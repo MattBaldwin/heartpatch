@@ -1,40 +1,81 @@
 import type { CareAction } from '../schemas/data/care-actions.js';
 import type { CareRules, MoodId } from '../schemas/data/care.js';
 
-// Contentment (design doc §7): stored as the value at the last care action
-// plus when that was, and worked out on read from the time since (CLAUDE.md
-// rule 4: nothing ticks). Integers only, so it's the same on every engine.
+// Contentment (design doc §7): stored as a checkpoint, the value at one
+// moment plus when that was, and worked out on read from the time since
+// (CLAUDE.md rule 4: nothing ticks). It drifts down only while a squishy
+// isn't working a job that suits it (owner decision on #376): the server
+// passes the stretches it was, and those don't count. Every care action and
+// every job change writes a new checkpoint. Integers only, so it's the same
+// on every engine.
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** What a squishy's contentment is stored as (`squishies` columns). */
+/** What a squishy's contentment is stored as (`squishies` checkpoint columns). */
 export interface CareState {
-  /** Contentment right after the last care action (0–100). */
+  /** Contentment at the checkpoint (0–100). */
   readonly contentment: number;
   /**
-   * When it was last cared for. A new squishy gets its creation time and the
-   * care rules' `startContentment`; null (rows from before that): never, and
-   * its stored value stays put, below any baseline.
+   * When the checkpoint was written: the last care action or job change. A
+   * new squishy gets its creation time and the care rules'
+   * `startContentment`; null (rows from before that): never, and its stored
+   * value stays put, below any baseline.
    */
-  readonly lastCaredAt: Date | null;
+  readonly since: Date | null;
 }
 
 /**
- * Contentment at `now`: the stored value, sliding down in a straight line to
- * the baseline over `hoursFullToBaseline` hours since the last care action.
- * Never below the baseline (or below what it already was, if that's lower).
+ * A stretch of time (epoch ms, from inclusive, to exclusive) a squishy was
+ * working a job that suits it, so its contentment held steady. `toMs` null:
+ * it still is.
+ */
+export interface HoldSpan {
+  readonly fromMs: number;
+  readonly toMs: number | null;
+}
+
+/**
+ * How much of `fromMs`..`toMs` the spans cover, each moment once (spans may
+ * overlap or come in any order). Whole milliseconds in, whole out.
+ */
+export function heldMs(fromMs: number, toMs: number, spans: readonly HoldSpan[]): number {
+  const clipped = spans
+    .map((s) => ({ from: Math.max(fromMs, s.fromMs), to: Math.min(toMs, s.toMs ?? toMs) }))
+    .filter((s) => s.to > s.from)
+    .sort((a, b) => a.from - b.from);
+  let total = 0;
+  let reached = fromMs;
+  for (const s of clipped) {
+    const from = Math.max(s.from, reached);
+    if (s.to > from) {
+      total += s.to - from;
+      reached = s.to;
+    }
+  }
+  return total;
+}
+
+/**
+ * Contentment at `now`: the checkpoint's value, sliding down in a straight
+ * line to the baseline over `hoursFullToBaseline` hours of time since the
+ * checkpoint that the `holding` spans don't cover (a suitable job holds it
+ * steady; it never raises it). Never below the baseline (or below what it
+ * already was, if that's lower).
  */
 export function contentmentAt(
   state: CareState,
   now: Date,
   rules: Pick<CareRules, 'maxContentment' | 'baselineContentment' | 'hoursFullToBaseline'>,
+  holding: readonly HoldSpan[] = [],
 ): number {
-  const { contentment, lastCaredAt } = state;
+  const { contentment, since } = state;
   const floor = Math.min(contentment, rules.baselineContentment);
-  if (lastCaredAt === null) return floor;
-  const elapsedMs = Math.max(0, now.getTime() - lastCaredAt.getTime());
+  if (since === null) return floor;
+  const fromMs = since.getTime();
+  const nowMs = Math.max(fromMs, now.getTime());
+  const driftMs = nowMs - fromMs - heldMs(fromMs, nowMs, holding);
   const range = rules.maxContentment - rules.baselineContentment;
-  const drop = Math.floor((elapsedMs * range) / (rules.hoursFullToBaseline * HOUR_MS));
+  const drop = Math.floor((driftMs * range) / (rules.hoursFullToBaseline * HOUR_MS));
   return Math.max(floor, contentment - drop);
 }
 
@@ -101,8 +142,9 @@ export function contentmentAfterCare(
   now: Date,
   gain: number,
   rules: Pick<CareRules, 'maxContentment' | 'baselineContentment' | 'hoursFullToBaseline'>,
+  holding: readonly HoldSpan[] = [],
 ): number {
-  return Math.min(rules.maxContentment, contentmentAt(state, now, rules) + gain);
+  return Math.min(rules.maxContentment, contentmentAt(state, now, rules, holding) + gain);
 }
 
 /**

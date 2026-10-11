@@ -4,7 +4,12 @@ import { EXPLORE_RULES } from '../data/explore.js';
 import { GAME_DATA } from '../data/index.js';
 import { HEX_DIRECTIONS, hexToWorld, hexSpiral, hex } from '../hex/index.js';
 import { hashString } from '../rng/index.js';
-import { checkExploreRules, MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
+import {
+  checkExploreRules,
+  MAX_SEARCH_SPOTS,
+  SearchSpotKindSchema,
+  type ExploreRules,
+} from '../schemas/data/explore.js';
 import {
   exploreLayout,
   exploreNeeds,
@@ -113,10 +118,35 @@ describe('explore rules data', () => {
       'old-forest': ['shovel'],
       'pumpkin-fields': ['shovel'],
       lake: ['net'],
-      hills: ['rope', 'lantern'],
-      mountains: ['rope', 'lantern'],
+      hills: ['lantern'], // #335: the cave
+      mountains: ['rope'], // #335: the trail
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
+  });
+
+  it('dives to bubble springs and parts reed beds with the Snorkel, keeping the old ids (#335)', () => {
+    const kind = (id: string) => EXPLORE_RULES.spotKinds.find((k) => k.id === id);
+    expect(kind('pond')).toEqual({
+      id: 'pond',
+      name: 'Bubble spring',
+      tool: 'net',
+      interaction: 'dive',
+    });
+    expect(kind('reeds')).toEqual({
+      id: 'reeds',
+      name: 'Reed bed',
+      tool: 'net',
+      interaction: 'part',
+    });
+    // Additive: the old interactions still validate.
+    for (const interaction of ['lift', 'shake', 'dig', 'scoop', 'climb', 'light', 'dive', 'part']) {
+      const spot = { id: 'x', name: 'X', tool: null, interaction };
+      expect(SearchSpotKindSchema.safeParse(spot).success, interaction).toBe(true);
+    }
+    expect(
+      SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
+        .success,
+    ).toBe(false);
   });
 
   it('keeps avoided words out of every name', () => {
@@ -134,12 +164,13 @@ describe('searchSpots', () => {
   });
 
   it('pins layout 1, so a change that moves spots must bump `layout`', () => {
-    // If this fails on purpose, bump EXPLORE_RULES.layout and update the hash:
-    // saved progress is read against the layout it was made under.
-    const layouts = ['meadow', 'lake', 'hills'].map((terrain) =>
+    // If this fails on purpose, bump EXPLORE_RULES.layout (or the terrain's
+    // own) and update the hash: saved progress is read against the layout it
+    // was made under. Hills and mountains moved to their own layout 2 (#335).
+    const layouts = ['meadow', 'lake'].map((terrain) =>
       searchSpots(SEED, { q: 1, r: 2, terrain }, EXPLORE_RULES),
     );
-    expect(hashString(JSON.stringify(layouts))).toBe('27fe6485484338aa163704638c22b789');
+    expect(hashString(JSON.stringify(layouts))).toBe('a82a50ab271a1cc770650507efa10ed6');
   });
 
   it('differs from tile to tile, from map to map and from layout to layout', () => {
@@ -239,8 +270,8 @@ describe('per-terrain layout (#335)', () => {
   });
 
   it("moves only the bumped terrain's spots", () => {
-    const rules = bumped('hills');
-    expect(exploreLayout('hills', rules)).toBe(2);
+    const rules = bumped('forest');
+    expect(exploreLayout('forest', rules)).toBe(2);
     expect(exploreLayout('meadow', rules)).toBe(EXPLORE_RULES.layout);
     const tiles = hexSpiral(hex(0, 0), 3);
     const same = (terrain: string) =>
@@ -251,7 +282,7 @@ describe('per-terrain layout (#335)', () => {
       );
     expect(same('meadow')).toBe(true);
     expect(same('lake')).toBe(true);
-    expect(same('hills')).toBe(false);
+    expect(same('forest')).toBe(false);
   });
 
   it('a terrain with its own layout equal to the rules layout lays out the same', () => {

@@ -394,6 +394,9 @@ function queries(db: Executor): BattlesRepo {
           // `lastCaredAt` = creation, so contentment decays from here.
           contentmentAtLastCare: contentment,
           lastCaredAt: at,
+          // Its first contentment checkpoint (#376), at the same moment.
+          contentment,
+          contentmentSince: at,
           createdAt: at,
         })
         .returning();

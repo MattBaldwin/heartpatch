@@ -71,7 +71,7 @@ describe('explore text', () => {
     expect(usesLine('shovel', 1)).toBe('1 dig left');
     expect(usesLine('rope', 0)).toBe('Resting zZ');
     expect(needsHere('mound', 'shovel')).toBe('This mound needs a Shovel!');
-    expect(needsHere('pond', 'net')).toBe('This pond needs a Snorkel!');
+    expect(needsHere('pond', 'net')).toBe('This bubble spring needs a Snorkel!');
     expect(restLine('shovel')).toBe('Your Shovel needs a rest! Craft a new one 🛠️');
   });
 
@@ -83,6 +83,9 @@ describe('explore text', () => {
     }
     expect(actionFor({ kind: 'mound', tool: 'shovel' }).label).toBe('Dig');
     expect(actionFor({ kind: 'tree', tool: null }).label).toBe('Shake');
+    // The Walking Stick hikes up to a lookout but pokes a snow drift (#335).
+    expect(actionFor({ kind: 'ledge', tool: 'rope' }).label).toBe('Hike');
+    expect(actionFor({ kind: 'snow-drift', tool: 'rope' }).label).toBe('Poke');
   });
 
   it('shows each spot its own icon, drawn or an emoji every iPhone has', () => {
@@ -113,6 +116,7 @@ describe('explore text', () => {
       '🔍',
       '📖',
       '🌱',
+      '🍄', // Emoji 1.0 (#335)
     ]);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),

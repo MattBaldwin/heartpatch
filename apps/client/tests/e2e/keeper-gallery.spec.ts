@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { KEEPER_DATA } from '@heartpatch/shared';
 import { draws, idle } from './dev-hook.js';
 
 /**
@@ -179,12 +180,26 @@ test('every hairstyle draws on a Keeper, each one different', async ({ page }) =
   test.setTimeout(90_000);
   const errors = await watchErrors(page);
   const stats = await openGallery(page, '?base=pip&hair=all');
-  expect(stats).toMatchObject({ keepers: 12 });
+  expect(stats).toMatchObject({ keepers: KEEPER_DATA.hairstyles.length });
   const info = await page.evaluate(() => {
     const h = (window as Hooks).__heartpatchKeepers!;
     return { hashes: h.shown().map((_, i) => h.hashOf(i)), missing: h.missing() };
   });
-  expect(new Set(info.hashes).size).toBe(12);
+  expect(new Set(info.hashes).size).toBe(KEEPER_DATA.hairstyles.length);
+  expect(info.missing).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('any face on any body draws, each pair different (#372)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = await watchErrors(page);
+  const stats = await openGallery(page, '?faces=pip,juniper&bodies=acorn,lanky');
+  expect(stats).toMatchObject({ keepers: 4 });
+  const info = await page.evaluate(() => {
+    const h = (window as Hooks).__heartpatchKeepers!;
+    return { hashes: h.shown().map((_, i) => h.hashOf(i)), missing: h.missing() };
+  });
+  expect(new Set(info.hashes).size).toBe(4);
   expect(info.missing).toEqual([]);
   expect(errors).toEqual([]);
 });

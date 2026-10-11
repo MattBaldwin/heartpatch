@@ -118,7 +118,7 @@ export const EXPLORE_VIEW = {
  */
 export const EXPLORE_CAMERA = {
   /** A phone held upright (width ÷ height at or under `aspect`): looking down from the horizontal, radians, and camera to target, world units. */
-  phone: { aspect: 0.5, pitch: (28 * Math.PI) / 180, distance: 7.0 }, // TUNE: #335 lower, so the sky shows over the far trees
+  phone: { aspect: 0.5, pitch: (28 * Math.PI) / 180, distance: 7.5 }, // TUNE: #335 lower, so the sky shows over the far trees; a step back so the foreground breathes
   /** A tablet or wider (at or over `aspect`). */
   tablet: { aspect: 0.75, pitch: (31 * Math.PI) / 180, distance: 7.6 }, // TUNE
   /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen and the ground ahead shows. */
@@ -146,7 +146,21 @@ export const EXPLORE_FADE = {
   /** Beside the Keeper's line: this plus the spot's own collider, doubled for its canopy. */
   side: 0.04, // TUNE
   /** A faded prop's opacity. */
-  alpha: 0.3, // TUNE
+  alpha: 0.45, // TUNE: see-through, but still reads as the prop, not a pale ghost
+  /**
+   * On screen (#335), a spot fades only if its outline covers at least this
+   * share of the Keeper's, so a stone beside the Keeper stays solid.
+   */
+  cover: 0.12, // TUNE
+  /** The Keeper's half-width on screen, as a share of its height there. */
+  keeperHalfWidth: 0.36, // TUNE
+  /**
+   * A glint keeps clear of the whole Keeper (#335): its spiky hair, hands and
+   * feet, half its height either side; the glint's halo is this many times
+   * its star.
+   */
+  glintClearHalfWidth: 0.55, // TUNE
+  glintHalo: 1.6, // TUNE
 } as const;
 
 /** Decorative props (#291): thin instances, one draw call per kind, placed from the tile. */
@@ -251,6 +265,14 @@ export const INTERACTION = {
   climbSteps: 6, // TUNE
   /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
+  /** Snorkel at a bubble spring: bubbles to catch, a tap each (#335). */
+  diveBubbles: 4, // TUNE
+  /** Snorkel at a reed bed: swipes to part the reeds (#335). */
+  partSwipes: 2, // TUNE
+  /** Walking Stick at a snow drift: pokes till it slumps (#335). */
+  pokes: 3, // TUNE
+  /** Hands on glow mushrooms: caps to boop (#335). */
+  boops: 3, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
@@ -264,4 +286,16 @@ export const INTERACTION = {
    * `lightRadius × caveArea` (about the Keeper's own glow).
    */
   caveArea: 0.5, // TUNE
+} as const;
+
+/**
+ * Under a lake (#335, owner's second pass): a Keeper who floats and swims,
+ * with the Snorkel's mask on its face. The water's own life (kelp, fish,
+ * bubbles, caustics) is in lake-config.ts.
+ */
+export const EXPLORE_UNDERWATER = {
+  /** The Keeper swims: floats this share of its height up, leans forward, bobs. */
+  swim: { float: 0.18, lean: 0.38, bob: 0.035, bobSpeed: 1.6 }, // TUNE
+  /** The mask on the face: up the Keeper's height, forward and size by its width. */
+  mask: { up: 0.74, forward: 0.42, size: 0.8 }, // TUNE
 } as const;

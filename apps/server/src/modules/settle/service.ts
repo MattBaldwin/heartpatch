@@ -19,6 +19,7 @@ import {
   lockGrantRows,
 } from '../inventory/service.js';
 import { applyBatchPlans, planGrants, planSettleBatches } from '../factory/service.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { bankableWork, landTraining, squishyName } from '../jobs/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -169,6 +170,13 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
 
         const worked: ItemCounts = {};
         const workedIds: string[] = [];
+        // A count restarts (or work on lost land ends): what gathering held so far is kept (#376).
+        await checkpointContentment(
+          tx,
+          map.id,
+          workPlans.flatMap(({ row, work }) => (work ? [row.squishy.id] : [])),
+          at,
+        );
         for (const { row, work } of workPlans) {
           if (!work) continue;
           const banked = work.progress.cycles > 0;

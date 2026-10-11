@@ -66,17 +66,17 @@ export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly
 /**
  * Steps that take more than one tap to finish (#140): the fire on the new
  * land (`land-fire`; fires stand only on captured land, owner decision
- * 2026-10-07) needs the tile, Build a fire, Build, then Emberwood and Add
+ * 2026-10-07) needs the tile, Build, Build!, then Emberwood and Add
  * fuel. A spotlight would block the rest, so these only guide: Sprout lights
  * and points at the next thing to tap (the first on screen wins), and every
- * tap stays open. Add fuel once a fire stands, else Build on its card, else
- * Build a fire. Whole selectors, unlike the stand-ins' test ids.
+ * tap stays open. Add fuel once a fire stands, else Build! on the sheet, else
+ * Build on the tile. Whole selectors, unlike the stand-ins' test ids.
  */
 export const TARGET_GUIDES: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
   'build-button': [
     '[data-testid="tile-fire-fuel"]',
-    '[data-testid="tile-build-fire-confirm"]',
-    '[data-testid="tile-build-fire"]',
+    '[data-testid="build-go"]',
+    '[data-testid="tile-build"]',
   ],
 };
 

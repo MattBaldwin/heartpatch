@@ -18,6 +18,7 @@ import {
   type PublicFence,
   type PublicTile,
 } from '@heartpatch/shared';
+import type { BuildCard } from '../building/build-model.js';
 import { bagItems } from '../inventory/bag-view.js';
 import { costText, effectChips } from '../home/home-view.js';
 import { ELEMENT_GLYPH } from '../ui/glyphs.js';
@@ -105,15 +106,7 @@ export function isInterior(
   return !borderEdges(tile, tilesOf(view, me), view.tiles).includes(edge as never);
 }
 
-/** A cost times `n` (fencing several edges at once). */
-export function times(cost: ItemCounts, n: number): ItemCounts {
-  return Object.fromEntries(Object.entries(cost).map(([id, k]) => [id, k * n]));
-}
-
-/** Does the bag hold all of `cost`? */
-export function canAfford(items: ItemCounts, cost: ItemCounts): boolean {
-  return Object.entries(cost).every(([id, n]) => (items[id] ?? 0) >= n);
-}
+export { canAfford, times } from '../building/build-model.js';
 
 /** One segment as its card shows it. */
 export interface FenceCard {
@@ -168,20 +161,25 @@ export function fenceChips(fence: FenceBuilding, level = 1): string[] {
   ];
 }
 
-/** One row of the build list. */
-export interface FenceChoice {
-  readonly fence: FenceBuilding;
-  readonly cost: ItemCounts;
-  readonly hp: number;
-  readonly affordable: boolean;
-}
-
-/** Every fence, what fencing `edges` edges with it costs, and whether the bag holds it. */
-export function fenceChoices(items: ItemCounts, edges: number): FenceChoice[] {
-  const n = Math.max(1, edges);
+/** Every fence as a card on the shared Build sheet (#371), when the tile has an edge to fence. */
+export function fenceBuildCards(
+  tile: PublicTile,
+  view: Pick<MapView, 'tiles'>,
+  me: string,
+): BuildCard[] {
+  if (openEdges(tile, view, me).length === 0) return [];
   return FENCES.map((fence) => {
-    const cost = times(buildCost(fence), n);
-    return { fence, cost, hp: fenceMaxHp(fence, 1), affordable: canAfford(items, cost) };
+    const chips = fenceChips(fence);
+    return {
+      id: fence.id,
+      icon: fenceIcon(fence.id),
+      name: fence.name,
+      effect: `${chips[0] ?? ''} · ${String(fenceMaxHp(fence, 1))} energy`,
+      cost: buildCost(fence),
+      area: 'edges',
+      blocked: null,
+      craft: null,
+    };
   });
 }
 
@@ -204,17 +202,10 @@ export const FENCE_TEXT = {
     n === 1
       ? '🪵 Your new land is past one of your fences, so it came down. Part of it came back to your bag!'
       : `🪵 Your new land is past ${String(n)} of your fences, so they came down. Part of each came back to your bag!`,
-  build: 'Build a fence',
   openSheet: (n: number) => (n > 0 ? `🪵 Fences (${String(n)})` : '🪵 Fences'),
   segment: (name: string, edge: string, percent: number) =>
     `${name} · ${edge} · ${String(percent)}%`,
   fences: (n: number) => (n === 1 ? '1 fence here' : `${String(n)} fences here`),
-  pickMaterial: 'Pick a material',
-  pickEdges: 'Which edges?',
-  allEdges: 'All open edges',
-  fenceThem: (n: number, cost: string) =>
-    `🪵 Fence ${n === 1 ? 'it' : n === 2 ? 'both' : `all ${String(n)}`} (${cost})`,
-  pickAnEdge: 'Tap an edge to fence it!',
   needMore: "Your bag doesn't have enough for that yet.",
   built: (n: number) => (n === 1 ? 'Fence up! 🪵' : `${String(n)} fences up! 🪵`),
   level: (n: number) => `Level ${String(n)}`,

@@ -116,3 +116,70 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   expect(battle.view.sides[battle.mySide]!.squishies.map((s) => s.id)).toEqual([helperId]);
   expect(errors).toEqual([]);
 });
+
+interface CareBody {
+  squishies: { id: string; contentment: number; moodDrift: string | null }[];
+}
+
+test('a gatherer on a spot it loves stays happy while a resting one drifts (#376)', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000); // a full map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('mood'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Happy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  const mapId = (await mapState(page))!.id;
+
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {
+    speciesId: 'mossmuffin',
+    level: 4,
+  });
+  expect(granted.status).toBe(201);
+  const helperId = (granted.body as { squishy: { id: string } }).squishy.id;
+
+  // The picker marks the spots it loves and the ones that aren't its thing.
+  await (await trayButton(page, 'jobs-open')).tap();
+  const board = page.getByTestId('jobs');
+  const helper = board.locator(`[data-testid="jobs-row"][data-squishy="${helperId}"]`);
+  await helper.getByRole('button', { name: /Gather/ }).tap();
+  const picker = helper.getByTestId('jobs-picker');
+  const loved = picker.locator('.jobs-spot', { has: page.locator('.jobs-fit') }).first();
+  await expect(loved.getByTestId('jobs-spot-fit')).toContainText('Loves gathering');
+  expect(findAvoidedWords((await picker.textContent()) ?? '')).toEqual([]);
+  await expect(loved.locator('.jobs-heart')).toHaveText('💕');
+  await loved.getByTestId('jobs-spot').tap();
+  await expect.poll(async () => (await jobsState(page))?.board.jobs[helperId]).toBe('gatherer');
+  // Its row says so (the 2.6 s pop-up is left out: too short to wait on in CI).
+  await expect(helper.getByTestId('jobs-mood')).toContainText('Loves this job');
+  expect(findAvoidedWords((await helper.textContent()) ?? '')).toEqual([]);
+  await board.getByRole('button', { name: 'Close' }).tap();
+
+  const moods = async () => {
+    const res = await api(page, 'GET', `/maps/${mapId}/care`);
+    return new Map((res.body as CareBody).squishies.map((s) => [s.id, s]));
+  };
+  const before = await moods();
+  const starterId = [...before.keys()].find((id) => id !== helperId)!;
+
+  // An hour passes (the dev clock jump): the gatherer holds, the resting starter drifts.
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/mood/age`, { minutes: 60 })).status).toBe(
+    200,
+  );
+  const after = await moods();
+  expect(after.get(helperId)).toMatchObject({
+    contentment: before.get(helperId)!.contentment,
+    moodDrift: 'steady',
+  });
+  expect(after.get(starterId)!.contentment).toBeLessThan(before.get(starterId)!.contentment);
+  expect(after.get(starterId)!.moodDrift).toBe('resting');
+  expect(errors).toEqual([]);
+});

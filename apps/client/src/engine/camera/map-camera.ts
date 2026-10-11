@@ -43,6 +43,8 @@ interface Glide {
   from: GroundPoint;
   to: GroundPoint;
   elapsed: number;
+  /** Zooming in on the way (Build sheet): the distances at the start and the end. */
+  zoom?: { from: number; to: number };
 }
 
 /**
@@ -118,18 +120,38 @@ export class MapCamera {
   /**
    * Brings a spot on the map to the middle of the screen ("Find on map"):
    * a short eased glide, or a jump when `instant` (reduced motion). A finger
-   * on the map takes over at once.
+   * on the map takes over at once. `raise` (0–1) lands the spot that far
+   * above the middle of the screen, clear of a sheet along the bottom (#371);
+   * `distance` also moves in that close (never out), so tile edges are big
+   * enough to tap.
    */
-  panTo(point: GroundPoint, instant = false): void {
+  panTo(point: GroundPoint, instant = false, raise = 0, distance?: number): void {
     this.velocity = ZERO;
-    const to = clampTarget(point, this.bounds);
+    const closer =
+      distance === undefined
+        ? this.distance
+        : Math.min(
+            this.distance,
+            clampDistance(distance, this.config.minDistance, this.config.maxDistance),
+          );
+    const above = raise > 0 ? groundAt({ ...this.pose(), distance: closer }, 0, raise) : null;
+    const lifted = above
+      ? { x: point.x - (above.x - this.target.x), z: point.z - (above.z - this.target.z) }
+      : point;
+    const to = clampTarget(lifted, this.bounds);
     if (instant) {
       this.glide = null;
       this.target = to;
+      this.distance = closer;
       this.dirty = true;
       return;
     }
-    this.glide = { from: this.target, to, elapsed: 0 };
+    this.glide = {
+      from: this.target,
+      to,
+      elapsed: 0,
+      ...(closer < this.distance ? { zoom: { from: this.distance, to: closer } } : {}),
+    };
   }
 
   get state(): MapCameraState {
@@ -306,6 +328,10 @@ export class MapCamera {
       const g = this.glide;
       g.elapsed += Math.min(Math.max(dt, 0), MAX_INERTIA_DT);
       this.target = glideAt(g.from, g.to, g.elapsed / GLIDE_SECONDS, this.bounds);
+      if (g.zoom) {
+        const f = Math.min(1, g.elapsed / GLIDE_SECONDS);
+        this.distance = g.zoom.from + (g.zoom.to - g.zoom.from) * f * f * (3 - 2 * f);
+      }
       if (g.elapsed >= GLIDE_SECONDS) this.glide = null;
       this.dirty = true;
     }

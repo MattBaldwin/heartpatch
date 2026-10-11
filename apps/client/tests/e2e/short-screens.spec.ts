@@ -25,6 +25,7 @@ const HUD = [
   '[data-testid^="tray-handle-"]',
   '[data-testid="lobby-open"]',
   '[data-testid="chat-open"]',
+  '[data-testid="friendly-open"]',
   '[data-testid="keeper-menu"]',
 ].join(', ');
 
@@ -132,7 +133,7 @@ async function checkTray(page: Page, side: TraySide, screen: Box): Promise<void>
   const trayBox = (await boxes(page, `[data-testid="tray-${side}"]`))[0]!;
   const corners = await boxes(
     page,
-    '[data-testid="lobby-open"], [data-testid="chat-open"], [data-testid="keeper-menu"]',
+    '[data-testid="lobby-open"], [data-testid="chat-open"], [data-testid="friendly-open"], [data-testid="keeper-menu"]',
   );
   expect(corners.filter((c) => overlap(c, trayBox)).map(show)).toEqual([]);
   await tray.locator('.tray-close').tap();
@@ -161,6 +162,7 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
       const hud = await boxes(page, HUD);
       expect(hud.map((b) => b.id).sort()).toEqual([
         'chat-open',
+        'friendly-open',
         'keeper-menu',
         'lobby-open',
         'tray-handle-adventure',

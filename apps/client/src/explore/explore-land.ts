@@ -52,6 +52,7 @@ import {
   type LandLayout,
   type LayoutInput,
   type MoteHome,
+  type Shade,
 } from './land-layout.js';
 import { paintGround } from './land-paint.js';
 import { landField, unwarp, type LandField } from './land-shape.js';
@@ -87,6 +88,11 @@ export interface LandOptions {
   readonly tier: QualityTier;
   readonly sky: SkyLook;
   /**
+   * The sky's light before the time of day scales it (`ExploreSky.lightBase`).
+   * Left out, it is worked back from what the sky has just set for `sky`.
+   */
+  readonly lightBase?: { readonly sun: number; readonly environment: number };
+  /**
    * A biome's own layers on top of the shared ones (#335: the lake, trail
    * and cave lanes): `place` runs inside `landLayout` (its `extras`), and
    * each layer named in `layers` is drawn from its places with that mesh,
@@ -97,7 +103,13 @@ export interface LandOptions {
     readonly layers: Readonly<
       Record<
         string,
-        { readonly build: (scene: Scene) => Mesh; readonly sway?: number; readonly thins?: boolean }
+        {
+          readonly build: (scene: Scene) => Mesh;
+          readonly sway?: number;
+          readonly thins?: boolean;
+          /** Lit from inside (crystals, glow caps): unlit vertex colours times this; over 1 blooms. */
+          readonly glow?: number;
+        }
       >
     >;
   };
@@ -119,6 +131,19 @@ interface Layer {
  */
 let lastPaint: { readonly key: string; readonly pixels: Uint8Array } | null = null;
 
+/**
+ * Everything the painted ground depends on: the biome's look, the tile's
+ * seed, the start (the path runs past it), the tier's size and every shade.
+ * Two grounds with the same key are the same pixels.
+ */
+export const paintKey = (
+  look: Pick<LandLook, 'palette' | 'shape'>,
+  seed: number,
+  start: WorldPoint,
+  texels: number,
+  shades: readonly Shade[],
+): string => JSON.stringify([look.palette, look.shape, seed, start, texels, shades]);
+
 const matrix = (g: Growth, y: number): Matrix =>
   Matrix.Compose(
     new Vector3(g.scale, g.scale, g.scale),
@@ -127,12 +152,12 @@ const matrix = (g: Growth, y: number): Matrix =>
   );
 
 /** Unlit and vertex-coloured, times `color` (motes and the lanterns' glass). */
-function glow(scene: Scene, name: string, color: string): StandardMaterial {
+function glow(scene: Scene, name: string, color: string, strength = 1): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.disableLighting = true;
   m.diffuseColor = Color3.Black();
   m.specularColor = Color3.Black();
-  m.emissiveColor = linear(color);
+  m.emissiveColor = linear(color).scale(strength);
   m.fogEnabled = false;
   return m;
 }
@@ -161,6 +186,7 @@ export class ExploreLand {
   readonly #sun: DirectionalLight | null;
   #tier: QualityTier;
   readonly #sunBase: number;
+  #groundMat: PBRMaterial | null = null;
   readonly #environmentBase: number;
   #ambient: AmbientMode = 'off';
   #night = false;
@@ -189,7 +215,7 @@ export class ExploreLand {
     // ── The ground: a warped grid (fine near the tile, coarse far out) and its painted texture ─
     this.#grid = LAND_GRID.cells[this.#tier];
     this.#texels = LAND_GRID.texture[this.#tier];
-    this.#buildGround(look, seed);
+    this.#buildGround(look, seed, start);
 
     // ── Growth: one material for the whole land, swaying on the terrain plugin ─
     const landMat = matte(scene, 'land-mat', 0.82);
@@ -235,7 +261,11 @@ export class ExploreLand {
     // ── Life: drifting motes on the terrain plugin ─
     // A biome's own layers (`LandOptions.extras`), after the shared ones.
     for (const [name, layer] of Object.entries(options.extras?.layers ?? {})) {
-      this.#grow(name, layer.build(scene), L.extras[name] ?? [], landMat, {
+      const material =
+        layer.glow === undefined
+          ? landMat
+          : glow(scene, `land-${name}-glow-mat`, '#ffffff', layer.glow);
+      this.#grow(name, layer.build(scene), L.extras[name] ?? [], material, {
         ...(layer.sway !== undefined ? { sway: layer.sway } : {}),
         ...(layer.thins !== undefined ? { thins: layer.thins } : {}),
       });
@@ -281,17 +311,21 @@ export class ExploreLand {
       const { x, y, z } = LAND_LIGHT.sunDirection;
       this.#sun.direction = new Vector3(x, y, z).normalize();
     }
-    scene.fogMode = Scene.FOGMODE_LINEAR;
-    scene.fogStart = LAND_LIGHT.haze.start;
-    scene.fogEnd = LAND_LIGHT.haze.end;
-
-    // The sky has set the light for this look; keep its time-of-day-free base,
-    // so every look after this sets absolute values (no compounding).
+    // The light before the time of day, so every look sets absolute values
+    // (no compounding): the sky's own bases, else worked back from what the
+    // sky has just set for this look.
     const { light } = options.sky;
-    this.#sunBase = this.#sun ? this.#sun.intensity / (light.sun || 1) : 0;
-    this.#environmentBase = scene.environmentIntensity / (light.environment || 1);
+    this.#sunBase =
+      options.lightBase?.sun ?? (this.#sun ? this.#sun.intensity / (light.sun || 1) : 0);
+    this.#environmentBase =
+      options.lightBase?.environment ?? scene.environmentIntensity / (light.environment || 1);
     this.setSky(options.sky);
     this.#applyTier();
+  }
+
+  /** The painted ground's material (the lake adds its caustics to it). */
+  get groundMaterial(): PBRMaterial | null {
+    return this.#groundMat;
   }
 
   /** The ground's height under a world point. */
@@ -331,6 +365,10 @@ export class ExploreLand {
     const horizon = Color3.FromHexString(look.horizon).toLinearSpace();
     const zenith = Color3.FromHexString(look.zenith).toLinearSpace();
     const { haze } = LAND_LIGHT;
+    // The land owns the haze, all of it, every time (the water, if any, overrides it next).
+    this.#scene.fogMode = Scene.FOGMODE_LINEAR;
+    this.#scene.fogStart = haze.start;
+    this.#scene.fogEnd = haze.end;
     this.#scene.fogColor = Color3.Lerp(horizon, linear(haze.tint), haze.mix);
     const tint = Color3.FromHexString(look.groundTint);
     for (const t of this.#tinted) t.mat.albedoColor = t.base.multiply(tint);
@@ -355,7 +393,7 @@ export class ExploreLand {
 
   // ── Building ─────────────────────────────────────────────────────────────
 
-  #buildGround(look: LandLook, seed: number): Mesh {
+  #buildGround(look: LandLook, seed: number, start: WorldPoint): Mesh {
     const n = this.#grid;
     const w = LAND_GRID.warp;
     const R = LAND_RADIUS;
@@ -394,7 +432,7 @@ export class ExploreLand {
 
     const t = this.#texels;
     // UVs run along the grid, so the texture's texels sit where the grid's warp puts them.
-    const key = `${String(seed)}:${String(t)}:${JSON.stringify(this.layout.shades)}`;
+    const key = paintKey(look, seed, start, t, this.layout.shades);
     const pixels =
       lastPaint?.key === key
         ? lastPaint.pixels
@@ -423,6 +461,7 @@ export class ExploreLand {
     texture.wrapV = Texture.CLAMP_ADDRESSMODE;
     texture.anisotropicFilteringLevel = 4;
     const mat = matte(this.#scene, 'land-ground-mat', 0.95);
+    this.#groundMat = mat;
     mat.albedoTexture = texture;
     mesh.material = mat;
     this.#tinted.push({ mat, base: mat.albedoColor.clone() });

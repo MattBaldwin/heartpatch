@@ -118,35 +118,30 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   const chip = (await page.locator('.auth-chip').boundingBox())!;
   expect(header.y).toBeGreaterThanOrEqual(chip.y + chip.height);
 
-  // The Hearthfire isn't built at home (owner decision 2026-10-07): its row
-  // says where fires go, with no Build button.
+  // The Hearthfire isn't built at home (owner decision 2026-10-07): the one
+  // Build sheet (#371) has no card for it, and says where fires go.
   await sheet.getByTestId('home-build').tap();
-  const fireRow = sheet.locator('[data-build-row="hearthfire"]');
-  await slowExpect(fireRow).toContainText(
+  await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();
+  await expect(sheet.locator('[data-build="hearthfire"]')).toHaveCount(0);
+  await expect(sheet.getByTestId('build-note')).toContainText(
     'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
   );
-  await slowExpect(fireRow.getByRole('button')).toHaveCount(0);
-  // Each row says what the building does (#207): a line, then effect chips.
-  await expect(fireRow).toContainText(
-    'Keeps squishies out on your land safe from the Hollow Man at night.',
-  );
-  await expect(fireRow.locator('.home-effect')).toHaveText([
-    '🛡️ Safe 1 tile around',
-    '🪵 Needs fuel each night',
-  ]);
-  // The Build button sits under the chips on a phone, still on screen.
-  const meadowRow = sheet.locator('[data-build-row="cozy-meadow"]');
-  const chips = (await meadowRow.locator('.home-effects').boundingBox())!;
-  const build = (await meadowRow.locator('[data-build="cozy-meadow"]').boundingBox())!;
+  // Picking a card says what it does and costs, in one line.
+  await sheet.locator('[data-build="cozy-meadow"]').tap();
+  await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(sheet.getByTestId('build-detail')).toContainText('·');
+  // Build! stays on screen on a phone, and so does the whole row.
+  const go = (await sheet.getByTestId('build-go').boundingBox())!;
   const view = page.viewportSize()!;
-  expect(build.x + build.width).toBeLessThanOrEqual(view.width);
-  if (view.width < 600) expect(build.y).toBeGreaterThanOrEqual(chips.y + chips.height - 1);
-  await sheet.getByRole('button', { name: 'Cancel' }).tap();
+  expect(go.x + go.width).toBeLessThanOrEqual(view.width);
+  expect(go.y + go.height).toBeLessThanOrEqual(view.height);
+  await sheet.getByTestId('build-cancel').tap();
+  await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
 
-  // A Cozy Meadow, and the squishy moves in.
+  // A Cozy Meadow on the first lit spot, and the squishy moves in.
   await sheet.getByTestId('home-build').tap();
   await sheet.locator('[data-build="cozy-meadow"]').tap();
-  await sheet.getByTestId('home-anywhere').tap();
+  await sheet.getByTestId('build-go').tap();
   await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(1);
   await slowExpect(sheet.getByTestId('home-residents')).toBeVisible();
   // Their starter and the dev squishy can both move in; one does.

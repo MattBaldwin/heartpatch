@@ -21,12 +21,60 @@ describe('checkKeeperData', () => {
     expect(checkKeeperData(KEEPER_DATA)).toEqual([]);
   });
 
-  it('ships 12 bases, 12 hairstyles and 6 outfit palettes', () => {
+  it('ships 12 bases and 6 outfit palettes', () => {
     // Design doc §23 [DEFAULT: 8] bases; 12 since the owner's hairstyle
     // decision (2026-10-06) added four with short styles.
     expect(KEEPER_DATA.bases).toHaveLength(12);
-    expect(KEEPER_DATA.hairstyles).toHaveLength(12);
     expect(KEEPER_DATA.outfits).toHaveLength(6);
+  });
+
+  it('keeps every hairstyle id ever shipped, and adds the #372 styles after them', () => {
+    // Ids are stored in `keepers` rows: never rename or remove one.
+    const shipped = [
+      'spiky',
+      'crew-cut',
+      'side-part',
+      'messy-mop',
+      'short-curls',
+      'swoop',
+      'curly',
+      'puff',
+      'bob',
+      'bun',
+      'pigtails',
+      'long',
+    ];
+    const added = [
+      'buzz',
+      'faux-hawk',
+      'curtains',
+      'twists',
+      'shaggy',
+      'high-pigtails',
+      'low-pigtails',
+      'curly-pigtails',
+      'braid',
+      'twin-braids',
+      'high-ponytail',
+      'low-ponytail',
+      'side-ponytail',
+      'long-loose',
+    ];
+    const ids = KEEPER_DATA.hairstyles.map((h) => h.id);
+    expect(ids.slice(0, shipped.length)).toEqual(shipped);
+    expect(ids.slice(shipped.length)).toEqual(added);
+  });
+
+  it('draws every hairstyle with the same few primitives (at most 16, over the head)', () => {
+    for (const style of KEEPER_DATA.hairstyles) {
+      expect(style.id, style.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(style.pieces.length, style.id).toBeLessThanOrEqual(16);
+      // Something sits over the top of the head, so a hat has hair to rest on.
+      expect(
+        Math.max(...style.pieces.map((p) => p.at[1] + p.size[1] / 2)),
+        style.id,
+      ).toBeGreaterThan(0.6);
+    }
   });
 
   it('varies body shape, skin tone, eyes and hairstyle across the bases', () => {
@@ -37,11 +85,39 @@ describe('checkKeeperData', () => {
     expect(distinct((b) => b.skinTone)).toBe(KEEPER_DATA.skinTones.length);
     expect(KEEPER_DATA.skinTones).toHaveLength(10);
     expect(distinct((b) => b.hairstyle)).toBe(count);
-    expect(distinct((b) => b.body)).toBe(count);
     // Every Keeper shares the line face (#289); the eyes are what differ.
     expect(distinct((b) => b.face.eyes)).toBe(KeeperEyesSchema.options.length);
-    const heights = KEEPER_DATA.bases.map((b) => b.body.height);
-    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.2);
+  });
+
+  it('has a face shape and a body type for every base, plus Lanky and Sturdy (#372)', () => {
+    const bases = KEEPER_DATA.bases.map((b) => b.id).sort();
+    expect(KEEPER_DATA.faces.map((f) => f.id).sort()).toEqual(bases);
+    expect(KEEPER_DATA.bodies.map((b) => b.id).sort()).toEqual(
+      [...bases, 'lanky', 'sturdy'].sort(),
+    );
+    // Every one is its own shape: its numbers differ, whatever its id or name.
+    const distinct = (rows: readonly { id: string; name: string }[]) =>
+      new Set(rows.map((r) => JSON.stringify({ ...r, id: '', name: '' }))).size;
+    expect(distinct(KEEPER_DATA.faces)).toBe(KEEPER_DATA.faces.length);
+    expect(distinct(KEEPER_DATA.bodies)).toBe(KEEPER_DATA.bodies.length);
+    expect(new Set(KEEPER_DATA.faces.map((f) => f.name)).size).toBe(KEEPER_DATA.faces.length);
+    expect(new Set(KEEPER_DATA.bodies.map((b) => b.name)).size).toBe(KEEPER_DATA.bodies.length);
+    // Listed for the picker: faces round to long, bodies small to tall.
+    const shapes = KEEPER_DATA.faces.map((f) => f.headShape);
+    expect(shapes).toEqual([...shapes].sort((a, b) => b - a));
+    const heights = KEEPER_DATA.bodies.map((b) => b.height);
+    expect(heights).toEqual([...heights].sort((a, b) => a - b));
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.3);
+  });
+
+  it('reports a base with no face or body of its own (#372)', () => {
+    const data = copy();
+    data.faces = data.faces.filter((f) => f.id !== 'pip');
+    data.bodies = data.bodies.filter((b) => b.id !== 'moss');
+    expect(checkKeeperData(data)).toEqual([
+      'bases["pip"].id: unknown face "pip"',
+      'bases["moss"].id: unknown body "moss"',
+    ]);
   });
 
   it('reports a starting look whose skin tone, brows or mouth is unknown (#289)', () => {
@@ -67,9 +143,10 @@ describe('checkKeeperData', () => {
     ]);
   });
 
-  it('starts every hairstyle on some base, so each one shows on the first screen', () => {
-    const used = new Set(KEEPER_DATA.bases.map((b) => b.hairstyle));
-    expect(KEEPER_DATA.hairstyles.filter((h) => !used.has(h.id))).toEqual([]);
+  it('starts every base on a hairstyle that exists', () => {
+    // The #372 styles are picked, not a base's own: no base starts on them.
+    const known = new Set(KEEPER_DATA.hairstyles.map((h) => h.id));
+    expect(KEEPER_DATA.bases.filter((b) => !known.has(b.hairstyle))).toEqual([]);
   });
 
   it('reports a base whose hairstyle is unknown, and duplicate hairstyles', () => {
@@ -112,9 +189,11 @@ describe('checkKeeperData', () => {
 
   it('keeps shapes inside the chibi ranges', () => {
     const data = copy();
-    data.bases[0]!.body.head = 0.9;
+    data.faces[0]!.head = 0.9;
+    data.bodies[0]!.height = 2;
     expect(checkKeeperData(data)).toEqual([
-      'bases["pip"].body.head: Too big: expected number to be <=0.6',
+      'faces["acorn"].head: Too big: expected number to be <=0.6',
+      'bodies["acorn"].height: Too big: expected number to be <=1.2',
     ]);
   });
 
@@ -139,6 +218,8 @@ describe('Keeper configs', () => {
     expect(keeperConfigProblem({ ...ok, eyeColor: 'laser' }, KEEPER_DATA)).toBe('eyeColor');
     expect(keeperConfigProblem({ ...ok, outfit: 'armor' }, KEEPER_DATA)).toBe('outfit');
     expect(keeperConfigProblem({ ...ok, hairstyle: 'mohawk' }, KEEPER_DATA)).toBe('hairstyle');
+    expect(keeperConfigProblem({ ...ok, face: 'square' }, KEEPER_DATA)).toBe('face');
+    expect(keeperConfigProblem({ ...ok, body: 'giant' }, KEEPER_DATA)).toBe('body');
     expect(keeperConfigProblem({ ...ok, skinTone: 'tone-99' }, KEEPER_DATA)).toBe('skinTone');
     expect(keeperConfigProblem({ ...ok, brows: 'unibrow' }, KEEPER_DATA)).toBe('brows');
     expect(keeperConfigProblem({ ...ok, mouth: 'grin' }, KEEPER_DATA)).toBe('mouth');
@@ -165,6 +246,18 @@ describe('Keeper configs', () => {
     }
   });
 
+  it('takes any face on any body, on any starting look (#372)', () => {
+    for (const base of KEEPER_DATA.bases) {
+      for (const face of KEEPER_DATA.faces) {
+        for (const body of KEEPER_DATA.bodies) {
+          const config = { ...defaultKeeperConfig(base), face: face.id, body: body.id };
+          expect(KeeperConfigSchema.parse(config)).toEqual(config);
+          expect(keeperConfigProblem(config, KEEPER_DATA)).toBeNull();
+        }
+      }
+    }
+  });
+
   it('starts with no extras, and every starting look uses a smile line and today’s brows', () => {
     for (const base of KEEPER_DATA.bases) {
       expect(defaultKeeperConfig(base).extras).toEqual([]);
@@ -178,6 +271,8 @@ describe('Keeper configs', () => {
     const old = { base: pip.id, hairColor: 'mint', eyeColor: 'sky', outfit: 'meadow' };
     expect(completeKeeperConfig(old, KEEPER_DATA)).toEqual({
       ...old,
+      face: pip.id,
+      body: pip.id,
       skinTone: pip.skinTone,
       eyes: pip.face.eyes,
       brows: pip.face.brows,
@@ -202,9 +297,18 @@ describe('Keeper configs', () => {
         eyeColor: base.eyeColor,
         outfit: base.outfit,
       });
-      const built = { ...own, skinTone: 'tone-10', brows: 'straight', extras: ['lashes'] };
+      const built = {
+        ...own,
+        body: 'lanky',
+        skinTone: 'tone-10',
+        brows: 'straight',
+        extras: ['lashes'],
+      };
       const sent = compactKeeperConfig(built, KEEPER_DATA);
       expect(sent).not.toHaveProperty('mouth');
+      // Its own face is left out (#372); another body is sent.
+      expect(sent).not.toHaveProperty('face');
+      expect(sent).toHaveProperty('body', 'lanky');
       expect(completeKeeperConfig(sent, KEEPER_DATA)).toEqual(built);
     }
   });

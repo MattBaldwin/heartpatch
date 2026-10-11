@@ -1325,3 +1325,99 @@ _Proposed in each PR; recorded by the coordinator after merge._
 _Proposed in PR #344; recorded by the coordinator after merge._
 
 - **Additive reply fields.** `CareSquishy` and `HomeSquishy` don't embed `OwnedSquishy`, so each gains `accessory: ContentIdSchema.nullable().default(null)`. Like `CareSquishy.evolving`, a reply from an older server parses as "nothing worn".
+
+## 2026-10-11 — Owner decisions (coordinator)
+
+_Proposed in PR #384 (owner decisions, 2026-10-11); recorded here at the coordinator's request._
+
+- **Full send for Phase 1.** The 4-lane cap is lifted for Phase 1 (due Oct 31).
+- **Migration freeze, Oct 15–18.** No DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18). Outside that window, merge when green, one migration at a time, with #376 first.
+- **Big features.** Fable writes a detailed plan (files, schema and type deltas, migration with backfill and rollback, API and WebSocket, UI flow, edge cases, named tests, risks), posted as an issue comment. Opus codes it, and the PR body lists **Plan deviations**. A Fable reviewer is the second reviewer on the first full review. The supervisor decides "big" when briefing.
+  - **Big** = a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature.
+  - **Not big** = additive optional schema fields, client-only art and UI, data-only content.
+  - **Rulings:** #372B and #376 are big. #261, #379, #372A and the trail and cave are not.
+- **Cost.** Opus codes big features. Sonnet does client UI and content. Every PR review runs the `reviewer` subagent on Opus. Supervisors hand off at about 400k context. Every PR gets a fresh lane session. *Why:* cache reads cost the same on Opus and Sonnet and dominate lane cost.
+- **#368:** PvP shots approved. The Friends button sits top right, by Chat.
+- **#372B:** the starter outfit is a second row on the Body step.
+- **Coordinator approvals:**
+  - #379: additive `SpotInteractionSchema` fields `dive` and `part`. No lake e2e for now. Follow-up: a dev route that guarantees a lake.
+  - #261: additive optional `ClothingVisual` fields `replacesBody` and `model`. `pieces` may be 0 when a model is set.
+
+## 2026-10-11 — Coordinator rules
+
+_Recorded from the coordinator's brief for the playbook, not owner decisions; see `docs/COORDINATOR.md` §2, §3 and §8._
+
+- **Render-check helper.** Before a visual capture reaches the owner, a read-only helper subagent (Agent tool, `general-purpose`, `model: "opus"`, background) checks it and returns PASS or FIX with a list. Captures name their quality tier and show no dev HUD.
+- **Lineage limit.** Sessions nest at most 8 deep, counting the owner's first supervisor session as depth 1. The last supervisor, at depth 7, writes the handoff into the repo and asks the owner to start the next supervisor from a fresh session.
+
+## 2026-10-11 — The Keeper's home (#381), 500 squishies (#382) and computer patch-mates (#386)
+
+_Owner decisions from the "Owner decisions" sections of #381 and #382, and from #386's owner decision; recorded here at the coordinator's request._
+
+**#381, the Keeper's home**
+- **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review.
+- **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
+- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen.
+- **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
+- **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the house feeds Home Base Harmony and reuses its facts; design doc §8, Phase 3; relayed by the coordinator from #381's plan, 2026-10-11); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
+
+**#382, 500 squishies**
+- **Every kind is hand-designed**, one at a time, like today's 48. No generator and no live generation. Draw on the biomes, the lore, the seasons and past owner decisions.
+- **Target mix (500 total; today's 48 count toward it):** common 250, uncommon 150, rare 45, epic 30, legendary 17, mythic 8. The top 100 (rare and up) get fewer kinds at each step up. `mythic` already exists in `RaritySchema` (finish `shimmer`; see #261's shimmer decision).
+- **Wave 1 before the family playtest (Oct 15):** about 30 new kinds, data only. Content needs no DB migration, so it's allowed during the Oct 15–18 migration freeze. More waves follow through Phases 2 and 3.
+- **Collecting takes longer, using all four levers:** (1) region and biome kinds, some only in certain terrains or far from home; (2) time and season kinds: night-only, weather, seasonal and holiday kinds; (3) rarer rares, with lower epic, legendary and mythic odds, plus a few ultra-rare kinds, and the rules staying server-only (rule 6); (4) more evolution branches, reached only by evolving under conditions (builds on #32).
+- **Process:** each wave is data-only and not big. Content lanes run on Sonnet; reviews run on Opus. Each wave gets a mockup (species sheet at iPhone and iPad size, quality tier named, no dev HUD), render-checked and owner-approved before its PR. Pacing levers 2–4 each get their own issue.
+
+**#386, computer patch-mates**
+- **Solo patches can spawn computer Keepers, as a toggle** (an option, not forced), so the patch-mate parts of the game (#381's house requirements, trades, gifts, trading posts, visits) work before friends join. The owner's design questions (who flips the toggle, what computer Keepers do, fairness, personalities) are still open: the plan and mockups propose answers, and the owner decides.
+- **BIG**: a new kind of player, server authority, and likely DB changes. A detailed plan goes up before any code.
+
+## 2026-10-11 — Build rule, happiness rule and creator order (#371, #376, #372)
+
+_Owner requests and decisions from issues #371, #376 and #372; the #376 checkpoint column is coordinator-approved. Recorded here at the coordinator's request._
+
+- **One Build sheet (#371).** Home base, owned tiles and fences build the same way: tap the tile, tap Build, pick the area, pick the type. A fence takes 4 taps or fewer from the map. Client-only: no server, schema or migration change.
+- **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360, and #376 goes first in the migration queue (owner, 2026-10-11). A checkpoint time separate from `lastCaredAt` is coordinator-approved, unless the lane finds a way to avoid a migration.
+- **Keeper creator, step by step (#372).** Face shape, Body type, Skin, Hair style, Hair color, Face details. Face and body become independent choices. Hairstyles are data. PR A is data-only; PR B is the face and body split and the creator UI. Its migration follows the migration-freeze order above (#376 first).
+
+## 2026-10-10 — Supervisor 6 decisions (lean lanes, evolution salt, live defense items)
+
+_Proposed in PRs #358, #360 and #370; recorded here at the coordinator's request._
+
+- **Lean lanes.** CI skips the browser e2e jobs for draft PRs, for stacked PRs (base isn't `main`), and for PRs touching only `docs/`, `.claude/` or root `*.md` (owner-approved 2026-10-10). The coordinator requires e2e success on a code PR's head before merging it.
+- **`HP_EVOLUTION_SALT`** is the server secret for evolution rolls. It's required in production. `deploy.sh` generates it on the first deploy (`openssl rand -hex 32`) and never changes it (coordinator decision). It's backed up with `.env`, and the client never receives it.
+- **No potions or Heart Charms in a live defense** (`liveDefenseItems = false`, owner-confirmed 2026-10-10). A defender's live fight takes no items.
+
+## 2026-10-11 — Owner working style: show screens first, features must be felt
+
+_Owner direction, relayed by the coordinator on 2026-10-11; recorded here and in `docs/COORDINATOR.md` §9._
+
+- **Show the screens before asking.** Always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link.
+- **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
+- **The home must be personal and personalizable.**
+- **Squishies are the most important visual part of the game.** Every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones (#382).
+
+## 2026-10-11 — Owner decisions, confirmed to supervisor 9
+
+_Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier write was blocked). These add to "Owner working style" above._
+
+- **One question at a time, with the screens and the link.** Every approval question is its own question. It says in plain words what is being approved, includes the artifact link, and comes after the images are shown (sent inline or the artifact opened). The recommended option comes first.
+- **Rare squishies glow (#391).** Rare and up get a visible glow-like touch (a glow, halo/rim or sparkles; the owner picks after an A/B), stepping up by rarity. It keeps the squishy's own colours (it must not wash out pale kinds). Finding one is a huge moment: a reveal plus a befriend celebration.
+- **The Keeper's home is immersive and elite (#381).** A living 3D place the player walks into: roaming residents, time of day and seasons, daily reasons to return, 3D furniture placement, paint, signs and memories. It's one of the main reasons players come back.
+- **Squishies are the most important visual part of the game.** Reconfirmed; see "Owner working style" above (unique hook and silhouette per kind, a creative brief with a duplication matrix before building, quality beats dates).
+
+**Owner answers the same day (relayed in the supervisor 8 handoff)**
+
+- **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
+- **#382 wave 1 creative brief:** approved; build rares first.
+- **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
+
+## 2026-10-11 — The step-by-step Keeper creator (#372, PR #394)
+
+_Proposed in PR #394; recorded here at the coordinator's request._
+
+- **The Keeper screen is steps, not one scrolling list:** Face → Body (with outfit) → Skin → Hair → Colors (hair and eye colour) → Details. This updates the owner's #372 order above ("Build rule, happiness rule and creator order"): Hair color becomes Colors and takes eye colour from Face details, so eyes, brows and mouth stay on screen on phones. The change came from a render check and is in the owner-approved mockup revision 2. It also supersedes #289's "The Keeper screen is one scrolling list" and #176's five-row picker.
+- **There is no starting-look row.** This supersedes #289's "The 12 presets are starting looks; one tap sets every row" and "Body shape stays with the starting look for now". `base` stays as the seed root and the fallback for anything not picked. New Keepers are Pip-based, and picking a face or body never changes `base`.
+- **Face and body are independent** (`keepers.face`, `keepers.body`, migration 0044). Each base's own face and body use the base's id, so existing Keepers look the same. Two new bodies: Lanky and Sturdy.
+- **Outfit sits on the Body step** (owner choice c). **Eye colour sits on Colors** with hair colour, so the face stays on screen without scrolling on phones.
+- **In edit mode, Back closes the editor without saving** on every step (plan §5). Open risk noted by the reviewer: a kid who learned that Back means "previous step" could lose unsaved picks.

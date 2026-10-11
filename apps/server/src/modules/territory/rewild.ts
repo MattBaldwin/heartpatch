@@ -6,6 +6,7 @@ import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { guardWatchesOf, writeGuardCheckpoints } from '../jobs/contentment.js';
 import { leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
@@ -37,6 +38,14 @@ export async function rewildTiles(
     byOwner.set(tile.ownerUserId, [...(byOwner.get(tile.ownerUserId) ?? []), tile]);
   }
   const owned = [...byOwner].sort(([a], [b]) => (a < b ? -1 : 1));
+  // Their watch so far held their contentment (#376): when each guard was
+  // posted is read while the land is still theirs, before the posts go; the
+  // checkpoints are written after the squishy locks below (tech spec §7).
+  const posted: string[] = [];
+  for (const tile of going) {
+    posted.push(...(await territory.listDefenders(tile.id, tile.ownerUserId)).map((g) => g.id));
+  }
+  const watches = await guardWatchesOf(tx, posted);
   // Neutral now, remembering when: work and gathers finished before
   // then still go in the bag (jobs' `firstCaptureSince`).
   for (const [userId, list] of owned) {
@@ -102,7 +111,10 @@ export async function rewildTiles(
   // hands); trainees there are locked with them (step 10, one id order).
   const workers = await repo.workersOn(going.map((t) => t.id));
   const trainees = lostFires.flatMap((l) => l.trainees);
-  await createSquishyJobsRepo(tx).lockSquishies([...new Set([...workers, ...trainees])]);
+  await createSquishyJobsRepo(tx).lockSquishies([
+    ...new Set([...workers, ...trainees, ...watches.map((w) => w.squishyId)]),
+  ]);
+  await writeGuardCheckpoints(tx, watches, at);
   const events: NewGameEvent[] =
     workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, refunds) : [];
   if (workers.length === 0) await lockGrantRows(tx, mapId, refunds);

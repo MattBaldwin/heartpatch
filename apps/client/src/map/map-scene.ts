@@ -31,6 +31,8 @@ import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/hom
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import { BorderField } from './border-field.js';
+import { BuildAreaField, type BuildAreaView } from './build-area.js';
+import { buildAreaAt, type BuildAreaHit } from './build-area-layout.js';
 import { FenceField } from './fence-field.js';
 import { fenceLength, fencePlacements } from './fence-layout.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
@@ -322,6 +324,8 @@ export class MapScene {
   private readonly buildings: BuildingField;
   /** Fence segments along tile edges (#203). */
   private readonly fences: FenceField;
+  /** What the Build sheet lights on a tile (#371). */
+  private readonly buildArea: BuildAreaField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
   private readonly safeGlow: Mesh;
   /** Homestead glows (#199): joined, then napping. */
@@ -458,6 +462,7 @@ export class MapScene {
     this.buildings = new BuildingField(scene);
     const fenceMat = vinyl(scene, 'fence-mat', { color: '#ffffff' });
     fenceMat.freeze();
+    this.buildArea = new BuildAreaField(scene, (name) => overlayMaterial(scene, name));
     this.fences = new FenceField(scene, {
       length: fenceLength(HEX_SIZE),
       material: fenceMat,
@@ -765,6 +770,23 @@ export class MapScene {
     const p = hexToWorld(tile, HEX_SIZE);
     this.selection.position.set(p.x, topOf(tile), p.z);
     this.selection.setEnabled(true);
+  }
+
+  /** Lights the edges or middle the Build sheet offers on a tile, or puts them out (null). */
+  showBuildArea(view: Omit<BuildAreaView, 'top'> | null): void {
+    this.buildArea.set(view ? { ...view, top: topOf(view.tile) } : null);
+  }
+
+  /** The edge or middle of the lit tile under a point on the canvas, if any. */
+  pickBuildArea(x: number, y: number): BuildAreaHit | null {
+    const tile = this.buildArea.shown;
+    const camera = this.scene.activeCamera;
+    if (!tile || !camera) return null;
+    const ray = CreatePickingRay(this.scene, x, y, null, camera);
+    if (ray.direction.y >= 0) return null;
+    const t = (topOf(tile) - ray.origin.y) / ray.direction.y;
+    const p = { x: ray.origin.x + ray.direction.x * t, z: ray.origin.z + ray.direction.z * t };
+    return buildAreaAt(tile, p, HEX_SIZE);
   }
 
   /** The tile under a point on the canvas (CSS pixels from its top left), if any. */

@@ -239,7 +239,9 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `state` | enum `squishy_state` | `active` \| `hollowed` |
 | `habitat_building_id` | uuid → buildings, null | The habitat it lives in (#18); `ON DELETE SET NULL` |
 | `contentment_at_last_care` | integer, default 0 | 0–100 (check): contentment right after the last care action (#19) |
-| `last_cared_at` | timestamptz, null | When. Today's contentment is worked out from these two on read (shared `contentmentAt`), so nothing ticks |
+| `last_cared_at` | timestamptz, null | When. Keeps that meaning; contentment now reads from whichever is newer, this pair or the checkpoint below (#376) |
+| `contentment` | integer, default 0 | 0–100 (check `squishies_contentment_checkpoint_range`, migration 0043): contentment at the last checkpoint, written at every care action and job change (#376) |
+| `contentment_since` | timestamptz, null | When. Today's contentment is the checkpoint minus the drift since, leaving out the stretches its job held it steady (shared `contentmentAt` and `holdSpans`), so nothing ticks. Null for rows the previous release wrote: they read from `contentment_at_last_care` / `last_cared_at` |
 | `created_at` | timestamptz | |
 | `team_slot` | smallint, null | Squishy jobs (migration 0021): its place on its owner's battle team, 0 first (check 0–5; unique per map and owner) |
 | `work_tile_id` | uuid → tiles, null | A gatherer's work tile; `ON DELETE SET NULL`. Never with `team_slot` (check `squishies_one_job`) |
