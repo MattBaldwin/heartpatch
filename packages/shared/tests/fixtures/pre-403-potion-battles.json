@@ -1,0 +1,1809 @@
+{
+  "engine": "pre-#403 (origin/main 393b257)",
+  "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+  "battles": [
+    {
+      "name": "faster-wild-foe",
+      "setup": {
+        "seed": "pre-403-faster",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:twirlysprout",
+                "speciesId": "fixture-twirlysprout",
+                "level": 10
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:emberbun",
+                "speciesId": "fixture-emberbun",
+                "level": 10
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-leafy-boop"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "b",
+        "reason": "tuckered-out",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 3,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:twirlysprout",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:emberbun",
+            "xp": 60
+          }
+        ]
+      },
+      "events": 12,
+      "stateHash": "036c381f29ada852369c484c224e3579"
+    },
+    {
+      "name": "two-players",
+      "setup": {
+        "seed": "pre-403-pvp",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:twirlysprout",
+                "speciesId": "fixture-twirlysprout",
+                "level": 10
+              },
+              {
+                "id": "a:pebblesnooze",
+                "speciesId": "fixture-pebblesnooze",
+                "level": 10
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "b:emberbun",
+                "speciesId": "fixture-emberbun",
+                "level": 10
+              },
+              {
+                "id": "b:puddlepuff",
+                "speciesId": "fixture-puddlepuff",
+                "level": 10
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-leafy-boop"
+            },
+            "b": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            },
+            "b": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-dizzy-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-cuddle-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            },
+            "b": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-cuddle-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-zippy-zoom"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-leafy-boop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-dizzy-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-zippy-zoom"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-leafy-boop"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-leafy-boop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-tickle-tackle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-silly-face"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-dizzy-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-zippy-zoom"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-tickle-tackle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            },
+            "b": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "b",
+        "reason": "tuckered-out",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 32,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:twirlysprout",
+            "xp": 40
+          },
+          {
+            "side": "a",
+            "squishyId": "a:pebblesnooze",
+            "xp": 40
+          },
+          {
+            "side": "b",
+            "squishyId": "b:emberbun",
+            "xp": 120
+          },
+          {
+            "side": "b",
+            "squishyId": "b:puddlepuff",
+            "xp": 120
+          }
+        ]
+      },
+      "events": 111,
+      "stateHash": "2e4c382a9969a996055780e25f18dd10"
+    },
+    {
+      "name": "random-0",
+      "setup": {
+        "seed": "pre-403-random-0",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 21
+              },
+              {
+                "id": "a:s1",
+                "speciesId": "fixture-snoozlet",
+                "level": 14
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "balanced"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-snoozlet",
+                "level": 8
+              },
+              {
+                "id": "b:s1",
+                "speciesId": "fixture-puddlepuff",
+                "level": 15
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-cuddle-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-cuddle-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 19,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s1",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s1",
+            "xp": 5
+          }
+        ]
+      },
+      "events": 46,
+      "stateHash": "f98eda5ce226f3715964f7c22310a336"
+    },
+    {
+      "name": "random-1",
+      "setup": {
+        "seed": "pre-403-random-1",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 20
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-emberbun",
+                "level": 25
+              },
+              {
+                "id": "b:s1",
+                "speciesId": "fixture-snoozlet",
+                "level": 21
+              },
+              {
+                "id": "b:s2",
+                "speciesId": "fixture-emberbun",
+                "level": 12
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 17,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 222
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s1",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s2",
+            "xp": 5
+          }
+        ]
+      },
+      "events": 66,
+      "stateHash": "359c427d48c3fa13ac0dea657dbf80a4"
+    },
+    {
+      "name": "random-2",
+      "setup": {
+        "seed": "pre-403-random-2",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 19
+              },
+              {
+                "id": "a:s1",
+                "speciesId": "fixture-emberbun",
+                "level": 19
+              },
+              {
+                "id": "a:s2",
+                "speciesId": "fixture-pebblesnooze",
+                "level": 14
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 16
+              },
+              {
+                "id": "b:s1",
+                "speciesId": "fixture-pebblesnooze",
+                "level": 5
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-rock-a-bye"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 13,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s1",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s2",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 76
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s1",
+            "xp": 76
+          }
+        ]
+      },
+      "events": 42,
+      "stateHash": "3c267ea7eb739d7bf39e40c61e076362"
+    },
+    {
+      "name": "random-3",
+      "setup": {
+        "seed": "pre-403-random-3",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 15
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "balanced"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-pebblesnooze",
+                "level": 15
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 10,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 5
+          }
+        ]
+      },
+      "events": 40,
+      "stateHash": "308a8ef9d060cb3e47d9727f2185aa18"
+    },
+    {
+      "name": "random-4",
+      "setup": {
+        "seed": "pre-403-random-4",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-snoozlet",
+                "level": 18
+              },
+              {
+                "id": "a:s1",
+                "speciesId": "fixture-twirlysprout",
+                "level": 28
+              },
+              {
+                "id": "a:s2",
+                "speciesId": "fixture-puddlepuff",
+                "level": 12
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-emberbun",
+                "level": 9
+              },
+              {
+                "id": "b:s1",
+                "speciesId": "fixture-twirlysprout",
+                "level": 12
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-cuddle-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-belly-flop"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 18,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s1",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s2",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 48
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s1",
+            "xp": 48
+          }
+        ]
+      },
+      "events": 60,
+      "stateHash": "1ab6d829c42e89d6a2b99acc3b83f819"
+    },
+    {
+      "name": "random-5",
+      "setup": {
+        "seed": "pre-403-random-5",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:s0",
+                "speciesId": "fixture-pebblesnooze",
+                "level": 15
+              },
+              {
+                "id": "a:s1",
+                "speciesId": "fixture-snoozlet",
+                "level": 25
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:s0",
+                "speciesId": "fixture-splashmallow",
+                "level": 26
+              },
+              {
+                "id": "b:s1",
+                "speciesId": "fixture-puddlepuff",
+                "level": 8
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "fixture-hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-pebble-puff"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fixture-lullaby"
+            }
+          }
+        }
+      ],
+      "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+      "result": {
+        "winner": "b",
+        "reason": "tuckered-out",
+        "contentHash": "a2f65c2ffb94ec41bdd22528f4267df1",
+        "turns": 9,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:s0",
+            "xp": 5
+          },
+          {
+            "side": "a",
+            "squishyId": "a:s1",
+            "xp": 5
+          },
+          {
+            "side": "b",
+            "squishyId": "b:s0",
+            "xp": 240
+          }
+        ]
+      },
+      "events": 34,
+      "stateHash": "b2057d3e6c6b5af160b6842267c78ccf"
+    }
+  ]
+}

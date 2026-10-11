@@ -1,4 +1,4 @@
-import { GAME_DATA, visualRegistry, type SpeciesVisual } from '@heartpatch/shared';
+import { GAME_DATA, visualRegistry, type Floater, type SpeciesVisual } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { FIXED_COLORS } from './config.js';
 import { hexToRgb, paramsHash, squishyParams, type SquishySpecies } from './params.js';
@@ -147,5 +147,88 @@ describe('squishyParams', () => {
   it('matches the pinned golden hash', () => {
     const p = squishyParams(GOLDEN.species, GOLDEN.instanceId, registry);
     expect(paramsHash(p)).toBe(GOLDEN.hash);
+  });
+});
+
+describe('optional species visual fields stay off by default', () => {
+  it('builds every public species without a floater key', () => {
+    // The client never loads secret species (CLAUDE.md rule 6); the shared
+    // `species-visual-defaults` test covers their visuals.
+    for (const species of GAME_DATA.species) {
+      expect(species.visual, species.id).not.toHaveProperty('floater');
+      for (const instanceId of ['a', 'b']) {
+        expect(squishyParams(species, instanceId, registry), species.id).not.toHaveProperty(
+          'floater',
+        );
+      }
+    }
+  });
+});
+
+describe('floater params', () => {
+  const floater: Floater = {
+    glyph: 'music-note',
+    size: 0.4,
+    above: 0.1,
+    side: 0.4,
+    color: 'detail',
+    bob: { height: 0.05, speed: 0.5 },
+  };
+  const singer = look({ palette: ['#9a70f0', '#ffd0e6', '#1e0a2e', '#ffb627'], floater });
+
+  it('adds only a floater: everything else is built as before', () => {
+    const plain = squishyParams(look({ palette: singer.visual.palette }), 'same', registry);
+    const { floater: built, ...rest } = squishyParams(singer, 'same', registry);
+    expect(rest).toEqual(plain);
+    expect(built).toBeDefined();
+  });
+
+  it('floats above the top and to the viewer’s right, sized from the body', () => {
+    const p = squishyParams(singer, 'f', registry);
+    const blob = registry.bodies.get('blob')!;
+    const f = p.floater!;
+    expect(f.glyph).toBe('music-note');
+    expect(f.size).toBeCloseTo(0.4 * blob.height);
+    expect(f.at[0]).toBeCloseTo(0.4 * blob.width);
+    // Its bottom is `above` over the top.
+    expect(f.at[1] - f.size / 2).toBeCloseTo(p.height + 0.1 * blob.height);
+    expect(f.at[2]).toBe(0);
+    // The palette's `detail` gold (with this squishy's small colour variation).
+    expect(f.color[0] - f.color[2]).toBeGreaterThan(0.6);
+    expect(f.bob).toEqual({ height: 0.05 * blob.height, speed: 0.5 });
+    expect(
+      squishyParams({ ...singer, visual: { ...singer.visual, size: 1.5 } }, 'f', registry).floater!
+        .size,
+    ).toBeCloseTo(f.size * 1.5);
+  });
+
+  it('glows with the parts', () => {
+    expect(squishyParams(singer, 'g', registry).floater!.glow).toBe(false);
+    const glowing = look({ ...singer.visual, glow: 'body' });
+    expect(squishyParams(glowing, 'g', registry).floater!.glow).toBe(true);
+    const accent = look({ ...singer.visual, glow: 'accent' });
+    expect(squishyParams(accent, 'g', registry).floater!.glow).toBe(false);
+  });
+});
+
+describe('sparkle kept off a face', () => {
+  it('adds only the flag: everything else is built as before', () => {
+    const plain = squishyParams(look(), 'same', registry);
+    const { sparkleOffFace, ...rest } = squishyParams(
+      look({ sparkleOffFace: true }),
+      'same',
+      registry,
+    );
+    expect(sparkleOffFace).toBe(true);
+    expect(rest).toEqual(plain);
+    expect(squishyParams(look({ sparkleOffFace: false }), 'same', registry)).toEqual(plain);
+  });
+
+  it('is off for every public species', () => {
+    for (const species of GAME_DATA.species) {
+      expect(squishyParams(species, 'x', registry), species.id).not.toHaveProperty(
+        'sparkleOffFace',
+      );
+    }
   });
 });

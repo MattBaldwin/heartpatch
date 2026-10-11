@@ -23,6 +23,7 @@ import type { QualityTier } from '../engine/config.js';
 import type { SceneContent } from '../engine/stage.js';
 import {
   CONTACT_SHADOW,
+  FLOATER_BATCH,
   type SquishMove,
   type SquishyLod,
   type SquishyLook,
@@ -99,6 +100,8 @@ export interface BattleSceneStats {
   readonly camera: { x: number; y: number; z: number } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
+  /** Each side's sparkle shield bubble is showing (#214; a sip before its move, #403). */
+  readonly shields: Readonly<Record<BattleSideId, boolean>>;
 }
 
 export interface BattleSceneOptions {
@@ -732,6 +735,7 @@ export class BattleScene {
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
         : null,
+      shields: { a: this.shieldShown('a'), b: this.shieldShown('b') },
     };
   }
 
@@ -927,6 +931,8 @@ export class BattleScene {
     for (const m of this.#scene.meshes) {
       if (!(m.name.startsWith('squishy-') || m.name.startsWith('keeper-'))) continue;
       if (m.name.includes('shadow')) continue;
+      // A floater (a music note, say) is a flat sign, not a thing in the light.
+      if (m.name.startsWith(`squishy-${FLOATER_BATCH}`)) continue;
       shadows.addShadowCaster(m, false);
     }
   }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema, DescriptionSchema, DisplayNameSchema, RaritySchema } from './common.js';
 import { ElementIdSchema, FeelingIdSchema } from './elements.js';
-import { PartSlotSchema } from './visuals.js';
+import { PaletteRoleSchema, PartSlotSchema } from './visuals.js';
 
 const statValue = z.number().int().min(1).max(255);
 
@@ -35,6 +35,35 @@ export type Finish = z.infer<typeof FinishSchema>;
 /** What glows (ART_BIBLE §1.4): the whole squishy, or only its `accent` parts. */
 export const GlowSchema = z.enum(['body', 'accent']);
 export type Glow = z.infer<typeof GlowSchema>;
+
+/** A floater's glyph: each kind has one flat shape builder in the client. */
+export const FloaterGlyphSchema = z.enum(['music-note']);
+export type FloaterGlyph = z.infer<typeof FloaterGlyphSchema>;
+
+/**
+ * A flat glyph that floats beside a squishy, always facing the camera (a
+ * music note; later a sleepy Zzz or a sparkle). It moves, hops and goes away
+ * with the squishy, never casts a shadow, and bobs gently unless motion is
+ * reduced. Off unless set. Proportions are of the body's height (`size`,
+ * `above`, `bob.height`) or width (`side`), at the species' size.
+ */
+export const FloaterSchema = z.strictObject({
+  glyph: FloaterGlyphSchema,
+  /** The glyph's height. */
+  size: z.number().min(0.1).max(0.8),
+  /** The gap from the squishy's top to the glyph's bottom (negative tucks it down beside the top). */
+  above: z.number().min(-0.5).max(0.8),
+  /** From the middle to the glyph's centre: positive is the viewer's right when it faces you. */
+  side: z.number().min(-1).max(1),
+  /** Palette role it's drawn in; its outline is a deep shade of the same colour. */
+  color: PaletteRoleSchema,
+  /** Up-and-down bob: its height, and bobs per second (0 holds it still). */
+  bob: z.strictObject({
+    height: z.number().min(0).max(0.2),
+    speed: z.number().min(0).max(2),
+  }),
+});
+export type Floater = z.infer<typeof FloaterSchema>;
 
 export const HexColorSchema = z
   .string()
@@ -79,6 +108,14 @@ export const SpeciesVisualSchema = z.strictObject({
   pose: PoseSchema.optional(),
   /** The slot a move animation swings, stomps or flares (tail, arms, horns…). */
   attackPart: PartSlotSchema.optional(),
+  /** A camera-facing glyph floating beside it (a music note). Off unless set. */
+  floater: FloaterSchema.optional(),
+  /**
+   * Keeps the sparkle tier's flecks (ART_BIBLE §1.4) off the front of its
+   * body, where its face is, and off its underside, so they never read as a
+   * nose or a stray mark. Off unless set.
+   */
+  sparkleOffFace: z.boolean().optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;
 

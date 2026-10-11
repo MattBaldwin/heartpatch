@@ -10,6 +10,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   EXPLORE_RULES,
+  searchSpots,
   ExploreTileResponseSchema,
   hexKey,
   hexNeighbors,
@@ -730,7 +731,18 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     );
     const { first } = await lineFromHome(mapId, me);
     await ownMeadow(first, me);
+    // A meadow's layout comes from the map's random seed, and about 1 in 1,800
+    // seeds gives a tile under two hand spots (#411). Pin the first seed that
+    // gives this tile two, so the two searches below always exist.
+    const handSpots = (seed: string) =>
+      (
+        searchSpots(seed, { q: first.q, r: first.r, terrain: 'meadow' }, EXPLORE_RULES) ?? []
+      ).filter((s) => s.tool === null).length;
+    let n = 0;
+    while (handSpots(`seeker-${String(n)}`) < 2) n += 1;
+    await db.execute(`update maps set seed = 'seeker-${String(n)}' where id = '${mapId}'`);
     const hands = (await view(server, me, mapId, first)).spots.filter((s) => s.tool === null);
+    expect(hands.length).toBeGreaterThanOrEqual(2);
     for (const s of hands.slice(0, 2)) {
       expect((await search(server, me, mapId, first, s.index)).statusCode).toBe(200);
     }

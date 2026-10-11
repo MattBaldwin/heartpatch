@@ -51,6 +51,19 @@ describe('rarity finishes (ART_BIBLE §1.4)', () => {
         });
       }
     }
+    // The off-face bit sits above glow and decodes away first; without it
+    // (every species but the ones that ask), the sums are what they were.
+    const shader = (code: number) => {
+      const offFace = code >= FINISH_CODE.offFace - 0.5;
+      return { ...decode(code - (offFace ? FINISH_CODE.offFace : 0)), offFace };
+    };
+    for (const finish of finishes) {
+      for (const glow of [false, true]) {
+        const code = FINISH_CODE[finish] + (glow ? FINISH_CODE.glow : 0);
+        expect(shader(code)).toEqual({ ...decode(code), offFace: false });
+        expect(shader(code + FINISH_CODE.offFace)).toEqual({ ...decode(code), offFace: true });
+      }
+    }
     // The soft shimmer sits above the shared one and below the glow code.
     expect(FINISH_CODE.shimmerSoft).toBeGreaterThan(FINISH_CODE.shimmer);
     expect(FINISH_CODE.shimmerSoft).toBeLessThan(FINISH_CODE.glow);
