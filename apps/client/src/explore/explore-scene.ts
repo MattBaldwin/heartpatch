@@ -315,6 +315,8 @@ function followBack(i: number, lead: number): number {
 const POSE: HopPose = { lift: 0, squash: 1 };
 /** Where the camera aims while swimming (#399), tile-local. */
 const SWIM_AIM = { x: 0, z: 0 };
+/** The swimmer's feet, tile-local, for the sand under its shadow (#399). */
+const SWIM_FEET = { x: 0, z: 0 };
 /** Dev mockups only (#399): which swim to draw. */
 const swimStyle = (): SwimStyle =>
   (globalThis as { __hpSwimStyle?: SwimStyle }).__hpSwimStyle ?? EXPLORE_SWIM.style;
@@ -1380,7 +1382,13 @@ export class ExploreScene implements AmbientTarget {
       PLACE.z -= Math.cos(this.#yaw) * ahead;
       PLACE.yaw = this.#yaw + sp.sway;
       PLACE.lean = -sp.pitch;
-      PLACE.lift = sp.lift * tall + pivot * (1 - Math.cos(sp.pitch));
+      // The shadow lies on the sand under the shifted feet, not buried in a
+      // dune; the body keeps its height over the swimmer's own point.
+      const floor = PLACE.y;
+      SWIM_FEET.x = PLACE.x / this.#size;
+      SWIM_FEET.z = PLACE.z / this.#size;
+      PLACE.y = this.#groundAt(SWIM_FEET);
+      PLACE.lift = floor - PLACE.y + sp.lift * tall + pivot * (1 - Math.cos(sp.pitch));
       PLACE.squash = sp.squash;
       PLACE.shadow = EXPLORE_SWIM.shadow.scale;
       PLACE.shadowAlpha = EXPLORE_SWIM.shadow.alpha;

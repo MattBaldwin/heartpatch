@@ -314,11 +314,11 @@ export const EXPLORE_SWIM = {
   stretchIn: 0.18, // TUNE
   stretchOut: 0.35, // TUNE
   /** Afloat this share of the swimmer's height above the sand: a clear gap of water under the steep camera. */
-  float: 0.3, // TUNE: the pivot lifts a swimming Keeper higher still
+  float: 0.45, // TUNE: the pivot lifts a swimming Keeper higher still
   /** The camera leads a swimmer by this many times its follow lag, so the long body sits mid-screen. */
   cameraLead: 2, // TUNE
   /** The shadow on the sand under a swimmer: smaller and fainter, so the gap reads from above. */
-  shadow: { scale: 0.7, alpha: 0.35 }, // TUNE
+  shadow: { scale: 0.85, alpha: 0.5 }, // TUNE
   /** Treading water: bob height (share of the height) and bobs a second. */
   tread: { bob: 0.04, rate: 0.45 }, // TUNE
   /** Per style: forward pitch (radians), and the stroke's dip, bob, surge, squash and stretch. */
