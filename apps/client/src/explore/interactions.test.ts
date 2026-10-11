@@ -174,3 +174,54 @@ it('stays done once done', () => {
   const done = run('lift', [{ type: 'easy', t: 0 }]);
   expect(stepInteraction(done, { type: 'down', x: 0, y: 0, t: 1 })).toBe(done);
 });
+
+describe('Snorkel at a bubble spring: tap to catch the bubbles (#335)', () => {
+  const tap = (x: number, t = 0): InteractionInput[] => [
+    { type: 'down', x, y: 120, t },
+    { type: 'up', x, y: 120, t },
+  ];
+
+  it('catches a bubble with each tap', () => {
+    const one = run('dive', tap(100));
+    expect(one.count).toBe(1);
+    expect(one.done).toBe(false);
+    const all = run(
+      'dive',
+      Array.from({ length: INTERACTION.diveBubbles }, (_, i) => tap(60 + i * 40)).flat(),
+    );
+    expect(all.done).toBe(true);
+  });
+
+  it('counts each easy tap, and a long hold catches them all', () => {
+    expect(run('dive', [{ type: 'easy', t: 0 }]).count).toBe(1);
+    const held = run('dive', [
+      { type: 'easy-down', t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(held.done).toBe(true);
+    const letGo = run('dive', [
+      { type: 'easy-down', t: 0 },
+      { type: 'easy-up', t: 100 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(letGo.done).toBe(false);
+  });
+});
+
+describe('Snorkel at a reed bed: swipe the reeds apart (#335)', () => {
+  it('counts each sideways swipe, either way, once', () => {
+    const right = run('part', drag(60, 120, 220, 120));
+    expect(right.count).toBe(1);
+    expect(right.done).toBe(false);
+    // A swipe right, then a separate swipe left, parts them.
+    expect(run('part', [...drag(60, 120, 220, 120), ...drag(220, 120, 60, 120)]).done).toBe(true);
+    // Two swipes the same way do too.
+    expect(run('part', [...drag(60, 120, 220, 120), ...drag(60, 120, 220, 120)]).done).toBe(true);
+  });
+
+  it('ignores up-and-down swipes and tiny wiggles, and parts in one easy tap', () => {
+    expect(run('part', drag(150, 40, 150, 200)).count).toBe(0);
+    expect(run('part', drag(150, 120, 150 + INTERACTION.swipePx / 2, 120)).count).toBe(0);
+    expect(run('part', [{ type: 'easy', t: 0 }]).done).toBe(true);
+  });
+});

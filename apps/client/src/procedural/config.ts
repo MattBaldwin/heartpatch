@@ -118,12 +118,31 @@ export const FINISH = {
    * each band is lit, its strength, and the pearl tint (linear RGB).
    */
   shimmer: { bands: 3.2, width: 0.12, strength: 0.26, tint: [1, 0.9, 0.98] }, // TUNE
+  /**
+   * The softer shimmer Mythic costumes wear (owner, #261): fewer, wider bands
+   * at lower strength, so one pearly sweep crosses a dark, narrow figure
+   * instead of thin stripes. Squishies keep `shimmer` above.
+   */
+  shimmerSoft: { bands: 1.3, width: 0.3, strength: 0.14, tint: [1, 0.9, 0.98] }, // TUNE
   /** Glow: how much of the vinyl's own colour is added back as light. */
   glow: 0.28, // TUNE
 } as const;
 
-/** Codes in `squishEvent`'s spare `w`: the finish, plus 4 when the instance glows. */
-export const FINISH_CODE = { vinyl: 0, sparkle: 1, iridescent: 2, shimmer: 3, glow: 4 } as const;
+/**
+ * Codes in `squishEvent`'s spare `w`: the finish, plus `glow` when the instance
+ * glows. `glow` sits above every finish, so each sum decodes to one pair.
+ */
+export const FINISH_CODE = {
+  vinyl: 0,
+  sparkle: 1,
+  iridescent: 2,
+  shimmer: 3,
+  shimmerSoft: 4,
+  glow: 8,
+} as const;
+
+/** A material finish a piece can be drawn with: the shared `Finish`s plus the costumes' soft shimmer. */
+export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow'>;
 
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';

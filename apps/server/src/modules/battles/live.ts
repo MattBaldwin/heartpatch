@@ -106,10 +106,12 @@ export function liveView(
   mySide: BattleSideId,
   opponentUserId: string,
   active: boolean,
+  opponentHere: boolean,
   at: Date,
 ): LiveBattleView {
   return {
     opponentUserId,
+    opponentHere,
     deadlineAt: active ? live.deadlineAt.toISOString() : null,
     myPick: live.picks[mySide] ?? null,
     opponentPicked: live.picks[otherSide(mySide)] !== undefined,

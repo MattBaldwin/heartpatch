@@ -2,6 +2,7 @@ import {
   CLOTHING_BY_ID,
   GAME_EVENTS,
   OUTFIT_PRESETS,
+  clothingSwatch,
   SQUISHY_SLOT,
   type KeeperConfig,
   type PublicUser,
@@ -407,7 +408,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     const nodes: Node[] = items.map(({ item, count }) => {
       const worn = outfit.trying.includes(item.id);
       const swatch = el('span', { class: 'wardrobe-swatch' });
-      swatch.style.background = item.visual.pieces[0]?.color ?? '#ffffff';
+      swatch.style.background = clothingSwatch(item);
       const parts: Node[] = [
         swatch,
         el('span', { class: 'wardrobe-item-name' }, item.name),

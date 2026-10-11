@@ -162,7 +162,10 @@
   margin: 0 auto;
   padding: 12px;
   border-radius: 24px;
-  background: #fffafc;
+  /* 99%, never solid (#389): a panel tall enough to scroll gets a composited
+     layer, and Chromium culls the map canvas under an opaque one at the
+     wrong height, leaving a page-pink hole near the top of the map. */
+  background: rgb(255 250 252 / 99%);
   box-shadow: 0 10px 30px rgb(74 49 80 / 28%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   color: #4a3150;
@@ -184,7 +187,7 @@
 }
 
 .tile-panel-home {
-  background: #fff6e6;
+  background: rgb(255 246 230 / 99%); /* not solid: see .tile-panel */
 }
 
 .tile-panel-head {

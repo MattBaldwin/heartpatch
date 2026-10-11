@@ -8,15 +8,16 @@ import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
-import type { KeeperConfig, KeeperData, PartShape } from '@heartpatch/shared';
+import type { KeeperConfig, KeeperData } from '@heartpatch/shared';
 import { CONTACT_SHADOW, FINISH_CODE, VINYL, type SquishMove, type SquishyLod } from '../config.js';
 import { createContactShadowMesh } from '../contact-shadow.js';
 import { eventAttribute, eventRunning, type SquishEvent } from '../motion.js';
+import { hollowManArrays } from '../hollow-man/hollow-man.js';
 import { partArrays } from '../part-shapes.js';
 import { SquishPlugin } from '../squish-plugin.js';
 import { KEEPER_LOD } from './keeper-config.js';
 import type { KeeperItem } from './keeper-items.js';
-import { keeperParams, type KeeperParams } from './keeper-params.js';
+import { keeperParams, type KeeperParams, type KeeperShape } from './keeper-params.js';
 
 /**
  * Draws Keepers cheaply, the way `SquishyField` draws squishies (CLAUDE.md
@@ -24,7 +25,8 @@ import { keeperParams, type KeeperParams } from './keeper-params.js';
  * - one shared vinyl material, the squishies' clearcoat look;
  * - one mesh per primitive shape, shared by every Keeper and drawn with thin
  *   instances, so draw calls don't grow with the number of Keepers (five
- *   shapes plus the shadow, however many Keepers);
+ *   shapes plus the shadow, however many Keepers). A costume `model` (the
+ *   Hollow Man) is one more shape, drawn only while someone wears it;
  * - colours are per-instance attributes;
  * - cheers (a hop, a wiggle) run in the vertex shader from one uniform, using
  *   the squishies' squash plugin. Keepers never breathe, so an idle Keeper
@@ -107,7 +109,7 @@ interface Keeper {
 }
 
 interface Batch {
-  readonly shape: PartShape;
+  readonly shape: KeeperShape;
   readonly instances: Instance[];
   mesh: Mesh | null;
   /** Instances came or went: rebuild every buffer. */
@@ -137,7 +139,7 @@ export class KeeperField {
   readonly #data: KeeperData;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
-  readonly #batches = new Map<PartShape, Batch>();
+  readonly #batches = new Map<KeeperShape, Batch>();
   readonly #keepers = new Map<number, Keeper>();
   readonly #shadow: Mesh | null;
   readonly #warned = new Set<string>();
@@ -320,7 +322,7 @@ export class KeeperField {
     return this.#clockAt(now);
   }
 
-  #batch(shape: PartShape): Batch {
+  #batch(shape: KeeperShape): Batch {
     let batch = this.#batches.get(shape);
     if (!batch) {
       batch = {
@@ -406,7 +408,11 @@ export class KeeperField {
     let mesh = batch.mesh;
     if (!mesh) {
       mesh = new Mesh(`keeper-${batch.shape}-${this.#lod}`, this.#scene);
-      const arrays = partArrays(batch.shape, KEEPER_LOD[this.#lod]);
+      const lod = KEEPER_LOD[this.#lod];
+      const arrays =
+        batch.shape === 'model-hollow-man'
+          ? hollowManArrays(this.#scene, lod.modelSegments)
+          : partArrays(batch.shape, lod);
       const data = new VertexData();
       data.positions = arrays.positions;
       data.normals = arrays.normals;
