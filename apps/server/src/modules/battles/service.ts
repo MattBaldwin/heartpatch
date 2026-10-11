@@ -1760,7 +1760,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       if (answer === 'not-now') return { challenge, battle: null };
       const row = await store.findBattle(battleId);
       if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-      return { challenge, battle: toPlayerBattle(row, await seatOf(db, row, user.id)) };
+      return { challenge, battle: await toPlayerBattle(db, row, await seatOf(db, row, user.id)) };
     },
 
     cheer: async (user, battleId, request) => {
