@@ -1,8 +1,9 @@
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
-import { BODIES, PartShapeSchema, type Body } from '@heartpatch/shared';
+import { BODIES, FloaterGlyphSchema, PartShapeSchema, type Body } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { bodyArrays, dot, surfaceNormal, surfacePoint, type MeshArrays } from './body-shape.js';
-import { LOD } from './config.js';
+import { FLOATER, LOD } from './config.js';
+import { floaterArrays } from './floater-shapes.js';
 import { orientTriangles, partArrays } from './part-shapes.js';
 import type { Vec3 } from './params.js';
 import { partMatrix, surfaceFrame } from './placement.js';
@@ -226,6 +227,36 @@ describe('a heart body (cleft)', () => {
       const mesh = orientTriangles(bodyArrays(heart, LOD[lod].bodyRings));
       expectFrontFacing(mesh);
       expect(bounds(mesh).min[1]).toBeCloseTo(0, 6);
+    }
+  });
+});
+
+describe.each(FloaterGlyphSchema.options)('floater glyph %s', (glyph) => {
+  for (const lod of ['low', 'high', 'hero'] as const) {
+    it(`is one unit tall, centred, flat and facing −z (${lod})`, () => {
+      const mesh = floaterArrays(glyph, LOD[lod]);
+      expectFrontFacing(mesh);
+      const { min, max } = bounds(mesh);
+      expect(max[1] - min[1]).toBeCloseTo(1, 6);
+      expect(max[1] + min[1]).toBeCloseTo(0, 6);
+      expect(max[0] + min[0]).toBeCloseTo(0, 6);
+      expect(max[0] - min[0]).toBeLessThan(1);
+      // The glyph lies just in front of its outline (towards the camera).
+      expect(min[2]).toBeCloseTo(-FLOATER.layerGap, 6);
+      expect(max[2]).toBeCloseTo(0, 6);
+      for (let i = 0; i < mesh.normals.length; i += 3) {
+        expect(mesh.normals.slice(i, i + 3)).toEqual([0, 0, -1]);
+      }
+    });
+  }
+
+  it('darkens only its outline, through vertex colours', () => {
+    const mesh = floaterArrays(glyph, LOD.low);
+    expect(mesh.colors).toHaveLength((mesh.positions.length / 3) * 4);
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const rgb = mesh.colors.slice(v * 4, v * 4 + 3);
+      const front = mesh.positions[v * 3 + 2]! < 0;
+      expect(rgb).toEqual(front ? [1, 1, 1] : [...FLOATER.outlineShade]);
     }
   });
 });

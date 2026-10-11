@@ -165,6 +165,23 @@ export const SQUISH = {
   bounce: { height: 0.45, hops: 2, squash: 0.22 }, // TUNE
 } as const;
 
+/** Batch keys (and so mesh names, after `squishy-`) of floater glyphs start with this. */
+export const FLOATER_BATCH = 'floater:';
+
+/**
+ * Floaters (a species' `visual.floater`): a flat, camera-facing glyph beside
+ * the squishy. Where it floats is species data; this is how every glyph is
+ * drawn: a chunky shape over a slightly bigger outline of itself.
+ */
+export const FLOATER = {
+  /** Outline width around the glyph, a share of the glyph's height. */
+  outline: 0.055, // TUNE
+  /** The outline's colour: the glyph's own colour times this (linear RGB), a deep shade of it. */
+  outlineShade: [0.13, 0.08, 0.15], // TUNE
+  /** How far the glyph sits in front of its outline, a share of its height (no z-fighting). */
+  layerGap: 0.01, // TUNE
+} as const;
+
 /** Contact shadow: a soft dark disc under each squishy. */
 export const CONTACT_SHADOW = {
   color: '#6b4b6e', // TUNE: plum, matches the test scene

@@ -23,6 +23,7 @@ import type { QualityTier } from '../engine/config.js';
 import type { SceneContent } from '../engine/stage.js';
 import {
   CONTACT_SHADOW,
+  FLOATER_BATCH,
   type SquishMove,
   type SquishyLod,
   type SquishyLook,
@@ -930,6 +931,8 @@ export class BattleScene {
     for (const m of this.#scene.meshes) {
       if (!(m.name.startsWith('squishy-') || m.name.startsWith('keeper-'))) continue;
       if (m.name.includes('shadow')) continue;
+      // A floater (Heartsong's song note) is a flat sign, not a thing in the light.
+      if (m.name.startsWith(`squishy-${FLOATER_BATCH}`)) continue;
       shadows.addShadowCaster(m, false);
     }
   }
