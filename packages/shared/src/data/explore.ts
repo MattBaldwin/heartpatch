@@ -17,8 +17,10 @@ export const EXPLORE_RULES: ExploreRules = {
     { id: 'flower-bed', name: 'Flower bed', tool: null, interaction: 'shake' },
     { id: 'pumpkin-row', name: 'Pumpkin row', tool: null, interaction: 'lift' },
     { id: 'mound', name: 'Mound', tool: 'shovel', interaction: 'dig' },
-    { id: 'pond', name: 'Pond', tool: 'net', interaction: 'scoop' },
-    { id: 'reeds', name: 'Reeds', tool: 'net', interaction: 'scoop' },
+    // #335: a lake is explored underwater with the Snorkel. The ids stay, so
+    // the kit, the finds and saved progress are unchanged.
+    { id: 'pond', name: 'Bubble spring', tool: 'net', interaction: 'dive' },
+    { id: 'reeds', name: 'Reed bed', tool: 'net', interaction: 'part' },
     { id: 'ledge', name: 'Ledge', tool: 'rope', interaction: 'climb' },
     { id: 'cave', name: 'Cave', tool: 'lantern', interaction: 'light' },
   ],

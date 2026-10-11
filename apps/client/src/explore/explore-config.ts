@@ -251,6 +251,10 @@ export const INTERACTION = {
   climbSteps: 6, // TUNE
   /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
+  /** Snorkel at a bubble spring: bubbles to catch, a tap each (#335). */
+  diveBubbles: 4, // TUNE
+  /** Snorkel at a reed bed: swipes to part the reeds (#335). */
+  partSwipes: 2, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
@@ -264,4 +268,16 @@ export const INTERACTION = {
    * `lightRadius × caveArea` (about the Keeper's own glow).
    */
   caveArea: 0.5, // TUNE
+} as const;
+
+/**
+ * Under a lake (#335, owner's second pass): a Keeper who floats and swims,
+ * with the Snorkel's mask on its face. The water's own life (kelp, fish,
+ * bubbles, caustics) is in lake-config.ts.
+ */
+export const EXPLORE_UNDERWATER = {
+  /** The Keeper swims: floats this share of its height up, leans forward, bobs. */
+  swim: { float: 0.18, lean: 0.38, bob: 0.035, bobSpeed: 1.6 }, // TUNE
+  /** The mask on the face: up the Keeper's height, forward and size by its width. */
+  mask: { up: 0.74, forward: 0.42, size: 0.8 }, // TUNE
 } as const;
