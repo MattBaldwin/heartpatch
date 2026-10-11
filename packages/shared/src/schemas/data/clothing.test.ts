@@ -135,6 +135,20 @@ describe('the clothing catalog', () => {
     ]);
   });
 
+  it('accepts a model with no pieces, and refuses no pieces and no model', () => {
+    const modelOnly = copy();
+    const hollow = modelOnly.find((i) => i.id === 'hollow-man-costume')!;
+    expect(hollow.visual.pieces).toHaveLength(0);
+    expect(hollow.visual.model).toBe('hollow-man');
+    expect(checkClothingData(modelOnly, SEASON_IDS)).toEqual([]);
+
+    const bare = copy();
+    bare.find((i) => i.id === 'witch-hat')!.visual.pieces = [];
+    expect(checkClothingData(bare, SEASON_IDS)).toEqual([
+      expect.stringContaining('at least one piece'),
+    ]);
+  });
+
   it('colours a model costume’s chip from its model', () => {
     const hollow = CLOTHING.find((i) => i.id === 'hollow-man-costume')!;
     expect(clothingSwatch(hollow)).toBe(COSTUME_MODEL_SWATCH['hollow-man']);
