@@ -575,6 +575,11 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     const potion = await pick(server, lee, mine, { type: 'item', item: 'brave-brew' });
     expect(potion.statusCode).toBe(409);
     expect(errorOf(potion).message).toMatch(/potions/);
+    // A free sip with a move (#403) follows the same rule.
+    const move = mine.view.sides[mine.mySide].squishies[0]!.moves[0]!;
+    const sip = await pick(server, lee, mine, { type: 'move', move, item: 'brave-brew' });
+    expect(sip.statusCode).toBe(409);
+    expect(errorOf(sip).message).toMatch(/potions/);
     const charm = await pick(server, lee, mine, { type: 'capture' });
     expect(charm.statusCode).toBe(409);
 

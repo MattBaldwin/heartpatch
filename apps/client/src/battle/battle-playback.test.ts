@@ -1,7 +1,7 @@
 import type { BattleEventView, PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '@heartpatch/shared';
-import { applyStep, FENCE_LINES, playbackSteps, shownFrom } from './battle-playback.js';
+import { applyStep, FENCE_LINES, playbackSteps, shownFrom, sipStep } from './battle-playback.js';
 import { BattleContent, benchOf, energyPercent, natureLine, plateName } from './battle-view.js';
 
 /** A small battle view, with species and moves the public tables don't have. */
@@ -390,5 +390,39 @@ describe('view helpers', () => {
       },
     };
     expect(shownFrom(resumed).a.chips[0]).toEqual({ attack: false, defense: true, shield: true });
+  });
+
+  it('a free sip (#403) plays the same sip step on my squishy that’s out, before the turn', () => {
+    const b = battle([]);
+    const content = new BattleContent(b);
+    const step = sipStep(b, content, 'cozy-cocoa');
+    expect(step).toMatchObject({
+      kind: 'item',
+      side: 'a',
+      slot: 0,
+      item: 'cozy-cocoa',
+      squish: 'bounce',
+      text: 'Puff sipped Cozy Cocoa! So snug!',
+    });
+    // The same step the log's `item` event plays once the turn comes back.
+    const logged = playbackSteps(
+      battle([{ ...at('a'), type: 'item', item: 'cozy-cocoa' }]),
+      content,
+      0,
+    )[0];
+    expect(step).toEqual(logged);
+    // After a swap, it's whoever is out now.
+    const swapped = battle([]);
+    const out: PlayerBattle = {
+      ...swapped,
+      view: {
+        ...swapped.view,
+        sides: { ...swapped.view.sides, a: { ...swapped.view.sides.a, active: 1 } },
+      },
+    };
+    expect(sipStep(out, content, 'brave-brew')).toMatchObject({
+      slot: 1,
+      text: 'Mallow sipped Brave Brew! Feeling bold!',
+    });
   });
 });

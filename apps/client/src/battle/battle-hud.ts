@@ -11,6 +11,8 @@ import {
   itemButtonName,
   NO_CHIPS,
   pickLine,
+  sippedLabel,
+  sippedName,
   type PlateChips,
   type PotionTile,
 } from './potions.js';
@@ -52,6 +54,13 @@ export type ControlMode =
        * it loads), and the picker's tiles. Null in a replay.
        */
       items: { total: number | null; tiles: PotionTile[]; who: string } | null;
+      /**
+       * The potion sipped for this turn (a free sip, #403), not sent yet:
+       * the moves carry it, its button reads "Sipped ✓" and puts it back,
+       * and the Heart Charm and Swap wait (a sip rides with a move). Null or
+       * missing: none.
+       */
+      sipped?: string | null;
       /** Breaking a fence (#203): the turn it is, and the most it lasts. Null elsewhere. */
       fence?: { turn: number; limit: number } | null;
       /**
@@ -144,6 +153,14 @@ export interface BattleHudOptions {
    * screen checks the bag again and explains or goes ahead.
    */
   onNoItem: (tile: PotionTile) => void;
+  /**
+   * A potion was picked (#403): a free sip. The screen shows it ("Sipped ✓",
+   * a sparkle, the shield) and keeps the moves open; the sip goes out with
+   * the move.
+   */
+  onSip: (id: string) => void;
+  /** The "Sipped ✓" button was tapped: the potion goes back in the bag. */
+  onUnsip: () => void;
 }
 
 /** Which side a plate shows, for the dev hook and tests. */
@@ -340,6 +357,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   ): void => {
     delete controls.dataset['view'];
     problem.textContent = '';
+    // The picker asks its own question: the last caption steps aside so the
+    // tiles and Back fit the sheet on a phone (style guide §3).
+    caption.hidden = true;
     const tiles = el('div', { class: 'battle-items' });
     for (const tile of items.tiles) {
       const count = el(
@@ -363,7 +383,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         count,
       );
       node.addEventListener('click', () => {
-        if (tile.state === 'ready') act({ type: 'item', item: tile.id });
+        problem.textContent = '';
+        if (tile.state === 'ready') options.onSip(tile.id);
         else options.onNoItem(tile);
       });
       tiles.append(node);
@@ -420,6 +441,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
 
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
+    // Back from the potion picker: the caption returns.
+    caption.hidden = caption.textContent === '';
     controls.hidden = mode.type === 'hidden';
     sheet.dataset['mode'] = mode.type;
     // The base pick (moves, Swap, Run): a live battle lays it out as one grid
@@ -428,13 +451,19 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     else delete controls.dataset['view'];
     switch (mode.type) {
       case 'choose': {
+        const sipped = mode.sipped ?? null;
         const moves = el('div', { class: 'battle-moves' });
         for (const move of mode.moves) {
           moves.append(
             button(
               move.name,
               () => {
-                act({ type: 'move', move: move.id });
+                // A sipped potion goes out with the move (a free sip, #403).
+                act(
+                  sipped === null
+                    ? { type: 'move', move: move.id }
+                    : { type: 'move', move: move.id, item: sipped },
+                );
               },
               { testId: 'battle-move' },
             ),
@@ -442,7 +471,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         }
         const row = el('div', { class: 'battle-row' });
         let hint: HTMLElement | null = null;
-        if (mode.capture) {
+        if (mode.capture && sipped === null) {
           // Always there in a wild battle, so a player learns befriending
           // exists; with none in the bag it stays, dimmed, and explains.
           const charm = charmButton(mode.capture.charms);
@@ -471,7 +500,17 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         // compact potion button right beside it, and one Swap that asks who
         // comes out, so all three fit a 375 px phone with a full team. Run
         // away wraps to line 2, as before.
-        if (mode.items) {
+        if (mode.items && sipped !== null) {
+          // Sipped, not sent yet: tap to put it back (style guide §3: forgiving).
+          const done = button(sippedLabel(sipped), options.onUnsip, {
+            small: true,
+            testId: 'battle-item',
+          });
+          done.classList.add('battle-button-sipped');
+          done.dataset['sipped'] = sipped;
+          done.setAttribute('aria-label', sippedName(sipped));
+          row.append(done);
+        } else if (mode.items) {
           const items = mode.items;
           const potions = button(
             itemButtonLabel(items.total),
@@ -485,7 +524,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           if (items.total === 0) potions.classList.add('battle-button-empty');
           row.append(potions);
         }
-        if (mode.bench.length > 0) {
+        if (mode.bench.length > 0 && sipped === null) {
           row.append(
             button(
               'Swap',

@@ -504,6 +504,13 @@ describe.skipIf(!url)('live tile defense (#29-C, needs DATABASE_URL)', () => {
     const potion = await act(server, lee, battle!, { type: 'item', item: 'brave-brew' });
     expect(potion.statusCode).toBe(409);
     expect(errorOf(potion).message).toMatch(/No potions in a live defense/);
+    // A free sip with a move (#403) follows the same rule.
+    const sip = await act(server, lee, battle!, {
+      ...(nextAction(await get(server, lee, battle!)) as { type: 'move'; move: string }),
+      item: 'brave-brew',
+    });
+    expect(sip.statusCode).toBe(409);
+    expect(errorOf(sip).message).toMatch(/No potions in a live defense/);
   });
 
   it('the challenger’s own waiting Battle me? goes when the challenge starts', async () => {
@@ -575,6 +582,55 @@ describe.skipIf(!url)('live tile defense (#29-C, needs DATABASE_URL)', () => {
     });
     expect(played.view.turn).toBe(1);
     expect(played.view.sides.b.itemsUsed).toEqual(['brave-brew']);
+  });
+
+  it('with potions switched on: a free sip rides with the move, out of the bag at once (#403)', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    const { battle } = AnswerChallengeResponseSchema.parse(
+      (await answer(server, sam, prompt.challengeId, 'yes')).json(),
+    );
+    const given = await call(server, 'POST', `/maps/${mapId}/dev/items`, sam, {
+      items: { 'cozy-cocoa': 1 },
+    });
+    expect(given.statusCode, given.body).toBe(201);
+    const battles = createBattlesService({
+      db,
+      clock: () => clock,
+      tileBattles: createTileBattlePort(),
+      liveRules: { ...LIVE_BATTLE_RULES, liveDefenseItems: true },
+    });
+    const samUser = { id: sam.id, username: 'sam' };
+    const move = nextAction(battle!) as { type: 'move'; move: string };
+    const picked = await battles.act(samUser, battle!.id, {
+      action: { ...move, item: 'cozy-cocoa' },
+      turn: 0,
+    });
+    expect(picked.live?.myPick).toEqual({ ...move, item: 'cozy-cocoa' });
+    const cocoa = await db.query.inventories.findFirst({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.userId, sam.id), eq(t.itemId, 'cozy-cocoa')),
+    });
+    expect(cocoa?.quantity ?? 0).toBe(0);
+    // Final for the turn: the potion is on its way.
+    await expect(battles.act(samUser, battle!.id, { action: move, turn: 0 })).rejects.toThrow(
+      /on its way/,
+    );
+    const leeView = await get(server, lee, started);
+    const played = await battles.act({ id: lee.id, username: 'lee' }, started.id, {
+      action: nextAction(leeView),
+      turn: 0,
+    });
+    expect(played.view.turn).toBe(1);
+    expect(played.view.sides.b.itemsUsed).toEqual(['cozy-cocoa']);
+    // Sam's squishy sipped and still moved.
+    expect(played.view.log.filter((e) => 'side' in e && e.side === 'b').map((e) => e.type)).toEqual(
+      expect.arrayContaining(['item', 'move']),
+    );
   });
 
   it('a defender already weighing a prompt isn’t asked again', async () => {
