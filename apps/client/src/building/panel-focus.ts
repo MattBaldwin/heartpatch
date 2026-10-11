@@ -13,12 +13,14 @@ export function onPanelFocus(next: ((focused: boolean) => void) | null): void {
 
 /** `owner` takes the panel over (focused) or gives it back. */
 export function setPanelFocus(container: HTMLElement, owner: string, focused: boolean): void {
-  container.classList.toggle('tile-actions-focus', focused);
-  container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
-  container.closest('.tile-panel')?.classList.toggle('tile-panel-building', focused);
   const before = owners.size > 0;
   if (focused) owners.add(owner);
   else owners.delete(owner);
   const after = owners.size > 0;
+  // This slot's own mark, per caller; the panel's follow whoever still holds it,
+  // so one feature letting go (a redraw) never undoes another's step.
+  container.classList.toggle('tile-actions-focus', focused);
+  container.parentElement?.classList.toggle('tile-panel-actions-focus', after);
+  container.closest('.tile-panel')?.classList.toggle('tile-panel-building', after);
   if (after !== before) listener?.(after);
 }

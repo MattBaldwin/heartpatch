@@ -139,12 +139,13 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
     }
     const open_ = openFor(tile, view);
     picked = picked.filter((e) => open_.includes(e));
+    // Only a tap on a card saves the pick; until then it follows the bag, so the
+    // first card you can pay for wins once the bag has loaded.
     const card = pickCard(cards, selectedId, bag);
-    selectedId = card?.id ?? null;
     const edgeCard = card?.area === 'edges';
     sheet.update({
       cards,
-      selectedId,
+      selectedId: card?.id ?? null,
       bag,
       areas: edgeCard ? picked.length : 1,
       hint: edgeCard

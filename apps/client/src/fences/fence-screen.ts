@@ -17,13 +17,13 @@ import { fenceApi, type FenceApi } from './fence-api.js';
 import {
   canAfford,
   edgeName,
+  fenceBuildCards,
   fenceCard,
   fenceIcon,
   FENCE_TEXT,
   isInterior,
   openEdges,
 } from './fence-model.js';
-import { fenceBuildCards } from './fence-model.js';
 import { setPanelFocus } from '../building/panel-focus.js';
 import type { BuildSource } from '../building/tile-build.js';
 import './fences.css';

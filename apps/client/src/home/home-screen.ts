@@ -18,6 +18,7 @@ import type { InventoryResponse } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import { BUILD_TEXT, pickCard, type BuildCard } from '../building/build-model.js';
 import { createBuildSheet } from '../building/build-sheet.js';
+import { setPanelFocus } from '../building/panel-focus.js';
 import type { BuildSource } from '../building/tile-build.js';
 import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
 import { createFactoryPanel } from '../factory/factory-panel.js';
@@ -1655,8 +1656,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // A step of a fire's card (build, upgrade, take down) has the panel to
     // itself, so it stays short and clear of the side trays.
     const focused = mine && tile.homeSlot === null && tileMode !== 'card';
-    container.classList.toggle('tile-actions-focus', focused);
-    container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
+    setPanelFocus(container, 'home-fire', focused);
     if (mine && tile.homeSlot === null) {
       if (!home) void loadForPanel();
       container.replaceChildren(...landTileNodes(tile));
@@ -1803,8 +1803,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       hide: () => {
         panel?.container.replaceChildren();
-        panel?.container.classList.remove('tile-actions-focus');
-        panel?.container.parentElement?.classList.remove('tile-panel-actions-focus');
+        if (panel) setPanelFocus(panel.container, 'home-fire', false);
         panel = null;
         render();
       },

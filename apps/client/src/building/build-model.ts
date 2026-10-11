@@ -92,7 +92,7 @@ export const BUILD_TEXT = {
   build: '🔨 Build',
   go: 'Build!',
   cancel: 'Not now',
-  tapEdges: 'Tap the glowing edges!',
+  tapEdges: 'Tap an edge to switch it off or on!',
   tapSpot: 'Tap a glowing spot!',
   spotChosen: 'Pretty spot! Tap another to change it.',
   centre: 'It goes right in the middle!',
@@ -102,6 +102,4 @@ export const BUILD_TEXT = {
   needMore: "Your bag doesn't have enough for that yet.",
   recipeBook: '📖 Recipe book',
   working: 'Building…',
-  edgeOn: (name: string) => `${name} edge: fenced`,
-  edgeOff: (name: string) => `${name} edge: no fence`,
 } as const;

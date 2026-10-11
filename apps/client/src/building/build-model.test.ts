@@ -62,6 +62,18 @@ describe('build model (#371)', () => {
     for (const line of Object.values(BUILD_TEXT)) {
       if (typeof line === 'string') expect(findAvoidedWords(line)).toEqual([]);
     }
-    expect(findAvoidedWords(BUILD_TEXT.edgeOn('east'))).toEqual([]);
+  });
+});
+
+describe('the first card you can pay for (#371)', () => {
+  it('follows the bag once it has loaded, until a card is tapped', () => {
+    const fire = card({ id: 'fire', area: 'spot', cost: { timber: 5 } });
+    const hedge = card();
+    // The bag isn't here yet: the first unblocked card shows.
+    expect(pickCard([fire, hedge], null, null)?.id).toBe('fire');
+    // It loads with greens but no timber: the pick moves to what you can pay for.
+    expect(pickCard([fire, hedge], null, { greens: 9 })?.id).toBe('hedge');
+    // A tapped card stays picked, whatever the bag says.
+    expect(pickCard([fire, hedge], 'fire', { greens: 9 })?.id).toBe('fire');
   });
 });
