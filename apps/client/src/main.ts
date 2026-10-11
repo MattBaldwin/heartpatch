@@ -633,11 +633,12 @@ const maps = createMapScreen({
   tileActions: combineTileActions(
     wildPicker.tileActions,
     inventory.tileActions,
+    // Build sits near the top of a tile's actions, so it's never scrolled away.
+    tileBuild.tileActions,
     home.tileActions,
     explore.tileActions,
     land.tileActions,
     fences.tileActions,
-    tileBuild.tileActions,
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
