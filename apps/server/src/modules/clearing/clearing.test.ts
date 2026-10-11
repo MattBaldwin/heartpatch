@@ -81,13 +81,11 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
       .returning({ id: users.id });
     await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     const { token, tokenHash } = newSessionToken();
-    await db
-      .insert(sessions)
-      .values({
-        userId: user!.id,
-        tokenHash,
-        expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
-      });
+    await db.insert(sessions).values({
+      userId: user!.id,
+      tokenHash,
+      expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
+    });
     return { id: user!.id, token };
   }
 
