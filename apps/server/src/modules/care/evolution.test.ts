@@ -10,7 +10,7 @@ import {
 } from '@heartpatch/shared';
 import { EVOLUTION_RULES, SERVER_GAME_DATA, rollEvolution } from '@heartpatch/shared/server';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
@@ -23,8 +23,23 @@ import {
   formsAt,
   type LoggedRoll,
 } from './evolution.js';
+import type * as EvolutionModule from './evolution.js';
 import { createCareRepo } from './repo.js';
 import { applyXp, growthEvents } from './service.js';
+
+/** When set, `formsAt` returns just this form: the roll-free path no real line reaches any more. */
+type Form = ReturnType<typeof EvolutionModule.formsAt>[number];
+const oneForm = vi.hoisted(() => ({ current: null as { from: string; form: Form } | null }));
+vi.mock('./evolution.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof EvolutionModule>();
+  return {
+    ...actual,
+    formsAt: (speciesId: string, level: number) =>
+      oneForm.current && speciesId === oneForm.current.from
+        ? [oneForm.current.form]
+        : actual.formsAt(speciesId, level),
+  };
+});
 
 /*
  * Branching evolution on the server (#32): rolls, pity, logging and replay,
@@ -306,30 +321,48 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
   });
 
   it('never rolls a step with one form', async () => {
+    // Nearly every real line branches since batch 4 of #32, so make the step a one-form one.
+    const only = formsAt(BASE.id, STEP.level)[0]!;
+    oneForm.current = { from: BASE.id, form: only };
+    try {
+      const server = await start();
+      const who = await player();
+      const mapId = await newMap(server, who);
+      const id = await squishy(mapId, who, leaning(BRANCH_FEELING));
+      const growth = await grow(id);
+      expect(growth?.evolutions).toEqual([
+        { fromSpeciesId: BASE.id, intoSpeciesId: only.into, branch: false },
+      ]);
+      expect((await evolutionsOf(id))[0]).toMatchObject({
+        roll: null,
+        branch: false,
+        userId: who.id,
+      });
+    } finally {
+      oneForm.current = null;
+    }
+  });
+
+  it("leaves `branch` off the care list's new-form card for a default form", async () => {
     const server = await start();
     const who = await player();
     const mapId = await newMap(server, who);
-    const single = GAME_DATA.species.find(
-      (s) => s.evolutions.length === 1 && formsAt(s.id, 100).length === 1,
-    )!;
-    const level = single.evolutions[0]!.level - 1;
     const id = await squishy(mapId, who, {
-      speciesId: single.id,
-      element: single.element,
-      feeling: single.feeling,
-      level,
-      xp: xpForLevel(level, GROWTH_RULES),
+      speciesId: DEFAULT.id,
+      element: DEFAULT.element,
+      feeling: DEFAULT.feeling,
+      level: STEP.level,
     });
-    const growth = await grow(id);
-    expect(growth?.evolutions).toEqual([
-      { fromSpeciesId: single.id, intoSpeciesId: single.evolutions[0]!.into, branch: false },
-    ]);
-    expect((await evolutionsOf(id))[0]).toMatchObject({
-      roll: null,
-      branch: false,
+    await db.insert(squishyEvolutions).values({
+      mapId,
+      squishyId: id,
       userId: who.id,
+      fromSpeciesId: BASE.id,
+      intoSpeciesId: DEFAULT.id,
+      level: STEP.level,
+      branch: false,
+      evolvedAt: clock,
     });
-    // The care list's celebration leaves `branch` off for a default form.
     const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
     const mine = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
     expect(mine?.newEvolution).toBeDefined();

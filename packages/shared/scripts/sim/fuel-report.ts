@@ -2,13 +2,23 @@ import { CURRENT_RULES, type ProgressionConfig } from './progression-config.js';
 import { modelData, runProgression } from './progression.js';
 import { generateMap } from '../../src/mapgen/index.js';
 import { GAME_DATA } from '../../src/data/index.js';
-import { hexKey } from '../../src/hex/index.js';
+import { hexKey, type HexKey } from '../../src/hex/index.js';
 import type { FuelConfig } from './fuel-config.js';
 import { COVER_LIMITS, coverDay, type CoverDay } from './fuel-cover.js';
 import { FUEL_LIMITS, FUEL_PER_NIGHT, emberwoodLand, fuelDay, type FuelDay } from './fuel.js';
+import { ECONOMY_CONFIG } from './economy-config.js';
+import { exploreDay, homesteadsOf, type ExploreProgress } from './economy.js';
+import { PLACEMENT_RULES, placementCover, type PlacementCover } from './fuel-placement.js';
 
-/** A day of fuel, and whether all the land can be lit (#277). */
-export type FuelCoverDay = FuelDay & { readonly cover: CoverDay };
+/**
+ * A day of fuel, whether all the land can be lit (#277), and how much of it
+ * each rule for where fires may stand can light (#295).
+ */
+export type FuelCoverDay = FuelDay & {
+  readonly cover: CoverDay;
+  readonly homesteads: number;
+  readonly placement: readonly PlacementCover[];
+};
 
 /** One kind of kid on one map size. */
 export interface FuelRow {
@@ -31,6 +41,17 @@ export function runFuel(config: FuelConfig, progression: ProgressionConfig): Fue
       if (!kid) throw new Error(`no progression kid "${profile.id}"`);
       const run = runProgression(data, short, CURRENT_RULES, kid, seats);
       const record = run.kids[0]?.days ?? [];
+      // Homesteads come from the economy model's exploring (#199), day by day.
+      const explorer = ECONOMY_CONFIG.profiles.find((p) => p.kid === profile.id);
+      const progress: ExploreProgress = new Map();
+      const homesteadsOn = new Map<number, ReadonlySet<HexKey>>();
+      for (let day = 1; day <= days; day++) {
+        const today = record[day - 1];
+        if (!today) throw new Error(`no day ${String(day)} in the progression run`);
+        if (explorer) exploreDay(progress, today.land, tiles, progression.mapSeed, explorer);
+        if (config.days.includes(day))
+          homesteadsOn.set(day, homesteadsOf(today.land, tiles, progress));
+      }
       rows.push({
         seats,
         kid: profile.id,
@@ -38,9 +59,12 @@ export function runFuel(config: FuelConfig, progression: ProgressionConfig): Fue
           const today = record[day - 1];
           if (!today) throw new Error(`no day ${String(day)} in the progression run`);
           const fuel = fuelDay(day, profile, emberwoodLand(today.land, tiles));
+          const homesteads = homesteadsOn.get(day) ?? new Set();
           return {
             ...fuel,
             cover: coverDay(profile, day, today.land, tiles, fuel.fuelFires),
+            homesteads: homesteads.size,
+            placement: placementCover(today.land, tiles, homesteads, fuel.fuelFires),
           };
         }),
       });
@@ -90,6 +114,26 @@ export function renderFuel(
       const verdict = c.fuelOk && c.costOk ? 'yes' : !c.fuelOk ? 'no: fuel' : 'no: build cost';
       lines.push(
         `| ${String(row.seats)} | ${row.kid} | ${String(d.day)} | ${String(c.fires)} | ${String(c.wideFires)} | ${String(d.keeper + d.gatherers)} | ${items(c.cost)} | ${items(c.budget)} | ${String(c.outOfReach)} | **${verdict}** |`,
+      );
+    }
+  }
+  lines.push(
+    '',
+    '## Where fires may stand (#295)',
+    '',
+    'One building per tile, with clearing (#242). Each rule places fires where they light the most of the land (level 1 while the fuel lasts, else level 3). Lit is the share of outer land a fire reaches; free homesteads are those left for the Training Grounds and the Crafting Factory.',
+    '',
+    `| Seats | Kid | Day | Outer tiles | Homesteads | ${PLACEMENT_RULES.map((r) => r.label).join(' | ')} |`,
+    `|---|---|---|---|---|${PLACEMENT_RULES.map(() => '---|').join('')}`,
+  );
+  for (const row of rows) {
+    for (const d of row.days) {
+      const cells = d.placement.map((p) => {
+        const share = p.outer === 0 ? 100 : Math.round((p.lit * 100) / p.outer);
+        return `${String(share)} % (${String(p.fires)} fires, ${String(p.freeHomesteads)} free)`;
+      });
+      lines.push(
+        `| ${String(row.seats)} | ${row.kid} | ${String(d.day)} | ${String(d.outer)} | ${String(d.homesteads)} | ${cells.join(' | ')} |`,
       );
     }
   }

@@ -15,7 +15,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
   // Everyday tables: any season, any time of day. TUNE: every weight.
   {
     id: 'meadow',
-    terrains: ['meadow'],
+    terrains: ['meadow', 'clearing'], // #242: cleared land spawns like a meadow
     entries: [
       { species: 'fuzzbolt', weight: 6 },
       { species: 'emberbun', weight: 5 },

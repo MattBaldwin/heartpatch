@@ -74,6 +74,19 @@ export const TERRAINS: Terrain[] = [
     nodeResources: [],
   },
   {
+    // Cleared land (#242): a tile its owner cleared turns into this terrain on
+    // its row (`tiles.terrain`), so everything that reads terrain treats it
+    // the same everywhere. Never scattered or seeded: no nodes, no extra
+    // nodes, no land yield (`JOB_RULES.terrainYields`), no explore layout.
+    // Spawns and guardians use the meadow's everyday tables.
+    id: 'clearing',
+    name: 'Cleared Land',
+    description: 'Tidy, open ground, ready for something new.',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+  },
+  {
     id: 'junipers-gap',
     name: "Juniper's Gap",
     description: 'The valley where the Heartpatch once glowed.',
