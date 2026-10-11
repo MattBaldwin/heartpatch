@@ -18,7 +18,7 @@ import type { FlowerKind, TreeKind } from './land-layout.js';
 //
 // The lake, trail and cave build on the same kit.
 
-type Part = Mesh;
+export type Part = Mesh;
 
 const srgb = (hex: string) => Color3.FromHexString(hex).toLinearSpace();
 
@@ -26,7 +26,7 @@ const srgb = (hex: string) => Color3.FromHexString(hex).toLinearSpace();
  * Paints a part from `bottom` at local height `y0` to `top` at `y1` (world
  * units, after its transform), linear colour.
  */
-function shaded(mesh: Part, bottom: string, top: string, y0: number, y1: number): Part {
+export function shaded(mesh: Part, bottom: string, top: string, y0: number, y1: number): Part {
   mesh.bakeCurrentTransformIntoVertices();
   const pos = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
   const a = srgb(bottom);
@@ -42,13 +42,13 @@ function shaded(mesh: Part, bottom: string, top: string, y0: number, y1: number)
   return mesh;
 }
 
-const flat = (mesh: Part, hex: string): Part => shaded(mesh, hex, hex, 0, 1);
+export const flat = (mesh: Part, hex: string): Part => shaded(mesh, hex, hex, 0, 1);
 
 /**
  * A round part: a smooth icosphere, far cheaper than a UV sphere for the
  * same roundness (`segments` picks its subdivisions: 20 × n² triangles).
  */
-function sphere(
+export function sphere(
   scene: Scene,
   d: number,
   segments: number,
@@ -62,7 +62,7 @@ function sphere(
   return m;
 }
 
-function cylinder(
+export function cylinder(
   scene: Scene,
   h: number,
   top: number,

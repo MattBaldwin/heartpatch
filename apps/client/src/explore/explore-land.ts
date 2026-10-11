@@ -46,7 +46,13 @@ import {
   buildTree,
   buildTuft,
 } from './land-kit.js';
-import { landLayout, type Growth, type LandLayout, type MoteHome } from './land-layout.js';
+import {
+  landLayout,
+  type Growth,
+  type LandLayout,
+  type LayoutInput,
+  type MoteHome,
+} from './land-layout.js';
 import { paintGround } from './land-paint.js';
 import { landField, unwarp, type LandField } from './land-shape.js';
 
@@ -80,6 +86,21 @@ export interface LandOptions {
   readonly start: WorldPoint;
   readonly tier: QualityTier;
   readonly sky: SkyLook;
+  /**
+   * A biome's own layers on top of the shared ones (#335: the lake, trail
+   * and cave lanes): `place` runs inside `landLayout` (its `extras`), and
+   * each layer named in `layers` is drawn from its places with that mesh,
+   * one thin-instanced draw call each, on the land's matte material.
+   */
+  readonly extras?: {
+    readonly place: NonNullable<LayoutInput['extras']>;
+    readonly layers: Readonly<
+      Record<
+        string,
+        { readonly build: (scene: Scene) => Mesh; readonly sway?: number; readonly thins?: boolean }
+      >
+    >;
+  };
 }
 
 /** One thin-instanced layer: its mesh, how many there are, and whether the tier thins it. */
@@ -152,6 +173,7 @@ export class ExploreLand {
       start,
       sun: { x: sd.x / -sd.y, z: sd.z / -sd.y },
       shadow: LAND_LIGHT.shadow,
+      ...(options.extras ? { extras: options.extras.place } : {}),
     });
 
     // ── The ground: a warped grid (fine near the tile, coarse far out) and its painted texture ─
@@ -199,6 +221,14 @@ export class ExploreLand {
     this.#grow('lamp-glass', lamp.glass, L.lamps, this.#lampGlass, {});
 
     // ── Life: drifting motes on the terrain plugin ─
+    // A biome's own layers (`LandOptions.extras`), after the shared ones.
+    for (const [name, layer] of Object.entries(options.extras?.layers ?? {})) {
+      this.#grow(name, layer.build(scene), L.extras[name] ?? [], landMat, {
+        ...(layer.sway !== undefined ? { sway: layer.sway } : {}),
+        ...(layer.thins !== undefined ? { thins: layer.thins } : {}),
+      });
+    }
+
     this.#drift(
       'butterflies',
       buildButterfly(scene),
@@ -292,6 +322,8 @@ export class ExploreLand {
     );
     this.#fill.groundColor = linear(LAND_LIGHT.bounce).multiply(tint);
     this.#fill.intensity = LAND_LIGHT.fill;
+    // Both multiply what `ExploreSky.set` has just set for this look (absolute values),
+    // so call this straight after it, as `ExploreScene.setSky` does, never on its own.
     this.#scene.environmentIntensity *= LAND_LIGHT.environment;
     // The sky has just set the sun for the time of day; the land's key is stronger.
     if (this.#sun) this.#sun.intensity *= LAND_LIGHT.sun;

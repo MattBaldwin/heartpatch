@@ -59,6 +59,8 @@ export interface LandLayout {
   readonly butterflies: readonly MoteHome[];
   readonly pollen: readonly MoteHome[];
   readonly fireflies: readonly MoteHome[];
+  /** A biome's own layers, by name (`LayoutInput.extras`); empty for the meadow. */
+  readonly extras: Readonly<Record<string, readonly Growth[]>>;
 }
 
 export interface LayoutInput {
@@ -77,6 +79,24 @@ export interface LayoutInput {
    */
   readonly sun: { readonly x: number; readonly z: number };
   readonly shadow: { readonly cast: number; readonly contact: number; readonly length: number };
+  /**
+   * A biome's own layers (the lake's reeds, the trail's boulders): called
+   * after everything else is placed, with its own seeded random (so the
+   * shared layers never change), it returns each extra layer's places by
+   * name. `ExploreLand` draws a layer for each name it is given a mesh for.
+   */
+  readonly extras?: (context: ExtrasContext) => Readonly<Record<string, readonly Growth[]>>;
+}
+
+/** What a biome's `extras` hook can read: the land, the tile and its spots, and a random of its own. */
+export interface ExtrasContext {
+  readonly land: LandField;
+  readonly size: number;
+  readonly colliders: readonly Collider[];
+  readonly start: WorldPoint;
+  readonly rand: () => number;
+  /** A soft shade (and a cast shadow) under something `height` tall and `r` round, painted into the ground. */
+  readonly shade: (x: number, z: number, r: number, height: number) => void;
 }
 
 /** Tufts grow out to this far from the middle, world units. */
@@ -89,6 +109,9 @@ const FRONT_CLEAR = 9; // TUNE
 const SPOT_CLEAR = 0.12; // TUNE
 /** The far trees' ring, world units from the middle. */
 const FAR = { from: 13, to: 40 } as const; // TUNE
+
+/** The ring's trees when a biome doesn't say (`LandGrowth.treeMix`). */
+export const DEFAULT_TREE_MIX = { oak: 0.5, birch: 0.3, pine: 0.2 } as const;
 
 /** A stable shuffle, so the first n of a list (a lower tier's share) spread evenly. */
 function shuffled<T>(list: T[], rand: () => number): T[] {
@@ -151,7 +174,7 @@ export function landLayout(input: LayoutInput): LandLayout {
     const inside = reach(x, z) < 1;
     if (Math.hypot(x, z) > GRASS_REACH) continue;
     // Outside the tile it's sparser (rejection keeps the inside density exact).
-    if (!inside && rand() > growth.tufts.outside / growth.tufts.inside) continue;
+    if (!inside && rand() > Math.min(1, growth.tufts.outside / growth.tufts.inside)) continue;
     if (land.pathMask(x, z) > 0.2 && rand() > 0.08) continue;
     if (inSpot(x, z, 0.05)) continue;
     // Clumps: grass is thicker where the noise is high.
@@ -169,7 +192,7 @@ export function landLayout(input: LayoutInput): LandLayout {
     const z = between(-FLOWER_REACH, FLOWER_REACH);
     if (Math.hypot(x, z) > FLOWER_REACH) continue;
     const inside = reach(x, z) < 1;
-    if (inside && rand() > growth.flowers.inside / growth.flowers.outside) continue;
+    if (inside && rand() > Math.min(1, growth.flowers.inside / growth.flowers.outside)) continue;
     if (softNoise(x * 0.28, z * 0.28, seed + 5) < 0.05) continue;
     if (land.pathMask(x, z) > 0) continue;
     if (inSpot(x, z, SPOT_CLEAR) || nearStart(x, z, 0.5)) continue;
@@ -192,7 +215,7 @@ export function landLayout(input: LayoutInput): LandLayout {
     const dz = Math.sin(angle);
     // Out along the ray to just past the edge.
     const toEdge = 1 / Math.max(1e-6, reach(dx, dz));
-    const out = toEdge * between(1.06, 1.2);
+    const out = toEdge * between(1.06, 1.2); // TUNE: just past the edge
     const x = dx * out;
     const z = dz * out;
     if (land.pathMask(x, z, 0.1) > 0 || Math.abs(x - land.pathX(z)) < 1.1) continue;
@@ -211,6 +234,8 @@ export function landLayout(input: LayoutInput): LandLayout {
   // Trees round the tile: never in front, never on the path, not too close to each other.
   const trees: Record<TreeKind, Growth[]> = { oak: [], pine: [], birch: [] };
   const placed: WorldPoint[] = [];
+  const mix = growth.treeMix ?? DEFAULT_TREE_MIX;
+  const mixTotal = mix.oak + mix.birch + mix.pine;
   for (let tries = 0, n = 0; n < growth.trees.near && tries < 800; tries++) {
     const angle = rand() * Math.PI * 2;
     const out = between(size * 1.2, size * 2);
@@ -218,10 +243,10 @@ export function landLayout(input: LayoutInput): LandLayout {
     const z = Math.sin(angle) * out;
     if (inFront(x, z) || reach(x, z) < 1.12) continue;
     if (Math.abs(x - land.pathX(z)) < 1.6) continue;
-    if (placed.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 2.4 ** 2)) continue;
+    if (placed.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 2.4 ** 2)) continue; // TUNE: tree spacing
     placed.push({ x, z });
-    const roll = rand();
-    const kind: TreeKind = roll < 0.5 ? 'oak' : roll < 0.8 ? 'birch' : 'pine';
+    const roll = rand() * mixTotal;
+    const kind: TreeKind = roll < mix.oak ? 'oak' : roll < mix.oak + mix.birch ? 'birch' : 'pine';
     const scale = between(0.85, 1.25);
     trees[kind].push(at(x, z, scale));
     shade(x, z, 1.25 * scale, 3 * scale);
@@ -281,7 +306,7 @@ export function landLayout(input: LayoutInput): LandLayout {
 
   // Lanterns beside the path, where it leaves the tile (front and back) and further back.
   const lamps: Growth[] = [];
-  const side = (rand() < 0.5 ? -1 : 1) * (0.9 * 0.5 + 0.45);
+  const side = (rand() < 0.5 ? -1 : 1) * (0.9 * 0.5 + 0.45); // TUNE: half the path, then a step
   for (const z of [size * 0.98, -size * 1.02, size * 1.6].slice(0, growth.lamps)) {
     const x = land.pathX(z) + side * (lamps.length % 2 === 0 ? 1 : -1);
     lamps.push({ x, z, yaw: 0, scale: 1 });
@@ -313,6 +338,16 @@ export function landLayout(input: LayoutInput): LandLayout {
   const pollen = scatter(growth.pollen, size * 1.2, [0.3, 1.4], [0.03, 0.05]);
   const fireflies = scatter(growth.fireflies, size * 1.5, [0.25, 1.3], [0.09, 0.13]);
 
+  const extras =
+    input.extras?.({
+      land,
+      size,
+      colliders,
+      start,
+      rand: seededRandom(seed ^ 0x6e7a),
+      shade,
+    }) ?? {};
+
   return {
     tufts: shuffled(tufts, rand),
     flowers: {
@@ -333,5 +368,6 @@ export function landLayout(input: LayoutInput): LandLayout {
     butterflies,
     pollen,
     fireflies,
+    extras,
   };
 }
