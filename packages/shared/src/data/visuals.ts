@@ -1766,7 +1766,7 @@ export const PARTS: Part[] = [
 
   {
     // A big round open mouth.
-    id: 'singing-mouth',
+    id: 'round-mouth',
     slot: 'mouth',
     shape: 'ellipsoid',
     size: [0.18, 0.25, 0.06],
@@ -1780,7 +1780,7 @@ export const PARTS: Part[] = [
 
   {
     // Two little round hands held out in front.
-    id: 'singing-arms',
+    id: 'round-hands',
     slot: 'arms',
     shape: 'ellipsoid',
     size: [0.18, 0.24, 0.18],
