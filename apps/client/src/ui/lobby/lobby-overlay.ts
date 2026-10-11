@@ -248,7 +248,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     refresh = () => void showList();
     // A list already on screen stays put while the new one loads, so a tap
     // mid-refresh isn't lost and the scroll doesn't jump (#423).
-    const inPlace = onList;
+    const inPlace = onList && !panel.hidden;
     if (inPlace) {
       stopPolling();
       shown += 1;
@@ -275,9 +275,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (await resume(mine, at)) return;
       if (at !== shown) return;
     }
-    keepScroll = inPlace;
-    renderList(mine, message);
-    keepScroll = false;
+    renderList(mine, message, inPlace);
   }
 
   /**
@@ -322,7 +320,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
             return;
           }
           const joined = joinedSince(mine, next)[0];
-          renderList(next, joined === undefined ? undefined : `Yay! You're in ${joined}!`);
+          renderList(next, joined === undefined ? undefined : `Yay! You're in ${joined}!`, true);
         })
         .catch(() => {
           // Offline for a moment: try again on the next beat.
@@ -331,7 +329,16 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     }, WAITING_POLL_MS);
   }
 
-  function renderList(mine: MyMapsResponse, message?: string): void {
+  function renderList(mine: MyMapsResponse, message?: string, keepPlace = false): void {
+    keepScroll = keepPlace;
+    try {
+      drawList(mine, message);
+    } finally {
+      keepScroll = false;
+    }
+  }
+
+  function drawList(mine: MyMapsResponse, message?: string): void {
     const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-maps' });
     for (const map of mine.maps) {
       const open = el(
