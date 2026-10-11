@@ -39,10 +39,8 @@ Rulings so far: #372B and #376 are big; #261, #379, #372A and the trail and cave
 
 ### Migrations (owner, 2026-10-11)
 
-- **Migration freeze, Oct 15–18:** no DB-changing merge during the family playtest.
+- **Migration freeze, Oct 15–18:** no DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18).
 - **Outside the freeze:** merge when green, one migration at a time, and #376 first.
-
-## 3. Merge gates (all required)
 
 ## 3. Merge gates (all required)
 
@@ -90,12 +88,12 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 | Big features: the plan, and the second reviewer on the first full review | Fable (`claude-fable-5-1`), owner decision 2026-10-11 |
 | Big features: the code | Opus 5.5 (`claude-opus-5-5`) |
 | Other code lanes (not big) | Opus 5.5 (owner rule 2026-10-05) |
-| Client UI and content | Sonnet 5.5 |
+| Client UI and content (not big) | Sonnet 5.5 |
 | Every PR review (the `reviewer` subagent) | Opus 5.5 (owner decision 2026-10-11) |
 | Drift audits and docs-only work | Sonnet 5.5 |
 | Periodic end-to-end review of the whole solution | Fable (`claude-fable-5-1`), only when the owner explicitly asks for it |
 
-The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every PR review now runs on Opus.
+The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every PR review now runs on Opus. Where rows overlap, big wins: a big feature's UI is coded by Opus, and only non-big client UI and content go to Sonnet.
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
@@ -162,7 +160,7 @@ Post the verdict comment summarizing each round. Don't merge.
    - the queued follow-ups (§9);
    - the next batch to launch.
 4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so. (Build sessions are archived after merge, per §4; supervisor sessions are not.)
-5. **Lineage limit (owner, 2026-10-11):** sessions nest at most 8 deep. The last supervisor, at depth 7, doesn't start another one. It writes the handoff into the repo (this playbook, DECISIONS, and the §9 state) and asks the owner to start the next supervisor from a fresh session.
+5. **Lineage limit (coordinator rule, 2026-10-11):** sessions nest at most 8 deep, counting the owner's first supervisor session as depth 1. The last supervisor, at depth 7, doesn't start another one. It writes the handoff into the repo (this playbook, DECISIONS, and the §9 state) and asks the owner to start the next supervisor from a fresh session.
 
 ## 9. Open follow-ups for upcoming briefs
 
