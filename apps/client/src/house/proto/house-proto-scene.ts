@@ -451,7 +451,7 @@ export class HouseProtoScene {
 
     // Back wall with the big window; side walls; skirting and a picture rail.
     const windowHole = hall
-      ? { x: 0, y: 3.3, w: 5.2, h: 3.2 }
+      ? { x: 0, y: 3.15, w: 5.2, h: 3.0 }
       : { x: -0.2, y: 2.15, w: 2.6, h: 1.8 };
     const back = wallWithHole(scene, w, h, thick, windowHole, spec.wall);
     for (const p of back) p.position.z += d / 2 + thick / 2;
@@ -967,9 +967,9 @@ export class HouseProtoScene {
     this.#lamp('tree-light', new Vector3(-1.2, 3.9, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
     // Lantern garlands from the beams.
     this.#string(
-      new Vector3(-w / 2 + 0.5, h - 1.0, 3.0),
-      new Vector3(w / 2 - 0.5, h - 1.0, 3.0),
-      0.5,
+      new Vector3(-w / 2 + 0.5, h - 0.3, 3.0),
+      new Vector3(w / 2 - 0.5, h - 0.3, 3.0),
+      0.45,
       9,
       '#ff9ab8',
     );
@@ -1023,7 +1023,7 @@ export class HouseProtoScene {
       3,
     );
     this.#shelf(-w / 2 + 0.2, 2.0, -2.2, 2.4, Math.PI / 2, ['#ffb3c8', '#bfe3ff'], 2);
-    this.#sign('Mia’s Heart Hall', -0.2, 5.35, d / 2 - 0.1, 0, 3.4);
+    this.#sign('Mia’s Heart Hall', -0.2, 5.02, d / 2 - 0.1, 0, 3.4);
     this.#toys(-1.6, -2.4);
     this.#pumpkin(w / 2 - 1.2, -3.8, 1.1);
     this.#pumpkin(w / 2 - 1.9, -3.5, 0.8);
