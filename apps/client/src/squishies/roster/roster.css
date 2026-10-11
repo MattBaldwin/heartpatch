@@ -26,17 +26,12 @@
   display: none;
 }
 
-/* The title stays put while the list scrolls under it. */
-.roster-top {
-  padding-top: 14px;
-}
-
-.roster-top .tile-panel-head {
+/* The title and × stay put while the chips and the list scroll under them. */
+.roster-head-bar {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 14px 0 4px;
-  margin-top: -14px;
+  padding: 14px 0 6px;
   background: #fffafc;
 }
 

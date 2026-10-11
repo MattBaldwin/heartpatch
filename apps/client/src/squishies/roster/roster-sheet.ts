@@ -143,19 +143,16 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       'aria-labelledby': 'roster-title',
       'data-testid': 'roster',
     },
+    // The title and × stay pinned while the chips and the list scroll under.
     el(
       'div',
-      { class: 'roster-top' },
-      el(
-        'div',
-        { class: 'tile-panel-head' },
-        el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
-        count,
-        close,
-      ),
-      el('div', { class: 'roster-controls' }, sortBar, filterBar),
-      note,
+      { class: 'tile-panel-head roster-head-bar' },
+      el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
+      count,
+      close,
     ),
+    el('div', { class: 'roster-controls' }, sortBar, filterBar),
+    note,
     list,
   );
   sheet.hidden = true;
