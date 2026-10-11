@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
+import { CLEARING_RULES } from '../../src/data/clearing.js';
 import { hexKey, hexSpiral, type HexKey } from '../../src/hex/index.js';
 import type { MapTile } from '../../src/mapgen/index.js';
 
@@ -11,8 +12,8 @@ import type { MapTile } from '../../src/mapgen/index.js';
  * take a homestead each. A report for the owner's choice; nothing here gates.
  */
 
-/** Terrains a kid can clear (owner decision 2026-10-11; Old Forest and Pumpkin Fields wait on the owner). */
-export const CLEARABLE = new Set(['meadow', 'forest', 'hills', 'mountains']); // TUNE:
+/** Terrains a kid can clear (`CLEARING_RULES`, owner decision 2026-10-11 Q5). */
+export const CLEARABLE = new Set(CLEARING_RULES.terrains.map((t) => t.terrain));
 
 export interface PlacementRule {
   readonly id: string;

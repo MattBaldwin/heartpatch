@@ -23,15 +23,15 @@ const data = (id: string) => {
 };
 
 // A home around (0, 0), and land to its east: (2, 0) and (3, 0) are open
-// homesteads, (2, -1) a homestead with a Stone spot, (3, -1) a paused one
-// (not a homestead), (2, 1) plain land.
+// homesteads, (2, -1) a homestead with a Stone spot, (3, -1) a paused (cut
+// off) homestead, (2, 1) plain land.
 const tile = (q: number, r: number, over: Partial<TileUseTile> = {}): TileUseTile => ({
   id: `t${String(q)}_${String(r)}`,
   q,
   r,
   homeSlot: null,
   nodeResource: null,
-  homestead: false,
+  homestead: null,
   ...over,
 });
 const HOME = [
@@ -44,32 +44,38 @@ const HOME = [
   tile(0, -1, { homeSlot: 0, nodeResource: 'magic-fallen-leaves' }),
 ];
 const LAND = [
-  tile(2, 0, { homestead: true }),
-  tile(3, 0, { homestead: true }),
-  tile(2, -1, { homestead: true, nodeResource: 'stone' }),
-  tile(3, -1),
+  tile(2, 0, { homestead: 'joined' }),
+  tile(3, 0, { homestead: 'joined' }),
+  tile(2, -1, { homestead: 'joined', nodeResource: 'stone' }),
+  tile(3, -1, { homestead: 'paused' }),
   tile(2, 1),
 ];
 const TILES = [...HOME, ...LAND];
 
 let n = 0;
-const row = (buildingId: string, tileId: string, placedAt = `2026-10-0${String(++n % 9 + 1)}`): TileUseBuilding => ({
-  id: `b${String(++n).padStart(3, '0')}`,
-  tileId,
-  buildingId,
-  placedAt,
-});
+/** A building row; with no date, rows are placed a day apart in the order made (wrapping every 9). */
+const row = (buildingId: string, tileId: string, placedAt?: string): TileUseBuilding => {
+  n += 1;
+  return {
+    id: `b${String(n).padStart(3, '0')}`,
+    tileId,
+    buildingId,
+    placedAt: placedAt ?? `2026-10-0${String((n % 9) + 1)}`,
+  };
+};
 
 /** The rows after a plan: moved ones on their new tiles, packed ones gone. */
 function apply(rows: readonly TileUseBuilding[], plan: TileUsePlan): TileUseBuilding[] {
   const to = new Map(plan.move.map((m) => [m.id, m.toTileId]));
   const packed = new Set(plan.pack);
-  return rows.filter((r) => !packed.has(r.id)).map((r) => ({ ...r, tileId: to.get(r.id) ?? r.tileId }));
+  return rows
+    .filter((r) => !packed.has(r.id))
+    .map((r) => ({ ...r, tileId: to.get(r.id) ?? r.tileId }));
 }
 
 describe('tileUseRefusal (#295)', () => {
   const [seed, ring] = HOME;
-  const [open, , spot, notHomestead, plain] = LAND;
+  const [open, , spot, paused, plain] = LAND;
 
   it('puts home buildings on home tiles only, beside the ring node', () => {
     expect(tileUseRefusal(data('ember-den'), ring!, false)).toBeNull();
@@ -81,7 +87,9 @@ describe('tileUseRefusal (#295)', () => {
   it('puts homestead buildings on open joined homesteads only', () => {
     expect(tileUseRefusal(data('training-grounds'), open!, false)).toBeNull();
     expect(tileUseRefusal(data('training-grounds'), spot!, false)).toBe('clear-first');
-    expect(tileUseRefusal(data('training-grounds'), notHomestead!, false)).toBe('homestead-only');
+    expect(tileUseRefusal(data('training-grounds'), plain!, false)).toBe('homestead-only');
+    // Cut off from home: it keeps what stands there, but takes nothing new.
+    expect(tileUseRefusal(data('training-grounds'), paused!, false)).toBe('napping');
     expect(tileUseRefusal(data('training-grounds'), ring!, false)).toBe('not-at-home');
     expect(tileUseRefusal(data('training-grounds'), open!, true)).toBe('taken');
   });
@@ -92,12 +100,21 @@ describe('tileUseRefusal (#295)', () => {
     expect(tileUseRefusal(data('hearthfire'), seed!, false)).toBe('not-at-home');
     expect(tileUseRefusal(data('hearthfire'), open!, true)).toBe('taken');
   });
+
+  it('never refuses a fence: fences stand on edges, not tiles', () => {
+    expect(tileUseRefusal(data('hedge'), spot!, true)).toBeNull();
+    expect(tileUseRefusal(data('hedge'), seed!, true)).toBeNull();
+  });
 });
 
 describe('planTileUses (#295)', () => {
   it('leaves a tidy home alone', () => {
     const rows = [row('ember-den', 't1_-1'), row('cozy-meadow', 't1_0'), row('hearthfire', 't2_1')];
-    expect(planTileUses(TILES, rows, DATA)).toEqual({ stay: rows.map((r) => r.id), move: [], pack: [] });
+    expect(planTileUses(TILES, rows, DATA)).toEqual({
+      stay: rows.map((r) => r.id),
+      move: [],
+      pack: [],
+    });
   });
 
   it('keeps the oldest home building on a crowded tile and moves the rest to the nearest free home tiles', () => {
@@ -139,18 +156,42 @@ describe('planTileUses (#295)', () => {
 
   it('grandfathers a building already standing on a resource spot', () => {
     const grounds = row('training-grounds', 't2_-1');
-    expect(planTileUses(TILES, [grounds], DATA)).toEqual({ stay: [grounds.id], move: [], pack: [] });
+    expect(planTileUses(TILES, [grounds], DATA)).toEqual({
+      stay: [grounds.id],
+      move: [],
+      pack: [],
+    });
   });
 
-  it('ignores fences and buildings the data no longer knows', () => {
+  it('keeps a building on a homestead that is cut off right now', () => {
+    const grounds = row('training-grounds', 't3_-1');
+    expect(planTileUses(TILES, [grounds], DATA)).toEqual({
+      stay: [grounds.id],
+      move: [],
+      pack: [],
+    });
+  });
+
+  it('leaves fences, unknown buildings and rows on other tiles alone, in stay', () => {
     const fence = row('hedge', 't2_0');
     const gone = row('retired-building', 't2_0');
+    const elsewhere = row('ember-den', 'not-my-tile');
     const fire = row('hearthfire', 't2_0');
-    expect(planTileUses(TILES, [fence, gone, fire], DATA)).toEqual({ stay: [fire.id], move: [], pack: [] });
+    expect(planTileUses(TILES, [fence, gone, elsewhere, fire], DATA)).toEqual({
+      stay: [fence.id, gone.id, elsewhere.id, fire.id],
+      move: [],
+      pack: [],
+    });
   });
 
   it('always ends at one building per tile, loses nothing and plans nothing the second time', () => {
-    const kinds = ['ember-den', 'cozy-meadow', 'crafting-factory', 'training-grounds', 'hearthfire'];
+    const kinds = [
+      'ember-den',
+      'cozy-meadow',
+      'crafting-factory',
+      'training-grounds',
+      'hearthfire',
+    ];
     for (let trial = 0; trial < 300; trial++) {
       const rng = Rng.fromSeed(`tile-uses-${String(trial)}`);
       const rows: TileUseBuilding[] = Array.from({ length: rng.int(1, 9) }, () => {

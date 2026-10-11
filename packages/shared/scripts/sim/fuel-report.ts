@@ -49,7 +49,8 @@ export function runFuel(config: FuelConfig, progression: ProgressionConfig): Fue
         const today = record[day - 1];
         if (!today) throw new Error(`no day ${String(day)} in the progression run`);
         if (explorer) exploreDay(progress, today.land, tiles, progression.mapSeed, explorer);
-        if (config.days.includes(day)) homesteadsOn.set(day, homesteadsOf(today.land, tiles, progress));
+        if (config.days.includes(day))
+          homesteadsOn.set(day, homesteadsOf(today.land, tiles, progress));
       }
       rows.push({
         seats,

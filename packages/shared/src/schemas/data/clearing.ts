@@ -59,7 +59,8 @@ export function checkClearingRules(input: unknown, data: Pick<GameData, 'terrain
   const rules = result.data;
   const problems: string[] = [];
   const terrains = new Map(data.terrains.map((t) => [t.id, t]));
-  if (!terrains.has(CLEARED_TERRAIN)) problems.push(`no "${CLEARED_TERRAIN}" terrain to clear into`);
+  if (!terrains.has(CLEARED_TERRAIN))
+    problems.push(`no "${CLEARED_TERRAIN}" terrain to clear into`);
   const tools = new Set<string>();
   rules.tools.forEach((t, i) => {
     if (tools.has(t.id)) problems.push(`tools[${String(i)}]: duplicate tool "${t.id}"`);

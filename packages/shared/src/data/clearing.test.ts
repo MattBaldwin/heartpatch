@@ -13,7 +13,14 @@ describe('CLEARING_RULES (#242)', () => {
     expect(clearToolFor('mountains', CLEARING_RULES)).toBe('pickaxe');
     expect(clearToolFor('meadow', CLEARING_RULES)).toBe('spade');
     expect(clearToolFor('hills', CLEARING_RULES)).toBe('spade');
-    for (const terrain of ['lake', 'junipers-gap', 'old-forest', 'pumpkin-fields', 'trading-post', 'clearing']) {
+    for (const terrain of [
+      'lake',
+      'junipers-gap',
+      'old-forest',
+      'pumpkin-fields',
+      'trading-post',
+      'clearing',
+    ]) {
       expect(clearToolFor(terrain, CLEARING_RULES)).toBeNull();
     }
   });
@@ -27,7 +34,11 @@ describe('CLEARING_RULES (#242)', () => {
     const broken = {
       ...CLEARING_RULES,
       tools: CLEARING_RULES.tools.filter((t) => t.id !== 'spade'),
-      terrains: [...CLEARING_RULES.terrains, { terrain: 'junipers-gap', tool: 'axe' }, { terrain: 'forest', tool: 'axe' }],
+      terrains: [
+        ...CLEARING_RULES.terrains,
+        { terrain: 'junipers-gap', tool: 'axe' },
+        { terrain: 'forest', tool: 'axe' },
+      ],
     };
     expect(checkClearingRules(broken, GAME_DATA)).toEqual([
       'terrains[2]: no tool row for "spade"',

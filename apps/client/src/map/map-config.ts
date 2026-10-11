@@ -58,9 +58,9 @@ export interface TerrainLook {
   /** Fewest and most props per tile. */
   propsPerTile: readonly [number, number];
   /**
-   * Draw with this terrain's tile mesh, in this look's own colour, so the
-   * terrain adds no draw call (cleared land, #242). Its height, gloss and
-   * glow come from that mesh's look.
+   * Draw with this terrain's tile mesh, in this look's own colour and height,
+   * so the terrain adds no draw call (cleared land, #242). Gloss and glow
+   * come from that mesh's look (they're its material).
    */
   meshOf?: string;
 }

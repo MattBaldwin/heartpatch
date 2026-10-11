@@ -8,6 +8,9 @@ import type { Building } from '../schemas/data/buildings.js';
 // it. Fences stand on edges and aren't tile uses. Pure: the server passes in
 // the player's tiles and buildings.
 
+/** A tile's homestead state (#199, `homesteadStates`): joined, paused, or not one. */
+export type TileUseHomestead = 'joined' | 'paused' | null;
+
 /** One of the player's tiles, as the tile-use rules see it. */
 export interface TileUseTile extends Hex {
   readonly id: string;
@@ -15,8 +18,11 @@ export interface TileUseTile extends Hex {
   readonly homeSlot: number | null;
   /** Resource id of the tile's spot, if it has one. */
   readonly nodeResource: string | null;
-  /** Joined to its owner's home as a homestead (#199); paused ones aren't. */
-  readonly homestead: boolean;
+  /**
+   * Its homestead state (#199). A paused homestead (cut off from home)
+   * keeps what stands on it but takes nothing new until it reconnects.
+   */
+  readonly homestead: TileUseHomestead;
 }
 
 /** Why a building can't go on a tile, or null when it can. */
@@ -27,6 +33,8 @@ export type TileUseRefusal =
   | 'not-at-home'
   /** Needs a joined homestead. */
   | 'homestead-only'
+  /** A homestead cut off from home (paused): it takes nothing new until it reconnects. */
+  | 'napping'
   /** A resource spot stands there: clear the land first. */
   | 'clear-first'
   /** The tile already has its building. */
@@ -34,18 +42,24 @@ export type TileUseRefusal =
 
 /**
  * Where a building of this kind may stand, ignoring what's on the tile: its
- * `placement` (home / homestead / land). Fences (`owned`) aren't tile uses.
+ * `placement` (home / homestead / land). A paused homestead keeps a building
+ * already there (`standing`) but refuses a new one. Fences (`owned`) stand
+ * on edges, so this rule never refuses them.
  */
 function placementRefusal(
   building: Pick<Building, 'placement'>,
   tile: TileUseTile,
+  standing: boolean,
 ): TileUseRefusal | null {
   const home = tile.homeSlot !== null;
   switch (building.placement) {
     case 'home':
       return home ? null : 'home-only';
     case 'homestead':
-      return home ? 'not-at-home' : tile.homestead ? null : 'homestead-only';
+      if (home) return 'not-at-home';
+      if (tile.homestead === 'joined') return null;
+      if (tile.homestead === 'paused') return standing ? null : 'napping';
+      return 'homestead-only';
     case 'land':
       return home ? 'not-at-home' : null;
     case 'owned':
@@ -56,14 +70,16 @@ function placementRefusal(
 /**
  * Can a new building of this kind go on this tile? `taken` says the tile
  * already holds a building. A home building stands beside its tile's ring
- * node; anywhere else a resource spot must be cleared first.
+ * node; anywhere else a resource spot must be cleared first. Fences stand on
+ * edges, not tiles: this rule doesn't apply to them (always null).
  */
 export function tileUseRefusal(
   building: Pick<Building, 'placement'>,
   tile: TileUseTile,
   taken: boolean,
 ): TileUseRefusal | null {
-  const where = placementRefusal(building, tile);
+  if (building.placement === 'owned') return null;
+  const where = placementRefusal(building, tile, false);
   if (where) return where;
   if (taken) return 'taken';
   if (tile.homeSlot === null && tile.nodeResource !== null) return 'clear-first';
@@ -81,9 +97,9 @@ export interface TileUseBuilding {
   readonly placedAt: string;
 }
 
-/** What the tidy-up does with one player's buildings. */
+/** What the tidy-up does with one player's buildings. Every row is in exactly one list. */
 export interface TileUsePlan {
-  /** Rows that stay where they are, in input order. */
+  /** Rows that stay where they are, in input order (rows the planner leaves alone too). */
   readonly stay: readonly string[];
   /** Rows that move to a free tile they're allowed on. */
   readonly move: readonly { readonly id: string; readonly toTileId: string }[];
@@ -92,7 +108,15 @@ export interface TileUsePlan {
 }
 
 const byAge = (a: TileUseBuilding, b: TileUseBuilding): number =>
-  a.placedAt < b.placedAt ? -1 : a.placedAt > b.placedAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  a.placedAt < b.placedAt
+    ? -1
+    : a.placedAt > b.placedAt
+      ? 1
+      : a.id < b.id
+        ? -1
+        : a.id > b.id
+          ? 1
+          : 0;
 
 /**
  * Tidies one player's buildings to one per tile (#295's migration of older
@@ -104,12 +128,14 @@ const byAge = (a: TileUseBuilding, b: TileUseBuilding): number =>
  * - A building its `placement` no longer allows where it stands (the
  *   Crafting Factory leaving home) leaves too, even alone.
  * - One already on a resource spot it was allowed on stays (grandfathered):
- *   the spot rule only gates new buildings.
+ *   the spot rule only gates new buildings. So does one on a homestead that
+ *   is paused right now: being cut off never takes a building away.
  * - Each building that leaves, oldest first, goes to the nearest free tile
- *   it's allowed on (spots excluded), ties by tile id; with none free, it's
- *   packed.
+ *   it's allowed on (spots and paused homesteads excluded), ties by tile id;
+ *   with none free, it's packed.
  *
- * Rows whose building id isn't in `buildings`, and fences, are left alone.
+ * Fences, rows whose building id isn't in `buildings` and rows on a tile not
+ * in `tiles` are left alone: they're listed in `stay`.
  */
 export function planTileUses(
   tiles: readonly TileUseTile[],
@@ -136,9 +162,11 @@ export function planTileUses(
     if (!tile) continue;
     const allowed = list.filter((r) => {
       const b = data.get(r.buildingId);
-      return b !== undefined && placementRefusal(b, tile) === null;
+      return b !== undefined && placementRefusal(b, tile, true) === null;
     });
-    const fire = allowed.filter((r) => data.get(r.buildingId)?.kind === 'hearthfire').sort(byAge)[0];
+    const fire = allowed
+      .filter((r) => data.get(r.buildingId)?.kind === 'hearthfire')
+      .sort(byAge)[0];
     const keeper = fire ?? [...allowed].sort(byAge)[0];
     for (const row of list) if (row !== keeper) leaving.add(row.id);
     if (keeper) occupied.add(tileId);
@@ -152,7 +180,10 @@ export function planTileUses(
     if (!b || !from) continue;
     const to = tiles
       .filter((t) => !occupied.has(t.id) && tileUseRefusal(b, t, false) === null)
-      .sort((x, y) => hexDistance(x, from) - hexDistance(y, from) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))[0];
+      .sort(
+        (x, y) =>
+          hexDistance(x, from) - hexDistance(y, from) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
+      )[0];
     if (to) {
       occupied.add(to.id);
       move.push({ id: row.id, toTileId: to.id });
@@ -160,6 +191,6 @@ export function planTileUses(
       pack.push(row.id);
     }
   }
-  const stay = onTiles.filter((r) => !leaving.has(r.id)).map((r) => r.id);
+  const stay = rows.filter((r) => !leaving.has(r.id)).map((r) => r.id);
   return { stay, move, pack };
 }

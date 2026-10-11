@@ -60,7 +60,9 @@ describe('MapScene', () => {
     const plain = build(testPatch());
     const before = plain.map.stats.tileMeshes;
     const view = testPatch();
-    const cleared = view.tiles.filter((t) => t.homeSlot === null && t.terrain === 'forest').slice(0, 3);
+    const cleared = view.tiles
+      .filter((t) => t.homeSlot === null && t.terrain === 'forest')
+      .slice(0, 3);
     const tiles = view.tiles.map((t) =>
       cleared.includes(t) ? { ...t, terrain: 'clearing', nodeResource: null } : t,
     );

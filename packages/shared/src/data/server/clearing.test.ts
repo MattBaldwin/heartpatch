@@ -57,7 +57,10 @@ describe('cleared land (#242)', () => {
       maxLevel: GROWTH_RULES.maxLevel,
     };
     const found = Array.from({ length: 40 }, (_, q) =>
-      resolveWildSpawn({ seed: deriveSeed('map', 'spawn', q, 0, day.id), terrain: 'clearing', window: day }, data),
+      resolveWildSpawn(
+        { seed: deriveSeed('map', 'spawn', q, 0, day.id), terrain: 'clearing', window: day },
+        data,
+      ),
     );
     const everyday = new Set(meadow?.entries.map((e) => e.species));
     expect(found.every((s) => s !== null && everyday.has(s.speciesId))).toBe(true);
@@ -65,7 +68,12 @@ describe('cleared land (#242)', () => {
 
   it("is guarded by the meadow's guardians", () => {
     const team = resolveGuardians(
-      { seed: deriveSeed('map', 'guardian', 3, -1, day.id), terrain: 'clearing', strength: 2, window: day },
+      {
+        seed: deriveSeed('map', 'guardian', 3, -1, day.id),
+        terrain: 'clearing',
+        strength: 2,
+        window: day,
+      },
       { rules: GUARDIAN_RULES, species, seasons: SEASONS },
     );
     const meadow = GUARDIAN_RULES.tables.find((t) => t.id === 'meadow-guardians');
