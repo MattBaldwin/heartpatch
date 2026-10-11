@@ -806,7 +806,11 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await pvpOn(mapId);
       const tile = await spotsAllAround(mapId, kid, 'mountains');
       // The clearing tools' recipes as they'll ship (PR 3 drops `hidden`).
-      const shipped = GAME_DATA.recipes.map(({ hidden: _hidden, ...r }) => r);
+      const shipped = GAME_DATA.recipes.map((recipe) => {
+        const r = { ...recipe };
+        delete r.hidden;
+        return r;
+      });
       await hollowService(WEAK_SHADOWS, BOLDEST, shipped).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
     });
