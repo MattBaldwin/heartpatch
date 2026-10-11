@@ -4,7 +4,6 @@ import {
   BATTLE_RULES,
   GAME_DATA,
   gatherFitsFor,
-  gameplayOverrides,
   hexKey,
   HOME_BASE_RULES,
   inSeason,
@@ -12,21 +11,14 @@ import {
   jobOf,
   teamProblem,
   tonightOf,
-  trainingProgressAround,
-  workCycleSeconds,
-  workProgressAround,
   EXPLORE_RULES,
   homesteadQuantity,
   workSource,
-  workSpeedPercent,
-  workYield,
   type CollectWorkResponse,
   type HexKey,
   type ItemCounts,
   type JobsView,
   type JobSquishy,
-  type JobTraits,
-  type OwnedSquishy,
   type PublicUser,
   type SetJobRequest,
   type SetTeamRequest,
@@ -35,7 +27,6 @@ import {
   type WorkSource,
   type WorkStatus,
 } from '@heartpatch/shared';
-import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -45,7 +36,7 @@ import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { foldHabitatLean } from '../care/evolution.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
-import { homesteadOf, workPauseOf } from '../explore/homesteads.js';
+import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
@@ -61,7 +52,6 @@ import {
   type SquishyJobsTxRepo,
 } from './repo.js';
 import {
-  seasonsAtFor,
   squishyName,
   trainingAt,
   trainingLevelOf,
