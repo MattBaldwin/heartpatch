@@ -99,6 +99,8 @@ export interface BattleSceneStats {
   readonly camera: { x: number; y: number; z: number } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
+  /** Each side's sparkle shield bubble is showing (#214; a sip before its move, #403). */
+  readonly shields: Readonly<Record<BattleSideId, boolean>>;
 }
 
 export interface BattleSceneOptions {
@@ -732,6 +734,7 @@ export class BattleScene {
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
         : null,
+      shields: { a: this.shieldShown('a'), b: this.shieldShown('b') },
     };
   }
 

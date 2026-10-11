@@ -5,60 +5,38 @@ import {
   deepFreeze,
   FIXTURE_BATTLE_DATA,
   FIXTURE_BATTLE_RULES,
+  FIXTURE_POTION_CONTENT as content,
+  FIXTURE_POTIONS as POTIONS,
   patchActive,
   squishy,
 } from '../../tests/fixtures/battle.js';
 import { Rng } from '../rng/index.js';
-import { ClientBattleViewSchema, type BattleAction, type BattleChoice } from '../schemas/battle.js';
-import type { Resource } from '../schemas/data/resources.js';
+import {
+  BattleChoiceSchema,
+  ClientBattleViewSchema,
+  PlayerBattleActionSchema,
+  type BattleAction,
+  type BattleChoice,
+} from '../schemas/battle.js';
 import { BattleRuleError, createBattleContent } from './content.js';
 import {
   applyBattleAction,
   clientBattleView,
   legalChoices,
   replayBattle,
+  sipOf,
   startBattle,
 } from './engine.js';
 import { effectiveStat, shieldedAmount } from './formulas.js';
 import { activeSquishy, type BattleEvent, type BattleState } from './state.js';
 
 /*
- * Battle potions (#214, owner decisions 2026-10-07): a potion takes the
- * drinker's turn, gives a boost or a heal, and a shield that takes 75% off
- * the next hit it takes. One of each per side per battle.
+ * Battle potions (#214, owner decisions 2026-10-07): a boost or a heal, and
+ * a shield that takes 75% off the next hit it takes. One of each per side
+ * per battle. Since #403 (owner decision 2026-10-11) a potion is a free sip:
+ * it rides along with a move, so the drinker still acts that turn. A bare
+ * item choice (battles logged before #403) still takes the whole turn.
  */
-
-// Fixture potions with their own numbers (+25%), independent of the owner's
-// tuning in data/resources.ts, so re-tuning never moves these tests.
-const POTIONS: Resource[] = [
-  {
-    id: 'fixture-brave-brew',
-    name: 'Brave Brew',
-    description: 'Bolder.',
-    kind: 'crafted',
-    battleEffect: { attackPercent: 25, shieldPercent: 75 },
-  },
-  {
-    id: 'fixture-cozy-cocoa',
-    name: 'Cozy Cocoa',
-    description: 'Softer bumps.',
-    kind: 'crafted',
-    battleEffect: { defensePercent: 25, shieldPercent: 75 },
-  },
-  {
-    id: 'fixture-hearty-soup',
-    name: 'Hearty Soup',
-    description: 'Energy back.',
-    kind: 'crafted',
-    battleEffect: { healPercent: 40, shieldPercent: 75 },
-  },
-  { id: 'fixture-charm', name: 'Charm', description: 'Not a potion.', kind: 'crafted' },
-];
-
-const content = createBattleContent(
-  { ...FIXTURE_BATTLE_DATA, resources: POTIONS },
-  FIXTURE_BATTLE_RULES,
-);
 
 const BREW = 'fixture-brave-brew';
 const COCOA = 'fixture-cozy-cocoa';
@@ -66,6 +44,12 @@ const SOUP = 'fixture-hearty-soup';
 
 const item = (id: string): BattleChoice => ({ type: 'item', item: id });
 const move = (id: string): BattleChoice => ({ type: 'move', move: `fixture-${id}` });
+/** A free sip (#403): drink `potion`, then use move `id`, in one turn. */
+const sip = (potion: string, id: string): BattleChoice => ({
+  type: 'move',
+  move: `fixture-${id}`,
+  item: potion,
+});
 
 /** Twirlysprout (player) against a wild Puddlepuff; both moves always land. */
 const duel = (seed = 'potions') =>
@@ -112,7 +96,7 @@ describe('battle potions (#214)', () => {
     }
   });
 
-  it('takes the turn: the drinker makes no move, and the log records the item', () => {
+  it('a bare item choice (pre-#403) takes the turn: no move, and the log records the item', () => {
     const state = pvp();
     const next = turn(state, item(BREW), move('giggle-drizzle'));
     const events = newEvents(state, next);
@@ -352,6 +336,140 @@ describe('battle potions (#214)', () => {
       { ...FIXTURE_BATTLE_RULES, items: { usesEach: 2 } },
     );
     expect(limited.contentHash).not.toBe(content.contentHash);
+  });
+});
+
+describe('a free sip (#403): drink a potion and still move the same turn', () => {
+  /** Twirlysprout (player, speed 45) against a faster Emberbun (speed 60); both moves land. */
+  const faster = (seed = 'free-sip') =>
+    deepFreeze(
+      startBattle(
+        content,
+        battleSetup(
+          seed,
+          { squishies: [squishy('fixture-twirlysprout', { level: 20 })] },
+          { squishies: [squishy('fixture-emberbun', { level: 20 })] },
+        ),
+      ),
+    );
+  const foeHit = (before: BattleState, after: BattleState) =>
+    ofType(newEvents(before, after), 'hit').find((e) => e.side === 'b')!;
+  const myHit = (before: BattleState, after: BattleState) =>
+    ofType(newEvents(before, after), 'hit').find((e) => e.side === 'a')!;
+
+  it('sips first, then still moves: the potion turn deals the player’s damage', () => {
+    const state = faster();
+    const next = turn(state, sip(COCOA, 'leafy-boop'), move('tickle-tackle'));
+    const events = newEvents(state, next);
+    expect(events[0]).toEqual({ turn: 1, side: 'a', slot: 0, type: 'item', item: COCOA });
+    // The faster foe still goes first, into the shield; then the drinker's move lands.
+    expect(ofType(events, 'move').map((e) => e.side)).toEqual(['b', 'a']);
+    expect(myHit(state, next).shielded).toBe(true);
+    const dealt = foeHit(state, next).amount;
+    expect(dealt).toBeGreaterThan(0);
+    expect(activeSquishy(next, 'b').energy).toBe(activeSquishy(state, 'b').energy - dealt);
+    expect(next.sides.a.itemsUsed).toEqual([COCOA]);
+  });
+
+  it('deals exactly a plain move’s damage, and soaks the faster foe’s hit', () => {
+    const state = faster();
+    const plain = turn(state, move('leafy-boop'), move('tickle-tackle'));
+    const sipped = turn(state, sip(COCOA, 'leafy-boop'), move('tickle-tackle'));
+    // A sip never rolls, so the same rolls follow either way.
+    expect(sipped.rng).toEqual(plain.rng);
+    expect(foeHit(state, sipped).amount).toBe(foeHit(state, plain).amount);
+    expect(myHit(state, sipped).amount).toBeLessThan(myHit(state, plain).amount);
+  });
+
+  it('Brave Brew’s boost counts for the drinker’s own move that turn', () => {
+    const state = faster();
+    const plain = turn(state, move('leafy-boop'), move('tickle-tackle'));
+    const brave = turn(state, sip(BREW, 'leafy-boop'), move('tickle-tackle'));
+    expect(foeHit(state, brave).amount).toBeGreaterThan(foeHit(state, plain).amount);
+  });
+
+  it('Hearty Soup heals before the foe’s move, then the drinker still moves', () => {
+    const low = patchActive(faster(), 'a', { energy: 10 });
+    const next = turn(low, sip(SOUP, 'leafy-boop'), move('tickle-tackle'));
+    expect(newEvents(low, next).map((e) => e.type)).toEqual([
+      'item',
+      'heal',
+      'move',
+      'hit',
+      'move',
+      'hit',
+    ]);
+  });
+
+  it('lets both sides sip in the same turn (live battles, #29)', () => {
+    const state = faster();
+    const next = turn(state, sip(BREW, 'leafy-boop'), sip(COCOA, 'tickle-tackle'));
+    const events = newEvents(state, next);
+    expect(ofType(events.slice(0, 2), 'item').map((e) => e.side)).toEqual(['a', 'b']);
+    expect(ofType(events, 'move')).toHaveLength(2);
+    expect(next.sides.b.itemsUsed).toEqual([COCOA]);
+  });
+
+  it('still allows one of each potion per battle, sipped or bare', () => {
+    const once = turn(faster(), sip(BREW, 'leafy-boop'), move('tickle-tackle'));
+    expect(() => turn(once, sip(BREW, 'leafy-boop'), move('tickle-tackle'))).toThrow(
+      /already used/,
+    );
+    expect(() => turn(once, item(BREW), move('tickle-tackle'))).toThrow(/already used/);
+    expect(turn(once, sip(COCOA, 'leafy-boop'), move('tickle-tackle')).sides.a.itemsUsed).toEqual([
+      BREW,
+      COCOA,
+    ]);
+  });
+
+  it('refuses a sip of a non-potion, with an unknown move, or for an AI side', () => {
+    const state = faster();
+    expect(() => turn(state, sip('fixture-charm', 'leafy-boop'), move('tickle-tackle'))).toThrow(
+      /can't be used in battle/,
+    );
+    expect(() => turn(state, sip(BREW, 'tickle-tackle'), move('tickle-tackle'))).toThrow(
+      /doesn't know/,
+    );
+    expect(() => turn(duel(), sip(BREW, 'leafy-boop'), sip(BREW, 'giggle-drizzle'))).toThrow(
+      /AI-controlled/,
+    );
+  });
+
+  it('lists a sip with every move, and drops a potion once it’s used', () => {
+    const state = faster();
+    const moves = activeSquishy(state, 'a').moves;
+    const choices = legalChoices(state, 'a', content);
+    for (const potion of [BREW, COCOA, SOUP]) {
+      for (const id of moves) {
+        expect(choices).toContainEqual({ type: 'move', move: id, item: potion });
+      }
+    }
+    const used = turn(state, sip(BREW, 'leafy-boop'), move('tickle-tackle'));
+    expect(
+      legalChoices(used, 'a', content).filter((c) => c.type === 'move' && c.item === BREW),
+    ).toEqual([]);
+    // No content, no items (the UI's moves and swaps only).
+    expect(legalChoices(state, 'a').some((c) => sipOf(c) !== undefined)).toBe(false);
+  });
+
+  it('rides on a move only: a swap or a Heart Charm can’t carry one', () => {
+    expect(BattleChoiceSchema.safeParse(sip(BREW, 'leafy-boop')).success).toBe(true);
+    expect(BattleChoiceSchema.safeParse({ type: 'swap', slot: 1, item: BREW }).success).toBe(false);
+    expect(BattleChoiceSchema.safeParse({ type: 'capture', item: BREW }).success).toBe(false);
+    expect(
+      PlayerBattleActionSchema.safeParse({ type: 'move', move: 'tickle-tackle', item: BREW })
+        .success,
+    ).toBe(true);
+    expect(PlayerBattleActionSchema.safeParse({ type: 'swap', slot: 1, item: BREW }).success).toBe(
+      false,
+    );
+  });
+
+  it('sipOf reads a free sip and a bare one', () => {
+    expect(sipOf(sip(BREW, 'leafy-boop'))).toBe(BREW);
+    expect(sipOf(item(SOUP))).toBe(SOUP);
+    expect(sipOf(move('leafy-boop'))).toBeUndefined();
+    expect(sipOf(null)).toBeUndefined();
   });
 });
 
