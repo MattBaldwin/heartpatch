@@ -1378,7 +1378,7 @@ _Owner requests and decisions from issues #371, #376 and #372; the #376 migratio
 
 - **One Build sheet (#371).** Home base, owned tiles and fences build the same way: tap the tile, tap Build, pick the area, pick the type. A fence takes 4 taps or fewer from the map. Client-only: no server, schema or migration change.
 - **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360, and #376 goes first in the migration queue (owner, 2026-10-11). A checkpoint time separate from `lastCaredAt` is coordinator-approved, unless the lane finds a way to avoid a migration.
-- **Keeper creator, step by step (#372).** Face shape, Body type, Skin, Hair style, Hair color, Face details. Face and body become independent choices. Hairstyles are data. PR A is data-only; PR B is the face and body split and the creator UI, with a migration after #360.
+- **Keeper creator, step by step (#372).** Face shape, Body type, Skin, Hair style, Hair color, Face details. Face and body become independent choices. Hairstyles are data. PR A is data-only; PR B is the face and body split and the creator UI. Its migration follows the migration-freeze order above (#376 first).
 
 ## 2026-10-10 — Supervisor 6 decisions (lean lanes, evolution salt, live defense items)
 
@@ -1390,9 +1390,9 @@ _Proposed in PRs #358, #360 and #370; recorded here at the coordinator's request
 
 ## 2026-10-11 — Owner working style: show screens first, features must be felt
 
-_Owner direction, relayed by the coordinator on 2026-10-11 (PR #390 follow-up); recorded here and in `docs/COORDINATOR.md` §9._
+_Owner direction, relayed by the coordinator on 2026-10-11; recorded here and in `docs/COORDINATOR.md` §9._
 
 - **Show the screens before asking.** Always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link.
 - **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
-- **The home must be personal and personalizable.** It should feel like the Keeper's own place (see #381).
+- **The home must be personal and personalizable.**
 - **Squishies are the most important visual part of the game.** Every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones (#382).
