@@ -70,7 +70,7 @@ export const LOD: Readonly<Record<SquishyDetail, LodSettings>> = {
  * A heart's (`cleft`) outline turns sharply at its shoulders and cleft, so
  * its body gets this many times the rings (and segments around) of other
  * bodies at every detail level. About 2.3× its body's triangles: a
- * Heartsong is ~16k triangles at `high`, inside ART_BIBLE's budget.
+ * heart-bodied squishy is ~16k triangles at `high`, inside ART_BIBLE's budget.
  */
 export const CLEFT_RING_SCALE = 1.5; // TUNE
 
