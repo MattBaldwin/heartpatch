@@ -129,7 +129,7 @@ Add anything else only with a one-line justification in the PR.
 | `keepers` | each account's Keeper | #42 |
 | `keepers.hairstyle` (text, nullable, migration 0023) | the hairstyle the player picked; null for the base's own style (every Keeper saved before styles could be picked) | Keeper hair styles PR |
 | `keepers.skin_tone`, `eyes`, `brows`, `mouth` (text, not null) and `extras` (text[], not null, default empty), migration 0035 | the Keeper builder's choices (ids from `KEEPER_DATA`); rows saved before it were filled from their base, the starting look. Replies leave out a choice that is the starting look's own (and no extras), so an older app reads an untouched Keeper as before | #289 |
-| `keepers.face`, `keepers.body` (text, not null; migration pending, after #376) | the face shape and body type picked (ids from `KEEPER_FACES` / `KEEPER_BODIES`); rows saved before #372 were filled from their base, whose face and body share its id, so no Keeper changed. Replies leave them out when they are the base's own | #372 |
+| `keepers.face`, `keepers.body` (text, not null), migration 0044 | the face shape and body type picked (ids from `KEEPER_FACES` / `KEEPER_BODIES`); rows saved before #372 were filled from their base, whose face and body share its id, so no Keeper changed. Replies leave them out when they are the base's own | #372 |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `factory_queues` | Crafting Factory batches: one recipe, `total` runs paid up front, one finishing every `item_seconds` from `started_at`; `banked` moves on as a settle banks them; ended rows are kept (`end_reason`) | #294 |
 | `species_seen` | the catalog, per map | #14 |

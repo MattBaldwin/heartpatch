@@ -365,6 +365,8 @@
 .keeper-base-name {
   font-size: 13px;
   font-weight: 700;
+  /* Pinned, so a tile is as tall in Safari as in Chrome (#372). */
+  line-height: 1.15;
   white-space: nowrap;
 }
 
@@ -448,6 +450,15 @@
   .keeper-tile-art {
     width: 44px;
     height: 44px;
+  }
+}
+
+/* An iPhone in a Safari tab or an SE (#372): three lines of faces fit with
+   room to spare in every engine. Tiles stay at least 44 px tall. */
+@media (max-height: 700px) {
+  .keeper-tile-art {
+    width: 40px;
+    height: 40px;
   }
 }
 

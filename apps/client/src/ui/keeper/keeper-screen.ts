@@ -676,6 +676,15 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     if (frame === 0) frame = requestAnimationFrame(tick);
   }
 
+  /** Unlocks every control a save may have locked, with its own words (a new player). */
+  function releaseControls(): void {
+    for (const node of [...tabButtons, backButton, leaveButton, forwardButton, saveButton]) {
+      node.disabled = false;
+    }
+    forwardButton.textContent = KEEPER_TEXT.next;
+    saveButton.textContent = KEEPER_TEXT.save.edit;
+  }
+
   function close(didSave: boolean): void {
     const was = mode;
     mode = null;
@@ -709,16 +718,14 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     } catch (err) {
       if (mine === session) error.textContent = messageOf(err);
     } finally {
-      save.disabled = false;
-      save.textContent = label;
+      // Another player since: the controls were handed back to them when the
+      // player changed (`releaseControls`), so this save leaves them alone.
       if (mine === session) {
+        save.disabled = false;
+        save.textContent = label;
         lock.forEach((node, i) => {
           node.disabled = wasDisabled[i] ?? false;
         });
-      } else {
-        // Another player since: the buttons are theirs now, so set them afresh.
-        for (const node of lock) node.disabled = false;
-        if (mode !== null) showStep(step);
       }
     }
   }
@@ -766,6 +773,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
       session += 1;
       user = next;
       saved = null;
+      releaseControls();
       close(false);
       if (next) void check(next);
     },

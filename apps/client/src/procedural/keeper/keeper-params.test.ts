@@ -595,6 +595,9 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
         if (item.visual.model) continue;
         expect(item.visual.replacesBody, item.id).toBeUndefined();
         const p = keeperParams(config, KEEPER_DATA, keeperItems([item.id]));
+        // Naming the base's own face and body draws exactly the same.
+        const named = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
+        expect({ ...named, config }, item.id).toEqual(p);
         lines.push(`${id}/${item.id}=${keeperHash(p)}`);
       }
     }
