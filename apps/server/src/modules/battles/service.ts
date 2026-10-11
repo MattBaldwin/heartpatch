@@ -56,6 +56,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
+import { wornAccessories } from '../wardrobe/accessories.js';
 import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
 import { creditCoins } from '../coins/service.js';
@@ -473,10 +474,19 @@ export function playerBattleView(
     mySide?: BattleSideId;
     state?: BattleState;
     live?: LiveBattleView;
+    /** Squishy id → the accessory it wears (#373), for drawing only. */
+    worn?: ReadonlyMap<string, string>;
     defensePrompt?: PlayerBattle['defensePrompt'];
   } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
+  const worn = options.worn;
+  const view = ClientBattleViewSchema.parse(clientBattleView(state));
+  if (worn && worn.size > 0) {
+    for (const side of [view.sides.a, view.sides.b]) {
+      for (const squishy of side.squishies) squishy.accessory = worn.get(squishy.id) ?? null;
+    }
+  }
   return {
     id: row.id,
     mapId: row.mapId,
@@ -484,7 +494,7 @@ export function playerBattleView(
     status: row.status,
     mySide: options.mySide ?? PLAYER_SIDE,
     // Parsed on the way out too, so a view can never carry `rng` (rule 6).
-    view: ClientBattleViewSchema.parse(clientBattleView(state)),
+    view,
     ...defsFor(content, state),
     // The seed predicts every roll, so it stays secret until the end (tech spec §8).
     seed: row.status === 'active' ? null : row.seed,
@@ -571,11 +581,23 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   };
 
   /** The battle as `seat`'s player sees it, with a live battle's turn state. */
-  const toPlayerBattle = (row: BattleRow, seat?: Seat | null): PlayerBattle => {
+  const toPlayerBattle = async (
+    tx: Executor,
+    row: BattleRow,
+    seat?: Seat | null,
+  ): Promise<PlayerBattle> => {
     const side = seat?.side ?? PLAYER_SIDE;
     const live = seat?.live;
+    // What each player's squishies wear (#373): side a is the battle's player,
+    // side b the live opponent. Wild and guardian squishies wear nothing.
+    const ids = (s: BattleSideId) => row.state.sides[s].squishies.map((q) => q.id);
+    const worn = new Map([
+      ...(await wornAccessories(tx, row.playerUserId, ids('a'))),
+      ...(live ? await wornAccessories(tx, live.bUserId, ids('b')) : []),
+    ]);
     return playerBattleView(content, row, {
       mySide: side,
+      worn,
       ...(seat?.asking && {
         defensePrompt: {
           expiresAt: seat.asking.expiresAt.toISOString(),
@@ -1245,7 +1267,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     if (going) {
       const row = await resolved(going);
       if (row.status === 'active') {
-        return { battle: toPlayerBattle(row, await seatOf(db, row, user.id)), created: false };
+        return {
+          battle: await toPlayerBattle(db, row, await seatOf(db, row, user.id)),
+          created: false,
+        };
       }
     }
     const begin = () =>
@@ -1330,7 +1355,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     if (result.created) published(mapId);
     return {
-      battle: toPlayerBattle(result.row, await seatOf(db, result.row, user.id)),
+      battle: await toPlayerBattle(db, result.row, await seatOf(db, result.row, user.id)),
       created: result.created,
     };
   };
@@ -1358,13 +1383,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       const row = await store.findActive(mapId, user.id);
       if (!row) return null;
       const latest = await resolved(row);
-      return toPlayerBattle(latest, await seatOf(db, latest, user.id));
+      return toPlayerBattle(db, latest, await seatOf(db, latest, user.id));
     },
 
     get: async (user, battleId) => {
       const { row } = await requireOwn(db, await store.findBattle(battleId), user);
       const latest = await resolved(row);
-      return toPlayerBattle(latest, await seatOf(db, latest, user.id));
+      return toPlayerBattle(db, latest, await seatOf(db, latest, user.id));
     },
 
     startWild: async (user, mapId, request = {}) => {
@@ -1372,7 +1397,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       const active = await store.findActive(mapId, user.id);
       if (active) {
         const row = await resolved(active);
-        return { battle: toPlayerBattle(row, await seatOf(db, row, user.id)), created: false };
+        return {
+          battle: await toPlayerBattle(db, row, await seatOf(db, row, user.id)),
+          created: false,
+        };
       }
       const encounter = await options.findWildEncounter?.({
         mapId,
@@ -1537,7 +1565,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       // An ended battle wrote events, and so did a guardian befriended
       // mid-battle; every live step writes one (`battle.picked` or `.turned`).
       if (next.status !== 'active' || befriended || live) published(mapId);
-      return toPlayerBattle(next, await seatOf(db, next, user.id));
+      return toPlayerBattle(db, next, await seatOf(db, next, user.id));
     },
 
     startFriendly: async ({ mapId, aUserId, bUserId, started }) => {
@@ -1732,7 +1760,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       if (answer === 'not-now') return { challenge, battle: null };
       const row = await store.findBattle(battleId);
       if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-      return { challenge, battle: toPlayerBattle(row, await seatOf(db, row, user.id)) };
+      return { challenge, battle: await toPlayerBattle(db, row, await seatOf(db, row, user.id)) };
     },
 
     cheer: async (user, battleId, request) => {
