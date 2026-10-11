@@ -1,0 +1,143 @@
+/* The one Build sheet (#371): used by the home base and the map's tile panel.
+   One horizontal swipe row; nothing scrolls up and down inside it. */
+
+.build-sheet {
+  display: grid;
+  gap: 6px;
+}
+
+.build-hint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.build-hint {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #7a2d55;
+}
+
+.build-all {
+  flex: none;
+  min-height: 44px;
+}
+
+.build-row {
+  list-style: none;
+  margin: 0 -12px;
+  padding: 2px 12px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.build-row::-webkit-scrollbar {
+  display: none;
+}
+
+.build-row > li {
+  display: flex;
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.build-card {
+  box-sizing: border-box;
+  width: 84px;
+  min-height: 56px;
+  padding: 6px 4px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  border: 2px solid #f3dbe7;
+  border-radius: 16px;
+  background: #fffafc;
+  color: #7a2d55;
+  font: inherit;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.build-card[aria-pressed='true'] {
+  border-color: #d0578f;
+  background: #ffe9f3;
+  box-shadow: 0 2px 8px rgb(208 87 143 / 30%);
+}
+
+.build-card-off {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.build-card-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.build-card-name {
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.build-detail {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.build-detail-short {
+  color: #b23a3a;
+}
+
+.build-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.build-actions > .auth-button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.build-note {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #7a2d55;
+}
+
+/* While the sheet is up it has the whole panel: the tile's title lines step
+   aside and the panel may grow past the side trays' handles (they hide). */
+.tile-panel.tile-panel-building {
+  max-height: none;
+}
+
+.tile-panel-building .tile-panel-head,
+.tile-panel-building .tile-panel-guardians,
+.tile-panel-building .tile-panel-gatherer,
+.tile-panel-building .tile-panel-post,
+.tile-panel-building .tile-panel-details {
+  display: none;
+}

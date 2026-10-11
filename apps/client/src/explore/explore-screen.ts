@@ -25,6 +25,7 @@ import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { AmbientDriver } from '../map/ambient-driver.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -80,7 +81,14 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import {
+  exploreSkyAt,
+  exploreWorld,
+  isUnderwater,
+  sameLook,
+  skyLook,
+  type SkyLook,
+} from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -100,6 +108,10 @@ export interface ExploreScreenOptions {
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
   tier: () => QualityTier;
+  /** Dev captures: the tier is pinned (`?tier=`), so ambient life never judges itself too slow. */
+  pinned?: () => boolean;
+  /** Draws one frame (`Stage.requestFrame`): ambient life (#335) paces itself with this. */
+  requestFrame?: () => void;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
   /**
@@ -195,10 +207,17 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let tile: ExploreTileResponse | null = null;
   let teamNames: Record<string, string> = {};
   /** My team's squishies that follow the Keeper, in team order. */
-  let teamMembers: { id: string; speciesId: string }[] = [];
+  let teamMembers: { id: string; speciesId: string; accessory: string | null }[] = [];
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
   let mapTileAtOpen: PublicTile | null = null;
+  /** Paces the land's (and the water's) ambient life (#335), like the map's: the motion itself is on the GPU. */
+  const ambient = new AmbientDriver({
+    target: () => (isOpen ? scene3d : null),
+    invalidate: options.invalidate,
+    tier: options.tier,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+  });
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
@@ -207,7 +226,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
    * map's view is gone after that), and kept for the visit.
    */
   let zone: string | null = null;
-  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  const skyNow = (): SkyLook =>
+    skyLook(
+      exploreSkyAt(zone, options.now?.() ?? new Date()),
+      tile ? exploreWorld(tile.terrain) : 'ground',
+    );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
@@ -495,6 +518,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (tier !== lastTier) {
       lastTier = tier;
       s.setLod(lodFor('closeUp', tier));
+      s.setTier(tier);
     }
     const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
@@ -831,6 +855,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     title.textContent = terrainName(t.terrain);
+    // Under a lake, Back brings the Keeper up for air (#335).
+    back.setAttribute(
+      'aria-label',
+      isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
+    );
     progress.textContent = progressLine(t.progress);
     const held = heldTool();
     if (held) lastHeld = held;
@@ -958,7 +987,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb') {
+    if (kind === 'climb' || kind === 'poke' || kind === 'pick' || kind === 'dive') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });
@@ -979,7 +1008,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
-  /** Updates the overlay's count and the Snorkel's glow. */
+  /** Updates the overlay's count (dots, or a hold's fill). */
   function renderPlay(): void {
     const p = playing;
     play.hidden = p === null || card !== null;
@@ -993,7 +1022,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
             el('span', { class: `explore-dot${i < s.count ? ' explore-dot-on' : ''}` }),
           ),
         );
-      } else if (s.kind === 'lift') {
+      } else if (s.kind === 'lift' || s.kind === 'stack') {
         const fill = el('span', { class: 'explore-hold-fill' });
         fill.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
         playDots.replaceChildren(el('span', { class: 'explore-hold' }, fill));
@@ -1163,11 +1192,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       keeperWearing: options.keeperWearing?.() ?? [],
       team: teamMembers.flatMap((m) => {
         const kind = species.get(m.speciesId);
-        return kind ? [{ id: m.id, species: kind }] : [];
+        return kind ? [{ id: m.id, species: kind, accessory: m.accessory }] : [];
       }),
       mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
+      tier: lastTier,
+      pinned: options.pinned?.() ?? false,
       reducedMotion,
+      redraw: () => {
+        options.invalidate();
+      },
     });
     // The start can land on a rock: step out before the Keeper is drawn.
     keeperAt = freePoint(keeperAt, built.colliders);
@@ -1179,6 +1213,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     built.hold(heldTool());
     front = null;
     findFront();
+    // Swaying grass, butterflies and fireflies (#335): about 30 frames a second, or still.
+    const { tier: startTier, reducedMotion: still } = ambient.state;
+    built.setAmbient(startTier, still);
+    ambient.start();
     return built.content;
   };
 
@@ -1211,7 +1249,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       teamMembers = (board?.squishies ?? [])
         .filter((s) => team.includes(s.squishy.id))
         .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
-        .map((s) => ({ id: s.squishy.id, speciesId: s.squishy.speciesId }));
+        .map((s) => ({
+          id: s.squishy.id,
+          speciesId: s.squishy.speciesId,
+          accessory: s.squishy.accessory ?? null,
+        }));
     } catch (err) {
       if (ask === generation) options.onProblem(messageOf(err));
       return;
@@ -1273,6 +1315,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function hide(): void {
     isOpen = false;
+    ambient.stop();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = null;
     // A reply still on its way (a search, a bag read) belongs to this visit:

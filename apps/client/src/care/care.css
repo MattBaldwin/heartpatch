@@ -21,7 +21,10 @@
 
 .care[hidden],
 .care-celebrate[hidden],
-.care-rarity[hidden] {
+.care-rarity[hidden],
+.care-whisper[hidden],
+.care-whisper-sub[hidden],
+.care-new-form[hidden] {
   display: none;
 }
 
@@ -219,6 +222,18 @@
   color: #b0467a;
 }
 
+/* Why happiness is holding or drifting (#376), small under the mood. */
+.care-drift {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a5d82;
+}
+
+.care-drift[hidden] {
+  display: none;
+}
+
 .care-xp-line {
   font-size: 13px;
   color: #7a5d82;
@@ -342,4 +357,157 @@
 
 .care-treat[hidden] {
   display: none;
+}
+
+/* The whisper (#32): what's shaping the next evolution, under the evolving meter. */
+.care-whisper {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f3ecff, #fdeff7);
+  box-shadow: inset 0 0 0 2px #e6dcff;
+  color: #5b3f86;
+  text-align: left;
+}
+
+/* The text column: a long nickname wraps instead of pushing past the card. */
+.care-whisper > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.care-whisper-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.care-whisper-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.care-whisper-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d6380;
+}
+
+/* A branch form's celebration chip (#32). */
+.care-new-form {
+  width: max-content;
+  max-width: 100%;
+  margin: 4px auto 8px;
+  padding: 4px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fff1b8;
+  color: #8a5a00;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 2px #ffd36e;
+}
+
+/* #376: the hearts bar says whether happiness holds or drifts. */
+.care-hearts-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.care-hearts-row .care-meter {
+  flex: 1;
+}
+
+.care-hearts-badge {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.care-hearts-badge:empty {
+  display: none;
+}
+
+.care-hearts-row[data-mood='steady'] .care-hearts-badge {
+  background: #ffe1ee;
+  animation: care-heart-bob 1.6s ease-in-out infinite;
+}
+
+.care-hearts-row[data-mood='steady'] .care-hearts {
+  box-shadow: 0 0 10px 2px rgb(240 98 146 / 45%);
+}
+
+.care-hearts-row[data-mood='drifting'] .care-hearts-badge {
+  background: #ece6f5;
+  color: #4f3d6b;
+}
+
+/* Drifting: stripes slide away slowly over the fill, like sand in a
+   timer. A transform on a pseudo-element, so nothing repaints each frame. */
+.care-hearts-row[data-mood='drifting'] .care-hearts {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #d9a6bf, #c27a9c);
+}
+
+.care-hearts-row[data-mood='drifting'] .care-hearts::after {
+  content: '';
+  position: absolute;
+  inset: 0 -28px 0 0;
+  /* One stripe period across is 28px (19.8px along the stripes' slope,
+     28 / √2), so the 28px slide loops without a jump. */
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 0%) 0 11.3px,
+    rgb(255 255 255 / 35%) 11.3px 19.8px
+  );
+  animation: care-hearts-drain 2.4s linear infinite;
+}
+
+.care-drift[data-mood='steady'],
+.care-drift[data-mood='drifting'] {
+  justify-self: center;
+  margin: 2px auto 0;
+  width: fit-content;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.care-drift[data-mood='steady'] {
+  background: #ffe1ee;
+  color: #a8336a;
+}
+
+.care-drift[data-mood='drifting'] {
+  background: #ece6f5;
+  color: #4f3d6b;
+}
+
+@keyframes care-heart-bob {
+  50% {
+    transform: translateY(-3px) scale(1.12);
+  }
+}
+
+@keyframes care-hearts-drain {
+  to {
+    transform: translateX(-28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .care-hearts-badge,
+  .care-hearts-row .care-hearts::after {
+    animation: none;
+  }
 }

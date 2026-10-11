@@ -23,7 +23,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
+import { EVOLUTION_RULES, SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -45,6 +45,8 @@ const TEST_KEEPER = {
   hairColor: 'honey',
   eyeColor: 'sky',
   outfit: 'sunflower',
+  face: 'pip',
+  body: 'pip',
   skinTone: 'tone-1',
   eyes: 'round' as const,
   brows: 'arched',
@@ -223,6 +225,35 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
   it('has secret species to battle with (public roster arrives with #10)', () => {
     expect(SECRET.length).toBeGreaterThan(0);
     expect(GAME_DATA.species.map((s) => s.id)).not.toContain(SECRET_IDS[0]);
+  });
+
+  describe('accessories (#373)', () => {
+    it('carries what each squishy wears, for drawing only', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hatted = await grant(server, kid, mapId);
+      const bare = await grant(server, kid, mapId);
+      const put = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/squishies/${hatted.id}/accessory`,
+        kid,
+        { itemId: 'tiny-bow' },
+      );
+      expect(put.statusCode).toBe(200);
+
+      const battle = await pickFight(server, kid, mapId);
+      const mine = battle.view.sides.a.squishies;
+      expect(mine.find((q) => q.id === hatted.id)?.accessory).toBe('tiny-bow');
+      // A bare squishy reads null; a wild opponent wears nothing.
+      expect(mine.find((q) => q.id === bare.id)?.accessory ?? null).toBeNull();
+      expect(battle.view.sides.b.squishies.every((q) => !q.accessory)).toBe(true);
+
+      // It is never stored in the battle itself, so replay is untouched.
+      const row = await createBattlesRepo(db).findBattle(battle.id);
+      expect(JSON.stringify(row?.state)).not.toContain('tiny-bow');
+    });
   });
 
   describe('access', () => {
@@ -588,6 +619,10 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect((await squishyOf(squishy.id))!.xp).toBe(
         xpForLevel(20, GROWTH_RULES) + newSquishyXp(award.xp),
       );
+      // A full-XP win leans it Brave (#32).
+      expect((await squishyOf(squishy.id))!.feelingLean['brave']).toBe(
+        EVOLUTION_RULES.lean.win.points,
+      );
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'battle.ended',
         actorUserId: kid.id,
@@ -795,7 +830,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     const DENVER_MIDNIGHT = '2026-10-03T06:00:00.000Z';
     /**
      * XP a squishy granted at `GRANTED` (no care since, no habitat) gets for
-     * `base` now: contentment slides down as the test clock moves on.
+     * `base` now. Both squishies join the team at `GRANTED`, and the team
+     * holds contentment steady (#376), so it doesn't slide as the clock moves.
      */
     const GRANTED = new Date('2026-10-02T12:00:00Z');
     const paidNow = (base: number) =>
@@ -803,9 +839,10 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         base,
         xpMultiplier(
           contentmentAt(
-            { contentment: CARE_RULES.startContentment, lastCaredAt: GRANTED },
+            { contentment: CARE_RULES.startContentment, since: GRANTED },
             clock,
             CARE_RULES,
+            [{ fromMs: GRANTED.getTime(), toMs: null }],
           ),
           null,
           { element: 'light', feeling: 'cozy' },

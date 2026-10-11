@@ -97,8 +97,12 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
   it('keeps befriended squishies below their evolution with the shipped cap', () => {
     const capped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
     const uncapped = runProgression(data, SMALL, UNCAPPED_BEFRIEND_RULES, engaged!, 4);
-    const friends = (r: typeof capped) => r.kids[0]!.days.at(-1)!.levels.slice(1);
-    expect(Math.max(...friends(capped))).toBeLessThan(Math.max(...friends(uncapped)));
+    // Total, not the top friend: a friend that is a final form keeps its level either way.
+    const friends = (r: typeof capped) =>
+      r.kids[0]!.days.at(-1)!
+        .levels.slice(1)
+        .reduce((sum, level) => sum + level, 0);
+    expect(friends(capped)).toBeLessThan(friends(uncapped));
   });
 });
 

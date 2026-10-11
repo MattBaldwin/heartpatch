@@ -3,7 +3,7 @@ import {
   GROWTH_RULES,
   BATTLE_RULES,
   GAME_DATA,
-  gameplayOverrides,
+  gatherFitsFor,
   hexKey,
   HOME_BASE_RULES,
   inSeason,
@@ -11,21 +11,14 @@ import {
   jobOf,
   teamProblem,
   tonightOf,
-  trainingProgressAround,
-  workCycleSeconds,
-  workProgressAround,
   EXPLORE_RULES,
   homesteadQuantity,
   workSource,
-  workSpeedPercent,
-  workYield,
   type CollectWorkResponse,
   type HexKey,
   type ItemCounts,
   type JobsView,
   type JobSquishy,
-  type JobTraits,
-  type OwnedSquishy,
   type PublicUser,
   type SetJobRequest,
   type SetTeamRequest,
@@ -34,7 +27,6 @@ import {
   type WorkSource,
   type WorkStatus,
 } from '@heartpatch/shared';
-import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -42,14 +34,16 @@ import { mapLocalTime, nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
+import { foldHabitatLean } from '../care/evolution.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
-import { homesteadOf, workPauseOf } from '../explore/homesteads.js';
+import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
+import { checkpointContentment } from './contentment.js';
 import {
   createSquishyJobsRepo,
   type JobRow,
@@ -57,6 +51,17 @@ import {
   type SquishyJobsRepo,
   type SquishyJobsTxRepo,
 } from './repo.js';
+import {
+  squishyName,
+  trainingAt,
+  trainingLevelOf,
+  TRAINING_GROUNDS,
+  traitsOf,
+  workAt,
+  type JobMap,
+} from './work.js';
+
+export { squishyName, trainingAt, trainingLevelOf, type JobMap } from './work.js';
 
 /*
  * Squishy jobs (owner decisions 2026-10-04, design doc §6 and §12). Each
@@ -92,81 +97,7 @@ const MESSAGES = {
   groundsFullTop: 'The Training Grounds are full! Give someone else a turn first.',
 } as const;
 
-const SPECIES = new Map(
-  [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies].map((s) => [s.id, s]),
-);
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
-
-/** What to call one of my squishies in a message: its nickname, else its species. */
-export const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
-  s.nickname ?? SPECIES.get(s.speciesId)?.name ?? 'Your squishy';
-
-/** The job rules' view of a squishy: element, feeling, and its species' season. */
-const traitsOf = (s: OwnedSquishy): JobTraits => ({
-  element: s.element,
-  feeling: s.feeling,
-  season: SPECIES.get(s.speciesId)?.season,
-});
-
-/** The map as the job rules need it. */
-export type JobMap = Pick<MapRow, 'id' | 'kind' | 'timeZone'>;
-
-/** Seasons on at an instant on this map (each cycle is judged when it finished). */
-const seasonsAtFor = (timeZone: string) => (ms: number) =>
-  new Set(seasonsOn(new Date(ms), timeZone));
-
-/**
- * A gatherer's work at `at`: what, how quick, and what's ready. Null if it
- * isn't at work. `justTaken`: it went to the Hollow in this transaction, and
- * its work up to now still counts.
- */
-function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
-  const active = row.squishy.state === 'active' || justTaken;
-  if (!row.atWork || !active || !row.workTile || !row.workSince) return null;
-  const found = workSource(row.workTile, GAME_DATA.resources, JOB_RULES);
-  if (!found) return null;
-  // A homestead (#199): +1 a cycle while it's joined to home, and nothing
-  // while it's cut off (the pause is left out of the count).
-  const homestead = row.workTile.homestead ?? null;
-  const source =
-    homesteadOf(homestead) === 'joined'
-      ? { ...found, quantity: homesteadQuantity(found.quantity, EXPLORE_RULES) }
-      : found;
-  const speedPercent = workSpeedPercent(traitsOf(row.squishy), source.resource, JOB_RULES);
-  const cycleSeconds = workCycleSeconds(
-    source.seconds,
-    speedPercent,
-    JOB_RULES,
-    gameplayOverrides(map.kind),
-  );
-  const progress = workProgressAround(
-    row.workSince.getTime(),
-    at.getTime(),
-    cycleSeconds,
-    JOB_RULES,
-    homestead ? workPauseOf(homestead) : null,
-  );
-  const ready = workYield(
-    source,
-    progress.finishedMs,
-    GAME_DATA.resources,
-    seasonsAtFor(map.timeZone),
-  );
-  return { tile: row.workTile, source, speedPercent, cycleSeconds, progress, ready };
-}
-
-/** Training Grounds levels by content id (owner decision 2026-10-06). */
-const TRAINING_GROUNDS = new Map(
-  GAME_DATA.buildings.flatMap((b) => (b.kind === 'training-grounds' ? [[b.id, b] as const] : [])),
-);
-
-/** A Training Grounds row's level data (room and XP per hour), or null for other buildings. */
-export function trainingLevelOf(
-  row: Pick<BuildingRow, 'buildingId' | 'level'>,
-): { capacity: number; xpPerHour: number } | null {
-  const grounds = TRAINING_GROUNDS.get(row.buildingId);
-  return grounds?.levels[Math.min(row.level, grounds.levels.length) - 1] ?? null;
-}
 
 /**
  * The Training Grounds a Train command means (read before the tile locks, and
@@ -192,30 +123,6 @@ async function pickGrounds(
   return mine[0] ?? null;
 }
 
-/** A trainee's XP at `at`: how much per hour, and what's waiting to land. Null if it isn't training. */
-export function trainingAt(row: Pick<JobRow, 'training'>, at: Date) {
-  const training = row.training;
-  if (!training) return null;
-  const level = trainingLevelOf({ buildingId: training.buildingId, level: training.level });
-  if (!level) return null;
-  // A homestead cut off from home naps (#277): the pause is left out of the count.
-  const homestead = training.homestead;
-  const progress = trainingProgressAround(
-    training.since.getTime(),
-    at.getTime(),
-    level.xpPerHour,
-    JOB_RULES,
-    homestead ? workPauseOf(homestead) : null,
-  );
-  return {
-    buildingRowId: training.buildingRowId,
-    tile: training.tile,
-    xpPerHour: level.xpPerHour,
-    napping: homesteadOf(homestead) === 'paused',
-    progress,
-  };
-}
-
 /**
  * Lands what trainees earned (plain XP, levels and evolutions through
  * `applyXp`) and either moves their count on (`stop: false`, a settle) or
@@ -236,6 +143,13 @@ export async function landTraining(
 }> {
   const repo = createSquishyJobsRepo(tx);
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.training !== null);
+  // Its count restarts or ends here: what training held so far is kept (#376).
+  await checkpointContentment(
+    tx,
+    map.id,
+    rows.map((r) => r.squishy.id),
+    at,
+  );
   const trained: { squishyId: string; ownerUserId: string; xp: number }[] = [];
   const growths: Growth[] = [];
   for (const row of rows) {
@@ -311,6 +225,13 @@ export async function leaveWork(
 ): Promise<NewGameEvent[]> {
   const repo = createSquishyJobsRepo(tx);
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.workTile !== null);
+  // Off work from here: what gathering held so far is kept (#376).
+  await checkpointContentment(
+    tx,
+    map.id,
+    rows.map((r) => r.squishy.id),
+    at,
+  );
   const banked = new Map<string, { squishyIds: string[]; items: ItemCounts }>();
   const events: NewGameEvent[] = [];
   // Nightfall calls this for a squishy it just took: its day's work still
@@ -375,6 +296,8 @@ export interface SquishyJobsService {
   collect: (user: PublicUser, mapId: string) => Promise<CollectWorkResponse>;
   /** Dev/test only: each of my gatherers finishes one more cycle now (a short timer for e2e). */
   devReady: (user: PublicUser, mapId: string) => Promise<JobsView>;
+  /** Dev/test only: my squishies live `minutes` more of their jobs, as if the clock jumped (#376). */
+  devAgeMood: (user: PublicUser, mapId: string, minutes: number) => Promise<JobsView>;
 }
 
 export interface SquishyJobsServiceOptions {
@@ -490,6 +413,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         training: trainingStatus,
         fullXpResetAt:
           battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
+        gatherFits: gatherFitsFor(traitsOf(row.squishy), JOB_RULES),
       };
     });
     // One a homestead (#277), each with its room and its night.
@@ -774,6 +698,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (slot === null) throw new AppError('CONFLICT', MESSAGES.teamFull);
         }
 
+        // Contentment so far counts at the old job's rate (#376).
+        await checkpointContentment(tx, map.id, [row.squishy.id], at);
         // Off the old job first: its post or work tile (banking what's ready).
         const events = await leaveOldJobs(repo, tx, map, user.id, [row], request.job, at);
         if (row.teamSlot !== null) await repo.setTeamSlot(row.squishy.id, null);
@@ -782,7 +708,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         // #277), it leaves its habitat bed (housed or working, not both).
         const outOnLand = (request.job === 'gatherer' && workTile) || request.job === 'training';
         if (outOnLand && row.habitatBuildingId !== null) {
-          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null);
+          await foldHabitatLean(tx, row.squishy.id, at);
+          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null, at);
           events.push({
             mapId: map.id,
             type: 'squishy.housed',
@@ -870,6 +797,13 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           request.squishyIds.every((id, i) => byId.get(id)?.teamSlot === i);
         if (same) return buildView(tx, repo, map, user.id, at);
 
+        // Contentment so far counts at everyone's old job's rate (#376).
+        await checkpointContentment(
+          tx,
+          map.id,
+          rows.map((r) => r.squishy.id),
+          at,
+        );
         // New team members leave their posts and work tiles first.
         const events = await leaveOldJobs(repo, tx, map, user.id, joining, 'team', at);
         await repo.clearTeam(map.id, user.id);
@@ -895,6 +829,13 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const granted: ItemCounts = {};
         const collected: string[] = [];
         const works = rows.map((row) => ({ row, work: workAt(row, map, at) }));
+        // An emptied basket works again: what it held so far is kept (#376).
+        await checkpointContentment(
+          tx,
+          map.id,
+          rows.map((r) => r.squishy.id),
+          at,
+        );
         await lockGrantRows(
           tx,
           map.id,
@@ -929,12 +870,28 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       command(user, mapId, async ({ repo, tx, map, at }) => {
         const working = (await repo.listMine(map.id, user.id)).filter((r) => r.atWork);
         const { rows } = await lockJobs(repo, working);
+        await checkpointContentment(
+          tx,
+          map.id,
+          rows.map((r) => r.squishy.id),
+          at,
+        );
         for (const row of rows) {
           const work = workAt(row, map, at);
           if (!work || !row.workSince) continue;
           const since = row.workSince.getTime() - work.cycleSeconds * 1000;
           await repo.moveWorkSince(row.squishy.id, new Date(since));
         }
+        return buildView(tx, repo, map, user.id, at);
+      }),
+
+    devAgeMood: (user, mapId, minutes) =>
+      command(user, mapId, async ({ repo, tx, map, at }) => {
+        const { rows } = await lockJobs(repo, await repo.listMine(map.id, user.id));
+        await repo.devShiftTimes(
+          rows.map((r) => r.squishy.id),
+          minutes * 60_000,
+        );
         return buildView(tx, repo, map, user.id, at);
       }),
   };

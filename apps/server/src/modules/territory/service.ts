@@ -10,6 +10,7 @@ import {
   GAME_DATA,
   isTileFenced,
   landCount,
+  LIVE_BATTLE_RULES,
   weakestSegment,
   RAID_RULES,
   stancePolicy,
@@ -22,6 +23,7 @@ import {
   type BattleSquishySetup,
   type DefenseStance,
   type FenceRules,
+  type LiveBattleRules,
   type PublicUser,
   type SetDefendersRequest,
   type Species,
@@ -47,6 +49,7 @@ import {
   type Clock,
 } from '../../lib/time.js';
 import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
+import { createChallengesRepo } from '../challenges/repo.js';
 import {
   PLAYER_SIDE,
   type BattlesService,
@@ -56,6 +59,7 @@ import {
   type TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { checkpointContentment, guardWatchesOf } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -106,6 +110,13 @@ export interface TerritoryServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
+  /**
+   * Is this player's app open on this map right now (`wsHub.isOnline`)? A
+   * defender who is gets "Defend now?" (#29-C). Without one, nobody is.
+   */
+  isOnline?: (mapId: string, userId: string) => boolean;
+  /** Live battles' timings (#29): the "Defend now?" window. */
+  liveRules?: LiveBattleRules;
   /** Tests pass their own raid rules, guardians and fence rules. */
   rules?: TerritoryRules;
   guardians?: GuardianData;
@@ -151,6 +162,7 @@ const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; me
 };
 
 const HOUR_MS = 60 * MINUTE_MS;
+const SECOND_MS = 1000;
 
 /** Every species the server knows: public, then secret. */
 const ALL_SPECIES: readonly Species[] = [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies];
@@ -219,12 +231,69 @@ export function defendingSide(
   return { controller: { type: 'ai', policy: 'guardian' }, squishies: [...guardians] };
 }
 
+/**
+ * "Defend now?" (#29-C), in a challenge's start transaction after the battle
+ * and its attempt row: the prompt (a `defense` challenge for the battle) and
+ * its event. The challenger's own waiting "Battle me?" goes first: they're in
+ * a battle now, and one ask out at a time is the table's rule. Lock order:
+ * their asks (step 9c, id order), then `maps` with the events.
+ */
+async function promptDefense(
+  tx: Executor,
+  input: { battle: BattleRow; defenderUserId: string; expiresAt: Date },
+): Promise<NewGameEvent[]> {
+  const { battle, defenderUserId, expiresAt } = input;
+  const repo = createChallengesRepo(tx);
+  const at = battle.startedAt;
+  const mine = (await repo.lockPendingOf(battle.mapId, [battle.playerUserId])).filter(
+    (row) => row.fromUserId === battle.playerUserId,
+  );
+  for (const row of mine) await repo.settle(row.id, { status: 'cancelled', at });
+  const prompt = await repo.insert({
+    mapId: battle.mapId,
+    kind: 'defense',
+    fromUserId: battle.playerUserId,
+    toUserId: defenderUserId,
+    battleId: battle.id,
+    createdAt: at,
+    expiresAt,
+  });
+  return [
+    ...mine.map((row): NewGameEvent<'challenge.cancelled'> => ({
+      mapId: battle.mapId,
+      type: 'challenge.cancelled',
+      actorUserId: battle.playerUserId,
+      payload: {
+        challengeId: row.id,
+        kind: row.kind,
+        fromUserId: row.fromUserId,
+        toUserId: row.toUserId,
+        reason: 'cancelled',
+      },
+    })),
+    {
+      mapId: battle.mapId,
+      type: 'defense.prompted',
+      actorUserId: battle.playerUserId,
+      payload: {
+        challengeId: prompt.id,
+        battleId: battle.id,
+        fromUserId: battle.playerUserId,
+        toUserId: defenderUserId,
+        expiresAt: expiresAt.toISOString(),
+      },
+    } satisfies NewGameEvent<'defense.prompted'>,
+  ];
+}
+
 export function createTerritoryService(options: TerritoryServiceOptions): TerritoryService {
   const { db } = options;
   const now = options.clock ?? (() => new Date());
   const rules = options.rules ?? TERRITORY_RULES;
   const fenceRules = options.fenceRules ?? FENCE_RULES;
   const guardianData = options.guardians ?? defaultGuardianData();
+  const isOnline = options.isOnline ?? (() => false);
+  const liveRules = options.liveRules ?? LIVE_BATTLE_RULES;
   const store = createTerritoryRepo(db);
   const land = createLandTending({
     db,
@@ -400,6 +469,22 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       const cooldownUntil =
         brokeFence?.cooldownUntil ?? new Date(at.getTime() + rules.cooldownHours * HOUR_MS);
 
+      // "Defend now?" (#29-C): a defender whose app is open on the patch may
+      // play their squishies on watch live. Not when the land's guardians
+      // stand in, nor a fence (it stands alone, played by the engine), nor a
+      // defender already in a battle or weighing another challenge. Nothing
+      // above changes either way: the try, the cooldown and the loss-cap slot
+      // are all taken now, so waiting for an answer dodges nothing.
+      const askDefender =
+        defenderId !== null &&
+        defenders.length > 0 &&
+        !fencePart &&
+        isOnline(map.id, defenderId) &&
+        (await createBattlesRepo(tx).findActive(map.id, defenderId)) === null &&
+        !(await createChallengesRepo(tx).pendingFor(map.id, defenderId)).some(
+          (row) => row.kind === 'defense' && row.toUserId === defenderId && row.expiresAt > at,
+        );
+
       return {
         kind,
         side: fencePart
@@ -451,7 +536,14 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
               cooldownUntil: cooldownUntil.toISOString(),
             },
           };
-          return [event];
+          if (!askDefender) return [event];
+          const expiresAt = new Date(
+            battle.startedAt.getTime() + liveRules.defensePromptSeconds * SECOND_MS,
+          );
+          return [
+            event,
+            ...(await promptDefense(startTx, { battle, defenderUserId: defenderId, expiresAt })),
+          ];
         },
       };
     };
@@ -533,13 +625,18 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           throw new AppError('FORBIDDEN', MESSAGES.notYours);
         }
         if (tile.homeSlot !== null) throw new AppError('FORBIDDEN', MESSAGES.homeWatch);
-        // Squishy locks after the tiles (in id order): housing one locks it too.
-        const homes = new Map(
-          (await repo.lockSquishies(request.squishyIds)).map((s) => [s.id, s.habitatBuildingId]),
-        );
-        const mine = new Map((await repo.mySquishies(map.id, user.id)).map((s) => [s.id, s]));
         const before = await repo.listDefenders(tile.id, user.id);
         const here = new Set(before.map((d) => d.id));
+        // Squishy locks after the tiles (in id order): housing one locks it
+        // too. Guards leaving this post are locked as well: their contentment
+        // checkpoint is written below (#376).
+        const homes = new Map(
+          (await repo.lockSquishies([...new Set([...here, ...request.squishyIds])])).map((s) => [
+            s.id,
+            s.habitatBuildingId,
+          ]),
+        );
+        const mine = new Map((await repo.mySquishies(map.id, user.id)).map((s) => [s.id, s]));
         for (const id of request.squishyIds) {
           const squishy = mine.get(id);
           if (!squishy) throw new AppError('FORBIDDEN', MESSAGES.notYourSquishy);
@@ -557,6 +654,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           before.every((d, i) => d.id === request.squishyIds[i]);
         if (same) return false;
         const at = now();
+        // Guards coming and going: contentment so far counts at their old job's rate (#376).
+        await checkpointContentment(tx, map.id, [...new Set([...here, ...request.squishyIds])], at);
         await repo.replaceDefenders(map.id, tile.id, request.squishyIds, at);
         // One job at a time (owner decisions 2026-10-04): a new guard leaves
         // the team or its work tile (banking what it had ready).
@@ -740,7 +839,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         await repo.endAttack(battle.id, 'won', at);
         return { events: [], xpPercent, drop: null };
       }
-      // Squishies on watch go home, never lost (issue #15).
+      // Squishies on watch go home, never lost (issue #15). Their watch so far
+      // held (#376): when each was posted is read now, before the posts go;
+      // battles writes the checkpoints after its squishy locks (tech spec §7).
+      const guards =
+        tile.ownerUserId === null
+          ? []
+          : await guardWatchesOf(
+              tx,
+              (await repo.listDefenders(tile.id, tile.ownerUserId)).map((g) => g.id),
+            );
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
       // Claiming land tends it (land that misses you, owner decision 2026-10-06),
@@ -833,6 +941,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         ].filter((r) => Object.keys(r.items).length > 0),
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
+        guards,
         afterRefunds: (inner, when) => finishLostTraining(inner, attack.mapId, lostFires, when),
       };
     },

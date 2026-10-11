@@ -2,9 +2,11 @@ import { createAudio } from './audio/audio.js';
 import { battleCue, careCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
-import { pickInitialTier } from './engine/quality/tiers.js';
+import { showsStats } from './engine/stats-flag.js';
+import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
@@ -19,9 +21,12 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
-import { createJobs } from './squishies/jobs/index.js';
+import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { createChatScreen } from './chat/chat-screen.js';
+import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
+import { onPanelFocus } from './building/panel-focus.js';
+import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
@@ -34,6 +39,7 @@ import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { lobbyApi } from './ui/lobby/lobby-api.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
@@ -74,8 +80,15 @@ installStickyTaps(document);
 
 const params = new URLSearchParams(window.location.search);
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
+/**
+ * Dev only: `?tier=` pins a tier for honest review captures (#335). The
+ * governor is off, so headless software rendering can't drop it to low;
+ * every capture says which tier it was taken at.
+ */
+const pinnedTier = import.meta.env.DEV ? params.get('tier') : null;
+const pinTier = isQualityTier(pinnedTier);
 /** The quality tier, carried from stage to stage so the governor's last step down isn't lost. */
-let tier = pickInitialTier(params.get('quality'));
+let tier = pickInitialTier(pinnedTier, params.get('quality'));
 let stage: Stage | null = null;
 /** What the stage draws: the open map, or the test scene. */
 let sceneBuilder: SceneBuilder = buildTestScene;
@@ -136,7 +149,7 @@ function showScene(build: SceneBuilder | null): void {
   currentStage.dispose();
   if (!target) return;
   try {
-    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
   } catch (err) {
     showRendererError(err);
   }
@@ -248,7 +261,7 @@ const closeUp = createCloseUpScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     home.setMap(null);
     explore.setMap(null);
@@ -269,7 +282,7 @@ const closeUp = createCloseUpScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -348,6 +361,8 @@ const darkLand = createDarkLand(
 );
 /** Glides the camera to a tile (at once with reduced motion). */
 const stillPans = window.matchMedia('(prefers-reduced-motion: reduce)');
+/** How close the camera moves in on a tile being built on, so its edges are easy to tap. TUNE: */
+const BUILD_ZOOM = 12;
 const panToTile = (h: Hex): void => {
   stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
 };
@@ -462,6 +477,15 @@ const hollowReportOpen = () => (hollow.debug?.report.length ?? 0) > 0;
 // Quick messages (#23): a Chat button over a multiplayer map, with presets,
 // emoji and squishy stickers, and little bubbles when someone says something.
 const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-right') });
+/**
+ * The patch's social screens follow the map on screen together: quick
+ * messages (#23) and friendly battles (#29). Null hides them (the Glade,
+ * another screen over the map).
+ */
+const socialSetMap = (mapId: string | null): Promise<void> => {
+  void friendly.setMap(mapId);
+  return chat.setMap(mapId);
+};
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -491,7 +515,7 @@ const home = createHomeScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     lobby.stepOut();
     void care.celebrateNews(mapId);
@@ -512,7 +536,7 @@ const home = createHomeScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -530,7 +554,9 @@ const explore = createExploreScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
+  pinned: () => pinTier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
@@ -545,7 +571,7 @@ const explore = createExploreScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     home.setMap(null);
     lobby.stepOut();
@@ -558,7 +584,7 @@ const explore = createExploreScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -589,6 +615,21 @@ const explore = createExploreScreen({
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
+// One Build sheet for my land (#371): fires, lanterns, Training Grounds and
+// fences, built the same way from the tile's panel.
+// A sheet or fence card with the whole panel: the side trays' handles would
+// sit on top of it, so they step aside until it's done.
+onPanelFocus((focused) => {
+  trays.setVisible(!focused);
+});
+const tileBuild = createTileBuild({
+  sources: [home.buildSource, fences.buildSource],
+  area: () => maps,
+  reveal: (tile) => {
+    // Above the sheet along the bottom, so the lit edges stay in view.
+    stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
+  },
+});
 const maps = createMapScreen({
   root: document.body,
   showScene,
@@ -605,7 +646,7 @@ const maps = createMapScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     lobby.showMessage(message);
@@ -614,6 +655,8 @@ const maps = createMapScreen({
   tileActions: combineTileActions(
     wildPicker.tileActions,
     inventory.tileActions,
+    // Build sits near the top of a tile's actions, so it's never scrolled away.
+    tileBuild.tileActions,
     home.tileActions,
     explore.tileActions,
     land.tileActions,
@@ -654,10 +697,14 @@ const maps = createMapScreen({
     land.liveEvent(event);
     fences.liveEvent(event);
     chat.liveEvent(event);
+    // Friendly battles (#29): asks, and a live battle's turns and cheers.
+    friendly.liveEvent(event);
+    battles.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
     postScreen.liveEvent(event);
+    defense.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -699,7 +746,7 @@ const tutorial = createTutorialScreen({
       glade = mapId;
       catalog.close();
       care.close();
-      await chat.setMap(null);
+      await socialSetMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (!stillWanted()) return;
@@ -719,7 +766,7 @@ const tutorial = createTutorialScreen({
       void territory.setMap(null);
       void hollow.setMap(null);
       void land.setMap(null);
-      void chat.setMap(null);
+      void socialSetMap(null);
       home.setMap(null);
       explore.setMap(null);
       // A care sheet left open on the Glade (an evolution's "Whoa!") would
@@ -775,6 +822,19 @@ const lorebook = createLorebook({
 // page, the morning report, What's new, an evolution's "Whoa!" or the wardrobe
 // (one card at a time, #129).
 // Nor over a form the player just asked for (the lobby's "Make a patch").
+// "Defend now?" (#29-C): over any screen while a rival challenges land my
+// squishies stand watch on; "Defend!" opens the battle from my side.
+const defense = createDefensePrompt({
+  root: document.body,
+  nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  openBattle: (battle) => {
+    // The server has seated them already: whatever is open steps aside.
+    catalog.close();
+    care.close();
+    closeUp.close();
+    battles.open(battle);
+  },
+});
 const milestones = createMilestoneCelebration({
   root: document.body,
   busy: () =>
@@ -792,8 +852,15 @@ const milestones = createMilestoneCelebration({
 });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
+/** A map-mate's name (a live battle's opponent, #29): the map on screen, else the patch's members. */
+const memberName = async (mapId: string, userId: string): Promise<string | null> => {
+  const members =
+    maps.view?.map.id === mapId ? maps.view.members : (await lobbyApi.get(mapId)).members;
+  return members.find((m) => m.user.id === userId)?.user.username ?? null;
+};
 const battles = createBattleScreen({
   root: document.body,
+  memberName,
   isGlade: (mapId) => mapId === glade,
   journey: {
     postName: (battleId) => journeys.postFor(battleId)?.name ?? null,
@@ -809,9 +876,12 @@ const battles = createBattleScreen({
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
-  onOpen: (mapId) => {
+  onOpen: (mapId, live) => {
     battleMapId = mapId;
-    maps.close();
+    // A live battle (#29) keeps following the patch underneath: the other
+    // Keeper's picks and cheers arrive on it, and it keeps me "here".
+    if (live) maps.hide();
+    else maps.close();
     catalog.close();
     care.close();
     jobs.close();
@@ -819,7 +889,7 @@ const battles = createBattleScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     lobby.stepOut();
@@ -842,7 +912,7 @@ const battles = createBattleScreen({
           territory.setMap(mapId),
           hollow.setMap(mapId),
           land.setMap(mapId),
-          chat.setMap(chatFor(mapId)),
+          socialSetMap(chatFor(mapId)),
         ]);
       },
       (err: unknown) => {
@@ -863,6 +933,24 @@ const battles = createBattleScreen({
   keeperWearing: () => wardrobe.wearing,
   onStep: (step) => {
     audio.cue(battleCue(step));
+  },
+});
+// Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends
+// button beside Chat (top right; the Adventure tray is full on short
+// screens); a friend's ask shows over the map. A yes opens the live battle on
+// the battle screen for both Keepers.
+const friendly = createFriendlyScreen({
+  root: document.body,
+  entryRoot: trays.slot('top-right'),
+  members: (mapId) =>
+    maps.view?.map.id === mapId
+      ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))
+      : [],
+  openBattle: (battle) => {
+    battles.open(battle);
+  },
+  openTeam: (mapId) => {
+    void openTeamPicker(mapId);
   },
 });
 // Claiming starts from a tile: this row says how (territory, #15).
@@ -903,7 +991,7 @@ const keeper = createKeeperScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -933,7 +1021,7 @@ const cinematic = createCinematicScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -975,7 +1063,7 @@ const wardrobe = createWardrobeScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -999,7 +1087,7 @@ const wardrobe = createWardrobeScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         // A battle left for the wardrobe resumes.
         void battles.setMap(mapId);
       },
@@ -1024,7 +1112,7 @@ const starters = createStarterScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -1067,7 +1155,7 @@ const lobby = mountLobby(document.body, {
     void territory.setMap(mapId);
     void hollow.setMap(mapId);
     void land.setMap(mapId);
-    void chat.setMap(chatFor(mapId));
+    void socialSetMap(chatFor(mapId));
     home.setMap(mapId);
     explore.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
@@ -1178,12 +1266,14 @@ mountAuth(document.body, {
     hollow.setUser(user);
     land.setUser(user);
     chat.setUser(user);
+    friendly.setUser(user);
     home.setUser(user);
     explore.setUser(user);
     wardrobe.setUser(user);
     starters.setUser(user);
     lorebook.setUser(user);
     milestones.setUser(user);
+    defense.setUser(user);
     maps.setUser(user);
     signedIn = user;
     cinematic.setUser(user);
@@ -1221,9 +1311,11 @@ if (import.meta.env.DEV) {
     inventory: () => inventory.debug,
     territory: () => territory.debug,
     fences: () => fences.debug,
+    tileBuild: () => tileBuild.debug,
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,
+    friendly: () => friendly.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     explore: () => explore.debug,
@@ -1241,6 +1333,7 @@ if (import.meta.env.DEV) {
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
+    defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     audio: () => audio.debug,
   };
@@ -1251,7 +1344,7 @@ await boot(canvas, {
   createRenderer,
   freshCanvas,
   mount: (renderer, target) => {
-    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
     return currentStage;
   },
   onError: showRendererError,
@@ -1270,7 +1363,10 @@ if (import.meta.env.DEV) {
     .catch(() => {
       badge.textContent = 'server: offline';
     });
+}
 
+// The stats badge: dev builds, or `?fps=1` on the live site (#335, the owner's device check).
+if (showsStats(import.meta.env.DEV, params)) {
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
   mountDevOverlay(() => stage);
 }

@@ -111,17 +111,49 @@ export type ClothingPiece = z.infer<typeof ClothingPieceSchema>;
 export const SquishyAnchorSchema = z.enum(['crown', 'neck']);
 export type SquishyAnchor = z.infer<typeof SquishyAnchorSchema>;
 
+/**
+ * A costume that draws a ready-made figure instead of pieces, by name, so
+ * the numbers stay in the one place that owns them (a model costume has no
+ * pieces: they would sit on the Keeper's sockets, not on the figure): the
+ * client builds `hollow-man` from the Hollow Man's own shape (#21). A closed
+ * list, so every model is known and validated.
+ */
+export const CostumeModelSchema = z.enum(['hollow-man']);
+export type CostumeModel = z.infer<typeof CostumeModelSchema>;
+
+/** The chip colour for a model costume, which has no pieces to take one from. */
+export const COSTUME_MODEL_SWATCH: Readonly<Record<CostumeModel, string>> = {
+  'hollow-man': '#251c3a',
+};
+
 /** Most pieces an item has; a head-to-toe costume may have up to `MAX_COSTUME_PIECES`. */
 export const MAX_ITEM_PIECES = 12;
 export const MAX_COSTUME_PIECES = 24;
 
 /** Soft vinyl-toy primitives (design doc §19), a few per item so they stay cheap. */
 export const ClothingVisualSchema = z.strictObject({
-  pieces: z.array(ClothingPieceSchema).min(1).max(MAX_COSTUME_PIECES),
+  /** At least one, unless the costume is a `model`, which draws itself. */
+  pieces: z.array(ClothingPieceSchema).max(MAX_COSTUME_PIECES),
   /** Squishy accessories only. */
   anchor: SquishyAnchorSchema.optional(),
+  /**
+   * Costumes only: hides the Keeper's own body, head, hands, hair and starter
+   * outfit while worn (default: false), so the costume is the whole figure.
+   * The Keeper's place, shadow and sockets stay where they were (the feet are
+   * not drawn: the figure stands where they did), so walking, exploring and
+   * the home view line up.
+   */
+  replacesBody: z.boolean().optional(),
+  /** Costumes only: draws this ready-made figure (it replaces the body). */
+  model: CostumeModelSchema.optional(),
 });
 export type ClothingVisual = z.infer<typeof ClothingVisualSchema>;
+
+/** The colour of an item's chip in a list: its first piece's, else its model's. */
+export function clothingSwatch(item: { readonly visual: ClothingVisual }): string {
+  const { pieces, model } = item.visual;
+  return pieces[0]?.color ?? (model ? COSTUME_MODEL_SWATCH[model] : '#ffffff');
+}
 
 /** One catalog row (design doc §23 "Data"). Cosmetic only: no stats, ever. */
 export const ClothingItemSchema = z.strictObject({
@@ -188,13 +220,25 @@ export function checkClothingData(input: unknown, seasons: readonly string[]): s
       if ((item.visual.anchor !== undefined) !== (item.slot === SQUISHY_SLOT)) {
         report(at('visual'), 'squishy accessories need an anchor, and only they have one');
       }
+      if (item.visual.pieces.length === 0 && item.visual.model === undefined) {
+        report(at('visual'), 'an item needs at least one piece, unless it is a `model`');
+      }
       if (item.slot !== 'costume') {
+        if (item.visual.replacesBody !== undefined || item.visual.model !== undefined) {
+          report(at('visual'), 'only costumes can replace the body or use a `model`');
+        }
         if (item.visual.pieces.length > MAX_ITEM_PIECES) {
           report(at('visual'), `only costumes have more than ${String(MAX_ITEM_PIECES)} pieces`);
         }
         if (item.visual.pieces.some((p) => p.on !== undefined)) {
           report(at('visual'), 'only costumes place pieces on body sockets (`on`)');
         }
+      }
+      if (item.visual.model !== undefined && item.visual.pieces.length > 0) {
+        report(at('visual'), 'a `model` draws itself, so it has no pieces');
+      }
+      if (item.visual.model !== undefined && item.visual.replacesBody !== true) {
+        report(at('visual'), 'a `model` is the whole figure, so it needs `replacesBody: true`');
       }
       // An arm piece turns with the arm's splay (a roll), which only adds up
       // right without a pitch or yaw of its own.

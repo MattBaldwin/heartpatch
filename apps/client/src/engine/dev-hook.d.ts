@@ -8,10 +8,12 @@ import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { CareDebug } from '../care/care-sheet.js';
 import type { ChatDebug } from '../chat/chat-screen.js';
+import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
+import type { TileBuildDebug } from '../building/tile-build.js';
 import type { FenceDebug } from '../fences/fence-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
@@ -19,6 +21,7 @@ import type { CinematicDebug } from '../cinematics/cinematic-screen.js';
 import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
+import type { DefensePromptDebug } from '../battle/defense-prompt.js';
 import type { WhatsNewDebug } from '../whats-new/whats-new.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
 import type { TraysDebug } from '../ui/trays/trays.js';
@@ -70,6 +73,7 @@ declare global {
       territory?(): TerritoryDebug | null;
       /** The fence sheet (#203): its step and the bag it read, or null off a map. */
       fences?(): FenceDebug | null;
+      tileBuild?(): TileBuildDebug;
       /** The night, the morning report, squishies in the Hollow and his visits (#21), or null. */
       hollow?(): HollowDebug | null;
       /** Land that misses you (owner decision 2026-10-06). */
@@ -100,8 +104,11 @@ declare global {
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */
       milestones?(): MilestoneCelebrationDebug;
+      defense?(): DefensePromptDebug;
       /** Quick messages (#23): the sheet, the feed and the bubbles over the map, or null. */
       chat?(): ChatDebug | null;
+      /** Friendly battles (#29): who's here, the asks. */
+      friendly?(): FriendlyDebug | null;
       /** Sound (#25): unlock state, engine, the loop wanted and playing, the last cue, levels. */
       audio?(): AudioDebug;
       /** What's new (#220): whether the sheet is open, why it opened and how many entries it lists. */

@@ -53,8 +53,10 @@ import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '
 import type { BattlesService, StartResult } from '../battles/service.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
+import { addNightWatchLean } from '../care/evolution.js';
 import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -297,6 +299,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const { userId } = outcome;
       // Under its row lock; a squishy that left the map meanwhile is skipped.
       const took: string[] = [];
+      // Its job so far held what it held (#376); in the Hollow it has none.
+      await checkpointContentment(tx, map.id, outcome.taken, at);
       for (const squishyId of outcome.taken) {
         if (await repo.hollow(squishyId)) took.push(squishyId);
       }
@@ -362,6 +366,16 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       squishyRows.some((s) => s.id === t.squishyId && s.postOwnerUserId !== undefined),
     );
     await repo.leavePosts(guards.map((t) => t.squishyId));
+    // Everyone really standing watch tonight (active, on its owner's land)
+    // leans a little Spooky (#32), taken or not.
+    await addNightWatchLean(
+      tx,
+      squishyRows
+        .map(asNight)
+        .filter((s) => s.post !== null && isOnWatch(s, s.post))
+        .map((s) => s.id),
+      at,
+    );
     // One `defenders.changed` per tile whose guards changed, as posting and
     // jobs send, so every map shows the watch as it now stands.
     const takenIds = new Set(taken.map((t) => t.squishyId));

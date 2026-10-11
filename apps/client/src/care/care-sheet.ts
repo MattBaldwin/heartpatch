@@ -89,8 +89,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   // The rarity chip under the name (#240).
   const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
+  const drift = el('p', { class: 'care-drift', 'data-testid': 'care-drift' });
   const heartsFill = el('div', { class: 'care-meter-fill care-hearts' });
   const hearts = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, heartsFill);
+  // Holding steady or drifting down (#376): a badge at the bar's end.
+  const heartsBadge = el('span', { class: 'care-hearts-badge', 'aria-hidden': 'true' });
+  const heartsRow = el('div', { class: 'care-hearts-row' }, hearts, heartsBadge);
   const level = el('p', { class: 'care-level', 'data-testid': 'care-level' });
   const xpFill = el('div', { class: 'care-meter-fill care-xp' });
   const xpBar = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, xpFill);
@@ -108,7 +112,24 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     el('summary', {}, CARE_TEXT.infoTitle),
     infoList,
   );
+  // What's shaping its next evolution (#32), under the evolving meter.
+  const whisperIcon = el('span', { class: 'care-whisper-icon', 'aria-hidden': 'true' });
+  const whisperText = el('p', { class: 'care-whisper-text' });
+  const whisperSub = el('p', { class: 'care-whisper-sub' });
+  const whisper = el(
+    'div',
+    { class: 'care-whisper', 'data-testid': 'care-whisper' },
+    whisperIcon,
+    el('div', {}, whisperText, whisperSub),
+  );
+  whisper.hidden = true;
   const celebrateLine = el('p', { class: 'care-celebrate-line' });
+  const newForm = el(
+    'p',
+    { class: 'care-new-form', 'data-testid': 'care-new-form' },
+    CARE_TEXT.newForm,
+  );
+  newForm.hidden = true;
   const yay = el(
     'button',
     { type: 'button', class: 'auth-button', 'data-testid': 'care-yay' },
@@ -119,6 +140,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     { class: 'care-celebrate', 'data-testid': 'care-celebrate' },
     el('h2', { class: 'care-celebrate-title' }, CARE_TEXT.evolvedTitle),
     celebrateLine,
+    newForm,
     yay,
   );
   celebrate.hidden = true;
@@ -143,11 +165,13 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       name,
       rarity,
       mood,
-      hearts,
+      drift,
+      heartsRow,
       level,
       xpBar,
       xpLine,
       evolving.root,
+      whisper,
       celebrate,
       actions,
       treatNote,
@@ -200,6 +224,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       rarity.replaceChildren();
       rarity.hidden = true;
       mood.textContent = CARE_TEXT.noneYet;
+      drift.hidden = true;
       actions.replaceChildren();
       return;
     }
@@ -211,11 +236,22 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
     rarity.hidden = model.rarity === null;
     mood.textContent = model.mood;
+    drift.textContent = model.drift ?? '';
+    drift.hidden = model.drift === null;
+    const driftMood = model.driftMood ?? '';
+    drift.dataset['mood'] = driftMood;
+    heartsRow.dataset['mood'] = driftMood;
+    heartsBadge.textContent = driftMood === 'steady' ? '💕' : driftMood === 'drifting' ? '↘' : '';
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
     level.textContent = model.level;
     xpFill.style.width = `${String(Math.round(model.xp * 100))}%`;
     xpLine.textContent = model.xpLine;
     evolving.update(model.evolving);
+    whisper.hidden = model.whisper === null;
+    whisperIcon.textContent = model.whisper?.icon ?? '';
+    whisperText.textContent = model.whisper?.text ?? '';
+    whisperSub.textContent = model.whisper?.sub ?? '';
+    whisperSub.hidden = model.whisper?.sub === undefined;
     actions.replaceChildren(
       ...model.buttons.map((b) => {
         const button = el(
@@ -240,6 +276,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     const evolved = evolutionLine(squishy, speciesById(reply));
     celebrate.hidden = evolved === null;
     if (evolved) celebrateLine.textContent = evolved;
+    newForm.hidden = !(evolved && model.newForm);
     // A debounced button comes back on by itself (one timer, the soonest).
     const wait = nextReadyIn(squishy, now);
     if (wait !== null) readyTimer = window.setTimeout(render, wait + 50);

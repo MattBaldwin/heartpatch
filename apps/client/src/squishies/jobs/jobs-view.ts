@@ -60,6 +60,15 @@ export const JOBS_TEXT = {
   inHollow: 'In the Hollow',
   outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
   training: 'Practicing at the Training Grounds 🎯',
+  // Whether gathering here suits it (#376): a job it's good at keeps it happy.
+  fits: (resource: string, icon: string) => `Loves gathering ${resource} here! ${icon}`,
+  noFit: "Not their thing, they'll get grumpy",
+  // The pop-up when a squishy goes to a job (#376): a job it loves is a little party.
+  lovesIt: (name: string) => `${name} loves it here!\u00a0💕`,
+  notKeen: (name: string) => `${name} isn't keen\u00a0🌧️`,
+  // The mood chip on a working squishy's row (#376).
+  moodLoves: 'Loves this job',
+  moodMeh: 'Not their thing',
 } as const;
 
 /** "1st", "2nd", "3rd". */
@@ -136,7 +145,7 @@ function jobWords(s: JobSquishy, nowMs: number): string {
   }
 }
 
-/** "Great at gathering Timber 🌲", "Strong fighter 💪" (shared `jobHints`, from data). */
+/** "Great at gathering Timber 🪵", "Strong fighter 💪" (shared `jobHints`, from data). */
 export function hintLines(s: JobSquishy): string[] {
   const species = SPECIES.get(s.squishy.speciesId);
   return jobHints({ ...s.squishy, season: species?.season }, species, JOB_RULES, BATTLE_RULES).map(
@@ -171,12 +180,48 @@ export function canTrain(view: Pick<JobsView, 'trainingGrounds'>): boolean {
   return view.trainingGrounds.some((g) => !g.napping && g.used < g.capacity);
 }
 
-/** A spot to gather, in words: "🌲 Timber (Forest)". */
+/** A spot to gather, in words: "🪵 Timber (Forest)". */
 export function spotLabel(spot: WorkSpot): string {
   const what = `${itemIcon(spot.resource)} ${itemName(spot.resource)}`;
   // A node is "the Timber spot"; open land says where it is.
   if (spot.from === 'node') return `${what} spot`;
   return `${what} on ${TERRAIN_NAMES.get(spot.terrain) ?? 'the land'}`;
+}
+
+/**
+ * Whether gathering at this spot suits this squishy (#376, the server's
+ * `gatherFits`), and the line that says so under the spot.
+ */
+export function spotFit(
+  squishy: Pick<JobSquishy, 'gatherFits'>,
+  spot: Pick<WorkSpot, 'resource'>,
+): { fits: boolean; line: string } {
+  const fits = squishy.gatherFits.includes(spot.resource);
+  return {
+    fits,
+    line: fits ? JOBS_TEXT.fits(itemName(spot.resource), itemIcon(spot.resource)) : JOBS_TEXT.noFit,
+  };
+}
+
+/**
+ * How a squishy feels about its job right now, for the row's chip (#376):
+ * `loves` on the team, on watch, training or gathering what it's good at;
+ * `meh` gathering anything else; null while resting, away, or when its job
+ * has stopped for now (a full basket, full Training XP, a napping homestead),
+ * as then its happiness drifts whatever the job.
+ */
+export function workMood(
+  s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work' | 'training'>,
+): 'loves' | 'meh' | null {
+  if (s.job === 'team' || s.job === 'guard') return 'loves';
+  if (s.job === 'training' && s.training) {
+    return s.training.full || s.training.napping ? null : 'loves';
+  }
+  if (s.job === 'gatherer' && s.work) {
+    if (!s.gatherFits.includes(s.work.resource)) return 'meh';
+    return s.work.full ? null : 'loves';
+  }
+  return null;
 }
 
 /** Everything my gatherers have ready, added up. */

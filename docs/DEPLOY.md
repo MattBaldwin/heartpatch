@@ -224,6 +224,7 @@ What each setting means is explained in the file itself. In short:
 | `LOG_LEVEL` | `info` |
 | `HP_SIGNUP_CODE` | Bootstrap signup code, for one release after #195 (family codes and patch invites replace it). Change it if it leaks |
 | `HP_TUTORIAL_REQUIRED` | `true`: new accounts finish the tutorial first (owner decision 2026-10-04). Set `false` and restart only if the tutorial misbehaves |
+| `HP_EVOLUTION_SALT` | Leave empty: `deploy.sh` generates it on the first deploy. Never change it once set (it changes evolution rolls), and back it up with `.env` |
 | `HEARTPATCH_TAG` | Leave empty: `deploy.sh` writes the running version here |
 
 `NODE_ENV=production`, `PORT=3000`, `TRUST_PROXY=true` and `APP_VERSION` are set by the compose file, so they can't be wrong.

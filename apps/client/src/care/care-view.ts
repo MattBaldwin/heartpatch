@@ -4,7 +4,10 @@ import {
   moodLine,
   type CareListResponse,
   type CareResult,
+  type CareWhisper,
   type CareSquishy,
+  type MoodDrift,
+  type MoodId,
   type Rarity,
   type Species,
   type SpeciesVisual,
@@ -65,7 +68,23 @@ export const CARE_TEXT = {
   // Why care matters (design doc §7), up front in "Levels and evolving".
   whyCare: 'Happy squishies learn more from battles and evolve sooner!',
   // CARE_RULES.hoursFullToBaseline (24, `// TUNE:`): reword if it moves far from a day.
-  fades: 'Happiness fades over about a day, so come back and say hi.',
+  // It fades only while resting or on a job that isn't their thing (#376).
+  fades: 'Happiness fades over about a day while they rest. A job they love keeps it steady!',
+  // Why happiness is or isn't drifting down right now (#376), under the mood.
+  // A no-break space keeps each emoji with its words when the line wraps.
+  drift: {
+    steady: 'Loves their job, so happiness holds steady\u00a0💪',
+    resting: 'Resting, so happiness slowly drifts down\u00a0💤',
+    'wrong-job': 'Not loving this job, so happiness drifts\u00a0😕',
+    stopped: "Work's on pause, so happiness drifts. Check their\u00a0job!",
+  } satisfies Record<MoodDrift, string>,
+  // The mood title while happiness drifts down (#376): the same level, a little droopy.
+  droopy: {
+    glowing: 'Glowing, but drooping a little…',
+    happy: 'Happy, but a bit droopy…',
+    calm: 'Calm, but a bit droopy…',
+    cuddly: 'Could use a cuddle!',
+  } satisfies Record<MoodId, string>,
   bonus: (percent: number) =>
     percent > 100
       ? `Battles give ×${String(percent / 100)} XP right now.`
@@ -74,6 +93,11 @@ export const CARE_TEXT = {
     n > 0 ? `${String(n)} more extra-special ${n === 1 ? 'cuddle' : 'cuddles'} today.` : '',
   evolvedTitle: 'Whoa!',
   evolved: (from: string, into: string) => `${from} grew into ${into}!`,
+  // A branch form (#32), under the celebration line.
+  newForm: '🌟 A brand-new form!',
+  // "Levels and evolving", on a line that can grow up two ways (#32).
+  feelingsMatter:
+    'How you care for it can change what it grows into. Treats, pets, games, battles and its home all count!',
   yay: 'Yay!',
   care: 'Care',
   upClose: 'Up close',
@@ -159,6 +183,10 @@ export interface CareSheetModel {
   readonly rarity: Rarity | null;
   readonly color: string;
   readonly mood: string;
+  /** Why happiness is holding or drifting (#376), or null when the reply doesn't say. */
+  readonly drift: string | null;
+  /** Holding steady or drifting down, for the hearts bar's look (#376); null: unknown. */
+  readonly driftMood: 'steady' | 'drifting' | null;
   /** Hearts meter, 0–1. */
   readonly hearts: number;
   readonly level: string;
@@ -172,6 +200,10 @@ export interface CareSheetModel {
   readonly info: readonly string[];
   /** The evolving meter (#205), under the level's XP bar; null with none. */
   readonly evolving: EvolvingBar | null;
+  /** Under the evolving meter (#32): what's shaping its next evolution, or null. */
+  readonly whisper: CareWhisper | null;
+  /** The celebration's "brand-new form!" chip (#32): it grew into a branch form. */
+  readonly newForm: boolean;
 }
 
 /** The evolving meter's words and fill (#205). */
@@ -243,14 +275,22 @@ export function careSheet(
   });
   const treat = actions.find((a) => a.outsideDailyCare === true);
   const toNext = squishy.xpToNext;
-  // Phase 1 forms evolve once, at a level (design doc §8).
+  // A step's forms share its level (#32): the first is the default form.
   const evolutions = species.get(squishy.speciesId)?.evolutions;
   const growsAt = evolutions?.[0]?.level;
+  // It can grow up two ways (#32): more than one form at its next level.
+  const branches = (evolutions ?? []).filter((e) => e.level === growsAt).length > 1;
   return {
     name: squishyName(squishy, species),
     rarity: species.get(squishy.speciesId)?.rarity ?? null,
     color: blobColor(squishy.speciesId, species),
-    mood: moodLine(squishy.mood, CARE_RULES),
+    mood:
+      squishy.moodDrift !== null && squishy.moodDrift !== 'steady'
+        ? CARE_TEXT.droopy[squishy.mood]
+        : moodLine(squishy.mood, CARE_RULES),
+    drift: squishy.moodDrift === null ? null : CARE_TEXT.drift[squishy.moodDrift],
+    driftMood:
+      squishy.moodDrift === null ? null : squishy.moodDrift === 'steady' ? 'steady' : 'drifting',
     hearts: squishy.contentment / CARE_RULES.maxContentment,
     level:
       growsAt !== undefined && growsAt > squishy.level
@@ -264,11 +304,14 @@ export function careSheet(
     treat: treat ? CARE_TEXT.treatLine(treat.name) : null,
     info: [
       CARE_TEXT.whyCare,
+      branches ? CARE_TEXT.feelingsMatter : '',
       CARE_TEXT.fades,
       CARE_TEXT.bonus(squishy.xpBonusPercent),
       CARE_TEXT.fullLeft(squishy.fullCareLeft),
     ].filter((line) => line !== ''),
     evolving: evolvingBar(squishy.evolving?.percent ?? null),
+    whisper: squishy.whisper,
+    newForm: squishy.newEvolution?.branch === true,
   };
 }
 

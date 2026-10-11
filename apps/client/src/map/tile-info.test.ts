@@ -103,7 +103,7 @@ describe('describeTile', () => {
     // forest's Greens spot is the Keeper's, and its Timber the squishies'.
     const forest = describeTile(tile({ terrain: 'forest', nodeResource: 'greens' }), lookup, null);
     expect(forest.resource).toBe('Find Greens here.');
-    expect(forest.gatherer).toBe('Squishies gather 🌲 Timber here.');
+    expect(forest.gatherer).toBe('Squishies gather 🪵 Timber here.');
     expect(describeTile(tile({ terrain: 'meadow' }), lookup, null).gatherer).toBe(
       'Squishies gather 🌿 Greens here.',
     );

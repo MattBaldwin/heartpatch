@@ -1,4 +1,6 @@
 import { inSeason, type ItemCounts } from '../gathering/index.js';
+import type { HoldSpan } from '../care/contentment.js';
+import type { MoodDrift } from '../schemas/care.js';
 import type { BattleRules } from '../schemas/data/battle.js';
 import type { ElementId, FeelingId } from '../schemas/data/elements.js';
 import type { GatherAffinity, JobRules } from '../schemas/data/jobs.js';
@@ -363,7 +365,7 @@ export function jobHints(
   return [...gather, role];
 }
 
-/** The kid-readable line for a hint ("Great at gathering Timber 🌲"). */
+/** The kid-readable line for a hint ("Great at gathering Timber 🪵"). */
 export function jobHintText(hint: JobHint, resources: readonly Resource[]): string {
   switch (hint.kind) {
     case 'gather': {
@@ -379,7 +381,8 @@ export function jobHintText(hint: JobHint, resources: readonly Resource[]): stri
   }
 }
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 
 /** Training XP worked out at `nowMs`, and where the next count starts. */
 export interface TrainingProgress {
@@ -429,4 +432,157 @@ export function trainingProgressAround(
   const p = trainingProgress(worked(sinceMs), worked(nowMs), xpPerHour, rules);
   // Full stops the count, as `trainingProgress` does: it starts again from now.
   return { xp: p.xp, full: p.full, nextSinceMs: p.full ? nowMs : real(p.nextSinceMs) };
+}
+
+/**
+ * Gathering a resource suits a squishy when it's Good or Great at it (one or
+ * both sides match, the same match `jobHints` shows): it holds its
+ * contentment steady there (owner decision on #376). Elsewhere it's not
+ * their thing, and contentment drifts down as if it were resting.
+ */
+export function gatherFits(
+  squishy: JobTraits,
+  resource: string,
+  rules: Pick<JobRules, 'affinities'>,
+): boolean {
+  return (
+    affinityMatches(
+      squishy,
+      rules.affinities.find((a) => a.resource === resource),
+    ) > 0
+  );
+}
+
+/** Every resource gathering suits this squishy for, in data order (the job board's fit marks). */
+export function gatherFitsFor(squishy: JobTraits, rules: Pick<JobRules, 'affinities'>): string[] {
+  return rules.affinities.filter((a) => affinityMatches(squishy, a) > 0).map((a) => a.resource);
+}
+
+/**
+ * When a gatherer's basket fills (epoch ms, real time): `maxStoredCycles`
+ * cycles of working time from `sinceMs`, with a pause left out. A full
+ * gatherer stops working until someone collects. Still paused at that
+ * point: the pause's start (it isn't working past it anyway).
+ */
+export function workFullAtMs(
+  sinceMs: number,
+  cycleSeconds: number,
+  rules: Pick<JobRules, 'work'>,
+  pause: WorkPause | null,
+): number {
+  const fullMs = rules.work.maxStoredCycles * cycleSeconds * 1000;
+  if (!pause) return sinceMs + fullMs;
+  const { worked, real } = pauseClock(pause);
+  return real(worked(sinceMs) + fullMs);
+}
+
+/** When a trainee's `training.maxHours` fills (epoch ms, real time), with a pause left out. */
+export function trainingFullAtMs(
+  sinceMs: number,
+  rules: Pick<JobRules, 'training'>,
+  pause: WorkPause | null,
+): number {
+  const fullMs = rules.training.maxHours * HOUR_MS;
+  if (!pause) return sinceMs + fullMs;
+  const { worked, real } = pauseClock(pause);
+  return real(worked(sinceMs) + fullMs);
+}
+
+/**
+ * The first whole minute (from the epoch) a seasonal resource is out of
+ * season between `fromMs` and `toMs`, or null if it's still in season at
+ * `toMs` (`fromMs` itself if it was already out then). A gatherer can't
+ * start out of season and a season ends once (whole days), so the change is
+ * found by halving over whole minutes: the answer depends on the season, not
+ * on when it's read (at most `toMs`, while the end is that minute).
+ */
+export function seasonEndMs(
+  fromMs: number,
+  toMs: number,
+  inSeasonAt: (ms: number) => boolean,
+): number | null {
+  if (toMs <= fromMs || inSeasonAt(toMs)) return null;
+  if (!inSeasonAt(fromMs)) return fromMs;
+  // In season at minute `on` (it's at or before `fromMs`), out at `off`.
+  let on = Math.floor(fromMs / MINUTE_MS);
+  let off = Math.ceil(toMs / MINUTE_MS);
+  while (off - on > 1) {
+    const mid = on + Math.floor((off - on) / 2);
+    if (inSeasonAt(mid * MINUTE_MS)) on = mid;
+    else off = mid;
+  }
+  return Math.min(off * MINUTE_MS, toMs);
+}
+
+/**
+ * What a squishy's job looks like to its contentment (owner decision on
+ * #376), as epoch ms. Each part is there only while the squishy has that job
+ * (the server leaves them out for one in the Hollow or a trade: no job).
+ */
+export interface HoldFacts {
+  /** On the team (`fromMs` null: all along) or on watch (`fromMs`: when it was posted). */
+  steady?: { fromMs: number | null } | undefined;
+  /**
+   * A gatherer: whether the resource suits it, when it started, when its land
+   * changed hands (null: it's still at work), when its basket fills, when its
+   * resource went out of season (null: still in), and its homestead's pause.
+   */
+  gatherer?:
+    | {
+        fits: boolean;
+        fromMs: number;
+        lostMs: number | null;
+        fullMs: number;
+        seasonEndMs: number | null;
+        pause: WorkPause | null;
+      }
+    | undefined;
+  /** A trainee: when its `maxHours` fills, and its homestead's pause (it naps there). */
+  training?: { fullMs: number; pause: WorkPause | null } | undefined;
+}
+
+/** `fromMs`..`toMs` with a pause cut out. */
+function aroundPause(fromMs: number, toMs: number | null, pause: WorkPause | null): HoldSpan[] {
+  if (!pause) return [{ fromMs, toMs }];
+  const spans: HoldSpan[] = [
+    { fromMs, toMs: toMs === null ? pause.fromMs : Math.min(toMs, pause.fromMs) },
+  ];
+  if (pause.toMs !== null) spans.push({ fromMs: Math.max(fromMs, pause.toMs), toMs });
+  return spans.filter((s) => s.toMs === null || s.toMs > s.fromMs);
+}
+
+/**
+ * The stretches a squishy's job held its contentment steady (owner decision
+ * on #376): Team and Guard all along; Training until its `maxHours` fills,
+ * napping time left out; gathering something it's Good or Great at until its
+ * basket fills, its land changes hands or its resource goes out of season,
+ * napping time left out. Anything else (resting, the wrong resource, a job
+ * that stopped) holds nothing: contentment drifts down.
+ */
+export function holdSpans(facts: HoldFacts): HoldSpan[] {
+  if (facts.steady) {
+    return [{ fromMs: facts.steady.fromMs ?? Number.MIN_SAFE_INTEGER, toMs: null }];
+  }
+  const g = facts.gatherer;
+  if (g) {
+    if (!g.fits) return [];
+    const stops = [g.fullMs, g.lostMs, g.seasonEndMs].filter((ms): ms is number => ms !== null);
+    return aroundPause(g.fromMs, Math.min(...stops), g.pause);
+  }
+  const t = facts.training;
+  if (t) return aroundPause(Number.MIN_SAFE_INTEGER, t.fullMs, t.pause);
+  return [];
+}
+
+/** Why contentment is or isn't holding at `nowMs`, for the care sheet and the roster. */
+export function moodDrift(facts: HoldFacts, nowMs: number): MoodDrift {
+  const g = facts.gatherer;
+  // Land that changed hands: it's resting now, whatever it had before.
+  const gathering = g && (g.lostMs === null || g.lostMs > nowMs);
+  if (!facts.steady && !gathering && !facts.training) return 'resting';
+  if (g && gathering && !g.fits) return 'wrong-job';
+  const holding = holdSpans(facts).some(
+    (s) => s.fromMs <= nowMs && (s.toMs === null || nowMs < s.toMs),
+  );
+  return holding ? 'steady' : 'stopped';
 }

@@ -17,24 +17,24 @@ import { fenceApi, type FenceApi } from './fence-api.js';
 import {
   canAfford,
   edgeName,
+  fenceBuildCards,
   fenceCard,
-  fenceChips,
-  fenceChoices,
   fenceIcon,
-  fenceOf,
   FENCE_TEXT,
   isInterior,
   openEdges,
 } from './fence-model.js';
+import { setPanelFocus } from '../building/panel-focus.js';
+import type { BuildSource } from '../building/tile-build.js';
 import './fences.css';
 
 // Fences in the tile panel (#203, the owner-approved mockup): on a tile of
 // mine, a line saying whether it's fenced and a Fences button. That opens the
 // fence sheet in the panel: each segment's card (energy, Repair, Upgrade with
-// before and after, Take down with what comes back), and the build list (a
-// material per element, the open edges, one button for all of them). The
-// server checks every cost and rule (CLAUDE.md rule 1); this only shows what
-// the map says and sends taps.
+// before and after, Take down with what comes back). Building a fence is the
+// shared Build sheet's job (#371, build/tile-build.ts): this screen is its
+// source for fence cards. The server checks every cost and rule (CLAUDE.md
+// rule 1); this only shows what the map says and sends taps.
 
 export interface FenceScreenOptions {
   api?: FenceApi;
@@ -53,17 +53,14 @@ export interface FenceScreen {
   /** Every live event: my fences that a capture left on inner edges (#244). */
   liveEvent: (event: WsEventMessage) => void;
   readonly tileActions: TileActions;
+  /** The fences the shared Build sheet can put up on a tile of mine. */
+  readonly buildSource: BuildSource;
   readonly debug: FenceDebug | null;
 }
 
 type Mode =
   | { readonly kind: 'card' }
   | { readonly kind: 'list' }
-  | {
-      readonly kind: 'build';
-      readonly buildingId: string | null;
-      readonly edges: readonly number[];
-    }
   | { readonly kind: 'fence'; readonly id: string }
   | { readonly kind: 'confirm'; readonly id: string };
 
@@ -190,16 +187,18 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
     else status = FENCE_TEXT.open(open);
     return [
       line(status, 'fence-status'),
-      button(
-        FENCE_TEXT.openSheet(fences.length),
-        () => {
-          go({ kind: 'list' });
-        },
-        {
-          'data-testid': 'fence-open',
-        },
-        true,
-      ),
+      ...(fences.length > 0
+        ? [
+            button(
+              FENCE_TEXT.openSheet(fences.length),
+              () => {
+                go({ kind: 'list' });
+              },
+              { 'data-testid': 'fence-open' },
+              true,
+            ),
+          ]
+        : []),
     ];
   }
 
@@ -234,18 +233,6 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       el(
         'div',
         { class: 'territory-row fence-actions' },
-        ...(open.length > 0
-          ? [
-              button(
-                FENCE_TEXT.build,
-                () => {
-                  go({ kind: 'build', buildingId: null, edges: open });
-                  if (!items) void loadItems();
-                },
-                { 'data-testid': 'fence-build' },
-              ),
-            ]
-          : []),
         button(
           FENCE_TEXT.back,
           () => {
@@ -256,130 +243,6 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
         ),
       ),
     ];
-  }
-
-  function buildNodes(
-    tile: PublicTile,
-    view: MapView,
-    me: string,
-    picked: { buildingId: string | null; edges: readonly number[] },
-  ): HTMLElement[] {
-    const open = openEdges(tile, view, me);
-    const edges = picked.edges.filter((e) => open.includes(e));
-    const bag = items ?? {};
-    const choices = fenceChoices(bag, edges.length);
-    const materials = el(
-      'ul',
-      { class: 'fence-materials', 'data-testid': 'fence-materials' },
-      ...choices.map((c) => {
-        const on = picked.buildingId === c.fence.id;
-        const b = el(
-          'button',
-          {
-            type: 'button',
-            class: 'fence-material',
-            'aria-pressed': on ? 'true' : 'false',
-            'data-fence': c.fence.id,
-          },
-          el('span', { class: 'fence-material-name' }, `${fenceIcon(c.fence.id)} ${c.fence.name}`),
-          el('span', { class: 'fence-material-about' }, c.fence.description),
-          el(
-            'span',
-            { class: 'fence-chips' },
-            ...fenceChips(c.fence).map((chip) => el('span', { class: 'home-effect' }, chip)),
-          ),
-          el(
-            'span',
-            { class: `fence-material-cost${items && !c.affordable ? ' fence-short' : ''}` },
-            FENCE_TEXT.costOf(c.cost),
-          ),
-        );
-        b.disabled = working;
-        b.addEventListener('click', () => {
-          mode = { kind: 'build', buildingId: c.fence.id, edges };
-          render();
-        });
-        return el('li', {}, b);
-      }),
-    );
-    const chips = el(
-      'div',
-      {
-        class: 'fence-edges',
-        role: 'group',
-        'aria-label': FENCE_TEXT.pickEdges,
-        'data-testid': 'fence-edges',
-      },
-      ...open.map((edge) => {
-        const on = edges.includes(edge);
-        const chip = el(
-          'button',
-          {
-            type: 'button',
-            class: 'fence-edge',
-            'aria-pressed': on ? 'true' : 'false',
-            'data-edge': String(edge),
-          },
-          edgeName(edge),
-        );
-        chip.disabled = working;
-        chip.addEventListener('click', () => {
-          mode = {
-            kind: 'build',
-            buildingId: picked.buildingId,
-            edges: on ? edges.filter((e) => e !== edge) : [...edges, edge].sort((a, b) => a - b),
-          };
-          render();
-        });
-        return chip;
-      }),
-    );
-    const chosen = picked.buildingId ? fenceOf(picked.buildingId) : undefined;
-    const nodes: HTMLElement[] = [
-      line(FENCE_TEXT.pickMaterial),
-      materials,
-      line(FENCE_TEXT.pickEdges),
-      chips,
-    ];
-    if (chosen && edges.length > 0) {
-      const choice = choices.find((c) => c.fence.id === chosen.id);
-      const cost = choice?.cost ?? {};
-      const confirm = button(
-        FENCE_TEXT.fenceThem(edges.length, FENCE_TEXT.costOf(cost)),
-        () =>
-          void command(
-            (id, key) =>
-              api.build(
-                id,
-                { buildingId: chosen.id, q: tile.q, r: tile.r, edges: [...edges] },
-                key,
-              ),
-            () => {
-              mode = { kind: 'list' };
-              note = FENCE_TEXT.built(edges.length);
-            },
-          ),
-        { 'data-testid': 'fence-confirm-build' },
-      );
-      if (items && !canAfford(bag, cost)) {
-        confirm.disabled = true;
-        nodes.push(line(FENCE_TEXT.needMore, 'fence-short'));
-      }
-      nodes.push(confirm);
-    } else if (chosen) {
-      nodes.push(line(FENCE_TEXT.pickAnEdge));
-    }
-    nodes.push(
-      button(
-        FENCE_TEXT.back,
-        () => {
-          go({ kind: 'list' });
-        },
-        {},
-        true,
-      ),
-    );
-    return nodes;
   }
 
   function fenceNodes(fence: PublicFence): HTMLElement[] {
@@ -539,9 +402,6 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       case 'list':
         nodes = listNodes(tile, view, me);
         break;
-      case 'build':
-        nodes = buildNodes(tile, view, me, mode);
-        break;
       case 'fence': {
         const fence = byId(mode.id);
         nodes = fence ? fenceNodes(fence) : [];
@@ -565,8 +425,7 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
 
   /** A step of the fence sheet has the panel to itself, like a fire's card. */
   function setFocus(container: HTMLElement, focused: boolean): void {
-    container.classList.toggle('tile-actions-focus', focused);
-    container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
+    setPanelFocus(container, 'fences', focused);
   }
 
   const reset = () => {
@@ -578,7 +437,53 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
     note = '';
   };
 
+  /** The fences, as the shared Build sheet's cards (#371). */
+  const buildSource: BuildSource = {
+    cards: (tile, view) => {
+      const me = user?.id ?? null;
+      if (!me || tile.ownerUserId !== me || tile.homeSlot !== null) return [];
+      const here = panel && panel.tile.q === tile.q && panel.tile.r === tile.r ? current() : null;
+      return fenceBuildCards(here ?? tile, view, me);
+    },
+    openEdges: (tile, view) => {
+      const me = user?.id ?? null;
+      if (!me || tile.ownerUserId !== me || tile.homeSlot !== null) return [];
+      const here = panel && panel.tile.q === tile.q && panel.tile.r === tile.r ? current() : null;
+      return openEdges(here ?? tile, view, me);
+    },
+    bag: async () => {
+      const id = mapId;
+      if (!id) throw new Error('no map');
+      const fresh = await api.items(id);
+      items = fresh;
+      return fresh;
+    },
+    build: async (card, tile, edges) => {
+      const id = mapId;
+      if (!id) return null;
+      const at = generation;
+      const stillHere = () => at === generation && mapId === id;
+      const res = await sendCommand(
+        sendDeps,
+        (key) =>
+          api.build(id, { buildingId: card.id, q: tile.q, r: tile.r, edges: [...edges] }, key),
+        stillHere,
+      );
+      if (!res || !stillHere()) return null;
+      items = res.items;
+      answer = { q: res.q, r: res.r, fences: res.fences };
+      render();
+      return FENCE_TEXT.built(edges.length);
+    },
+    // The fences come with the map view, which re-shows the panel itself.
+    onChange: () => undefined,
+    invalidate: () => {
+      items = null;
+    },
+  };
+
   return {
+    buildSource,
     setMap: (next) => {
       if (next === mapId) return;
       reset();

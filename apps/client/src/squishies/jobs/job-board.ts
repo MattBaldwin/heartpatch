@@ -1,20 +1,23 @@
-import type { JobSquishy, JobsView, SetJobRequest } from '@heartpatch/shared';
+import type { JobSquishy, JobsView, SetJobRequest, WorkSpot } from '@heartpatch/shared';
 import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
-import { groundsPicker, jobActions, spotPicker, type JobActionsContext } from './job-actions.js';
 import {
   canTrain,
   colorOf,
+  groundsLabel,
   hintLines,
   countsDown,
   jobLine,
   JOBS_TEXT,
   nameOf,
   readyTotal,
+  spotFit,
+  workMood,
+  spotLabel,
   trainHintText,
 } from './jobs-view.js';
 import './jobs.css';
@@ -24,6 +27,11 @@ import './jobs.css';
 // next ready time. A self-contained DOM sheet: anything can open it with a
 // map id (the trays, a temporary button, the tile panel). The server decides
 // everything; the sheet counts down on the server's clock.
+
+/** Hearts that float out of the pop-up for a job it loves (#376). */
+const HEART_BURST = 5;
+/** How long the pop-up shows before it fades. */
+const TOAST_MS = 2600;
 
 export interface JobBoardOptions {
   root: HTMLElement;
@@ -97,6 +105,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   const trainHint = el('p', { class: 'jobs-hint', 'data-testid': 'jobs-train-hint' });
   trainHint.hidden = true;
   const list = el('ul', { class: 'jobs-list', 'data-testid': 'jobs-list' });
+  // A pop-up in the row of the squishy just given a job (#376): a job it
+  // loves gets hearts. Inside the row, so it never covers a button.
+  const toast = el('div', { class: 'jobs-toast', role: 'status', 'data-testid': 'jobs-toast' });
   const sheet = el(
     'section',
     { class: 'jobs-sheet', role: 'dialog', 'aria-labelledby': 'jobs-title', 'data-testid': 'jobs' },
@@ -120,6 +131,53 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   };
   const say = (text: string) => {
     note.textContent = text;
+  };
+  let toastTimer: number | undefined;
+  /** Whose row the pop-up sits in, while it shows. */
+  let toastFor: string | null = null;
+  /**
+   * Puts the pop-up under its squishy's job line (rows are rebuilt on every
+   * render). Put back into a rebuilt row, it doesn't pop or burst again.
+   */
+  const placeToast = () => {
+    if (toastFor === null) return;
+    if (!toast.isConnected) {
+      toast.classList.remove('jobs-toast-show');
+      for (const heart of toast.querySelectorAll('.jobs-burst')) heart.remove();
+    }
+    const row = list.querySelector(`[data-testid="jobs-row"][data-squishy="${toastFor}"]`);
+    row?.querySelector('.jobs-line')?.after(toast);
+  };
+  const clearToast = () => {
+    window.clearTimeout(toastTimer);
+    toastFor = null;
+    toast.remove();
+  };
+  const cheer = (squishyId: string, text: string, mood: 'loves' | 'meh') => {
+    clearToast();
+    toast.textContent = text;
+    toast.dataset['mood'] = mood;
+    toast.classList.remove('jobs-toast-done');
+    toastFor = squishyId;
+    placeToast();
+    toast.classList.remove('jobs-toast-show');
+    toast.getBoundingClientRect(); // a layout between, so the pop restarts
+    toast.classList.add('jobs-toast-show');
+    // A job it loves: a few hearts float up out of the pop-up.
+    if (mood === 'loves') {
+      for (let i = 0; i < HEART_BURST; i += 1) {
+        const heart = el('span', { class: 'jobs-burst', 'aria-hidden': 'true' }, '💕');
+        heart.style.setProperty('--burst-x', `${String((i - (HEART_BURST - 1) / 2) * 22)}px`);
+        heart.style.setProperty('--burst-delay', `${String(i * 70)}ms`);
+        toast.append(heart);
+      }
+    }
+    // It fades but keeps its place, so nothing under a finger moves; the
+    // next render (the player's next tap, or a refetch) lets the space go.
+    toastTimer = window.setTimeout(() => {
+      toast.classList.add('jobs-toast-done');
+      toastFor = null;
+    }, TOAST_MS);
   };
   /** Bumped by every view taken, so a slower refetch can't put an older one back. */
   let views = 0;
@@ -176,30 +234,129 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       say(done);
     });
 
-  /** What the shared job actions call back into (the board owns the state and the calls). */
-  const actionContext = (current: JobsView): JobActionsContext => ({
-    view: current,
-    working,
-    wantSpot,
-    assign: (squishy, job, done) => {
-      void assign(squishy, job, done);
-    },
-    pickSpot: (squishy) => {
-      picking = squishy.squishy.id;
-      pickingGrounds = null;
-      render();
-    },
-    pickGrounds: (squishy) => {
-      pickingGrounds = squishy.squishy.id;
-      picking = null;
-      render();
-    },
-    cancel: () => {
-      picking = null;
-      pickingGrounds = null;
-      render();
-    },
-  });
+  const button = (label: string, onTap: () => void, attrs: Record<string, string> = {}) => {
+    const b = el('button', { type: 'button', class: 'auth-button jobs-action', ...attrs }, label);
+    b.disabled = working;
+    b.addEventListener('click', onTap);
+    return b;
+  };
+
+  /** The spots this squishy could go and gather, with the firelight warning. */
+  function spotPicker(squishy: JobSquishy, current: JobsView): HTMLElement {
+    const name = nameOf(current, squishy);
+    const spots = [...current.spots]
+      .filter((s) => s.inSeason)
+      .sort((a, b) => {
+        const first = (s: { q: number; r: number }) =>
+          wantSpot && s.q === wantSpot.q && s.r === wantSpot.r ? 0 : 1;
+        // Then the spots it loves (#376); the sort keeps the server's order otherwise.
+        const fit = (s: WorkSpot) => (spotFit(squishy, s).fits ? 0 : 1);
+        return first(a) - first(b) || fit(a) - fit(b);
+      });
+    const rows = spots.map((spot) => {
+      const worker = current.squishies.find((s) => s.squishy.id === spot.workerId);
+      const fit = spotFit(squishy, spot);
+      const go = button(
+        spotLabel(spot),
+        () => {
+          const mine = ticket;
+          void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then(() => {
+            // Still the same opening of this board, and the job went through.
+            if (mine !== ticket || picking !== null || sheet.hidden) return;
+            cheer(
+              squishy.squishy.id,
+              fit.fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),
+              fit.fits ? 'loves' : 'meh',
+            );
+          });
+        },
+        { 'data-testid': 'jobs-spot', 'data-q': String(spot.q), 'data-r': String(spot.r) },
+      );
+      if (worker && worker.squishy.id !== squishy.squishy.id) go.disabled = true;
+      go.append(
+        el(
+          'span',
+          { class: fit.fits ? 'jobs-heart' : 'jobs-heart jobs-cloud', 'aria-hidden': 'true' },
+          fit.fits ? '💕' : '🌧️',
+        ),
+      );
+      return el(
+        'li',
+        { class: `jobs-spot ${fit.fits ? 'jobs-spot-loved' : 'jobs-spot-meh'}` },
+        go,
+        el(
+          'p',
+          { class: fit.fits ? 'jobs-fit' : 'jobs-no-fit', 'data-testid': 'jobs-spot-fit' },
+          fit.line,
+        ),
+        el(
+          'p',
+          { class: spot.firelit ? 'jobs-safe' : 'jobs-dark' },
+          spot.firelit ? JOBS_TEXT.firelit : JOBS_TEXT.dark,
+        ),
+        ...(worker
+          ? [el('p', { class: 'jobs-small' }, JOBS_TEXT.takenBy(nameOf(current, worker)))]
+          : []),
+      );
+    });
+    return el(
+      'div',
+      { class: 'jobs-picker', 'data-testid': 'jobs-picker' },
+      el('p', { class: 'jobs-small' }, JOBS_TEXT.pickSpot),
+      ...(rows.length > 0
+        ? [el('ul', { class: 'jobs-spots' }, ...rows)]
+        : [el('p', {}, JOBS_TEXT.noSpots)]),
+      button(JOBS_TEXT.cancel, () => {
+        picking = null;
+        render();
+      }),
+    );
+  }
+
+  /**
+   * The Training Grounds this squishy could practice at (#277), with the
+   * firelight warning before it goes: a trainee sleeps on its homestead.
+   */
+  function groundsPicker(squishy: JobSquishy, current: JobsView): HTMLElement {
+    const name = nameOf(current, squishy);
+    const first = (g: { q: number; r: number }) =>
+      wantSpot && g.q === wantSpot.q && g.r === wantSpot.r ? 0 : 1;
+    const rows = [...current.trainingGrounds]
+      .sort((a, b) => first(a) - first(b))
+      .map((g) => {
+        const go = button(
+          groundsLabel(current, g.id),
+          () => {
+            void assign(squishy, { job: 'training', buildingId: g.id }, JOBS_TEXT.offToTrain(name));
+          },
+          { 'data-testid': 'jobs-grounds', 'data-q': String(g.q), 'data-r': String(g.r) },
+        );
+        const here = squishy.training?.buildingId === g.id;
+        if (here || g.napping || g.used >= g.capacity) go.disabled = true;
+        return el(
+          'li',
+          { class: 'jobs-spot' },
+          go,
+          g.napping
+            ? el('p', { class: 'jobs-dark' }, JOBS_TEXT.groundsNapping)
+            : el(
+                'p',
+                { class: g.firelit ? 'jobs-safe' : 'jobs-dark' },
+                g.firelit ? JOBS_TEXT.groundsLit : JOBS_TEXT.groundsDark,
+              ),
+        );
+      });
+    return el(
+      'div',
+      { class: 'jobs-picker', 'data-testid': 'jobs-grounds-picker' },
+      el('p', { class: 'jobs-small' }, JOBS_TEXT.pickGrounds),
+      el('ul', { class: 'jobs-spots' }, ...rows),
+      button(JOBS_TEXT.cancel, () => {
+        pickingGrounds = null;
+        render();
+      }),
+    );
+  }
 
   function render(): void {
     window.clearTimeout(ticker);
@@ -222,7 +379,49 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
-        const ctx = actionContext(current);
+        const away = s.squishy.state !== 'active';
+        const actions = el(
+          'div',
+          { class: 'jobs-actions' },
+          button(
+            `⚔️ ${JOBS_TEXT.team}`,
+            () => void assign(s, { job: 'team' }, `${name} joined the team!`),
+            { 'data-job': 'team' },
+          ),
+          button(
+            `🧺 ${JOBS_TEXT.gather}`,
+            () => {
+              picking = s.squishy.id;
+              pickingGrounds = null;
+              render();
+            },
+            { 'data-job': 'gatherer' },
+          ),
+          // Owner decision 2026-10-06: practice at the Training Grounds, one a
+          // homestead (#277): pick which, seeing whether it's lit at night.
+          button(
+            `🎯 ${JOBS_TEXT.train}`,
+            () => {
+              pickingGrounds = s.squishy.id;
+              picking = null;
+              render();
+            },
+            { 'data-job': 'training' },
+          ),
+          button(
+            `💤 ${JOBS_TEXT.rest}`,
+            () => void assign(s, { job: 'resting' }, `${name} is having a rest.`),
+            { 'data-job': 'resting' },
+          ),
+        );
+        // Train needs Training Grounds with room (the server checks again);
+        // a trainee may move to other Training Grounds.
+        for (const b of actions.querySelectorAll('button')) {
+          const job = b.getAttribute('data-job');
+          const again = job !== 'gatherer' && job !== 'training' && job === s.job;
+          if (away || again) b.disabled = true;
+          if (job === 'training' && !trainable) b.disabled = true;
+        }
         return el(
           'li',
           {
@@ -233,6 +432,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
           },
           el('div', { class: 'jobs-head' }, blobFor(s), el('strong', { class: 'jobs-name' }, name)),
           lineFor(s, nowMs),
+          ...moodChip(s),
           el('ul', { class: 'jobs-hints' }, ...hintLines(s).map((h) => el('li', {}, h))),
           ...(s.work && !s.work.firelit ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)] : []),
           ...(s.work && outOfSeason(current, s.work)
@@ -245,14 +445,33 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
               ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)]
               : []),
           picking === s.squishy.id
-            ? spotPicker(s, ctx)
+            ? spotPicker(s, current)
             : pickingGrounds === s.squishy.id
-              ? groundsPicker(s, ctx)
-              : jobActions(s, ctx),
+              ? groundsPicker(s, current)
+              : actions,
         );
       }),
     );
+    placeToast();
     tick();
+  }
+
+  /** The row's mood chip (#376): hearts at a job it loves, a rain cloud at one it doesn't. */
+  function moodChip(s: JobSquishy): HTMLElement[] {
+    const mood = workMood(s);
+    if (mood === null) return [];
+    return [
+      el(
+        'p',
+        { class: `jobs-mood jobs-mood-${mood}`, 'data-testid': 'jobs-mood' },
+        el(
+          'span',
+          { class: 'jobs-mood-icon', 'aria-hidden': 'true' },
+          mood === 'loves' ? '💕' : '🌧️',
+        ),
+        mood === 'loves' ? JOBS_TEXT.moodLoves : JOBS_TEXT.moodMeh,
+      ),
+    ];
   }
 
   /** A squishy's job line, remembered so the countdown can update it alone. */
@@ -320,6 +539,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     view = null;
     picking = null;
     pickingGrounds = null;
+    clearToast();
     say('');
   }
 

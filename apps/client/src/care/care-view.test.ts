@@ -56,6 +56,8 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   nextCareAt: {},
   newEvolution: null,
   accessory: null,
+  whisper: null,
+  moodDrift: null,
   ...extra,
 });
 
@@ -164,6 +166,29 @@ describe('careSheet', () => {
     );
   });
 
+  it('says why happiness is holding or drifting (#376), and nothing when the reply is silent', () => {
+    expect(careSheet(squishy({ moodDrift: 'steady' }), reply()).drift).toBe(CARE_TEXT.drift.steady);
+    expect(careSheet(squishy({ moodDrift: 'wrong-job' }), reply()).drift).toBe(
+      CARE_TEXT.drift['wrong-job'],
+    );
+    expect(careSheet(squishy({ moodDrift: null }), reply()).drift).toBeNull();
+  });
+
+  it('droops the mood title and the hearts bar while happiness drifts (#376)', () => {
+    expect(careSheet(squishy({ moodDrift: 'steady' }), reply())).toMatchObject({
+      mood: 'Happy and bouncy!',
+      driftMood: 'steady',
+    });
+    expect(careSheet(squishy({ moodDrift: 'resting' }), reply())).toMatchObject({
+      mood: CARE_TEXT.droopy.happy,
+      driftMood: 'drifting',
+    });
+    expect(careSheet(squishy({ moodDrift: null }), reply())).toMatchObject({
+      mood: 'Happy and bouncy!',
+      driftMood: null,
+    });
+  });
+
   it('fills the bar at the top level, and says so', () => {
     const model = careSheet(squishy({ level: 100, xpToNext: null }), reply());
     expect(model).toMatchObject({ xp: 1, xpLine: 'Top level!' });
@@ -201,6 +226,47 @@ describe('careSheet', () => {
     if (!pub) throw new Error('no legendary species');
     expect(careSheet(squishy({ speciesId: pub.id }), reply()).rarity).toBe('legendary');
     expect(careSheet(squishy({ speciesId: 'who-knows' }), reply()).rarity).toBeNull();
+  });
+
+  // #32: branching evolution's hints.
+  it('passes the whisper through, and says feelings matter on a line that branches', () => {
+    const whisper = { icon: '💭', text: 'Moonpuff has been feeling very sleepy lately…' };
+    expect(careSheet(squishy({ whisper }), reply()).whisper).toEqual(whisper);
+    expect(careSheet(squishy(), reply()).whisper).toBeNull();
+    const branching = GAME_DATA.species.find(
+      (s) => s.evolutions.filter((e) => e.level === s.evolutions[0]?.level).length > 1,
+    )!;
+    const single = GAME_DATA.species.find((s) => s.evolutions.length === 1)!;
+    const infoFor = (s: Species) => careSheet(squishy({ speciesId: s.id }), reply()).info;
+    expect(infoFor(branching)).toContain(CARE_TEXT.feelingsMatter);
+    expect(infoFor(single)).not.toContain(CARE_TEXT.feelingsMatter);
+    // Forms at two different levels are two steps, not a branch.
+    const twoSteps = {
+      ...species('twostep', 'Twostep', '#aaccee'),
+      evolutions: [
+        { into: 'moonpuff', level: 16 },
+        { into: 'moonmallow', level: 30 },
+      ],
+    };
+    const info = careSheet(
+      squishy({ speciesId: 'twostep' }),
+      reply({ speciesDefs: [...reply().speciesDefs, twoSteps] }),
+    ).info;
+    expect(info).not.toContain(CARE_TEXT.feelingsMatter);
+  });
+
+  it('shows the "brand-new form" chip only for a branch form', () => {
+    const evolution = {
+      fromSpeciesId: 'moonpuff',
+      intoSpeciesId: 'moonmallow',
+      level: 20,
+      at: NOW,
+    };
+    expect(
+      careSheet(squishy({ newEvolution: { ...evolution, branch: true } }), reply()).newForm,
+    ).toBe(true);
+    expect(careSheet(squishy({ newEvolution: evolution }), reply()).newForm).toBe(false);
+    expect(careSheet(squishy(), reply()).newForm).toBe(false);
   });
 
   it('uses a nickname when there is one', () => {

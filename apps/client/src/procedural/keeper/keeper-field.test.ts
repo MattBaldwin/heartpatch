@@ -2,6 +2,7 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { defaultKeeperConfig, KEEPER_DATA } from '@heartpatch/shared';
+import { keeperItems } from './keeper-items.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { KeeperField } from './keeper-field.js';
 
@@ -38,5 +39,62 @@ describe('KeeperField hop placement (#317)', () => {
     });
     const tall = h.params.height * 0.75;
     expect(field.centre(h)!.y).toBeCloseTo(0.5 + 0.1 + tall / 2);
+  });
+});
+
+describe('KeeperField costume models', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('draws the Hollow Man costume as one extra mesh, shared by every wearer', () => {
+    const scene = new Scene(engine);
+    const field = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
+    const config = defaultKeeperConfig(KEEPER_DATA.bases[0]!);
+    field.add(config, { x: 0, z: 0 });
+    const before = field.stats;
+    for (let i = 0; i < 4; i++) {
+      field.add(config, { x: i + 1, z: 0 }, keeperItems(['hollow-man-costume']));
+    }
+    const { meshes, instances } = field.stats;
+    // His cloak and arms are one mesh, however many wear him; the eyes share the ellipsoids.
+    expect(meshes).toBe(before.meshes + 1);
+    const model = scene.meshes.find((m) => m.name === 'keeper-model-hollow-man-low') as Mesh;
+    expect(model.thinInstanceCount).toBe(4);
+    // Three pieces a wearer (cloak and arms, two eyes): far fewer than Marigold Calavera's 26.
+    expect(instances - before.instances).toBe(4 * 3);
+    expect(model.getTotalVertices()).toBeGreaterThan(0);
+  });
+
+  it('rebuilds the model at the new detail level, hides it when nobody wears it, and disposes it', () => {
+    const scene = new Scene(engine);
+    const field = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
+    const config = defaultKeeperConfig(KEEPER_DATA.bases[0]!);
+    const wearers = [0, 1].map((i) =>
+      field.add(config, { x: i, z: 0 }, keeperItems(['hollow-man-costume'])),
+    );
+    field.flush();
+    const low = scene.meshes.find((m) => m.name === 'keeper-model-hollow-man-low') as Mesh;
+    const lowVertices = low.getTotalVertices();
+    field.setLod('high');
+    field.flush();
+    const high = scene.meshes.find((m) => m.name === 'keeper-model-hollow-man-high') as Mesh;
+    expect(high.getTotalVertices()).toBeGreaterThan(lowVertices);
+    expect(high.thinInstanceCount).toBe(2);
+    expect(scene.meshes.some((m) => m.name === 'keeper-model-hollow-man-low')).toBe(false);
+    for (const wearer of wearers) field.remove(wearer);
+    field.flush();
+    expect(high.isEnabled()).toBe(false);
+    field.add(config, { x: 0, z: 0 }, keeperItems(['hollow-man-costume']));
+    field.flush();
+    field.dispose();
+    expect(scene.meshes.some((m) => m.name.startsWith('keeper-model-'))).toBe(false);
   });
 });

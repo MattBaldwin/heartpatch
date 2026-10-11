@@ -7,7 +7,7 @@ import {
   edgeName,
   fenceCard,
   fenceChips,
-  fenceChoices,
+  fenceBuildCards,
   fenceCrackers,
   FENCE_TEXT,
   FENCES,
@@ -104,16 +104,24 @@ describe('the fence sheet (#203)', () => {
     expect(fenceChips(hedge, 3)[1]).toBe('🪵 Keeps other Keepers out · 140 energy');
   });
 
-  it('multiplies the build cost by the edges picked, and checks the bag', () => {
-    const one = fenceChoices({}, 1).find((c) => c.fence.id === 'emberwood-palisade');
-    const two = fenceChoices({ emberwood: 12, timber: 4 }, 2).find(
-      (c) => c.fence.id === 'emberwood-palisade',
-    );
-    expect(one?.cost).toEqual({ emberwood: 6, timber: 2 });
-    expect(one?.affordable).toBe(false);
-    expect(two?.cost).toEqual({ emberwood: 12, timber: 4 });
-    expect(two?.affordable).toBe(true);
+  it('offers every fence as a Build-sheet card, per edge, only while an edge is open (#371)', () => {
+    const view = testView(1);
+    const mine = view.tiles.filter((t) => t.ownerUserId === ME);
+    const rim = mine.find((t) => openEdges(t, view, ME).length > 0);
+    expect(rim).toBeDefined();
+    if (!rim) return;
+    const cards = fenceBuildCards(rim, view, ME);
+    expect(cards.map((c) => c.id)).toEqual(FENCES.map((f) => f.id));
+    const palisade = cards.find((c) => c.id === 'emberwood-palisade');
+    expect(palisade?.cost).toEqual({ emberwood: 6, timber: 2 });
+    expect(palisade?.area).toBe('edges');
     expect(canAfford({ emberwood: 5 }, { emberwood: 6 })).toBe(false);
+    // Every open edge already fenced: nothing to build.
+    const fenced = {
+      ...rim,
+      fences: openEdges(rim, view, ME).map((edge) => fence({ edge })),
+    };
+    expect(fenceBuildCards(fenced, view, ME)).toEqual([]);
   });
 
   it('stays cozy and kid-safe', () => {
@@ -122,11 +130,7 @@ describe('the fence sheet (#203)', () => {
       FENCE_TEXT.open(1),
       FENCE_TEXT.open(3),
       FENCE_TEXT.inside,
-      FENCE_TEXT.build,
       FENCE_TEXT.openSheet(2),
-      FENCE_TEXT.fenceThem(1, '6 Emberwood'),
-      FENCE_TEXT.fenceThem(2, '12 Emberwood'),
-      FENCE_TEXT.fenceThem(4, '24 Emberwood'),
       FENCE_TEXT.needMore,
       FENCE_TEXT.built(2),
       FENCE_TEXT.interiorNote,
@@ -139,7 +143,6 @@ describe('the fence sheet (#203)', () => {
       FENCE_TEXT.innerDown(3),
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
-    expect(FENCE_TEXT.fenceThem(2, 'x')).toBe('🪵 Fence both (x)');
     expect(FENCE_TEXT.items({ emberwood: 3, timber: 1 })).toBe('1 Timber and 3 Emberwood');
     expect(FENCE_TEXT.items({ emberwood: 3, timber: 1, glimmer: 2 })).toBe(
       '1 Timber, 3 Emberwood and 2 Glimmer',

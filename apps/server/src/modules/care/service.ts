@@ -4,9 +4,6 @@ import {
   CARE_RULES,
   careCoins,
   careGain,
-  contentmentAfterCare,
-  contentmentAt,
-  evolutionAt,
   evolvingMeter,
   GAME_DATA,
   grantedXp,
@@ -21,12 +18,13 @@ import {
   type CareResponse,
   type CareSquishy,
   type ElementId,
+  type FeelingId,
   type EvolutionStep,
   type HabitatTags,
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
-import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
+import { EVOLUTION_RULES, SERVER_GAME_DATA, addLean } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -39,6 +37,17 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
+import { contentmentFor, contentmentsOf, moodIn } from '../jobs/contentment.js';
+import {
+  WIN_LEAN,
+  careLean,
+  formsAt,
+  leanColumns,
+  leanOf,
+  rollStep,
+  whisperOf,
+  type LoggedRoll,
+} from './evolution.js';
 import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
 
 /*
@@ -138,14 +147,6 @@ export interface CareServiceOptions {
 const nameOf = (row: Pick<CareSquishyRow, 'nickname' | 'speciesId'>) =>
   row.nickname ?? speciesOf(row.speciesId)?.name ?? 'Your squishy';
 
-/** Contentment at `at` (shared `contentmentAt` over the stored columns). */
-const contentmentOf = (row: CareSquishyRow, at: Date) =>
-  contentmentAt(
-    { contentment: row.contentmentAtLastCare, lastCaredAt: row.lastCaredAt },
-    at,
-    CARE_RULES,
-  );
-
 /** The tags of a squishy's habitat, or null when it has none (or it isn't a habitat). */
 async function habitatTagsFor(
   repo: CareRepo,
@@ -184,8 +185,8 @@ export interface Growth {
   fromLevel: number;
   level: number;
   totalXp: number;
-  /** Each form it grew into, in order (usually none, at most one in Phase 1 data). */
-  evolutions: { fromSpeciesId: string; intoSpeciesId: string }[];
+  /** Each form it grew into, in order (usually none); `branch`: a branch form, not the default (#32). */
+  evolutions: { fromSpeciesId: string; intoSpeciesId: string; branch: boolean }[];
   /**
    * The evolving meter's percent before and after this XP (#205), for the
    * results card; null where it shows no meter. After is null for one that
@@ -210,34 +211,66 @@ export async function applyXp(
   squishyId: string,
   baseXp: number,
   at: Date,
-  options: { plain?: boolean } = {},
+  options: { plain?: boolean; won?: boolean } = {},
 ): Promise<Growth | null> {
   const repo = createCareRepo(tx);
   const row = await repo.lockSquishy(squishyId);
   if (!row) return null;
+  const habitat = habitatOf(await habitatTagsFor(repo, [row]), row);
   const multiplier =
     options.plain === true
       ? 100
       : xpMultiplier(
-          contentmentOf(row, at),
-          habitatOf(await habitatTagsFor(repo, [row]), row),
+          (await contentmentFor(tx, row.mapId, row.id, at)).contentment,
+          habitat,
           row,
           GROWTH_RULES,
         );
   const xp = grantedXp(baseXp, multiplier);
   const next = addXp({ level: row.level, xp: row.xp }, xp, GROWTH_RULES);
 
+  // A win leans it Brave (#32); the lean is folded in before any roll reads it.
+  let lean = leanOf(row, habitat, at);
+  if (options.won === true) {
+    lean = addLean(lean, WIN_LEAN.feeling, WIN_LEAN.points, at, EVOLUTION_RULES);
+  }
+  const housed = row.habitatBuildingId !== null;
+  const leanRow = { ...row, ...leanColumns(lean, at, housed) };
+
   let speciesId = row.speciesId;
   let element: ElementId = row.element;
+  let feeling: FeelingId = row.feeling;
   const evolutions: Growth['evolutions'] = [];
+  const rolls: (LoggedRoll | null)[] = [];
   for (let i = 0; i < MAX_EVOLUTIONS_AT_ONCE; i += 1) {
-    const step = evolutionAt(speciesId, next.level, EVOLUTION_STEPS);
-    const into = step ? speciesOf(step.into) : undefined;
-    if (!step || !into) break;
-    evolutions.push({ fromSpeciesId: speciesId, intoSpeciesId: into.id });
-    // It takes its new form's element; its feeling is its own (shaped by care).
+    const forms = formsAt(speciesId, next.level);
+    if (forms.length === 0) break;
+    // A step with branches rolls (#32); a single form needs no roll.
+    const roll =
+      forms.length > 1
+        ? await rollStep(
+            tx,
+            {
+              ...leanRow,
+              feeling,
+              contentmentSum: row.careSum,
+              contentmentSamples: row.careSamples,
+            },
+            habitat,
+            forms,
+            at,
+          )
+        : null;
+    const into = speciesOf(roll?.pick ?? forms[0]?.into ?? '');
+    if (!into) break;
+    const branch = roll?.branch ?? false;
+    evolutions.push({ fromSpeciesId: speciesId, intoSpeciesId: into.id, branch });
+    rolls.push(roll);
     speciesId = into.id;
     element = into.element;
+    // The default form keeps its own feeling; a branch form takes the
+    // branch's, because it grew into it (owner decision 2026-10-10, #32).
+    if (branch) feeling = into.feeling;
   }
 
   await repo.setGrowth(row.id, {
@@ -245,15 +278,20 @@ export async function applyXp(
     level: next.level,
     speciesId,
     element,
+    ...(feeling !== row.feeling ? { feeling } : {}),
+    ...leanColumns(lean, at, housed),
     // A row the previous release wrote has no joining level: its first XP
     // pins it at the level it had, so its meter stops restarting (#205).
     ...(row.joinedLevel === null ? { joinedLevel: row.level } : {}),
   });
-  for (const evolution of evolutions) {
+  for (const [i, evolution] of evolutions.entries()) {
+    const roll = rolls[i] ?? null;
     await repo.insertEvolution({
       mapId: row.mapId,
       squishyId: row.id,
+      userId: row.ownerUserId,
       ...evolution,
+      roll: roll ? (JSON.parse(JSON.stringify(roll)) as Record<string, unknown>) : null,
       level: next.level,
       evolvedAt: at,
     });
@@ -341,7 +379,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     const day = await accountDay(tx, userId, at);
     const rows = await repo.listActive(mapId, userId);
     const ids = rows.map((r) => r.id);
-    const [habitats, counts, lastCare, coinsToday, unseen, items, worn] = await Promise.all([
+    const [habitats, counts, lastCare, coinsToday, unseen, items, worn, moods] = await Promise.all([
       habitatTagsFor(repo, rows),
       repo.countCareOn(ids, day),
       repo.lastCare(ids, debounceSince(at)),
@@ -349,6 +387,7 @@ export function createCareService(options: CareServiceOptions): CareService {
       repo.unseenEvolutions(ids),
       createInventoryRepo(tx).list({ mapId, userId }),
       wornAccessories(tx, userId, ids),
+      contentmentsOf(tx, mapId, ids, at),
     ]);
 
     // Species rows the client can't have: secret forms the player owns, or
@@ -361,7 +400,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     });
 
     const squishies = rows.map((row): CareSquishy => {
-      const contentment = contentmentOf(row, at);
+      const { contentment, drift } = moodIn(moods, row.id);
       const habitat = habitatOf(habitats, row);
       const caredToday = counts.get(row.id) ?? 0;
       const nextCareAt: Record<string, string> = {};
@@ -387,6 +426,7 @@ export function createCareService(options: CareServiceOptions): CareService {
         stats: statsAtLevel(base, row.level, BATTLE_RULES),
         contentment,
         mood: moodFor(contentment, CARE_RULES),
+        moodDrift: drift,
         xpBonusPercent: xpMultiplier(contentment, habitat, row, GROWTH_RULES),
         habitatId: row.habitatBuildingId,
         caredToday,
@@ -398,9 +438,16 @@ export function createCareService(options: CareServiceOptions): CareService {
               intoSpeciesId: evolution.intoSpeciesId,
               level: evolution.level,
               at: evolution.evolvedAt.toISOString(),
+              ...(evolution.branch ? { branch: true } : {}),
             }
           : null,
         accessory: worn.get(row.id) ?? null,
+        whisper: whisperOf(
+          { ...row, name: nameOf(row) },
+          habitat,
+          evolvingOf(row)?.percent ?? null,
+          at,
+        ),
       };
     });
     return { squishies, speciesDefs, items, coinsToday, now: at.toISOString() };
@@ -448,11 +495,11 @@ export function createCareService(options: CareServiceOptions): CareService {
         const today = (await repo.countCareOn([row.id], day)).get(row.id) ?? 0;
         const gain = careGain(action, today, CARE_RULES);
         const coins = careCoins(gain, await repo.coinsOn(user.id, day), CARE_RULES);
-        const contentment = contentmentAfterCare(
-          { contentment: row.contentmentAtLastCare, lastCaredAt: row.lastCaredAt },
-          at,
-          gain.contentment,
-          CARE_RULES,
+        // On what its job left it with (#376), capped at full.
+        const before = await contentmentFor(tx, mapId, row.id, at);
+        const contentment = Math.min(
+          CARE_RULES.maxContentment,
+          before.contentment + gain.contentment,
         );
         const careId = await repo.insertCare({
           mapId,
@@ -480,6 +527,22 @@ export function createCareService(options: CareServiceOptions): CareService {
           at,
         });
         await repo.setContentment(row.id, contentment, at);
+        // A full-value action shapes how it feels and its care history (#32);
+        // lesser ones don't, so tapping all day can't steer an evolution.
+        const lean = careLean(action.id, gain.full);
+        if (gain.full) {
+          const habitat = habitatOf(await habitatTagsFor(repo, [row]), row);
+          const current = leanOf(row, habitat, at);
+          await repo.setCareHistory(row.id, {
+            ...leanColumns(
+              lean ? addLean(current, lean.feeling, lean.points, at, EVOLUTION_RULES) : current,
+              at,
+              row.habitatBuildingId !== null,
+            ),
+            careSum: row.careSum + contentment,
+            careSamples: row.careSamples + 1,
+          });
+        }
         const mood = moodFor(contentment, CARE_RULES);
         await repo.appendEvent({
           mapId,

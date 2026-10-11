@@ -50,6 +50,8 @@ export function mountStage(
   tier: QualityTier,
   /** Dev galleries only: a different camera (pitch, distance) than the game's. */
   camera: Partial<CameraConfig> = {},
+  /** Dev captures only (`?tier=`): hold `tier` at full resolution, with the governor off. */
+  pinTier = false,
 ): Stage {
   const { engine } = renderer;
   const scene = new Scene(engine);
@@ -74,7 +76,7 @@ export function mountStage(
     start,
   );
   scene.activeCamera = mapCamera.camera;
-  const quality = new RenderQuality(scene, mapCamera.camera, tier);
+  const quality = new RenderQuality(scene, mapCamera.camera, tier, pinTier);
 
   const frames = new FrameScheduler(SETTLE_FRAMES);
   const abort = new AbortController();

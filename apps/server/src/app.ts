@@ -1,8 +1,10 @@
+import { LIVE_BATTLE_RULES } from '@heartpatch/shared';
 import { BlockList, isIPv6 } from 'node:net';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { setEvolutionSalt } from './modules/care/evolution.js';
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
@@ -119,6 +121,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
   const clock = options.clock ?? createClock(config);
+  // Evolution rolls are seeded with a server secret (#32); config refuses a
+  // production start without it.
+  setEvolutionSalt(config.HP_EVOLUTION_SALT);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
     trustProxy: config.TRUST_PROXY ? trustOneProxyHop : false,
@@ -276,6 +281,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           findWildEncounter: spawns.findWildEncounter,
           // Live battles (#29) give a player whose app isn't open one away-grace.
           ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+          liveRules: {
+            ...LIVE_BATTLE_RULES,
+            ...(config.HP_DEV_LIVE_TURN_SECONDS !== undefined && {
+              turnSeconds: config.HP_DEV_LIVE_TURN_SECONDS,
+            }),
+            ...(config.HP_DEV_LIVE_GRACE_SECONDS !== undefined && {
+              awayGraceSeconds: config.HP_DEV_LIVE_GRACE_SECONDS,
+            }),
+          },
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
@@ -343,11 +357,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
         await api.register(
-          territoryRoutes(createTerritoryService({ db, clock, battles, ...publish }), {
-            hooks: authHooks,
-            idempotency,
-            devTools: config.HP_DEV_SQUISHY_GRANTS,
-          }),
+          territoryRoutes(
+            createTerritoryService({
+              db,
+              clock,
+              battles,
+              ...publish,
+              // "Defend now?" (#29-C) goes to a defender whose app is open.
+              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            }),
+            {
+              hooks: authHooks,
+              idempotency,
+              devTools: config.HP_DEV_SQUISHY_GRANTS,
+            },
+          ),
         );
         // The raid log and defense style (#16); the raid-log consumer writes
         // the rows (`modules/raids/consumer.ts`, started in index.ts).

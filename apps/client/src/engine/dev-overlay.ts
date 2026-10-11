@@ -14,7 +14,8 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * Dev-only stats badge: frame rate, renderer, quality tier, the render pixel
  * ratio the dynamic scaler has picked, and the last frame's draw calls and
  * triangles (#318, for checking a real older iPad). Imported dynamically
- * from main.ts under `import.meta.env.DEV`, so it never ships.
+ * from main.ts in a dev build, or on the live site with `?fps=1` (#335,
+ * `showsStats`), so nobody sees it unless they ask.
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
@@ -35,9 +36,9 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     const drawCalls = counted.instrumentation.drawCallsCounter.current;
     // Idle means nothing is drawn (render on demand), so there's no frame rate.
     const rate = stage.idle ? 'idle' : `${Math.round(stage.renderer.engine.getFps())} fps`;
-    const { tier, pixelRatio } = stage.quality.snapshot;
+    const { tier, pinned, pixelRatio } = stage.quality.snapshot;
     const renderer = RENDERER_LABEL[stage.renderer.kind];
     const work = formatRenderStats(drawCalls, activeTriangles(stage.scene));
-    badge.textContent = `${rate} · ${renderer} · ${tier} · ${pixelRatio.toFixed(2)}x · ${work}`;
+    badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
   }, 500);
 }

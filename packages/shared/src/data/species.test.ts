@@ -10,6 +10,7 @@ import { GUARDIAN_RULES } from './server/guardian-rules.js';
 import { SERVER_GAME_DATA } from './server/index.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { MOVES, SPECIES } from './species.js';
+import { WAVE_1_SPECIES } from './species-wave-1.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 /*
@@ -20,8 +21,11 @@ import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 const byId = new Map(SPECIES.map((s) => [s.id, s]));
 const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
-/** Base forms: the first squishy of each line. */
-const bases = SPECIES.filter((s) => !evolvedIds.has(s.id));
+/** Wave-1 kinds (#382) are standalone: no evolutions yet, so they're not lines. */
+const standalone = SPECIES.filter((s) => WAVE_1_SPECIES.some((w) => w.id === s.id));
+const standaloneIds = new Set(standalone.map((s) => s.id));
+/** Base forms: the first squishy of each launch line. */
+const bases = SPECIES.filter((s) => !evolvedIds.has(s.id) && !standaloneIds.has(s.id));
 const halloween = bases.filter((s) => s.season === 'halloween');
 const everyday = bases.filter((s) => s.season === undefined);
 const evolvedFormOf = (s: Species): Species => byId.get(s.evolutions[0]!.into)!;
@@ -35,7 +39,7 @@ describe('launch roster (issue #10)', () => {
     expect(everyday.length).toBeLessThanOrEqual(15);
     expect(halloween).toHaveLength(4);
     // Every species is a base form or a form one of them evolves into (#32: one or two).
-    expect(SPECIES).toHaveLength(bases.length + evolvedIds.size);
+    expect(SPECIES).toHaveLength(bases.length + evolvedIds.size + standalone.length);
     for (const base of bases) expect(base.evolutions.length, base.id).toBeLessThanOrEqual(2);
   });
 
@@ -119,7 +123,7 @@ describe('where the roster lives (server-only tables)', () => {
   const guarding = new Set(GUARDIAN_RULES.tables.flatMap((t) => t.entries.map((e) => e.species)));
 
   it('spawns every base form wild, and keeps evolved forms out of the wild', () => {
-    for (const s of bases) expect(spawnable, s.id).toContain(s.id);
+    for (const s of [...bases, ...standalone]) expect(spawnable, s.id).toContain(s.id);
     for (const id of evolvedIds) expect(spawnable, id).not.toContain(id);
   });
 
@@ -202,8 +206,13 @@ describe('balance intent (design doc §5), played with the real engine', () => {
   });
 
   it('has no base form that wins (or loses) nearly every 1v1', () => {
-    const rates = bases.map((a) => {
-      const others = bases.filter((b) => b !== a);
+    // Launch lines are measured against the launch lines, as ever (a roster of
+    // more small kinds shouldn't make its epic look unbeatable). Wave-1 kinds
+    // (#382) are measured against everyone, so none of them is a pushover or a bully.
+    const everyBase = [...bases, ...standalone];
+    const rates = everyBase.map((a) => {
+      const field = standaloneIds.has(a.id) ? everyBase : bases;
+      const others = field.filter((b) => b !== a);
       const total = others.reduce((sum, b) => sum + winRate(a.id, b.id, 30), 0);
       return { id: a.id, rate: total / others.length };
     });

@@ -139,10 +139,17 @@ export const GrowthRulesSchema = z
     /**
      * A befriended squishy joins at most this many levels below its
      * species' first evolution, so it still grows up by training. Species
-     * that never evolve keep their battle level. Optional: left out, every
+     * that never evolve keep their battle level (unless `befriendNoEvolutionLevel`). Optional: left out, every
      * befriended squishy keeps its battle level.
      */
     befriendBelowEvolution: z.number().int().min(1).max(99).optional(),
+    /**
+     * The level a befriended squishy of a standalone species (no evolution
+     * into or out of it) joins at most, so it is no stronger than an evolving
+     * one would be (`befriendBelowEvolution`). Optional: left out, standalone
+     * species keep their battle level. Ignored without `befriendBelowEvolution`.
+     */
+    befriendNoEvolutionLevel: z.number().int().min(1).max(99).optional(),
     /**
      * Battle XP falls off per squishy per map-local day: full XP while it has
      * won fewer than `fullWinsPerDay` battles today, then `afterPercent` of

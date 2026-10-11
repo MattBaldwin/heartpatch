@@ -170,6 +170,14 @@ export interface BattlesRepo {
     battleId: string,
     progress: { actions: BattleAction[]; state: BattleState },
   ) => Promise<void>;
+  /**
+   * A defender took over side `b` before the first move (#29-C): the stored
+   * setup and the starting state, rebuilt from the same seed with a player there.
+   */
+  seatDefender: (
+    battleId: string,
+    start: { setup: BattleSetup['sides']; state: BattleState },
+  ) => Promise<void>;
   /** The battle is over: stores the outcome and the resolved log. */
   finish: (
     battleId: string,
@@ -386,6 +394,9 @@ function queries(db: Executor): BattlesRepo {
           // `lastCaredAt` = creation, so contentment decays from here.
           contentmentAtLastCare: contentment,
           lastCaredAt: at,
+          // Its first contentment checkpoint (#376), at the same moment.
+          contentment,
+          contentmentSince: at,
           createdAt: at,
         })
         .returning();
@@ -473,6 +484,10 @@ function queries(db: Executor): BattlesRepo {
 
     saveProgress: async (battleId, progress) => {
       await db.update(battles).set(progress).where(eq(battles.id, battleId));
+    },
+
+    seatDefender: async (battleId, start) => {
+      await db.update(battles).set(start).where(eq(battles.id, battleId));
     },
 
     finish: async (battleId, outcome) => {

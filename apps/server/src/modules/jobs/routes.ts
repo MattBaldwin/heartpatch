@@ -1,5 +1,6 @@
 import {
   CollectWorkResponseSchema,
+  DevAgeMoodRequestSchema,
   JobsViewSchema,
   MapIdParamsSchema,
   SetJobRequestSchema,
@@ -93,6 +94,20 @@ export const squishyJobsRoutes =
           preHandler: [requireAuth, rateLimit('jobs')],
         },
         async (request) => service.devReady(requireUser(request), request.params.mapId),
+      );
+      // Dev and test only: my squishies' moods live through more of their jobs (#376's e2e).
+      app.post(
+        '/maps/:mapId/dev/mood/age',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevAgeMoodRequestSchema,
+            response: { 200: JobsViewSchema },
+          },
+          preHandler: [requireAuth, rateLimit('jobs')],
+        },
+        async (request) =>
+          service.devAgeMood(requireUser(request), request.params.mapId, request.body.minutes),
       );
     }
 

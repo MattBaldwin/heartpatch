@@ -49,6 +49,11 @@ const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  // Branching evolution (#32): the secret salt evolution rolls are seeded
+  // with, so a player who knows a squishy's id can't work out its roll.
+  // Required in production; development and tests fall back to a fixed dev
+  // salt. Never commit a real value.
+  HP_EVOLUTION_SALT: z.string().trim().min(16).max(256).optional(),
   // Dev time override (tech spec §7): the clock starts here. Never in production.
   HP_DEV_NOW: z.iso.datetime({ offset: true }).optional(),
   // Signups per IP per window (auth limits.ts), raised for e2e: every Playwright
@@ -68,6 +73,11 @@ const ConfigSchema = z.object({
   // Dev/test only: every found-clothing drop table's chance, in percent (#43),
   // so a find can be tried without gathering a hundred times. Never in production.
   HP_DEV_DROP_CHANCE: z.coerce.number().int().min(0).max(100).optional(),
+  // Dev/test only: a live battle's turn time and away-grace in seconds (#29),
+  // so e2e can try a timeout and a disconnect without waiting 30 s and 60 s.
+  // Never in production.
+  HP_DEV_LIVE_TURN_SECONDS: z.coerce.number().int().min(1).max(600).optional(),
+  HP_DEV_LIVE_GRACE_SECONDS: z.coerce.number().int().min(0).max(600).optional(),
   // `pnpm db:seed` only: lets the seed write to a database that isn't on this
   // computer (db/seed.ts, `seedTargetRefusal`). Never in production.
   HP_SEED_ALLOW_REMOTE: z
@@ -81,6 +91,10 @@ const ServerConfigSchema = ConfigSchema.refine(
   (c) => c.NODE_ENV !== 'production' || c.HP_SIGNUP_CODE !== undefined,
   { path: ['HP_SIGNUP_CODE'], message: 'required in production (family-only signup)' },
 )
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_EVOLUTION_SALT !== undefined, {
+    path: ['HP_EVOLUTION_SALT'],
+    message: 'required in production (evolution rolls)',
+  })
   .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_NOW === undefined, {
     path: ['HP_DEV_NOW'],
     message: 'development and tests only',
@@ -99,6 +113,14 @@ const ServerConfigSchema = ConfigSchema.refine(
   })
   .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_DROP_CHANCE === undefined, {
     path: ['HP_DEV_DROP_CHANCE'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_LIVE_TURN_SECONDS === undefined, {
+    path: ['HP_DEV_LIVE_TURN_SECONDS'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_LIVE_GRACE_SECONDS === undefined, {
+    path: ['HP_DEV_LIVE_GRACE_SECONDS'],
     message: 'development and tests only',
   })
   .refine((c) => c.NODE_ENV !== 'production' || !c.HP_SEED_ALLOW_REMOTE, {

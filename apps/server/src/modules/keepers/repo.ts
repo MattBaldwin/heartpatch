@@ -16,6 +16,8 @@ export const keeperColumns = {
   eyeColor: keepers.eyeColor,
   outfit: keepers.outfit,
   hairstyle: keepers.hairstyle,
+  face: keepers.face,
+  body: keepers.body,
   skinTone: keepers.skinTone,
   eyes: keepers.eyes,
   brows: keepers.brows,

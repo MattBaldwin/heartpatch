@@ -195,6 +195,13 @@ export const BattleSquishyViewSchema = z.object({
   shield: z.number().int().min(0).max(100).default(0),
   /** Said yes to a Heart Charm and left the fight (#279). */
   befriended: z.literal(true).optional(),
+  /**
+   * The wardrobe accessory it wears (#373), for drawing only. The server adds
+   * it when it builds a player's view (read through ownership, like the care
+   * view); it is never in the engine's state or the stored battle, so replay
+   * is untouched. Wild squishies, fences and replays leave it out.
+   */
+  accessory: ContentIdSchema.nullable().optional(),
 });
 export type BattleSquishyView = z.infer<typeof BattleSquishyViewSchema>;
 
@@ -390,6 +397,12 @@ export const LiveBattleViewSchema = z.object({
   deadlineAt: z.iso.datetime().nullable(),
   myPick: BattleChoiceSchema.nullable(),
   opponentPicked: z.boolean(),
+  /**
+   * The opponent's app is open on the patch right now. False: they stepped
+   * away (iOS backgrounds the app), and the AI picks for them when their
+   * time and away-grace run out.
+   */
+  opponentHere: z.boolean(),
   covered: z.array(z.object({ turn: z.number().int().min(0), side: BattleSideIdSchema })),
   now: z.iso.datetime(),
 });
@@ -426,6 +439,12 @@ export const PlayerBattleSchema = z.object({
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */
   live: LiveBattleViewSchema.optional(),
+  /**
+   * A challenge whose defender is being asked "Defend now?" (#29-C), to the
+   * challenger only: nobody moves until `expiresAt`, or until the defender
+   * answers. Giving up meanwhile counts as leaving (the land holds).
+   */
+  defensePrompt: z.object({ expiresAt: z.iso.datetime(), now: z.iso.datetime() }).optional(),
 });
 export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
 

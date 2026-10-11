@@ -5,7 +5,6 @@ import {
   Rng,
   WARDROBE_SLOTS,
   type CostumeAnchor,
-  type Finish,
   type KeeperBase,
   type KeeperConfig,
   type KeeperData,
@@ -14,6 +13,8 @@ import {
   type PartShape,
   type WardrobeSlot,
 } from '@heartpatch/shared';
+import { HOLLOW_ARM, HOLLOW_MAN } from '../hollow-man/hollow-man-config.js';
+import type { FinishName } from '../config.js';
 import { hexToRgb, type Rgb, type Vec3 } from '../params.js';
 import { KEEPER } from './keeper-config.js';
 import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
@@ -31,11 +32,28 @@ import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
  * world units for a Keeper at scale 1.
  */
 
+/**
+ * A costume's finish: its rarity's, except that the Mythic shimmer is the
+ * softer one on a costume (owner, #261); squishies keep the shared shimmer.
+ */
+function costumeFinish(rarity: KeeperItem['rarity']): FinishName {
+  const finish = ART_RULES.finishByRarity[rarity];
+  return finish === 'shimmer' ? 'shimmerSoft' : finish;
+}
+
 /** What a piece is part of (tests and the gallery count these). */
 export type KeeperLayer = 'body' | 'face' | 'hair' | 'outfit' | WardrobeSlot;
 
+/**
+ * A costume model's own geometry, built by the field from the shape the
+ * model comes from (`model-hollow-man`: the Hollow Man's cloak and arms). It
+ * stands on y = 0 at its own height, so a piece scales it by one factor.
+ */
+export type ModelShape = 'model-hollow-man';
+export type KeeperShape = PartShape | ModelShape;
+
 export interface KeeperPiece {
-  readonly shape: PartShape;
+  readonly shape: KeeperShape;
   /** Centre in Keeper space. */
   readonly at: Vec3;
   /** Size of the unit-box primitive. */
@@ -45,7 +63,7 @@ export interface KeeperPiece {
   readonly color: Rgb;
   readonly layer: KeeperLayer;
   /** Costumes wear their rarity's finish (ART_BIBLE §1.4); everything else is plain vinyl. */
-  readonly finish?: Finish;
+  readonly finish?: FinishName;
   /** Lit from inside. */
   readonly glow?: boolean;
 }
@@ -215,6 +233,10 @@ export function keeperParams(
   const eyes = config.eyes ?? base.face.eyes;
   const brows = pick(data.brows, config.brows, base.face.brows, missing);
   const mouth = pick(data.mouths, config.mouth, base.face.mouth, missing);
+  // Face shape and body type (#372): a base's own share its id.
+  const faceShape = pick(data.faces, config.face, base.id, missing);
+  const b = pick(data.bodies, config.body, base.id, missing);
+  if (!faceShape || !b) throw new Error(`keeperParams: no face or body "${base.id}"`);
   const extras = (config.extras ?? []).flatMap((id) => {
     const found = data.faceExtras.find((e) => e.id === id);
     if (!found) missing.push(id);
@@ -225,13 +247,22 @@ export function keeperParams(
 
   // Seeded by the whole config, so the same config is always the same Keeper.
   // The base's own style adds nothing, so Keepers saved before styles could
-  // be picked (and ones that pick their base's style) look as they did.
+  // be picked (and ones that pick their base's style) look as they did. So
+  // do the base's own face and body (#372).
   const restyled = style.id === base.hairstyle ? [] : [style.id];
+  const reshaped = faceShape.id === base.id && b.id === base.id ? [] : [faceShape.id, b.id];
   const rng = Rng.fromSeed(
-    deriveSeed('keeper', base.id, config.hairColor, config.eyeColor, config.outfit, ...restyled),
+    deriveSeed(
+      'keeper',
+      base.id,
+      config.hairColor,
+      config.eyeColor,
+      config.outfit,
+      ...restyled,
+      ...reshaped,
+    ),
   );
 
-  const b = base.body;
   const s = KEEPER.height * b.height;
   const t = b.limbs * s;
   const tw = b.torsoWidth * s;
@@ -246,10 +277,13 @@ export function keeperParams(
   const hipY = b.legs * s + shoe[1] * 0.5;
   const torsoY = hipY + th / 2;
   const legX = tw * 0.24;
-  const d = b.head * s;
+  // The face's head size blended with the body's (their geometric mean), so
+  // a big face on a tall body stays in proportion. A base's own face and
+  // body have the same size, and √(x·x) is exactly x, so it draws as before.
+  const d = Math.sqrt(faceShape.head * b.head) * s;
   const head: Head = {
     c: [0, hipY + th + d * (0.5 - KEEPER.neckSink), 0],
-    r: [(d * b.headShape) / 2, d / 2, (d * 0.95) / 2],
+    r: [(d * faceShape.headShape) / 2, d / 2, (d * 0.95) / 2],
   };
 
   const pieces: KeeperPiece[] = [];
@@ -474,7 +508,7 @@ export function keeperParams(
   const worn = costume ? [costume] : WARDROBE_SLOTS.flatMap((slot) => bySlot.get(slot) ?? []);
   for (const item of worn) {
     // Costumes wear their rarity's finish (owner, #261); other clothing is plain vinyl.
-    const finish = item.slot === 'costume' ? ART_RULES.finishByRarity[item.rarity] : 'vinyl';
+    const finish = item.slot === 'costume' ? costumeFinish(item.rarity) : 'vinyl';
     // Pieces grouped by socket, in order: each anchor in turn, then its pieces.
     const groups = new Map<CostumeAnchor | undefined, KeeperItemPiece[]>();
     for (const p of item.pieces) groups.set(p.on, [...(groups.get(p.on) ?? []), p]);
@@ -506,12 +540,56 @@ export function keeperParams(
     }
   }
 
+  // A costume that replaces the body is the whole figure: the Keeper's own
+  // body, face, hair and starter outfit stay out of it (the feet, shadow and
+  // sockets keep their place, so it walks and lines up like the Keeper).
+  const replaced = costume?.replacesBody === true;
+  let height = hairTop;
+  let width = footprint;
+  if (costume?.model === 'hollow-man') {
+    // The Hollow Man's own shape, scaled from his height to this Keeper's.
+    const h = hairTop * KEEPER.models['hollow-man'].heightRatio;
+    const k = h / HOLLOW_MAN.height;
+    const shimmer = costumeFinish(costume.rarity);
+    pieces.push({
+      shape: 'model-hollow-man',
+      at: [0, 0, 0],
+      size: [k, k, k],
+      turn: NO_TURN,
+      color: hexToRgb(HOLLOW_MAN.bodyColor),
+      layer: 'costume',
+      ...(shimmer === 'vinyl' ? {} : { finish: shimmer }),
+    });
+    // His eyes, at his own spot on his face (the eye is a sphere, widened and flattened a little).
+    const look = KEEPER.models['hollow-man'];
+    const eyeSize = HOLLOW_MAN.eyeSize * h;
+    for (const side of [-1, 1]) {
+      pieces.push({
+        shape: 'ellipsoid',
+        at: [side * HOLLOW_MAN.eyeGap * h, HOLLOW_MAN.eyeHeight * h, -look.eyeForward * h],
+        size: [eyeSize * look.eyeWide, eyeSize, eyeSize * look.eyeDeep],
+        turn: NO_TURN,
+        color: hexToRgb(HOLLOW_MAN.eyeColor),
+        layer: 'costume',
+        glow: true,
+      });
+    }
+    height = h;
+    // Narrow: his arms hang a little out from his sides (a small angle, so
+    // no trigonometry here).
+    width = 2 * (HOLLOW_ARM.shoulder[0] + HOLLOW_ARM.length * HOLLOW_ARM.restSpread) * h;
+  }
+
   return {
     config,
-    height: hairTop,
-    width: footprint,
+    height,
+    width,
     // Hair tucks under a costume's hood rather than poking through it.
-    pieces: costume ? pieces.filter((p) => p.layer !== 'hair') : pieces,
+    pieces: replaced
+      ? pieces.filter((p) => p.layer === 'costume')
+      : costume
+        ? pieces.filter((p) => p.layer !== 'hair')
+        : pieces,
     sockets,
     worn: worn.map((item) => item.id),
     missing,
