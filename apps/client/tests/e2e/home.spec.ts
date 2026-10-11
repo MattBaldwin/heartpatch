@@ -149,7 +149,14 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
         const handle = document.querySelector('[data-testid="home-handle"]')!;
         const at = (type: string, clientY: number) =>
           handle.dispatchEvent(
-            new PointerEvent(type, { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY, bubbles: true }),
+            new PointerEvent(type, {
+              pointerId: 7,
+              pointerType: 'touch',
+              isPrimary: true,
+              clientX: x,
+              clientY,
+              bubbles: true,
+            }),
           );
         at('pointerdown', y);
         at('pointerup', y + dy);

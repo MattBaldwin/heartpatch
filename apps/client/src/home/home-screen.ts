@@ -744,7 +744,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         );
         const species = speciesMap(current);
         const jobs =
-          current.squishies.length > 0 && options.onJobs && mapId && options.showJobs?.(mapId) !== false
+          current.squishies.length > 0 &&
+          options.onJobs &&
+          mapId &&
+          options.showJobs?.(mapId) !== false
             ? button(
                 HOME_TEXT.jobs,
                 () => {
