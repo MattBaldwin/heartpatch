@@ -1,4 +1,5 @@
 import {
+  isAvailableRecipe,
   activeSeasons,
   BATTLE_RULES,
   craftSecondsFor,
@@ -43,7 +44,8 @@ import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
  */
 
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
-const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
+// Only recipes in the game yet (`isAvailableRecipe`): a hidden one can't be made.
+const RECIPES = new Map(GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => [r.id, r]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 /** The recipe book (owner decision 2026-10-05), in book order. */
 const BOOK_PAGES = recipeBookPages();

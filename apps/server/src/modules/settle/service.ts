@@ -249,7 +249,7 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         return { ...bag, landed, trained, cleared: clearing.cleared, nextAt: next };
       });
       const changed =
-        result.landed.length > 0 || result.trained.length > 0 || (result.cleared ?? []).length > 0;
+        result.landed.length > 0 || result.trained.length > 0 || result.cleared.length > 0;
       if (changed) void options.publish?.(mapId);
       return result;
     },

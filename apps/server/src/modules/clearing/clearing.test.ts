@@ -334,4 +334,11 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     expect(res.statusCode).toBe(409);
     expect(errorOf(res).message).toMatch(/gathering here/);
   });
+
+  it("won't make a clearing tool before the clear sheet ships (#295 PR 3)", async () => {
+    const { server, kid, mapId } = await forestHomestead();
+    await give(mapId, kid, { timber: 10, stone: 10 });
+    const res = await call(server, 'POST', `/maps/${mapId}/crafts`, kid, { recipeId: 'axe' });
+    expect(res.statusCode).toBe(404);
+  });
 });

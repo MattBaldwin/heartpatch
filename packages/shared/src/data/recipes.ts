@@ -120,6 +120,7 @@ export const RECIPES: Recipe[] = [
     inputs: { timber: 4, stone: 2 }, // TUNE: #295 plan revision 1
     output: { resource: 'axe', quantity: 3 },
     craftSeconds: 60, // TUNE:
+    hidden: true, // until the clear sheet ships (#295 PR 3 turns it on)
   },
   {
     id: 'pickaxe',
@@ -128,6 +129,7 @@ export const RECIPES: Recipe[] = [
     inputs: { timber: 2, stone: 4 }, // TUNE: #295 plan revision 1
     output: { resource: 'pickaxe', quantity: 3 },
     craftSeconds: 60, // TUNE:
+    hidden: true, // until the clear sheet ships (#295 PR 3 turns it on)
   },
   {
     id: 'spade',
@@ -136,6 +138,7 @@ export const RECIPES: Recipe[] = [
     inputs: { timber: 3, stone: 3 }, // TUNE: #295 plan revision 1
     output: { resource: 'spade', quantity: 3 },
     craftSeconds: 60, // TUNE:
+    hidden: true, // until the clear sheet ships (#295 PR 3 turns it on)
   },
   {
     // Thanksgiving's use for Magic Fallen Leaves (owner decision 2026-10-06):

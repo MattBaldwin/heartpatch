@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   inSeason,
+  isAvailableRecipe,
   needMoreText,
   shortfall,
   type Craft,
@@ -162,7 +163,7 @@ export function bagRecipes(
   recipes: readonly Recipe[] = GAME_DATA.recipes,
 ): BagRecipe[] {
   const on = new Set(seasons);
-  return recipes.map((recipe) => {
+  return recipes.filter(isAvailableRecipe).map((recipe) => {
     const cost = Object.entries(recipe.inputs)
       .map(([id, n]) => `${String(n)} ${itemIcon(id)}`)
       .join(' · ');

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { itemEffects } from '../home/item-effects.js';
+import { recipeBookPages } from '../recipe-book/index.js';
 import { checkClearingRules, clearToolFor } from '../schemas/data/clearing.js';
+import { isAvailableRecipe } from '../schemas/data/recipes.js';
 import { CLEARING_RULES } from './clearing.js';
 import { GAME_DATA } from './index.js';
 
@@ -52,5 +55,16 @@ describe('CLEARING_RULES (#242)', () => {
       `terrains[4]: "junipers-gap" can't be cleared`,
       'terrains[5]: "forest" is listed twice',
     ]);
+  });
+
+  it('keeps the tool recipes out of the game until the clear sheet ships (#295 PR 3)', () => {
+    for (const tool of CLEARING_RULES.tools) {
+      const recipe = GAME_DATA.recipes.find((r) => r.output.resource === tool.id);
+      expect(recipe && isAvailableRecipe(recipe)).toBe(false);
+      expect(recipeBookPages().some((p) => p.key === `recipe:${recipe?.id ?? ''}`)).toBe(false);
+    }
+    // Timber doesn't say it goes into an Axe yet.
+    const into = itemEffects('timber').flatMap((e) => (e.kind === 'recipes' ? e.recipes : []));
+    expect(into).not.toContain('axe');
   });
 });
