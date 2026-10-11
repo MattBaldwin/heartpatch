@@ -216,6 +216,19 @@ describe('careSheet', () => {
     const infoFor = (s: Species) => careSheet(squishy({ speciesId: s.id }), reply()).info;
     expect(infoFor(branching)).toContain(CARE_TEXT.feelingsMatter);
     expect(infoFor(single)).not.toContain(CARE_TEXT.feelingsMatter);
+    // Forms at two different levels are two steps, not a branch.
+    const twoSteps = {
+      ...species('twostep', 'Twostep', '#aaccee'),
+      evolutions: [
+        { into: 'moonpuff', level: 16 },
+        { into: 'moonmallow', level: 30 },
+      ],
+    };
+    const info = careSheet(
+      squishy({ speciesId: 'twostep' }),
+      reply({ speciesDefs: [...reply().speciesDefs, twoSteps] }),
+    ).info;
+    expect(info).not.toContain(CARE_TEXT.feelingsMatter);
   });
 
   it('shows the "brand-new form" chip only for a branch form', () => {

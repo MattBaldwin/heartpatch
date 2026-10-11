@@ -360,6 +360,12 @@
   text-align: left;
 }
 
+/* The text column: a long nickname wraps instead of pushing past the card. */
+.care-whisper > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .care-whisper-icon {
   font-size: 22px;
   line-height: 1;

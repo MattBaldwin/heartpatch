@@ -327,6 +327,11 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
       branch: false,
       userId: who.id,
     });
+    // The care list's celebration leaves `branch` off for a default form.
+    const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
+    const mine = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
+    expect(mine?.newEvolution).toBeDefined();
+    expect(mine?.newEvolution).not.toHaveProperty('branch');
   });
 
   it('leans with full-value care and counts care history; a win leans Brave', async () => {

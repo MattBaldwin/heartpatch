@@ -79,7 +79,7 @@ export const CARE_TEXT = {
   newForm: '🌟 A brand-new form!',
   // "Levels and evolving", on a line that can grow up two ways (#32).
   feelingsMatter:
-    'How it feels can change what it grows into. Cuddles, naps, games and its home all count!',
+    'How you care for it can change what it grows into. Treats, pets, games, battles and its home all count!',
   yay: 'Yay!',
   care: 'Care',
   upClose: 'Up close',
