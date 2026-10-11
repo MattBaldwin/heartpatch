@@ -98,6 +98,7 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     resolvedAt: row.resolvedAt.toISOString(),
     seenAt: row.seenAt?.toISOString() ?? null,
     replayable: replayable(row),
+    live: row.liveBattleId !== null,
     lostFire: row.lostFire ?? null,
     fence: fenceLine(row),
     lostFences: row.lostFences ?? null,

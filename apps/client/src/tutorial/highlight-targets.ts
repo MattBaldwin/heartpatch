@@ -1,6 +1,6 @@
 import type { HighlightTarget } from '@heartpatch/shared';
 import { SETTLING } from '../ui/trays/tray-state.js';
-import type { Rect } from './overlay-layout.js';
+import type { Rect } from '../ui/geometry.js';
 
 // Finds a step's highlight target on screen (HighlightTargetSchema in
 // shared: ids are a client contract and never renamed).

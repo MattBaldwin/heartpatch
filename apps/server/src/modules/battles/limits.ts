@@ -13,6 +13,11 @@ export const BATTLE_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 240, windowMs: MINUTE_MS }, // TUNE: guess; a fast tapper, with retries
   },
+  // Cheers in a live battle (#29): preset ids only, but still not a spam button.
+  cheer: {
+    perIp: { max: 120, windowMs: MINUTE_MS }, // TUNE: a family on one Wi-Fi
+    perUser: { max: 6, windowMs: MINUTE_MS / 2 }, // TUNE: guess; a cheer every few seconds
+  },
   dev: {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: e2e signs up and grants from one IP
     perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess

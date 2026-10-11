@@ -3,12 +3,7 @@
 // Sprout's bubble and the arrow. Pure geometry in CSS pixels, so it's
 // unit-tested; tutorial-overlay.ts applies it to the DOM.
 
-export interface Rect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
+import { intersects, type Rect } from '../ui/geometry.js';
 
 export interface Size {
   readonly width: number;
@@ -64,11 +59,6 @@ export interface OverlayLayout {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max));
-
-/** True when the two rects share any area (touching edges don't count). */
-export function intersects(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-}
 
 /** The target grown by the padding (and to a tappable size), kept on screen. */
 export function holeFor(target: Rect, viewport: Size): Rect | null {

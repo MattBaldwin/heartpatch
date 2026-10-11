@@ -261,6 +261,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       timeZone: map.timeZone,
       pvpMode: map.pvpMode,
       tradingEnabled: map.tradingEnabled,
+      friendlyChallenges: map.friendlyChallenges,
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
