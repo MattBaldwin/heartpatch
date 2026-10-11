@@ -140,13 +140,13 @@ test('one real tap opens each sheet and works each button over the map', async (
     raids.getByRole('button', { name: 'Close' }),
   );
 
-  // Home owns the screen: Build opens the list, Cancel comes back, Back to map returns.
+  // Home owns the screen: Build opens the sheet, Not now comes back, Back to map returns.
   await realTap(await inTray(page, 'home-open'));
   const home = page.getByTestId('home');
   await expect(home).toBeVisible();
   await realTap(page.getByTestId('home-build'));
-  await expect(page.getByTestId('home-build-list')).toBeVisible();
-  await realTap(home.getByRole('button', { name: 'Cancel' }));
+  await expect(page.getByTestId('build-sheet')).toBeVisible();
+  await realTap(home.getByTestId('build-cancel'));
   await expect(page.getByTestId('home-build')).toBeVisible();
   await realTap(page.getByTestId('home-back'));
   await expect(home).toBeHidden();

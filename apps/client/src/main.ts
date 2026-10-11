@@ -24,6 +24,8 @@ import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
+import { onPanelFocus } from './building/panel-focus.js';
+import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
@@ -358,6 +360,8 @@ const darkLand = createDarkLand(
 );
 /** Glides the camera to a tile (at once with reduced motion). */
 const stillPans = window.matchMedia('(prefers-reduced-motion: reduce)');
+/** How close the camera moves in on a tile being built on, so its edges are easy to tap. TUNE: */
+const BUILD_ZOOM = 12;
 const panToTile = (h: Hex): void => {
   stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
 };
@@ -610,6 +614,21 @@ const explore = createExploreScreen({
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
+// One Build sheet for my land (#371): fires, lanterns, Training Grounds and
+// fences, built the same way from the tile's panel.
+// A sheet or fence card with the whole panel: the side trays' handles would
+// sit on top of it, so they step aside until it's done.
+onPanelFocus((focused) => {
+  trays.setVisible(!focused);
+});
+const tileBuild = createTileBuild({
+  sources: [home.buildSource, fences.buildSource],
+  area: () => maps,
+  reveal: (tile) => {
+    // Above the sheet along the bottom, so the lit edges stay in view.
+    stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
+  },
+});
 const maps = createMapScreen({
   root: document.body,
   showScene,
@@ -635,6 +654,8 @@ const maps = createMapScreen({
   tileActions: combineTileActions(
     wildPicker.tileActions,
     inventory.tileActions,
+    // Build sits near the top of a tile's actions, so it's never scrolled away.
+    tileBuild.tileActions,
     home.tileActions,
     explore.tileActions,
     land.tileActions,
@@ -1289,6 +1310,7 @@ if (import.meta.env.DEV) {
     inventory: () => inventory.debug,
     territory: () => territory.debug,
     fences: () => fences.debug,
+    tileBuild: () => tileBuild.debug,
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,

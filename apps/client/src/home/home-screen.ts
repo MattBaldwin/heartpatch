@@ -1,10 +1,12 @@
 import {
+  buildCost,
   GAME_DATA,
   visualRegistry,
   type FuelAllResponse,
   type HomeResponse,
   type HomeSquishy,
   type KeeperConfig,
+  type Building,
   type MyBuilding,
   hexKey,
   type MapView,
@@ -14,6 +16,10 @@ import {
 } from '@heartpatch/shared';
 import type { InventoryResponse } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import { BUILD_TEXT, pickCard, type BuildCard } from '../building/build-model.js';
+import { createBuildSheet } from '../building/build-sheet.js';
+import { setPanelFocus } from '../building/panel-focus.js';
+import type { BuildSource } from '../building/tile-build.js';
 import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
 import { createFactoryPanel } from '../factory/factory-panel.js';
 import { FACTORY_TEXT, goingCount } from '../factory/factory-view.js';
@@ -46,6 +52,7 @@ import {
   upgradeOffer,
   upgradeReach,
   HOME_SAFE_LINE,
+  FIRES_ON_LAND,
   freeHomeSpots,
   fuelAllOffer,
   groundsTileOffer,
@@ -121,8 +128,12 @@ export interface HomeScreenOptions {
 
 type Mode =
   | { readonly kind: 'idle' }
-  | { readonly kind: 'menu' }
-  | { readonly kind: 'placing'; readonly buildingId: string }
+  /** The shared Build sheet (#371): the building picked, and the spot lit and chosen for it. */
+  | {
+      readonly kind: 'build';
+      readonly buildingId: string | null;
+      readonly spot: HomeSpot | null;
+    }
   | { readonly kind: 'moving'; readonly id: string }
   | { readonly kind: 'selected'; readonly id: string }
   | { readonly kind: 'upgrade'; readonly id: string }
@@ -156,6 +167,8 @@ export interface HomeScreen {
   open: () => Promise<void>;
   /** Tile-panel lines and the "Go home" button for home tiles. */
   readonly tileActions: TileActions;
+  /** Fires, lanterns and Training Grounds the shared Build sheet can put up on my land (#371). */
+  readonly buildSource: BuildSource;
   readonly debug: HomeDebug | null;
 }
 
@@ -165,7 +178,6 @@ export const HOME_TEXT = {
   title: 'Your home base',
   build: 'Build',
   back: 'Back to map',
-  buildTitle: 'What shall we build?',
   pick: 'Tap a glowing spot!',
   anywhere: 'Put it anywhere',
   cancel: 'Cancel',
@@ -208,8 +220,6 @@ export const HOME_TEXT = {
   movedOut: (name: string) => `${name} moved out.`,
   goHome: 'Go home',
   // Fires on my land (#202).
-  buildFire: '🔥 Build a fire',
-  buildHere: '🔥 Build',
   landFires: (n: number, low: number) =>
     `🔥 ${String(n)} ${n === 1 ? 'fire' : 'fires'} on your land.` +
     (low === 0 ? '' : low === 1 ? ' 1 is almost out!' : ` ${String(low)} are almost out!`),
@@ -222,8 +232,6 @@ export const HOME_TEXT = {
   fireBuilt: 'Ta-da! Your fire is built. Add Emberwood to light it!',
   landFuel: '🔥 Add fuel',
   // Training Grounds on a homestead (#277, mockup screen 6).
-  buildGrounds: '🎯 Build Training Grounds',
-  buildGroundsHere: '🎯 Build',
   groundsBuilt: 'Ta-da! Your Training Grounds are ready. Send someone to practice!',
   trainHere: '🎯 Train here',
   groundsLit: '🔥 In fire light',
@@ -316,6 +324,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   );
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
   const body = el('div', { class: 'home-body' });
+  const homeSheet = createBuildSheet();
   const sheet = el(
     'section',
     { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
@@ -554,10 +563,40 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       }),
     );
 
-  /** A spot was chosen (tapped, or "Put it anywhere") while placing or moving. */
+  /** A spot was tapped (or "Put it anywhere"): picked for the Build sheet, or moved to. */
   const chooseSpot = (spot: HomeSpot) => {
-    if (mode.kind === 'placing') void place(mode.buildingId, spot);
+    if (mode.kind === 'build') setMode({ ...mode, spot });
     else if (mode.kind === 'moving') void move(mode.id, spot);
+  };
+
+  /**
+   * The Build sheet at home (#371): a card for each building I could put up,
+   * the one picked, the spots it could go on (lit), and the spot chosen
+   * (the first until a tap says otherwise).
+   */
+  const buildView = (current: HomeResponse) => {
+    const rows = buildRows(current).filter(
+      (r) => r.option.kind !== 'built' && r.option.kind !== 'land' && r.option.kind !== 'homestead',
+    );
+    const cards: BuildCard[] = rows.map((r) => ({
+      id: r.building.id,
+      icon: r.icon,
+      name: r.building.name,
+      effect: r.effects[0] ?? r.description,
+      cost: buildCost(r.building),
+      area: 'spot',
+      blocked: r.option.kind === 'blocked' ? r.option.note : null,
+      craft: r.option.kind === 'craft' ? r.option.note : null,
+    }));
+    const card = pickCard(cards, mode.kind === 'build' ? mode.buildingId : null, current.items);
+    const row = rows.find((r) => r.building.id === card?.id);
+    const spots = row ? freeHomeSpots(atHome(current), null, row.building.slot) : [];
+    const wanted = mode.kind === 'build' ? mode.spot : null;
+    const spot =
+      spots.find((s) => s.q === wanted?.q && s.r === wanted.r && s.spot === wanted.spot) ??
+      spots[0] ??
+      null;
+    return { cards, card, spots, spot };
   };
 
   // ── Drawing ───────────────────────────────────────────────────────────
@@ -566,9 +605,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const spotsFor = (current: HomeResponse): HomeSpot[] => {
     const m = mode;
     const home = atHome(current);
-    if (m.kind === 'placing') {
-      return freeHomeSpots(home, null, BUILDING_DATA.get(m.buildingId)?.slot);
-    }
+    if (m.kind === 'build') return buildView(current).spots;
     if (m.kind === 'moving') {
       const moving = home.buildings.find((b) => b.id === m.id);
       const slot = BUILDING_DATA.get(moving?.buildingId ?? '')?.slot;
@@ -601,6 +638,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (!scene3d || !home) return;
     scene3d.showSpots(spotsFor(home));
     scene3d.select('id' in mode && mode.kind !== 'moving' ? mode.id : null);
+    // The spot a building will go on, ringed among the glowing ones (#371).
+    if (mode.kind === 'build') scene3d.markSpot(buildView(home).spot);
     options.invalidate();
   }
 
@@ -683,7 +722,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             button(
               HOME_TEXT.build,
               () => {
-                setMode({ kind: 'menu' });
+                setMode({ kind: 'build', buildingId: null, spot: null });
               },
               { 'data-testid': 'home-build' },
             ),
@@ -692,72 +731,41 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         );
         break;
       }
-      case 'menu': {
-        body.replaceChildren(
-          el('h3', { class: 'home-section-title' }, HOME_TEXT.buildTitle),
-          el(
-            'ul',
-            { class: 'home-list', 'data-testid': 'home-build-list' },
-            ...buildRows(current).map(
-              ({ building, icon, description, effects, needs, option, where }) => {
-                let action: Node;
-                if (option.kind === 'ready' || option.kind === 'short') {
-                  const build = button(
-                    HOME_TEXT.build,
-                    () => {
-                      setMode({ kind: 'placing', buildingId: building.id });
-                    },
-                    { 'data-build': building.id },
-                  );
-                  if (option.kind === 'short') build.disabled = true;
-                  action = build;
-                } else if (option.kind === 'craft' && options.onRecipeBook) {
-                  action = button(
-                    HOME_TEXT.recipeBook,
-                    () => {
-                      close();
-                      options.onRecipeBook?.();
-                    },
-                    { 'data-recipe-for': building.id },
-                    true,
-                  );
-                } else {
-                  action = el('span', { class: 'home-list-note' }, '');
-                }
-                const note = 'note' in option ? option.note : null;
-                return el(
-                  'li',
-                  { class: 'home-list-row home-build-row', 'data-build-row': building.id },
-                  el(
-                    'span',
-                    { class: 'home-list-name' },
-                    `${icon} ${building.name}`,
-                    el('span', { class: 'home-build-about' }, description),
-                    effectRow(effects),
-                    ...(needs.length > 0 ? [needRow(needs)] : []),
-                    ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
-                    ...(where ? [el('span', { class: 'home-list-sub' }, where)] : []),
-                  ),
-                  action,
-                );
-              },
-            ),
-          ),
-          row(
-            button(
-              HOME_TEXT.cancel,
-              () => {
-                setMode({ kind: 'idle' });
-              },
-              {},
-              true,
-            ),
-          ),
-        );
+      case 'build': {
+        const view = buildView(current);
+        homeSheet.update({
+          cards: view.cards,
+          selectedId: view.card?.id ?? null,
+          bag: current.items,
+          areas: view.spot ? 1 : 0,
+          hint:
+            view.spots.length === 0 ? '' : mode.spot ? BUILD_TEXT.spotChosen : BUILD_TEXT.tapSpot,
+          allEdges: null,
+          working,
+          // The Hearthfire has no card here: it goes out on my land.
+          note: FIRES_ON_LAND,
+          onSelect: (id) => {
+            setMode({ kind: 'build', buildingId: id, spot: null });
+          },
+          onAllEdges: () => undefined,
+          onBuild: () => {
+            if (view.card && view.spot) void place(view.card.id, view.spot);
+          },
+          onCancel: () => {
+            setMode({ kind: 'idle' });
+          },
+          onRecipeBook: options.onRecipeBook
+            ? () => {
+                close();
+                options.onRecipeBook?.();
+              }
+            : undefined,
+        });
+        if (homeSheet.element.parentElement !== body) body.replaceChildren(homeSheet.element);
         break;
       }
-      case 'placing':
       case 'moving': {
+        const movingId = mode.id;
         const spots = spotsFor(current);
         const first = spots[0];
         body.replaceChildren(
@@ -773,9 +781,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             button(
               HOME_TEXT.cancel,
               () => {
-                setMode(
-                  mode.kind === 'moving' ? { kind: 'selected', id: mode.id } : { kind: 'idle' },
-                );
+                setMode({ kind: 'selected', id: movingId });
               },
               {},
               true,
@@ -1050,15 +1056,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     ];
   }
 
-  /** What a building does, as chips (#207). */
-  function effectRow(effects: readonly string[]): HTMLElement {
-    return el(
-      'span',
-      { class: 'home-effects' },
-      ...effects.map((e) => el('span', { class: 'home-effect' }, e)),
-    );
-  }
-
   /** Have/need chips ("🪵 12/10 ✓"), green when there's enough. */
   function needRow(needs: readonly NeedChip[]): HTMLElement {
     return el(
@@ -1151,7 +1148,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           const hit = built.pick(x, y);
           if (hit?.kind === 'spot') chooseSpot(hit.spot);
           else if (hit?.kind === 'squishy' && mapId && !working) options.onCloseUp?.(mapId, hit.id);
-          else if (hit?.kind === 'building' && mode.kind !== 'placing' && mode.kind !== 'moving') {
+          else if (hit?.kind === 'building' && mode.kind !== 'build' && mode.kind !== 'moving') {
             setMode({ kind: 'selected', id: hit.id });
           }
         },
@@ -1251,10 +1248,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   // ── Tile panel (home tiles and my fires on the map) ───────────────────
   /** What the panel shows for a fire on my land (#202): its card, or a step of a command. */
-  type TileMode = 'card' | 'build' | 'upgrade' | 'confirm';
+  type TileMode = 'card' | 'upgrade' | 'confirm';
   let tileMode: TileMode = 'card';
-  /** Which fire the build step is for (the Hearthfire or the Jack-o'-Lantern). */
-  let tileBuilding = '';
   /** Whose card a step is for: the tile's fire, or its Training Grounds (#277). */
   let tileTarget: 'fire' | 'grounds' = 'fire';
   let tileNote = '';
@@ -1273,7 +1268,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (at === generation) tileNote = messageOf(err);
     }
     renderTile();
+    for (const listener of buildListeners) listener();
   }
+  const buildListeners: (() => void)[] = [];
 
   /** One command from the tile panel, one at a time; the panel says how it went. */
   async function tileAct(
@@ -1385,60 +1382,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       lit ? HOME_TEXT.groundsLit : HOME_TEXT.groundsDark,
     );
     if (offer.kind === 'build') {
-      if (tileMode !== 'build') {
-        return [
-          tileButton(
-            HOME_TEXT.buildGrounds,
-            () => {
-              tileMode = 'build';
-              tileTarget = 'grounds';
-              tileNote = '';
-              renderTile();
-            },
-            'tile-build-grounds',
-            true,
-          ),
-        ];
-      }
-      const go = tileButton(
-        HOME_TEXT.buildGroundsHere,
-        () =>
-          void tileAct(
-            (id, send) =>
-              send((key) =>
-                api.place(
-                  id,
-                  { buildingId: offer.building.id, q: tile.q, r: tile.r, spot: offer.spot },
-                  key,
-                ),
-              ),
-            HOME_TEXT.groundsBuilt,
-          ),
-        'tile-build-grounds-confirm',
-      );
-      if (!offer.needs.every((n) => n.ok)) go.disabled = true;
+      // Building them is the shared Build sheet's job (#371); this says how
+      // the tile stands for the night.
       return [
         el(
           'div',
           { class: 'home-card', 'data-testid': 'tile-grounds-build' },
-          cardHead({ buildingId: offer.building.id }, 1),
-          el('p', { class: 'home-card-note' }, offer.building.description),
-          effectRow(effectChips(offer.building)),
           el('span', { class: 'home-effects' }, light),
           el('p', { class: 'home-card-note' }, HOME_TEXT.groundsNight),
-          needRow(offer.needs),
-          tileRow(
-            go,
-            tileButton(
-              HOME_TEXT.notNow,
-              () => {
-                tileMode = 'card';
-                renderTile();
-              },
-              'tile-build-grounds-cancel',
-              true,
-            ),
-          ),
         ),
         ...note,
       ];
@@ -1573,78 +1524,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     const note = tileNote ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)] : [];
     if (offer.kind === 'node') return [el('p', { class: 'tile-action-note' }, offer.line), ...note];
     if (offer.kind === 'none') return note;
-    if (offer.kind === 'build') {
-      if (tileMode !== 'build') {
-        const lantern = offer.lantern;
-        // Each fire has its own Build / Not now card, so one tap never spends
-        // a carved pumpkin (or anything else) by accident.
-        const pick = (buildingId: string) => () => {
-          tileMode = 'build';
-          tileTarget = 'fire';
-          tileBuilding = buildingId;
-          tileNote = '';
-          renderTile();
-        };
-        return [
-          ...note,
-          ...(lantern
-            ? [
-                tileButton(
-                  `${buildingIcon(lantern.building.id)} ${buildingName(lantern.building.id)}`,
-                  pick(lantern.building.id),
-                  'tile-build-lantern',
-                  true,
-                ),
-              ]
-            : []),
-          tileButton(HOME_TEXT.buildFire, pick(offer.building.id), 'tile-build-fire', true),
-        ];
-      }
-      const chosen =
-        offer.lantern && tileBuilding === offer.lantern.building.id
-          ? offer.lantern
-          : { building: offer.building, needs: offer.needs };
-      const go = tileButton(
-        HOME_TEXT.buildHere,
-        () =>
-          void tileAct(
-            (id, send) =>
-              send((key) =>
-                api.place(
-                  id,
-                  { buildingId: chosen.building.id, q: tile.q, r: tile.r, spot: 0 },
-                  key,
-                ),
-              ),
-            HOME_TEXT.fireBuilt,
-          ),
-        'tile-build-fire-confirm',
-      );
-      if (!chosen.needs.every((n) => n.ok)) go.disabled = true;
-      return [
-        el(
-          'div',
-          { class: 'home-card' },
-          cardHead({ buildingId: chosen.building.id }, 1),
-          el('p', { class: 'home-card-note' }, chosen.building.description),
-          effectRow(effectChips(chosen.building)),
-          needRow(chosen.needs),
-          tileRow(
-            go,
-            tileButton(
-              HOME_TEXT.notNow,
-              () => {
-                tileMode = 'card';
-                renderTile();
-              },
-              'tile-build-fire-cancel',
-              true,
-            ),
-          ),
-        ),
-        ...note,
-      ];
-    }
+    // Building one is the shared Build sheet's job (#371).
+    if (offer.kind === 'build') return note;
     const { fire } = offer;
     const current = home;
     const card: Node[] = [cardHead(fire, fire.level)];
@@ -1775,8 +1656,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // A step of a fire's card (build, upgrade, take down) has the panel to
     // itself, so it stays short and clear of the side trays.
     const focused = mine && tile.homeSlot === null && tileMode !== 'card';
-    container.classList.toggle('tile-actions-focus', focused);
-    container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
+    setPanelFocus(container, 'home-fire', focused);
     if (mine && tile.homeSlot === null) {
       if (!home) void loadForPanel();
       container.replaceChildren(...landTileNodes(tile));
@@ -1801,7 +1681,90 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     container.replaceChildren(...nodes);
   }
 
+  /**
+   * What the shared Build sheet can put up on one of my tiles out on the land
+   * (#371): the Hearthfire, the Jack-o'-Lantern in season, and Training
+   * Grounds on a homestead. All of them go on the tile's one spot.
+   */
+  const buildSource: BuildSource = {
+    cards: (tile) => {
+      if (!home || !user || tile.ownerUserId !== user.id || tile.homeSlot !== null) return [];
+      const card = (b: Building, effect: string): BuildCard => ({
+        id: b.id,
+        icon: buildingIcon(b.id),
+        name: buildingName(b.id),
+        effect,
+        cost: buildCost(b),
+        area: 'spot',
+        blocked: null,
+        craft: null,
+      });
+      const fire = landTileOffer(tile, home);
+      const grounds = groundsTileOffer(tile, home);
+      return [
+        ...(fire.kind === 'build'
+          ? [
+              card(fire.building, effectChips(fire.building)[0] ?? fire.building.description),
+              ...(fire.lantern
+                ? [
+                    card(
+                      fire.lantern.building,
+                      effectChips(fire.lantern.building)[0] ?? fire.lantern.building.description,
+                    ),
+                  ]
+                : []),
+            ]
+          : []),
+        ...(grounds?.kind === 'build'
+          ? [
+              card(
+                grounds.building,
+                effectChips(grounds.building)[0] ?? grounds.building.description,
+              ),
+            ]
+          : []),
+      ];
+    },
+    build: async (card, tile) => {
+      const id = mapId;
+      const current = home;
+      if (!id || !current) return null;
+      const at = generation;
+      const grounds = groundsTileOffer(tile, current);
+      const isGrounds = grounds?.kind === 'build' && grounds.building.id === card.id;
+      const spot = isGrounds ? grounds.spot : 0;
+      try {
+        const next = await sendCommand(
+          sendDeps,
+          (key) => api.place(id, { buildingId: card.id, q: tile.q, r: tile.r, spot }, key),
+          () => at === generation,
+        );
+        if (!next || at !== generation) return null;
+        home = next;
+        tileNote = '';
+        renderTile();
+        return isGrounds ? HOME_TEXT.groundsBuilt : HOME_TEXT.fireBuilt;
+      } catch (err) {
+        if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
+          home = null;
+          void loadForPanel();
+        }
+        throw err;
+      }
+    },
+    onChange: (listener) => {
+      buildListeners.push(listener);
+    },
+    // Another feature built something that took from the bag: read it again.
+    invalidate: () => {
+      if (!home) return;
+      home = null;
+      renderTile();
+    },
+  };
+
   return {
+    buildSource,
     setMap: (next) => {
       if (next === mapId) return;
       generation += 1;
@@ -1840,8 +1803,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       hide: () => {
         panel?.container.replaceChildren();
-        panel?.container.classList.remove('tile-actions-focus');
-        panel?.container.parentElement?.classList.remove('tile-panel-actions-focus');
+        if (panel) setPanelFocus(panel.container, 'home-fire', false);
         panel = null;
         render();
       },

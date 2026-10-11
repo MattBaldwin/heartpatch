@@ -19,6 +19,7 @@ export type HookName =
   | 'inventory'
   | 'territory'
   | 'fences'
+  | 'tileBuild'
   | 'hollow'
   | 'raids'
   | 'home'

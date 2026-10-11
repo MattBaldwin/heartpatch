@@ -27,6 +27,8 @@ import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween, seasonsOn } from './map-dressing.js';
 import { mountMapLegend } from './map-legend.js';
+import type { BuildAreaView } from './build-area.js';
+import type { BuildAreaHit } from './build-area-layout.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -127,6 +129,13 @@ export interface MapScreen {
    * glide to, or null when it isn't on the map on screen.
    */
   focus: (h: Hex) => GroundPoint | null;
+  /**
+   * Lights the edges or middle of a tile for the Build sheet (#371) and sends
+   * taps on them to `onTap`; null puts them out. Taps elsewhere work as ever.
+   */
+  setBuildArea: (
+    area: { view: Omit<BuildAreaView, 'top'>; onTap: (hit: BuildAreaHit) => void } | null,
+  ) => void;
   /** Clears the selected tile and shuts its panel (a screen opened from it, like a trading post's, #271). */
   deselect: () => void;
   /** The map on screen as this player sees it, or null (the recipe book finds their tiles in it). */
@@ -165,6 +174,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let scene3d: MapScene | null = null;
   let ws: WsClient | null = null;
   let selected: Hex | null = null;
+  /** What the Build sheet has lit on the selected tile, and who hears the taps (#371). */
+  let buildArea: Parameters<MapScreen['setBuildArea']>[0] = null;
   /** Followed live while another screen is up (`hide`, a live battle). */
   let backgrounded = false;
   let night = false;
@@ -262,6 +273,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
 
   const deselect = (): void => {
     selected = null;
+    buildArea = null;
+    scene3d?.showBuildArea(null);
     scene3d?.select(null);
     panel.hide();
     options.tileActions?.hide();
@@ -358,6 +371,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     });
     for (const layer of options.layers ?? []) layer.attach(scene, drawn);
     if (selected) built.select(selected);
+    built.showBuildArea(buildArea?.view ?? null);
     const unregister = options.targets?.register('resource-node', () =>
       built.homeNodeRect(user?.id ?? null),
     );
@@ -371,6 +385,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       listenForTaps(
         canvas,
         (x, y) => {
+          const hit = buildArea ? built.pickBuildArea(x, y) : null;
+          if (buildArea && hit) {
+            buildArea.onTap(hit);
+            return;
+          }
           const tile = built.pick(x, y);
           const current = sync.state;
           if (tile && current) showTile(current, tile);
@@ -391,6 +410,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     ambient.stop();
     scene3d = null;
     selected = null;
+    buildArea = null;
     panel.hide();
     options.tileActions?.hide();
     setLegend(false);
@@ -427,6 +447,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
     close,
     deselect,
+    setBuildArea: (next) => {
+      buildArea = next;
+      scene3d?.showBuildArea(next?.view ?? null);
+      options.invalidate();
+    },
     focus: (h) => {
       const state = sync.state;
       if (!state || !scene3d || !state.tileAt(hexKey(h))) return null;
