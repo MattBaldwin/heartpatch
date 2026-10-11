@@ -88,9 +88,9 @@ async function celebrateFirstPatch(page: Page): Promise<void> {
   await expect(party).toBeHidden();
 }
 
-// Every test opens its own player (newPlayer); a page left on the map or the starter picker keeps
-// drawing, which starves the next test's pages when rendering is in software
-// (#397). Close them all when the test is done.
+// Most tests open their own player (newPlayer); a page left on the map or the
+// starter picker keeps drawing, which starves the next test's pages when
+// rendering is in software (#397). Close them all when the test is done.
 test.afterEach(async ({ browser }) => {
   for (const context of browser.contexts()) await context.close();
 });
