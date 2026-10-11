@@ -24,6 +24,26 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 3. **Start it** with `create_session` (source = repo, `outcome_branch` = `issue-<n>-<slug>`, tags `heartpatch:phase-1` and `heartpatch:batch-<k>`). Pick the model per §6.
 4. **Subscribe** to the PR as soon as the session reports `PR #<n> opened`.
 
+**Full send for Phase 1 (owner, 2026-10-11):** the 4-lane cap is lifted until Phase 1 ships (due Oct 31). The separate-folders rule in step 1 still holds. **Every PR gets a fresh lane session**; don't reuse a lane for its next PR.
+
+### Big features (owner, 2026-10-11)
+
+A feature is **big** when it is a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature. Additive optional schema fields, client-only art and UI, and data-only content are not big. The supervisor decides "big" when briefing and says so in the brief.
+
+For a big feature:
+1. **Fable writes the plan** as an issue comment: files, schema and type deltas, the migration with backfill and rollback, API and WebSocket changes, the UI flow, edge cases, named tests and risks.
+2. **Opus codes it** against that plan. The PR body lists **Plan deviations**.
+3. **A Fable reviewer is the second reviewer** on the first full review.
+
+Rulings so far: #372B and #376 are big; #261, #379, #372A and the trail and cave are not.
+
+### Migrations (owner, 2026-10-11)
+
+- **Migration freeze, Oct 15–18:** no DB-changing merge during the family playtest.
+- **Outside the freeze:** merge when green, one migration at a time, and #376 first.
+
+## 3. Merge gates (all required)
+
 ## 3. Merge gates (all required)
 
 1. A reviewer **APPROVE** verdict comment for the **current head** commit.
@@ -33,6 +53,8 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 5. **Base is current:** if `main` moved in a way that could interact, the branch has merged `main` and CI is green again.
 
 Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict comment.
+
+**Render-checks (visual work):** before a capture reaches the owner, a read-only helper subagent checks it. Start it with the Agent tool (`general-purpose`, `model: "opus"`, background). It returns **PASS** or **FIX** with a list. Captures name their quality tier and show no dev HUD.
 
 **Don't wait for pings.** On every `check_suite.completed` event, check for a verdict on the current head yourself: read the PR comments (`pull_request_read` → `get_comments`) for the build session's verdict comment naming that SHA. The "ready" ping is a convenience, not a dependency.
 
@@ -65,15 +87,22 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 | Work | Model |
 |---|---|
-| Build sessions that write code; reviewers on code PRs | Opus 5.5 (`claude-opus-5-5`) |
-| Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
+| Big features: the plan, and the second reviewer on the first full review | Fable (`claude-fable-5-1`), owner decision 2026-10-11 |
+| Big features: the code | Opus 5.5 (`claude-opus-5-5`) |
+| Other code lanes (not big) | Opus 5.5 (owner rule 2026-10-05) |
+| Client UI and content | Sonnet 5.5 |
+| Every PR review (the `reviewer` subagent) | Opus 5.5 (owner decision 2026-10-11) |
+| Drift audits and docs-only work | Sonnet 5.5 |
 | Periodic end-to-end review of the whole solution | Fable (`claude-fable-5-1`), only when the owner explicitly asks for it |
+
+The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every PR review now runs on Opus.
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
 - Batch tool calls.
 - Don't re-read large files.
-- When the supervisor's context gets large (≈ 600K+ tokens), **hand off** to a fresh supervisor session (§8).
+- **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session (§2).
+- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8).
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
@@ -133,6 +162,7 @@ Post the verdict comment summarizing each round. Don't merge.
    - the queued follow-ups (§9);
    - the next batch to launch.
 4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so. (Build sessions are archived after merge, per §4; supervisor sessions are not.)
+5. **Lineage limit (owner, 2026-10-11):** sessions nest at most 8 deep. The last supervisor, at depth 7, doesn't start another one. It writes the handoff into the repo (this playbook, DECISIONS, and the §9 state) and asks the owner to start the next supervisor from a fresh session.
 
 ## 9. Open follow-ups for upcoming briefs
 
@@ -183,6 +213,13 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-11):**
+  - **Superseded runs look like failures.** A run replaced by a newer one can show as red or stopped. Check whether it was superseded before treating it as broken.
+  - **There are no required checks on main.** Branch protection requires none (#349 showed `mergeable_state: clean` with zero check runs). The §3 gates are the only guard, so read CI on the head yourself.
+  - **A lane's `@parent` is its creator.** Its reports go to the session that started it, so after a handoff the new supervisor re-routes the lanes (§8).
+  - **Polish lanes burn cache.** Long polish sessions cost the most in cache reads. Keep them short, or start a fresh one.
+  - **Never merge on a chat "ready".** Merge only on the reviewer's APPROVE and green CI on the exact head SHA, checked on GitHub.
+  - **Stop orders aren't self-enforcing.** A lane can keep working after a STOP. Confirm a hold on GitHub (draft state), not only in chat.
 - **Lessons (2026-10-10):**
   - **Render-check visual work at the tier the owner will see.** Headless SwiftShader drops to the low quality tier (no shadows, LOD or AA). Explore captures shot that way, on flat scene design, were rejected outright. Pin the tier (`?tier=`) and label every capture with it.
   - **Render-check every artifact before it reaches the owner:** screenshot it with Playwright, look at it, then delete the PNGs.
