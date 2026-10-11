@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { homeFriends } from './home-sheet.js';
 
 /**
  * Patch Coins and the Boutique (#45): earn a coin by caring for the starter,
@@ -42,7 +43,7 @@ test('earns Patch Coins from care, then buys a piece in the Boutique', async ({ 
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await (await trayButton(page, 'home-open')).tap();
-  await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
+  await (await homeFriends(page)).locator('[data-care-squishy]').first().tap();
   const care = page.getByTestId('care');
   await slowExpect(care).toBeVisible();
   await care.locator('[data-care="pet"]').tap();

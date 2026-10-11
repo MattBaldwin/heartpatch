@@ -41,6 +41,7 @@ interface HomeDebug {
     spots: number;
   } | null;
   hops: number;
+  sheet: 'peek' | 'open';
 }
 
 interface MapDebug {
@@ -118,6 +119,50 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   const chip = (await page.locator('.auth-chip').boundingBox())!;
   expect(header.y).toBeGreaterThanOrEqual(chip.y + chip.height);
 
+  // The sheet opens as a short peek bar (#412): the squishies by the Heart
+  // Seed stay in view, and every button is on screen with no scrolling.
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
+  await expect(sheet.getByTestId('home-friends')).toHaveCount(0);
+  const view = page.viewportSize()!;
+  for (const id of ['home-squishies', 'home-build', 'home-back']) {
+    const box = (await sheet.getByTestId(id).boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(view.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(view.height);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  const bar = (await sheet.boundingBox())!;
+  expect(bar.height).toBeLessThan(view.height * 0.3);
+  // Squishies opens the full lists; the handle folds them back.
+  await sheet.getByTestId('home-squishies').tap();
+  await expect(sheet.getByTestId('home-friends')).toBeVisible();
+  await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');
+  await sheet.getByTestId('home-handle').tap();
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
+  // A swipe up on the handle opens it, a swipe down folds it.
+  const swipe = async (dy: number) => {
+    const grip = (await sheet.getByTestId('home-handle').boundingBox())!;
+    const x = grip.x + grip.width / 2;
+    const y = grip.y + grip.height / 2;
+    await page.evaluate(
+      ({ x, y, dy }) => {
+        const handle = document.querySelector('[data-testid="home-handle"]')!;
+        const at = (type: string, clientY: number) =>
+          handle.dispatchEvent(
+            new PointerEvent(type, { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY, bubbles: true }),
+          );
+        at('pointerdown', y);
+        at('pointerup', y + dy);
+        handle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      },
+      { x, y, dy },
+    );
+  };
+  await swipe(-80);
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
+  await swipe(80);
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
+
   // The Hearthfire isn't built at home (owner decision 2026-10-07): the one
   // Build sheet (#371) has no card for it, and says where fires go.
   await sheet.getByTestId('home-build').tap();
@@ -132,7 +177,6 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await expect(sheet.getByTestId('build-detail')).toContainText('·');
   // Build! stays on screen on a phone, and so does the whole row.
   const go = (await sheet.getByTestId('build-go').boundingBox())!;
-  const view = page.viewportSize()!;
   expect(go.x + go.width).toBeLessThanOrEqual(view.width);
   expect(go.y + go.height).toBeLessThanOrEqual(view.height);
   await sheet.getByTestId('build-cancel').tap();
