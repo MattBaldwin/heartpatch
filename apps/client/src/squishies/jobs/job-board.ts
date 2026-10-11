@@ -30,6 +30,8 @@ import './jobs.css';
 
 /** Hearts that float out of the pop-up for a job it loves (#376). */
 const HEART_BURST = 5;
+/** How long the pop-up shows before it fades. */
+const TOAST_MS = 2600;
 
 export interface JobBoardOptions {
   root: HTMLElement;
@@ -106,7 +108,6 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   // A pop-up in the row of the squishy just given a job (#376): a job it
   // loves gets hearts. Inside the row, so it never covers a button.
   const toast = el('div', { class: 'jobs-toast', role: 'status', 'data-testid': 'jobs-toast' });
-  toast.hidden = true;
   const sheet = el(
     'section',
     { class: 'jobs-sheet', role: 'dialog', 'aria-labelledby': 'jobs-title', 'data-testid': 'jobs' },
@@ -134,16 +135,29 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   let toastTimer: number | undefined;
   /** Whose row the pop-up sits in, while it shows. */
   let toastFor: string | null = null;
-  /** Puts the pop-up under its squishy's job line (rows are rebuilt on every render). */
+  /**
+   * Puts the pop-up under its squishy's job line (rows are rebuilt on every
+   * render). Put back into a rebuilt row, it doesn't pop or burst again.
+   */
   const placeToast = () => {
     if (toastFor === null) return;
+    if (!toast.isConnected) {
+      toast.classList.remove('jobs-toast-show');
+      for (const heart of toast.querySelectorAll('.jobs-burst')) heart.remove();
+    }
     const row = list.querySelector(`[data-testid="jobs-row"][data-squishy="${toastFor}"]`);
     row?.querySelector('.jobs-line')?.after(toast);
   };
+  const clearToast = () => {
+    window.clearTimeout(toastTimer);
+    toastFor = null;
+    toast.remove();
+  };
   const cheer = (squishyId: string, text: string, mood: 'loves' | 'meh') => {
+    clearToast();
     toast.textContent = text;
     toast.dataset['mood'] = mood;
-    toast.hidden = false;
+    toast.classList.remove('jobs-toast-done');
     toastFor = squishyId;
     placeToast();
     toast.classList.remove('jobs-toast-show');
@@ -158,12 +172,12 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
         toast.append(heart);
       }
     }
-    window.clearTimeout(toastTimer);
+    // It fades but keeps its place, so nothing under a finger moves; the
+    // next render (the player's next tap, or a refetch) lets the space go.
     toastTimer = window.setTimeout(() => {
-      toast.hidden = true;
-      toast.remove();
+      toast.classList.add('jobs-toast-done');
       toastFor = null;
-    }, 2600);
+    }, TOAST_MS);
   };
   /** Bumped by every view taken, so a slower refetch can't put an older one back. */
   let views = 0;
@@ -246,7 +260,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
         spotLabel(spot),
         () => {
           void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then(() => {
-            if (picking !== null) return;
+            // Still on this board, and the job went through.
+            if (picking !== null || sheet.hidden) return;
             cheer(
               squishy.squishy.id,
               fit.fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),
@@ -523,6 +538,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     view = null;
     picking = null;
     pickingGrounds = null;
+    clearToast();
     say('');
   }
 

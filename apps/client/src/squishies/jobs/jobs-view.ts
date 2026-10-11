@@ -206,14 +206,20 @@ export function spotFit(
 /**
  * How a squishy feels about its job right now, for the row's chip (#376):
  * `loves` on the team, on watch, training or gathering what it's good at;
- * `meh` gathering anything else; null while resting or away.
+ * `meh` gathering anything else; null while resting, away, or when its job
+ * has stopped for now (a full basket, full Training XP, a napping homestead),
+ * as then its happiness drifts whatever the job.
  */
 export function workMood(
-  s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work'>,
+  s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work' | 'training'>,
 ): 'loves' | 'meh' | null {
-  if (s.job === 'team' || s.job === 'guard' || s.job === 'training') return 'loves';
+  if (s.job === 'team' || s.job === 'guard') return 'loves';
+  if (s.job === 'training' && s.training) {
+    return s.training.full || s.training.napping ? null : 'loves';
+  }
   if (s.job === 'gatherer' && s.work) {
-    return s.gatherFits.includes(s.work.resource) ? 'loves' : 'meh';
+    if (!s.gatherFits.includes(s.work.resource)) return 'meh';
+    return s.work.full ? null : 'loves';
   }
   return null;
 }

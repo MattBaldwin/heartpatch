@@ -249,10 +249,28 @@
 /* #376: a spot it loves glows and wears a heart; the rest step back. */
 .jobs-spot-loved .jobs-action {
   position: relative;
-  box-shadow:
-    0 0 0 3px #ffd1e4,
-    0 0 18px 4px rgb(255 120 170 / 45%);
+  box-shadow: 0 0 0 3px #ffd1e4;
+}
+
+/* The glow pulses by opacity alone: no repainted blur each frame. */
+.jobs-spot-loved .jobs-action::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 22px 6px rgb(255 120 170 / 55%);
+  opacity: 0.5;
+  pointer-events: none;
   animation: jobs-loved-glow 2.4s ease-in-out infinite;
+}
+
+/* Someone else works it: no glow, no bob. */
+.jobs-spot-loved .jobs-action:disabled::after {
+  display: none;
+}
+
+.jobs-spot-loved .jobs-action:disabled .jobs-heart {
+  animation: none;
 }
 
 .jobs-heart {
@@ -273,7 +291,7 @@
 /* Gently sad, not washed out: a dusky lilac with a rain cloud. */
 .jobs-spot-meh .jobs-action {
   position: relative;
-  background: #9a86b4;
+  background: #6f5a8f;
 }
 
 .jobs-cloud {
@@ -323,25 +341,31 @@
   font-weight: 800;
   text-align: center;
   box-shadow: 0 4px 12px rgb(120 30 70 / 20%);
+  /* It never takes a tap. */
+  pointer-events: none;
 }
 
 .jobs-toast[data-mood='loves'] {
-  background: linear-gradient(90deg, #ff8fbf, #ffb36b);
-  color: #fff;
+  background: linear-gradient(90deg, #ffc6de, #ffdcb8);
+  color: #7a1f4b;
 }
 
 .jobs-toast[data-mood='meh'] {
-  background: #9a86b4;
+  background: #6f5a8f;
   color: #fff;
+}
+
+/* Faded, but its place is kept until the next render. */
+.jobs-toast-done {
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.4s ease,
+    visibility 0s linear 0.4s;
 }
 
 .jobs-toast-show {
   animation: jobs-toast-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
-}
-
-/* It never takes a tap: buttons under it still work. */
-.jobs-toast {
-  pointer-events: none;
 }
 
 .jobs-burst {
@@ -367,9 +391,7 @@
 
 @keyframes jobs-loved-glow {
   50% {
-    box-shadow:
-      0 0 0 3px #ffd1e4,
-      0 0 26px 8px rgb(255 120 170 / 60%);
+    opacity: 1;
   }
 }
 
@@ -393,7 +415,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .jobs-spot-loved .jobs-action,
+  .jobs-spot-loved .jobs-action::after,
   .jobs-heart,
   .jobs-mood-icon,
   .jobs-toast-show,
