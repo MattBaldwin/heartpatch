@@ -1359,25 +1359,25 @@ _Owner decisions from the "Owner decisions" sections of #381 and #382, and from 
 - **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
 - **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen.
 - **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
-- **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the plan says whether this replaces, feeds or reuses Home Base Harmony, design doc §8); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
+- **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the house feeds Home Base Harmony and reuses its facts; design doc §8, Phase 3; relayed by the coordinator from #381's plan, 2026-10-11); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
 
 **#382, 500 squishies**
-- **Every kind is hand-designed**, one at a time, like today's 48. No generator and no live generation.
+- **Every kind is hand-designed**, one at a time, like today's 48. No generator and no live generation. Draw on the biomes, the lore, the seasons and past owner decisions.
 - **Target mix (500 total; today's 48 count toward it):** common 250, uncommon 150, rare 45, epic 30, legendary 17, mythic 8. The top 100 (rare and up) get fewer kinds at each step up. `mythic` already exists in `RaritySchema` (finish `shimmer`; see #261's shimmer decision).
 - **Wave 1 before the family playtest (Oct 15):** about 30 new kinds, data only. Content needs no DB migration, so it's allowed during the Oct 15–18 migration freeze. More waves follow through Phases 2 and 3.
-- **Collecting takes longer, using all four levers:** (1) region and biome kinds; (2) time and season kinds; (3) rarer rares, with lower epic, legendary and mythic odds, plus a few ultra-rare kinds, and the rules staying server-only (rule 6); (4) more evolution branches, reached only by evolving under conditions (builds on #32).
+- **Collecting takes longer, using all four levers:** (1) region and biome kinds, some only in certain terrains or far from home; (2) time and season kinds: night-only, weather, seasonal and holiday kinds; (3) rarer rares, with lower epic, legendary and mythic odds, plus a few ultra-rare kinds, and the rules staying server-only (rule 6); (4) more evolution branches, reached only by evolving under conditions (builds on #32).
 - **Process:** each wave is data-only and not big. Content lanes run on Sonnet; reviews run on Opus. Each wave gets a mockup (species sheet at iPhone and iPad size, quality tier named, no dev HUD), render-checked and owner-approved before its PR. Pacing levers 2–4 each get their own issue.
 
 **#386, computer patch-mates**
-- **Solo patches can spawn computer Keepers, as a toggle** (an option, not forced), so the patch-mate parts of the game (#381's house requirements, trades, gifts, trading posts, visits) work before friends join. The owner's design questions (who flips the toggle, what computer Keepers do, fairness, personalities) are still open; the plan decides them.
+- **Solo patches can spawn computer Keepers, as a toggle** (an option, not forced), so the patch-mate parts of the game (#381's house requirements, trades, gifts, trading posts, visits) work before friends join. The owner's design questions (who flips the toggle, what computer Keepers do, fairness, personalities) are still open: the plan and mockups propose answers, and the owner decides.
 - **BIG**: a new kind of player, server authority, and likely DB changes. A detailed plan goes up before any code.
 
 ## 2026-10-11 — Build rule, happiness rule and creator order (#371, #376, #372)
 
-_Owner requests and decisions from issues #371, #376 and #372; recorded here at the coordinator's request._
+_Owner requests and decisions from issues #371, #376 and #372; the #376 migration order and the checkpoint column are coordinator-approved. Recorded here at the coordinator's request._
 
 - **One Build sheet (#371).** Home base, owned tiles and fences build the same way: tap the tile, tap Build, pick the area, pick the type. A fence takes 4 taps or fewer from the map. Client-only: no server, schema or migration change.
-- **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360 and #372 B; a checkpoint time separate from `lastCaredAt`, unless the lane finds a way to avoid it.
+- **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360, and #376 goes first in the migration queue (owner, 2026-10-11). A checkpoint time separate from `lastCaredAt` is coordinator-approved, unless the lane finds a way to avoid a migration.
 - **Keeper creator, step by step (#372).** Face shape, Body type, Skin, Hair style, Hair color, Face details. Face and body become independent choices. Hairstyles are data. PR A is data-only; PR B is the face and body split and the creator UI, with a migration after #360.
 
 ## 2026-10-10 — Supervisor 6 decisions (lean lanes, evolution salt, live defense items)
@@ -1385,7 +1385,7 @@ _Owner requests and decisions from issues #371, #376 and #372; recorded here at 
 _Proposed in PRs #358, #360 and #370; recorded here at the coordinator's request._
 
 - **Lean lanes.** CI skips the browser e2e jobs for draft PRs, for stacked PRs (base isn't `main`), and for PRs touching only `docs/`, `.claude/` or root `*.md` (owner-approved 2026-10-10). The coordinator requires e2e success on a code PR's head before merging it.
-- **`HP_EVOLUTION_SALT`** is the server secret for evolution rolls (coordinator decision). It's required in production. `deploy.sh` generates it on the first deploy (`openssl rand -hex 32`) and never changes it. It's backed up with `.env`, and the client never receives it.
+- **`HP_EVOLUTION_SALT`** is the server secret for evolution rolls. It's required in production. `deploy.sh` generates it on the first deploy (`openssl rand -hex 32`) and never changes it (coordinator decision). It's backed up with `.env`, and the client never receives it.
 - **No potions or Heart Charms in a live defense** (`liveDefenseItems = false`, owner-confirmed 2026-10-10). A defender's live fight takes no items.
 
 ## 2026-10-11 — Owner working style: show screens first, features must be felt
