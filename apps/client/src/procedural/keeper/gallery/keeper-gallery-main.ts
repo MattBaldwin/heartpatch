@@ -36,7 +36,7 @@ import '../../gallery/gallery.css';
  * `?each=hat` (one Keeper per catalog item in that slot, to judge them side
  * by side; `?each=all` for every Keeper item), `?count=40` (stress test,
  * colours vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them
- * round), `?hair=all` (every hairstyle on each base shown, a row per base;
+ * round), `?lean=0` (degrees; upright, for side and back views), `?hair=all` (every hairstyle on each base shown, a row per base;
  * `?hair=crew-cut` puts one style on every Keeper; with `?base=pip,rowan`
  * for a few bases), plus the main page's `?quality=` and `?renderer=webgpu`.
  */
@@ -114,6 +114,10 @@ const itemsOf = (i: number): KeeperItem[] => {
 };
 // Degrees; 180 shows the back (hair, backpacks).
 const yaw = (Number(params.get('yaw')) || 0) * (Math.PI / 180);
+// Degrees; `?lean=0` stands them upright, so a side or back view isn't tipped
+// (the lean pitches about each Keeper's own axis, after the yaw).
+const leanParam = params.get('lean');
+const leanFlag = leanParam === null || leanParam === '' ? null : Number(leanParam);
 
 let stage: Stage | null = null;
 let field: KeeperField | null = null;
@@ -148,7 +152,12 @@ await boot(canvas, {
           lod: lodFor(view, tier),
           scale: view === 'closeUp' ? KEEPER_PLACES.preview.scale : 1,
           yaw,
-          lean: view === 'closeUp' ? KEEPER_PLACES.preview.lean : KEEPER_PLACES.map.lean,
+          lean:
+            leanFlag !== null && Number.isFinite(leanFlag)
+              ? leanFlag * (Math.PI / 180)
+              : view === 'closeUp'
+                ? KEEPER_PLACES.preview.lean
+                : KEEPER_PLACES.map.lean,
         });
         field = built.field;
         return built.content;
