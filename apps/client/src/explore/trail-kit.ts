@@ -18,13 +18,25 @@ export interface SpotShape {
 export function buildLookout(scene: Scene): SpotShape {
   const mesh = merged('land-spot-lookout', [
     shaded(sphere(scene, 1.0, 8, [0, 0.22, 0], [1.15, 0.6, 1]), '#9a93a6', '#d9d3e0', 0, 0.55),
-    shaded(sphere(scene, 0.62, 6, [0.42, 0.14, 0.18], [1.1, 0.65, 1]), '#948da0', '#d2ccd9', 0, 0.35),
-    shaded(sphere(scene, 0.66, 6, [-0.08, 0.5, 0], [1.1, 0.3, 0.95]), '#86b27a', '#b6dc96', 0.42, 0.62),
-    flat(cylinder(scene, 0.62, 0.025, 0.03, 5, [0.12, 0.88, 0.02]), '#7d5a3f'),
+    shaded(
+      sphere(scene, 0.62, 6, [0.42, 0.14, 0.18], [1.1, 0.65, 1]),
+      '#948da0',
+      '#d2ccd9',
+      0,
+      0.35,
+    ),
+    shaded(
+      sphere(scene, 0.66, 6, [-0.08, 0.5, 0], [1.1, 0.3, 0.95]),
+      '#86b27a',
+      '#b6dc96',
+      0.42,
+      0.62,
+    ),
+    flat(cylinder(scene, 0.9, 0.03, 0.04, 5, [0.1, 1.0, 0.02]), '#7d5a3f'),
     // The flag: a flat, rounded pennant.
-    flat(sphere(scene, 0.3, 4, [0.27, 1.08, 0.02], [1, 0.55, 0.12]), '#ff8fb8'),
+    flat(sphere(scene, 0.34, 4, [0.27, 1.3, 0.02], [1, 0.62, 0.14]), '#ff8fb8'),
   ]);
-  return { mesh, glint: 1.35 };
+  return { mesh, glint: 1.8 };
 }
 
 /** A snow drift: a soft heap with a twig poking out, ready for the stick. */

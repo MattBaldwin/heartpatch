@@ -11,12 +11,12 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
   // pines and boulders, big hills behind.
   mountains: {
     palette: {
-      grass: ['#86a889', '#a4bf98', '#c0d3a8'], // TUNE
-      sunny: '#d3dfae', // TUNE
+      grass: ['#8fa896', '#a9bda3', '#c4d1b0'], // TUNE
+      sunny: '#d9e0b8', // TUNE
       path: '#f3e6c6', // TUNE
       pathEdge: '#d6c295', // TUNE
       specks: ['#f4f1ff', '#e1e8ff', '#fff4c2', '#ffd6e6'], // TUNE
-      shade: '#566888', // TUNE
+      shade: '#5a6a86', // TUNE
     },
     shape: {
       bumps: { height: 0.3, scale: 0.14 }, // TUNE
@@ -24,18 +24,19 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
       rises: { count: 4, height: 0.5, width: 1.4 }, // TUNE
       edge: 7.0, // TUNE
       fall: { depth: 14, length: 8 }, // TUNE
-      hills: { height: 3.4, scale: 0.06 }, // TUNE
+      hills: { height: 4.2, scale: 0.06 }, // TUNE
       path: { width: 0.8, sway: 2.2, bend: 0.5, sink: 0.03 }, // TUNE
     },
     growth: {
-      tufts: { inside: 4, outside: 2.5 }, // TUNE
-      flowers: { inside: 0.1, outside: 0.2 }, // TUNE
-      bushes: { edge: 14, outside: 12 }, // TUNE
-      trees: { near: 14, far: 60 }, // TUNE
-      rocks: 22, // TUNE
-      logs: 1, // TUNE
-      mushrooms: 2, // TUNE
-      pebbles: 40, // TUNE
+      tufts: { inside: 0.9, outside: 0.7 }, // TUNE: thin alpine grass
+      flowers: { inside: 0, outside: 0 }, // TUNE
+      bushes: { edge: 6, outside: 4 }, // TUNE
+      trees: { near: 12, far: 22 }, // TUNE
+      treeMix: { oak: 0.05, birch: 0.15, pine: 0.8 }, // TUNE: pines up here
+      rocks: 30, // TUNE
+      logs: 0, // TUNE
+      mushrooms: 0, // TUNE
+      pebbles: 70, // TUNE
       lamps: 0, // TUNE
       butterflies: 0, // TUNE
       pollen: 24, // TUNE
@@ -56,7 +57,7 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
     shape: {
       bumps: { height: 0.22, scale: 0.18 }, // TUNE
       ripples: { height: 0.06, scale: 0.7 }, // TUNE
-      rises: { count: 3, height: 0.36, width: 1.5 }, // TUNE
+      rises: { count: 6, height: 0.45, width: 1.3 }, // TUNE
       edge: 7.0, // TUNE
       fall: { depth: 10, length: 10 }, // TUNE
       hills: { height: 1.2, scale: 0.08 }, // TUNE

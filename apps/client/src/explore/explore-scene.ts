@@ -45,6 +45,8 @@ import {
 } from '../map/map-config.js';
 import { loftRoundedHex } from '../map/hex-mesh.js';
 import { buildSpotProp } from './land-kit.js';
+import { BIOME_EXTRAS, buildBiomeSpot } from './biome-dressing.js';
+import { BIOME_LOOKS } from './biome-looks.js';
 import { linear, merged, painted } from '../map/map-props.js';
 import {
   buildProp,
@@ -197,6 +199,9 @@ const SHAPES: ReadonlySet<string> = new Set<ExploreShape>([
   'cairn',
   'glow-mushrooms',
 ]);
+/** A spot drawn from the land kit: the meadow's own, else the trail's or the cave's. */
+const spotKit = (scene: Scene, kind: string) =>
+  buildSpotProp(scene, kind) ?? buildBiomeSpot(scene, kind);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -353,7 +358,8 @@ export class ExploreScene implements AmbientTarget {
     // opens on it instead of easing across.
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
-    const landLook = LAND_LOOKS[tile.terrain];
+    const landLook = LAND_LOOKS[tile.terrain] ?? BIOME_LOOKS[tile.terrain];
+    const extras = BIOME_EXTRAS[tile.terrain];
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
@@ -365,6 +371,7 @@ export class ExploreScene implements AmbientTarget {
         start: this.#world(this.#at),
         tier: options.tier,
         sky: options.sky,
+        ...(extras ? { extras } : {}),
       });
       const land = this.#land;
       this.#surface = (p) => land.heightAt(p.x * size, p.z * size);
@@ -1070,14 +1077,14 @@ export class ExploreScene implements AmbientTarget {
       // Old forests grow their own old trees.
       const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
       // On the land kit (#335), its own rocks, trees, logs and flower beds, drawn at world size.
-      const kit = this.#land ? buildSpotProp(this.#scene, spot.kind) : null;
+      const kit = this.#land ? spotKit(this.#scene, spot.kind) : null;
       const kind = kit ? `kit:${spot.kind}` : prop;
       if (kit) {
         kit.mesh.dispose();
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => buildSpotProp(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
+          () => spotKit(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
         );
       } else {
         builders.set(kind, () =>
