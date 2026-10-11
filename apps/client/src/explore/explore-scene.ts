@@ -313,6 +313,8 @@ function followBack(i: number, lead: number): number {
 
 // Scratch for the hop pose and the placements (no allocations while walking, #323).
 const POSE: HopPose = { lift: 0, squash: 1 };
+/** Where the camera aims while swimming (#399), tile-local. */
+const SWIM_AIM = { x: 0, z: 0 };
 /** Dev mockups only (#399): which swim to draw. */
 const swimStyle = (): SwimStyle =>
   (globalThis as { __hpSwimStyle?: SwimStyle }).__hpSwimStyle ?? EXPLORE_SWIM.style;
@@ -967,7 +969,10 @@ export class ExploreScene implements AmbientTarget {
         POSE.lift += follower.bob * (s * Math.sin(q) + (1 - s) * bob);
         POSE.squash = 1 + follower.pulse * s * Math.sin(q + 1.2);
       }
-      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
+      const place = this.#squishyPlacement(f.at, f.yaw, f.handle, POSE);
+      place.shadow = EXPLORE_SWIM.shadow.scale;
+      place.shadowAlpha = EXPLORE_SWIM.shadow.alpha;
+      this.#squishies.move(f.handle, place);
     }
   }
 
@@ -1079,8 +1084,23 @@ export class ExploreScene implements AmbientTarget {
   }
 
   #cameraGoal(): FollowCamera {
+    let at = this.#at;
+    if (this.#underwater && this.#swim.stretch > 0) {
+      // A swimmer lies long across the screen (#399): lead it by its follow
+      // lag (speed × the ease) and a little more, so it stays in the middle
+      // instead of swimming off the edge of a phone held upright.
+      const lead =
+        EXPLORE_VIEW.walkSpeed *
+        EXPLORE_CAMERA.follow *
+        EXPLORE_SWIM.cameraLead *
+        this.#swim.effort *
+        this.#swim.stretch;
+      SWIM_AIM.x = at.x - Math.sin(this.#yaw) * lead;
+      SWIM_AIM.z = at.z - Math.cos(this.#yaw) * lead;
+      at = SWIM_AIM;
+    }
     return {
-      target: cameraGoal(this.#at, this.#focus, this.#lit),
+      target: cameraGoal(at, this.#focus, this.#lit),
       zoom: this.#focus ? EXPLORE_CAMERA.nudge : 1,
     };
   }
@@ -1348,22 +1368,22 @@ export class ExploreScene implements AmbientTarget {
     PLACE.shadow = shadowScale(pose.lift);
     PLACE.shadowAlpha = shadowAlpha(pose.lift);
     if (this.#underwater) {
-      // Swimming (#399): afloat, pitched forward about its middle into the
+      // Swimming (#399): afloat, pitched forward about its head into the
       // heading (a negative lean; a positive one leans back), surging ahead
       // of its point on a kick and gliding back.
       const sp = this.#swimPose;
       const tall = this.keeperTall;
-      const middle = tall * EXPLORE_SWIM.pivot;
-      const ahead = sp.surge * tall - middle * Math.sin(sp.pitch);
+      const pivot = tall * EXPLORE_SWIM.pivot;
+      const ahead = sp.surge * tall - pivot * Math.sin(sp.pitch);
       // The Keeper faces −z at yaw 0, so ahead is (−sin yaw, −cos yaw).
       PLACE.x -= Math.sin(this.#yaw) * ahead;
       PLACE.z -= Math.cos(this.#yaw) * ahead;
       PLACE.yaw = this.#yaw + sp.sway;
       PLACE.lean = -sp.pitch;
-      PLACE.lift = sp.lift * tall + middle * (1 - Math.cos(sp.pitch));
+      PLACE.lift = sp.lift * tall + pivot * (1 - Math.cos(sp.pitch));
       PLACE.squash = sp.squash;
-      PLACE.shadow = shadowScale(EXPLORE_SWIM.float);
-      PLACE.shadowAlpha = shadowAlpha(EXPLORE_SWIM.float);
+      PLACE.shadow = EXPLORE_SWIM.shadow.scale;
+      PLACE.shadowAlpha = EXPLORE_SWIM.shadow.alpha;
     }
     return PLACE;
   }

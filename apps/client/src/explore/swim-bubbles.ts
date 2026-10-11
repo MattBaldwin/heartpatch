@@ -35,7 +35,7 @@ export class SwimBubbles {
     mat.disableLighting = true;
     mat.diffuseColor = Color3.Black();
     mat.specularColor = Color3.Black();
-    mat.emissiveColor = linear('#e8fbff').scale(WATER_MOTION.glow);
+    mat.emissiveColor = linear('#f4fdff').scale(WATER_MOTION.glow * 1.3);
     mesh.material = mat;
     mesh.isPickable = false;
     mesh.alwaysSelectAsActiveMesh = true;
