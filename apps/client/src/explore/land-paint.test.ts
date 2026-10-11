@@ -46,4 +46,30 @@ describe('paintGround', () => {
     expect(sum(at(shaded, 3, 0))).toBeLessThan(sum(at(plain, 3, 0)) - 30);
     expect(at(shaded, -10, 10)).toEqual(at(plain, -10, 10));
   });
+
+  it("tints the ground towards a pool's colour, and nowhere else", () => {
+    const pooled = paint([{ x: 3, z: 0, r: 1, strength: 0.9, tint: '#4060ff' }]);
+    const [r, g, b] = at(pooled, 3, 0);
+    const [pr, , pb] = at(plain, 3, 0);
+    expect(b).toBeGreaterThan(pb + 60);
+    expect(b).toBeGreaterThan(g);
+    expect(r).toBeLessThan(pr + 10);
+    expect(at(pooled, -10, 10)).toEqual(at(plain, -10, 10));
+  });
+
+  it('blends overlapping pools by weight, and lights a shade back up', () => {
+    const two = paint([
+      { x: 3, z: 0, r: 1, strength: 0.5, tint: '#ff0000' },
+      { x: 3, z: 0, r: 1, strength: 0.5, tint: '#0000ff' },
+    ]);
+    const [r, , b] = at(two, 3, 0);
+    expect(Math.abs(r - b)).toBeLessThan(4);
+    const sum = (c: [number, number, number]) => c[0] + c[1] + c[2];
+    const dark = paint([{ x: 3, z: 0, r: 1, strength: 0.8 }]);
+    const relit = paint([
+      { x: 3, z: 0, r: 1, strength: 0.8 },
+      { x: 3, z: 0, r: 1, strength: 0.9, tint: '#ffffff' },
+    ]);
+    expect(sum(at(relit, 3, 0))).toBeGreaterThan(sum(at(dark, 3, 0)) + 100);
+  });
 });

@@ -31,6 +31,8 @@ export interface Shade {
   /** A cast shadow is longer along the sun's direction on the ground (a unit vector), this many times. */
   readonly along?: { readonly x: number; readonly z: number };
   readonly stretch?: number;
+  /** A pool of light instead of a shade: the ground is tinted towards this colour (sRGB hex). */
+  readonly tint?: string;
 }
 
 /** A drifting mote's home: where it hovers, and its drift (`terrainDrift`: mode, phase, range, speed). */
@@ -97,6 +99,8 @@ export interface ExtrasContext {
   readonly rand: () => number;
   /** A soft shade (and a cast shadow) under something `height` tall and `r` round, painted into the ground. */
   readonly shade: (x: number, z: number, r: number, height: number) => void;
+  /** A soft pool of `tint` light on the ground round something that glows (a cave crystal). */
+  readonly glow: (x: number, z: number, r: number, tint: string, strength: number) => void;
 }
 
 /** Tufts grow out to this far from the middle, world units. */
@@ -346,6 +350,9 @@ export function landLayout(input: LayoutInput): LandLayout {
       start,
       rand: seededRandom(seed ^ 0x6e7a),
       shade,
+      glow: (x, z, r, tint, strength) => {
+        shades.push({ x, z, r, strength, tint });
+      },
     }) ?? {};
 
   return {

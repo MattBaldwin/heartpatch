@@ -2,6 +2,7 @@ import { createAudio } from './audio/audio.js';
 import { battleCue, careCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
+import { showsStats } from './engine/stats-flag.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
@@ -1362,7 +1363,10 @@ if (import.meta.env.DEV) {
     .catch(() => {
       badge.textContent = 'server: offline';
     });
+}
 
+// The stats badge: dev builds, or `?fps=1` on the live site (#335, the owner's device check).
+if (showsStats(import.meta.env.DEV, params)) {
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
   mountDevOverlay(() => stage);
 }

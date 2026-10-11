@@ -20,6 +20,7 @@ import {
   KEEPER_DATA,
   type ExploreTileResponse,
   type KeeperConfig,
+  type PublicSearchSpot,
   type PublicTile,
   type Species,
   type ToolId,
@@ -48,6 +49,8 @@ import {
 import { loftRoundedHex } from '../map/hex-mesh.js';
 import { buildLakeSpotProp } from './lake-kit.js';
 import { buildSpotProp } from './land-kit.js';
+import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
+import { BIOME_LOOKS } from './biome-looks.js';
 import { linear, merged, painted } from '../map/map-props.js';
 import {
   buildProp,
@@ -93,10 +96,12 @@ import {
   cameraSettled,
   cameraShot,
   collidersOf,
+  coverShare,
   decorPlaces,
   followLead,
   followStep,
   freePoint,
+  glintNudge,
   hidingSpots,
   keepClear,
   tileSeed,
@@ -105,6 +110,7 @@ import {
   type Collider,
   type DecorKind,
   type FollowCamera,
+  type ScreenBox,
 } from './explore-world.js';
 
 // The explore view (#199; cozy-sim feel #291, owner mockup 2026-10-08): one
@@ -141,6 +147,8 @@ export interface ExploreSceneStats {
   readonly drawCalls: number;
   /** Spots faded because they stand between the camera and the Keeper. */
   readonly faded: readonly number[];
+  /** How much of the Keeper each faded spot covers on screen, in `faded`'s order (#335). */
+  readonly fadedCover: readonly number[];
   /** The Keeper's height on screen, as a share of the canvas's height (0: not on screen). */
   readonly keeperHeight: number;
   /** The sky's pieces (#335). */
@@ -175,11 +183,16 @@ export interface ExploreSceneOptions {
   readonly pinned?: boolean;
   /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
   readonly reducedMotion?: () => boolean;
+  /** Draws one more frame (the fade and glints settle after a frame, #335). */
+  readonly redraw?: () => void;
 }
 
-/** A search spot drawn from the land kit: the meadow's, else the lake's (#335). */
-const kitSpot = (scene: Scene, kind: string) =>
-  buildSpotProp(scene, kind) ?? buildLakeSpotProp(scene, kind);
+/** A search spot drawn from the land kit (#335): a biome's own take first, then the meadow's, the lake's, the trail's and the cave's. */
+const kitSpot = (scene: Scene, kind: string, terrain: string) =>
+  (overridesSpot(terrain, kind) ? buildBiomeSpot(scene, kind, terrain) : null) ??
+  buildSpotProp(scene, kind) ??
+  buildLakeSpotProp(scene, kind) ??
+  buildBiomeSpot(scene, kind, terrain);
 
 /**
  * What each kind of spot looks like: a map prop where one fits, else one of
@@ -196,6 +209,8 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   pond: 'pond',
   ledge: 'ledge',
   cave: 'cave',
+  // #335: the trail's and the cave's own spots are drawn by their land kit
+  // (kitSpot); without one they fall back to a rock.
 };
 
 type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
@@ -203,6 +218,29 @@ type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
 /** The island under the tile: shallow, so the tile reads as a little diorama. */
 const ISLAND_DEPTH = 0.12; // TUNE:
 const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
+/**
+ * Writes a follow-camera shot into a camera, looking along +z and down by
+ * `pitch` at `target` from `distance` away, and refreshes its view and
+ * projection at once (#335): Babylon otherwise keeps the last frame's
+ * matrices until the next render, and anything projected in between (the
+ * fade, the glints) would see the old view.
+ */
+export function writeShot(
+  camera: TargetCamera,
+  target: Vector3,
+  pitch: number,
+  distance: number,
+): void {
+  camera.position.set(
+    target.x,
+    target.y + Math.sin(pitch) * distance,
+    target.z - Math.cos(pitch) * distance,
+  );
+  camera.setTarget(target);
+  camera.getViewMatrix(true);
+  camera.getProjectionMatrix(true);
+}
+
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -288,6 +326,10 @@ export class ExploreScene implements AmbientTarget {
   #shot = cameraShot(0.5);
   #decor: Record<DecorKind, number>;
   readonly #glints: Mesh;
+  /** The settled shot the fade and glints were last worked out for (`#framingKey`). */
+  #framed = '';
+  /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
+  #glintNudge: number[] = [];
   readonly #halo: Mesh;
   readonly #tools: Record<ToolId, Mesh>;
   readonly #colliders: Collider[];
@@ -309,6 +351,10 @@ export class ExploreScene implements AmbientTarget {
   /** Someone was hopping, landing or settling at the last step. */
   #hopping = false;
   readonly #reduced: () => boolean;
+  /** Asks the screen for one more frame. */
+  readonly #redraw: () => void;
+  /** The side each spot's glint last slid to, so it doesn't flip while the Keeper walks past. */
+  readonly #glintSide = new Map<number, number>();
   /** The tallest follower, tile-local: how far back the team keeps (#323). */
   #teamTall = 0;
   #tile: ExploreTileResponse;
@@ -352,6 +398,7 @@ export class ExploreScene implements AmbientTarget {
     // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
     const reduced = options.reducedMotion ?? (() => false);
     this.#reduced = this.#underwater ? () => true : reduced;
+    this.#redraw = options.redraw ?? (() => {});
     this.#pinned = options.pinned ?? false;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
     this.#sky = new ExploreSky(scene, options.sky);
@@ -369,8 +416,13 @@ export class ExploreScene implements AmbientTarget {
     // opens on it instead of easing across.
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
-    const landLook = LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain];
+    const landLook =
+      LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain] ?? BIOME_LOOKS[tile.terrain];
     const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
+    // A biome's own layers: the lake's kelp and coral, the trail's peaks, the cave's walls.
+    const extras = waterLook
+      ? lakeExtras(waterLook, tileSeed(tile, 'water'))
+      : BIOME_EXTRAS[tile.terrain];
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
@@ -383,7 +435,7 @@ export class ExploreScene implements AmbientTarget {
         tier: options.tier,
         sky: options.sky,
         lightBase: this.#sky.lightBase,
-        ...(waterLook ? { extras: lakeExtras(waterLook, tileSeed(tile, 'water')) } : {}),
+        ...(extras ? { extras } : {}),
       });
       const land = this.#land;
       this.#surface = (p) => land.heightAt(p.x * size, p.z * size);
@@ -578,6 +630,7 @@ export class ExploreScene implements AmbientTarget {
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
       this.#triangles = Math.round(scene.getActiveIndices() / 3);
+      this.#refreshFraming();
     });
     scene.onDisposeObservable.addOnce(() => {
       scene.onBeforeRenderObservable.remove(this.#beforeRender);
@@ -606,6 +659,7 @@ export class ExploreScene implements AmbientTarget {
       camera: { ...this.#camera.target, zoom: this.#camera.zoom },
       drawCalls: this.#drawCalls,
       faded: [...this.#hiding].sort((a, b) => a - b),
+      fadedCover: this.#fadedCover(),
       keeperHeight: this.#keeperHeight(),
       sky: this.#sky.stats,
       triangles: this.#triangles,
@@ -642,25 +696,8 @@ export class ExploreScene implements AmbientTarget {
   /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
     this.#tile = tile;
-    const size = EXPLORE_VIEW.glintSize;
-    setInstances(
-      this.#glints,
-      tile.spots
-        .filter((s) => !s.done)
-        .map((s) => {
-          const at = this.#world(s);
-          const lift = this.#glintLift(s.kind);
-          // Off to one side of the prop, as on the boards.
-          const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
-          return placeAt(
-            at.x + side,
-            this.#groundAt(s) + lift,
-            at.z,
-            new Vector3(size, size, size),
-          );
-        }),
-      true,
-    );
+    this.#glintNudge = [];
+    this.#placeGlints();
     if (this.#highlighted !== null && tile.spots.find((s) => s.index === this.#highlighted)?.done) {
       this.highlight(null);
     }
@@ -703,6 +740,7 @@ export class ExploreScene implements AmbientTarget {
     this.#at = at;
     if (yaw !== undefined) this.#yaw = yaw;
     this.#fade();
+    this.#placeGlints();
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
@@ -955,10 +993,10 @@ export class ExploreScene implements AmbientTarget {
     const engine = this.#scene.getEngine();
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     if (aspect !== this.#aspect) {
-      // The screen's shape picks the tilt (a phone upright looks flatter).
+      // The screen's shape picks the tilt (a phone upright looks flatter);
+      // the fade and glints follow once the new shot is drawn (#refreshFraming).
       this.#aspect = aspect;
       this.#shot = cameraShot(aspect);
-      this.#fade();
     }
     const { pitch, distance } = this.#shot;
     const d = distance * this.#camera.zoom;
@@ -968,8 +1006,7 @@ export class ExploreScene implements AmbientTarget {
     // dip ahead would bring the Keeper closer and draw it bigger (#335).
     const ty = this.#groundAt(this.#at) + AIM_HEIGHT;
     // Yaw 0: looking towards +z, down by `pitch`.
-    camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
-    camera.setTarget(this.#lookAt.set(tx, ty, tz));
+    writeShot(camera, this.#lookAt.set(tx, ty, tz), pitch, d);
     this.#sky.follow(camera.position, pitch);
   }
 
@@ -1027,6 +1064,9 @@ export class ExploreScene implements AmbientTarget {
   /** Fades the props that stand between the camera and the Keeper; the rest stay solid. */
   #fade(): void {
     if (this.#props.size === 0) return;
+    // The camera first: its tilt follows the screen's shape, which the first
+    // call learns (and that re-enters here); work from the settled shot.
+    this.#applyCamera();
     const middle = AIM_HEIGHT / this.#size;
     // Into the spare set (no allocation while walking); swapped in only on a change.
     const hiding = hidingSpots(
@@ -1037,6 +1077,15 @@ export class ExploreScene implements AmbientTarget {
       middle,
       this.#hidingNext,
     );
+    // The line-of-sight rule is generous (a canopy's width); keep only the
+    // spots that really cover the Keeper on screen, so nothing beside it fades.
+    const keeper = this.#keeperBox();
+    if (keeper) {
+      for (const s of this.#tile.spots) {
+        if (hiding.has(s.index) && this.#coverOf(s, keeper) < EXPLORE_FADE.cover)
+          hiding.delete(s.index);
+      }
+    }
     let same = hiding.size === this.#hiding.size;
     for (const i of hiding) same &&= this.#hiding.has(i);
     if (same) return;
@@ -1051,6 +1100,111 @@ export class ExploreScene implements AmbientTarget {
       setInstances(batch.mesh, solid, true);
       setInstances(batch.faded, faded, true);
     }
+  }
+
+  /** The shot as it stands: where the Keeper is, where the camera aims, how close and how tilted. */
+  #framingKey(): string {
+    const { target, zoom } = this.#camera;
+    return [this.#at.x, this.#at.z, target.x, target.z, zoom, this.#aspect].join(',');
+  }
+
+  /**
+   * After a frame is drawn (#335): once the camera has settled on a new shot
+   * (arriving, walking, turning the device, leaning in to a spot), work the
+   * fade and the glints out against it, and draw again if either changed.
+   * Until the Keeper can be placed on screen (the canvas not laid out yet),
+   * ask for another frame and try again.
+   */
+  #refreshFraming(): void {
+    if (!cameraSettled(this.#camera, this.#cameraGoal())) return;
+    const key = this.#framingKey();
+    if (key === this.#framed) return;
+    if (this.#keeper && !this.#keeperBox()) {
+      this.#redraw();
+      return;
+    }
+    this.#framed = key;
+    const hiding = this.#hiding;
+    const glints = this.#glintNudge;
+    this.#fade();
+    this.#placeGlints();
+    if (this.#hiding !== hiding || this.#glintNudge !== glints) this.#redraw();
+  }
+
+  /**
+   * Draws a glint beside each unsearched spot, as on the boards; one that
+   * would cover the Keeper on screen slides sideways, clear of it (#335).
+   * Redrawn only when a glint moves.
+   */
+  #placeGlints(): void {
+    this.#applyCamera(); // the shot's tilt, as #fade
+    const size = EXPLORE_VIEW.glintSize;
+    const keeper = { ...this.#world(this.#at), y: this.#groundAt(this.#at) };
+    const half = (size * EXPLORE_FADE.glintHalo) / 2;
+    const open = this.#tile.spots.filter((s) => !s.done);
+    const places = open.map((s) => {
+      const at = this.#world(s);
+      // Off to one side of the prop, as on the boards.
+      const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
+      const glint = { x: at.x + side, y: this.#groundAt(s) + this.#glintLift(s.kind), z: at.z };
+      const slide = this.#keeper
+        ? glintNudge(
+            glint,
+            keeper,
+            this.keeperTall,
+            this.#shot.pitch,
+            half,
+            EXPLORE_FADE.glintClearHalfWidth,
+            this.#glintSide.get(s.index),
+          )
+        : 0;
+      if (slide === 0) this.#glintSide.delete(s.index);
+      else this.#glintSide.set(s.index, Math.sign(slide + glint.x - keeper.x));
+      return { ...glint, x: glint.x + Math.round(slide * 100) / 100 };
+    });
+    const nudge = places.map((p) => p.x);
+    const same =
+      nudge.length === this.#glintNudge.length && nudge.every((n, i) => n === this.#glintNudge[i]);
+    if (same && this.#glints.thinInstanceCount === open.length) return;
+    this.#glintNudge = nudge;
+    setInstances(
+      this.#glints,
+      places.map((p) => placeAt(p.x, p.y, p.z, new Vector3(size, size, size))),
+      true,
+    );
+  }
+
+  #fadedCover(): number[] {
+    const keeper = this.#keeperBox();
+    return [...this.#hiding]
+      .sort((a, b) => a - b)
+      .map((i) => {
+        const spot = this.#tile.spots.find((s) => s.index === i);
+        return spot && keeper ? Math.round(this.#coverOf(spot, keeper) * 1000) / 1000 : 1;
+      });
+  }
+
+  /** The Keeper on screen: its feet to the top of its hair, about as wide as its head. */
+  #keeperBox(): ScreenBox | null {
+    if (!this.#keeper) return null;
+    const feet = this.screenOf(this.#at, 0);
+    const top = this.screenOf(this.#at, this.keeperTall);
+    if (!feet || !top) return null;
+    const half = (feet.y - top.y) * EXPLORE_FADE.keeperHalfWidth;
+    // Before the canvas is laid out the projection isn't real yet: can't tell.
+    if (![feet.x, feet.y, top.y, half].every(Number.isFinite) || half <= 0) return null;
+    return { left: feet.x - half, right: feet.x + half, top: top.y, bottom: feet.y };
+  }
+
+  /** How much of the Keeper a spot's prop covers on screen (#335); 1 when it can't tell. */
+  #coverOf(spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>, keeper: ScreenBox): number {
+    const base = this.screenOf(spot, 0);
+    const top = this.screenOf(spot, this.#heightOf(spot.kind) * this.#size);
+    const edge = this.screenOf({ x: spot.x + spotRadius(spot.kind), z: spot.z }, 0);
+    if (!base || !top || !edge) return 1; // can't tell: keep the line-of-sight rule's answer
+    const half = Math.abs(edge.x - base.x);
+    const prop = { left: base.x - half, right: base.x + half, top: top.y, bottom: base.y };
+    return coverShare(prop, keeper);
   }
 
   /** The ground's height under a tile-local point, world units. */
@@ -1199,11 +1353,12 @@ export class ExploreScene implements AmbientTarget {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
       // Old forests grow their own old trees.
       const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
-      // On the land kit (#335), its own rocks, trees, logs and flower beds (and the lake's
-      // spots), drawn at world size: built once a kind (the first is the solid copy).
+      // On the land kit (#335), its own rocks, trees, logs and flower beds (and the lake's,
+      // trail's and cave's spots), drawn at world size: built once a kind (the first is the
+      // solid copy).
       let kit = built.get(spot.kind);
       if (kit === undefined && this.#land) {
-        kit = kitSpot(this.#scene, spot.kind);
+        kit = kitSpot(this.#scene, spot.kind, tile.terrain);
         built.set(spot.kind, kit);
       }
       const kind = kit ? `kit:${spot.kind}` : prop;
@@ -1212,7 +1367,9 @@ export class ExploreScene implements AmbientTarget {
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => kitSpot(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
+          () =>
+            kitSpot(this.#scene, spot.kind, tile.terrain)?.mesh ??
+            buildProp(this.#scene, 'rock').mesh,
         );
       } else {
         builders.set(kind, () =>

@@ -95,6 +95,36 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
     ],
   },
   {
+    // #335: the mountain trail's hand and Walking Stick spots.
+    kind: 'snow-drift',
+    finds: [
+      { weight: 3, items: { ice: 1 } },
+      { weight: 2, items: { stone: 1 } },
+      { weight: 1, items: { glimmer: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'cairn',
+    finds: [
+      { weight: 5, items: { stone: 1 } },
+      { weight: 2, items: { stone: 2 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    // #335: the hills cave's hand spot.
+    kind: 'glow-mushrooms',
+    finds: [
+      { weight: 3, items: { greens: 1 } },
+      { weight: 2, items: { emberwood: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
     kind: 'cave',
     finds: [
       { weight: 3, items: { glimmer: 1 } },

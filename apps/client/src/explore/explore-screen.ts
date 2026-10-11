@@ -81,7 +81,14 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, isUnderwater, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import {
+  exploreSkyAt,
+  exploreWorld,
+  isUnderwater,
+  sameLook,
+  skyLook,
+  type SkyLook,
+} from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -222,7 +229,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const skyNow = (): SkyLook =>
     skyLook(
       exploreSkyAt(zone, options.now?.() ?? new Date()),
-      tile ? isUnderwater(tile.terrain) : false,
+      tile ? exploreWorld(tile.terrain) : 'ground',
     );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
@@ -980,7 +987,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb' || kind === 'dive') {
+    if (kind === 'climb' || kind === 'poke' || kind === 'pick' || kind === 'dive') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });
@@ -1015,7 +1022,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
             el('span', { class: `explore-dot${i < s.count ? ' explore-dot-on' : ''}` }),
           ),
         );
-      } else if (s.kind === 'lift') {
+      } else if (s.kind === 'lift' || s.kind === 'stack') {
         const fill = el('span', { class: 'explore-hold-fill' });
         fill.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
         playDots.replaceChildren(el('span', { class: 'explore-hold' }, fill));
@@ -1192,6 +1199,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       tier: lastTier,
       pinned: options.pinned?.() ?? false,
       reducedMotion,
+      redraw: () => {
+        options.invalidate();
+      },
     });
     // The start can land on a rock: step out before the Keeper is drawn.
     keeperAt = freePoint(keeperAt, built.colliders);

@@ -9,7 +9,7 @@ import { EXPLORE_RULES, skyAt, type SkyAt, type SkyPhase } from '@heartpatch/sha
 export interface SkyLook {
   readonly zenith: string;
   readonly horizon: string;
-  /** The sun's (or the moon's) disc, and whether it shows (not underwater). */
+  /** The sun's (or the moon's) disc, and whether it shows (not underwater or in a cave). */
   readonly sun: string;
   readonly sunDisc: boolean;
   readonly moon: boolean;
@@ -90,6 +90,32 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 };
 
 /**
+ * Inside the hills cave (#335): warm purple stone all round, little glowing
+ * motes where the stars would be, and a dim warm light that the Lantern
+ * brightens. A cave is the same at any hour.
+ */
+const CAVE: SkyLook = {
+  zenith: '#2a1f3d', // TUNE: the cave roof
+  horizon: '#1f1730', // TUNE: the far, dark walls (never black)
+  sun: '#ffd36e',
+  sunDisc: false,
+  moon: false,
+  cloud: '#5c4878',
+  clouds: 0,
+  stars: false, // a roof, not a sky: the glow comes from the crystals and caps
+  starColor: '#8ef0ff',
+  fog: null,
+  groundTint: '#ffffff',
+  light: { color: '#ffd9b0', sun: 0.55, environment: 0.62 }, // TUNE: dusky but kid-readable; the glow still reads
+};
+export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  dawn: CAVE,
+  day: CAVE,
+  dusk: CAVE,
+  night: CAVE,
+};
+
+/**
  * Under a lake (#335): the bright surface at the top fading to deep water,
  * bubbles drifting up, and the light the colour of the sky above. At night
  * the plankton glows. Never black (art bible §2).
@@ -145,12 +171,26 @@ export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   },
 };
 
-/** Terrains explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel). */
-export const UNDERWATER_TERRAINS: ReadonlySet<string> = new Set(['lake']);
+/**
+ * Each biome's own world (#335, owner decisions 2026-10-09): lakes are
+ * explored underwater, hills inside a cave, mountains up a trail; the rest
+ * on cozy open ground.
+ */
+export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail';
+const WORLDS: Readonly<Record<string, ExploreWorld>> = {
+  lake: 'water',
+  hills: 'cave',
+  mountains: 'trail',
+};
 
-/** Is this terrain explored underwater? */
+/** The world a terrain is explored in. */
+export function exploreWorld(terrain: string): ExploreWorld {
+  return WORLDS[terrain] ?? 'ground';
+}
+
+/** Is this terrain explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel)? */
 export function isUnderwater(terrain: string): boolean {
-  return UNDERWATER_TERRAINS.has(terrain);
+  return exploreWorld(terrain) === 'water';
 }
 
 /**
@@ -186,10 +226,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
  * The look at a moment: colours and light fade into the next sky; stars,
- * clouds and the moon switch halfway. Underwater uses the water's looks.
+ * clouds and the moon switch halfway. Underwater and in a cave, their own looks.
  */
-export function skyLook(at: SkyAt, underwater = false): SkyLook {
-  const looks = underwater ? WATER_LOOKS : SKY_LOOKS;
+export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
+  const looks = world === 'water' ? WATER_LOOKS : world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
   const a = looks[at.phase];
   const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));

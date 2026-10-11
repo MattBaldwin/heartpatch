@@ -13,7 +13,7 @@ afterEach(() => {
   for (const scene of [...engine.scenes]) scene.dispose();
 });
 
-const underwater = skyLook({ phase: 'day', next: 'day', blend: 0 }, true);
+const underwater = skyLook({ phase: 'day', next: 'day', blend: 0 }, 'water');
 const start = { x: 0, z: -2.94 };
 
 function lake() {

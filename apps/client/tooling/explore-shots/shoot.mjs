@@ -156,7 +156,9 @@ for (const device of DEVICES) {
   // `REUSE=1`: the player from the last run on this device (iterating on the look).
   // `SHARE=1`: one player for every device, so the same tile is shot at each size.
   const statePath = path.join(OUT, `.state-${process.env.SHARE === '1' ? 'shared' : device}.json`);
-  const reuse = process.env.REUSE === '1' && (await stat(statePath).catch(() => null)) !== null;
+  // With SHARE, every device after the first reuses the player the first one made.
+  const again = process.env.REUSE === '1' || (process.env.SHARE === '1' && device !== DEVICES[0]);
+  const reuse = again && (await stat(statePath).catch(() => null)) !== null;
   const context = await browser.newContext({
     ...(reuse ? { storageState: statePath } : {}),
     viewport: { width: size.width, height: size.height },

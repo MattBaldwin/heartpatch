@@ -103,7 +103,13 @@ export interface LandOptions {
     readonly layers: Readonly<
       Record<
         string,
-        { readonly build: (scene: Scene) => Mesh; readonly sway?: number; readonly thins?: boolean }
+        {
+          readonly build: (scene: Scene) => Mesh;
+          readonly sway?: number;
+          readonly thins?: boolean;
+          /** Lit from inside (crystals, glow caps): unlit vertex colours times this; over 1 blooms. */
+          readonly glow?: number;
+        }
       >
     >;
   };
@@ -146,12 +152,12 @@ const matrix = (g: Growth, y: number): Matrix =>
   );
 
 /** Unlit and vertex-coloured, times `color` (motes and the lanterns' glass). */
-function glow(scene: Scene, name: string, color: string): StandardMaterial {
+function glow(scene: Scene, name: string, color: string, strength = 1): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.disableLighting = true;
   m.diffuseColor = Color3.Black();
   m.specularColor = Color3.Black();
-  m.emissiveColor = linear(color);
+  m.emissiveColor = linear(color).scale(strength);
   m.fogEnabled = false;
   return m;
 }
@@ -255,7 +261,11 @@ export class ExploreLand {
     // ── Life: drifting motes on the terrain plugin ─
     // A biome's own layers (`LandOptions.extras`), after the shared ones.
     for (const [name, layer] of Object.entries(options.extras?.layers ?? {})) {
-      this.#grow(name, layer.build(scene), L.extras[name] ?? [], landMat, {
+      const material =
+        layer.glow === undefined
+          ? landMat
+          : glow(scene, `land-${name}-glow-mat`, '#ffffff', layer.glow);
+      this.#grow(name, layer.build(scene), L.extras[name] ?? [], material, {
         ...(layer.sway !== undefined ? { sway: layer.sway } : {}),
         ...(layer.thins !== undefined ? { thins: layer.thins } : {}),
       });
