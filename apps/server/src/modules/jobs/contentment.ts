@@ -209,7 +209,8 @@ export async function writeGuardCheckpoints(
   const repo = createSquishyJobsRepo(tx);
   const since = new Map(watches.map((w) => [w.squishyId, w.assignedAt.getTime()]));
   for (const row of await repo.listByIds([...since.keys()])) {
-    const fromMs = since.get(row.squishy.id)!;
+    const fromMs = since.get(row.squishy.id);
+    if (fromMs === undefined) continue;
     const value = contentmentAt(contentmentCheckpoint(row.care), at, CARE_RULES, [
       { fromMs, toMs: null },
     ]);
