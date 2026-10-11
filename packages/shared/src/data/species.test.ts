@@ -207,7 +207,7 @@ describe('balance intent (design doc §5), played with the real engine', () => {
 
   it('has no base form that wins (or loses) nearly every 1v1', () => {
     // Launch lines are measured against the launch lines, as ever (a roster of
-    // 30 more small kinds shouldn't make its epic look unbeatable). Wave-1 kinds
+    // more small kinds shouldn't make its epic look unbeatable). Wave-1 kinds
     // (#382) are measured against everyone, so none of them is a pushover or a bully.
     const everyBase = [...bases, ...standalone];
     const rates = everyBase.map((a) => {

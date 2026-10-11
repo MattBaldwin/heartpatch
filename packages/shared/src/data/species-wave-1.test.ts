@@ -26,9 +26,15 @@ describe('wave 1 (#382)', () => {
   });
 
   it('keeps stat totals inside the rarity bands (species.ts)', () => {
-    const bands = { common: [195, 215], uncommon: [210, 240], rare: [225, 245] } as const;
+    const bands: Partial<Record<string, readonly [number, number]>> = {
+      common: [195, 215],
+      uncommon: [210, 240],
+      rare: [225, 245],
+    };
     for (const s of WAVE_1_SPECIES) {
-      const [min, max] = bands[s.rarity as keyof typeof bands];
+      const band = bands[s.rarity];
+      expect(band, `${s.id} is ${s.rarity}`).toBeDefined();
+      const [min, max] = band!;
       expect(total(s), s.id).toBeGreaterThanOrEqual(min);
       expect(total(s), s.id).toBeLessThanOrEqual(max);
     }
@@ -63,11 +69,12 @@ describe('wave 1 (#382)', () => {
     for (const terrain of covered) expect(wild, terrain).toContain(terrain);
     expect(covered.size).toBeGreaterThanOrEqual(5);
     const byId = new Map(WAVE_1_SPECIES.map((s) => [s.id, s]));
-    const weight = { common: 4, uncommon: 2, rare: 1 } as const;
+    const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 1 };
     for (const t of tables) {
       for (const e of t.entries) {
-        const rarity = byId.get(e.species)!.rarity as keyof typeof weight;
-        expect(e.weight, `${t.id}: ${e.species}`).toBeLessThanOrEqual(weight[rarity]);
+        const kind = byId.get(e.species);
+        expect(kind, `${t.id}: ${e.species} is a wave-1 kind`).toBeDefined();
+        expect(e.weight, `${t.id}: ${e.species}`).toBeLessThanOrEqual(weight[kind!.rarity] ?? 0);
       }
     }
   });

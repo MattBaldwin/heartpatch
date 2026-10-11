@@ -12,7 +12,7 @@ import type { Species } from '../schemas/data/species.js';
  * `species.ts`; where each one spawns is server-only.
  *
  * Stat budgets (hp + attack + defense + speed) follow the launch bands in
- * `species.ts` (TUNE: every `baseStats` and spawn weight): common ~200-215, uncommon ~215-240, rare ~230-245. A
+ * `species.ts` (TUNE: every `baseStats` and spawn weight): common 195-215, uncommon 210-240, rare 225-245 (the bands `species-wave-1.test.ts` pins). A
  * conflicted element x feeling (0.85x) gets a few more points, a harmonious
  * one (1.2x) a few less. Every move comes from the existing `MOVES`.
  *

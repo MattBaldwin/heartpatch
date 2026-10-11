@@ -1402,9 +1402,9 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.08,
   },
-  // #382 wave 1: four parts so frogs, crabs, turtles and lantern fish read at a glance.
+  // #382 wave 1: four parts so frogs, turtles and moths read at a glance.
   // All existing primitives (no client geometry code); a species' `glow` lights them
-  // like any other part (the lure takes `accent`, so a Light squishy's body glow reaches it).
+  // like any other part.
   {
     // Frog and toad eyes: two domes above the face, on the head.
     id: 'eye-bumps',
@@ -1449,10 +1449,9 @@ export const PARTS: Part[] = [
     sink: 0.25,
     jitter: 0.04,
   },
-  // #382 wave 1, second pass: three more data-only parts (cup and kettle handles, knit and
-  // spring stripes, plant roots).
+  // #382 wave 1, second pass: a data-only handle for the turtle's shell.
   {
-    // An upright C of a handle at the back: cups, kettles, mugs.
+    // An upright C of a handle at the back, like a teacup's.
     id: 'handle-arc',
     slot: 'tail',
     shape: 'arc',
