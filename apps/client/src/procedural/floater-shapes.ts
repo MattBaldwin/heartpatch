@@ -113,9 +113,9 @@ const GLYPHS: Readonly<Record<FloaterGlyph, readonly Piece[]>> = {
   // An eighth note (♪): a round head tipped up to the right, a thick stem
   // from its right side, and a fat curved flag. Chunky, so it reads small.
   'music-note': [
-    ellipse([0, 0], 0.3, 0.21, (20 * Math.PI) / 180),
-    box([0.17, 0.04], [0.29, 1.28]),
-    band([0.23, 1.26], [0.66, 1.02], [0.56, 0.6], 0.11, 0.05),
+    ellipse([0, 0], 0.32, 0.23, (20 * Math.PI) / 180),
+    box([0.17, 0.04], [0.31, 1.28]),
+    band([0.24, 1.26], [0.68, 1.02], [0.58, 0.6], 0.14, 0.08),
   ],
 };
 
