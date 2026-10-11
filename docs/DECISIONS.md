@@ -1387,3 +1387,11 @@ _Proposed in PRs #358, #360 and #370; recorded here at the coordinator's request
 - **Lean lanes.** CI skips the browser e2e jobs for draft PRs, for stacked PRs (base isn't `main`), and for PRs touching only `docs/`, `.claude/` or root `*.md` (owner-approved 2026-10-10). The coordinator requires e2e success on a code PR's head before merging it.
 - **`HP_EVOLUTION_SALT`** is the server secret for evolution rolls (coordinator decision). It's required in production. `deploy.sh` generates it on the first deploy (`openssl rand -hex 32`) and never changes it. It's backed up with `.env`, and the client never receives it.
 - **No potions or Heart Charms in a live defense** (`liveDefenseItems = false`, owner-confirmed 2026-10-10). A defender's live fight takes no items.
+
+## 2026-10-11 — Owner working style: show screens first, features must be felt
+
+_Owner direction, relayed by the coordinator on 2026-10-11 (PR #390 follow-up); recorded here and in `docs/COORDINATOR.md` §9._
+
+- **Show the screens before asking.** Always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link.
+- **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
+- **The home must be personal and personalizable.** It should feel like the Keeper's own place (see #381).
