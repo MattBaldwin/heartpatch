@@ -34,6 +34,15 @@ export const KEEPER = {
     /** How far features stand out of the head surface, of their own depth. */
     standOut: 0.35, // TUNE
   },
+  /**
+   * Costume models (a costume's `model`, drawn instead of the Keeper): how
+   * tall each stands as a multiple of the Keeper's own height. The Hollow
+   * Man is a head taller than a Keeper on the map (the map draws him 0.85
+   * to a Keeper's 0.55).
+   */
+  models: {
+    'hollow-man': { heightRatio: 1.6 }, // TUNE
+  },
   /** Fixed toy colours (sRGB hex). */
   colors: {
     ink: '#3b2a3f', // TUNE: the squishies' plum ink
@@ -47,8 +56,8 @@ export const KEEPER = {
 
 /** Detail levels, like squishies' (`procedural/config.ts`): `low` on the map, `high` in close-ups. */
 export const KEEPER_LOD = {
-  low: { bodyRings: 10, partRings: 6, partSegments: 10 }, // TUNE
-  high: { bodyRings: 20, partRings: 12, partSegments: 20 }, // TUNE
+  low: { bodyRings: 10, partRings: 6, partSegments: 10, modelSegments: 14 }, // TUNE
+  high: { bodyRings: 20, partRings: 12, partSegments: 20, modelSegments: 28 }, // TUNE
 } as const;
 
 /** Where Keepers stand, and how big, in each place they show up. */

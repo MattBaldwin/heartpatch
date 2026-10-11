@@ -14,6 +14,7 @@ import {
   type PartShape,
   type WardrobeSlot,
 } from '@heartpatch/shared';
+import { HOLLOW_ARM, HOLLOW_MAN } from '../hollow-man/hollow-man-config.js';
 import { hexToRgb, type Rgb, type Vec3 } from '../params.js';
 import { KEEPER } from './keeper-config.js';
 import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
@@ -34,8 +35,16 @@ import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
 /** What a piece is part of (tests and the gallery count these). */
 export type KeeperLayer = 'body' | 'face' | 'hair' | 'outfit' | WardrobeSlot;
 
+/**
+ * A costume model's own geometry, built by the field from the shape the
+ * model comes from (`model-hollow-man`: the Hollow Man's cloak and arms). It
+ * stands on y = 0 at its own height, so a piece scales it by one factor.
+ */
+export type ModelShape = 'model-hollow-man';
+export type KeeperShape = PartShape | ModelShape;
+
 export interface KeeperPiece {
-  readonly shape: PartShape;
+  readonly shape: KeeperShape;
   /** Centre in Keeper space. */
   readonly at: Vec3;
   /** Size of the unit-box primitive. */
@@ -506,12 +515,55 @@ export function keeperParams(
     }
   }
 
+  // A costume that replaces the body is the whole figure: the Keeper's own
+  // body, face, hair and starter outfit stay out of it (the feet, shadow and
+  // sockets keep their place, so it walks and lines up like the Keeper).
+  const replaced = costume?.replacesBody === true;
+  let height = hairTop;
+  let width = footprint;
+  if (costume?.model === 'hollow-man') {
+    // The Hollow Man's own shape, scaled from his height to this Keeper's.
+    const h = hairTop * KEEPER.models['hollow-man'].heightRatio;
+    const k = h / HOLLOW_MAN.height;
+    const shimmer = ART_RULES.finishByRarity[costume.rarity];
+    pieces.push({
+      shape: 'model-hollow-man',
+      at: [0, 0, 0],
+      size: [k, k, k],
+      turn: NO_TURN,
+      color: hexToRgb(HOLLOW_MAN.bodyColor),
+      layer: 'costume',
+      ...(shimmer === 'vinyl' ? {} : { finish: shimmer }),
+    });
+    // His eyes, at his own spot on his face (the eye is a sphere, narrowed a little).
+    const eyeSize = HOLLOW_MAN.eyeSize * h;
+    for (const side of [-1, 1]) {
+      pieces.push({
+        shape: 'ellipsoid',
+        at: [side * HOLLOW_MAN.eyeGap * h, HOLLOW_MAN.eyeHeight * h, -0.07 * h],
+        size: [eyeSize * 1.25, eyeSize, eyeSize * 0.6],
+        turn: NO_TURN,
+        color: hexToRgb(HOLLOW_MAN.eyeColor),
+        layer: 'costume',
+        glow: true,
+      });
+    }
+    height = h;
+    // Narrow: his arms hang a little out from his sides (a small angle, so
+    // no trigonometry here).
+    width = 2 * (HOLLOW_ARM.shoulder[0] + HOLLOW_ARM.length * HOLLOW_ARM.restSpread) * h;
+  }
+
   return {
     config,
-    height: hairTop,
-    width: footprint,
+    height,
+    width,
     // Hair tucks under a costume's hood rather than poking through it.
-    pieces: costume ? pieces.filter((p) => p.layer !== 'hair') : pieces,
+    pieces: replaced
+      ? pieces.filter((p) => p.layer === 'costume')
+      : costume
+        ? pieces.filter((p) => p.layer !== 'hair')
+        : pieces,
     sockets,
     worn: worn.map((item) => item.id),
     missing,

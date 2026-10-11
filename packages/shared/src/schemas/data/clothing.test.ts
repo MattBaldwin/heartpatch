@@ -4,6 +4,8 @@ import { CLOTHING, CLOTHING_BY_ID, STARTER_CLOTHING } from '../../data/clothing.
 import { SEASONS } from '../../data/seasons.js';
 import {
   checkClothingData,
+  clothingSwatch,
+  COSTUME_MODEL_SWATCH,
   CLOTHING_RARITIES,
   MAX_COSTUME_PIECES,
   MAX_ITEM_PIECES,
@@ -99,11 +101,45 @@ describe('the clothing catalog', () => {
       expect.stringContaining('only costumes place pieces on body sockets'),
     ]);
     const sleeves = copy();
-    const hollow = sleeves.find((i) => i.id === 'hollow-man-costume')!;
+    const hollow = sleeves.find((i) => i.visual.pieces.some((p) => p.on === 'arms'))!;
     hollow.visual.pieces.find((p) => p.on === 'arms')!.turn = [20, 0, 0];
     expect(checkClothingData(sleeves, SEASON_IDS)).toEqual([
       expect.stringContaining('pieces on the arms may only roll'),
     ]);
+  });
+
+  it('lets only costumes replace the body or use a model, and a model needs no pieces (the Hollow Man)', () => {
+    const hollow = CLOTHING.find((i) => i.id === 'hollow-man-costume')!;
+    expect(hollow.visual).toEqual({ pieces: [], replacesBody: true, model: 'hollow-man' });
+    // A model is the whole figure…
+    const loose = copy();
+    delete loose.find((i) => i.id === 'hollow-man-costume')!.visual.replacesBody;
+    expect(checkClothingData(loose, SEASON_IDS)).toEqual([
+      expect.stringContaining('needs `replacesBody: true`'),
+    ]);
+    // …an item with no pieces needs one…
+    const empty = copy();
+    delete empty.find((i) => i.id === 'hollow-man-costume')!.visual.model;
+    expect(checkClothingData(empty, SEASON_IDS)).toEqual([
+      expect.stringContaining('at least one piece'),
+    ]);
+    // …an unknown model is refused…
+    const unknown = copy();
+    (unknown.find((i) => i.id === 'hollow-man-costume')!.visual as { model: string }).model = 'x';
+    expect(checkClothingData(unknown, SEASON_IDS)).not.toEqual([]);
+    // …and only costumes may replace the body or use one.
+    const hat = copy();
+    hat.find((i) => i.id === 'witch-hat')!.visual.replacesBody = true;
+    expect(checkClothingData(hat, SEASON_IDS)).toEqual([
+      expect.stringContaining('only costumes can replace the body'),
+    ]);
+  });
+
+  it('colours a model costume’s chip from its model', () => {
+    const hollow = CLOTHING.find((i) => i.id === 'hollow-man-costume')!;
+    expect(clothingSwatch(hollow)).toBe(COSTUME_MODEL_SWATCH['hollow-man']);
+    const hat = CLOTHING.find((i) => i.id === 'witch-hat')!;
+    expect(clothingSwatch(hat)).toBe(hat.visual.pieces[0]!.color);
   });
 
   it('has no avoided words in names or descriptions (style guide §9)', () => {
