@@ -251,6 +251,10 @@ export const INTERACTION = {
   climbSteps: 6, // TUNE
   /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
+  /** Walking Stick at a snow drift: pokes till it slumps (#335). */
+  pokes: 3, // TUNE
+  /** Hands on glow mushrooms: caps to boop (#335). */
+  boops: 3, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */

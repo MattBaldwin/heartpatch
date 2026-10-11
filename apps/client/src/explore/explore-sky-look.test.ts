@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EXPLORE_SKY, localMinuteIn, SKY_LOOKS, skyLook } from './explore-sky-look.js';
+import {
+  EXPLORE_SKY,
+  exploreWorld,
+  localMinuteIn,
+  SKY_LOOKS,
+  skyLook,
+} from './explore-sky-look.js';
 
 describe('the explore sky look (#335)', () => {
   it('is the phase itself away from a change', () => {
@@ -46,5 +52,15 @@ describe('the explore sky look (#335)', () => {
     expect(Math.max(r, g, b)).toBeLessThan(0xc0);
     expect(g).toBeGreaterThan(r);
     expect(b).toBeGreaterThan(r);
+  });
+
+  it('puts hills in a cave and mountains on a trail, the same cave at any hour (#335)', () => {
+    expect(exploreWorld('hills')).toBe('cave');
+    expect(exploreWorld('mountains')).toBe('trail');
+    expect(exploreWorld('forest')).toBe('ground');
+    const noon = skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'cave');
+    expect(skyLook({ phase: 'night', next: 'night', blend: 0 }, 'cave')).toEqual(noon);
+    expect(noon.sunDisc).toBe(false);
+    expect(skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'trail')).toEqual(SKY_LOOKS.day);
   });
 });

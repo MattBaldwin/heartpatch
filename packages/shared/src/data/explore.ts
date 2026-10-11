@@ -19,8 +19,14 @@ export const EXPLORE_RULES: ExploreRules = {
     { id: 'mound', name: 'Mound', tool: 'shovel', interaction: 'dig' },
     { id: 'pond', name: 'Pond', tool: 'net', interaction: 'scoop' },
     { id: 'reeds', name: 'Reeds', tool: 'net', interaction: 'scoop' },
-    { id: 'ledge', name: 'Ledge', tool: 'rope', interaction: 'climb' },
-    { id: 'cave', name: 'Cave', tool: 'lantern', interaction: 'light' },
+    // #335: mountains are a trail you hike up to lookouts with the Walking
+    // Stick; hills are a cave you explore with the Lantern. The ids stay, so
+    // their finds and lore pages do too.
+    { id: 'ledge', name: 'Lookout', tool: 'rope', interaction: 'climb' },
+    { id: 'cave', name: 'Dark nook', tool: 'lantern', interaction: 'light' },
+    { id: 'snow-drift', name: 'Snow drift', tool: 'rope', interaction: 'poke' },
+    { id: 'cairn', name: 'Cairn', tool: null, interaction: 'stack' },
+    { id: 'glow-mushrooms', name: 'Glow mushrooms', tool: null, interaction: 'pick' },
   ],
   // TUNE: owner decision 2026-10-06 ("a Shovel lasts 20 digs"); the rest are guesses.
   tools: [
@@ -85,18 +91,25 @@ export const EXPLORE_RULES: ExploreRules = {
       spots: { min: 6, max: 10 },
     },
     {
+      // #335: the hills cave. A new kit, so its own layout: half-searched
+      // hills restart, finished ones stay finished (the server, #339).
       terrain: 'hills',
+      layout: 2,
       kinds: [
-        { kind: 'ledge', weight: 3 },
         { kind: 'cave', weight: 3 },
+        { kind: 'glow-mushrooms', weight: 2 },
+        { kind: 'rock', weight: 1 },
       ],
       spots: { min: 8, max: 12 },
     },
     {
+      // #335: the mountain trail, with its own layout as the hills.
       terrain: 'mountains',
+      layout: 2,
       kinds: [
         { kind: 'ledge', weight: 4 },
-        { kind: 'cave', weight: 3 },
+        { kind: 'snow-drift', weight: 1 },
+        { kind: 'cairn', weight: 2 },
       ],
       spots: { min: 8, max: 12 },
     },

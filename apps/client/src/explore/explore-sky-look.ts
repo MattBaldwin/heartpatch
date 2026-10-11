@@ -9,13 +9,16 @@ import { EXPLORE_RULES, skyAt, type SkyAt, type SkyPhase } from '@heartpatch/sha
 export interface SkyLook {
   readonly zenith: string;
   readonly horizon: string;
-  /** The sun's (or the moon's) disc. */
+  /** The sun's (or the moon's) disc, and whether it shows (not in a cave). */
   readonly sun: string;
+  readonly sunDisc: boolean;
   readonly moon: boolean;
   readonly cloud: string;
   /** How many clouds show (0–`EXPLORE_SKY.clouds.length`). */
   readonly clouds: number;
   readonly stars: boolean;
+  /** The stars' colour (in the cave they're glow motes). */
+  readonly starColor: string;
   /**
    * Multiplies the ground's and its decor's colour (#335, owner: a moonlit
    * blue-green at night). Spots, glints and the team keep their own colour.
@@ -30,10 +33,12 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     zenith: '#8fa2e3', // TUNE
     horizon: '#ffd6b0', // TUNE
     sun: '#ffd28a',
+    sunDisc: true,
     moon: false,
     cloud: '#ffd6e4',
     clouds: 3,
     stars: false,
+    starColor: '#fff3c4',
     groundTint: '#fff0e8', // TUNE: a touch warm
     light: { color: '#ffd9c2', sun: 0.85, environment: 0.85 }, // TUNE
   },
@@ -41,10 +46,12 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     zenith: '#6fbff0', // TUNE
     horizon: '#e6f7ff', // TUNE
     sun: '#ffe27a', // TUNE
+    sunDisc: true,
     moon: false,
     cloud: '#ffffff', // TUNE
     clouds: 4, // TUNE
     stars: false,
+    starColor: '#fff3c4',
     groundTint: '#ffffff', // TUNE
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
@@ -52,10 +59,12 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     zenith: '#6b5bb0', // TUNE
     horizon: '#ffb36b', // TUNE
     sun: '#ff9a52',
+    sunDisc: true,
     moon: false,
     cloud: '#d9b8ee',
     clouds: 3,
     stars: false,
+    starColor: '#fff3c4',
     groundTint: '#ffeedd', // TUNE: a touch warm
     light: { color: '#ffc49a', sun: 0.8, environment: 0.8 }, // TUNE
   },
@@ -63,14 +72,57 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     zenith: '#1e2a5e', // TUNE: a friendly deep blue, never black
     horizon: '#4d5596', // TUNE
     sun: '#fff3d0',
+    sunDisc: true,
     moon: true,
     cloud: '#5a6299',
     clouds: 1,
     stars: true,
+    starColor: '#fff3c4',
     groundTint: '#6f9ea6', // TUNE: moonlit blue-green (owner)
     light: { color: '#b9c4ff', sun: 0.55, environment: 0.6 }, // TUNE: kids still see the spots
   },
 };
+
+/**
+ * Inside the hills cave (#335): warm purple stone all round, little glowing
+ * motes where the stars would be, and a dim warm light that the Lantern
+ * brightens. A cave is the same at any hour.
+ */
+const CAVE: SkyLook = {
+  zenith: '#4f3c6e', // TUNE: the cave roof
+  horizon: '#33264a', // TUNE: the far, dark walls (never black)
+  sun: '#ffd36e',
+  sunDisc: false,
+  moon: false,
+  cloud: '#5c4878',
+  clouds: 0,
+  stars: true,
+  starColor: '#8ef0ff', // glow motes
+  groundTint: '#ffffff',
+  light: { color: '#ffd9b0', sun: 0.6, environment: 0.55 }, // TUNE: warm and dim
+};
+export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  dawn: CAVE,
+  day: CAVE,
+  dusk: CAVE,
+  night: CAVE,
+};
+
+/**
+ * Each biome's own world (#335, owner decision 2026-10-09): hills are
+ * explored inside a cave, mountains up a trail; the rest
+ * on cozy open ground.
+ */
+export type ExploreWorld = 'ground' | 'cave' | 'trail';
+const WORLDS: Readonly<Record<string, ExploreWorld>> = {
+  hills: 'cave',
+  mountains: 'trail',
+};
+
+/** The world a terrain is explored in. */
+export function exploreWorld(terrain: string): ExploreWorld {
+  return WORLDS[terrain] ?? 'ground';
+}
 
 /**
  * Where the sky's pieces sit, in degrees from the middle of the view (the
@@ -103,20 +155,26 @@ const mix = (a: string, b: string, t: number) =>
     .join('')}`;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** The look at a moment: colours and light fade into the next sky; stars, clouds and the moon switch halfway. */
-export function skyLook(at: SkyAt): SkyLook {
-  const a = SKY_LOOKS[at.phase];
-  const b = SKY_LOOKS[at.next];
+/**
+ * The look at a moment: colours and light fade into the next sky; stars,
+ * clouds and the moon switch halfway. In a cave, its own look.
+ */
+export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
+  const looks = world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
+  const a = looks[at.phase];
+  const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));
   const pick = t < 0.5 ? a : b;
   return {
     zenith: mix(a.zenith, b.zenith, t),
     horizon: mix(a.horizon, b.horizon, t),
     sun: pick.sun,
+    sunDisc: pick.sunDisc,
     moon: pick.moon,
     cloud: mix(a.cloud, b.cloud, t),
     clouds: pick.clouds,
     stars: pick.stars,
+    starColor: pick.starColor,
     groundTint: mix(a.groundTint, b.groundTint, t),
     light: {
       color: mix(a.light.color, b.light.color, t),
