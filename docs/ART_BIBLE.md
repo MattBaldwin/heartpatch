@@ -163,15 +163,15 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
 | Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
 | Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
-| Mossmuffin | Sprinklemuff | Silly | pink cupcake: pleated pink cup, cream frosting dome, yellow sprinkle confetti | stand · crown |
+| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: pink frosting body, cherry and sprinkles on top, cream pleated paper cup | stand · crown |
 | Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
-| Thunderpuff | Stormhoot | Spooky | storm owl: teal, big round eyes, ear tufts, cream belly, folded wings, tail feathers | stand · wings |
+| Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
 | Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
 | Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
-| Crunchkin | Huddlenut | Cozy | olive-sage squirrel: tufted ears, buck teeth, amber acorn hat, huge curled brown tail | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | violet songbird: beak, coral feather crest, broad coral wings, big fan tail | hover · wings |
+| Crunchkin | Huddlenut | Cozy | olive-sage squirrel: tall tufted ears, buck teeth, amber acorn hat, huge curled brown tail | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | violet songbird: beak, coral feather crest, small wings, two legs, big upright fan tail | stand · wings |
 
 ## 2. Palette
 
