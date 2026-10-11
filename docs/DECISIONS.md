@@ -1331,7 +1331,7 @@ _Proposed in PR #344; recorded by the coordinator after merge._
 _Proposed in PR #384 (owner decisions, 2026-10-11); recorded here at the coordinator's request._
 
 - **Full send for Phase 1.** The 4-lane cap is lifted for Phase 1 (due Oct 31).
-- **Migration freeze, Oct 15–18.** No DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18). Outside that window, merge when green, one migration at a time, with #376 first.
+- **Migration freeze, Oct 15–18.** No DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18). Outside that window, merge when green, one migration at a time, with #376 first. _Lifted by the owner on 2026-10-11; see "2026-10-11 — Owner decisions, night (coordinator)"._
 - **Big features.** Fable writes a detailed plan (files, schema and type deltas, migration with backfill and rollback, API and WebSocket, UI flow, edge cases, named tests, risks), posted as an issue comment. Opus codes it, and the PR body lists **Plan deviations**. A Fable reviewer is the second reviewer on the first full review. The supervisor decides "big" when briefing.
   - **Big** = a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature.
   - **Not big** = additive optional schema fields, client-only art and UI, data-only content.
@@ -1355,7 +1355,7 @@ _Recorded from the coordinator's brief for the playbook, not owner decisions; se
 _Owner decisions from the "Owner decisions" sections of #381 and #382, and from #386's owner decision; recorded here at the coordinator's request._
 
 **#381, the Keeper's home**
-- **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review.
+- **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review. _Moved into Phase 1 behind a switch on 2026-10-11; see "2026-10-11 — Owner decisions, night (coordinator)"._
 - **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
 - **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen. *(Now capped by the Heart Seed level; see "2026-10-11 — Owner decisions, afternoon (coordinator)" below.)*
 - **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
@@ -1410,7 +1410,7 @@ _Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier wr
 
 - **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
 - **#382 wave 1 creative brief:** approved; build rares first.
-- **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
+- **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms. _Heartsong later split into its own PR; see "2026-10-11 — Owner decisions, night (coordinator)"._
 
 ## 2026-10-11 — The step-by-step Keeper creator (#372, PR #394)
 
@@ -1441,6 +1441,33 @@ _Owner answers to the coordinator on 2026-10-11, asked one question at a time, p
 - **Potions are a free sip (#403).** Drinking a potion no longer uses the squishy's turn: in one turn the player sips and still acts. This supersedes the 2026-10-07 "Battle potions (#214, PR #219)" rule that a potion is the side's whole turn. Everything else stays (one of each per battle, the boosts, the 75% shield, Hearty Soup's heal). Coordinator: battles logged under the old rule must still replay the old way (a versioned rule or the old path, proved by a replay test).
 - **The squishies roster (#375).** Each row shows the evolution stage ("Stage N of M") with a bar toward the next evolution (branch hints only in the detail view, rule 6), and happiness as 5 hearts with the mood word, a "needs care" badge and a draining hint. A Squishies button in the top bar opens it from home, the map and explore.
 - **Clear land and one building per tile move into Phase 1 (#242, #295).** Convert (farm, mine, sawmill) stays in Phase 2.
-  - Home tiles hold home buildings only, one per tile (habitats such as the Ember Den and Meadow, and the Keeper's house). Homesteads hold everything else, one per tile. Where Hearthfires may stand is still open: the owner's first answer put them on homesteads, and the #295 plan's Q1 recommends any owned land, one per tile, to keep casual land lit. Until it is settled, today's Hearthfire rules stand.
+  - Home tiles hold home buildings only, one per tile (habitats such as the Ember Den and Meadow, and the Keeper's house). Homesteads hold everything else, one per tile. Where Hearthfires may stand is still open: the owner's first answer put them on homesteads, and the #295 plan's Q1 recommends any owned land, one per tile, to keep casual land lit. Until it is settled, today's Hearthfire rules stand. _Settled later the same evening: any owned land outside home, one per tile; see "2026-10-11 — Owner decisions, night (coordinator)" below._
   - Existing patches: extra buildings move to a free allowed tile; anything with no free tile is refunded in full; a one-time note explains it.
-  - Clearing needs a kept crafted tool plus a short timer (about 2 minutes, `// TUNE:`) and drops some of the tile's resource. Meadows, forests, mountains and hills can be cleared; lakes and Juniper's Gap cannot (Old Forest and Pumpkin Fields are still open, #295 plan Q5).
+  - Clearing needs a kept crafted tool plus a short timer (about 2 minutes, `// TUNE:`) and drops some of the tile's resource. Meadows, forests, mountains and hills can be cleared; lakes and Juniper's Gap cannot (Old Forest and Pumpkin Fields are still open, #295 plan Q5). _Later the same evening the owner chose tools that wear out, not kept tools, and kept Old Forest and Pumpkin Fields unclearable in Phase 1; see "2026-10-11 — Owner decisions, night (coordinator)" below._
+
+## 2026-10-11 — Owner decisions, night (coordinator)
+
+_Owner answers to the coordinator on 2026-10-11, asked one question at a time with the screens, plus coordinator calls, each labelled "Coordinator"._
+
+**Clear land and one building per tile (#242, #295)**
+- **Hearthfires go on any owned land outside home, one per tile.** This settles the open point above. The owner saw the #295 mockup's day-14 picture of a casual 4-seat patch: homesteads only, 7 fires and 31 of 70 tiles lit; any owned land, 16 fires and 64 of 70 lit (the plan's simulation: 44% vs 93%).
+- **A building blocks its tile's land yield, outside home.** Gatherers get nothing from a tile with a building on it. On the home ring, the node beside a home building stays gatherable (owner follow-up), so a habitat never blocks a kid's main fire fuel. Coordinator: adopted the #295 plan's proposal for squishies already working: placing a building where a squishy gathers is refused ("Ask your squishy to move first!"), and the tidy-up pass settles and ends gatherers on tiles that keep a building, naming them in its note.
+- **If the Crafting Factory is lost, everything comes back:** the full build and upgrade cost plus every unfinished batch's inputs.
+- **The clearing tools are the Axe (forest), Pickaxe (mountains) and Spade (meadow and hills), and they wear out.** This supersedes "a kept crafted tool" above. The number of uses is data (`// TUNE:`). Coordinator: adopted the #295 plan's numbers: 3 uses each, one spent when a clear starts, kept in their own clearing data table.
+- **Old Forest and Pumpkin Fields cannot be cleared in Phase 1.**
+- **Buildings fill their tile by scaling today's models up**, with the tile's props cleared away. Bespoke tile-sized models come in Phase 2 with Farm, Mine and Sawmill.
+- Coordinator: the server work ships in two PRs: 2a (clearing, with migration A) and 2b (one building per tile, no migration). If time runs short, 2a ships alone. The unique index on buildings (migration B) still follows later, as the plan says. The three tool recipes stay hidden by a data flag until the clearing button ships, then show in the recipe book, so nobody spends resources on a tool with no use yet.
+- Coordinator: before 2b merges, the tidy-up pass is dry-run (`tile-uses:check`) on a restored copy of the live data, and the counts are posted on the PR.
+
+**New evolution forms (#363)**
+- **Huddlenut and Sprinklemuff ship.** The owner approved both looks, each with small polish made without another round. Sprinklemuff's (a wider grin, sprinkles round the dome) landed in PR #363; Huddlenut's (tail tip, head crease, teeth) is a follow-up.
+- **Sprinklemuff's stats are trimmed by 5 points** (98/92/87/103 to 96/91/86/102), so it stays under the 1.2× sibling ceiling against Mossquilt after Mossquilt's 2% trim (1.21× to 1.19×). Win rate after the trim: 55% (band 38–66%).
+- **Heartsong gets a true heart body and a floating music note.** The owner chose a new heart body drawn as one smooth piece, instead of shipping round 6 or keeping the old look. The gold note floats above it and turns to face the camera (option C, shown as a mock); the owner chose it over no note and over a note attached to the body. Coordinator: both are optional, off-by-default fields in the shared squishy data (a test proves every other kind draws byte-identically). The note costs at most one extra draw call, only while Heartsong is on screen, follows the scene's light and fog, and holds still under Reduce Motion. Heartsong ships in its own PR after Huddlenut and Sprinklemuff.
+
+**Battles (#403)**
+- **The free sip ships as shown.** The owner approved the "Sipped ✓" moment, where moves stay open after drinking.
+
+**Schedule and process**
+- **The Oct 15–18 migration freeze is lifted.** The family playtest becomes one extended test session once all Phase 1 items are in. One migration in flight at a time still holds.
+- **The Keeper's home (#381) moves into Phase 1.** Coordinator: it ships behind a server switch, `HP_HOUSE` = off, testers or on (default off), with the testers list set only on the server. Go/no-go around Oct 27: the #381 Phase 1 PRs merged and at least 30 fps on the low tier on the iPad 9th gen walk-through; otherwise it stays off and lands in Phase 2. Its one Phase 1 migration takes the slot after #242's migration A; furniture and the guestbook move to Phase 2.
+- **Decisions go through the coordinator.** Every lane sends decisions to the coordinator as "#<issue> decision needed: …" with a picture or link and a recommendation; the coordinator puts them to the owner, one question at a time. Lanes never ask the owner directly.
