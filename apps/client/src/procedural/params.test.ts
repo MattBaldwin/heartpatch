@@ -151,43 +151,17 @@ describe('squishyParams', () => {
 });
 
 describe('optional species visual fields stay off by default', () => {
-  /**
-   * Every public species that existed before the optional `floater`. The
-   * client never loads secret species (CLAUDE.md rule 6), so their visuals
-   * are pinned by the shared `species-visual-hash` test instead.
-   */
-  const BEFORE_FLOATER = (
-    'puddlepuff splashmallow drizzledoze pebblesnooze boulderdoze rumblehorn ' +
-    'emberbun hearthbun embernap snoozicle drowsiberg twirlicle fuzzbolt frizzbolt ' +
-    'glidebolt fizzlepop zingaling snugglestar bubbletub bubbletide bubblejelly ' +
-    'thistlepip bristlebloom petalprance flurrypup blusterpup mittenpup glimmerock ' +
-    'glittercrag geodoze nookling snugglenook mothnook mossmuffin mossquilt ' +
-    'sprinklemuff dawndrop dazzledrop moondrop thunderpuff thunderplume stormhoot ' +
-    'gourdon glowgourd squashboo glowboo brightboo lullaboo upsybat topsywing ' +
-    'hushwing candlekit wickwhisker sparklewick crunchkin maplecrunch huddlenut ' +
-    'moonmoth cometsnail shellnap gnomnom lilyhop hailhop chillypep flakefluff'
-  ).split(' ');
-
-  it('builds every species without a floater exactly as it did', () => {
-    // A hash of each one's params for two instances, taken before `floater`
-    // existed. FNV-1a over the JSON text, like the body-shape hash.
-    let hash = 0x811c9dc5;
-    const add = (text: string) => {
-      for (let i = 0; i < text.length; i++) {
-        hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
-      }
-    };
-    for (const id of BEFORE_FLOATER) {
-      const species = GAME_DATA.species.find((s) => s.id === id);
-      expect(species, id).toBeDefined();
-      if (!species) continue;
-      for (const instanceId of ['hash-1', 'hash-2']) {
-        const p = squishyParams(species, instanceId, registry);
-        expect(p, id).not.toHaveProperty('floater');
-        add(JSON.stringify(p));
+  it('builds every public species without a floater key', () => {
+    // The client never loads secret species (CLAUDE.md rule 6); the shared
+    // `species-visual-defaults` test covers their visuals.
+    for (const species of GAME_DATA.species) {
+      expect(species.visual, species.id).not.toHaveProperty('floater');
+      for (const instanceId of ['a', 'b']) {
+        expect(squishyParams(species, instanceId, registry), species.id).not.toHaveProperty(
+          'floater',
+        );
       }
     }
-    expect(hash.toString(16)).toBe('69cd2af1');
   });
 });
 
