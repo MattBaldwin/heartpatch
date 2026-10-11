@@ -64,9 +64,9 @@ const MESSAGES = {
 /**
  * What happens to a clear when it's settled, like a gather (`gatherFate`):
  * `clear` when it finished while the tile was still the clearer's (even if
- * the land changed hands since: the drop is theirs, though only land still
- * theirs becomes cleared land, `planClearSettlement`), `lose` when the land
- * changed hands first, `wait` while it's still going.
+ * the land changed hands since: the drop is theirs, though land someone else
+ * holds stays as it is, `planClearSettlement`), `lose` when the land changed
+ * hands first, `wait` while it's still going.
  */
 export function clearFate(
   clear: Pick<SettleClearRow, 'userId' | 'readyAt' | 'tileOwner' | 'lostAt'>,
@@ -139,8 +139,13 @@ export async function planClearSettlement(
         // drop is still theirs, and a new owner's land stays as it is (they
         // may be gathering or building there already). Wild land has no one
         // to disturb, so it clears as it would have at `ready_at`.
-        const landCleared = clear.tileOwner === clear.userId || clear.tileOwner === null;
-        await finishClear(tx, repo, clear, at, landCleared);
+        const landCleared = await finishClear(
+          tx,
+          repo,
+          clear,
+          at,
+          clear.tileOwner === clear.userId || clear.tileOwner === null,
+        );
         cleared.push({ q: clear.q, r: clear.r, items: clear.drop, landCleared });
         if (!landCleared) continue;
         events.push({
@@ -163,15 +168,19 @@ export async function planClearSettlement(
   };
 }
 
-/** The drop lands and the clear ends; with `landCleared`, the tile becomes cleared land. */
+/**
+ * The drop lands and the clear ends; when `mayClear`, the tile becomes
+ * cleared land too, if it's still the land the clear started on. Returns
+ * whether it did.
+ */
 async function finishClear(
   tx: Executor,
   repo: Pick<ClearingRepo, 'clearTile' | 'endClear'>,
   clear: ClearRow,
   at: Date,
-  landCleared: boolean,
-): Promise<void> {
-  if (landCleared) await repo.clearTile(clear.tileId);
+  mayClear: boolean,
+): Promise<boolean> {
+  const landCleared = mayClear && (await repo.clearTile(clear.tileId, clear.fromTerrain));
   if (Object.keys(clear.drop).length > 0) {
     await grantItems(
       tx,
@@ -182,6 +191,7 @@ async function finishClear(
     );
   }
   await repo.endClear(clear.id, { reason: 'cleared', at });
+  return landCleared;
 }
 
 /**

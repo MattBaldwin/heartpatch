@@ -83,9 +83,11 @@ export interface ClearingRepo {
   endClear: (clearId: string, end: { reason: ClearEndReason; at: Date }) => Promise<boolean>;
   /**
    * Turns the tile into cleared land: its terrain becomes `clearing` and its
-   * node goes. The caller holds the tile's lock.
+   * node goes, but only while it's still `fromTerrain` (the land the clear
+   * started on; a trading post or other land made since stays as it is).
+   * True when it wrote. The caller holds the tile's lock.
    */
-  clearTile: (tileId: string) => Promise<void>;
+  clearTile: (tileId: string, fromTerrain: string) => Promise<boolean>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -281,11 +283,13 @@ function queries(db: Executor): ClearingRepo {
       return ended.length > 0;
     },
 
-    clearTile: async (tileId) => {
-      await db
+    clearTile: async (tileId, fromTerrain) => {
+      const written = await db
         .update(tiles)
         .set({ terrain: CLEARED_TERRAIN, nodeResource: null })
-        .where(eq(tiles.id, tileId));
+        .where(and(eq(tiles.id, tileId), eq(tiles.terrain, fromTerrain)))
+        .returning({ id: tiles.id });
+      return written.length > 0;
     },
   };
 }

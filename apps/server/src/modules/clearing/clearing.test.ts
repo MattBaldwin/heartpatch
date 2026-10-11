@@ -30,6 +30,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { seedExtraNodes } from '../maps/extra-nodes.js';
+import { createMapsRepo } from '../maps/repo.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -328,6 +329,17 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
        values ('${who.id}', '${tileId}', '${mapId}', 1, 'forest', 7, 3, '${START}', '${START}')`,
     );
 
+  /** The tile goes wild at `at`, recorded the way untended land and the Hollow Man do (`rewildTiles`). */
+  async function goWild(mapId: string, tileId: string, from: Player, at: Date) {
+    await db.execute(`update tiles set owner_user_id = null where id = '${tileId}'`);
+    await db.execute(
+      `insert into tile_tending (tile_id, map_id, tended_at, wild_night, wild_from_user_id, wild_at)
+       values ('${tileId}', '${mapId}', '${START}', '2026-10-02', '${from.id}', '${at.toISOString()}')
+       on conflict (tile_id) do update set wild_night = excluded.wild_night,
+         wild_from_user_id = excluded.wild_from_user_id, wild_at = excluded.wild_at`,
+    );
+  }
+
   const clearRow = (tileId: string) =>
     db.query.tileClears.findFirst({ where: (t, { eq }) => eq(t.tileId, tileId) });
 
@@ -405,13 +417,7 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     const { server, kid, mapId, plot } = await forestHomestead();
     expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
     const wildAt = new Date(Date.parse(START) + CLEAR_MS + 60 * 60 * 1000);
-    await db.execute(`update tiles set owner_user_id = null where id = '${plot.id}'`);
-    await db.execute(
-      `insert into tile_tending (tile_id, map_id, tended_at, wild_night, wild_from_user_id, wild_at)
-       values ('${plot.id}', '${mapId}', '${START}', '2026-10-02', '${kid.id}', '${wildAt.toISOString()}')
-       on conflict (tile_id) do update set wild_night = excluded.wild_night,
-         wild_from_user_id = excluded.wild_from_user_id, wild_at = excluded.wild_at`,
-    );
+    await goWild(mapId, plot.id, kid, wildAt);
     clock.setTime(wildAt.getTime() + 60 * 60 * 1000);
     const done = await settle(server, kid, mapId);
     expect(done.cleared).toEqual([
@@ -419,6 +425,22 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     ]);
     const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
     expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, ownerUserId: null });
+  });
+
+  it('never clears land that became something else meanwhile, like a trading post', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    // Done, then the land is let go and a boot makes it the patch's trading post.
+    clock.setTime(Date.parse(START) + CLEAR_MS + 60 * 60 * 1000);
+    await goWild(mapId, plot.id, kid, clock);
+    expect(await createMapsRepo(db).makeTradingPosts([plot.id])).toBe(1);
+    const post = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
+    const done = await settle(server, kid, mapId);
+    expect(done.cleared).toEqual([
+      { q: plot.q, r: plot.r, items: { timber: 5 }, landCleared: false },
+    ]);
+    const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
+    expect(tile).toEqual(post);
   });
 
   it("isn't blocked by a clear or a gather the land's last owner left behind", async () => {
