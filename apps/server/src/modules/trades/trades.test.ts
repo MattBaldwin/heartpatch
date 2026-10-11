@@ -179,6 +179,11 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     withTransaction(db, (tx) => grantItems(tx, { mapId, userId: kid.id }, items, 'dev-grant'));
 
   async function piece(kid: PublicUser, itemId: string) {
+    const owned = () =>
+      db.query.clothingOwned.findMany({
+        where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.itemId, itemId)),
+      });
+    const before = new Set((await owned()).map((r) => r.id));
     await insertClothing(db, {
       userId: kid.id,
       itemId,
@@ -187,10 +192,11 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
       mapId: null,
       at: clock,
     });
-    const rows = await db.query.clothingOwned.findMany({
-      where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.itemId, itemId)),
-    });
-    return rows.at(-1)!.id;
+    // Ids are random and the fake clock stamps every row alike, so no ORDER BY can
+    // say "newest"; the row that wasn't there before the insert is the one.
+    const fresh = (await owned()).filter((r) => !before.has(r.id));
+    expect(fresh).toHaveLength(1);
+    return fresh[0]!.id;
   }
 
   /** Lee owns a patch; Sam (and anyone else) joins it. Both reach a post. */
