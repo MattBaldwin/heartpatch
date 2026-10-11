@@ -26,6 +26,7 @@ import {
   type PlaceBuildingRequest,
   type PlacedBuilding,
   type PublicBuilding,
+  HOUSE_START_LEVEL,
   type PublicUser,
   type RemoveBuildingResponse,
 } from '@heartpatch/shared';
@@ -49,6 +50,7 @@ import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createFactoryRepo } from '../factory/repo.js';
 import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
+import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -168,6 +170,8 @@ export interface BuildingsServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
+  /** The Keeper's house switch (`HP_HOUSE`, #381); off when left out. */
+  house?: HouseSwitch;
 }
 
 /** The Heart Seed: the middle of a home base (the mean of its seven tiles). */
@@ -217,6 +221,7 @@ function requireBuildingData(id: string): Building {
 export function createBuildingsService(options: BuildingsServiceOptions): BuildingsService {
   const { db } = options;
   const now = options.clock ?? (() => new Date());
+  const house = options.house ?? HOUSE_OFF;
   const store = createBuildingsRepo(db);
   const published = (mapId: string) => {
     void options.publish?.(mapId);
@@ -227,10 +232,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     repo: BuildingsRepo,
     tx: Executor,
     mapId: string,
-    userId: string,
+    user: PublicUser,
     at: Date,
     timeZone: string,
   ): Promise<HomeResponse> {
+    const userId = user.id;
     const local = mapLocalTime(at, timeZone);
     const [tiles, buildings, squishies, items] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
@@ -287,6 +293,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       seasons: seasonsOn(at, timeZone),
       tonight: hearthfireState(null, local, HOME_BASE_RULES).tonight,
       now: at.toISOString(),
+      // The Keeper's house (#381): level 1 for everyone until its tables land (A2).
+      ...(houseOpenFor(house, user) ? { house: { level: HOUSE_START_LEVEL } } : {}),
     };
   }
 
@@ -415,7 +423,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       const { map } = await requireMember(db, user, mapId);
       // An older map's home ring gets its seasonal nodes (owner decision 2026-10-06).
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
-      return homeView(store, db, mapId, user.id, now(), map.timeZone);
+      return homeView(store, db, mapId, user, now(), map.timeZone);
     },
 
     place: (user, mapId, request) => {
@@ -473,7 +481,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             actorUserId: user.id,
             payload: { userId: user.id, building: placed(row, local), cost },
           });
-          return homeView(repo, tx, mapId, user.id, at, timeZone);
+          return homeView(repo, tx, mapId, user, at, timeZone);
         },
         { q: request.q, r: request.r },
       );
@@ -504,7 +512,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
         }
-        return homeView(repo, tx, mapId, user.id, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, timeZone);
       }),
 
     remove: async (user, mapId, buildingRowId) =>
@@ -554,7 +562,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
           for (const event of stopped.events) await repo.appendEvent(event);
-          return { refund, home: await homeView(repo, tx, mapId, user.id, at, timeZone) };
+          return { refund, home: await homeView(repo, tx, mapId, user, at, timeZone) };
         },
         await tileOf(mapId, user.id, buildingRowId),
       ),
@@ -582,7 +590,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             fuelledThrough,
           },
         });
-        return homeView(repo, tx, mapId, user.id, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, timeZone);
       }),
 
     fuelAll: (user, mapId) =>
@@ -656,7 +664,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           fires: plan.size,
           nights,
           short: room,
-          home: await homeView(repo, tx, mapId, user.id, at, timeZone),
+          home: await homeView(repo, tx, mapId, user, at, timeZone),
         };
       }),
 
@@ -694,7 +702,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
-          return homeView(repo, tx, mapId, user.id, at, timeZone);
+          return homeView(repo, tx, mapId, user, at, timeZone);
         },
         await tileOf(mapId, user.id, buildingRowId),
       ),
@@ -761,7 +769,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
         }
-        return homeView(repo, tx, mapId, user.id, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, timeZone);
       }),
   };
 }

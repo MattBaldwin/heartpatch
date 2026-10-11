@@ -49,6 +49,9 @@ import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { loreRoutes } from './modules/lore/routes.js';
 import { milestonesRoutes } from './modules/milestones/routes.js';
+import { houseRoutes } from './modules/house/routes.js';
+import { createHouseService } from './modules/house/service.js';
+import { houseSwitchOf } from './modules/house/switch.js';
 import { createMilestonesService } from './modules/milestones/service.js';
 import { createLoreService } from './modules/lore/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
@@ -121,6 +124,7 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
   const clock = options.clock ?? createClock(config);
+  const house = houseSwitchOf(config);
   // Evolution rolls are seeded with a server secret (#32); config refuses a
   // production start without it.
   setEvolutionSalt(config.HP_EVOLUTION_SALT);
@@ -379,7 +383,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           raidsRoutes(createRaidsService({ db, clock }), { hooks: authHooks, idempotency }),
         );
         await api.register(
-          buildingsRoutes(createBuildingsService({ db, clock, log: app.log, ...publish }), {
+          buildingsRoutes(createBuildingsService({ db, clock, log: app.log, house, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
@@ -457,6 +461,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           boutiqueRoutes(createBoutiqueService({ db, clock }), { hooks: authHooks, idempotency }),
+        );
+        // The Keeper's house (#381), behind `HP_HOUSE` (off by default).
+        await api.register(
+          houseRoutes(createHouseService({ db, clock, house }), { hooks: authHooks }),
         );
         // Keeper milestones (#44): the `milestones` consumer counts progress.
         await api.register(
