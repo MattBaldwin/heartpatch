@@ -68,3 +68,17 @@ NOT yet recorded in DECISIONS (a write was blocked; confirm with Matt directly, 
 - **Playtest readiness (Oct 15):** a live deploy check, backups, the #362 smoke checklist, the iPad fps check above.
 - **Older owner asks:** iPhone checks of #330 and #334; a backups check; suggest a GitHub ruleset requiring the `check` job.
 - **Cost:** supervisor 8 spent about $46. Lanes so far: #376 $30, #381 $22, #372B $17, #371 $14. Hand off at ~400k context.
+
+## Update at ~12:10 UTC (supersedes the rows above where they differ)
+- **Merged since:** #387 (#376 happiness, migration 0043), #396 (#371 Build flow), #395 (#335 trail and cave, stone rocks; it ships the `?fps=1` badge, so after deploy send Matt the iPad 9th-gen fps check). Lanes archived: #376, #371, #389, docs.
+- **Matt answered today (record these in DECISIONS, with his confirmation):**
+  - trail and cave approved, with bare-stone cave rocks;
+  - the #382 creative brief approved (the lane is building, rares first);
+  - Mossquilt −2%;
+  - Stormhoot keeps "Rare" with a second condition (night plus a feeling);
+  - #363: REDESIGN Huddlenut, Sprinklemuff and Heartsong before merge (they're too close to their defaults).
+- **#394 (Keeper creator, migration 0044):** green on 648a75f; waiting on the round-5 Opus verdict naming the head. MERGE BEFORE OCT 15 (freeze Oct 15–18).
+- **#363:** the lane (session_01HqBDwq9EsTGvcjvNEkCxSG) is applying the 3 redesigns plus the 2 balance changes. Render-check, show Matt the shots, ask approval, then merge.
+- **#382 wave 1:** the lane (session_01BJnkbYZasTKgnsdF7BzHVE) is building from the approved brief. Render-check the sheet and show Matt.
+- **#381 Keeper's home:** v9 real-engine renders are not yet render-checked or shown. Then ask Matt (1) the camera (walk-in orbit vs dollhouse) and (2) PR order (living house before furniture).
+- **No new lanes yet for:** #375 roster, #385 care-sheet overlap, #391 rare glow and reveal, #393 map cues, #397 wardrobe e2e timeout, #386 computer patch-mates (Phase 2).
