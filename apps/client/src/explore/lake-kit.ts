@@ -1,12 +1,8 @@
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
-import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
-import { CreateIcoSphere } from '@babylonjs/core/Meshes/Builders/icoSphereBuilder';
-import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { merged } from '../map/map-props.js';
 import { WATER_COLORS } from './lake-config.js';
+import { cylinder, flat, shaded, sphere } from './land-kit.js';
 
 // The lake's shapes on the meadow's kit (#335 art reset): the same
 // vinyl-toy language (smooth icospheres, a darker foot rising to a sunlit
@@ -15,61 +11,6 @@ import { WATER_COLORS } from './lake-config.js';
 // have: kelp, coral, a fish, a bubble, and the two lake search spots.
 
 type Part = Mesh;
-
-// TEMPORARY copies of land-kit.ts's private helpers, until the meadow lane
-// exports them (the coordinator's plan); then these go and this imports them.
-const srgb = (hex: string) => Color3.FromHexString(hex).toLinearSpace();
-
-function shaded(mesh: Part, bottom: string, top: string, y0: number, y1: number): Part {
-  mesh.bakeCurrentTransformIntoVertices();
-  const pos = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
-  const a = srgb(bottom);
-  const b = srgb(top);
-  const colors = new Float32Array((pos.length / 3) * 4);
-  for (let i = 0; i < pos.length / 3; i++) {
-    const y = pos[i * 3 + 1] ?? 0;
-    const t = Math.min(1, Math.max(0, (y - y0) / (y1 - y0 || 1)));
-    const k = t * t * (3 - 2 * t);
-    colors.set([a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, 1], i * 4);
-  }
-  mesh.setVerticesData(VertexBuffer.ColorKind, colors);
-  return mesh;
-}
-
-const flat = (mesh: Part, hex: string): Part => shaded(mesh, hex, hex, 0, 1);
-
-function sphere(
-  scene: Scene,
-  d: number,
-  segments: number,
-  at: [number, number, number],
-  s: [number, number, number] = [1, 1, 1],
-): Part {
-  const subdivisions = segments <= 4 ? 1 : segments <= 6 ? 2 : segments <= 8 ? 3 : 4;
-  const m = CreateIcoSphere('kit', { radius: d / 2, subdivisions, flat: false }, scene);
-  m.position.set(...at);
-  m.scaling.set(...s);
-  return m;
-}
-
-function cylinder(
-  scene: Scene,
-  h: number,
-  top: number,
-  bottom: number,
-  tessellation: number,
-  at: [number, number, number],
-  tilt: [number, number, number] = [0, 0, 0],
-): Part {
-  const m = CreateCylinder(
-    'kit',
-    { height: h, diameterTop: top, diameterBottom: bottom, tessellation },
-    scene,
-  );
-  m.position.set(...at);
-  m.rotation.set(...tilt);
-  return m;
-}
 
 /**
  * A kelp clump: three tapering, leaning stalks of flattened blobs, each with
@@ -159,35 +100,6 @@ export function buildFish(scene: Scene): Mesh {
 /** A bubble: a small pale ball (unlit; the drift shader grows and pops it). */
 export function buildBubble(scene: Scene): Mesh {
   return merged('lake-bubbles', [flat(sphere(scene, 1, 6, [0, 0, 0]), '#ffffff')]);
-}
-
-/**
- * A soft dark spot on the sand under something (a flat fan, alpha 0.5 in the
- * middle to 0 at the rim), radius 1: the water's version of the meadow's
- * painted contact shade, for what the ground texture was painted before.
- */
-export function buildContact(scene: Scene): Mesh {
-  const sides = 14;
-  const positions = [0, 0, 0];
-  const colors = [0.08, 0.2, 0.22, 0.5];
-  const indices: number[] = [];
-  for (let i = 0; i < sides; i++) {
-    const a = (i / sides) * Math.PI * 2;
-    positions.push(Math.cos(a), 0, Math.sin(a));
-    colors.push(0.08, 0.2, 0.22, 0);
-    indices.push(0, 1 + ((i + 1) % sides), 1 + i);
-  }
-  const mesh = new Mesh('lake-contact', scene);
-  const data = new VertexData();
-  data.positions = positions;
-  data.colors = colors;
-  data.indices = indices;
-  data.normals = positions.map((_, i) => (i % 3 === 1 ? 1 : 0));
-  data.applyToMesh(mesh);
-  mesh.hasVertexAlpha = true;
-  mesh.isPickable = false;
-  mesh.alwaysSelectAsActiveMesh = true;
-  return mesh;
 }
 
 /**

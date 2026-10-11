@@ -1,5 +1,4 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
-import { Material } from '@babylonjs/core/Materials/material';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -10,10 +9,10 @@ import type { WorldPoint } from '@heartpatch/shared';
 import type { QualityTier } from '../engine/config.js';
 import { DRIFT_MODE, type AmbientMode } from '../map/ambient-layout.js';
 import { linear } from '../map/map-props.js';
-import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
+import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import { attachCaustics, type CausticsPlugin } from './caustics-plugin.js';
 import type { SkyLook } from './explore-sky-look.js';
-import type { ExploreLand } from './explore-land.js';
+import type { ExploreLand, LandOptions } from './explore-land.js';
 import {
   CAUSTICS,
   FISH_COLORS,
@@ -22,15 +21,20 @@ import {
   WATER_TIERS,
   type WaterLook,
 } from './lake-config.js';
-import { buildBubble, buildContact, buildCoral, buildFish, buildKelp } from './lake-kit.js';
-import type { Growth } from './land-layout.js';
-import { waterLayout, type BubbleHome, type FishHome, type WaterLayout } from './water-layout.js';
+import { buildBubble, buildCoral, buildFish, buildKelp } from './lake-kit.js';
+import {
+  waterLayout,
+  waterPlaces,
+  type BubbleHome,
+  type FishHome,
+  type WaterLayout,
+} from './water-layout.js';
 
-// The lake's own layers on the meadow's land (#335 art reset): kelp that
-// sways, coral, fish circling, bubbles rising, soft contact shade under
-// them, and caustic light on the sand. They share the land's ground, clock
-// and terrain plugin (one time uniform, no CPU work per frame), one draw call
-// a kind; the tier sets how many bubbles rise. The haze is the water's.
+// The lake's own layers on the meadow's land (#335 art reset): fish circling,
+// bubbles rising and caustic light on the sand, with the water's haze (the
+// kelp and coral are the land's `extras`, see `lakeExtras`). They share the
+// land's ground, clock and terrain plugin (one time uniform, no CPU work per
+// frame), one draw call a kind; the tier sets how many bubbles rise.
 
 /** Read-only numbers for the dev hook. */
 export interface WaterStats {
@@ -58,6 +62,21 @@ interface Layer {
   readonly thins: boolean;
 }
 
+/**
+ * The lake's kelp and coral as the land's own extra layers (`LandOptions.extras`):
+ * placed inside the land's layout, so their shade is painted into the ground,
+ * and drawn on the land's matte material, tinted with it.
+ */
+export function lakeExtras(look: WaterLook, seed: number): NonNullable<LandOptions['extras']> {
+  return {
+    place: (ctx) => waterPlaces(look, ctx, seed),
+    layers: {
+      kelp: { build: buildKelp, sway: WATER_MOTION.kelp },
+      coral: { build: buildCoral, sway: WATER_MOTION.coral },
+    },
+  };
+}
+
 const matrix = (x: number, y: number, z: number, scale: number, yaw: number): Matrix =>
   Matrix.Compose(
     new Vector3(scale, scale, scale),
@@ -70,8 +89,6 @@ export class ExploreWater {
   readonly #scene: Scene;
   readonly #land: ExploreLand;
   readonly #layers = new Map<string, Layer>();
-  /** Materials the water tints (kelp, coral), with their own colour. */
-  readonly #tinted: { readonly mat: PBRMaterial; readonly base: Color3 }[] = [];
   #caustics: CausticsPlugin | null = null;
   #tier: QualityTier;
   #ambient: AmbientMode = 'off';
@@ -92,24 +109,6 @@ export class ExploreWater {
     });
     const L = this.layout;
 
-    const plant = (name: string, roughness: number): PBRMaterial => {
-      const m = new PBRMaterial(name, scene);
-      m.albedoColor = Color3.White();
-      m.metallic = 0;
-      m.roughness = roughness;
-      attachTerrainPlugin(m, land.clock);
-      this.#tinted.push({ mat: m, base: m.albedoColor.clone() });
-      return m;
-    };
-    const kelpMat = plant('lake-kelp-mat', 0.8);
-    const coralMat = plant('lake-coral-mat', 0.7);
-
-    this.#plant('kelp', buildKelp(scene), L.kelp, kelpMat, WATER_MOTION.kelp);
-    this.#plant('coral', buildCoral(scene), L.coral, coralMat, WATER_MOTION.coral);
-    this.#contacts([
-      ...L.kelp.map((g) => ({ ...g, r: 0.5 })),
-      ...L.coral.map((g) => ({ ...g, r: 0.62 })),
-    ]);
     this.#fish(L.fish);
     this.#bubbles(L.bubbles);
 
@@ -144,8 +143,6 @@ export class ExploreWater {
 
   /** The time of day: the water's tint and haze (after the land's own, which this overrides). */
   setSky(look: SkyLook): void {
-    const tint = Color3.FromHexString(look.groundTint);
-    for (const t of this.#tinted) t.mat.albedoColor = t.base.multiply(tint);
     // The ripples fade with the light: soft by day, faint by moonlight.
     this.#caustics?.setStrength(CAUSTICS.strength * look.light.sun ** 2);
     if (look.fog) {
@@ -159,65 +156,6 @@ export class ExploreWater {
   }
 
   // ── Building ─────────────────────────────────────────────────────────────
-
-  #plant(
-    name: string,
-    mesh: Mesh,
-    list: readonly Growth[],
-    material: Material,
-    sway: number,
-  ): void {
-    mesh.material = material;
-    mesh.isPickable = false;
-    mesh.alwaysSelectAsActiveMesh = true;
-    if (list.length === 0) {
-      mesh.setEnabled(false);
-      this.#layers.set(name, { mesh, count: 0, live: false, thins: false });
-      return;
-    }
-    const matrices = new Float32Array(list.length * 16);
-    const ambient = new Float32Array(list.length * 4);
-    list.forEach((g, i) => {
-      matrix(g.x, this.#land.heightAt(g.x, g.z), g.z, g.scale, g.yaw).copyToArray(matrices, i * 16);
-      // Sway per unit height², phase from where it grows (neighbours move together, like a current).
-      ambient.set([sway, g.x * 0.7 + g.z * 0.4, 0, 0], i * 4);
-    });
-    mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
-    mesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, true);
-    mesh.freezeWorldMatrix();
-    this.#layers.set(name, { mesh, count: list.length, live: false, thins: false });
-  }
-
-  /** Soft shade on the sand under the kelp and coral. */
-  #contacts(list: readonly (Growth & { r: number })[]): void {
-    const mesh = buildContact(this.#scene);
-    const mat = new StandardMaterial('lake-contact-mat', this.#scene);
-    mat.disableLighting = true;
-    mat.diffuseColor = Color3.Black();
-    mat.specularColor = Color3.Black();
-    mat.emissiveColor = Color3.White();
-    mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
-    mat.disableDepthWrite = true;
-    mat.zOffset = -2;
-    mesh.material = mat;
-    if (list.length === 0) {
-      mesh.setEnabled(false);
-      this.#layers.set('contacts', { mesh, count: 0, live: false, thins: false });
-      return;
-    }
-    const matrices = new Float32Array(list.length * 16);
-    list.forEach((g, i) => {
-      const r = g.r * g.scale;
-      Matrix.Compose(
-        new Vector3(r, 1, r),
-        Quaternion.Identity(),
-        new Vector3(g.x, this.#land.heightAt(g.x, g.z) + 0.03, g.z),
-      ).copyToArray(matrices, i * 16);
-    });
-    mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
-    mesh.freezeWorldMatrix();
-    this.#layers.set('contacts', { mesh, count: list.length, live: false, thins: false });
-  }
 
   #fish(list: readonly FishHome[]): void {
     const mesh = buildFish(this.#scene);

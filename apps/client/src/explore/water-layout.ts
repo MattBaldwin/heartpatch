@@ -1,6 +1,6 @@
 import type { WorldPoint } from '@heartpatch/shared';
 import { seededRandom } from './explore-world.js';
-import type { Growth, MoteHome } from './land-layout.js';
+import type { ExtrasContext, Growth, MoteHome } from './land-layout.js';
 import { hexReach, softNoise, type LandField } from './land-shape.js';
 import { WATER_MOTION, type WaterLook } from './lake-config.js';
 
@@ -25,9 +25,13 @@ export interface BubbleHome extends MoteHome {
   readonly speed: number;
 }
 
-export interface WaterLayout {
+/** The lake's own plants, placed inside the land's layout (its `extras` hook, so their shade is painted into the ground). */
+export type WaterPlaces = {
   readonly kelp: readonly Growth[];
   readonly coral: readonly Growth[];
+};
+
+export interface WaterLayout {
   readonly fish: readonly FishHome[];
   readonly bubbles: readonly BubbleHome[];
 }
@@ -50,9 +54,11 @@ const FRONT_CLEAR = 9; // TUNE
 /** The far kelp's ring, world units from the middle. */
 const FAR = { from: 13, to: 40 } as const; // TUNE
 
-export function waterLayout(input: WaterLayoutInput): WaterLayout {
-  const { look, land, seed, size, start, springs } = input;
-  const rand = seededRandom(seed ^ 0x1a4e);
+export function waterPlaces(
+  look: WaterLook,
+  { land, size, rand, shade }: Pick<ExtrasContext, 'land' | 'size' | 'rand' | 'shade'>,
+  seed: number,
+): WaterPlaces {
   const between = (lo: number, hi: number) => lo + rand() * (hi - lo);
   const reach = (x: number, z: number) => hexReach({ x, z }, size);
   const inFront = (x: number, z: number) => z < -size * 0.55 && Math.abs(x) < FRONT_CLEAR;
@@ -63,7 +69,6 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
     yaw: rand() * Math.PI * 2,
     scale,
   });
-
   // Kelp: a ring just outside the tile, then groves on the far bed (where the noise is high).
   const kelp: Growth[] = [];
   const placed: WorldPoint[] = [];
@@ -75,7 +80,9 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
     if (inFront(x, z) || reach(x, z) < 1.12 || onPath(x, z, 1.4)) continue;
     if (placed.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 2 ** 2)) continue;
     placed.push({ x, z });
-    kelp.push(at(x, z, between(0.85, 1.25)));
+    const scale = between(0.85, 1.25);
+    kelp.push(at(x, z, scale));
+    shade(x, z, 0.5 * scale, 1.2 * scale);
   }
   const nearKelp = kelp.length;
   for (
@@ -103,7 +110,9 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
     const x = dx * out;
     const z = dz * out;
     if (land.pathMask(x, z, 0.1) > 0 || onPath(x, z, 1.1)) continue;
-    coral.push(at(x, z, between(0.8, 1.2)));
+    const scale = between(0.8, 1.2);
+    coral.push(at(x, z, scale));
+    shade(x, z, 0.62 * scale, 0.5 * scale);
   }
   for (let tries = 0, n = 0; n < look.coral.outside && tries < 400; tries++) {
     const angle = rand() * Math.PI * 2;
@@ -111,9 +120,20 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
     const x = Math.cos(angle) * out;
     const z = Math.sin(angle) * out;
     if (onPath(x, z, 1.2)) continue;
-    coral.push(at(x, z, between(0.9, 1.5)));
+    const scale = between(0.9, 1.5);
+    coral.push(at(x, z, scale));
+    shade(x, z, 0.62 * scale, 0.5 * scale);
     n++;
   }
+
+  return { kelp, coral };
+}
+
+export function waterLayout(input: WaterLayoutInput): WaterLayout {
+  const { look, land, seed, size, start, springs } = input;
+  const rand = seededRandom(seed ^ 0x1a4e);
+  const between = (lo: number, hi: number) => lo + rand() * (hi - lo);
+  const reach = (x: number, z: number) => hexReach({ x, z }, size);
 
   // Fish: circling over the tile, kept off the front so they never hide the Keeper's feet.
   const m = WATER_MOTION.fish;
@@ -157,7 +177,7 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
     bubbles.push(bubble(Math.cos(angle) * d, Math.sin(angle) * d));
   }
 
-  return { kelp, coral, fish, bubbles: shuffled(bubbles, rand) };
+  return { fish, bubbles: shuffled(bubbles, rand) };
 }
 
 /** A stable shuffle, so the first n of the list (a lower tier's share) spread evenly. */

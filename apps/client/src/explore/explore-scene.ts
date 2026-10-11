@@ -29,7 +29,7 @@ import {
 import type { SceneContent } from '../engine/stage.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
 import { ExploreLand, type LandStats } from './explore-land.js';
-import { ExploreWater, type WaterStats } from './explore-water.js';
+import { ExploreWater, lakeExtras, type WaterStats } from './explore-water.js';
 import { LAKE_LOOKS, WATER_LOOKS_BY_TERRAIN } from './lake-config.js';
 import { LAND_LOOKS } from './land-config.js';
 import type { QualityTier } from '../engine/config.js';
@@ -362,6 +362,7 @@ export class ExploreScene implements AmbientTarget {
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
     const landLook = LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain];
+    const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
@@ -373,10 +374,10 @@ export class ExploreScene implements AmbientTarget {
         start: this.#world(this.#at),
         tier: options.tier,
         sky: options.sky,
+        ...(waterLook ? { extras: lakeExtras(waterLook, tileSeed(tile, 'water')) } : {}),
       });
       const land = this.#land;
       this.#surface = (p) => land.heightAt(p.x * size, p.z * size);
-      const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
       if (waterLook) {
         this.#water = new ExploreWater(scene, land, {
           look: waterLook,

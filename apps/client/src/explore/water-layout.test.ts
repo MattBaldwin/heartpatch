@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LAKE_LOOKS, WATER_LOOKS_BY_TERRAIN, WATER_MOTION } from './lake-config.js';
 import { landField, hexReach } from './land-shape.js';
-import { waterLayout, type WaterLayoutInput } from './water-layout.js';
+import { seededRandom } from './explore-world.js';
+import { waterLayout, waterPlaces, type WaterLayoutInput } from './water-layout.js';
 
 const land = LAKE_LOOKS['lake']!;
 const look = WATER_LOOKS_BY_TERRAIN['lake']!;
@@ -24,22 +25,54 @@ function input(seed = 42): WaterLayoutInput {
   };
 }
 
-describe('waterLayout', () => {
-  const layout = waterLayout(input());
+/** The land's extras context, with every shade recorded. */
+function places(seed = 42) {
+  const shades: { x: number; z: number; r: number; height: number }[] = [];
+  const result = waterPlaces(
+    look,
+    {
+      land: landField(land.shape, seed, SIZE, START),
+      size: SIZE,
+      rand: seededRandom(seed),
+      shade: (x, z, r, height) => shades.push({ x, z, r, height }),
+    },
+    seed,
+  );
+  return { ...result, shades };
+}
+
+describe('waterPlaces', () => {
+  const grown = places();
 
   it('grows nothing you would bump into inside the tile', () => {
-    for (const g of [...layout.kelp, ...layout.coral]) {
+    for (const g of [...grown.kelp, ...grown.coral]) {
       expect(hexReach(g, SIZE)).toBeGreaterThanOrEqual(1);
     }
   });
 
   it('never puts kelp between the camera and the tile', () => {
-    expect(layout.kelp.length).toBeGreaterThan(look.kelp.near);
-    for (const k of layout.kelp) expect(k.z < -SIZE * 0.55 && Math.abs(k.x) < 9).toBe(false);
+    expect(grown.kelp.length).toBeGreaterThan(look.kelp.near);
+    for (const k of grown.kelp) expect(k.z < -SIZE * 0.55 && Math.abs(k.x) < 9).toBe(false);
   });
 
-  it('lines the tile with coral and fills the water with fish and bubbles', () => {
-    expect(layout.coral.length).toBeGreaterThan(look.coral.edge);
+  it('lines the tile with coral', () => {
+    expect(grown.coral.length).toBeGreaterThan(look.coral.edge);
+  });
+
+  it('paints a shade into the ground under every near kelp stalk and every coral cluster', () => {
+    expect(grown.shades.length).toBeGreaterThanOrEqual(look.kelp.near + grown.coral.length);
+  });
+
+  it('grows the same plants on every device', () => {
+    expect(places()).toEqual(grown);
+    expect(places(7).kelp[0]).not.toEqual(grown.kelp[0]);
+  });
+});
+
+describe('waterLayout', () => {
+  const layout = waterLayout(input());
+
+  it('fills the water with fish and bubbles', () => {
     expect(layout.fish).toHaveLength(look.fish);
     expect(layout.bubbles).toHaveLength(look.bubbles.ambient + look.bubbles.perSpring * 2);
   });
@@ -64,7 +97,7 @@ describe('waterLayout', () => {
 
   it('grows the same water on every device', () => {
     expect(waterLayout(input())).toEqual(layout);
-    expect(waterLayout(input(7)).kelp[0]).not.toEqual(layout.kelp[0]);
+    expect(waterLayout(input(7)).fish[0]).not.toEqual(layout.fish[0]);
   });
 });
 
