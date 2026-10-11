@@ -1042,7 +1042,10 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
 
   /** Starts the frame loop if it isn't running. */
   function kick(): void {
-    if (frame === 0 && isOpen()) frame = requestAnimationFrame(tick);
+    if (frame !== 0 || !isOpen()) return;
+    // The loop stood still: the next breath's gap isn't a slow frame.
+    breath.skip();
+    frame = requestAnimationFrame(tick);
   }
 
   /**

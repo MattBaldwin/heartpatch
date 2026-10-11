@@ -319,7 +319,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let queue: PlaybackStep[] = [];
   let waiting = false;
   let frame = 0;
-  /** Breathing's pace, judged afresh each battle (a slow device stops it, #397). */
+  /** Breathing's pace, judged afresh each time the battle screen opens (a slow device stops it, #397). */
   let breath = new BreathPacer(BREATHING_FRAME_MS);
   let lastTier: QualityTier | null = null;
   /** A raid replay is on screen (`watch`): no controls, replay words. */

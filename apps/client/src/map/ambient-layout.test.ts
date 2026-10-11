@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AmbientJudge, ambientMode, BreathPacer, moteShare, motesFor } from './ambient-layout.js';
+import { BREATHING_FRAME_MS as BATTLE_BREATH_MS } from '../battle/battle-config.js';
+import { BREATHING_FRAME_MS as CLOSE_UP_BREATH_MS } from '../close-up/close-up-config.js';
 import { AMBIENT, HEX_SIZE, MOTE_KINDS, MOTES, THANKSGIVING } from './map-config.js';
 import { testView } from './test-view.js';
 
@@ -137,7 +139,7 @@ describe('BreathPacer', () => {
 
   it('draws about 30 a second on a 60 or 120 Hz display, and keeps breathing', () => {
     for (const tickMs of [1000 / 60, 1000 / 120]) {
-      const pacer = new BreathPacer(29);
+      const pacer = new BreathPacer(CLOSE_UP_BREATH_MS);
       const drawn = breathe(pacer, tickMs, 60_000);
       expect(drawn / 60).toBeGreaterThan(28);
       expect(drawn / 60).toBeLessThanOrEqual(31);
@@ -145,10 +147,19 @@ describe('BreathPacer', () => {
     }
   });
 
-  it('keeps breathing at iOS Low Power Mode’s 30 fps', () => {
-    const pacer = new BreathPacer(33);
-    expect(breathe(pacer, 34, 60_000)).toBeGreaterThan(1700);
-    expect(pacer.slow).toBe(false);
+  it('keeps breathing at iOS Low Power Mode’s 30 fps, ticks a hair early or late', () => {
+    // Both screens' real paces, on a true 30 Hz tick (33.3 ms) with jitter.
+    for (const frameMs of [CLOSE_UP_BREATH_MS, BATTLE_BREATH_MS]) {
+      for (const jitter of [0, 0.3, 1, 2]) {
+        const pacer = new BreathPacer(frameMs);
+        let drawn = 0;
+        for (let i = 0; i < 1800; i++) {
+          if (pacer.due(i * (1000 / 30) + (i % 2 === 0 ? -jitter : jitter))) drawn += 1;
+        }
+        expect(pacer.slow, `${String(frameMs)} ms ±${String(jitter)}`).toBe(false);
+        expect(drawn).toBeGreaterThan(1790);
+      }
+    }
   });
 
   it('stops for good on a renderer too slow for it, so the screen goes idle (#397)', () => {
