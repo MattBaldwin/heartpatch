@@ -70,7 +70,7 @@ function ownerOnlyView(
 
 /**
  * A registry view sent only to an offer's or an ask's two players
- * (`fromUserId`, `toUserId`; trades #271, friendly battles #29).
+ * (`fromUserId`, `toUserId`; trades #271, friendly battles and live defense #29).
  */
 function twoPlayerView(
   type:
@@ -79,7 +79,9 @@ function twoPlayerView(
     | 'trade.expired'
     | 'challenge.sent'
     | 'challenge.answered'
-    | 'challenge.cancelled',
+    | 'challenge.cancelled'
+    | 'defense.prompted'
+    | 'defense.answered',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -149,6 +151,8 @@ export const PUBLIC_VIEWS: PublicViews = {
   'challenge.sent': twoPlayerView('challenge.sent'),
   'challenge.answered': twoPlayerView('challenge.answered'),
   'challenge.cancelled': twoPlayerView('challenge.cancelled'),
+  'defense.prompted': twoPlayerView('defense.prompted'),
+  'defense.answered': twoPlayerView('defense.answered'),
   'battle.picked': livePairView('battle.picked'),
   'battle.turned': livePairView('battle.turned'),
   'battle.cheered': livePairView('battle.cheered'),

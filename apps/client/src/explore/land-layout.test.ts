@@ -91,6 +91,32 @@ describe('the kit hooks (#335: the lake, trail and cave build on them)', () => {
   };
 
   it('leaves the meadow exactly as it grew before the hooks', () => {
+    // Counts first, so a failure says what moved; then the whole layout.
+    const layout = landLayout(golden);
+    const counts = {
+      tufts: layout.tufts.length,
+      daisy: layout.flowers.daisy.length,
+      tulip: layout.flowers.tulip.length,
+      bell: layout.flowers.bell.length,
+      bushes: layout.bushes.length + layout.berryBushes.length,
+      oak: layout.trees.oak.length,
+      birch: layout.trees.birch.length,
+      pine: layout.trees.pine.length,
+      shades: layout.shades.length,
+    };
+    expect(counts).toEqual({
+      tufts: 2177,
+      daisy: 143,
+      tulip: 61,
+      bell: 36,
+      bushes: 50,
+      oak: 20,
+      birch: 11,
+      pine: 4,
+      shades: 202,
+    });
+    expect(layout.tufts[0]?.x).toBeCloseTo(1.31068, 4);
+    expect(layout.tufts[0]?.z).toBeCloseTo(2.68196, 4);
     // Recorded on the approved meadow (v2) before treeMix and extras existed.
     expect(fingerprint(landLayout(golden))).toBe('2135753483:295799');
   });

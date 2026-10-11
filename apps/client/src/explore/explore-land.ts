@@ -113,6 +113,12 @@ interface Layer {
   readonly mote?: boolean;
 }
 
+/**
+ * The last ground painted (a few hundred ms on a phone): coming back to the
+ * same tile, or reopening it after a scene rebuild, reuses it.
+ */
+let lastPaint: { readonly key: string; readonly pixels: Uint8Array } | null = null;
+
 const matrix = (g: Growth, y: number): Matrix =>
   Matrix.Compose(
     new Vector3(g.scale, g.scale, g.scale),
@@ -144,6 +150,8 @@ export class ExploreLand {
   readonly field: LandField;
   readonly layout: LandLayout;
   readonly clock = new TerrainClock();
+  /** The terrain plugin is on (GLSL): things can sway and drift. */
+  readonly animated: boolean;
   readonly #scene: Scene;
   readonly #layers = new Map<string, Layer>();
   /** The land's materials, with their own colour (night tints them; spots and the team keep theirs). */
@@ -152,6 +160,8 @@ export class ExploreLand {
   readonly #lampGlass: StandardMaterial;
   readonly #sun: DirectionalLight | null;
   #tier: QualityTier;
+  readonly #sunBase: number;
+  readonly #environmentBase: number;
   #ambient: AmbientMode = 'off';
   #night = false;
   #grid: number;
@@ -183,7 +193,9 @@ export class ExploreLand {
 
     // ── Growth: one material for the whole land, swaying on the terrain plugin ─
     const landMat = matte(scene, 'land-mat', 0.82);
-    attachTerrainPlugin(landMat, this.clock);
+    // GLSL only, like the map: under the opt-in WebGPU renderer nothing sways
+    // or drifts, so ambient life stays off rather than hanging motes in the air.
+    this.animated = attachTerrainPlugin(landMat, this.clock) !== null;
     this.#tinted.push({ mat: landMat, base: landMat.albedoColor.clone() });
     const grassMat = matte(scene, 'land-grass-mat', 0.9);
     grassMat.backFaceCulling = false;
@@ -273,6 +285,11 @@ export class ExploreLand {
     scene.fogStart = LAND_LIGHT.haze.start;
     scene.fogEnd = LAND_LIGHT.haze.end;
 
+    // The sky has set the light for this look; keep its time-of-day-free base,
+    // so every look after this sets absolute values (no compounding).
+    const { light } = options.sky;
+    this.#sunBase = this.#sun ? this.#sun.intensity / (light.sun || 1) : 0;
+    this.#environmentBase = scene.environmentIntensity / (light.environment || 1);
     this.setSky(options.sky);
     this.#applyTier();
   }
@@ -322,11 +339,11 @@ export class ExploreLand {
     );
     this.#fill.groundColor = linear(LAND_LIGHT.bounce).multiply(tint);
     this.#fill.intensity = LAND_LIGHT.fill;
-    // Both multiply what `ExploreSky.set` has just set for this look (absolute values),
-    // so call this straight after it, as `ExploreScene.setSky` does, never on its own.
-    this.#scene.environmentIntensity *= LAND_LIGHT.environment;
-    // The sky has just set the sun for the time of day; the land's key is stronger.
-    if (this.#sun) this.#sun.intensity *= LAND_LIGHT.sun;
+    // Absolute, from the bases taken at the start: the land's key is stronger
+    // and its sky light softer than the sky alone sets them.
+    this.#scene.environmentIntensity =
+      this.#environmentBase * look.light.environment * LAND_LIGHT.environment;
+    if (this.#sun) this.#sun.intensity = this.#sunBase * look.light.sun * LAND_LIGHT.sun;
     // Lanterns light up as the day goes.
     const dark = look.light.sun < LAND_LIGHT.lamp.dusk;
     this.#lampGlass.emissiveColor = linear(LAND_LIGHT.lamp.color).scale(
@@ -377,15 +394,20 @@ export class ExploreLand {
 
     const t = this.#texels;
     // UVs run along the grid, so the texture's texels sit where the grid's warp puts them.
-    const pixels = paintGround({
-      palette: look.palette,
-      land: this.field,
-      shades: this.layout.shades,
-      seed,
-      texels: t,
-      radius: R,
-      warp: w,
-    });
+    const key = `${String(seed)}:${String(t)}:${JSON.stringify(this.layout.shades)}`;
+    const pixels =
+      lastPaint?.key === key
+        ? lastPaint.pixels
+        : paintGround({
+            palette: look.palette,
+            land: this.field,
+            shades: this.layout.shades,
+            seed,
+            texels: t,
+            radius: R,
+            warp: w,
+          });
+    lastPaint = { key, pixels };
     const texture = new RawTexture(
       pixels,
       t,

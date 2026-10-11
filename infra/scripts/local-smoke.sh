@@ -108,6 +108,9 @@ grep -qx 'HEARTPATCH_TAG=good-1' "$HP_DIR/.env" || fail ".env does not record go
 pass ".env records HEARTPATCH_TAG=good-1"
 [[ $(stat -c %a "$HP_DIR/.env") == 600 ]] || fail ".env is not mode 600"
 pass ".env is still mode 600"
+salt=$(sed -n 's/^HP_EVOLUTION_SALT=//p' "$HP_DIR/.env")
+[[ $salt =~ ^[0-9a-f]{64}$ ]] || fail "deploy did not generate HP_EVOLUTION_SALT"
+pass "the first deploy generated HP_EVOLUTION_SALT"
 
 step "checking the site through Caddy"
 https https://localhost/api/v1/ready | grep -q '"status":"ready"' || fail "/api/v1/ready"
@@ -220,6 +223,10 @@ stage
 pass "serving good-2"
 [[ $(psql_value 'select count(*) from users') == "$users_before" ]] || fail "data lost across deploys"
 pass "data survived the deploys"
+[[ $(grep -c '^HP_EVOLUTION_SALT=' "$HP_DIR/.env") == 1 &&
+  $(sed -n 's/^HP_EVOLUTION_SALT=//p' "$HP_DIR/.env") == "$salt" ]] ||
+  fail "HP_EVOLUTION_SALT changed across deploys"
+pass "HP_EVOLUTION_SALT kept across deploys"
 images=$(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -F "$prefix-server" | sort | tr '\n' ' ')
 [[ $images == "$prefix-server:good-1 $prefix-server:good-2 " ]] ||
   fail "expected only good-1 and good-2 images to be kept, found: $images"
