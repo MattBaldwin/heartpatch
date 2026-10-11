@@ -96,14 +96,15 @@ test('builds a fence on every open edge, upgrades one, and takes one down', asyn
     await page.getByTestId('tile-panel').evaluate((e) => e.scrollHeight <= e.clientHeight + 1),
   ).toBe(true);
   expect(await row.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+  // Hedge is the card to pick; the fire is first in the row on a free tile.
+  await tap(row.locator('[data-build="hedge"]'));
+  await expect.poll(async () => (await buildState(page))?.selected).toBe('hedge');
   // "None" and "All edges" for those who'd rather not tap the tile.
   await page.getByTestId('build-all-edges').tap();
   await expect.poll(async () => (await buildState(page))?.edges.length).toBe(0);
   await expect(page.getByTestId('build-go')).toBeDisabled();
   await page.getByTestId('build-all-edges').tap();
   await expect.poll(async () => (await buildState(page))?.edges.length).toBe(edges);
-  await tap(row.locator('[data-build="hedge"]'));
-  await expect.poll(async () => (await buildState(page))?.selected).toBe('hedge');
   const build = page.getByTestId('build-go');
   await expect(build).toBeEnabled();
   await tap(build);
