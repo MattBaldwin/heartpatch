@@ -115,6 +115,12 @@ export interface MapDebug extends MapSceneStats {
 export interface MapScreen {
   /** Fetches and shows a map; rejects (with a player-safe message) if it can't. */
   open: (mapId: string) => Promise<void>;
+  /**
+   * Takes the map off screen but keeps following it live (#29): a live
+   * battle needs this patch's events (the other Keeper's picks and cheers),
+   * and the server counts a subscribed socket as "here". `open` brings it back.
+   */
+  hide: () => void;
   /** Back to the default scene; stops live updates. */
   close: () => void;
   /**
@@ -170,6 +176,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let selected: Hex | null = null;
   /** What the Build sheet has lit on the selected tile, and who hears the taps (#371). */
   let buildArea: Parameters<MapScreen['setBuildArea']>[0] = null;
+  /** Followed live while another screen is up (`hide`, a live battle). */
+  let backgrounded = false;
   let night = false;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
   let held: ReadonlyMap<HexKey, string> = new Map();
@@ -316,6 +324,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     fetchView: (mapId) => api.view(mapId),
     socket: liveSocket,
     onRedraw: (state) => {
+      // Followed in the background (`hide`): the state is kept, nothing is drawn.
+      if (backgrounded) return;
       const drawn = drawnView(state.view);
       scene3d?.update(drawn);
       showLegend(state.view.members);
@@ -410,12 +420,18 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   }
 
   const close = (): void => {
+    backgrounded = false;
     sync.close();
     hideMap();
   };
 
   return {
+    hide: () => {
+      backgrounded = true;
+      hideMap();
+    },
     open: async (mapId) => {
+      backgrounded = false;
       const state = await sync.open(mapId);
       if (!state) return;
       scene3d = null;

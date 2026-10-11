@@ -1,5 +1,6 @@
 import {
   CLOTHING_BY_ID,
+  clothingSwatch,
   GAME_DATA,
   type Boutique,
   type ClothingRarity,
@@ -134,7 +135,7 @@ export function createBoutiqueCard(options: BoutiqueCardOptions): BoutiqueCard {
         const item = CLOTHING_BY_ID.get(entry.itemId);
         const state = buyState(entry, balance);
         const swatch = el('span', { class: 'wardrobe-swatch' });
-        swatch.style.background = item?.visual.pieces[0]?.color ?? '#ffffff';
+        swatch.style.background = item ? clothingSwatch(item) : '#ffffff';
         const tag =
           state.kind === 'owned'
             ? el('span', { class: 'boutique-tag boutique-owned' }, BOUTIQUE_TEXT.owned)

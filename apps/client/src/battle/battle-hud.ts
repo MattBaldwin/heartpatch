@@ -54,12 +54,26 @@ export type ControlMode =
       items: { total: number | null; tiles: PotionTile[]; who: string } | null;
       /** Breaking a fence (#203): the turn it is, and the most it lasts. Null elsewhere. */
       fence?: { turn: number; limit: number } | null;
+      /**
+       * The leave button's words, when not "Run away" (a friendly battle's
+       * "Give up", #29); null for no leave button (a live defense's defender
+       * stays to the end, #29-C).
+       */
+      runWords?: RunWords | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
   /** The log is playing, or the server is thinking. */
   | { type: 'waiting' }
   | { type: 'hidden' };
+
+/** The leave button and its "are you sure?" (style guide §3: forgiving). */
+export interface RunWords {
+  readonly run: string;
+  readonly ask: string;
+  readonly yes: string;
+  readonly stay: string;
+}
 
 const PLAIN_RUN = {
   run: 'Run away',
@@ -97,6 +111,8 @@ export interface ResultInfo {
 }
 
 export interface BattleHud {
+  /** Where a live battle's bar goes (#29), at the top of the sheet; hidden otherwise. */
+  readonly liveSlot: HTMLElement;
   show: () => void;
   hide: () => void;
   setPlate: (side: 'mine' | 'theirs', info: PlateInfo) => void;
@@ -252,9 +268,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   result.hidden = true;
 
   const top = el('div', { class: 'battle-top' }, plates.mine.node, leave, plates.theirs.node);
+  // A live battle's bar (#29): the turn timer, the opponent and cheers.
+  const liveSlot = el('div', { class: 'battle-live', 'data-testid': 'battle-live' });
+  liveSlot.hidden = true;
   const sheet = el(
     'section',
     { class: 'battle-sheet', 'data-testid': 'battle-sheet' },
+    liveSlot,
     caption,
     controls,
     problem,
@@ -318,6 +338,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     mode: Extract<ControlMode, { type: 'choose' }>,
     items: NonNullable<Extract<ControlMode, { type: 'choose' }>['items']>,
   ): void => {
+    delete controls.dataset['view'];
     problem.textContent = '';
     const tiles = el('div', { class: 'battle-items' });
     for (const tile of items.tiles) {
@@ -367,6 +388,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   /** "Who comes out?": the bench, in the sheet like the potion picker (#214). */
   const openSwap = (mode: Extract<ControlMode, { type: 'choose' }>): void => {
     problem.textContent = '';
+    delete controls.dataset['view'];
     const pick = el('div', { class: 'battle-moves' });
     for (const { slot, name } of mode.bench) {
       pick.append(
@@ -400,6 +422,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     controls.replaceChildren();
     controls.hidden = mode.type === 'hidden';
     sheet.dataset['mode'] = mode.type;
+    // The base pick (moves, Swap, Run): a live battle lays it out as one grid
+    // (battle.css). "Who comes out?" and the run check clear it.
+    if (mode.type === 'choose') controls.dataset['view'] = 'pick';
+    else delete controls.dataset['view'];
     switch (mode.type) {
       case 'choose': {
         const moves = el('div', { class: 'battle-moves' });
@@ -472,35 +498,39 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         }
         // Forgiving (style guide §3): running away asks first. At a fence
         // (#203) it's "Stop for now": the fence keeps what it lost.
-        const words = mode.fence ? FENCE_RUN : PLAIN_RUN;
-        const run = button(
-          words.run,
-          () => {
-            controls.replaceChildren(
-              el('p', { class: 'battle-ask' }, words.ask),
-              el(
-                'div',
-                { class: 'battle-row' },
-                button(
-                  words.yes,
-                  () => {
-                    act({ type: 'forfeit' });
-                  },
-                  { small: true, testId: 'battle-run-confirm' },
+        const words =
+          mode.runWords === null ? null : (mode.runWords ?? (mode.fence ? FENCE_RUN : PLAIN_RUN));
+        const run =
+          words &&
+          button(
+            words.run,
+            () => {
+              delete controls.dataset['view'];
+              controls.replaceChildren(
+                el('p', { class: 'battle-ask' }, words.ask),
+                el(
+                  'div',
+                  { class: 'battle-row' },
+                  button(
+                    words.yes,
+                    () => {
+                      act({ type: 'forfeit' });
+                    },
+                    { small: true, testId: 'battle-run-confirm' },
+                  ),
+                  button(
+                    words.stay,
+                    () => {
+                      setControls(mode);
+                    },
+                    { soft: true, small: true },
+                  ),
                 ),
-                button(
-                  words.stay,
-                  () => {
-                    setControls(mode);
-                  },
-                  { soft: true, small: true },
-                ),
-              ),
-            );
-          },
-          { soft: true, small: true, testId: 'battle-run' },
-        );
-        row.append(run);
+              );
+            },
+            { soft: true, small: true, testId: 'battle-run' },
+          );
+        if (run) row.append(run);
         controls.append(moves, row);
         if (hint) controls.append(hint);
         if (mode.fence) {
@@ -540,6 +570,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   };
 
   return {
+    liveSlot,
     show: () => {
       hud.hidden = false;
       forget();
