@@ -76,6 +76,25 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
   await done.tap();
 }
 
+/**
+ * Taps "Sign up" and waits for the server's answer (#408). On a busy CI
+ * runner the tap and the answer took up to 7 s (200 sign-ups: p99 5.3 s),
+ * more than the 5 s the code screen's check allows, while the screen followed
+ * the answer within about a second. So wait on the answer, then the screen.
+ */
+export async function submitSignUp(overlay: Locator): Promise<void> {
+  const [answer] = await Promise.all([
+    overlay
+      .page()
+      .waitForResponse(
+        (res) => res.url().endsWith('/api/v1/auth/signup') && res.request().method() === 'POST',
+        { timeout: 30_000 },
+      ),
+    overlay.getByRole('button', { name: 'Sign up' }).tap(),
+  ]);
+  expect(answer.status()).toBe(201);
+}
+
 export interface SignUpOptions {
   /** The device's time zone, so its patches keep that map time (map-time.ts); the suite's unless given. */
   timezoneId?: string;
@@ -106,34 +125,8 @@ export async function signUp(
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption(options.birthYear ?? '2014');
-  // TEMP (#408): measure where sign-up time goes in CI; removed before merge.
-  const t0 = Date.now();
-  let tResponse = 0;
-  void page
-    .waitForResponse((r) => r.url().endsWith('/api/v1/auth/signup'), { timeout: 0 })
-    .then(() => (tResponse = Date.now()))
-    .catch(() => undefined);
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  const tTapped = Date.now();
-  let shown = 0;
-  void overlay
-    .getByTestId('auth-code-done')
-    .waitFor({ timeout: 60_000 })
-    .then(() => (shown = Date.now()))
-    .catch(() => undefined);
-  try {
-    await savedCode(overlay);
-  } finally {
-    const ready = await page
-      .locator('#game')
-      .getAttribute('data-ready', { timeout: 1_000 })
-      .catch(() => null);
-    console.log(
-      `[signup-timing] ${test.info().titlePath.slice(1, 2).join('')}:${String(test.info().line)} ` +
-        `tap=${String(tTapped - t0)}ms response=${tResponse ? String(tResponse - t0) : 'none'}ms ` +
-        `screen=${shown ? String(shown - t0) : 'none'}ms stageReady=${String(ready)}`,
-    );
-  }
+  await submitSignUp(overlay);
+  await savedCode(overlay);
   const { helper } = options;
   if (!helper) return;
   await expect(
