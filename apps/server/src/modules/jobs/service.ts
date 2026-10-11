@@ -306,6 +306,8 @@ export interface SquishyJobsService {
   collect: (user: PublicUser, mapId: string) => Promise<CollectWorkResponse>;
   /** Dev/test only: each of my gatherers finishes one more cycle now (a short timer for e2e). */
   devReady: (user: PublicUser, mapId: string) => Promise<JobsView>;
+  /** Dev/test only: my squishies live `minutes` more of their jobs, as if the clock jumped (#376). */
+  devAgeMood: (user: PublicUser, mapId: string, minutes: number) => Promise<JobsView>;
 }
 
 export interface SquishyJobsServiceOptions {
@@ -891,6 +893,16 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           const since = row.workSince.getTime() - work.cycleSeconds * 1000;
           await repo.moveWorkSince(row.squishy.id, new Date(since));
         }
+        return buildView(tx, repo, map, user.id, at);
+      }),
+
+    devAgeMood: (user, mapId, minutes) =>
+      command(user, mapId, async ({ repo, tx, map, at }) => {
+        const { rows } = await lockJobs(repo, await repo.listMine(map.id, user.id));
+        await repo.devShiftTimes(
+          rows.map((r) => r.squishy.id),
+          minutes * 60_000,
+        );
         return buildView(tx, repo, map, user.id, at);
       }),
   };

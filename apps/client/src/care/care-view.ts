@@ -6,6 +6,7 @@ import {
   type CareResult,
   type CareWhisper,
   type CareSquishy,
+  type MoodDrift,
   type Rarity,
   type Species,
   type SpeciesVisual,
@@ -66,7 +67,15 @@ export const CARE_TEXT = {
   // Why care matters (design doc §7), up front in "Levels and evolving".
   whyCare: 'Happy squishies learn more from battles and evolve sooner!',
   // CARE_RULES.hoursFullToBaseline (24, `// TUNE:`): reword if it moves far from a day.
-  fades: 'Happiness fades over about a day, so come back and say hi.',
+  // It fades only while resting or on a job that isn't their thing (#376).
+  fades: 'Happiness fades over about a day while they rest. A job they love keeps it steady!',
+  // Why happiness is or isn't drifting down right now (#376), under the mood.
+  drift: {
+    steady: 'Loves their job! Happiness is holding steady. 💪',
+    resting: 'Resting, so happiness slowly drifts down. 💤',
+    'wrong-job': 'Not loving this job, so happiness drifts down. 😕',
+    stopped: "Work's on pause, so happiness drifts down. Check their job!",
+  } satisfies Record<MoodDrift, string>,
   bonus: (percent: number) =>
     percent > 100
       ? `Battles give ×${String(percent / 100)} XP right now.`
@@ -165,6 +174,8 @@ export interface CareSheetModel {
   readonly rarity: Rarity | null;
   readonly color: string;
   readonly mood: string;
+  /** Why happiness is holding or drifting (#376), or null when the reply doesn't say. */
+  readonly drift: string | null;
   /** Hearts meter, 0–1. */
   readonly hearts: number;
   readonly level: string;
@@ -263,6 +274,7 @@ export function careSheet(
     rarity: species.get(squishy.speciesId)?.rarity ?? null,
     color: blobColor(squishy.speciesId, species),
     mood: moodLine(squishy.mood, CARE_RULES),
+    drift: squishy.moodDrift === null ? null : CARE_TEXT.drift[squishy.moodDrift],
     hearts: squishy.contentment / CARE_RULES.maxContentment,
     level:
       growsAt !== undefined && growsAt > squishy.level

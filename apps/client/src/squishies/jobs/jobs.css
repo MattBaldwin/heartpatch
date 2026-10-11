@@ -90,6 +90,20 @@
   color: #7a5d80;
 }
 
+/* Whether gathering here suits the squishy (#376). */
+.jobs-fit {
+  margin: 2px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f6b3d;
+}
+
+.jobs-no-fit {
+  margin: 2px 0;
+  font-size: 13px;
+  color: #8a4b2d;
+}
+
 .jobs-safe {
   margin: 2px 0;
   font-size: 13px;

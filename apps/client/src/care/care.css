@@ -222,6 +222,18 @@
   color: #b0467a;
 }
 
+/* Why happiness is holding or drifting (#376), small under the mood. */
+.care-drift {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a5d82;
+}
+
+.care-drift[hidden] {
+  display: none;
+}
+
 .care-xp-line {
   font-size: 13px;
   color: #7a5d82;

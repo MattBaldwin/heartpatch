@@ -88,8 +88,8 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
 
   const later = (ms: number) => clock.setTime(clock.getTime() + ms);
 
-  async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+  async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
+    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, ...env });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
   }
@@ -1323,6 +1323,32 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       later(HOUR_MS);
       expect(await moodOf(server, kid, mapId, pet)).toEqual({
         contentment: 80 - drop(6),
+        drift: 'steady',
+      });
+    });
+
+    it('dev mood aging reads as a clock jump would (e2e only)', async () => {
+      const server = await start({ HP_DEV_SQUISHY_GRANTS: 'true' });
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      const [rester, worker] = [
+        await squishy(mapId, kid),
+        await squishy(mapId, kid, { element: 'leaf', feeling: 'brave' }),
+      ];
+      await checkpoint(rester, 80);
+      await checkpoint(worker, 80);
+      await setJob(server, kid, mapId, worker, { job: 'gatherer', q: node.q, r: node.r });
+      const aged = await call(server, 'POST', `/maps/${mapId}/dev/mood/age`, kid, {
+        minutes: 60,
+      });
+      expect(aged.statusCode).toBe(200);
+      expect(await moodOf(server, kid, mapId, rester)).toEqual({
+        contentment: 80 - drop(1),
+        drift: 'resting',
+      });
+      expect(await moodOf(server, kid, mapId, worker)).toEqual({
+        contentment: 80,
         drift: 'steady',
       });
     });

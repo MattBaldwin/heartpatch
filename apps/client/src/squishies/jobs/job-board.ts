@@ -1,4 +1,4 @@
-import type { JobSquishy, JobsView, SetJobRequest } from '@heartpatch/shared';
+import type { JobSquishy, JobsView, SetJobRequest, WorkSpot } from '@heartpatch/shared';
 import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
@@ -15,6 +15,7 @@ import {
   JOBS_TEXT,
   nameOf,
   readyTotal,
+  spotFit,
   spotLabel,
   trainHintText,
 } from './jobs-view.js';
@@ -192,7 +193,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       .sort((a, b) => {
         const first = (s: { q: number; r: number }) =>
           wantSpot && s.q === wantSpot.q && s.r === wantSpot.r ? 0 : 1;
-        return first(a) - first(b);
+        // Then the spots it loves (#376); the sort keeps the server's order otherwise.
+        const fit = (s: WorkSpot) => (spotFit(squishy, s).fits ? 0 : 1);
+        return first(a) - first(b) || fit(a) - fit(b);
       });
     const rows = spots.map((spot) => {
       const worker = current.squishies.find((s) => s.squishy.id === spot.workerId);
@@ -208,10 +211,16 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
         { 'data-testid': 'jobs-spot', 'data-q': String(spot.q), 'data-r': String(spot.r) },
       );
       if (worker && worker.squishy.id !== squishy.squishy.id) go.disabled = true;
+      const fit = spotFit(squishy, spot);
       return el(
         'li',
         { class: 'jobs-spot' },
         go,
+        el(
+          'p',
+          { class: fit.fits ? 'jobs-fit' : 'jobs-no-fit', 'data-testid': 'jobs-spot-fit' },
+          fit.line,
+        ),
         el(
           'p',
           { class: spot.firelit ? 'jobs-safe' : 'jobs-dark' },

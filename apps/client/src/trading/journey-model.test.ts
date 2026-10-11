@@ -36,6 +36,8 @@ const squishy = (
   work: null,
   training: null,
   fullXpResetAt: null,
+  gatherFits: [],
+  moodDrift: null,
 });
 const RULES = { teamSize: 3, maxStoredCycles: 4 };
 

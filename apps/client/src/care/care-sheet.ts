@@ -89,6 +89,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   // The rarity chip under the name (#240).
   const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
+  const drift = el('p', { class: 'care-drift', 'data-testid': 'care-drift' });
   const heartsFill = el('div', { class: 'care-meter-fill care-hearts' });
   const hearts = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, heartsFill);
   const level = el('p', { class: 'care-level', 'data-testid': 'care-level' });
@@ -161,6 +162,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       name,
       rarity,
       mood,
+      drift,
       hearts,
       level,
       xpBar,
@@ -219,6 +221,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       rarity.replaceChildren();
       rarity.hidden = true;
       mood.textContent = CARE_TEXT.noneYet;
+      drift.hidden = true;
       actions.replaceChildren();
       return;
     }
@@ -230,6 +233,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
     rarity.hidden = model.rarity === null;
     mood.textContent = model.mood;
+    drift.textContent = model.drift ?? '';
+    drift.hidden = model.drift === null;
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
     level.textContent = model.level;
     xpFill.style.width = `${String(Math.round(model.xp * 100))}%`;

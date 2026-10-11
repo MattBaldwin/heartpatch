@@ -182,6 +182,11 @@ export interface SquishyJobsRepo {
   leavePost: (squishyId: string) => Promise<string | null>;
   /** A new contentment checkpoint (#376): its value at `at`. */
   setContentment: (squishyId: string, contentment: number, at: Date) => Promise<void>;
+  /**
+   * Dev and test only: moves these squishies' care, checkpoint, work,
+   * training and watch times `ms` into the past, as if the clock jumped.
+   */
+  devShiftTimes: (squishyIds: readonly string[], ms: number) => Promise<void>;
 }
 
 export interface SquishyJobsTxRepo extends SquishyJobsRepo {
@@ -512,6 +517,25 @@ function queries(db: Executor): SquishyJobsRepo {
         .update(squishies)
         .set({ contentment, contentmentSince: at })
         .where(eq(squishies.id, squishyId));
+    },
+
+    devShiftTimes: async (squishyIds, ms) => {
+      if (squishyIds.length === 0) return;
+      const back = (column: AnyColumn) => sql`${column} - make_interval(secs => ${ms / 1000})`;
+      await db
+        .update(squishies)
+        .set({
+          lastCaredAt: back(squishies.lastCaredAt),
+          contentmentSince: back(squishies.contentmentSince),
+          workSince: back(squishies.workSince),
+          workStartedAt: back(squishies.workStartedAt),
+          trainingSince: back(squishies.trainingSince),
+        })
+        .where(inArray(squishies.id, [...squishyIds]));
+      await db
+        .update(tileDefenders)
+        .set({ assignedAt: back(tileDefenders.assignedAt) })
+        .where(inArray(tileDefenders.squishyId, [...squishyIds]));
     },
   };
 }

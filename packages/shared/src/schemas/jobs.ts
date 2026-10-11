@@ -157,6 +157,19 @@ export const SetTeamRequestSchema = z.strictObject({
 });
 export type SetTeamRequest = z.infer<typeof SetTeamRequestSchema>;
 
+/**
+ * Dev and test only, `POST /maps/:mapId/dev/mood/age`: my squishies live
+ * `minutes` more of their jobs, as if the clock jumped (#376's e2e).
+ */
+export const DevAgeMoodRequestSchema = z.strictObject({
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60),
+});
+export type DevAgeMoodRequest = z.infer<typeof DevAgeMoodRequestSchema>;
+
 /** `POST /maps/:mapId/work/collect`: everything my gatherers had ready. */
 export const CollectWorkResponseSchema = z.object({
   granted: ItemCountsSchema,

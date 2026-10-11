@@ -57,6 +57,7 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   newEvolution: null,
   accessory: null,
   whisper: null,
+  moodDrift: null,
   ...extra,
 });
 
@@ -163,6 +164,14 @@ describe('careSheet', () => {
     expect(careSheet(squishy({ speciesId: top.id }), reply()).level).toBe(
       'Level 4 · Fully evolved! 🌟',
     );
+  });
+
+  it('says why happiness is holding or drifting (#376), and nothing when the reply is silent', () => {
+    expect(careSheet(squishy({ moodDrift: 'steady' }), reply()).drift).toBe(CARE_TEXT.drift.steady);
+    expect(careSheet(squishy({ moodDrift: 'wrong-job' }), reply()).drift).toBe(
+      CARE_TEXT.drift['wrong-job'],
+    );
+    expect(careSheet(squishy({ moodDrift: null }), reply()).drift).toBeNull();
   });
 
   it('fills the bar at the top level, and says so', () => {

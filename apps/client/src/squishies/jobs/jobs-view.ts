@@ -60,6 +60,9 @@ export const JOBS_TEXT = {
   inHollow: 'In the Hollow',
   outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
   training: 'Practicing at the Training Grounds 🎯',
+  // Whether gathering here suits it (#376): a job it's good at keeps it happy.
+  fits: (resource: string, icon: string) => `Loves gathering ${resource} here! ${icon}`,
+  noFit: "Not their thing, they'll get grumpy",
 } as const;
 
 /** "1st", "2nd", "3rd". */
@@ -177,6 +180,21 @@ export function spotLabel(spot: WorkSpot): string {
   // A node is "the Timber spot"; open land says where it is.
   if (spot.from === 'node') return `${what} spot`;
   return `${what} on ${TERRAIN_NAMES.get(spot.terrain) ?? 'the land'}`;
+}
+
+/**
+ * Whether gathering at this spot suits this squishy (#376, the server's
+ * `gatherFits`), and the line that says so under the spot.
+ */
+export function spotFit(
+  squishy: Pick<JobSquishy, 'gatherFits'>,
+  spot: Pick<WorkSpot, 'resource'>,
+): { fits: boolean; line: string } {
+  const fits = squishy.gatherFits.includes(spot.resource);
+  return {
+    fits,
+    line: fits ? JOBS_TEXT.fits(itemName(spot.resource), itemIcon(spot.resource)) : JOBS_TEXT.noFit,
+  };
 }
 
 /** Everything my gatherers have ready, added up. */

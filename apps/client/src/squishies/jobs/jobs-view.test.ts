@@ -6,6 +6,8 @@ import {
   type WorkStatus,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { itemName } from '../../inventory/bag-view.js';
+import { itemIcon } from '../../inventory/item-icons.js';
 import { workableByMe } from './index.js';
 import {
   canTrain,
@@ -18,6 +20,7 @@ import {
   nameOf,
   rarityOf,
   readyTotal,
+  spotFit,
   spotLabel,
   teamCost,
   teamSlots,
@@ -49,6 +52,8 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     work: null,
     training: null,
     fullXpResetAt: null,
+    gatherFits: [],
+    moodDrift: null,
     ...over,
   };
 }
@@ -256,5 +261,19 @@ describe('Training Grounds on homesteads (#277)', () => {
       JOBS_TEXT.groundsFull,
     );
     expect(trainHintText({ trainingGrounds: [g(1, 1)] })).toBe('');
+  });
+});
+
+describe('spot fit (#376)', () => {
+  it('says it loves a resource it is good at, and warns about one it is not', () => {
+    const pet = squishy(1, { gatherFits: ['timber'] });
+    expect(spotFit(pet, { resource: 'timber' })).toEqual({
+      fits: true,
+      line: `Loves gathering ${itemName('timber')} here! ${itemIcon('timber')}`,
+    });
+    expect(spotFit(pet, { resource: 'stone' })).toEqual({
+      fits: false,
+      line: JOBS_TEXT.noFit,
+    });
   });
 });
