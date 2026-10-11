@@ -276,6 +276,7 @@ export function createTradesRepo(db: Executor) {
           state,
           teamSlot: null,
           habitatBuildingId: null,
+          habitatSince: null,
           workTileId: null,
           workSince: null,
           workStartedAt: null,
