@@ -351,7 +351,7 @@ export const EXPLORE_SWIM = {
     }, // TUNE
   },
   /** Squishies following underwater: float, and a drifting glide by the water they cover. */
-  follower: { float: 0.3, bob: 0.06, pulse: 0.08 }, // TUNE
+  follower: { float: 0.5, bob: 0.1, pulse: 0.08 }, // TUNE
   /** Bubbles puffed from the mask on each kick: how many, how long they live (ms), rise (world units), size. */
   bubbles: { perKick: 3, pool: 9, lifeMs: 1100, rise: 0.9, size: 0.1 }, // TUNE
 } as const;
