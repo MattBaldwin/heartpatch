@@ -17,7 +17,8 @@
 // every frame is saved, so `ffmpeg` can make a real-time clip of a scene that
 // takes seconds a frame to draw.
 import { chromium } from '@playwright/test';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const OUT = process.env.OUT ?? path.resolve('.explore-shots');
@@ -37,6 +38,24 @@ const SKIES = (process.env.SKIES ?? 'day,dusk,night').split(',');
 const CLIP = process.env.CLIP === '1';
 const CLIP_FRAMES = Number(process.env.CLIP_FRAMES ?? 150);
 const TAG = process.env.TAG ?? 'shot';
+// `TERRAIN=lake` turns the player's tiles in the dev database into that terrain before
+// exploring (dev tooling only: the shots show a lake without playing to one).
+const TERRAIN = process.env.TERRAIN ?? null;
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
+
+function setTerrain(name) {
+  if (!TERRAIN) return;
+  // psql doesn't interpolate -v variables into -c, so the statement goes in on stdin.
+  execFileSync(
+    'psql',
+    [DATABASE_URL, '-v', `terrain=${TERRAIN}`, '-v', `name=${name}`, '-f', '-'],
+    {
+      input:
+        "UPDATE tiles SET terrain = :'terrain' WHERE owner_user_id IN (SELECT id FROM users WHERE username = :'name');",
+    },
+  );
+}
 
 /**
  * Polls `fn` in the page from here until it's truthy. (Playwright's own
@@ -134,7 +153,8 @@ const stats = [];
 for (const device of DEVICES) {
   const size = ALL_DEVICES[device];
   // `REUSE=1`: the player from the last run on this device (iterating on the look).
-  const statePath = path.join(OUT, `.state-${device}.json`);
+  // `SHARE=1`: one player for every device, so the same tile is shot at each size.
+  const statePath = path.join(OUT, `.state-${process.env.SHARE === '1' ? 'shared' : device}.json`);
   const reuse = process.env.REUSE === '1' && (await stat(statePath).catch(() => null)) !== null;
   const context = await browser.newContext({
     ...(reuse ? { storageState: statePath } : {}),
@@ -148,10 +168,16 @@ for (const device of DEVICES) {
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   await page.clock.install({ time: at(ALL_SKIES.day) });
   await page.clock.resume();
-  if (!reuse) {
-    await signUpAndMakePatch(page, `${TAG}_${Date.now().toString(36)}${device[0]}`);
+  let name;
+  if (reuse) {
+    name = (await readFile(`${statePath}.name`, 'utf8')).trim();
+  } else {
+    name = `${TAG}_${Date.now().toString(36)}${device[0]}`;
+    await signUpAndMakePatch(page, name);
     await context.storageState({ path: statePath });
+    await writeFile(`${statePath}.name`, name);
   }
+  setTerrain(name);
   for (const tier of TIERS) {
     for (const sky of SKIES) {
       const started = Date.now();

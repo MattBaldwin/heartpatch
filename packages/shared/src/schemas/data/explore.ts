@@ -15,7 +15,17 @@ export const ToolIdSchema = z.enum(['shovel', 'net', 'rope', 'lantern']);
 export type ToolId = z.infer<typeof ToolIdSchema>;
 
 /** The touch mini-interaction a spot plays (feel only: the server rolls every find). */
-export const SpotInteractionSchema = z.enum(['lift', 'shake', 'dig', 'scoop', 'climb', 'light']);
+export const SpotInteractionSchema = z.enum([
+  'lift',
+  'shake',
+  'dig',
+  'scoop',
+  'climb',
+  'light',
+  // #335: underwater on a lake, catch a bubble spring's bubbles, part the reeds.
+  'dive',
+  'part',
+]);
 export type SpotInteraction = z.infer<typeof SpotInteractionSchema>;
 
 /** A kind of search spot: a rock to lift, a mound to dig, a cave to light. */

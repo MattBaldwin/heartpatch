@@ -29,11 +29,13 @@ import {
 import type { SceneContent } from '../engine/stage.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
 import { ExploreLand, type LandStats } from './explore-land.js';
+import { ExploreWater, type WaterStats } from './explore-water.js';
+import { LAKE_LOOKS, WATER_LOOKS_BY_TERRAIN } from './lake-config.js';
 import { LAND_LOOKS } from './land-config.js';
 import type { QualityTier } from '../engine/config.js';
 import { AmbientJudge, ambientMode, type AmbientMode } from '../map/ambient-layout.js';
 import type { AmbientTarget } from '../map/ambient-driver.js';
-import type { SkyLook } from './explore-sky-look.js';
+import { isUnderwater, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   FALLBACK_LOOK,
@@ -44,6 +46,7 @@ import {
   type PropKind,
 } from '../map/map-config.js';
 import { loftRoundedHex } from '../map/hex-mesh.js';
+import { buildLakeSpotProp } from './lake-kit.js';
 import { buildSpotProp } from './land-kit.js';
 import { linear, merged, painted } from '../map/map-props.js';
 import {
@@ -68,6 +71,7 @@ import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
   EXPLORE_HOP,
+  EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
 } from './explore-config.js';
@@ -142,6 +146,8 @@ export interface ExploreSceneStats {
   readonly triangles: number;
   /** The land kit's layers and tier (#335 art reset), or null on today's tile. */
   readonly land: LandStats | null;
+  /** The lake's own layers (kelp, coral, fish, bubbles), or null off a lake. */
+  readonly water: WaterStats | null;
 }
 
 export interface ExploreSceneOptions {
@@ -167,6 +173,10 @@ export interface ExploreSceneOptions {
  * What each kind of spot looks like: a map prop where one fits, else one of
  * the explore-only shapes built below (a mound, a pond, a ledge, a cave).
  */
+/** A search spot drawn from the land kit: the meadow's, else the lake's (#335). */
+const kitSpot = (scene: Scene, kind: string) =>
+  buildSpotProp(scene, kind) ?? buildLakeSpotProp(scene, kind);
+
 const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   rock: 'rock',
   tree: 'tree',
@@ -310,6 +320,8 @@ export class ExploreScene implements AmbientTarget {
   readonly #sky: ExploreSky;
   /** The land kit (#335 art reset), on the terrains built on it so far; null: today's tile. */
   readonly #land: ExploreLand | null = null;
+  /** The lake's water life on that land (#335), underwater only. */
+  readonly #water: ExploreWater | null = null;
   /** Ambient life (#335): how it runs, and whether the device keeps up with it. */
   #ambient: AmbientMode = 'off';
   #ambientStart: number | null = null;
@@ -319,11 +331,19 @@ export class ExploreScene implements AmbientTarget {
   /** The ground and its decor, tinted by the time of day (#335: moonlit at night). */
   readonly #ground: { readonly mat: PBRMaterial; readonly base: Color3 }[] = [];
   #drawCalls = 0;
+  /** Under a lake (#335): the Keeper swims and wears the Snorkel's mask. */
+  readonly #underwater: boolean;
+  /** The Snorkel's mask on the Keeper's face, underwater. */
+  #mask: Mesh | null = null;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
-    this.#reduced = options.reducedMotion ?? (() => false);
+    this.#underwater = isUnderwater(tile.terrain);
+    // Underwater the Keeper and team float and bob instead of hopping (#335).
+    // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
+    const reduced = options.reducedMotion ?? (() => false);
+    this.#reduced = this.#underwater ? () => true : reduced;
     this.#pinned = options.pinned ?? false;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
     this.#sky = new ExploreSky(scene, options.sky);
@@ -341,7 +361,7 @@ export class ExploreScene implements AmbientTarget {
     // opens on it instead of easing across.
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
-    const landLook = LAND_LOOKS[tile.terrain];
+    const landLook = LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain];
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
@@ -356,6 +376,18 @@ export class ExploreScene implements AmbientTarget {
       });
       const land = this.#land;
       this.#surface = (p) => land.heightAt(p.x * size, p.z * size);
+      const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
+      if (waterLook) {
+        this.#water = new ExploreWater(scene, land, {
+          look: waterLook,
+          seed: tileSeed(tile, 'water'),
+          size,
+          start: this.#world(this.#at),
+          springs: tile.spots.filter((s) => s.kind === 'pond').map((s) => this.#world(s)),
+          tier: options.tier,
+          sky: options.sky,
+        });
+      }
     } else {
       const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
       const h = look.height;
@@ -458,6 +490,40 @@ export class ExploreScene implements AmbientTarget {
         this.#keeperPlacement(),
         keeperItems(options.keeperWearing ?? []),
       );
+      if (this.#underwater) {
+        // The Snorkel worn on the face (#335): a mask and its orange tube,
+        // in head-width units.
+        const part = (m: Mesh, x: number, y: number, z: number, hex: string) => {
+          m.position.set(x, y, z);
+          return painted(m, hex);
+        };
+        // Round and toy-like, like the rest of the kit: a blue frame, a pale lens, a bent tube.
+        const blob = (
+          d: number,
+          at: [number, number, number],
+          k: [number, number, number],
+          hex: string,
+        ) => {
+          const m = CreateSphere('m', { diameter: d, segments: 8 }, scene);
+          m.scaling.set(...k);
+          return part(m, at[0], at[1], at[2], hex);
+        };
+        const mask = merged('explore-mask', [
+          blob(0.9, [0, 0, 0], [1, 0.55, 0.3], '#3aa0d8'),
+          blob(0.72, [0, 0, -0.06], [1, 0.48, 0.3], '#d9f7ff'),
+          part(
+            CreateCylinder('m', { height: 0.7, diameter: 0.1, tessellation: 10 }, scene),
+            0.52,
+            0.34,
+            0.06,
+            '#ff8a4a',
+          ),
+          blob(0.16, [0.52, 0.7, 0.06], [1, 1, 1], '#ff6a3a'),
+        ]);
+        mask.material = propMaterial;
+        mask.isPickable = false;
+        this.#mask = mask;
+      }
     }
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
@@ -527,6 +593,7 @@ export class ExploreScene implements AmbientTarget {
       sky: this.#sky.stats,
       triangles: this.#triangles,
       land: this.#land?.stats ?? null,
+      water: this.#water?.stats ?? null,
     };
   }
 
@@ -600,6 +667,8 @@ export class ExploreScene implements AmbientTarget {
 
   /** The tool in the Keeper's hand (null: hands). */
   hold(tool: ToolId | null): void {
+    // Underwater the Snorkel is worn on the face, not carried (#335).
+    if (this.#underwater && tool === 'net') tool = null;
     if (tool === this.#held) return;
     this.#held = tool;
     for (const t of TOOLS) this.#tools[t].setEnabled(t === tool);
@@ -755,6 +824,7 @@ export class ExploreScene implements AmbientTarget {
   /** The quality tier changed: the land's grass share follows (#335). */
   setTier(tier: QualityTier): void {
     this.#land?.setTier(tier);
+    this.#water?.setTier(tier);
   }
 
   // ── Ambient life (#335): the map's driver paces it (`AmbientTarget`) ──────
@@ -766,6 +836,7 @@ export class ExploreScene implements AmbientTarget {
     if (mode === this.#ambient) return false;
     this.#ambient = mode;
     this.#land?.setAmbient(mode);
+    this.#water?.setAmbient(mode);
     return true;
   }
 
@@ -780,10 +851,16 @@ export class ExploreScene implements AmbientTarget {
       // Too slow for ambient life here: everything stands still from now on.
       this.#ambient = 'off';
       land.setAmbient('off');
+      this.#water?.setAmbient('off');
       return true;
     }
     this.#ambientStart ??= now;
     land.clock.time = (now - this.#ambientStart) / 1000;
+    if (this.#underwater) {
+      // The swimmer bobs on the same clock as the kelp.
+      if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+      this.#placeMask();
+    }
     return true;
   }
 
@@ -882,6 +959,8 @@ export class ExploreScene implements AmbientTarget {
     this.#sky.set(look);
     this.#tintGround(look);
     this.#land?.setSky(look);
+    // After the land, whose haze the water's replaces.
+    this.#water?.setSky(look);
   }
 
   /** The ground and decor take the time of day's tint; spots, glints and the team don't. */
@@ -892,6 +971,7 @@ export class ExploreScene implements AmbientTarget {
 
   /** The held tool at the Keeper's hand, following its position and heading. */
   #placeTool(): void {
+    this.#placeMask();
     const tool = this.#held ? this.#tools[this.#held] : null;
     if (!tool || !this.#keeper) return;
     const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
@@ -995,6 +1075,16 @@ export class ExploreScene implements AmbientTarget {
     PLACE.squash = pose.squash;
     PLACE.shadow = shadowScale(pose.lift);
     PLACE.shadowAlpha = shadowAlpha(pose.lift);
+    if (this.#underwater) {
+      // Swimming (#335): afloat, leaning into a kick, bobbing on the clock.
+      const { swim } = EXPLORE_UNDERWATER;
+      PLACE.lean = swim.lean;
+      PLACE.lift +=
+        (swim.float + swim.bob * Math.sin((this.#land?.clock.time ?? 0) * swim.bobSpeed)) *
+        this.keeperTall;
+      PLACE.shadow = shadowScale(swim.float);
+      PLACE.shadowAlpha = shadowAlpha(swim.float);
+    }
     return PLACE;
   }
 
@@ -1013,6 +1103,37 @@ export class ExploreScene implements AmbientTarget {
     PLACE.shadow = shadowScale(lift);
     PLACE.shadowAlpha = shadowAlpha(lift);
     return PLACE;
+  }
+
+  /** The Snorkel's mask sits on the Keeper's face while it swims (#335). */
+  #placeMask(): void {
+    const mask = this.#mask;
+    if (!mask || !this.#keeper) return;
+    // The face, from the Keeper's own proportions (a big chibi head).
+    const { height, width } = this.#keeper.params;
+    const place = this.#keeperPlacement();
+    Quaternion.RotationYawPitchRollToRef(this.#yaw, place.lean, 0, TOOL_TURN);
+    const k = EXPLORE_VIEW.keeperScale;
+    Matrix.ComposeToRef(
+      TOOL_SCALE.set(k, k, k),
+      TOOL_TURN,
+      TOOL_AT.set(place.x, place.y + place.lift, place.z),
+      TOOL_WORLD,
+    );
+    // On the face: the front of the head (the Keeper faces -z at yaw 0).
+    Vector3.TransformCoordinatesToRef(
+      TOOL_ANCHOR.set(
+        0,
+        height * EXPLORE_UNDERWATER.mask.up,
+        -width * EXPLORE_UNDERWATER.mask.forward,
+      ),
+      TOOL_WORLD,
+      mask.position,
+    );
+    mask.rotationQuaternion ??= new Quaternion();
+    mask.rotationQuaternion.copyFrom(TOOL_TURN);
+    const s = k * width * EXPLORE_UNDERWATER.mask.size;
+    mask.scaling.set(s, s, s);
   }
 
   #buildGround(terrain: string): void {
@@ -1058,14 +1179,14 @@ export class ExploreScene implements AmbientTarget {
       // Old forests grow their own old trees.
       const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
       // On the land kit (#335), its own rocks, trees, logs and flower beds, drawn at world size.
-      const kit = this.#land ? buildSpotProp(this.#scene, spot.kind) : null;
+      const kit = this.#land ? kitSpot(this.#scene, spot.kind) : null;
       const kind = kit ? `kit:${spot.kind}` : prop;
       if (kit) {
         kit.mesh.dispose();
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => buildSpotProp(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
+          () => kitSpot(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
         );
       } else {
         builders.set(kind, () =>
