@@ -104,6 +104,22 @@ describe('BattleScene', () => {
     expect(scene.getMeshByName('arena-hills')).not.toBeNull();
   });
 
+  it('dresses each squishy in what it wears, hat height included, and swaps keep it (#373)', () => {
+    const { battle } = build('forest');
+    battle.prewarm('a', [
+      { speciesId: 'puddlepuff', instanceId: 'mine-1', accessory: 'tiny-top-hat' },
+      { speciesId: 'puddlepuff', instanceId: 'mine-2', accessory: null },
+    ]);
+    battle.prewarm('b', [{ speciesId: 'emberbun', instanceId: 'theirs-1', accessory: 'tiny-bow' }]);
+    expect(battle.stats.accessories).toBe(2);
+    // Sending out and swapping reuse the built (dressed) squishies.
+    battle.sendOut('a', 'puddlepuff', 'mine-1');
+    battle.sendOut('b', 'emberbun', 'theirs-1');
+    expect(battle.stats.accessories).toBe(2);
+    battle.sendOut('a', 'puddlepuff', 'mine-2');
+    expect(battle.stats.accessories).toBe(2);
+  });
+
   it('scatters fewer props and draws no shadow map on the low tier; night gets its stars', () => {
     const high = build('forest').battle.stats.arena.props;
     const { scene, battle } = build('forest', false, 'low');

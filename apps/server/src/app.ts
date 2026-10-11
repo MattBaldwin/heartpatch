@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { setEvolutionSalt } from './modules/care/evolution.js';
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
@@ -36,6 +37,8 @@ import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
+import { challengesRoutes } from './modules/challenges/routes.js';
+import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
@@ -117,6 +120,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
   const clock = options.clock ?? createClock(config);
+  // Evolution rolls are seeded with a server secret (#32); config refuses a
+  // production start without it.
+  setEvolutionSalt(config.HP_EVOLUTION_SALT);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
     trustProxy: config.TRUST_PROXY ? trustOneProxyHop : false,
@@ -213,7 +219,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         const maps = createMapsService({
           db,
-          departed: trades.memberLeft,
+          // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
+          // Each on its own: one failing never keeps the other from running.
+          departed: async (mapId, userId, actorUserId) => {
+            const results = await Promise.allSettled([
+              trades.memberLeft(mapId, userId, actorUserId),
+              callOffAsksOf(
+                { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
+                mapId,
+                userId,
+                actorUserId,
+              ),
+            ]);
+            for (const result of results) {
+              if (result.status === 'rejected') throw result.reason;
+            }
+          },
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           clock,
@@ -257,6 +278,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           db,
           clock,
           findWildEncounter: spawns.findWildEncounter,
+          // Live battles (#29) give a player whose app isn't open one away-grace.
+          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
@@ -275,6 +298,19 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         const publish = wsHub ? { publish: wsHub.publish } : {};
         const idempotency = (plugin: Parameters<typeof registerIdempotency>[0]) =>
           registerIdempotency(plugin, { store: idempotencyStore, clock });
+        // Friendly battles (#29): "Battle me?" between two Keepers who are both here.
+        await api.register(
+          challengesRoutes(
+            createChallengesService({
+              db,
+              battles,
+              clock,
+              ...publish,
+              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            }),
+            { hooks: authHooks, idempotency },
+          ),
+        );
         await api.register(
           inventoryRoutes(createInventoryService({ db, clock, ...publish }), {
             hooks: authHooks,
@@ -311,11 +347,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
         await api.register(
-          territoryRoutes(createTerritoryService({ db, clock, battles, ...publish }), {
-            hooks: authHooks,
-            idempotency,
-            devTools: config.HP_DEV_SQUISHY_GRANTS,
-          }),
+          territoryRoutes(
+            createTerritoryService({
+              db,
+              clock,
+              battles,
+              ...publish,
+              // "Defend now?" (#29-C) goes to a defender whose app is open.
+              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            }),
+            {
+              hooks: authHooks,
+              idempotency,
+              devTools: config.HP_DEV_SQUISHY_GRANTS,
+            },
+          ),
         );
         // The raid log and defense style (#16); the raid-log consumer writes
         // the rows (`modules/raids/consumer.ts`, started in index.ts).

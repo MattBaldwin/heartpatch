@@ -265,6 +265,202 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
       { shape: 'capsule', at: [0.88, -0.5, 0.05], size: [0.34, 1.2, 0.4] },
     ],
   },
+  // ── More styles (#372): short to long, as above ──────────────────────────
+  {
+    // Clippered close: just a thin cap, no fringe.
+    id: 'buzz',
+    name: 'Buzz Cut',
+    volume: { top: 1.2, width: 1.04 },
+    pieces: [{ shape: 'ellipsoid', at: [0, 0.3, 0.14], size: [1.03, 0.86, 1.03] }],
+  },
+  {
+    // Short sides, a ridge of hair swept up the middle, front to back.
+    id: 'faux-hawk',
+    name: 'Faux Hawk',
+    volume: { top: 1.5, width: 1.06 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.14], size: [1.04, 0.88, 1.04] },
+      { shape: 'ellipsoid', at: [0, 0.98, -0.36], size: [0.34, 0.44, 0.46], turn: [-25, 0, 0] },
+      { shape: 'ellipsoid', at: [0, 1.12, -0.02], size: [0.36, 0.52, 0.5] },
+      { shape: 'ellipsoid', at: [0, 1.0, 0.36], size: [0.34, 0.46, 0.46], turn: [25, 0, 0] },
+    ],
+  },
+  {
+    // Parted in the middle, with two soft curtains framing the forehead.
+    id: 'curtains',
+    name: 'Curtains',
+    volume: { top: 1.24, width: 1.14 },
+    pieces: [
+      CAP,
+      { shape: 'ellipsoid', at: [-0.5, 0.64, -0.46], size: [0.6, 0.42, 0.5], turn: [-20, 0, 38] },
+      { shape: 'ellipsoid', at: [0.5, 0.64, -0.46], size: [0.6, 0.42, 0.5], turn: [-20, 0, -38] },
+      { shape: 'ellipsoid', at: [-0.9, 0.18, -0.1], size: [0.3, 0.6, 0.5] },
+      { shape: 'ellipsoid', at: [0.9, 0.18, -0.1], size: [0.3, 0.6, 0.5] },
+    ],
+  },
+  {
+    // Little twists sticking up all over, like springs.
+    id: 'twists',
+    name: 'Short Twists',
+    volume: { top: 1.4, width: 1.12 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.28, 0.16], size: [1.06, 0.9, 1.06] },
+      { shape: 'capsule', at: [0, 1.08, 0.08], size: [0.2, 0.4, 0.2] },
+      { shape: 'capsule', at: [-0.46, 0.98, -0.1], size: [0.2, 0.4, 0.2], turn: [0, 0, 24] },
+      { shape: 'capsule', at: [0.46, 0.98, -0.1], size: [0.2, 0.4, 0.2], turn: [0, 0, -24] },
+      { shape: 'capsule', at: [-0.46, 0.96, 0.4], size: [0.2, 0.4, 0.2], turn: [20, 0, 22] },
+      { shape: 'capsule', at: [0.46, 0.96, 0.4], size: [0.2, 0.4, 0.2], turn: [20, 0, -22] },
+      { shape: 'capsule', at: [0, 0.86, 0.66], size: [0.2, 0.4, 0.2], turn: [38, 0, 0] },
+      { shape: 'capsule', at: [-0.84, 0.62, 0.1], size: [0.2, 0.4, 0.2], turn: [0, 0, 55] },
+      { shape: 'capsule', at: [0.84, 0.62, 0.1], size: [0.2, 0.4, 0.2], turn: [0, 0, -55] },
+      { shape: 'capsule', at: [0, 0.96, -0.54], size: [0.2, 0.36, 0.2], turn: [-34, 0, 0] },
+    ],
+  },
+  {
+    // Layers that fall over the ears and neck, a bit unruly.
+    id: 'shaggy',
+    name: 'Shaggy',
+    volume: { top: 1.26, width: 1.18 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.2], size: [1.12, 0.94, 1.1] },
+      { shape: 'ellipsoid', at: [-0.38, 0.7, -0.5], size: [0.6, 0.38, 0.48], turn: [-25, 0, 28] },
+      { shape: 'ellipsoid', at: [0.4, 0.68, -0.5], size: [0.6, 0.38, 0.48], turn: [-25, 0, -22] },
+      { shape: 'ellipsoid', at: [-0.94, 0.0, 0.1], size: [0.4, 0.8, 0.54], turn: [0, 0, -8] },
+      { shape: 'ellipsoid', at: [0.94, 0.0, 0.1], size: [0.4, 0.8, 0.54], turn: [0, 0, 8] },
+      { shape: 'ellipsoid', at: [-0.8, -0.5, 0.3], size: [0.34, 0.5, 0.4], turn: [0, 0, -14] },
+      { shape: 'ellipsoid', at: [0.8, -0.5, 0.3], size: [0.34, 0.5, 0.4], turn: [0, 0, 14] },
+      { shape: 'ellipsoid', at: [0, -0.2, 0.9], size: [1.1, 0.9, 0.46] },
+    ],
+  },
+  {
+    // Two bunches up high, at the top corners of the head.
+    id: 'high-pigtails',
+    name: 'High Pigtails',
+    volume: { top: 1.24, width: 1.1 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(-0.78, 0.86, 0.3, 0.3),
+      ball(0.78, 0.86, 0.3, 0.3),
+      { shape: 'teardrop', at: [-1.02, 0.5, 0.34], size: [0.46, 0.9, 0.46], turn: [0, 0, -155] },
+      { shape: 'teardrop', at: [1.02, 0.5, 0.34], size: [0.46, 0.9, 0.46], turn: [0, 0, 155] },
+    ],
+  },
+  {
+    // Two bunches low by the neck, hanging straight down.
+    id: 'low-pigtails',
+    name: 'Low Pigtails',
+    volume: { top: 1.2, width: 1.08 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(-0.82, -0.04, 0.32, 0.26),
+      ball(0.82, -0.04, 0.32, 0.26),
+      { shape: 'teardrop', at: [-0.88, -0.62, 0.34], size: [0.44, 0.88, 0.44], turn: [0, 0, 180] },
+      { shape: 'teardrop', at: [0.88, -0.62, 0.34], size: [0.44, 0.88, 0.44], turn: [0, 0, 180] },
+    ],
+  },
+  {
+    // Two bouncy bunches of curls.
+    id: 'curly-pigtails',
+    name: 'Curly Pigtails',
+    volume: { top: 1.22, width: 1.1 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(-1.02, 0.46, 0.3, 0.46),
+      ball(1.02, 0.46, 0.3, 0.46),
+      ball(-1.1, -0.04, 0.36, 0.42),
+      ball(1.1, -0.04, 0.36, 0.42),
+      ball(-1.04, -0.5, 0.4, 0.38),
+      ball(1.04, -0.5, 0.4, 0.38),
+    ],
+  },
+  {
+    // One braid over the right shoulder, tied with a little bobble.
+    id: 'braid',
+    name: 'Braid',
+    volume: { top: 1.2, width: 1.08 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'ellipsoid', at: [0.88, -0.1, 0.1], size: [0.4, 0.46, 0.36] },
+      { shape: 'ellipsoid', at: [0.9, -0.52, -0.08], size: [0.36, 0.44, 0.34] },
+      { shape: 'ellipsoid', at: [0.86, -0.94, -0.3], size: [0.34, 0.42, 0.32] },
+      { shape: 'ellipsoid', at: [0.8, -1.34, -0.5], size: [0.32, 0.4, 0.3] },
+      ball(0.76, -1.64, -0.6, 0.2),
+    ],
+  },
+  {
+    // Two braids over the shoulders, one each side.
+    id: 'twin-braids',
+    name: 'Twin Braids',
+    volume: { top: 1.2, width: 1.1 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'ellipsoid', at: [-0.88, -0.1, 0.1], size: [0.36, 0.42, 0.34] },
+      { shape: 'ellipsoid', at: [0.88, -0.1, 0.1], size: [0.36, 0.42, 0.34] },
+      { shape: 'ellipsoid', at: [-0.9, -0.5, -0.08], size: [0.34, 0.4, 0.32] },
+      { shape: 'ellipsoid', at: [0.9, -0.5, -0.08], size: [0.34, 0.4, 0.32] },
+      { shape: 'ellipsoid', at: [-0.86, -0.9, -0.3], size: [0.32, 0.38, 0.3] },
+      { shape: 'ellipsoid', at: [0.86, -0.9, -0.3], size: [0.32, 0.38, 0.3] },
+      { shape: 'ellipsoid', at: [-0.8, -1.28, -0.5], size: [0.3, 0.36, 0.28] },
+      { shape: 'ellipsoid', at: [0.8, -1.28, -0.5], size: [0.3, 0.36, 0.28] },
+      ball(-0.76, -1.56, -0.6, 0.2),
+      ball(0.76, -1.56, -0.6, 0.2),
+    ],
+  },
+  {
+    // Tied high on the back of the head, swinging out behind.
+    id: 'high-ponytail',
+    name: 'High Ponytail',
+    volume: { top: 1.3, width: 1.06 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(0, 0.86, 0.74, 0.24),
+      { shape: 'teardrop', at: [0, 0.5, 1.28], size: [0.5, 1.05, 0.46], turn: [-28, 0, 180] },
+    ],
+  },
+  {
+    // Tied low at the nape, then brought round over the right shoulder.
+    id: 'low-ponytail',
+    name: 'Low Ponytail',
+    volume: { top: 1.2, width: 1.06 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(0.5, -0.1, 0.8, 0.24),
+      { shape: 'teardrop', at: [0.88, -0.86, -0.1], size: [0.56, 1.15, 0.5], turn: [-8, 0, 180] },
+    ],
+  },
+  {
+    // Swept to one side and over the shoulder.
+    id: 'side-ponytail',
+    name: 'Side Ponytail',
+    volume: { top: 1.22, width: 1.12 },
+    pieces: [
+      CAP,
+      FRINGE,
+      ball(0.8, 0.36, 0.34, 0.26),
+      { shape: 'teardrop', at: [1.12, -0.24, 0.4], size: [0.52, 1.05, 0.46], turn: [0, 0, 165] },
+    ],
+  },
+  {
+    // Long and loose with a centre parting: the front stays clear of the face.
+    id: 'long-loose',
+    name: 'Long Loose',
+    volume: { top: 1.24, width: 1.1 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.24], size: [1.1, 0.92, 1.08] },
+      { shape: 'ellipsoid', at: [-0.56, 0.74, -0.38], size: [0.5, 0.34, 0.46], turn: [-20, 0, 34] },
+      { shape: 'ellipsoid', at: [0.56, 0.74, -0.38], size: [0.5, 0.34, 0.46], turn: [-20, 0, -34] },
+      { shape: 'capsule', at: [0, -0.62, 0.52], size: [1.5, 1.6, 0.55] },
+      { shape: 'capsule', at: [-0.92, -0.5, 0.08], size: [0.32, 1.3, 0.4] },
+      { shape: 'capsule', at: [0.92, -0.5, 0.08], size: [0.32, 1.3, 0.4] },
+    ],
+  },
 ];
 
 // TUNE: all skin tones (owner 2026-10-08, #289): ten, light to deep; Hazel's is

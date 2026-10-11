@@ -53,6 +53,12 @@ export interface WsHub {
   publish: (mapId: string) => Promise<void>;
   /** Serves an authenticated socket until it closes. */
   accept: (socket: WebSocket, user: PublicUser, sessionToken: string) => void;
+  /**
+   * Is this player's app open on this map right now: a socket of theirs is
+   * subscribed to it (#29, live battles and "who's here now"). In-process,
+   * like the sockets; iOS closes them when the app goes to the background.
+   */
+  isOnline: (mapId: string, userId: string) => boolean;
   /** Stops the heartbeat, closes every socket and waits for in-flight reads. */
   close: () => Promise<void>;
 }
@@ -387,6 +393,9 @@ export function createWsHub(options: WsHubOptions): WsHub {
 
   return {
     publish: (mapId) => (channels.has(mapId) ? pump(mapId) : Promise.resolve()),
+
+    isOnline: (mapId, userId) =>
+      [...(byUser.get(userId) ?? [])].some((conn) => conn.subscription?.mapId === mapId),
 
     accept: (socket, user, sessionToken) => {
       const conn: Connection = {

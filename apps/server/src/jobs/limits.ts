@@ -28,3 +28,16 @@ export const NIGHTFALL_CONCURRENCY = 2; // TUNE: guess; fits pg-boss's and the a
 /** Retries for a nightfall that throws (its `hollow_events` row makes them safe). */
 export const NIGHTFALL_RETRY_LIMIT = 5; // TUNE: guess
 export const NIGHTFALL_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time
+
+/** How often the `game_events` retention job runs (cron, UTC). */
+export const EVENT_RETENTION_CRON = '41 * * * *'; // TUNE: hourly, off the hour
+
+/** Days an event is kept, once no consumer or reconnect replay needs it (#352). */
+export const EVENT_RETENTION_DAYS = 30; // TUNE: guess
+/** Days a short-lived event (a live battle's picks, turns and cheers; challenges and defense prompts) is kept. */
+export const EVENT_RETENTION_SHORT_DAYS = 2; // TUNE: guess
+
+/** Events one retention delete removes; each batch is its own short statement. */
+export const EVENT_RETENTION_BATCH = 1000; // TUNE: guess
+/** Full batches one retention run deletes, across all maps; the next run carries on. */
+export const EVENT_RETENTION_MAX_BATCHES = 50; // TUNE: guess

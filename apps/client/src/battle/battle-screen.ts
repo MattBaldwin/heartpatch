@@ -769,7 +769,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         ? battle.view.sides[step.side].squishies[step.to]
         : undefined;
     scene3d.perform(step, t, {
-      ...(incoming ? { incoming: { speciesId: incoming.speciesId, instanceId: incoming.id } } : {}),
+      ...(incoming
+        ? {
+            incoming: {
+              speciesId: incoming.speciesId,
+              instanceId: incoming.id,
+              accessory: incoming.accessory ?? null,
+            },
+          }
+        : {}),
       captured: battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured',
     });
     const reaction = keeperReaction(step, battle.mySide);
@@ -871,6 +879,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           speciesId: s.speciesId,
           instanceId: s.id,
           level: s.level,
+          accessory: s.accessory ?? null,
         })),
       );
       const slot = shown[side].active;

@@ -338,3 +338,111 @@
     animation-duration: 1ms;
   }
 }
+
+/* Dress up (#340): a soft button under the care buttons, and the picker
+   that takes the card's place while it's open (owner-approved mockup). */
+.close-up-dress-open {
+  min-height: 44px;
+}
+
+.close-up-dressing > :not(.close-up-dress) {
+  display: none;
+}
+
+.close-up-dress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.close-up-dress-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #4a2f4d;
+}
+
+.close-up-dress-hint {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: #7a5d82;
+}
+
+/* Two columns; a long wardrobe scrolls here, so the squishy keeps its space. */
+.close-up-dress-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 38vh;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.close-up-dress-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-height: 56px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 3px solid transparent;
+  border-radius: 16px;
+  background: #fbeef4;
+  font: inherit;
+  text-align: left;
+  color: #4a2f4d;
+  cursor: pointer;
+}
+
+.close-up-dress-item[aria-pressed='true'] {
+  border-color: #ff7aa2;
+  background: #fff;
+}
+
+.close-up-dress-item:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 2px;
+}
+
+.close-up-dress-swatch {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%);
+}
+
+.close-up-dress-none {
+  border: 2px solid #e6c9d8;
+  background: repeating-linear-gradient(45deg, #fff 0 4px, #f1dde7 4px 8px);
+}
+
+.close-up-dress-name {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+}
+
+.close-up-dress-sub {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a5d82;
+}
+
+.close-up-dress-item[aria-pressed='true'] .close-up-dress-sub {
+  color: #b8487a;
+}
+
+.close-up-dress-status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  color: #b8487a;
+}

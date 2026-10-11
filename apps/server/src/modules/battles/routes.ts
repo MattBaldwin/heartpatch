@@ -1,5 +1,6 @@
 import {
   BattleActionRequestSchema,
+  BattleCheerRequestSchema,
   BattleIdParamsSchema,
   BattleResponseSchema,
   CurrentBattleResponseSchema,
@@ -95,6 +96,19 @@ export const battlesRoutes =
       async (request) => ({
         battle: await service.act(requireUser(request), request.params.battleId, request.body),
       }),
+    );
+
+    // A cheer in a live battle (#29): a quick message or emoji id, never text.
+    app.post(
+      '/battles/:battleId/cheer',
+      {
+        schema: { params: BattleIdParamsSchema, body: BattleCheerRequestSchema },
+        preHandler: [requireAuth, rateLimit('cheer')],
+      },
+      async (request, reply) => {
+        await service.cheer(requireUser(request), request.params.battleId, request.body);
+        return reply.code(204).send();
+      },
     );
 
     if (options.devGrants) {
