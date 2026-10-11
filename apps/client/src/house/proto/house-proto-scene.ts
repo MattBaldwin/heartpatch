@@ -904,8 +904,8 @@ export class HouseProtoScene {
     });
     // Emberbun curled up by the fire.
     this.#squishies.add(species('emberbun'), 'resident-3', {
-      x: -2.2,
-      z: -1.5,
+      x: -2.5,
+      z: -0.5,
       y: 0,
       yaw: Math.PI / 2,
       scale: 0.75,
