@@ -1488,7 +1488,7 @@ export const SPECIES: Species[] = [
     element: 'leaf',
     feeling: 'cozy',
     rarity: 'epic',
-    baseStats: { hp: 100, attack: 75, defense: 90, speed: 55 }, // TUNE:
+    baseStats: { hp: 98, attack: 74, defense: 88, speed: 54 }, // TUNE:
     moves: ['leafy-tickle', 'mossy-nap', 'prickle-roll', 'pollen-puff'],
     evolutions: [],
     visual: {
@@ -1519,7 +1519,7 @@ export const SPECIES: Species[] = [
     element: 'leaf',
     feeling: 'silly',
     rarity: 'epic',
-    baseStats: { hp: 98, attack: 92, defense: 87, speed: 103 }, // TUNE:
+    baseStats: { hp: 96, attack: 91, defense: 86, speed: 102 }, // TUNE:
     moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff', 'sprinkle-sneeze'],
     evolutions: [],
     visual: {

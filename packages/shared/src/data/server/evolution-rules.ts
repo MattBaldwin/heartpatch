@@ -115,6 +115,8 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
     trigger: {
       kind: 'rare',
       conditions: [{ kind: 'time', times: ['dusk', 'night'] }],
+      // Dusk or night alone is most evenings, so it takes a spooky lean too.
+      feeling: 'spooky',
       whisper: {
         icon: '🌙',
         text: '{name} keeps gazing up at the night sky…',

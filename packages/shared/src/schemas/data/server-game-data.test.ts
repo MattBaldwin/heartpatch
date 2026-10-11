@@ -333,6 +333,12 @@ describe('evolution rules (#32)', () => {
     expect(checkEvolutionRules(EVOLUTION_RULES)).toEqual([]);
   });
 
+  it('makes Stormhoot take a spooky lean as well as dusk or night', () => {
+    // Dusk or night alone is most evenings, so it would be the common form for them.
+    const row = SERVER_GAME_DATA.evolutionOdds.find((o) => o.into === 'stormhoot');
+    expect(row?.trigger).toMatchObject({ kind: 'rare', feeling: 'spooky' });
+  });
+
   it('refuses pity that guarantees before it boosts', () => {
     expect(
       checkEvolutionRules({
