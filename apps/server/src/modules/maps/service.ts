@@ -314,7 +314,14 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // their Training Grounds (#376): what each job held so far is worked
       // out while the land is still theirs, and written once it's released.
       const jobs = createSquishyJobsRepo(tx);
-      const theirs = (await jobs.listMine(mapId, memberId)).map((r) => r.squishy.id);
+      // Only those whose job stops here: guards on their land, gatherers at
+      // work there and trainees. Any other row (the team, the Hollow, a
+      // trade) keeps its own count, and a rescue may be writing it right now.
+      const theirs = (await jobs.listMine(mapId, memberId))
+        .filter(
+          (r) => r.squishy.state === 'active' && (r.onWatch || r.atWork || r.training !== null),
+        )
+        .map((r) => r.squishy.id);
       const checkpoints = await contentmentCheckpointsOf(tx, mapId, theirs, at);
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
       // Written here, before the buildings (tech spec §7 exception): the

@@ -1697,7 +1697,16 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       });
       expect(await defendersOf(mapId)).toHaveLength(1);
       await sixHoursOnWatch(squishy.id);
+      // One with no job that stops here keeps its own checkpoint.
+      const resting = await grant(server, friend, mapId, 3);
+      await db.execute(
+        `update squishies set contentment = 70,
+           contentment_since = '${new Date(clock.getTime() - 2 * HOUR_MS).toISOString()}'
+         where id = '${resting.id}'`,
+      );
+      const restingBefore = await checkpointOf(resting.id);
       expect((await call(server, 'POST', `/maps/${mapId}/leave`, friend)).statusCode).toBe(204);
+      expect(await checkpointOf(resting.id)).toEqual(restingBefore);
       expect(await defendersOf(mapId)).toEqual([]);
       // Its watch so far held; it rests from the day its owner left (#376).
       expect(await checkpointOf(squishy.id)).toEqual({ contentment: 80, since: new Date(clock) });

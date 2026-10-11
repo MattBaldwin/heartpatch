@@ -182,7 +182,10 @@ export interface GuardWatch {
   readonly assignedAt: Date;
 }
 
-/** These guards' watches: read before their posts go (only the post row says when it started). */
+/**
+ * These guards' watches: read before their posts go (only the post row says
+ * when it started). The ids come from `listDefenders`: active guards on watch.
+ */
 export async function guardWatchesOf(
   tx: Executor,
   squishyIds: readonly string[],
@@ -211,9 +214,12 @@ export async function writeGuardCheckpoints(
   for (const row of await repo.listByIds([...since.keys()])) {
     const fromMs = since.get(row.squishy.id);
     if (fromMs === undefined) continue;
-    const value = contentmentAt(contentmentCheckpoint(row.care), at, CARE_RULES, [
-      { fromMs, toMs: null },
-    ]);
+    const value = contentmentAt(
+      contentmentCheckpoint(row.care),
+      at,
+      CARE_RULES,
+      holdSpans({ steady: { fromMs } }),
+    );
     await repo.setContentment(row.squishy.id, value, at);
   }
 }
