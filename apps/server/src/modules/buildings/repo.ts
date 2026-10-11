@@ -173,6 +173,12 @@ export interface BuildingsRepo {
    * a Train takes one off watch, work or the team).
    */
   listSquishies: (mapId: string, userId: string) => Promise<HomeListRow[]>;
+  /**
+   * How many of the player's squishies gather on this tile (#295: a building
+   * doesn't go up where one works). Read under the tile's lock, which
+   * posting a gatherer takes too.
+   */
+  gatherersOn: (tileId: string, userId: string) => Promise<number>;
   /** Row-locks a squishy until commit. */
   lockSquishy: (squishyId: string) => Promise<(HomeSquishyRow & { mapId: string }) | null>;
   /**
@@ -489,6 +495,14 @@ function queries(db: Executor): BuildingsRepo {
         );
       const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
+    },
+
+    gatherersOn: async (tileId, userId) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(squishies)
+        .where(and(eq(squishies.workTileId, tileId), eq(squishies.ownerUserId, userId)));
+      return row?.n ?? 0;
     },
 
     listSquishies: async (mapId, userId) =>

@@ -2,7 +2,6 @@ import {
   addFuel,
   buildCost,
   buildingPageKey,
-  buildsAtHome,
   fitsSlot,
   fuelCost,
   fuelSpace,
@@ -12,6 +11,7 @@ import {
   inSeason,
   isBuildable,
   isReservedSpot,
+  tileUseRefusal,
   jobOf,
   planFuelAll,
   removeRefund,
@@ -47,6 +47,7 @@ import {
   seasonsOn,
 } from '../inventory/service.js';
 import { homesteadOf } from '../explore/homesteads.js';
+import { clearGoingOn } from '../clearing/repo.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createFactoryRepo } from '../factory/repo.js';
 import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
@@ -123,6 +124,10 @@ const MESSAGES = {
   onWatch: (name: string) => `Bring ${name} home from watch first!`,
   topLevel: (name: string) => `Your ${name} is as big as it gets!`,
   fenceOnEdge: 'Fences go on the edges of a tile. Tap 🪵 Fences on your land!',
+  tileTaken: 'Only one building fits on a tile! Try another one.',
+  clearFirst: 'Clear this land first 🌱. Then you can build here!',
+  squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
+  clearing: "You're clearing this land. Let it finish first!",
 } as const;
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
@@ -303,9 +308,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
   }
 
   /**
-   * The target tile and spot, checked for `building`: on my home base (or,
-   * for a building that can stand on owned land, any tile I own), its
-   * slot's kind of spot (#204), and free.
+   * The target tile and spot, checked for `building`: one of my tiles its
+   * `placement` allows, with no other building on it (#295: one building per
+   * tile), no resource spot outside home (clear it first, #242), its slot's
+   * kind of spot (#204), and free. `homestead` is the target's homestead
+   * state when it's out on my land.
    */
   function checkSpot(
     userId: string,
@@ -318,33 +325,56 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     homestead: 'joined' | 'paused' | null = null,
   ): HomeTileRow {
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
-    // Training Grounds stand only on a homestead (owner decision 4 on #277).
-    if (building.placement === 'homestead') {
-      if (homeTile || outer?.ownerUserId !== userId || homestead === null) {
+    const mine = homeTile ?? (outer?.ownerUserId === userId ? outer : null);
+    if (!mine) {
+      if (building.placement === 'home') throw new AppError('FORBIDDEN', MESSAGES.notHome);
+      if (building.placement === 'homestead') {
         throw new AppError('FORBIDDEN', MESSAGES.notHomestead(building.name));
       }
-      if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.homesteadNapping);
+      throw new AppError('FORBIDDEN', MESSAGES.notMine);
     }
-    // Fires stand only on captured land (owner decision 2026-10-07).
-    if (homeTile && !buildsAtHome(building)) throw new AppError('FORBIDDEN', MESSAGES.fireAtHome);
-    if (!homeTile) {
-      if (building.placement === 'home') throw new AppError('FORBIDDEN', MESSAGES.notHome);
-      if (outer?.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notMine);
+    const taken = owned.some((b) => b.id !== moving && b.tileId === mine.id);
+    const refusal = tileUseRefusal(
+      building,
+      {
+        id: mine.id,
+        q: mine.q,
+        r: mine.r,
+        homeSlot: homeTile ? 0 : null,
+        nodeResource: mine.nodeResource,
+        homestead: homeTile ? null : homestead,
+      },
+      taken,
+    );
+    switch (refusal) {
+      case null:
+        break;
+      case 'home-only':
+        throw new AppError('FORBIDDEN', MESSAGES.notHome);
+      case 'not-at-home':
+        throw new AppError(
+          'FORBIDDEN',
+          building.placement === 'homestead'
+            ? MESSAGES.notHomestead(building.name)
+            : MESSAGES.fireAtHome,
+        );
+      case 'homestead-only':
+        throw new AppError('FORBIDDEN', MESSAGES.notHomestead(building.name));
+      case 'napping':
+        throw new AppError('CONFLICT', MESSAGES.homesteadNapping);
+      case 'taken':
+        throw new AppError('CONFLICT', MESSAGES.tileTaken);
+      case 'clear-first':
+        throw new AppError('CONFLICT', MESSAGES.clearFirst);
     }
-    const tile = homeTile ?? outer;
-    if (!tile) throw new AppError('FORBIDDEN', MESSAGES.notMine);
     if (!fitsSlot(building.slot, target.spot)) {
       throw new AppError('CONFLICT', MESSAGES.wrongSlot(building));
     }
     const seed = homeTile ? isSeed(homeTile, heartSeedOf(home)) : false;
-    if (isReservedSpot({ heartSeed: seed, nodeResource: tile.nodeResource }, target.spot)) {
+    if (isReservedSpot({ heartSeed: seed, nodeResource: mine.nodeResource }, target.spot)) {
       throw new AppError('CONFLICT', MESSAGES.middleTaken);
     }
-    const taken = owned.some(
-      (b) => b.id !== moving && b.tileId === tile.id && b.spot === target.spot,
-    );
-    if (taken) throw new AppError('CONFLICT', MESSAGES.spotTaken);
-    return tile;
+    return mine;
   }
 
   /** Runs a command for one player in one transaction, then publishes. */
@@ -450,7 +480,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // A homestead (#199) is its owner's explore row for the tile, read
           // after the tile locks and before the buildings (tech spec §7 step 6).
           const homestead =
-            building.placement === 'homestead' && outer
+            outer && outer.homeSlot === null
               ? homesteadOf(await createExploreRepo(tx).findRow(user.id, outer.id))
               : null;
           const owned = await repo.listOwned(mapId, user.id);
@@ -462,10 +492,20 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             if (same.filter((b) => homeIds.has(b.tileId)).length >= (building.maxPerHome ?? 0)) {
               throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
             }
-          } else if (
-            same.filter((b) => b.tileId === tile.id).length >= (building.maxPerTile ?? 0)
-          ) {
-            throw new AppError('CONFLICT', MESSAGES.tileHasOne(building.name));
+          } else {
+            if (same.filter((b) => b.tileId === tile.id).length >= (building.maxPerTile ?? 0)) {
+              throw new AppError('CONFLICT', MESSAGES.tileHasOne(building.name));
+            }
+            // A building blocks its tile's land yield (owner decision
+            // 2026-10-11, #295): it doesn't go up where a squishy gathers,
+            // nor on land being cleared (#242). Both read under the tile lock,
+            // which posting a gatherer and starting a clear take too.
+            if ((await repo.gatherersOn(tile.id, user.id)) > 0) {
+              throw new AppError('CONFLICT', MESSAGES.squishyBusy);
+            }
+            if (await clearGoingOn(tx, tile.id, user.id)) {
+              throw new AppError('CONFLICT', MESSAGES.clearing);
+            }
           }
           const row = await repo.insertBuilding({
             mapId,
