@@ -131,13 +131,12 @@ export const BODIES: Body[] = [
     // that overhangs its paper cup (the cup is a ring of pleat legs).
     id: 'frosting',
     width: 1.3,
-    height: 0.82,
-    depth: 0.82,
+    height: 0.85,
+    depth: 0.8,
     squareness: 0.12,
     taper: -0.12,
     peak: 0.18,
     bottomFlat: 0.8,
-    hem: { count: 12, depth: 0.14 },
     jitter: 0.04,
   },
   {
@@ -1416,7 +1415,7 @@ export const PARTS: Part[] = [
     jitter: 0.08,
   },
   // #32 redesigns: a squirrel's acorn cup and plume tail, a cupcake's
-  // pleated cup and sprinkles, a singing heart's lobes and song waves.
+  // pleated cup and sprinkles, a singing heart's lobes, mouth and arms.
   {
     // Short, pointed squirrel ears (not tall bunny ears).
     id: 'tuft-ears',
@@ -1487,6 +1486,20 @@ export const PARTS: Part[] = [
     sink: 0.4,
     jitter: 0.05,
   },
+
+  {
+    // A wide smile that sits above the buck teeth, so it isn't hidden by them.
+    id: 'nut-smile',
+    slot: 'mouth',
+    shape: 'arc',
+    size: [0.2, 0.08, 0.06],
+    color: 'ink',
+    layout: single,
+    around: 0,
+    up: 0,
+    sink: 0.3,
+    jitter: 0.04,
+  },
   {
     // Two big front teeth.
     id: 'buck-teeth',
@@ -1495,8 +1508,8 @@ export const PARTS: Part[] = [
     size: [0.09, 0.15, 0.05],
     color: 'white',
     layout: pair,
-    around: 5,
-    up: -4,
+    around: 4,
+    up: -10,
     tilt: -80,
     jitter: 0.04,
   },
@@ -1530,22 +1543,51 @@ export const PARTS: Part[] = [
   },
 
   {
-    // A cupcake's paper cup: straight pleats all the way round, under the frosting.
+    // A cupcake's paper liner: deep pleats all the way round, narrow at the
+    // bottom and flaring out to the rim under the frosting.
     id: 'pleat-cup',
-    slot: 'legs',
+    slot: 'back',
     shape: 'capsule',
-    size: [0.22, 0.4, 0.22],
+    size: [0.3, 0.7, 0.3],
     color: 'secondary',
     layout: { kind: 'ring', count: 16, spread: 180 },
     around: 0,
-    up: -80,
-    sink: 0.15,
+    up: -65,
+    tilt: -20,
+    sink: 0.3,
     jitter: 0.02,
+  },
+  {
+    // Soft frosting drips all round the rim (in the free tail slot: a cupcake has no tail).
+    id: 'frosting-drips',
+    slot: 'tail',
+    shape: 'ellipsoid',
+    size: [0.32, 0.34, 0.24],
+    color: 'primary',
+    layout: { kind: 'ring', count: 14, spread: 180 },
+    around: 0,
+    up: -40,
+    tilt: -55,
+    sink: 0.6,
+    jitter: 0.08,
+  },
+  {
+    // Big white googly eye patches behind small dot eyes: a silly, wide-eyed look.
+    id: 'googly-whites',
+    slot: 'pattern',
+    shape: 'ellipsoid',
+    size: [0.24, 0.28, 0.05],
+    color: 'white',
+    layout: pair,
+    around: 26,
+    up: 18,
+    sink: 0.45,
+    jitter: 0.04,
   },
   {
     // A wide giggly grin around the open mouth.
     id: 'giggle-grin',
-    slot: 'pattern',
+    slot: 'brows',
     shape: 'arc',
     size: [0.22, 0.1, 0.05],
     color: 'ink',
@@ -1560,41 +1602,15 @@ export const PARTS: Part[] = [
     id: 'sprinkles',
     slot: 'cheeks',
     shape: 'capsule',
-    size: [0.055, 0.2, 0.06],
+    size: [0.07, 0.24, 0.07],
     color: 'white',
-    layout: { kind: 'scatter', count: 12, aroundRange: 120, upRange: 24 },
+    layout: { kind: 'scatter', count: 12, aroundRange: 110, upRange: 18 },
     around: 0,
-    up: 50,
+    up: 58,
     sink: 0.4,
     jitter: 0.12,
   },
-  {
-    // More sprinkles, lying the other way.
-    id: 'sprinkles-green',
-    slot: 'spikes',
-    shape: 'capsule',
-    size: [0.2, 0.055, 0.06],
-    color: 'detail',
-    layout: { kind: 'scatter', count: 12, aroundRange: 120, upRange: 24 },
-    around: 0,
-    up: 56,
-    sink: 0.4,
-    jitter: 0.12,
-  },
-  {
-    // …and a third colour.
-    id: 'sprinkles-red',
-    slot: 'back',
-    shape: 'capsule',
-    size: [0.055, 0.2, 0.06],
-    color: 'accent',
-    layout: { kind: 'scatter', count: 12, aroundRange: 120, upRange: 24 },
-    around: 0,
-    up: 62,
-    tilt: 85,
-    sink: 0.4,
-    jitter: 0.12,
-  },
+
   {
     // A little cherry on top.
     id: 'cherry',
@@ -1610,12 +1626,39 @@ export const PARTS: Part[] = [
     jitter: 0.04,
   },
   {
+    // Yellow sprinkles, lying every which way.
+    id: 'sprinkles-yellow',
+    slot: 'spikes',
+    shape: 'capsule',
+    size: [0.24, 0.07, 0.07],
+    color: 'detail',
+    layout: { kind: 'scatter', count: 12, aroundRange: 110, upRange: 18 },
+    around: 0,
+    up: 62,
+    sink: 0.4,
+    jitter: 0.12,
+  },
+  {
+    // Chocolate sprinkles.
+    id: 'sprinkles-choc',
+    slot: 'horns',
+    shape: 'capsule',
+    size: [0.07, 0.24, 0.07],
+    color: 'ink',
+    layout: { kind: 'scatter', count: 10, aroundRange: 110, upRange: 18 },
+    around: 0,
+    up: 66,
+    tilt: 85,
+    sink: 0.4,
+    jitter: 0.12,
+  },
+  {
     // The cherry's little stem.
     id: 'cherry-stem',
     slot: 'mane',
     shape: 'capsule',
     size: [0.045, 0.36, 0.045],
-    color: 'detail',
+    color: 'ink',
     layout: single,
     around: 22,
     up: 80,
@@ -1623,24 +1666,10 @@ export const PARTS: Part[] = [
     sink: 0.1,
     jitter: 0.05,
   },
-  {
-    // A mint leaf beside the cherry.
-    id: 'cherry-leaf',
-    slot: 'horns',
-    shape: 'teardrop',
-    size: [0.16, 0.3, 0.05],
-    color: 'detail',
-    layout: single,
-    around: 40,
-    up: 74,
-    tilt: 40,
-    sink: 0.2,
-    jitter: 0.06,
-  },
 
   {
     // The two round lobes that make a heart's top. The pair is turned a
-    // little towards the battle camera (ring centred at 32°), so from the
+    // little towards the battle camera (ring centred at 26°), so from the
     // three-quarter view they read as one even heart, not a ball stuck on.
     id: 'heart-lobes',
     slot: 'ears',
@@ -1648,24 +1677,67 @@ export const PARTS: Part[] = [
     size: [0.76, 0.76, 0.42],
     color: 'primary',
     layout: { kind: 'ring', count: 2, spread: 165 },
-    around: 32,
+    around: 26,
     up: 46,
     tilt: 34,
     sink: 0.92,
+    splay: 0,
     jitter: 0.03,
   },
   {
-    // Song waves ))) rippling out of one side.
-    id: 'song-waves',
-    slot: 'tail',
-    shape: 'arc',
-    size: [0.56, 0.19, 0.14],
+    // A big round singing mouth, open on a long note.
+    id: 'singing-mouth',
+    slot: 'mouth',
+    shape: 'ellipsoid',
+    size: [0.19, 0.22, 0.06],
     color: 'accent',
-    layout: { kind: 'chain', count: 3, step: 1.1, curl: 0, wave: 0, shrink: 1.1 },
-    around: 95,
-    up: -10,
-    tilt: 30,
-    sink: 0,
+    layout: single,
+    around: 0,
+    up: -8,
+    sink: 0.45,
+    jitter: 0.04,
+  },
+  {
+    // A little pink tongue inside the singing mouth.
+    id: 'singing-tongue',
+    slot: 'pattern',
+    shape: 'ellipsoid',
+    size: [0.1, 0.07, 0.07],
+    color: 'blush',
+    layout: single,
+    around: 0,
+    up: -12,
+    sink: 0.4,
+    jitter: 0.04,
+  },
+  {
+    // Little arms thrown up and out, mid-song.
+    id: 'singing-arms',
+    slot: 'arms',
+    shape: 'capsule',
+    size: [0.14, 0.34, 0.14],
+    color: 'primary',
+    layout: pair,
+    around: 80,
+    up: -5,
+    tilt: 50,
+    splay: 40,
+    sink: 0.3,
+    jitter: 0.05,
+  },
+  {
+    // Little song bubbles drifting up and away behind one shoulder; only the first
+    // sits on the body (hidden), so the rest read as floating free.
+    id: 'song-notes',
+    slot: 'crown',
+    shape: 'teardrop',
+    size: [0.17, 0.3, 0.17],
+    color: 'detail',
+    layout: { kind: 'chain', count: 4, step: 1.2, curl: 30, wave: 0, shrink: 1.0 },
+    around: 118,
+    up: 8,
+    tilt: 0,
+    sink: 1,
     flip: true,
     jitter: 0.04,
   },
