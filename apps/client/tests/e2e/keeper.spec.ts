@@ -189,7 +189,8 @@ test('any Keeper wears any hair style, kept after a reload', async ({ page }) =>
   await signUp(page, uniqueName('hair'));
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
-  const style = (name: string) => picker.getByRole('button', { name: `Hair style: ${name}` });
+  const style = (name: string) =>
+    picker.getByRole('button', { name: `Hair style: ${name}`, exact: true });
 
   // A new Keeper starts on Pip's own style…
   await picker.getByRole('tab', { name: 'Hair' }).tap();

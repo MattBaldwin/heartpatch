@@ -21,12 +21,60 @@ describe('checkKeeperData', () => {
     expect(checkKeeperData(KEEPER_DATA)).toEqual([]);
   });
 
-  it('ships 12 bases, 12 hairstyles and 6 outfit palettes', () => {
+  it('ships 12 bases and 6 outfit palettes', () => {
     // Design doc §23 [DEFAULT: 8] bases; 12 since the owner's hairstyle
     // decision (2026-10-06) added four with short styles.
     expect(KEEPER_DATA.bases).toHaveLength(12);
-    expect(KEEPER_DATA.hairstyles).toHaveLength(12);
     expect(KEEPER_DATA.outfits).toHaveLength(6);
+  });
+
+  it('keeps every hairstyle id ever shipped, and adds the #372 styles after them', () => {
+    // Ids are stored in `keepers` rows: never rename or remove one.
+    const shipped = [
+      'spiky',
+      'crew-cut',
+      'side-part',
+      'messy-mop',
+      'short-curls',
+      'swoop',
+      'curly',
+      'puff',
+      'bob',
+      'bun',
+      'pigtails',
+      'long',
+    ];
+    const added = [
+      'buzz',
+      'faux-hawk',
+      'curtains',
+      'twists',
+      'shaggy',
+      'high-pigtails',
+      'low-pigtails',
+      'curly-pigtails',
+      'braid',
+      'twin-braids',
+      'high-ponytail',
+      'low-ponytail',
+      'side-ponytail',
+      'long-loose',
+    ];
+    const ids = KEEPER_DATA.hairstyles.map((h) => h.id);
+    expect(ids.slice(0, shipped.length)).toEqual(shipped);
+    expect(ids.slice(shipped.length)).toEqual(added);
+  });
+
+  it('draws every hairstyle with the same few primitives (at most 16, over the head)', () => {
+    for (const style of KEEPER_DATA.hairstyles) {
+      expect(style.id, style.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(style.pieces.length, style.id).toBeLessThanOrEqual(16);
+      // Something sits over the top of the head, so a hat has hair to rest on.
+      expect(
+        Math.max(...style.pieces.map((p) => p.at[1] + p.size[1] / 2)),
+        style.id,
+      ).toBeGreaterThan(0.6);
+    }
   });
 
   it('varies body shape, skin tone, eyes and hairstyle across the bases', () => {
@@ -95,9 +143,10 @@ describe('checkKeeperData', () => {
     ]);
   });
 
-  it('starts every hairstyle on some base, so each one shows on the first screen', () => {
-    const used = new Set(KEEPER_DATA.bases.map((b) => b.hairstyle));
-    expect(KEEPER_DATA.hairstyles.filter((h) => !used.has(h.id))).toEqual([]);
+  it('starts every base on a hairstyle that exists', () => {
+    // The #372 styles are picked, not a base's own: no base starts on them.
+    const known = new Set(KEEPER_DATA.hairstyles.map((h) => h.id));
+    expect(KEEPER_DATA.bases.filter((b) => !known.has(b.hairstyle))).toEqual([]);
   });
 
   it('reports a base whose hairstyle is unknown, and duplicate hairstyles', () => {
