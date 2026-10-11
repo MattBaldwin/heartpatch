@@ -564,7 +564,7 @@ export class HouseProtoScene {
     // The visitors' wall by the door: hearts and stickers left by friends,
     // stuck flat on the right wall (facing −x, into the room).
     const stickers: Mesh[] = [];
-    const sx = w / 2 - 0.05;
+    const sx = w / 2 - 0.12;
     const marks: [number, number, number, string][] = [
       [1.9, -0.9, 1, '#ff7aa2'],
       [2.25, -0.55, 0.8, '#ffb347'],
