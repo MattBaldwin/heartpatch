@@ -116,14 +116,12 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'chillypep', weight: 4 },
       { species: 'gnomnom', weight: 2 },
-      { species: 'fogglet', weight: 2 },
     ],
   },
   {
     id: 'wave-1-forest',
     terrains: ['forest'],
     entries: [
-      { species: 'fogglet', weight: 4 },
       { species: 'gnomnom', weight: 2 },
       { species: 'moonmoth', weight: 1 },
     ],
@@ -131,10 +129,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
   {
     id: 'wave-1-old-forest',
     terrains: ['old-forest'],
-    entries: [
-      { species: 'fogglet', weight: 2 },
-      { species: 'moonmoth', weight: 1 },
-    ],
+    entries: [{ species: 'moonmoth', weight: 1 }],
   },
   {
     id: 'wave-1-hills',
@@ -161,7 +156,6 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'lilyhop', weight: 4 },
       { species: 'shellnap', weight: 2 },
-      { species: 'fogglet', weight: 2 },
       { species: 'cometsnail', weight: 1 },
     ],
   },
@@ -171,7 +165,6 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'chillypep', weight: 4 },
       { species: 'gnomnom', weight: 2 },
-      { species: 'fogglet', weight: 2 },
     ],
   },
 

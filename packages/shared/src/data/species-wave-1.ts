@@ -1,8 +1,8 @@
 import type { Species } from '../schemas/data/species.js';
 
 /*
- * Wave 1 of the 500-squishy plan (#382): 9 hand-designed kinds, found in the
- * wild by biome (see `SPAWN_TABLES`, ids `wave-1-*`). 5 common, 2 uncommon,
+ * Wave 1 of the 500-squishy plan (#382): 8 hand-designed kinds, found in the
+ * wild by biome (see the server spawn tables, ids `wave-1-*`). 4 common, 2 uncommon,
  * 2 rare (the brief's 30; the rest did not read at a glance as toys and were
  * dropped rather than shipped weak). Each is built round one hook a kid can say in five words (the
  * creative brief the owner approved): a moth carrying its own moon, a shooting
@@ -218,35 +218,6 @@ export const WAVE_1_SPECIES: Species[] = [
     },
   },
   {
-    id: 'fogglet',
-    name: 'Fogglet',
-    description: 'Everyone else lifted hours ago. Fogglet is still here. Shh.',
-    element: 'shadow',
-    feeling: 'sleepy',
-    rarity: 'common',
-    baseStats: {
-      hp: 60,
-      attack: 45,
-      defense: 50,
-      speed: 50,
-    },
-    moves: ['peekaboo', 'upside-snooze', 'shadow-snuggle'],
-    evolutions: [],
-    visual: {
-      body: 'mochi',
-      palette: ['#c9bfe0', '#f0ecfa', '#d8ccf0', '#8a7aa8'],
-      parts: ['sleepy-eyes', 'tiny-smile', 'cloud-crown', 'wisp-tail'],
-      size: 1.25,
-      stance: 0.2,
-      pose: 'hover',
-      attackPart: 'tail',
-    },
-    habitatPreferences: {
-      elements: ['shadow'],
-      feelings: ['sleepy', 'cozy'],
-    },
-  },
-  {
     id: 'chillypep',
     name: 'Chillypep',
     description: 'Brrr, says Chillypep, steaming gently. Brrr.',
@@ -292,11 +263,10 @@ export const WAVE_1_SPECIES: Species[] = [
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
     evolutions: [],
     visual: {
-      body: 'orb',
+      body: 'tiered',
       palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
       parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'icicle-crown'],
-      stance: 0.5,
-      pose: 'hover',
+      pose: 'stand',
       attackPart: 'crown',
     },
     habitatPreferences: {

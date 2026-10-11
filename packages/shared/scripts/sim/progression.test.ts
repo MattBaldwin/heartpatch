@@ -58,7 +58,7 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
       runProgression(data, SMALL, CURRENT_RULES, kid, 4).kids[0]!.days.map((d) => d.partnerLevel),
     );
     expect(levels).toEqual([
-      [8, 13, 16, 17, 18, 19],
+      [8, 13, 15, 17, 18, 19],
       [14, 18, 20, 21, 22, 23],
     ]);
   });
