@@ -477,6 +477,16 @@ function queries(db: Executor): BuildingsRepo {
         )
         .orderBy(asc(squishies.id))
         .for('no key update');
+      // The foreign key clears the habitat; its move-in time goes with it (#32).
+      await db
+        .update(squishies)
+        .set({ habitatSince: null })
+        .where(
+          inArray(
+            squishies.habitatBuildingId,
+            db.select({ id: buildings.id }).from(buildings).where(owned),
+          ),
+        );
       const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
     },

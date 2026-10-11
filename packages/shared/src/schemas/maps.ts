@@ -99,6 +99,18 @@ export type SetTradingRequest = z.infer<typeof SetTradingRequestSchema>;
 export const TradingResponseSchema = z.object({ tradingEnabled: z.boolean() });
 export type TradingResponse = z.infer<typeof TradingResponseSchema>;
 
+/**
+ * `POST /api/v1/maps/:mapId/friendly-challenges` (#29): the patch owner turns
+ * friendly battles ("Battle me?") on or off. Off calls off every waiting ask.
+ * Live land defense follows the PvP mode instead.
+ */
+export const SetFriendlyChallengesRequestSchema = z.strictObject({
+  friendlyChallenges: z.boolean(),
+});
+export type SetFriendlyChallengesRequest = z.infer<typeof SetFriendlyChallengesRequestSchema>;
+export const FriendlyChallengesResponseSchema = z.object({ friendlyChallenges: z.boolean() });
+export type FriendlyChallengesResponse = z.infer<typeof FriendlyChallengesResponseSchema>;
+
 /** `POST /api/v1/maps/:mapId/pvp-mode` */
 export const SetPvpModeRequestSchema = z.object({ pvpMode: PvpModeSchema });
 export type SetPvpModeRequest = z.infer<typeof SetPvpModeRequestSchema>;
@@ -179,6 +191,8 @@ export const MapDetailSchema = z.object({
   pvpMode: PvpModeSchema,
   /** Trading at the posts is on (#271, the owner's switch). Optional so older servers' details parse. */
   tradingEnabled: z.boolean().optional(),
+  /** Friendly battles are on (#29, the owner's switch). Optional so older servers' details parse. */
+  friendlyChallenges: z.boolean().optional(),
   role: MapRoleSchema,
   maxPlayers: z.number().int(),
   members: z.array(MapMemberSchema),
