@@ -28,7 +28,8 @@ import { createCareRepo } from './repo.js';
 import { applyXp, growthEvents } from './service.js';
 
 /** When set, `formsAt` returns just this form: the roll-free path no real line reaches any more. */
-const oneForm = vi.hoisted(() => ({ current: null as { from: string; form: unknown } | null }));
+type Form = ReturnType<typeof EvolutionModule.formsAt>[number];
+const oneForm = vi.hoisted(() => ({ current: null as { from: string; form: Form } | null }));
 vi.mock('./evolution.js', async (importOriginal) => {
   const actual = await importOriginal<typeof EvolutionModule>();
   return {
@@ -320,8 +321,8 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
   });
 
   it('never rolls a step with one form', async () => {
-    // Every real line branches since batch 4 of #32, so make the step a one-form one.
-    const [only] = formsAt(BASE.id, STEP.level);
+    // Nearly every real line branches since batch 4 of #32, so make the step a one-form one.
+    const only = formsAt(BASE.id, STEP.level)[0]!;
     oneForm.current = { from: BASE.id, form: only };
     try {
       const server = await start();
@@ -330,7 +331,7 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
       const id = await squishy(mapId, who, leaning(BRANCH_FEELING));
       const growth = await grow(id);
       expect(growth?.evolutions).toEqual([
-        { fromSpeciesId: BASE.id, intoSpeciesId: only!.into, branch: false },
+        { fromSpeciesId: BASE.id, intoSpeciesId: only.into, branch: false },
       ]);
       expect((await evolutionsOf(id))[0]).toMatchObject({
         roll: null,

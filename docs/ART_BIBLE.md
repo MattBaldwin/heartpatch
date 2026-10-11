@@ -148,7 +148,7 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
-**Branch forms (#32).** Almost every line (not yet the secret Heartlet one) has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. All are built from the existing bodies and parts.
+**Branch forms (#32).** Almost every line (not yet the secret Heartlet one) has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff.
 
 | Line | Branch form | Feeling | Body plan | Pose · attack part |
 |---|---|---|---|---|

@@ -236,7 +236,7 @@ describe('careSheet', () => {
     const branching = GAME_DATA.species.find(
       (s) => s.evolutions.filter((e) => e.level === s.evolutions[0]?.level).length > 1,
     )!;
-    // Every real line branches by now, so a one-form line has to be made up.
+    // Nearly every real line branches by now, so a one-form line has to be made up.
     const single = {
       ...species('solo', 'Solo', '#aaccee'),
       evolutions: [{ into: 'moonpuff', level: 16 }],
