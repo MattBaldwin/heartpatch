@@ -110,22 +110,22 @@ export const SECRET_SPECIES: Species[] = [
       body: 'heart',
       palette: ['#9a70f0', '#ffd0e6', '#1e0a2e', '#ffb627'],
       ink: '#1e0a2e',
-      parts: [
-        'happy-eyes',
-        'bold-happy-eyes',
-        'singing-mouth',
-        'heart-blush',
-        'singing-arms',
-        'note-head',
-        'note-stem',
-        'note-flag',
-      ],
+      parts: ['happy-eyes', 'bold-happy-eyes', 'singing-mouth', 'heart-blush', 'singing-arms'],
       size: 1.3,
       finish: 'iridescent',
       glow: 'body',
       stance: 0.3,
       pose: 'hover',
       attackPart: 'arms',
+      // A gold song note floating just above its right shoulder, facing you.
+      floater: {
+        glyph: 'music-note',
+        size: 0.4, // TUNE: of the body's height
+        above: 0.08, // TUNE: gap above its top
+        side: 0.42, // TUNE: of the body's width, to the viewer's right
+        color: 'detail',
+        bob: { height: 0.04, speed: 0.45 }, // TUNE
+      },
     },
     habitatPreferences: { elements: ['light'], feelings: ['joy', 'cozy'] },
   },

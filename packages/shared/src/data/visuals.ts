@@ -1806,49 +1806,6 @@ export const PARTS: Part[] = [
     sink: 0.5,
     jitter: 0.05,
   },
-  {
-    // A beamed pair of gold eighth notes on the heart's right shoulder: their
-    // oval heads…
-    id: 'note-head',
-    slot: 'crown',
-    shape: 'ellipsoid',
-    size: [0.2, 0.13, 0.14],
-    color: 'detail',
-    layout: { kind: 'ring', count: 2, spread: 26 },
-    around: 58,
-    up: 22,
-    sink: 0.35,
-    tilt: 20,
-    jitter: 0.04,
-  },
-  {
-    // …their straight stems…
-    id: 'note-stem',
-    slot: 'horns',
-    shape: 'capsule',
-    size: [0.085, 0.28, 0.085],
-    color: 'detail',
-    layout: { kind: 'ring', count: 2, spread: 26 },
-    around: 65,
-    up: 26,
-    sink: 0.35,
-    tilt: 88,
-    jitter: 0.04,
-  },
-  {
-    // …and the beam across their tops, lying flat on the shoulder (a surface
-    // slot, so it hugs the body instead of growing off it).
-    id: 'note-flag',
-    slot: 'cheeks',
-    shape: 'capsule',
-    size: [0.3, 0.1, 0.09],
-    color: 'detail',
-    layout: single,
-    around: 78,
-    up: 54,
-    sink: 0.2,
-    jitter: 0.04,
-  },
 ];
 
 /**
