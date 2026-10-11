@@ -25,8 +25,8 @@ const pinned = params.get('tier');
 const tier = pickInitialTier(pinned, params.get('quality'));
 const room: HouseProtoRoom = params.get('room') === 'hall' ? 'hall' : 'snug';
 const portrait = window.innerHeight > window.innerWidth;
-const pitchDefault = room === 'hall' ? (portrait ? 25 : 20) : portrait ? 23 : 24;
-const distDefault = room === 'hall' ? (portrait ? 12.5 : 13.5) : portrait ? 8.2 : 8.5;
+const pitchDefault = room === 'hall' ? (portrait ? 25 : 20) : portrait ? 21 : 24;
+const distDefault = room === 'hall' ? (portrait ? 12.5 : 13.5) : portrait ? 7.6 : 8.5;
 const focus = {
   x: Number(params.get('x')) || 0,
   z: Number(params.get('z')) || (room === 'hall' ? (portrait ? 1.4 : 0.6) : portrait ? 0.9 : 0.5),

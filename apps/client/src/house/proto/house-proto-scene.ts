@@ -834,7 +834,7 @@ export class HouseProtoScene {
   #furnishSnug(spec: RoomSpec): void {
     const { w, d } = spec;
     const scene = this.#scene;
-    this.#rug(0.2, -0.3, 2.4, 2.0, '#e97a9b', '#fff0e6');
+    this.#rug(0.2, -0.5, 2.5, 2.5, '#e97a9b', '#fff0e6');
     // The hearth on the left wall, facing into the room (+x).
     this.#hearth(-w / 2 + 0.28, 0.6, Math.PI / 2);
     // Two beds against the back wall, either side of the window light.
@@ -866,7 +866,7 @@ export class HouseProtoScene {
       ball(scene, 0.16, [-0.07, 0.36, 0], '#ff7aa2', [1.2, 0.7, 0.8]),
       ball(scene, 0.16, [0.07, 0.36, 0], '#ff7aa2', [1.2, 0.7, 0.8]),
     ]);
-    gift.position.set(1.4, 0, d / 2 - 1.9);
+    gift.position.set(2.6, 0, d / 2 - 2.1);
     gift.rotation.y = 0.5;
     // Toys on the rug, a pumpkin by the door (it's October).
     this.#toys(-0.7, -2.5);
@@ -1033,15 +1033,15 @@ export class HouseProtoScene {
     r('thistlepip', 5, { x: -1.2, z: 0.9, y: 0, yaw: 0.6, scale: 0.9 });
     r('glowgourd', 6, { x: 0.6, z: 2.6, y: 0, yaw: 0.1, scale: 0.9 });
     r('candlekit', 7, {
-      x: w / 2 - 1.1,
-      z: 1.45,
-      y: 3.22,
+      x: w / 2 - 1.25,
+      z: 1.55,
+      y: 3.2,
       yaw: 0.35,
-      scale: 0.85,
-      squash: 0.8,
+      scale: 0.55,
+      squash: 0.9,
       shadowAlpha: 0.3,
     });
-    r('gourdon', 8, { x: 2.6, z: 1.4, y: 0, yaw: -1.2, scale: 0.95, squash: 0.96 });
+    r('gourdon', 8, { x: 1.9, z: 1.7, y: 0, yaw: -1.2, scale: 0.95, squash: 0.96 });
     const base = KEEPER_DATA.bases[0];
     if (!base) throw new Error('no keeper base');
     this.#keepers.add(miaConfig(base), {
