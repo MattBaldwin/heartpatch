@@ -1395,3 +1395,4 @@ _Owner direction, relayed by the coordinator on 2026-10-11 (PR #390 follow-up); 
 - **Show the screens before asking.** Always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link.
 - **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
 - **The home must be personal and personalizable.** It should feel like the Keeper's own place (see #381).
+- **Squishies are the most important visual part of the game.** Every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones (#382).
