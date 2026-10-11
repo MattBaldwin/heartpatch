@@ -907,7 +907,7 @@ export class HouseProtoScene {
       x: -2.5,
       z: -0.5,
       y: 0,
-      yaw: Math.PI / 2,
+      yaw: 2.1,
       scale: 0.75,
       squash: 0.92,
     });
@@ -969,7 +969,7 @@ export class HouseProtoScene {
     this.#bed(-4.6, d / 2 - 1.2, 0, '#ffd166', true);
     this.#bed(0.9, d / 2 - 1.2, 0, '#c9a0ff', true);
     this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 2.72);
-    this.#bed(-5.2, -2.2, Math.PI / 2, '#9fd0ff', true);
+    this.#bed(-5.2, -3.4, Math.PI / 2, '#9fd0ff', true);
     // The Keeper's corner: an alcove on the right with a table, tea and lamps.
     const table = this.#solid('table', [
       tube(scene, 0.1, 1.5, 1.5, [0, 0.66, 0], '#a06a44', 20),
