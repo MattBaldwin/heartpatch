@@ -377,18 +377,18 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     ],
   },
   {
-    // One braid down the back, tied with a little bobble.
+    // One braid over the right shoulder, tied with a little bobble.
     id: 'braid',
     name: 'Braid',
     volume: { top: 1.2, width: 1.08 },
     pieces: [
       CAP,
       FRINGE,
-      { shape: 'ellipsoid', at: [0, 0.1, 0.96], size: [0.5, 0.5, 0.36] },
-      { shape: 'ellipsoid', at: [0, -0.3, 1.0], size: [0.44, 0.46, 0.34] },
-      { shape: 'ellipsoid', at: [0, -0.68, 1.02], size: [0.4, 0.44, 0.32] },
-      { shape: 'ellipsoid', at: [0, -1.04, 1.02], size: [0.36, 0.42, 0.3] },
-      ball(0, -1.34, 1.02, 0.22),
+      { shape: 'ellipsoid', at: [0.88, -0.1, 0.1], size: [0.4, 0.46, 0.36] },
+      { shape: 'ellipsoid', at: [0.9, -0.52, -0.08], size: [0.36, 0.44, 0.34] },
+      { shape: 'ellipsoid', at: [0.86, -0.94, -0.3], size: [0.34, 0.42, 0.32] },
+      { shape: 'ellipsoid', at: [0.8, -1.34, -0.5], size: [0.32, 0.4, 0.3] },
+      ball(0.76, -1.64, -0.6, 0.2),
     ],
   },
   {
@@ -399,14 +399,16 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     pieces: [
       CAP,
       FRINGE,
-      { shape: 'ellipsoid', at: [-0.9, -0.1, 0.3], size: [0.38, 0.42, 0.34] },
-      { shape: 'ellipsoid', at: [0.9, -0.1, 0.3], size: [0.38, 0.42, 0.34] },
-      { shape: 'ellipsoid', at: [-0.94, -0.5, 0.34], size: [0.34, 0.4, 0.3] },
-      { shape: 'ellipsoid', at: [0.94, -0.5, 0.34], size: [0.34, 0.4, 0.3] },
-      { shape: 'ellipsoid', at: [-0.94, -0.88, 0.36], size: [0.3, 0.38, 0.28] },
-      { shape: 'ellipsoid', at: [0.94, -0.88, 0.36], size: [0.3, 0.38, 0.28] },
-      ball(-0.94, -1.16, 0.38, 0.2),
-      ball(0.94, -1.16, 0.38, 0.2),
+      { shape: 'ellipsoid', at: [-0.88, -0.1, 0.1], size: [0.36, 0.42, 0.34] },
+      { shape: 'ellipsoid', at: [0.88, -0.1, 0.1], size: [0.36, 0.42, 0.34] },
+      { shape: 'ellipsoid', at: [-0.9, -0.5, -0.08], size: [0.34, 0.4, 0.32] },
+      { shape: 'ellipsoid', at: [0.9, -0.5, -0.08], size: [0.34, 0.4, 0.32] },
+      { shape: 'ellipsoid', at: [-0.86, -0.9, -0.3], size: [0.32, 0.38, 0.3] },
+      { shape: 'ellipsoid', at: [0.86, -0.9, -0.3], size: [0.32, 0.38, 0.3] },
+      { shape: 'ellipsoid', at: [-0.8, -1.28, -0.5], size: [0.3, 0.36, 0.28] },
+      { shape: 'ellipsoid', at: [0.8, -1.28, -0.5], size: [0.3, 0.36, 0.28] },
+      ball(-0.76, -1.56, -0.6, 0.2),
+      ball(0.76, -1.56, -0.6, 0.2),
     ],
   },
   {
@@ -422,15 +424,15 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     ],
   },
   {
-    // Tied low at the nape, hanging straight down the back.
+    // Tied low at the nape, then brought round over the right shoulder.
     id: 'low-ponytail',
     name: 'Low Ponytail',
     volume: { top: 1.2, width: 1.06 },
     pieces: [
       CAP,
       FRINGE,
-      ball(0, -0.04, 0.98, 0.24),
-      { shape: 'teardrop', at: [0, -0.78, 1.08], size: [0.56, 1.15, 0.5], turn: [0, 0, 180] },
+      ball(0.5, -0.1, 0.8, 0.24),
+      { shape: 'teardrop', at: [0.88, -0.86, -0.1], size: [0.56, 1.15, 0.5], turn: [-8, 0, 180] },
     ],
   },
   {
