@@ -177,6 +177,27 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     expect(await saveKeeper(server, kid, CLOVER_KEEPER)).toEqual(CLOVER_KEEPER);
   });
 
+  it('keeps any face on any body, and an older app’s save keeps them (#372)', async () => {
+    const server = await start();
+    const kid = await player();
+    const shaped = { ...CLOVER_KEEPER, face: 'juniper', body: 'lanky' };
+    expect(await saveKeeper(server, kid, shaped)).toEqual(shaped);
+    expect(await getKeeper(server, kid)).toEqual(shaped);
+    const row = (await db.select().from(keepers)).find((r) => r.userId === kid.id);
+    expect(row).toMatchObject({ base: 'clover', face: 'juniper', body: 'lanky' });
+    // Sent only where it differs from the starting look's own.
+    const sent = await call(server, 'POST', '/keeper', kid, { ...shaped, face: 'clover' });
+    expect(sent.json<{ keeper: object }>().keeper).not.toHaveProperty('face');
+    expect(sent.json<{ keeper: object }>().keeper).toHaveProperty('body', 'lanky');
+
+    // An older app only knows today's fields: the same starting look keeps them…
+    const old = { base: 'clover', hairColor: 'honey', eyeColor: 'leaf', outfit: 'meadow' };
+    expect(await saveKeeper(server, kid, old)).toMatchObject({ face: 'clover', body: 'lanky' });
+    // …and a new one starts from its own face and body.
+    const pip = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+    expect(await saveKeeper(server, kid, pip)).toMatchObject({ face: 'pip', body: 'pip' });
+  });
+
   it('sends an untouched Keeper exactly as before the builder, so older apps still load it (#289)', async () => {
     const server = await start();
     const kid = await player();
@@ -233,6 +254,8 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     const keeper = await saveKeeper(server, kid, old);
     expect(keeper).toEqual({
       ...old,
+      face: 'clover',
+      body: 'clover',
       skinTone: CLOVER!.skinTone,
       eyes: CLOVER!.face.eyes,
       brows: CLOVER!.face.brows,
@@ -260,6 +283,8 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
       { ...PIP_KEEPER, eyeColor: 'laser' },
       { ...PIP_KEEPER, outfit: 'armor' },
       { ...PIP_KEEPER, hairstyle: 'mohawk' },
+      { ...PIP_KEEPER, face: 'square' },
+      { ...PIP_KEEPER, body: 'giant' },
       { ...PIP_KEEPER, skinTone: 'tone-99' },
       { ...PIP_KEEPER, brows: 'unibrow' },
       { ...PIP_KEEPER, mouth: 'grin' },

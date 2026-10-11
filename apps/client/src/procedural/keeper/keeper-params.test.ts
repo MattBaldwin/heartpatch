@@ -304,6 +304,57 @@ describe('keeperParams', () => {
     expect(p.pieces).toEqual(own.pieces);
   });
 
+  it('draws any face on any body (#372); a base’s own draw exactly as before', () => {
+    const pip = BASES[0]!;
+    const own = keeperParams(defaultKeeperConfig(pip), KEEPER_DATA);
+    // Its own face and body, named or not, are the same Keeper.
+    const named = keeperParams(
+      { ...defaultKeeperConfig(pip), face: 'pip', body: 'pip' },
+      KEEPER_DATA,
+    );
+    expect(named.pieces).toEqual(own.pieces);
+    expect(named.sockets).toEqual(own.sockets);
+    const looks = new Set<string>();
+    for (const face of KEEPER_DATA.faces) {
+      for (const body of KEEPER_DATA.bodies) {
+        const p = keeperParams(
+          { ...defaultKeeperConfig(pip), face: face.id, body: body.id },
+          KEEPER_DATA,
+        );
+        expect(p.missing).toEqual([]);
+        looks.add(keeperHash(p));
+        // The face sits on the body's shoulders, whatever the pair.
+        const top = head(p);
+        const torso = p.sockets.top;
+        const shoulders = torso.anchors[0]![1] + torso.size[1] / 2;
+        expect(top.at[1] - top.size[1] / 2, `${face.id} on ${body.id}`).toBeLessThan(shoulders);
+        expect(top.at[1], `${face.id} on ${body.id}`).toBeGreaterThan(shoulders);
+      }
+    }
+    expect(looks.size).toBe(KEEPER_DATA.faces.length * KEEPER_DATA.bodies.length);
+  });
+
+  it('changes only the head with the face, and the body with the body (#372)', () => {
+    const pip = defaultKeeperConfig(BASES[0]!);
+    const own = keeperParams(pip, KEEPER_DATA);
+    const egg = keeperParams({ ...pip, face: 'juniper' }, KEEPER_DATA);
+    expect(piecesOf(egg, 'outfit')).toEqual(piecesOf(own, 'outfit'));
+    // Longer than it is wide: Egg's head is narrower for its height than Bubble's.
+    const ratio = (p: KeeperParams) => head(p).size[0] / head(p).size[1];
+    expect(ratio(egg)).toBeLessThan(ratio(own));
+    const lanky = keeperParams({ ...pip, body: 'lanky' }, KEEPER_DATA);
+    expect(lanky.height).toBeGreaterThan(own.height);
+    expect(ratio(lanky)).toBeCloseTo(ratio(own), 9);
+  });
+
+  it('draws an unknown face or body as the base’s own, and reports it (#372)', () => {
+    const pip = defaultKeeperConfig(BASES[0]!);
+    const own = keeperParams(pip, KEEPER_DATA);
+    const p = keeperParams({ ...pip, face: 'square', body: 'giant' }, KEEPER_DATA);
+    expect(p.missing).toEqual(['square', 'giant']);
+    expect(p.pieces).toEqual(own.pieces);
+  });
+
   // Pinned so a change to the build (which would change every player's
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
@@ -384,6 +435,27 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
         expect(bare.sockets.hat.anchors[0]![1], at).toBeLessThan(bare.height);
         for (const piece of piecesOf(p, 'hair-accessory')) {
           expect(Math.abs(piece.at[1] - top.at[1]), at).toBeLessThan(top.size[1]);
+        }
+      }
+    }
+  });
+
+  it('sits hats on every hairstyle and fits the costume on every face and body (#372)', () => {
+    const pip = defaultKeeperConfig(BASES[0]!);
+    for (const face of KEEPER_DATA.faces) {
+      for (const body of KEEPER_DATA.bodies) {
+        for (const style of KEEPER_DATA.hairstyles) {
+          const config = { ...pip, face: face.id, body: body.id, hairstyle: style.id };
+          const at = `${face.id} on ${body.id}, ${style.id}`;
+          const bare = keeperParams(config, KEEPER_DATA);
+          const top = head(bare);
+          const hat = piecesOf(keeperParams(config, KEEPER_DATA, itemFor('hat')), 'hat');
+          expect(lowest(hat), at).toBeGreaterThan(top.at[1]);
+          expect(highest(hat), at).toBeGreaterThan(bare.height);
+          expect(bare.sockets.hat.anchors[0]![1], at).toBeLessThan(bare.height);
+          const sheet = piecesOf(keeperParams(config, KEEPER_DATA, GHOST_SHEET), 'costume')[0]!;
+          expect(sheet.size[1], at).toBeGreaterThan(bare.height);
+          expect(sheet.size[0], at).toBeGreaterThan(bare.width);
         }
       }
     }

@@ -8,7 +8,7 @@ import type { SquishyLod } from '../../procedural/config.js';
 import { KEEPER_PLACES } from '../../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../../procedural/keeper/keeper-field.js';
 import type { KeeperItem } from '../../procedural/keeper/keeper-items.js';
-import { keeperHash } from '../../procedural/keeper/keeper-params.js';
+import { keeperHash, keeperParams } from '../../procedural/keeper/keeper-params.js';
 
 // The picker's 3D preview (design doc §23): the Keeper being picked, close
 // up on a little pastel stage, above the picker card. The wardrobe (#43)
@@ -58,7 +58,10 @@ export class KeeperPreview {
     turned = false,
   ): void {
     if (this.#handle) this.#field.remove(this.#handle);
-    const { scale, lean } = KEEPER_PLACES.preview;
+    const { lean, fitHeight } = KEEPER_PLACES.preview;
+    // A Keeper taller than fits (a tall body with a big face and hair) shrinks to fit.
+    const height = keeperParams(config, KEEPER_DATA, items).height;
+    const scale = KEEPER_PLACES.preview.scale * Math.min(1, fitHeight / height);
     const placement = turned
       ? { x: 0, z: 0, scale, lean: -lean, yaw: Math.PI }
       : { x: 0, z: 0, scale, lean };

@@ -16,14 +16,25 @@ import { lodFor } from '../../procedural/motion.js';
 import { el, messageOf } from '../dom.js';
 import { keeperApi, type KeeperApi } from './keeper-api.js';
 import { KeeperPreview } from './keeper-preview.js';
+import {
+  bodyTileSvg,
+  faceTileSvg,
+  KEEPER_STEPS,
+  nextStep,
+  previousStep,
+  type KeeperStep,
+} from './keeper-steps.js';
 import { watchScrollHints } from './scroll-hint.js';
 import './keeper.css';
 
 // Picking your Keeper (design doc §23, issue #42): right after signup and
 // before the opening cinematic (#46) and the tutorial, and again
-// any time from Settings, for free. A bottom card for one thumb, with the
-// Keeper in 3D above it. Colours are tried on the device; only "That's me!"
-// talks to the server, which checks every id.
+// any time from Settings, for free. One step per screen (#372): face, body,
+// skin, hair style, hair colour, face details, outfit, with Back and Next,
+// in a bottom card for one thumb and the Keeper in 3D above it. Every step
+// starts on a pick, so Next all the way through makes a Keeper; the step
+// tabs jump straight to any step. Picks are tried on the device; only
+// "That's me!" talks to the server, which checks every id.
 
 export type KeeperPickerMode = 'first' | 'edit';
 
@@ -48,6 +59,8 @@ export interface KeeperDebug {
   readonly mode: KeeperPickerMode | null;
   /** What the picker shows right now. */
   readonly picked: KeeperConfig | null;
+  /** The step on screen (#372), while the picker is open. */
+  readonly step: KeeperStep | null;
   /** The player's saved Keeper, once known. */
   readonly saved: KeeperConfig | null;
   /** `keeperHash` of the 3D preview, while it's on screen. */
@@ -67,20 +80,34 @@ export interface KeeperScreen {
 }
 
 export const KEEPER_TEXT = {
-  first: { title: 'Pick your Keeper!', subtitle: 'This is you in Heartpatch. Change it any time!' },
-  edit: { title: 'Your Keeper', subtitle: 'Try a new look. It’s free!' },
+  first: { title: 'Pick your Keeper!' },
+  edit: { title: 'Your Keeper' },
   save: { first: 'That’s me!', edit: 'Save' },
   saving: 'One moment…',
   back: 'Back',
+  next: 'Next',
+  /** The steps (#372): a short tab name and what to do on it. */
+  steps: {
+    face: { tab: 'Face', prompt: 'Pick a face shape!' },
+    body: { tab: 'Body', prompt: 'Pick a body!' },
+    skin: { tab: 'Skin', prompt: 'Pick a skin tone!' },
+    hairstyle: { tab: 'Hair', prompt: 'Pick a hair style!' },
+    hairColor: { tab: 'Color', prompt: 'Pick a hair color!' },
+    details: { tab: 'Details', prompt: 'Eyes, brows and a smile!' },
+    outfit: { tab: 'Outfit', prompt: 'Pick an outfit!' },
+  } satisfies Record<KeeperStep, { tab: string; prompt: string }>,
+  /** Screen readers: where the player is. */
+  stepOf: (n: number, of: number) => `Step ${String(n)} of ${String(of)}`,
   loadFailed: 'We couldn’t find your Keeper. Check your connection and try again!',
   retry: 'Try again',
   settings: 'Change how you look, any time!',
   settingsButton: 'Change Keeper',
   /** Back in the lobby after a change. */
   changed: 'Looking good, Keeper!',
-  /** The rows (#289), in order down the card. */
+  /** Choice labels (#289, #372). */
   rows: {
-    look: 'Starting look',
+    face: 'Face',
+    body: 'Body',
     skin: 'Skin',
     eyes: 'Eyes',
     eyeColor: 'Eye color',
@@ -130,13 +157,29 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   let preview: KeeperPreview | null = null;
   let frame = 0;
   let lastTier: QualityTier | null = null;
+  let step: KeeperStep = 'face';
 
   const title = el('h1', { class: 'auth-title', id: 'keeper-title' });
-  const subtitle = el('p', { class: 'auth-subtitle keeper-subtitle' });
-  const rows = el('div', { class: 'keeper-rows' });
+  const tabs = el('div', { class: 'keeper-tabs', role: 'tablist', 'aria-label': 'Steps' });
+  const prompt = el('p', { class: 'auth-subtitle keeper-subtitle', id: 'keeper-prompt' });
+  const rows = el('div', {
+    class: 'keeper-rows',
+    role: 'tabpanel',
+    'aria-labelledby': 'keeper-prompt',
+    'data-testid': 'keeper-step',
+  });
   const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'keeper-error' });
   const actions = el('div', { class: 'auth-actions keeper-actions' });
-  const card = el('div', { class: 'auth-card keeper-card' }, title, subtitle, rows, error, actions);
+  const card = el(
+    'div',
+    { class: 'auth-card keeper-card' },
+    title,
+    tabs,
+    prompt,
+    rows,
+    error,
+    actions,
+  );
   const panel = el(
     'section',
     {
@@ -220,187 +263,219 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return node;
   };
 
-  /** Stops the scroll hints of the rows on screen (they're rebuilt on open). */
+  /** A tile's drawing (SVG markup this file builds from data, never player text). */
+  const drawing = (svg: string) => {
+    const node = el('span', { class: 'keeper-tile-art' });
+    node.innerHTML = svg;
+    return node;
+  };
+
+  /** Stops the scroll hints of the step on screen (they're rebuilt with it). */
   let hints = new AbortController();
 
-  /**
-   * One labelled line of choices (#130): the label sits beside the choices,
-   * not above them, so all five rows fit the card with no scrolling on a
-   * phone or iPad.
-   */
+  /** The step's choices, wrapping onto as many lines as they need. */
+  const grid = (...buttons: HTMLElement[]) => el('div', { class: 'keeper-grid' }, ...buttons);
+
+  /** One labelled group of choices on the details step: the label above them. */
   const row = (legend: string, ...buttons: HTMLElement[]) => {
     const id = `keeper-row-${legend.toLowerCase().replaceAll(' ', '-')}`;
     return el(
       'div',
       { class: 'keeper-row', role: 'group', 'aria-labelledby': id },
       el('span', { class: 'keeper-legend', id }, legend),
-      el('div', { class: 'keeper-choices' }, ...buttons),
+      grid(...buttons),
     );
   };
 
-  const swatchRow = (
+  const swatches = (
     legend: string,
-    swatches: readonly KeeperSwatch[],
+    rows: readonly KeeperSwatch[],
     field: 'hairColor' | 'eyeColor',
   ) =>
-    row(
-      legend,
-      ...swatches.map((s) =>
-        choice(
-          `${legend}: ${s.name}`,
-          () => picked[field] === s.id,
-          () => {
-            pick({ ...picked, [field]: s.id });
-          },
-          'keeper-swatch',
-          dot(s.color),
-        ),
+    rows.map((s) =>
+      choice(
+        `${legend}: ${s.name}`,
+        () => picked[field] === s.id,
+        () => {
+          pick({ ...picked, [field]: s.id });
+        },
+        'keeper-swatch',
+        dot(s.color),
       ),
     );
 
-  function renderRows(): void {
-    choices = [];
-    const toneOf = (id: string) => KEEPER_DATA.skinTones.find((t) => t.id === id)?.color ?? '';
-    const hairOf = (id: string) => KEEPER_DATA.hairColors.find((c) => c.id === id)?.color ?? '';
+  /** Named pills (brows, mouths, eyes, extras, hair styles). */
+  const pill = (label: string, name: string, isPicked: () => boolean, onPick: () => void) =>
+    choice(
+      label,
+      isPicked,
+      onPick,
+      'keeper-style',
+      el('span', { class: 'keeper-base-name' }, name),
+    );
+
+  /** A named drawing (faces and bodies). */
+  const tile = (
+    label: string,
+    name: string,
+    svg: string,
+    isPicked: () => boolean,
+    onPick: () => void,
+  ) =>
+    choice(
+      label,
+      isPicked,
+      onPick,
+      'keeper-tile',
+      drawing(svg),
+      el('span', { class: 'keeper-base-name' }, name),
+    );
+
+  /** The choices of `on`, built from the picks so far (tiles wear the skin tone). */
+  function choicesFor(on: KeeperStep): HTMLElement[] {
     const T = KEEPER_TEXT.rows;
-    /** A row of named line styles (brows or mouths). */
-    const lineRow = (legend: string, lines: readonly KeeperFaceLine[], field: 'brows' | 'mouth') =>
-      row(
-        legend,
-        ...lines.map((l) =>
-          choice(
-            `${legend}: ${l.name}`,
-            () => picked[field] === l.id,
-            () => {
-              pick({ ...picked, [field]: l.id });
-            },
-            'keeper-style',
-            el('span', { class: 'keeper-base-name' }, l.name),
-          ),
-        ),
-      );
-    rows.replaceChildren(
-      row(
-        T.look,
-        ...bases.map((b) =>
-          choice(
-            b.name,
-            () => picked.base === b.id,
-            () => {
-              // A new Keeper comes with its own colours; tweak from there.
-              pick(defaultKeeperConfig(b));
-            },
-            'keeper-base',
-            el(
-              'span',
-              { class: 'keeper-faces' },
-              dot(toneOf(b.skinTone)),
-              dot(hairOf(b.hairColor), 'keeper-hair-dot'),
+    const full = completeKeeperConfig(picked, KEEPER_DATA);
+    const skin = KEEPER_DATA.skinTones.find((t) => t.id === full.skinTone)?.color ?? '#f6cfae';
+    const top = KEEPER_DATA.outfits.find((o) => o.id === full.outfit)?.top ?? '#ffd85a';
+    switch (on) {
+      case 'face':
+        return [
+          grid(
+            ...KEEPER_DATA.faces.map((f) =>
+              tile(
+                `${T.face}: ${f.name}`,
+                f.name,
+                faceTileSvg(f, skin),
+                () => completeKeeperConfig(picked, KEEPER_DATA).face === f.id,
+                () => {
+                  pick({ ...picked, face: f.id });
+                },
+              ),
             ),
-            el('span', { class: 'keeper-base-name' }, b.name),
           ),
-        ),
-      ),
-      // The Keeper builder (#289): every part is a choice, for every Keeper.
-      row(
-        T.skin,
-        ...KEEPER_DATA.skinTones.map((tone, i) =>
-          choice(
-            KEEPER_TEXT.skinTone(i + 1),
-            () => picked.skinTone === tone.id,
-            () => {
-              pick({ ...picked, skinTone: tone.id });
-            },
-            'keeper-swatch',
-            dot(tone.color),
+        ];
+      case 'body':
+        return [
+          grid(
+            ...KEEPER_DATA.bodies.map((b) =>
+              tile(
+                `${T.body}: ${b.name}`,
+                b.name,
+                bodyTileSvg(b, skin, top),
+                () => completeKeeperConfig(picked, KEEPER_DATA).body === b.id,
+                () => {
+                  pick({ ...picked, body: b.id });
+                },
+              ),
+            ),
           ),
-        ),
-      ),
-      row(
-        T.eyes,
-        ...KeeperEyesSchema.options.map((eyes) =>
-          choice(
-            `${T.eyes}: ${KEEPER_TEXT.eyeShapes[eyes]}`,
-            () => picked.eyes === eyes,
-            () => {
-              pick({ ...picked, eyes });
-            },
-            'keeper-style',
-            el('span', { class: 'keeper-base-name' }, KEEPER_TEXT.eyeShapes[eyes]),
+        ];
+      case 'skin':
+        return [
+          grid(
+            ...KEEPER_DATA.skinTones.map((tone, i) =>
+              choice(
+                KEEPER_TEXT.skinTone(i + 1),
+                () => picked.skinTone === tone.id,
+                () => {
+                  pick({ ...picked, skinTone: tone.id });
+                },
+                'keeper-swatch',
+                dot(tone.color),
+              ),
+            ),
           ),
-        ),
-      ),
-      swatchRow(T.eyeColor, KEEPER_DATA.eyeColors, 'eyeColor'),
-      lineRow(T.brows, KEEPER_DATA.brows, 'brows'),
-      lineRow(T.mouth, KEEPER_DATA.mouths, 'mouth'),
-      // Any number, all off to start, and every Keeper can pick any.
-      row(
-        T.extras,
-        ...KEEPER_DATA.faceExtras.map((extra) =>
-          choice(
-            `${T.extras}: ${extra.name}`,
-            () => picked.extras?.includes(extra.id) ?? false,
-            () => {
-              const on = picked.extras ?? [];
-              pick({
-                ...picked,
-                extras: on.includes(extra.id)
-                  ? on.filter((id) => id !== extra.id)
-                  : [...on, extra.id],
-              });
-            },
-            'keeper-style',
-            el('span', { class: 'keeper-base-name' }, extra.name),
+        ];
+      // Any Keeper can wear any style (owner decision 2026-10-06).
+      case 'hairstyle':
+        return [
+          grid(
+            ...KEEPER_DATA.hairstyles.map((h) =>
+              pill(
+                `${T.hairstyle}: ${h.name}`,
+                h.name,
+                () => styleOf(picked) === h.id,
+                () => {
+                  pick(withHairstyle(picked, h.id));
+                },
+              ),
+            ),
           ),
-        ),
-      ),
-      // Any Keeper can wear any style (owner decision 2026-10-06); picking a
-      // starting look above goes back to its own.
-      row(
-        T.hairstyle,
-        ...KEEPER_DATA.hairstyles.map((h) =>
-          choice(
-            `Hair style: ${h.name}`,
-            () => styleOf(picked) === h.id,
-            () => {
-              pick(withHairstyle(picked, h.id));
-            },
-            'keeper-style',
-            el('span', { class: 'keeper-base-name' }, h.name),
+        ];
+      case 'hairColor':
+        return [grid(...swatches(T.hair, KEEPER_DATA.hairColors, 'hairColor'))];
+      case 'details': {
+        /** A group of named line styles (brows or mouths). */
+        const lines = (legend: string, list: readonly KeeperFaceLine[], field: 'brows' | 'mouth') =>
+          row(
+            legend,
+            ...list.map((l) =>
+              pill(
+                `${legend}: ${l.name}`,
+                l.name,
+                () => picked[field] === l.id,
+                () => {
+                  pick({ ...picked, [field]: l.id });
+                },
+              ),
+            ),
+          );
+        return [
+          row(
+            T.eyes,
+            ...KeeperEyesSchema.options.map((eyes) =>
+              pill(
+                `${T.eyes}: ${KEEPER_TEXT.eyeShapes[eyes]}`,
+                KEEPER_TEXT.eyeShapes[eyes],
+                () => picked.eyes === eyes,
+                () => {
+                  pick({ ...picked, eyes });
+                },
+              ),
+            ),
           ),
-        ),
-      ),
-      swatchRow(T.hair, KEEPER_DATA.hairColors, 'hairColor'),
-      row(
-        T.outfit,
-        ...KEEPER_DATA.outfits.map((o) =>
-          choice(
-            `Outfit: ${o.name}`,
-            () => picked.outfit === o.id,
-            () => {
-              pick({ ...picked, outfit: o.id });
-            },
-            'keeper-swatch',
-            dot(`linear-gradient(${o.top} 0 55%, ${o.bottom} 55% 100%)`),
+          row(T.eyeColor, ...swatches(T.eyeColor, KEEPER_DATA.eyeColors, 'eyeColor')),
+          lines(T.brows, KEEPER_DATA.brows, 'brows'),
+          lines(T.mouth, KEEPER_DATA.mouths, 'mouth'),
+          // Any number, all off to start, and every Keeper can pick any.
+          row(
+            T.extras,
+            ...KEEPER_DATA.faceExtras.map((extra) =>
+              pill(
+                `${T.extras}: ${extra.name}`,
+                extra.name,
+                () => picked.extras?.includes(extra.id) ?? false,
+                () => {
+                  const on = picked.extras ?? [];
+                  pick({
+                    ...picked,
+                    extras: on.includes(extra.id)
+                      ? on.filter((id) => id !== extra.id)
+                      : [...on, extra.id],
+                  });
+                },
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-    refresh();
-    hints.abort();
-    hints = new AbortController();
-    const update = watchScrollHints(
-      [
-        { node: rows, axis: 'y' },
-        ...[...rows.querySelectorAll<HTMLElement>('.keeper-choices')].map((node) => ({
-          node,
-          axis: 'x' as const,
-        })),
-      ],
-      hints.signal,
-    );
-    // Measured once the card is on screen (it's hidden while it's built).
-    requestAnimationFrame(update);
+        ];
+      }
+      case 'outfit':
+        return [
+          grid(
+            ...KEEPER_DATA.outfits.map((o) =>
+              choice(
+                `${T.outfit}: ${o.name}`,
+                () => picked.outfit === o.id,
+                () => {
+                  pick({ ...picked, outfit: o.id });
+                },
+                'keeper-swatch',
+                dot(`linear-gradient(${o.top} 0 55%, ${o.bottom} 55% 100%)`),
+              ),
+            ),
+          ),
+        ];
+    }
   }
 
   const button = (label: string, onClick: () => void, soft = false) => {
@@ -413,27 +488,93 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return node;
   };
 
-  function open(next: KeeperPickerMode): void {
+  /** Shows step `next`: its tab, its choices, and its buttons. */
+  function showStep(next: KeeperStep): void {
+    if (mode === null) return;
+    const on = mode;
+    step = next;
+    choices = [];
+    error.textContent = '';
+    const number = KEEPER_STEPS.indexOf(next) + 1;
+    prompt.textContent = KEEPER_TEXT.steps[next].prompt;
+    prompt.setAttribute('aria-description', KEEPER_TEXT.stepOf(number, KEEPER_STEPS.length));
+    tabs.replaceChildren(
+      ...KEEPER_STEPS.map((s) => {
+        const tab = el(
+          'button',
+          {
+            type: 'button',
+            class: 'keeper-tab',
+            role: 'tab',
+            'aria-selected': String(s === next),
+            'data-step': s,
+          },
+          KEEPER_TEXT.steps[s].tab,
+        );
+        tab.addEventListener('click', () => {
+          showStep(s);
+        });
+        return tab;
+      }),
+    );
+    rows.replaceChildren(...choicesFor(next));
+    rows.scrollTop = 0;
+    refresh();
+
+    // First time: Back and Next, then "That's me!" on the last step. Editing:
+    // the tabs pick the step, and Save is always there.
+    const after = nextStep(next);
+    const before = previousStep(next);
+    if (on === 'edit') {
+      const save = button(KEEPER_TEXT.save.edit, () => void submit(save));
+      const leave = button(
+        KEEPER_TEXT.back,
+        () => {
+          close(false);
+        },
+        true,
+      );
+      actions.replaceChildren(leave, save);
+    } else {
+      const forward = after
+        ? button(KEEPER_TEXT.next, () => {
+            showStep(after);
+          })
+        : button(KEEPER_TEXT.save.first, () => void submit(forward));
+      const back = button(
+        KEEPER_TEXT.back,
+        () => {
+          if (before) showStep(before);
+        },
+        true,
+      );
+      back.disabled = before === null;
+      actions.replaceChildren(back, forward);
+    }
+
+    hints.abort();
+    hints = new AbortController();
+    const update = watchScrollHints(
+      [
+        { node: rows, axis: 'y' },
+        { node: tabs, axis: 'x' },
+      ],
+      hints.signal,
+    );
+    // Measured once the card is on screen (it's hidden while it's built).
+    requestAnimationFrame(() => {
+      update();
+      tabs
+        .querySelector<HTMLElement>('[aria-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+
+  function open(next: KeeperPickerMode, at: KeeperStep = 'face'): void {
     mode = next;
     title.textContent = KEEPER_TEXT[next].title;
-    subtitle.textContent = KEEPER_TEXT[next].subtitle;
-    error.textContent = '';
-    renderRows();
-    const save = button(KEEPER_TEXT.save[next], () => void submit(save));
-    actions.replaceChildren(
-      save,
-      ...(next === 'edit'
-        ? [
-            button(
-              KEEPER_TEXT.back,
-              () => {
-                close(false);
-              },
-              true,
-            ),
-          ]
-        : []),
-    );
+    panel.dataset['mode'] = next;
+    showStep(at);
     panel.hidden = false;
     options.showScene(build);
     if (frame === 0) frame = requestAnimationFrame(tick);
@@ -477,7 +618,8 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   function showLoadFailed(who: PublicUser): void {
     mode = 'first';
     title.textContent = KEEPER_TEXT.first.title;
-    subtitle.textContent = '';
+    tabs.replaceChildren();
+    prompt.textContent = '';
     rows.replaceChildren();
     error.textContent = KEEPER_TEXT.loadFailed;
     actions.replaceChildren(button(KEEPER_TEXT.retry, () => void check(who)));
@@ -542,6 +684,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
       return {
         mode,
         picked: mode === null ? null : picked,
+        step: mode === null ? null : step,
         saved,
         preview: preview?.hash ?? null,
         hopping: preview?.isPlaying(now) ?? false,

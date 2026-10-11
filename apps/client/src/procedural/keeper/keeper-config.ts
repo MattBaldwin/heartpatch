@@ -78,5 +78,11 @@ export const KEEPER_PLACES = {
     lean: 0.5, // TUNE
     /** Where the camera looks (+z is away from it): the Keeper sits above the picker card. */
     lookAtZ: -2.3, // TUNE
+    /**
+     * The tallest Keeper (world units at scale 1, to the top of the hair)
+     * that fits above the card; a taller face, body and hair pair (#372) is
+     * shown smaller so its head stays on screen.
+     */
+    fitHeight: 1.8, // TUNE
   },
 } as const;

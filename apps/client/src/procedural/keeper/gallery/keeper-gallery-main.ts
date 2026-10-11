@@ -38,7 +38,10 @@ import '../../gallery/gallery.css';
  * colours vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them
  * round), `?hair=all` (every hairstyle on each base shown, a row per base;
  * `?hair=crew-cut` puts one style on every Keeper; with `?base=pip,rowan`
- * for a few bases), plus the main page's `?quality=` and `?renderer=webgpu`.
+ * for a few bases), `?faces=pip,juniper&bodies=acorn,lanky` (every face on
+ * every body, on the first base's other picks: a row per face, a column per
+ * body when they make a square; `all` for every one, #372), plus the main
+ * page's `?quality=` and `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The Keeper gallery is dev-only');
@@ -60,6 +63,15 @@ const baseParam = params.get('base');
 const baseIds = baseParam?.split(',');
 const bases = baseIds ? data.bases.filter((b) => baseIds.includes(b.id)) : data.bases;
 const hairParam = params.get('hair');
+/** `?faces=` and `?bodies=` (#372): ids, or `all`. */
+const listed = <T extends { id: string }>(rows: readonly T[], flag: string | null): T[] =>
+  !flag || flag === 'all' ? [...rows] : rows.filter((r) => flag.split(',').includes(r.id));
+const shaped =
+  params.has('faces') || params.has('bodies')
+    ? listed(data.faces, params.get('faces')).flatMap((f) =>
+        listed(data.bodies, params.get('bodies')).map((b) => ({ face: f.id, body: b.id })),
+      )
+    : null;
 /** `?each=<slot>`: the catalog items shown one per Keeper. */
 const eachParam = params.get('each');
 const each = eachParam
@@ -69,16 +81,25 @@ const requested = Number(params.get('count'));
 const count =
   Number.isInteger(requested) && requested > 0
     ? Math.min(requested, 200)
-    : hairParam === 'all'
-      ? bases.length * data.hairstyles.length
-      : each.length > 0
-        ? each.length
-        : view === 'closeUp'
-          ? 1
-          : bases.length;
+    : shaped
+      ? shaped.length
+      : hairParam === 'all'
+        ? bases.length * data.hairstyles.length
+        : each.length > 0
+          ? each.length
+          : view === 'closeUp'
+            ? 1
+            : bases.length;
 /** Base defaults first; past the end, colours cycle so repeats look different. */
-const configs: KeeperConfig[] =
-  hairParam === 'all'
+const firstBase = bases[0];
+if (!firstBase) throw new Error('no Keeper bases');
+const configs: KeeperConfig[] = shaped
+  ? shaped.map((shape) => ({
+      ...defaultKeeperConfig(firstBase),
+      ...shape,
+      ...(hairParam && hairParam !== 'all' ? { hairstyle: hairParam } : {}),
+    }))
+  : hairParam === 'all'
     ? bases.flatMap((b) =>
         data.hairstyles.map((h) => ({ ...defaultKeeperConfig(b), hairstyle: h.id })),
       )

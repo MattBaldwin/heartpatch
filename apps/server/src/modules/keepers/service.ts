@@ -34,6 +34,8 @@ const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   eyeColor: "We don't know that eye color. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
   hairstyle: "We don't know that hair style. Pick another one!",
+  face: "We don't know that face. Pick another one!",
+  body: "We don't know that body. Pick another one!",
   skinTone: "We don't know that skin tone. Pick another one!",
   eyes: "We don't know those eyes. Pick another one!",
   brows: "We don't know those brows. Pick another one!",
@@ -65,6 +67,8 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
       const kept =
         earlier?.base === config.base
           ? {
+              face: earlier.face,
+              body: earlier.body,
               skinTone: earlier.skinTone,
               eyes: earlier.eyes,
               brows: earlier.brows,
@@ -81,6 +85,8 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
         hairColor: full.hairColor,
         eyeColor: full.eyeColor,
         outfit: full.outfit,
+        face: full.face,
+        body: full.body,
         skinTone: full.skinTone,
         eyes: full.eyes,
         brows: full.brows,

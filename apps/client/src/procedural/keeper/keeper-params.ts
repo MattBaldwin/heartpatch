@@ -215,6 +215,10 @@ export function keeperParams(
   const eyes = config.eyes ?? base.face.eyes;
   const brows = pick(data.brows, config.brows, base.face.brows, missing);
   const mouth = pick(data.mouths, config.mouth, base.face.mouth, missing);
+  // Face shape and body type (#372): a base's own share its id.
+  const faceShape = pick(data.faces, config.face, base.id, missing);
+  const b = pick(data.bodies, config.body, base.id, missing);
+  if (!faceShape || !b) throw new Error(`keeperParams: no face or body "${base.id}"`);
   const extras = (config.extras ?? []).flatMap((id) => {
     const found = data.faceExtras.find((e) => e.id === id);
     if (!found) missing.push(id);
@@ -225,13 +229,22 @@ export function keeperParams(
 
   // Seeded by the whole config, so the same config is always the same Keeper.
   // The base's own style adds nothing, so Keepers saved before styles could
-  // be picked (and ones that pick their base's style) look as they did.
+  // be picked (and ones that pick their base's style) look as they did. So
+  // do the base's own face and body (#372).
   const restyled = style.id === base.hairstyle ? [] : [style.id];
+  const reshaped = faceShape.id === base.id && b.id === base.id ? [] : [faceShape.id, b.id];
   const rng = Rng.fromSeed(
-    deriveSeed('keeper', base.id, config.hairColor, config.eyeColor, config.outfit, ...restyled),
+    deriveSeed(
+      'keeper',
+      base.id,
+      config.hairColor,
+      config.eyeColor,
+      config.outfit,
+      ...restyled,
+      ...reshaped,
+    ),
   );
 
-  const b = base.body;
   const s = KEEPER.height * b.height;
   const t = b.limbs * s;
   const tw = b.torsoWidth * s;
@@ -246,10 +259,13 @@ export function keeperParams(
   const hipY = b.legs * s + shoe[1] * 0.5;
   const torsoY = hipY + th / 2;
   const legX = tw * 0.24;
-  const d = b.head * s;
+  // The face's head size blended with the body's (their geometric mean), so
+  // a big face on a tall body stays in proportion. A base's own face and
+  // body have the same size, and √(x·x) is exactly x, so it draws as before.
+  const d = Math.sqrt(faceShape.head * b.head) * s;
   const head: Head = {
     c: [0, hipY + th + d * (0.5 - KEEPER.neckSink), 0],
-    r: [(d * b.headShape) / 2, d / 2, (d * 0.95) / 2],
+    r: [(d * faceShape.headShape) / 2, d / 2, (d * 0.95) / 2],
   };
 
   const pieces: KeeperPiece[] = [];
