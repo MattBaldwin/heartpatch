@@ -303,35 +303,13 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     expect((row!.roll as unknown as LoggedRoll).inputs.pity).toEqual({});
   });
 
-  it('never rolls a step with one form', async () => {
-    const server = await start();
-    const who = await player();
-    const mapId = await newMap(server, who);
-    const single = GAME_DATA.species.find(
-      (s) => s.evolutions.length === 1 && formsAt(s.id, 100).length === 1,
-    )!;
-    const level = single.evolutions[0]!.level - 1;
-    const id = await squishy(mapId, who, {
-      speciesId: single.id,
-      element: single.element,
-      feeling: single.feeling,
-      level,
-      xp: xpForLevel(level, GROWTH_RULES),
-    });
-    const growth = await grow(id);
-    expect(growth?.evolutions).toEqual([
-      { fromSpeciesId: single.id, intoSpeciesId: single.evolutions[0]!.into, branch: false },
-    ]);
-    expect((await evolutionsOf(id))[0]).toMatchObject({
-      roll: null,
-      branch: false,
-      userId: who.id,
-    });
-    // The care list's celebration leaves `branch` off for a default form.
-    const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
-    const mine = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
-    expect(mine?.newEvolution).toBeDefined();
-    expect(mine?.newEvolution).not.toHaveProperty('branch');
+  it('has no one-form step left, so every evolution rolls', () => {
+    // The roll-free path (`forms.length > 1` in the care service) has no real data to run on
+    // since batch 4 gave every line a branch, and no test covers it with made-up data.
+    const single = GAME_DATA.species.filter(
+      (s) => s.evolutions.length > 0 && formsAt(s.id, 100).length === 1,
+    );
+    expect(single.map((s) => s.id)).toEqual([]);
   });
 
   it('leans with full-value care and counts care history; a win leans Brave', async () => {
