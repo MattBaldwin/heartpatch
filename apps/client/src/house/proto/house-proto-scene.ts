@@ -914,7 +914,7 @@ export class HouseProtoScene {
     const base = KEEPER_DATA.bases[0];
     if (!base) throw new Error('no keeper base');
     this.#keepers.add(miaConfig(base), {
-      x: 0.9,
+      x: 0.5,
       z: -1.8,
       yaw: 0.7,
       scale: 0.75,
@@ -1045,7 +1045,7 @@ export class HouseProtoScene {
     const base = KEEPER_DATA.bases[0];
     if (!base) throw new Error('no keeper base');
     this.#keepers.add(miaConfig(base), {
-      x: 1.7,
+      x: 1.3,
       z: -2.7,
       yaw: 1.0,
       scale: 0.9,
