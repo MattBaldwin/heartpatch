@@ -1,10 +1,10 @@
-/* The Squishies roster (#375): a sheet like the job board's (z-index 5, under
-   the care sheet), one scroll area (the sheet itself), 44pt+ targets, safe
+/* The Squishies roster (#375): a sheet like the job board's (z-index 6, over
+   home base; made before the care sheet, so Care opens over it), one scroll area (the sheet itself), 44pt+ targets, safe
    areas, one-handed. Rows are two lines of tags that wrap, so 375pt is enough. */
 
 .roster-sheet {
   position: fixed;
-  z-index: 5;
+  z-index: 6;
   left: calc(env(safe-area-inset-left) + 12px);
   right: calc(env(safe-area-inset-right) + 12px);
   bottom: calc(env(safe-area-inset-bottom) + 12px);

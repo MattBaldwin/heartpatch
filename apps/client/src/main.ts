@@ -228,6 +228,29 @@ const portraits = createPortraits({
   lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
   invalidate: () => stage?.invalidate(),
 });
+// The Squishies roster (#375): every squishy with its happiness, evolution,
+// rarity and job, one tap from the top bar on the map, at home and in
+// explore. Its Care opens the care sheet over it (two taps to care).
+const roster = createRosterSheet({
+  root: document.body,
+  portraits,
+  hasJobs: (mapId) => mapId !== glade,
+  onCare: (mapId, squishyId) => {
+    void care.open(mapId, squishyId);
+  },
+  // Up close and Dress up hand the screen to the close-up, which returns
+  // to the roster when it's done.
+  onCloseUp: (mapId, squishyId) => {
+    rosterReturn = mapId;
+    roster.close();
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
+  },
+  onDressUp: (mapId, squishyId) => {
+    rosterReturn = mapId;
+    roster.close();
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map', { dressUp: true });
+  },
+});
 const care = createCareSheet({
   root: document.body,
   portraits,
@@ -522,29 +545,6 @@ const socialSetMap = (mapId: string | null): Promise<void> => {
   void friendly.setMap(mapId);
   return chat.setMap(mapId);
 };
-// The Squishies roster (#375): every squishy with its happiness, evolution,
-// rarity and job, one tap from the top bar on the map, at home and in
-// explore. Its Care opens the care sheet over it (two taps to care).
-const roster = createRosterSheet({
-  root: document.body,
-  portraits,
-  hasJobs: (mapId) => mapId !== glade,
-  onCare: (mapId, squishyId) => {
-    void care.open(mapId, squishyId);
-  },
-  // Up close and Dress up hand the screen to the close-up, which returns
-  // to the roster when it's done.
-  onCloseUp: (mapId, squishyId) => {
-    rosterReturn = mapId;
-    roster.close();
-    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
-  },
-  onDressUp: (mapId, squishyId) => {
-    rosterReturn = mapId;
-    roster.close();
-    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map', { dressUp: true });
-  },
-});
 /** The patch each view's Squishies button opens the roster for. */
 const rosterMapId: { home: string | null; explore: string | null } = { home: null, explore: null };
 const homeSquishies = squishiesButton(() => {
