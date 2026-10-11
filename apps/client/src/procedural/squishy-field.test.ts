@@ -317,6 +317,64 @@ describe('SquishyField floaters', () => {
     expect(m.getTranslation().subtract(at).length()).toBeLessThan(1e-5);
   });
 
+  /** A battle rig like battle-scene's: the pose scale on `tilt`, the field under `turn`. */
+  function rigged() {
+    const { scene } = field();
+    const tilt = new TransformNode('tilt', scene);
+    const turn = new TransformNode('turn', scene);
+    turn.parent = tilt;
+    tilt.position.set(1, 0, 2);
+    turn.rotation.y = 0.7;
+    const f = new SquishyField<SquishyLod>(scene, {
+      registry,
+      lod: 'low',
+      shadows: false,
+      breathing: false,
+      parent: turn,
+    });
+    const h = f.add(singer, 'rig', { x: 0, z: 0, scale: 2.7 });
+    const body = () => {
+      const mesh = scene.meshes.find((m) => m.name.startsWith('squishy-body:')) as Mesh;
+      const m = mesh.thinInstanceGetWorldMatrices()[0]!.multiply(mesh.computeWorldMatrix(true));
+      return Math.hypot(m.m[4]!, m.m[5]!, m.m[6]!);
+    };
+    /** The note's world height (its mesh is one unit tall) and place. */
+    const note = () => {
+      scene.render();
+      const m = noteWorld(scene);
+      return { height: Math.hypot(m.m[4]!, m.m[5]!, m.m[6]!), at: m.getTranslation() };
+    };
+    return { tilt, turn, h, body, note };
+  }
+
+  it('shrinks and vanishes with its squishy when a battle rig scales it', () => {
+    const { tilt, body, note } = rigged();
+    const full = { note: note().height, body: body() };
+    expect(full.note).toBeGreaterThan(0.5);
+    for (const k of [0.2, 0.001]) {
+      tilt.scaling.setAll(k);
+      const now = note();
+      expect(now.height / full.note, `rig ${k}`).toBeCloseTo(k, 5);
+      expect(body() / full.body, `rig ${k}`).toBeCloseTo(k, 5);
+    }
+    expect(note().height).toBeLessThan(0.01);
+  });
+
+  it('keeps its size through a rig’s squash and stretch, and stays beside the body', () => {
+    const { tilt, turn, h, note } = rigged();
+    const full = note().height;
+    // Volume-keeping squash, as battle-scene poses it.
+    tilt.scaling.set(1 / Math.sqrt(0.7), 0.7, 1 / Math.sqrt(0.7));
+    const squashed = note();
+    expect(squashed.height).toBeCloseTo(full, 5);
+    // Its place goes through the rig like the body's vertices do.
+    const at = Vector3.TransformCoordinates(
+      new Vector3(...h.params.floater!.at).scale(2.7),
+      turn.computeWorldMatrix(true),
+    );
+    expect(squashed.at.subtract(at).length()).toBeLessThan(1e-4);
+  });
+
   it('floats above and to the viewer’s right of its squishy, and follows it', () => {
     const { scene, field: f } = field({ breathing: false });
     const h = f.add(singer, 'a', { x: 0, z: 0 });

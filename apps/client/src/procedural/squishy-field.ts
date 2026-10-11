@@ -676,12 +676,15 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
    * Runs before each camera draws; costs nothing without floaters.
    */
   #faceCamera(camera: Camera): void {
+    let parentWorld: Matrix | null = null;
     let parentInverse: Matrix | null = null;
+    /** The rig's overall scale: the cube root of its volume scale (see below). */
+    let parentScale = 1;
     let cameraWorld: Matrix | null = null;
     const bobbing = this.#breathing && this.#plugin !== null;
     for (const batch of this.#batches.values()) {
-      const { mesh } = batch;
-      if (!batch.key.startsWith(FLOATER_BATCH) || !mesh || batch.instances.length === 0) continue;
+      const { mesh, instances } = batch;
+      if (!batch.key.startsWith(FLOATER_BATCH) || !mesh || instances.length === 0) continue;
       if (!cameraWorld) {
         cameraWorld = camera.getViewMatrix().invertToRef(CAMERA_WORLD);
         // The camera's own axes: the glyph's x, y and z, so it lies parallel to the screen.
@@ -689,12 +692,20 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         Vector3.FromArrayToRef(cameraWorld.m, 4, UP);
         Vector3.FromArrayToRef(cameraWorld.m, 8, FORWARD);
         if (this.#parent) {
-          parentInverse = this.#parent.computeWorldMatrix().invertToRef(PARENT_INVERSE);
+          parentWorld = this.#parent.computeWorldMatrix();
+          parentInverse = parentWorld.invertToRef(PARENT_INVERSE);
+          // A battle rig scales its fighter: uniformly to shrink it (a swap,
+          // a scoot, charmed) and non-uniformly to squash and stretch it,
+          // keeping its volume. The cube root of the volume scale follows the
+          // first and ignores the second, so the note shrinks and vanishes
+          // with its squishy but doesn't squash like a body.
+          parentScale = Math.cbrt(Math.abs(parentWorld.determinant()));
         }
       }
-      batch.instances.forEach((inst, i) => {
-        const f = inst.floater;
-        if (!f) return;
+      for (let i = 0; i < instances.length; i++) {
+        const inst = instances[i];
+        const f = inst?.floater;
+        if (!inst || !f) continue;
         const { owner } = inst;
         Vector3.TransformCoordinatesFromFloatsToRef(
           f.at[0],
@@ -708,11 +719,10 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
           FLOATER_AT.y +=
             f.bob.height * owner.scale * Math.sin(2 * Math.PI * (f.bob.speed * this.#time + phase));
         }
-        // In the scene's space, so it faces the camera however a battle rig turns.
-        if (this.#parent) {
-          Vector3.TransformCoordinatesToRef(FLOATER_AT, this.#parent.getWorldMatrix(), FLOATER_AT);
-        }
-        const s = f.size * owner.scale;
+        // In the scene's space (position and bob go through the rig like the
+        // body's vertices do), so it faces the camera however a rig turns.
+        if (parentWorld) Vector3.TransformCoordinatesToRef(FLOATER_AT, parentWorld, FLOATER_AT);
+        const s = f.size * owner.scale * parentScale;
         Matrix.FromValuesToRef(
           RIGHT.x * s,
           RIGHT.y * s,
@@ -736,7 +746,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         if (parentInverse) FLOATER_WORLD.multiplyToRef(parentInverse, inst.matrix);
         else inst.matrix.copyFrom(FLOATER_WORLD);
         mesh.thinInstanceSetMatrixAt(i, inst.matrix, false);
-      });
+      }
       mesh.thinInstanceBufferUpdated('matrix');
     }
   }
