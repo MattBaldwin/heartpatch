@@ -248,12 +248,23 @@ describe.each(FloaterGlyphSchema.options)('floater glyph %s', (glyph) => {
       expect(max[1] + min[1]).toBeCloseTo(0, 6);
       expect(max[0] + min[0]).toBeCloseTo(0, 6);
       expect(max[0] - min[0]).toBeLessThan(1);
-      // The glyph lies just in front of its outline (towards the camera).
-      expect(min[2]).toBeCloseTo(-FLOATER.layerGap, 6);
+      // The glyph lies just in front of its outline (towards the camera),
+      // still thin: a sign, not a solid.
+      expect(min[2]).toBeLessThanOrEqual(-FLOATER.layerGap + 1e-9);
+      expect(min[2]).toBeGreaterThan(-FLOATER.layerGap * 3);
       expect(max[2]).toBeCloseTo(0, 6);
-      for (let i = 0; i < mesh.normals.length; i += 3) {
-        expect(mesh.normals.slice(i, i + 3)).toEqual([0, 0, -1]);
+      // The outline shades flat; the glyph's normals lean out for a soft
+      // dome, but always towards the camera.
+      let leaning = 0;
+      for (let v = 0; v < mesh.positions.length / 3; v++) {
+        const n = mesh.normals.slice(v * 3, v * 3 + 3);
+        if (mesh.positions[v * 3 + 2] === 0) expect(n.map((c) => c + 0)).toEqual([0, 0, -1]);
+        else {
+          expect(n[2]).toBeLessThan(-0.8);
+          if (Math.hypot(n[0]!, n[1]!) > 0.3) leaning++;
+        }
       }
+      expect(leaning).toBeGreaterThan(0);
     });
   }
 

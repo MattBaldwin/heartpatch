@@ -201,6 +201,8 @@ export const FLOATER = {
   outlineShade: [0.13, 0.08, 0.15], // TUNE
   /** How far the glyph sits in front of its outline, a share of its height (no z-fighting). */
   layerGap: 0.01, // TUNE
+  /** How far the glyph's shading leans out at its edges (0 flat): a soft dome that catches the gloss. */
+  dome: 0.7, // TUNE
 } as const;
 
 /** Contact shadow: a soft dark disc under each squishy. */
