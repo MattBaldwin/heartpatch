@@ -210,3 +210,25 @@ describe('floater params', () => {
     expect(squishyParams(accent, 'g', registry).floater!.glow).toBe(false);
   });
 });
+
+describe('sparkle kept off a face', () => {
+  it('adds only the flag: everything else is built as before', () => {
+    const plain = squishyParams(look(), 'same', registry);
+    const { sparkleOffFace, ...rest } = squishyParams(
+      look({ sparkleOffFace: true }),
+      'same',
+      registry,
+    );
+    expect(sparkleOffFace).toBe(true);
+    expect(rest).toEqual(plain);
+    expect(squishyParams(look({ sparkleOffFace: false }), 'same', registry)).toEqual(plain);
+  });
+
+  it('is off for every public species', () => {
+    for (const species of GAME_DATA.species) {
+      expect(squishyParams(species, 'x', registry), species.id).not.toHaveProperty(
+        'sparkleOffFace',
+      );
+    }
+  });
+});

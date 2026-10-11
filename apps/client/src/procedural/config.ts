@@ -109,7 +109,17 @@ export const SHADOW_LOOK = {
  */
 export const FINISH = {
   /** Sparkle flecks: cells per body height, share of cells with a fleck, fleck strength. */
-  sparkle: { cells: 11, density: 0.16, strength: 0.9 }, // TUNE
+  sparkle: {
+    cells: 11, // TUNE
+    density: 0.16, // TUNE
+    strength: 0.9, // TUNE
+    /**
+     * For a species with `visual.sparkleOffFace`: no flecks where its body
+     * faces forward more than this (the face, −z) or down more than `under`
+     * (a heart's bottom point), as the mesh normal's z and y.
+     */
+    offFace: { front: 0.5, under: 0.55 }, // TUNE
+  },
   /** Iridescent rim: strength and how tightly it hugs the edge. */
   iridescent: { strength: 0.55, falloff: 2.2 }, // TUNE
   /**
@@ -130,7 +140,8 @@ export const FINISH = {
 
 /**
  * Codes in `squishEvent`'s spare `w`: the finish, plus `glow` when the instance
- * glows. `glow` sits above every finish, so each sum decodes to one pair.
+ * glows, plus `offFace` on the body of a species with `visual.sparkleOffFace`.
+ * Each sits above everything before it, so each sum decodes to one set.
  */
 export const FINISH_CODE = {
   vinyl: 0,
@@ -139,10 +150,12 @@ export const FINISH_CODE = {
   shimmer: 3,
   shimmerSoft: 4,
   glow: 8,
+  /** Above glow: a body that keeps its sparkle flecks off its face and underside. */
+  offFace: 16,
 } as const;
 
 /** A material finish a piece can be drawn with: the shared `Finish`s plus the costumes' soft shimmer. */
-export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow'>;
+export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow' | 'offFace'>;
 
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';

@@ -110,6 +110,12 @@ export const SpeciesVisualSchema = z.strictObject({
   attackPart: PartSlotSchema.optional(),
   /** A camera-facing glyph floating beside it (a song note). Off unless set. */
   floater: FloaterSchema.optional(),
+  /**
+   * Keeps the sparkle tier's flecks (ART_BIBLE §1.4) off the front of its
+   * body, where its face is, and off its underside, so they never read as a
+   * nose or a stray mark. Off unless set.
+   */
+  sparkleOffFace: z.boolean().optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;
 

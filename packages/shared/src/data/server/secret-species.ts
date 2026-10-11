@@ -117,6 +117,8 @@ export const SECRET_SPECIES: Species[] = [
       stance: 0.3,
       pose: 'hover',
       attackPart: 'arms',
+      // No sparkle flecks between its eyes or on its bottom point.
+      sparkleOffFace: true,
       // A gold song note floating just above its right shoulder, facing you.
       floater: {
         glyph: 'music-note',

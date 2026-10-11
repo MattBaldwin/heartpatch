@@ -6,7 +6,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
 import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type Floater } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FLOATER_BATCH, SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
+import { FINISH_CODE, FLOATER_BATCH, SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
 import type { SquishySpecies } from './params.js';
 import { SquishyField } from './squishy-field.js';
 
@@ -364,5 +364,66 @@ describe('SquishyField floaters', () => {
     ) as Mesh;
     expect(high.getTotalVertices()).toBeGreaterThan(low);
     expect(f.stats.floaters).toBe(1);
+  });
+});
+
+describe('SquishyField sparkle kept off a face', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Every instance's `squishEvent.w` (finish code) across the scene's squishy meshes. */
+  function codes(scene: Scene): Map<string, number[]> {
+    const out = new Map<string, number[]>();
+    for (const mesh of scene.meshes) {
+      const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+        Float32Array | undefined;
+      if (!data || !mesh.isEnabled()) continue;
+      out.set(
+        mesh.name,
+        Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!),
+      );
+    }
+    return out;
+  }
+
+  it('marks only the body of a sparkly species that asks', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    const visual = { ...species.visual, finish: 'iridescent' as const };
+    f.add({ id: 'asks', visual: { ...visual, sparkleOffFace: true } }, 'a', { x: 0, z: 0 });
+    f.flush();
+    const all = codes(scene);
+    const body = [...all].find(([name]) => name.startsWith('squishy-body:'))![1];
+    expect(body).toEqual([FINISH_CODE.iridescent + FINISH_CODE.offFace]);
+    for (const [name, list] of all) {
+      if (name.startsWith('squishy-body:')) continue;
+      for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
+    }
+    // Plain vinyl has no flecks to keep off: no bit.
+    f.add({ id: 'plain', visual: { ...species.visual, sparkleOffFace: true } }, 'b', {
+      x: 2,
+      z: 0,
+    });
+    f.flush();
+    const bodies = [...codes(scene)].find(([name]) => name.startsWith('squishy-body:'))![1];
+    expect(bodies).toContain(FINISH_CODE.vinyl);
+  });
+
+  it('leaves every public species’ codes as they were (no off-face bit)', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    GAME_DATA.species.forEach((s, i) => f.add(s, `pub-${i}`, { x: i, z: 0 }));
+    f.flush();
+    for (const [name, list] of codes(scene)) {
+      for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
+    }
   });
 });

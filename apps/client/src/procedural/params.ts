@@ -134,6 +134,8 @@ export interface SquishyParams {
   readonly missing: readonly string[];
   /** Only when the species has one, so every other squishy's params (and hash) stay as they were. */
   readonly floater?: FloaterParams;
+  /** Sparkle flecks stay off the body's front and underside; only when the species asks. */
+  readonly sparkleOffFace?: true;
 }
 
 const DEG = Math.PI / 180;
@@ -416,6 +418,7 @@ export function squishyParams(
       amplitude: between(motion, VARIATION.breathAmplitude.min, VARIATION.breathAmplitude.max),
     },
     missing,
+    ...(visual.sparkleOffFace && { sparkleOffFace: true as const }),
     // Seeded from nothing, so adding a floater never moves anything else.
     ...(floater && {
       floater: {

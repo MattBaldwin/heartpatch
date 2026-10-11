@@ -609,11 +609,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     const [sx, sy, sz] = params.body.scale;
     const glow = (on: boolean) => (on ? FINISH_CODE.glow : 0);
     const torsoAt: [number, number, number] = [0, params.lift, 0];
+    // Sparkle kept off the face: the torso and head carry the face, parts don't.
+    const offFace = params.sparkleOffFace && tier > 0 ? FINISH_CODE.offFace : 0;
     attach(
       bodyBatchOf(body),
       Matrix.Scaling(sx, sy, sz).multiply(Matrix.Translation(...torsoAt)),
       linear(params.body.color),
-      tier + glow(params.body.glow),
+      tier + glow(params.body.glow) + offFace,
     );
     // A separate head: one more instance in its body kind's batch.
     const headBody = params.head ? this.#registry.bodies.get(params.head.id) : undefined;
@@ -623,7 +625,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         bodyBatchOf(headBody),
         Matrix.Scaling(hx, hy, hz).multiply(Matrix.Translation(...params.head.offset)),
         linear(params.body.color),
-        tier + glow(params.body.glow),
+        tier + glow(params.body.glow) + offFace,
       );
     }
 
