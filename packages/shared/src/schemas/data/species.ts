@@ -108,7 +108,7 @@ export const SpeciesVisualSchema = z.strictObject({
   pose: PoseSchema.optional(),
   /** The slot a move animation swings, stomps or flares (tail, arms, horns…). */
   attackPart: PartSlotSchema.optional(),
-  /** A camera-facing glyph floating beside it (Heartsong's song note). Off unless set. */
+  /** A camera-facing glyph floating beside it (a song note). Off unless set. */
   floater: FloaterSchema.optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;

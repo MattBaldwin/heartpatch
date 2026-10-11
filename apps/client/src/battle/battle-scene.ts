@@ -931,7 +931,7 @@ export class BattleScene {
     for (const m of this.#scene.meshes) {
       if (!(m.name.startsWith('squishy-') || m.name.startsWith('keeper-'))) continue;
       if (m.name.includes('shadow')) continue;
-      // A floater (Heartsong's song note) is a flat sign, not a thing in the light.
+      // A floater (a song note, say) is a flat sign, not a thing in the light.
       if (m.name.startsWith(`squishy-${FLOATER_BATCH}`)) continue;
       shadows.addShadowCaster(m, false);
     }
