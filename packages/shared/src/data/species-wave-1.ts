@@ -69,7 +69,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'comet-star',
       palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'zing-antennae', 'bolt-chain'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'bolt-chain'],
       size: 1.5,
       glow: 'body',
       stance: 0.5,
@@ -104,9 +104,9 @@ export const WAVE_1_SPECIES: Species[] = [
       size: 1.05,
       head: {
         body: 'orb',
-        size: 0.5,
-        forward: 0.7,
-        up: 0.1,
+        size: 0.68,
+        forward: 0.62,
+        up: 0.14,
       },
       pose: 'stand',
       attackPart: 'tail',
@@ -251,7 +251,7 @@ export const WAVE_1_SPECIES: Species[] = [
     name: 'Chillypep',
     description: 'Brrr, says Chillypep, steaming gently. Brrr.',
     element: 'fire',
-    feeling: 'joy',
+    feeling: 'brave',
     rarity: 'common',
     baseStats: {
       hp: 50,
@@ -264,7 +264,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'tall',
       palette: ['#f46a5c', '#ffd2c2', '#5fbf4a', '#3fae3a'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'stem', 'stubby-legs'],
+      parts: ['brave-brows', 'dot-eyes', 'smirk', 'blush-cheeks', 'stem', 'stubby-legs'],
       ink: '#1a0f16',
       size: 1.1,
       glow: 'accent',
@@ -273,7 +273,7 @@ export const WAVE_1_SPECIES: Species[] = [
     },
     habitatPreferences: {
       elements: ['fire'],
-      feelings: ['joy', 'cozy'],
+      feelings: ['brave', 'joy'],
     },
   },
   {
@@ -294,10 +294,10 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'orb',
       palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
-      parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'spike-coat'],
+      parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'icicle-crown'],
       stance: 0.5,
       pose: 'hover',
-      attackPart: 'spikes',
+      attackPart: 'crown',
     },
     habitatPreferences: {
       elements: ['frost'],

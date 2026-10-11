@@ -1439,7 +1439,7 @@ export const PARTS: Part[] = [
     id: 'moth-wings',
     slot: 'wings',
     shape: 'teardrop',
-    size: [0.8, 1.2, 0.06],
+    size: [0.8, 1.2, 0.14],
     color: 'accent',
     layout: pair,
     around: 68,
