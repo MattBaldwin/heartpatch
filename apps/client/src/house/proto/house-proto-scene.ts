@@ -749,7 +749,13 @@ export class HouseProtoScene {
     tex.hasAlpha = true;
     const ctx = tex.getContext() as CanvasRenderingContext2D;
     ctx.clearRect(0, 0, 512, 128);
-    ctx.font = 'bold 72px "Nunito", "Arial Rounded MT Bold", sans-serif';
+    // Shrink the type until the name fits the board with a margin.
+    let px = 72;
+    for (;;) {
+      ctx.font = `bold ${String(px)}px "Nunito", "Arial Rounded MT Bold", sans-serif`;
+      if (ctx.measureText(text).width <= 440 || px <= 28) break;
+      px -= 4;
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#8d3d5a';
@@ -823,42 +829,12 @@ export class HouseProtoScene {
     p.position.set(x, 0, z);
   }
 
-  #string(from: Vector3, to: Vector3, sag: number, bulbs: number, hex: string): void {
-    const scene = this.#scene;
-    const cord: Mesh[] = [];
-    const glows: Mesh[] = [];
-    const segs = 14;
-    let prev = from.clone();
-    for (let i = 1; i <= segs; i++) {
-      const t = i / segs;
-      const p = Vector3.Lerp(from, to, t);
-      p.y -= 4 * sag * t * (1 - t);
-      const mid = Vector3.Center(prev, p);
-      const len = Vector3.Distance(prev, p);
-      const c = CreateCylinder('cord', { height: len, diameter: 0.025, tessellation: 4 }, scene);
-      c.position.copyFrom(mid);
-      const dir = p.subtract(prev).normalize();
-      c.rotation.z = -Math.atan2(dir.x, dir.y);
-      c.rotation.x = Math.atan2(dir.z, Math.sqrt(dir.x * dir.x + dir.y * dir.y));
-      cord.push(painted(c, '#5a3f2c'));
-      prev = p;
-    }
-    for (let i = 0; i < bulbs; i++) {
-      const t = (i + 0.5) / bulbs;
-      const p = Vector3.Lerp(from, to, t);
-      p.y -= 4 * sag * t * (1 - t) + 0.12;
-      glows.push(ball(scene, 0.16, [p.x, p.y, p.z], hex, [1, 1.25, 1]));
-    }
-    this.#solid('garland-cord', cord, { cast: false, receive: false });
-    this.#glowMesh('garland-bulbs', glows, hex, 1.5);
-  }
-
   // ── The Snug (level 1) ───────────────────────────────────────────────
 
   #furnishSnug(spec: RoomSpec): void {
     const { w, d } = spec;
     const scene = this.#scene;
-    this.#rug(0.2, 0.3, 2.3, 1.7, '#e97a9b', '#fff0e6');
+    this.#rug(0.2, -0.3, 2.4, 2.0, '#e97a9b', '#fff0e6');
     // The hearth on the left wall, facing into the room (+x).
     this.#hearth(-w / 2 + 0.28, 0.6, Math.PI / 2);
     // Two beds against the back wall, either side of the window light.
@@ -893,7 +869,7 @@ export class HouseProtoScene {
     gift.position.set(1.4, 0, d / 2 - 1.9);
     gift.rotation.y = 0.5;
     // Toys on the rug, a pumpkin by the door (it's October).
-    this.#toys(-0.6, -1.4);
+    this.#toys(-0.7, -2.5);
     this.#pumpkin(w / 2 - 0.9, -2.4, 0.9);
     // A plant in the far corner.
     const plant = this.#solid('plant', [
@@ -949,9 +925,9 @@ export class HouseProtoScene {
   // ── The Heart Hall (level 4, the final level) ────────────────────────
 
   #furnishHall(spec: RoomSpec): void {
-    const { w, d, h } = spec;
+    const { w, d } = spec;
     const scene = this.#scene;
-    this.#rug(0, -0.2, 3.6, 2.6, '#f2a0bd', '#ffe7c2');
+    this.#rug(0, -0.6, 3.6, 2.8, '#f2a0bd', '#ffe7c2');
     // A grand hearth on the left wall.
     this.#hearth(-w / 2 + 0.28, 1.2, Math.PI / 2, true);
     // The heart-tree, grown through the hall floor, under a ring of lanterns.
@@ -965,14 +941,6 @@ export class HouseProtoScene {
     seed.position.set(-1.2, 4.15, d / 2 - 2.4);
     seed.scaling.setAll(2.0);
     this.#lamp('tree-light', new Vector3(-1.2, 3.9, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
-    // Lantern garlands from the beams.
-    this.#string(
-      new Vector3(-w / 2 + 0.5, h - 0.3, 3.0),
-      new Vector3(w / 2 - 0.5, h - 0.3, 3.0),
-      0.45,
-      9,
-      '#ff9ab8',
-    );
     // A gallery along the right wall, above the door, with stairs at the back.
     const gy = 2.6;
     const gw = 2.6;
@@ -1011,20 +979,12 @@ export class HouseProtoScene {
     table.position.set(3.9, 0, -2.4);
     this.#teaAndSteam(3.6, 0.7, -2.1);
     this.#tableLamp(4.5, -2.7, 0.7, '#ffd9a8');
-    this.#tableLamp(-4.2, 0.4, 0.0, '#ffb3c8');
+    this.#tableLamp(-5.9, -3.6, 0.0, '#ffb3c8');
     // The trophy shelf and the memories wall.
-    this.#shelf(
-      -3.6,
-      2.2,
-      -d / 2 + 0.2,
-      2.6,
-      Math.PI,
-      ['#ffb3c8', '#bfe3ff', '#ffe29a', '#c9ffd0'],
-      3,
-    );
-    this.#shelf(-w / 2 + 0.2, 2.0, -2.2, 2.4, Math.PI / 2, ['#ffb3c8', '#bfe3ff'], 2);
+    this.#shelf(-4.3, 2.75, d / 2 - 0.17, 2.6, 0, ['#ffb3c8', '#bfe3ff', '#ffe29a', '#c9ffd0'], 3);
+    this.#shelf(-w / 2 + 0.2, 2.1, -3.4, 2.0, Math.PI / 2, ['#ffb3c8', '#bfe3ff'], 2);
     this.#sign('Mia’s Heart Hall', -0.2, 5.02, d / 2 - 0.1, 0, 3.4);
-    this.#toys(-1.6, -2.4);
+    this.#toys(-1.6, -3.4);
     this.#pumpkin(w / 2 - 1.2, -3.8, 1.1);
     this.#pumpkin(w / 2 - 1.9, -3.5, 0.8);
     // Gold trim: the final level looks the part.
@@ -1060,7 +1020,7 @@ export class HouseProtoScene {
       lift: 0.3,
       shadowAlpha: 0.6,
     });
-    r('emberbun', 3, { x: -3.6, z: 0.4, y: 0, yaw: 2.0, scale: 0.9, squash: 0.93 });
+    r('emberbun', 3, { x: -4.0, z: -1.6, y: 0, yaw: Math.PI / 2, scale: 0.9, squash: 0.93 });
     r('pebblesnooze', 4, {
       x: 2.6,
       z: d / 2 - 1.3,
@@ -1073,12 +1033,12 @@ export class HouseProtoScene {
     r('thistlepip', 5, { x: -1.2, z: 0.9, y: 0, yaw: 0.6, scale: 0.9 });
     r('glowgourd', 6, { x: 0.6, z: 2.6, y: 0, yaw: 0.1, scale: 0.9 });
     r('candlekit', 7, {
-      x: w / 2 - 1.3,
-      z: 1.5,
-      y: 3.18,
-      yaw: -1.4,
-      scale: 0.9,
-      squash: 0.85,
+      x: w / 2 - 1.1,
+      z: 1.45,
+      y: 3.22,
+      yaw: 0.35,
+      scale: 0.85,
+      squash: 0.8,
       shadowAlpha: 0.3,
     });
     r('gourdon', 8, { x: 2.6, z: 1.4, y: 0, yaw: -1.2, scale: 0.95, squash: 0.96 });
