@@ -83,6 +83,49 @@
   touch-action: manipulation;
 }
 
+.roster-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roster-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--hp-pad-x, 12px);
+  border: 2px solid #ecd2e2;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  color: #6b4a70;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-picker-label {
+  font-weight: 600;
+  color: #8a6a8f;
+}
+
+.roster-picker-open {
+  border-color: #8a5f86;
+}
+
+.roster-picker-caret {
+  font-size: 12px;
+}
+
+.roster-menu {
+  padding: 6px 0 2px;
+}
+
+.roster-menu[hidden] {
+  display: none;
+}
+
 .roster-chip-on {
   background: #8a5f86;
   color: #fff;
@@ -136,7 +179,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 48px;
+  min-height: 64px;
   padding: 0;
   border: none;
   background: none;
@@ -147,9 +190,25 @@
   touch-action: manipulation;
 }
 
-.roster-blob-wrap .jobs-blob {
-  width: 34px;
-  height: 30px;
+.roster-portrait {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 70%, #ffe6f0, #fff7fb 70%);
+}
+
+.roster-portrait .jobs-blob {
+  width: 40px;
+  height: 34px;
+}
+
+.roster-portrait-img {
+  display: block;
+  width: 64px;
+  height: 64px;
 }
 
 .roster-names {

@@ -7,7 +7,6 @@ import type {
   SetJobRequest,
 } from '@heartpatch/shared';
 import { careApi, type CareApi } from '../../care/care-api.js';
-import { evolvingMeterEl } from '../../care/evolving-meter.js';
 import { CARE_TEXT } from '../../care/care-view.js';
 import { homeApi, type HomeApi } from '../../home/home-api.js';
 import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
@@ -41,6 +40,7 @@ import {
   type RosterRow,
   type RosterSort,
 } from './roster-view.js';
+import type { Portraits } from './portraits.js';
 import './roster.css';
 
 // The Squishies roster (#375): one sheet at home listing every squishy with
@@ -58,6 +58,8 @@ export interface RosterOptions {
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /** Opens the close-up with Dress up already showing. */
   onDressUp?: (mapId: string, squishyId: string) => void;
+  /** The real squishy pictures (the game's 3D renderer); without them, plain blobs. */
+  portraits?: Portraits;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
 }
@@ -106,6 +108,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let sort: RosterSort = 'mood';
   let filter: RosterFilter = 'all';
   let expanded: string | null = null;
+  /** The picker whose choices are open, or null. */
+  let menu: 'sort' | 'filter' | null = null;
   /** The squishy picking a spot or Training Grounds in its detail, or null. */
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
   let working = false;
@@ -122,18 +126,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   );
   const count = el('p', { class: 'roster-count', 'data-testid': 'roster-count' });
   const note = el('p', { class: 'roster-note', role: 'status', 'data-testid': 'roster-note' });
-  const sortBar = el('div', {
-    class: 'roster-chips',
-    role: 'group',
-    'aria-label': ROSTER_TEXT.sortBy,
-    'data-testid': 'roster-sorts',
-  });
-  const filterBar = el('div', {
-    class: 'roster-chips',
-    role: 'group',
-    'aria-label': ROSTER_TEXT.show,
-    'data-testid': 'roster-filters',
-  });
+  // Sort and Show are one compact row of two pickers; tapping one opens its
+  // choices under it (no second scroll area), and a choice closes it.
+  const pickers = el('div', { class: 'roster-pickers', 'data-testid': 'roster-pickers' });
+  const menuBox = el('div', { class: 'roster-chips roster-menu', role: 'group' });
   const list = el('ul', { class: 'roster-list', 'data-testid': 'roster-list' });
   const sheet = el(
     'section',
@@ -151,7 +147,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       count,
       close,
     ),
-    el('div', { class: 'roster-controls' }, sortBar, filterBar),
+    el('div', { class: 'roster-controls' }, pickers, menuBox),
     note,
     list,
   );
@@ -339,11 +335,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         parts.push(el('p', { class: 'roster-drift-line' }, CARE_TEXT.drift[row.mood.drift]));
       }
     }
-    if (row.evolving) {
-      const meter = evolvingMeterEl('roster-evolving');
-      meter.update(row.evolving);
-      parts.push(meter.root);
-    }
+    // The row's own Stage bar is the one evolving meter (no second bar here).
     // Branch hints live here, never on the row (owner, 2026-10-11): the
     // server's whisper names no form and no chance (CLAUDE.md rule 6).
     if (row.whisper) {
@@ -495,7 +487,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         'aria-expanded': String(open),
         'data-testid': 'roster-head',
       },
-      el('span', { class: 'roster-blob-wrap' }, row.job ? blobFor(row.job) : plainBlob(row)),
+      portraitEl(row),
       el(
         'span',
         { class: 'roster-names' },
@@ -540,6 +532,28 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     );
   }
 
+  /** The squishy's real picture, a blob until it's drawn (or with no renderer). */
+  function portraitEl(row: RosterRow): HTMLElement {
+    const wrap = el(
+      'span',
+      { class: 'roster-portrait', 'data-testid': 'roster-portrait' },
+      row.job ? blobFor(row.job) : plainBlob(row),
+    );
+    const portraits = options.portraits;
+    if (portraits && row.species) {
+      void portraits
+        .get({ species: row.species, instanceId: row.id, accessory: row.accessory })
+        .then((url) => {
+          if (!url) return;
+          const img = el('img', { src: url, alt: '', class: 'roster-portrait-img' });
+          img.decoding = 'async';
+          wrap.replaceChildren(img);
+          wrap.dataset['ready'] = 'true';
+        });
+    }
+    return wrap;
+  }
+
   function plainBlob(row: RosterRow): HTMLElement {
     const blob = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
     blob.style.background = row.color;
@@ -548,45 +562,69 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
 
   function renderChips(): void {
     const counts = filterCounts(rows);
-    sortBar.replaceChildren(
-      el('span', { class: 'roster-chips-label' }, ROSTER_TEXT.sortBy),
-      ...ROSTER_SORTS.map((s) => {
-        const b = el(
-          'button',
-          {
-            type: 'button',
-            class: `roster-chip${sort === s ? ' roster-chip-on' : ''}`,
-            'aria-pressed': String(sort === s),
-            'data-sort': s,
-          },
-          SORT_LABELS[s],
-        );
-        b.addEventListener('click', () => {
-          sort = s;
-          render();
-        });
-        return b;
-      }),
+    const picker = (which: 'sort' | 'filter', label: string, value: string) => {
+      const b = el(
+        'button',
+        {
+          type: 'button',
+          class: `roster-picker${menu === which ? ' roster-picker-open' : ''}`,
+          'aria-expanded': String(menu === which),
+          'data-testid': `roster-pick-${which}`,
+        },
+        el('span', { class: 'roster-picker-label' }, label),
+        el('strong', {}, value),
+        el('span', { class: 'roster-picker-caret', 'aria-hidden': 'true' }, '▾'),
+      );
+      b.addEventListener('click', () => {
+        menu = menu === which ? null : which;
+        render();
+      });
+      return b;
+    };
+    pickers.replaceChildren(
+      picker('sort', ROSTER_TEXT.sortBy, SORT_LABELS[sort]),
+      picker('filter', ROSTER_TEXT.show, `${FILTER_LABELS[filter]} ${String(counts[filter])}`),
     );
-    filterBar.replaceChildren(
-      el('span', { class: 'roster-chips-label' }, ROSTER_TEXT.show),
-      ...ROSTER_FILTERS.map((f) => {
-        const b = el(
-          'button',
-          {
-            type: 'button',
-            class: `roster-chip${filter === f ? ' roster-chip-on' : ''}`,
-            'aria-pressed': String(filter === f),
-            'data-filter': f,
-          },
-          `${FILTER_LABELS[f]} ${String(counts[f])}`,
-        );
-        b.addEventListener('click', () => {
-          filter = f;
-          render();
-        });
-        return b;
-      }),
+    const option = (on: boolean, label: string, attrs: Record<string, string>, pick: () => void) => {
+      const b = el(
+        'button',
+        {
+          type: 'button',
+          class: `roster-chip${on ? ' roster-chip-on' : ''}`,
+          'aria-pressed': String(on),
+          ...attrs,
+        },
+        label,
+      );
+      b.addEventListener('click', () => {
+        pick();
+        menu = null;
+        render();
+      });
+      return b;
+    };
+    menuBox.hidden = menu === null;
+    menuBox.setAttribute('aria-label', menu === 'filter' ? ROSTER_TEXT.show : ROSTER_TEXT.sortBy);
+    menuBox.dataset['testid'] = menu === 'filter' ? 'roster-filters' : 'roster-sorts';
+    menuBox.replaceChildren(
+      ...(menu === 'sort'
+        ? ROSTER_SORTS.map((s) =>
+            option(sort === s, SORT_LABELS[s], { 'data-sort': s }, () => {
+              sort = s;
+            }),
+          )
+        : menu === 'filter'
+          ? ROSTER_FILTERS.map((f) =>
+              option(
+                filter === f,
+                `${FILTER_LABELS[f]} ${String(counts[f])}`,
+                { 'data-filter': f },
+                () => {
+                  filter = f;
+                },
+              ),
+            )
+          : []),
     );
   }
 
@@ -649,6 +687,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     rows = [];
     expanded = null;
     picking = null;
+    menu = null;
     say('');
   }
 

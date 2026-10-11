@@ -13,7 +13,7 @@ import {
   type Rarity,
   type Species,
 } from '@heartpatch/shared';
-import { blobColor, evolvingBar, speciesById, type EvolvingBar } from '../../care/care-view.js';
+import { blobColor, speciesById } from '../../care/care-view.js';
 import { formatTimeLeft } from '../../inventory/game-clock.js';
 import { itemIcon } from '../../inventory/item-icons.js';
 import { itemName } from '../../inventory/bag-view.js';
@@ -67,8 +67,6 @@ export const ROSTER_TEXT = {
   partial: 'Some details are still loading. Try again in a sec!',
 } as const;
 
-/** The evolving hint shows in the row from here; the detail always shows the bar. */
-export const CLOSE_TO_EVOLVING_PERCENT = 70; // TUNE: "close" for the row's little ✨ hint
 
 export type RosterSort = 'mood' | 'level' | 'rarity' | 'status';
 export type RosterFilter = 'all' | 'care' | 'team' | 'working';
@@ -101,7 +99,7 @@ export interface MoodTag {
   readonly line: string;
   /** 0–100. */
   readonly contentment: number;
-  /** A full-value cuddle is still waiting (`fullCareLeft > 0`). */
+  /** Below Happy with a full-value cuddle still waiting (`needsCare`). */
   readonly needsCare: boolean;
   /** Why it's holding or drifting (#376), or null when the server doesn't say. */
   readonly drift: MoodDrift | null;
@@ -123,13 +121,11 @@ export interface RosterRow {
   readonly name: string;
   readonly speciesName: string;
   readonly speciesId: string;
+  /** Its species row (for the portrait), or null when the client has none. */
+  readonly species: Species | null;
   readonly rarity: Rarity | null;
   readonly color: string;
   readonly level: number;
-  /** The evolving meter, or null on a top form (or with no care read). */
-  readonly evolving: EvolvingBar | null;
-  /** Evolving and close enough to say so on the row. */
-  readonly evolvingSoon: boolean;
   /** "Stage N of M" with its bar, or null for a form off the public lines (a secret one). */
   readonly stage: EvolutionStage | null;
   /** The care sheet's branch whisper (#32), for the detail only; never a form or a chance. */
@@ -263,12 +259,24 @@ export function heartsOf(contentment: number): number {
   return Math.round((contentment / CARE_RULES.maxContentment) * 10) / 2;
 }
 
+/** Below this a squishy isn't Happy any more (the shared mood bands). */
+const HAPPY_FROM = CARE_RULES.moods.find((m) => m.id === 'happy')?.atLeast ?? 40;
+
+/**
+ * Care is due: it's below Happy (Calm or Cuddly, the shared mood bands) and a
+ * cuddle still counts in full today. A Happy or Glowing one never says so, so
+ * the badge, the hearts and the mood word always agree.
+ */
+export function needsCare(care: Pick<CareSquishy, 'contentment' | 'fullCareLeft'>): boolean {
+  return care.contentment < HAPPY_FROM && care.fullCareLeft > 0;
+}
+
 function moodTag(care: CareSquishy): MoodTag {
   return {
     mood: care.mood,
     line: moodLine(care.mood, CARE_RULES),
     contentment: care.contentment,
-    needsCare: care.fullCareLeft > 0,
+    needsCare: needsCare(care),
     drift: care.moodDrift,
   };
 }
@@ -304,17 +312,15 @@ export function mergeRoster(sources: RosterSources): RosterRow[] {
     const nickname = c?.nickname ?? base.nickname;
     const named = jobs?.names[id];
     const speciesName = sp?.name ?? named ?? 'Mystery squishy';
-    const evolving = c && !away ? evolvingBar(c.evolving?.percent ?? null) : null;
     return {
       id,
       name: nickname ?? named ?? speciesName,
       speciesName,
       speciesId: base.speciesId,
+      species: sp ?? null,
       rarity: sp?.rarity ?? null,
       color: blobColor(base.speciesId, species),
       level: c?.level ?? j?.squishy.level ?? base.level,
-      evolving,
-      evolvingSoon: evolving !== null && (c?.evolving?.percent ?? 0) >= CLOSE_TO_EVOLVING_PERCENT,
       stage: c && !away ? evolutionStage(base.speciesId, c.level, c.evolving) : null,
       whisper: c && !away ? c.whisper : null,
       mood: c && !away ? moodTag(c) : null,

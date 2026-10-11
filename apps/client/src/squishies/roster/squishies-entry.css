@@ -1,6 +1,6 @@
 /* The top bar's Squishies button (#375): a 48pt round 🐾 like Chat and
    Friends: first of the round buttons by the Keeper menu on the map,
-   top-left at home, and beside Back in explore. */
+   top-left at home, and under Back in explore. */
 
 .squishies-open {
   position: relative;
@@ -58,6 +58,15 @@
   z-index: 5;
   top: calc(env(safe-area-inset-top) + 8px);
   left: calc(env(safe-area-inset-left) + 12px);
+}
+
+/* In explore, under Back (explore's top row is its own: Back, the tile's
+   name, the tool and the bag). */
+.squishies-open-explore {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 68px);
+  left: calc(env(safe-area-inset-left) + 16px);
 }
 
 /* The account pill (top right at home) stops short of the button; its name

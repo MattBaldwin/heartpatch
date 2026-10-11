@@ -12,6 +12,7 @@ import {
   filterCounts,
   heartsOf,
   mergeRoster,
+  needsCare,
   ROSTER_TEXT,
   statusLine,
   statusTag,
@@ -127,7 +128,7 @@ describe('mergeRoster', () => {
       home: home([homeSquishy(1, { nickname: 'Mochi' }), homeSquishy(2, { speciesId: 'emberbun' })]),
       care: care([
         careSquishy(1, { nickname: 'Mochi', contentment: 90, mood: 'glowing', fullCareLeft: 0 }),
-        careSquishy(2, { speciesId: 'emberbun' }),
+        careSquishy(2, { speciesId: 'emberbun', contentment: 30 }),
       ]),
       jobs: jobs([
         jobSquishy(1, { job: 'team' }),
@@ -204,6 +205,19 @@ describe('evolutionStage', () => {
   });
 });
 
+describe('needsCare', () => {
+  it('is due below Happy while a cuddle still counts in full', () => {
+    expect(needsCare({ contentment: 39, fullCareLeft: 1 })).toBe(true);
+    expect(needsCare({ contentment: 5, fullCareLeft: 3 })).toBe(true);
+  });
+
+  it('never shows on a Happy or Glowing one, or once today\'s full cuddles are used', () => {
+    expect(needsCare({ contentment: 40, fullCareLeft: 3 })).toBe(false);
+    expect(needsCare({ contentment: 90, fullCareLeft: 3 })).toBe(false);
+    expect(needsCare({ contentment: 10, fullCareLeft: 0 })).toBe(false);
+  });
+});
+
 describe('heartsOf', () => {
   it('rounds contentment to the nearest half heart out of 5', () => {
     expect(heartsOf(0)).toBe(0);
@@ -277,10 +291,10 @@ describe('visibleRows and filterCounts', () => {
   });
 
   it('filters needs care, on team and working, and counts each', () => {
-    expect(names(visibleRows(rows, 'mood', 'care'))).toEqual(['Bo', 'Cy']);
+    expect(names(visibleRows(rows, 'mood', 'care'))).toEqual(['Bo']);
     expect(names(visibleRows(rows, 'mood', 'team'))).toEqual(['Ada']);
     expect(names(visibleRows(rows, 'mood', 'working'))).toEqual(['Bo']);
-    expect(filterCounts(rows)).toEqual({ all: 3, care: 2, team: 1, working: 1 });
+    expect(filterCounts(rows)).toEqual({ all: 3, care: 1, team: 1, working: 1 });
   });
 
   it('sorts 300 squishies quickly', () => {

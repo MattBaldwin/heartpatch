@@ -61,9 +61,18 @@ import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
-import { hexKey, hexToWorld, type Hex, type PublicUser } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  hexKey,
+  hexToWorld,
+  visualRegistry,
+  type Hex,
+  type PublicUser,
+} from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
+import { createPortraits } from './squishies/roster/portraits.js';
 import { createRosterSheet } from './squishies/roster/roster-sheet.js';
+import { heroLodFor } from './procedural/motion.js';
 import { squishiesButton } from './squishies/roster/squishies-entry.js';
 import './styles.css';
 
@@ -493,6 +502,13 @@ const socialSetMap = (mapId: string | null): Promise<void> => {
 // explore. Its Care opens the care sheet over it (two taps to care).
 const roster = createRosterSheet({
   root: document.body,
+  // The real squishies, drawn once each on the game's engine (#375).
+  portraits: createPortraits({
+    engine: () => stage?.renderer.engine ?? null,
+    registry: visualRegistry(GAME_DATA),
+    lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+    invalidate: () => stage?.invalidate(),
+  }),
   onCare: (mapId, squishyId) => {
     void care.open(mapId, squishyId);
   },
@@ -511,7 +527,12 @@ const homeSquishies = squishiesButton(() => {
   if (rosterMapId.home) void roster.open(rosterMapId.home);
 }, 'home');
 homeSquishies.hidden = true;
-document.body.append(homeSquishies);
+// In explore it sits under Back, so the tile's name keeps the top row.
+const exploreSquishies = squishiesButton(() => {
+  if (rosterMapId.explore) void roster.open(rosterMapId.explore);
+}, 'explore');
+exploreSquishies.hidden = true;
+document.body.append(homeSquishies, exploreSquishies);
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -593,11 +614,9 @@ const explore = createExploreScreen({
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
   timeZone: () => maps.view?.map.timeZone ?? null,
   isGlade: (mapId) => mapId === glade,
-  topEntry: squishiesButton(() => {
-    if (rosterMapId.explore) void roster.open(rosterMapId.explore);
-  }, 'explore'),
   onOpen: (mapId) => {
     rosterMapId.explore = mapId;
+    exploreSquishies.hidden = false;
     roster.close();
     maps.close();
     catalog.close();
@@ -613,6 +632,7 @@ const explore = createExploreScreen({
     lobby.stepOut();
   },
   onClosed: (mapId) => {
+    exploreSquishies.hidden = true;
     roster.close();
     maps
       .open(mapId)
