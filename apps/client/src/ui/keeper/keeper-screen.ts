@@ -686,6 +686,10 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     const label = save.textContent;
     save.disabled = true;
     save.textContent = KEEPER_TEXT.saving;
+    // Nothing else moves while it saves: no second save from another step.
+    const lock = [...tabButtons, backButton, leaveButton];
+    const wasDisabled = lock.map((node) => node.disabled);
+    for (const node of lock) node.disabled = true;
     error.textContent = '';
     try {
       // The server leaves out choices that are the starting look's own (#289).
@@ -697,6 +701,9 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     } catch (err) {
       if (mine === session) error.textContent = messageOf(err);
     } finally {
+      lock.forEach((node, i) => {
+        node.disabled = wasDisabled[i] ?? false;
+      });
       save.disabled = false;
       save.textContent = label;
     }

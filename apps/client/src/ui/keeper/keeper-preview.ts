@@ -36,6 +36,8 @@ export class KeeperPreview {
   readonly #scene: Scene;
   readonly #field: KeeperField;
   #band: PreviewBand | null = null;
+  /** The canvas size the band was fitted on. */
+  #bandCanvas = '';
   #fitted: { feet: number; head: number; top: number; bottom: number } | null = null;
   #shown: { config: KeeperConfig; items: readonly KeeperItem[]; turned: boolean } | null = null;
   #handle: KeeperHandle | null = null;
@@ -81,9 +83,12 @@ export class KeeperPreview {
     if (this.#handle) this.#field.remove(this.#handle);
     this.#shown = { config, items, turned };
     const { lean, fitHeight } = KEEPER_PLACES.preview;
-    // A Keeper taller than fits (a tall body with a big face and hair) shrinks to fit.
+    // With a band (the picker) the fit below sizes the Keeper. Without one
+    // (wardrobe, boutique) a pair taller than any starting look shrinks to
+    // the tallest, so every Keeper saved before #372 shows as it did.
     const height = keeperParams(config, KEEPER_DATA, items).height;
-    const largest = KEEPER_PLACES.preview.scale * Math.min(1, fitHeight / height);
+    const cap = this.#band ? 1 : Math.min(1, fitHeight / height);
+    const largest = KEEPER_PLACES.preview.scale * cap;
     const turn = turned ? { lean: -lean, yaw: Math.PI } : { lean, yaw: 0 };
     const { scale, z } = this.#fit(height, largest, turn);
     this.#handle = this.#field.add(config, { x: 0, z, scale, ...turn }, items);
@@ -96,10 +101,19 @@ export class KeeperPreview {
    * shrinks if its head would still pass the top. Null: the fixed placement.
    */
   setBand(band: PreviewBand | null): void {
+    // A turned screen can keep the band and change the canvas (and so the
+    // camera's aspect): either one means a new fit.
+    const box = this.#scene.getEngine().getRenderingCanvas()?.getBoundingClientRect();
+    const canvas = box ? `${String(box.width)}x${String(box.height)}` : '';
     const same =
-      band && this.#band && band.top === this.#band.top && band.bottom === this.#band.bottom;
+      band &&
+      this.#band &&
+      band.top === this.#band.top &&
+      band.bottom === this.#band.bottom &&
+      canvas === this.#bandCanvas;
     if (same || (!band && !this.#band)) return;
     this.#band = band;
+    this.#bandCanvas = canvas;
     const shown = this.#shown;
     if (shown) this.show(shown.config, performance.now(), false, shown.items, shown.turned);
   }

@@ -79,12 +79,14 @@ export const KEEPER_PLACES = {
     /** Where the camera looks (+z is away from it): the Keeper sits above the picker card. */
     lookAtZ: -2.3, // TUNE
     /**
-     * The tallest Keeper (world units at scale 1, to the top of the hair)
-     * that fits above the card on an iPhone SE; a taller one (bases run 1.25
-     * to 1.8, a face, body and hair pair up to about 2.3, #372) is shown
-     * smaller so its head stays on screen. Preview only: the Keeper itself
-     * (and its hash) doesn't change.
+     * Where no band is set (wardrobe, boutique): the tallest Keeper (world
+     * units at scale 1, to the top of the hair) shown at full size, the
+     * tallest starting look (Hazel, 1.8). A taller face, body and hair pair
+     * (up to about 2.3, #372) shows smaller so its head stays on screen. The
+     * picker fits the Keeper to the room above its card instead
+     * (`KeeperPreview.setBand`). Preview only: the Keeper and its hash don't
+     * change.
      */
-    fitHeight: 1.6, // TUNE
+    fitHeight: 1.8, // TUNE
   },
 } as const;
