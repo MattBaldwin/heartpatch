@@ -132,6 +132,7 @@ export const SECRET_EVOLUTIONS: SecretEvolution[] = [
       kind: 'rare',
       conditions: [{ kind: 'time', times: ['dusk', 'night'] }, { kind: 'fire-full' }],
       feeling: 'joy',
+      // The schema wants one, but it never shows: no evolving meter before a secret form.
       whisper: {
         icon: '🔥',
         text: '{name} loves sitting by a bright, cozy fire…',
