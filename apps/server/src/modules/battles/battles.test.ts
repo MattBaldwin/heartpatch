@@ -23,7 +23,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
+import { EVOLUTION_RULES, SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -587,6 +587,10 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       // (#19 `applyXp`).
       expect((await squishyOf(squishy.id))!.xp).toBe(
         xpForLevel(20, GROWTH_RULES) + newSquishyXp(award.xp),
+      );
+      // A full-XP win leans it Brave (#32).
+      expect((await squishyOf(squishy.id))!.feelingLean['brave']).toBe(
+        EVOLUTION_RULES.lean.win.points,
       );
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'battle.ended',
