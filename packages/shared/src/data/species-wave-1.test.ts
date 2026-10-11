@@ -76,12 +76,13 @@ describe('wave 1 (#382)', () => {
     for (const t of tables) expect(t.terrains, t.id).not.toContain('junipers-gap');
   });
 
-  it('adds four read-at-a-glance parts, all data on existing shapes, and every one is used', () => {
+  it('adds five read-at-a-glance parts, all data on existing shapes, and every one is used', () => {
     const wanted = {
       'eye-bumps': 'horns',
       'shell-dome': 'back',
       'claw-arms': 'arms',
       'lure-lantern': 'crown',
+      'moth-wings': 'wings',
     } as const;
     const used = new Set(WAVE_1_SPECIES.flatMap((s) => s.visual.parts));
     for (const [id, slot] of Object.entries(wanted)) {
