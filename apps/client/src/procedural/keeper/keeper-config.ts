@@ -46,7 +46,7 @@ export const KEEPER = {
       heightRatio: 1.6, // TUNE
       /** His eyes, as fractions of his height: how far in front of his middle they sit. */
       eyeForward: 0.07, // TUNE
-      /** The eye is a sphere, widened and flattened a little: width and depth against its height. */
+      /** The eye is a sphere, widened and flattened a little: width and depth to its height. */
       eyeWide: 1.25, // TUNE
       eyeDeep: 0.6, // TUNE
     },
