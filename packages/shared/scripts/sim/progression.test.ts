@@ -95,16 +95,14 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
   });
 
   it('keeps befriended squishies below their evolution with the shipped cap', () => {
-    // The cap is about evolving lines: a kind that never evolves keeps its level
-    // (`befriendedLevel`), so the wave-1 kinds (#382) are left out of this pin.
-    const evolving = {
-      ...data,
-      spawnTables: data.spawnTables.filter((t) => !t.id.startsWith('wave-1-')),
-    };
-    const capped = runProgression(evolving, SMALL, CURRENT_RULES, engaged!, 4);
-    const uncapped = runProgression(evolving, SMALL, UNCAPPED_BEFRIEND_RULES, engaged!, 4);
-    const friends = (r: typeof capped) => r.kids[0]!.days.at(-1)!.levels.slice(1);
-    expect(Math.max(...friends(capped))).toBeLessThan(Math.max(...friends(uncapped)));
+    const capped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
+    const uncapped = runProgression(data, SMALL, UNCAPPED_BEFRIEND_RULES, engaged!, 4);
+    // Total, not the top friend: a friend that is a final form keeps its level either way.
+    const friends = (r: typeof capped) =>
+      r.kids[0]!.days.at(-1)!
+        .levels.slice(1)
+        .reduce((sum, level) => sum + level, 0);
+    expect(friends(capped)).toBeLessThan(friends(uncapped));
   });
 });
 
