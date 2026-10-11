@@ -1746,6 +1746,7 @@ export const PARTS: Part[] = [
     tilt: 80,
     sink: 0.3,
     jitter: 0.03,
+  },
   {
     // Bolder happy-eye arcs laid exactly over the plain ones (same place, a
     // little bigger and thicker), so the eyes still read at night.
