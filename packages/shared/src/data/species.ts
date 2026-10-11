@@ -1535,7 +1535,7 @@ export const SPECIES: Species[] = [
       ],
       size: 1.3,
       finish: 'sparkle',
-      head: { body: 'orb', size: 0.95, forward: 0.1, up: 0.5 },
+      head: { body: 'orb', size: 1.02, forward: 0.14, up: 0.4 },
       stance: 0.12,
       pose: 'stand',
       attackPart: 'crown',
@@ -2147,7 +2147,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'blob',
-      palette: ['#d2cd8c', '#f6f3d8', '#8e5733', '#c9823f'],
+      palette: ['#d2cd8c', '#f6f3d8', '#a56a3e', '#c9823f'],
       parts: [
         'oval-eyes',
         'smile',
