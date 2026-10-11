@@ -2167,7 +2167,7 @@ export const SPECIES: Species[] = [
         'plume-tip',
       ],
       size: 1.3,
-      head: { body: 'orb', size: 0.84, forward: 0.12, up: 0.46 },
+      head: { body: 'orb', size: 0.88, forward: 0.1, up: 0.45 },
       stance: 0.08,
       pose: 'sit',
       attackPart: 'tail',
