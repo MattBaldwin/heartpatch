@@ -14,7 +14,8 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * Dev-only stats badge: frame rate, renderer, quality tier, the render pixel
  * ratio the dynamic scaler has picked, and the last frame's draw calls and
  * triangles (#318, for checking a real older iPad). Imported dynamically
- * from main.ts under `import.meta.env.DEV`, so it never ships.
+ * from main.ts in a dev build, or on the live site with `?fps=1` (#335,
+ * `showsStats`), so nobody sees it unless they ask.
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
