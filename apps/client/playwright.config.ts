@@ -33,6 +33,7 @@ const E2E_GROUPS = [
   ['audio', 'battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
   [
     'care',
+    'care-layout',
     'cinematic',
     'dress-up',
     'explore',

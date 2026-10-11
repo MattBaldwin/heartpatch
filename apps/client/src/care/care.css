@@ -7,12 +7,15 @@
   inset: 0;
   z-index: 6;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  /* The one scroll area (the card's margin-top auto, below, keeps its top
+     reachable). */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px)
+  /* The top stays under the account chip (z 10, 8px in, about 52px tall): the
+     title, rarity and mood never sit behind it (#385). */
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 16px)
     calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
   background: rgb(253 232 240 / 55%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -35,6 +38,13 @@
   width: 100%;
   max-width: 420px;
   text-align: center;
+}
+
+/* Two classes, to beat .auth-card's centring margin (ui/auth/auth.css loads
+   later): the card sits at the bottom of the sheet, and a card taller than
+   the screen scrolls from its top (#385). */
+.care .care-card {
+  margin: auto auto 0;
 }
 
 .care-stage {
@@ -509,5 +519,45 @@
   .care-hearts-badge,
   .care-hearts-row .care-hearts::after {
     animation: none;
+  }
+}
+
+/* A short screen (iPhone SE, a phone on its side, an iPad on its side): the
+   same card, tighter, so Feed, Pet and Play stay in view (#385). Two classes
+   each, to beat .auth-card's padding and .auth-title's size (loaded later). */
+@media (max-height: 840px) {
+  .care .care-card {
+    gap: 4px;
+    padding-block: 12px;
+  }
+
+  .care-card .care-name {
+    font-size: 24px;
+  }
+
+  .care-stage {
+    height: 60px;
+  }
+
+  .care-blob {
+    width: 58px;
+    height: 52px;
+  }
+
+  .care-drift[data-mood='steady'],
+  .care-drift[data-mood='drifting'] {
+    padding: 4px 12px;
+  }
+
+  /* Up close and All done share a row. */
+  .care-card .auth-actions {
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .care-card .auth-actions > button {
+    flex: 1;
+    padding-inline: 8px;
   }
 }
