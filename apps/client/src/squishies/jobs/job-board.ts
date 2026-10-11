@@ -259,9 +259,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       const go = button(
         spotLabel(spot),
         () => {
+          const mine = ticket;
           void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then(() => {
-            // Still on this board, and the job went through.
-            if (picking !== null || sheet.hidden) return;
+            // Still the same opening of this board, and the job went through.
+            if (mine !== ticket || picking !== null || sheet.hidden) return;
             cheer(
               squishy.squishy.id,
               fit.fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),

@@ -464,10 +464,12 @@
   content: '';
   position: absolute;
   inset: 0 -28px 0 0;
+  /* One stripe period across is 28px (19.8px along the stripes' slope,
+     28 / √2), so the 28px slide loops without a jump. */
   background: repeating-linear-gradient(
     -45deg,
-    rgb(255 255 255 / 0%) 0 8px,
-    rgb(255 255 255 / 35%) 8px 14px
+    rgb(255 255 255 / 0%) 0 11.3px,
+    rgb(255 255 255 / 35%) 11.3px 19.8px
   );
   animation: care-hearts-drain 2.4s linear infinite;
 }
@@ -488,7 +490,7 @@
 
 .care-drift[data-mood='drifting'] {
   background: #ece6f5;
-  color: #5e4a7d;
+  color: #4f3d6b;
 }
 
 @keyframes care-heart-bob {
