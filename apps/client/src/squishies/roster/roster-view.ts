@@ -67,7 +67,6 @@ export const ROSTER_TEXT = {
   partial: 'Some details are still loading. Try again in a sec!',
 } as const;
 
-
 export type RosterSort = 'mood' | 'level' | 'rarity' | 'status';
 export type RosterFilter = 'all' | 'care' | 'team' | 'working';
 

@@ -125,7 +125,10 @@ function jobs(squishies: JobSquishy[]): JobsView {
 describe('mergeRoster', () => {
   it('joins home, care and jobs by id, with the away ones only the job board knows', () => {
     const rows = mergeRoster({
-      home: home([homeSquishy(1, { nickname: 'Mochi' }), homeSquishy(2, { speciesId: 'emberbun' })]),
+      home: home([
+        homeSquishy(1, { nickname: 'Mochi' }),
+        homeSquishy(2, { speciesId: 'emberbun' }),
+      ]),
       care: care([
         careSquishy(1, { nickname: 'Mochi', contentment: 90, mood: 'glowing', fullCareLeft: 0 }),
         careSquishy(2, { speciesId: 'emberbun', contentment: 30 }),
@@ -211,7 +214,7 @@ describe('needsCare', () => {
     expect(needsCare({ contentment: 5, fullCareLeft: 3 })).toBe(true);
   });
 
-  it('never shows on a Happy or Glowing one, or once today\'s full cuddles are used', () => {
+  it("never shows on a Happy or Glowing one, or once today's full cuddles are used", () => {
     expect(needsCare({ contentment: 40, fullCareLeft: 3 })).toBe(false);
     expect(needsCare({ contentment: 90, fullCareLeft: 3 })).toBe(false);
     expect(needsCare({ contentment: 10, fullCareLeft: 0 })).toBe(false);
@@ -275,11 +278,7 @@ describe('visibleRows and filterCounts', () => {
       careSquishy(2, { nickname: 'Bo', level: 14, contentment: 20, speciesId: 'thunderpuff' }),
       careSquishy(3, { nickname: 'Cy', level: 3, contentment: 50 }),
     ]),
-    jobs: jobs([
-      jobSquishy(1, { job: 'team' }),
-      jobSquishy(2, { job: 'training' }),
-      jobSquishy(3),
-    ]),
+    jobs: jobs([jobSquishy(1, { job: 'team' }), jobSquishy(2, { job: 'training' }), jobSquishy(3)]),
   });
   const names = (rs: readonly RosterRow[]) => rs.map((r) => r.name);
 
@@ -303,7 +302,8 @@ describe('visibleRows and filterCounts', () => {
       id: id(1000 + i),
     }));
     const start = performance.now();
-    for (const sort of ['mood', 'level', 'rarity', 'status'] as const) visibleRows(many, sort, 'all');
+    for (const sort of ['mood', 'level', 'rarity', 'status'] as const)
+      visibleRows(many, sort, 'all');
     expect(performance.now() - start).toBeLessThan(100);
   });
 });

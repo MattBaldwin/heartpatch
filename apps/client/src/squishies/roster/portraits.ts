@@ -22,7 +22,7 @@ export const PORTRAIT_CSS_PX = 64; // TUNE: the roster row's picture
 /** The pose: face to face, a little above, turned a touch so it reads as round. */
 const POSE = { pitch: 0.22, yaw: -0.35, lookAt: 0.6 }; // TUNE: a little above the middle, for ears and toppers
 /** Camera distance per unit of the squishy's larger side, so every kind fills the frame. */
-const FIT = 2.6; // TUNE: room for ears and toppers
+const FIT = 3.4; // TUNE: generous room (ears, toppers); `cropToSquishy` trims it
 const FOV = 0.62; // TUNE: radians
 
 export interface PortraitLook {
@@ -44,6 +44,61 @@ export interface PortraitOptions {
   readonly lod: () => SquishyDetail;
   /** The map's own scene must draw again after a portrait borrowed the engine. */
   readonly invalidate: () => void;
+}
+
+/** Space left around the squishy after the crop, as a share of the picture. */
+const MARGIN = 0.06; // TUNE
+
+/** The opaque pixels' box in RGBA data, or null when nothing was drawn. */
+export function opaqueBox(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): { x0: number; y0: number; x1: number; y1: number } | null {
+  let x0 = width;
+  let y0 = height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if ((data[(y * width + x) * 4 + 3] ?? 0) < 8) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x0, y0, x1: x1 + 1, y1: y1 + 1 };
+}
+
+/** Cuts a square around the drawn squishy (with a small margin) and scales it to `px`. */
+async function cropToSquishy(dataUrl: string, px: number): Promise<string> {
+  const image = new Image();
+  image.src = dataUrl;
+  await image.decode();
+  const from = document.createElement('canvas');
+  from.width = image.width;
+  from.height = image.height;
+  const fromCtx = from.getContext('2d');
+  if (!fromCtx) return dataUrl;
+  fromCtx.drawImage(image, 0, 0);
+  const box = opaqueBox(
+    fromCtx.getImageData(0, 0, from.width, from.height).data,
+    from.width,
+    from.height,
+  );
+  if (!box) return dataUrl;
+  const side = Math.max(box.x1 - box.x0, box.y1 - box.y0) / (1 - 2 * MARGIN);
+  const cx = (box.x0 + box.x1) / 2;
+  const cy = (box.y0 + box.y1) / 2;
+  const to = document.createElement('canvas');
+  to.width = px;
+  to.height = px;
+  const toCtx = to.getContext('2d');
+  if (!toCtx) return dataUrl;
+  toCtx.imageSmoothingQuality = 'high';
+  toCtx.drawImage(from, cx - side / 2, cy - side / 2, side, side, 0, 0, px, px);
+  return to.toDataURL('image/png');
 }
 
 export function createPortraits(options: PortraitOptions): Portraits {
@@ -98,7 +153,17 @@ export function createPortraits(options: PortraitOptions): Portraits {
       field.flush();
       await scene.whenReadyAsync();
       const px = Math.round(PORTRAIT_CSS_PX * Math.min(3, Math.max(2, window.devicePixelRatio)));
-      return await CreateScreenshotUsingRenderTargetAsync(engine, camera, px, 'image/png', 4, true);
+      // Drawn twice the size with room to spare, then cut to the squishy's own
+      // outline, so long ears and tall toppers fit as well as round bodies.
+      const shot = await CreateScreenshotUsingRenderTargetAsync(
+        engine,
+        camera,
+        px * 2,
+        'image/png',
+        4,
+        true,
+      );
+      return await cropToSquishy(shot, px);
     } catch {
       return null;
     } finally {

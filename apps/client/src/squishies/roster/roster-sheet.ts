@@ -439,14 +439,13 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
 
   /** "Stage 2 of 3", a little bar, and when it evolves (public lines only). */
   function stageLineEl(stage: EvolutionStage): HTMLElement {
-    const words =
-      stage.ready
-        ? ROSTER_TEXT.readyToEvolve
-        : stage.evolvesAt !== null
-          ? ROSTER_TEXT.evolvesAt(stage.evolvesAt)
-          : stage.stage >= stage.of
-            ? ROSTER_TEXT.fullyEvolved
-            : '';
+    const words = stage.ready
+      ? ROSTER_TEXT.readyToEvolve
+      : stage.evolvesAt !== null
+        ? ROSTER_TEXT.evolvesAt(stage.evolvesAt)
+        : stage.stage >= stage.of
+          ? ROSTER_TEXT.fullyEvolved
+          : '';
     return el(
       'div',
       {
@@ -528,9 +527,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     const id = mapId;
     const topRow = el('div', { class: 'roster-top-row' }, head);
     if (!row.away && id && options.onCare) {
-      topRow.append(
-        careButton(() => options.onCare?.(id, row.id), row.id),
-      );
+      topRow.append(careButton(() => options.onCare?.(id, row.id), row.id));
     }
     return el(
       'li',
@@ -601,7 +598,12 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       picker('sort', ROSTER_TEXT.sortBy, SORT_LABELS[sort]),
       picker('filter', ROSTER_TEXT.show, `${FILTER_LABELS[filter]} ${String(counts[filter])}`),
     );
-    const option = (on: boolean, label: string, attrs: Record<string, string>, pick: () => void) => {
+    const option = (
+      on: boolean,
+      label: string,
+      attrs: Record<string, string>,
+      pick: () => void,
+    ) => {
       const b = el(
         'button',
         {
