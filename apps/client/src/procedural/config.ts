@@ -66,6 +66,14 @@ export const LOD: Readonly<Record<SquishyDetail, LodSettings>> = {
   hero: { bodyRings: 48, partRings: 16, partSegments: 28 },
 };
 
+/**
+ * A heart's (`cleft`) outline turns sharply at its shoulders and cleft, so
+ * its body gets this many times the rings (and segments around) of other
+ * bodies at every detail level. About 2.3× its body's triangles: a
+ * heart-bodied squishy is ~16k triangles at `high`, inside ART_BIBLE's budget.
+ */
+export const CLEFT_RING_SCALE = 1.5; // TUNE
+
 /** Soft-vinyl material (matches the test scene's vinyl). */
 export const VINYL = {
   roughness: 0.42, // TUNE
@@ -109,7 +117,17 @@ export const SHADOW_LOOK = {
  */
 export const FINISH = {
   /** Sparkle flecks: cells per body height, share of cells with a fleck, fleck strength. */
-  sparkle: { cells: 11, density: 0.16, strength: 0.9 }, // TUNE
+  sparkle: {
+    cells: 11, // TUNE
+    density: 0.16, // TUNE
+    strength: 0.9, // TUNE
+    /**
+     * For a species with `visual.sparkleOffFace`: no flecks where its body
+     * faces forward more than this (the face, −z) or down more than `under`
+     * (a heart's bottom point), as the mesh normal's z and y.
+     */
+    offFace: { front: 0.5, under: 0.55 }, // TUNE
+  },
   /** Iridescent rim: strength and how tightly it hugs the edge. */
   iridescent: { strength: 0.55, falloff: 2.2 }, // TUNE
   /**
@@ -130,7 +148,8 @@ export const FINISH = {
 
 /**
  * Codes in `squishEvent`'s spare `w`: the finish, plus `glow` when the instance
- * glows. `glow` sits above every finish, so each sum decodes to one pair.
+ * glows, plus `offFace` on the body of a species with `visual.sparkleOffFace`.
+ * Each sits above everything before it, so each sum decodes to one set.
  */
 export const FINISH_CODE = {
   vinyl: 0,
@@ -139,10 +158,12 @@ export const FINISH_CODE = {
   shimmer: 3,
   shimmerSoft: 4,
   glow: 8,
+  /** Above glow: a body that keeps its sparkle flecks off its face and underside. */
+  offFace: 16,
 } as const;
 
 /** A material finish a piece can be drawn with: the shared `Finish`s plus the costumes' soft shimmer. */
-export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow'>;
+export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow' | 'offFace'>;
 
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';
@@ -163,6 +184,25 @@ export const SQUISH = {
   wobble: { squash: 0.28, decay: 5, speed: 17 }, // TUNE
   /** Happy bounce: hop height (fraction of body height), hops, squash on landing. */
   bounce: { height: 0.45, hops: 2, squash: 0.22 }, // TUNE
+} as const;
+
+/** Batch keys (and so mesh names, after `squishy-`) of floater glyphs start with this. */
+export const FLOATER_BATCH = 'floater:';
+
+/**
+ * Floaters (a species' `visual.floater`): a flat, camera-facing glyph beside
+ * the squishy. Where it floats is species data; this is how every glyph is
+ * drawn: a chunky shape over a slightly bigger outline of itself.
+ */
+export const FLOATER = {
+  /** Outline width around the glyph, a share of the glyph's height. */
+  outline: 0.055, // TUNE
+  /** The outline's colour: the glyph's own colour times this (linear RGB), a deep shade of it. */
+  outlineShade: [0.13, 0.08, 0.15], // TUNE
+  /** How far the glyph sits in front of its outline, a share of its height (no z-fighting). */
+  layerGap: 0.01, // TUNE
+  /** How far the glyph's shading leans out at its edges (0 flat): a soft dome that catches the gloss. */
+  dome: 0.7, // TUNE
 } as const;
 
 /** Contact shadow: a soft dark disc under each squishy. */
