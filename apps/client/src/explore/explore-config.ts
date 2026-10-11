@@ -318,7 +318,7 @@ export const EXPLORE_SWIM = {
   /** The camera leads a swimmer by this many times its follow lag, so the long body sits mid-screen. */
   cameraLead: 2, // TUNE
   /** The shadow on the sand under a swimmer: smaller and fainter, so the gap reads from above. */
-  shadow: { scale: 0.85, alpha: 0.5 }, // TUNE
+  shadow: { scale: 0.9, alpha: 0.7 }, // TUNE
   /** Treading water: bob height (share of the height) and bobs a second. */
   tread: { bob: 0.04, rate: 0.45 }, // TUNE
   /** Per style: forward pitch (radians), and the stroke's dip, bob, surge, squash and stretch. */
