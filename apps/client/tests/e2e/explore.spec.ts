@@ -21,6 +21,8 @@ const slow = { timeout: 30_000 };
  * buildings, a full team, the tool in hand).
  */
 const DRAW_CALL_CEILING = 46;
+/** The land kit's triangles on a settled meadow frame (#335): 278k–308k on high, with headroom for a busier tile. */
+const TRIANGLE_CEILING = 420_000;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
@@ -62,6 +64,8 @@ interface ExploreDebug {
     sky: { clouds: number; stars: boolean; moon: boolean; underwater: boolean };
     keeperHeight: number;
     faded: number[];
+    triangles: number;
+    land: { tier: string } | null;
   } | null;
 }
 
@@ -139,6 +143,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   const drawCalls = (await exploreState(page))?.scene?.drawCalls ?? 0;
   test.info().annotations.push({ type: 'drawCalls', description: String(drawCalls) });
   expect(drawCalls).toBeLessThan(DRAW_CALL_CEILING);
+  // The meadow is on the land kit (#335), never silently back on the old tile,
+  // and its triangles stay in budget (308k on an iPad at high; 175–199k on low).
+  const settled = (await exploreState(page))?.scene;
+  expect(settled?.land).not.toBeNull();
+  test.info().annotations.push({ type: 'triangles', description: String(settled?.triangles) });
+  expect(settled?.triangles ?? 0).toBeLessThan(TRIANGLE_CEILING);
 
   // Walk to a spot searched by hand and search it the easy way. A common find
   // is a toast and the world keeps going; a rare one (a lore page, something

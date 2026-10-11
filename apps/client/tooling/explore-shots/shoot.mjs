@@ -10,7 +10,8 @@
 // to low) and its file name and stats say which. Headless Chromium here has
 // no GPU: it draws with SwiftShader (software WebGL2), which `stats.json`
 // records as `gpu: false`. Set PW_CHROMIUM_ARGS to a GPU-backed set of flags
-// where a GPU exists. Frame times from SwiftShader say nothing about a device.
+// where a GPU exists, and PW_CHROMIUM_EXECUTABLE outside the build container
+// (the default is its preinstalled Chromium). Frame times from SwiftShader say nothing about a device.
 //
 // The clock is pinned (Playwright's fake clock) so the sky is the one asked
 // for. `CLIP=1` also records a walk-around: the clock steps 1/30 s a frame and
