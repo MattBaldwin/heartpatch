@@ -1118,9 +1118,9 @@ _Proposed in each PR; recorded by the coordinator after merge._
 
 - **Keepers share one line face** (arched ink brows, flat ink nose, smile line). Face lines are always dark ink on every skin tone.
 - **Ten skin tones, light to deep,** with Hazel `#7a4a2c` the deepest (owner). The darker tones were dropped rather than chasing line readability on them. Tones have no names: swatches on screen, "Skin tone N" for screen readers; ids `tone-1` to `tone-10`.
-- **A Keeper is one model with every part a choice.** The 12 presets are starting looks; one tap sets every row. Body shape stays with the starting look for now. Blush, freckles, lashes and the heart sticker are player choices.
+- **A Keeper is one model with every part a choice.** The 12 presets are starting looks; one tap sets every row. Body shape stays with the starting look for now. *(Starting looks and body-with-look superseded by "The step-by-step Keeper creator (#372, PR #394)".)* Blush, freckles, lashes and the heart sticker are player choices.
 - **Builder fields are optional on input.** Rows store them complete; replies leave out the starting look's own, so older apps keep loading untouched Keepers. A save that leaves a field out keeps the stored value while the starting look stays the same.
-- **The Keeper screen is one scrolling list,** and "That's me!" always shows (owner).
+- **The Keeper screen is one scrolling list,** and "That's me!" always shows (owner). *(The scrolling list is superseded by "The step-by-step Keeper creator (#372, PR #394)".)*
 
 ## 2026-10-08 — Journeys to trading posts (#270, PR #293)
 
@@ -1357,7 +1357,7 @@ _Owner decisions from the "Owner decisions" sections of #381 and #382, and from 
 **#381, the Keeper's home**
 - **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review.
 - **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
-- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen.
+- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen. *(Now capped by the Heart Seed level; see "Owner decisions, afternoon" below.)*
 - **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
 - **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the house feeds Home Base Harmony and reuses its facts; design doc §8, Phase 3; relayed by the coordinator from #381's plan, 2026-10-11); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
 
@@ -1421,3 +1421,12 @@ _Proposed in PR #394; recorded here at the coordinator's request._
 - **Face and body are independent** (`keepers.face`, `keepers.body`, migration 0044). Each base's own face and body use the base's id, so existing Keepers look the same. Two new bodies: Lanky and Sturdy.
 - **Outfit sits on the Body step** (owner choice c). **Eye colour sits on Colors** with hair colour, so the face stays on screen without scrolling on phones.
 - **In edit mode, Back closes the editor without saving** on every step (plan §5). Open risk noted by the reviewer: a kid who learned that Back means "previous step" could lose unsaved picks.
+
+## 2026-10-11 — Owner decisions, afternoon (coordinator)
+
+_Owner answers to the coordinator on 2026-10-11, each asked as one question with the screens._
+
+- **Stormhoot keeps its look (#363).** The owner saw it next to Thunderplume (day, silhouette, night battle) and chose to keep it as drawn. Only its night-plus-feeling condition and whisper hint change.
+- **The Keeper's home camera is a walk-around dollhouse (#381).** The base view is the dollhouse cutaway: front wall and roof off, so the whole house is readable. It is immersive because you can walk around inside it: the Keeper and residents move in the rooms, and pinching zooms down to kid height while the walls in the way fade. The camera must scale as the house grows bigger and more complex (more rooms, more floors).
+- **The house level is capped by the Heart Seed (#381).** The house keeps its own level and requirements (home base, residents' wellbeing, patch-mates, land), but a house level can never go beyond what the Keeper's Heart Seed level allows.
+- **The living house comes before furniture (#381).** Windows that follow real time and weather, lamps and fire, sound, seasonal decorating, a daily gift and residents learning tricks ship before furniture placement, paint and the name sign.
