@@ -67,7 +67,8 @@
   /* Over explore's glints (z-index 5), never under a sparkle. */
   z-index: 6;
   top: calc(env(safe-area-inset-top) + 68px);
-  left: calc(env(safe-area-inset-left) + 16px);
+  /* Right under Back: explore's top row is centred at up to 640px wide. */
+  left: calc(env(safe-area-inset-left) + 16px + max(0px, (100vw - 672px) / 2));
 }
 
 /* The account pill (top right at home) stops short of the button; its name

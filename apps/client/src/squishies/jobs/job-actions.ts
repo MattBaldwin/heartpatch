@@ -1,6 +1,6 @@
-import type { JobSquishy, JobsView, SetJobRequest } from '@heartpatch/shared';
+import type { JobSquishy, JobsView, SetJobRequest, WorkSpot } from '@heartpatch/shared';
 import { el } from '../../ui/dom.js';
-import { canTrain, groundsLabel, JOBS_TEXT, nameOf, spotLabel } from './jobs-view.js';
+import { canTrain, groundsLabel, JOBS_TEXT, nameOf, spotFit, spotLabel } from './jobs-view.js';
 
 // A squishy's job actions (Team, Gather, Train, Rest) and the spot and
 // Training Grounds pickers behind Gather and Train: the DOM the job board and
@@ -16,6 +16,11 @@ export interface JobActionsContext {
   readonly wantSpot: { q: number; r: number } | null;
   /** Sends the squishy's new job; `done` is the line to say when it lands. */
   assign: (squishy: JobSquishy, job: SetJobRequest, done: string) => void;
+  /**
+   * Gather at a spot (#376): the owner sends it and may cheer once it lands
+   * (hearts for a spot it loves). Without one, it's a plain `assign`.
+   */
+  gather?: (squishy: JobSquishy, spot: WorkSpot, fits: boolean) => void;
   /** Gather was tapped: show the spot picker for this squishy. */
   pickSpot: (squishy: JobSquishy) => void;
   /** Train was tapped: show the Training Grounds picker for this squishy. */
@@ -89,7 +94,10 @@ export function jobActions(s: JobSquishy, ctx: JobActionsContext): HTMLElement {
   return actions;
 }
 
-/** The spots this squishy could go and gather, with the firelight warning. */
+/**
+ * The spots this squishy could go and gather, the ones it loves first (#376),
+ * each with how it feels about it and the firelight warning.
+ */
 export function spotPicker(squishy: JobSquishy, ctx: JobActionsContext): HTMLElement {
   const current = ctx.view;
   const name = nameOf(current, squishy);
@@ -99,23 +107,45 @@ export function spotPicker(squishy: JobSquishy, ctx: JobActionsContext): HTMLEle
     .sort((a, b) => {
       const first = (s: { q: number; r: number }) =>
         want && s.q === want.q && s.r === want.r ? 0 : 1;
-      return first(a) - first(b);
+      // Then the spots it loves (#376); the sort keeps the server's order otherwise.
+      const fit = (s: WorkSpot) => (spotFit(squishy, s).fits ? 0 : 1);
+      return first(a) - first(b) || fit(a) - fit(b);
     });
   const rows = spots.map((spot) => {
     const worker = current.squishies.find((s) => s.squishy.id === spot.workerId);
+    const fit = spotFit(squishy, spot);
     const go = jobButton(
       spotLabel(spot),
       () => {
-        ctx.assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, `${name} is off to gather!`);
+        if (ctx.gather) ctx.gather(squishy, spot, fit.fits);
+        else {
+          ctx.assign(
+            squishy,
+            { job: 'gatherer', q: spot.q, r: spot.r },
+            fit.fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),
+          );
+        }
       },
       ctx.working,
       { 'data-testid': 'jobs-spot', 'data-q': String(spot.q), 'data-r': String(spot.r) },
     );
     if (worker && worker.squishy.id !== squishy.squishy.id) go.disabled = true;
+    go.append(
+      el(
+        'span',
+        { class: fit.fits ? 'jobs-heart' : 'jobs-heart jobs-cloud', 'aria-hidden': 'true' },
+        fit.fits ? '💕' : '🌧️',
+      ),
+    );
     return el(
       'li',
-      { class: 'jobs-spot' },
+      { class: `jobs-spot ${fit.fits ? 'jobs-spot-loved' : 'jobs-spot-meh'}` },
       go,
+      el(
+        'p',
+        { class: fit.fits ? 'jobs-fit' : 'jobs-no-fit', 'data-testid': 'jobs-spot-fit' },
+        fit.line,
+      ),
       el(
         'p',
         { class: spot.firelit ? 'jobs-safe' : 'jobs-dark' },

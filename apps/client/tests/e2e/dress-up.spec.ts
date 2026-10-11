@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { careFromRoster } from './roster.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -29,8 +30,7 @@ const mapId = async (page: Page) => (await hook<{ id: string }>(page, 'map'))?.i
 async function openFromHome(page: Page): Promise<void> {
   await (await trayButton(page, 'home-open')).tap();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
-  await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
-  await slowExpect(page.getByTestId('care')).toBeVisible();
+  await careFromRoster(page);
   await page.getByTestId('care-close-up').tap();
   await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');
 }
@@ -100,7 +100,7 @@ test('puts an accessory on a squishy up close and sees it on them', async ({ bro
   await card.getByTestId('close-up-back').tap();
   await expect.poll(() => state(page), slow).toBeNull();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
-  await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
+  await careFromRoster(page);
   await page.getByTestId('care-close-up').tap();
   await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');
   expect((await state(page))?.accessory).toBe('tiny-bow');

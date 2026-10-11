@@ -39,7 +39,7 @@ import {
   type RosterRow,
   type RosterSort,
 } from './roster-view.js';
-import type { Portraits } from './portraits.js';
+import type { Portraits } from '../../procedural/portraits.js';
 import './roster.css';
 
 // The Squishies roster (#375): one sheet at home listing every squishy with
@@ -57,6 +57,8 @@ export interface RosterOptions {
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /** Opens the close-up with Dress up already showing. */
   onDressUp?: (mapId: string, squishyId: string) => void;
+  /** Jobs exist on this map (not on the Tutorial Glade); without, rows go by home's job. */
+  hasJobs?: (mapId: string) => boolean;
   /** The real squishy pictures (the game's 3D renderer); without them, plain blobs. */
   portraits?: Portraits;
   /** Device wall clock in ms (tests pass a fake). */
@@ -169,17 +171,18 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   }
 
   async function load(id: string, mine: number): Promise<void> {
+    const withJobs = options.hasJobs?.(id) ?? true;
     const [h, c, j] = await Promise.allSettled([
       homeCalls.get(id),
       careCalls.list(id),
-      jobCalls.view(id),
+      withJobs ? jobCalls.view(id) : Promise.resolve(null),
     ]);
     if (mine !== ticket) return;
     if (h.status === 'fulfilled') home = h.value;
     if (c.status === 'fulfilled') care = c.value;
     if (j.status === 'fulfilled') {
       jobs = j.value;
-      clock.sync(j.value.now);
+      if (j.value) clock.sync(j.value.now);
     }
     if (h.status === 'rejected') say(messageOf(h.reason));
     else if (c.status === 'rejected' || j.status === 'rejected') say(ROSTER_TEXT.partial);

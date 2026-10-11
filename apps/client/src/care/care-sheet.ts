@@ -16,6 +16,7 @@ import {
   type SquishyFace,
 } from './care-view.js';
 import { moodHeartsEl } from './mood-hearts.js';
+import type { Portraits } from '../procedural/portraits.js';
 import { evolvingMeterEl } from './evolving-meter.js';
 import './care.css';
 
@@ -32,6 +33,10 @@ export interface CareSheetOptions {
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /** A squash after care, or sparkles for an evolution, starts (sound, #25). */
   onSquish?: (kind: 'care' | 'evolve') => void;
+  /** The real squishy pictures (#375); without them, the drawn blob. */
+  portraits?: Portraits;
+  /** The sheet closed (the Squishies roster under it reads again). */
+  onClosed?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -80,6 +85,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
 
   const face = squishyFaceNode();
   const blob = el('div', { class: 'care-blob', 'aria-hidden': 'true' }, face.node);
+  /** Which squishy (and accessory) the blob shows a picture of, so care doesn't redraw it. */
+  let portraitKey = '';
   const sparkles = el(
     'div',
     { class: 'care-sparkles', 'aria-hidden': 'true' },
@@ -235,8 +242,10 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     }
     const now = serverNow();
     const model = careSheet(squishy, reply, now);
-    blob.style.background = model.color;
     face.set(faceFor(squishy.speciesId, speciesById(reply)));
+    showPortrait(squishy, reply);
+    // The drawn blob's colour; the real picture brings its own.
+    blob.style.background = blob.classList.contains('care-blob-real') ? '' : model.color;
     name.textContent = model.name;
     rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
     rarity.hidden = model.rarity === null;
@@ -350,7 +359,28 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     if (map && id) options.onCloseUp?.(map, id);
   });
 
+  /** The real squishy in place of the blob once it's drawn (#375); the blob until then. */
+  function showPortrait(squishy: CareSquishy, current: CareListResponse): void {
+    const key = `${squishy.id}|${squishy.speciesId}|${squishy.accessory ?? ''}`;
+    if (key === portraitKey) return;
+    portraitKey = key;
+    blob.classList.remove('care-blob-real');
+    blob.replaceChildren(face.node);
+    const species = speciesById(current).get(squishy.speciesId);
+    if (!options.portraits || !species) return;
+    void options.portraits
+      .get({ species, instanceId: squishy.id, accessory: squishy.accessory })
+      .then((url) => {
+        if (!url || portraitKey !== key) return;
+        blob.replaceChildren(el('img', { src: url, alt: '', class: 'care-portrait' }));
+        blob.classList.add('care-blob-real');
+        blob.style.background = '';
+      });
+  }
+
   function hide(): void {
+    const wasOpen = !panel.hidden;
+    portraitKey = '';
     window.clearTimeout(readyTimer);
     readyTimer = undefined;
     ticket += 1;
@@ -360,6 +390,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     panel.hidden = true;
     celebrate.hidden = true;
     note.textContent = '';
+    if (wasOpen) options.onClosed?.();
   }
 
   /** Loads the patch's care list and shows the squishy `pick` chooses (nothing if it picks none). */

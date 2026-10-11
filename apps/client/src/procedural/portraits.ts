@@ -5,13 +5,13 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateScreenshotUsingRenderTargetAsync } from '@babylonjs/core/Misc/screenshotTools';
 import { Scene } from '@babylonjs/core/scene';
 import type { Species, VisualRegistry } from '@heartpatch/shared';
-import { cameraFor } from '../../close-up/close-up-view.js';
-import { setupLighting } from '../../engine/lighting/lighting.js';
-import { accessoryItem } from '../../procedural/accessory.js';
-import type { SquishyDetail } from '../../procedural/config.js';
-import { SquishyField } from '../../procedural/squishy-field.js';
+import { cameraFor } from '../close-up/close-up-view.js';
+import { setupLighting } from '../engine/lighting/lighting.js';
+import { accessoryItem } from './accessory.js';
+import type { SquishyDetail } from './config.js';
+import { SquishyField } from './squishy-field.js';
 
-// Squishy portraits for DOM lists (#375): the real 3D squishy, drawn once on
+// Squishy portraits for DOM screens (#375: the Squishies roster and the care sheet): the real 3D squishy, drawn once on
 // the game's own engine into a transparent picture and kept by look, so a
 // roster of 30 costs a handful of renders, then none (idle costs nothing,
 // CLAUDE.md rule 4). Without an engine (a renderer that couldn't start) the

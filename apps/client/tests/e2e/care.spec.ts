@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { careFromRoster } from './roster.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -55,8 +56,7 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
 
   await (await trayButton(page, 'home-open')).tap();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
-  await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
-  const sheet = page.getByTestId('care');
+  const sheet = await careFromRoster(page);
   await slowExpect(sheet).toBeVisible();
   // A new squishy starts part content (care rules `startContentment`).
   const start = CARE_RULES.startContentment;

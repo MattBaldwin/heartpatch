@@ -53,6 +53,7 @@ const E2E_GROUPS = [
     'hollow-dusk',
     'keeper-gallery',
     'lorebook',
+    'roster',
     'smoke',
     'starter',
   ],

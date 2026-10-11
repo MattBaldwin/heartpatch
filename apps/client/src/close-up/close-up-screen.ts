@@ -147,7 +147,13 @@ type Phase = 'arriving' | 'here' | 'leaving';
 
 export interface CloseUpScreen {
   /** Opens one of my squishies up close. */
-  open: (mapId: string, squishyId: string, from: CloseUpFrom) => Promise<void>;
+  /** `dressUp` opens with the Dress up picker showing (the Squishies roster's Dress up, #375). */
+  open: (
+    mapId: string,
+    squishyId: string,
+    from: CloseUpFrom,
+    opts?: { readonly dressUp?: boolean },
+  ) => Promise<void>;
   /** Back to where it came from (swoops out first). */
   close: () => void;
   setUser: (user: PublicUser | null) => void;
@@ -1123,7 +1129,12 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   }
 
   // ── Open and close ────────────────────────────────────────────────────
-  async function open(map: string, id: string, origin: CloseUpFrom): Promise<void> {
+  async function open(
+    map: string,
+    id: string,
+    origin: CloseUpFrom,
+    opts: { readonly dressUp?: boolean } = {},
+  ): Promise<void> {
     if (isOpen()) hide();
     const mine = (ticket += 1);
     // The view the player is looking at, blurred, becomes the backdrop. Read
@@ -1156,7 +1167,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     accessories.reset(squishy.accessory);
     dressingFor = { mapId: map, squishyId: id };
     ownedPieces = null;
-    showDress(false, false);
+    showDress(opts.dressUp === true, false);
     counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
     lastHold = null;
     phase = 'arriving';

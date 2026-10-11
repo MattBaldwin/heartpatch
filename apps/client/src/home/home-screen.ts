@@ -204,7 +204,6 @@ export const HOME_TEXT = {
   cozy: 'Loves it here!',
   full: 'Full',
   yours: 'Your buildings',
-  friends: 'Your squishies',
   jobs: '🧺 Jobs & team',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',

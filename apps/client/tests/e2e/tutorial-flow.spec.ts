@@ -360,7 +360,9 @@ async function playTutorial(page: Page): Promise<void> {
   await readAll();
   await tapOn(main); // Let's go!
   await openHome();
-  await tapOn(page.getByTestId('home-friends').getByRole('button').first());
+  // The Squishies button at the top, then Care on the Partner's row (#375).
+  await tapOn(page.locator('[data-testid="squishies-open"]:visible'));
+  await tapOn(page.getByTestId('roster-care').first());
   const care = page.getByTestId('care');
   await expect(care).toBeVisible();
   // The spotlight is on Pet, Play and Feed (the care sheet is gated on

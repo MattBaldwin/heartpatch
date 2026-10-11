@@ -70,7 +70,7 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
-import { createPortraits } from './squishies/roster/portraits.js';
+import { createPortraits } from './procedural/portraits.js';
 import { createRosterSheet } from './squishies/roster/roster-sheet.js';
 import { heroLodFor } from './procedural/motion.js';
 import { squishiesButton } from './squishies/roster/squishies-entry.js';
@@ -218,12 +218,32 @@ const inventory = createInventoryScreen({
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
+/** The patch whose roster the close-up returns to (opened from the roster), or null. */
+let rosterReturn: string | null = null;
+// The real squishies for DOM screens, drawn once each on the game's engine
+// (#375): the Squishies roster and the care sheet share them.
+const portraits = createPortraits({
+  engine: () => stage?.renderer.engine ?? null,
+  registry: visualRegistry(GAME_DATA),
+  lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+  invalidate: () => stage?.invalidate(),
+});
 const care = createCareSheet({
   root: document.body,
+  portraits,
+  // The roster under it reads again, so its hearts show the care just given.
+  onClosed: () => {
+    void roster.refresh();
+  },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
   },
   onCloseUp: (mapId, squishyId) => {
+    // From a care sheet over the roster: the roster steps aside and comes back after.
+    if (roster.isOpen) {
+      rosterReturn = mapId;
+      roster.close();
+    }
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
   },
 });
@@ -279,11 +299,15 @@ const closeUp = createCloseUpScreen({
     lobby.stepOut();
   },
   onClosed: (mapId: string, from: CloseUpFrom) => {
+    const backToRoster = rosterReturn === mapId;
+    rosterReturn = null;
     if (from === 'home') {
       home.setMap(mapId);
       explore.setMap(mapId);
       // Home base celebrates an evolution as it opens (#19).
-      void home.open();
+      void home.open().then(() => {
+        if (backToRoster) void roster.open(mapId);
+      });
       return;
     }
     maps
@@ -298,6 +322,7 @@ const closeUp = createCloseUpScreen({
         home.setMap(mapId);
         explore.setMap(mapId);
         void care.celebrateNews(mapId);
+        if (backToRoster) void roster.open(mapId);
       })
       .catch((err: unknown) => {
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
@@ -502,23 +527,22 @@ const socialSetMap = (mapId: string | null): Promise<void> => {
 // explore. Its Care opens the care sheet over it (two taps to care).
 const roster = createRosterSheet({
   root: document.body,
-  // The real squishies, drawn once each on the game's engine (#375).
-  portraits: createPortraits({
-    engine: () => stage?.renderer.engine ?? null,
-    registry: visualRegistry(GAME_DATA),
-    lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
-    invalidate: () => stage?.invalidate(),
-  }),
+  portraits,
+  hasJobs: (mapId) => mapId !== glade,
   onCare: (mapId, squishyId) => {
     void care.open(mapId, squishyId);
   },
+  // Up close and Dress up hand the screen to the close-up, which returns
+  // to the roster when it's done.
   onCloseUp: (mapId, squishyId) => {
+    rosterReturn = mapId;
     roster.close();
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
   },
   onDressUp: (mapId, squishyId) => {
+    rosterReturn = mapId;
     roster.close();
-    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map', { dressUp: true });
   },
 });
 /** The patch each view's Squishies button opens the roster for. */
@@ -1240,7 +1264,7 @@ const lobby = mountLobby(document.body, {
     ...lorebook.settings(),
     ...account.settings(),
   ],
-});// The map's Squishies button leads the round buttons by the Keeper menu
+}); // The map's Squishies button leads the round buttons by the Keeper menu
 // (before Chat and Friends).
 const mapSquishies = squishiesButton(() => {
   if (hudMapId) void roster.open(hudMapId);
@@ -1389,6 +1413,7 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
     jobs: () => jobs.debug,
+    roster: () => roster.debug,
     journey: () => journeys.debug,
     post: () => postScreen.debug,
     posts: () => ({
