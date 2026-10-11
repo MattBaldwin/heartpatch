@@ -197,7 +197,7 @@ export const RARE_GLOW = {
     motes: [0.3, 0.36, 0.42, 0.48],
     falloff: 1.7,
     bright: 1.1,
-    saturate: 2.4,
+    saturate: 1.25,
   },
   /** Inner glow: how much of its own glowing colour is added where the vinyl is dim, per level (capped). */
   inner: [0.16, 0.2, 0.24, 0.28],
@@ -210,5 +210,8 @@ export const RARE_GLOW = {
   hueSaturation: 0.7,
   /** A body paler than this saturation glows in its palette's most colourful hue instead. */
   paleBody: 0.2,
+  /** A part's glow brightness is its own brightness times this (capped at 1, floored), so dark parts glow dark. */
+  darkLift: 1.6,
+  darkFloor: 0.12,
   moteLook: 3,
 } as const;
