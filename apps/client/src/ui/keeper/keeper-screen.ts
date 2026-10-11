@@ -29,8 +29,8 @@ import './keeper.css';
 
 // Picking your Keeper (design doc §23, issue #42): right after signup and
 // before the opening cinematic (#46) and the tutorial, and again
-// any time from Settings, for free. One step per screen (#372): face, body,
-// skin, hair style, hair and outfit colours, face details, with Back and Next,
+// any time from Settings, for free. One step per screen (#372): face, body
+// and outfit, skin, hair style, hair and eye colours, face details, with Back and Next,
 // in a bottom card for one thumb and the Keeper in 3D above it. Every step
 // starts on a pick, so Next all the way through makes a Keeper; the step
 // tabs jump straight to any step. Picks are tried on the device; only
@@ -89,14 +89,16 @@ export const KEEPER_TEXT = {
   /** The steps (#372): a short tab name and what to do on it. */
   steps: {
     face: { tab: 'Face', prompt: 'Pick a face shape!' },
-    body: { tab: 'Body', prompt: 'Pick a body!' },
+    body: { tab: 'Body', prompt: 'Pick a body and an outfit!' },
     skin: { tab: 'Skin', prompt: 'Pick a skin tone!' },
     hairstyle: { tab: 'Hair', prompt: 'Pick a hair style!' },
-    hairColor: { tab: 'Color', prompt: 'Pick your hair and outfit colors!' },
+    hairColor: { tab: 'Colors', prompt: 'Pick your hair and eye colors!' },
     details: { tab: 'Details', prompt: 'Eyes, brows and a smile!' },
   } satisfies Record<KeeperStep, { tab: string; prompt: string }>,
   /** Screen readers: where the player is. */
   stepOf: (n: number, of: number) => `Step ${String(n)} of ${String(of)}`,
+  /** Under a step whose list scrolls: there's more below. */
+  more: 'More ↓',
   loadFailed: 'We couldn’t find your Keeper. Check your connection and try again!',
   retry: 'Try again',
   settings: 'Change how you look, any time!',
@@ -167,6 +169,11 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     'aria-labelledby': 'keeper-prompt',
     'data-testid': 'keeper-step',
   });
+  /** The picked body's name (#372): body tiles have no names on a phone. */
+  const caption = el('span', { class: 'keeper-caption', 'aria-hidden': 'true' });
+  // A list that scrolls says so plainly; taps go through to the choices under it.
+  const more = el('span', { class: 'keeper-more', 'aria-hidden': 'true' }, KEEPER_TEXT.more);
+  const list = el('div', { class: 'keeper-list' }, rows, more);
   const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'keeper-error' });
   const actions = el('div', { class: 'auth-actions keeper-actions' });
   const card = el(
@@ -175,7 +182,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     title,
     tabs,
     prompt,
-    rows,
+    list,
     error,
     actions,
   );
@@ -199,12 +206,29 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     lastTier = options.tier();
     built.show(picked, performance.now(), false);
     preview = built;
+    requestAnimationFrame(fitPreview);
     scene.onDisposeObservable.addOnce(() => {
       if (preview === built) preview = null;
       built.dispose();
     });
     return built.content;
   };
+
+  /**
+   * Keeps the whole Keeper on screen between the top bar and the card (#372):
+   * on a short phone the card would hide its legs.
+   */
+  const fitPreview = (): void => {
+    if (mode === null || !preview) return;
+    preview.setBand({
+      top: parseFloat(getComputedStyle(panel).paddingTop) || 0,
+      bottom: card.getBoundingClientRect().top,
+    });
+    options.invalidate();
+  };
+  window.addEventListener('resize', () => {
+    requestAnimationFrame(fitPreview);
+  });
 
   /** Draws while the Keeper hops, and follows the quality tier's detail level. */
   const tick = (): void => {
@@ -230,6 +254,9 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   /** Marks the picked choices (no rebuild, so a tap never loses its place). */
   const refresh = () => {
     for (const c of choices) c.node.setAttribute('aria-pressed', String(c.isPicked()));
+    const body = completeKeeperConfig(picked, KEEPER_DATA).body;
+    caption.textContent =
+      step === 'body' ? (KEEPER_DATA.bodies.find((b) => b.id === body)?.name ?? '') : '';
   };
 
   const pick = (next: KeeperConfig) => {
@@ -274,6 +301,9 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
 
   /** The step's choices, wrapping onto as many lines as they need. */
   const grid = (...buttons: HTMLElement[]) => el('div', { class: 'keeper-grid' }, ...buttons);
+  /** Body tiles: nameless on a phone, so all 14 and the outfits fit (owner, #372). */
+  const bodyGrid = (...buttons: HTMLElement[]) =>
+    el('div', { class: 'keeper-grid keeper-grid-bodies' }, ...buttons);
 
   /** One labelled group of choices on the details step: the label above them. */
   const row = (legend: string, ...buttons: HTMLElement[]) => {
@@ -355,7 +385,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
         ];
       case 'body':
         return [
-          grid(
+          bodyGrid(
             ...KEEPER_DATA.bodies.map((b) =>
               tile(
                 `${T.body}: ${b.name}`,
@@ -365,6 +395,21 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
                 () => {
                   pick({ ...picked, body: b.id });
                 },
+              ),
+            ),
+          ),
+          row(
+            T.outfit,
+            ...KEEPER_DATA.outfits.map((o) =>
+              choice(
+                `${T.outfit}: ${o.name}`,
+                () => picked.outfit === o.id,
+                () => {
+                  pick({ ...picked, outfit: o.id });
+                  redraw(); // the body tiles wear the outfit's top
+                },
+                'keeper-swatch',
+                dot(`linear-gradient(${o.top} 0 55%, ${o.bottom} 55% 100%)`),
               ),
             ),
           ),
@@ -401,24 +446,11 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
             ),
           ),
         ];
-      // The starter outfit's colours ride along with the hair's (#372).
+      // Hair and eye colours together (#372), so face details fit a phone.
       case 'hairColor':
         return [
           row(T.hair, ...swatches(T.hair, KEEPER_DATA.hairColors, 'hairColor')),
-          row(
-            T.outfit,
-            ...KEEPER_DATA.outfits.map((o) =>
-              choice(
-                `${T.outfit}: ${o.name}`,
-                () => picked.outfit === o.id,
-                () => {
-                  pick({ ...picked, outfit: o.id });
-                },
-                'keeper-swatch',
-                dot(`linear-gradient(${o.top} 0 55%, ${o.bottom} 55% 100%)`),
-              ),
-            ),
-          ),
+          row(T.eyeColor, ...swatches(T.eyeColor, KEEPER_DATA.eyeColors, 'eyeColor')),
         ];
       case 'details': {
         /** A group of named line styles (brows or mouths). */
@@ -450,7 +482,6 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
               ),
             ),
           ),
-          row(T.eyeColor, ...swatches(T.eyeColor, KEEPER_DATA.eyeColors, 'eyeColor')),
           lines(T.brows, KEEPER_DATA.brows, 'brows'),
           lines(T.mouth, KEEPER_DATA.mouths, 'mouth'),
           // Any number, all off to start, and every Keeper can pick any.
@@ -488,6 +519,15 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return node;
   };
 
+  /** Rebuilds the step's choices in place (their drawings follow the picks). */
+  function redraw(): void {
+    const top = rows.scrollTop;
+    choices = [];
+    rows.replaceChildren(...choicesFor(step));
+    rows.scrollTop = top;
+    refresh();
+  }
+
   /** Shows step `next`: its tab, its choices, and its buttons. */
   function showStep(next: KeeperStep): void {
     if (mode === null) return;
@@ -496,7 +536,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     choices = [];
     error.textContent = '';
     const number = KEEPER_STEPS.indexOf(next) + 1;
-    prompt.textContent = KEEPER_TEXT.steps[next].prompt;
+    prompt.replaceChildren(KEEPER_TEXT.steps[next].prompt, caption);
     prompt.setAttribute('aria-description', KEEPER_TEXT.stepOf(number, KEEPER_STEPS.length));
     tabs.replaceChildren(
       ...KEEPER_STEPS.map((s, i) => {
@@ -561,6 +601,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     // Measured once the card is on screen (it's hidden while it's built).
     requestAnimationFrame(() => {
       update();
+      fitPreview();
       // A long step (hair styles) opens on what's picked.
       rows
         .querySelector<HTMLElement>('[aria-pressed="true"]')

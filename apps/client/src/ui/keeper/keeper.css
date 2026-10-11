@@ -142,6 +142,54 @@
   }
 }
 
+/* The step's list and, over its foot, the "More" hint when it scrolls. */
+.keeper-list {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.keeper-more {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ff7aa2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgb(74 49 80 / 20%);
+}
+
+.keeper-list:not(:has(.keeper-rows[data-more='end'], .keeper-rows[data-more='both'])) .keeper-more {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .keeper-more {
+    animation: keeper-more-nudge 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes keeper-more-nudge {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* The picked body's name, after the prompt (body tiles are nameless on a phone). */
+.keeper-caption:not(:empty)::before {
+  content: ' · ';
+}
+
+.keeper-caption {
+  color: #b8467a;
+}
+
 /* Only the step's choices scroll (just the long ones: hair styles, and face
    details on a short phone); the tabs and the buttons always show. */
 .keeper-rows {
@@ -149,6 +197,7 @@
 
   display: flex;
   flex: 1 1 auto;
+  height: 100%;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
@@ -177,6 +226,49 @@
   .keeper-grid:has(.keeper-tile) {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
+  }
+}
+
+/* Bodies on a narrow card (owner, #372): seven nameless tiles a line, so all
+   14 and the outfit row fit an iPhone SE; the picked one is named in the
+   caption, and every tile in its label. */
+@container keeper-card (max-width: 479px) {
+  .keeper-rows .keeper-grid.keeper-grid-bodies {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .keeper-grid-bodies .keeper-tile {
+    min-width: 44px;
+    padding: 2px 0;
+  }
+
+  .keeper-grid-bodies .keeper-base-name {
+    display: none;
+  }
+
+  .keeper-grid-bodies .keeper-tile-art {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* Swatches on a narrow card: six outfits or eye colours fit on one line. */
+@container keeper-card (max-width: 479px) {
+  .keeper-grid {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 6px;
+  }
+
+  .keeper-swatch {
+    height: 44px;
+  }
+}
+
+/* The narrowest phones: six a line. */
+@container keeper-card (max-width: 300px) {
+  .keeper-rows .keeper-grid.keeper-grid-bodies {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -321,6 +413,7 @@
   .keeper-picker .keeper-card {
     height: 58vh;
     height: 58dvh;
+    padding-inline: 12px;
   }
 }
 

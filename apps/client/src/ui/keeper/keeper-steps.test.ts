@@ -4,7 +4,7 @@ import { KEEPER_TEXT } from './keeper-screen.js';
 import { bodyTileSvg, faceTileSvg, KEEPER_STEPS, nextStep, previousStep } from './keeper-steps.js';
 
 describe('Keeper creator steps (#372)', () => {
-  it('runs in the owner-approved order, with the outfit on the colour step', () => {
+  it('runs in the owner-approved order, with the outfit on the body step', () => {
     expect(KEEPER_STEPS).toEqual(['face', 'body', 'skin', 'hairstyle', 'hairColor', 'details']);
     expect(nextStep('face')).toBe('body');
     expect(nextStep('details')).toBeNull();

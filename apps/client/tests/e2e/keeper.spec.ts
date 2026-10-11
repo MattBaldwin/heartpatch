@@ -95,24 +95,26 @@ test('a new Keeper is built step by step before any patch, remembered, and chang
   const next = picker.getByRole('button', { name: 'Next', exact: true });
   const tap = (name: string) => picker.getByRole('button', { name, exact: true }).tap();
 
-  // One step a screen (#372): face, body, skin, hair style, hair and outfit
-  // colours, face details. Every pick shows on the 3D Keeper.
+  // One step a screen (#372): face, body and outfit, skin, hair style, hair
+  // and eye colours, face details. Every pick shows on the 3D Keeper.
   await expect(picker.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
   await tap('Face: Button');
   await next.tap();
   await tap('Body: Lanky');
+  // Body tiles have no names on a phone: the pick is named after the prompt.
+  await expect(picker.locator('#keeper-prompt')).toContainText('Lanky');
+  await tap('Outfit: Pumpkin');
   await next.tap();
   await tap('Skin tone 2');
   await next.tap();
   await tap('Hair style: Pigtails');
   await next.tap();
   await tap('Hair: Mint');
-  await tap('Outfit: Pumpkin');
+  await tap('Eye color: Violet');
   await next.tap();
   expect((await keeperState(page))!.step).toBe('details');
   await expect(next).toBeHidden();
   await tap('Eyes: Happy');
-  await tap('Eye color: Violet');
   await tap('Brows: Soft');
   await tap('Mouth: Big smile');
   await tap('Extras: Freckles');
@@ -282,7 +284,7 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
   await signUp(page, uniqueName('rows'));
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
-  const steps = ['Face', 'Body', 'Skin', 'Hair', 'Color', 'Details'];
+  const steps = ['Face', 'Body', 'Skin', 'Hair', 'Colors', 'Details'];
 
   // An iPhone SE, an iPhone in a Safari tab and as an app, an iPad, two laptops.
   for (const size of [
@@ -322,6 +324,14 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
           nested: scrollers.map((n) => n.className),
           actionsShow: onScreen(actions),
           scrolls: rows.scrollHeight > rows.clientHeight + 1,
+          // Face details: eyes, brows and mouth all show before any scrolling.
+          mouthShows: (() => {
+            const mouth = rows.querySelector<HTMLElement>('#keeper-row-mouth');
+            if (!mouth) return true;
+            rows.scrollTop = 0;
+            const last = mouth.parentElement!.querySelector('button')!;
+            return last.getBoundingClientRect().bottom <= rows.getBoundingClientRect().bottom + 0.5;
+          })(),
           // Scrolled to, every choice is what a finger on it touches.
           reachable: [...rows.querySelectorAll<HTMLElement>('button')].every((button) => {
             button.scrollIntoView({ block: 'nearest' });
@@ -344,12 +354,13 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
       if (size.height >= 659 && !['Hair', 'Details'].includes(tab)) {
         expect(layout.scrolls, at).toBe(false);
       }
+      if (size.height >= 659) expect(layout.mouthShows, at).toBe(true);
     }
     await expectRoomyLabels(page, '.keeper-tab, .keeper-style, .keeper-actions .auth-button');
   }
 
   // Tapping an outfit picks it; it never saves the Keeper by mistake.
-  await picker.getByRole('tab', { name: 'Color' }).tap();
+  await picker.getByRole('tab', { name: 'Body' }).tap();
   await picker.getByRole('button', { name: 'Outfit: Pumpkin' }).tap();
   await expect(picker).toBeVisible();
   expect((await keeperState(page))!).toMatchObject({
