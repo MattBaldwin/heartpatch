@@ -184,7 +184,7 @@ function miaConfig(
 }
 
 /** The floor runs this far past the open front, so a low camera never sees the void. */
-const FRONT_APRON = 6; // TUNE
+const FRONT_APRON = 3; // TUNE
 
 interface RoomSpec {
   readonly w: number;
