@@ -135,6 +135,25 @@ function wallWithHole(
   return parts;
 }
 
+/** Darkens a kit mesh for dusk: its vertex colours blend toward `foot` at the base and `top` up high. */
+function duskTint(mesh: Mesh, foot: string, top: string): void {
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
+  const colors = mesh.getVerticesData(VertexBuffer.ColorKind);
+  if (!colors) return;
+  const a = linear(foot);
+  const b = linear(top);
+  const k = 0.75; // TUNE: how far toward the dusk ramp
+  let maxY = 0;
+  for (let i = 0; i < pos.length / 3; i++) maxY = Math.max(maxY, pos[i * 3 + 1] ?? 0);
+  for (let i = 0; i < pos.length / 3; i++) {
+    const t = Math.min(1, (pos[i * 3 + 1] ?? 0) / (maxY || 1));
+    colors[i * 4] = (colors[i * 4] ?? 0) * (1 - k) + (a.r + (b.r - a.r) * t) * k;
+    colors[i * 4 + 1] = (colors[i * 4 + 1] ?? 0) * (1 - k) + (a.g + (b.g - a.g) * t) * k;
+    colors[i * 4 + 2] = (colors[i * 4 + 2] ?? 0) * (1 - k) + (a.b + (b.b - a.b) * t) * k;
+  }
+  mesh.setVerticesData(VertexBuffer.ColorKind, colors);
+}
+
 /** Repaints a kit tree's canopy (vertices above `fromY`, local units) from `bottom` to `top`. */
 function blushCanopy(tree: Mesh, fromY: number, bottom: string, top: string): void {
   const pos = tree.getVerticesData(VertexBuffer.PositionKind) ?? [];
@@ -154,6 +173,18 @@ function blushCanopy(tree: Mesh, fromY: number, bottom: string, top: string): vo
   }
   tree.setVerticesData(VertexBuffer.ColorKind, colors);
 }
+
+/** Mia's Keeper: the default base with the mockups' lilac hair, when the data has that colour. */
+function miaConfig(
+  base: (typeof KEEPER_DATA.bases)[number],
+): ReturnType<typeof defaultKeeperConfig> {
+  const config = defaultKeeperConfig(base);
+  const lilac = KEEPER_DATA.hairColors.find((c) => c.id === 'lilac');
+  return lilac ? { ...config, hairColor: lilac.id } : config;
+}
+
+/** The floor runs this far past the open front, so a low camera never sees the void. */
+const FRONT_APRON = 6; // TUNE
 
 interface RoomSpec {
   readonly w: number;
@@ -358,7 +389,7 @@ export class HouseProtoScene {
     ground.rotation.x = Math.PI / 2;
     ground.position.set(0, -0.32, 0);
     const gm = new PBRMaterial('outside-ground', scene);
-    gm.albedoColor = linear('#4f7a4c'); // TUNE: dusk grass
+    gm.albedoColor = linear('#5f7d55'); // TUNE: dusk lawn, lit warm by the low sun
     gm.roughness = 0.9;
     gm.metallic = 0;
     ground.material = gm;
@@ -367,13 +398,18 @@ export class HouseProtoScene {
     const trees: Mesh[] = [];
     const far = buildFarTree(scene);
     const spots: [number, number, number][] = [
-      [-6, 5.5, 1.4],
-      [-2.5, 7, 1.8],
-      [1.5, 6.5, 1.5],
-      [5, 5, 1.6],
-      [8, 8, 2],
-      [-9, 9, 2.2],
+      [-11, 24, 1.1],
+      [-5, 27, 1.2],
+      [2, 26, 1.0],
+      [8, 25, 1.15],
+      [14, 28, 1.3],
+      [-17, 29, 1.3],
+      [-24, 32, 1.4],
+      [21, 32, 1.4],
+      [5, 34, 1.2],
+      [-8, 36, 1.3],
     ];
+    duskTint(far, '#2f4a3c', '#8a6d5a'); // dusk: a dark foot, a warm-lit top
     for (const [x, dz, s] of spots) {
       const t = far.clone('far-tree');
       t.position.set(x, 0, spec.d / 2 + dz);
@@ -383,9 +419,10 @@ export class HouseProtoScene {
     }
     far.dispose();
     const oak = buildTree(scene, 'oak');
-    oak.position.set(-3.5, 0, spec.d / 2 + 3.5);
-    oak.scaling.setAll(1.3);
+    oak.position.set(-7.5, 0, spec.d / 2 + 14);
+    oak.scaling.setAll(0.9);
     oak.material = this.#vinyl;
+    duskTint(oak, '#2f4a3c', '#8a6d5a');
   }
 
   // ── Floor and walls ──────────────────────────────────────────────────
@@ -402,22 +439,21 @@ export class HouseProtoScene {
     for (let i = 0; i < Math.ceil(w / plankW); i++) {
       const x = -w / 2 + plankW / 2 + i * plankW;
       const tone = i % 3 === 0 ? spec.floor : i % 3 === 1 ? '#d2956a' : '#bf7f52';
-      planks.push(box(scene, [plankW - 0.02, 0.2, d], [x, -0.1, 0], tone));
+      planks.push(
+        box(scene, [plankW - 0.02, 0.2, d + FRONT_APRON], [x, -0.1, -FRONT_APRON / 2], tone),
+      );
     }
     this.#solid('floor', planks, { cast: false });
     // The stone footing under the open front (a dollhouse base) and a step.
     this.#solid(
       'footing',
-      [
-        box(scene, [w + 0.6, 0.3, d + 1.6], [0, -0.17, -0.5], '#8f8279'),
-        box(scene, [w, 0.06, 1.0], [0, -0.03, -d / 2 - 0.5], '#a3968c'),
-      ],
+      [box(scene, [w + 0.6, 0.3, d + FRONT_APRON + 0.6], [0, -0.17, -FRONT_APRON / 2], '#8f8279')],
       { cast: false, receive: true },
     );
 
     // Back wall with the big window; side walls; skirting and a picture rail.
     const windowHole = hall
-      ? { x: 0, y: 3.6, w: 5.2, h: 3.6 }
+      ? { x: 0, y: 3.3, w: 5.2, h: 3.2 }
       : { x: -0.2, y: 2.15, w: 2.6, h: 1.8 };
     const back = wallWithHole(scene, w, h, thick, windowHole, spec.wall);
     for (const p of back) p.position.z += d / 2 + thick / 2;
@@ -847,7 +883,7 @@ export class HouseProtoScene {
     // Memories shelf on the back wall, right of the window; a trophy on it.
     this.#shelf(2.5, 2.6, d / 2 - 0.17, 1.8, 0, ['#ffb3c8', '#bfe3ff', '#ffe29a'], 1);
     // The name sign over the window.
-    this.#sign('Mia’s Snug', -0.2, 3.65, d / 2 - 0.1, 0, 2.2);
+    this.#sign('Mia’s Nook', -0.2, 3.65, d / 2 - 0.1, 0, 2.2);
     // A little gift a resident left overnight (a daily return reason).
     const gift = this.#solid('gift', [
       box(scene, [0.36, 0.3, 0.36], [0, 0.15, 0], '#9ad8ff'),
@@ -903,7 +939,7 @@ export class HouseProtoScene {
     });
     const base = KEEPER_DATA.bases[0];
     if (!base) throw new Error('no keeper base');
-    this.#keepers.add(defaultKeeperConfig(base), {
+    this.#keepers.add(miaConfig(base), {
       x: 0.9,
       z: -1.8,
       yaw: 0.7,
@@ -923,31 +959,31 @@ export class HouseProtoScene {
     // The heart-tree, grown through the hall floor, under a ring of lanterns.
     const tree = buildTree(scene, 'oak');
     tree.position.set(-1.2, 0, d / 2 - 2.4);
-    tree.scaling.setAll(1.6);
+    tree.scaling.setAll(1.45);
     tree.material = this.#vinyl;
     blushCanopy(tree, 1.1, '#ff9ec4', '#ffd4e4'); // the Heart Tree: a pink canopy
     if (this.#shadows) this.#shadows.addShadowCaster(tree);
     const seed = buildHeartSeed(scene);
-    seed.position.set(-1.2, 5.0, d / 2 - 2.4);
-    seed.scaling.setAll(2.4);
-    this.#lamp('tree-light', new Vector3(-1.2, 4.6, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
+    seed.position.set(-1.2, 4.55, d / 2 - 2.4);
+    seed.scaling.setAll(2.2);
+    this.#lamp('tree-light', new Vector3(-1.2, 4.2, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
     // Lantern garlands from the beams.
     this.#string(
-      new Vector3(-w / 2 + 0.5, h - 0.9, 0.2),
-      new Vector3(w / 2 - 0.5, h - 0.9, 0.2),
-      0.8,
+      new Vector3(-w / 2 + 0.5, h - 0.6, -1.5),
+      new Vector3(w / 2 - 0.5, h - 0.6, -1.5),
+      0.6,
       9,
       '#ffd166',
     );
     this.#string(
-      new Vector3(-w / 2 + 0.5, h - 0.7, 3.0),
-      new Vector3(w / 2 - 0.5, h - 0.7, 3.0),
-      0.7,
+      new Vector3(-w / 2 + 0.5, h - 1.0, 3.0),
+      new Vector3(w / 2 - 0.5, h - 1.0, 3.0),
+      0.5,
       9,
       '#ff9ab8',
     );
     // A gallery along the right wall, above the door, with stairs at the back.
-    const gy = 3.3;
+    const gy = 2.9;
     const gw = 2.6;
     const gx = w / 2 - gw / 2;
     this.#solid('gallery', [
@@ -973,7 +1009,7 @@ export class HouseProtoScene {
     // Four beds: two on the balcony, two below, with golden blankets.
     this.#bed(-4.6, d / 2 - 1.2, 0, '#ffd166', true);
     this.#bed(2.6, d / 2 - 1.2, 0, '#c9a0ff', true);
-    this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 3.42);
+    this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 3.02);
     this.#bed(-5.2, -2.2, Math.PI / 2, '#9fd0ff', true);
     // The Keeper's corner: an alcove on the right with a table, tea and lamps.
     const table = this.#solid('table', [
@@ -981,9 +1017,9 @@ export class HouseProtoScene {
       tube(scene, 0.64, 0.14, 0.24, [0, 0.32, 0], '#8a5a39', 8),
       tube(scene, 0.08, 0.8, 0.8, [0, 0.04, 0], '#8a5a39', 12),
     ]);
-    table.position.set(3.6, 0, -2.6);
-    this.#teaAndSteam(3.3, 0.7, -2.3);
-    this.#tableLamp(4.2, -2.9, 0.7, '#ffd9a8');
+    table.position.set(3.9, 0, -2.4);
+    this.#teaAndSteam(3.6, 0.7, -2.1);
+    this.#tableLamp(4.5, -2.7, 0.7, '#ffd9a8');
     this.#tableLamp(-4.2, 0.4, 0.0, '#ffb3c8');
     // The trophy shelf and the memories wall.
     this.#shelf(
@@ -996,7 +1032,7 @@ export class HouseProtoScene {
       3,
     );
     this.#shelf(-w / 2 + 0.2, 2.0, -2.2, 2.4, Math.PI / 2, ['#ffb3c8', '#bfe3ff'], 2);
-    this.#sign('Mia’s Heart Hall', -0.2, h - 1.2, d / 2 - 0.1, 0, 3.4);
+    this.#sign('Mia’s Heart Hall', -0.2, 5.35, d / 2 - 0.1, 0, 3.4);
     this.#toys(-1.6, -2.4);
     this.#pumpkin(w / 2 - 1.2, -3.8, 1.1);
     this.#pumpkin(w / 2 - 1.9, -3.5, 0.8);
@@ -1048,7 +1084,7 @@ export class HouseProtoScene {
     r('candlekit', 7, {
       x: w / 2 - 1.3,
       z: 1.5,
-      y: 3.88,
+      y: 3.48,
       yaw: -1.4,
       scale: 0.9,
       squash: 0.85,
@@ -1057,9 +1093,9 @@ export class HouseProtoScene {
     r('gourdon', 8, { x: 2.6, z: 1.4, y: 0, yaw: -1.2, scale: 0.95, squash: 0.96 });
     const base = KEEPER_DATA.bases[0];
     if (!base) throw new Error('no keeper base');
-    this.#keepers.add(defaultKeeperConfig(base), {
-      x: 2.4,
-      z: -2.2,
+    this.#keepers.add(miaConfig(base), {
+      x: 1.7,
+      z: -2.7,
       yaw: 1.0,
       scale: 0.9,
       lean: 0.05,
