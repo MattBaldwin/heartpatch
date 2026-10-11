@@ -1531,7 +1531,6 @@ export const SPECIES: Species[] = [
         'cupcake-liner',
         'sprinkles',
         'cherry',
-        'stubby-legs',
         'leaf-tail',
       ],
       size: 1.3,
