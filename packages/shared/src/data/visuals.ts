@@ -143,9 +143,9 @@ export const BODIES: Body[] = [
     // #32: a shallow heart's lower half, wide at the top and narrowing to a soft
     // point at the bottom (two lobe parts round off its top).
     id: 'heart',
-    width: 1.25,
-    height: 1.05,
-    depth: 0.55,
+    width: 1.6,
+    height: 1.3,
+    depth: 0.5,
     squareness: 0,
     taper: 0.6,
     peak: 0,
@@ -1415,7 +1415,7 @@ export const PARTS: Part[] = [
     jitter: 0.08,
   },
   // #32 redesigns: a squirrel's acorn cup and plume tail, a cupcake's
-  // pleated cup and sprinkles, a singing heart's lobes, mouth and arms.
+  // pleated cup and sprinkles, a singing heart's lobes, mouth, arms and music note.
   {
     // Short, pointed squirrel ears (not tall bunny ears).
     id: 'tuft-ears',
@@ -1657,18 +1657,19 @@ export const PARTS: Part[] = [
   },
 
   {
-    // The two round lobes that make a heart's top, flattened into the heart's
-    // plane so the shallow heart reads as one shape from the front and the side.
+    // The two round lobes that make a heart's top: big, high and as thick as
+    // the shallow heart body, so together they read as one heart, not a head
+    // with ears.
     id: 'heart-lobes',
     slot: 'ears',
     shape: 'ellipsoid',
-    size: [0.78, 0.78, 0.4],
+    size: [0.9, 0.9, 0.46],
     color: 'primary',
     layout: pair,
     around: 90,
-    up: 46,
-    tilt: 34,
-    sink: 0.92,
+    up: 56,
+    tilt: 50,
+    sink: 0.95,
     splay: 0,
     jitter: 0.03,
   },
@@ -1679,7 +1680,7 @@ export const PARTS: Part[] = [
     id: 'bold-happy-eyes',
     slot: 'brows',
     shape: 'arc',
-    size: [0.22, 0.11, 0.075],
+    size: [0.24, 0.13, 0.09],
     color: 'ink',
     layout: pair,
     around: 26,
@@ -1694,11 +1695,11 @@ export const PARTS: Part[] = [
     id: 'singing-mouth',
     slot: 'mouth',
     shape: 'ellipsoid',
-    size: [0.3, 0.16, 0.06],
+    size: [0.24, 0.22, 0.06],
     color: 'accent',
     layout: single,
     around: 0,
-    up: -6,
+    up: -4,
     sink: 0.45,
     jitter: 0.04,
   },
@@ -1707,7 +1708,7 @@ export const PARTS: Part[] = [
     id: 'singing-tongue',
     slot: 'pattern',
     shape: 'ellipsoid',
-    size: [0.15, 0.1, 0.07],
+    size: [0.13, 0.09, 0.07],
     color: 'blush',
     layout: single,
     around: 0,
@@ -1730,20 +1731,47 @@ export const PARTS: Part[] = [
     splay: 30,
     jitter: 0.05,
   },
+
   {
-    // Little song bubbles drifting up and away behind one shoulder; only the first
-    // sits on the body (hidden), so the rest read as floating free.
-    id: 'song-notes',
+    // A gold music note on the heart's right lobe: its round head…
+    id: 'note-head',
     slot: 'crown',
     shape: 'ellipsoid',
-    size: [0.36, 0.36, 0.36],
+    size: [0.3, 0.26, 0.22],
     color: 'detail',
-    layout: { kind: 'chain', count: 5, step: 1.2, curl: 30, wave: 0, shrink: 0.8 },
-    around: 150,
-    up: 25,
-    tilt: -15,
-    sink: 1,
+    layout: single,
+    around: 60,
+    up: 32,
+    sink: 0.3,
     jitter: 0.04,
+  },
+  {
+    // …and its stem, leaning out of the lobe from the head's right side.
+    id: 'note-stem',
+    slot: 'horns',
+    shape: 'capsule',
+    size: [0.09, 0.6, 0.09],
+    color: 'detail',
+    layout: single,
+    around: 72,
+    up: 24,
+    sink: 0,
+    tilt: 40,
+    jitter: 0.04,
+  },
+
+  {
+    // Big rosy cheeks for the singing heart.
+    id: 'heart-blush',
+    slot: 'cheeks',
+    shape: 'ellipsoid',
+    size: [0.2, 0.12, 0.04],
+    color: 'blush',
+    layout: pair,
+    around: 40,
+    up: 4,
+    sink: 0.5,
+    jitter: 0.05,
   },
 ];
 

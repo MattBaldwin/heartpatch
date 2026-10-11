@@ -171,7 +171,7 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
 | Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, a wide smile above gap-toothed buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: a big deep-violet heart with two even round lobes and a soft point, bold happy eyes, a wide-open singing mouth with a tongue and blush on its front, little arms held out, round aqua song bubbles rising in an arc from one shoulder | hover · arms |
+| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: one deep-violet heart with two big round lobes and a soft point, bold happy eyes, a round open singing mouth with a tongue and blush on its front, little arms held out, a gold music note on its right lobe | hover · arms |
 
 ## 2. Palette
 
