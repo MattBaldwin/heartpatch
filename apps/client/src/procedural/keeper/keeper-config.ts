@@ -36,14 +36,15 @@ export const KEEPER = {
   },
   /**
    * Costume models (a costume's `model`, drawn instead of the Keeper): how
-   * tall each stands as a multiple of the Keeper's own height. The Hollow
-   * Man is a head taller than a Keeper on the map (the map draws him 0.85
-   * to a Keeper's 0.55).
+   * tall each stands as a multiple of the Keeper's own height, and where
+   * the costume sets his eyes (the rest of his eye numbers are his own, in
+   * `HOLLOW_MAN`). The Hollow Man is a head taller than a Keeper on the map
+   * (the map draws him 0.85 to a Keeper's 0.55).
    */
   models: {
     'hollow-man': {
       heightRatio: 1.6, // TUNE
-      /** His eyes, as fractions of his height: how far they stand out of his face. */
+      /** His eyes, as fractions of his height: how far in front of his middle they sit. */
       eyeForward: 0.07, // TUNE
       /** The eye is a sphere, widened and flattened a little: width and depth against its height. */
       eyeWide: 1.25, // TUNE

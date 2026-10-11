@@ -544,7 +544,7 @@ export function keeperParams(
       layer: 'costume',
       ...(shimmer === 'vinyl' ? {} : { finish: shimmer }),
     });
-    // His eyes, at his own spot on his face (the eye is a sphere, narrowed a little).
+    // His eyes, at his own spot on his face (the eye is a sphere, widened and flattened a little).
     const look = KEEPER.models['hollow-man'];
     const eyeSize = HOLLOW_MAN.eyeSize * h;
     for (const side of [-1, 1]) {

@@ -37,8 +37,8 @@ import '../../gallery/gallery.css';
  * by side; `?each=all` for every Keeper item), `?count=40` (stress test,
  * colours vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them
  * round), `?lean=0` (degrees; upright, for side and back views), `?hair=all`
- * (every hairstyle on each base shown, a row per base; `?hair=crew-cut` puts one style on every Keeper; with `?base=pip,rowan`
- * for a few bases), plus the main page's `?quality=` and `?renderer=webgpu`.
+ * (every hairstyle on each base shown, a row per base; `?hair=crew-cut` puts
+ * one style on every Keeper; with `?base=pip,rowan` for a few bases), plus the main page's `?quality=` and `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The Keeper gallery is dev-only');
