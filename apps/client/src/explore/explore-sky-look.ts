@@ -89,17 +89,17 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
  * brightens. A cave is the same at any hour.
  */
 const CAVE: SkyLook = {
-  zenith: '#4f3c6e', // TUNE: the cave roof
-  horizon: '#33264a', // TUNE: the far, dark walls (never black)
+  zenith: '#2a1f3d', // TUNE: the cave roof
+  horizon: '#1f1730', // TUNE: the far, dark walls (never black)
   sun: '#ffd36e',
   sunDisc: false,
   moon: false,
   cloud: '#5c4878',
   clouds: 0,
-  stars: true,
-  starColor: '#8ef0ff', // glow motes
+  stars: false, // a roof, not a sky: the glow comes from the crystals and caps
+  starColor: '#8ef0ff',
   groundTint: '#ffffff',
-  light: { color: '#ffd9b0', sun: 0.6, environment: 0.55 }, // TUNE: warm and dim
+  light: { color: '#ffd9b0', sun: 0.35, environment: 0.4 }, // TUNE: dim, so the glow reads
 };
 export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   dawn: CAVE,

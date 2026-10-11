@@ -22,9 +22,10 @@ import type { LandOptions } from './explore-land.js';
 /** A far mountain: a rounded cone of lavender stone with a snow cap. */
 function buildPeak(scene: Scene): Mesh {
   return merged('trail-peaks', [
-    shaded(cylinder(scene, 6, 0.4, 7, 9, [0, 3, 0]), '#8f86b4', '#c4bce0', 0, 6),
-    shaded(sphere(scene, 2.2, 6, [0, 5.4, 0], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 4.6, 6.6),
-    shaded(sphere(scene, 3.6, 6, [3.4, 1.8, 0.6], [1, 1.2, 1]), '#8a81ae', '#bdb5da', 0, 3.8),
+    shaded(cylinder(scene, 9, 0.5, 10, 10, [0, 4.5, 0]), '#7d74a6', '#bcb3dc', 0, 9),
+    shaded(sphere(scene, 3.0, 6, [0, 8.2, 0], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 7, 9.8),
+    shaded(cylinder(scene, 6, 0.4, 7, 9, [4.6, 3, 1]), '#857cae', '#c4bce0', 0, 6),
+    shaded(sphere(scene, 2.0, 6, [4.6, 5.6, 1], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 4.8, 6.6),
   ]);
 }
 
@@ -59,9 +60,11 @@ function ring(
 
 const trailPlace: Placer = (ctx) => {
   // Far peaks across the back, where the camera looks, with a few to the sides.
+  // Two layers so they read as a range: a near row and a taller one behind.
   const peaks = [
-    ...ring(ctx, 6, 3.3, 4.2, [1.8, 2.7], 0, true, [50, 130]),
-    ...ring(ctx, 3, 3.6, 4.6, [1.5, 2.3], 0, true, [15, 165]),
+    ...ring(ctx, 5, 3.6, 4.4, [1.6, 2.2], 0, true, [55, 125]),
+    ...ring(ctx, 5, 4.8, 5.8, [2.4, 3.2], 0, true, [40, 140]),
+    ...ring(ctx, 3, 4.0, 5.0, [1.4, 2.0], 0, true, [15, 165]),
   ];
   for (const p of peaks) ctx.shade(p.x, p.z, 2.5 * p.scale, 6 * p.scale);
   return { peaks };
@@ -70,8 +73,10 @@ const trailPlace: Placer = (ctx) => {
 const cavePlace: Placer = (ctx) => {
   // The cave wall: big rounded boulders across the back, fewer round the sides.
   const walls = [
-    ...ring(ctx, 8, 1.7, 2.3, [1.8, 2.8], 1.2, true, [40, 140]),
-    ...ring(ctx, 6, 1.9, 2.6, [1.1, 1.8], 1.2, true, [0, 180]),
+    ...ring(ctx, 11, 1.35, 1.8, [2.4, 3.4], 1.2, true, [35, 145]),
+    ...ring(ctx, 9, 1.5, 2.1, [1.8, 2.6], 1.2, true, [0, 180]),
+    // A second, taller row behind, so no gap shows the roof's edge.
+    ...ring(ctx, 10, 2.1, 2.6, [3.0, 4.2], 0, true, [20, 160]),
   ];
   for (const w of walls) ctx.shade(w.x, w.z, 1.8 * w.scale, 2.4 * w.scale);
   const stalagmites = ring(ctx, 14, 1.2, 1.9, [0.9, 1.5], 1, true, [20, 160]);
@@ -80,6 +85,11 @@ const cavePlace: Placer = (ctx) => {
     (c) => !ctx.colliders.some((k) => (c.x - k.x) ** 2 + (c.z - k.z) ** 2 < (k.r + 0.3) ** 2),
   );
   const caps = ring(ctx, 10, 1.0, 1.6, [0.9, 1.3], 1, false);
+  // Each one lights a soft pool of its own colour on the floor.
+  crystals.forEach((c, i) => {
+    ctx.glow(c.x, c.z, 1.6 * c.scale, i % 2 ? '#c9a8ff' : '#7fe4f5', 0.55); // TUNE
+  });
+  for (const c of caps) ctx.glow(c.x, c.z, 1.2 * c.scale, '#9fe8ff', 0.45); // TUNE
   return { 'wall-rocks': walls, stalagmites, crystals, 'glow-caps': caps };
 };
 
@@ -91,8 +101,8 @@ export const BIOME_EXTRAS: Readonly<Record<string, NonNullable<LandOptions['extr
     layers: {
       'wall-rocks': { build: buildWallRock },
       stalagmites: { build: buildStalagmite },
-      crystals: { build: buildCrystals },
-      'glow-caps': { build: buildGlowCaps },
+      crystals: { build: buildCrystals, glow: 1.3 }, // TUNE: over 1 blooms
+      'glow-caps': { build: buildGlowCaps, glow: 1.15 }, // TUNE
     },
   },
 };
