@@ -340,7 +340,7 @@ export const EXPLORE_SWIM = {
       surge: 0.06,
       squash: 0,
       stretch: 0.05,
-      sway: 0.2,
+      sway: 0.3,
       kick: 0,
     }, // TUNE
     dolphin: {
