@@ -13,8 +13,8 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
     palette: {
       grass: ['#7f9f86', '#97b59a', '#b5caa5'], // TUNE: alpine sage
       sunny: '#d9e0b8', // TUNE
-      path: '#d8cfbf', // TUNE: a stone path
-      pathEdge: '#b0a48f', // TUNE
+      path: '#cdbfa6', // TUNE: a stone path
+      pathEdge: '#a8987c', // TUNE
       specks: ['#f4f1ff', '#e1e8ff', '#fff4c2', '#ffd6e6'], // TUNE
       shade: '#5a6a86', // TUNE
     },
@@ -47,7 +47,7 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
   // specks; the walls, crystals and caps come from the cave kit.
   hills: {
     palette: {
-      grass: ['#4a3f66', '#57497a', '#65568a'], // TUNE: dark stone
+      grass: ['#54476f', '#615283', '#6f5f94'], // TUNE: dark stone
       sunny: '#75669a', // TUNE
       path: '#9c8aa8', // TUNE: a muted trail
       pathEdge: '#7a6a8c', // TUNE

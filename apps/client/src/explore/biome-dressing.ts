@@ -85,9 +85,14 @@ const cavePlace: Placer = (ctx) => {
     (c) => !ctx.colliders.some((k) => (c.x - k.x) ** 2 + (c.z - k.z) ** 2 < (k.r + 0.3) ** 2),
   );
   const caps = ring(ctx, 10, 1.0, 1.6, [0.9, 1.3], 1, false);
+  // A few small clusters inside the tile, so the glow reaches the Keeper's floor.
+  const near = ring(ctx, 6, 0.35, 0.95, [0.5, 0.8], 1, false).filter(
+    (c) => !ctx.colliders.some((k) => (c.x - k.x) ** 2 + (c.z - k.z) ** 2 < (k.r + 0.6) ** 2),
+  );
+  crystals.push(...near);
   // Each one lights a soft pool of its own colour on the floor.
   crystals.forEach((c, i) => {
-    ctx.glow(c.x, c.z, 1.6 * c.scale, i % 2 ? '#c9a8ff' : '#7fe4f5', 0.55); // TUNE
+    ctx.glow(c.x, c.z, 2.2 * c.scale, i % 2 ? '#c9a8ff' : '#7fe4f5', 0.6); // TUNE
   });
   for (const c of caps) ctx.glow(c.x, c.z, 1.2 * c.scale, '#9fe8ff', 0.45); // TUNE
   return { 'wall-rocks': walls, stalagmites, crystals, 'glow-caps': caps };
