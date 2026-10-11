@@ -93,7 +93,13 @@ test('claimed land leaves no hole in the map', async ({ browser }) => {
   // No trays open, and the claimed tile's panel over the map, as in the issue.
   await expect.poll(async () => (await traysState(page))?.open ?? null).toBeNull();
   await tapTile(page, claimed);
-  await expect(page.getByTestId('tile-panel')).toBeVisible();
+  const panel = page.getByTestId('tile-panel');
+  await expect(panel).toBeVisible();
+  // The hole needs a panel that scrolls. On a phone, your land's panel always
+  // does; on wider screens (map.css, 662px) it's taller and may not.
+  if (page.viewportSize()!.width < 662) {
+    expect(await panel.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
+  }
 
   // Once the map has settled, look: it has no big flat page-pink patch.
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
