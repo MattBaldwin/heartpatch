@@ -64,6 +64,7 @@ interface ExploreDebug {
     sky: { clouds: number; stars: boolean; moon: boolean };
     keeperHeight: number;
     faded: number[];
+    fadedCover: number[];
     triangles: number;
     land: { tier: string } | null;
   } | null;
@@ -274,6 +275,9 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   if (faded) {
     await page.waitForTimeout(500);
     const now = (await exploreState(page))!.scene!;
+    // Only a spot that really covers the Keeper on screen fades (#335), never
+    // one standing beside it: at least EXPLORE_FADE.cover (0.12) of the Keeper.
+    for (const cover of now.fadedCover) expect(cover).toBeGreaterThanOrEqual(0.12);
     test.info().annotations.push({ type: 'drawCallsFaded', description: String(now.drawCalls) });
     expect(now.drawCalls).toBeLessThan(DRAW_CALL_CEILING);
   } else {

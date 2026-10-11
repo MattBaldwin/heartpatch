@@ -140,6 +140,8 @@ export interface ExploreSceneStats {
   readonly drawCalls: number;
   /** Spots faded because they stand between the camera and the Keeper. */
   readonly faded: readonly number[];
+  /** How much of the Keeper each faded spot covers on screen, in `faded`'s order (#335). */
+  readonly fadedCover: readonly number[];
   /** The Keeper's height on screen, as a share of the canvas's height (0: not on screen). */
   readonly keeperHeight: number;
   /** The sky's pieces (#335). */
@@ -557,6 +559,7 @@ export class ExploreScene implements AmbientTarget {
       camera: { ...this.#camera.target, zoom: this.#camera.zoom },
       drawCalls: this.#drawCalls,
       faded: [...this.#hiding].sort((a, b) => a - b),
+      fadedCover: this.#fadedCover(),
       keeperHeight: this.#keeperHeight(),
       sky: this.#sky.stats,
       triangles: this.#triangles,
@@ -970,7 +973,8 @@ export class ExploreScene implements AmbientTarget {
     const keeper = this.#keeperBox();
     if (keeper) {
       for (const s of this.#tile.spots) {
-        if (hiding.has(s.index) && !this.#covers(s, keeper)) hiding.delete(s.index);
+        if (hiding.has(s.index) && this.#coverOf(s, keeper) < EXPLORE_FADE.cover)
+          hiding.delete(s.index);
       }
     }
     let same = hiding.size === this.#hiding.size;
@@ -1031,6 +1035,16 @@ export class ExploreScene implements AmbientTarget {
     );
   }
 
+  #fadedCover(): number[] {
+    const keeper = this.#keeperBox();
+    return [...this.#hiding]
+      .sort((a, b) => a - b)
+      .map((i) => {
+        const spot = this.#tile.spots.find((s) => s.index === i);
+        return spot && keeper ? Math.round(this.#coverOf(spot, keeper) * 1000) / 1000 : 1;
+      });
+  }
+
   /** The Keeper on screen: its feet to the top of its hair, about as wide as its head. */
   #keeperBox(): ScreenBox | null {
     if (!this.#keeper) return null;
@@ -1041,15 +1055,15 @@ export class ExploreScene implements AmbientTarget {
     return { left: feet.x - half, right: feet.x + half, top: top.y, bottom: feet.y };
   }
 
-  /** Whether a spot's prop covers enough of the Keeper on screen to fade (#335). */
-  #covers(spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>, keeper: ScreenBox): boolean {
+  /** How much of the Keeper a spot's prop covers on screen (#335); 1 when it can't tell. */
+  #coverOf(spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>, keeper: ScreenBox): number {
     const base = this.screenOf(spot, 0);
     const top = this.screenOf(spot, this.#heightOf(spot.kind) * this.#size);
     const edge = this.screenOf({ x: spot.x + spotRadius(spot.kind), z: spot.z }, 0);
-    if (!base || !top || !edge) return true; // can't tell: keep the old rule's answer
+    if (!base || !top || !edge) return 1; // can't tell: keep the line-of-sight rule's answer
     const half = Math.abs(edge.x - base.x);
     const prop = { left: base.x - half, right: base.x + half, top: top.y, bottom: base.y };
-    return coverShare(prop, keeper) >= EXPLORE_FADE.cover;
+    return coverShare(prop, keeper);
   }
 
   /** The ground's height under a tile-local point, world units. */
