@@ -34,7 +34,7 @@ export const EVENT_RETENTION_CRON = '41 * * * *'; // TUNE: hourly, off the hour
 
 /** Days an event is kept, once no consumer or reconnect replay needs it (#352). */
 export const EVENT_RETENTION_DAYS = 30; // TUNE: guess
-/** Days a short-lived event (a live battle's picks, turns and cheers; challenges) is kept. */
+/** Days a short-lived event (a live battle's picks, turns and cheers; challenges and defense prompts) is kept. */
 export const EVENT_RETENTION_SHORT_DAYS = 2; // TUNE: guess
 
 /** Events one retention delete removes; each batch is its own short statement. */

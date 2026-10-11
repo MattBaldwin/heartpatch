@@ -19,6 +19,8 @@ export const RAID_TEXT = {
   styleNote: 'How your squishies on watch play when someone challenges your land.',
   styleSaved: (name: string) => `Your squishies will play ${name}!`,
   noReplay: 'Nothing to watch for this one.',
+  /** The style chip for a challenge I played myself (#29-C). */
+  defendedLive: 'Defended live',
 } as const;
 
 /** The three defense styles, in the order the picker shows them. */
@@ -38,9 +40,12 @@ const FENCE_NAMES = new Map(
 
 /** One line per raid: who came by and how it went, kind either way. */
 export function raidLine(
-  raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> & Partial<Pick<Raid, 'fence'>>,
+  raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> &
+    Partial<Pick<Raid, 'fence' | 'live'>>,
 ): string {
   const who = raid.attackerName;
+  // I said "Defend now?" yes and played it myself (#29-C).
+  if (raid.live) return liveRaidLine(who, raid);
   // A fence battle (#203): the fence held, or it was broken (the guard's still there).
   if (raid.fence) {
     const name = FENCE_NAMES.get(raid.fence.buildingId) ?? 'fence';
@@ -68,6 +73,24 @@ export function raidLine(
   }
 }
 
+/** A challenge I defended live (#29-C): proud either way, never shaming. */
+function liveRaidLine(who: string, raid: Pick<Raid, 'outcome' | 'reason'>): string {
+  switch (raid.outcome) {
+    case 'held':
+      return raid.reason === 'forfeit'
+        ? `🛡️ You defended live! ${who} scooted home, and your land is safe.`
+        : `🛡️ You defended live and kept ${who} out. Your land is safe!`;
+    case 'tie':
+      return `🛡️ You defended live against ${who}. A tie, and your land is safe!`;
+    case 'lost':
+      return `🛡️ You defended live! ${who} won the showdown, but nothing changed.`;
+    case 'taken':
+      return `🛡️ You defended live! ${who} won this time and claimed the spot. Great try!`;
+    case 'no-contest':
+      return `🛡️ You came to defend, but everyone got distracted. Nothing changed!`;
+  }
+}
+
 /** A fire that came down with the land (#202), or null when there was none there. */
 export function raidFireLine(raid: Pick<Raid, 'lostFire'>): string | null {
   return raid.lostFire === null
@@ -84,7 +107,10 @@ export function raidFencesLine(raid: Partial<Pick<Raid, 'lostFences'>>): string 
     : `Your ${String(n)} fences there were lost when the land changed hands. 🪵`;
 }
 
-/** "Bold" etc. for a raid's style, or null when guardians stood in. */
-export function raidStyleLine(raid: Pick<Raid, 'stance'>): string | null {
+/** "Bold" etc. for a raid's style; "Defended live" when I played it (#29-C); null when guardians stood in. */
+export function raidStyleLine(
+  raid: Pick<Raid, 'stance'> & Partial<Pick<Raid, 'live'>>,
+): string | null {
+  if (raid.live) return RAID_TEXT.defendedLive;
   return raid.stance === null ? null : `Style: ${stanceName(raid.stance)}`;
 }

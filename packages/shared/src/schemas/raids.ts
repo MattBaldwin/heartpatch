@@ -37,8 +37,16 @@ export const RaidSchema = z.object({
   outcome: RaidOutcomeSchema,
   /** Why the battle ended (`forfeit`: the challenger scooted home). */
   reason: z.union([BattleEndReasonSchema, z.literal('no-contest')]),
-  /** The style my squishies on watch played with; null when the land's guardians stood in. */
+  /**
+   * The style my squishies on watch played with; null when the land's
+   * guardians stood in, or when I defended live.
+   */
   stance: DefenseStanceSchema.nullable(),
+  /**
+   * I said "Defend now?" yes and played it myself (#29-C). Optional only so
+   * older fixtures parse.
+   */
+  live: z.boolean().optional(),
   resolvedAt: z.iso.datetime(),
   /** When I saw it in the report; null while it's new. */
   seenAt: z.iso.datetime().nullable(),

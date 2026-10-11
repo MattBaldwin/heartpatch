@@ -29,11 +29,12 @@ import { createJobsRepo, type RetentionMap } from './repo.js';
 
 /**
  * Event types that only matter while a live battle or a challenge is on: a
- * battle's picks, turns and cheers, and every `challenge.*` type. Matched
+ * battle's picks, turns and cheers, and every `challenge.*` and `defense.*`
+ * ("Defend now?", #29-C) type. Matched
  * against the shared registry, so only registered types count, and a new
  * challenge type is short-lived from the day it's registered.
  */
-const SHORT_LIVED = /^(?:battle\.(?:picked|turned|cheered)|challenge\..+)$/;
+const SHORT_LIVED = /^(?:battle\.(?:picked|turned|cheered)|(?:challenge|defense)\..+)$/;
 
 export const isShortLived = (type: string): boolean => SHORT_LIVED.test(type);
 

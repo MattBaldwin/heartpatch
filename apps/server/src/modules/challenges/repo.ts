@@ -32,8 +32,19 @@ export interface ChallengesRepo {
     toUserId: string;
     createdAt: Date;
     expiresAt: Date;
+    /** A "Defend now?" prompt's battle (#29-C), there from the start. */
+    battleId?: string;
   }) => Promise<ChallengeRow>;
   find: (challengeId: string) => Promise<ChallengeRow | null>;
+  /**
+   * A battle's "Defend now?" prompt (#29-C), still waiting or not, row-locked
+   * when `lock` (step 9c, after the battle's own lock). Null: there was none.
+   * Found through the challenger's asks (`challenges_map_id_from_user_id_idx`).
+   */
+  defenseFor: (
+    battle: { id: string; mapId: string; playerUserId: string },
+    options?: { lock?: boolean },
+  ) => Promise<ChallengeRow | null>;
   /** Row-locks the ask until commit (lock order step 9c, #29). */
   lock: (challengeId: string) => Promise<ChallengeRow | null>;
   /** Waiting asks on the map to or from `userId`, oldest first. */
@@ -49,7 +60,10 @@ export interface ChallengesRepo {
     userIds: readonly string[],
     except?: string,
   ) => Promise<ChallengeRow[]>;
-  /** Waiting asks past their time, row-locked in id order (expired lazily, on the next read). */
+  /**
+   * Waiting friendly asks past their time, row-locked in id order (expired
+   * lazily, on the next read). A "Defend now?" prompt expires with its battle.
+   */
   lockExpired: (mapId: string, at: Date) => Promise<ChallengeRow[]>;
   settle: (
     challengeId: string,
@@ -104,6 +118,22 @@ function queries(db: Executor): ChallengesRepo {
       const [inserted] = await db.insert(challenges).values(row).returning();
       if (!inserted) throw new Error('insert: no challenge row returned');
       return toRow(inserted);
+    },
+
+    defenseFor: async (battle, options = {}) => {
+      const query = db
+        .select()
+        .from(challenges)
+        .where(
+          and(
+            eq(challenges.mapId, battle.mapId),
+            eq(challenges.fromUserId, battle.playerUserId),
+            eq(challenges.kind, 'defense'),
+            eq(challenges.battleId, battle.id),
+          ),
+        );
+      const [row] = options.lock ? await query.for('update') : await query;
+      return row ? toRow(row) : null;
     },
 
     find: async (challengeId) => {
@@ -179,6 +209,7 @@ function queries(db: Executor): ChallengesRepo {
         .where(
           and(
             eq(challenges.mapId, mapId),
+            eq(challenges.kind, 'friendly'),
             eq(challenges.status, 'pending'),
             lte(challenges.expiresAt, at),
           ),
