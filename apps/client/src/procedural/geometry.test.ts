@@ -48,7 +48,8 @@ describe.each(BODIES.map((b) => [b.id, b] as const))('body %s', (_id, body: Body
       expectFrontFacing(mesh);
       const { min, max } = bounds(mesh);
       expect(min[1]).toBeCloseTo(0, 6);
-      expect(max[1]).toBeGreaterThanOrEqual(body.height * 0.99);
+      // A heart's shoulders are a narrow peak, which a coarse mesh clips a little.
+      expect(max[1]).toBeGreaterThanOrEqual(body.height * (body.cleft ? 0.98 : 0.99));
       expect(max[0] - min[0]).toBeLessThanOrEqual(body.width * 1.01 + 1e-9);
       expect(max[2] - min[2]).toBeLessThanOrEqual(body.depth * 1.01 + 1e-9);
     });
@@ -148,5 +149,64 @@ describe('partMatrix', () => {
     expect(b.z).toEqual(a.z);
     expect(b.y.map((c) => -c)).toEqual(a.y);
     expect(b.x.map((c) => -c)).toEqual(a.x);
+  });
+});
+
+describe('optional body features stay off by default', () => {
+  it('draws every body but the heart exactly as before the cleft existed', () => {
+    // The hash of every other body's mesh at three levels of detail, taken
+    // before `cleft` was added (the heart is the one body that asks for it): a
+    // body without the feature must not move.
+    // FNV-1a over the text of every body's arrays.
+    let hash = 0x811c9dc5;
+    const add = (text: string) => {
+      for (let i = 0; i < text.length; i++) {
+        hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
+      }
+    };
+    for (const body of BODIES.filter((b) => b.id !== 'heart')) {
+      for (const rings of [8, 16, 24]) {
+        const mesh = bodyArrays(body, rings);
+        add(body.id + JSON.stringify([mesh.positions, mesh.normals, mesh.indices]));
+      }
+    }
+    expect(hash.toString(16)).toBe('5627a20c');
+  });
+});
+
+describe('a heart body (cleft)', () => {
+  const heart: Body = {
+    id: 'test-heart',
+    width: 1.6,
+    height: 1.4,
+    depth: 0.6,
+    squareness: 0.3,
+    taper: 0,
+    peak: 0,
+    bottomFlat: 0,
+    cleft: { depth: 0.2, tip: 0.8 },
+    jitter: 0,
+  };
+  const round: Body = { ...heart, cleft: undefined };
+  const near = Math.PI / 2 - 1e-3;
+
+  it('dips at the top middle with a shoulder either side', () => {
+    const shoulder = (b: Body) => surfacePoint(b, 1.2, Math.PI / 2 - 0.5)[1];
+    expect(shoulder(heart)).toBeGreaterThan(surfacePoint(heart, 0, near)[1] + 0.1);
+    // Without the cleft the top middle is the highest point.
+    expect(surfacePoint(round, 0, near)[1]).toBeGreaterThan(shoulder(round));
+  });
+
+  it('narrows to a point at the bottom', () => {
+    const lowWidth = (b: Body) => Math.abs(surfacePoint(b, Math.PI / 2, -Math.PI / 4)[0]);
+    expect(lowWidth(heart)).toBeLessThan(lowWidth(round) * 0.6);
+  });
+
+  it('is one smooth, front-facing mesh standing on the ground at every detail level', () => {
+    for (const lod of ['low', 'high', 'hero'] as const) {
+      const mesh = orientTriangles(bodyArrays(heart, LOD[lod].bodyRings));
+      expectFrontFacing(mesh);
+      expect(bounds(mesh).min[1]).toBeCloseTo(0, 6);
+    }
   });
 });
