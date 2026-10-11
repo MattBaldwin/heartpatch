@@ -803,7 +803,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         base,
         xpMultiplier(
           contentmentAt(
-            { contentment: CARE_RULES.startContentment, lastCaredAt: GRANTED },
+            { contentment: CARE_RULES.startContentment, since: GRANTED },
             clock,
             CARE_RULES,
           ),

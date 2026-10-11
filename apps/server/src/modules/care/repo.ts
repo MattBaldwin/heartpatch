@@ -239,7 +239,13 @@ function queries(db: Executor): CareRepo {
     setContentment: async (squishyId, contentment, at) => {
       await db
         .update(squishies)
-        .set({ contentmentAtLastCare: contentment, lastCaredAt: at })
+        // The last care, and a new checkpoint (#376): the same value and time.
+        .set({
+          contentmentAtLastCare: contentment,
+          lastCaredAt: at,
+          contentment,
+          contentmentSince: at,
+        })
         .where(eq(squishies.id, squishyId));
     },
 

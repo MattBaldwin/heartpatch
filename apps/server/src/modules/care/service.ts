@@ -4,8 +4,6 @@ import {
   CARE_RULES,
   careCoins,
   careGain,
-  contentmentAfterCare,
-  contentmentAt,
   evolutionAt,
   evolvingMeter,
   GAME_DATA,
@@ -39,6 +37,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
+import { contentmentsOf } from '../jobs/contentment.js';
 import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
 
 /*
@@ -138,14 +137,6 @@ export interface CareServiceOptions {
 const nameOf = (row: Pick<CareSquishyRow, 'nickname' | 'speciesId'>) =>
   row.nickname ?? speciesOf(row.speciesId)?.name ?? 'Your squishy';
 
-/** Contentment at `at` (shared `contentmentAt` over the stored columns). */
-const contentmentOf = (row: CareSquishyRow, at: Date) =>
-  contentmentAt(
-    { contentment: row.contentmentAtLastCare, lastCaredAt: row.lastCaredAt },
-    at,
-    CARE_RULES,
-  );
-
 /** The tags of a squishy's habitat, or null when it has none (or it isn't a habitat). */
 async function habitatTagsFor(
   repo: CareRepo,
@@ -219,7 +210,7 @@ export async function applyXp(
     options.plain === true
       ? 100
       : xpMultiplier(
-          contentmentOf(row, at),
+          (await contentmentsOf(tx, row.mapId, [row.id], at)).get(row.id)?.contentment ?? 0,
           habitatOf(await habitatTagsFor(repo, [row]), row),
           row,
           GROWTH_RULES,
@@ -341,7 +332,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     const day = await accountDay(tx, userId, at);
     const rows = await repo.listActive(mapId, userId);
     const ids = rows.map((r) => r.id);
-    const [habitats, counts, lastCare, coinsToday, unseen, items, worn] = await Promise.all([
+    const [habitats, counts, lastCare, coinsToday, unseen, items, worn, moods] = await Promise.all([
       habitatTagsFor(repo, rows),
       repo.countCareOn(ids, day),
       repo.lastCare(ids, debounceSince(at)),
@@ -349,6 +340,7 @@ export function createCareService(options: CareServiceOptions): CareService {
       repo.unseenEvolutions(ids),
       createInventoryRepo(tx).list({ mapId, userId }),
       wornAccessories(tx, userId, ids),
+      contentmentsOf(tx, mapId, ids, at),
     ]);
 
     // Species rows the client can't have: secret forms the player owns, or
@@ -361,7 +353,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     });
 
     const squishies = rows.map((row): CareSquishy => {
-      const contentment = contentmentOf(row, at);
+      const { contentment, drift } = moods.get(row.id) ?? { contentment: 0, drift: null };
       const habitat = habitatOf(habitats, row);
       const caredToday = counts.get(row.id) ?? 0;
       const nextCareAt: Record<string, string> = {};
@@ -387,6 +379,7 @@ export function createCareService(options: CareServiceOptions): CareService {
         stats: statsAtLevel(base, row.level, BATTLE_RULES),
         contentment,
         mood: moodFor(contentment, CARE_RULES),
+        moodDrift: drift,
         xpBonusPercent: xpMultiplier(contentment, habitat, row, GROWTH_RULES),
         habitatId: row.habitatBuildingId,
         caredToday,
@@ -448,11 +441,11 @@ export function createCareService(options: CareServiceOptions): CareService {
         const today = (await repo.countCareOn([row.id], day)).get(row.id) ?? 0;
         const gain = careGain(action, today, CARE_RULES);
         const coins = careCoins(gain, await repo.coinsOn(user.id, day), CARE_RULES);
-        const contentment = contentmentAfterCare(
-          { contentment: row.contentmentAtLastCare, lastCaredAt: row.lastCaredAt },
-          at,
-          gain.contentment,
-          CARE_RULES,
+        // On what its job left it with (#376), capped at full.
+        const before = (await contentmentsOf(tx, mapId, [row.id], at)).get(row.id);
+        const contentment = Math.min(
+          CARE_RULES.maxContentment,
+          (before?.contentment ?? 0) + gain.contentment,
         );
         const careId = await repo.insertCare({
           mapId,

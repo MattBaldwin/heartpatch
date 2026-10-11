@@ -56,6 +56,7 @@ import {
   type TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -557,6 +558,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           before.every((d, i) => d.id === request.squishyIds[i]);
         if (same) return false;
         const at = now();
+        // Guards coming and going: contentment so far counts at their old job's rate (#376).
+        await checkpointContentment(tx, map.id, [...new Set([...here, ...request.squishyIds])], at);
         await repo.replaceDefenders(map.id, tile.id, request.squishyIds, at);
         // One job at a time (owner decisions 2026-10-04): a new guard leaves
         // the team or its work tile (banking what it had ready).
@@ -740,7 +743,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         await repo.endAttack(battle.id, 'won', at);
         return { events: [], xpPercent, drop: null };
       }
-      // Squishies on watch go home, never lost (issue #15).
+      // Squishies on watch go home, never lost (issue #15). Their watch so far held (#376).
+      if (tile.ownerUserId !== null) {
+        const guards = await repo.listDefenders(tile.id, tile.ownerUserId);
+        await checkpointContentment(
+          tx,
+          attack.mapId,
+          guards.map((g) => g.id),
+          at,
+        );
+      }
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
       // Claiming land tends it (land that misses you, owner decision 2026-10-06),

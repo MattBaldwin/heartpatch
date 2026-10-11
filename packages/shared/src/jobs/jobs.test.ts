@@ -19,7 +19,17 @@ import {
   workSpeedPercent,
   combinePercents,
   workYield,
+  gatherFits,
+  gatherFitsFor,
+  holdSpans,
+  moodDrift,
+  seasonEndMs,
+  trainingFullAtMs,
+  workFullAtMs,
+  type HoldFacts,
 } from './index.js';
+import { contentmentAt } from '../care/contentment.js';
+import { CARE_RULES } from '../data/care.js';
 
 const { resources } = GAME_DATA;
 const HALLOWEEN = new Set(['halloween']);
@@ -412,5 +422,105 @@ describe('workProgressAround (#199: a paused homestead pays nothing)', () => {
     expect(p.cycles).toBe(JOB_RULES.work.maxStoredCycles);
     expect(p.full).toBe(true);
     expect(p.nextSinceMs).toBe(20 * HOUR);
+  });
+});
+
+describe('happiness and jobs (#376)', () => {
+  const HOUR = 60 * MINUTE;
+  const leafBrave = { element: 'leaf', feeling: 'brave' } as const;
+  const leafJoy = { element: 'leaf', feeling: 'joy' } as const;
+  const fireCozy = { element: 'fire', feeling: 'cozy' } as const;
+  const full = { contentment: 100, since: new Date(0) };
+  const after = (facts: HoldFacts, hours: number) =>
+    contentmentAt(full, new Date(hours * HOUR), CARE_RULES, holdSpans(facts));
+
+  it('fits gathering a resource it is Good or Great at, and nothing else', () => {
+    expect(gatherFits(leafBrave, 'timber', JOB_RULES)).toBe(true); // Great: both sides
+    expect(gatherFits(leafJoy, 'timber', JOB_RULES)).toBe(true); // Good: element
+    expect(gatherFits(fireCozy, 'timber', JOB_RULES)).toBe(false);
+    expect(gatherFits(fireCozy, 'nowhere', JOB_RULES)).toBe(false);
+    expect(gatherFitsFor(leafBrave, JOB_RULES)).toEqual(['timber', 'greens']);
+    // A Halloween species counts as an element match for Pumpkins.
+    const ghost = { element: 'fire', feeling: 'joy', season: 'halloween' } as const;
+    expect(gatherFitsFor(ghost, JOB_RULES)).toContain('pumpkins');
+  });
+
+  it('holds on the team and on watch, and drifts while resting', () => {
+    expect(after({ steady: { fromMs: null } }, 12)).toBe(100);
+    expect(after({ steady: { fromMs: 0 } }, 12)).toBe(100);
+    // Posted 6 hours after the checkpoint: those first hours drifted.
+    expect(after({ steady: { fromMs: 6 * HOUR } }, 12)).toBe(75);
+    expect(after({}, 12)).toBe(50);
+  });
+
+  const gather = (over: Partial<NonNullable<HoldFacts['gatherer']>> = {}): HoldFacts => ({
+    gatherer: {
+      fits: true,
+      fromMs: 0,
+      lostMs: null,
+      fullMs: 100 * HOUR,
+      seasonEndMs: null,
+      pause: null,
+      ...over,
+    },
+  });
+
+  it('holds while gathering what suits it, and drifts on the wrong resource', () => {
+    expect(after(gather(), 12)).toBe(100);
+    expect(after(gather({ fits: false }), 12)).toBe(50);
+  });
+
+  it('drifts once the job stops: a full basket, lost land, out of season, a nap', () => {
+    expect(after(gather({ fullMs: 6 * HOUR }), 12)).toBe(75);
+    expect(after(gather({ lostMs: 6 * HOUR }), 12)).toBe(75);
+    expect(after(gather({ seasonEndMs: 6 * HOUR }), 12)).toBe(75);
+    expect(after(gather({ pause: { fromMs: 2 * HOUR, toMs: 8 * HOUR } }), 12)).toBe(75);
+    expect(after(gather({ pause: { fromMs: 6 * HOUR, toMs: null } }), 12)).toBe(75);
+  });
+
+  it('holds while training until its XP is full, napping left out', () => {
+    expect(after({ training: { fullMs: 24 * HOUR, pause: null } }, 12)).toBe(100);
+    expect(after({ training: { fullMs: 6 * HOUR, pause: null } }, 12)).toBe(75);
+    const nap = { fromMs: 6 * HOUR, toMs: null };
+    expect(after({ training: { fullMs: 24 * HOUR, pause: nap } }, 12)).toBe(75);
+  });
+
+  it('says why contentment is or is not holding', () => {
+    expect(moodDrift({}, HOUR)).toBe('resting');
+    expect(moodDrift({ steady: { fromMs: null } }, HOUR)).toBe('steady');
+    expect(moodDrift(gather(), HOUR)).toBe('steady');
+    expect(moodDrift(gather({ fits: false }), HOUR)).toBe('wrong-job');
+    expect(moodDrift(gather({ fullMs: HOUR }), 2 * HOUR)).toBe('stopped');
+    expect(moodDrift(gather({ lostMs: HOUR }), 2 * HOUR)).toBe('resting');
+    expect(moodDrift({ training: { fullMs: HOUR, pause: null } }, 2 * HOUR)).toBe('stopped');
+  });
+
+  it('works out when a basket and Training XP fill, around a pause', () => {
+    const cycle = 600; // seconds
+    const max = JOB_RULES.work.maxStoredCycles;
+    expect(workFullAtMs(0, cycle, JOB_RULES, null)).toBe(max * cycle * 1000);
+    // A pause of an hour before it fills pushes the moment out by an hour.
+    const pause = { fromMs: 10 * MINUTE, toMs: 70 * MINUTE };
+    expect(workFullAtMs(0, cycle, JOB_RULES, pause)).toBe(max * cycle * 1000 + HOUR);
+    // Still paused: it can't fill, and it stops working at the pause.
+    expect(workFullAtMs(0, cycle, JOB_RULES, { fromMs: 10 * MINUTE, toMs: null })).toBe(
+      10 * MINUTE,
+    );
+    const maxHours = JOB_RULES.training.maxHours;
+    expect(trainingFullAtMs(5, JOB_RULES, null)).toBe(5 + maxHours * HOUR);
+    expect(trainingFullAtMs(0, JOB_RULES, pause)).toBe(maxHours * HOUR + HOUR);
+  });
+
+  it('finds when a season ended, to the minute', () => {
+    const end = 3 * 24 * HOUR + 17 * MINUTE + 5_000;
+    const inSeason = (ms: number) => ms < end;
+    const found = seasonEndMs(0, 10 * 24 * HOUR, inSeason);
+    expect(found).not.toBeNull();
+    expect(found ?? 0).toBeGreaterThanOrEqual(end);
+    expect((found ?? 0) - end).toBeLessThanOrEqual(MINUTE);
+    expect(seasonEndMs(0, 10 * 24 * HOUR, () => true)).toBeNull();
+    expect(seasonEndMs(5, 10 * 24 * HOUR, () => false)).toBe(5);
+    // The same answer every time (no clock, no randomness).
+    expect(seasonEndMs(0, 10 * 24 * HOUR, inSeason)).toBe(found);
   });
 });

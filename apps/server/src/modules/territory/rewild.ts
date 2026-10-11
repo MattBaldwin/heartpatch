@@ -6,6 +6,7 @@ import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
@@ -49,6 +50,14 @@ export async function rewildTiles(
   }
   const returned = new Map<string, string[]>();
   for (const tile of going) {
+    // Their watch so far held their contentment (#376).
+    const posted = await territory.listDefenders(tile.id, tile.ownerUserId);
+    await checkpointContentment(
+      tx,
+      mapId,
+      posted.map((g) => g.id),
+      at,
+    );
     const guards = await territory.clearDefenders(tile.id);
     returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
   }

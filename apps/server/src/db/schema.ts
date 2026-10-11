@@ -534,6 +534,13 @@ export const squishies = pgTable(
     // `contentmentAt`; CLAUDE.md rule 4), so nothing ticks.
     contentmentAtLastCare: integer('contentment_at_last_care').notNull().default(0),
     lastCaredAt: timestamptz('last_cared_at'),
+    // The contentment checkpoint (#376): its value at the last care action or
+    // job change, and when. It drifts down from here only while the squishy's
+    // job doesn't suit it (shared `holdSpans`), so every job change writes a
+    // new one. Read with the last-care pair above, whichever is newer (a row
+    // the previous release cared for, or wrote, has only that).
+    contentment: integer('contentment').notNull().default(0),
+    contentmentSince: timestamptz('contentment_since'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     // Squishy jobs (owner decisions 2026-10-04): one job at a time. Its place
     // on its owner's battle team (0 first), or null.
@@ -589,6 +596,7 @@ export const squishies = pgTable(
     check('squishies_level_positive', sql`${t.level} >= 1`),
     check('squishies_xp_nonnegative', sql`${t.xp} >= 0`),
     check('squishies_contentment_range', sql`${t.contentmentAtLastCare} between 0 and 100`),
+    check('squishies_contentment_checkpoint_range', sql`${t.contentment} between 0 and 100`),
   ],
 );
 
