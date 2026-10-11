@@ -114,9 +114,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'wave-1-meadow',
     terrains: ['meadow'],
     entries: [
-      { species: 'sunfollow', weight: 2 },
       { species: 'peekapple', weight: 4 },
-      { species: 'kiteray', weight: 2 },
       { species: 'gnomnom', weight: 2 },
     ],
   },
@@ -124,8 +122,10 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'wave-1-forest',
     terrains: ['forest'],
     entries: [
-      { species: 'whirleaf', weight: 4 },
-      { species: 'mallowmelt', weight: 4 },
+      { species: 'cindernub', weight: 4 },
+      { species: 'peekapple', weight: 4 },
+      { species: 'gnomnom', weight: 2 },
+      { species: 'moonmoth', weight: 1 },
     ],
   },
   {
@@ -133,7 +133,6 @@ export const SPAWN_TABLES: SpawnTable[] = [
     terrains: ['old-forest'],
     entries: [
       { species: 'cindernub', weight: 4 },
-      { species: 'boinkle', weight: 2 },
       { species: 'moonmoth', weight: 1 },
     ],
   },
@@ -141,10 +140,8 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'wave-1-hills',
     terrains: ['hills'],
     entries: [
-      { species: 'bellhop', weight: 4 },
       { species: 'cobblecrab', weight: 2 },
       { species: 'wobblecairn', weight: 2 },
-      { species: 'kiteray', weight: 2 },
     ],
   },
   {
@@ -175,7 +172,6 @@ export const SPAWN_TABLES: SpawnTable[] = [
     terrains: ['pumpkin-fields'],
     entries: [
       { species: 'chillypep', weight: 4 },
-      { species: 'halfhatch', weight: 4 },
       { species: 'fogglet', weight: 2 },
       { species: 'strawly', weight: 2 },
       { species: 'gnomnom', weight: 2 },

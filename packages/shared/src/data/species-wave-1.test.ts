@@ -17,10 +17,10 @@ const wave1Ids = new Set(WAVE_1_SPECIES.map((s) => s.id));
 const tables = SPAWN_TABLES.filter((t) => t.id.startsWith('wave-1-'));
 
 describe('wave 1 (#382)', () => {
-  it('is 22 kinds: 13 common, 7 uncommon, 2 rare, all in the public roster', () => {
-    expect(WAVE_1_SPECIES).toHaveLength(22);
+  it('is 15 kinds: 9 common, 4 uncommon, 2 rare, all in the public roster', () => {
+    expect(WAVE_1_SPECIES).toHaveLength(15);
     const count = (r: string) => WAVE_1_SPECIES.filter((s) => s.rarity === r).length;
-    expect([count('common'), count('uncommon'), count('rare')]).toEqual([13, 7, 2]);
+    expect([count('common'), count('uncommon'), count('rare')]).toEqual([9, 4, 2]);
     for (const s of WAVE_1_SPECIES) expect(SPECIES, s.id).toContain(s);
     expect(new Set(SPECIES.map((s) => s.id)).size).toBe(SPECIES.length);
   });
