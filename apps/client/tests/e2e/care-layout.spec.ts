@@ -1,6 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import { settled } from './layout.js';
+import { expect, test } from '@playwright/test';
+import { expectClear, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -8,14 +7,17 @@ const slowExpect = expect.configure({ timeout: 30_000 });
 
 /**
  * The care sheet and the Keeper chip (#385): the chip floats over every sheet
- * (z 10), so the sheet keeps its title, rarity and mood clear of it, and the
- * whole sheet fits one scroll area. Measured as boxes, never pixels. Set
- * HP_SHOTS_DIR to also save a screenshot of each size.
+ * (z 10), so the sheet keeps its name, rarity and mood clear of it, scrolls as
+ * one area, and keeps Feed, Pet and Play on screen. Measured as boxes, never
+ * pixels; a screenshot of each size is saved with the test's output.
  */
 
 const SIZES = [
   { name: 'iphone-se', width: 375, height: 667 },
   { name: 'iphone-15', width: 393, height: 852 },
+  // An iPhone 15 installed to the home screen: the status bar and home
+  // indicator take about 93px of 852 (about what Safari's own bars take too).
+  { name: 'iphone-15-installed', width: 393, height: 759 },
   { name: 'iphone-14', width: 390, height: 844 },
   { name: 'iphone-15-pro-max', width: 430, height: 932 },
   { name: 'iphone-se-landscape', width: 667, height: 375 },
@@ -23,24 +25,17 @@ const SIZES = [
   { name: 'ipad-landscape', width: 1180, height: 820 },
 ] as const;
 
-type Box = { l: number; t: number; r: number; b: number };
+const COVERED = [
+  '[data-testid="care-name"]',
+  '[data-testid="care-rarity"]',
+  '[data-testid="care-mood"]',
+  '[data-testid="care-drift"]',
+].join(', ');
 
-/** Boxes of the visible matches of `selector`, keyed by selector. */
-async function boxOf(page: Page, selector: string): Promise<Box | null> {
-  return page.evaluate((selector) => {
-    const el = document.querySelector<HTMLElement>(selector);
-    if (!el || el.closest('[hidden]')) return null;
-    const b = el.getBoundingClientRect();
-    return { l: b.left, t: b.top, r: b.right, b: b.bottom };
-  }, selector);
-}
-
-const overlaps = (a: Box, b: Box) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
-
-test('the Keeper chip never covers the care sheet, and the sheet fits one scroll area', async ({
+test('the Keeper chip never covers the care sheet, and the sheet scrolls as one area', async ({
   browser,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('carefit'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -58,39 +53,34 @@ test('the Keeper chip never covers the care sheet, and the sheet fits one scroll
     await slowExpect(page.getByTestId('care-mood')).not.toBeEmpty();
   };
 
-  const shots = process.env['HP_SHOTS_DIR'];
-  if (shots) mkdirSync(shots, { recursive: true });
-
   for (const size of SIZES) {
     await test.step(size.name, async () => {
       // Opened at this size, as a player on this phone would.
       await page.setViewportSize({ width: size.width, height: size.height });
       await settled(page);
       await openSheet();
-      await settled(page);
-      if (shots) await page.screenshot({ path: `${shots}/${size.name}.png` });
+      await still(page, '[data-testid="care"] button');
+      // It opens at the top: a sheet already scrolled would slide the name
+      // under the chip.
+      expect(await sheet.evaluate((el) => el.scrollTop), 'the sheet opens at its top').toBe(0);
+      await page.screenshot({ path: test.info().outputPath(`${size.name}.png`) });
 
-      const chip = await boxOf(page, '.auth-chip');
-      expect.soft(chip, 'the Keeper chip is on screen').not.toBeNull();
-      for (const id of ['care-name', 'care-rarity', 'care-mood', 'care-drift']) {
-        const target = await boxOf(page, `[data-testid="${id}"]`);
-        if (target && chip)
-          expect.soft(overlaps(chip, target), `${id} clear of the chip`).toBe(false);
-      }
+      // The chip never sits over the name, rarity or mood (it fails if any of
+      // them, or the chip, isn't on screen).
+      await expectClear(page, '.auth-chip', COVERED);
 
-      // One scroll area: the sheet scrolls itself, nothing inside it does, and
-      // the card's buttons are 44pt targets.
-      const inner = await page.evaluate(() =>
+      // The care notes stay open (decisions: "Care explains itself").
+      await expect(page.getByTestId('care-details')).toHaveJSProperty('open', true);
+
+      // One scroll area: the sheet scrolls itself and nothing in it does.
+      const nested = await page.evaluate(() =>
         [...document.querySelectorAll<HTMLElement>('[data-testid="care"] *')]
-          .filter((el) => {
-            const overflow = getComputedStyle(el).overflowY;
-            return (
-              (overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight
-            );
-          })
+          .filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowY))
           .map((el) => el.className),
       );
-      expect.soft(inner, 'no scroller inside the sheet').toEqual([]);
+      expect.soft(nested, 'no scroller inside the sheet').toEqual([]);
+
+      // 44pt targets, both ways.
       const small = await page.evaluate(() =>
         [
           ...document.querySelectorAll<HTMLElement>(
@@ -98,20 +88,28 @@ test('the Keeper chip never covers the care sheet, and the sheet fits one scroll
           ),
         ]
           .filter((el) => !el.closest('[hidden]'))
-          .map((el) => ({
-            name: el.textContent.trim(),
-            h: el.getBoundingClientRect().height,
-          }))
-          .filter((b) => b.h < 44),
+          .map((el) => ({ el, box: el.getBoundingClientRect() }))
+          .filter(({ box }) => box.height < 44 || box.width < 44)
+          .map(({ el }) => el.textContent.trim()),
       );
-      expect.soft(small, 'every button is at least 44pt tall').toEqual([]);
+      expect.soft(small, 'every button is at least 44pt each way').toEqual([]);
 
-      // The sheet fits without scrolling at the sizes a phone holds upright
-      // and an iPad; a phone on its side is allowed to scroll the sheet.
-      if (!size.name.endsWith('landscape') || size.name.startsWith('ipad')) {
-        const spill = await sheet.evaluate((el) => el.scrollHeight - el.clientHeight);
-        expect.soft(spill, 'the sheet fits the screen').toBeLessThanOrEqual(0);
+      // Feed, Pet and Play are on screen without scrolling (a phone on its
+      // side shows the top of the sheet and scrolls once).
+      if (size.name !== 'iphone-se-landscape') {
+        const bottom = await page
+          .locator('[data-tutorial-target="care-buttons"]')
+          .evaluate((el) => el.getBoundingClientRect().bottom);
+        expect
+          .soft(bottom, 'Feed, Pet and Play end above the screen bottom')
+          .toBeLessThanOrEqual(size.height);
       }
+
+      // How much the sheet scrolls here, for the PR (iPad portrait and the
+      // taller iPhones need none).
+      const spill = await sheet.evaluate((el) => el.scrollHeight - el.clientHeight);
+      test.info().annotations.push({ type: size.name, description: `scrolls ${String(spill)}px` });
+
       await page.getByTestId('care-close').tap();
       await slowExpect(sheet).toBeHidden();
     });

@@ -111,8 +111,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const infoList = el('ul', { class: 'care-info' });
   const info = el(
     'details',
-    // Open from the start where there's room: it's where care is explained
-    // (the playtest missed it). `load` folds it on a short screen.
+    // Open from the start: it's where care is explained (the playtest missed it).
     { class: 'care-details', open: '', 'data-testid': 'care-details' },
     el('summary', {}, CARE_TEXT.infoTitle),
     infoList,
@@ -377,7 +376,10 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       mapId = map;
       squishyId = null;
       setReply(null);
-      panel.hidden = false;
+      if (panel.hidden) {
+        panel.hidden = false;
+        panel.scrollTop = 0;
+      }
       note.textContent = messageOf(err);
       render();
       return;
@@ -391,10 +393,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     setReply(list);
     // Asked for one that isn't here (it grew up, or it's in the Hollow): say so.
     note.textContent = !picked && chosen ? CARE_TEXT.notHere : '';
-    // Opening (not a quiet refresh): the care notes start open where there's
-    // room, and folded on a short screen so the whole sheet fits (#385).
-    if (panel.hidden) info.open = !onShortScreen();
+    const opening = panel.hidden;
     panel.hidden = false;
+    // The sheet keeps its scroll while hidden: a sheet closed from the bottom
+    // would open with its name under the account pill (#385).
+    if (opening) panel.scrollTop = 0;
     render();
     if (chosen?.newEvolution) squish('evolve');
   }
@@ -498,15 +501,4 @@ function squishyFaceNode(): { node: SVGSVGElement; set: (face: SquishyFace) => v
       for (const [kind, n] of Object.entries(mouths)) show(n, kind === face.mouth);
     },
   };
-}
-
-/**
- * True where the open care notes would push the buttons off the screen: the
- * iPhones, upright or on their side, and an iPad on its side. A tall iPad has
- * the room (the open card is about 960px tall with the notes).
- */
-function onShortScreen(): boolean {
-  return (
-    typeof window.matchMedia === 'function' && window.matchMedia('(max-height: 1000px)').matches
-  );
 }

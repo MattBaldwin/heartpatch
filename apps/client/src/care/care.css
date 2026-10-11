@@ -8,8 +8,8 @@
   z-index: 6;
   display: flex;
   flex-direction: column;
-  /* The one scroll area: the card sits at the bottom (margin-top auto below),
-     and a tall card scrolls from its top instead of growing past it. */
+  /* The one scroll area (the card's margin-top auto, below, keeps its top
+     reachable). */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -37,8 +37,14 @@
   gap: 8px;
   width: 100%;
   max-width: 420px;
-  margin: auto auto 0;
   text-align: center;
+}
+
+/* Two classes, to beat .auth-card's centring margin (ui/auth/auth.css loads
+   later): the card sits at the bottom of the sheet, and a card taller than
+   the screen scrolls from its top (#385). */
+.care .care-card {
+  margin: auto auto 0;
 }
 
 .care-stage {
@@ -516,12 +522,17 @@
   }
 }
 
-/* A short screen (iPhone SE, a phone on its side, an iPad on its side): the same card, tighter, so
-   Feed, Pet and Play stay in view without scrolling (#385). */
+/* A short screen (iPhone SE, a phone on its side, an iPad on its side): the
+   same card, tighter, so Feed, Pet and Play stay in view (#385). Two classes
+   each, to beat .auth-card's padding and .auth-title's size (loaded later). */
 @media (max-height: 840px) {
-  .care-card {
+  .care .care-card {
     gap: 4px;
     padding-block: 12px;
+  }
+
+  .care-card .care-name {
+    font-size: 24px;
   }
 
   .care-stage {
@@ -533,16 +544,12 @@
     height: 52px;
   }
 
-  .care-name {
-    font-size: 24px;
-  }
-
   .care-drift[data-mood='steady'],
   .care-drift[data-mood='drifting'] {
     padding: 4px 12px;
   }
 
-  /* Up close and Close share a row. */
+  /* Up close and All done share a row. */
   .care-card .auth-actions {
     flex-direction: row;
     gap: 8px;
