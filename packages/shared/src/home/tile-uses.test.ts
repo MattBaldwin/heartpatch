@@ -90,6 +90,8 @@ describe('tileUseRefusal (#295)', () => {
     expect(tileUseRefusal(data('training-grounds'), plain!, false)).toBe('homestead-only');
     // Cut off from home: it keeps what stands there, but takes nothing new.
     expect(tileUseRefusal(data('training-grounds'), paused!, false)).toBe('napping');
+    // A fire stands on any owned land (owner Q1), a napping homestead included.
+    expect(tileUseRefusal(data('hearthfire'), paused!, false)).toBeNull();
     expect(tileUseRefusal(data('training-grounds'), ring!, false)).toBe('not-at-home');
     expect(tileUseRefusal(data('training-grounds'), open!, true)).toBe('taken');
   });

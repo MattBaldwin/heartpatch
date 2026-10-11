@@ -20,7 +20,8 @@ export interface TileUseTile extends Hex {
   readonly nodeResource: string | null;
   /**
    * Its homestead state (#199). A paused homestead (cut off from home)
-   * keeps what stands on it but takes nothing new until it reconnects.
+   * keeps what stands on it but takes no new homestead building until it
+   * reconnects (fires, `placement: 'land'`, may still go there).
    */
   readonly homestead: TileUseHomestead;
 }
@@ -33,7 +34,7 @@ export type TileUseRefusal =
   | 'not-at-home'
   /** Needs a joined homestead. */
   | 'homestead-only'
-  /** A homestead cut off from home (paused): it takes nothing new until it reconnects. */
+  /** A homestead cut off from home (paused): it takes no new homestead building until it reconnects. */
   | 'napping'
   /** A resource spot stands there: clear the land first. */
   | 'clear-first'
@@ -131,7 +132,7 @@ const byAge = (a: TileUseBuilding, b: TileUseBuilding): number =>
  *   the spot rule only gates new buildings. So does one on a homestead that
  *   is paused right now: being cut off never takes a building away.
  * - Each building that leaves, oldest first, goes to the nearest free tile
- *   it's allowed on (spots and paused homesteads excluded), ties by tile id;
+ *   it's allowed on (spots excluded, and paused homesteads for homestead buildings), ties by tile id;
  *   with none free, it's packed.
  *
  * Fences, rows whose building id isn't in `buildings` and rows on a tile not
