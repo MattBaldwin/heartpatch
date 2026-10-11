@@ -153,10 +153,28 @@ describe('partMatrix', () => {
 });
 
 describe('optional body features stay off by default', () => {
-  it('draws every body but the heart exactly as before the cleft existed', () => {
-    // The hash of every other body's mesh at three levels of detail, taken
-    // before `cleft` was added (the heart is the one body that asks for it): a
-    // body without the feature must not move.
+  /** The bodies that existed before `cleft`; new bodies don't move this. */
+  const BEFORE_CLEFT = [
+    'blob',
+    'pebble',
+    'bean',
+    'pear',
+    'drop',
+    'bun',
+    'pumpkin',
+    'tall',
+    'mochi',
+    'tiered',
+    'star',
+    'comet-star',
+    'ghost',
+    'barrel',
+    'orb',
+  ];
+
+  it('draws the bodies that came before the cleft exactly as they were', () => {
+    // A hash of each one's mesh at three levels of detail, taken with the
+    // original body shaper: a body that doesn't ask for `cleft` must not move.
     // FNV-1a over the text of every body's arrays.
     let hash = 0x811c9dc5;
     const add = (text: string) => {
@@ -164,13 +182,14 @@ describe('optional body features stay off by default', () => {
         hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
       }
     };
-    for (const body of BODIES.filter((b) => b.id !== 'heart')) {
+    for (const id of BEFORE_CLEFT) {
+      const body = BODIES.find((b) => b.id === id)!;
       for (const rings of [8, 16, 24]) {
         const mesh = bodyArrays(body, rings);
         add(body.id + JSON.stringify([mesh.positions, mesh.normals, mesh.indices]));
       }
     }
-    expect(hash.toString(16)).toBe('5627a20c');
+    expect(hash.toString(16)).toBe('c6964a27');
   });
 });
 
