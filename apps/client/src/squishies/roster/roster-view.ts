@@ -30,7 +30,7 @@ export const ROSTER_TEXT = {
   close: 'Close',
   empty: 'No squishies yet. Befriend one on the map!',
   noMatch: 'No squishies match. Try another filter!',
-  sortBy: 'Sort by',
+  sortBy: 'Sort',
   show: 'Show',
   sort: { mood: 'Mood', level: 'Level', rarity: 'Rarity', status: 'Status' },
   filter: { all: 'All', care: 'Needs care', team: 'On team', working: 'Working' },

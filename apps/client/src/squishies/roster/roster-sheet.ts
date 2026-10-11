@@ -477,6 +477,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     const statusRow = el(
       'div',
       { class: 'roster-status-row' },
+      ...(row.rarity ? [rarityChip(row.rarity)] : []),
       status,
       ...(drift !== null
         ? [
@@ -505,7 +506,6 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         el(
           'span',
           { class: 'roster-sub' },
-          ...(row.rarity ? [rarityChip(row.rarity)] : []),
           // The species only when a nickname hides it.
           row.name === row.speciesName
             ? ROSTER_TEXT.level(row.level)
@@ -552,7 +552,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   function renderChips(): void {
     const counts = filterCounts(rows);
     sortBar.replaceChildren(
-      el('span', { class: 'roster-chips-label' }, `${ROSTER_TEXT.sortBy}:`),
+      el('span', { class: 'roster-chips-label' }, ROSTER_TEXT.sortBy),
       ...ROSTER_SORTS.map((s) => {
         const b = el(
           'button',
@@ -572,7 +572,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       }),
     );
     filterBar.replaceChildren(
-      el('span', { class: 'roster-chips-label' }, `${ROSTER_TEXT.show}:`),
+      el('span', { class: 'roster-chips-label' }, ROSTER_TEXT.show),
       ...ROSTER_FILTERS.map((f) => {
         const b = el(
           'button',

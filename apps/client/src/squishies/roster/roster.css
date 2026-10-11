@@ -61,12 +61,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .roster-chips-label {
   flex: none;
-  min-width: 52px;
+  min-width: 40px;
   font-size: 13px;
   font-weight: 700;
   color: #7a5d80;
@@ -74,7 +74,7 @@
 
 .roster-chip {
   min-height: 44px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: none;
   border-radius: 999px;
   background: #f6e3ee;
@@ -179,9 +179,8 @@
   color: #7a5d80;
 }
 
-.roster-sub .rarity-chip {
+.roster-status-row .rarity-chip {
   flex: none;
-  font-size: 12px;
 }
 
 .roster-action {
