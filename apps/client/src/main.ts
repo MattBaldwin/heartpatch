@@ -22,6 +22,7 @@ import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
 import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
+import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
@@ -504,6 +505,7 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
+  workMoods: (mapId) => jobs.workMoods(mapId),
   onRecipeBook: () => {
     recipeBook.open();
   },
@@ -966,6 +968,10 @@ trays.slot('adventure').append(
   }),
 );
 jobs.mountTeamButton(jobsBox, () => hudMapId);
+// A job changed or the board read a fresh view: the home's moods follow (#393).
+jobs.onView((mapId, view) => {
+  home.setWorkMoods(mapId, workMoods(view));
+});
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening

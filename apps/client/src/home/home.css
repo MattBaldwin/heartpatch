@@ -393,3 +393,57 @@
   font-size: 15px;
   font-weight: 700;
 }
+
+/* Mood bubbles over squishies at home (#393): 💕 loves its job, 🌧️ isn't keen.
+   A pill like the map's 🧺 badges, so it reads as the same family and never
+   as the 💗 in the squishy list. A tail points down at its own squishy's
+   head (--tail: how far the bubble slid sideways), and a stem (--stem, when it
+   climbed clear of another face) reaches it. */
+.home-mood-mark {
+  --tail: 0px;
+  --stem: 0px;
+  --mark-bg: rgb(255 228 240 / 96%);
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--mark-bg);
+  font-size: 16px;
+  line-height: 1.3;
+  box-shadow: 0 2px 5px rgb(61 42 64 / 30%);
+  pointer-events: none;
+}
+
+/* The tail. */
+.home-mood-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: var(--mark-bg);
+  transform: translateX(calc(-50% + var(--tail)));
+}
+
+/* The stem from the tail down to its squishy's head. */
+.home-mood-mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  width: 2px;
+  height: var(--stem);
+  background: var(--mark-bg);
+  transform: translateX(calc(-50% + var(--tail)));
+}
+
+.home-mood-meh {
+  --mark-bg: rgb(84 112 146 / 96%);
+}
+
+/* No spot clear of other faces: it waits, hidden, until there's room. */
+.home-mood-mark[hidden] {
+  display: none;
+}
