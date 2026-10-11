@@ -5,6 +5,7 @@ import { RECIPE_BOOK } from '../data/recipe-book.js';
 import { TUTORIAL_SETUP } from '../data/tutorial/setup.js';
 import { TUTORIAL_STEPS } from '../data/tutorial/steps.js';
 import { checkRecipeBook } from '../schemas/data/recipe-book.js';
+import { isAvailableRecipe } from '../schemas/data/recipes.js';
 import { RecipeBookResponseSchema } from '../schemas/inventory.js';
 import {
   buildingPageKey,
@@ -18,24 +19,30 @@ import {
 } from './index.js';
 
 const PAGES = recipeBookPages();
+/** Recipes not in the game yet (`isAvailableRecipe`, #242's clearing tools until their client ships). */
+const HIDDEN = GAME_DATA.recipes.filter((r) => !isAvailableRecipe(r));
+/** Every page key the book's data may name: the pages shown, and hidden recipes' pages to come. */
+const BOOK_KEYS = [...PAGES.map((p) => p.key), ...HIDDEN.map((r) => recipePageKey(r.id))];
 const page = (key: string) => PAGES.find((p) => p.key === key)!;
 const unlocked = (collected: string[]) => unlockedPageKeys(PAGES, new Set(collected));
 
 describe('recipe book pages', () => {
-  it('lists every recipe, then every buildable building, in data order', () => {
+  it('lists every recipe in the game, then every buildable building, in data order', () => {
     const buildable = GAME_DATA.buildings.filter((b) =>
       (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind),
     );
     expect(PAGES.map((p) => p.key)).toEqual([
-      ...GAME_DATA.recipes.map((r) => `recipe:${r.id}`),
+      ...GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => `recipe:${r.id}`),
       ...buildable.map((b) => `building:${b.id}`),
     ]);
+    // A hidden recipe has no page until it's in the game.
+    for (const r of HIDDEN) expect(PAGES.some((p) => p.key === recipePageKey(r.id))).toBe(false);
     // Training Grounds are buildable now (owner decision 2026-10-06), so they have a page.
     expect(PAGES.some((p) => p.key === 'building:training-grounds')).toBe(true);
   });
 
   it('copies ingredients, timing, season and output from the data', () => {
-    for (const r of GAME_DATA.recipes) {
+    for (const r of GAME_DATA.recipes.filter(isAvailableRecipe)) {
       expect(page(recipePageKey(r.id))).toEqual({
         key: `recipe:${r.id}`,
         kind: 'recipe',
@@ -68,16 +75,11 @@ describe('recipe book pages', () => {
   });
 
   it('has valid recipe book data: real pages, a short kind hint for every sealable page', () => {
-    expect(
-      checkRecipeBook(
-        RECIPE_BOOK,
-        PAGES.map((p) => p.key),
-      ),
-    ).toEqual([]);
+    expect(checkRecipeBook(RECIPE_BOOK, BOOK_KEYS)).toEqual([]);
   });
 
   it('catches bad recipe book data', () => {
-    const keys = PAGES.map((p) => p.key);
+    const keys = BOOK_KEYS;
     expect(
       checkRecipeBook({ ...RECIPE_BOOK, alwaysOpen: ['recipe:golden-ticket'] }, keys),
     ).not.toEqual([]);
@@ -182,7 +184,14 @@ describe('whereToFind', () => {
         where.bonusFrom.length > 0 ||
         where.madeBy.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
-      const elsewhere = ['heartdust', 'turkey-feathers', 'presents', 'fireworks'];
+      // Things only a hidden recipe makes aren't anywhere yet either.
+      const elsewhere = [
+        'heartdust',
+        'turkey-feathers',
+        'presents',
+        'fireworks',
+        ...HIDDEN.map((h) => h.output.resource),
+      ];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));
     }
   });

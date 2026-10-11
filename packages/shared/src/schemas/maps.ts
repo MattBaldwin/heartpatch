@@ -288,6 +288,11 @@ export const PublicTileSchema = z.object({
    */
   gathering: z.object({ readyAt: z.iso.datetime() }).nullable(),
   /**
+   * The owner is clearing this tile (#242), cleared land at this time.
+   * Optional so older fixtures and servers parse; the server always sends it.
+   */
+  clearing: z.object({ readyAt: z.iso.datetime() }).nullable().optional(),
+  /**
    * When the latest battle for this tile stops blocking another (#15, the
    * raid cooldown); null if there's never been one. May be in the past.
    */

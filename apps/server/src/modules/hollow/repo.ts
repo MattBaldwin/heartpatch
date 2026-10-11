@@ -23,6 +23,7 @@ import {
   squishies,
   tileAttacks,
   tileDefenders,
+  tileExplore,
   tiles,
   tileTending,
 } from '../../db/schema.js';
@@ -81,6 +82,8 @@ export interface NightTileRow {
   nodeResource: string | null;
   /** When its owner claimed it (null: before #277, or never claimed). */
   claimedAt: Date | null;
+  /** A homestead joined to its owner's home right now (#199): it could be cleared (#242). */
+  homestead: boolean;
 }
 
 export interface NightRow {
@@ -351,6 +354,14 @@ function queries(db: Executor): HollowRepo {
           homeSlot: tiles.homeSlot,
           nodeResource: tiles.nodeResource,
           claimedAt: tileTending.claimedAt,
+          // Joined and not paused (`homesteadOf`), for its owner.
+          homestead: sql<boolean>`exists (
+            select 1 from ${tileExplore}
+            where ${tileExplore.tileId} = ${tiles.id}
+              and ${tileExplore.userId} = ${tiles.ownerUserId}
+              and ${tileExplore.joinedAt} is not null
+              and (${tileExplore.pausedAt} is null or ${tileExplore.resumedAt} is not null)
+          )`,
         })
         .from(tiles)
         .leftJoin(tileTending, eq(tileTending.tileId, tiles.id))
