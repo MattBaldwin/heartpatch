@@ -184,7 +184,7 @@ function miaConfig(
 }
 
 /** The floor runs this far past the open front, so a low camera never sees the void. */
-const FRONT_APRON = 3; // TUNE
+const FRONT_APRON = 2; // TUNE
 
 interface RoomSpec {
   readonly w: number;
@@ -857,7 +857,7 @@ export class HouseProtoScene {
     // Memories shelf on the back wall, right of the window; a trophy on it.
     this.#shelf(2.5, 2.6, d / 2 - 0.17, 1.8, 0, ['#ffb3c8', '#bfe3ff', '#ffe29a'], 1);
     // The name sign over the window.
-    this.#sign('Mia’s Nook', -0.2, 3.65, d / 2 - 0.1, 0, 2.2);
+    this.#sign('Mia’s Nook', -0.2, 3.32, d / 2 - 0.1, 0, 2.2);
     // A little gift a resident left overnight (a daily return reason).
     const gift = this.#solid('gift', [
       box(scene, [0.36, 0.3, 0.36], [0, 0.15, 0], '#9ad8ff'),
@@ -1031,7 +1031,7 @@ export class HouseProtoScene {
       shadowAlpha: 0.3,
     });
     r('thistlepip', 5, { x: -1.2, z: 0.9, y: 0, yaw: 0.6, scale: 0.9 });
-    r('glowgourd', 6, { x: 0.6, z: 2.6, y: 0, yaw: 0.1, scale: 0.9 });
+    r('glowgourd', 6, { x: -0.2, z: 2.2, y: 0, yaw: 0.1, scale: 0.9 });
     r('candlekit', 7, {
       x: w / 2 - 1.25,
       z: 1.55,
