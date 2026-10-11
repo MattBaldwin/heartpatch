@@ -19,10 +19,14 @@ import { SquishyField } from './squishy-field.js';
 
 /** A portrait's side in CSS px; drawn at the screen's pixel ratio (capped at 3). */
 export const PORTRAIT_CSS_PX = 112; // TUNE: the roster row's picture at its largest (iPad)
+/** Phones show it smaller (the roster's 88, the care sheet's 96): drawn for that. */
+const PHONE_CSS_PX = 96; // TUNE
+/** How much bigger than the picture the snapshot is drawn, before the crop. */
+const DRAW_SCALE = 1.5; // TUNE: room for the crop without a costly snapshot
 /** The pose: face to face, a little above, turned a touch so it reads as round. */
 const POSE = { pitch: 0.22, yaw: -0.35, lookAt: 0.6 }; // TUNE: a little above the middle, for ears and toppers
 /** Camera distance per unit of the squishy's larger side, so every kind fills the frame. */
-const FIT = 3.4; // TUNE: generous room (ears, toppers); `cropToSquishy` trims it
+const FIT = 2.9; // TUNE: room for ears and toppers; `cropToSquishy` trims the rest
 const FOV = 0.62; // TUNE: radians
 
 export interface PortraitLook {
@@ -152,13 +156,14 @@ export function createPortraits(options: PortraitOptions): Portraits {
       // renders straight into a texture, so upload them now.
       field.flush();
       await scene.whenReadyAsync();
-      const px = Math.round(PORTRAIT_CSS_PX * Math.min(3, Math.max(2, window.devicePixelRatio)));
-      // Drawn twice the size with room to spare, then cut to the squishy's own
+      const css = window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX;
+      const px = Math.round(css * Math.min(3, Math.max(2, window.devicePixelRatio)));
+      // Drawn bigger with room to spare, then cut to the squishy's own
       // outline, so long ears and tall toppers fit as well as round bodies.
       const shot = await CreateScreenshotUsingRenderTargetAsync(
         engine,
         camera,
-        px * 2,
+        Math.round(px * DRAW_SCALE),
         'image/png',
         4,
         true,
