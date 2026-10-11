@@ -118,9 +118,9 @@ export const EXPLORE_VIEW = {
  */
 export const EXPLORE_CAMERA = {
   /** A phone held upright (width ÷ height at or under `aspect`): looking down from the horizontal, radians, and camera to target, world units. */
-  phone: { aspect: 0.5, pitch: (35 * Math.PI) / 180, distance: 7.2 }, // TUNE
+  phone: { aspect: 0.5, pitch: (28 * Math.PI) / 180, distance: 7.0 }, // TUNE: #335 lower, so the sky shows over the far trees
   /** A tablet or wider (at or over `aspect`). */
-  tablet: { aspect: 0.75, pitch: (38 * Math.PI) / 180, distance: 7.4 }, // TUNE
+  tablet: { aspect: 0.75, pitch: (31 * Math.PI) / 180, distance: 7.6 }, // TUNE
   /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen and the ground ahead shows. */
   lookAhead: 0.18, // TUNE
   /** With the lantern lit the Keeper and its light sit higher, clear of the overlay (board g). */
