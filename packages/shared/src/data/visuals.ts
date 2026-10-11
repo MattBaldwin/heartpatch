@@ -1416,7 +1416,7 @@ export const PARTS: Part[] = [
     jitter: 0.08,
   },
   // #32 redesigns: a squirrel's acorn cup and plume tail, a cupcake's
-  // pleated cup and sprinkles, a singing heart's mouth, blush, arm nubs and music note.
+  // pleated cup and sprinkles, a singing heart's mouth, blush, hand nubs and beamed music notes.
   {
     // Short, pointed squirrel ears (not tall bunny ears).
     id: 'tuft-ears',
@@ -1701,18 +1701,18 @@ export const PARTS: Part[] = [
   },
 
   {
-    // Two little round arm nubs held low in front, mid-song.
+    // Two little round hands held out in front, mid-song.
     id: 'singing-arms',
     slot: 'arms',
     shape: 'ellipsoid',
     size: [0.18, 0.24, 0.18],
     color: 'primary',
     layout: pair,
-    around: 80,
-    up: -30,
-    tilt: -30,
+    around: 58,
+    up: -2,
+    tilt: -15,
     sink: 0.5,
-    splay: 15,
+    splay: 20,
     jitter: 0.05,
   },
 
@@ -1730,47 +1730,46 @@ export const PARTS: Part[] = [
     jitter: 0.05,
   },
   {
-    // A gold eighth note on the heart's right cheek: its round head…
+    // A beamed pair of gold eighth notes on the heart's right shoulder: their
+    // oval heads…
     id: 'note-head',
     slot: 'crown',
     shape: 'ellipsoid',
-    size: [0.24, 0.2, 0.17],
+    size: [0.2, 0.13, 0.14],
     color: 'detail',
-    layout: single,
-    around: 44,
-    up: -28,
+    layout: { kind: 'ring', count: 2, spread: 26 },
+    around: 58,
+    up: 22,
     sink: 0.35,
     tilt: 20,
     jitter: 0.04,
   },
   {
-    // …and its stem, leaning out of the lobe from the head's right side.
+    // …their straight stems…
     id: 'note-stem',
     slot: 'horns',
     shape: 'capsule',
-    size: [0.09, 0.36, 0.09],
+    size: [0.085, 0.28, 0.085],
     color: 'detail',
-    layout: single,
-    around: 52,
-    up: -24,
-    sink: 0.4,
+    layout: { kind: 'ring', count: 2, spread: 26 },
+    around: 65,
+    up: 26,
+    sink: 0.35,
     tilt: 88,
     jitter: 0.04,
   },
   {
-    // …and its flag: a narrow curve lying flat on the body, hooked over the
-    // top of the stem and sweeping down on the outer side (a surface slot,
-    // so it hugs the body instead of growing off it).
+    // …and the beam across their tops, lying flat on the shoulder (a surface
+    // slot, so it hugs the body instead of growing off it).
     id: 'note-flag',
     slot: 'cheeks',
-    shape: 'arc',
-    size: [0.12, 0.22, 0.08],
+    shape: 'capsule',
+    size: [0.3, 0.1, 0.09],
     color: 'detail',
     layout: single,
-    around: 49,
-    up: -4,
+    around: 78,
+    up: 54,
     sink: 0.2,
-    flip: true,
     jitter: 0.04,
   },
 ];
