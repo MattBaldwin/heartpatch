@@ -87,7 +87,11 @@ export function startInteraction(
             ? INTERACTION.pokes
             : kind === 'pick'
               ? INTERACTION.boops
-              : 1;
+              : kind === 'dive'
+                ? INTERACTION.diveBubbles
+                : kind === 'part'
+                  ? INTERACTION.partSwipes
+                  : 1;
   const angle = seed01 * Math.PI * 2;
   return {
     kind,
@@ -154,11 +158,14 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
       return shake(s, input);
     case 'poke':
     case 'pick':
-      // A snow drift to poke, mushroom caps to boop: taps.
+    case 'dive':
+      // A snow drift to poke, mushroom caps to boop, bubbles to catch: taps.
       return taps(s, input);
     case 'stack':
       // A stone on the cairn: hold, like lifting a rock.
       return lift(s, input);
+    case 'part':
+      return part(s, input);
   }
 }
 
@@ -215,8 +222,8 @@ function climb(s: InteractionState, input: InteractionInput): InteractionState {
 }
 
 /**
- * Taps (#335): each tap pokes the snow or boops a cap. Any
- * tap on the easy button counts too, and holding it does them all.
+ * Taps (#335): each tap pokes the snow, boops a cap or catches a bubble at a
+ * spring. Any tap on the easy button counts too, and holding it does them all.
  */
 function taps(s: InteractionState, input: InteractionInput): InteractionState {
   switch (input.type) {
@@ -285,6 +292,29 @@ function scoop(s: InteractionState, input: InteractionInput): InteractionState {
       const dy = input.y - stroke.y0;
       if (dx * dx + dy * dy < INTERACTION.swipePx * INTERACTION.swipePx) return s;
       return { ...s, stroke: null, count: 1, done: true, bigSplash: netGlowing(s, input.t) };
+    }
+    case 'up':
+      return { ...s, stroke: null };
+    default:
+      return s;
+  }
+}
+
+/**
+ * Snorkel at a reed bed (#335): each sideways swipe, either way, parts the
+ * reeds a little. The easy way is one tap.
+ */
+function part(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'easy':
+      return { ...s, count: s.need, done: true };
+    case 'down':
+      return { ...s, stroke: { x0: input.x, y0: input.y, counted: false, dir: 0, turnX: input.x } };
+    case 'move': {
+      const stroke = s.stroke;
+      if (!stroke || stroke.counted || Math.abs(input.x - stroke.x0) < INTERACTION.swipePx)
+        return s;
+      return counted({ ...s, stroke: { ...stroke, counted: true } });
     }
     case 'up':
       return { ...s, stroke: null };

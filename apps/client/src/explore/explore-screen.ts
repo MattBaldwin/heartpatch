@@ -81,7 +81,14 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, exploreWorld, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import {
+  exploreSkyAt,
+  exploreWorld,
+  isUnderwater,
+  sameLook,
+  skyLook,
+  type SkyLook,
+} from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -200,11 +207,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let tile: ExploreTileResponse | null = null;
   let teamNames: Record<string, string> = {};
   /** My team's squishies that follow the Keeper, in team order. */
-  let teamMembers: { id: string; speciesId: string }[] = [];
+  let teamMembers: { id: string; speciesId: string; accessory: string | null }[] = [];
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
   let mapTileAtOpen: PublicTile | null = null;
-  /** Paces the land's ambient life (#335), like the map's: the motion itself is on the GPU. */
+  /** Paces the land's (and the water's) ambient life (#335), like the map's: the motion itself is on the GPU. */
   const ambient = new AmbientDriver({
     target: () => (isOpen ? scene3d : null),
     invalidate: options.invalidate,
@@ -848,6 +855,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     title.textContent = terrainName(t.terrain);
+    // Under a lake, Back brings the Keeper up for air (#335).
+    back.setAttribute(
+      'aria-label',
+      isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
+    );
     progress.textContent = progressLine(t.progress);
     const held = heldTool();
     if (held) lastHeld = held;
@@ -975,7 +987,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb' || kind === 'poke' || kind === 'pick') {
+    if (kind === 'climb' || kind === 'poke' || kind === 'pick' || kind === 'dive') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });
@@ -996,7 +1008,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
-  /** Updates the overlay's count and the Snorkel's glow. */
+  /** Updates the overlay's count (dots, or a hold's fill). */
   function renderPlay(): void {
     const p = playing;
     play.hidden = p === null || card !== null;
@@ -1180,7 +1192,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       keeperWearing: options.keeperWearing?.() ?? [],
       team: teamMembers.flatMap((m) => {
         const kind = species.get(m.speciesId);
-        return kind ? [{ id: m.id, species: kind }] : [];
+        return kind ? [{ id: m.id, species: kind, accessory: m.accessory }] : [];
       }),
       mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
@@ -1234,7 +1246,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       teamMembers = (board?.squishies ?? [])
         .filter((s) => team.includes(s.squishy.id))
         .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
-        .map((s) => ({ id: s.squishy.id, speciesId: s.squishy.speciesId }));
+        .map((s) => ({
+          id: s.squishy.id,
+          speciesId: s.squishy.speciesId,
+          accessory: s.squishy.accessory ?? null,
+        }));
     } catch (err) {
       if (ask === generation) options.onProblem(messageOf(err));
       return;

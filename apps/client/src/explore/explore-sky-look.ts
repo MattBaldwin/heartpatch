@@ -9,7 +9,7 @@ import { EXPLORE_RULES, skyAt, type SkyAt, type SkyPhase } from '@heartpatch/sha
 export interface SkyLook {
   readonly zenith: string;
   readonly horizon: string;
-  /** The sun's (or the moon's) disc, and whether it shows (not in a cave). */
+  /** The sun's (or the moon's) disc, and whether it shows (not underwater or in a cave). */
   readonly sun: string;
   readonly sunDisc: boolean;
   readonly moon: boolean;
@@ -17,8 +17,10 @@ export interface SkyLook {
   /** How many clouds show (0–`EXPLORE_SKY.clouds.length`). */
   readonly clouds: number;
   readonly stars: boolean;
-  /** The stars' colour (in the cave they're glow motes). */
+  /** The stars' colour (underwater they're bubbles and glowing plankton). */
   readonly starColor: string;
+  /** Underwater: the water's haze over the far seabed (#335), else null. */
+  readonly fog: string | null;
   /**
    * Multiplies the ground's and its decor's colour (#335, owner: a moonlit
    * blue-green at night). Spots, glints and the team keep their own colour.
@@ -39,6 +41,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     clouds: 3,
     stars: false,
     starColor: '#fff3c4',
+    fog: null,
     groundTint: '#fff0e8', // TUNE: a touch warm
     light: { color: '#ffd9c2', sun: 0.85, environment: 0.85 }, // TUNE
   },
@@ -52,6 +55,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     clouds: 4, // TUNE
     stars: false,
     starColor: '#fff3c4',
+    fog: null,
     groundTint: '#ffffff', // TUNE
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
@@ -65,6 +69,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     clouds: 3,
     stars: false,
     starColor: '#fff3c4',
+    fog: null,
     groundTint: '#ffeedd', // TUNE: a touch warm
     light: { color: '#ffc49a', sun: 0.8, environment: 0.8 }, // TUNE
   },
@@ -78,6 +83,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     clouds: 1,
     stars: true,
     starColor: '#fff3c4',
+    fog: null,
     groundTint: '#6f9ea6', // TUNE: moonlit blue-green (owner)
     light: { color: '#b9c4ff', sun: 0.55, environment: 0.6 }, // TUNE: kids still see the spots
   },
@@ -98,6 +104,7 @@ const CAVE: SkyLook = {
   clouds: 0,
   stars: false, // a roof, not a sky: the glow comes from the crystals and caps
   starColor: '#8ef0ff',
+  fog: null,
   groundTint: '#ffffff',
   light: { color: '#ffd9b0', sun: 0.55, environment: 0.62 }, // TUNE: dusky but kid-readable; the glow still reads
 };
@@ -109,12 +116,69 @@ export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 };
 
 /**
- * Each biome's own world (#335, owner decision 2026-10-09): hills are
- * explored inside a cave, mountains up a trail; the rest
+ * Under a lake (#335): the bright surface at the top fading to deep water,
+ * bubbles drifting up, and the light the colour of the sky above. At night
+ * the plankton glows. Never black (art bible §2).
+ */
+export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  dawn: {
+    ...SKY_LOOKS.dawn,
+    zenith: '#9ccfd8', // TUNE: the surface, lit pink-gold through blue-green water
+    horizon: '#2f7f98', // TUNE
+    sunDisc: false,
+    clouds: 0,
+    stars: true,
+    starColor: '#eefbff',
+    fog: '#4f97a8',
+    groundTint: '#e6f2ea', // TUNE: the water's blue-green over everything
+    light: { color: '#c8ece4', sun: 0.8, environment: 0.85 },
+  },
+  day: {
+    ...SKY_LOOKS.day,
+    zenith: '#7fd6d8', // TUNE: sunlight through blue-green water
+    horizon: '#2a8aa0', // TUNE: deep water
+    sunDisc: false,
+    clouds: 0,
+    stars: true,
+    starColor: '#eefbff',
+    fog: '#4fa6b4',
+    groundTint: '#e2f6ee', // TUNE: the water's blue-green over everything
+    light: { color: '#bdf0e6', sun: 0.9, environment: 0.95 },
+  },
+  dusk: {
+    ...SKY_LOOKS.dusk,
+    zenith: '#a5b8d6', // TUNE
+    horizon: '#2f6a94', // TUNE
+    sunDisc: false,
+    clouds: 0,
+    stars: true,
+    starColor: '#eefbff',
+    fog: '#457e9e',
+    groundTint: '#dbe6ea', // TUNE
+    light: { color: '#cdd8f0', sun: 0.75, environment: 0.8 },
+  },
+  night: {
+    ...SKY_LOOKS.night,
+    zenith: '#3f7aa8', // TUNE: moonlight through the water
+    horizon: '#1f4f7e', // TUNE: still blue, never black
+    sunDisc: false,
+    clouds: 0,
+    stars: true,
+    starColor: '#9ff6ff', // glowing plankton
+    fog: '#2a5a86',
+    groundTint: '#7fa6b0', // TUNE: moonlit water
+    light: { color: '#a9c8ff', sun: 0.55, environment: 0.6 },
+  },
+};
+
+/**
+ * Each biome's own world (#335, owner decisions 2026-10-09): lakes are
+ * explored underwater, hills inside a cave, mountains up a trail; the rest
  * on cozy open ground.
  */
-export type ExploreWorld = 'ground' | 'cave' | 'trail';
+export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail';
 const WORLDS: Readonly<Record<string, ExploreWorld>> = {
+  lake: 'water',
   hills: 'cave',
   mountains: 'trail',
 };
@@ -122,6 +186,11 @@ const WORLDS: Readonly<Record<string, ExploreWorld>> = {
 /** The world a terrain is explored in. */
 export function exploreWorld(terrain: string): ExploreWorld {
   return WORLDS[terrain] ?? 'ground';
+}
+
+/** Is this terrain explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel)? */
+export function isUnderwater(terrain: string): boolean {
+  return exploreWorld(terrain) === 'water';
 }
 
 /**
@@ -157,10 +226,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
  * The look at a moment: colours and light fade into the next sky; stars,
- * clouds and the moon switch halfway. In a cave, its own look.
+ * clouds and the moon switch halfway. Underwater and in a cave, their own looks.
  */
 export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
-  const looks = world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
+  const looks = world === 'water' ? WATER_LOOKS : world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
   const a = looks[at.phase];
   const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));
@@ -175,6 +244,7 @@ export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
     clouds: pick.clouds,
     stars: pick.stars,
     starColor: pick.starColor,
+    fog: a.fog && b.fog ? mix(a.fog, b.fog, t) : pick.fog,
     groundTint: mix(a.groundTint, b.groundTint, t),
     light: {
       color: mix(a.light.color, b.light.color, t),

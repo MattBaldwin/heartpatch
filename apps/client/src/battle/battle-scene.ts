@@ -28,6 +28,7 @@ import {
   type SquishyLook,
 } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
+import { accessoryItem } from '../procedural/accessory.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
@@ -80,6 +81,8 @@ export interface BattleSceneStats {
   readonly instances: number;
   /** Squishies out with the shadow look (a rescue's guardians). */
   readonly shadowLook: number;
+  /** Squishies built for the fight (out or on a bench) that wear an accessory (#373). */
+  readonly accessories: number;
   readonly lod: SquishyLod;
   /** The player's Keeper is in the arena. */
   readonly keeper: boolean;
@@ -128,6 +131,8 @@ export interface TeamMember {
   readonly instanceId: string;
   /** A fence's level, for its look. */
   readonly level?: number;
+  /** The wardrobe accessory it wears (#373), for drawing only. */
+  readonly accessory?: string | null;
 }
 
 interface Fighter {
@@ -389,14 +394,19 @@ export class BattleScene {
    */
   prewarm(side: BattleSideId, team: readonly TeamMember[]): void {
     for (const member of team) {
-      if (!this.#fighter(side, member.speciesId, member.instanceId)) {
+      if (!this.#fighter(side, member.speciesId, member.instanceId, member.accessory)) {
         this.#fenceStand(side, member.speciesId, member.instanceId, member.level ?? 1);
       }
     }
     this.#rigs[side].field.flush();
   }
 
-  #fighter(side: BattleSideId, speciesId: string, instanceId: string): Fighter | null {
+  #fighter(
+    side: BattleSideId,
+    speciesId: string,
+    instanceId: string,
+    accessory?: string | null,
+  ): Fighter | null {
     const rig = this.#rigs[side];
     const known = rig.bench.get(instanceId);
     if (known) return known;
@@ -406,13 +416,16 @@ export class BattleScene {
       side === this.#options.mySide ? 'normal' : (this.#options.opponentLook ?? 'normal');
     // The rig's turn node carries the yaw; the field only scales. Hidden at scale 0 until it's out.
     const handle = rig.field.add(species, instanceId, { x: 0, z: 0, yaw: 0, scale: 0 }, look);
+    // What it wears (#373): the same call home makes, so a hat is as tall here as up close.
+    rig.field.setAccessory(handle, accessoryItem(accessory));
     const body = this.#options.registry.bodies.get(handle.params.body.id);
     const [sx, , sz] = handle.params.body.scale;
     const fighter: Fighter = {
       handle,
       species,
       feeling: species.feeling,
-      height: handle.params.height * FIGHTER.scale,
+      // Hat included, so plates and the camera clear it.
+      height: rig.field.heightOf(handle) * FIGHTER.scale,
       radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * FIGHTER.scale) / 2,
     };
     rig.bench.set(instanceId, fighter);
@@ -702,6 +715,11 @@ export class BattleScene {
       meshes: a.meshes + b.meshes,
       instances: a.instances + b.instances,
       shadowLook: a.shadowLook + b.shadowLook,
+      accessories: [this.#rigs.a, this.#rigs.b].reduce(
+        (n, rig) =>
+          n + [...rig.bench.values()].filter((f) => rig.field.accessoryOf(f.handle)).length,
+        0,
+      ),
       lod: a.lod,
       keeper: this.#keeper !== null,
       arena: this.#arena.stats,

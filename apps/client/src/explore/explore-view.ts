@@ -26,6 +26,8 @@ export { TOOL_ICONS, TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
 export const EXPLORE_TEXT = {
   explore: 'Explore',
   back: 'Back',
+  /** Back, under a lake (#335). */
+  popUp: 'Pop up',
   /** Under the joystick (#291). */
   walkHint: 'Or drag anywhere, or tap to walk',
   /** Sprout's one-time tip after the tools were renamed (#335, owner decision 2026-10-09). */
@@ -88,6 +90,12 @@ export const PLAY_TEXT: Readonly<
   climb: { icon: 'stick', hint: 'Left, right, left, right!', easy: 'hold to hike up' },
   light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
   scoop: { icon: 'snorkel', hint: 'Swipe through when it glows!', easy: 'Dive!' },
+  dive: {
+    icon: 'snorkel',
+    hint: 'Tap, tap, tap to catch the bubbles!',
+    easy: 'hold to catch them',
+  },
+  part: { icon: 'snorkel', hint: 'Swipe the reeds apart!', easy: 'tap to part them' },
   poke: { icon: 'stick', hint: 'Poke, poke… floomp!', easy: 'tap to poke' },
   stack: { icon: '✊', hint: 'Hold to add your stone!', easy: 'tap to stack' },
   pick: { icon: '🍄', hint: 'Boop the glowing caps!', easy: 'tap to boop' },
@@ -217,6 +225,10 @@ export function foundHeadline(interaction: SpotInteraction): string {
       return 'Under the water you found…';
     case 'climb':
       return 'Up at the lookout you found…';
+    case 'dive':
+      return 'In the bubbles you found…';
+    case 'part':
+      return 'Behind the reeds you found…';
     case 'poke':
       return 'In the snow you found…';
     case 'stack':

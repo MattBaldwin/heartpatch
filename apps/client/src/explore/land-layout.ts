@@ -118,7 +118,7 @@ const FAR = { from: 13, to: 40 } as const; // TUNE
 export const DEFAULT_TREE_MIX = { oak: 0.5, birch: 0.3, pine: 0.2 } as const;
 
 /** A stable shuffle, so the first n of a list (a lower tier's share) spread evenly. */
-function shuffled<T>(list: T[], rand: () => number): T[] {
+export function shuffled<T>(list: T[], rand: () => number): T[] {
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     const a = list[i] as T;

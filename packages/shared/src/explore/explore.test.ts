@@ -4,7 +4,12 @@ import { EXPLORE_RULES } from '../data/explore.js';
 import { GAME_DATA } from '../data/index.js';
 import { HEX_DIRECTIONS, hexToWorld, hexSpiral, hex } from '../hex/index.js';
 import { hashString } from '../rng/index.js';
-import { checkExploreRules, MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
+import {
+  checkExploreRules,
+  MAX_SEARCH_SPOTS,
+  SearchSpotKindSchema,
+  type ExploreRules,
+} from '../schemas/data/explore.js';
 import {
   exploreLayout,
   exploreNeeds,
@@ -117,6 +122,31 @@ describe('explore rules data', () => {
       mountains: ['rope'], // #335: the trail
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
+  });
+
+  it('dives to bubble springs and parts reed beds with the Snorkel, keeping the old ids (#335)', () => {
+    const kind = (id: string) => EXPLORE_RULES.spotKinds.find((k) => k.id === id);
+    expect(kind('pond')).toEqual({
+      id: 'pond',
+      name: 'Bubble spring',
+      tool: 'net',
+      interaction: 'dive',
+    });
+    expect(kind('reeds')).toEqual({
+      id: 'reeds',
+      name: 'Reed bed',
+      tool: 'net',
+      interaction: 'part',
+    });
+    // Additive: the old interactions still validate.
+    for (const interaction of ['lift', 'shake', 'dig', 'scoop', 'climb', 'light', 'dive', 'part']) {
+      const spot = { id: 'x', name: 'X', tool: null, interaction };
+      expect(SearchSpotKindSchema.safeParse(spot).success, interaction).toBe(true);
+    }
+    expect(
+      SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
+        .success,
+    ).toBe(false);
   });
 
   it('keeps avoided words out of every name', () => {
