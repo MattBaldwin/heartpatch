@@ -39,6 +39,7 @@ const E2E_GROUPS = [
     'hollow',
     'inventory',
     'keeper',
+    'map-hole',
     'recipe-book',
     'short-screens',
   ],
