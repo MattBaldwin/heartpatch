@@ -1,0 +1,61 @@
+/* The top bar's Squishies button (#375): a 48pt round 🐾 like Chat and
+   Friends: first of the round buttons by the Keeper menu on the map,
+   top-left at home, and beside Back in explore. */
+
+.squishies-open {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 250 252 / 94%);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font-size: 22px;
+  line-height: 1;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.squishies-open[hidden] {
+  display: none;
+}
+
+.squishies-open-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* On the map it leads Chat and Friends (the slot draws them round). On the
+   narrowest phones the row tightens so it never reaches "My patches". */
+@media (max-width: 359px) {
+  .tray-top-right {
+    gap: 4px;
+  }
+
+  .tray-top-right > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tray-top-left > button {
+    padding-inline: var(--hp-pad-x);
+    font-size: 14px;
+  }
+}
+
+/* At home the top-left corner is free (the home header sits lower). */
+.squishies-open-home {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 12px);
+}

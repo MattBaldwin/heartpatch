@@ -683,28 +683,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             true,
           ),
         );
-        const species = speciesMap(current);
-        const friends = current.squishies.map((s) =>
-          button(
-            `💗 ${squishyName(s, species)}`,
-            () => {
-              if (mapId) options.onCare?.(mapId, s.id);
-            },
-            { 'data-care-squishy': s.id, class: 'home-chip' },
-            true,
-          ),
-        );
+        // Your squishies live in the Squishies roster now, one tap from the
+        // top bar (#375); the panel keeps the Jobs & team button.
+        const friends = current.squishies;
         body.replaceChildren(
           el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
-          ...(friends.length > 0 && options.onCare
-            ? [
-                el('h3', { class: 'home-section-title' }, HOME_TEXT.friends),
-                el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
-              ]
-            : []),
           ...(friends.length > 0 && options.onJobs && mapId && options.showJobs?.(mapId) !== false
             ? [
                 row(

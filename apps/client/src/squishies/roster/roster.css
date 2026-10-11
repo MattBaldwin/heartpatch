@@ -46,7 +46,8 @@
 }
 
 .roster-count {
-  margin: 0 0 6px;
+  flex: 1;
+  margin: 4px 0 0 10px;
   font-size: 14px;
   color: #7a5d80;
 }
@@ -112,7 +113,7 @@
 .roster-row {
   /* Off-screen rows of a long roster aren't laid out until they scroll near. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
+  contain-intrinsic-size: auto 150px;
   padding: 8px 10px 10px;
   border-radius: 18px;
   background: #fff1f7;
@@ -167,8 +168,20 @@
 }
 
 .roster-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
   font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #7a5d80;
+}
+
+.roster-sub .rarity-chip {
+  flex: none;
+  font-size: 12px;
 }
 
 .roster-action {
@@ -178,10 +191,11 @@
   font-size: 15px;
 }
 
-.roster-tags {
+.roster-status-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  align-items: center;
+  gap: 4px 8px;
   margin-top: 6px;
 }
 
@@ -270,6 +284,120 @@
   padding: 18px 8px;
   text-align: center;
   font-size: 16px;
+}
+
+/* Happiness (owner, 2026-10-11): five hearts filled to contentment, the
+   mood word, the needs-care badge and, when it drifts down (#376), why. */
+.roster-mood-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.roster-hearts {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 1px;
+  color: #e9d3df;
+}
+
+.roster-hearts::before {
+  content: '♥♥♥♥♥';
+}
+
+.roster-hearts-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  color: #ff5f97;
+  white-space: nowrap;
+}
+
+.roster-hearts-fill::before {
+  content: '♥♥♥♥♥';
+}
+
+.roster-drifting .roster-hearts-fill {
+  color: #e98bb0;
+}
+
+.roster-mood-word {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.roster-drift {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a5a3a;
+}
+
+.roster-drift-line {
+  margin: 0;
+  font-size: 14px;
+  color: #8a5a3a;
+}
+
+/* Evolution (owner, 2026-10-11): "Stage N of M", a little bar, and when. */
+.roster-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5a3a8a;
+}
+
+.roster-stage-n {
+  flex: none;
+}
+
+.roster-stage-bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 40px;
+  max-width: 140px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ece1f7;
+}
+
+.roster-stage-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b79cf0, #8a63d8);
+}
+
+.roster-stage-words {
+  flex: none;
+  font-weight: 600;
+  color: #7a5d80;
+}
+
+.roster-stage-ready .roster-stage-words {
+  color: #8a63d8;
+  font-weight: 800;
+}
+
+.roster-whisper {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f3ecff;
+  font-size: 14px;
+}
+
+.roster-whisper p {
+  margin: 0;
 }
 
 /* iPad and wide windows: a roomier sheet, two squishies a line. */

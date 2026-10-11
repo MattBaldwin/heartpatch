@@ -8,6 +8,7 @@ import type {
 } from '@heartpatch/shared';
 import { careApi, type CareApi } from '../../care/care-api.js';
 import { evolvingMeterEl } from '../../care/evolving-meter.js';
+import { CARE_TEXT } from '../../care/care-view.js';
 import { homeApi, type HomeApi } from '../../home/home-api.js';
 import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
 import { GameClock } from '../../inventory/game-clock.js';
@@ -26,6 +27,7 @@ import { jobsApi, type JobsApi } from '../jobs/jobs-api.js';
 import { blobFor } from '../jobs/job-board.js';
 import {
   filterCounts,
+  heartsOf,
   MOOD_WORDS,
   mergeRoster,
   ROSTER_FILTERS,
@@ -33,6 +35,8 @@ import {
   ROSTER_TEXT,
   statusLine,
   visibleRows,
+  type EvolutionStage,
+  type MoodTag,
   type RosterFilter,
   type RosterRow,
   type RosterSort,
@@ -81,6 +85,12 @@ export interface RosterSheet {
 }
 
 const SORT_LABELS = ROSTER_TEXT.sort;
+
+/** Sets a bar's fill (0–1) as its width. */
+function fillTo(node: HTMLElement, fill: number): HTMLElement {
+  node.style.width = `${String(Math.round(fill * 100))}%`;
+  return node;
+}
 const FILTER_LABELS = ROSTER_TEXT.filter;
 
 export function createRosterSheet(options: RosterOptions): RosterSheet {
@@ -140,9 +150,9 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         'div',
         { class: 'tile-panel-head' },
         el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
+        count,
         close,
       ),
-      count,
       el('div', { class: 'roster-controls' }, sortBar, filterBar),
       note,
     ),
@@ -326,11 +336,28 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   function detail(row: RosterRow): HTMLElement {
     const id = mapId;
     const parts: HTMLElement[] = [];
-    if (row.mood) parts.push(el('p', { class: 'roster-mood-line' }, row.mood.line));
+    if (row.mood) {
+      parts.push(el('p', { class: 'roster-mood-line' }, row.mood.line));
+      if (row.mood.drift !== null) {
+        parts.push(el('p', { class: 'roster-drift-line' }, CARE_TEXT.drift[row.mood.drift]));
+      }
+    }
     if (row.evolving) {
       const meter = evolvingMeterEl('roster-evolving');
       meter.update(row.evolving);
       parts.push(meter.root);
+    }
+    // Branch hints live here, never on the row (owner, 2026-10-11): the
+    // server's whisper names no form and no chance (CLAUDE.md rule 6).
+    if (row.whisper) {
+      parts.push(
+        el(
+          'div',
+          { class: 'roster-whisper', 'data-testid': 'roster-whisper' },
+          el('p', {}, `${row.whisper.icon} ${row.whisper.text}`),
+          ...(row.whisper.sub ? [el('p', { class: 'jobs-small' }, row.whisper.sub)] : []),
+        ),
+      );
     }
     if (!row.away && id) {
       const view = el('div', { class: 'roster-view-actions' });
@@ -368,35 +395,73 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     return el('div', { class: 'roster-detail', 'data-testid': 'roster-detail' }, ...parts);
   }
 
+  /** Five hearts filled to its contentment, the mood word, and a needs-care badge. */
+  function moodLineEl(mood: MoodTag): HTMLElement {
+    const word = MOOD_WORDS[mood.mood];
+    const hearts = heartsOf(mood.contentment);
+    const drift = mood.drift === 'steady' ? null : mood.drift;
+    const drifting = drift !== null;
+    return el(
+      'div',
+      {
+        class: `roster-mood-row${drifting ? ' roster-drifting' : ''}`,
+        'data-testid': 'roster-mood',
+        'data-hearts': String(hearts),
+      },
+      el(
+        'span',
+        { class: 'roster-hearts', role: 'img', 'aria-label': ROSTER_TEXT.hearts(hearts) },
+        fillTo(el('span', { class: 'roster-hearts-fill' }), hearts / 5),
+      ),
+      el(
+        'span',
+        { class: `roster-mood-word roster-mood-${mood.mood}` },
+        `${word.icon} ${word.word}`,
+      ),
+      ...(mood.needsCare
+        ? [
+            el(
+              'span',
+              { class: 'roster-tag roster-needs', 'data-testid': 'roster-needs-care' },
+              `💗 ${ROSTER_TEXT.needsCare}`,
+            ),
+          ]
+        : []),
+    );
+  }
+
+  /** "Stage 2 of 3", a little bar, and when it evolves (public lines only). */
+  function stageLineEl(stage: EvolutionStage): HTMLElement {
+    const words =
+      stage.ready
+        ? ROSTER_TEXT.readyToEvolve
+        : stage.evolvesAt !== null
+          ? ROSTER_TEXT.evolvesAt(stage.evolvesAt)
+          : stage.stage >= stage.of
+            ? ROSTER_TEXT.fullyEvolved
+            : '';
+    return el(
+      'div',
+      {
+        class: `roster-stage${stage.ready ? ' roster-stage-ready' : ''}`,
+        'data-testid': 'roster-stage',
+      },
+      el('span', { class: 'roster-stage-n' }, ROSTER_TEXT.stage(stage.stage, stage.of)),
+      ...(stage.fill !== null
+        ? [
+            el(
+              'span',
+              { class: 'roster-stage-bar', 'aria-hidden': 'true' },
+              fillTo(el('span', { class: 'roster-stage-fill' }), stage.fill),
+            ),
+          ]
+        : []),
+      ...(words ? [el('span', { class: 'roster-stage-words' }, words)] : []),
+    );
+  }
+
   function rowEl(row: RosterRow, nowMs: number): HTMLElement {
     const open = expanded === row.id;
-    const tags: HTMLElement[] = [];
-    if (row.rarity) tags.push(rarityChip(row.rarity));
-    if (row.mood) {
-      const word = MOOD_WORDS[row.mood.mood];
-      tags.push(
-        el(
-          'span',
-          {
-            class: `roster-tag roster-mood roster-mood-${row.mood.mood}`,
-            'data-testid': 'roster-mood',
-          },
-          `${word.icon} ${word.word}`,
-        ),
-      );
-      if (row.mood.needsCare) {
-        tags.push(
-          el(
-            'span',
-            { class: 'roster-tag roster-needs', 'data-testid': 'roster-needs-care' },
-            `💗 ${ROSTER_TEXT.needsCare}`,
-          ),
-        );
-      }
-    }
-    if (row.evolvingSoon && row.evolving) {
-      tags.push(el('span', { class: 'roster-tag roster-evolving-tag' }, row.evolving.label));
-    }
     const status = el(
       'span',
       {
@@ -407,7 +472,22 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       statusLine(row.status, nowMs),
     );
     if (row.status.readyAt !== null) chips.set(row.id, { row, node: status });
-    tags.push(status);
+    // What it's doing, and (#376) why its happiness drifts, side by side.
+    const drift = row.mood?.drift === 'steady' ? null : (row.mood?.drift ?? null);
+    const statusRow = el(
+      'div',
+      { class: 'roster-status-row' },
+      status,
+      ...(drift !== null
+        ? [
+            el(
+              'span',
+              { class: 'roster-drift', 'data-testid': 'roster-drift', 'data-drift': drift },
+              ROSTER_TEXT.drift[drift],
+            ),
+          ]
+        : []),
+    );
 
     const head = el(
       'button',
@@ -422,7 +502,15 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         'span',
         { class: 'roster-names' },
         el('strong', { class: 'roster-name' }, row.name),
-        el('span', { class: 'roster-sub' }, `${row.speciesName} · ${ROSTER_TEXT.level(row.level)}`),
+        el(
+          'span',
+          { class: 'roster-sub' },
+          ...(row.rarity ? [rarityChip(row.rarity)] : []),
+          // The species only when a nickname hides it.
+          row.name === row.speciesName
+            ? ROSTER_TEXT.level(row.level)
+            : `${ROSTER_TEXT.level(row.level)} · ${row.speciesName}`,
+        ),
       ),
     );
     head.addEventListener('click', () => {
@@ -448,7 +536,9 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         'data-squishy': row.id,
       },
       topRow,
-      el('div', { class: 'roster-tags' }, ...tags),
+      ...(row.mood ? [moodLineEl(row.mood)] : []),
+      ...(row.stage ? [stageLineEl(row.stage)] : []),
+      statusRow,
       ...(open ? [detail(row)] : []),
     );
   }

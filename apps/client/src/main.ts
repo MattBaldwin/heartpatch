@@ -63,6 +63,8 @@ import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.
 import { el } from './ui/dom.js';
 import { hexKey, hexToWorld, type Hex, type PublicUser } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
+import { createRosterSheet } from './squishies/roster/roster-sheet.js';
+import { squishiesButton } from './squishies/roster/squishies-entry.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -486,6 +488,30 @@ const socialSetMap = (mapId: string | null): Promise<void> => {
   void friendly.setMap(mapId);
   return chat.setMap(mapId);
 };
+// The Squishies roster (#375): every squishy with its happiness, evolution,
+// rarity and job, one tap from the top bar on the map, at home and in
+// explore. Its Care opens the care sheet over it (two taps to care).
+const roster = createRosterSheet({
+  root: document.body,
+  onCare: (mapId, squishyId) => {
+    void care.open(mapId, squishyId);
+  },
+  onCloseUp: (mapId, squishyId) => {
+    roster.close();
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
+  },
+  onDressUp: (mapId, squishyId) => {
+    roster.close();
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
+  },
+});
+/** The patch each view's Squishies button opens the roster for. */
+const rosterMapId: { home: string | null; explore: string | null } = { home: null, explore: null };
+const homeSquishies = squishiesButton(() => {
+  if (rosterMapId.home) void roster.open(rosterMapId.home);
+}, 'home');
+homeSquishies.hidden = true;
+document.body.append(homeSquishies);
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -508,6 +534,9 @@ const home = createHomeScreen({
     recipeBook.open();
   },
   onOpen: (mapId) => {
+    rosterMapId.home = mapId;
+    homeSquishies.hidden = false;
+    roster.close();
     maps.close();
     catalog.close();
     care.close();
@@ -528,6 +557,8 @@ const home = createHomeScreen({
     void closeUp.open(mapId, squishyId, 'home');
   },
   onClosed: (mapId) => {
+    homeSquishies.hidden = true;
+    roster.close();
     care.close();
     maps
       .open(mapId)
@@ -562,7 +593,12 @@ const explore = createExploreScreen({
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
   timeZone: () => maps.view?.map.timeZone ?? null,
   isGlade: (mapId) => mapId === glade,
-  onOpen: () => {
+  topEntry: squishiesButton(() => {
+    if (rosterMapId.explore) void roster.open(rosterMapId.explore);
+  }, 'explore'),
+  onOpen: (mapId) => {
+    rosterMapId.explore = mapId;
+    roster.close();
     maps.close();
     catalog.close();
     care.close();
@@ -577,6 +613,7 @@ const explore = createExploreScreen({
     lobby.stepOut();
   },
   onClosed: (mapId) => {
+    roster.close();
     maps
       .open(mapId)
       .then(() => {
@@ -637,6 +674,7 @@ const maps = createMapScreen({
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
+    roster.close();
     jobs.close();
     postScreen.close();
     void battles.setMap(null);
@@ -679,6 +717,7 @@ const maps = createMapScreen({
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
+    mapSquishies.hidden = mapId === null || mapId === glade;
     recipeBook.setMap(mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
     jobsBox.hidden = true;
@@ -1181,7 +1220,14 @@ const lobby = mountLobby(document.body, {
     ...lorebook.settings(),
     ...account.settings(),
   ],
-});
+});// The map's Squishies button leads the round buttons by the Keeper menu
+// (before Chat and Friends).
+const mapSquishies = squishiesButton(() => {
+  if (hudMapId) void roster.open(hudMapId);
+}, 'map');
+mapSquishies.hidden = true;
+trays.slot('top-right').prepend(mapSquishies);
+
 /** A row in the Keeper menu (the corner of the map). */
 const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElement => {
   const row = document.createElement('button');

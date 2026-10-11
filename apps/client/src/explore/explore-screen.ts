@@ -125,6 +125,8 @@ export interface ExploreScreenOptions {
   onOpen: (mapId: string) => void;
   /** Back to the map. */
   onClosed: (mapId: string) => void;
+  /** A button for the top row, beside Back (the Squishies button, #375). */
+  topEntry?: HTMLElement;
   /** It couldn't open (offline): say why where the player is looking. */
   onProblem: (message: string) => void;
   /** A search landed things in the bag (the bag, recipe book, lore and milestones look again). */
@@ -296,6 +298,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     'header',
     { class: 'explore-top' },
     back,
+    ...(options.topEntry ? [options.topEntry] : []),
     el('div', { class: 'explore-names' }, title, progress),
     toolLine,
     bagChip,

@@ -1,12 +1,15 @@
 import {
   CARE_RULES,
+  GAME_DATA,
   moodLine,
   RaritySchema,
   type CareListResponse,
   type CareSquishy,
+  type CareWhisper,
   type HomeResponse,
   type JobSquishy,
   type JobsView,
+  type MoodDrift,
   type Rarity,
   type Species,
 } from '@heartpatch/shared';
@@ -46,6 +49,18 @@ export const ROSTER_TEXT = {
   training: 'Training',
   resting: 'Resting',
   level: (n: number) => `Lv ${String(n)}`,
+  stage: (n: number, of: number) => `Stage ${String(n)} of ${String(of)}`,
+  evolvesAt: (lv: number) => `evolves at Lv ${String(lv)}`,
+  readyToEvolve: 'Ready to evolve! ✨',
+  fullyEvolved: 'Fully evolved! 🌟',
+  // Why happiness is drifting down (#376), short enough for a row tag.
+  drift: {
+    resting: '💤 Idle, so drifting',
+    'wrong-job': '😕 Not its job',
+    stopped: "⏸️ Job's on pause",
+  } satisfies Record<Exclude<MoodDrift, 'steady'>, string>,
+  steady: 'Holding steady',
+  hearts: (filled: number) => `${String(filled)} of 5 hearts`,
   count: (n: number) => `${String(n)} ${n === 1 ? 'squishy' : 'squishies'}`,
   // Said where the detail would be, when a read is missing.
   partial: 'Some details are still loading. Try again in a sec!',
@@ -87,6 +102,19 @@ export interface MoodTag {
   readonly contentment: number;
   /** A full-value cuddle is still waiting (`fullCareLeft > 0`). */
   readonly needsCare: boolean;
+  /** Why it's holding or drifting (#376), or null when the server doesn't say. */
+  readonly drift: MoodDrift | null;
+}
+
+/** Where a squishy is on its public evolution line: "Stage 2 of 3". */
+export interface EvolutionStage {
+  readonly stage: number;
+  readonly of: number;
+  /** The level its next public form comes at, or null (top form, or ready). */
+  readonly evolvesAt: number | null;
+  /** 0–1 toward the next form; null with no meter (top form). */
+  readonly fill: number | null;
+  readonly ready: boolean;
 }
 
 export interface RosterRow {
@@ -101,6 +129,10 @@ export interface RosterRow {
   readonly evolving: EvolvingBar | null;
   /** Evolving and close enough to say so on the row. */
   readonly evolvingSoon: boolean;
+  /** "Stage N of M" with its bar, or null for a form off the public lines (a secret one). */
+  readonly stage: EvolutionStage | null;
+  /** The care sheet's branch whisper (#32), for the detail only; never a form or a chance. */
+  readonly whisper: CareWhisper | null;
   /** Null when the care read is missing, or the squishy is away. */
   readonly mood: MoodTag | null;
   readonly status: StatusTag;
@@ -181,12 +213,62 @@ export function statusLine(tag: StatusTag, nowMs: number): string {
   return left > 0 ? `${tag.text} · ${formatTimeLeft(left)}` : tag.text;
 }
 
+const PUBLIC_SPECIES: ReadonlyMap<string, Species> = new Map(
+  GAME_DATA.species.map((s) => [s.id, s]),
+);
+/** Each public form's public parent (forms on one step share a parent). */
+const PARENT: ReadonlyMap<string, string> = new Map(
+  GAME_DATA.species.flatMap((s) => s.evolutions.map((e) => [e.into, s.id] as const)),
+);
+
+/** How many public steps are still above this form (0 on a top form). */
+function stepsAbove(id: string, seen = new Set<string>()): number {
+  const sp = PUBLIC_SPECIES.get(id);
+  if (!sp || seen.has(id)) return 0;
+  seen.add(id);
+  let most = 0;
+  for (const e of sp.evolutions) most = Math.max(most, 1 + stepsAbove(e.into, seen));
+  return most;
+}
+
+/**
+ * "Stage N of M" from the public species lines only (CLAUDE.md rule 6): a
+ * secret form, or a step only a secret form follows, never counts. Null for a
+ * form that isn't public. The bar and "evolves at" come from the care read's
+ * evolving meter, which the server already blanks before a secret form.
+ */
+export function evolutionStage(
+  speciesId: string,
+  level: number,
+  meter: CareSquishy['evolving'],
+): EvolutionStage | null {
+  if (!PUBLIC_SPECIES.has(speciesId)) return null;
+  let stage = 1;
+  for (let at = PARENT.get(speciesId); at !== undefined && stage < 10; at = PARENT.get(at)) {
+    stage += 1;
+  }
+  const ready = meter !== null && meter.percent >= 100;
+  return {
+    stage,
+    of: stage + stepsAbove(speciesId),
+    evolvesAt: meter === null || ready ? null : level + meter.levelsToGo,
+    fill: meter === null ? null : Math.min(1, meter.percent / 100),
+    ready,
+  };
+}
+
+/** Hearts out of 5 for a contentment, to the nearest half (2.5 = two and a half). */
+export function heartsOf(contentment: number): number {
+  return Math.round((contentment / CARE_RULES.maxContentment) * 10) / 2;
+}
+
 function moodTag(care: CareSquishy): MoodTag {
   return {
     mood: care.mood,
     line: moodLine(care.mood, CARE_RULES),
     contentment: care.contentment,
     needsCare: care.fullCareLeft > 0,
+    drift: care.moodDrift,
   };
 }
 
@@ -232,6 +314,8 @@ export function mergeRoster(sources: RosterSources): RosterRow[] {
       level: c?.level ?? j?.squishy.level ?? base.level,
       evolving,
       evolvingSoon: evolving !== null && (c?.evolving?.percent ?? 0) >= CLOSE_TO_EVOLVING_PERCENT,
+      stage: c && !away ? evolutionStage(base.speciesId, c.level, c.evolving) : null,
+      whisper: c && !away ? c.whisper : null,
       mood: c && !away ? moodTag(c) : null,
       status,
       away,
