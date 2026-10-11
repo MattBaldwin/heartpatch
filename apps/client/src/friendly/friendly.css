@@ -2,6 +2,10 @@
    chat sheet's; the ask a friend sent sits in the middle, over any screen.
    Big targets (44pt+), safe areas, text never touches a control's edge. */
 
+.friendly-open-away {
+  visibility: hidden;
+}
+
 .friendly-open[hidden],
 .friendly-sheet[hidden],
 .friendly-ask[hidden],

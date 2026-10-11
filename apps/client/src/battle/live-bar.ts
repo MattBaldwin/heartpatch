@@ -59,14 +59,16 @@ export function mountLiveBar(
 
   const line = el('p', { class: 'battle-live-line', 'data-testid': 'battle-live-line' });
   const chip = el('span', { class: 'battle-live-chip', 'data-testid': 'battle-live-chip' });
+  // A round icon button, so the turn's words keep most of the row; the word is for VoiceOver.
   const cheerButton = el(
     'button',
     {
       type: 'button',
-      class: 'battle-button battle-button-soft battle-button-small',
+      class: 'battle-live-cheer',
       'data-testid': 'battle-cheer',
+      'aria-label': LIVE_TEXT.cheer,
     },
-    LIVE_TEXT.cheer,
+    el('span', { 'aria-hidden': 'true' }, '📣'),
   );
   const note = el('p', {
     class: 'battle-live-note',
@@ -102,8 +104,10 @@ export function mountLiveBar(
     tray.hidden = !tray.hidden;
   });
 
-  const row = el('div', { class: 'battle-live-row' }, ring, line, chip, cheerButton);
-  slot.replaceChildren(note, row, tray);
+  // Ring | the turn's words (or Sprout's note in their place) over the other
+  // Keeper's chip | Cheer: the words keep the middle of the row at any width.
+  const row = el('div', { class: 'battle-live-row' }, ring, line, note, chip, cheerButton);
+  slot.replaceChildren(row, tray);
   slot.hidden = false;
 
   return {
@@ -121,8 +125,10 @@ export function mountLiveBar(
       chip.classList.toggle('battle-live-chip-away', info.theyAway);
     },
     setNote: (text) => {
+      // Sprout's note takes the words' place while it shows (the moves say it's my pick).
       note.textContent = text ?? '';
       note.hidden = text === null;
+      line.hidden = text !== null;
     },
     setSending: (sending) => {
       cheerButton.disabled = sending;

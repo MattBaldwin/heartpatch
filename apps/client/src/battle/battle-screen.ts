@@ -1290,9 +1290,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     open: (next) => {
       // Already on screen (a late "Battle!" event, a resume): a fresh look, not a rebuild.
       if (battle?.id === next.id && !replaying) {
-        // Mid-move or mid-playback: a live battle looks again once that's done.
-        if (!waiting && queue.length === 0) receive(next);
-        else if (battle.live) liveStale = true;
+        // A live battle looks again itself (a view fetched before my own pick
+        // could be older than the one on screen); mid-move or mid-playback,
+        // that waits until it's done.
+        if (battle.live) refreshLive();
+        else if (!waiting && queue.length === 0) receive(next);
         return;
       }
       open(next);

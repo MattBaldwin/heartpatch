@@ -337,7 +337,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function render(): void {
     const multiplayer = mapId !== null && user !== null;
-    openButton.hidden = !multiplayer || mode.type !== 'closed';
+    openButton.hidden = !multiplayer;
+    // Under its open sheet the button keeps its place, so Chat beside it doesn't jump.
+    openButton.classList.toggle('friendly-open-away', mode.type !== 'closed');
     sheet.hidden = !multiplayer || mode.type === 'closed';
     window.clearInterval(listTimer);
     listTimer = 0;

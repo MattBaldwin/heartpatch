@@ -44,6 +44,14 @@ describe('friendly battles (#29)', () => {
     expect(challengeEventFor(event('challenge.sent', base), 'someone-else')).toBeNull();
     expect(challengeEventFor(event('challenge.sent', { ...base, kind: 'defense' }), ME)).toBeNull();
     expect(challengeEventFor(event('battle.started', base), ME)).toBeNull();
+    // A payload that doesn't match its event's schema is dropped, never half-read.
+    expect(
+      challengeEventFor(event('challenge.answered', { ...base, answer: 'maybe' }), ME),
+    ).toBeNull();
+    expect(challengeEventFor(event('challenge.cancelled', { ...base, reason: 42 }), ME)).toBeNull();
+    expect(
+      challengeEventFor(event('challenge.sent', { ...base, challengeId: 'nope' }), ME),
+    ).toBeNull();
   });
 
   it('every line is kind and free of avoided words', () => {

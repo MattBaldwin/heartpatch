@@ -123,6 +123,28 @@ test.describe('friendly battles (#29)', () => {
         .poll(async () => (await battleState(page))?.live?.secondsLeft ?? 0)
         .toBeGreaterThan(0);
     }
+    // On an iPhone SE: every move, Swap and Give up fit the sheet with no
+    // hidden scroll, the turn's words keep most of their row, and no
+    // "Log out" sits over the battle.
+    await sam.setViewportSize({ width: 375, height: 667 });
+    await expect(sam.getByTestId('battle-move').first()).toBeVisible();
+    const fit = await sam.evaluate(() => {
+      const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
+      const row = document.querySelector<HTMLElement>('.battle-live-row')!;
+      const words = document.querySelector<HTMLElement>(
+        '.battle-live-row > :is(.battle-live-line, .battle-live-note):not([hidden])',
+      )!;
+      const chip = document.querySelector<HTMLElement>('.auth-chip');
+      return {
+        overflow: sheet.scrollHeight - sheet.clientHeight,
+        share: words.getBoundingClientRect().width / row.getBoundingClientRect().width,
+        authShown: chip !== null && chip.getBoundingClientRect().height > 0,
+      };
+    });
+    expect(fit.overflow).toBeLessThanOrEqual(1);
+    expect(fit.share).toBeGreaterThanOrEqual(0.6);
+    expect(fit.authShown).toBe(false);
+
     // A cheer while turn 0 is on: ids only, and the other phone shows it.
     await sam.getByTestId('battle-cheer').tap();
     await sam.getByTestId('battle-cheers').locator('[data-message="nice-move"]').tap();

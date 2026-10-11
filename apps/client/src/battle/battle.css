@@ -23,6 +23,12 @@
   touch-action: none;
 }
 
+/* A battle owns the screen: the "Hi, name! Log out" chip steps aside while
+   it's open (as for exploring and the story), so no tap mid-battle logs out. */
+body:has(.battle-hud:not([hidden])) .auth-chip {
+  display: none;
+}
+
 .battle-hud[hidden],
 .battle-plate-status[hidden],
 .battle-chip[hidden],
@@ -268,7 +274,7 @@
     calc(env(safe-area-inset-left) + 16px);
   border-top: 3px solid #ffd9c2;
   border-radius: 26px 26px 0 0;
-  background: linear-gradient(rgb(255 250 241 / 96%), rgb(255 243 228 / 96%));
+  background: linear-gradient(#fffaf1, #fff3e4); /* opaque: nothing behind reads through */
   box-shadow: 0 -8px 28px rgb(107 75 110 / 16%);
   pointer-events: auto;
 }
@@ -525,6 +531,7 @@
 /* ── A live battle's bar (#29): the turn timer, the other Keeper, cheers ── */
 
 .battle-live[hidden],
+.battle-live-line[hidden],
 .battle-live-chip[hidden],
 .battle-live-note[hidden],
 .battle-cheers[hidden] {
@@ -537,14 +544,21 @@
   gap: 8px;
 }
 
+/* Ring | words over the chip | Cheer. The words (or Sprout's note in their
+   place) keep the middle column, two lines at most, at any width. */
 .battle-live-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-areas:
+    'ring words cheer'
+    'ring chip cheer';
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 2px;
 }
 
 .battle-live-ring {
-  flex: none;
+  grid-area: ring;
   width: 44px;
   height: 44px;
 }
@@ -578,23 +592,37 @@
   fill: #4a3150;
 }
 
-.battle-live-line {
-  flex: 1;
-  min-width: 0;
+.battle-live-line,
+.battle-live-note {
+  grid-area: words;
+  display: -webkit-box;
+  overflow: hidden;
   margin: 0;
   font-size: 15px;
   font-weight: 800;
   line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.battle-live-note {
+  color: #3d6b1f;
 }
 
 .battle-live-chip {
-  flex: none;
-  padding: 6px 10px;
+  grid-area: chip;
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 9px;
   border-radius: 999px;
   background: #fff1d6;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.4;
   color: #7a4f0f;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .battle-live-chip-done {
@@ -607,14 +635,49 @@
   color: #5a4a62;
 }
 
-.battle-live-note {
-  margin: 0;
-  padding: var(--hp-pad-y) var(--hp-pad-x);
-  border-radius: 16px;
-  background: #f4fbe4;
+.battle-live-cheer {
+  grid-area: cheer;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #efe2ff;
+  box-shadow: 0 3px 0 #cdb6ee;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.battle-live-cheer:disabled {
+  opacity: 0.6;
+}
+
+/* A live battle's pick fits the 35% sheet on an iPhone SE: the words above
+   say it's my pick (so the narration steps aside), and the moves, Swap and
+   Give up share one grid of three. */
+.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] > .battle-caption {
+  display: none;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] .battle-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose']
+  :is(.battle-moves, .battle-row) {
+  display: contents;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] .battle-button {
+  min-width: 0;
+  padding: 6px 8px;
   font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .battle-cheers {
@@ -656,10 +719,4 @@
   box-shadow: 0 3px 0 #f0dfe7;
   font-size: 22px;
   line-height: 1;
-}
-
-@media (max-width: 360px) {
-  .battle-live-row {
-    flex-wrap: wrap;
-  }
 }
