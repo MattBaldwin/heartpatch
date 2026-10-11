@@ -1402,11 +1402,12 @@ _Owner direction, relayed by the coordinator on 2026-10-11; recorded here and in
 _Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier write was blocked). These add to "Owner working style" above._
 
 - **One question at a time, with the screens and the link.** Every approval question is its own question. It says in plain words what is being approved, includes the artifact link, and comes after the images are shown (sent inline or the artifact opened). The recommended option comes first.
-- **Rare squishies glow (#391).** Rare and up glow, stepping up by rarity, and the glow keeps the squishy's own colours (it must not wash out pale kinds). Finding one is a huge moment: a reveal plus a befriend celebration.
+- **Rare squishies glow (#391).** Rare and up get a visible glow-like touch (a glow, halo/rim or sparkles; the owner picks after an A/B), stepping up by rarity. It keeps the squishy's own colours (it must not wash out pale kinds). Finding one is a huge moment: a reveal plus a befriend celebration.
 - **The Keeper's home is immersive and elite (#381).** A living 3D place the player walks into: roaming residents, time of day and seasons, daily reasons to return, 3D furniture placement, paint, signs and memories. It's one of the main reasons players come back.
 - **Squishies are the most important visual part of the game.** Reconfirmed; see "Owner working style" above (unique hook and silhouette per kind, a creative brief with a duplication matrix before building, quality beats dates).
 
 **Owner answers the same day (relayed in the supervisor 8 handoff)**
+
 - **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
 - **#382 wave 1 creative brief:** approved; build rares first.
 - **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
@@ -1415,8 +1416,8 @@ _Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier wr
 
 _Proposed in PR #394; recorded here at the coordinator's request._
 
-- **The Keeper screen is steps, not one scrolling list:** Face → Body (with outfit) → Skin → Hair → Colors (hair and eye colour) → Details. This supersedes #289's "The Keeper screen is one scrolling list" and #176's five-row picker.
+- **The Keeper screen is steps, not one scrolling list:** Face → Body (with outfit) → Skin → Hair → Colors (hair and eye colour) → Details. This updates the owner's #372 order above ("Build rule, happiness rule and creator order"): Hair color becomes Colors and takes eye colour from Face details, so eyes, brows and mouth stay on screen on phones. The change came from a render check and is in the owner-approved mockup revision 2. It also supersedes #289's "The Keeper screen is one scrolling list" and #176's five-row picker.
 - **There is no starting-look row.** This supersedes #289's "The 12 presets are starting looks; one tap sets every row" and "Body shape stays with the starting look for now". `base` stays as the seed root and the fallback for anything not picked. New Keepers are Pip-based, and picking a face or body never changes `base`.
 - **Face and body are independent** (`keepers.face`, `keepers.body`, migration 0044). Each base's own face and body use the base's id, so existing Keepers look the same. Two new bodies: Lanky and Sturdy.
 - **Outfit sits on the Body step** (owner choice c). **Eye colour sits on Colors** with hair colour, so the face stays on screen without scrolling on phones.
-- **In edit mode, Back closes the editor without saving** on every step (plan §5).
+- **In edit mode, Back closes the editor without saving** on every step (plan §5). Open risk noted by the reviewer: a kid who learned that Back means "previous step" could lose unsaved picks.
