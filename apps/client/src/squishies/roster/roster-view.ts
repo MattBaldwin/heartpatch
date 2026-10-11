@@ -36,7 +36,7 @@ export const ROSTER_TEXT = {
   filter: { all: 'All', care: 'Needs care', team: 'On team', working: 'Working' },
   needsCare: 'Needs care',
   care: '💗 Care',
-  upClose: '🔍 Up close',
+  upClose: '👀 Up close',
   dressUp: '🎀 Dress up',
   moveIn: '🏡 Move to a habitat',
   moveOut: '🏡 Move out',
