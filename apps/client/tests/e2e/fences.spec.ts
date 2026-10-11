@@ -1,12 +1,13 @@
 import { findAvoidedWords, type MapView } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { claimLand, findTile } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
- * Fences on an iPhone (issue #203): a new player claims land next to home,
- * then from its tile panel builds a Hedge on every open edge, upgrades one
+ * Fences on an iPhone (issue #203, #371): a new player claims land next to
+ * home, then from its tile panel and the shared Build sheet builds a Hedge on
+ * every open edge in four taps or fewer, upgrades one
  * segment, and takes it down for half back. The map draws each segment and
  * follows every change live. Checked through the dev hook's signals, never
  * pixels. (Breaking a fence in a challenge is the server's tests' job.)
@@ -15,11 +16,21 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 /** `FenceDebug` from src/fences/fence-screen.ts (this project can't see its types). */
 interface FenceDebug {
   mapId: string;
-  mode: 'card' | 'list' | 'build' | 'fence' | 'confirm' | null;
+  mode: 'card' | 'list' | 'fence' | 'confirm' | null;
   items: Record<string, number> | null;
 }
 
 const fenceState = (page: Page) => hook<FenceDebug>(page, 'fences');
+
+/** `TileBuildDebug` from src/building/tile-build.ts. */
+interface BuildDebug {
+  mode: 'card' | 'build' | null;
+  cards: string[];
+  selected: string | null;
+  edges: number[];
+  bag: Record<string, number> | null;
+}
+const buildState = (page: Page) => hook<BuildDebug>(page, 'tileBuild');
 const mapState = (page: Page) =>
   hook<{ id: string; live: string | null; selected: string | null; fences: number }>(page, 'map');
 
@@ -54,32 +65,61 @@ test('builds a fence on every open edge, upgrades one, and takes one down', asyn
   });
   expect(granted.status).toBe(201);
 
-  // My land out past home: its panel says how it's fenced, and opens the sheet.
+  // My land out past home: its panel says how it's fenced, and offers Build.
+  // Every tap counts: a fence is four or fewer from the map (#371).
+  let taps = 0;
+  const tap = async (target: Locator) => {
+    taps += 1;
+    await target.tap();
+  };
   await findTile(page, 'watch');
+  taps += 1; // the tap on the tile
   expect((await mapState(page))!.selected).toBe(`${String(land.q)},${String(land.r)}`);
   const status = page.getByTestId('fence-status');
   await expect(status).toBeVisible();
   expect(findAvoidedWords((await status.textContent()) ?? '')).toEqual([]);
-  await page.getByTestId('fence-open').tap();
-  await expect.poll(async () => (await fenceState(page))?.mode).toBe('list');
 
-  // Build: every open edge starts picked; pick the Hedge and fence them all.
-  await page.getByTestId('fence-build').tap();
-  await expect.poll(async () => (await fenceState(page))?.mode).toBe('build');
-  await expect.poll(async () => (await fenceState(page))?.items?.['greens']).toBe(80);
-  const edges = await page.getByTestId('fence-edges').locator('[aria-pressed="true"]').count();
+  // Build: every open edge starts lit, one row holds every building.
+  await tap(page.getByTestId('tile-build'));
+  await expect.poll(async () => (await buildState(page))?.mode).toBe('build');
+  await expect.poll(async () => (await buildState(page))?.bag?.['greens']).toBe(80);
+  const edges = (await buildState(page))!.edges.length;
   expect(edges).toBeGreaterThan(0);
-  await page.locator('[data-fence="hedge"]').tap();
-  const build = page.getByTestId('fence-confirm-build');
+  const row = page.getByTestId('build-row');
+  await expect(row.locator('[data-build="hedge"]')).toBeVisible();
+  // Nothing scrolls up and down inside the panel, and the row swipes sideways.
+  const sheet = page.getByTestId('build-sheet');
+  const box = (await sheet.boundingBox())!;
+  const panel = (await page.getByTestId('tile-panel').boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(panel.y + panel.height);
+  expect(
+    await page.getByTestId('tile-panel').evaluate((e) => e.scrollHeight <= e.clientHeight + 1),
+  ).toBe(true);
+  expect(await row.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+  // "None" and "All edges" for those who'd rather not tap the tile.
+  await page.getByTestId('build-all-edges').tap();
+  await expect.poll(async () => (await buildState(page))?.edges.length).toBe(0);
+  await expect(page.getByTestId('build-go')).toBeDisabled();
+  await page.getByTestId('build-all-edges').tap();
+  await expect.poll(async () => (await buildState(page))?.edges.length).toBe(edges);
+  await tap(row.locator('[data-build="hedge"]'));
+  await expect.poll(async () => (await buildState(page))?.selected).toBe('hedge');
+  const build = page.getByTestId('build-go');
   await expect(build).toBeEnabled();
-  await build.tap();
-  await expect.poll(async () => (await fenceState(page))?.mode).toBe('list');
-  await expect(page.getByTestId('fence-segment')).toHaveCount(edges);
+  await tap(build);
+  await expect.poll(async () => (await buildState(page))?.mode).toBe('card');
+  expect(taps).toBeLessThanOrEqual(4);
+  await expect(page.getByTestId('tile-build-note')).toContainText('up!');
   expect((await fencesOn(page, mapId, land)).length).toBe(edges);
   // The map draws every segment, live.
   await expect.poll(async () => (await mapState(page))?.fences).toBe(edges);
   await expect(page.getByTestId('fence-status')).toContainText('Fenced all the way round');
 
+  // Fences stay one tap from the tile: the segments, each with Repair, Upgrade
+  // and Take down, with nothing scrolling inside the panel.
+  await page.getByTestId('fence-open').tap();
+  await expect.poll(async () => (await fenceState(page))?.mode).toBe('list');
+  await expect(page.getByTestId('fence-segment')).toHaveCount(edges);
   // A segment's card: full energy, an upgrade with before and after.
   await page.getByTestId('fence-segment').first().tap();
   await expect.poll(async () => (await fenceState(page))?.mode).toBe('fence');
