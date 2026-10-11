@@ -967,7 +967,7 @@ export class HouseProtoScene {
     ]);
     // Four beds: two on the balcony, two below, with golden blankets.
     this.#bed(-4.6, d / 2 - 1.2, 0, '#ffd166', true);
-    this.#bed(2.6, d / 2 - 1.2, 0, '#c9a0ff', true);
+    this.#bed(0.9, d / 2 - 1.2, 0, '#c9a0ff', true);
     this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 2.72);
     this.#bed(-5.2, -2.2, Math.PI / 2, '#9fd0ff', true);
     // The Keeper's corner: an alcove on the right with a table, tea and lamps.
@@ -1022,7 +1022,7 @@ export class HouseProtoScene {
     });
     r('emberbun', 3, { x: -4.0, z: -1.6, y: 0, yaw: Math.PI / 2, scale: 0.9, squash: 0.93 });
     r('pebblesnooze', 4, {
-      x: 2.6,
+      x: 0.9,
       z: d / 2 - 1.3,
       y: 0.46,
       yaw: -0.2,
@@ -1031,7 +1031,7 @@ export class HouseProtoScene {
       shadowAlpha: 0.3,
     });
     r('thistlepip', 5, { x: -1.2, z: 0.9, y: 0, yaw: 0.6, scale: 0.9 });
-    r('glowgourd', 6, { x: 0.9, z: 3.4, y: 0, yaw: 0.2, scale: 0.9 });
+    r('glowgourd', 6, { x: 2.6, z: 3.0, y: 0, yaw: 0.2, scale: 0.9 });
     r('candlekit', 7, {
       x: w / 2 - 1.25,
       z: 1.55,
