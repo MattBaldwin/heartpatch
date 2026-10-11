@@ -107,6 +107,67 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
 
+  // Wave 1 (#382): biome-tied kinds, every day of the year, on top of the
+  // launch tables above (weights add up across matching tables). Common 4,
+  // uncommon 2, rare 1. TUNE: every weight.
+  {
+    id: 'wave-1-meadow',
+    terrains: ['meadow'],
+    entries: [
+      { species: 'chillypep', weight: 4 },
+      { species: 'gnomnom', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-1-forest',
+    terrains: ['forest'],
+    entries: [
+      { species: 'gnomnom', weight: 2 },
+      { species: 'moonmoth', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-old-forest',
+    terrains: ['old-forest'],
+    entries: [{ species: 'moonmoth', weight: 1 }],
+  },
+  {
+    id: 'wave-1-hills',
+    terrains: ['hills'],
+    entries: [
+      { species: 'chillypep', weight: 4 },
+      { species: 'hailhop', weight: 2 },
+      { species: 'gnomnom', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-1-mountains',
+    terrains: ['mountains'],
+    entries: [
+      { species: 'hailhop', weight: 4 },
+      { species: 'flakefluff', weight: 4 },
+      { species: 'cometsnail', weight: 1 },
+      { species: 'moonmoth', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-lake',
+    terrains: ['lake'],
+    entries: [
+      { species: 'lilyhop', weight: 4 },
+      { species: 'shellnap', weight: 2 },
+      { species: 'cometsnail', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-pumpkin-fields',
+    terrains: ['pumpkin-fields'],
+    entries: [
+      { species: 'chillypep', weight: 4 },
+      { species: 'gnomnom', weight: 2 },
+    ],
+  },
+
   // Times of day.
   {
     // Dawndrop hums good morning on sunny open land.

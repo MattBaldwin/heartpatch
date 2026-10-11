@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_ACTIONS } from '../data/care-actions.js';
 import { CARE_RULES, GROWTH_RULES } from '../data/care.js';
+import { SPECIES } from '../data/species.js';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { checkCareRules, checkGrowthRules, type CareRules } from '../schemas/data/care.js';
 import {
@@ -411,6 +412,28 @@ describe('befriendedLevel (owner decision 2026-10-06)', () => {
 
   it('is on in the shipped data', () => {
     expect(GROWTH_RULES.befriendBelowEvolution).toBe(1);
+  });
+
+  it('holds a standalone species to befriendNoEvolutionLevel, not a final form', () => {
+    const rules = { befriendBelowEvolution: 1, befriendNoEvolutionLevel: 15 };
+    expect(befriendedLevel('pebble', 40, steps, rules)).toBe(15);
+    expect(befriendedLevel('pebble', 9, steps, rules)).toBe(9);
+    // A final form (`cloud`) is not standalone: it keeps its level.
+    expect(befriendedLevel('cloud', 40, steps, rules)).toBe(40);
+    // Without the field, or without the main cap, a standalone species keeps its level.
+    expect(befriendedLevel('pebble', 40, steps, cap)).toBe(40);
+    expect(befriendedLevel('pebble', 40, steps, { befriendNoEvolutionLevel: 15 })).toBe(40);
+  });
+
+  it('shipped standalone cap sits between the earliest and the middle first evolution', () => {
+    const into = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
+    const firsts = SPECIES.filter((s) => !into.has(s.id) && s.evolutions.length > 0)
+      .map((s) => Math.min(...s.evolutions.map((e) => e.level)))
+      .sort((a, b) => a - b);
+    const cap = GROWTH_RULES.befriendNoEvolutionLevel ?? 0;
+    // Never stricter than the strictest evolver would be, never looser than a typical one.
+    expect(cap).toBeGreaterThanOrEqual(firsts[0]! - (GROWTH_RULES.befriendBelowEvolution ?? 0));
+    expect(cap).toBeLessThanOrEqual(firsts[Math.floor(firsts.length / 2)]!);
   });
 });
 
