@@ -390,6 +390,12 @@ export const LiveBattleViewSchema = z.object({
   deadlineAt: z.iso.datetime().nullable(),
   myPick: BattleChoiceSchema.nullable(),
   opponentPicked: z.boolean(),
+  /**
+   * The opponent's app is open on the patch right now. False: they stepped
+   * away (iOS backgrounds the app), and the AI picks for them when their
+   * time and away-grace run out.
+   */
+  opponentHere: z.boolean(),
   covered: z.array(z.object({ turn: z.number().int().min(0), side: BattleSideIdSchema })),
   now: z.iso.datetime(),
 });

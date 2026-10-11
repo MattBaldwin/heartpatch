@@ -8,6 +8,7 @@ import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { CareDebug } from '../care/care-sheet.js';
 import type { ChatDebug } from '../chat/chat-screen.js';
+import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
@@ -102,6 +103,8 @@ declare global {
       milestones?(): MilestoneCelebrationDebug;
       /** Quick messages (#23): the sheet, the feed and the bubbles over the map, or null. */
       chat?(): ChatDebug | null;
+      /** Friendly battles (#29): who's here, the asks. */
+      friendly?(): FriendlyDebug | null;
       /** Sound (#25): unlock state, engine, the loop wanted and playing, the last cue, levels. */
       audio?(): AudioDebug;
       /** What's new (#220): whether the sheet is open, why it opened and how many entries it lists. */

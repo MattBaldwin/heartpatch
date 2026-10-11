@@ -1,0 +1,274 @@
+/* Friendly battles (#29, the owner-approved mockup). Bottom cards like the
+   chat sheet's; the ask a friend sent sits in the middle, over any screen.
+   Big targets (44pt+), safe areas, text never touches a control's edge. */
+
+.friendly-open[hidden],
+.friendly-sheet[hidden],
+.friendly-ask[hidden],
+.friendly-toast[hidden],
+.friendly-note[hidden] {
+  display: none;
+}
+
+.friendly-sheet,
+.friendly-ask {
+  position: fixed;
+  z-index: 6;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  max-height: 78vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 auto;
+  padding: 18px 18px 20px;
+  border: 3px solid #ffd9c2;
+  border-radius: 26px;
+  background: #fffaf1;
+  box-shadow: 0 10px 32px rgb(74 49 80 / 26%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.friendly-sheet {
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+}
+
+.friendly-ask {
+  /* Over every screen, a battle's included: it's a friend asking. */
+  z-index: 20;
+  top: 50%;
+  transform: translateY(-50%);
+  align-items: stretch;
+}
+
+.friendly-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.friendly-title {
+  margin: 0;
+  padding-right: 44px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.friendly-center {
+  padding-right: 0;
+  text-align: center;
+}
+
+.friendly-intro {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.friendly-hint {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.friendly-note {
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 14px;
+  background: #fff1d6;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.friendly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.friendly-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 2px 0 #f3e3ea;
+}
+
+.friendly-row-away {
+  opacity: 0.72;
+}
+
+.friendly-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.friendly-name {
+  font-size: 17px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.friendly-status {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.friendly-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #e8d6ff;
+  box-shadow: inset 0 -4px 0 rgb(0 0 0 / 8%);
+  font-size: 18px;
+  font-weight: 900;
+  color: #5a3a5d;
+}
+
+.friendly-pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.friendly-pair .friendly-avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 26px;
+}
+
+.friendly-and {
+  font-size: 18px;
+  font-weight: 900;
+  color: #a06c95;
+}
+
+.friendly-gap {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #fff1d6;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.friendly-team {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.friendly-button {
+  min-height: 52px;
+}
+
+.friendly-answers {
+  display: flex;
+  gap: 10px;
+}
+
+.friendly-answers .friendly-button {
+  flex: 1;
+}
+
+.friendly-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.friendly-dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f2a4bb;
+  animation: friendly-dot 1.2s ease-in-out infinite;
+}
+
+.friendly-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.friendly-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes friendly-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.friendly-bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #f1e2ea;
+}
+
+.friendly-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: #f2a4bb;
+  transition: width 0.5s linear;
+}
+
+.friendly-toast {
+  position: fixed;
+  z-index: 21;
+  top: calc(env(safe-area-inset-top) + 58px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgb(255 250 240 / 97%);
+  box-shadow: 0 6px 18px rgb(107 75 110 / 18%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  color: #4a3150;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .friendly-dots i {
+    animation: none;
+    opacity: 0.8;
+  }
+
+  .friendly-bar-fill {
+    transition: none;
+  }
+}

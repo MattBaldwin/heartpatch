@@ -174,6 +174,8 @@ export function playbackSteps(
   battle: PlayerBattle,
   content: BattleContent,
   fromIndex: number,
+  /** A live battle's other Keeper (#29): "Mira's Puddlepuff", never "Wild". */
+  options: { opponent?: string | null } = {},
 ): PlaybackStep[] {
   const name = (side: BattleSideId, slot: number): string => {
     const squishy = battle.view.sides[side].squishies[slot];
@@ -181,7 +183,10 @@ export function playbackSteps(
     const species = content.speciesName(squishy.speciesId);
     // A fence (#203) is a thing, not a squishy: "The Hedge".
     if (squishy.fence !== undefined) return `The ${species}`;
-    return isMine(battle, side) ? species : `Wild ${species}`;
+    if (isMine(battle, side)) return species;
+    if (battle.live)
+      return options.opponent ? `${options.opponent}'s ${species}` : `Their ${species}`;
+    return `Wild ${species}`;
   };
   const isFence = (side: BattleSideId, slot: number): boolean =>
     battle.view.sides[side].squishies[slot]?.fence !== undefined;

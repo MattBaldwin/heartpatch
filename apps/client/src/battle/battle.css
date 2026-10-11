@@ -521,3 +521,145 @@
     }
   }
 }
+
+/* ── A live battle's bar (#29): the turn timer, the other Keeper, cheers ── */
+
+.battle-live[hidden],
+.battle-live-chip[hidden],
+.battle-live-note[hidden],
+.battle-cheers[hidden] {
+  display: none;
+}
+
+.battle-live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battle-live-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.battle-live-ring {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+.battle-live-ring-track,
+.battle-live-ring-fill {
+  fill: none;
+  stroke-width: 6;
+}
+
+.battle-live-ring-track {
+  stroke: #f1e2ea;
+}
+
+.battle-live-ring-fill {
+  stroke: #b48cf0;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s linear;
+}
+
+.battle-live-ring-low .battle-live-ring-fill {
+  stroke: #f2a93b;
+}
+
+.battle-live-ring-number {
+  font:
+    800 15px ui-rounded,
+    'SF Pro Rounded',
+    system-ui,
+    sans-serif;
+  fill: #4a3150;
+}
+
+.battle-live-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.battle-live-chip {
+  flex: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff1d6;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a4f0f;
+}
+
+.battle-live-chip-done {
+  background: #d9f4e3;
+  color: #1f6b43;
+}
+
+.battle-live-chip-away {
+  background: #e9e2ee;
+  color: #5a4a62;
+}
+
+.battle-live-note {
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #f4fbe4;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.battle-cheers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battle-cheers-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.battle-cheers-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.battle-cheer-pick {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 16px;
+  background: #efe2ff;
+  box-shadow: 0 3px 0 #cdb6ee;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: #5a3a5d;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.battle-cheer-emoji {
+  background: #fff;
+  box-shadow: 0 3px 0 #f0dfe7;
+  font-size: 22px;
+  line-height: 1;
+}
+
+@media (max-width: 360px) {
+  .battle-live-row {
+    flex-wrap: wrap;
+  }
+}

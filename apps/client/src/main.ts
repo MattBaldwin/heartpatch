@@ -19,8 +19,9 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
-import { createJobs } from './squishies/jobs/index.js';
+import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { createChatScreen } from './chat/chat-screen.js';
+import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
@@ -34,6 +35,7 @@ import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { lobbyApi } from './ui/lobby/lobby-api.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
@@ -248,7 +250,7 @@ const closeUp = createCloseUpScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     home.setMap(null);
     explore.setMap(null);
@@ -269,7 +271,7 @@ const closeUp = createCloseUpScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -462,6 +464,15 @@ const hollowReportOpen = () => (hollow.debug?.report.length ?? 0) > 0;
 // Quick messages (#23): a Chat button over a multiplayer map, with presets,
 // emoji and squishy stickers, and little bubbles when someone says something.
 const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-right') });
+/**
+ * The patch's social screens follow the map on screen together: quick
+ * messages (#23) and friendly battles (#29). Null hides them (the Glade,
+ * another screen over the map).
+ */
+const socialSetMap = (mapId: string | null): Promise<void> => {
+  void friendly.setMap(mapId);
+  return chat.setMap(mapId);
+};
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -491,7 +502,7 @@ const home = createHomeScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     lobby.stepOut();
     void care.celebrateNews(mapId);
@@ -512,7 +523,7 @@ const home = createHomeScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -545,7 +556,7 @@ const explore = createExploreScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     void battles.setMap(null);
     home.setMap(null);
     lobby.stepOut();
@@ -558,7 +569,7 @@ const explore = createExploreScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
@@ -605,7 +616,7 @@ const maps = createMapScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     lobby.showMessage(message);
@@ -654,6 +665,9 @@ const maps = createMapScreen({
     land.liveEvent(event);
     fences.liveEvent(event);
     chat.liveEvent(event);
+    // Friendly battles (#29): asks, and a live battle's turns and cheers.
+    friendly.liveEvent(event);
+    battles.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
@@ -699,7 +713,7 @@ const tutorial = createTutorialScreen({
       glade = mapId;
       catalog.close();
       care.close();
-      await chat.setMap(null);
+      await socialSetMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (!stillWanted()) return;
@@ -719,7 +733,7 @@ const tutorial = createTutorialScreen({
       void territory.setMap(null);
       void hollow.setMap(null);
       void land.setMap(null);
-      void chat.setMap(null);
+      void socialSetMap(null);
       home.setMap(null);
       explore.setMap(null);
       // A care sheet left open on the Glade (an evolution's "Whoa!") would
@@ -792,8 +806,15 @@ const milestones = createMilestoneCelebration({
 });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
+/** A map-mate's name (a live battle's opponent, #29): the map on screen, else the patch's members. */
+const memberName = async (mapId: string, userId: string): Promise<string | null> => {
+  const members =
+    maps.view?.map.id === mapId ? maps.view.members : (await lobbyApi.get(mapId)).members;
+  return members.find((m) => m.user.id === userId)?.user.username ?? null;
+};
 const battles = createBattleScreen({
   root: document.body,
+  memberName,
   isGlade: (mapId) => mapId === glade,
   journey: {
     postName: (battleId) => journeys.postFor(battleId)?.name ?? null,
@@ -809,9 +830,12 @@ const battles = createBattleScreen({
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
-  onOpen: (mapId) => {
+  onOpen: (mapId, live) => {
     battleMapId = mapId;
-    maps.close();
+    // A live battle (#29) keeps following the patch underneath: the other
+    // Keeper's picks and cheers arrive on it, and it keeps me "here".
+    if (live) maps.hide();
+    else maps.close();
     catalog.close();
     care.close();
     jobs.close();
@@ -819,7 +843,7 @@ const battles = createBattleScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     lobby.stepOut();
@@ -842,7 +866,7 @@ const battles = createBattleScreen({
           territory.setMap(mapId),
           hollow.setMap(mapId),
           land.setMap(mapId),
-          chat.setMap(chatFor(mapId)),
+          socialSetMap(chatFor(mapId)),
         ]);
       },
       (err: unknown) => {
@@ -863,6 +887,24 @@ const battles = createBattleScreen({
   keeperWearing: () => wardrobe.wearing,
   onStep: (step) => {
     audio.cue(battleCue(step));
+  },
+});
+// Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends
+// button beside Chat (top right; the Adventure tray is full on short
+// screens); a friend's ask shows over the map. A yes opens the live battle on
+// the battle screen for both Keepers.
+const friendly = createFriendlyScreen({
+  root: document.body,
+  entryRoot: trays.slot('top-right'),
+  members: (mapId) =>
+    maps.view?.map.id === mapId
+      ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))
+      : [],
+  openBattle: (battle) => {
+    battles.open(battle);
+  },
+  openTeam: (mapId) => {
+    void openTeamPicker(mapId);
   },
 });
 // Claiming starts from a tile: this row says how (territory, #15).
@@ -903,7 +945,7 @@ const keeper = createKeeperScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -933,7 +975,7 @@ const cinematic = createCinematicScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -975,7 +1017,7 @@ const wardrobe = createWardrobeScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -999,7 +1041,7 @@ const wardrobe = createWardrobeScreen({
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
         void land.setMap(mapId);
-        void chat.setMap(chatFor(mapId));
+        void socialSetMap(chatFor(mapId));
         // A battle left for the wardrobe resumes.
         void battles.setMap(mapId);
       },
@@ -1024,7 +1066,7 @@ const starters = createStarterScreen({
     void territory.setMap(null);
     void hollow.setMap(null);
     void land.setMap(null);
-    void chat.setMap(null);
+    void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
     maps.close();
@@ -1067,7 +1109,7 @@ const lobby = mountLobby(document.body, {
     void territory.setMap(mapId);
     void hollow.setMap(mapId);
     void land.setMap(mapId);
-    void chat.setMap(chatFor(mapId));
+    void socialSetMap(chatFor(mapId));
     home.setMap(mapId);
     explore.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
@@ -1178,6 +1220,7 @@ mountAuth(document.body, {
     hollow.setUser(user);
     land.setUser(user);
     chat.setUser(user);
+    friendly.setUser(user);
     home.setUser(user);
     explore.setUser(user);
     wardrobe.setUser(user);
@@ -1224,6 +1267,7 @@ if (import.meta.env.DEV) {
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,
+    friendly: () => friendly.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     explore: () => explore.debug,

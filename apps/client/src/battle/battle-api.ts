@@ -10,7 +10,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { apiCallFor } from '../net/api.js';
+import { apiCall, apiCallFor } from '../net/api.js';
 
 const battleOf = (res: { battle: PlayerBattle }) => res.battle;
 
@@ -61,6 +61,15 @@ export const battleApi = {
       schema: BattleResponseSchema,
       headers: { 'idempotency-key': key },
     }).then(battleOf),
+
+  /** A cheer in a live battle (#29): a quick message or emoji id, never text. */
+  cheer: async (battleId: string, messageId: string): Promise<void> => {
+    await apiCall(`/battles/${battleId}/cheer`, {
+      method: 'POST',
+      body: { messageId },
+      schema: null,
+    });
+  },
 
   // Dev builds only (server `HP_DEV_SQUISHY_GRANTS`): until spawns (#14) and the
   // tutorial's starter arrive, these hand a player a squishy and pick a fight.

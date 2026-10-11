@@ -4,6 +4,9 @@ import {
   CAPTURABLE_BATTLE_KINDS,
   TILE_BATTLE_KINDS,
   GAME_DATA,
+  GAME_EVENTS,
+  LIVE_BATTLE_RULES,
+  quickMessageById,
   visualRegistry,
   type BattleSideId,
   type BattleTimeOfDay,
@@ -12,6 +15,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { careApi } from '../care/care-api.js';
 import type { QualityTier } from '../engine/config.js';
@@ -20,7 +24,7 @@ import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
-import { formatWait } from '../inventory/game-clock.js';
+import { formatWait, GameClock } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
 import { nearbyNote, tilesToMark } from './wild-pick.js';
@@ -63,6 +67,15 @@ import {
 import { keeperReaction } from './keeper-reaction.js';
 import { fenceResult, resultLine } from './result-line.js';
 import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
+import { mountLiveBar, type LiveBar } from './live-bar.js';
+import {
+  clockText,
+  coveredSince,
+  LIVE_TEXT,
+  liveTurnInfo,
+  ringSpan,
+  type RingSpan,
+} from './live-turn.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -80,8 +93,12 @@ export interface BattleScreenOptions {
   requestFrame: () => void;
   /** The quality tier now (the squishies' detail level follows it). */
   tier: () => QualityTier;
-  /** A battle is about to take the screen: the caller hides the map. */
-  onOpen: (mapId: string) => void;
+  /**
+   * A battle is about to take the screen: the caller hides the map. `live`:
+   * a live battle (#29), whose patch must stay followed (its events, and
+   * the server's "here").
+   */
+  onOpen: (mapId: string, live: boolean) => void;
   /** The battle screen closed: the caller shows the map again. */
   onClosed: (mapId: string) => void;
   api?: typeof battleApi;
@@ -120,6 +137,8 @@ export interface BattleScreenOptions {
   };
   /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
   onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
+  /** A map-mate's name (a live battle's opponent, #29); null if not known. */
+  memberName?: (mapId: string, userId: string) => Promise<string | null>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -141,6 +160,14 @@ export interface BattleDebug {
   readonly keeperReactions: number;
   /** A raid replay (#16) is playing, not a battle to play. */
   readonly replay: boolean;
+  /** A live battle (#29): my pick is in, they've picked, seconds left; null otherwise. */
+  readonly live: {
+    readonly picked: boolean;
+    readonly theyPicked: boolean;
+    readonly secondsLeft: number | null;
+    readonly covered: number;
+    readonly note: string | null;
+  } | null;
   /** Heart Charms the wild battle's button shows (null until counted, or not a wild battle). */
   readonly charms: number | null;
   /** Potions in the bag, by id (#214); null until counted, or in a replay. */
@@ -178,6 +205,8 @@ export interface BattleScreen {
    * and fetches fresh hints so the tufts catch up.
    */
   meetWild: (mapId: string, tile: Hex) => Promise<void>;
+  /** Every live event on the open map (map-screen `onLiveEvent`): a live battle's turns and cheers (#29). */
+  liveEvent: (event: WsEventMessage) => void;
   readonly debug: BattleDebug | null;
   /** Dev builds only: the clock controls, or null on the real clock. */
   readonly dev: BattleDevControls | null;
@@ -289,6 +318,21 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let potions: Readonly<Record<string, number>> | null = null;
   /** The player's squishies' nicknames on this map (#141). */
   let nicknames: ReadonlyMap<string, string> = new Map();
+  /** A live battle's bar (#29), its ticking ring, and the deadline's look-again. */
+  let liveBar: LiveBar | null = null;
+  let liveTick = 0;
+  let liveDue = 0;
+  /** Game time, synced from each live view's `now`: deadlines are the server's, not the phone's. */
+  const liveClock = new GameClock();
+  /** The ring's full length for the deadline on screen. */
+  let liveSpan: RingSpan | null = null;
+  /** Sprout's note on the bar, as shown (the dev hook reads it). */
+  let liveNote: string | null = null;
+  /** A live update arrived while the log played: look again once it settles. */
+  let liveStale = false;
+  let cheering = false;
+  /** The live battle's opponent's name, once known (`memberName`). */
+  let opponentLabel: string | null = null;
 
   // ── Entry button (shown over the map) ─────────────────────────────────
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
@@ -377,7 +421,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   });
   // Back from the background (hours, maybe a new spawn window): fresh tufts.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && battle === null) refreshNearby();
+    if (document.visibilityState !== 'visible') return;
+    if (battle === null) refreshNearby();
+    // A live battle went on while the app slept (#29): catch up.
+    else if (battle.live) refreshLive();
   });
   if (options.devTools) {
     const grant = el(
@@ -503,6 +550,25 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       slot,
       name: plateName(names, squishy, nicknames),
     }));
+    if (b.live) {
+      // A live battle (#29): no Heart Charms or potions, "Give up" instead of
+      // running. A pick can change until the other Keeper's arrives.
+      if (b.view.phase.type === 'turn') {
+        return {
+          type: 'choose',
+          moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
+          bench,
+          capture: null,
+          items: null,
+          runWords: {
+            run: LIVE_TEXT.giveUp,
+            ask: LIVE_TEXT.giveUpAsk,
+            yes: LIVE_TEXT.giveUpYes,
+            stay: LIVE_TEXT.keepPlaying,
+          },
+        };
+      }
+    }
     switch (b.view.phase.type) {
       case 'turn':
         return {
@@ -581,6 +647,31 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
             : { title: MESSAGES.replayLost, subtitle: MESSAGES.replayLostSub };
       hud.setCaption(null);
       hud.showResult({ ...outcome, xp: [MESSAGES.replayNote], done: MESSAGES.done });
+      return;
+    }
+    if (b.kind === 'friendly') {
+      // A friendly battle (#29): just for fun, so no XP lines and no losses.
+      const name = opponentName(b);
+      const won = result?.winner === b.mySide;
+      const title =
+        b.status === 'no-contest' || !result
+          ? MESSAGES.resultNoContest
+          : result.winner === 'draw'
+            ? MESSAGES.resultDraw
+            : result.reason === 'forfeit'
+              ? won
+                ? LIVE_TEXT.theyGaveUp(name)
+                : LIVE_TEXT.gaveUp
+              : won
+                ? LIVE_TEXT.resultWon(name)
+                : LIVE_TEXT.resultLost(name);
+      hud.setCaption(null);
+      hud.showResult({
+        title,
+        subtitle: LIVE_TEXT.friendlySub,
+        xp: [LIVE_TEXT.friendlyNote],
+        done: MESSAGES.done,
+      });
       return;
     }
     const mine = b.view.sides[b.mySide];
@@ -741,14 +832,175 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                 ? MESSAGES.shadowsStart
                 : battle.kind === 'journey'
                   ? JOURNEY_TEXT.startCaption
-                  : MESSAGES.wildStart,
+                  : battle.kind === 'friendly'
+                    ? LIVE_TEXT.startCaption(opponentName(battle))
+                    : MESSAGES.wildStart,
         );
       }
     } else {
       showResult(battle);
     }
+    drawLive();
     options.invalidate();
+    if (liveStale) {
+      liveStale = false;
+      refreshLive();
+    }
   };
+
+  // ── Live battles (#29) ────────────────────────────────────────────────
+
+  /** The opponent's name for a live battle's words. */
+  function opponentName(b: PlayerBattle): string {
+    return (b.live && opponentLabel) ?? 'your friend';
+  }
+
+  /** Looks the opponent's name up once per battle, then says it everywhere. */
+  function learnOpponent(b: PlayerBattle): void {
+    const id = b.live?.opponentUserId;
+    if (!id || !options.memberName) return;
+    void options
+      .memberName(b.mapId, id)
+      .then((name) => {
+        if (battle?.id !== b.id || !name) return;
+        opponentLabel = name;
+        drawLive();
+        // The caption and the result card that already say "your friend".
+        if (!waiting && queue.length === 0) settle();
+      })
+      .catch(() => {
+        // "your friend" will do.
+      });
+  }
+
+  /** Redraws the live bar from the battle on screen (the ring ticks on its own). */
+  function drawLive(): void {
+    const b = battle;
+    if (!b || !liveBar) return;
+    // Over: the result card says the rest; the timer and cheers step aside.
+    if (b.status !== 'active') {
+      liveBar.dispose();
+      liveBar = null;
+      window.clearInterval(liveTick);
+      liveTick = 0;
+      return;
+    }
+    const info = liveInfo(b);
+    if (!info) return;
+    const names = content;
+    const name = opponentName(b);
+    const pick = b.live?.myPick;
+    const line = pick
+      ? `${LIVE_TEXT.picked(pick.type === 'move' ? (names?.moveName(pick.move) ?? 'That') : 'A swap')} ${LIVE_TEXT.waitingFor(name)}`
+      : info.myTurn && names
+        ? LIVE_TEXT.yourPick(plateName(names, activeOf(b, b.mySide), nicknames))
+        : LIVE_TEXT.waitingFor(name);
+    const chip = info.theyAway
+      ? LIVE_TEXT.away(clockText(info.secondsLeft ?? 0))
+      : info.theyPicked
+        ? LIVE_TEXT.theyPicked
+        : LIVE_TEXT.theyPicking;
+    liveBar.update(info, line, chip);
+  }
+
+  /** Arms the ring's tick and the look-again at the deadline (the server settles it then). */
+  function armLive(): void {
+    window.clearInterval(liveTick);
+    window.clearTimeout(liveDue);
+    liveTick = 0;
+    liveDue = 0;
+    const b = battle;
+    if (!b?.live || b.status !== 'active') return;
+    liveClock.sync(b.live.now);
+    liveTick = window.setInterval(drawLive, 500);
+    if (b.live.deadlineAt !== null) {
+      // A little after the deadline (game time), so the server has passed it too.
+      liveDue = window.setTimeout(refreshLive, liveClock.msUntil(b.live.deadlineAt) + 700);
+    }
+  }
+
+  /** The live bar's numbers on game time; the ring spans the deadline on screen. */
+  function liveInfo(b: PlayerBattle): ReturnType<typeof liveTurnInfo> {
+    const at = liveClock.now();
+    liveSpan = ringSpan(
+      liveSpan,
+      b.live?.deadlineAt ?? null,
+      at,
+      LIVE_BATTLE_RULES.turnSeconds * 1000,
+    );
+    return liveTurnInfo(b, at, liveSpan?.ms ?? LIVE_BATTLE_RULES.turnSeconds * 1000);
+  }
+
+  /** Looks at a live battle again: the other Keeper picked, a turn played, or time ran out. */
+  function refreshLive(): void {
+    const current = battle;
+    if (!current?.live || replaying) return;
+    if (waiting || queue.length > 0) {
+      liveStale = true;
+      return;
+    }
+    api
+      .get(current.id)
+      .then((fresh) => {
+        if (battle?.id !== current.id || waiting) return;
+        if (queue.length > 0) {
+          liveStale = true;
+          return;
+        }
+        receive(fresh);
+      })
+      .catch(() => {
+        // The next event, the deadline or coming back to the app looks again.
+      });
+  }
+
+  /** Sprout's note when the AI picked for me (a timeout, never a loss). */
+  function noteCovered(before: PlayerBattle, after: PlayerBattle): void {
+    if (!liveBar || !content) return;
+    const turns =
+      coveredSince(after, after.mySide, -1).length - coveredSince(before, before.mySide, -1).length;
+    if (turns <= 0) return;
+    // My side's latest move or send-out in the new log is the one Sprout picked.
+    const fresh = after.view.log.slice(before.view.log.length);
+    const moved = fresh.findLast((e) => e.type === 'move' && e.side === after.mySide);
+    const sentOut = fresh.findLast((e) => e.type === 'replace' && e.side === after.mySide);
+    liveNote =
+      moved && moved.type === 'move'
+        ? `${LIVE_TEXT.timeUp(content.moveName(moved.move))} ${LIVE_TEXT.stillIn}`
+        : sentOut
+          ? `${LIVE_TEXT.timeUpSendOut(plateName(content, activeOf(after, after.mySide), nicknames))} ${LIVE_TEXT.stillIn}`
+          : `${LIVE_TEXT.timeUp('a move')} ${LIVE_TEXT.stillIn}`;
+    liveBar.setNote(liveNote);
+  }
+
+  async function sendCheer(messageId: string): Promise<void> {
+    const current = battle;
+    if (!current?.live || cheering) return;
+    cheering = true;
+    liveBar?.setSending(true);
+    try {
+      await api.cheer(current.id, messageId);
+      if (battle?.id !== current.id) return;
+      const label = cheerLabel(messageId);
+      if (label) hud.callout('mine', label);
+    } catch (err) {
+      if (battle?.id === current.id) hud.setProblem(messageOf(err));
+    } finally {
+      cheering = false;
+      liveBar?.setSending(false);
+    }
+  }
+
+  /** A cheer's words or emoji, from shared data (only ids travel). */
+  function cheerLabel(messageId: string): string | null {
+    const message = quickMessageById(messageId);
+    if (!message) return null;
+    return message.kind === 'phrase'
+      ? message.line
+      : message.kind === 'emoji'
+        ? message.emoji
+        : message.name;
+  }
 
   /** Plays the next queued step, then the next, until the queue is empty. */
   const playNext = (): void => {
@@ -790,9 +1042,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       return;
     }
     const from = Math.min(shownLog, next.view.log.length);
+    if (next.live) noteCovered(battle, next);
     battle = next;
+    armLive();
     content = new BattleContent(next);
-    queue = playbackSteps(next, content, from);
+    queue = playbackSteps(next, content, from, { opponent: opponentLabel });
     // A capture try spends a charm: count again.
     if (next.view.log.slice(from).some((e) => e.type === 'capture')) void refreshCharms(next);
     // A potion (#214) came out of the bag: count again.
@@ -819,6 +1073,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const stillOpen = () => battle?.id === current.id;
     waiting = true;
     hud.setControls({ type: 'waiting' });
+    // My own pick: Sprout's "time's up" note has done its job.
+    if (current.live && liveNote !== null) {
+      liveNote = null;
+      liveBar?.setNote(null);
+    }
     try {
       const reply = await sendAction(submitDeps, current, action, stillOpen);
       if (reply && stillOpen()) receive(reply);
@@ -934,15 +1193,40 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       void refreshPotions(next);
     }
     refreshNicknames(next);
-    if (!wasOpen) options.onOpen(next.mapId);
+    if (!wasOpen) options.onOpen(next.mapId, next.live !== undefined && !replay);
     entry.hidden = true;
     hud.hideResult();
     hud.setProblem('');
+    liveBar?.dispose();
+    liveBar = null;
+    liveNote = null;
+    liveStale = false;
+    opponentLabel = null;
+    liveSpan = null;
+    if (next.live && !replay) {
+      learnOpponent(next);
+      liveBar = mountLiveBar(hud.liveSlot, {
+        onCheer: (messageId) => {
+          void sendCheer(messageId);
+        },
+      });
+    }
     hud.show();
     options.showScene(build);
     settle();
+    armLive();
     if (next.view.log.length > 0 && next.status === 'active') {
-      hud.setCaption('Welcome back! The showdown is still on.');
+      if (next.live) {
+        // Back from the background (or a reload): Sprout says what it did meanwhile.
+        hud.setCaption(LIVE_TEXT.welcomeBack(opponentName(next)));
+        const helped = coveredSince(next, next.mySide, -1).length;
+        if (helped > 0 && liveBar) {
+          liveNote = LIVE_TEXT.helped(helped);
+          liveBar.setNote(liveNote);
+        }
+      } else {
+        hud.setCaption('Welcome back! The showdown is still on.');
+      }
     }
     if (frame === 0) frame = requestAnimationFrame(tick);
   }
@@ -954,6 +1238,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     queue = [];
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
+    window.clearInterval(liveTick);
+    window.clearTimeout(liveDue);
+    liveTick = 0;
+    liveDue = 0;
+    liveBar?.dispose();
+    liveBar = null;
+    liveNote = null;
     battle = null;
     replaying = false;
     content = null;
@@ -997,6 +1288,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       entry.hidden = true;
     },
     open: (next) => {
+      // Already on screen (a late "Battle!" event, a resume): a fresh look, not a rebuild.
+      if (battle?.id === next.id && !replaying) {
+        // Mid-move or mid-playback: a live battle looks again once that's done.
+        if (!waiting && queue.length === 0) receive(next);
+        else if (battle.live) liveStale = true;
+        return;
+      }
       open(next);
     },
     watch: (start, end) => {
@@ -1014,6 +1312,30 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       } catch (err) {
         refreshNearby();
         throw err;
+      }
+    },
+    liveEvent: (event) => {
+      const current = battle;
+      if (!current?.live || event.mapId !== current.mapId) return;
+      if (event.type === 'battle.cheered') {
+        const parsed = GAME_EVENTS['battle.cheered'].public.safeParse(event.data);
+        // Theirs only: my own cheer showed when it went out.
+        if (!parsed.success || parsed.data.battleId !== current.id) return;
+        if (parsed.data.side === current.mySide) return;
+        const label = cheerLabel(parsed.data.messageId);
+        if (label) hud.callout('theirs', label);
+        return;
+      }
+      if (event.type === 'battle.picked') {
+        const parsed = GAME_EVENTS['battle.picked'].public.safeParse(event.data);
+        // My own pick needs no second look; theirs does.
+        if (!parsed.success || parsed.data.battleId !== current.id) return;
+        if (parsed.data.side !== current.mySide) refreshLive();
+        return;
+      }
+      if (event.type === 'battle.turned') {
+        const parsed = GAME_EVENTS['battle.turned'].public.safeParse(event.data);
+        if (parsed.success && parsed.data.battleId === current.id) refreshLive();
       }
     },
     get debug() {
@@ -1041,6 +1363,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         scene: scene3d?.stats ?? null,
         keeperReactions,
         replay: replaying,
+        live: battle.live
+          ? {
+              picked: battle.live.myPick !== null,
+              theyPicked: battle.live.opponentPicked,
+              secondsLeft: liveInfo(battle)?.secondsLeft ?? null,
+              covered: battle.live.covered.filter((c) => c.side === battle?.mySide).length,
+              note: liveNote,
+            }
+          : null,
         charms,
         potions,
         clock: now(),

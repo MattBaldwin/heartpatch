@@ -136,6 +136,30 @@ describe('loadServerConfig', () => {
     ).toBe(false);
   });
 
+  it('accepts the live-battle timings outside production only (#29)', () => {
+    const config = loadServerConfig({
+      DATABASE_URL,
+      NODE_ENV: 'test',
+      HP_DEV_LIVE_TURN_SECONDS: '6',
+      HP_DEV_LIVE_GRACE_SECONDS: '4',
+    });
+    expect([config.HP_DEV_LIVE_TURN_SECONDS, config.HP_DEV_LIVE_GRACE_SECONDS]).toEqual([6, 4]);
+    expect(() =>
+      loadServerConfig({
+        DATABASE_URL,
+        HP_SIGNUP_CODE: 'family-code',
+        HP_DEV_LIVE_TURN_SECONDS: '6',
+      }),
+    ).toThrow(/HP_DEV_LIVE_TURN_SECONDS/);
+    expect(() =>
+      loadServerConfig({
+        DATABASE_URL,
+        HP_SIGNUP_CODE: 'family-code',
+        HP_DEV_LIVE_GRACE_SECONDS: '4',
+      }),
+    ).toThrow(/HP_DEV_LIVE_GRACE_SECONDS/);
+  });
+
   it('accepts HP_DEV_DROP_CHANCE outside production only', () => {
     expect(
       loadServerConfig({ DATABASE_URL, NODE_ENV: 'test', HP_DEV_DROP_CHANCE: '100' })

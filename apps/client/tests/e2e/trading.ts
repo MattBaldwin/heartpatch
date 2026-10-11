@@ -152,9 +152,14 @@ export interface Traders {
 
 /**
  * Lee makes a patch called `patchName` and Sam joins it; each one's land
- * reaches a post (dev route), and both are on the live map.
+ * reaches a post (dev route, unless `posts` is false: friendly.spec.ts), and
+ * both are on the live map.
  */
-export async function twoTraders(browser: Browser, patchName: string): Promise<Traders> {
+export async function twoTraders(
+  browser: Browser,
+  patchName: string,
+  { posts = true }: { posts?: boolean } = {},
+): Promise<Traders> {
   const leeName = uniqueName('lee');
   const samName = uniqueName('sam');
   const lee = await newPlayer(browser, leeName);
@@ -171,7 +176,7 @@ export async function twoTraders(browser: Browser, patchName: string): Promise<T
   const code = (await leeLobby.getByTestId('lobby-invite-code').textContent()) ?? '';
   const mine = await api<{ maps: { id: string; name: string }[] }>(lee, 'GET', '/maps');
   const mapId = mine.body.maps.find((m) => m.name === patchName)!.id;
-  expect((await api(lee, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
+  if (posts) expect((await api(lee, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
 
   const samLobby = sam.getByTestId('lobby');
   await samLobby.getByRole('button', { name: 'Join with a code' }).tap();
@@ -187,7 +192,7 @@ export async function twoTraders(browser: Browser, patchName: string): Promise<T
   await visitPatch(leeLobby);
   await expect(leeLobby).toBeHidden();
   await samLobby.getByRole('button', { name: new RegExp(patchName) }).tap({ timeout: 30_000 });
-  expect((await api(sam, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
+  if (posts) expect((await api(sam, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
   await visitPatch(samLobby);
   await expect(samLobby).toBeHidden();
   for (const page of [lee, sam]) {
