@@ -219,3 +219,39 @@ export class AmbientJudge {
     return this.slowNow;
   }
 }
+
+/**
+ * Paces idle breathing (the close-up's and the battle's squishies) the way
+ * ambient life is paced: a frame every `frameMs` while they only breathe,
+ * judged by an `AmbientJudge`. On a device that can't keep up, breathing stops
+ * drawing for this visit and the scene goes idle, so the player's taps get
+ * the main thread (#397: a software renderer blocks it for every frame drawn).
+ * Moves, swoops and acts still draw every frame; call `skip` after them, and
+ * after a hidden page, so that gap isn't judged as a breathing frame.
+ */
+export class BreathPacer {
+  private readonly frameMs: number;
+  private readonly judge = new AmbientJudge();
+  private last = -Infinity;
+
+  constructor(frameMs: number) {
+    this.frameMs = frameMs;
+  }
+
+  /** True when a breathing-only frame is due at `now` (ms): draw one. */
+  due(now: number): boolean {
+    if (this.judge.slow || now - this.last < this.frameMs) return false;
+    this.last = now;
+    return !this.judge.record(now);
+  }
+
+  /** Something else drew, or the page was hidden: the next gap isn't breathing's. */
+  skip(): void {
+    this.judge.skip();
+  }
+
+  /** True once breathing has stopped for this visit. */
+  get slow(): boolean {
+    return this.judge.slow;
+  }
+}
