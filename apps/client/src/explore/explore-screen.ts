@@ -81,7 +81,7 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import { exploreSkyAt, exploreWorld, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -219,7 +219,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
    * map's view is gone after that), and kept for the visit.
    */
   let zone: string | null = null;
-  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  const skyNow = (): SkyLook =>
+    skyLook(
+      exploreSkyAt(zone, options.now?.() ?? new Date()),
+      tile ? exploreWorld(tile.terrain) : 'ground',
+    );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
@@ -971,7 +975,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb') {
+    if (kind === 'climb' || kind === 'poke' || kind === 'pick') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });
@@ -1006,7 +1010,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
             el('span', { class: `explore-dot${i < s.count ? ' explore-dot-on' : ''}` }),
           ),
         );
-      } else if (s.kind === 'lift') {
+      } else if (s.kind === 'lift' || s.kind === 'stack') {
         const fill = el('span', { class: 'explore-hold-fill' });
         fill.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
         playDots.replaceChildren(el('span', { class: 'explore-hold' }, fill));

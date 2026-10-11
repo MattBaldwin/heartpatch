@@ -178,13 +178,25 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   pond: 'pond',
   ledge: 'ledge',
   cave: 'cave',
+  // #335: the mountain trail and the hills cave.
+  'snow-drift': 'snow-drift',
+  cairn: 'cairn',
+  'glow-mushrooms': 'glow-mushrooms',
 };
 
-type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
+type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave' | 'snow-drift' | 'cairn' | 'glow-mushrooms';
 
 /** The island under the tile: shallow, so the tile reads as a little diorama. */
 const ISLAND_DEPTH = 0.12; // TUNE:
-const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
+const SHAPES: ReadonlySet<string> = new Set<ExploreShape>([
+  'mound',
+  'pond',
+  'ledge',
+  'cave',
+  'snow-drift',
+  'cairn',
+  'glow-mushrooms',
+]);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -1385,7 +1397,8 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
         painted(at(cylinder(0.01, 0.09, 0.09), 0.08, 0.02, -0.05), '#6fbf73'),
       ]);
     case 'ledge':
-      // A chunky cliff step with a flat top to climb to.
+      // A lookout on the trail (#335): a chunky step with a flat top and a
+      // little flag to hike up to.
       return merged(`explore-${shape}`, [
         painted(
           at(
@@ -1406,12 +1419,61 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
           '#d8c8ab',
         ),
         painted(at(sphere(0.08), -0.1, 0.24, -0.05, 1, 0.6, 1), '#9fd6a0'),
+        // The lookout's flag.
+        painted(at(cylinder(0.26, 0.012, 0.012), 0.1, 0.47, 0.04), '#7a5d43'),
+        painted(
+          at(
+            CreateBox(`${shape}-part`, { width: 0.12, height: 0.07, depth: 0.01 }, scene),
+            0.16,
+            0.55,
+            0.04,
+          ),
+          '#ff8fb8',
+        ),
       ]);
     case 'cave':
-      // A rounded hill with a dark doorway facing the camera.
+      // A dark nook in the cave wall (#335): a rock hump with a black doorway
+      // and a crystal peeking out, waiting for the Lantern.
       return merged(`explore-${shape}`, [
-        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#bfb3cf'),
-        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#3a2f4a'),
+        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#8a76a6'),
+        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#1f1630'),
+        painted(at(cylinder(0.16, 0.0, 0.05), 0.12, 0.2, -0.08), '#e6cdfc'),
       ]);
+    case 'snow-drift':
+      // A soft snow heap with a twig poking out: poke it with the stick.
+      return merged(`explore-${shape}`, [
+        painted(at(sphere(0.32), 0, 0, 0, 1.15, 0.5, 1), '#fbfaff'),
+        painted(at(sphere(0.16), -0.08, 0.06, 0.04, 1, 0.7, 1), '#eef2ff'),
+        painted(at(cylinder(0.14, 0.008, 0.015), 0.07, 0.12, -0.02), '#9a6a3c'),
+      ]);
+    case 'cairn':
+      // Stones stacked by trail walkers, smallest on top.
+      return merged(
+        `explore-${shape}`,
+        (
+          [
+            [0.24, 0.05, '#9e968a'],
+            [0.18, 0.13, '#b9b2a7'],
+            [0.13, 0.2, '#cfc9bf'],
+            [0.08, 0.26, '#b9b2a7'],
+          ] as const
+        ).map(([d, y, c]) => painted(at(sphere(d), 0, y, 0, 1, 0.55, 1), c)),
+      );
+    case 'glow-mushrooms':
+      // A ring of glowing caps (their glow is the colour; bloom does the rest).
+      return merged(
+        `explore-${shape}`,
+        (
+          [
+            [0, 0, 1, '#8ef0ff'],
+            [0.1, 0.05, 0.8, '#ff9cd6'],
+            [-0.09, 0.06, 0.75, '#8ef0ff'],
+            [0.03, -0.1, 0.7, '#ff9cd6'],
+          ] as const
+        ).flatMap(([x, z, s, c]) => [
+          painted(at(cylinder(0.1 * s, 0.03 * s, 0.035 * s), x, 0.05 * s, z), '#f6e9d8'),
+          painted(at(sphere(0.12 * s), x, 0.1 * s, z, 1, 0.55, 1), c),
+        ]),
+      );
   }
 }

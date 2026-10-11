@@ -83,7 +83,11 @@ export function startInteraction(
         ? INTERACTION.climbSteps
         : kind === 'shake'
           ? INTERACTION.shakes
-          : 1;
+          : kind === 'poke'
+            ? INTERACTION.pokes
+            : kind === 'pick'
+              ? INTERACTION.boops
+              : 1;
   const angle = seed01 * Math.PI * 2;
   return {
     kind,
@@ -148,6 +152,13 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
       return lift(s, input);
     case 'shake':
       return shake(s, input);
+    case 'poke':
+    case 'pick':
+      // A snow drift to poke, mushroom caps to boop: taps.
+      return taps(s, input);
+    case 'stack':
+      // A stone on the cairn: hold, like lifting a rock.
+      return lift(s, input);
   }
 }
 
@@ -185,6 +196,32 @@ function climb(s: InteractionState, input: InteractionInput): InteractionState {
     case 'side':
       if (s.lastSide === input.side) return s;
       return counted({ ...s, lastSide: input.side });
+    case 'easy':
+      return counted(s);
+    case 'easy-down':
+      return { ...s, holdSince: input.t, held: 0 };
+    case 'easy-up':
+      return { ...s, holdSince: null, held: 0 };
+    case 'tick': {
+      if (s.holdSince === null) return s;
+      const held = input.t - s.holdSince;
+      return held >= INTERACTION.holdMs
+        ? { ...s, held, count: s.need, done: true }
+        : { ...s, held };
+    }
+    default:
+      return s;
+  }
+}
+
+/**
+ * Taps (#335): each tap pokes the snow or boops a cap. Any
+ * tap on the easy button counts too, and holding it does them all.
+ */
+function taps(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'down':
+      return counted(s);
     case 'easy':
       return counted(s);
     case 'easy-down':

@@ -157,7 +157,11 @@ export class ExploreSky {
   }
 
   get stats(): ExploreSkyStats {
-    return { clouds: this.#look.clouds, stars: this.#look.stars, moon: this.#look.moon };
+    return {
+      clouds: this.#look.clouds,
+      stars: this.#look.stars,
+      moon: this.#look.moon && this.#look.sunDisc,
+    };
   }
 
   /** Shows a new look: the dome, sun or moon, clouds, stars and the light on the land. */
@@ -179,6 +183,8 @@ export class ExploreSky {
     this.#scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
 
     recolour(this.#sun, look.sun);
+    this.#sun.setEnabled(look.sunDisc);
+    recolour(this.#stars, look.starColor);
     recolour(this.#cloud, look.cloud);
     const d = r * 0.85;
     setInstances(

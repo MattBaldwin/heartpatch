@@ -113,8 +113,8 @@ describe('explore rules data', () => {
       'old-forest': ['shovel'],
       'pumpkin-fields': ['shovel'],
       lake: ['net'],
-      hills: ['rope', 'lantern'],
-      mountains: ['rope', 'lantern'],
+      hills: ['lantern'], // #335: the cave
+      mountains: ['rope'], // #335: the trail
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
   });
@@ -134,12 +134,13 @@ describe('searchSpots', () => {
   });
 
   it('pins layout 1, so a change that moves spots must bump `layout`', () => {
-    // If this fails on purpose, bump EXPLORE_RULES.layout and update the hash:
-    // saved progress is read against the layout it was made under.
-    const layouts = ['meadow', 'lake', 'hills'].map((terrain) =>
+    // If this fails on purpose, bump EXPLORE_RULES.layout (or the terrain's
+    // own) and update the hash: saved progress is read against the layout it
+    // was made under. Hills and mountains moved to their own layout 2 (#335).
+    const layouts = ['meadow', 'lake'].map((terrain) =>
       searchSpots(SEED, { q: 1, r: 2, terrain }, EXPLORE_RULES),
     );
-    expect(hashString(JSON.stringify(layouts))).toBe('27fe6485484338aa163704638c22b789');
+    expect(hashString(JSON.stringify(layouts))).toBe('a82a50ab271a1cc770650507efa10ed6');
   });
 
   it('differs from tile to tile, from map to map and from layout to layout', () => {
@@ -239,8 +240,8 @@ describe('per-terrain layout (#335)', () => {
   });
 
   it("moves only the bumped terrain's spots", () => {
-    const rules = bumped('hills');
-    expect(exploreLayout('hills', rules)).toBe(2);
+    const rules = bumped('forest');
+    expect(exploreLayout('forest', rules)).toBe(2);
     expect(exploreLayout('meadow', rules)).toBe(EXPLORE_RULES.layout);
     const tiles = hexSpiral(hex(0, 0), 3);
     const same = (terrain: string) =>
@@ -251,7 +252,7 @@ describe('per-terrain layout (#335)', () => {
       );
     expect(same('meadow')).toBe(true);
     expect(same('lake')).toBe(true);
-    expect(same('hills')).toBe(false);
+    expect(same('forest')).toBe(false);
   });
 
   it('a terrain with its own layout equal to the rules layout lays out the same', () => {
