@@ -6,7 +6,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
-import type { VisualRegistry } from '@heartpatch/shared';
+import type { ClothingItem, VisualRegistry } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
 import type { SquishMove, SquishyDetail } from '../procedural/config.js';
 import type { SquishySpecies } from '../procedural/params.js';
@@ -42,6 +42,8 @@ export interface CloseUpSceneOptions {
   readonly breathing: boolean;
   /** The soft contact shadow under it. Default on. */
   readonly shadows?: boolean;
+  /** The wardrobe accessory it wears (#340), or null. */
+  readonly accessory?: ClothingItem | null;
 }
 
 /** Read-only numbers for the dev hook (Playwright asserts on these, not pixels). */
@@ -54,7 +56,8 @@ export class CloseUpScene {
   readonly #field: SquishyField<SquishyDetail>;
   readonly #handle: SquishyHandle;
   readonly #layer: Layer | null;
-  readonly #height: number;
+  /** With its accessory on: the camera frames a hat too. */
+  #height: number;
   readonly #width: number;
   readonly #lookAt = new Vector3();
   #camera: CameraPlacement;
@@ -79,7 +82,8 @@ export class CloseUpScene {
     });
     const { params } = this.#handle;
     const body = options.registry.bodies.get(params.body.id);
-    this.#height = params.height * STAGE.scale;
+    this.#field.setAccessory(this.#handle, options.accessory ?? null);
+    this.#height = this.#field.heightOf(this.#handle) * STAGE.scale;
     this.#width = (body?.width ?? 1) * params.body.scale[0] * STAGE.scale;
     this.#camera = cameraFor(CAMERA_POSES.face, this.#height);
 
@@ -111,6 +115,20 @@ export class CloseUpScene {
   /** World height of the squishy as drawn. */
   get height(): number {
     return this.#height;
+  }
+
+  /**
+   * Puts an accessory on (or off, null). Its height changes with a hat, so
+   * the screen reframes after this (`setCamera` with a fresh `frameFor`).
+   */
+  setAccessory(item: ClothingItem | null): void {
+    this.#field.setAccessory(this.#handle, item);
+    this.#height = this.#field.heightOf(this.#handle) * STAGE.scale;
+  }
+
+  /** The accessory it wears, or null. */
+  get accessory(): string | null {
+    return this.#field.accessoryOf(this.#handle);
   }
 
   /** True once a frame with the squishy in it has been drawn. */

@@ -1,4 +1,4 @@
-import type { Rect } from './overlay-layout.js';
+import type { Rect } from '../ui/geometry.js';
 
 // What else is on screen while the tutorial runs (#127, #128, #139). Sprout
 // waits its turn behind any open sheet: a tile chip, the care sheet, the
@@ -22,7 +22,8 @@ export interface OpenSheet {
   readonly rect: Rect;
 }
 
-function boxOf(element: Element): { box: Rect; element: HTMLElement } | null {
+/** Where `element` shows on screen, or null when it's hidden, shut (inert), or empty. */
+export function boxOf(element: Element): { box: Rect; element: HTMLElement } | null {
   if (!(element instanceof HTMLElement) || element.hidden || !element.isConnected) return null;
   if (element.closest('[hidden]') || element.closest('[inert]')) return null;
   const style = getComputedStyle(element);

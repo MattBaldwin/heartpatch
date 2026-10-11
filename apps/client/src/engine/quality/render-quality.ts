@@ -32,6 +32,8 @@ export function createPostProcessing(scene: Scene, camera: Camera): DefaultRende
 
 export interface QualitySnapshot {
   readonly tier: QualityTier;
+  /** The tier is pinned for a dev capture (`?tier=`): the governor is off. */
+  readonly pinned: boolean;
   readonly renderScale: number;
   /** Render pixels per CSS pixel actually in use. */
   readonly pixelRatio: number;
@@ -51,10 +53,13 @@ export class RenderQuality {
   private appliedTier: QualityTier | null = null;
   private appliedScale = 0;
   private readonly stop = new AbortController();
+  /** Dev captures (`?tier=`): the tier and full resolution hold, whatever the frame rate. */
+  private readonly pinned: boolean;
 
-  constructor(scene: Scene, camera: Camera, tier: QualityTier) {
+  constructor(scene: Scene, camera: Camera, tier: QualityTier, pinned = false) {
     this.scene = scene;
     this.camera = camera;
+    this.pinned = pinned;
     this.state = initialGovernor(tier, SCALER);
     this.pipeline = createPostProcessing(scene, camera);
     this.apply();
@@ -75,6 +80,7 @@ export class RenderQuality {
    * resize then would clear the frame about to be shown (#260).
    */
   sample(frameMs: number): boolean {
+    if (this.pinned) return false;
     this.state = stepGovernor(this.state, frameMs, {
       config: SCALER,
       devicePixelRatio: window.devicePixelRatio,
@@ -98,6 +104,7 @@ export class RenderQuality {
   get snapshot(): QualitySnapshot {
     return {
       tier: this.state.tier,
+      pinned: this.pinned,
       renderScale: this.state.renderScale,
       pixelRatio: 1 / this.scene.getEngine().getHardwareScalingLevel(),
     };

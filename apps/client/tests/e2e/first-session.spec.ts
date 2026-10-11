@@ -1,5 +1,6 @@
 import { GAME_DATA, TERRITORY_RULES } from '@heartpatch/shared';
 import { expect as baseExpect, test, type Page } from '@playwright/test';
+import { findTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -11,6 +12,12 @@ import { trayButton } from './trays.js';
  * make a patch, let a friend in, befriend a wild squishy and claim a tile.
  * Each system has its own spec; this one checks they join up. Asserts on the
  * dev hook, test ids and the API, never on pixels.
+ *
+ * The playtest and launch run with the tutorial required (DECISIONS, "The
+ * tutorial is required at launch"), and e2e's server keeps the code default
+ * (off), so the player's page is told it's required: Sprout opens by itself
+ * after the story, the way a new tester meets it. Only the client side of
+ * the gate is checked here; the server's gate has its own tests.
  */
 
 /**
@@ -44,51 +51,32 @@ const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 const territoryState = (page: Page) =>
   hook<{ attemptsLeft: number; tileAction: string | null }>(page, 'territory');
 
+/**
+ * Reports the tutorial as required in every tutorial state the server sends
+ * this page, as `HP_TUTORIAL_REQUIRED=true` would. Call before signing up.
+ */
+async function requireTutorial(page: Page): Promise<void> {
+  await page.route(/\/api\/v1\/tutorial(\/(start|replay|skip|dev\/step))?$/, async (route) => {
+    const response = await route.fetch();
+    let body: { tutorial?: { required: boolean } };
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      // Not JSON (a proxy's error page): pass it on, so the API's own error shows.
+      await route.fulfill({ response });
+      return;
+    }
+    if (body.tutorial) body.tutorial.required = true;
+    await route.fulfill({ response, json: body });
+  });
+}
+
 /** Waits for the battle's playback to catch up with the server. */
 async function settled(page: Page): Promise<BattleDebug> {
   await expect
     .poll(() => battleState(page), { timeout: 30_000 })
     .toMatchObject({ pending: 0, waiting: false });
   return (await battleState(page))!;
-}
-
-/** A touch tap on the canvas as pointer events (as territory.spec.ts does). */
-async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
-  await page.evaluate(
-    ({ x, y }) => {
-      const canvas = document.querySelector('#game')!;
-      for (const type of ['pointerdown', 'pointerup']) {
-        canvas.dispatchEvent(
-          new PointerEvent(type, {
-            pointerId: 1,
-            pointerType: 'touch',
-            isPrimary: true,
-            clientX: x,
-            clientY: y,
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-      }
-    },
-    { x, y },
-  );
-}
-
-/** Taps outward from the Heart Seed until the tile panel offers `action` (territory.spec.ts). */
-async function findTile(page: Page, action: string): Promise<{ x: number; y: number }> {
-  const box = (await page.locator('#game').boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  for (const radius of [60, 80, 100, 130, 160]) {
-    for (let step = 0; step < 12; step++) {
-      const angle = (step * Math.PI) / 6;
-      const at = { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
-      await tapCanvas(page, at.x, at.y);
-      if ((await territoryState(page))?.tileAction === action) return at;
-    }
-  }
-  throw new Error(`no tile offering "${action}" near the Heart Seed`);
 }
 
 /**
@@ -122,6 +110,7 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   const name = uniqueName('first');
+  await requireTutorial(page);
 
   // Sign up and pick a Keeper; the story plays next, the first time.
   await signUp(page, name);
@@ -135,20 +124,27 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
 
-  // Sprout's tutorial from the lobby, over its gameplay steps to graduation.
+  // Sprout opens by itself, since the tutorial is required: no "Later"
+  // until it's done, but "Log out" stays in reach. The dev route jumps over
+  // its gameplay steps to graduation.
   const lobby = page.getByTestId('lobby');
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await lobby.getByTestId('tutorial-start').tap();
   await expect
     .poll(async () => (await tutorial(page))?.stepId, { timeout: 30_000 })
     .toBe('welcome');
+  const bubble = page.getByTestId('tutorial-bubble');
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByRole('button', { name: 'Later' })).toBeHidden();
+  // In the Glade the chip is the round Keeper menu, above Sprout's layer.
+  const menu = page.getByTestId('keeper-menu');
+  await menu.tap();
+  await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+  await menu.tap();
+  await expect(page.getByRole('button', { name: 'Log out' })).toBeHidden();
   expect((await api(page, 'POST', '/tutorial/dev/step', { stepId: 'graduation' })).status).toBe(
     200,
   );
   await expect.poll(async () => (await tutorial(page))?.stepId).toBe('graduation');
-  await page.getByTestId('tutorial-bubble').getByRole('button', { name: 'Next' }).tap();
+  await bubble.getByRole('button', { name: 'Next' }).tap();
   await page
     .locator('[data-tutorial-target="graduation-choices"]')
     .getByRole('button', { name: 'Make a patch' })

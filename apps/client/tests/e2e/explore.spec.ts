@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
@@ -11,12 +11,18 @@ const slow = { timeout: 30_000 };
 
 /**
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
- * under this many calls. Measured at 15 on the iPhone and iPad viewports
- * (#291, a new player's meadow: tile, island, spot props, three decor kinds,
- * glints, the Keeper's batches, post-processing); the headroom is for a busier
- * tile (more prop kinds, buildings, a full team, the tool in hand).
+ * under this many calls. A new player's meadow is on the land kit (#335 art
+ * reset): measured at 37 on the iPhone and iPad viewports on the high tier
+ * (the sky, the ground, grass and three kinds of flower, pebbles, two kinds of
+ * bush, three of tree, far trees, rocks, logs, mushrooms, lanterns and their
+ * glass, butterflies and pollen, the spot props, glints, the Keeper's batches,
+ * post-processing) and 31 on low (no motes). Each kind is one thin-instanced
+ * draw however many grow; the headroom is for a busier tile (more prop kinds,
+ * buildings, a full team, the tool in hand).
  */
-const DRAW_CALL_CEILING = 26;
+const DRAW_CALL_CEILING = 46;
+/** The land kit's triangles on a settled meadow frame (#335): 278k–308k on high, with headroom for a busier tile. */
+const TRIANGLE_CEILING = 420_000;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
@@ -50,17 +56,22 @@ interface ExploreDebug {
     done: number;
     glints: number;
     keeper: boolean;
+    buildings: number;
     held: string | null;
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
+    sky: { clouds: number; stars: boolean; moon: boolean };
     keeperHeight: number;
     faded: number[];
+    triangles: number;
+    land: { tier: string } | null;
   } | null;
 }
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
-const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
+const mapState = (page: Page) =>
+  hook<{ tiles: number; selected: string | null; buildings: number }>(page, 'map');
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -116,6 +127,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
     .toBeGreaterThan(0.14);
   expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.195);
+  // The sky follows the patch's clock (#335): e2e pins late morning, so it's day with clouds.
+  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false });
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);
@@ -130,6 +143,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   const drawCalls = (await exploreState(page))?.scene?.drawCalls ?? 0;
   test.info().annotations.push({ type: 'drawCalls', description: String(drawCalls) });
   expect(drawCalls).toBeLessThan(DRAW_CALL_CEILING);
+  // The meadow is on the land kit (#335), never silently back on the old tile,
+  // and its triangles stay in budget (308k on an iPad at high; 175–199k on low).
+  const settled = (await exploreState(page))?.scene;
+  expect(settled?.land).not.toBeNull();
+  test.info().annotations.push({ type: 'triangles', description: String(settled?.triangles) });
+  expect(settled?.triangles ?? 0).toBeLessThan(TRIANGLE_CEILING);
 
   // Walk to a spot searched by hand and search it the easy way. A common find
   // is a toast and the world keeps going; a rare one (a lore page, something
@@ -268,5 +287,59 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await page.getByTestId('explore-back').tap();
   await slowExpect(page.getByTestId('map-hud')).toBeVisible();
   expect((await exploreState(page))?.open).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('shows the buildings on the tile it explores (#347)', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('builds'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Den Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  const openExplore = async () => {
+    await expect(async () => {
+      if ((await mapState(page))?.selected == null) {
+        await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      }
+      await expect(explore).toBeVisible({ timeout: 5_000 });
+    }).toPass(slow);
+    await explore.tap();
+    await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+  };
+
+  // The Heart Seed's tile has nothing built on it yet.
+  await openExplore();
+  const first = (await exploreState(page))!;
+  expect(first.scene?.buildings).toBe(0);
+  const at = first.tile!;
+  await page.getByTestId('explore-back').tap();
+  await slowExpect(page.getByTestId('map-hud')).toBeVisible();
+
+  // An Ember Den on one of its ring spots, then explore it again.
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 5, stone: 3 },
+  });
+  expect(granted.status).toBe(201);
+  const built = await api(page, 'POST', `/maps/${mapId}/buildings`, {
+    buildingId: 'ember-den',
+    q: at.q,
+    r: at.r,
+    spot: 1,
+  });
+  expect(built.status).toBe(201);
+  // The map hears about the new den (its WS event), then Explore opens on the tile again.
+  await expect.poll(async () => (await mapState(page))?.buildings, slow).toBe(1);
+  await openExplore();
+  expect((await exploreState(page))?.scene?.buildings).toBe(1);
   expect(errors).toEqual([]);
 });

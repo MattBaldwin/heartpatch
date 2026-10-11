@@ -38,15 +38,59 @@ export function onGameClock(realAt: Date, now: Date): Date {
 }
 
 /**
+ * ICU (and so `Intl`) resolves some zones to an older name that is only a
+ * link in today's tz database: `Asia/Yangon` comes back as `Asia/Rangoon`.
+ * Postgres images built on newer Debian ship without those links
+ * (tzdata-legacy), so `at time zone 'Asia/Rangoon'` fails. Each old name
+ * maps to the zone it links to, which every tz database has.
+ */
+export const ICU_LINK_TO_ZONE: Readonly<Record<string, string>> = {
+  'Africa/Asmera': 'Africa/Asmara',
+  'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+  'America/Catamarca': 'America/Argentina/Catamarca',
+  'America/Coral_Harbour': 'America/Atikokan',
+  'America/Cordoba': 'America/Argentina/Cordoba',
+  'America/Godthab': 'America/Nuuk',
+  'America/Indianapolis': 'America/Indiana/Indianapolis',
+  'America/Jujuy': 'America/Argentina/Jujuy',
+  'America/Kralendijk': 'America/Curacao',
+  'America/Louisville': 'America/Kentucky/Louisville',
+  'America/Lower_Princes': 'America/Curacao',
+  'America/Marigot': 'America/Port_of_Spain',
+  'America/Mendoza': 'America/Argentina/Mendoza',
+  'America/St_Barthelemy': 'America/Port_of_Spain',
+  'Arctic/Longyearbyen': 'Europe/Oslo',
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Atlantic/Faeroe': 'Atlantic/Faroe',
+  'Europe/Bratislava': 'Europe/Prague',
+  'Europe/Busingen': 'Europe/Zurich',
+  'Europe/Kiev': 'Europe/Kyiv',
+  'Europe/Mariehamn': 'Europe/Helsinki',
+  'Europe/Podgorica': 'Europe/Belgrade',
+  'Europe/San_Marino': 'Europe/Rome',
+  'Europe/Vatican': 'Europe/Rome',
+  'Pacific/Enderbury': 'Pacific/Kanton',
+  'Pacific/Ponape': 'Pacific/Pohnpei',
+  'Pacific/Truk': 'Pacific/Chuuk',
+};
+
+/**
  * The canonical IANA name for a time zone (e.g. `US/Central` →
- * `America/Chicago`), or null if the runtime doesn't know the zone.
+ * `America/Chicago`, `Asia/Yangon` stays `Asia/Yangon`), or null if the
+ * runtime doesn't know the zone. Always a zone, never a link, so Postgres
+ * accepts it.
  */
 export function canonicalTimeZone(timeZone: string): string | null {
+  let resolved: string;
   try {
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
+    resolved = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
   } catch {
     return null;
   }
+  return ICU_LINK_TO_ZONE[resolved] ?? resolved;
 }
 
 /** The calendar date at `at` in `timeZone` (e.g. a map's), as `YYYY-MM-DD`. */

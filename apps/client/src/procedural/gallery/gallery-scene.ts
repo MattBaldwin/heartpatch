@@ -2,7 +2,7 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import type { Scene } from '@babylonjs/core/scene';
-import type { VisualRegistry } from '@heartpatch/shared';
+import type { ClothingItem, VisualRegistry } from '@heartpatch/shared';
 import type { SceneContent } from '../../engine/stage.js';
 import type { SquishyLod } from '../config.js';
 import type { SquishySpecies } from '../params.js';
@@ -20,6 +20,10 @@ export interface GalleryOptions {
   readonly yaw: number;
   /** Every squishy as a rescue guardian from the Hollow (`?shadow`, owner decision 7). */
   readonly shadow?: boolean;
+  /** Wardrobe accessories, one per squishy in turn (`?accessory=`, #340). */
+  readonly accessories?: readonly ClothingItem[];
+  /** Lowers the floor and squishies (world units), so the camera looks at their middles. */
+  readonly drop?: number;
 }
 
 /** Tile spacing between squishies, in world units at scale 1. */
@@ -50,17 +54,20 @@ export function buildGalleryScene(
     if (!look) break;
     const col = i % columns;
     const row = Math.floor(i / columns);
-    field.add(
+    const handle = field.add(
       look,
       `gallery-${i}`,
       {
         x: (col - (columns - 1) / 2) * spacing,
         z: (row - (rows - 1) / 2) * spacing,
+        y: -(options.drop ?? 0),
         scale: options.scale,
         yaw: options.yaw,
       },
       options.shadow ? 'shadow' : 'normal',
     );
+    const worn = options.accessories?.[i % options.accessories.length];
+    if (worn) field.setAccessory(handle, worn);
   }
 
   const half = Math.max(columns, rows) * spacing * 0.5 + spacing;
@@ -69,7 +76,7 @@ export function buildGalleryScene(
     { diameter: half * 2.6, height: 0.4, tessellation: 96 },
     scene,
   );
-  floor.position.y = -0.2;
+  floor.position.y = -0.2 - (options.drop ?? 0);
   const grass = new PBRMaterial('gallery-floor-mat', scene);
   grass.albedoColor = Color3.FromHexString('#c8eebc').toLinearSpace();
   grass.metallic = 0;

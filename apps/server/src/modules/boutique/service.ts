@@ -6,7 +6,6 @@ import {
   CLOTHING_BY_ID,
   GAME_DATA,
   inStock,
-  STARTER_CLOTHING,
   type Boutique,
   type BoutiqueItem,
   type BoutiqueStock,
@@ -19,6 +18,7 @@ import { AppError } from '../../lib/errors.js';
 import { localDate, nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { createCoinsRepo } from '../coins/repo.js';
 import { accountDay, accountTimeZone, spendCoins } from '../coins/service.js';
+import { STARTER_CLOTHING_IDS } from '../wardrobe/accessories.js';
 import { createWardrobeRepo } from '../wardrobe/repo.js';
 import { createWardrobeService, grantClothing } from '../wardrobe/service.js';
 
@@ -41,8 +41,6 @@ const MESSAGES = {
   notToday: "That one isn't on the racks today. Come back tomorrow for something new!",
   owned: "You already have that one! It's in your wardrobe.",
 } as const;
-
-const STARTERS = new Set(STARTER_CLOTHING);
 
 export interface BoutiqueService {
   /** Today's racks for the player, with prices, what they own and their coins. */
@@ -84,7 +82,11 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
       // Only priced pieces reach the racks (`boutiqueStock`).
       const price = CLOTHING_BY_ID.get(itemId)?.boutiquePrice;
       if (price === undefined) throw new Error(`boutique: ${itemId} has no price`);
-      return { itemId, price, owned: STARTERS.has(itemId) || (owned.get(itemId) ?? 0) > 0 };
+      return {
+        itemId,
+        price,
+        owned: STARTER_CLOTHING_IDS.has(itemId) || (owned.get(itemId) ?? 0) > 0,
+      };
     };
     return {
       date,
@@ -117,7 +119,10 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
         }
         // 3. Not owned already (found, or bought before).
         const store = createWardrobeRepo(tx);
-        if (STARTERS.has(itemId) || ((await store.countOwned(user.id)).get(itemId) ?? 0) > 0) {
+        if (
+          STARTER_CLOTHING_IDS.has(itemId) ||
+          ((await store.countOwned(user.id)).get(itemId) ?? 0) > 0
+        ) {
           throw new AppError('CONFLICT', MESSAGES.owned);
         }
         // 4. The debit (CONFLICT, nothing changed, if it's short), and 5. the

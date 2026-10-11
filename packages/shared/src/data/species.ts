@@ -3,7 +3,10 @@ import type { Species } from '../schemas/data/species.js';
 
 /*
  * The Phase 1 launch roster (design doc §4, issue #10): 14 base lines plus 4
- * Halloween lines, each with one simple level-based evolution (§8). Public:
+ * Halloween lines, each with a level-based evolution (§8). Lines branch
+ * (#32): a second form at the same level is a sidegrade, the same element
+ * and rarity with a different feeling; how it's reached is server-only
+ * (`data/server/evolution-rules.ts`). Public:
  * this table ships to every client. Secret squishies, spawn tables and
  * guardian tables live in `data/server/` (CLAUDE.md rule 6).
  *
@@ -342,6 +345,98 @@ export const MOVES: Move[] = [
       { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }, // TUNE:
     ],
   },
+  // Branch forms' signature moves (#32).
+  {
+    id: 'snore-drizzle',
+    name: 'Snore Drizzle',
+    description: 'A drowsy little rain cloud. The other squishy gets yawny.',
+    element: 'water',
+    power: 0,
+    accuracy: 80, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 60 }], // TUNE:
+  },
+  {
+    id: 'toasty-snore',
+    name: 'Toasty Snore',
+    description: 'A warm, crackly snore that makes the other squishy sleepy.',
+    element: 'fire',
+    power: 0,
+    accuracy: 80, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 60 }], // TUNE:
+  },
+  {
+    id: 'petal-party',
+    name: 'Petal Party',
+    description: 'Throws petals everywhere and feels fantastic.',
+    element: 'leaf',
+    power: 0,
+    accuracy: 100,
+    effects: [
+      { type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 100 }, // TUNE:
+      { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }, // TUNE:
+    ],
+  },
+  {
+    id: 'static-glide',
+    name: 'Static Glide',
+    description: 'Glides in on a fizzy breeze. Zzzip!',
+    element: 'spark',
+    power: 55, // TUNE:
+    accuracy: 100,
+  },
+  {
+    id: 'twirly-whirl',
+    name: 'Twirly Whirl',
+    description: 'Spins on the ice until the other squishy is dizzy too.',
+    element: 'frost',
+    power: 50, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 25 }], // TUNE:
+  },
+  {
+    id: 'lantern-grin',
+    name: 'Lantern Grin',
+    description: 'A big, glowy, lopsided grin. The other squishy forgets what it was doing.',
+    element: 'leaf',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }], // TUNE:
+  },
+  {
+    id: 'night-light-hug',
+    name: 'Night-Light Hug',
+    description: 'A warm, glowy hug that chases the dark away.',
+    element: 'light',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'heal', percent: 35 }], // TUNE:
+  },
+  {
+    id: 'upside-snooze',
+    name: 'Upside Snooze',
+    description: 'Hangs upside down for a quick nap. Much better.',
+    element: 'shadow',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'heal', percent: 40 }], // TUNE:
+  },
+  {
+    id: 'sparkler-swirl',
+    name: 'Sparkler Swirl',
+    description: 'Twirls a sparkly little flame. Ooh, pretty!',
+    element: 'fire',
+    power: 55, // TUNE:
+    accuracy: 100,
+  },
+  {
+    id: 'rumble-boop',
+    name: 'Rumble Boop',
+    description: 'A big, rumbly boop with a sturdy horn. Wobble wobble.',
+    element: 'stone',
+    power: 70, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
+  },
 ];
 
 /*
@@ -359,7 +454,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 50, defense: 45, speed: 55 }, // TUNE:
     moves: ['giggle-drizzle', 'belly-flop', 'bubble-bath'],
-    evolutions: [{ into: 'splashmallow', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'splashmallow', level: 16 },
+      { into: 'drizzledoze', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'drop',
       palette: ['#7cc0f4', '#e8f6ff', '#3f86d8'],
@@ -398,6 +496,37 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
   },
+  {
+    id: 'drizzledoze',
+    name: 'Drizzledoze',
+    description: 'A sleepy pond frog. It snores tiny rain clouds.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'uncommon',
+    baseStats: { hp: 92, attack: 63, defense: 83, speed: 68 }, // TUNE:
+    moves: ['giggle-drizzle', 'splish-splash', 'bubble-bath', 'snore-drizzle'],
+    evolutions: [],
+    visual: {
+      body: 'bun',
+      palette: ['#7cc0f4', '#e8f6ff', '#3f86d8', '#ffffff'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'belly-patch',
+        'water-curl',
+        'side-fins',
+        'hop-feet',
+        'wiggle-tail',
+      ],
+      size: 1.3,
+      head: { body: 'orb', size: 0.8, forward: 0.3, up: 0.5 },
+      stance: 0.15,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
 
   // Stone + Sleepy. A plain counter: Stone beats Fire, Sleepy calms Spooky and Cozy.
   {
@@ -409,7 +538,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 45, defense: 65, speed: 25 }, // TUNE:
     moves: ['pebble-plop', 'rock-a-bye', 'sturdy-sit'],
-    evolutions: [{ into: 'boulderdoze', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'boulderdoze', level: 16 },
+      { into: 'rumblehorn', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'pebble',
       palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
@@ -451,6 +583,37 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
   },
+  {
+    id: 'rumblehorn',
+    name: 'Rumblehorn',
+    description: "Woke up from its nap feeling brave. Now it guards everyone else's naps.",
+    element: 'stone',
+    feeling: 'brave',
+    rarity: 'uncommon',
+    baseStats: { hp: 75, attack: 95, defense: 85, speed: 45 }, // TUNE:
+    moves: ['pebble-plop', 'rumble-boop', 'sturdy-sit', 'rumble-roll'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'round-ears',
+        'uni-horn',
+        'crag-nubs',
+        'strong-arms',
+        'biped-legs',
+      ],
+      size: 1.35,
+      head: { body: 'orb', size: 0.6, forward: 0.1, up: 0.82 },
+      stance: 0.3,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['brave', 'sleepy'] },
+  },
 
   // Fire + Cozy (harmonious).
   {
@@ -462,7 +625,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 50, attack: 55, defense: 45, speed: 50 }, // TUNE:
     moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle'],
-    evolutions: [{ into: 'hearthbun', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'hearthbun', level: 16 },
+      { into: 'embernap', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'blob',
       palette: ['#ffad73', '#fff0e0', '#ff6a2e'],
@@ -517,6 +683,38 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
+  {
+    id: 'embernap',
+    name: 'Embernap',
+    description: 'Curled up like a warm coal. Toasty to cuddle, impossible to wake.',
+    element: 'fire',
+    feeling: 'sleepy',
+    rarity: 'uncommon',
+    baseStats: { hp: 93, attack: 75, defense: 88, speed: 55 }, // TUNE:
+    moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle', 'toasty-snore'],
+    evolutions: [],
+    visual: {
+      body: 'bun',
+      palette: ['#ffad73', '#fff0e0', '#ff6a2e', '#ffd166'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'floppy-ears',
+        'flame-crown',
+        'stubby-arms',
+        'stubby-legs',
+        'fluff-tail',
+      ],
+      size: 1.3,
+      glow: 'accent',
+      head: { body: 'orb', size: 0.85, forward: 0.45, up: 0.3 },
+      stance: 0.1,
+      pose: 'sit',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['sleepy', 'cozy'] },
+  },
 
   // Frost + Sleepy. A plain counter: Frost nips Leaf, Sleepy calms Cozy.
   {
@@ -528,7 +726,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 40 }, // TUNE:
     moves: ['snowball-toss', 'chilly-yawn', 'frosty-pounce'],
-    evolutions: [{ into: 'drowsiberg', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'drowsiberg', level: 16 },
+      { into: 'twirlicle', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'tiered',
       palette: ['#d4f0ff', '#ffffff', '#86c5eb'],
@@ -569,6 +770,36 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
   },
+  {
+    id: 'twirlicle',
+    name: 'Twirlicle',
+    description: 'Woke up, found the ice, and never stopped skating. Wheee!',
+    element: 'frost',
+    feeling: 'silly',
+    rarity: 'uncommon',
+    baseStats: { hp: 77, attack: 77, defense: 65, speed: 98 }, // TUNE:
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster', 'twirly-whirl'],
+    evolutions: [],
+    visual: {
+      body: 'tiered',
+      palette: ['#d4f0ff', '#ffffff', '#86c5eb', '#ff9ad5'],
+      parts: [
+        'sharp-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'floppy-ears',
+        'fur-ruff',
+        'stubby-arms',
+        'side-fins',
+        'hop-feet',
+      ],
+      size: 1.3,
+      stance: 0.2,
+      pose: 'stand',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['silly', 'joy'] },
+  },
 
   // Spark + Silly. A plain counter: Spark zaps Light, Silly disarms Joy and Brave.
   {
@@ -580,7 +811,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 50, attack: 50, defense: 45, speed: 70 }, // TUNE:
     moves: ['zip-zap', 'fizzy-pop', 'pebble-plop'], // TUNE: Fizzy Pop, so it can hit hard
-    evolutions: [{ into: 'frizzbolt', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'frizzbolt', level: 16 },
+      { into: 'glidebolt', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'barrel',
       palette: ['#ffe45c', '#fff9db', '#f5a800'],
@@ -622,6 +856,37 @@ export const SPECIES: Species[] = [
       attackPart: 'tail',
     },
     habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
+  },
+  {
+    id: 'glidebolt',
+    name: 'Glidebolt',
+    description: 'A fluffy glider that zips from tree to tree. It never lands where it meant to.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'uncommon',
+    baseStats: { hp: 72, attack: 78, defense: 55, speed: 105 }, // TUNE:
+    moves: ['zip-zap', 'fizzy-pop', 'zoomies', 'static-glide'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#ffe45c', '#fff9db', '#f5a800', '#ffffff'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'bolt-ears',
+        'big-bat-wings',
+        'stubby-legs',
+        'bolt-chain',
+        'belly-patch',
+      ],
+      size: 1.3,
+      head: { body: 'orb', size: 0.9, forward: 0.55, up: 0.45 },
+      stance: 0.35,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'silly'] },
   },
 
   // Spark + Joy (harmonious).
@@ -727,7 +992,10 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 55, attack: 70, defense: 55, speed: 45 }, // TUNE:
     moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff'],
-    evolutions: [{ into: 'bristlebloom', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'bristlebloom', level: 18 },
+      { into: 'petalprance', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#9fd672', '#f2ffe6', '#b06fd8'],
@@ -767,6 +1035,35 @@ export const SPECIES: Species[] = [
       attackPart: 'arms',
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
+  },
+  {
+    id: 'petalprance',
+    name: 'Petalprance',
+    description: "Swapped its prickles for petals and hasn't stopped dancing since.",
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 79, attack: 90, defense: 69, speed: 95 }, // TUNE:
+    moves: ['leafy-tickle', 'pollen-puff', 'leaf-pile-leap', 'petal-party'],
+    evolutions: [],
+    visual: {
+      body: 'star',
+      palette: ['#9fd672', '#f2ffe6', '#b06fd8', '#5aa83a'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'leaf-sprout',
+        'leaf-wings',
+        'leaf-arms',
+        'freckles',
+      ],
+      size: 1.3,
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'brave'] },
   },
 
   // Frost + Brave (harmonious).
@@ -1015,7 +1312,7 @@ export const SPECIES: Species[] = [
     element: 'light',
     feeling: 'joy',
     rarity: 'legendary',
-    baseStats: { hp: 85, attack: 95, defense: 75, speed: 90 }, // TUNE:
+    baseStats: { hp: 82, attack: 92, defense: 73, speed: 87 }, // TUNE:
     moves: ['sunny-beam', 'dazzle-dance', 'glow-up', 'giggle-drizzle'],
     evolutions: [],
     visual: {
@@ -1091,7 +1388,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 40 }, // TUNE:
     moves: ['pumpkin-roll', 'leafy-tickle', 'boo'],
-    evolutions: [{ into: 'glowgourd', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'glowgourd', level: 16 },
+      { into: 'squashboo', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'pumpkin',
       palette: ['#ff9a3c', '#ffe0b8', '#4f9a45'],
@@ -1142,6 +1442,29 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
   },
+  {
+    id: 'squashboo',
+    name: 'Squashboo',
+    description: 'A pumpkin that learned to say boo. Then giggled about it for an hour.',
+    element: 'leaf',
+    feeling: 'spooky',
+    rarity: 'uncommon',
+    season: 'halloween',
+    baseStats: { hp: 85, attack: 85, defense: 75, speed: 80 }, // TUNE:
+    moves: ['pumpkin-roll', 'peekaboo', 'boo', 'lantern-grin'],
+    evolutions: [],
+    visual: {
+      body: 'pumpkin',
+      palette: ['#ffb871', '#fff6e0', '#4f9a45', '#ffd23f'],
+      parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stem', 'bat-wings', 'wisp-chain'],
+      size: 1.3,
+      glow: 'body',
+      stance: 0.4,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['spooky', 'silly'] },
+  },
 
   // Light + Spooky (conflicted, so a bigger stat budget). A little ghost
   // who's afraid of the dark; comes out on Halloween nights in the woods.
@@ -1155,7 +1478,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 65, defense: 60, speed: 65 }, // TUNE:
     moves: ['night-light', 'boo', 'peekaboo'],
-    evolutions: [{ into: 'brightboo', level: 22 }], // TUNE:
+    evolutions: [
+      { into: 'brightboo', level: 22 },
+      { into: 'lullaboo', level: 22 },
+    ], // TUNE:
     visual: {
       body: 'ghost',
       palette: ['#f1ecff', '#fff6c7', '#c9b8ff'],
@@ -1199,6 +1525,38 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
+  {
+    id: 'lullaboo',
+    name: 'Lullaboo',
+    description: "Used to be afraid of the dark. Now it's everybody's night-light.",
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 95, attack: 75, defense: 85, speed: 70 }, // TUNE:
+    moves: ['night-light', 'sunny-beam', 'boo', 'night-light-hug'],
+    evolutions: [],
+    visual: {
+      body: 'ghost',
+      palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
+      parts: [
+        'oval-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'nightcap',
+        'stubby-arms',
+        'wisp-tail',
+        'freckles',
+      ],
+      size: 1.3,
+      finish: 'sparkle',
+      glow: 'body',
+      stance: 0.35,
+      pose: 'hover',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'spooky'] },
+  },
 
   // Shadow + Silly. A bat that hangs the wrong way up and loves Witch Dust.
   // Spawns key on terrain, season and time only, so it comes out at dusk
@@ -1213,7 +1571,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 55, attack: 60, defense: 45, speed: 70 }, // TUNE:
     moves: ['upside-flop', 'peekaboo', 'zip-zap'],
-    evolutions: [{ into: 'topsywing', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'topsywing', level: 18 },
+      { into: 'hushwing', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#4a3a7a', '#eadcff', '#9b7fd4'],
@@ -1249,6 +1610,38 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['silly', 'spooky'] },
   },
+  {
+    id: 'hushwing',
+    name: 'Hushwing',
+    description: 'Sleeps all day upside down, wrapped in its wings like a burrito.',
+    element: 'shadow',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    season: 'halloween',
+    // A smaller budget than Topsywing: its 40% Upside Snooze heal pays for it.
+    baseStats: { hp: 84, attack: 67, defense: 75, speed: 62 }, // TUNE:
+    moves: ['peekaboo', 'upside-flop', 'shadow-snuggle', 'upside-snooze'],
+    evolutions: [],
+    visual: {
+      body: 'mochi',
+      palette: ['#4a3a7a', '#eadcff', '#9b7fd4', '#ff9ad5'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'round-ears',
+        'nightcap',
+        'big-bat-wings',
+        'ball-tail',
+      ],
+      size: 1.25,
+      ink: '#fff4dc',
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy', 'silly'] },
+  },
 
   // Fire + Spooky. A candle-kitten that loves Jack-o'-Lantern glow. Spawns
   // can't see buildings yet, so it comes out at dusk and night in the
@@ -1263,7 +1656,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 50, attack: 60, defense: 45, speed: 65 }, // TUNE:
     moves: ['wiggle-wick', 'ember-boop', 'boo'],
-    evolutions: [{ into: 'wickwhisker', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'wickwhisker', level: 18 },
+      { into: 'sparklewick', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'tall',
       palette: ['#3d3550', '#fff1d6', '#ffb43c'],
@@ -1308,6 +1704,40 @@ export const SPECIES: Species[] = [
       attackPart: 'tail',
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
+  },
+  {
+    id: 'sparklewick',
+    name: 'Sparklewick',
+    description: "Glowed so bright it threw itself a party. Everyone's invited!",
+    element: 'fire',
+    feeling: 'joy',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 72, attack: 87, defense: 61, speed: 92 }, // TUNE:
+    moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble', 'sparkler-swirl'],
+    evolutions: [],
+    visual: {
+      body: 'tall',
+      palette: ['#3d3550', '#fff1d6', '#ffb43c', '#ffe066'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'pointy-ears',
+        'flame-crown',
+        'whisker-flames',
+        'stubby-arms',
+        'hop-feet',
+        'curly-tail',
+      ],
+      size: 1.3,
+      ink: '#fff4dc',
+      glow: 'accent',
+      stance: 0.15,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['joy', 'spooky'] },
   },
 
   // Thanksgiving (season `thanksgiving`): drawn by the season's leaf piles.
@@ -1354,7 +1784,7 @@ export const SPECIES: Species[] = [
     feeling: 'joy',
     rarity: 'rare',
     season: 'thanksgiving',
-    baseStats: { hp: 75, attack: 85, defense: 63, speed: 85 }, // TUNE:
+    baseStats: { hp: 84, attack: 95, defense: 71, speed: 95 }, // TUNE:
     moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies', 'sunny-beam'],
     evolutions: [],
     visual: {

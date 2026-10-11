@@ -128,10 +128,10 @@ export interface EvolutionStep {
 }
 
 /**
- * Phase 1 evolution (design doc §8): the single next form a species reaches
- * at `level`, or null. Of the steps from it whose level it has reached, the
- * lowest level wins, then the first listed (callers list public steps before
- * secret ones). Branch weights and rare conditions arrive in Phase 2.
+ * The next step a species reaches at `level`, or null: of the steps from it
+ * whose level it has reached, the lowest level wins, then the first listed
+ * (callers list public steps before secret ones), which is the step's
+ * default form. The server rolls between a step's branches (#32).
  */
 export function evolutionAt(
   speciesId: string,

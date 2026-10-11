@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { intersects, type Rect } from '../ui/geometry.js';
 import {
   blockersAround,
   dockChip,
   holeFor,
-  intersects,
   layoutOverlay,
   MIN_HOLE,
   ORB_SIZE,
   placeOrb,
   SPOTLIGHT_PADDING,
   union,
-  type Rect,
 } from './overlay-layout.js';
 
 const viewport = { width: 390, height: 844 };

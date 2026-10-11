@@ -605,7 +605,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect((await view(server, rival, mapId, second)).homestead).toBe('paused');
   });
 
-  it('restarts a tile explored under an older layout, and pauses the land beyond it', async () => {
+  it('keeps a tile finished under an older layout finished, homestead and all (#335)', async () => {
     const server = await start();
     const me = await player();
     const mapId = await patch(server, me);
@@ -614,10 +614,49 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     await ownMeadow(second, me);
     await exploreAll(server, me, mapId, first);
     await exploreAll(server, me, mapId, second);
-    // A layout bump: the row under `first` was made with an older one.
+    // A new kit for the terrain: the row under `first` was made with another layout.
     await db.execute(
       `update tile_explore set layout = ${String(EXPLORE_RULES.layout + 1)} where tile_id = '${first.id}'`,
     );
+    const kept = await view(server, me, mapId, first);
+    expect(kept.progress.searched).toBe(kept.progress.total);
+    expect(kept.spots.every((s) => s.done)).toBe(true);
+    expect(kept.homestead).toBe('joined');
+    await give(mapId, me, { shovel: 20 });
+    const res = await search(server, me, mapId, first, kept.spots[0]!.index);
+    expect(res.statusCode, res.body).toBe(409);
+    expect((await view(server, me, mapId, second)).homestead).toBe('joined');
+    expect(await eventsOf(mapId, 'homestead.paused')).toEqual([]);
+  });
+
+  it('restarts a half-searched tile under an older layout', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { first } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await give(mapId, me, { shovel: 20 });
+    const half = await view(server, me, mapId, first);
+    expect((await search(server, me, mapId, first, half.spots[0]!.index)).statusCode).toBe(200);
+    await db.execute(
+      `update tile_explore set layout = ${String(EXPLORE_RULES.layout + 1)} where tile_id = '${first.id}'`,
+    );
+    const fresh = await view(server, me, mapId, first);
+    expect(fresh.progress.searched).toBe(0);
+    expect((await search(server, me, mapId, first, half.spots[0]!.index)).statusCode).toBe(200);
+  });
+
+  it('restarts a converted tile, and pauses the land beyond it', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    await exploreAll(server, me, mapId, second);
+    // The row under `first` was made on another terrain.
+    await db.execute(`update tile_explore set terrain = 'forest' where tile_id = '${first.id}'`);
     const fresh = await view(server, me, mapId, first);
     expect(fresh.progress.searched).toBe(0);
     await give(mapId, me, { shovel: 20 });
@@ -632,6 +671,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       });
     expect(await rowOf(first)).toMatchObject({
       layout: EXPLORE_RULES.layout,
+      terrain: 'meadow',
       completedAt: null,
       joinedAt: null,
     });
@@ -652,9 +692,8 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     await exploreAll(server, me, mapId, second);
     // The stale row sorts after the other explored one.
     const [low, high] = [first, second].sort((a, b) => (a.id < b.id ? -1 : 1));
-    await db.execute(
-      `update tile_explore set layout = ${String(EXPLORE_RULES.layout + 1)} where tile_id = '${high!.id}'`,
-    );
+    // A converted tile's row is stale (a finished one under an older layout isn't, #335).
+    await db.execute(`update tile_explore set terrain = 'forest' where tile_id = '${high!.id}'`);
     await give(mapId, me, { shovel: 20 });
     const spot = (await view(server, me, mapId, high!)).spots[0]!.index;
     const lockRowOf = (tx: Executor, tile: Tile) =>

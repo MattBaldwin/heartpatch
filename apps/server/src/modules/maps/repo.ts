@@ -61,6 +61,8 @@ export interface MapRow {
   pvpMode: PvpMode;
   /** The owner's trading switch (#271). */
   tradingEnabled: boolean;
+  /** The owner's friendly-battle switch (#29). */
+  friendlyChallenges: boolean;
   maxPlayers: number;
   /** The last event seq committed for this map (`maps.event_seq`). */
   eventSeq: number;
@@ -441,6 +443,7 @@ function queries(db: Executor): MapsRepo {
           timeZone: maps.timeZone,
           pvpMode: maps.pvpMode,
           tradingEnabled: maps.tradingEnabled,
+          friendlyChallenges: maps.friendlyChallenges,
           maxPlayers: maps.maxPlayers,
           eventSeq: maps.eventSeq,
         })

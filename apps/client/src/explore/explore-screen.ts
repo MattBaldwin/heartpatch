@@ -25,6 +25,7 @@ import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { AmbientDriver } from '../map/ambient-driver.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -80,6 +81,8 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
+import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -98,9 +101,16 @@ export interface ExploreScreenOptions {
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
   tier: () => QualityTier;
+  /** Dev captures: the tier is pinned (`?tier=`), so ambient life never judges itself too slow. */
+  pinned?: () => boolean;
+  /** Draws one frame (`Stage.requestFrame`): ambient life (#335) paces itself with this. */
+  requestFrame?: () => void;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
-  /** The tile as the map has it (its buildings), or null. */
+  /**
+   * The tile as the map has it (its buildings), or null. Read when a tile
+   * opens, before `onOpen` closes the map (#347).
+   */
   mapTile: (at: { q: number; r: number }) => PublicTile | null;
   /** Exploring is for patches: never on the Tutorial Glade. */
   isGlade: (mapId: string) => boolean;
@@ -121,7 +131,16 @@ export interface ExploreScreenOptions {
   bag?: (mapId: string) => Promise<ItemCounts>;
   /** Reduced motion: finds skip their flight into the bag. */
   reducedMotion?: () => boolean;
+  /** The open patch's time zone, for the sky (#335); null uses the device's. */
+  timeZone?: (mapId: string) => string | null;
+  /** The clock (tests pin it). */
+  now?: () => Date;
+  /** Where Sprout remembers the renamed-tools tip (tests pass their own; null: never shown). */
+  storage?: SettingsStorage | null;
 }
+
+/** Where Sprout remembers it gave the renamed-tools tip (#335), per account. */
+const RENAMED_TIP_KEY = (userId: string) => `heartpatch.explore.renamed-tools.${userId}`;
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface ExploreDebug {
@@ -183,6 +202,26 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
+  /** The map's view of the open tile, read as it opened (#347). */
+  let mapTileAtOpen: PublicTile | null = null;
+  /** Paces the land's ambient life (#335), like the map's: the motion itself is on the GPU. */
+  const ambient = new AmbientDriver({
+    target: () => (isOpen ? scene3d : null),
+    invalidate: options.invalidate,
+    tier: options.tier,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+  });
+  /** Checks the sky once a minute while exploring (#335). */
+  let skyTimer: ReturnType<typeof setInterval> | null = null;
+  const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
+  /**
+   * The open patch's time zone, read before `onOpen` closes the map (the
+   * map's view is gone after that), and kept for the visit.
+   */
+  let zone: string | null = null;
+  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  /** The look last shown, so a quiet minute changes and redraws nothing. */
+  let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
   let yaw: number = EXPLORE_VIEW.startYaw;
@@ -468,6 +507,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (tier !== lastTier) {
       lastTier = tier;
       s.setLod(lodFor('closeUp', tier));
+      s.setTier(tier);
     }
     const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
@@ -602,7 +642,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const state = stepInteraction(before, input);
     if (state === before) return;
     playing = { ...playing, state };
-    // Every scoop, shake or step up the rope swings the tool.
+    // Every scoop, shake or step up the trail swings the tool.
     if (state.count > before.count) scene3d?.useTool(performance.now());
     if (state.done) {
       const { spot } = playing;
@@ -952,7 +992,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
-  /** Updates the overlay's count and the net's glow. */
+  /** Updates the overlay's count and the Snorkel's glow. */
   function renderPlay(): void {
     const p = playing;
     play.hidden = p === null || card !== null;
@@ -1138,7 +1178,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         const kind = species.get(m.speciesId);
         return kind ? [{ id: m.id, species: kind }] : [];
       }),
-      mapTile: options.mapTile(tile),
+      mapTile: mapTileAtOpen,
+      sky: (skyShown = skyNow()),
+      tier: lastTier,
+      pinned: options.pinned?.() ?? false,
       reducedMotion,
     });
     // The start can land on a rock: step out before the Keeper is drawn.
@@ -1151,6 +1194,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     built.hold(heldTool());
     front = null;
     findFront();
+    // Swaying grass, butterflies and fireflies (#335): about 30 frames a second, or still.
+    const { tier: startTier, reducedMotion: still } = ambient.state;
+    built.setAmbient(startTier, still);
+    ambient.start();
     return built.content;
   };
 
@@ -1168,6 +1215,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   async function openTile(id: string, at: { q: number; r: number }): Promise<void> {
     const ask = generation;
+    zone = options.timeZone?.(id) ?? null;
     let fresh: ExploreTileResponse;
     try {
       const [view, board] = await Promise.all([
@@ -1202,13 +1250,51 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     clearToast();
     isOpen = true;
     say('');
+    // The map's view of the tile, before `onOpen` closes the map and its
+    // view goes with it (#347: the tile's buildings never reached the scene).
+    mapTileAtOpen = options.mapTile(at);
     options.onOpen(id);
     options.showScene(build);
+    if (skyTimer !== null) clearInterval(skyTimer);
+    skyTimer = setInterval(() => {
+      const look = skyNow();
+      if (skyShown && sameLook(look, skyShown)) return;
+      skyShown = look;
+      scene3d?.setSky(look);
+      options.invalidate();
+    }, 60_000);
     render();
+    renamedTip(fresh);
+  }
+
+  /**
+   * Sprout's one-time tip (#335): a kid who had a Net or a Rope hears they
+   * are a Snorkel and a Walking Stick now, the first time they explore.
+   */
+  function renamedTip(view: ExploreTileResponse): void {
+    if (!user || !tipStorage || (view.tools.net <= 0 && view.tools.rope <= 0)) return;
+    const key = RENAMED_TIP_KEY(user.id);
+    try {
+      if (tipStorage.getItem(key) !== null) return;
+      tipStorage.setItem(key, '1');
+    } catch {
+      return;
+    }
+    toast = { main: EXPLORE_TEXT.renamedTip, extra: EXPLORE_TEXT.renamedTipExtra };
+    if (toastTimer !== null) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastTimer = null;
+      toast = null;
+      renderToast();
+    }, EXPLORE_FIND.toastMs * 2);
+    renderToast();
   }
 
   function hide(): void {
     isOpen = false;
+    ambient.stop();
+    if (skyTimer !== null) clearInterval(skyTimer);
+    skyTimer = null;
     // A reply still on its way (a search, a bag read) belongs to this visit:
     // it must never land on the next tile opened.
     generation += 1;
@@ -1223,6 +1309,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     scene3d = null;
+    mapTileAtOpen = null;
     render();
   }
 

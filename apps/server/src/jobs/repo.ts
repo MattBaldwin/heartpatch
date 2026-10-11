@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Db as PgBossDb } from 'pg-boss';
 import { withTransaction, type Executor, type Transaction } from '../db/client.js';
 import type { GameEvent } from '../db/game-events.js';
@@ -23,6 +23,32 @@ export interface JobsRepo {
   setPosition: (consumer: string, mapId: string, lastSeq: number) => Promise<void>;
   /** Maps of these kinds whose `event_seq` is past the consumer's `last_seq`. */
   laggingMaps: (consumer: string, kinds: readonly MapKind[]) => Promise<string[]>;
+  /** Maps (all, or just these) with their head seq and every consumer's position on them. */
+  retentionMaps: (mapIds?: readonly string[]) => Promise<RetentionMap[]>;
+  /**
+   * Deletes up to `limit` of the map's events below `belowSeq` that are past
+   * their keep (older than `before`, or a short-lived type older than
+   * `shortLivedBefore`), oldest seq first. Returns how many it deleted.
+   */
+  deleteOldEvents: (mapId: string, cut: EventCut) => Promise<number>;
+}
+
+/** A map as the retention job sees it. */
+export interface RetentionMap {
+  id: string;
+  kind: MapKind;
+  eventSeq: number;
+  /** `event_consumers.last_seq` by consumer name. */
+  positions: Map<string, number>;
+}
+
+/** Which of a map's events one retention batch may delete. */
+export interface EventCut {
+  belowSeq: number;
+  before: Date;
+  shortLivedTypes: readonly string[];
+  shortLivedBefore: Date;
+  limit: number;
 }
 
 export function createJobsRepo(db: Executor): JobsRepo {
@@ -74,6 +100,55 @@ export function createJobsRepo(db: Executor): JobsRepo {
           ),
         );
       return rows.map((r) => r.id);
+    },
+
+    retentionMaps: async (mapIds) => {
+      if (mapIds?.length === 0) return [];
+      const only = mapIds ? [...mapIds] : null;
+      const rows = await db
+        .select({ id: maps.id, kind: maps.kind, eventSeq: maps.eventSeq })
+        .from(maps)
+        .where(only ? inArray(maps.id, only) : undefined)
+        .orderBy(asc(maps.id));
+      const positions = await db
+        .select()
+        .from(eventConsumers)
+        .where(only ? inArray(eventConsumers.mapId, only) : undefined);
+      return rows.map((map) => ({
+        ...map,
+        positions: new Map(
+          positions.filter((p) => p.mapId === map.id).map((p) => [p.consumer, p.lastSeq]),
+        ),
+      }));
+    },
+
+    deleteOldEvents: async (mapId, cut) => {
+      // Walks the `(map_id, seq)` index from the map's oldest event; no other index needed.
+      const doomed = db
+        .select({ id: gameEvents.id })
+        .from(gameEvents)
+        .where(
+          and(
+            eq(gameEvents.mapId, mapId),
+            lt(gameEvents.seq, cut.belowSeq),
+            or(
+              lt(gameEvents.createdAt, cut.before),
+              cut.shortLivedTypes.length > 0
+                ? and(
+                    inArray(gameEvents.type, [...cut.shortLivedTypes]),
+                    lt(gameEvents.createdAt, cut.shortLivedBefore),
+                  )
+                : undefined,
+            ),
+          ),
+        )
+        .orderBy(asc(gameEvents.seq))
+        .limit(cut.limit);
+      const gone = await db
+        .delete(gameEvents)
+        .where(inArray(gameEvents.id, doomed))
+        .returning({ id: gameEvents.id });
+      return gone.length;
     },
   };
 }
