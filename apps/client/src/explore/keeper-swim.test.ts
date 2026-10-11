@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { EXPLORE_SWIM, EXPLORE_VIEW } from './explore-config.js';
 import {
+  bubblesAt,
   createSwim,
   stepSwim,
   strokeAt,
   swimActive,
+  swimPlacement,
   swimPose,
   type Swim,
+  type SwimPlacement,
   type SwimPose,
 } from './keeper-swim.js';
 
@@ -115,5 +118,85 @@ describe('the swim (#399, glide and kick)', () => {
   it('writes the pose in place', () => {
     const out = pose();
     expect(swimPose(createSwim(), false, 0, out)).toBe(out);
+  });
+
+  it('moves smoothly frame to frame, the kick-to-glide hand-over included (60 and 120 fps)', () => {
+    for (const fps of [60, 120]) {
+      const s = createSwim();
+      const dt = 1 / fps;
+      let last: SwimPose | null = null;
+      // Warm up, then many strokes at full push.
+      for (let i = 0; i < fps * 6; i++) {
+        stepSwim(s, EXPLORE_VIEW.walkSpeed * dt, dt, 1);
+        const p = { ...swimPose(s, false, i * dt, pose()) };
+        if (last && i > fps) {
+          // A 60 fps frame may change each by this much at most; 120 fps half that.
+          const k = 60 / fps;
+          expect(Math.abs(p.squash - last.squash)).toBeLessThan(0.06 * k);
+          expect(Math.abs(p.surge - last.surge)).toBeLessThan(0.08 * k);
+          expect(Math.abs(p.pitch - last.pitch)).toBeLessThan(0.05 * k);
+          expect(Math.abs(p.lift - last.lift)).toBeLessThan(0.02 * k);
+        }
+        last = p;
+      }
+    }
+  });
+});
+
+describe('placing the swimmer (#399)', () => {
+  const tall = 0.9;
+  const out = (): SwimPlacement => ({ dx: 0, dz: 0, lean: 0, lift: 0, midX: 0, midZ: 0 });
+  const swimming = (pitch: number): SwimPose => ({ pitch, lift: 0.4, squash: 1, surge: 0 });
+
+  it('leans the head forward into the heading (a negative lean), and stands upright treading water', () => {
+    expect(swimPlacement(swimming(1.1), tall, 0, out()).lean).toBeLessThan(0);
+    expect(swimPlacement(swimming(0), tall, 0, out()).lean).toBe(-0);
+  });
+
+  it('pitches about the head: the head stays on its point at any tilt and heading', () => {
+    const pivot = tall * EXPLORE_SWIM.pivot;
+    for (const yaw of [0, Math.PI / 2, Math.PI, -0.7]) {
+      for (const pitch of [0, 0.4, 0.8, 1.15]) {
+        const p = swimPlacement(swimming(pitch), tall, yaw, out());
+        // The field rotates the body about its feet: yaw, then the lean
+        // (positive tips the top toward the Keeper's back, +z at yaw 0).
+        const lean = p.lean;
+        const backX = Math.sin(yaw);
+        const backZ = Math.cos(yaw);
+        const headX = p.dx + backX * pivot * Math.sin(lean);
+        const headZ = p.dz + backZ * pivot * Math.sin(lean);
+        const headY = p.lift + pivot * Math.cos(lean);
+        expect(headX).toBeCloseTo(0, 9);
+        expect(headZ).toBeCloseTo(0, 9);
+        expect(headY).toBeCloseTo(0.4 * tall + pivot, 9);
+      }
+    }
+  });
+
+  it('trails the feet behind the heading, with the shadow under the middle', () => {
+    for (const yaw of [0, Math.PI / 2, Math.PI]) {
+      const p = swimPlacement(swimming(1.15), tall, yaw, out());
+      // The heading is (−sin yaw, −cos yaw): the feet sit the other way.
+      const along = -Math.sin(yaw) * p.dx - Math.cos(yaw) * p.dz;
+      expect(along).toBeLessThan(0);
+      const mid = -Math.sin(yaw) * p.midX - Math.cos(yaw) * p.midZ;
+      expect(mid).toBeGreaterThan(along);
+      expect(mid).toBeLessThan(0);
+    }
+  });
+
+  it('surges ahead along the heading on a kick', () => {
+    const rest = swimPlacement(swimming(1.15), tall, Math.PI / 2, out());
+    const kick = swimPlacement({ ...swimming(1.15), surge: 0.3 }, tall, Math.PI / 2, out());
+    // Yaw π/2 faces −x: the kick moves it further toward −x.
+    expect(kick.dx).toBeLessThan(rest.dx);
+  });
+});
+
+describe('kick bubbles by quality tier (#399)', () => {
+  it('only the high tier puffs them, so lower tiers draw nothing extra', () => {
+    expect(bubblesAt('high')).toBe(true);
+    expect(bubblesAt('medium')).toBe(false);
+    expect(bubblesAt('low')).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import type { QualityTier } from '../engine/config.js';
 import { EXPLORE_SWIM } from './explore-config.js';
 
 // Swimming under a lake (#399, "Glide and kick"): the Keeper and the team
@@ -100,7 +101,9 @@ export function swimPose(swim: Swim, reduce: boolean, time: number, out: SwimPos
   if (q < kick.share) {
     // The kick: bunch up, then shoot out long, ahead of the pace.
     const k = q / kick.share;
-    out.squash = 1 - kick.squash * amp * Math.sin(Math.PI * k);
+    // …ending at the glide's first stretch, so the hand-over doesn't pop.
+    out.squash =
+      1 - kick.squash * amp * Math.sin(Math.PI * k) + kick.stretch * amp * (k * k * (3 - 2 * k));
     out.surge = kick.surge * amp * (k * k * (3 - 2 * k));
   } else {
     // The glide: drift back to the pace, easing out of the stretch.
@@ -112,4 +115,51 @@ export function swimPose(swim: Swim, reduce: boolean, time: number, out: SwimPos
   out.pitch += kick.dip * amp * Math.sin(TAU * q);
   out.lift += kick.bob * amp * Math.sin(TAU * q);
   return out;
+}
+
+/** Where the swimmer is drawn, from its pose: in place, no allocation. */
+export interface SwimPlacement {
+  /** Offset of the feet from the swimmer's point, along x and z (world units). */
+  dx: number;
+  dz: number;
+  /** The field's lean: negative pitches the head forward, into the heading (a positive lean leans back). */
+  lean: number;
+  /** Lift of the feet above the sand (world units). */
+  lift: number;
+  /** Offset of the body's middle from the swimmer's point, along x and z (for its shadow). */
+  midX: number;
+  midZ: number;
+}
+
+/**
+ * The swimmer pitches about its head (`EXPLORE_SWIM.pivot` of its height
+ * up), not its feet, so the head stays on its point and the legs trail; the
+ * kick's surge carries it ahead along the heading. `tall` is its height in
+ * world units; yaw 0 faces −z, so the heading is (−sin yaw, −cos yaw).
+ */
+export function swimPlacement(
+  pose: SwimPose,
+  tall: number,
+  yaw: number,
+  out: SwimPlacement,
+): SwimPlacement {
+  const pivot = tall * EXPLORE_SWIM.pivot;
+  const sin = Math.sin(pose.pitch);
+  const ahead = pose.surge * tall - pivot * sin;
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  out.dx = fx * ahead;
+  out.dz = fz * ahead;
+  out.lean = -pose.pitch;
+  out.lift = pose.lift * tall + pivot * (1 - Math.cos(pose.pitch));
+  // The middle of the body, half its height along it from the feet.
+  const mid = ahead + tall * 0.5 * sin;
+  out.midX = fx * mid;
+  out.midZ = fz * mid;
+  return out;
+}
+
+/** Kick bubbles (one extra draw) only on the quality tiers that can afford them. */
+export function bubblesAt(tier: QualityTier): boolean {
+  return EXPLORE_SWIM.bubbleTiers[tier];
 }

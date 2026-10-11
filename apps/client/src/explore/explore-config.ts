@@ -305,7 +305,7 @@ export const EXPLORE_UNDERWATER = {
  * covered, never the clock.
  */
 export const EXPLORE_SWIM = {
-  /** The Keeper pitches about this share of its height up (its head), not its feet: the head stays on its point and the legs trail. */
+  /** The Keeper pitches about this share of its height up (its head), not its feet: the head stays on (about) its point and the legs trail. */
   pivot: 0.7, // TUNE
   /** Water covered by one stroke at no effort and at full effort, tile-local (full stick is about 1.6 strokes a second). */
   stroke: { min: 0.13, max: 0.19 }, // TUNE
@@ -348,6 +348,8 @@ export const EXPLORE_SWIM = {
     size: 0.13,
     spread: 0.2,
     staggerMs: 140,
+    /** Each kick's bubbles in turn, as a share of the full size. */
+    sizes: [1, 0.7, 0.85],
   }, // TUNE
   /** Kick bubbles are one extra draw: only on the high tier, so the iPad 9th gen's low and medium tiers pay nothing (owner, 30 fps with no headroom). */
   bubbleTiers: { high: true, medium: false, low: false }, // TUNE

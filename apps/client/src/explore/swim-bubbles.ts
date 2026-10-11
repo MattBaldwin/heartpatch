@@ -16,8 +16,6 @@ const SCALE = new Vector3();
 const AT = new Vector3();
 const M = new Matrix();
 const TURN = Quaternion.Identity();
-/** Each kick's bubbles in turn, as a share of the full size. */
-const BUBBLE_SIZES = [1, 0.7, 0.85]; // TUNE:
 
 export class SwimBubbles {
   readonly #mesh: Mesh;
@@ -43,6 +41,8 @@ export class SwimBubbles {
     mat.specularColor = Color3.Black();
     mat.emissiveColor = linear('#f4fdff').scale(WATER_MOTION.glow * 1.3);
     mesh.material = mat;
+    // Compiled now, so the first kick doesn't wait on the shader.
+    mat.forceCompilation(mesh);
     mesh.isPickable = false;
     mesh.alwaysSelectAsActiveMesh = true;
     this.#matrices = new Float32Array(pool * 16);
@@ -64,12 +64,12 @@ export class SwimBubbles {
       const s = this.#state;
       // Spread apart so they never merge into one pill, sizes varied, and
       // a stagger so they leave one after another.
-      const { spread, staggerMs } = EXPLORE_SWIM.bubbles;
+      const { spread, staggerMs, sizes } = EXPLORE_SWIM.bubbles;
       s[i * 4] = at.x + (n - (perKick - 1) / 2) * spread * this.#size;
       s[i * 4 + 1] = at.y + (n % 2) * spread * 0.5 * this.#size;
       s[i * 4 + 2] = at.z + ((n * 2) % 3) * spread * 0.4 * this.#size;
       s[i * 4 + 3] = now + n * staggerMs;
-      this.#sizes[i] = BUBBLE_SIZES[n % BUBBLE_SIZES.length] ?? 1;
+      this.#sizes[i] = sizes[n % sizes.length] ?? 1;
     }
     this.#puffed = true;
     this.#mesh.setEnabled(true);
