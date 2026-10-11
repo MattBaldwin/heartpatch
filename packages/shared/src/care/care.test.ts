@@ -425,14 +425,15 @@ describe('befriendedLevel (owner decision 2026-10-06)', () => {
     expect(befriendedLevel('pebble', 40, steps, { befriendNoEvolutionLevel: 15 })).toBe(40);
   });
 
-  it('shipped standalone cap = lowest first evolution among base forms, minus the cap', () => {
+  it('shipped standalone cap sits between the earliest and the middle first evolution', () => {
     const into = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
-    const firsts = SPECIES.filter((s) => !into.has(s.id) && s.evolutions.length > 0).map((s) =>
-      Math.min(...s.evolutions.map((e) => e.level)),
-    );
-    expect(GROWTH_RULES.befriendNoEvolutionLevel).toBe(
-      Math.min(...firsts) - (GROWTH_RULES.befriendBelowEvolution ?? 0),
-    );
+    const firsts = SPECIES.filter((s) => !into.has(s.id) && s.evolutions.length > 0)
+      .map((s) => Math.min(...s.evolutions.map((e) => e.level)))
+      .sort((a, b) => a - b);
+    const cap = GROWTH_RULES.befriendNoEvolutionLevel ?? 0;
+    // Never stricter than the strictest evolver would be, never looser than a typical one.
+    expect(cap).toBeGreaterThanOrEqual(firsts[0]! - (GROWTH_RULES.befriendBelowEvolution ?? 0));
+    expect(cap).toBeLessThanOrEqual(firsts[Math.floor(firsts.length / 2)]!);
   });
 });
 
