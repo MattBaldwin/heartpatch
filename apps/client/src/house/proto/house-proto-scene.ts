@@ -878,7 +878,7 @@ export class HouseProtoScene {
       ball(scene, 0.5, [0.25, 0.9, 0.1], '#7cc46f'),
       ball(scene, 0.45, [-0.22, 0.95, -0.1], '#6db863'),
     ]);
-    plant.position.set(-w / 2 + 0.42, 0, d / 2 - 1.6);
+    plant.position.set(-w / 2 + 0.42, 0, d / 2 - 0.45);
 
     // Residents and the Keeper.
     // Puddlepuff napping in the left bed, squashed into the pillow.
