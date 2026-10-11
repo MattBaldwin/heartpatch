@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EXPLORE_SKY, localMinuteIn, SKY_LOOKS, skyLook } from './explore-sky-look.js';
+import {
+  EXPLORE_SKY,
+  isUnderwater,
+  localMinuteIn,
+  SKY_LOOKS,
+  skyLook,
+  WATER_LOOKS,
+} from './explore-sky-look.js';
 
 describe('the explore sky look (#335)', () => {
   it('is the phase itself away from a change', () => {
@@ -39,6 +46,22 @@ describe('the explore sky look (#335)', () => {
     expect(Number.isInteger(localMinuteIn('Not/AZone', at))).toBe(true);
   });
 
+  it('goes underwater on a lake: no sun or clouds, bubbles, a hazy seabed (#335)', () => {
+    expect(isUnderwater('lake')).toBe(true);
+    expect(isUnderwater('meadow')).toBe(false);
+    const day = skyLook({ phase: 'day', next: 'dusk', blend: 0 }, true);
+    expect(day).toEqual(WATER_LOOKS.day);
+    expect(day.sunDisc).toBe(false);
+    expect(day.clouds).toBe(0);
+    expect(day.stars).toBe(true);
+    expect(day.fog).not.toBeNull();
+    expect(skyLook({ phase: 'day', next: 'dusk', blend: 0 }).fog).toBeNull();
+    // Night under the water is still blue, never black (art bible §2).
+    const max = (hex: string) =>
+      Math.max(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+    expect(max(WATER_LOOKS.night.horizon)).toBeGreaterThan(0x60);
+  });
+
   it('tints the ground a moonlit blue-green at night, and leaves day untouched (owner)', () => {
     const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     expect(SKY_LOOKS.day.groundTint).toBe('#ffffff');
@@ -46,5 +69,16 @@ describe('the explore sky look (#335)', () => {
     expect(Math.max(r, g, b)).toBeLessThan(0xc0);
     expect(g).toBeGreaterThan(r);
     expect(b).toBeGreaterThan(r);
+  });
+
+  it('washes the whole lake a blue-green, day and night (owner, second pass)', () => {
+    for (const look of Object.values(WATER_LOOKS)) {
+      const [r = 0, g = 0, b = 0] = [1, 3, 5].map((i) =>
+        parseInt(look.groundTint.slice(i, i + 2), 16),
+      );
+      expect(g, look.groundTint).toBeGreaterThan(r);
+      expect(b, look.groundTint).toBeGreaterThan(r);
+      expect(look.fog).not.toBeNull();
+    }
   });
 });

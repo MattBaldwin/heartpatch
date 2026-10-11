@@ -27,6 +27,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { requirePostAccess } from '../journeys/service.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -264,10 +265,10 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       const mine = held.filter(
         (s) => s.ownerUserId === offer.fromUserId && squishyIds(giveOf(offer.id)).includes(s.id),
       );
-      await repo.setSquishyState(
-        mine.filter((s) => s.state === 'in-trade').map((s) => s.id),
-        'active',
-      );
+      const back = mine.filter((s) => s.state === 'in-trade').map((s) => s.id);
+      // Waiting at the post was no job (#376): that time counts as resting.
+      await checkpointContentment(tx, offer.mapId, back, at);
+      await repo.setSquishyState(back, 'active');
     }
     const pieces = await repo.lockPieces(offers.flatMap((o) => pieceIds(giveOf(o.id))));
     for (const offer of offers) {
@@ -613,6 +614,8 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
         });
       }
 
+      // Off to the post with no job: contentment so far counts at its old job's rate (#376).
+      await checkpointContentment(tx, mapId, squishyIds(give), at);
       await repo.setSquishyState(squishyIds(give), 'in-trade');
       await repo.movePieces(gifts, user.id, offer.id);
       await takeOffGone(
@@ -684,7 +687,9 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       // The sender's side lands with me now.
       await repo.moveSquishies(squishyIds(give), user.id, 'active');
       await repo.movePieces(pieceIds(give), user.id, null);
-      // My side goes to the sender's mailbox, held until they pick it up.
+      // My side goes to the sender's mailbox, held until they pick it up,
+      // its contentment so far counted at its old job's rate (#376).
+      await checkpointContentment(tx, mapId, squishyIds(want), at);
       await repo.moveSquishies(squishyIds(want), offer.fromUserId, 'in-trade');
       await repo.movePieces(pieceIds(want), offer.fromUserId, offer.id);
       await takeOffGone(

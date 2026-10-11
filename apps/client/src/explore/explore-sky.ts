@@ -61,6 +61,7 @@ export interface ExploreSkyStats {
   readonly clouds: number;
   readonly stars: boolean;
   readonly moon: boolean;
+  readonly underwater: boolean;
 }
 
 export class ExploreSky {
@@ -156,8 +157,21 @@ export class ExploreSky {
     this.set(look);
   }
 
+  /**
+   * The light before any time of day scales it: the sun's strength and the
+   * sky light's, as the scene had them. The land sets its own on these.
+   */
+  get lightBase(): { readonly sun: number; readonly environment: number } {
+    return { sun: this.#light?.intensity ?? 0, environment: this.#environment };
+  }
+
   get stats(): ExploreSkyStats {
-    return { clouds: this.#look.clouds, stars: this.#look.stars, moon: this.#look.moon };
+    return {
+      clouds: this.#look.clouds,
+      stars: this.#look.stars,
+      moon: this.#look.moon && this.#look.sunDisc,
+      underwater: this.#look.fog !== null,
+    };
   }
 
   /** Shows a new look: the dome, sun or moon, clouds, stars and the light on the land. */
@@ -179,6 +193,8 @@ export class ExploreSky {
     this.#scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
 
     recolour(this.#sun, look.sun);
+    this.#sun.setEnabled(look.sunDisc);
+    recolour(this.#stars, look.starColor);
     recolour(this.#cloud, look.cloud);
     const d = r * 0.85;
     setInstances(
@@ -201,6 +217,7 @@ export class ExploreSky {
       light.diffuse = diffuse.multiply(linear(look.light.color));
     }
     this.#scene.environmentIntensity = this.#environment * look.light.environment;
+    // The haze is the land's (and under a lake the water's): the sky never sets it.
   }
 
   /** Rides with the camera: on its position, tilted down by its pitch. */

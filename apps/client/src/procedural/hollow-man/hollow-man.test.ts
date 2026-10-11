@@ -4,7 +4,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EYE_FLARE, HOLLOW_ARM, HOLLOW_HEM, HOLLOW_MAN } from './hollow-man-config.js';
-import { armMatrix, HollowMan, raggedHem } from './hollow-man.js';
+import { armMatrix, HollowMan, hollowManArrays, raggedHem } from './hollow-man.js';
 
 const H = HOLLOW_MAN.height;
 
@@ -33,6 +33,28 @@ describe('the Hollow Man (spooky-tense, owner decision 2026-10-04)', () => {
       'hollow-man-eyes',
     ]);
     expect(built.find((m) => m.name === 'hollow-man-arms')?.thinInstanceCount).toBe(2);
+  });
+
+  it('builds his cloak and both arms as one geometry for the Keeper costume', () => {
+    const scene = new Scene(engine);
+    const arrays = hollowManArrays(scene, 14);
+    // Feet on the ground, his own height, narrow, facing the same way as a Keeper (−z).
+    let top = -Infinity;
+    let bottom = Infinity;
+    let widest = 0;
+    for (let i = 0; i < arrays.positions.length; i += 3) {
+      top = Math.max(top, arrays.positions[i + 1]!);
+      bottom = Math.min(bottom, arrays.positions[i + 1]!);
+      widest = Math.max(widest, Math.abs(arrays.positions[i]!));
+    }
+    expect(bottom).toBeGreaterThanOrEqual(-HOLLOW_ARM.length * H); // fingertips hang below the hem
+    expect(top).toBeCloseTo(0.995 * H, 1);
+    expect(widest).toBeGreaterThan(HOLLOW_ARM.shoulder[0] * H); // the arms hang outside the cloak
+    expect(widest).toBeLessThan(0.5 * H);
+    expect(arrays.normals.length).toBe(arrays.positions.length);
+    expect(arrays.indices.length % 3).toBe(0);
+    // It leaves nothing behind in the scene.
+    expect(scene.meshes).toEqual([]);
   });
 
   it('hangs his long arms at his sides, clear of the cloak, and reaches out, forward and down', () => {

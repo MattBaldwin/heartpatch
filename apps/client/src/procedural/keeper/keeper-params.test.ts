@@ -2,6 +2,7 @@ import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import {
   CLOTHING,
   defaultKeeperConfig,
+  hashString,
   isKeeperClothing,
   KEEPER_DATA,
   STARTER_CLOTHING,
@@ -10,6 +11,7 @@ import {
   type WardrobeSlot,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { HOLLOW_MAN } from '../hollow-man/hollow-man-config.js';
 import { hexToRgb } from '../params.js';
 import { KEEPER } from './keeper-config.js';
 import { keeperItems } from './keeper-items.js';
@@ -489,7 +491,8 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
   it('fits every catalog item on every base, near the Keeper (no body-type locks)', () => {
     for (const base of BASES) {
       const bare = keeperParams(defaultKeeperConfig(base), KEEPER_DATA);
-      for (const item of CLOTHING.filter(isKeeperClothing)) {
+      // Costume models draw their own shape: they have a test of their own below.
+      for (const item of CLOTHING.filter(isKeeperClothing).filter((i) => !i.visual.model)) {
         const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
         const pieces = piecesOf(p, item.slot);
         // Shoes, and costume pieces on legs, arms, hands or shoes, come in mirrored pairs.
@@ -535,13 +538,63 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
     const eyes = hollow.filter((piece) => piece.glow);
     expect(eyes.length).toBeGreaterThanOrEqual(2);
     for (const eye of eyes) expect(eye.finish).toBeUndefined();
-    for (const piece of hollow.filter((x) => !x.glow)) expect(piece.finish).toBe('shimmer');
+    for (const piece of hollow.filter((x) => !x.glow)) expect(piece.finish).toBe('shimmerSoft');
     for (const piece of wearing('marigold-calavera')) expect(piece.finish).toBe('iridescent');
     for (const piece of wearing('zippy-hedgehog')) expect(piece.finish).toBe('sparkle');
     for (const piece of wearing('candy-corn-cutie')) expect(piece.finish).toBeUndefined();
     // Other clothing stays plain vinyl, however rare (owner, #261).
     const wings = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems(['bat-wings']));
     for (const piece of piecesOf(wings, 'back')) expect(piece.finish).toBeUndefined();
+  });
+
+  it('draws the Hollow Man costume as his own shape in place of the Keeper', () => {
+    for (const base of BASES) {
+      const bare = keeperParams(defaultKeeperConfig(base), KEEPER_DATA);
+      const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, [
+        ...ALL_BUT_COSTUME,
+        ...keeperItems(['hollow-man-costume']),
+      ]);
+      // Nothing of the Keeper is left: no body, face, hair or starter outfit.
+      expect([...new Set(p.pieces.map((piece) => piece.layer))], base.id).toEqual(['costume']);
+      const [model, ...eyes] = p.pieces;
+      expect(model!.shape).toBe('model-hollow-man');
+      expect(model!.finish).toBe('shimmerSoft');
+      expect(model!.at).toEqual([0, 0, 0]);
+      // He stands on the Keeper's feet, taller than the Keeper, and one scale all round.
+      expect(p.height).toBeGreaterThan(bare.height);
+      expect(model!.size[0]).toBe(model!.size[1]);
+      expect(model!.size[2]).toBe(model!.size[1]);
+      expect(model!.size[1] * HOLLOW_MAN.height).toBeCloseTo(p.height);
+      // Two glowing eyes at his own spot on his face, in front, never shimmering.
+      expect(eyes.length).toBe(2);
+      for (const eye of eyes) {
+        expect(eye.glow).toBe(true);
+        expect(eye.finish).toBeUndefined();
+        expect(eye.at[1]).toBeCloseTo(HOLLOW_MAN.eyeHeight * p.height);
+        expect(eye.at[2]).toBeLessThan(0);
+      }
+      expect(eyes[0]!.at[0]).toBeCloseTo(-eyes[1]!.at[0]);
+      // The shadow is as wide as his arms reach (he is thin), and the sockets stay the Keeper's own.
+      expect(p.width).toBeLessThan(p.height / 2);
+      expect(p.sockets).toEqual(bare.sockets);
+    }
+  });
+
+  it('leaves every other item exactly as it was (the model costume changes nothing else)', () => {
+    // Fingerprint of every other catalog item on two bases, taken on main
+    // before the model costume existed (#261 follow-up).
+    const lines: string[] = [];
+    for (const id of ['pip', 'bramble']) {
+      const base = BASES.find((b) => b.id === id)!;
+      for (const item of CLOTHING.filter(isKeeperClothing)) {
+        if (item.visual.model) continue;
+        expect(item.visual.replacesBody, item.id).toBeUndefined();
+        const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
+        lines.push(`${id}/${item.id}=${keeperHash(p)}`);
+      }
+    }
+    expect(lines.length).toBe(120);
+    expect(hashString(lines.join('\n'))).toBe('15c569666292584f11157854a1223e1c');
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {

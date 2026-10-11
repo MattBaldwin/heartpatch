@@ -398,6 +398,17 @@ export class HomeScene {
     );
   }
 
+  /** Rings the spot the Build sheet will build on (#371), among the glowing ones; null clears it. */
+  markSpot(spot: HomeSpot | null): void {
+    if (!spot) {
+      this.#selection.setEnabled(false);
+      return;
+    }
+    const at = this.spotAt(spot);
+    this.#selection.position.set(at.x, this.#ground + 0.02, at.z);
+    this.#selection.setEnabled(true);
+  }
+
   /** Rings the selected building, or clears the ring (null). */
   select(id: string | null): void {
     const b = id ? this.#home.buildings.find((x) => x.id === id) : undefined;
