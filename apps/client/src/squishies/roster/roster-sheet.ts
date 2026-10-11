@@ -599,8 +599,11 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     chips = new Map();
     if (sheet.hidden) return;
     renderChips();
-    count.textContent = ROSTER_TEXT.count(rows.length);
     const shown = visibleRows(rows, sort, filter);
+    count.textContent =
+      filter === 'all'
+        ? ROSTER_TEXT.count(rows.length)
+        : ROSTER_TEXT.countOf(shown.length, rows.length);
     const nowMs = clock.now();
     if (shown.length === 0) {
       list.replaceChildren(

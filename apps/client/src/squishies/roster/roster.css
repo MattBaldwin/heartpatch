@@ -409,6 +409,11 @@
     grid-template-columns: 1fr 1fr;
     align-items: start;
   }
+
+  /* An open row takes the whole width, so its column leaves no hole. */
+  .roster-open {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Over explore, its floating controls step back while the roster is up, so

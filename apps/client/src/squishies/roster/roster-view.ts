@@ -62,6 +62,7 @@ export const ROSTER_TEXT = {
   steady: 'Holding steady',
   hearts: (filled: number) => `${String(filled)} of 5 hearts`,
   count: (n: number) => `${String(n)} ${n === 1 ? 'squishy' : 'squishies'}`,
+  countOf: (shown: number, all: number) => `${String(shown)} of ${String(all)}`,
   // Said where the detail would be, when a read is missing.
   partial: 'Some details are still loading. Try again in a sec!',
 } as const;
