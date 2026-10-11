@@ -1440,13 +1440,13 @@ export const PARTS: Part[] = [
     id: 'lure-lantern',
     slot: 'crown',
     shape: 'ellipsoid',
-    size: [0.36, 0.44, 0.36],
+    size: [0.3, 0.36, 0.3],
     color: 'accent',
     layout: single,
     around: 0,
-    up: 48,
-    tilt: -75,
-    sink: 0,
+    up: 70,
+    tilt: -45,
+    sink: 0.05,
     jitter: 0.03,
   },
   {
@@ -1463,6 +1463,50 @@ export const PARTS: Part[] = [
     splay: 62,
     sink: 0.25,
     jitter: 0.04,
+  },
+  // #382 wave 1, second pass: three more data-only parts (cup and kettle handles, knit and
+  // spring stripes, plant roots).
+  {
+    // An upright C of a handle at the back: cups, kettles, mugs.
+    id: 'handle-arc',
+    slot: 'tail',
+    shape: 'arc',
+    size: [0.5, 0.5, 0.12],
+    color: 'accent',
+    layout: single,
+    around: 180,
+    up: 20,
+    tilt: 80,
+    sink: 0.3,
+    jitter: 0.03,
+  },
+  {
+    // Four flat bands across the front: knit stripes, coils.
+    id: 'band-stripes',
+    slot: 'pattern',
+    shape: 'ellipsoid',
+    size: [0.8, 0.07, 0.03],
+    color: 'secondary',
+    layout: { kind: 'row', count: 4, to: 40 },
+    around: 0,
+    up: -40,
+    sink: 0.85,
+    jitter: 0.03,
+  },
+  {
+    // Four short splayed root-feet, so a plant can stand.
+    id: 'root-legs',
+    slot: 'legs',
+    shape: 'cone',
+    size: [0.14, 0.24, 0.14],
+    color: 'detail',
+    layout: { kind: 'quad' },
+    around: 40,
+    up: -75,
+    tilt: -35,
+    splay: 30,
+    sink: 0.2,
+    jitter: 0.08,
   },
 ];
 
