@@ -171,7 +171,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#8ad65f', '#e6ffd0', '#ff9ec4', '#3fae3a'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'eye-bumps', 'hop-feet', 'stem'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'eye-bumps', 'hop-feet'],
       size: 1.0,
       pose: 'sit',
       attackPart: 'legs',
@@ -291,12 +291,12 @@ export const WAVE_1_SPECIES: Species[] = [
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
     evolutions: [],
     visual: {
-      body: 'star',
-      palette: ['#dff1ff', '#ffffff', '#bfe6fb', '#8ec6f0'],
-      parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'crystal-crown', 'nub-wings'],
+      body: 'orb',
+      palette: ['#f4fbff', '#ffffff', '#8ec6f0', '#bfe6fb'],
+      parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'spike-coat'],
       stance: 0.5,
       pose: 'hover',
-      attackPart: 'wings',
+      attackPart: 'spikes',
     },
     habitatPreferences: {
       elements: ['frost'],
