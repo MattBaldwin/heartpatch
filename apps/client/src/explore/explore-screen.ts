@@ -200,7 +200,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let tile: ExploreTileResponse | null = null;
   let teamNames: Record<string, string> = {};
   /** My team's squishies that follow the Keeper, in team order. */
-  let teamMembers: { id: string; speciesId: string }[] = [];
+  let teamMembers: { id: string; speciesId: string; accessory: string | null }[] = [];
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
   let mapTileAtOpen: PublicTile | null = null;
@@ -1176,7 +1176,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       keeperWearing: options.keeperWearing?.() ?? [],
       team: teamMembers.flatMap((m) => {
         const kind = species.get(m.speciesId);
-        return kind ? [{ id: m.id, species: kind }] : [];
+        return kind ? [{ id: m.id, species: kind, accessory: m.accessory }] : [];
       }),
       mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
@@ -1230,7 +1230,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       teamMembers = (board?.squishies ?? [])
         .filter((s) => team.includes(s.squishy.id))
         .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
-        .map((s) => ({ id: s.squishy.id, speciesId: s.squishy.speciesId }));
+        .map((s) => ({
+          id: s.squishy.id,
+          speciesId: s.squishy.speciesId,
+          accessory: s.squishy.accessory ?? null,
+        }));
     } catch (err) {
       if (ask === generation) options.onProblem(messageOf(err));
       return;
