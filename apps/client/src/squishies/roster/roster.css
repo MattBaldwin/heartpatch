@@ -61,14 +61,6 @@
   gap: 5px;
 }
 
-.roster-chips-label {
-  flex: none;
-  min-width: 40px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #7a5d80;
-}
-
 .roster-chip {
   min-height: 44px;
   padding: 0 10px;
@@ -179,7 +171,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 64px;
+  min-height: 88px;
   padding: 0;
   border: none;
   background: none;
@@ -191,24 +183,33 @@
 }
 
 .roster-portrait {
+  /* The squishy is the row's hero (owner rule): the biggest, strongest thing. */
+  --portrait: 88px;
   display: grid;
   flex: none;
   place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
+  width: var(--portrait);
+  height: var(--portrait);
+  border-radius: 24px;
   background: radial-gradient(circle at 50% 70%, #ffe6f0, #fff7fb 70%);
 }
 
 .roster-portrait .jobs-blob {
-  width: 40px;
-  height: 34px;
+  width: 52px;
+  height: 44px;
 }
 
 .roster-portrait-img {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: var(--portrait);
+  height: var(--portrait);
+}
+
+/* Taken to the Hollow: grey until rescued (style guide §5). */
+.roster-hollowed .roster-portrait-img,
+.roster-hollowed .roster-portrait .jobs-blob {
+  filter: grayscale(1);
+  opacity: 0.7;
 }
 
 .roster-names {
@@ -262,27 +263,9 @@
   line-height: 1.2;
 }
 
-.roster-mood-glowing {
-  background: #fff3c4;
-}
-.roster-mood-happy {
-  background: #dff5d8;
-}
-.roster-mood-calm {
-  background: #e3ecff;
-}
-.roster-mood-cuddly {
-  background: #ffe0ea;
-}
-
 .roster-needs {
   background: #ff8fb1;
   color: #4a1f33;
-}
-
-.roster-evolving-tag {
-  background: #efe3ff;
-  color: #5a3a8a;
 }
 
 .roster-status-team {
@@ -346,43 +329,6 @@
   align-items: center;
   gap: 4px 8px;
   margin-top: 6px;
-}
-
-.roster-hearts {
-  position: relative;
-  display: inline-block;
-  flex: none;
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: 1px;
-  color: #e9d3df;
-}
-
-.roster-hearts::before {
-  content: '♥♥♥♥♥';
-}
-
-.roster-hearts-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  overflow: hidden;
-  color: #ff5f97;
-  white-space: nowrap;
-}
-
-.roster-hearts-fill::before {
-  content: '♥♥♥♥♥';
-}
-
-.roster-drifting .roster-hearts-fill {
-  color: #e98bb0;
-}
-
-.roster-mood-word {
-  font-size: 14px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
 }
 
 .roster-drift {
@@ -453,20 +399,26 @@
 }
 
 .roster-care {
+  /* Second to the squishy: small and soft. */
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid #f0c6da;
+  background: #fff;
+  color: #9a3a68;
+  font-size: 14px;
+  box-shadow: none;
 }
 
 /* The narrowest phones: a smaller picture, Care as just 💗, and the pickers
    without their "Sort"/"Show" words (VoiceOver still reads them), so the
    name and both pickers keep their room. */
 @media (max-width: 359px) {
-  .roster-portrait,
-  .roster-portrait-img {
-    width: 52px;
-    height: 52px;
+  .roster-portrait {
+    --portrait: 72px;
   }
 
   .roster-care-word,
@@ -475,7 +427,7 @@
   }
 
   .roster-care {
-    min-width: 48px;
+    min-width: 44px;
     justify-content: center;
     padding-inline: 0;
   }
@@ -490,6 +442,10 @@
   .roster-list {
     grid-template-columns: 1fr 1fr;
     align-items: start;
+  }
+
+  .roster-portrait {
+    --portrait: 112px;
   }
 
   /* An open row takes the whole width, so its column leaves no hole. */

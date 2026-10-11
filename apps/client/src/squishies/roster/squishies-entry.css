@@ -64,7 +64,8 @@
    name, the tool and the bag). */
 .squishies-open-explore {
   position: fixed;
-  z-index: 5;
+  /* Over explore's glints (z-index 5), never under a sparkle. */
+  z-index: 6;
   top: calc(env(safe-area-inset-top) + 68px);
   left: calc(env(safe-area-inset-left) + 16px);
 }
@@ -73,4 +74,20 @@
    shortens with "…" rather than covering it (#385 owns the pill itself). */
 body:has(.squishies-open-home:not([hidden])) .auth-chip {
   max-width: calc(100vw - 84px - env(safe-area-inset-left) - env(safe-area-inset-right));
+}
+
+/* The narrowest phones at home: the pill keeps a wave and Log out on one line. */
+@media (max-width: 359px) {
+  body:has(.squishies-open-home:not([hidden])) .auth-chip-name {
+    font-size: 0;
+  }
+
+  body:has(.squishies-open-home:not([hidden])) .auth-chip-name::before {
+    content: '👋';
+    font-size: 18px;
+  }
+
+  body:has(.squishies-open-home:not([hidden])) .auth-chip .auth-button-small {
+    white-space: nowrap;
+  }
 }

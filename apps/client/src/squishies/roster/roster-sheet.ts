@@ -8,6 +8,7 @@ import type {
 } from '@heartpatch/shared';
 import { careApi, type CareApi } from '../../care/care-api.js';
 import { CARE_TEXT } from '../../care/care-view.js';
+import { moodHeartsEl } from '../../care/mood-hearts.js';
 import { homeApi, type HomeApi } from '../../home/home-api.js';
 import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
 import { GameClock } from '../../inventory/game-clock.js';
@@ -26,8 +27,6 @@ import { jobsApi, type JobsApi } from '../jobs/jobs-api.js';
 import { blobFor } from '../jobs/job-board.js';
 import {
   filterCounts,
-  heartsOf,
-  MOOD_WORDS,
   mergeRoster,
   ROSTER_FILTERS,
   ROSTER_SORTS,
@@ -281,7 +280,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       'button',
       {
         type: 'button',
-        class: 'auth-button roster-action roster-care',
+        class: 'roster-care',
         'aria-label': ROSTER_TEXT.careWord,
         'data-testid': 'roster-care',
         'data-care-squishy': squishyId,
@@ -404,27 +403,12 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
 
   /** Five hearts filled to its contentment, the mood word, and a needs-care badge. */
   function moodLineEl(mood: MoodTag): HTMLElement {
-    const word = MOOD_WORDS[mood.mood];
-    const hearts = heartsOf(mood.contentment);
-    const drift = mood.drift === 'steady' ? null : mood.drift;
-    const drifting = drift !== null;
+    const hearts = moodHeartsEl('roster-mood');
+    hearts.update(mood.contentment, mood.mood, mood.drift !== null && mood.drift !== 'steady');
     return el(
       'div',
-      {
-        class: `roster-mood-row${drifting ? ' roster-drifting' : ''}`,
-        'data-testid': 'roster-mood',
-        'data-hearts': String(hearts),
-      },
-      el(
-        'span',
-        { class: 'roster-hearts', role: 'img', 'aria-label': ROSTER_TEXT.hearts(hearts) },
-        fillTo(el('span', { class: 'roster-hearts-fill' }), hearts / 5),
-      ),
-      el(
-        'span',
-        { class: `roster-mood-word roster-mood-${mood.mood}` },
-        `${word.icon} ${word.word}`,
-      ),
+      { class: 'roster-mood-row' },
+      hearts.root,
       ...(mood.needsCare
         ? [
             el(
@@ -532,7 +516,9 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     return el(
       'li',
       {
-        class: `roster-row${open ? ' roster-open' : ''}${row.away ? ' roster-away' : ''}`,
+        class: `roster-row${open ? ' roster-open' : ''}${row.away ? ' roster-away' : ''}${
+          row.status.kind === 'hollowed' ? ' roster-hollowed' : ''
+        }`,
         'data-testid': 'roster-row',
         'data-squishy': row.id,
       },

@@ -14,6 +14,7 @@ import {
   type Species,
 } from '@heartpatch/shared';
 import { blobColor, speciesById } from '../../care/care-view.js';
+import { needsCareAt } from '../../care/mood-hearts.js';
 import { formatTimeLeft } from '../../inventory/game-clock.js';
 import { itemIcon } from '../../inventory/item-icons.js';
 import { itemName } from '../../inventory/bag-view.js';
@@ -41,7 +42,7 @@ export const ROSTER_TEXT = {
   moveIn: '🏡 Move to a habitat',
   moveOut: '🏡 Move out',
   habitatFull: 'Full',
-  hollowed: 'In the Hollow',
+  hollowed: 'Taken to the Hollow · you can rescue them!',
   inTrade: 'In a trade',
   onTeam: 'On team',
   guarding: 'Guarding',
@@ -73,13 +74,7 @@ export type RosterFilter = 'all' | 'care' | 'team' | 'working';
 export const ROSTER_SORTS: readonly RosterSort[] = ['mood', 'level', 'rarity', 'status'];
 export const ROSTER_FILTERS: readonly RosterFilter[] = ['all', 'care', 'team', 'working'];
 
-/** A mood's little picture and one word, for its tag (the long line is for the detail). */
-export const MOOD_WORDS: Readonly<Record<CareSquishy['mood'], { icon: string; word: string }>> = {
-  glowing: { icon: '🌟', word: 'Glowing' },
-  happy: { icon: '😊', word: 'Happy' },
-  calm: { icon: '😌', word: 'Calm' },
-  cuddly: { icon: '🤗', word: 'Cuddly' },
-};
+export { heartsOf, MOOD_WORDS } from '../../care/mood-hearts.js';
 
 /** What a squishy is doing, for its status tag. `away` ones can't be sent anywhere. */
 export type StatusKind =
@@ -98,7 +93,7 @@ export interface MoodTag {
   readonly line: string;
   /** 0–100. */
   readonly contentment: number;
-  /** Below Happy with a full-value cuddle still waiting (`needsCare`). */
+  /** Below Happy (`needsCare`). */
   readonly needsCare: boolean;
   /** Why it's holding or drifting (#376), or null when the server doesn't say. */
   readonly drift: MoodDrift | null;
@@ -253,21 +248,9 @@ export function evolutionStage(
   };
 }
 
-/** Hearts out of 5 for a contentment, to the nearest half (2.5 = two and a half). */
-export function heartsOf(contentment: number): number {
-  return Math.round((contentment / CARE_RULES.maxContentment) * 10) / 2;
-}
-
-/** Below this a squishy isn't Happy any more (the shared mood bands). */
-const HAPPY_FROM = CARE_RULES.moods.find((m) => m.id === 'happy')?.atLeast ?? 40;
-
-/**
- * Care is due: it's below Happy (Calm or Cuddly, the shared mood bands) and a
- * cuddle still counts in full today. A Happy or Glowing one never says so, so
- * the badge, the hearts and the mood word always agree.
- */
-export function needsCare(care: Pick<CareSquishy, 'contentment' | 'fullCareLeft'>): boolean {
-  return care.contentment < HAPPY_FROM && care.fullCareLeft > 0;
+/** Care is due whenever it's below Happy (the shared mood bands): one rule everywhere. */
+export function needsCare(care: Pick<CareSquishy, 'contentment'>): boolean {
+  return needsCareAt(care.contentment);
 }
 
 function moodTag(care: CareSquishy): MoodTag {

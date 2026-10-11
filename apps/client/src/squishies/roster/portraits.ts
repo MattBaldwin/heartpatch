@@ -18,7 +18,7 @@ import { SquishyField } from '../../procedural/squishy-field.js';
 // list keeps its plain blobs.
 
 /** A portrait's side in CSS px; drawn at the screen's pixel ratio (capped at 3). */
-export const PORTRAIT_CSS_PX = 64; // TUNE: the roster row's picture
+export const PORTRAIT_CSS_PX = 112; // TUNE: the roster row's picture at its largest (iPad)
 /** The pose: face to face, a little above, turned a touch so it reads as round. */
 const POSE = { pitch: 0.22, yaw: -0.35, lookAt: 0.6 }; // TUNE: a little above the middle, for ears and toppers
 /** Camera distance per unit of the squishy's larger side, so every kind fills the frame. */

@@ -209,15 +209,11 @@ describe('evolutionStage', () => {
 });
 
 describe('needsCare', () => {
-  it('is due below Happy while a cuddle still counts in full', () => {
-    expect(needsCare({ contentment: 39, fullCareLeft: 1 })).toBe(true);
-    expect(needsCare({ contentment: 5, fullCareLeft: 3 })).toBe(true);
-  });
-
-  it("never shows on a Happy or Glowing one, or once today's full cuddles are used", () => {
-    expect(needsCare({ contentment: 40, fullCareLeft: 3 })).toBe(false);
-    expect(needsCare({ contentment: 90, fullCareLeft: 3 })).toBe(false);
-    expect(needsCare({ contentment: 10, fullCareLeft: 0 })).toBe(false);
+  it('is due whenever it is below Happy, and never on a Happy or Glowing one', () => {
+    expect(needsCare({ contentment: 39 })).toBe(true);
+    expect(needsCare({ contentment: 5 })).toBe(true);
+    expect(needsCare({ contentment: 40 })).toBe(false);
+    expect(needsCare({ contentment: 90 })).toBe(false);
   });
 });
 
