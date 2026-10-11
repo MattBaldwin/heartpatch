@@ -1,12 +1,10 @@
 import { EXPLORE_SWIM } from './explore-config.js';
 
-// Swimming under a lake (#399): the Keeper and the team swim instead of
-// hopping. Like the hop (#317), the stroke follows the ground covered, never
-// the clock, so a gentle push swims slowly and a full push kicks fast. Each
-// swimmer's state is one small object updated in place, and the pose is
-// written into a caller's object, so stepping allocates nothing.
-
-export type SwimStyle = 'glide' | 'paddle' | 'dolphin';
+// Swimming under a lake (#399, "Glide and kick"): the Keeper and the team
+// swim instead of hopping. Like the hop (#317), the stroke follows the water
+// covered, never the clock, so a gentle push swims slowly and a full push
+// kicks fast. Each swimmer's state is one small object updated in place, and
+// the pose is written into a caller's object, so stepping allocates nothing.
 
 export interface Swim {
   /** Strokes taken; the fraction is how far through the current one (0 is the kick). */
@@ -31,8 +29,6 @@ export interface SwimPose {
   squash: number;
   /** Ahead of the true point along the heading, share of the height (the surge). */
   surge: number;
-  /** Heading wiggle, radians. */
-  sway: number;
 }
 
 export function createSwim(offset = 0): Swim {
@@ -86,67 +82,34 @@ export function stepSwim(swim: Swim, ds: number, dt: number, push: number): bool
 /**
  * The pose this frame into `out` (no allocation). `time` is the water's
  * clock, seconds (the tread-water bob). With Reduce Motion: a still float,
- * leaning into the swim without surge, bob or sway.
+ * leaning into the swim without kick, surge or bob.
  */
-export function swimPose(
-  swim: Swim,
-  style: SwimStyle,
-  reduce: boolean,
-  time: number,
-  out: SwimPose,
-): SwimPose {
-  const look = EXPLORE_SWIM.styles[style];
+export function swimPose(swim: Swim, reduce: boolean, time: number, out: SwimPose): SwimPose {
   const s = swim.stretch;
-  out.pitch = look.pitch * s;
+  out.pitch = EXPLORE_SWIM.pitch * s;
   out.lift = EXPLORE_SWIM.float;
   out.squash = 1;
   out.surge = 0;
-  out.sway = 0;
   if (reduce) return out;
   // Treading water: a slow bob that fades out as the swim stretches out.
-  const tread = 1 - s;
-  out.lift +=
-    EXPLORE_SWIM.tread.bob *
-    tread *
-    Math.sin(time * TAU * EXPLORE_SWIM.tread.rate + swim.offset * TAU);
+  const { tread, kick } = EXPLORE_SWIM;
+  out.lift += tread.bob * (1 - s) * Math.sin(time * TAU * tread.rate + swim.offset * TAU);
   if (s <= 0) return out;
   const q = swim.phase - Math.floor(swim.phase);
   const amp = s * (0.55 + 0.45 * swim.effort);
-  switch (style) {
-    case 'glide': {
-      // Kick: bunch up, then shoot out long; glide: drift back to the pace.
-      const kick = EXPLORE_SWIM.styles.glide.kick;
-      if (q < kick) {
-        const k = q / kick;
-        out.squash = 1 - look.squash * amp * Math.sin(Math.PI * k);
-        out.surge = look.surge * amp * (k * k * (3 - 2 * k));
-      } else {
-        const g = (q - kick) / (1 - kick);
-        const decay = Math.exp(-g * 3.2);
-        out.surge = look.surge * amp * decay - look.surge * amp * Math.exp(-3.2) * g;
-        out.squash = 1 + look.stretch * amp * decay;
-      }
-      out.pitch += look.dip * amp * Math.sin(TAU * q);
-      out.lift += look.bob * amp * Math.sin(TAU * q);
-      break;
-    }
-    case 'paddle': {
-      // Two paddles a stroke, left then right: a waggle and a bob each.
-      const half = (q * 2) % 1;
-      out.sway = look.sway * amp * Math.sin(TAU * q);
-      out.lift += look.bob * amp * Math.sin(Math.PI * half);
-      out.squash = 1 + look.stretch * amp * Math.cos(TAU * half) * 0.5;
-      out.surge = look.surge * amp * Math.sin(TAU * half) * 0.5;
-      break;
-    }
-    case 'dolphin': {
-      // One long wave through the body: the nose dips and rises with the float.
-      out.pitch += look.dip * amp * Math.sin(TAU * q);
-      out.lift += look.bob * amp * Math.sin(TAU * q - Math.PI / 2);
-      out.squash = 1 + look.stretch * amp * Math.sin(TAU * q + Math.PI / 2);
-      out.surge = look.surge * amp * Math.sin(TAU * q + Math.PI);
-      break;
-    }
+  if (q < kick.share) {
+    // The kick: bunch up, then shoot out long, ahead of the pace.
+    const k = q / kick.share;
+    out.squash = 1 - kick.squash * amp * Math.sin(Math.PI * k);
+    out.surge = kick.surge * amp * (k * k * (3 - 2 * k));
+  } else {
+    // The glide: drift back to the pace, easing out of the stretch.
+    const g = (q - kick.share) / (1 - kick.share);
+    const decay = Math.exp(-g * kick.decay);
+    out.surge = kick.surge * amp * (decay - Math.exp(-kick.decay) * g);
+    out.squash = 1 + kick.stretch * amp * decay;
   }
+  out.pitch += kick.dip * amp * Math.sin(TAU * q);
+  out.lift += kick.bob * amp * Math.sin(TAU * q);
   return out;
 }

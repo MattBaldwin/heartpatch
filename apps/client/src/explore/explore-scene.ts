@@ -66,7 +66,8 @@ import {
 } from '../map/map-scene.js';
 import { accessoryItem } from '../procedural/accessory.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
-import type { SquishyLod } from '../procedural/config.js';
+import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
+import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
@@ -98,7 +99,6 @@ import {
   swimPose,
   type Swim,
   type SwimPose,
-  type SwimStyle,
 } from './keeper-swim.js';
 import { SwimBubbles } from './swim-bubbles.js';
 import {
@@ -315,11 +315,11 @@ function followBack(i: number, lead: number): number {
 const POSE: HopPose = { lift: 0, squash: 1 };
 /** Where the camera aims while swimming (#399), tile-local. */
 const SWIM_AIM = { x: 0, z: 0 };
-/** The swimmer's feet, tile-local, for the sand under its shadow (#399). */
-const SWIM_FEET = { x: 0, z: 0 };
-/** Dev mockups only (#399): which swim to draw. */
-const swimStyle = (): SwimStyle =>
-  (globalThis as { __hpSwimStyle?: SwimStyle }).__hpSwimStyle ?? EXPLORE_SWIM.style;
+/** The swimmer's middle, tile-local, for the sand under its shadow (#399). */
+const SWIM_MIDDLE = { x: 0, z: 0 };
+/** The swim shadow sits this far above the sand (world units), clear of the dunes' ripples. */
+const SWIM_SHADOW_LIFT = 0.05; // TUNE:
+const SWIM_SHADOW_TURN = Quaternion.Identity();
 const PLACE = {
   x: 0,
   z: 0,
@@ -422,12 +422,13 @@ export class ExploreScene implements AmbientTarget {
   #mask: Mesh | null = null;
   /** The Keeper's swim (#399), its pose this frame, and the bubbles each kick puffs. */
   readonly #swim = createSwim();
-  readonly #swimPose: SwimPose = { pitch: 0, lift: 0, squash: 1, surge: 0, sway: 0 };
+  readonly #swimPose: SwimPose = { pitch: 0, lift: 0, squash: 1, surge: 0 };
   #bubbles: SwimBubbles | null = null;
+  /** The swimmer's soft shadow under its middle (#399), and its matrix. */
+  #swimShadow: Mesh | null = null;
+  readonly #swimShadowMatrix = new Float32Array(16);
   /** Kick bubbles at this quality tier (#399: high only). */
   #bubbling = false;
-  /** The player's own Reduce Motion (underwater too). */
-  readonly #still: () => boolean;
   #now = 0;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
@@ -436,9 +437,7 @@ export class ExploreScene implements AmbientTarget {
     this.#underwater = isUnderwater(tile.terrain);
     this.#bubbling = EXPLORE_SWIM.bubbleTiers[options.tier];
     // Underwater the Keeper and team swim instead of hopping (#399).
-    const reduced = options.reducedMotion ?? (() => false);
-    this.#reduced = reduced;
-    this.#still = reduced;
+    this.#reduced = options.reducedMotion ?? (() => false);
     this.#redraw = options.redraw ?? (() => {});
     this.#pinned = options.pinned ?? false;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
@@ -586,7 +585,13 @@ export class ExploreScene implements AmbientTarget {
     this.#halo.isPickable = false;
     this.#halo.setEnabled(false);
 
-    this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
+    // Underwater the swimmer's own soft shadow lies under its middle (#399),
+    // in place of the field's, which sits at the feet.
+    this.#keepers = new KeeperField(scene, {
+      data: KEEPER_DATA,
+      lod: options.lod,
+      shadows: !this.#underwater,
+    });
     this.#squishies = new SquishyField(scene, {
       registry: options.registry,
       lod: options.lod,
@@ -632,6 +637,16 @@ export class ExploreScene implements AmbientTarget {
         mask.isPickable = false;
         this.#mask = mask;
         this.#bubbles = new SwimBubbles(scene, EXPLORE_VIEW.keeperScale);
+        const shadow = createContactShadowMesh(scene);
+        shadow.name = 'swim-shadow';
+        shadow.thinInstanceSetBuffer('matrix', this.#swimShadowMatrix, 16, false);
+        shadow.thinInstanceSetBuffer(
+          'color',
+          new Float32Array([1, 1, 1, EXPLORE_SWIM.shadow.alpha]),
+          4,
+          true,
+        );
+        this.#swimShadow = shadow;
       }
     }
     options.team.forEach((member, i) => {
@@ -894,9 +909,10 @@ export class ExploreScene implements AmbientTarget {
       f.walked = 0;
       swimming ||= swimActive(f.swim);
     }
+    // One more placement (and frame) after the swimmers settle, as the hop does.
     const drawing = swimming || this.#hopping;
     if (drawing) this.#place();
-    if (kicked && this.#bubbling && !this.#still() && this.#mask && swimStyle() === 'glide') {
+    if (kicked && this.#bubbling && !this.#reduced() && this.#mask) {
       this.#bubbles?.puff(this.#mask.position, this.#now);
     }
     const rising = this.#bubbles?.step(this.#now) ?? false;
@@ -928,7 +944,9 @@ export class ExploreScene implements AmbientTarget {
   /** How close the team may come (#323), for the tallest follower at the top of its hop. */
   #lead(): number {
     const hop = EXPLORE_HOP.followerLift * EXPLORE_HOP.height.max * (1 + EXPLORE_HOP.stretch);
-    return followLead(this.#teamTall * (1 + hop), this.#shot.pitch);
+    const lead = followLead(this.#teamTall * (1 + hop), this.#shot.pitch);
+    // Afloat, the team covers less of the Keeper, so it swims a little closer (#399).
+    return this.#underwater ? lead * EXPLORE_SWIM.followBack : lead;
   }
 
   /** Trail points to keep: enough for the last follower's distance back, plus one. */
@@ -955,10 +973,13 @@ export class ExploreScene implements AmbientTarget {
 
   /** Places the Keeper, its mask and tool, and the team, swimming (#399). */
   #placeSwimmers(): void {
-    const still = this.#still();
+    const still = this.#reduced();
     const time = this.#land?.clock.time ?? 0;
-    swimPose(this.#swim, swimStyle(), still, time, this.#swimPose);
-    if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+    swimPose(this.#swim, still, time, this.#swimPose);
+    if (this.#keeper) {
+      this.#keepers.move(this.#keeper, this.#keeperPlacement());
+      this.#placeSwimShadow();
+    }
     this.#placeTool();
     const { follower } = EXPLORE_SWIM;
     for (const f of this.#followers) {
@@ -979,6 +1000,40 @@ export class ExploreScene implements AmbientTarget {
       place.shadowAlpha = EXPLORE_SWIM.shadow.alpha;
       this.#squishies.move(f.handle, place);
     }
+  }
+
+  /**
+   * The swimmer's soft shadow (#399): a round blob on the sand straight
+   * under its middle (between the head on its point and the trailing feet),
+   * lifted a little so a dune doesn't cut a hard edge into it.
+   */
+  #placeSwimShadow(): void {
+    const shadow = this.#swimShadow;
+    const keeper = this.#keeper;
+    if (!shadow || !keeper) return;
+    const place = this.#keeperPlacement();
+    const tall = this.keeperTall;
+    // The middle of the body, half its height along it from the feet.
+    const reach = tall * 0.5 * Math.sin(this.#swimPose.pitch);
+    SWIM_MIDDLE.x = (place.x - Math.sin(this.#yaw) * reach) / this.#size;
+    SWIM_MIDDLE.z = (place.z - Math.cos(this.#yaw) * reach) / this.#size;
+    const d =
+      keeper.params.width *
+      EXPLORE_VIEW.keeperScale *
+      CONTACT_SHADOW.scale *
+      EXPLORE_SWIM.shadow.scale;
+    Matrix.ComposeToRef(
+      TOOL_SCALE.set(d, 1, d),
+      SWIM_SHADOW_TURN,
+      TOOL_AT.set(
+        SWIM_MIDDLE.x * this.#size,
+        this.#groundAt(SWIM_MIDDLE) + SWIM_SHADOW_LIFT,
+        SWIM_MIDDLE.z * this.#size,
+      ),
+      TOOL_WORLD,
+    );
+    TOOL_WORLD.copyToArray(this.#swimShadowMatrix);
+    shadow.thinInstanceBufferUpdated('matrix');
   }
 
   setLod(lod: SquishyLod): void {
@@ -1384,18 +1439,9 @@ export class ExploreScene implements AmbientTarget {
       // The Keeper faces −z at yaw 0, so ahead is (−sin yaw, −cos yaw).
       PLACE.x -= Math.sin(this.#yaw) * ahead;
       PLACE.z -= Math.cos(this.#yaw) * ahead;
-      PLACE.yaw = this.#yaw + sp.sway;
       PLACE.lean = -sp.pitch;
-      // The shadow lies on the sand under the shifted feet, not buried in a
-      // dune; the body keeps its height over the swimmer's own point.
-      const floor = PLACE.y;
-      SWIM_FEET.x = PLACE.x / this.#size;
-      SWIM_FEET.z = PLACE.z / this.#size;
-      PLACE.y = this.#groundAt(SWIM_FEET);
-      PLACE.lift = floor - PLACE.y + sp.lift * tall + pivot * (1 - Math.cos(sp.pitch));
+      PLACE.lift = sp.lift * tall + pivot * (1 - Math.cos(sp.pitch));
       PLACE.squash = sp.squash;
-      PLACE.shadow = EXPLORE_SWIM.shadow.scale;
-      PLACE.shadowAlpha = EXPLORE_SWIM.shadow.alpha;
     }
     return PLACE;
   }
