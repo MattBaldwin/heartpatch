@@ -1,7 +1,14 @@
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { BODIES, FloaterGlyphSchema, PartShapeSchema, type Body } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { bodyArrays, dot, surfaceNormal, surfacePoint, type MeshArrays } from './body-shape.js';
+import {
+  bodyArrays,
+  bodyRingsFor,
+  dot,
+  surfaceNormal,
+  surfacePoint,
+  type MeshArrays,
+} from './body-shape.js';
 import { FLOATER, LOD } from './config.js';
 import { floaterArrays } from './floater-shapes.js';
 import { orientTriangles, partArrays } from './part-shapes.js';
@@ -259,4 +266,52 @@ describe.each(FloaterGlyphSchema.options)('floater glyph %s', (glyph) => {
       expect(rgb).toEqual(front ? [1, 1, 1] : [...FLOATER.outlineShade]);
     }
   });
+});
+
+/**
+ * Most a heart's vertex normal may turn from its neighbour's, degrees: the
+ * sharpest spot is across the cleft. Below what the shallower cleft at the
+ * old ring count turned (48°, 35°, 28°), so the deeper cleft is still smoother.
+ */
+const MAX_TURN = { low: 47.5, high: 34.5, hero: 27.5 } as const;
+
+describe('the heart body in the registry', () => {
+  const heart = BODIES.find((b) => b.id === 'heart')!;
+
+  it('gets more rings than other bodies, and every other body keeps its own', () => {
+    for (const body of BODIES) {
+      for (const lod of ['low', 'high', 'hero'] as const) {
+        const rings = LOD[lod].bodyRings;
+        if (body.cleft) expect(bodyRingsFor(body, rings), body.id).toBeGreaterThan(rings);
+        else expect(bodyRingsFor(body, rings), body.id).toBe(rings);
+      }
+    }
+  });
+
+  for (const lod of ['low', 'high', 'hero'] as const) {
+    it(`stands on the ground with smooth normals at ${lod} detail`, () => {
+      const rings = bodyRingsFor(heart, LOD[lod].bodyRings);
+      const mesh = orientTriangles(bodyArrays(heart, rings));
+      expectFrontFacing(mesh);
+      const { min, max } = bounds(mesh);
+      expect(min[1]).toBeCloseTo(0, 6);
+      expect(max[1]).toBeGreaterThanOrEqual(heart.height * 0.98);
+      // Neighbouring vertices' normals turn gently, around and up the grid
+      // (no crease at the cleft or the shoulders).
+      const row = rings * 2 + 1;
+      let worst = 0;
+      for (let r = 1; r < rings - 1; r++) {
+        for (let s = 0; s < row - 1; s++) {
+          const n = at(mesh.normals, r * row + s);
+          for (const m of [
+            at(mesh.normals, r * row + s + 1),
+            at(mesh.normals, (r + 1) * row + s),
+          ]) {
+            worst = Math.max(worst, Math.acos(Math.min(1, dot(n, m))));
+          }
+        }
+      }
+      expect((worst * 180) / Math.PI).toBeLessThan(MAX_TURN[lod]);
+    });
+  }
 });

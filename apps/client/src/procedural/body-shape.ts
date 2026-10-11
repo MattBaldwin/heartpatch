@@ -1,4 +1,5 @@
 import type { Body } from '@heartpatch/shared';
+import { CLEFT_RING_SCALE } from './config.js';
 import type { Vec3 } from './params.js';
 
 /**
@@ -164,6 +165,11 @@ export interface MeshArrays {
   readonly positions: number[];
   readonly normals: number[];
   readonly indices: number[];
+}
+
+/** Rings for `body` at a detail level's `rings`: more for a heart's sharper outline. */
+export function bodyRingsFor(body: Body, rings: number): number {
+  return body.cleft ? Math.round(rings * CLEFT_RING_SCALE) : rings;
 }
 
 /**

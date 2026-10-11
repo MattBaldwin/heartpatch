@@ -150,7 +150,7 @@ export const BODIES: Body[] = [
     taper: 0,
     peak: 0,
     bottomFlat: 0,
-    cleft: { depth: 0.22, tip: 0.6 },
+    cleft: { depth: 0.26, tip: 0.6 }, // TUNE: a crisp dip that still reads at a 40° turn
     jitter: 0.03,
   },
   {

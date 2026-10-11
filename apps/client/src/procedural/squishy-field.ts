@@ -14,7 +14,7 @@ import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
 import { accessoryPieces, accessorySocket } from './accessory.js';
-import { bodyArrays, type MeshArrays } from './body-shape.js';
+import { bodyArrays, bodyRingsFor, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
   FINISH_CODE,
@@ -603,7 +603,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     const bodyBatchOf = (shape: Body) =>
       this.#batch(
         `body:${shape.id}`,
-        (lod) => orientTriangles(bodyArrays(shape, LOD[lod].bodyRings)),
+        (lod) => orientTriangles(bodyArrays(shape, bodyRingsFor(shape, LOD[lod].bodyRings))),
         true,
       );
     const [sx, sy, sz] = params.body.scale;

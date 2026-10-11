@@ -66,6 +66,14 @@ export const LOD: Readonly<Record<SquishyDetail, LodSettings>> = {
   hero: { bodyRings: 48, partRings: 16, partSegments: 28 },
 };
 
+/**
+ * A heart's (`cleft`) outline turns sharply at its shoulders and cleft, so
+ * its body gets this many times the rings (and segments around) of other
+ * bodies at every detail level. About 2.3× its body's triangles: a
+ * Heartsong is ~16k triangles at `high`, inside ART_BIBLE's budget.
+ */
+export const CLEFT_RING_SCALE = 1.5; // TUNE
+
 /** Soft-vinyl material (matches the test scene's vinyl). */
 export const VINYL = {
   roughness: 0.42, // TUNE
