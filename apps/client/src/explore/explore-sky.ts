@@ -157,6 +157,14 @@ export class ExploreSky {
     this.set(look);
   }
 
+  /**
+   * The light before any time of day scales it: the sun's strength and the
+   * sky light's, as the scene had them. The land sets its own on these.
+   */
+  get lightBase(): { readonly sun: number; readonly environment: number } {
+    return { sun: this.#light?.intensity ?? 0, environment: this.#environment };
+  }
+
   get stats(): ExploreSkyStats {
     return {
       clouds: this.#look.clouds,

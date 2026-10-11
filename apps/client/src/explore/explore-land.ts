@@ -87,6 +87,11 @@ export interface LandOptions {
   readonly tier: QualityTier;
   readonly sky: SkyLook;
   /**
+   * The sky's light before the time of day scales it (`ExploreSky.lightBase`).
+   * Left out, it is worked back from what the sky has just set for `sky`.
+   */
+  readonly lightBase?: { readonly sun: number; readonly environment: number };
+  /**
    * A biome's own layers on top of the shared ones (#335: the lake, trail
    * and cave lanes): `place` runs inside `landLayout` (its `extras`), and
    * each layer named in `layers` is drawn from its places with that mesh,
@@ -189,7 +194,7 @@ export class ExploreLand {
     // ── The ground: a warped grid (fine near the tile, coarse far out) and its painted texture ─
     this.#grid = LAND_GRID.cells[this.#tier];
     this.#texels = LAND_GRID.texture[this.#tier];
-    this.#buildGround(look, seed);
+    this.#buildGround(look, seed, start);
 
     // ── Growth: one material for the whole land, swaying on the terrain plugin ─
     const landMat = matte(scene, 'land-mat', 0.82);
@@ -285,11 +290,14 @@ export class ExploreLand {
     scene.fogStart = LAND_LIGHT.haze.start;
     scene.fogEnd = LAND_LIGHT.haze.end;
 
-    // The sky has set the light for this look; keep its time-of-day-free base,
-    // so every look after this sets absolute values (no compounding).
+    // The light before the time of day, so every look sets absolute values
+    // (no compounding): the sky's own bases, else worked back from what the
+    // sky has just set for this look.
     const { light } = options.sky;
-    this.#sunBase = this.#sun ? this.#sun.intensity / (light.sun || 1) : 0;
-    this.#environmentBase = scene.environmentIntensity / (light.environment || 1);
+    this.#sunBase =
+      options.lightBase?.sun ?? (this.#sun ? this.#sun.intensity / (light.sun || 1) : 0);
+    this.#environmentBase =
+      options.lightBase?.environment ?? scene.environmentIntensity / (light.environment || 1);
     this.setSky(options.sky);
     this.#applyTier();
   }
@@ -355,7 +363,7 @@ export class ExploreLand {
 
   // ── Building ─────────────────────────────────────────────────────────────
 
-  #buildGround(look: LandLook, seed: number): Mesh {
+  #buildGround(look: LandLook, seed: number, start: WorldPoint): Mesh {
     const n = this.#grid;
     const w = LAND_GRID.warp;
     const R = LAND_RADIUS;
@@ -394,7 +402,9 @@ export class ExploreLand {
 
     const t = this.#texels;
     // UVs run along the grid, so the texture's texels sit where the grid's warp puts them.
-    const key = `${String(seed)}:${String(t)}:${JSON.stringify(this.layout.shades)}`;
+    // Everything the pixels depend on: the biome's look, the tile, the start
+    // (the path runs past it), the tier's size and every painted shade.
+    const key = JSON.stringify([look.palette, look.shape, seed, start, t, this.layout.shades]);
     const pixels =
       lastPaint?.key === key
         ? lastPaint.pixels

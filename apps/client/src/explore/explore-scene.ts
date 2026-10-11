@@ -374,6 +374,7 @@ export class ExploreScene implements AmbientTarget {
         start: this.#world(this.#at),
         tier: options.tier,
         sky: options.sky,
+        lightBase: this.#sky.lightBase,
         ...(waterLook ? { extras: lakeExtras(waterLook, tileSeed(tile, 'water')) } : {}),
       });
       const land = this.#land;
