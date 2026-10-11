@@ -358,4 +358,6 @@ export const EXPLORE_SWIM = {
   follower: { float: 0.5, bob: 0.1, pulse: 0.08 }, // TUNE
   /** Bubbles puffed from the mask on each kick: how many, how long they live (ms), rise (world units), size. */
   bubbles: { perKick: 4, pool: 12, lifeMs: 1400, rise: 1.1, size: 0.17 }, // TUNE
+  /** Kick bubbles are one extra draw: only on the high tier, so the iPad 9th gen's low and medium tiers pay nothing (owner, 30 fps with no headroom). */
+  bubbleTiers: { high: true, medium: false, low: false }, // TUNE
 } as const;

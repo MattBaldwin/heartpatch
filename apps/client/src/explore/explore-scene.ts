@@ -424,6 +424,8 @@ export class ExploreScene implements AmbientTarget {
   readonly #swim = createSwim();
   readonly #swimPose: SwimPose = { pitch: 0, lift: 0, squash: 1, surge: 0, sway: 0 };
   #bubbles: SwimBubbles | null = null;
+  /** Kick bubbles at this quality tier (#399: high only). */
+  #bubbling = false;
   /** The player's own Reduce Motion (underwater too). */
   readonly #still: () => boolean;
   #now = 0;
@@ -432,6 +434,7 @@ export class ExploreScene implements AmbientTarget {
     this.#scene = scene;
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
+    this.#bubbling = EXPLORE_SWIM.bubbleTiers[options.tier];
     // Underwater the Keeper and team swim instead of hopping (#399).
     const reduced = options.reducedMotion ?? (() => false);
     this.#reduced = reduced;
@@ -893,7 +896,7 @@ export class ExploreScene implements AmbientTarget {
     }
     const drawing = swimming || this.#hopping;
     if (drawing) this.#place();
-    if (kicked && !this.#still() && this.#mask && swimStyle() === 'glide') {
+    if (kicked && this.#bubbling && !this.#still() && this.#mask && swimStyle() === 'glide') {
       this.#bubbles?.puff(this.#mask.position, this.#now);
     }
     const rising = this.#bubbles?.step(this.#now) ?? false;
@@ -987,6 +990,7 @@ export class ExploreScene implements AmbientTarget {
   setTier(tier: QualityTier): void {
     this.#land?.setTier(tier);
     this.#water?.setTier(tier);
+    this.#bubbling = EXPLORE_SWIM.bubbleTiers[tier];
   }
 
   // ── Ambient life (#335): the map's driver paces it (`AmbientTarget`) ──────
