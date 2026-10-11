@@ -33,6 +33,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
+import { createHouseRepo } from '../house/repo.js';
 import { listPublicFences, removeMemberFences } from '../fences/service.js';
 import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
@@ -338,6 +339,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // After the buildings' grants: safe, as every fence command takes the
       // tile lock first, and this transaction already holds their tiles.
       const lostFences = await removeMemberFences(tx, mapId, memberId);
+      // Their house goes with the buildings (#381; plan Q5): the house row
+      // (its gifts by cascade) and their residency rows.
+      await createHouseRepo(tx).deleteForMember(mapId, memberId);
       for (const event of lostFires) await repo.appendEvent(event);
       for (const event of lostFences) await repo.appendEvent(event);
       await repo.appendEvent({

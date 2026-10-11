@@ -121,11 +121,14 @@ describe('requirements (#381 plan §8)', () => {
     }
     expect(requirementLine({ kind: 'litFires', count: 1 }, context)).toBe('Light a fire 🔥');
     expect(requirementLine({ kind: 'residentsContent', mood: 'happy', count: 1 }, context)).toBe(
-      '1 happy resident',
+      'Have 1 happy resident',
     );
     expect(
       requirementLine({ kind: 'buildingsBuilt', buildingId: 'cozy-meadow', count: 1 }, context),
     ).toBe('Build a Cozy Meadow');
+    expect(
+      requirementLine({ kind: 'buildingsBuilt', buildingId: 'cozy-meadow', count: 2 }, context),
+    ).toBe('Build 2 Cozy Meadows');
     expect(requirementLine({ kind: 'heartSeedLevel', level: 2 }, context)).toBe(
       'Grow your Heart Seed to level 2 🌱',
     );

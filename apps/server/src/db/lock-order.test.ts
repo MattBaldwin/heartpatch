@@ -8,6 +8,7 @@ import {
   hexDistance,
   hexKey,
   hexNeighbors,
+  HOUSE_DATA,
   STARTERS,
   type BattleAction,
   type PlayerBattleAction,
@@ -27,6 +28,8 @@ import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js
 import { createGatheringService } from '../modules/gathering/service.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
+import { createHouseRepo } from '../modules/house/repo.js';
+import { createHouseService } from '../modules/house/service.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
@@ -670,6 +673,62 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockMapRow(tx, mapId),
     );
     expect(await coinRows(kid.id)).toEqual([{ source: 'care', amount: 1 }]);
+  });
+
+  /** A patch whose house can grow with one Timber (only the Seed cap to meet), for the build's locks. */
+  async function houseSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 1 }, 'dev-grant'),
+    );
+    const data = structuredClone(HOUSE_DATA);
+    data.levels[1]!.requirements = [{ kind: 'heartSeedLevel', level: 1 }];
+    data.levels[1]!.cost = { timber: 1 };
+    const service = createHouseService({ db, house: { mode: 'on', testers: [] }, data });
+    const build = () => service.build(kid, map.id, 2);
+    return { kid, mapId: map.id, build };
+  }
+
+  const lockTimber = (tx: Transaction, mapId: string, userId: string) =>
+    tx
+      .select({ itemId: inventories.itemId })
+      .from(inventories)
+      .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, userId)))
+      .for('update');
+
+  it('takes the member row before the house (house `build`, #381 step 2 then 8c)', async () => {
+    const { kid, mapId, build } = await houseSetup('housemember');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      build,
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it('takes the house before the inventory rows (house `build`, #381 step 8c then 11)', async () => {
+    const { kid, mapId, build } = await houseSetup('househouse');
+    await holdThen(
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+      build,
+      (tx) => lockTimber(tx, mapId, kid.id),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it('spends the cost before its event (house `build`, #381 step 11 then 13)', async () => {
+    const { kid, mapId, build } = await houseSetup('housebill');
+    await holdThen(
+      (tx) => lockTimber(tx, mapId, kid.id),
+      build,
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
   });
 
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {

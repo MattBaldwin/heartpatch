@@ -49,6 +49,8 @@ export const ItemChangeReasonSchema = z.enum([
    * they land, and what comes back when one stops. Ledgered against the batch.
    */
   'factory',
+  /** Building the next level of the Keeper's house (#381), ledgered against the house's level. */
+  'house-build',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

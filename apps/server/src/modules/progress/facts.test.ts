@@ -1,4 +1,4 @@
-import { HOUSE_DATA, MapResponseSchema, type HouseData } from '@heartpatch/shared';
+import { HOUSE_DATA, hexDistance, MapResponseSchema, type HouseData } from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { makeHomestead } from '../../../tests/homestead.js';
@@ -244,7 +244,8 @@ describe.skipIf(!url)('progress facts (needs DATABASE_URL)', () => {
     ).find(
       (t) =>
         t.terrain !== 'trading-post' &&
-        Math.abs(t.q - homestead.q) + Math.abs(t.r - homestead.r) > 6,
+        // The homestead is 2 from the Heart Seed, so this is past keepRadius.
+        hexDistance(t, homestead) > 5,
     )!;
     await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${far.id}'`);
     await db

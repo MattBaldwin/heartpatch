@@ -666,6 +666,19 @@ export const GAME_EVENTS = {
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
   },
+  /**
+   * A Keeper built their house's next level (#381). The whole patch hears it
+   * (coordinator call): "Lee's house grew to level 3! 🏠". The cost stays
+   * internal.
+   */
+  'house.built': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      level: z.number().int().min(2),
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), level: z.number().int().min(2) }),
+  },
   /** A player moved one of their buildings to another spot (#18). */
   'building.moved': {
     internal: z.strictObject({
