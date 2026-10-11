@@ -83,7 +83,11 @@ export function startInteraction(
         ? INTERACTION.climbSteps
         : kind === 'shake'
           ? INTERACTION.shakes
-          : 1;
+          : kind === 'dive'
+            ? INTERACTION.diveBubbles
+            : kind === 'part'
+              ? INTERACTION.partSwipes
+              : 1;
   const angle = seed01 * Math.PI * 2;
   return {
     kind,
@@ -148,6 +152,10 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
       return lift(s, input);
     case 'shake':
       return shake(s, input);
+    case 'dive':
+      return dive(s, input);
+    case 'part':
+      return part(s, input);
   }
 }
 
@@ -185,6 +193,32 @@ function climb(s: InteractionState, input: InteractionInput): InteractionState {
     case 'side':
       if (s.lastSide === input.side) return s;
       return counted({ ...s, lastSide: input.side });
+    case 'easy':
+      return counted(s);
+    case 'easy-down':
+      return { ...s, holdSince: input.t, held: 0 };
+    case 'easy-up':
+      return { ...s, holdSince: null, held: 0 };
+    case 'tick': {
+      if (s.holdSince === null) return s;
+      const held = input.t - s.holdSince;
+      return held >= INTERACTION.holdMs
+        ? { ...s, held, count: s.need, done: true }
+        : { ...s, held };
+    }
+    default:
+      return s;
+  }
+}
+
+/**
+ * Snorkel at a bubble spring (#335): each tap on the water catches a bubble.
+ * Any tap on the easy button catches one too, and holding it catches them all.
+ */
+function dive(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'down':
+      return counted(s);
     case 'easy':
       return counted(s);
     case 'easy-down':
@@ -248,6 +282,29 @@ function scoop(s: InteractionState, input: InteractionInput): InteractionState {
       const dy = input.y - stroke.y0;
       if (dx * dx + dy * dy < INTERACTION.swipePx * INTERACTION.swipePx) return s;
       return { ...s, stroke: null, count: 1, done: true, bigSplash: netGlowing(s, input.t) };
+    }
+    case 'up':
+      return { ...s, stroke: null };
+    default:
+      return s;
+  }
+}
+
+/**
+ * Snorkel at a reed bed (#335): each sideways swipe, either way, parts the
+ * reeds a little. The easy way is one tap.
+ */
+function part(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'easy':
+      return { ...s, count: s.need, done: true };
+    case 'down':
+      return { ...s, stroke: { x0: input.x, y0: input.y, counted: false, dir: 0, turnX: input.x } };
+    case 'move': {
+      const stroke = s.stroke;
+      if (!stroke || stroke.counted || Math.abs(input.x - stroke.x0) < INTERACTION.swipePx)
+        return s;
+      return counted({ ...s, stroke: { ...stroke, counted: true } });
     }
     case 'up':
       return { ...s, stroke: null };

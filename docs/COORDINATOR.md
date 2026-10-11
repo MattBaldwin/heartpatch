@@ -24,6 +24,24 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 3. **Start it** with `create_session` (source = repo, `outcome_branch` = `issue-<n>-<slug>`, tags `heartpatch:phase-1` and `heartpatch:batch-<k>`). Pick the model per §6.
 4. **Subscribe** to the PR as soon as the session reports `PR #<n> opened`.
 
+**Full send for Phase 1 (owner, 2026-10-11):** the 4-lane cap is lifted until Phase 1 ships (due Oct 31). The separate-folders rule in step 1 still holds. **Every PR gets a fresh lane session**; don't reuse a lane for its next PR.
+
+### Big features (owner, 2026-10-11)
+
+A feature is **big** when it is a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature. Additive optional schema fields, client-only art and UI, and data-only content are not big. The supervisor decides "big" when briefing and says so in the brief.
+
+For a big feature:
+1. **Fable writes the plan** as an issue comment: files, schema and type deltas, the migration with backfill and rollback, API and WebSocket changes, the UI flow, edge cases, named tests and risks.
+2. **Opus codes it** against that plan. The PR body lists **Plan deviations**.
+3. **A Fable reviewer is the second reviewer** on the first full review.
+
+Rulings so far: #372B and #376 are big; #261, #379, #372A and the trail and cave are not.
+
+### Migrations (owner, 2026-10-11)
+
+- **Migration freeze, Oct 15–18:** no DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18).
+- **Outside the freeze:** merge when green, one migration at a time, and #376 first.
+
 ## 3. Merge gates (all required)
 
 1. A reviewer **APPROVE** verdict comment for the **current head** commit.
@@ -33,6 +51,8 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 5. **Base is current:** if `main` moved in a way that could interact, the branch has merged `main` and CI is green again.
 
 Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict comment.
+
+**Render-checks (visual work):** before a capture reaches the owner, a read-only helper subagent checks it. Start it with the Agent tool (`general-purpose`, `model: "opus"`, background). It returns **PASS** or **FIX** with a list. Captures name their quality tier and show no dev HUD.
 
 **Don't wait for pings.** On every `check_suite.completed` event, check for a verdict on the current head yourself: read the PR comments (`pull_request_read` → `get_comments`) for the build session's verdict comment naming that SHA. The "ready" ping is a convenience, not a dependency.
 
@@ -65,15 +85,22 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 | Work | Model |
 |---|---|
-| Build sessions that write code; reviewers on code PRs | Opus 5.5 (`claude-opus-5-5`) |
-| Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
+| Big features: the plan, and the second reviewer on the first full review | Fable (`claude-fable-5-1`), owner decision 2026-10-11 |
+| Big features: the code | Opus 5.5 (`claude-opus-5-5`) |
+| Other code lanes (not big) | Opus 5.5 (owner rule 2026-10-05) |
+| Client UI and content (not big) | Sonnet 5.5 |
+| Every PR review (the `reviewer` subagent) | Opus 5.5 (owner decision 2026-10-11) |
+| Drift audits and docs-only work | Sonnet 5.5 |
 | Periodic end-to-end review of the whole solution | Fable (`claude-fable-5-1`), only when the owner explicitly asks for it |
+
+The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every PR review now runs on Opus. Where rows overlap, big wins: a big feature's UI is coded by Opus, and only non-big client UI and content go to Sonnet.
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
 - Batch tool calls.
 - Don't re-read large files.
-- When the supervisor's context gets large (≈ 600K+ tokens), **hand off** to a fresh supervisor session (§8).
+- **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session (§2).
+- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8).
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
@@ -125,6 +152,7 @@ Post the verdict comment summarizing each round. Don't merge.
 ## 8. Supervisor handoff
 
 1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to, and subscribe the new supervisor to their PRs. Their `@parent` reports and PR subscriptions belong to the session that started them.
+   - **The new supervisor owns re-routing (hard rule).** At every check-in until each lane has confirmed the switch, it reads each lane's recent events (`list_events`, kinds `assistant`) for a `send_message` to `@parent` or to the old supervisor. Any lane that still reports there gets the correction again, and the new supervisor re-checks GitHub for whatever that report said (opened PRs, verdicts, blockers), because the old supervisor may already be archived. Lessons from the supervisor 5 → 6 handoff: two lanes kept reporting to `@parent` after being told, and one report was a deploy blocker.
 2. Make sure everything durable is in the repo: DECISIONS.md, this playbook, and the briefs' carry-over notes (§9).
 3. Start the new supervisor with a compact prompt:
    - read this playbook, CLAUDE.md and DECISIONS.md;
@@ -132,15 +160,26 @@ Post the verdict comment summarizing each round. Don't merge.
    - the queued follow-ups (§9);
    - the next batch to launch.
 4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so. (Build sessions are archived after merge, per §4; supervisor sessions are not.)
+5. **Lineage limit (coordinator rule, 2026-10-11):** sessions nest at most 8 deep, counting the owner's first supervisor session as depth 1. The last supervisor, at depth 7, doesn't start another one. It writes the handoff into the repo (this playbook, DECISIONS, and the §9 state) and asks the owner to start the next supervisor from a fresh session.
 
 ## 9. Open follow-ups for upcoming briefs
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 5, 2026-10-05 evening):** main `d60573e` after the bug-bash stabilization (#166, #125, #167, #169, #168, #126, #170, #171 merged; #121 closed as superseded by #170). Server live on Lightsail (see DEPLOY.md and DECISIONS 2026-10-05 "Deploy on the new AWS experience"); the owner adds the four GitHub secrets, then runs the Deploy workflow.
-- **In flight:** the taps-flake lane (`fix-taps-gather-flake`: `taps.spec.ts:164` gather → chip → Bag fails intermittently on busier branches' WebKit legs) and the lean full review (three read-only reviewers → one ranked report; feeds the art bible).
-- **Plan after stabilization (owner-approved, in order):** lean review report → owner questions one at a time → **ART BIBLE** mockup (palette, lighting, materials, UI kit, motion, squishy style, Sprout) → visual-upgrade lanes per area, each mockup-first (map/terrain resumes #124 on a fresh session from `83a0aa7`; squishies/close-up; HUD kit, menus, recipe book; cinematic; lobby/onboarding) → **Sprout lane** (she/her, face mockup first, portrait in every bubble, data-driven first-time tips with server-side seen state, an "Ask Sprout" button whose next-best hint the server computes without leaking secrets, she rewrites "See the grey land?") → **food lane** (4–6 foods with recipes, a Feed picker, element/feeling favourites, short boosts, same daily caps, the balance sim must pass).
-- **Remaining Phase 1:** #28 device playtest on the live server. Follow-ups: spotlight relayout on an older iPad; `homeNodeOf` tests; a server capability flag to hide "(dev)" buttons; the #126 round-7 notes landed; move the server to the 2 GB plan when AWS allows it.
+- **State (supervisor 6 handoff, 2026-10-10 ~02:30 UTC):** main `334bcc0`, deployed. Family playtest Oct 16–18 on the live server; Phase 1 due Oct 31. DECISIONS is current through "2026-10-10 — Owner decisions (coordinator)".
+- **Lanes in flight** (each was told to report to supervisor 6; their PRs need a fresh subscription):
+
+  | Lane (session) | PRs and state | What's next |
+  |---|---|---|
+  | #335 explore `session_01S5SgffGk7tXi6bj6dZC1xx` | #339 per-terrain layout: 14/14 green, waiting on its reviewer verdict. #345 sky (owner: "merge it now"): CI finishing at `122162e`. #346 underwater, #350 trail and cave: **on hold, should be drafts.** #347 (Fix: a tile's buildings never draw in explore, because `maps.close()` runs before `options.mapTile()`; `main.ts:531`, `explore-screen.ts:1141/1205`): no PR yet. | Merge #339, #345 and #347 on gates. Owes the BIOME RULES design artifact and answers on capture GPU, tier and DPR. |
+  | #335 art reset `session_01PueHb7QTFgUkvjQGsoJ4QN` | Hero meadow on a shared art kit, plus the dev-only `?tier=` pin. | Render-check its captures (tier labelled), then take them to the owner. Lake, trail and cave (cave second room and tunnel) follow. Unapproved biomes by Oct 15 keep today's explore. |
+  | #340 accessories `session_01FhjFBqdVYSEjZ85QkX4Dit` | #349 dress-up client (owner-approved): went red, fix at `a1be585`; now `51547f8`. | Merge on gates, then archive. If the iPad recipe-book craft timeout repeats, check whether main fails too. |
+  | #29 PvP `session_018USpwEubBSKfGQcHxxV5xJ` | #351 live turn flow (server) with migration 0040: **holds the migration slot.** | Merge on gates. Client PRs need owner-approved shots first (the PvP mockup is approved). |
+  | #32 branching `session_01Kf247AXgxDsoE2ctTWq5UG` | #353 engine, then #354 batch 1, then #355 batch 2 (stacked). Both batches owner-approved; the shot pages' "PR #PRNUM" text is a nit to fix. | Merge in stack order on gates. Its migration waits for #351. More batches follow. |
+  | Polish `session_01MKvSweAoVa4ugJSFk8nHgz` | #348 trading post flags (#310, owner-approved): CI running. | Merge on gates, then archive. |
+- **Owner waits / asks:** iPhone checks of the zoom fix (#330) and the book page turns (#334); a backups check (`ls -lh /opt/heartpatch/backups/`). Share the family signup code only in person.
+- **Filed, no lane yet:** #352 (Chore: nothing prunes `game_events`; add retention), #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
+- **Check-in:** a supervisor check-in every ~45 min via a self-bound trigger. Supervisor 5's `trig_01VMZ5PUHUGUozUZAoUQepRd` was deleted at handoff; arm your own.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first.
 - **Merge gates as practised:** reviewer APPROVE on the exact head; CI green on it; base current, or a merge-only delta verified with `git merge-tree`; squash with `expectedHeadSha`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
 - **After a merge:** check the other open PRs for conflicts (`git merge-tree --name-only`); delete the lane's own one-shot triggers (`list_triggers` with `recurring:false`, filter by `persistent_session_id`); archive the lane. Never archive a supervisor.
@@ -172,6 +211,19 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-11):**
+  - **Superseded runs look like failures.** A run replaced by a newer one can show as red or stopped. Check whether it was superseded before treating it as broken.
+  - **There are no required checks on main.** Branch protection requires none (#349 showed `mergeable_state: clean` with zero check runs). The §3 gates are the only guard, so read CI on the head yourself.
+  - **A lane's `@parent` is its creator.** Its reports go to the session that started it, so after a handoff the new supervisor re-routes the lanes (§8).
+  - **Polish lanes burn cache.** Long polish sessions cost the most in cache reads. Keep them short, or start a fresh one.
+  - **Never merge on a chat "ready".** Merge only on the reviewer's APPROVE and green CI on the exact head SHA, checked on GitHub.
+  - **Stop orders aren't self-enforcing.** A lane can keep working after a STOP. Confirm a hold on GitHub (draft state), not only in chat.
+- **Lessons (2026-10-10):**
+  - **Render-check visual work at the tier the owner will see.** Headless SwiftShader drops to the low quality tier (no shadows, LOD or AA). Explore captures shot that way, on flat scene design, were rejected outright. Pin the tier (`?tier=`) and label every capture with it.
+  - **Render-check every artifact before it reaches the owner:** screenshot it with Playwright, look at it, then delete the PNGs.
+  - **"Continue from where you left off" always means resume the pending work.** Never answer it with "No response requested".
+  - **`merge_pull_request` needs the full 40-character `expectedHeadSha`.** A short SHA is refused.
+  - **A STOP to a lane can cross a message already in flight.** Confirm a hold on GitHub (draft state), not just in chat.
 - **Lessons (2026-10-05):**
   - **A red main costs every lane.** Each PR re-merged main and re-ran 8–15 min of WebKit CI per merge; the day's seven lanes cost about $650 (taps $154, tutorial $152, battle $108, screens $65, rules $64, flakes $60, tray-fix $40). Fix main first, and fix a timing test by waiting on the game's own state (`still()` in `apps/client/tests/e2e/layout.ts`), never on time.
   - **`docs/DECISIONS.md` is append-only at the bottom, so every pair of open PRs conflicts there.** Lanes now put their decision text under a `## Decisions` heading in the PR body; the coordinator appends it to DECISIONS.md after the merge (in the next Docs PR). Lanes don't edit DECISIONS.md.

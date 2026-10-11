@@ -38,7 +38,18 @@ flock -n 9 || fail "another deploy or a restore is running; try again when it fi
 # Reads KEY=value from .env without sourcing it (values may hold shell characters).
 env_value() { sed -n "s/^$1=//p" .env | tail -n 1; }
 
-for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN; do
+# The evolution roll salt is made here on the first deploy and kept for good:
+# changing it changes every evolution roll. Only its name is ever logged.
+if [[ -z $(env_value HP_EVOLUTION_SALT) ]]; then
+  tmp=$(mktemp "$HP_DIR/.env.XXXXXX")
+  grep -v '^HP_EVOLUTION_SALT=' .env >"$tmp" || true
+  printf 'HP_EVOLUTION_SALT=%s\n' "$(openssl rand -hex 32)" >>"$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" .env
+  log "generated HP_EVOLUTION_SALT"
+fi
+
+for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN HP_EVOLUTION_SALT; do
   [[ -n $(env_value "$key") ]] || fail "$key is empty in $HP_DIR/.env (see .env.prod.example)"
 done
 
