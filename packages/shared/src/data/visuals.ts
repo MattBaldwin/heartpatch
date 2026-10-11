@@ -1416,7 +1416,7 @@ export const PARTS: Part[] = [
     jitter: 0.08,
   },
   // #32 redesigns: a squirrel's acorn cup and plume tail, a cupcake's
-  // pleated cup and sprinkles, a singing heart's mouth, arms and music note.
+  // pleated cup and sprinkles, a singing heart's mouth, blush, arm nubs and music note.
   {
     // Short, pointed squirrel ears (not tall bunny ears).
     id: 'tuft-ears',
@@ -1676,7 +1676,7 @@ export const PARTS: Part[] = [
     id: 'bold-happy-eyes',
     slot: 'brows',
     shape: 'arc',
-    size: [0.3, 0.16, 0.1],
+    size: [0.22, 0.11, 0.08],
     color: 'ink',
     layout: pair,
     around: 26,
@@ -1699,35 +1699,36 @@ export const PARTS: Part[] = [
     sink: 0.45,
     jitter: 0.04,
   },
+
   {
-    // A little pink tongue inside the singing mouth.
-    id: 'singing-tongue',
-    slot: 'pattern',
-    shape: 'ellipsoid',
-    size: [0.14, 0.11, 0.08],
-    color: 'blush',
-    layout: single,
-    around: 0,
-    up: -8,
-    sink: 0.3,
-    jitter: 0.04,
-  },
-  {
-    // Little arms thrown up and out, mid-song.
+    // Two little round arm nubs held low in front, mid-song.
     id: 'singing-arms',
     slot: 'arms',
-    shape: 'capsule',
-    size: [0.15, 0.36, 0.15],
-    color: 'secondary',
+    shape: 'ellipsoid',
+    size: [0.18, 0.24, 0.18],
+    color: 'primary',
     layout: pair,
-    around: 90,
-    up: 0,
-    tilt: 30,
-    sink: 0.45,
+    around: 80,
+    up: -30,
+    tilt: -30,
+    sink: 0.5,
     splay: 15,
     jitter: 0.05,
   },
 
+  {
+    // Big rosy cheeks under the singing heart's eyes.
+    id: 'heart-blush',
+    slot: 'pattern',
+    shape: 'ellipsoid',
+    size: [0.16, 0.1, 0.04],
+    color: 'blush',
+    layout: pair,
+    around: 32,
+    up: 6,
+    sink: 0.5,
+    jitter: 0.05,
+  },
   {
     // A gold eighth note on the heart's right cheek: its round head…
     id: 'note-head',
@@ -1737,7 +1738,7 @@ export const PARTS: Part[] = [
     color: 'detail',
     layout: single,
     around: 44,
-    up: -24,
+    up: -28,
     sink: 0.35,
     tilt: 20,
     jitter: 0.04,
@@ -1751,22 +1752,23 @@ export const PARTS: Part[] = [
     color: 'detail',
     layout: single,
     around: 52,
-    up: -20,
+    up: -24,
     sink: 0.4,
     tilt: 88,
     jitter: 0.04,
   },
   {
-    // …and its flag, a little curve lying flat on the body from the top of
-    // the stem (a surface slot, so it hugs the body instead of growing off it).
+    // …and its flag: a narrow curve lying flat on the body, hooked over the
+    // top of the stem and sweeping down on the outer side (a surface slot,
+    // so it hugs the body instead of growing off it).
     id: 'note-flag',
     slot: 'cheeks',
     shape: 'arc',
-    size: [0.2, 0.13, 0.08],
+    size: [0.12, 0.22, 0.08],
     color: 'detail',
     layout: single,
-    around: 52,
-    up: 4,
+    around: 49,
+    up: -4,
     sink: 0.2,
     flip: true,
     jitter: 0.04,
