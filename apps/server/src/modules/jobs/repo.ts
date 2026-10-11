@@ -38,6 +38,8 @@ export interface JobRow {
   /** The work tile as stored (maybe stale), with when its count started. */
   workTile: JobTileRow | null;
   workSince: Date | null;
+  /** When it started on its work tile (its count's `workSince` moves on at each collect). */
+  workStartedAt: Date | null;
   /** It works a tile its owner still holds, untouched since it started (`squishyAtWork`). */
   atWork: boolean;
   /**
@@ -47,7 +49,7 @@ export interface JobRow {
    */
   lostAt: Date | null;
   /** Its watch post as stored (maybe on land that changed hands). */
-  post: { tileId: string; q: number; r: number } | null;
+  post: { tileId: string; q: number; r: number; assignedAt: Date } | null;
   /** It stands watch (`squishyOnWatch`). */
   onWatch: boolean;
   /**
@@ -65,6 +67,16 @@ export interface JobRow {
     /** Its owner's row for that tile: the homestead's pauses (training naps while cut off). */
     homestead: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
   } | null;
+  /**
+   * Its contentment as stored (#376): the checkpoint, and the last-care pair
+   * the previous release wrote. `contentmentCheckpoint` reads the newer.
+   */
+  care: {
+    contentment: number;
+    contentmentSince: Date | null;
+    contentmentAtLastCare: number;
+    lastCaredAt: Date | null;
+  };
 }
 
 /**
@@ -168,6 +180,13 @@ export interface SquishyJobsRepo {
   countTrainees: (buildingRowId: string) => Promise<number>;
   /** Off its watch post; returns the tile it left, if it had one. */
   leavePost: (squishyId: string) => Promise<string | null>;
+  /** A new contentment checkpoint (#376): its value at `at`. */
+  setContentment: (squishyId: string, contentment: number, at: Date) => Promise<void>;
+  /**
+   * Dev and test only: moves these squishies' care, checkpoint, work,
+   * training and watch times `ms` into the past, as if the clock jumped.
+   */
+  devShiftTimes: (squishyIds: readonly string[], ms: number) => Promise<void>;
 }
 
 export interface SquishyJobsTxRepo extends SquishyJobsRepo {
@@ -216,6 +235,7 @@ function queries(db: Executor): SquishyJobsRepo {
         habitatBuildingId: squishies.habitatBuildingId,
         teamSlot: squishies.teamSlot,
         workSince: squishies.workSince,
+        workStartedAt: squishies.workStartedAt,
         atWork: squishyAtWork(),
         lostAt: firstCaptureSince(squishies.workTileId, squishies.workStartedAt),
         onWatch: squishyOnWatch(),
@@ -233,6 +253,7 @@ function queries(db: Executor): SquishyJobsRepo {
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
+        postAssignedAt: tileDefenders.assignedAt,
         trainingRowId: trainingBuilding.id,
         trainingContentId: trainingBuilding.buildingId,
         trainingLevel: trainingBuilding.level,
@@ -244,6 +265,10 @@ function queries(db: Executor): SquishyJobsRepo {
         trainingJoinedAt: trainingExplore.joinedAt,
         trainingPausedAt: trainingExplore.pausedAt,
         trainingResumedAt: trainingExplore.resumedAt,
+        contentment: squishies.contentment,
+        contentmentSince: squishies.contentmentSince,
+        contentmentAtLastCare: squishies.contentmentAtLastCare,
+        lastCaredAt: squishies.lastCaredAt,
       })
       .from(squishies)
       .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
@@ -308,12 +333,13 @@ function queries(db: Executor): SquishyJobsRepo {
                   },
           },
     workSince: r.workSince,
+    workStartedAt: r.workStartedAt,
     atWork: r.atWork,
     lostAt: r.lostAt,
     post:
-      r.postTileId === null || r.postQ === null || r.postR === null
+      r.postTileId === null || r.postQ === null || r.postR === null || r.postAssignedAt === null
         ? null
-        : { tileId: r.postTileId, q: r.postQ, r: r.postR },
+        : { tileId: r.postTileId, q: r.postQ, r: r.postR, assignedAt: r.postAssignedAt },
     onWatch: r.onWatch,
     training:
       r.trainingRowId === null ||
@@ -339,6 +365,12 @@ function queries(db: Executor): SquishyJobsRepo {
                     resumedAt: r.trainingResumedAt,
                   },
           },
+    care: {
+      contentment: r.contentment,
+      contentmentSince: r.contentmentSince,
+      contentmentAtLastCare: r.contentmentAtLastCare,
+      lastCaredAt: r.lastCaredAt,
+    },
   });
 
   return {
@@ -478,6 +510,34 @@ function queries(db: Executor): SquishyJobsRepo {
         .where(eq(tileDefenders.squishyId, squishyId))
         .returning({ tileId: tileDefenders.tileId });
       return row?.tileId ?? null;
+    },
+
+    setContentment: async (squishyId, contentment, at) => {
+      await db
+        .update(squishies)
+        .set({ contentment, contentmentSince: at })
+        .where(eq(squishies.id, squishyId));
+    },
+
+    // Dev and test only: it writes `tile_defenders` after the squishy locks,
+    // outside tech spec §7's order, which is fine for a seeding tool.
+    devShiftTimes: async (squishyIds, ms) => {
+      if (squishyIds.length === 0) return;
+      const back = (column: AnyColumn) => sql`${column} - make_interval(secs => ${ms / 1000})`;
+      await db
+        .update(squishies)
+        .set({
+          lastCaredAt: back(squishies.lastCaredAt),
+          contentmentSince: back(squishies.contentmentSince),
+          workSince: back(squishies.workSince),
+          workStartedAt: back(squishies.workStartedAt),
+          trainingSince: back(squishies.trainingSince),
+        })
+        .where(inArray(squishies.id, [...squishyIds]));
+      await db
+        .update(tileDefenders)
+        .set({ assignedAt: back(tileDefenders.assignedAt) })
+        .where(inArray(tileDefenders.squishyId, [...squishyIds]));
     },
   };
 }

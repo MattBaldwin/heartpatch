@@ -828,7 +828,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     const DENVER_MIDNIGHT = '2026-10-03T06:00:00.000Z';
     /**
      * XP a squishy granted at `GRANTED` (no care since, no habitat) gets for
-     * `base` now: contentment slides down as the test clock moves on.
+     * `base` now. Both squishies join the team at `GRANTED`, and the team
+     * holds contentment steady (#376), so it doesn't slide as the clock moves.
      */
     const GRANTED = new Date('2026-10-02T12:00:00Z');
     const paidNow = (base: number) =>
@@ -836,9 +837,10 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         base,
         xpMultiplier(
           contentmentAt(
-            { contentment: CARE_RULES.startContentment, lastCaredAt: GRANTED },
+            { contentment: CARE_RULES.startContentment, since: GRANTED },
             clock,
             CARE_RULES,
+            [{ fromMs: GRANTED.getTime(), toMs: null }],
           ),
           null,
           { element: 'light', feeling: 'cozy' },

@@ -71,6 +71,12 @@ export const JobSquishySchema = z.object({
    * wins still pay in full.
    */
   fullXpResetAt: z.iso.datetime().nullable(),
+  /**
+   * The resources gathering suits it for (Good or Great at, shared
+   * `gatherFitsFor`): there its contentment holds steady; anywhere else it
+   * drifts down (owner decision on #376). An older server sends none.
+   */
+  gatherFits: z.array(ContentIdSchema).default([]),
 });
 export type JobSquishy = z.infer<typeof JobSquishySchema>;
 
@@ -147,6 +153,19 @@ export const SetTeamRequestSchema = z.strictObject({
   squishyIds: z.array(z.uuid()).max(6),
 });
 export type SetTeamRequest = z.infer<typeof SetTeamRequestSchema>;
+
+/**
+ * Dev and test only, `POST /maps/:mapId/dev/mood/age`: my squishies live
+ * `minutes` more of their jobs, as if the clock jumped (#376's e2e).
+ */
+export const DevAgeMoodRequestSchema = z.strictObject({
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60),
+});
+export type DevAgeMoodRequest = z.infer<typeof DevAgeMoodRequestSchema>;
 
 /** `POST /maps/:mapId/work/collect`: everything my gatherers had ready. */
 export const CollectWorkResponseSchema = z.object({

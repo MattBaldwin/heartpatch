@@ -33,7 +33,7 @@ export interface TileInfo {
   readonly guardians: string | null;
   /**
    * What a squishy gatherer picks on this land, whether or not it has a
-   * Keeper spot (#238's nesting economy): "Squishies gather 🌲 Timber here."
+   * Keeper spot (#238's nesting economy): "Squishies gather 🪵 Timber here."
    */
   readonly gatherer: string | null;
   /**

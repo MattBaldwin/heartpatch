@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   ApiErrorSchema,
+  CARE_RULES,
+  CareListResponseSchema,
   CollectWorkResponseSchema,
   hexDistance,
   GROWTH_RULES,
@@ -40,6 +42,10 @@ import { createBattlesService } from '../battles/service.js';
 import { createHollowService } from '../hollow/service.js';
 import { makeHomestead } from '../../../tests/homestead.js';
 import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
+import { localDate } from '../../lib/time.js';
+import { createMapsRepo } from '../maps/repo.js';
+import { rewildTiles } from '../territory/rewild.js';
+import { guardWatchesOf, writeGuardCheckpoints } from './contentment.js';
 import { createSquishyJobsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -86,8 +92,8 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
 
   const later = (ms: number) => clock.setTime(clock.getTime() + ms);
 
-  async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+  async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
+    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, ...env });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
   }
@@ -1193,6 +1199,312 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('contentment by job (#376)', () => {
+    const HOUR_MS = 60 * MINUTE_MS;
+    /** What `hours` of drift takes off (the care rules' straight line, whole points). */
+    const drop = (hours: number) =>
+      Math.floor(
+        (hours * (CARE_RULES.maxContentment - CARE_RULES.baselineContentment)) /
+          CARE_RULES.hoursFullToBaseline,
+      );
+
+    /** Sets a squishy's checkpoint to `contentment` now, as a care action would. */
+    const checkpoint = (id: string, contentment: number) =>
+      run(
+        `update squishies set contentment = ${String(contentment)},
+         contentment_since = '${clock.toISOString()}' where id = '${id}'`,
+      );
+
+    /** Its contentment and drift as the care sheet reads them. */
+    async function moodOf(server: FastifyInstance, who: Player, mapId: string, id: string) {
+      const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
+      expect(res.statusCode).toBe(200);
+      const care = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id)!;
+      return { contentment: care.contentment, drift: care.moodDrift };
+    }
+
+    it('drains while resting', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 80);
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'resting',
+      });
+    });
+
+    it('holds on the team and on watch', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const [member, guard] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      await checkpoint(member, 80);
+      await checkpoint(guard, 80);
+      expect((await setTeam(server, kid, mapId, [member])).statusCode).toBe(200);
+      const post = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      expect(post.statusCode).toBe(200);
+      later(6 * HOUR_MS);
+      for (const id of [member, guard]) {
+        expect(await moodOf(server, kid, mapId, id)).toEqual({ contentment: 80, drift: 'steady' });
+      }
+    });
+
+    it('holds while training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const plot = await makeHomestead(db, mapId, kid.id, clock, 0);
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: plot.id,
+        buildingId: 'training-grounds',
+        kind: 'training-grounds',
+        level: 1,
+        spot: 2,
+      });
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 80);
+      expect((await setJob(server, kid, mapId, pet, { job: 'training' })).statusCode).toBe(200);
+      // Daytime in Denver (6 AM to noon): no nap.
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({ contentment: 80, drift: 'steady' });
+    });
+
+    it('drains while gathering something it has no knack for', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      // Water + Silly: neither side of Timber's match.
+      const pet = await squishy(mapId, kid, { element: 'water', feeling: 'silly' });
+      await checkpoint(pet, 80);
+      const res = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
+      expect(res.statusCode).toBe(200);
+      expect(jobOf(JobsViewSchema.parse(res.json()), pet).gatherFits).not.toContain('timber');
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'wrong-job',
+      });
+    });
+
+    it('holds a fitting gatherer until its basket fills, then drains with no write; collect starts it again', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      // Leaf + Brave: Great at Timber.
+      const pet = await squishy(mapId, kid, { element: 'leaf', feeling: 'brave' });
+      await checkpoint(pet, 80);
+      const res = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
+      expect(jobOf(JobsViewSchema.parse(res.json()), pet).gatherFits).toContain('timber');
+      const cycle = Math.floor((900 * JOB_RULES.work.cyclePercent) / 175);
+      const fullAfterMs = JOB_RULES.work.maxStoredCycles * cycle * 1000;
+
+      later(fullAfterMs - MINUTE_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({ contentment: 80, drift: 'steady' });
+      // The basket filled a minute later; nothing was written since.
+      later(MINUTE_MS + 6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'stopped',
+      });
+      expect((await squishyRow(pet))?.contentmentSince).toEqual(new Date(START));
+
+      // Collecting empties the basket: it's back at work and holds again.
+      expect((await collect(server, kid, mapId)).statusCode).toBe(200);
+      later(HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'steady',
+      });
+    });
+
+    it('dev mood aging reads as a clock jump would (e2e only)', async () => {
+      const server = await start({ HP_DEV_SQUISHY_GRANTS: 'true' });
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      const [rester, worker] = [
+        await squishy(mapId, kid),
+        await squishy(mapId, kid, { element: 'leaf', feeling: 'brave' }),
+      ];
+      await checkpoint(rester, 80);
+      await checkpoint(worker, 80);
+      await setJob(server, kid, mapId, worker, { job: 'gatherer', q: node.q, r: node.r });
+      const aged = await call(server, 'POST', `/maps/${mapId}/dev/mood/age`, kid, {
+        minutes: 60,
+      });
+      expect(aged.statusCode).toBe(200);
+      expect(await moodOf(server, kid, mapId, rester)).toEqual({
+        contentment: 80 - drop(1),
+        drift: 'resting',
+      });
+      expect(await moodOf(server, kid, mapId, worker)).toEqual({
+        contentment: 80,
+        drift: 'steady',
+      });
+    });
+
+    it('keeps what a watch held when its land goes wild, then drifts', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const guard = await squishy(mapId, kid);
+      await checkpoint(guard, 80);
+      const post = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      expect(post.statusCode).toBe(200);
+      later(6 * HOUR_MS);
+      const map = (await createMapsRepo(db).findMap(mapId))!;
+      const tileId = await tileIdAt(mapId, hills);
+      await db.transaction(async (tx) => {
+        await tx.execute(`select 1 from tiles where id = '${tileId}' for update`);
+        await rewildTiles(
+          tx,
+          map,
+          [{ ...hills, id: tileId, ownerUserId: kid.id, tendedAt: null }],
+          localDate(clock, map.timeZone),
+          new Date(clock),
+          'untended',
+        );
+      });
+      // The six hours on watch held; it rests from here.
+      expect(await squishyRow(guard)).toMatchObject({
+        contentment: 80,
+        contentmentSince: new Date(clock),
+      });
+      later(3 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, guard)).toEqual({
+        contentment: 80 - drop(3),
+        drift: 'resting',
+      });
+    });
+
+    it("counts a care that lands between reading a guard's watch and writing its checkpoint", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const guard = await squishy(mapId, kid);
+      await checkpoint(guard, 60);
+      await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      later(2 * HOUR_MS);
+      // A capture reads the watch first; a care commits; then the capture writes.
+      const watches = await guardWatchesOf(db, [guard]);
+      expect(
+        (
+          await call(server, 'POST', `/maps/${mapId}/squishies/${guard}/care`, kid, {
+            action: 'pet',
+          })
+        ).statusCode,
+      ).toBe(200);
+      later(MINUTE_MS);
+      await db.transaction((tx) => writeGuardCheckpoints(tx, watches, new Date(clock)));
+      const gain = GAME_DATA.careActions.find((a) => a.id === 'pet')!.contentment;
+      expect(await squishyRow(guard)).toMatchObject({
+        contentment: 60 + gain,
+        contentmentSince: new Date(clock),
+      });
+    });
+
+    it('reads a row the previous release wrote from its last care, until a care writes both', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pet = await squishy(mapId, kid);
+      await run(
+        `update squishies set contentment_at_last_care = 70, last_cared_at = '${clock.toISOString()}',
+         contentment = 0, contentment_since = null where id = '${pet}'`,
+      );
+      later(6 * HOUR_MS);
+      expect((await moodOf(server, kid, mapId, pet)).contentment).toBe(70 - drop(6));
+      const cared = await call(server, 'POST', `/maps/${mapId}/squishies/${pet}/care`, kid, {
+        action: 'pet',
+      });
+      expect(cared.statusCode).toBe(200);
+      const gain = GAME_DATA.careActions.find((a) => a.id === 'pet')!.contentment;
+      expect(await squishyRow(pet)).toMatchObject({
+        contentment: 70 - drop(6) + gain,
+        contentmentSince: new Date(clock),
+        contentmentAtLastCare: 70 - drop(6) + gain,
+        lastCaredAt: new Date(clock),
+      });
+    });
+
+    it('builds a care action on the held value', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [member, rester] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      await checkpoint(member, 60);
+      await checkpoint(rester, 60);
+      expect((await setTeam(server, kid, mapId, [member])).statusCode).toBe(200);
+      later(12 * HOUR_MS);
+      const gain = GAME_DATA.careActions.find((a) => a.id === 'pet')!.contentment;
+      for (const id of [member, rester]) {
+        const res = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, kid, {
+          action: 'pet',
+        });
+        expect(res.statusCode).toBe(200);
+      }
+      expect((await squishyRow(member))?.contentment).toBe(60 + gain);
+      expect((await squishyRow(rester))?.contentment).toBe(60 - drop(12) + gain);
+    });
+
+    it('writes a checkpoint at each job change, and reads match across them', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 90);
+
+      // Six hours resting, read lazily: nothing written.
+      later(6 * HOUR_MS);
+      expect((await moodOf(server, kid, mapId, pet)).contentment).toBe(90 - drop(6));
+      expect((await squishyRow(pet))?.contentment).toBe(90);
+
+      // Onto the team: the rest so far is written down at the old rate.
+      expect((await setTeam(server, kid, mapId, [pet])).statusCode).toBe(200);
+      const joined = new Date(clock);
+      expect(await squishyRow(pet)).toMatchObject({
+        contentment: 90 - drop(6),
+        contentmentSince: joined,
+      });
+      later(5 * HOUR_MS);
+      expect((await moodOf(server, kid, mapId, pet)).contentment).toBe(90 - drop(6));
+
+      // Back to resting: the team time held, and it drifts from here.
+      expect((await setJob(server, kid, mapId, pet, { job: 'resting' })).statusCode).toBe(200);
+      expect(await squishyRow(pet)).toMatchObject({
+        contentment: 90 - drop(6),
+        contentmentSince: new Date(clock),
+      });
+      later(3 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 90 - drop(6) - drop(3),
+        drift: 'resting',
+      });
+    });
+  });
+
   describe('lock order (tech spec §7)', () => {
     /** Holds `first`, runs `command`, and once it waits, takes `then` too. */
     async function holdThen(
@@ -1233,6 +1545,28 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const user = { id: kid.id, username: kid.username } as never;
       return { server, kid, mapId, node, tileId: tileRow.id, pet, service, user };
     }
+
+    it('locks a guard leaving its post before writing its checkpoint (territory `setDefenders`, #376)', async () => {
+      const { server, kid, mapId } = await setup();
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const [leaving, coming] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const post = (ids: string[]) =>
+        call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+          q: hills.q,
+          r: hills.r,
+          squishyIds: ids,
+        });
+      expect((await post([leaving])).statusCode).toBe(200);
+      let swapped: LightMyRequestResponse | undefined;
+      await holdThen(
+        (tx) => lockRow(tx, 'squishies', leaving),
+        async () => {
+          swapped = await post([coming]);
+        },
+        (tx) => lockMap(tx, mapId),
+      );
+      expect(swapped?.statusCode).toBe(200);
+    });
 
     it('takes the member row before the tile (jobs `setJob`)', async () => {
       const { kid, mapId, node, tileId, pet, service, user } = await setup();

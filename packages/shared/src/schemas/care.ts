@@ -28,6 +28,17 @@ export const EvolvingMeterSchema = z.strictObject({
 });
 
 /**
+ * Why a squishy's contentment is or isn't drifting down right now (owner
+ * decision on #376, shared `moodDrift`): `steady`, a job that suits it holds
+ * it (Team, Guard, Training, or gathering what it's Good or Great at);
+ * `resting`, no job; `wrong-job`, gathering something it isn't good at;
+ * `stopped`, its job has stopped working (a full basket, a napping
+ * homestead, out of season, full Training XP). Only `steady` holds.
+ */
+export const MoodDriftSchema = z.enum(['steady', 'resting', 'wrong-job', 'stopped']);
+export type MoodDrift = z.infer<typeof MoodDriftSchema>;
+
+/**
  * A whisper in the care sheet (#32): what's shaping a squishy's next
  * evolution, as a finished kid-readable line. It never names a form or a
  * chance; the rules behind it stay on the server (CLAUDE.md rule 6).
@@ -67,6 +78,8 @@ export const CareSquishySchema = z.object({
   /** Contentment now, 0–100 (worked out from the last care, design doc §7). */
   contentment: z.number().int().min(0).max(100),
   mood: MoodIdSchema,
+  /** Whether its job is holding its contentment steady, and why not. An older server sends none. */
+  moodDrift: MoodDriftSchema.nullable().default(null),
   /** The XP multiplier from care × habitat, as a percent (100 = no bonus). For the info card. */
   xpBonusPercent: z.number().int().min(100),
   habitatId: z.uuid().nullable(),
