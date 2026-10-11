@@ -215,11 +215,13 @@ class Step {
       if (choice?.type === 'swap') this.swap(side, choice.slot);
     }
 
-    // Battle items next (potions, #214): the side's whole turn too, before
-    // any move, so a shield is up for this turn's hit.
+    // Potion sips next (#214), before any move, so a shield is up for this
+    // turn's hit. A sip with a move is free (#403): the move still comes
+    // below. A bare item choice (battles logged before #403) is the side's
+    // whole turn, as it always was.
     for (const side of SIDES) {
-      const choice = picked[side];
-      if (choice?.type === 'item') this.useItem(side, choice.item);
+      const sip = sipOf(picked[side]);
+      if (sip !== undefined) this.useItem(side, sip);
     }
 
     // Heart Charms next; a squishy that says yes leaves the fight (#279), and
@@ -270,6 +272,7 @@ class Step {
       if (!this.active(side).moves.includes(given.move)) {
         throw new BattleRuleError(`side ${side}'s squishy doesn't know "${given.move}"`);
       }
+      if (given.item !== undefined) this.checkItem(side, given.item);
     } else {
       this.checkBenchSlot(side, given.slot);
     }
@@ -734,10 +737,18 @@ export function itemRefusal(
   return used >= content.rules.items.usesEach ? 'used-up' : null;
 }
 
+/** The potion a choice sips this turn (#214, #403), if any. */
+export function sipOf(choice: BattleChoice | null | undefined): string | undefined {
+  if (choice?.type === 'item') return choice.item;
+  if (choice?.type === 'move') return choice.item;
+  return undefined;
+}
+
 /**
  * Every choice a side could legally make this turn (for the UI and tests).
  * Battle items are listed when `content` is given: player sides only, and
- * whether the bag holds one is the server's to check.
+ * whether the bag holds one is the server's to check. Each is listed as a
+ * free sip with every move (#403), and bare, as a sip with no move.
  */
 export function legalChoices(
   state: BattleState,
@@ -751,8 +762,10 @@ export function legalChoices(
     content && state.sides[side].controller.type === 'player'
       ? [...content.items.keys()].filter((item) => !itemRefusal(content, state, side, item))
       : [];
+  const moves = activeSquishy(state, side).moves;
   return [
-    ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),
+    ...moves.map((move): BattleChoice => ({ type: 'move', move })),
+    ...items.flatMap((item) => moves.map((move): BattleChoice => ({ type: 'move', move, item }))),
     ...benchOf(state, side).map(({ slot }): BattleChoice => ({ type: 'swap', slot })),
     ...(state.sides[side].controller.type === 'player' &&
     state.sides[otherSide(side)].controller.type === 'ai' &&

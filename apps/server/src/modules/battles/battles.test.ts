@@ -755,6 +755,69 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect((await ledgerFor(battle.id)).length).toBe(1);
     });
 
+    it('a free sip (#403): spends one potion and still makes the move that turn', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { speciesId: SECRET_IDS[0], level: 10 });
+      const battle = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0] },
+      });
+      await giveItems(server, kid, mapId, { 'cozy-cocoa': 2 });
+      const move = myActive(battle).moves[0]!;
+
+      const res = await act(server, kid, battle, { type: 'move', move, item: 'cozy-cocoa' });
+      expect(res.statusCode, res.body).toBe(200);
+      const after = battleOf(res);
+      expect(after.view.turn).toBe(1);
+      expect(after.view.sides.a.itemsUsed).toEqual(['cozy-cocoa']);
+      const mine = after.view.log.filter((e) => 'side' in e && e.side === 'a');
+      // The sip comes first, and the squishy still makes its move.
+      expect(mine[0]).toEqual({ turn: 1, side: 'a', slot: 0, type: 'item', item: 'cozy-cocoa' });
+      expect(after.view.log).toContainEqual({ turn: 1, side: 'a', slot: 0, type: 'move', move });
+      expect(await countOf(kid, mapId, 'cozy-cocoa')).toBe(1);
+      expect(
+        (await ledgerFor(battle.id)).map(({ itemId, delta, reason }) => ({
+          itemId,
+          delta,
+          reason,
+        })),
+      ).toEqual([{ itemId: 'cozy-cocoa', delta: -1, reason: 'battle-item' }]);
+      // Stored as the engine's combined choice, so it replays.
+      const row = (await rowOf(battle.id))!;
+      expect((row.actions as unknown[]).at(-1)).toEqual({
+        type: 'turn',
+        choices: { a: { type: 'move', move, item: 'cozy-cocoa' } },
+      });
+
+      // One of each per battle, sipped or not: refused, nothing spent, no turn played.
+      if (after.view.phase.type !== 'turn') return;
+      const again = await act(server, kid, after, { type: 'move', move, item: 'cozy-cocoa' });
+      expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toMatch(/already had one/);
+      expect(await countOf(kid, mapId, 'cozy-cocoa')).toBe(1);
+      expect(battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid)).view.turn).toBe(1);
+    });
+
+    it('a free sip with none in the bag, or of a non-potion, is refused before the move', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { level: 10 });
+      const battle = await pickFight(server, kid, mapId);
+      const move = myActive(battle).moves[0]!;
+
+      const none = await act(server, kid, battle, { type: 'move', move, item: 'brave-brew' });
+      expect(none.statusCode).toBe(409);
+      expect(errorOf(none).message).toMatch(/Brave Brew/);
+      await giveItems(server, kid, mapId, { timber: 1 });
+      const timber = await act(server, kid, battle, { type: 'move', move, item: 'timber' });
+      expect(timber.statusCode).toBe(409);
+      expect(errorOf(timber).message).toMatch(/not something you can use in a battle/);
+      expect(await countOf(kid, mapId, 'timber')).toBe(1);
+      expect(battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid)).view.turn).toBe(0);
+    });
+
     it('refuses a potion the bag doesn’t have, or a thing that isn’t a potion', async () => {
       const server = await start();
       const kid = await player();

@@ -13,6 +13,7 @@ import {
   type BattleSetup,
   type BattleSquishySetup,
   type BattleState,
+  type Resource,
 } from '../../src/index.js';
 import { FIXTURE_MOVES, FIXTURE_SPECIES } from './sample-content.js';
 
@@ -159,6 +160,42 @@ export const FIXTURE_BATTLE_RULES: BattleRules = {
 
 export const FIXTURE_BATTLE_CONTENT = createBattleContent(
   FIXTURE_BATTLE_DATA,
+  FIXTURE_BATTLE_RULES,
+);
+
+/**
+ * Fixture potions (#214) with their own numbers (+25%), independent of the
+ * owner's tuning in data/resources.ts, so re-tuning never moves the potion
+ * tests or the pre-#403 replay fixture. `fixture-charm` is not a potion.
+ */
+export const FIXTURE_POTIONS: Resource[] = [
+  {
+    id: 'fixture-brave-brew',
+    name: 'Brave Brew',
+    description: 'Bolder.',
+    kind: 'crafted',
+    battleEffect: { attackPercent: 25, shieldPercent: 75 },
+  },
+  {
+    id: 'fixture-cozy-cocoa',
+    name: 'Cozy Cocoa',
+    description: 'Softer bumps.',
+    kind: 'crafted',
+    battleEffect: { defensePercent: 25, shieldPercent: 75 },
+  },
+  {
+    id: 'fixture-hearty-soup',
+    name: 'Hearty Soup',
+    description: 'Energy back.',
+    kind: 'crafted',
+    battleEffect: { healPercent: 40, shieldPercent: 75 },
+  },
+  { id: 'fixture-charm', name: 'Charm', description: 'Not a potion.', kind: 'crafted' },
+];
+
+/** The fixture battle content with the fixture potions. */
+export const FIXTURE_POTION_CONTENT = createBattleContent(
+  { ...FIXTURE_BATTLE_DATA, resources: FIXTURE_POTIONS },
   FIXTURE_BATTLE_RULES,
 );
 

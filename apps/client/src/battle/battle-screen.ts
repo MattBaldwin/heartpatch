@@ -35,6 +35,7 @@ import {
   applyStep,
   playbackSteps,
   shownFrom,
+  sipStep,
   type PlaybackStep,
   type ShownState,
 } from './battle-playback.js';
@@ -57,10 +58,13 @@ import {
   noCharmsLine,
 } from './heart-charm.js';
 import {
+  chipsAfterDrinking,
   NO_CHIPS,
   noPotionLine,
   potionTiles,
   potionTotal,
+  SIPPED_CALLOUT,
+  sippedLine,
   usedLine,
   type PotionTile,
 } from './potions.js';
@@ -174,6 +178,8 @@ export interface BattleDebug {
   readonly charms: number | null;
   /** Potions in the bag, by id (#214); null until counted, or in a replay. */
   readonly potions: Readonly<Record<string, number>> | null;
+  /** The potion sipped for this turn, not sent yet (a free sip, #403), or null. */
+  readonly sipped: string | null;
   /** The battle clock now, ms (a manual clock in dev captures). */
   readonly clock: number;
   /** The band the camera fits the fight into (`BattleHud.safe`), as the camera reads it now. */
@@ -318,6 +324,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let charms: number | null = null;
   /** The bag's potions for the battle on screen (#214); null until known. */
   let potions: Readonly<Record<string, number>> | null = null;
+  /**
+   * The potion sipped for this turn (a free sip, #403): shown at once (the
+   * pill's chips, the shield, a sparkle) and sent with the move the player
+   * picks next. Null when none; cleared when the turn comes back.
+   */
+  let sipped: string | null = null;
   /** The player's squishies' nicknames on this map (#141). */
   let nicknames: ReadonlyMap<string, string> = new Map();
   /** A live battle's bar (#29), its ticking ring, and the deadline's look-again. */
@@ -496,12 +508,23 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         if (battle?.id !== current.id) return;
         waiting = false;
         if ((bag?.[tile.id] ?? 0) > 0) {
-          void submit({ type: 'item', item: tile.id });
+          sip(tile.id);
         } else {
           hud.setControls(controlsFor(current));
           hud.setProblem(noPotionLine(tile.id));
         }
       });
+    },
+    onSip: (id) => {
+      sip(id);
+    },
+    onUnsip: () => {
+      const current = battle;
+      if (!current || waiting || queue.length > 0) return;
+      sipped = null;
+      plate(current.mySide);
+      hud.setCaption(null);
+      hud.setControls(controlsFor(current));
     },
     onDone: () => {
       close();
@@ -515,6 +538,26 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const later = (ms: number, fn: () => void): void => {
     clock.later(ms, fn);
   };
+
+  /**
+   * A free sip (#403): the potion is marked "Sipped ✓" and felt at once (a
+   * bounce and a sparkle on the squishy, the shield bubble, the pill's
+   * chips), and the move picker stays open. Nothing goes to the server
+   * until the move: the sip rides along with it.
+   */
+  function sip(id: string): void {
+    const current = battle;
+    if (!current || !content || waiting || queue.length > 0) return;
+    sipped = id;
+    const step = sipStep(current, content, id);
+    options.onStep?.(step);
+    scene3d?.perform(step, now(), { captured: false });
+    hud.callout('mine', SIPPED_CALLOUT);
+    plate(current.mySide);
+    hud.setCaption(sippedLine(id));
+    hud.setControls(controlsFor(current));
+    options.invalidate();
+  }
 
   /** Fills a side's plate from the view, with the energy currently shown. */
   const plate = (side: BattleSideId): void => {
@@ -531,7 +574,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       : energy === 0
         ? 'Tuckered out'
         : null;
-    const chips = shown[side].chips[slot] ?? NO_CHIPS;
+    const known = shown[side].chips[slot] ?? NO_CHIPS;
+    // A sip not sent yet (#403) shows as if drunk: it goes out with the move.
+    const chips =
+      sipped !== null && side === battle.mySide ? chipsAfterDrinking(known, sipped) : known;
     scene3d?.setShield(side, chips.shield && energy > 0);
     hud.setPlate(plateSideOf(battle.mySide, side), {
       chips,
@@ -580,6 +626,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
             tiles: potionTiles(potions, b.view.sides[b.mySide].itemsUsed),
             who: plateName(names, activeOf(b, b.mySide), nicknames),
           },
+          sipped,
           // Breaking a fence (#203): how long it can last.
           fence:
             b.view.turnLimit !== undefined && activeOf(b, otherSide(b.mySide)).fence !== undefined
@@ -1071,6 +1118,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const from = Math.min(shownLog, next.view.log.length);
     if (next.live) noteCovered(battle, next);
+    // The turn came back: a sip went out with it, or the battle moved on (#403).
+    sipped = null;
     battle = next;
     armLive();
     content = new BattleContent(next);
@@ -1111,6 +1160,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (reply && stillOpen()) receive(reply);
     } catch (err) {
       if (!stillOpen()) return;
+      // A refused sip (none in the bag after all) goes back: pick again (#403).
+      if (sipped !== null) {
+        sipped = null;
+        plate(current.mySide);
+        void refreshPotions(current);
+      }
       hud.setProblem(messageOf(err));
       // The battle moved on without us (another tab, a retry): show where it is.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
@@ -1216,6 +1271,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     keeperReactions = 0;
     charms = null;
     potions = null;
+    sipped = null;
     nicknames = new Map();
     if (!replay) {
       void refreshCharms(next);
@@ -1275,6 +1331,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     liveBar = null;
     liveNote = null;
     battle = null;
+    sipped = null;
     replaying = false;
     content = null;
     shown = null;
@@ -1405,6 +1462,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           : null,
         charms,
         potions,
+        sipped,
         clock: now(),
         safe: hud.safe(),
       };

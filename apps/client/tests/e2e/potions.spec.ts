@@ -7,15 +7,24 @@ import { realTap } from './touch.js';
 import { trayButton } from './trays.js';
 
 /**
- * Battle potions (#214): craft a Brave Brew from dev items, drink it in a
- * wild battle from the "Use item" picker, and see the ⚔️+ chip on the pill.
+ * Battle potions (#214): craft a Brave Brew from dev items, sip it in a wild
+ * battle from the "Use item" picker, and see the ⚔️+ chip on the pill. A
+ * potion is a free sip (#403): the move picker stays open, and the sip goes
+ * out with the move.
  */
 
 interface BattleDebug {
+  id: string;
   turn: number;
   pending: number;
   waiting: boolean;
   potions: Record<string, number> | null;
+  sipped: string | null;
+  scene: { shields: { a: boolean; b: boolean }; effects: { spawned: number } } | null;
+}
+
+interface BattleLog {
+  battle: { view: { log: { turn: number; side?: string; type: string }[] } };
 }
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
@@ -32,7 +41,7 @@ test.afterEach(async ({ browser }) => {
 });
 
 test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', async ({ browser }) => {
-  test.setTimeout(240_000); // a map build and a battle; CI renders in software
+  test.setTimeout(300_000); // a map build and a battle; CI renders in software
   const page = await newPlayer(browser, uniqueName('potion'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -76,18 +85,57 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
     page.locator('[data-testid="battle-item-pick"][data-item="hearty-soup"]'),
   ).toHaveAttribute('data-state', 'empty');
   await expectRoomyLabels(page, '.battle-item, .battle-button, .battle-ask');
+  // Back is fully in view, inside the sheet (it clips what overflows).
+  await expect(page.getByTestId('battle-item-back')).toBeInViewport({ ratio: 1 });
+  const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
+  const backBox = (await page.getByTestId('battle-item-back').boundingBox())!;
+  expect(backBox.y + backBox.height).toBeLessThanOrEqual(sheetBox.y + sheetBox.height + 0.5);
   expect(findAvoidedWords((await page.getByTestId('battle-sheet').textContent()) ?? '')).toEqual(
     [],
   );
 
-  // One tap drinks it: the turn is spent, the chip shows, the bag is empty.
+  // One tap sips it (#403): "Sipped ✓", a sparkle and the shield bubble, the
+  // chip, and the moves stay open. Nothing has gone out yet: still turn 0.
+  const sparkles = state.scene?.effects.spawned ?? 0;
   await realTap(brew);
-  // The turn goes out, then plays back.
+  const sippedButton = page.getByTestId('battle-item');
+  await expect(sippedButton).toHaveText('🧪 Sipped ✓');
+  await expect(sippedButton).toHaveAccessibleName('Brave Brew sipped. Tap to put it back.');
+  await expect(page.getByTestId('battle-move').first()).toBeVisible();
+  await expect(page.getByTestId('battle-caption')).toContainText('Now pick a move!');
+  await expect(page.getByTestId('battle-chip-attack-mine')).toBeVisible();
+  await expect(page.getByTestId('battle-chip-shield-mine')).toBeVisible();
+  await expect
+    .poll(async () => (await battleState(page))?.scene?.shields.a, { timeout: 10_000 })
+    .toBe(true);
+  const sipped = (await battleState(page))!;
+  expect(sipped.sipped).toBe('brave-brew');
+  expect(sipped.turn).toBe(0);
+  expect(sipped.scene!.effects.spawned).toBeGreaterThan(sparkles);
+  // The sip rides with a move: the Heart Charm and Swap wait.
+  await expect(page.getByTestId('battle-capture')).toBeHidden();
+  await expectRoomyLabels(page, '.battle-button');
+
+  // Forgiving: tap "Sipped ✓" to put it back, then sip it again.
+  await realTap(sippedButton);
+  await expect(sippedButton).toHaveText('🧪 1');
+  await expect(page.getByTestId('battle-chip-attack-mine')).toBeHidden();
+  expect((await battleState(page))?.sipped).toBeNull();
+  await realTap(sippedButton);
+  await realTap(brew);
+  await expect(sippedButton).toHaveText('🧪 Sipped ✓');
+
+  // Then a move: one turn plays, with the sip first and the move still made.
+  await realTap(page.getByTestId('battle-move').first());
   await expect.poll(async () => (await battleState(page))?.turn, { timeout: 30_000 }).toBe(1);
   await settled(page);
   await expect(page.getByTestId('battle-chip-attack-mine')).toBeVisible();
   await expect.poll(async () => (await battleState(page))?.potions?.['brave-brew'] ?? 0).toBe(0);
   await expect(page.getByTestId('battle-item')).toHaveText('🧪 0');
+  const played = await api<BattleLog>(page, 'GET', `/battles/${sipped.id}`);
+  const mine = played.body.battle.view.log.filter((e) => e.turn === 1 && e.side === 'a');
+  expect(mine[0]?.type).toBe('item');
+  expect(mine.map((e) => e.type)).toContain('move');
 
   // Another one is "Had one!" this battle.
   await realTap(page.getByTestId('battle-item'));

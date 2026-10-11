@@ -354,6 +354,36 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   box-shadow: 0 1px 0 #e2cfc1;
 }
 
+/* A potion sipped for this turn (#403): mint and glowing, so the sip is
+   felt before the move goes out. Tap it to put the potion back. */
+.battle-button-sipped {
+  background: #c9f2df;
+  box-shadow:
+    0 3px 0 #94d8b8,
+    0 0 0 3px rgb(255 255 255 / 80%),
+    0 0 14px 2px rgb(150 230 200 / 85%);
+  color: #2f5a48;
+  animation: battle-sipped-pop 420ms ease-out;
+}
+
+.battle-button-sipped:active {
+  box-shadow: 0 1px 0 #94d8b8;
+}
+
+@keyframes battle-sipped-pop {
+  0% {
+    transform: scale(0.8);
+  }
+
+  60% {
+    transform: scale(1.12);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* The potion picker (#214): three tiles in a row, each with a count badge in
    its corner (inside, so no text touches an edge). */
 .battle-items {
@@ -510,6 +540,10 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 @media (prefers-reduced-motion: reduce) {
   .battle-energy-fill {
     transition: none;
+  }
+
+  .battle-button-sipped {
+    animation: none;
   }
 
   .battle-callout-show {

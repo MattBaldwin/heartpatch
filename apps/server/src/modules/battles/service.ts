@@ -3,6 +3,7 @@ import {
   BattleRuleError,
   itemRefusal,
   legalChoices,
+  sipOf,
   LIVE_BATTLE_RULES,
   liveTurnAction,
   quickMessageById,
@@ -43,6 +44,7 @@ import {
   type Move,
   type OwnedSquishy,
   type PlayerBattle,
+  type PlayerBattleAction,
   type PublicUser,
   type Species,
   type StartWildBattleRequest,
@@ -551,6 +553,12 @@ function defenseAnswered(
   };
 }
 
+/** The potion a player's action sips (#214): alone, or along with a move (a free sip, #403). */
+function sipOfAction(action: PlayerBattleAction): string | undefined {
+  if (action.type === 'item' || action.type === 'move') return action.item;
+  return undefined;
+}
+
 /** The same move or the same swap: a pick against `legalChoices`, field by field. */
 function sameChoice(a: BattleChoice, b: BattleChoice): boolean {
   if (a.type === 'move' && b.type === 'move') return a.move === b.move;
@@ -862,7 +870,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   ): BattleAction => {
     switch (action.type) {
       case 'move':
-        return { type: 'turn', choices: { [PLAYER_SIDE]: { type: 'move', move: action.move } } };
+        // A potion sipped along with the move (a free sip, #403).
+        return {
+          type: 'turn',
+          choices: {
+            [PLAYER_SIDE]:
+              action.item === undefined
+                ? { type: 'move', move: action.move }
+                : { type: 'move', move: action.move, item: action.item },
+          },
+        };
       case 'swap':
         return { type: 'turn', choices: { [PLAYER_SIDE]: { type: 'swap', slot: action.slot } } };
       case 'replace':
@@ -1186,29 +1203,27 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       case 'item':
       case 'move':
       case 'swap': {
-        // A potion already out of the bag stays this turn's pick.
-        if (live.picks[side]?.type === 'item') {
+        // A potion already out of the bag stays this turn's pick, sipped
+        // alone or with a move (#403).
+        if (sipOf(live.picks[side]) !== undefined) {
           throw new AppError('CONFLICT', MESSAGES.potionOnWay);
         }
-        let choice: BattleChoice;
-        if (intent.type === 'item') {
+        const sip = sipOfAction(intent);
+        if (sip !== undefined) {
+          // The same rules for a sip alone or with a move (#403): none in a
+          // friendly battle, and a live defense only takes one if
+          // `liveDefenseItems`.
           if (!defense) throw new AppError('CONFLICT', MESSAGES.noPotionsLive);
           if (!liveRules.liveDefenseItems) {
             throw new AppError('CONFLICT', MESSAGES.noPotionsDefense);
           }
           if (!owesPick || live.picks[side]) throw new AppError('CONFLICT', MESSAGES.badChoice);
-          const refusal = itemRefusal(content, row.state, side, intent.item);
+          const refusal = itemRefusal(content, row.state, side, sip);
           if (refusal === 'not-an-item') throw new AppError('CONFLICT', MESSAGES.notAPotion);
           if (refusal === 'used-up') throw new AppError('CONFLICT', MESSAGES.hadOne);
-          // Out of this side's bag now (battle, then inventory: the potion
-          // exception in tech spec §7), so a refused step gives it back.
-          await consumeItems(
-            tx,
-            { mapId: row.mapId, userId: userOnSide(row, live, side) },
-            { [intent.item]: 1 },
-            'battle-item',
-            row.id,
-          );
+        }
+        let choice: BattleChoice;
+        if (intent.type === 'item') {
           choice = { type: 'item', item: intent.item };
         } else {
           choice =
@@ -1218,6 +1233,18 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           const legal =
             owesPick && legalChoices(row.state, side).some((c) => sameChoice(c, choice));
           if (!legal) throw new AppError('CONFLICT', MESSAGES.badChoice);
+        }
+        if (sip !== undefined) {
+          // Out of this side's bag now (battle, then inventory: the potion
+          // exception in tech spec §7), so a refused step gives it back.
+          await consumeItems(
+            tx,
+            { mapId: row.mapId, userId: userOnSide(row, live, side) },
+            { [sip]: 1 },
+            'battle-item',
+            row.id,
+          );
+          if (choice.type === 'move') choice = { ...choice, item: sip };
         }
         const picks = { ...live.picks, [side]: choice };
         const turn = liveTurnAction(row.state, picks);
@@ -1533,12 +1560,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             'capture',
             row.id,
           );
-        } else if (request.action.type === 'item') {
-          // A potion (#214) comes out of the bag in this transaction too, so
-          // a refused step gives it back. Refusals the engine would make are
-          // checked first, so they say why (not "You need 1 more …") and
-          // lock no inventory row. None in the bag is CONFLICT from the bag.
-          const { item } = request.action;
+        }
+        const item = sipOfAction(request.action);
+        if (item !== undefined) {
+          // A potion (#214), sipped alone or along with a move (#403), comes
+          // out of the bag in this transaction too, so a refused step gives
+          // it back. Refusals the engine would make are checked first, so
+          // they say why (not "You need 1 more …") and lock no inventory
+          // row. None in the bag is CONFLICT from the bag.
           const refusal = itemRefusal(content, row.state, PLAYER_SIDE, item);
           if (refusal === 'not-an-item') throw new AppError('CONFLICT', MESSAGES.notAPotion);
           if (refusal === 'used-up') throw new AppError('CONFLICT', MESSAGES.hadOne);
