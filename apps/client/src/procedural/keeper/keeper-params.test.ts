@@ -586,10 +586,15 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
     const lines: string[] = [];
     for (const id of ['pip', 'bramble']) {
       const base = BASES.find((b) => b.id === id)!;
+      // As saved before faces and bodies were choices (#372): the hash covers
+      // the config, and leaving out the base's own face and body draws the same.
+      const config: KeeperConfig = { ...defaultKeeperConfig(base) };
+      delete config.face;
+      delete config.body;
       for (const item of CLOTHING.filter(isKeeperClothing)) {
         if (item.visual.model) continue;
         expect(item.visual.replacesBody, item.id).toBeUndefined();
-        const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
+        const p = keeperParams(config, KEEPER_DATA, keeperItems([item.id]));
         lines.push(`${id}/${item.id}=${keeperHash(p)}`);
       }
     }
