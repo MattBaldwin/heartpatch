@@ -14,7 +14,11 @@ import {
   potionTotal,
   SHIELD_CALLOUT,
   SHIELD_LINE,
+  SIPPED_CALLOUT,
   sipLine,
+  sippedLabel,
+  sippedLine,
+  sippedName,
   usedLine,
 } from './potions.js';
 
@@ -91,7 +95,19 @@ describe('battle potions in the HUD (#214)', () => {
       SHIELD_CALLOUT,
       SHIELD_LINE,
       pickLine('Pip'),
+      SIPPED_CALLOUT,
+      ...BATTLE_POTIONS.flatMap((p) => [sippedLabel(p.id), sippedName(p.id), sippedLine(p.id)]),
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
+  });
+
+  it('a potion is a free sip (#403): "Sipped ✓", and the move still comes', () => {
+    expect(pickLine('Pip')).toBe('Pick a potion! Pip still gets a move.');
+    expect(pickLine('Pip')).not.toMatch(/turn/);
+    expect(sippedLabel('cozy-cocoa')).toBe('☕ Sipped ✓');
+    expect(sippedLabel('brave-brew')).toBe('🧪 Sipped ✓');
+    expect(sippedName('cozy-cocoa')).toBe('Cozy Cocoa sipped. Tap to put it back.');
+    expect(SIPPED_CALLOUT).toBe('Sipped ✓');
+    expect(sippedLine('hearty-soup')).toBe('Sipped Hearty Soup! Now pick a move!');
   });
 });
