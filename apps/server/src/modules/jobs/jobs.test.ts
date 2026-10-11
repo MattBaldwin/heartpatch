@@ -45,6 +45,7 @@ import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { localDate } from '../../lib/time.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { rewildTiles } from '../territory/rewild.js';
+import { guardWatchesOf, writeGuardCheckpoints } from './contentment.js';
 import { createSquishyJobsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -1390,6 +1391,37 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(await moodOf(server, kid, mapId, guard)).toEqual({
         contentment: 80 - drop(3),
         drift: 'resting',
+      });
+    });
+
+    it("counts a care that lands between reading a guard's watch and writing its checkpoint", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const guard = await squishy(mapId, kid);
+      await checkpoint(guard, 60);
+      await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      later(2 * HOUR_MS);
+      // A capture reads the watch first; a care commits; then the capture writes.
+      const watches = await guardWatchesOf(db, [guard]);
+      expect(
+        (
+          await call(server, 'POST', `/maps/${mapId}/squishies/${guard}/care`, kid, {
+            action: 'pet',
+          })
+        ).statusCode,
+      ).toBe(200);
+      later(MINUTE_MS);
+      await db.transaction((tx) => writeGuardCheckpoints(tx, watches, new Date(clock)));
+      const gain = GAME_DATA.careActions.find((a) => a.id === 'pet')!.contentment;
+      expect(await squishyRow(guard)).toMatchObject({
+        contentment: 60 + gain,
+        contentmentSince: new Date(clock),
       });
     });
 

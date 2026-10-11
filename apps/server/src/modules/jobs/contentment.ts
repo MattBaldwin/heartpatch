@@ -98,6 +98,26 @@ export function contentmentOf(
   };
 }
 
+/** One squishy's contentment at `at`; it must exist (a locked or listed row). */
+export async function contentmentFor(
+  tx: Executor,
+  mapId: string,
+  squishyId: string,
+  at: Date,
+): Promise<{ contentment: number; drift: MoodDrift }> {
+  return moodIn(await contentmentsOf(tx, mapId, [squishyId], at), squishyId);
+}
+
+/** A squishy's entry from `contentmentsOf`, which has every row it was asked for. */
+export function moodIn(
+  moods: ReadonlyMap<string, { contentment: number; drift: MoodDrift }>,
+  squishyId: string,
+): { contentment: number; drift: MoodDrift } {
+  const mood = moods.get(squishyId);
+  if (!mood) throw new Error(`contentment: no squishy ${squishyId}`);
+  return mood;
+}
+
 /** The map as the job maths needs it, read once. */
 async function jobMap(tx: Executor, mapId: string): Promise<JobMap> {
   const map = await createMapsRepo(tx).findMap(mapId);
@@ -152,6 +172,48 @@ export async function writeContentmentCheckpoints(
   const repo = createSquishyJobsRepo(tx);
   for (const { squishyId, contentment } of checkpoints) {
     await repo.setContentment(squishyId, contentment, at);
+  }
+}
+
+/** A guard on watch, as a capture or land going wild finds it before its post goes. */
+export interface GuardWatch {
+  readonly squishyId: string;
+  /** When it was posted (`tile_defenders.assigned_at`): its watch holds from then. */
+  readonly assignedAt: Date;
+}
+
+/** These guards' watches: read before their posts go (only the post row says when it started). */
+export async function guardWatchesOf(
+  tx: Executor,
+  squishyIds: readonly string[],
+): Promise<GuardWatch[]> {
+  if (squishyIds.length === 0) return [];
+  return (await createSquishyJobsRepo(tx).listByIds(squishyIds)).flatMap((row) =>
+    row.post ? [{ squishyId: row.squishy.id, assignedAt: row.post.assignedAt }] : [],
+  );
+}
+
+/**
+ * Writes the checkpoint of guards whose posts went at `at` (a capture, land
+ * going wild): their watch held until now. Call it with the squishies
+ * locked: it reads their care columns then, so a care action that landed
+ * after the posts were read still counts (only `assignedAt` comes from
+ * before, and nothing changes it while the command holds the tile).
+ */
+export async function writeGuardCheckpoints(
+  tx: Executor,
+  watches: readonly GuardWatch[],
+  at: Date,
+): Promise<void> {
+  if (watches.length === 0) return;
+  const repo = createSquishyJobsRepo(tx);
+  const since = new Map(watches.map((w) => [w.squishyId, w.assignedAt.getTime()]));
+  for (const row of await repo.listByIds([...since.keys()])) {
+    const fromMs = since.get(row.squishy.id)!;
+    const value = contentmentAt(contentmentCheckpoint(row.care), at, CARE_RULES, [
+      { fromMs, toMs: null },
+    ]);
+    await repo.setContentment(row.squishy.id, value, at);
   }
 }
 

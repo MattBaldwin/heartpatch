@@ -519,6 +519,8 @@ function queries(db: Executor): SquishyJobsRepo {
         .where(eq(squishies.id, squishyId));
     },
 
+    // Dev and test only: it writes `tile_defenders` after the squishy locks,
+    // outside tech spec §7's order, which is fine for a seeding tool.
     devShiftTimes: async (squishyIds, ms) => {
       if (squishyIds.length === 0) return;
       const back = (column: AnyColumn) => sql`${column} - make_interval(secs => ${ms / 1000})`;

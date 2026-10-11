@@ -59,7 +59,7 @@ import {
   type TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
-import { checkpointContentment, contentmentCheckpointsOf } from '../jobs/contentment.js';
+import { checkpointContentment, guardWatchesOf } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -840,16 +840,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         return { events: [], xpPercent, drop: null };
       }
       // Squishies on watch go home, never lost (issue #15). Their watch so far
-      // held (#376): worked out now, before the posts go; battles writes it
-      // after its squishy locks (tech spec §7).
-      const checkpoints =
+      // held (#376): when each was posted is read now, before the posts go;
+      // battles writes the checkpoints after its squishy locks (tech spec §7).
+      const guards =
         tile.ownerUserId === null
           ? []
-          : await contentmentCheckpointsOf(
+          : await guardWatchesOf(
               tx,
-              attack.mapId,
               (await repo.listDefenders(tile.id, tile.ownerUserId)).map((g) => g.id),
-              at,
             );
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
@@ -943,7 +941,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         ].filter((r) => Object.keys(r.items).length > 0),
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
-        checkpoints,
+        guards,
         afterRefunds: (inner, when) => finishLostTraining(inner, attack.mapId, lostFires, when),
       };
     },

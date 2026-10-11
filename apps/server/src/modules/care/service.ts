@@ -37,7 +37,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
-import { contentmentsOf } from '../jobs/contentment.js';
+import { contentmentFor, contentmentsOf, moodIn } from '../jobs/contentment.js';
 import {
   WIN_LEAN,
   careLean,
@@ -221,7 +221,7 @@ export async function applyXp(
     options.plain === true
       ? 100
       : xpMultiplier(
-          (await contentmentsOf(tx, row.mapId, [row.id], at)).get(row.id)?.contentment ?? 0,
+          (await contentmentFor(tx, row.mapId, row.id, at)).contentment,
           habitat,
           row,
           GROWTH_RULES,
@@ -400,7 +400,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     });
 
     const squishies = rows.map((row): CareSquishy => {
-      const { contentment, drift } = moods.get(row.id) ?? { contentment: 0, drift: null };
+      const { contentment, drift } = moodIn(moods, row.id);
       const habitat = habitatOf(habitats, row);
       const caredToday = counts.get(row.id) ?? 0;
       const nextCareAt: Record<string, string> = {};
@@ -496,10 +496,10 @@ export function createCareService(options: CareServiceOptions): CareService {
         const gain = careGain(action, today, CARE_RULES);
         const coins = careCoins(gain, await repo.coinsOn(user.id, day), CARE_RULES);
         // On what its job left it with (#376), capped at full.
-        const before = (await contentmentsOf(tx, mapId, [row.id], at)).get(row.id);
+        const before = await contentmentFor(tx, mapId, row.id, at);
         const contentment = Math.min(
           CARE_RULES.maxContentment,
-          (before?.contentment ?? 0) + gain.contentment,
+          before.contentment + gain.contentment,
         );
         const careId = await repo.insertCare({
           mapId,

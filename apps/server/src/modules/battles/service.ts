@@ -58,7 +58,7 @@ import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
-import { writeContentmentCheckpoints, type ContentmentCheckpoint } from '../jobs/contentment.js';
+import { writeGuardCheckpoints, type GuardWatch } from '../jobs/contentment.js';
 import { creditCoins } from '../coins/service.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -204,11 +204,11 @@ export interface TileBattleEnd {
    */
   squishies?: readonly string[];
   /**
-   * Contentment checkpoints for the defender's guards the capture sent home
-   * (#376), worked out before their posts went. Battles locks them with the
-   * team (step 10, one id order) and writes them right after.
+   * The defender's guards the capture sent home, with when each was posted
+   * (#376). Battles locks them with the team (step 10, one id order) and
+   * writes their contentment checkpoints right after (`writeGuardCheckpoints`).
    */
-  checkpoints?: readonly ContentmentCheckpoint[];
+  guards?: readonly GuardWatch[];
   /**
    * Runs after the squishy locks and the refunds, before any XP of the
    * team's: the trainees land what they earned. Returns events to append
@@ -971,16 +971,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
     // A capture's moved squishies (#277's trainees) join the same id-ordered lock.
-    const checkpoints = tile.checkpoints ?? [];
+    const guards = tile.guards ?? [];
     await repo.lockSquishies([
       ...new Set([
         ...awards.map((a) => a.squishyId),
         ...(tile.squishies ?? []),
-        ...checkpoints.map((c) => c.squishyId),
+        ...guards.map((g) => g.squishyId),
       ]),
     ]);
     // The guards sent home: their watch so far held (#376).
-    await writeContentmentCheckpoints(tx, checkpoints, at);
+    await writeGuardCheckpoints(tx, guards, at);
     // The daily falloff (owner decision 2026-10-06): a squishy that has
     // already won `fullWinsPerDay` battles today gets a share of the XP.
     const wins = await repo.winsToday(

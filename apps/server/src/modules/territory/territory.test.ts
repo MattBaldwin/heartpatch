@@ -1010,6 +1010,27 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     });
   });
 
+  /**
+   * Makes a guard look six hours into its watch at 80 contentment (#376):
+   * its checkpoint and its post both from then, its last care before.
+   */
+  const sixHoursOnWatch = (squishyId: string) =>
+    db.execute(
+      `update squishies set contentment = 80,
+         contentment_since = '${new Date(clock.getTime() - 6 * HOUR_MS).toISOString()}',
+         contentment_at_last_care = 80,
+         last_cared_at = '${new Date(clock.getTime() - 7 * HOUR_MS).toISOString()}'
+       where id = '${squishyId}';
+       update tile_defenders set assigned_at = '${new Date(clock.getTime() - 6 * HOUR_MS).toISOString()}'
+       where squishy_id = '${squishyId}'`,
+    );
+
+  /** Its stored contentment checkpoint. */
+  const checkpointOf = async (squishyId: string) => {
+    const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, squishyId) });
+    return { contentment: row?.contentment, since: row?.contentmentSince };
+  };
+
   describe('challenging another player', () => {
     it('battles the squishies on watch, sends them home on a capture, and caps Gentle losses at one a day', async () => {
       const server = await start();
@@ -1025,6 +1046,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       ]);
       // The picker can name the rival's own (secret) squishy; nothing else secret comes along.
       expect(territoryOf(watch).speciesDefs.map((s) => s.id)).toEqual([buddy.speciesId]);
+      await sixHoursOnWatch(buddy.id);
 
       const res = await attack(server, kid, mapId, near);
       expect(res.statusCode, res.body).toBe(201);
@@ -1043,6 +1065,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         where: (t, { eq }) => eq(t.id, buddy.id),
       });
       expect(squishy).toMatchObject({ ownerUserId: rival.id, state: 'active' });
+      // Its six hours on watch held its contentment; it rests from the capture (#376).
+      expect(await checkpointOf(buddy.id)).toEqual({ contentment: 80, since: new Date(clock) });
       const captured = (await eventsOf(mapId)).at(-1)!;
       expect(captured.type).toBe('tile.captured');
       expect(parseGameEventPayload('tile.captured', captured.payload)).toMatchObject({
@@ -1672,8 +1696,11 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         squishyIds: [squishy.id],
       });
       expect(await defendersOf(mapId)).toHaveLength(1);
+      await sixHoursOnWatch(squishy.id);
       expect((await call(server, 'POST', `/maps/${mapId}/leave`, friend)).statusCode).toBe(204);
       expect(await defendersOf(mapId)).toEqual([]);
+      // Its watch so far held; it rests from the day its owner left (#376).
+      expect(await checkpointOf(squishy.id)).toEqual({ contentment: 80, since: new Date(clock) });
     });
   });
 });

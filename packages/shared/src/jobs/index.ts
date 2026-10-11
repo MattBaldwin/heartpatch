@@ -381,7 +381,8 @@ export function jobHintText(hint: JobHint, resources: readonly Resource[]): stri
   }
 }
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 
 /** Training XP worked out at `nowMs`, and where the next count starts. */
 export interface TrainingProgress {
@@ -488,11 +489,12 @@ export function trainingFullAtMs(
 }
 
 /**
- * The first moment (to the minute) a seasonal resource is out of season
- * between `fromMs` and `toMs`, or null if it's still in season at `toMs`
- * (`fromMs` itself if it was already out then). A gatherer can't start out
- * of season and a season ends once (whole days), so the change is found by
- * halving.
+ * The first whole minute (from the epoch) a seasonal resource is out of
+ * season between `fromMs` and `toMs`, or null if it's still in season at
+ * `toMs` (`fromMs` itself if it was already out then). A gatherer can't
+ * start out of season and a season ends once (whole days), so the change is
+ * found by halving over whole minutes: the answer depends on the season, not
+ * on when it's read (at most `toMs`, while the end is that minute).
  */
 export function seasonEndMs(
   fromMs: number,
@@ -501,14 +503,15 @@ export function seasonEndMs(
 ): number | null {
   if (toMs <= fromMs || inSeasonAt(toMs)) return null;
   if (!inSeasonAt(fromMs)) return fromMs;
-  let on = fromMs;
-  let off = toMs;
-  while (off - on > 60_000) {
+  // In season at minute `on` (it's at or before `fromMs`), out at `off`.
+  let on = Math.floor(fromMs / MINUTE_MS);
+  let off = Math.ceil(toMs / MINUTE_MS);
+  while (off - on > 1) {
     const mid = on + Math.floor((off - on) / 2);
-    if (inSeasonAt(mid)) on = mid;
+    if (inSeasonAt(mid * MINUTE_MS)) on = mid;
     else off = mid;
   }
-  return off;
+  return Math.min(off * MINUTE_MS, toMs);
 }
 
 /**

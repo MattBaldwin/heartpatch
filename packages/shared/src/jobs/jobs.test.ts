@@ -520,7 +520,12 @@ describe('happiness and jobs (#376)', () => {
     expect((found ?? 0) - end).toBeLessThanOrEqual(MINUTE);
     expect(seasonEndMs(0, 10 * 24 * HOUR, () => true)).toBeNull();
     expect(seasonEndMs(5, 10 * 24 * HOUR, () => false)).toBe(5);
-    // The same answer every time (no clock, no randomness).
+    // The same answer every time (no clock, no randomness), and whenever it's read.
     expect(seasonEndMs(0, 10 * 24 * HOUR, inSeason)).toBe(found);
+    for (const toMs of [4 * 24 * HOUR + 7_123, 5 * 24 * HOUR + 59_999, 9 * 24 * HOUR + 31_337]) {
+      expect(seasonEndMs(0, toMs, inSeason)).toBe(found);
+      expect(seasonEndMs(1_234, toMs, inSeason)).toBe(found);
+    }
+    expect((found ?? 0) % MINUTE).toBe(0);
   });
 });
