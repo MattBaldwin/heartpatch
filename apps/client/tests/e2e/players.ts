@@ -80,7 +80,7 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
  * Taps "Sign up" and waits for the server's answer (#408). On a busy CI
  * runner the tap and the answer took up to 7 s (200 sign-ups: p99 5.3 s),
  * more than the 5 s the code screen's check allows, while the screen followed
- * the answer within about a second. So wait on the answer, then the screen.
+ * the answer within 1.3 s. So wait on the answer, then the screen.
  */
 export async function submitSignUp(overlay: Locator): Promise<void> {
   const [answer] = await Promise.all([
