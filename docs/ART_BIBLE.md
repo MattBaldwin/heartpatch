@@ -163,15 +163,15 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
 | Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
 | Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
-| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: tall pink frosting dome with a ring of round drips at the rim, googly eyes and a grin, white, yellow and chocolate sprinkles, a cherry on a stem, on a deeply pleated cream liner that narrows to the bottom | stand · crown |
+| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: tall pink frosting dome with a soft scalloped lip overhanging a deeply pleated cream liner that narrows to the bottom, googly eyes and a grin, yellow and chocolate sprinkles, a cherry on a stem | stand · crown |
 | Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
 | Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
 | Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
 | Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
-| Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, a wide smile above buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: a big deep-violet heart with two round lobes and a soft point, a wide-open singing mouth, little arms, aqua song bubbles drifting up from one shoulder | hover · arms |
+| Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, a wide smile above gap-toothed buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: a big deep-violet heart with two even round lobes and a soft point, bold happy eyes, a wide-open singing mouth with a tongue and blush on its front, little arms held out, round aqua song bubbles rising in an arc from one shoulder | hover · arms |
 
 ## 2. Palette
 

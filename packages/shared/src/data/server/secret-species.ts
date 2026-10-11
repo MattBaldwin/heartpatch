@@ -112,6 +112,7 @@ export const SECRET_SPECIES: Species[] = [
       ink: '#fff4dc',
       parts: [
         'happy-eyes',
+        'bold-happy-eyes',
         'singing-mouth',
         'singing-tongue',
         'blush-cheeks',
