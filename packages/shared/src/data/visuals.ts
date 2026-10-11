@@ -1729,16 +1729,16 @@ export const PARTS: Part[] = [
   },
 
   {
-    // A gold music note on the heart's right shoulder: its round head…
+    // A gold eighth note on the heart's right cheek: its round head…
     id: 'note-head',
     slot: 'crown',
     shape: 'ellipsoid',
-    size: [0.26, 0.2, 0.18],
+    size: [0.24, 0.2, 0.17],
     color: 'detail',
     layout: single,
-    around: 50,
-    up: 24,
-    sink: 0.3,
+    around: 44,
+    up: -24,
+    sink: 0.35,
     tilt: 20,
     jitter: 0.04,
   },
@@ -1747,28 +1747,29 @@ export const PARTS: Part[] = [
     id: 'note-stem',
     slot: 'horns',
     shape: 'capsule',
-    size: [0.1, 0.48, 0.1],
+    size: [0.09, 0.36, 0.09],
     color: 'detail',
     layout: single,
-    around: 58,
-    up: 28,
-    sink: 0.3,
+    around: 52,
+    up: -20,
+    sink: 0.4,
     tilt: 88,
     jitter: 0.04,
   },
-
   {
-    // Big rosy cheeks for the singing heart.
-    id: 'heart-blush',
+    // …and its flag, a little curve lying flat on the body from the top of
+    // the stem (a surface slot, so it hugs the body instead of growing off it).
+    id: 'note-flag',
     slot: 'cheeks',
-    shape: 'ellipsoid',
-    size: [0.2, 0.12, 0.04],
-    color: 'blush',
-    layout: pair,
-    around: 40,
+    shape: 'arc',
+    size: [0.2, 0.13, 0.08],
+    color: 'detail',
+    layout: single,
+    around: 52,
     up: 4,
-    sink: 0.5,
-    jitter: 0.05,
+    sink: 0.2,
+    flip: true,
+    jitter: 0.04,
   },
 ];
 
