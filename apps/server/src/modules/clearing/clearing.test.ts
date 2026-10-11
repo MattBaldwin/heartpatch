@@ -13,7 +13,17 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import {
+  battles,
+  buildings,
+  keepers,
+  mapMembers,
+  sessions,
+  squishies,
+  tileAttacks,
+  tileDefenders,
+  users,
+} from '../../db/schema.js';
 import { makeHomestead, type HomesteadTile } from '../../../tests/homestead.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -95,11 +105,12 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     path: string,
     who: Player,
     payload?: object,
+    headers: Record<string, string> = {},
   ) {
     return server.inject({
       method,
       url: `/api/v1${path}`,
-      headers: HEADERS,
+      headers: { ...HEADERS, ...headers },
       cookies: { [SESSION_COOKIE]: who.token },
       ...(payload ? { payload } : {}),
     });
@@ -162,6 +173,23 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
       where: (t, { eq }) => eq(t.mapId, mapId),
       orderBy: (t, { asc }) => [asc(t.seq)],
     });
+
+  /** A squishy of the player's, resting. */
+  async function pal(mapId: string, who: Player): Promise<string> {
+    const [row] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: who.id,
+        speciesId: 'puddlepuff',
+        element: 'water',
+        feeling: 'silly',
+        level: 5,
+        createdAt: new Date(clock),
+      })
+      .returning({ id: squishies.id });
+    return row!.id;
+  }
 
   /** A player with a patch, an Axe and a forest homestead with a Timber spot. */
   async function forestHomestead() {
@@ -252,21 +280,166 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     });
   });
 
-  it('lets the clear go, and keeps the tool use spent, if the land changes hands first', async () => {
+  /** A rival on the patch. */
+  async function rivalOn(mapId: string): Promise<Player> {
+    const rival = await player();
+    await db.insert(mapMembers).values({ mapId, userId: rival.id, role: 'member' });
+    return rival;
+  }
+
+  /** A capture of the tile by `rival` at the clock's time, recorded the way #15 does, and the land theirs. */
+  async function capture(mapId: string, tileId: string, from: Player, rival: Player) {
+    const [battle] = await db
+      .insert(battles)
+      .values({
+        mapId,
+        kind: 'rival-tile',
+        playerUserId: rival.id,
+        seed: '00',
+        contentHash: 'x',
+        setup: {},
+        actions: [],
+        state: {},
+        status: 'finished',
+        startedAt: clock,
+      })
+      .returning({ id: battles.id });
+    await db.insert(tileAttacks).values({
+      mapId,
+      tileId,
+      attackerUserId: rival.id,
+      defenderUserId: from.id,
+      battleId: battle!.id,
+      outcome: 'captured',
+      startedAt: clock,
+      cooldownUntil: clock,
+      lastActionAt: clock,
+      endedAt: new Date(clock),
+    });
+    await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${tileId}'`);
+  }
+
+  /** Makes the tile a joined homestead of `who` too (their explore row), as capturing explored land does. */
+  const joinAsHomestead = (mapId: string, tileId: string, who: Player) =>
+    db.execute(
+      `insert into tile_explore (user_id, tile_id, map_id, layout, terrain, searched, spot_count, completed_at, joined_at)
+       values ('${who.id}', '${tileId}', '${mapId}', 1, 'forest', 7, 3, '${START}', '${START}')`,
+    );
+
+  const clearRow = (tileId: string) =>
+    db.query.tileClears.findFirst({ where: (t, { eq }) => eq(t.tileId, tileId) });
+
+  it('lets the clear go, and keeps the tool use spent, if the land is captured first', async () => {
     const { server, kid, mapId, plot } = await forestHomestead();
+    const rival = await rivalOn(mapId);
     expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
-    await db.execute(`update tiles set owner_user_id = null where id = '${plot.id}'`);
+    clock.setTime(Date.parse(START) + CLEAR_MS / 2);
+    await capture(mapId, plot.id, kid, rival);
     clock.setTime(Date.parse(START) + CLEAR_MS);
     const done = await settle(server, kid, mapId);
     expect(done.cleared).toEqual([]);
     expect(done.items['timber']).toBeUndefined();
     expect(done.items['axe']).toBe(2);
-    const row = await db.query.tileClears.findFirst({
-      where: (t, { eq }) => eq(t.tileId, plot.id),
-    });
-    expect(row).toMatchObject({ endReason: 'lost' });
+    expect(await clearRow(plot.id)).toMatchObject({ endReason: 'lost' });
     const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
     expect(tile).toMatchObject({ terrain: 'forest', nodeResource: 'timber' });
+  });
+
+  it('still clears the land, and banks the drop for its clearer, when a capture came after it was done', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const rival = await rivalOn(mapId);
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    clock.setTime(Date.parse(START) + CLEAR_MS + 1000);
+    await capture(mapId, plot.id, kid, rival);
+    clock.setTime(Date.parse(START) + 2 * CLEAR_MS);
+    const done = await settle(server, kid, mapId);
+    expect(done.cleared).toEqual([{ q: plot.q, r: plot.r, items: { timber: 5 } }]);
+    expect(done.items['timber']).toBe(5);
+    const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
+    expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, ownerUserId: rival.id });
+  });
+
+  it("isn't blocked by a clear or a gather the land's last owner left behind", async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const rival = await rivalOn(mapId);
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    clock.setTime(Date.parse(START) + CLEAR_MS / 2);
+    await capture(mapId, plot.id, kid, rival);
+    await joinAsHomestead(mapId, plot.id, rival);
+    await give(mapId, rival, { axe: 1 });
+    // The kid never settles; the rival clears the land as their own.
+    const res = await clear(server, rival, mapId, plot);
+    expect(res.statusCode).toBe(201);
+    const rows = await db.query.tileClears.findMany({
+      where: (t, { eq }) => eq(t.tileId, plot.id),
+      orderBy: (t, { asc }) => [asc(t.startedAt)],
+    });
+    expect(rows.map((r) => [r.userId, r.endReason])).toEqual([
+      [kid.id, 'lost'],
+      [rival.id, null],
+    ]);
+
+    // A gather left behind is let go the same way.
+    const { server: s2, kid: k2, mapId: m2, plot: p2 } = await forestHomestead();
+    const r2 = await rivalOn(m2);
+    const gather = await call(s2, 'POST', `/maps/${m2}/gathers`, k2, { q: p2.q, r: p2.r });
+    expect(gather.statusCode).toBe(201);
+    await capture(m2, p2.id, k2, r2);
+    await joinAsHomestead(m2, p2.id, r2);
+    await give(m2, r2, { axe: 1 });
+    expect((await clear(s2, r2, m2, p2)).statusCode).toBe(201);
+    const left = await db.query.gatherJobs.findFirst({
+      where: (t, { eq }) => eq(t.tileId, p2.id),
+    });
+    expect(left).toMatchObject({ userId: k2.id, status: 'lost' });
+  });
+
+  it('finishes my last clear first when it is done but not settled yet', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    const second = await makeHomestead(db, mapId, kid.id, clock, 1);
+    await setLand(second, 'forest', 'timber');
+    clock.setTime(Date.parse(START) + CLEAR_MS);
+    // No settle in between: the next clear starts, and the first one lands.
+    expect((await clear(server, kid, mapId, second)).statusCode).toBe(201);
+    expect(await clearRow(plot.id)).toMatchObject({ endReason: 'cleared' });
+    expect((await bag(server, kid, mapId)).items['timber']).toBe(5);
+    expect((await tileOf(server, kid, mapId, plot)).terrain).toBe('clearing');
+  });
+
+  it('replies the same to a retry with the same Idempotency-Key, spending one use', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const key = { 'idempotency-key': 'clear-tap-1' };
+    const path = `/maps/${mapId}/clears`;
+    const first = await call(server, 'POST', path, kid, { q: plot.q, r: plot.r }, key);
+    const again = await call(server, 'POST', path, kid, { q: plot.q, r: plot.r }, key);
+    expect(first.statusCode).toBe(201);
+    expect(again.statusCode).toBe(201);
+    expect(again.json()).toEqual(first.json());
+    expect((await bag(server, kid, mapId)).items['axe']).toBe(2);
+  });
+
+  it('keeps gathers, gatherers and new guards off land being cleared', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const pet = await pal(mapId, kid);
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    const refusals = [
+      await call(server, 'POST', `/maps/${mapId}/gathers`, kid, { q: plot.q, r: plot.r }),
+      await call(server, 'POST', `/maps/${mapId}/squishies/${pet}/job`, kid, {
+        job: 'gatherer',
+        q: plot.q,
+        r: plot.r,
+      }),
+      await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: plot.q,
+        r: plot.r,
+        squishyIds: [pet],
+      }),
+    ];
+    for (const res of refusals) {
+      expect(res.statusCode).toBe(409);
+      expect(errorOf(res).message).toMatch(/clearing this land/);
+    }
   });
 
   it('needs the right tool, a joined homestead, clearable land and nothing in the way', async () => {
@@ -333,6 +506,45 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     const res = await clear(server, kid, mapId, plot);
     expect(res.statusCode).toBe(409);
     expect(errorOf(res).message).toMatch(/gathering here/);
+  });
+
+  it('waits for a building, a gatherer or a guard to move first', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const refused = async (message: RegExp) => {
+      const res = await clear(server, kid, mapId, plot);
+      expect(res.statusCode, message.source).toBe(409);
+      expect(errorOf(res).message).toMatch(message);
+    };
+    const [fire] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: plot.id,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+      })
+      .returning({ id: buildings.id });
+    await refused(/building stands here/);
+    await db.execute(`delete from buildings where id = '${fire!.id}'`);
+
+    const pet = await pal(mapId, kid);
+    await db.execute(
+      `update squishies set work_tile_id = '${plot.id}', work_since = '${START}', work_started_at = '${START}' where id = '${pet}'`,
+    );
+    await refused(/Ask your squishy to move/);
+    await db.execute(
+      `update squishies set work_tile_id = null, work_since = null, work_started_at = null where id = '${pet}'`,
+    );
+
+    await db
+      .insert(tileDefenders)
+      .values({ mapId, tileId: plot.id, slot: 0, squishyId: pet, assignedAt: clock });
+    await refused(/Ask your squishy to move/);
+    await db.execute(`delete from tile_defenders where squishy_id = '${pet}'`);
+
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
   });
 
   it("won't make a clearing tool before the clear sheet ships (#295 PR 3)", async () => {

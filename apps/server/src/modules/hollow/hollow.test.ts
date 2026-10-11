@@ -4,6 +4,7 @@ import {
   CARE_RULES,
   BattleResponseSchema,
   DevNightfallResponseSchema,
+  GAME_DATA,
   HOLLOW_RULES,
   hexDistance,
   HollowResponseSchema,
@@ -17,6 +18,7 @@ import {
   type PlayerBattleAction,
   type PublicUser,
   type HollowRules,
+  type Recipe,
   type RescueGuardianRules,
 } from '@heartpatch/shared';
 import { EVOLUTION_RULES, RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
@@ -137,9 +139,10 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
   function hollowService(
     guardians: RescueGuardianRules = WEAK_SHADOWS,
     rules: HollowRules = NO_GRACE,
+    recipes?: readonly Recipe[],
   ): HollowService {
     const battles = createBattlesService({ db, clock: () => clock });
-    return createHollowService({ db, clock: () => clock, battles, guardians, rules });
+    return createHollowService({ db, clock: () => clock, battles, guardians, rules, recipes });
   }
 
   async function player(): Promise<Player> {
@@ -802,8 +805,21 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const mapId = await patch(server, kid);
       await pvpOn(mapId);
       const tile = await spotsAllAround(mapId, kid, 'mountains');
-      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
+      // The clearing tools' recipes as they'll ship (PR 3 drops `hidden`).
+      const shipped = GAME_DATA.recipes.map(({ hidden: _hidden, ...r }) => r);
+      await hollowService(WEAK_SHADOWS, BOLDEST, shipped).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
+    });
+
+    it("doesn't count on clearing while no kid can make the tool yet (#242)", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      // The Pickaxe's recipe is still hidden, so the Stone spot can't go.
+      await spotsAllAround(mapId, kid, 'mountains');
+      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
     });
 
     it("leaves land alone that no fire could ever light, a homestead that can't be cleared included", async () => {

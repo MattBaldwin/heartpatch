@@ -27,14 +27,14 @@ export const RecipeSchema = z.strictObject({
    * craft starts (#238: a Frost squishy freezes Water faster): `percent` off
    * `craftSeconds`.
    */
+  fasterWith: z
+    .strictObject({ element: ElementIdSchema, percent: z.number().int().min(1).max(90) })
+    .optional(),
   /**
    * Not in the game yet (`isAvailableRecipe`): no recipe-book page, no Bag
    * row, no "goes into" chip, and the server refuses to make it.
    */
   hidden: z.literal(true).optional(),
-  fasterWith: z
-    .strictObject({ element: ElementIdSchema, percent: z.number().int().min(1).max(90) })
-    .optional(),
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 

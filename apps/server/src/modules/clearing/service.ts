@@ -17,8 +17,10 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
+import { createGatheringRepo } from '../gathering/repo.js';
+import { bankGather, gatherFate } from '../gathering/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { consumeItems, grantItems } from '../inventory/service.js';
+import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { toClearing } from './view.js';
 import {
@@ -171,6 +173,71 @@ async function finishClear(
   await repo.endClear(clear.id, { reason: 'cleared', at });
 }
 
+/**
+ * Before a clear starts (#242): settles, in its own transaction, what's left
+ * over that would otherwise stand in its way, as settle would. On the tile,
+ * if it's the player's: a previous owner's clear or gather (one that
+ * finished before the land changed hands banks into its maker's bag, a clear
+ * clearing the land; else it ends `lost`) and the player's own finished
+ * gather. Anywhere: the player's own clear, done or lost but not settled
+ * yet. Lock order (tech spec §7): tiles in id order, the gather, the clears,
+ * inventory rows, `maps`. True when anything changed.
+ */
+async function settleLeftovers(
+  store: ClearingRepo,
+  user: PublicUser,
+  mapId: string,
+  q: number,
+  r: number,
+  at: Date,
+): Promise<boolean> {
+  return store.transaction(async (repo, tx) => {
+    await requireMember(tx, user, mapId);
+    const tileId = await repo.tileIdAt(mapId, q, r);
+    const own = await repo.findActive({ mapId, userId: user.id });
+    const locked = await repo.lockTiles(
+      [tileId, own?.tileId].filter((id): id is string => id !== null && id !== undefined),
+    );
+    // Only the tile's owner settles what's left on it.
+    const tile = locked.find((t) => t.id === tileId && t.ownerUserId === user.id);
+
+    const gathering = createGatheringRepo(tx);
+    const found = tile ? await gathering.findActiveOnTile(tile.id) : null;
+    const [gather] = found ? await gathering.lockToSettle([found.id]) : [];
+    const fate = gather?.status === 'active' ? gatherFate(gather, at) : 'wait';
+
+    const onTile = tile ? await repo.findActive({ tileId: tile.id }) : null;
+    const clearIds = [...new Set([own?.id, onTile?.id])].filter(
+      (id): id is string => id !== undefined,
+    );
+    const clears = await planClearSettlement(
+      tx,
+      clearIds.sort(),
+      new Set(locked.map((t) => t.id)),
+      at,
+    );
+    if (!gather || fate === 'wait') {
+      if (clears.due.length === clearIds.length) return false;
+    }
+
+    await lockGrantRows(tx, mapId, [
+      ...(gather && fate === 'bank' ? [gather] : []),
+      ...clears.grants,
+    ]);
+    if (gather && fate === 'bank') {
+      await grantItems(tx, { mapId, userId: gather.userId }, gather.items, 'gather', gather.id);
+    }
+    if (gather && fate === 'lose') await gathering.endGather(gather.id, { status: 'lost', at });
+    const { events } = await clears.apply();
+    // The gather's found-clothing roll takes `maps`: after every inventory row.
+    if (gather && fate === 'bank') {
+      events.push(await bankGather(tx, gathering, gather, at, { granted: true }));
+    }
+    for (const event of events) await repo.appendEvent(event);
+    return true;
+  });
+}
+
 export interface ClearingService {
   /** Starts clearing a homestead the player owns. */
   start: (user: PublicUser, mapId: string, at: StartClearRequest) => Promise<ClearResponse>;
@@ -192,14 +259,18 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
     start: async (user, mapId, { q, r }) => {
       const at = now();
       const owner = { mapId, userId: user.id };
+      // What's left over settles first, and stays settled even if this start is refused.
+      const tidied = await settleLeftovers(store, user, mapId, q, r, at);
       let result: ClearResponse;
       try {
         result = await store.transaction(async (repo, tx) => {
           await requireMember(tx, user, mapId);
-          // Lock order (tech spec §7): the tile (step 6, share: it can't
-          // change hands while this starts), reads of what stands on it, the
-          // clear's insert, the tool's inventory row (step 11), then `maps`.
-          const tile = await repo.lockTileAt(mapId, q, r);
+          // Lock order (tech spec §7): the tile (step 6: it can't change hands,
+          // and no gather, gatherer or guard starts on it meanwhile), reads of
+          // what's on it, the clear's insert, the tool's inventory row (step
+          // 11), then `maps`.
+          const tileId = await repo.tileIdAt(mapId, q, r);
+          const [tile] = tileId ? await repo.lockTiles([tileId]) : [];
           if (!tile) throw new AppError('NOT_FOUND', MESSAGES.noTile);
           if (tile.ownerUserId !== user.id) throw new AppError('FORBIDDEN', MESSAGES.notYours);
           if (tile.homeSlot !== null) throw new AppError('CONFLICT', MESSAGES.home);
@@ -213,9 +284,12 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
           if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.napping);
           if (homestead !== 'joined') throw new AppError('CONFLICT', MESSAGES.notHomestead);
 
-          const busy = await repo.tileBusy(tile.id);
+          const busy = await repo.tileBusy(tile.id, user.id);
           if (busy.buildings > 0) throw new AppError('CONFLICT', MESSAGES.built);
-          if (busy.gathering) throw new AppError('CONFLICT', MESSAGES.gathering);
+          // Left over gathers have settled, so one still here is the player's, still going.
+          if (await createGatheringRepo(tx).findActiveOnTile(tile.id)) {
+            throw new AppError('CONFLICT', MESSAGES.gathering);
+          }
           if (busy.workers > 0 || busy.guards > 0) {
             throw new AppError('CONFLICT', MESSAGES.squishyBusy);
           }
@@ -263,7 +337,9 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
           };
         });
       } catch (err) {
-        // A double tap raced us to a one-clear index.
+        if (tidied) void options.publish?.(mapId);
+        // A double tap raced us to a one-clear index (left overs on the tile
+        // settled first, so the tile's index is the player's own too).
         if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.already);
         throw err;
       }

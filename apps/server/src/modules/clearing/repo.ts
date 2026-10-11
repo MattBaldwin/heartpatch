@@ -2,14 +2,7 @@ import { CLEARED_TERRAIN, ItemCountsSchema, type ItemCounts } from '@heartpatch/
 import { and, asc, count, eq, inArray, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import {
-  buildings,
-  gatherJobs,
-  squishies,
-  tileClears,
-  tileDefenders,
-  tiles,
-} from '../../db/schema.js';
+import { buildings, squishies, tileClears, tileDefenders, tiles } from '../../db/schema.js';
 import { firstCaptureSince } from '../jobs/repo.js';
 
 /** A tile as a clear needs it (tiles belong to the maps module; only a finished clear writes one). */
@@ -54,8 +47,6 @@ export interface SettleClearRow extends ClearRow {
 /** What stands on or works a tile, which a clear has to wait for. */
 export interface TileBusy {
   buildings: number;
-  /** The Keeper's gather on its node, still going. */
-  gathering: boolean;
   workers: number;
   guards: number;
 }
@@ -67,10 +58,16 @@ export interface TileBusy {
 export interface ClearingRepo {
   transaction: <T>(fn: (repo: ClearingTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
-  /** The tile at `q, r`, share-locked until commit so it can't change hands while a clear starts. */
-  lockTileAt: (mapId: string, q: number, r: number) => Promise<ClearTileRow | null>;
-  /** What stands on or works the tile right now. */
-  tileBusy: (tileId: string) => Promise<TileBusy>;
+  /** The tile's id at `q, r`, unlocked (a tile's place never changes). */
+  tileIdAt: (mapId: string, q: number, r: number) => Promise<string | null>;
+  /**
+   * Locks these tiles in id order (`FOR NO KEY UPDATE`, like settle) until
+   * commit: they can't change hands, and a gather, a gatherer or a guard
+   * can't start on them meanwhile.
+   */
+  lockTiles: (tileIds: readonly string[]) => Promise<ClearTileRow[]>;
+  /** What stands on the tile, and the owner's squishies working or on watch there. */
+  tileBusy: (tileId: string, ownerUserId: string) => Promise<TileBusy>;
   /** The clear going on this tile, or the player's clear going anywhere on the map. */
   findActive: (
     where: { tileId: string } | { mapId: string; userId: string },
@@ -132,6 +129,22 @@ const toClear = (row: ClearSelect): ClearRow => ({
   endReason: row.endReason === 'cleared' || row.endReason === 'lost' ? row.endReason : null,
 });
 
+/**
+ * Is the player clearing this tile? Gathers, gatherers and guards don't start
+ * on land being cleared (#242): its spot is about to go into the clear's
+ * drop. The caller holds the tile's lock, which a clear's start takes too.
+ */
+export async function clearGoingOn(db: Executor, tileId: string, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: tileClears.id })
+    .from(tileClears)
+    .where(
+      and(eq(tileClears.tileId, tileId), eq(tileClears.userId, userId), isNull(tileClears.endedAt)),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
 export function createClearingRepo(db: Executor): ClearingRepo {
   return queries(db);
 }
@@ -159,36 +172,52 @@ function queries(db: Executor): ClearingRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createClearingTxRepo(tx), tx)),
 
-    lockTileAt: async (mapId, q, r) => {
+    tileIdAt: async (mapId, q, r) => {
       const [row] = await db
-        .select({
-          id: tiles.id,
-          q: tiles.q,
-          r: tiles.r,
-          terrain: tiles.terrain,
-          ownerUserId: tiles.ownerUserId,
-          nodeResource: tiles.nodeResource,
-          homeSlot: tiles.homeSlot,
-        })
+        .select({ id: tiles.id })
         .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, q), eq(tiles.r, r)))
-        .for('share');
-      return row ?? null;
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, q), eq(tiles.r, r)));
+      return row?.id ?? null;
     },
 
-    tileBusy: async (tileId) => {
-      const [[built], [gather], [work], [guard]] = await Promise.all([
+    lockTiles: async (tileIds) => {
+      if (tileIds.length === 0) return [];
+      return (
+        db
+          .select({
+            id: tiles.id,
+            q: tiles.q,
+            r: tiles.r,
+            terrain: tiles.terrain,
+            ownerUserId: tiles.ownerUserId,
+            nodeResource: tiles.nodeResource,
+            homeSlot: tiles.homeSlot,
+          })
+          .from(tiles)
+          .where(inArray(tiles.id, [...new Set(tileIds)]))
+          // Id order (tech spec §7 "Lock order"), so two transactions never deadlock.
+          .orderBy(asc(tiles.id))
+          .for('no key update')
+      );
+    },
+
+    tileBusy: async (tileId, ownerUserId) => {
+      // Only the owner's squishies: a previous owner's left-behind work row isn't working here.
+      const theirs = eq(squishies.ownerUserId, ownerUserId);
+      const [[built], [work], [guard]] = await Promise.all([
         db.select({ n: count() }).from(buildings).where(eq(buildings.tileId, tileId)),
         db
           .select({ n: count() })
-          .from(gatherJobs)
-          .where(and(eq(gatherJobs.tileId, tileId), eq(gatherJobs.status, 'active'))),
-        db.select({ n: count() }).from(squishies).where(eq(squishies.workTileId, tileId)),
-        db.select({ n: count() }).from(tileDefenders).where(eq(tileDefenders.tileId, tileId)),
+          .from(squishies)
+          .where(and(eq(squishies.workTileId, tileId), theirs)),
+        db
+          .select({ n: count() })
+          .from(tileDefenders)
+          .innerJoin(squishies, eq(squishies.id, tileDefenders.squishyId))
+          .where(and(eq(tileDefenders.tileId, tileId), theirs)),
       ]);
       return {
         buildings: built?.n ?? 0,
-        gathering: (gather?.n ?? 0) > 0,
         workers: work?.n ?? 0,
         guards: guard?.n ?? 0,
       };

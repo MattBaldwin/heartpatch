@@ -1,6 +1,7 @@
 import type { ItemCounts } from '../gathering/index.js';
 import type { ClearingRules } from '../schemas/data/clearing.js';
 import type { JobRules } from '../schemas/data/jobs.js';
+import { isAvailableRecipe, type Recipe } from '../schemas/data/recipes.js';
 import type { Resource } from '../schemas/data/resources.js';
 
 // Clearing land (#242). Pure: the server fixes a clear's drop when it starts,
@@ -30,4 +31,17 @@ export function clearDrop(
   const land = jobRules.terrainYields.find((y) => y.terrain === tile.terrain);
   const quantity = (land?.quantity ?? 0) * rules.landDropCycles;
   return land && quantity > 0 ? { [land.resource]: quantity } : {};
+}
+
+/**
+ * Can a kid make this clearing tool yet? True when a recipe that's in the
+ * game (`isAvailableRecipe`) makes it. While the tools' recipes are hidden,
+ * no land can be cleared, so nothing should count on it (the Hollow Man's
+ * fire sites, #242).
+ */
+export function clearToolMakeable(
+  toolId: string,
+  recipes: readonly Pick<Recipe, 'output' | 'hidden'>[],
+): boolean {
+  return recipes.some((r) => r.output.resource === toolId && isAvailableRecipe(r));
 }
