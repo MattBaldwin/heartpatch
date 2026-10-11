@@ -5,13 +5,15 @@ import { savedCode, skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from 
 import { trayButton } from './trays.js';
 
 /**
- * Picking a Keeper (issue #42): a new account picks one before it can reach
- * a patch, changes it for free from Settings, and shows it on the map and in
+ * Picking a Keeper (issue #42; step by step since #372): a new account builds
+ * one before it can reach a patch, changes it for free from Settings, and shows it on the map and in
  * battles. Checked through the dev hook's signals, never pixels.
  */
 
 interface KeeperConfig {
   base: string;
+  face?: string;
+  body?: string;
   hairColor: string;
   eyeColor: string;
   outfit: string;
@@ -22,8 +24,10 @@ interface KeeperConfig {
 interface KeeperDebug {
   mode: 'first' | 'edit' | null;
   picked: KeeperConfig | null;
+  step: string | null;
   saved: KeeperConfig | null;
   preview: string | null;
+  fit: { feet: number; head: number; top: number; bottom: number } | null;
   hopping: boolean;
 }
 
@@ -74,7 +78,7 @@ async function signUp(page: Page, name: string): Promise<void> {
   await skipCinematic(page);
 }
 
-test('a new Keeper is picked before any patch, remembered, and changed for free', async ({
+test('a new Keeper is built step by step before any patch, remembered, and changed for free', async ({
   page,
 }) => {
   test.setTimeout(240_000); // several scene builds; CI renders in software
@@ -88,23 +92,45 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   await expect(page.getByTestId('lobby')).toBeHidden();
   await expect.poll(() => keeperState(page).then((s) => s?.preview ?? null)).not.toBeNull();
   const start = (await keeperState(page))!;
-  expect(start).toMatchObject({ mode: 'first', saved: null });
+  expect(start).toMatchObject({ mode: 'first', saved: null, step: 'face' });
+  const next = picker.getByRole('button', { name: 'Next', exact: true });
+  const tap = (name: string) => picker.getByRole('button', { name, exact: true }).tap();
 
-  // Every pick shows on the 3D Keeper, which hops, then stops drawing.
-  await picker.getByRole('button', { name: 'Wren', exact: true }).tap();
-  await picker.getByRole('button', { name: 'Hair: Mint' }).tap();
-  await picker.getByRole('button', { name: 'Eye color: Violet' }).tap();
-  await picker.getByRole('button', { name: 'Outfit: Pumpkin' }).tap();
-  // The Keeper builder (#289): any skin tone, eyes, brows, mouth and extras.
-  await picker.getByRole('button', { name: 'Skin tone 2' }).tap();
-  await picker.getByRole('button', { name: 'Eyes: Happy' }).tap();
-  await picker.getByRole('button', { name: 'Brows: Soft' }).tap();
-  await picker.getByRole('button', { name: 'Mouth: Big smile' }).tap();
-  await picker.getByRole('button', { name: 'Extras: Freckles' }).tap();
-  await picker.getByRole('button', { name: 'Extras: Blush' }).tap();
+  // One step a screen (#372): face, body and outfit, skin, hair style, hair
+  // and eye colours, face details. Every pick shows on the 3D Keeper.
+  await expect(picker.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
+  await tap('Face: Button');
+  // Next stays put from step to step, so a keyboard or switch user keeps their place.
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(next).toBeFocused();
+  expect((await keeperState(page))!.step).toBe('body');
+  await tap('Body: Lanky');
+  // Body tiles have no names on a phone: the pick is named after the prompt.
+  await expect(picker.locator('#keeper-prompt')).toContainText('Lanky');
+  await tap('Outfit: Pumpkin');
+  await next.tap();
+  await tap('Skin tone 2');
+  await next.tap();
+  await tap('Hair style: Pigtails');
+  await next.tap();
+  await tap('Hair: Mint');
+  await tap('Eye color: Violet');
+  await next.tap();
+  expect((await keeperState(page))!.step).toBe('details');
+  await expect(next).toBeHidden();
+  await tap('Eyes: Happy');
+  await tap('Brows: Soft');
+  await tap('Mouth: Big smile');
+  await tap('Extras: Freckles');
+  await tap('Extras: Blush');
   const picked = (await keeperState(page))!;
+  // Face and body are their own choices; the starting look stays Pip.
   expect(picked.picked).toEqual({
-    base: 'wren',
+    base: 'pip',
+    face: 'wren',
+    body: 'lanky',
+    hairstyle: 'pigtails',
     hairColor: 'mint',
     eyeColor: 'violet',
     outfit: 'pumpkin',
@@ -119,10 +145,14 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
     'true',
   );
   expect(picked.preview).not.toBe(start.preview);
+
+  // Back keeps every pick.
+  await tap('Back');
   await expect(picker.getByRole('button', { name: 'Hair: Mint' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await next.tap();
   await waitForIdle(page);
 
   // "That's me!" saves it and opens the lobby.
@@ -138,23 +168,24 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   await expect(picker).toBeHidden();
   await expect.poll(() => keeperState(page).then((s) => s?.saved ?? null)).toEqual(picked.picked);
 
-  // Settings → Change Keeper → a new look, for free.
+  // Settings → Change Keeper → the Body tab → a new body, for free.
   await lobby.getByTestId('lobby-settings').tap();
   await lobby.getByTestId('keeper-settings').tap();
   await expect(picker.getByRole('heading', { name: 'Your Keeper' })).toBeVisible();
   expect((await keeperState(page))!).toMatchObject({ mode: 'edit', picked: picked.picked });
-  await picker.getByRole('button', { name: 'Bramble', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Body' }).tap();
+  await tap('Body: Sturdy');
   await picker.getByRole('button', { name: 'Save' }).tap();
   await expect(lobby.getByTestId('lobby-notice')).toHaveText('Looking good, Keeper!');
-  expect((await keeperState(page))!.saved).toMatchObject({ base: 'bramble' });
+  expect((await keeperState(page))!.saved).toMatchObject({ face: 'wren', body: 'sturdy' });
 
   // Back leaves it as it was.
   await lobby.getByTestId('lobby-settings').tap();
   await lobby.getByTestId('keeper-settings').tap();
-  await picker.getByRole('button', { name: 'Pip', exact: true }).tap();
+  await tap('Face: Moon');
   await picker.getByRole('button', { name: 'Back' }).tap();
   await waitForLobby(page);
-  expect((await keeperState(page))!.saved).toMatchObject({ base: 'bramble' });
+  expect((await keeperState(page))!.saved).toMatchObject({ face: 'wren', body: 'sturdy' });
   expect(errors).toEqual([]);
 });
 
@@ -168,31 +199,22 @@ test('any Keeper wears any hair style, kept after a reload', async ({ page }) =>
   const style = (name: string) =>
     picker.getByRole('button', { name: `Hair style: ${name}`, exact: true });
 
-  // A new Keeper comes with its own short style…
-  await picker.getByRole('button', { name: 'Rowan', exact: true }).tap();
-  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'true');
+  // A new Keeper starts on Pip's own style…
+  await picker.getByRole('tab', { name: 'Hair' }).tap();
+  await expect(style('Spiky')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => keeperState(page).then((s) => s?.preview ?? null)).not.toBeNull();
-  const rowan = (await keeperState(page))!;
-  expect(rowan.picked).toEqual({
-    base: 'rowan',
-    hairColor: 'midnight',
-    eyeColor: 'hazel',
-    outfit: 'sunflower',
-    skinTone: 'tone-10',
-    eyes: 'oval',
-    brows: 'arched',
-    mouth: 'smile',
-    extras: [],
-  });
+  const pip = (await keeperState(page))!;
+  expect(pip.picked).not.toHaveProperty('hairstyle');
 
-  // …and can wear any other; the Keeper and colours stay.
+  // …and can wear any other; everything else stays.
   await style('Long').tap();
   await expect(style('Long')).toHaveAttribute('aria-pressed', 'true');
-  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'false');
+  await expect(style('Spiky')).toHaveAttribute('aria-pressed', 'false');
   const styled = (await keeperState(page))!;
-  expect(styled.picked).toEqual({ ...rowan.picked, hairstyle: 'long' });
-  expect(styled.preview).not.toBe(rowan.preview);
+  expect(styled.picked).toEqual({ ...pip.picked, hairstyle: 'long' });
+  expect(styled.preview).not.toBe(pip.preview);
 
+  await picker.getByRole('tab', { name: 'Details' }).tap();
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
   await waitForLobby(page);
   expect((await keeperState(page))!.saved).toEqual(styled.picked);
@@ -204,12 +226,12 @@ test('any Keeper wears any hair style, kept after a reload', async ({ page }) =>
   const lobby = page.getByTestId('lobby');
   await lobby.getByTestId('lobby-settings').tap();
   await lobby.getByTestId('keeper-settings').tap();
+  await picker.getByRole('tab', { name: 'Hair' }).tap();
   await expect(style('Long')).toHaveAttribute('aria-pressed', 'true');
 
-  // Picking a Keeper again goes back to its own style.
-  await picker.getByRole('button', { name: 'Rowan', exact: true }).tap();
-  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'true');
-  expect((await keeperState(page))!.picked).toEqual(rowan.picked);
+  // Picking Pip's own style again stores none.
+  await style('Spiky').tap();
+  expect((await keeperState(page))!.picked).toEqual(pip.picked);
   await picker.getByRole('button', { name: 'Back' }).tap();
   await waitForLobby(page);
   expect(errors).toEqual([]);
@@ -219,7 +241,8 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   test.setTimeout(240_000);
   await signUp(page, uniqueName('cheer'));
   const picker = page.getByTestId('keeper-picker');
-  await picker.getByRole('button', { name: 'Sunny', exact: true }).tap();
+  await picker.getByRole('button', { name: 'Face: Peach', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Details' }).tap();
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
 
   const lobby = page.getByTestId('lobby');
@@ -259,59 +282,119 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
     .toBeGreaterThan(0);
 });
 
-test('every row of the picker is reachable on phones, iPads and laptops (#130, #289)', async ({
+test('every step of the creator fits phones, iPads and laptops with no scroll inside scroll (#130, #372)', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await signUp(page, uniqueName('rows'));
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
+  const steps = ['Face', 'Body', 'Skin', 'Hair', 'Colors', 'Details'];
+  // The tallest Keeper there is: a round face, the lanky body and a puff.
+  await picker.getByRole('button', { name: 'Face: Moon', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Body' }).tap();
+  await picker.getByRole('button', { name: 'Body: Lanky', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Hair' }).tap();
+  await picker.getByRole('button', { name: 'Hair style: Puff', exact: true }).tap();
 
-  // An iPhone in a Safari tab and as an app, an iPad, two laptops.
+  // An iPhone SE, an iPhone in a Safari tab and as an app, an iPad, two laptops.
   for (const size of [
+    { width: 320, height: 568 },
+    { width: 375, height: 667 },
     { width: 393, height: 659 },
     { width: 390, height: 844 },
     { width: 1180, height: 820 },
-    { width: 1280, height: 800 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(size);
-    await settled(page);
-    const layout = await page.evaluate(() => {
-      const rows = document.querySelector<HTMLElement>('.keeper-rows')!;
-      const save = document.querySelector<HTMLElement>('.keeper-actions')!;
-      const onScreen = (node: HTMLElement) => {
-        const box = node.getBoundingClientRect();
-        return box.top >= 0 && box.bottom <= window.innerHeight;
-      };
-      return {
-        // One list (owner, #289): the rows scroll; "That's me!" always shows.
-        saveShows: onScreen(save),
-        // Scrolled to, the first choice of each row is what a finger on it touches.
-        reachable: [...rows.querySelectorAll<HTMLElement>('.keeper-row')].map((row) => {
-          row.scrollIntoView({ block: 'nearest' });
-          const button = row.querySelector('button')!;
-          const box = button.getBoundingClientRect();
-          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-          return hit?.closest('button') === button && onScreen(save);
-        }),
-        // A swipe up or down that starts on a choice can still scroll the rows.
-        swipe: getComputedStyle(rows.querySelector('.keeper-choices')!).touchAction,
-      };
-    });
-    expect(layout, `${String(size.width)}×${String(size.height)}`).toEqual({
-      saveShows: true,
-      reachable: Array.from({ length: 10 }, () => true),
-      swipe: 'pan-x pan-y',
-    });
-    await page.evaluate(() => {
-      document.querySelector('.keeper-rows')!.scrollTop = 0;
-    });
-    // More Keepers than fit: the row says so (it fades out at the end).
-    await expect(picker.locator('.keeper-choices').first()).toHaveAttribute('data-more', 'end');
+    for (const tab of steps) {
+      await picker.getByRole('tab', { name: tab }).tap();
+      await settled(page);
+      const layout = await page.evaluate(() => {
+        const card = document.querySelector<HTMLElement>('.keeper-card')!;
+        const tabs = document.querySelector<HTMLElement>('.keeper-tabs')!;
+        const rows = document.querySelector<HTMLElement>('.keeper-rows')!;
+        const actions = document.querySelector<HTMLElement>('.keeper-actions')!;
+        const onScreen = (node: HTMLElement) => {
+          const box = node.getBoundingClientRect();
+          return box.top >= 0 && box.bottom <= window.innerHeight;
+        };
+        // The step's own list is the only thing that may scroll, and only up and down.
+        const scrollers = [...card.querySelectorAll<HTMLElement>('*')].filter((node) => {
+          const style = getComputedStyle(node);
+          const can = (o: string) => o === 'auto' || o === 'scroll';
+          return (
+            node !== rows &&
+            ((can(style.overflowY) && node.scrollHeight > node.clientHeight) ||
+              (can(style.overflowX) && node.scrollWidth > node.clientWidth))
+          );
+        });
+        return {
+          tabsFit: tabs.scrollWidth <= tabs.clientWidth,
+          rowsSideways: rows.scrollWidth > rows.clientWidth,
+          nested: scrollers.map((n) => n.className),
+          actionsShow: onScreen(actions),
+          scrolls: rows.scrollHeight > rows.clientHeight + 1,
+          // Face details: eyes, brows and mouth all show before any scrolling.
+          mouthShows: (() => {
+            const mouth = rows.querySelector<HTMLElement>('#keeper-row-mouth');
+            if (!mouth) return true;
+            rows.scrollTop = 0;
+            const first = mouth.parentElement!.querySelector('button')!;
+            return (
+              first.getBoundingClientRect().bottom <= rows.getBoundingClientRect().bottom + 0.5
+            );
+          })(),
+          // Scrolled to, every choice is what a finger on it touches.
+          reachable: [...rows.querySelectorAll<HTMLElement>('button')].every((button) => {
+            button.scrollIntoView({ block: 'nearest' });
+            const box = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+            return hit?.closest('button') === button && onScreen(actions);
+          }),
+        };
+      });
+      const at = `${tab} at ${String(size.width)}×${String(size.height)}`;
+      expect(layout, at).toMatchObject({
+        tabsFit: true,
+        rowsSideways: false,
+        nested: [],
+        actionsShow: true,
+        reachable: true,
+      });
+      // Faces, bodies, skin and hair colour all show at once from an iPhone
+      // SE's height up (iOS 17 phones); shorter screens scroll the one list.
+      if (size.height >= 659 && !['Hair', 'Details'].includes(tab)) {
+        expect(layout.scrolls, at).toBe(false);
+      }
+      if (size.height >= 659) {
+        expect(layout.mouthShows, at).toBe(true);
+        // The whole Keeper stands between the top bar and the card (#372).
+        await expect
+          .poll(() => keeperState(page).then((s) => s?.fit ?? null), { message: at })
+          .not.toBeNull();
+        // Fitted to this size: the band it used is the card's top right now.
+        const cardTop = () =>
+          page.evaluate(() => document.querySelector('.keeper-card')!.getBoundingClientRect().top);
+        await expect
+          .poll(
+            async () => {
+              const now = (await keeperState(page))?.fit;
+              return now ? Math.abs(now.bottom - (await cardTop())) <= 1 : false;
+            },
+            { message: at },
+          )
+          .toBe(true);
+        const fit = (await keeperState(page))!.fit!;
+        expect(fit.feet, at).toBeLessThanOrEqual(fit.bottom + 1);
+        expect(fit.head, at).toBeGreaterThanOrEqual(fit.top - 1);
+      }
+    }
+    await expectRoomyLabels(page, '.keeper-tab, .keeper-style, .keeper-actions .auth-button');
   }
 
   // Tapping an outfit picks it; it never saves the Keeper by mistake.
+  await picker.getByRole('tab', { name: 'Body' }).tap();
   await picker.getByRole('button', { name: 'Outfit: Pumpkin' }).tap();
   await expect(picker).toBeVisible();
   expect((await keeperState(page))!).toMatchObject({
@@ -319,5 +402,4 @@ test('every row of the picker is reachable on phones, iPads and laptops (#130, #
     saved: null,
     picked: { outfit: 'pumpkin' },
   });
-  await expectRoomyLabels(page, '.keeper-base, .keeper-style, .keeper-actions .auth-button');
 });

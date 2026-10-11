@@ -860,6 +860,11 @@ export const keepers = pgTable('keepers', {
   // A hairstyle id from the shared Keeper data, or null for the base's own
   // style (every Keeper saved before styles could be picked).
   hairstyle: text('hairstyle'),
+  // Face shape and body type (#372): ids from the shared Keeper data. Rows
+  // saved before they were choices were filled from their base, whose face
+  // and body share its id, so no Keeper changed.
+  face: text('face').notNull(),
+  body: text('body').notNull(),
   // The Keeper builder (#289): ids from the shared Keeper data. Rows saved
   // before it were filled from their base (the starting look), so no Keeper
   // changed.
