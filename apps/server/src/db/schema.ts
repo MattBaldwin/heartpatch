@@ -997,7 +997,10 @@ export const gatherJobs = pgTable(
  * spends a tool use and fixes `drop`; at `ready_at` the next settle turns the
  * tile into cleared land (`tiles.terrain = 'clearing'`, its node gone) and
  * banks `drop` (`ended_at`, `end_reason = 'cleared'`). If the tile changes
- * hands first, the clear ends `lost` with nothing banked. `from_terrain` and
+ * hands before `ready_at`, the clear ends `lost` with nothing banked. If it
+ * finished in time but someone else holds the tile by the settle, `drop`
+ * still banks and the clear ends `cleared`, but their land stays as it is
+ * (wild land still clears). `from_terrain` and
  * `from_node` keep what the tile was. One clear per tile and one per player
  * at a time.
  */

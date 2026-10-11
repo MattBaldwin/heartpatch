@@ -38,7 +38,7 @@ import {
  * (owner decision 2026-10-06: no Collect). Only the owner, on their own
  * joined homesteads, on terrain `CLEARING_RULES` lists, with nothing standing
  * on or working the tile. Cleared land stays cleared for good, whoever holds
- * it later; a clear only clears land still the clearer's when it settles.
+ * it later; a clear never clears land someone else holds when it settles.
  */
 
 const RESOURCE_NAMES = new Map(GAME_DATA.resources.map((r) => [r.id, r.name]));
@@ -136,9 +136,10 @@ export async function planClearSettlement(
           continue;
         }
         // Finished in time, but the land changed hands before it settled: the
-        // drop is still theirs, and the new owner's land stays as it is (they
-        // may be gathering or building there already).
-        const landCleared = clear.tileOwner === clear.userId;
+        // drop is still theirs, and a new owner's land stays as it is (they
+        // may be gathering or building there already). Wild land has no one
+        // to disturb, so it clears as it would have at `ready_at`.
+        const landCleared = clear.tileOwner === clear.userId || clear.tileOwner === null;
         await finishClear(tx, repo, clear, at, landCleared);
         cleared.push({ q: clear.q, r: clear.r, items: clear.drop, landCleared });
         if (!landCleared) continue;

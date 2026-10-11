@@ -385,6 +385,42 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     expect(rivalGather).toMatchObject({ status: 'active' });
   });
 
+  it('clears the land when its clearer won it back before settling', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    const rival = await rivalOn(mapId);
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    clock.setTime(Date.parse(START) + CLEAR_MS + 60 * 60 * 1000);
+    await capture(mapId, plot.id, kid, rival);
+    clock.setTime(Date.parse(START) + CLEAR_MS + 2 * 60 * 60 * 1000);
+    await capture(mapId, plot.id, rival, kid);
+    const done = await settle(server, kid, mapId);
+    expect(done.cleared).toEqual([
+      { q: plot.q, r: plot.r, items: { timber: 5 }, landCleared: true },
+    ]);
+    const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
+    expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, ownerUserId: kid.id });
+  });
+
+  it('clears land that went wild after the clear was done: nobody holds it to disturb', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
+    const wildAt = new Date(Date.parse(START) + CLEAR_MS + 60 * 60 * 1000);
+    await db.execute(`update tiles set owner_user_id = null where id = '${plot.id}'`);
+    await db.execute(
+      `insert into tile_tending (tile_id, map_id, tended_at, wild_night, wild_from_user_id, wild_at)
+       values ('${plot.id}', '${mapId}', '${START}', '2026-10-02', '${kid.id}', '${wildAt.toISOString()}')
+       on conflict (tile_id) do update set wild_night = excluded.wild_night,
+         wild_from_user_id = excluded.wild_from_user_id, wild_at = excluded.wild_at`,
+    );
+    clock.setTime(wildAt.getTime() + 60 * 60 * 1000);
+    const done = await settle(server, kid, mapId);
+    expect(done.cleared).toEqual([
+      { q: plot.q, r: plot.r, items: { timber: 5 }, landCleared: true },
+    ]);
+    const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
+    expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, ownerUserId: null });
+  });
+
   it("isn't blocked by a clear or a gather the land's last owner left behind", async () => {
     const { server, kid, mapId, plot } = await forestHomestead();
     const rival = await rivalOn(mapId);
