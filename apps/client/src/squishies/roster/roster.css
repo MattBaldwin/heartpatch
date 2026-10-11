@@ -407,10 +407,15 @@
   min-height: 44px;
   padding: 0 12px;
   border: 2px solid #f0c6da;
+  border-radius: 999px;
   background: #fff;
   color: #9a3a68;
+  font: inherit;
   font-size: 14px;
+  font-weight: 700;
   box-shadow: none;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 /* The narrowest phones: a smaller picture, Care as just 💗, and the pickers
