@@ -5,7 +5,6 @@ import {
   Rng,
   WARDROBE_SLOTS,
   type CostumeAnchor,
-  type Finish,
   type KeeperBase,
   type KeeperConfig,
   type KeeperData,
@@ -15,6 +14,7 @@ import {
   type WardrobeSlot,
 } from '@heartpatch/shared';
 import { HOLLOW_ARM, HOLLOW_MAN } from '../hollow-man/hollow-man-config.js';
+import type { FinishName } from '../config.js';
 import { hexToRgb, type Rgb, type Vec3 } from '../params.js';
 import { KEEPER } from './keeper-config.js';
 import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
@@ -31,6 +31,15 @@ import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
  * camera with the default heading), +x is the viewer's right. Sizes are
  * world units for a Keeper at scale 1.
  */
+
+/**
+ * A costume's finish: its rarity's, except that the Mythic shimmer is the
+ * softer one on a costume (owner, #261); squishies keep the shared shimmer.
+ */
+function costumeFinish(rarity: KeeperItem['rarity']): FinishName {
+  const finish = ART_RULES.finishByRarity[rarity];
+  return finish === 'shimmer' ? 'shimmerSoft' : finish;
+}
 
 /** What a piece is part of (tests and the gallery count these). */
 export type KeeperLayer = 'body' | 'face' | 'hair' | 'outfit' | WardrobeSlot;
@@ -54,7 +63,7 @@ export interface KeeperPiece {
   readonly color: Rgb;
   readonly layer: KeeperLayer;
   /** Costumes wear their rarity's finish (ART_BIBLE §1.4); everything else is plain vinyl. */
-  readonly finish?: Finish;
+  readonly finish?: FinishName;
   /** Lit from inside. */
   readonly glow?: boolean;
 }
@@ -483,7 +492,7 @@ export function keeperParams(
   const worn = costume ? [costume] : WARDROBE_SLOTS.flatMap((slot) => bySlot.get(slot) ?? []);
   for (const item of worn) {
     // Costumes wear their rarity's finish (owner, #261); other clothing is plain vinyl.
-    const finish = item.slot === 'costume' ? ART_RULES.finishByRarity[item.rarity] : 'vinyl';
+    const finish = item.slot === 'costume' ? costumeFinish(item.rarity) : 'vinyl';
     // Pieces grouped by socket, in order: each anchor in turn, then its pieces.
     const groups = new Map<CostumeAnchor | undefined, KeeperItemPiece[]>();
     for (const p of item.pieces) groups.set(p.on, [...(groups.get(p.on) ?? []), p]);
@@ -525,7 +534,7 @@ export function keeperParams(
     // The Hollow Man's own shape, scaled from his height to this Keeper's.
     const h = hairTop * KEEPER.models['hollow-man'].heightRatio;
     const k = h / HOLLOW_MAN.height;
-    const shimmer = ART_RULES.finishByRarity[costume.rarity];
+    const shimmer = costumeFinish(costume.rarity);
     pieces.push({
       shape: 'model-hollow-man',
       at: [0, 0, 0],

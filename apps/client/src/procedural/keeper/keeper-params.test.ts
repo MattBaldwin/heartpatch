@@ -466,7 +466,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
     const eyes = hollow.filter((piece) => piece.glow);
     expect(eyes.length).toBeGreaterThanOrEqual(2);
     for (const eye of eyes) expect(eye.finish).toBeUndefined();
-    for (const piece of hollow.filter((x) => !x.glow)) expect(piece.finish).toBe('shimmer');
+    for (const piece of hollow.filter((x) => !x.glow)) expect(piece.finish).toBe('shimmerSoft');
     for (const piece of wearing('marigold-calavera')) expect(piece.finish).toBe('iridescent');
     for (const piece of wearing('zippy-hedgehog')) expect(piece.finish).toBe('sparkle');
     for (const piece of wearing('candy-corn-cutie')) expect(piece.finish).toBeUndefined();
@@ -486,7 +486,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       expect([...new Set(p.pieces.map((piece) => piece.layer))], base.id).toEqual(['costume']);
       const [model, ...eyes] = p.pieces;
       expect(model!.shape).toBe('model-hollow-man');
-      expect(model!.finish).toBe('shimmer');
+      expect(model!.finish).toBe('shimmerSoft');
       expect(model!.at).toEqual([0, 0, 0]);
       // He stands on the Keeper's feet, taller than the Keeper, and one scale all round.
       expect(p.height).toBeGreaterThan(bare.height);
