@@ -112,8 +112,9 @@ export const SquishyAnchorSchema = z.enum(['crown', 'neck']);
 export type SquishyAnchor = z.infer<typeof SquishyAnchorSchema>;
 
 /**
- * A costume that draws a ready-made figure instead of (or as well as) its
- * pieces, by name, so the numbers stay in the one place that owns them: the
+ * A costume that draws a ready-made figure instead of pieces, by name, so
+ * the numbers stay in the one place that owns them (a model costume has no
+ * pieces: they would sit on the Keeper's sockets, not on the figure): the
  * client builds `hollow-man` from the Hollow Man's own shape (#21). A closed
  * list, so every model is known and validated.
  */
@@ -138,8 +139,9 @@ export const ClothingVisualSchema = z.strictObject({
   /**
    * Costumes only: hides the Keeper's own body, head, hands, hair and starter
    * outfit while worn (default: false), so the costume is the whole figure.
-   * The feet, shadow and sockets stay where they were, so walking, exploring
-   * and the home view line up.
+   * The Keeper's place, shadow and sockets stay where they were (the feet are
+   * not drawn: the figure stands where they did), so walking, exploring and
+   * the home view line up.
    */
   replacesBody: z.boolean().optional(),
   /** Costumes only: draws this ready-made figure (it replaces the body). */
@@ -231,6 +233,9 @@ export function checkClothingData(input: unknown, seasons: readonly string[]): s
         if (item.visual.pieces.some((p) => p.on !== undefined)) {
           report(at('visual'), 'only costumes place pieces on body sockets (`on`)');
         }
+      }
+      if (item.visual.model !== undefined && item.visual.pieces.length > 0) {
+        report(at('visual'), 'a `model` draws itself, so it has no pieces');
       }
       if (item.visual.model !== undefined && item.visual.replacesBody !== true) {
         report(at('visual'), 'a `model` is the whole figure, so it needs `replacesBody: true`');

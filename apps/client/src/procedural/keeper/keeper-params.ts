@@ -545,12 +545,13 @@ export function keeperParams(
       ...(shimmer === 'vinyl' ? {} : { finish: shimmer }),
     });
     // His eyes, at his own spot on his face (the eye is a sphere, narrowed a little).
+    const look = KEEPER.models['hollow-man'];
     const eyeSize = HOLLOW_MAN.eyeSize * h;
     for (const side of [-1, 1]) {
       pieces.push({
         shape: 'ellipsoid',
-        at: [side * HOLLOW_MAN.eyeGap * h, HOLLOW_MAN.eyeHeight * h, -0.07 * h],
-        size: [eyeSize * 1.25, eyeSize, eyeSize * 0.6],
+        at: [side * HOLLOW_MAN.eyeGap * h, HOLLOW_MAN.eyeHeight * h, -look.eyeForward * h],
+        size: [eyeSize * look.eyeWide, eyeSize, eyeSize * look.eyeDeep],
         turn: NO_TURN,
         color: hexToRgb(HOLLOW_MAN.eyeColor),
         layer: 'costume',

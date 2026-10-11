@@ -126,7 +126,7 @@ describe('the clothing catalog', () => {
     // …an unknown model is refused…
     const unknown = copy();
     (unknown.find((i) => i.id === 'hollow-man-costume')!.visual as { model: string }).model = 'x';
-    expect(checkClothingData(unknown, SEASON_IDS)).not.toEqual([]);
+    expect(checkClothingData(unknown, SEASON_IDS)).toEqual([expect.stringMatching(/model/)]);
     // …and only costumes may replace the body or use one.
     const hat = copy();
     hat.find((i) => i.id === 'witch-hat')!.visual.replacesBody = true;
@@ -147,6 +147,15 @@ describe('the clothing catalog', () => {
     expect(checkClothingData(bare, SEASON_IDS)).toEqual([
       expect.stringContaining('at least one piece'),
     ]);
+  });
+
+  it('refuses pieces beside a model: it draws itself', () => {
+    const both = copy();
+    const hollow = both.find((i) => i.id === 'hollow-man-costume')!;
+    hollow.visual.pieces = structuredClone(
+      both.find((i) => i.id === 'witch-hat')!.visual.pieces,
+    ).slice(0, 1);
+    expect(checkClothingData(both, SEASON_IDS)).toEqual([expect.stringContaining('has no pieces')]);
   });
 
   it('colours a model costume’s chip from its model', () => {

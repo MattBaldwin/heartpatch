@@ -41,7 +41,14 @@ export const KEEPER = {
    * to a Keeper's 0.55).
    */
   models: {
-    'hollow-man': { heightRatio: 1.6 }, // TUNE
+    'hollow-man': {
+      heightRatio: 1.6, // TUNE
+      /** His eyes, as fractions of his height: how far they stand out of his face. */
+      eyeForward: 0.07, // TUNE
+      /** The eye is a sphere, widened and flattened a little: width and depth against its height. */
+      eyeWide: 1.25, // TUNE
+      eyeDeep: 0.6, // TUNE
+    },
   },
   /** Fixed toy colours (sRGB hex). */
   colors: {
