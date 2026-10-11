@@ -1396,3 +1396,17 @@ _Owner direction, relayed by the coordinator on 2026-10-11; recorded here and in
 - **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
 - **The home must be personal and personalizable.**
 - **Squishies are the most important visual part of the game.** Every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones (#382).
+
+## 2026-10-11 — Owner decisions, confirmed to supervisor 9
+
+_Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier write was blocked). These add to "Owner working style" above._
+
+- **One question at a time, with the screens and the link.** Every approval question is its own question. It says in plain words what is being approved, includes the artifact link, and comes after the images are shown (sent inline or the artifact opened). The recommended option comes first.
+- **Rare squishies glow (#391).** Rare and up glow, stepping up by rarity, and the glow keeps the squishy's own colours (it must not wash out pale kinds). Finding one is a huge moment: a reveal plus a befriend celebration.
+- **The Keeper's home is immersive and elite (#381).** A living 3D place the player walks into: roaming residents, time of day and seasons, daily reasons to return, 3D furniture placement, paint, signs and memories. It's one of the main reasons players come back.
+- **Squishies are the most important visual part of the game.** Reconfirmed; see "Owner working style" above (unique hook and silhouette per kind, a creative brief with a duplication matrix before building, quality beats dates).
+
+**Owner answers the same day (relayed in the supervisor 8 handoff)**
+- **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
+- **#382 wave 1 creative brief:** approved; build rares first.
+- **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
