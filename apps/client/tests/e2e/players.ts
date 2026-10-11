@@ -158,10 +158,10 @@ export async function pickKeeper(
   if (cinematic === 'skip') await skipCinematic(page);
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
-  // One step a screen (#372): pick a face, then Next through the rest.
+  // One step a screen (#372): pick a face, then jump to the last step (the
+  // tabs; keeper.spec.ts walks every step with Next).
   await picker.getByRole('button', { name: `Face: ${face}`, exact: true }).tap();
-  const next = picker.getByRole('button', { name: 'Next', exact: true });
-  for (let i = 0; i < 5 && (await next.isVisible()); i++) await next.tap();
+  await picker.getByRole('tab', { name: 'Details' }).tap();
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
   await expect(picker).toBeHidden();
 }
