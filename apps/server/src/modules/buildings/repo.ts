@@ -182,7 +182,8 @@ export interface BuildingsRepo {
   isOnWatch: (squishyId: string) => Promise<boolean>;
   /** How many squishies live in a habitat now. */
   countResidents: (buildingRowId: string) => Promise<number>;
-  setHabitat: (squishyId: string, habitatBuildingId: string | null) => Promise<void>;
+  /** Moves a squishy into a habitat (from `at`, for its feeling lean, #32) or out (null). */
+  setHabitat: (squishyId: string, habitatBuildingId: string | null, at: Date) => Promise<void>;
   /** Moves everyone out of a habitat; returns who. */
   moveOutAll: (buildingRowId: string) => Promise<string[]>;
   /** Locks the squishies practicing at a Training Grounds, in id order; returns their ids. */
@@ -476,6 +477,16 @@ function queries(db: Executor): BuildingsRepo {
         )
         .orderBy(asc(squishies.id))
         .for('no key update');
+      // The foreign key clears the habitat; its move-in time goes with it (#32).
+      await db
+        .update(squishies)
+        .set({ habitatSince: null })
+        .where(
+          inArray(
+            squishies.habitatBuildingId,
+            db.select({ id: buildings.id }).from(buildings).where(owned),
+          ),
+        );
       const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
     },
@@ -519,8 +530,11 @@ function queries(db: Executor): BuildingsRepo {
       return row?.n ?? 0;
     },
 
-    setHabitat: async (squishyId, habitatBuildingId) => {
-      await db.update(squishies).set({ habitatBuildingId }).where(eq(squishies.id, squishyId));
+    setHabitat: async (squishyId, habitatBuildingId, at) => {
+      await db
+        .update(squishies)
+        .set({ habitatBuildingId, habitatSince: habitatBuildingId === null ? null : at })
+        .where(eq(squishies.id, squishyId));
     },
 
     moveOutAll: async (buildingRowId) => {
@@ -535,7 +549,7 @@ function queries(db: Executor): BuildingsRepo {
       return (
         await db
           .update(squishies)
-          .set({ habitatBuildingId: null })
+          .set({ habitatBuildingId: null, habitatSince: null })
           .where(eq(squishies.habitatBuildingId, buildingRowId))
           .returning({ id: squishies.id })
       )

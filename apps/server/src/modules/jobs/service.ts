@@ -42,6 +42,7 @@ import { mapLocalTime, nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
+import { foldHabitatLean } from '../care/evolution.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
 import { homesteadOf, workPauseOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
@@ -782,7 +783,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         // #277), it leaves its habitat bed (housed or working, not both).
         const outOnLand = (request.job === 'gatherer' && workTile) || request.job === 'training';
         if (outOnLand && row.habitatBuildingId !== null) {
-          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null);
+          await foldHabitatLean(tx, row.squishy.id, at);
+          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null, at);
           events.push({
             mapId: map.id,
             type: 'squishy.housed',

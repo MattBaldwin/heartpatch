@@ -101,10 +101,18 @@ export function dominantFeeling(
   return best;
 }
 
-/** Habitat points for `hours` housed in a habitat tagged with a feeling. */
+/**
+ * Habitat points for the last `hours` housed in a habitat tagged with a
+ * feeling, as of now. They trickle in (`points` every `hours`) and fade like
+ * every other point while they wait, so it's the decayed integral
+ * rate · H/ln 2 · (1 − 2^(−h/H)): how often the lean is written in between
+ * never changes the total.
+ */
 export function habitatLeanPoints(hours: number, rules: Pick<EvolutionRules, 'lean'>): number {
-  if (hours <= 0) return 0;
-  return tidy((hours / rules.lean.habitat.hours) * rules.lean.habitat.points);
+  if (!(hours > 0)) return 0;
+  const { halfLifeHours } = rules.lean;
+  const rate = rules.lean.habitat.points / rules.lean.habitat.hours;
+  return tidy(((rate * halfLifeHours) / LN2) * (1 - halvings(hours / halfLifeHours)));
 }
 
 /** A care-history score from 0 to 1: the average contentment (0–100) over its care samples. */

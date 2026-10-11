@@ -92,8 +92,18 @@ describe('feeling lean', () => {
   });
 
   it('counts habitat time and care history', () => {
-    expect(habitatLeanPoints(12, EVOLUTION_RULES)).toBe(2);
+    // Twelve hours is a little under 2 (the early hours have started to fade).
+    expect(habitatLeanPoints(12, EVOLUTION_RULES)).toBe(1.916);
     expect(habitatLeanPoints(-1, EVOLUTION_RULES)).toBe(0);
+    // Splitting a stay doesn't change it: 5 days, or 2 + 3 with a write between.
+    const whole = habitatLeanPoints(120, EVOLUTION_RULES);
+    const t0 = new Date('2026-10-01T00:00:00Z');
+    const at = (h: number) => new Date(t0.getTime() + h * 3_600_000);
+    const firstPart = { points: { cozy: habitatLeanPoints(48, EVOLUTION_RULES) }, at: at(48) };
+    const split =
+      (leanAt(firstPart, at(120), EVOLUTION_RULES).points.cozy ?? 0) +
+      habitatLeanPoints(72, EVOLUTION_RULES);
+    expect(split).toBeCloseTo(whole, 2);
     expect(careScore(0, 0)).toBe(0);
     expect(careScore(160, 2)).toBe(0.8);
     expect(careScore(500, 2)).toBe(1);

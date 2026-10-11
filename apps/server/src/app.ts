@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { setEvolutionSalt } from './modules/care/evolution.js';
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
@@ -119,6 +120,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
   const clock = options.clock ?? createClock(config);
+  // Evolution rolls are seeded with a server secret (#32); config refuses a
+  // production start without it.
+  setEvolutionSalt(config.HP_EVOLUTION_SALT);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
     trustProxy: config.TRUST_PROXY ? trustOneProxyHop : false,

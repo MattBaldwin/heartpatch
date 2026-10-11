@@ -857,9 +857,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       at,
     );
     let fellOff = false;
+    /** Squishies on full XP today: only their wins lean Brave (#32), as only full-value care leans. */
+    const fullXp = new Set<string>();
     for (const award of awards) {
       const percent = battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES);
       if (percent < 100) fellOff = true;
+      else fullXp.add(award.squishyId);
       award.xp = Math.floor((award.xp * percent) / 100);
     }
     // A captured tile's fire comes back to its old owner (#202): their
@@ -879,7 +882,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const grown: Growth[] = [];
     for (const award of awards) {
       if (award.xp <= 0) continue;
-      const growth = await applyXp(tx, award.squishyId, award.xp, at);
+      const growth = await applyXp(tx, award.squishyId, award.xp, at, {
+        // A win leans its squishies Brave (#32).
+        won: result.winner === PLAYER_SIDE && fullXp.has(award.squishyId),
+      });
       if (growth) grown.push(growth);
     }
     // Befriended in this last step (design doc §6, #279): each one joins
