@@ -12,7 +12,8 @@ const testDir = './tests/e2e';
  * per-test medians of six CI runs' list-reporter durations), simulating how
  * the 2 workers pull spec files in name order (a `parallel`-mode file,
  * friendly and tutorial-flow, hands out each test on its own). Each group
- * should take about 11-11.5 min on iPad and 6-11.5 on iPhone.
+ * should take about 11-11.6 min on iPad (friendly's lighter) and 6-11.6 on
+ * iPhone.
  *
  * Two specs need room beyond their own time (#408):
  * - friendly runs its two-phone tests side by side, so it fills both workers
