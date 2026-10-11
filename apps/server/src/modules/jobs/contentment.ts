@@ -120,6 +120,41 @@ export async function contentmentsOf(
   return new Map(rows.map((row) => [row.squishy.id, contentmentOf(row, map, at)]));
 }
 
+/** A checkpoint worked out but not written yet: a squishy's contentment at one moment. */
+export interface ContentmentCheckpoint {
+  readonly squishyId: string;
+  readonly contentment: number;
+}
+
+/** These squishies' checkpoints at `at`, worked out from their jobs as stored now. */
+export async function contentmentCheckpointsOf(
+  tx: Executor,
+  mapId: string,
+  squishyIds: readonly string[],
+  at: Date,
+): Promise<ContentmentCheckpoint[]> {
+  return [...(await contentmentsOf(tx, mapId, squishyIds, at))].map(([squishyId, c]) => ({
+    squishyId,
+    contentment: c.contentment,
+  }));
+}
+
+/**
+ * Writes checkpoints worked out earlier (`contentmentCheckpointsOf`), with
+ * the squishies locked. For a command that must read a job before its rows
+ * go (a capture, land going wild) but locks squishies later (tech spec §7).
+ */
+export async function writeContentmentCheckpoints(
+  tx: Executor,
+  checkpoints: readonly ContentmentCheckpoint[],
+  at: Date,
+): Promise<void> {
+  const repo = createSquishyJobsRepo(tx);
+  for (const { squishyId, contentment } of checkpoints) {
+    await repo.setContentment(squishyId, contentment, at);
+  }
+}
+
 /**
  * Writes a contentment checkpoint for these squishies at `at` (#376): what
  * their job so far left them with. Call it before anything that changes
@@ -133,8 +168,9 @@ export async function checkpointContentment(
   squishyIds: readonly string[],
   at: Date,
 ): Promise<void> {
-  const repo = createSquishyJobsRepo(tx);
-  for (const [id, { contentment }] of await contentmentsOf(tx, mapId, squishyIds, at)) {
-    await repo.setContentment(id, contentment, at);
-  }
+  await writeContentmentCheckpoints(
+    tx,
+    await contentmentCheckpointsOf(tx, mapId, squishyIds, at),
+    at,
+  );
 }

@@ -276,10 +276,10 @@ describe('job hints', () => {
       BATTLE_RULES,
     );
     expect(hints).toEqual([
-      { kind: 'gather', resource: 'timber', icon: '🌲', great: true },
+      { kind: 'gather', resource: 'timber', icon: '🪵', great: true },
       { kind: 'gather', resource: 'greens', icon: '🌿', great: false },
     ]);
-    expect(jobHintText(hints[0]!, resources)).toBe('Great at gathering Timber 🌲');
+    expect(jobHintText(hints[0]!, resources)).toBe('Great at gathering Timber 🪵');
   });
 
   it('lists double matches before single ones, at most the hint limit', () => {

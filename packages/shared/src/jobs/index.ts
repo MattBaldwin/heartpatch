@@ -365,7 +365,7 @@ export function jobHints(
   return [...gather, role];
 }
 
-/** The kid-readable line for a hint ("Great at gathering Timber 🌲"). */
+/** The kid-readable line for a hint ("Great at gathering Timber 🪵"). */
 export function jobHintText(hint: JobHint, resources: readonly Resource[]): string {
   switch (hint.kind) {
     case 'gather': {

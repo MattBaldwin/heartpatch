@@ -30,7 +30,7 @@ export const JOB_RULES: JobRules = {
   ],
   // TUNE: who is quick at what. Element side first, then feeling.
   affinities: [
-    { resource: 'timber', icon: '🌲', elements: ['leaf'], feelings: ['brave'], seasons: [] },
+    { resource: 'timber', icon: '🪵', elements: ['leaf'], feelings: ['brave'], seasons: [] },
     { resource: 'stone', icon: '🪨', elements: ['stone'], feelings: ['sleepy'], seasons: [] },
     { resource: 'emberwood', icon: '🔥', elements: ['fire'], feelings: ['cozy'], seasons: [] },
     {

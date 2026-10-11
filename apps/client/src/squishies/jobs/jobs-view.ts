@@ -139,7 +139,7 @@ function jobWords(s: JobSquishy, nowMs: number): string {
   }
 }
 
-/** "Great at gathering Timber 🌲", "Strong fighter 💪" (shared `jobHints`, from data). */
+/** "Great at gathering Timber 🪵", "Strong fighter 💪" (shared `jobHints`, from data). */
 export function hintLines(s: JobSquishy): string[] {
   const species = SPECIES.get(s.squishy.speciesId);
   return jobHints({ ...s.squishy, season: species?.season }, species, JOB_RULES, BATTLE_RULES).map(
@@ -174,7 +174,7 @@ export function canTrain(view: Pick<JobsView, 'trainingGrounds'>): boolean {
   return view.trainingGrounds.some((g) => !g.napping && g.used < g.capacity);
 }
 
-/** A spot to gather, in words: "🌲 Timber (Forest)". */
+/** A spot to gather, in words: "🪵 Timber (Forest)". */
 export function spotLabel(spot: WorkSpot): string {
   const what = `${itemIcon(spot.resource)} ${itemName(spot.resource)}`;
   // A node is "the Timber spot"; open land says where it is.

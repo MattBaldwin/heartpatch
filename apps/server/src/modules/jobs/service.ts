@@ -43,7 +43,7 @@ import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
-import { checkpointContentment, contentmentOf } from './contentment.js';
+import { checkpointContentment } from './contentment.js';
 import {
   createSquishyJobsRepo,
   type JobRow,
@@ -414,7 +414,6 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         fullXpResetAt:
           battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
         gatherFits: gatherFitsFor(traitsOf(row.squishy), JOB_RULES),
-        moodDrift: contentmentOf(row, map, at).drift,
       };
     });
     // One a homestead (#277), each with its room and its night.

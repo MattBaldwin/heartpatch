@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
-import { MoodDriftSchema } from './care.js';
 import { ContentIdSchema } from './data/common.js';
 import { ItemCountsSchema } from './inventory.js';
 import { OwnedSquishySchema } from './squishies.js';
@@ -78,8 +77,6 @@ export const JobSquishySchema = z.object({
    * drifts down (owner decision on #376). An older server sends none.
    */
   gatherFits: z.array(ContentIdSchema).default([]),
-  /** Whether its job holds its contentment steady right now, and why not (as on the care sheet). */
-  moodDrift: MoodDriftSchema.nullable().default(null),
 });
 export type JobSquishy = z.infer<typeof JobSquishySchema>;
 

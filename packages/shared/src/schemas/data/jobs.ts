@@ -27,7 +27,7 @@ export type TerrainYield = z.infer<typeof TerrainYieldSchema>;
  */
 export const GatherAffinitySchema = z.strictObject({
   resource: ContentIdSchema,
-  /** A little picture for the job hints ("Great at gathering Timber 🌲"). */
+  /** A little picture for the job hints ("Great at gathering Timber 🪵"). */
   icon: z.string().min(1).max(8),
   elements: z.array(ElementIdSchema),
   feelings: z.array(FeelingIdSchema),
