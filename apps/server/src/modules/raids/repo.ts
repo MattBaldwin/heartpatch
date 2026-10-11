@@ -2,7 +2,15 @@ import type { DefenseStance, RaidOutcome } from '@heartpatch/shared';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, mapMembers, raids, tileAttacks, tiles, users } from '../../db/schema.js';
+import {
+  battles,
+  liveBattles,
+  mapMembers,
+  raids,
+  tileAttacks,
+  tiles,
+  users,
+} from '../../db/schema.js';
 import { activeMember } from '../maps/repo.js';
 
 /** A `raids` row, with its tile and whether its battle can still be replayed. */
@@ -31,6 +39,8 @@ export interface RaidRow {
   fenceHpAfter: number | null;
   /** My fence segments there came down with the capture (#203): what came back. */
   lostFences: number | null;
+  /** I defended it live (#29-C): the battle had a player on my side. Null: the AI did. */
+  liveBattleId: string | null;
 }
 
 export interface NewRaid {
@@ -114,6 +124,8 @@ const raidColumns = {
   fenceMaxHp: tileAttacks.fenceMaxHp,
   fenceHpAfter: tileAttacks.fenceHpAfter,
   lostFences: tileAttacks.lostFences,
+  // Defended live (#29-C): the battle's `live_battles` row, kept after it ends.
+  liveBattleId: liveBattles.battleId,
 };
 
 export function createRaidsRepo(db: Executor): RaidsRepo {
@@ -133,6 +145,7 @@ function queries(db: Executor): RaidsRepo {
       .innerJoin(battles, eq(battles.id, raids.battleId))
       .innerJoin(users, eq(users.id, raids.attackerUserId))
       .leftJoin(tileAttacks, eq(tileAttacks.battleId, raids.battleId))
+      .leftJoin(liveBattles, eq(liveBattles.battleId, raids.battleId))
       .where(where);
 
   return {
