@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LAND_LIGHT, LAND_LOOKS } from './land-config.js';
-import { landLayout, type Growth, type LayoutInput } from './land-layout.js';
+import { DEFAULT_TREE_MIX, landLayout, type Growth, type LayoutInput } from './land-layout.js';
 import { hexReach, landField } from './land-shape.js';
 
 const look = LAND_LOOKS['meadow']!;
@@ -73,5 +73,47 @@ describe('landLayout', () => {
   it('grows the same meadow on every device', () => {
     expect(landLayout(input())).toEqual(layout);
     expect(landLayout(input(7)).tufts[0]).not.toEqual(layout.tufts[0]);
+  });
+});
+
+describe('the kit hooks (#335: the lake, trail and cave build on them)', () => {
+  /** FNV-1a over the layout's JSON, without the hook's own field. */
+  function fingerprint(layout: ReturnType<typeof landLayout>): string {
+    // JSON drops an undefined field, so this is the layout as it was before the hook.
+    const s = JSON.stringify({ ...layout, extras: undefined });
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+    return `${String(h >>> 0)}:${String(s.length)}`;
+  }
+  const golden = {
+    ...input(),
+    colliders: [{ x: 2, z: 1, r: 0.32 }],
+  };
+
+  it('leaves the meadow exactly as it grew before the hooks', () => {
+    // Recorded on the approved meadow (v2) before treeMix and extras existed.
+    expect(fingerprint(landLayout(golden))).toBe('2135753483:295799');
+  });
+
+  it('grows the same meadow with the default tree mix spelled out, and an extras hook adds only its own layer', () => {
+    const plain = landLayout(golden);
+    const mixed = landLayout({
+      ...golden,
+      growth: { ...look.growth, treeMix: DEFAULT_TREE_MIX },
+      extras: ({ rand, size }) => ({ reeds: [{ x: size * 1.3, z: 0, yaw: rand(), scale: 1 }] }),
+    });
+    expect(fingerprint(mixed)).toBe(fingerprint(plain));
+    expect(plain.extras).toEqual({});
+    expect(mixed.extras['reeds']).toHaveLength(1);
+  });
+
+  it('follows a biome tree mix', () => {
+    const pines = landLayout({
+      ...input(),
+      growth: { ...look.growth, treeMix: { oak: 0, birch: 0, pine: 1 } },
+    });
+    expect(pines.trees.oak).toHaveLength(0);
+    expect(pines.trees.birch).toHaveLength(0);
+    expect(pines.trees.pine.length).toBeGreaterThan(0);
   });
 });

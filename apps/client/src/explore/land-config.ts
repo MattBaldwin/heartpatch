@@ -61,6 +61,11 @@ export interface LandGrowth {
   readonly bushes: { readonly edge: number; readonly outside: number };
   /** Trees in the ring round the tile, and out on the far hills. */
   readonly trees: { readonly near: number; readonly far: number };
+  /**
+   * How the ring's trees split between the kinds, as weights (any scale).
+   * Left out: oak 50, birch 30, pine 20.
+   */
+  readonly treeMix?: { readonly oak: number; readonly birch: number; readonly pine: number };
   /** Rock clusters, logs and mushroom rings outside the tile, and pebbles inside. */
   readonly rocks: number;
   readonly logs: number;
