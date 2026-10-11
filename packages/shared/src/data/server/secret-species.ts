@@ -108,7 +108,7 @@ export const SECRET_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'heart',
-      palette: ['#9a70f0', '#ffd0e6', '#1e0a2e', '#ffb627'],
+      palette: ['#9a70f0', '#ffd0e6', '#5a2068', '#ffb627'],
       ink: '#1e0a2e',
       parts: ['happy-eyes', 'bold-happy-eyes', 'singing-mouth', 'heart-blush', 'singing-arms'],
       size: 1.3,
