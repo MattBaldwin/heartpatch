@@ -778,7 +778,7 @@ _Owner decisions of 2026-10-06 (design review Q1 and Q2), plus the owner's later
 - **Q1, power curve: keep level 100, with a steeper curve, and scale wild squishies to the Partner.** The owner chose this over the recommended "cap at level 30". Stored XP and levels are kept; **no level ever goes down** (`addXp` takes the larger of the stored and the computed level).
   - **The curve:** `xpCurve.curve` goes 5 → 20, with `knees` at 16 (`steep: 500`) and 30 (`steep: 1500`), as data. The curve below 16 steepens too, because a win pays about 30 × L base XP at Partner-matched levels and the owner's goal is evolution on day 3–5 with a long tail after it. A casual kid evolves on day 4 (day 2 for an engaged one); a casual Partner is near level 24 on day 14 and 29 on day 30.
   - **Wild levels follow the Partner:** server-only `SPAWN_RULES.partnerOffset` −2 to +1, floored at the old minimum and capped at `maxLevel`. "Partner" means the starter picked on the patch (`map_members.starter_squishy_id`); with none, levels stay 2–6. Which species is on a tile never depends on who looks. *(Now −2 to +0, see "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)*
-  - **Follow-up (a): befriended squishies join at most one level below their first evolution** (`GROWTH_RULES.befriendBelowEvolution: 1`), so a kid can't befriend a level-41 base form that evolves on its next battle. The fight stays at full level.
+  - **Follow-up (a): befriended squishies join at most one level below their first evolution** (`GROWTH_RULES.befriendBelowEvolution: 1`), so a kid can't befriend a level-41 base form that evolves on its next battle. The fight stays at full level. *(A kind that never evolves joins at most `befriendNoEvolutionLevel`; see "2026-10-11 — Owner decisions, evening (coordinator)".)*
   - **Follow-up (b): a daily battle-XP falloff.** Each squishy earns full battle XP for its first 7 wins of the map-local day, then 10% (`battleXpFalloff`). 7 is the most that leaves the casual kid unchanged. It reads existing `battles` rows (no migration) and lives in `GROWTH_RULES`, so the battle content hash is unchanged.
   - **Known misses, owner calls:** an engaged kid still evolves on day 2 and is Gap-ready on day 4 (the Gap is about team strength, not XP). Fixing that would need guardians to follow the attacker's Partner or team, or a daily befriend limit. Neither is done.
   - **`pnpm sim:progression`** is the model behind these numbers (`reports/sim/progression-report.md`). It leaves out care above one multiplier, gathering, the Hollow Man and challenges between the two kids.
@@ -923,7 +923,7 @@ _Owner decisions of 2026-10-07, relayed by the coordinator. Proposed in PR #219;
 
 - **Boosts are +40%; Hearty Soup heals 40%** (all `// TUNE:`).
 - **Recipes:** Brave Brew is 2 Treats + 2 Stone (not a Pumpkin, which only grows at Halloween), Cozy Cocoa 2 Treats + 2 Timber, Hearty Soup 2 Treats + 1 Emberwood; 2 minutes each.
-- **Turn order:** swaps, potions, Heart Charms, moves.
+- **Turn order:** swaps, potions, Heart Charms, moves. *(A potion is now a free sip that doesn't use the turn; see "2026-10-11 — Owner decisions, evening (coordinator)".)*
 - **Boosts stay on the squishy that drank,** through swaps. The shield waits on that squishy until a hit lands; a miss doesn't use it. A shielded hit still costs at least 1 energy. A new shield replaces the old.
 - **One of each potion per side per battle** (`BATTLE_RULES.items.usesEach`). Hearty Soup at full energy is allowed: it heals nothing but still shields.
 - **The content hash changed,** so a battle still going at deploy ended as "No contest!".
@@ -1118,9 +1118,9 @@ _Proposed in each PR; recorded by the coordinator after merge._
 
 - **Keepers share one line face** (arched ink brows, flat ink nose, smile line). Face lines are always dark ink on every skin tone.
 - **Ten skin tones, light to deep,** with Hazel `#7a4a2c` the deepest (owner). The darker tones were dropped rather than chasing line readability on them. Tones have no names: swatches on screen, "Skin tone N" for screen readers; ids `tone-1` to `tone-10`.
-- **A Keeper is one model with every part a choice.** The 12 presets are starting looks; one tap sets every row. Body shape stays with the starting look for now. Blush, freckles, lashes and the heart sticker are player choices.
+- **A Keeper is one model with every part a choice.** The 12 presets are starting looks; one tap sets every row. Body shape stays with the starting look for now. *(Starting looks and body-with-look superseded by "The step-by-step Keeper creator (#372, PR #394)".)* Blush, freckles, lashes and the heart sticker are player choices.
 - **Builder fields are optional on input.** Rows store them complete; replies leave out the starting look's own, so older apps keep loading untouched Keepers. A save that leaves a field out keeps the stored value while the starting look stays the same.
-- **The Keeper screen is one scrolling list,** and "That's me!" always shows (owner).
+- **The Keeper screen is one scrolling list,** and "That's me!" always shows (owner). *(The scrolling list is superseded by "The step-by-step Keeper creator (#372, PR #394)".)*
 
 ## 2026-10-08 — Journeys to trading posts (#270, PR #293)
 
@@ -1357,7 +1357,7 @@ _Owner decisions from the "Owner decisions" sections of #381 and #382, and from 
 **#381, the Keeper's home**
 - **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review.
 - **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
-- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen.
+- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen. *(Now capped by the Heart Seed level; see "2026-10-11 — Owner decisions, afternoon (coordinator)" below.)*
 - **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
 - **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the house feeds Home Base Harmony and reuses its facts; design doc §8, Phase 3; relayed by the coordinator from #381's plan, 2026-10-11); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
 
@@ -1396,3 +1396,51 @@ _Owner direction, relayed by the coordinator on 2026-10-11; recorded here and in
 - **Features must be felt, not just correct.** A feature needs visible feedback, not just correct text.
 - **The home must be personal and personalizable.**
 - **Squishies are the most important visual part of the game.** Every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones (#382).
+
+## 2026-10-11 — Owner decisions, confirmed to supervisor 9
+
+_Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier write was blocked). These add to "Owner working style" above._
+
+- **One question at a time, with the screens and the link.** Every approval question is its own question. It says in plain words what is being approved, includes the artifact link, and comes after the images are shown (sent inline or the artifact opened). The recommended option comes first.
+- **Rare squishies glow (#391).** Rare and up get a visible glow-like touch (a glow, halo/rim or sparkles; the owner picks after an A/B), stepping up by rarity. It keeps the squishy's own colours (it must not wash out pale kinds). Finding one is a huge moment: a reveal plus a befriend celebration.
+- **The Keeper's home is immersive and elite (#381).** A living 3D place the player walks into: roaming residents, time of day and seasons, daily reasons to return, 3D furniture placement, paint, signs and memories. It's one of the main reasons players come back.
+- **Squishies are the most important visual part of the game.** Reconfirmed; see "Owner working style" above (unique hook and silhouette per kind, a creative brief with a duplication matrix before building, quality beats dates).
+
+**Owner answers the same day (relayed in the supervisor 8 handoff)**
+
+- **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
+- **#382 wave 1 creative brief:** approved; build rares first.
+- **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
+
+## 2026-10-11 — The step-by-step Keeper creator (#372, PR #394)
+
+_Proposed in PR #394; recorded here at the coordinator's request._
+
+- **The Keeper screen is steps, not one scrolling list:** Face → Body (with outfit) → Skin → Hair → Colors (hair and eye colour) → Details. This updates the owner's #372 order above ("Build rule, happiness rule and creator order"): Hair color becomes Colors and takes eye colour from Face details, so eyes, brows and mouth stay on screen on phones. The change came from a render check and is in the owner-approved mockup revision 2. It also supersedes #289's "The Keeper screen is one scrolling list" and #176's five-row picker.
+- **There is no starting-look row.** This supersedes #289's "The 12 presets are starting looks; one tap sets every row" and "Body shape stays with the starting look for now". `base` stays as the seed root and the fallback for anything not picked. New Keepers are Pip-based, and picking a face or body never changes `base`.
+- **Face and body are independent** (`keepers.face`, `keepers.body`, migration 0044). Each base's own face and body use the base's id, so existing Keepers look the same. Two new bodies: Lanky and Sturdy.
+- **Outfit sits on the Body step** (owner choice c). **Eye colour sits on Colors** with hair colour, so the face stays on screen without scrolling on phones.
+- **In edit mode, Back closes the editor without saving** on every step (plan §5). Open risk noted by the reviewer: a kid who learned that Back means "previous step" could lose unsaved picks.
+
+## 2026-10-11 — Owner decisions, afternoon (coordinator)
+
+_Owner answers to the coordinator on 2026-10-11, each asked as one question with the screens._
+
+- **Stormhoot keeps its look (#363).** The owner saw it next to Thunderplume (day, silhouette, night battle) and chose to keep it as drawn. Only its night-plus-feeling condition changes (owner); the lane also rewords its whisper hint to match.
+- **The Keeper's home camera is a walk-around dollhouse (#381).** In the owner's words: "I like the dollhouse view, but make it immersive by being able to walk around in it. Keep in mind that the house becomes bigger and more complex the more you upgrade your heartseed." So the dollhouse cutaway is the base view, walking around inside it is what makes it immersive, and the camera must keep working as the house grows. How the walking works (for example pinch to kid height with walls fading, roaming residents, room and floor switching) is the #381 plan's proposal, which the owner approves on the mockup.
+- **The house level is capped by the Heart Seed (#381).** The house keeps its own level and requirements (home base, residents' wellbeing, patch-mates, land), but a house level can never go beyond what the Keeper's Heart Seed level allows. Which Seed level each house level needs is data (`// TUNE:`), proposed in the #381 plan.
+- **The living house comes before furniture (#381).** Windows that follow real time and weather, lamps and fire, sound, seasonal decorating, a daily gift and residents learning tricks ship before furniture placement, paint and the name sign.
+
+## 2026-10-11 — Owner decisions, evening (coordinator)
+
+_Owner answers to the coordinator on 2026-10-11, asked one question at a time, plus coordinator calls, each labelled "Coordinator"._
+
+- **Wave 1 ships as-is (#382, PR #402).** The owner approved shipping all 8 (Lilyhop, Hailhop, Chillypep, Flakefluff, Shellnap, Gnomnom, Moonmoth, Cometsnail) for the Oct 15 playtest. Polish follows #400 (face-on camera, varied faces, lake glare) and #391 (rare glow); the known follow-ups are listed on PR #402.
+- **Coordinator: kinds that never evolve share the befriend cap (keeps #182).** A befriended squishy with no evolution step joins at most `befriendNoEvolutionLevel` (18, `// TUNE:`), so new friends stay below the Partner as "The level curve and wild levels (#182)" intends. 18 rather than 15 keeps the #199 rule that exploring moves no target by more than a day (owner Q6, 2026-10-07).
+- **The Keeper swims with glide and kick (#399).** The owner picked Glide and kick from the #399 mockup: lean forward head first, a quick kick then a glide, with almost no up-and-down. The details (followers, Reduce Motion, kick bubbles on the high tier only) are PR #404's proposal.
+- **Potions are a free sip (#403).** Drinking a potion no longer uses the squishy's turn: in one turn the player sips and still acts. This supersedes the 2026-10-07 "Battle potions (#214, PR #219)" rule that a potion is the side's whole turn. Everything else stays (one of each per battle, the boosts, the 75% shield, Hearty Soup's heal). Coordinator: battles logged under the old rule must still replay the old way (a versioned rule or the old path, proved by a replay test).
+- **The squishies roster (#375).** Each row shows the evolution stage ("Stage N of M") with a bar toward the next evolution (branch hints only in the detail view, rule 6), and happiness as 5 hearts with the mood word, a "needs care" badge and a draining hint. A Squishies button in the top bar opens it from home, the map and explore.
+- **Clear land and one building per tile move into Phase 1 (#242, #295).** Convert (farm, mine, sawmill) stays in Phase 2.
+  - Home tiles hold home buildings only, one per tile (habitats such as the Ember Den and Meadow, and the Keeper's house). Homesteads hold everything else, one per tile. Where Hearthfires may stand is still open: the owner's first answer put them on homesteads, and the #295 plan's Q1 recommends any owned land, one per tile, to keep casual land lit. Until it is settled, today's Hearthfire rules stand.
+  - Existing patches: extra buildings move to a free allowed tile; anything with no free tile is refunded in full; a one-time note explains it.
+  - Clearing needs a kept crafted tool plus a short timer (about 2 minutes, `// TUNE:`) and drops some of the tile's resource. Meadows, forests, mountains and hills can be cleared; lakes and Juniper's Gap cannot (Old Forest and Pumpkin Fields are still open, #295 plan Q5).

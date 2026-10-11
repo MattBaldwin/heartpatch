@@ -45,6 +45,13 @@ export const GROWTH_RULES: GrowthRules = {
   // TUNE: owner decision 2026-10-06: a befriended squishy joins at most one
   // level below its first evolution, so it grows up by training, not by catch.
   befriendBelowEvolution: 1,
+  // TUNE: coordinator call (#382, keeps the line above for kinds that never
+  // evolve). 18 is the middle first-evolution level among base forms (they run
+  // 16 to 30). Lower (15 or 16, one under the earliest evolver) is the strict
+  // reading, but then casual Gap-ready slips to day 10 against day 8 with
+  // exploring, past the one-day tolerance of #199 (owner decision 2026-10-07 Q6);
+  // `pnpm sim:progression` shows it. `care.test.ts` keeps it between the two.
+  befriendNoEvolutionLevel: 18,
   // TUNE: owner decision 2026-10-06 (design review, engaged kids): full battle
   // XP for a squishy's first 7 wins of the map-local day, then 10%. A casual
   // kid (about 7 battles a day) never reaches it; `pnpm sim:progression`.

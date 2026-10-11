@@ -1,5 +1,6 @@
 import type { Move } from '../schemas/data/moves.js';
 import type { Species } from '../schemas/data/species.js';
+import { WAVE_1_SPECIES } from './species-wave-1.js';
 
 /*
  * The Phase 1 launch roster (design doc §4, issue #10): 14 base lines plus 4
@@ -2003,4 +2004,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
+
+  // Wave 1 of the 500-squishy plan (#382): its own file, so waves don't crowd this one.
+  ...WAVE_1_SPECIES,
 ];

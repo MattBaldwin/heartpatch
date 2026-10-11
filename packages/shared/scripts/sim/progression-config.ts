@@ -153,7 +153,11 @@ export const NO_TRAINING_RULES: ProgressionRules = {
 export const UNCAPPED_BEFRIEND_RULES: ProgressionRules = {
   ...CURRENT_RULES,
   label: 'now, no befriend cap',
-  growth: { ...GROWTH_RULES, befriendBelowEvolution: undefined },
+  growth: {
+    ...GROWTH_RULES,
+    befriendBelowEvolution: undefined,
+    befriendNoEvolutionLevel: undefined,
+  },
 };
 
 /**
