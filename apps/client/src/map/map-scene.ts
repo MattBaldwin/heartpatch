@@ -870,6 +870,14 @@ export class MapScene {
     return tile ? tileScreenRectOf(this.scene, tile) : null;
   }
 
+  /** The tile a building stands on (its instance id), or null if it isn't on this map (#419). */
+  buildingTile(id: string): Hex | null {
+    for (const tile of this.tiles.values()) {
+      if (tile.buildings.some((b) => b.id === id)) return { q: tile.q, r: tile.r };
+    }
+    return null;
+  }
+
   /**
    * Where this player's home node is on screen (CSS pixels), for the
    * tutorial's `resource-node` spotlight: their Timber node if they have one,

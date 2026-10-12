@@ -88,6 +88,8 @@ export interface InventoryScreenOptions {
   locate?: {
     readonly tile: (h: { q: number; r: number }) => ScreenBox | null;
     readonly home: () => ScreenBox | null;
+    /** The tile a building stands on (the Factory, on a homestead since #461). */
+    readonly building?: (id: string) => { q: number; r: number } | null;
   };
   /** What the "what landed" banner keeps below at the top of the screen (#419). */
   clearOf?: () => Iterable<Element>;
@@ -497,6 +499,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** Bumped by every settle sent, so an older reply can't put an older bag back. */
   let settlesSent = 0;
 
+  /** The Factory's batches that landed, from the tile it stands on, if the map knows it. */
+  function factoryFrom(
+    landed: readonly Landed[],
+    factory: InventoryResponse['factory'],
+  ): LandedFrom[] {
+    const at = factory ? options.locate?.building?.(factory.buildingId) : null;
+    if (!at) return [];
+    return landed.filter((l) => l.kind === 'factory').map((l) => ({ ...at, items: l.items }));
+  }
+
   /** The gathers on the go, without banking anything (none if it can't tell). */
   async function gathersGoing(id: string): Promise<readonly Gather[]> {
     try {
@@ -538,12 +550,12 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const finished = before.filter((g) => !fresh.gathers.some((f) => f.id === g.id));
         // The card's things are in the Bag too: they count as news. Land
         // that finished clearing (#242) drops its things into the same banner,
-        // flying from the cleared tile.
+        // flying from the cleared tile; the Factory's from its homestead (#461).
         showLanded(
           [...popped, ...cleared],
           trained,
           away >= WELCOME_BACK_MS,
-          [...finished, ...cleared],
+          [...finished, ...cleared, ...factoryFrom(popped, fresh.factory)],
           [...landed, ...cleared],
           clearedNote(cleared),
         );

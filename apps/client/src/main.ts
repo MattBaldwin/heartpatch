@@ -224,6 +224,7 @@ const inventory = createInventoryScreen({
   locate: {
     tile: (h) => maps.tileRect(h),
     home: () => maps.homeRect(),
+    building: (id) => maps.buildingTile(id),
   },
   // The "what landed" banner stays below the patch's name, a wardrobe find
   // and the trays' hint line and first-visit hint (#419).

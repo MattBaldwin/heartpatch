@@ -146,6 +146,8 @@ export interface MapScreen {
   tileRect: (h: Hex) => ScreenRect | null;
   /** My home base's node on screen now, or null (#419: where things made at home fly from). */
   homeRect: () => ScreenRect | null;
+  /** The tile a building stands on, by its instance id, or null (#419: a Factory's batches fly from there). */
+  buildingTile: (id: string) => Hex | null;
   /**
    * Lights the edges or middle of a tile for the Build sheet (#371) and sends
    * taps on them to `onTap`; null puts them out. Taps elsewhere work as ever.
@@ -479,6 +481,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     // Only while the map is on screen: another screen (home, a battle) owns the stage then.
     tileRect: (h) => (hud.hidden ? null : (scene3d?.tileRect(h) ?? null)),
     homeRect: () => (hud.hidden ? null : (scene3d?.homeNodeRect(user?.id ?? null) ?? null)),
+    buildingTile: (id) => scene3d?.buildingTile(id) ?? null,
     setNight: (next) => {
       night = next;
       scene3d?.setNight(next);
