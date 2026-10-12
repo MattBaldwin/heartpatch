@@ -991,6 +991,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     });
   }
 
+  /** Scrolls the sheet so `node` shows to its bottom edge, with the sheet's padding under it. */
+  function revealInSheet(node: Element | null): void {
+    if (!node?.isConnected) return;
+    const room = 16; // TUNE: the sheet's bottom padding and a little air
+    const gap = node.getBoundingClientRect().bottom + room - peek.getBoundingClientRect().bottom;
+    if (gap > 0) peek.scrollTop += gap;
+  }
+
   /** What the sheet points at, for the framing (house-frame.ts). */
   function frameState(): FrameState {
     const chosenRoom =
@@ -1054,6 +1062,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
           note = '';
           movedRoom = null;
           renderSheet();
+          // The opened detail shows whole, its edge clear of the sheet's bottom (once, as it opens).
+          if (chosen) {
+            requestAnimationFrame(() => {
+              revealInSheet(peek.querySelector('[data-testid="house-bed-detail"]'));
+            });
+          }
         },
         onMoveOut: (squishyId) => {
           chosen = squishyId;
