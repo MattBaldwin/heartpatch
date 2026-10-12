@@ -3,7 +3,13 @@ import { boot } from '../../engine/boot.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from '../../engine/stage.js';
-import { sampleHouse, withGrow, type SampleGrow } from '../house-fixtures.js';
+import {
+  sampleHouse,
+  withGift,
+  withGrow,
+  type HouseSample,
+  type SampleGrow,
+} from '../house-fixtures.js';
 import { createHouseScreen } from '../house-screen.js';
 import '../../styles.css';
 
@@ -14,8 +20,12 @@ import '../../styles.css';
  * `?level=1` (default) up to the top level, or `top`; `?tier=high|medium|low`
  * pins a tier (the governor off, as on the main page); `?empty=1` leaves every
  * bed empty; `?still=1` skips the entry glide; `?grow=not-yet|ready` fills
- * in Grow the house (Build it! then builds the next level, no server); plus
- * `?renderer=webgpu`.
+ * in Grow the house (Build it! then builds the next level, no server);
+ * `?gift=1` puts today's wrapped gift by a resident's bed (`?gift=hearth`:
+ * its giver is out, so by the hearth), and Open it! opens it, no server;
+ * `?minute=1200` pins the time of day (minutes after midnight: 720 noon,
+ * 1080 dusk, 1200 night; the device's clock if left out); `?welcome=1`
+ * shows welcome home on every load; plus `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
@@ -29,7 +39,24 @@ const level = levelParam === 'top' ? 99 : Number(levelParam) || 1;
 const residents = params.get('empty') !== '1';
 const growParam = params.get('grow');
 const grow: SampleGrow = growParam === 'ready' ? 'ready' : 'not-yet';
-let sample = withGrow(sampleHouse(level, residents), grow);
+const giftParam = params.get('gift');
+/** Today's gift as `?gift=` asks: by a resident's bed (the top room's, upstairs too), or the hearth. */
+const gifted = (s: HouseSample): HouseSample =>
+  giftParam === null || giftParam === '0'
+    ? s
+    : withGift(s, giftParam === 'hearth' ? { away: true } : {});
+let sample = gifted(withGrow(sampleHouse(level, residents), grow));
+const minuteParam = params.get('minute');
+const minute = minuteParam === null ? null : Number(minuteParam);
+/** `?minute=`: today on the device's clock at that minute. */
+const now = (): Date => {
+  const at = new Date();
+  if (minute === null || !Number.isFinite(minute)) return at;
+  at.setHours(Math.floor(minute / 60) % 24, Math.floor(minute % 60), 0, 0);
+  return at;
+};
+/** Welcome home remembers nothing in the gallery unless `?welcome=1` asks for it every load. */
+const welcome = params.get('welcome') === '1';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('missing #game canvas');
@@ -71,7 +98,17 @@ const house = createHouseScreen({
       sample = withGrow(sampleHouse(toLevel, residents), 'not-yet');
       return sample.view;
     },
+    // A pretend open: the gift, opened.
+    claimGift: async (): Promise<HouseView> => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const gift = sample.view.gift;
+      sample = { ...sample, view: { ...sample.view, gift: gift && { ...gift, claimed: true } } };
+      return sample.view;
+    },
   },
+  now,
+  requestFrame: () => stage?.requestFrame(),
+  storage: welcome ? { getItem: () => null, setItem: () => undefined } : null,
   // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });

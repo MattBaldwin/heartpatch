@@ -12,8 +12,11 @@
 // calls and triangles are counted from the WebGL calls themselves (shadow,
 // scene and post passes) and hold on a device. No dev badges in the shots.
 //
-// LEVELS (default 1), POSES (dollhouse,kid), TIERS (high,low), DEVICES (iphone,ipad) narrow the set;
+// LEVELS (default 1), POSES (dollhouse,kid,card), TIERS (high,low), DEVICES (iphone,ipad),
+// MINUTES (720,1200: noon and night, minutes after midnight; #381 H2) narrow the set;
 // a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
+// `card` is the dollhouse with today's gift card open (#381 H2). GIFT=0 leaves the gift out
+// (by default a resident's wrapped gift waits by its bed).
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -31,7 +34,20 @@ const only = (key, all) => (process.env[key] ? process.env[key].split(',') : all
 const levels = only('LEVELS', ['1']);
 const tiers = only('TIERS', ['high', 'low']);
 const devices = only('DEVICES', ['iphone', 'ipad']);
-const poses = only('POSES', ['dollhouse', 'kid']);
+const poses = only('POSES', ['dollhouse', 'kid', 'card']);
+const minutes = only('MINUTES', ['720', '1200']);
+const gift = process.env.GIFT !== '0';
+/** A capture's time of day, by its minute: noon is `day`, 8 pm `night`. */
+const timeOf = (minute) => {
+  const m = Number(minute);
+  return m >= 7 * 60 && m < 17 * 60
+    ? 'day'
+    : m >= 17 * 60 && m < 19 * 60
+      ? 'dusk'
+      : m >= 6 * 60 && m < 7 * 60
+        ? 'dawn'
+        : 'night';
+};
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 2);
 
 /** Floors a level's dollhouse has (house-data: the Kitchen upstairs from level 3). */
@@ -40,16 +56,19 @@ const jobs = [];
 for (const level of levels)
   for (const pose of poses)
     for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
-      for (const tier of tiers)
-        for (const device of devices)
-          jobs.push({
-            file: `house${level}-${pose}${floor > 0 ? `-f${floor}` : ''}-${tier}-${device}.png`,
-            level,
-            pose,
-            floor,
-            tier,
-            device,
-          });
+      // The gift card: once, at night (the card is DOM; the time of day is behind it).
+      for (const minute of pose === 'card' ? [minutes.at(-1)] : minutes)
+        for (const tier of tiers)
+          for (const device of devices)
+            jobs.push({
+              file: `house${level}-${pose}${floor > 0 ? `-f${floor}` : ''}-${timeOf(minute)}-${tier}-${device}.png`,
+              level,
+              pose,
+              floor,
+              minute,
+              tier,
+              device,
+            });
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 if (ONLY) jobs.splice(0, jobs.length, ...jobs.filter((j) => ONLY.test(j.file)));
 
@@ -109,7 +128,13 @@ async function shoot(job) {
   page.setDefaultTimeout(240_000);
   page.on('pageerror', (e) => console.log(`[${job.file}] pageerror`, e.message));
   await page.addInitScript(countDraws);
-  const q = new URLSearchParams({ level: job.level, tier: job.tier, still: '1' });
+  const q = new URLSearchParams({
+    level: job.level,
+    tier: job.tier,
+    still: '1',
+    minute: job.minute,
+    ...(gift && { gift: '1' }),
+  });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
   if (job.floor > 0) {
@@ -121,6 +146,11 @@ async function shoot(job) {
     // Walk in (the gallery's `still=1` cuts straight there, as reduced motion does).
     await page.getByTestId('house-walk').click();
     await until(page, () => window.__heartpatch.house()?.pose === 'kid');
+  }
+  if (job.pose === 'card') {
+    // Today's gift card, opened from the peek bar's gift line.
+    await page.getByTestId('house-gift-line').click();
+    await until(page, () => window.__heartpatch.house()?.sheet === 'gift');
   }
   // Frames drawn while shaders still compile skip meshes (SwiftShader
   // compiles slowly): redraw until two frames in a row draw the same.
@@ -186,6 +216,9 @@ async function shoot(job) {
     level: house.level,
     rooms: house.rooms,
     pose: job.pose,
+    minute: Number(job.minute),
+    light: scene.light,
+    gift: scene.gift,
     floor: scene.floor,
     floors: scene.floors,
     tier: quality?.tier,

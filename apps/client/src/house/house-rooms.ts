@@ -60,6 +60,8 @@ export interface RoomKit {
 export interface RoomPlan {
   readonly keeper: FloorSpot | null;
   readonly residents: readonly FloorSpot[];
+  /** Where a gift waits by the hearth (#381 H2), clear of the cast; the room's front-left corner if left out. */
+  readonly gift?: FloorSpot;
 }
 
 export type RoomBuilder = (kit: RoomKit) => RoomPlan;
@@ -198,6 +200,9 @@ export const snugRoom: RoomBuilder = (kit) => {
   return {
     // Behind the two on the rug, in the gap between them: clear of both at kid height.
     keeper: { x: box.x0 + w * 0.55, z: box.z0 + d * 0.7 },
+    // At the hearthstone's front corner, between the plant and the ball: in
+    // view from the dollhouse and kid height, clear of the two on the rug.
+    gift: { x: box.x0 + 1.0, z: box.z0 + 0.62 }, // TUNE
     residents: [at(w * 0.33, d * 0.4), at(w * 0.67, d * 0.36), at(w * 0.5, d * 0.22)].map(
       ([x, z]) => ({ x, z }),
     ),

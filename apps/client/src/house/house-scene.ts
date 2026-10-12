@@ -38,7 +38,11 @@ import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { lodFor } from '../procedural/motion.js';
 import type { SquishySpecies } from '../procedural/params.js';
-import { SquishyField, type SquishyPlacement } from '../procedural/squishy-field.js';
+import {
+  SquishyField,
+  type SquishyHandle,
+  type SquishyPlacement,
+} from '../procedural/squishy-field.js';
 import type { KeeperHandle, KeeperPlacement } from '../procedural/keeper/keeper-field.js';
 import {
   frontAlpha,
@@ -52,6 +56,7 @@ import {
   HOUSE_BLANKETS,
   HOUSE_CAST,
   HOUSE_FIT_FLOOR,
+  HOUSE_GIFT,
   HOUSE_GLIDE,
   HOUSE_GRID,
   HOUSE_KID,
@@ -84,16 +89,20 @@ import {
   floorPlanks,
   frontYard,
   gableRoof,
+  giftBox,
   roofInside,
   TREE_TOP,
   treeParts,
+  paintSky,
   signBoard,
   skyDome,
   wallPieces,
   windowFrame,
 } from './house-models.js';
-import { roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
-import { duskPaneMaterial, radialTexture, signMaterial } from './house-textures.js';
+import { besideBed, type BedSpot, type GiftPlacement } from './house-gift-view.js';
+import { DUSK_LOOK, type HouseLightLook } from './house-light-look.js';
+import { placed, roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
+import { paneMaterial, radialTexture, signMaterial } from './house-textures.js';
 
 /*
  * The Keeper's house interior (#381 plan §1c): a dollhouse on the shared
@@ -123,6 +132,10 @@ export interface HouseSceneOptions {
   readonly cast: ReadonlyMap<string, HouseCastMember>;
   /** "<name>'s house" on the sign. */
   readonly signText: string;
+  /** The light at this time of day (#381 H2); dusk when left out. */
+  readonly look?: HouseLightLook;
+  /** Where today's wrapped gift waits (#381 H2), or null: no box. */
+  readonly gift?: GiftPlacement | null;
 }
 
 /** Read-only numbers for the dev hook and house-shots (tests assert on these, not pixels). */
@@ -154,6 +167,10 @@ export interface HouseSceneStats {
   readonly floor: number;
   /** The floors it can show, bottom up. */
   readonly floors: readonly number[];
+  /** Today's gift box is drawn (#381 H2): built, not yet opened, on a floor the cut shows. */
+  readonly gift: boolean;
+  /** The time of day the light shows, and whether the lamps and the fire are lit. */
+  readonly light: { readonly phase: string; readonly lit: boolean };
 }
 
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
@@ -198,6 +215,8 @@ interface FloorParts {
   readonly glow: Mesh[];
   readonly floor: Mesh[];
   readonly panes: Mesh[];
+  /** Today's gift box (#381 H2): merged last into the floor's furniture, so opening it can fold it away. */
+  readonly gift: Mesh[];
 }
 
 /** A thin instance on a floor (beds, contact shadows, pools, keepsakes): the cut drops its floor's. */
@@ -222,7 +241,7 @@ export class HouseScene {
   readonly bounds: HouseBounds;
   readonly #scene: Scene;
   readonly #tier: QualityTier;
-  readonly #look: (typeof HOUSE_TIERS)[QualityTier];
+  readonly #tierLook: (typeof HOUSE_TIERS)[QualityTier];
   readonly #vinyl: PBRMaterial;
   readonly #matte: PBRMaterial;
   readonly #glow: StandardMaterial;
@@ -292,12 +311,34 @@ export class HouseScene {
   readonly #sorted = new WeakSet<AbstractMesh>();
   readonly #trees: { x: number; z: number; s: number; hex: string }[] = [];
   #treeMeshes: { trunks: Mesh; crowns: Mesh } | null = null;
+  /** Every room's beds as placed, in order (the gift goes by its giver's). */
+  readonly #roomBeds = new Map<string, BedSpot[]>();
+  /** Where the gift box stands and its floor, while it's wrapped (#381 H2). */
+  #giftAt: { x: number; y: number; z: number; floor: number } | null = null;
+  /** The gift's vertices: the last `count` of `mesh` (folded to a point once opened). */
+  #giftRange: { mesh: Mesh; count: number } | null = null;
+  #giftShadow: Placed | null = null;
+  /** Lights and looks the time of day changes (#381 H2). */
+  #sun: DirectionalLight | null = null;
+  #houseLight: DirectionalLight | null = null;
+  readonly #points: { kind: 'fire' | 'lamp'; light: PointLight }[] = [];
+  #flicker = { fire: 1, lamp: 1 };
+  #look: HouseLightLook = DUSK_LOOK;
+  #poolMaterial: StandardMaterial | null = null;
+  #lawnMaterial: PBRMaterial | null = null;
+  #sky: Mesh | null = null;
+  readonly #paneMeshes: Mesh[] = [];
+  /** Residents drawn now, by squishy id, so one can hop (welcome home). */
+  readonly #handles = new Map<string, { field: SquishyField; handle: SquishyHandle }>();
+  /** The residents in the order they were placed (the Keeper's room first). */
+  #order: string[] = [];
 
   constructor(scene: Scene, view: HouseView, options: HouseSceneOptions) {
     this.#scene = scene;
     this.#tier = options.tier;
-    this.#look = HOUSE_TIERS[options.tier];
-    const low = this.#look.shadowMap === 0;
+    this.#tierLook = HOUSE_TIERS[options.tier];
+    this.#look = options.look ?? DUSK_LOOK;
+    const low = this.#tierLook.shadowMap === 0;
     scene.clearColor = Color4.FromColor3(linear(HOUSE_PALETTE.sky), 1);
 
     // One matte vinyl for every painted prop (art bible §4: matte-er than squishies).
@@ -305,7 +346,7 @@ export class HouseScene {
     this.#vinyl.albedoColor = Color3.White();
     this.#vinyl.metallic = 0;
     this.#vinyl.roughness = 0.6; // TUNE
-    this.#vinyl.clearCoat.isEnabled = this.#look.clearCoat;
+    this.#vinyl.clearCoat.isEnabled = this.#tierLook.clearCoat;
     this.#vinyl.clearCoat.intensity = 0.45; // TUNE
     this.#vinyl.clearCoat.roughness = 0.35; // TUNE
     this.#matte = new PBRMaterial('house-floor', scene);
@@ -325,10 +366,10 @@ export class HouseScene {
     // warm light leaves them out. Their meshes appear as the fields draw.
     this.#fill = new DirectionalLight('house-fill', new Vector3(0, -0.5, 1), scene);
     this.#fill.diffuse = linear(HOUSE_LIGHT.fill.color);
-    this.#fill.specular = this.#look.specular
+    this.#fill.specular = this.#tierLook.specular
       ? linear(HOUSE_LIGHT.fill.color).scale(HOUSE_LIGHT.fill.specular)
       : Color3.Black();
-    this.#fill.intensity = this.#look.fill;
+    this.#fill.intensity = this.#tierLook.fill;
     this.#fill.includedOnlyMeshes = [];
     // The fields make their meshes as they first draw (in beforeRender):
     // sort any new ones before the camera renders. Every mesh is checked,
@@ -370,6 +411,7 @@ export class HouseScene {
       own.floor.push(...parts.floor);
       own.panes.push(...parts.panes);
     }
+    this.#buildGift(options.gift ?? null, view, plans);
     this.#mergeFloors();
     this.#buildBeds();
     this.#buildSeeds();
@@ -412,6 +454,7 @@ export class HouseScene {
     );
     this.#instrumentation = new SceneInstrumentation(scene);
     this.#applyCut();
+    this.setLook(options.look ?? DUSK_LOOK);
 
     const b = this.bounds;
     this.content = {
@@ -652,6 +695,171 @@ export class HouseScene {
     this.#applyCut();
   }
 
+  // ── The living house (#381 H2) ─────────────────────────────────────
+
+  /**
+   * The light at this time of day: the sky and haze outside, the windows'
+   * picture, the sun through the back windows (or the low tier's one house
+   * light and its ambient), the fire's and lamps' strength and their pools,
+   * and the glow of shades and flames. Colours and strengths only: no light,
+   * mesh or draw call comes or goes, and the squishy-only fill is untouched.
+   */
+  setLook(look: HouseLightLook): void {
+    this.#look = look;
+    const scene = this.#scene;
+    scene.clearColor = Color4.FromColor3(linear(look.clear), 1);
+    scene.fogColor = linear(look.haze);
+    const sky = this.#sky;
+    const skyKey = look.sky.join();
+    if (sky && sky.metadata !== skyKey) {
+      paintSky(sky, HOUSE_OUTSIDE.lawnRadius * 2.2, look.sky);
+      sky.metadata = skyKey;
+    }
+    if (this.#lawnMaterial) {
+      this.#lawnMaterial.albedoColor = linear(look.lawn);
+      this.#lawnMaterial.emissiveColor = linear(look.lawnLift);
+    }
+    if (this.#sun) {
+      this.#sun.diffuse = linear(look.sun.color);
+      this.#sun.specular = linear(look.sun.color).scale(0.6);
+      this.#sun.intensity = look.sun.intensity;
+    }
+    if (this.#houseLight) {
+      this.#houseLight.diffuse = linear(look.house.color);
+      this.#houseLight.intensity = look.house.intensity;
+      scene.ambientColor = linear(look.ambient);
+    }
+    if (this.#poolMaterial) {
+      const low = this.#tierLook.shadowMap === 0;
+      this.#poolMaterial.emissiveColor = linear('#ffae62').scale((low ? 0.55 : 0.32) * look.lamps); // TUNE
+    }
+    this.#glow.emissiveColor = Color3.White().scale(look.glow);
+    const panes = paneMaterial(scene, look.pane);
+    for (const m of this.#paneMeshes) m.material = panes;
+    this.#lightPoints();
+  }
+
+  /** The fire and the lamp as the flicker has them now (shares of their steady light). */
+  setFlicker(fire: number, lamp: number): void {
+    this.#flicker = { fire, lamp };
+    this.#lightPoints();
+  }
+
+  /** Lights the flicker moves (high and medium: the fire's and the lamp's point lights). */
+  get flickers(): boolean {
+    return this.#points.length > 0;
+  }
+
+  #lightPoints(): void {
+    for (const { kind, light } of this.#points) {
+      const base = kind === 'fire' ? HOUSE_LIGHT.fire.intensity : HOUSE_LIGHT.lamp.intensity;
+      light.intensity = base * this.#look.lamps * this.#flicker[kind];
+    }
+  }
+
+  /**
+   * Where the wrapped gift stands (world metres, its middle), or null when
+   * there's none, it's open, or the floor cut has taken its floor away.
+   */
+  get giftPoint(): { x: number; y: number; z: number } | null {
+    const at = this.#giftAt;
+    if (!at || !shownAt(at.floor, this.#cut.floor)) return null;
+    return { x: at.x, y: at.y, z: at.z };
+  }
+
+  /**
+   * Takes the gift box away once it's open: its vertices (the last of its
+   * floor's furniture mesh) fold to one point, and its contact shadow goes.
+   * No rebuild and no draw call changes.
+   */
+  removeGift(): void {
+    const range = this.#giftRange;
+    this.#giftAt = null;
+    this.#giftRange = null;
+    if (range) {
+      const { mesh, count } = range;
+      const pos = mesh.getVerticesData(VertexBuffer.PositionKind, false, true);
+      if (pos) {
+        const total = pos.length / 3;
+        const start = Math.max(0, total - count);
+        const [x, y, z] = [pos[start * 3] ?? 0, pos[start * 3 + 1] ?? 0, pos[start * 3 + 2] ?? 0];
+        for (let i = start; i < total; i++) {
+          pos[i * 3] = x;
+          pos[i * 3 + 1] = y;
+          pos[i * 3 + 2] = z;
+        }
+        mesh.setVerticesData(VertexBuffer.PositionKind, pos, false);
+      }
+    }
+    const shadow = this.#giftShadow;
+    this.#giftShadow = null;
+    const i = shadow ? this.#contact.indexOf(shadow) : -1;
+    if (i >= 0) {
+      this.#contact.splice(i, 1);
+      this.#instancedFor = null;
+      this.#applyCut();
+    }
+  }
+
+  /**
+   * Welcome home: the first resident drawn in the Keeper's room (else the
+   * first drawn) does a happy bounce. False when nobody is drawn.
+   */
+  hop(now: number): boolean {
+    for (const id of this.#order) {
+      const drawn = this.#handles.get(id);
+      if (!drawn) continue;
+      drawn.field.play(drawn.handle, 'bounce', now);
+      return true;
+    }
+    return false;
+  }
+
+  /** Advances the squishies' clock; true while one still moves (keep drawing). */
+  update(now: number): boolean {
+    const main = this.#squishies.update(now);
+    const hero = this.#hero?.update(now) ?? false;
+    return main || hero;
+  }
+
+  /**
+   * Today's wrapped gift (#381 H2): a little box by the giver's bed, or by
+   * the hearth in the Keeper's room, merged with its floor's furniture (no
+   * draw call of its own), with a contact shadow on low.
+   */
+  #buildGift(
+    placement: GiftPlacement | null,
+    view: HouseView,
+    plans: ReadonlyMap<string, RoomPlan>,
+  ): void {
+    if (!placement) return;
+    let spot: { x: number; z: number } | null = null;
+    let room: RoomBox | undefined;
+    if (placement.kind === 'bed') {
+      room = this.#boxes.find((b) => b.id === placement.roomId);
+      const beds = this.#roomBeds.get(placement.roomId) ?? [];
+      const bed = beds[placement.bed] ?? beds.at(-1);
+      if (room && bed) spot = besideBed(bed, beds, room);
+    }
+    if (!spot || !room) {
+      const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
+      room = this.#boxes.find((b) => b.id === keeperRoom?.id);
+      if (!room) return;
+      spot = plans.get(room.id)?.gift ?? { x: room.x0 + 0.9, z: room.z0 + 0.7 };
+    }
+    const mesh = placed(giftBox(this.#scene, this.#tierLook.rounds), spot.x, room.y0, spot.z, 0.45); // TUNE: a little turned, so two faces read
+    this.#floorParts(room.floor).gift.push(mesh);
+    this.#giftAt = { x: spot.x, y: room.y0 + HOUSE_GIFT.size * 0.55, z: spot.z, floor: room.floor };
+    const shadow: Placed = {
+      matrix: Matrix.Scaling(0.62, 1, 0.62).multiply(
+        Matrix.Translation(spot.x, room.y0 + 0.025, spot.z),
+      ),
+      floor: room.floor,
+    };
+    this.#contact.push(shadow);
+    this.#giftShadow = shadow;
+  }
+
   get stats(): HouseSceneStats {
     const pose = this.#pose;
     let pitch = 0;
@@ -677,6 +885,8 @@ export class HouseScene {
       heroes: this.#hero?.lod === 'high' ? this.#hero.handles.length : 0,
       floor: this.#cut.floor,
       floors: this.#floors,
+      gift: this.giftPoint !== null,
+      light: { phase: this.#look.phase, lit: this.#look.lit },
     };
   }
 
@@ -798,10 +1008,11 @@ export class HouseScene {
     sun.diffuse = linear(HOUSE_LIGHT.sun.color);
     sun.specular = linear(HOUSE_LIGHT.sun.color).scale(0.6);
     this.#warm.push(sun);
+    this.#sun = sun;
   }
 
   #shadowsFor(sun: DirectionalLight): ShadowGenerator {
-    const sg = new ShadowGenerator(this.#look.shadowMap, sun);
+    const sg = new ShadowGenerator(this.#tierLook.shadowMap, sun);
     sg.usePercentageCloserFiltering = true;
     sg.filteringQuality =
       this.#tier === 'high' ? ShadowGenerator.QUALITY_HIGH : ShadowGenerator.QUALITY_MEDIUM;
@@ -825,7 +1036,7 @@ export class HouseScene {
     const point = (name: string, at: Vector3, look: { intensity: number; color: string }) => {
       const light = new PointLight(name, at, scene);
       light.diffuse = linear(look.color);
-      light.specular = this.#look.specular ? linear(look.color).scale(0.5) : Color3.Black();
+      light.specular = this.#tierLook.specular ? linear(look.color).scale(0.5) : Color3.Black();
       light.intensity = look.intensity;
       light.range = HOUSE_LIGHT.range;
       return light;
@@ -841,13 +1052,20 @@ export class HouseScene {
       light.specular = Color3.Black();
       light.intensity = HOUSE_LIGHT.house.intensity;
       add(light);
+      this.#houseLight = light;
       return;
     }
-    let free = this.#look.lights - 1 - this.#warm.length; // the fill and the sun so far
+    let free = this.#tierLook.lights - 1 - this.#warm.length; // the fill and the sun so far
     for (const kind of ['fire', 'lamp'] as const) {
       const wanted = this.#requests.find((r) => r.kind === kind);
       if (!wanted || free <= 0) continue;
-      add(point(`house-${kind}`, wanted.at, kind === 'fire' ? HOUSE_LIGHT.fire : HOUSE_LIGHT.lamp));
+      const light = point(
+        `house-${kind}`,
+        wanted.at,
+        kind === 'fire' ? HOUSE_LIGHT.fire : HOUSE_LIGHT.lamp,
+      );
+      add(light);
+      this.#points.push({ kind, light });
       free -= 1;
     }
   }
@@ -864,6 +1082,9 @@ export class HouseScene {
       solid: (list) => parts.solid.push(...list),
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {
+        const own = this.#roomBeds.get(parts.box.id) ?? [];
+        own.push({ x, z, yaw });
+        this.#roomBeds.set(parts.box.id, own);
         this.#beds.push({
           matrix: Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)),
           floor,
@@ -1106,7 +1327,7 @@ export class HouseScene {
   #floorParts(floor: number): FloorParts {
     let parts = this.#byFloor.get(floor);
     if (!parts) {
-      parts = { solid: [], glow: [], floor: [], panes: [] };
+      parts = { solid: [], glow: [], floor: [], panes: [], gift: [] };
       this.#byFloor.set(floor, parts);
     }
     return parts;
@@ -1129,19 +1350,40 @@ export class HouseScene {
         ? parts.solid.filter((m) => extent(m) < HOUSE_SHADOW.minCaster)
         : [];
       const big = parts.solid.filter((m) => !small.includes(m));
+      // The gift box goes last into the little pieces (it casts no shadow
+      // you'd see) or, on low, the furniture: its vertices are the mesh's
+      // last, so opening it folds them away with no rebuild (#381 H2).
+      const giftCount = parts.gift.reduce((n, m) => n + m.getTotalVertices(), 0);
+      const giftInSmall = this.#shadows !== null;
+      if (giftInSmall) small.push(...parts.gift);
+      else big.push(...parts.gift);
       const planks = this.#static(`house-${f}-floor`, parts.floor, this.#matte, false);
       planks.receiveShadows = true;
+      const solid = this.#static(`house-${f}-solid`, big, this.#vinyl, true);
       const meshes = [
-        this.#static(`house-${f}-solid`, big, this.#vinyl, true),
+        solid,
         planks,
         this.#static(`house-glow-${f}`, parts.glow, this.#glow, false),
       ];
-      if (small.length > 0)
-        meshes.push(this.#static(`house-${f}-small`, small, this.#vinyl, false));
-      if (parts.panes.length > 0)
-        meshes.push(
-          this.#static(`house-${f}-panes`, parts.panes, duskPaneMaterial(this.#scene), false),
+      let smallMesh: Mesh | null = null;
+      if (small.length > 0) {
+        smallMesh = this.#static(`house-${f}-small`, small, this.#vinyl, false);
+        meshes.push(smallMesh);
+      }
+      if (giftCount > 0) {
+        const mesh = giftInSmall ? smallMesh : solid;
+        if (mesh) this.#giftRange = { mesh, count: giftCount };
+      }
+      if (parts.panes.length > 0) {
+        const panes = this.#static(
+          `house-${f}-panes`,
+          parts.panes,
+          paneMaterial(this.#scene, this.#look.pane),
+          false,
         );
+        this.#paneMeshes.push(panes);
+        meshes.push(panes);
+      }
       if (floor > 0) for (const mesh of meshes) this.#floorMeshes.push({ mesh, floor });
     }
   }
@@ -1179,7 +1421,7 @@ export class HouseScene {
   /** Every bed in the house: one frame mesh and one blanket mesh, thin-instanced (two draw calls). */
   #buildBeds(): void {
     if (this.#beds.length === 0) return;
-    const frame = merged('house-beds', bedFrame(this.#scene, this.#look.rounds));
+    const frame = merged('house-beds', bedFrame(this.#scene, this.#tierLook.rounds));
     frame.material = this.#vinyl;
     const blanket = merged('house-blankets', bedBlanket(this.#scene));
     blanket.material = this.#vinyl;
@@ -1225,6 +1467,7 @@ export class HouseScene {
       ]);
       m.alphaMode = Constants.ALPHA_ADD;
       m.disableDepthWrite = true;
+      this.#poolMaterial = m;
       const quad = CreateGround('house-pools', { width: 1, height: 1 }, scene);
       quad.material = m;
       quad.alwaysSelectAsActiveMesh = true;
@@ -1352,8 +1595,9 @@ export class HouseScene {
     lm.roughness = 0.95;
     lm.metallic = 0;
     lawn.material = lm;
+    this.#lawnMaterial = lm;
     lawn.isPickable = false;
-    lawn.receiveShadows = this.#look.shadowMap > 0;
+    lawn.receiveShadows = this.#tierLook.shadowMap > 0;
     this.#house.push(lawn);
 
     const sky = skyDome(scene, HOUSE_OUTSIDE.lawnRadius * 2.2);
@@ -1367,9 +1611,10 @@ export class HouseScene {
     sky.material = sm;
     sky.applyFog = false;
     this.#house.push(sky);
+    this.#sky = sky;
 
     // Soft pastel trees in a ring, none on the camera's side of the house.
-    const count = this.#look.trees;
+    const count = this.#tierLook.trees;
     const [near, far] = HOUSE_OUTSIDE.treeRing;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + 0.35 * Math.sin(i * 2.7);
@@ -1384,7 +1629,7 @@ export class HouseScene {
         hex: HOUSE_TREE_CROWNS[i % HOUSE_TREE_CROWNS.length] ?? '#9fcf9a',
       });
     }
-    const parts = treeParts(scene, this.#look.treeSegments);
+    const parts = treeParts(scene, this.#tierLook.treeSegments);
     const trunks = merged('house-tree-trunks', parts.trunk);
     const crowns = merged('house-tree-crowns', parts.crown);
     for (const mesh of [trunks, crowns]) {
@@ -1394,7 +1639,7 @@ export class HouseScene {
     }
     this.#treeMeshes = { trunks, crowns };
     this.frameOutside(null);
-    const yard = frontYard(scene, b.minX, b.maxX, b.minZ, this.#look.rounds);
+    const yard = frontYard(scene, b.minX, b.maxX, b.minZ, this.#tierLook.rounds);
     // A warm pool on the lawn under each lantern.
     for (const [x, z] of yard.lanterns) {
       this.#pools.push({
@@ -1431,6 +1676,7 @@ export class HouseScene {
       return faceYaw(camera.x - spot.x, camera.z - spot.z) + turn;
     };
     let n = 0;
+    const order: string[] = [];
     const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
     if (keeperRoom) {
       const k = roomBox(keeperRoom);
@@ -1483,17 +1729,23 @@ export class HouseScene {
             () => {
               const handle = field.add(member.species, resident.squishyId, placement);
               field.setAccessory(handle, accessoryItem(member.accessory));
+              this.#handles.set(resident.squishyId, { field, handle });
               return () => {
                 field.remove(handle);
+                this.#handles.delete(resident.squishyId);
               };
             },
             'resident',
             { x: spot.x, y: box.y0, z: spot.z },
           ),
         );
+        order.push(resident.squishyId);
         n += 1;
       });
     }
+    // The Keeper's room first: its residents are the ones big on screen.
+    const first = new Set(keeperRoom?.residents.map((r) => r.squishyId) ?? []);
+    this.#order = [...order.filter((id) => first.has(id)), ...order.filter((id) => !first.has(id))];
     if (!keeperRoom) return;
     const box = roomBox(keeperRoom);
     const spot = plans.get(keeperRoom.id)?.keeper ?? { x: (box.x0 + box.x1) / 2, z: box.z0 + 0.8 };

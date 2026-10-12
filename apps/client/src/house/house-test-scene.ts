@@ -7,6 +7,8 @@ import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import type { QualityTier } from '../engine/config.js';
 import { sampleHouse, type HouseSample } from './house-fixtures.js';
+import { giftPlacement } from './house-gift-view.js';
+import type { HouseLightLook } from './house-light-look.js';
 import { HouseScene, type HouseCastMember } from './house-scene.js';
 
 /*
@@ -32,6 +34,8 @@ export function buildHouse(
   sample: HouseSample = sampleHouse(level),
   /** The canvas in px (projections and face checks follow it), NullEngine's default if left out. */
   canvas?: { width: number; height: number },
+  /** The time of day's light (dusk if left out). */
+  look?: HouseLightLook,
 ): { scene: Scene; house: HouseScene } {
   const engine = canvas
     ? new NullEngine({
@@ -45,12 +49,16 @@ export function buildHouse(
   const scene = new Scene(engine);
   // The stage's key light (setupLighting's sky texture needs a GPU).
   new DirectionalLight('sun', new Vector3(-0.45, -1, 0.6), scene);
+  const cast = castOf(sample);
   const house = new HouseScene(scene, sample.view, {
     tier,
     registry,
     keeper: null,
-    cast: castOf(sample),
+    cast,
     signText: 'Mia’s house',
+    // Today's gift where the screen puts it (#381 H2): none unless the sample has one.
+    gift: giftPlacement(sample.view, (id) => cast.has(id)),
+    ...(look && { look }),
   });
   // The stage's camera; the house puts it where its pose says.
   scene.activeCamera = new TargetCamera('map-camera', new Vector3(0, 10, -10), scene);

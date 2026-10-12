@@ -666,6 +666,12 @@ const house = createHouseScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
+  // The windows follow the patch's clock (#381 H2), read before the map steps out.
+  timeZone: () => maps.view?.map.timeZone ?? null,
+  cue: (name) => {
+    audio.cue(name);
+  },
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,

@@ -13,8 +13,9 @@ import {
   residentBoxes,
   safeArea,
 } from './house-camera.js';
-import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
-import { sampleHouse, sampleLevels } from './house-fixtures.js';
+import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID } from './house-config.js';
+import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
+import { houseLookAtMinute } from './house-light-look.js';
 import { yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
@@ -27,7 +28,9 @@ vi.mock('../procedural/contact-shadow.js', () => ({
 vi.mock('./house-textures.js', async () => {
   const { StandardMaterial } = await import('@babylonjs/core/Materials/standardMaterial');
   return {
-    duskPaneMaterial: (scene: Scene) => new StandardMaterial('test-pane', scene),
+    paneMaterial: (scene: Scene, kind = 'dusk') =>
+      scene.getMaterialByName(`test-${kind}-pane`) ??
+      new StandardMaterial(`test-${kind}-pane`, scene),
     signMaterial: (scene: Scene) => new StandardMaterial('test-sign', scene),
     radialTexture: () => null,
   };
@@ -503,5 +506,135 @@ describe('house scene', () => {
     expect(roof.isEnabled()).toBe(false);
     expect(house.stats.roof).toBe(1);
     scene.getEngine().dispose();
+  });
+
+  describe('the living house (#381 H2)', () => {
+    const dist = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+      Math.hypot(a.x - b.x, a.z - b.z);
+
+    it('puts the wrapped gift by its giver’s bed, merged into the floor’s furniture', () => {
+      for (const tier of ['low', 'high'] as const) {
+        const sample = withGift(sampleHouse(2), { room: 'playroom', index: 0 });
+        const { scene, house } = buildHouse(2, tier, sample);
+        const at = house.giftPoint!;
+        expect(at).not.toBeNull();
+        const playroom = sample.view.rooms.find((r) => r.id === 'playroom')!;
+        const x0 = playroom.layout.gx * HOUSE_GRID.cell;
+        const z0 = playroom.layout.gy * HOUSE_GRID.cell;
+        // Inside the Playroom, near its back wall where its first bed stands.
+        expect(at.x).toBeGreaterThan(x0);
+        expect(at.x).toBeLessThan(x0 + playroom.layout.w * HOUSE_GRID.cell);
+        expect(at.z).toBeGreaterThan(z0 + (playroom.layout.d * HOUSE_GRID.cell) / 2);
+        // No mesh of its own: one draw for the floor's furniture, gift and all.
+        expect(scene.meshes.some((m) => /gift/.test(m.name))).toBe(false);
+        expect(house.stats.gift).toBe(true);
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('puts it by the hearth when its giver isn’t drawn, clear of the cast', () => {
+      const sample = withGift(sampleHouse(1), { away: true });
+      const { scene, house } = buildHouse(1, 'low', sample);
+      const at = house.giftPoint!;
+      const snug = sample.view.rooms[0]!;
+      expect(at.x).toBeLessThan((snug.layout.w * HOUSE_GRID.cell) / 2);
+      expect(at.z).toBeLessThan((snug.layout.d * HOUSE_GRID.cell) / 2);
+      for (const spot of house.residentSpots) expect(dist(at, spot)).toBeGreaterThan(0.6);
+      scene.getEngine().dispose();
+    });
+
+    it('takes the box away once it’s open, with no rebuild and no draw call change', () => {
+      for (const tier of ['low', 'high'] as const) {
+        const { scene, house } = buildHouse(1, tier, withGift(sampleHouse(1)));
+        const meshes = scene.meshes.length;
+        const shadows = scene.getMeshByName('house-contact-shadows') as Mesh | null;
+        const before = shadows?.thinInstanceCount ?? 0;
+        const at = house.giftPoint!;
+        house.removeGift();
+        expect(house.giftPoint).toBeNull();
+        expect(house.stats.gift).toBe(false);
+        expect(scene.meshes.length).toBe(meshes);
+        // Low: its contact shadow went with it.
+        if (tier === 'low') expect(shadows!.thinInstanceCount).toBe(before - 1);
+        // Every vertex of the box folded to one point: nothing of it draws.
+        const mesh = scene.getMeshByName(tier === 'low' ? 'house-f0-solid' : 'house-f0-small')!;
+        const pos = mesh.getVerticesData('position')!;
+        const last = pos.slice(-3);
+        // …and they were the box's own (the merge keeps it last), where it stood.
+        expect(Math.hypot(last[0]! - at.x, last[2]! - at.z)).toBeLessThan(HOUSE_GIFT.size);
+        expect(Array.from(pos.slice(-30))).toEqual(
+          Array.from({ length: 30 }, (_, i) => last[i % 3]),
+        );
+        house.removeGift(); // twice is harmless
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('hides a gift upstairs with its floor, and shows it there', () => {
+      const sample = withGift(sampleHouse(3), { room: 'kitchen' });
+      const { scene, house } = buildHouse(3, 'low', sample);
+      expect(house.giftPoint).toBeNull();
+      house.setFloor(1);
+      expect(house.giftPoint).not.toBeNull();
+      expect(house.giftPoint!.y).toBeGreaterThan(HOUSE_GRID.storey);
+      scene.getEngine().dispose();
+    });
+
+    it('relights for the time of day without a new light or mesh, and never touches the squishy fill', () => {
+      for (const tier of ['low', 'high'] as const) {
+        const { scene, house } = buildHouse(1, tier);
+        const fill = scene.getLightByName('house-fill')!;
+        const fillLook = [fill.intensity, fill.diffuse.toHexString()];
+        const lights = scene.lights.length;
+        const meshes = scene.meshes.length;
+        expect(house.stats.light).toEqual({ phase: 'dusk', lit: true });
+        house.setLook(houseLookAtMinute(23 * 60));
+        expect(house.stats.light).toEqual({ phase: 'night', lit: true });
+        expect(scene.getMeshByName('house-f0-panes')!.material!.name).toBe('test-night-pane');
+        expect(scene.clearColor.b).toBeGreaterThan(scene.clearColor.r);
+        house.setLook(houseLookAtMinute(12 * 60));
+        expect(house.stats.light).toEqual({ phase: 'day', lit: false });
+        expect(scene.getMeshByName('house-f0-panes')!.material!.name).toBe('test-day-pane');
+        expect(scene.lights.length).toBe(lights);
+        expect(scene.meshes.length).toBe(meshes);
+        expect([fill.intensity, fill.diffuse.toHexString()]).toEqual(fillLook);
+        expect(house.stats.lights).toBeLessThanOrEqual(tier === 'low' ? 2 : 4);
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('builds in the look it’s given, and dims the lamps by day', () => {
+      const night = buildHouse(1, 'high', sampleHouse(1), undefined, houseLookAtMinute(23 * 60));
+      const day = buildHouse(1, 'high', sampleHouse(1), undefined, houseLookAtMinute(12 * 60));
+      const fire = (s: typeof night.scene) => s.getLightByName('house-fire')!.intensity;
+      expect(night.house.stats.light.phase).toBe('night');
+      expect(fire(day.scene)).toBeLessThan(fire(night.scene));
+      night.scene.getEngine().dispose();
+      day.scene.getEngine().dispose();
+    });
+
+    it('flickers the fire on medium and high only, as the flicker says', () => {
+      const low = buildHouse(1, 'low');
+      expect(low.house.flickers).toBe(false);
+      low.scene.getEngine().dispose();
+      const { scene, house } = buildHouse(1, 'high');
+      expect(house.flickers).toBe(true);
+      const fire = scene.getLightByName('house-fire')!;
+      const steady = fire.intensity;
+      house.setFlicker(1.1, 1);
+      expect(fire.intensity).toBeCloseTo(steady * 1.1);
+      house.setFlicker(1, 1);
+      expect(fire.intensity).toBeCloseTo(steady);
+      scene.getEngine().dispose();
+    });
+
+    it('lets a resident in the Keeper’s room hop for welcome home, and nobody in an empty house', () => {
+      const { scene, house } = buildHouse(1, 'low');
+      expect(house.hop(performance.now())).toBe(true);
+      scene.getEngine().dispose();
+      const empty = buildHouse(1, 'low', sampleHouse(1, false));
+      expect(empty.house.hop(performance.now())).toBe(false);
+      empty.scene.getEngine().dispose();
+    });
   });
 });
