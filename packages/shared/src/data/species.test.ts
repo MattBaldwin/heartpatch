@@ -21,8 +21,13 @@ import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 const byId = new Map(SPECIES.map((s) => [s.id, s]));
 const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
-/** Wave-1 kinds (#382) are standalone: no evolutions yet, so they're not lines. */
-const standalone = SPECIES.filter((s) => WAVE_1_SPECIES.some((w) => w.id === s.id));
+/**
+ * Wave-1 kinds (#382): their first forms, measured apart from the launch
+ * lines. Their kids and teens (#443) are evolved forms like any other.
+ */
+const standalone = SPECIES.filter(
+  (s) => !evolvedIds.has(s.id) && WAVE_1_SPECIES.some((w) => w.id === s.id),
+);
 const standaloneIds = new Set(standalone.map((s) => s.id));
 /** Base forms: the first squishy of each launch line. */
 const bases = SPECIES.filter((s) => !evolvedIds.has(s.id) && !standaloneIds.has(s.id));
@@ -57,8 +62,9 @@ describe('launch roster (issue #10)', () => {
 
   // #443: a kid sits between the baby and its teens, at the baby's old
   // evolution level, and keeps everything but its size and stats.
+  // Wave-1 kinds (#382) are lines now too: the same kid and teen checks apply.
   it('gives every converted line a kid that keeps its baby’s rarity, element, feeling and season', () => {
-    const kids = bases.flatMap((base) => {
+    const kids = [...bases, ...standalone].flatMap((base) => {
       const kid = kidOf(base);
       return kid ? [{ base, kid }] : [];
     });
@@ -84,7 +90,7 @@ describe('launch roster (issue #10)', () => {
   });
 
   it('gives every line a default evolution that keeps its element, feeling and season', () => {
-    for (const base of bases) {
+    for (const base of [...bases, ...standalone]) {
       expect(base.evolutions.length, base.id).toBeGreaterThanOrEqual(1);
       const evolved = evolvedFormOf(base);
       expect(evolved.evolutions, evolved.id).toEqual([]);

@@ -8,7 +8,13 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseExterior } from '@heartpatch/shared';
 import { linear, merged, painted } from '../map/map-props.js';
-import { HOUSE_COTTAGE, HOUSE_GRID, HOUSE_GROWN, HOUSE_PALETTE } from './house-config.js';
+import {
+  HOUSE_COTTAGE,
+  HOUSE_GIFT,
+  HOUSE_GRID,
+  HOUSE_GROWN,
+  HOUSE_PALETTE,
+} from './house-config.js';
 import type { WallHole } from './house-layout.js';
 
 /*
@@ -490,6 +496,31 @@ export function toys(
   ];
 }
 
+/**
+ * The daily gift (#381 H2): a little wrapped box, foot at the origin, in
+ * pink paper with a lighter lid, a pale gold ribbon round both ways and a
+ * bow on top. A few boxes and three small rounds, merged with the floor's
+ * furniture (no draw call of its own).
+ */
+export function giftBox(scene: Scene, rounds = 10): Mesh[] {
+  const s = HOUSE_GIFT.size;
+  const h = s * 0.8;
+  const lid = 0.09;
+  const top = h + lid - 0.02;
+  const band = 0.07;
+  return [
+    box(scene, [s, h, s], [0, h / 2, 0], HOUSE_GIFT.wrap),
+    box(scene, [s + 0.04, lid, s + 0.04], [0, h + lid / 2 - 0.02, 0], HOUSE_GIFT.lid),
+    // The ribbon, round both ways, just proud of the paper and the lid.
+    box(scene, [s + 0.05, top + 0.01, band], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
+    box(scene, [band, top + 0.01, s + 0.05], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
+    // The bow: two soft loops and a knot.
+    ball(scene, 0.15, [-0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
+    ball(scene, 0.15, [0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
+    ball(scene, 0.08, [0, top + 0.04, 0], HOUSE_GIFT.ribbon, [1, 1, 1], rounds),
+  ];
+}
+
 /** A shelf with framed squishy doodles, facing -z in local units. */
 export function photoShelf(scene: Scene, w: number, frames: readonly string[]): Mesh[] {
   const parts = [box(scene, [w, 0.07, 0.26], [0, 0, 0], '#8d5a3b')];
@@ -632,23 +663,41 @@ export function frontYard(
  * A sky dome round the clearing: violet up high to the haze colour at the
  * horizon, vertex-coloured and drawn unlit, so it looks right from any pose.
  */
-export function skyDome(scene: Scene, radius: number): Mesh {
+export function skyDome(
+  scene: Scene,
+  radius: number,
+  colours: readonly string[] = [
+    HOUSE_PALETTE.haze,
+    HOUSE_PALETTE.haze,
+    '#f3ae98',
+    '#d99bb0',
+    '#8d78b8',
+    '#4e4a96',
+  ], // TUNE: dusk from the horizon up
+): Mesh {
   const dome = CreateSphere(
     'house-sky',
     { diameter: radius * 2, segments: 16, sideOrientation: Mesh.BACKSIDE },
     scene,
   );
+  paintSky(dome, radius, colours);
+  dome.isPickable = false;
+  return dome;
+}
+
+/** Heights of the sky dome's colour stops, a share of its radius from the horizon up. */
+const SKY_STOPS = [-0.2, 0.05, 0.2, 0.4, 0.65, 1] as const;
+
+/**
+ * Paints the sky dome's colours from the horizon up, one per stop (the
+ * time of day's sky, #381 H2): a rare repaint of its vertex colours, no
+ * new mesh and no new draw.
+ */
+export function paintSky(dome: Mesh, radius: number, colours: readonly string[]): void {
   const pos = dome.getVerticesData(VertexBuffer.PositionKind) ?? [];
   const n = pos.length / 3;
   const colors = new Float32Array(n * 4);
-  const stops: [number, string][] = [
-    [-0.2, HOUSE_PALETTE.haze],
-    [0.05, HOUSE_PALETTE.haze],
-    [0.2, '#f3ae98'],
-    [0.4, '#d99bb0'],
-    [0.65, '#8d78b8'],
-    [1, '#4e4a96'],
-  ]; // TUNE: dusk from the horizon up
+  const stops = SKY_STOPS.map((t, i): [number, string] => [t, colours[i] ?? '#ffffff']);
   for (let i = 0; i < n; i++) {
     const t = (pos[i * 3 + 1] ?? 0) / radius;
     let j = 0;
@@ -661,8 +710,6 @@ export function skyDome(scene: Scene, radius: number): Mesh {
     colors.set([a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k, 1], i * 4);
   }
   dome.setVerticesData(VertexBuffer.ColorKind, colors);
-  dome.isPickable = false;
-  return dome;
 }
 
 // ── The cottage on the Heart Seed tile (home base) ──────────────────

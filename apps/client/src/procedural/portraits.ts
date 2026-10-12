@@ -119,9 +119,9 @@ const SNAPSHOT_TIMEOUT_MS = 20_000; // TUNE
  */
 const READY_TIMEOUT_MS = 8_000; // TUNE
 /**
- * The next draw starts after the last one ends, or after this at most. Longer
- * than a draw can take (its ready wait, then its snapshot), so two snapshots
- * never overlap.
+ * The next draw starts after the last one ends, or after this at most: longer
+ * than a draw normally takes (its ready wait, then its snapshot). A snapshot
+ * still going after it is caught by `draw`'s own check (`skipFrameRender`).
  */
 const QUEUE_CAP_MS = READY_TIMEOUT_MS + SNAPSHOT_TIMEOUT_MS + 5_000; // TUNE
 
@@ -303,6 +303,10 @@ export function createPortraits(options: PortraitOptions): Portraits {
       const px = Math.round(css * MAX_DPR);
       // Drawn bigger with room to spare, then cut to the squishy's own
       // outline, so long ears and tall toppers fit as well as round bodies.
+      // Another snapshot is still going (one the queue gave up waiting on):
+      // Babylon sets this until it renders, and two at once would leave the
+      // engine's render size wrong. No picture this time.
+      if (engine.skipFrameRender) return null;
       const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
       return await cropToSquishy(shot, px);
     } catch {
