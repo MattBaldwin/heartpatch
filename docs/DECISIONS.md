@@ -1523,7 +1523,7 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each la
 - **Factory take-down share (#295).** A player who leaves a shared Factory gets the half take-down share as well. This extends the 2026-10-08 Crafting Factory rule, where only a take-down paid half the building's cost.
 - **Additive contract changes approved.** #419 adds `speciesId` to the gather summary payload; squishy portraits in the summary are deferred. #381 C1 and C2 add fields only.
 - **Flaky tests (#429).**
-  - Fixed by root cause: #439, #445, #453, and the map-id race in #440. #453 is test-side plus a dev-hook field: `visitPost` taps the connected post's tile.
-  - Budget and timeout raises: #438 (map.spec 240 s), #447 (iPad `expect` 10 s), the 30 s live polls in #440, and #451 (three whole-test budgets to about twice their measured iPad runtime).
+  - Fixed by root cause: #439, #453, the map-id race in #440, and the home-node tap and toast observer in #445. #453 is test-side plus a dev-hook field: `visitPost` taps the connected post's tile.
+  - Budget and timeout raises: #438 (map.spec 240 s), #447 (iPad `expect` 10 s), the 30 s live polls in #440, the 30 s landing waits in #445, and #451 (three whole-test budgets to about twice their measured iPad runtime).
   - The recipe-book and wardrobe stalls keep their budgets, because a bigger limit would only hide a stall. A re-scan on the new main decides whether the lane stands down.
 - **Post flags keep their hide rule (#426).** A connected post whose flag would sit under a tray handle stays unlabelled until the map moves. That is noted as polish for a 393 px phone, not changed.
