@@ -544,7 +544,7 @@ export const MOVES: Move[] = [
   {
     id: 'bonfire-hug',
     name: 'Bonfire Hug',
-    description: 'A big warm hug that leaves everyone toasty, even itself.',
+    description: 'A big warm hug that makes it feel a bit better too.',
     element: 'fire',
     power: 75, // TUNE:
     accuracy: 95, // TUNE:
@@ -562,7 +562,7 @@ export const MOVES: Move[] = [
   {
     id: 'thistle-charge',
     name: 'Thistle Charge',
-    description: 'Charges in with its prickly shield up. Boop!',
+    description: 'Charges in, prickles first, feeling braver. Boop!',
     element: 'leaf',
     power: 85, // TUNE:
     accuracy: 85, // TUNE:
@@ -571,7 +571,7 @@ export const MOVES: Move[] = [
   {
     id: 'petal-storm',
     name: 'Petal Storm',
-    description: 'A whirl of petals that leaves everyone a little slower to catch up.',
+    description: 'A whirl of petals that can leave the other side a little slower.',
     element: 'leaf',
     power: 85, // TUNE:
     accuracy: 85, // TUNE:
@@ -752,7 +752,6 @@ export const SPECIES: Species[] = [
         'belly-patch',
         'cloud-crown',
         'side-fins',
-        'round-hands',
         'hop-feet',
         'wiggle-tail',
       ],
@@ -988,12 +987,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
-  // #495 grown-up (stage 4): Hearthbun's brawler grows tall ears and a crown of flames.
+  // #495 grown-up (stage 4): Hearthbun's brawler grows a crown of golden flames and fangs.
   {
     id: 'bonfirebun',
     name: 'Bonfirebun',
     description:
-      'Tall ears, a crown of flames and the warmest hugs in the patch. Everyone gathers round.',
+      'A crown of golden flames and the warmest hugs in the patch. Everyone gathers round.',
     element: 'fire',
     feeling: 'cozy',
     rarity: 'rare',
@@ -1009,7 +1008,7 @@ export const SPECIES: Species[] = [
         'smirk',
         'blush-cheeks',
         'fangs',
-        'long-ears',
+        'swept-ears',
         'flame-crown',
         'flame-mane',
         'biped-legs',
@@ -1057,11 +1056,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['sleepy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Embernap's coal grows a flame mane and big round paws.
+  // #495 grown-up (stage 4): Embernap's coal grows a fluffy ruff, fangs and big round paws.
   {
     id: 'emberslumber',
     name: 'Emberslumber',
-    description: 'A big cozy coal with a mane of soft flames. It glows brighter with every snore.',
+    description:
+      'A big cozy coal in a fluffy ruff, with a crown of golden flames. It glows brighter with every snore.',
     element: 'fire',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -1074,10 +1074,11 @@ export const SPECIES: Species[] = [
       parts: [
         'sleepy-eyes',
         'smirk',
+        'fangs',
         'blush-cheeks',
         'floppy-ears',
         'flame-crown',
-        'flame-mane',
+        'fur-ruff',
         'stubby-arms',
         'round-paws',
         'fluff-tail',
@@ -1604,12 +1605,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
   },
-  // #495 grown-up (stage 4): Bristlebloom's knight grows a coat of soft spikes and strong arms.
+  // #495 grown-up (stage 4): Bristlebloom's knight grows a mantle of spikes and strong arms.
   {
     id: 'thistleknight',
     name: 'Thistleknight',
     description:
-      'A thistle knight in a coat of soft spikes. It guards the meadow and always says please.',
+      'A thistle knight with a mantle of purple spikes. It guards the meadow and always says please.',
     element: 'leaf',
     feeling: 'brave',
     rarity: 'epic',
@@ -1626,7 +1627,7 @@ export const SPECIES: Species[] = [
         'fangs',
         'thistle-crown',
         'back-spines',
-        'spike-coat',
+        'thorn-mantle',
         'biped-legs',
         'strong-arms',
       ],
@@ -1668,11 +1669,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'brave'] },
   },
-  // #495 grown-up (stage 4): Petalprance grows a halo of blossoms and a leafy tail.
+  // #495 grown-up (stage 4): Petalprance grows a ring of petals and a leafy tail.
   {
     id: 'petalwhirl',
     name: 'Petalwhirl',
-    description: 'A whirl of petals with a halo of blossoms. Wherever it dances, flowers pop up.',
+    description:
+      'A whirl of petals with a ring of blossoms on top. Wherever it dances, flowers pop up.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
@@ -1687,7 +1689,7 @@ export const SPECIES: Species[] = [
         'smirk',
         'blush-cheeks',
         'leaf-sprout',
-        'sun-crown',
+        'petal-ruff',
         'leaf-wings',
         'leaf-arms',
         'leaf-tail',
