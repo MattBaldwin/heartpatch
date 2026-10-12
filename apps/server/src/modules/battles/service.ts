@@ -7,6 +7,7 @@ import {
   LIVE_BATTLE_RULES,
   liveTurnAction,
   quickMessageById,
+  rareFindTier,
   sidesToAct,
   battleXpPercent,
   befriendedLevel,
@@ -1004,6 +1005,34 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
 
+  /**
+   * The patch line (#391): a wild friend whose tier tells the whole patch
+   * (Legendary in Phase 1, never a secret kind). Its name goes only to members
+   * who have met it (`metBy`, read by the event's public view).
+   */
+  const appendCelebrated = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    friend: OwnedSquishy,
+  ): Promise<void> => {
+    const rarity = content.species.get(friend.speciesId)?.rarity;
+    if (row.kind !== 'wild' || !rarity || rarity === 'secret') return;
+    if (!rareFindTier(rarity)?.patchLine) return;
+    await repo.appendEvent({
+      mapId: row.mapId,
+      type: 'squishy.celebrated',
+      actorUserId: row.playerUserId,
+      payload: {
+        battleId: row.id,
+        userId: row.playerUserId,
+        speciesId: friend.speciesId,
+        rarity,
+        metBy: await createSpawnsRepo(tx).seenBy(row.mapId, friend.speciesId),
+      },
+    });
+  };
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -1176,7 +1205,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
     await appendGrowthEvents(repo.appendEvent, grown);
-    for (const friend of friends) await appendCaptured(repo, row, friend);
+    for (const friend of friends) {
+      await appendCaptured(repo, row, friend);
+      await appendCelebrated(repo, tx, row, friend);
+    }
     for (const event of tile.events) await repo.appendEvent(event);
     for (const event of landEvents) await repo.appendEvent(event);
     for (const event of journeyEvents) await repo.appendEvent(event);

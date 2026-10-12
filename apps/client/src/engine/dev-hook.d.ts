@@ -124,6 +124,8 @@ declare global {
       audio?(): AudioDebug;
       /** What's new (#220): whether the sheet is open, why it opened and how many entries it lists. */
       whatsNew?(): WhatsNewDebug;
+      /** The patch line (#391): the line showing, how many wait, and whether it's held back now. */
+      patchLine?(): { showing: string | null; waiting: number; busy: boolean };
     };
   }
 }
