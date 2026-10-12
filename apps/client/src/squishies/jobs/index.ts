@@ -2,6 +2,7 @@ import {
   GAME_DATA,
   JOB_RULES,
   workSource,
+  type JobsView,
   type PublicTile,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -9,8 +10,9 @@ import type { TileActions } from '../../map/map-screen.js';
 import { el } from '../../ui/dom.js';
 import { createGathererBadges, type GathererBadges } from './gatherer-badges.js';
 import { createJobBoard, type JobBoard, type JobBoardDebug } from './job-board.js';
-import type { JobsApi } from './jobs-api.js';
-import { JOBS_TEXT } from './jobs-view.js';
+import { jobsApi, type JobsApi } from './jobs-api.js';
+import { JOBS_TEXT, type WorkMood } from './jobs-view.js';
+import { createViewFeed } from './view-feed.js';
 import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-picker.js';
 
 // Squishy jobs on the client (owner decisions 2026-10-04): the job board and
@@ -33,6 +35,8 @@ export interface JobsDebug {
   readonly team: TeamPickerDebug;
   /** Gatherer badges on screen over the map. */
   readonly badges: number;
+  /** Of those, the ones showing my gatherers' mood (#393). */
+  readonly badgeMoods: Readonly<Record<WorkMood, number>>;
 }
 
 export interface Jobs {
@@ -50,6 +54,13 @@ export interface Jobs {
   mountTeamButton: (box: Element | null, mapNow: () => string | null) => void;
   /** The map layer that puts a 🧺 over tiles with a gatherer (pass it to the map screen). */
   readonly badges: GathererBadges;
+  /**
+   * Asks for my fresh jobs view of a map (#393): it reaches `onView` (only if
+   * it's still the newest), for the home's bubbles, bounce and droop.
+   */
+  loadView: (mapId: string) => void;
+  /** Calls `listener` with every fresh jobs view (a job changed, the board opened). */
+  onView: (listener: (mapId: string, view: JobsView) => void) => void;
   readonly isOpen: boolean;
   readonly debug: JobsDebug;
 }
@@ -76,18 +87,25 @@ export function openTeamPicker(mapId: string): Promise<void> {
 }
 
 export function createJobs(options: JobsOptions): Jobs {
+  // My jobs views, newest only, for the map's badges and the home's moods (#393).
+  const feed = createViewFeed(options.api ?? jobsApi);
+  const api = feed.api;
   const board: JobBoard = createJobBoard({
     root: options.root,
-    ...(options.api ? { api: options.api } : {}),
+    api,
     ...(options.settle ? { settle: options.settle } : {}),
   });
-  const picker: TeamPicker = createTeamPicker({
-    root: options.root,
-    ...(options.api ? { api: options.api } : {}),
-  });
-  const badges = createGathererBadges(options.root);
+  const picker: TeamPicker = createTeamPicker({ root: options.root, api });
   let userId: string | null = null;
   const glade = (mapId: string) => options.isGlade?.(mapId) ?? false;
+  /** My jobs view, for the moods: never on the Tutorial Glade, never signed out. */
+  const loadView = (mapId: string) => {
+    if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
+  };
+  const badges = createGathererBadges(options.root, { load: loadView });
+  feed.listen((mapId, view) => {
+    badges.setMine(mapId, view);
+  });
 
   const jobs: Jobs = {
     // Never on the Tutorial Glade: its steps keep their own flow.
@@ -106,7 +124,14 @@ export function createJobs(options: JobsOptions): Jobs {
       picker.close();
     },
     setUser: (user) => {
-      userId = user?.id ?? null;
+      const next = user?.id ?? null;
+      const changed = next !== userId;
+      userId = next;
+      if (changed) {
+        // Another player (or none): the last one's moods go, and so does anything still on its way.
+        feed.reset();
+        badges.forget();
+      }
       if (!user) jobs.close();
     },
     tileActions: {
@@ -184,11 +209,18 @@ export function createJobs(options: JobsOptions): Jobs {
       refresh();
     },
     badges,
+    loadView,
+    onView: feed.listen,
     get isOpen() {
       return board.isOpen || picker.isOpen;
     },
     get debug() {
-      return { board: board.debug, team: picker.debug, badges: badges.shown };
+      return {
+        board: board.debug,
+        team: picker.debug,
+        badges: badges.shown,
+        badgeMoods: badges.moods,
+      };
     },
   };
   installed = jobs;
