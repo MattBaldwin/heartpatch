@@ -76,6 +76,11 @@
   overflow: hidden;
 }
 
+/* Once the chips that fit are chosen, a chip's landing pop may spill a little. */
+.away-chips.away-fit {
+  overflow: visible;
+}
+
 .away-chip {
   display: flex;
   flex: none;
@@ -153,6 +158,8 @@
 .away-flyer {
   position: fixed;
   z-index: 7;
+  /* Mounted outside the banner: the same rounded type as the chip it becomes. */
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   top: 0;
   left: 0;
   box-shadow: 0 4px 12px rgb(74 49 80 / 22%);

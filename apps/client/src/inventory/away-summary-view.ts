@@ -29,6 +29,8 @@ const STAGGER_MS = 70; // TUNE
 const MAX_FLYERS = 10; // TUNE
 /** Points along each flight path. */
 const FLIGHT_STEPS = 12;
+/** How far apart chips from the same tile pop up. */
+const SAME_TILE_STEP = { x: 22, y: -16 }; // TUNE
 
 export interface AwaySummaryShow {
   readonly entries: readonly SummaryEntry[];
@@ -241,10 +243,14 @@ export function createAwaySummary(
 
   /** Every chip if they fit; else as many whole ones as fit beside "N more", which counts the rest. */
   function fitChips(entries: readonly SummaryEntry[]): void {
+    chips.classList.remove('away-fit');
     chips.replaceChildren(...entries.map(chipFor));
     chipsShown = entries.length;
     more.hidden = true;
-    if (!overflows()) return;
+    if (!overflows()) {
+      chips.classList.add('away-fit');
+      return;
+    }
     more.hidden = false;
     // Measured with the button at its widest, so the last chip is never cut.
     more.textContent = `${AWAY_TEXT.more(entries.length)} ›`;
@@ -255,6 +261,7 @@ export function createAwaySummary(
     const hiddenCount = entries.length - chipsShown;
     more.textContent = `${AWAY_TEXT.more(hiddenCount)} ›`;
     more.hidden = hiddenCount === 0;
+    chips.classList.add('away-fit');
   }
 
   function overflows(): boolean {
@@ -304,8 +311,14 @@ export function createAwaySummary(
     const from = what.from;
     if (!from || reducedMotion()) return false;
     const run = flightRun;
+    // Chips from the same tile pop up a little apart, so none hides another's number.
+    const fromSame = new Map<string, number>();
     const trips = what.entries.slice(0, MAX_FLYERS).flatMap((entry, i) => {
-      const start = from(entry);
+      const at = from(entry);
+      const key = at ? `${String(Math.round(at.x))},${String(Math.round(at.y))}` : '';
+      const nth = fromSame.get(key) ?? 0;
+      fromSame.set(key, nth + 1);
+      const start = at && { x: at.x + nth * SAME_TILE_STEP.x, y: at.y + nth * SAME_TILE_STEP.y };
       const slot = i < chipsShown ? (chips.children[i] as HTMLElement | undefined) : more;
       return start && slot && !slot.hidden ? [{ entry, start, slot }] : [];
     });
