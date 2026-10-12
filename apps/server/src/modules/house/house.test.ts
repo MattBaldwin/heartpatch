@@ -221,6 +221,7 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     // A new Keeper's home ring is tended land: 7 of the 8 tiles.
     expect(row(view, 'tilesTended')).toMatchObject({ have: 7, need: 8, done: false });
     expect(view.items).toEqual({ timber: 0, stone: 0 });
+    expect(view.cooldowns).toEqual([]);
   });
 
   it("counts habitats and tonight's lit fires from the server, never the client", async () => {
@@ -644,6 +645,8 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       later(12); // half the rate while it lived there
       const out = await moveOk(server, kid, mapId, mochi, null);
       expect(snug(out).residents.map((r) => r.squishyId)).toEqual([other]);
+      const backAt = new Date(clock.getTime() + 24 * HOUR_MS).toISOString();
+      expect(out.cooldowns).toEqual([{ squishyId: mochi, moveBackInAt: backAt }]);
       expect(await squishyRow(mochi)).toMatchObject({ contentment: 75, contentmentSince: clock });
       expect(await residencyOf(mochi)).toMatchObject({
         roomId: null,
@@ -665,8 +668,15 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(await refused(move(server, kid, mapId, mochi, 'snug'))).toBe(
         'Mochi just moved out. Let them stretch their legs first!',
       );
-      later(18);
+      // The house screen lists Mochi's wait until the day is up.
+      later(17);
+      expect((await house(server, kid, mapId)).cooldowns).toEqual([
+        { squishyId: mochi, moveBackInAt: backAt },
+      ]);
+      later(1);
       await moveOk(server, kid, mapId, third, null);
+      // Third just moved out, so it waits now; Mochi doesn't.
+      expect((await house(server, kid, mapId)).cooldowns.map((c) => c.squishyId)).toEqual([third]);
       const back = await moveOk(server, kid, mapId, mochi, 'snug');
       expect(
         snug(back)
@@ -677,6 +687,22 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       const events = (await movedEvents(mapId)).length;
       await moveOk(server, kid, mapId, third, null);
       expect(await movedEvents(mapId)).toHaveLength(events);
+    });
+
+    it('lists no cooldown for a squishy another Keeper owns now', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      const id = await pet(mapId, kid);
+      await moveOk(server, kid, mapId, id, 'snug');
+      const out = await moveOk(server, kid, mapId, id, null);
+      expect(out.cooldowns.map((c) => c.squishyId)).toEqual([id]);
+      // Traded to the owner (the row left behind, as a stray one would be).
+      await db.execute(`update squishies set owner_user_id = '${owner.id}' where id = '${id}'`);
+      expect((await house(server, kid, mapId)).cooldowns).toEqual([]);
+      expect((await house(server, owner, mapId)).cooldowns).toEqual([]);
     });
 
     it('says a full room is full, and refuses squishies at a post, in the Hollow, or not mine', async () => {

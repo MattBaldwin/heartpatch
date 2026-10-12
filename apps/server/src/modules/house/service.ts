@@ -10,6 +10,7 @@ import {
   houseLevelData,
   jobOf,
   MILESTONE_TRACKS,
+  moveBackInAt,
   moveInProblem,
   nextHouseLevel,
   renderHouseNote,
@@ -305,10 +306,11 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
     reads?: ViewReads,
   ): Promise<HouseView> {
     const repo = createHouseRepo(executor);
-    const [built, { residents, gift }, items] = await Promise.all([
+    const [built, { residents, gift }, items, movedOut] = await Promise.all([
       repo.level(map.id, userId),
       reads ?? readToday(executor, map, userId, at),
       createInventoryRepo(executor).list({ mapId: map.id, userId }),
+      repo.movedOut(map.id, userId),
     ]);
     const mapSeed = gift ? await mapSeedOf(executor, map.id) : null;
     const level = built ?? HOUSE_START_LEVEL;
@@ -358,6 +360,11 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
       next: nextView,
       items: Object.fromEntries(Object.keys(next?.cost ?? {}).map((id) => [id, items[id] ?? 0])),
       gift: gift && mapSeed ? giftView(gift, mapSeed, userId) : null,
+      // The move-in refusal's rule: still before `moveBackInAt` (plan Q5).
+      cooldowns: movedOut.flatMap(({ squishyId, movedOutAt }) => {
+        const until = moveBackInAt(movedOutAt, data.rules);
+        return at < until ? [{ squishyId, moveBackInAt: until.toISOString() }] : [];
+      }),
       now: at.toISOString(),
     };
   }

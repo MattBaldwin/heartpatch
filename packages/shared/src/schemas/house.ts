@@ -75,6 +75,17 @@ export const HouseGiftSchema = z.object({
 });
 export type HouseGift = z.infer<typeof HouseGiftSchema>;
 
+/**
+ * A squishy of mine that just moved out of my house and can't move back in
+ * yet (#381 plan Q5), with when it may (`moveBackInAt`, the shared rule the
+ * move-in refusal uses).
+ */
+export const HouseCooldownSchema = z.object({
+  squishyId: z.uuid(),
+  moveBackInAt: z.iso.datetime(),
+});
+export type HouseCooldown = z.infer<typeof HouseCooldownSchema>;
+
 /** `GET /maps/:mapId/house`, and later the reply to every house command. */
 export const HouseViewSchema = z.object({
   level: z.number().int().min(1),
@@ -88,6 +99,12 @@ export const HouseViewSchema = z.object({
   items: ItemCountsSchema,
   /** Today's gift, or null when there's none (no resident home; older servers). */
   gift: HouseGiftSchema.nullable().default(null),
+  /**
+   * My squishies on this patch that moved out and can't move back in yet,
+   * for the move-in picker's dimmed rows. Empty when there are none, and
+   * from older servers.
+   */
+  cooldowns: z.array(HouseCooldownSchema).default([]),
   now: z.iso.datetime(),
 });
 export type HouseView = z.infer<typeof HouseViewSchema>;
