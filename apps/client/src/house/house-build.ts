@@ -1,22 +1,17 @@
 import type { HouseView } from '@heartpatch/shared';
-import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
-import { newIdempotencyKey } from '../net/idempotency-key.js';
-import { messageOf } from '../ui/dom.js';
+import { createHouseCommand, type HouseCommandDeps } from './house-command.js';
 
 /*
- * Building the house's next level (#381 plan §10.5), as the other screens
- * send a command: one `Idempotency-Key` per tap on the confirm, the same key
- * on the one retry after a dropped connection (so a build that did land is
- * replayed, never paid twice), and a second tap while one is in flight does
- * nothing. Pure (the API, the key and the clock are passed in), so it's
- * unit-tested.
+ * Building the house's next level (#381 plan §10.5), sent as one house
+ * command (house-command.ts): one `Idempotency-Key` per tap on the confirm,
+ * the same key on the one retry after a dropped connection (so a build that
+ * did land is replayed, never paid twice), and a second tap while one is in
+ * flight does nothing. Pure (the API, the key and the clock are passed in),
+ * so it's unit-tested.
  */
 
-export interface HouseBuildDeps {
+export interface HouseBuildDeps extends HouseCommandDeps {
   build: (mapId: string, toLevel: number, key: string) => Promise<HouseView>;
-  newKey?: () => string;
-  wait?: (ms: number) => Promise<void>;
-  retryAfterMs?: number;
 }
 
 /** What one tap on the confirm came to. */
@@ -33,35 +28,15 @@ export interface HouseBuilder {
   readonly busy: boolean;
 }
 
-const delay = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 export function createHouseBuilder(deps: HouseBuildDeps): HouseBuilder {
-  let busy = false;
-  const send = {
-    newKey: deps.newKey ?? newIdempotencyKey,
-    wait: deps.wait ?? delay,
-    retryAfterMs: deps.retryAfterMs ?? COMMAND_RETRY_MS,
-  };
+  const command = createHouseCommand(deps);
   return {
     async build(mapId, toLevel, stillWanted) {
-      if (busy) return { kind: 'dropped' };
-      busy = true;
-      try {
-        const view = await sendCommand(send, (key) => deps.build(mapId, toLevel, key), stillWanted);
-        if (!view || !stillWanted()) return { kind: 'dropped' };
-        return { kind: 'built', view };
-      } catch (err) {
-        if (!stillWanted()) return { kind: 'dropped' };
-        return { kind: 'failed', message: messageOf(err) };
-      } finally {
-        busy = false;
-      }
+      const outcome = await command.run((key) => deps.build(mapId, toLevel, key), stillWanted);
+      return outcome.kind === 'done' ? { kind: 'built', view: outcome.view } : outcome;
     },
     get busy() {
-      return busy;
+      return command.busy;
     },
   };
 }

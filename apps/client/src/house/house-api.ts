@@ -1,4 +1,9 @@
-import { HouseViewSchema, type BuildHouseRequest, type HouseView } from '@heartpatch/shared';
+import {
+  HouseViewSchema,
+  type BuildHouseRequest,
+  type ClaimHouseGiftRequest,
+  type HouseView,
+} from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
 /**
@@ -17,6 +22,18 @@ export const houseApi = {
     apiCallFor(`/maps/${mapId}/house/build`, {
       method: 'POST',
       body: { toLevel } satisfies BuildHouseRequest,
+      schema: HouseViewSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /**
+   * Opens the day's gift the house showed (#381 H2), and replies with the
+   * house. One `key` per tap, the same one on the retry (tech spec §5).
+   */
+  claimGift: (mapId: string, day: string, key: string): Promise<HouseView> =>
+    apiCallFor(`/maps/${mapId}/house/gift/claim`, {
+      method: 'POST',
+      body: { day } satisfies ClaimHouseGiftRequest,
       schema: HouseViewSchema,
       headers: { 'idempotency-key': key },
     }),

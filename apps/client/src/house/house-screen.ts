@@ -8,14 +8,30 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import type { CueName } from '../audio/cues.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { HOME_SHEET } from '../home/home-config.js';
 import { afterHandle } from '../home/home-peek.js';
+import { speciesMap, squishyName } from '../home/home-view.js';
 import { TapDetector } from '../map/tap-detector.js';
 import { el, messageOf } from '../ui/dom.js';
 import { houseApi, type HouseApi } from './house-api.js';
 import { createHouseBuilder } from './house-build.js';
+import { createFlicker } from './house-flicker.js';
+import { giftPanel, giftPop } from './house-gift.js';
+import { createGiftOpener } from './house-gift-open.js';
+import {
+  giftPeek,
+  giftPlacement,
+  giftToast,
+  placementKey,
+  rereadAfterOpen,
+  shouldReread,
+  wrappedGift,
+} from './house-gift-view.js';
+import { houseLookNow, sameHouseLook, type HouseLightLook } from './house-light-look.js';
+import { localDayIn, welcomeOnce, welcomeStorage, type WelcomeStorage } from './house-welcome.js';
 import { confirmPanel, growPanel, houseButton, sparkle } from './house-grow.js';
 import { builtLine, sparkleSpot } from './house-grow-view.js';
 import { floorAfterGrowing, roomBox } from './house-layout.js';
@@ -28,6 +44,7 @@ import {
   kidPose,
   pinchedOut,
   pinchZoom,
+  project,
   roofAt,
   walkedIn,
   walkZoom,
@@ -35,10 +52,17 @@ import {
   type HouseViewport,
 } from './house-camera.js';
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
-import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
+import {
+  HOUSE_CAMERA,
+  HOUSE_FLICKER,
+  HOUSE_GIFT,
+  HOUSE_LOOK_EVERY_MS,
+  HOUSE_SHEET,
+  HOUSE_WELCOME,
+} from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
 import { createHousePan, type PanFrame } from './house-pan.js';
-import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine } from './house-view.js';
+import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine, WELCOME_TEXT } from './house-view.js';
 import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
@@ -73,6 +97,18 @@ export interface HouseScreenOptions {
    * player who left Home mid-fetch never gets the house over the map.
    */
   canOpen?: (mapId: string) => boolean;
+  /** Draws one frame (`Stage.requestFrame`), for the flicker's ticks; `invalidate` if left out. */
+  requestFrame?: () => void;
+  /** The patch's time zone (the windows follow its clock); read as the house opens. */
+  timeZone?: (mapId: string) => string | null;
+  /** The clock (the dev gallery pins a time of day). */
+  now?: () => Date;
+  /** A soft sound for a moment (the audio cue system, #25). */
+  cue?: (name: CueName) => void;
+  /** Where welcome home remembers the day (localStorage; null: never welcomes). */
+  storage?: WelcomeStorage | null;
+  /** How long welcome home's line stays, ms (0: until the sheet moves; the gallery's captures). */
+  welcomeLineMs?: number;
 }
 
 /**
@@ -80,7 +116,7 @@ export interface HouseScreenOptions {
  * fills the screen, opened to the room line and Grow the house, the Grow
  * sheet itself, or the build's confirm.
  */
-export type HouseSheet = 'peek' | 'open' | 'grow' | 'confirm';
+export type HouseSheet = 'peek' | 'open' | 'grow' | 'confirm' | 'gift';
 
 /** Read-only state for the dev hook (Playwright asserts on it, not pixels). */
 export interface HouseDebug {
@@ -99,6 +135,13 @@ export interface HouseDebug {
   readonly building: boolean;
   /** Sparkle bursts played after builds (none under reduced motion). */
   readonly sparkles: number;
+  /** Today's gift (#381 H2): its line shows, it's opening, and how many opened this visit. */
+  readonly gift: { readonly shown: boolean; readonly opening: boolean; readonly opened: number };
+  /** Welcome home showed on this open, and the hops played (none under reduced motion). */
+  readonly welcomed: boolean;
+  readonly hops: number;
+  /** The fire's flicker timer: running now, its rate, and its ticks so far. */
+  readonly flicker: { readonly running: boolean; readonly hz: number; readonly ticks: number };
   /**
    * Re-reads the house now, as opening the sheet does. Dev hook only: e2e
    * starts a read while a build is in flight (the UI can't) to prove the
@@ -125,6 +168,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)');
   // Turned on mid-glide: cut to the end, as the close-up does.
   reducedMotion.addEventListener?.('change', () => {
+    // The fire's flicker follows it mid-visit: still with reduced motion, back without.
+    startFlicker();
     if (!reducedMotion.matches) return;
     skipGlide();
     if (walk) {
@@ -191,6 +236,52 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   const builder = createHouseBuilder({
     build: (id, toLevel, key) => api.build(id, toLevel, key),
   });
+  const opener = createGiftOpener({
+    claim: (id, day, key) => api.claimGift(id, day, key),
+  });
+  const clock = options.now ?? (() => new Date());
+  const storage = options.storage === undefined ? welcomeStorage() : options.storage;
+  const frameOnce = () => {
+    if (options.requestFrame) options.requestFrame();
+    else options.invalidate();
+  };
+  /** Residents' names by squishy id (the gift line names its giver). */
+  let names = new Map<string, string>();
+  /** The gift is opening (Open it! tapped, no reply yet). */
+  let opening = false;
+  let opened = 0;
+  /** Where the scene drew the gift box (`placementKey`): a new gift means a new scene. */
+  let giftDrawn = 'none';
+  /** The patch's time zone, read as the house opens (the map's view goes after). */
+  let zone: string | null = null;
+  /** The patch day the shown house was read on (a new day re-reads it: today's gift). */
+  let readDay = '';
+  /** The light now (#381 H2): picked as the scene builds and once a minute after. */
+  let look: HouseLightLook | null = null;
+  let lookTimer: ReturnType<typeof setInterval> | null = null;
+  /** Welcome home: still to decide on this open, shown, and the hop still to play. */
+  let welcomePending = false;
+  let welcomed = false;
+  let hopPending = false;
+  let hops = 0;
+  let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+  const hidden = () => typeof document !== 'undefined' && document.hidden;
+  /** The fire's flicker: a slow timer on medium and high while the house shows (house-flicker.ts). */
+  const flicker = createFlicker({
+    apply: (fire, lamp) => scene3d?.setFlicker(fire, lamp),
+    frame: frameOnce,
+    hidden,
+    onVisibility: (changed) => {
+      document.addEventListener('visibilitychange', changed);
+      return () => {
+        document.removeEventListener('visibilitychange', changed);
+      };
+    },
+  });
+  // Back from the background: the clock may have moved on.
+  document.addEventListener('visibilitychange', () => {
+    if (isOpen && !hidden()) checkLook();
+  });
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
@@ -216,6 +307,16 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   const moreLeft = el('div', { class: 'house-more house-more-left', 'aria-hidden': 'true' }, '‹');
   const moreRight = el('div', { class: 'house-more house-more-right', 'aria-hidden': 'true' }, '›');
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
+  // Today's gift on the peek bar (#381 H2): the button alternative to tapping the box.
+  const giftLine = el('button', {
+    type: 'button',
+    class: 'house-gift-line',
+    'data-testid': 'house-gift-line',
+  });
+  giftLine.hidden = true;
+  giftLine.addEventListener('click', () => {
+    if (wrappedGift(view)) setSheet('gift');
+  });
   // The sheet's handle, as home's (#412): a tap opens or folds it, a swipe
   // goes the finger's way; a click with no press before it (keyboard,
   // VoiceOver) toggles.
@@ -239,6 +340,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     { class: 'house-peek', 'data-testid': 'house-peek', 'aria-label': HOUSE_TEXT.yourHouse },
     handle,
     peekText,
+    giftLine,
     noteLine,
     sheetBody,
   );
@@ -251,8 +353,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     e.preventDefault();
   });
   scrim.addEventListener('click', () => {
-    // While building, the confirm stays put ("Building…" can't be dismissed).
-    if (!building) setSheet('peek');
+    // While building or opening, the sheet stays put ("Building…" can't be dismissed).
+    if (!building && !opening) setSheet('peek');
   });
   const overlay = el(
     'div',
@@ -375,6 +477,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     top.style.top = `${String(Math.max(0, options.coveredTop?.() ?? 0))}px`;
     pill.textContent = HOUSE_TEXT.pill(view.level);
     peekText.textContent = peekLine(view);
+    const line = giftPeek(wrappedGift(view), (id) => names.get(id) ?? null);
+    giftLine.textContent = line ?? '';
+    giftLine.dataset['gift'] = String(line !== null);
     renderWalk();
     renderSheet();
   }
@@ -400,10 +505,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         return 'house-grow-close';
       case 'confirm':
         return 'house-grow-yes';
+      case 'gift':
+        return 'house-gift-yes';
       case 'open':
         return from === 'peek' ? null : 'house-grow-open';
       case 'peek':
-        return from === 'peek' ? null : 'house-peek-handle';
+        return from === 'peek' ? null : from === 'gift' ? 'house-gift-line' : 'house-peek-handle';
     }
   }
 
@@ -426,6 +533,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         ? (active.dataset['testid'] ?? null)
         : null;
     drawSheet();
+    // Walk in and the floor switch stand clear of the folded sheet, which
+    // grows a row while today's gift or a line waits (#381 H2).
+    if (sheet === 'peek' && isOpen) {
+      overlay.style.setProperty('--house-peek-clear', `${String(peek.offsetHeight + 24)}px`);
+    }
     const want = focusNext;
     focusNext = null;
     if (want) {
@@ -440,18 +552,23 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const current = view;
     const open = sheet !== 'peek';
     const growing = sheet === 'grow' || sheet === 'confirm';
+    // The Grow sheet and the gift card own the screen: the HUD behind dims.
+    const modal = growing || sheet === 'gift';
     peek.classList.toggle('house-peek-open', open);
     peek.classList.toggle('house-peek-grow', growing);
     handle.setAttribute('aria-expanded', String(open));
     walkButton.hidden = open;
     renderFloor();
-    peekText.hidden = growing;
-    // The Grow sheet has its own ✕; the grip comes back with the room line.
-    handle.hidden = growing;
-    scrim.hidden = !growing;
+    peekText.hidden = modal;
+    giftLine.hidden = modal || giftLine.dataset['gift'] !== 'true';
+    // The Grow sheet and the gift card have their own ✕; the grip comes back with the room line.
+    handle.hidden = modal;
+    scrim.hidden = !modal;
+    // The gift card dims the house only a little: the squishies stay bright behind it.
+    scrim.classList.toggle('house-scrim-light', sheet === 'gift');
     for (const behind of [touch, top, walkButton, floorButton]) {
-      behind.toggleAttribute('inert', growing);
-      if (growing) behind.setAttribute('aria-hidden', 'true');
+      behind.toggleAttribute('inert', modal);
+      if (modal) behind.setAttribute('aria-hidden', 'true');
       else behind.removeAttribute('aria-hidden');
     }
     noteLine.textContent = keepTail(note);
@@ -462,6 +579,25 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const next = current?.next ?? null;
     if (!current || sheet === 'peek') {
       sheetBody.replaceChildren();
+      return;
+    }
+    if (sheet === 'gift') {
+      const gift = wrappedGift(current);
+      if (!gift) {
+        sheetBody.replaceChildren();
+        return;
+      }
+      const [header, ...rest] = giftPanel(gift, opening, {
+        onOpen: () => void openGift(),
+        onClose: () => {
+          setSheet('peek');
+        },
+      });
+      if (header) {
+        head = header;
+        peek.insertBefore(header, noteLine);
+      }
+      sheetBody.replaceChildren(...rest);
       return;
     }
     if (sheet === 'open' || !next) {
@@ -510,8 +646,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function applyView(fresh: HouseView): void {
     const grew = view !== null && fresh.level !== view.level;
     view = fresh;
+    readDay = localDayIn(zone, new Date(fresh.now));
+    // An opened gift (or none, as a claim of yesterday's replies) folds its card away.
+    if (sheet === 'gift' && !opening && !wrappedGift(fresh)) {
+      sheet = 'peek';
+      focusNext ??= 'house-peek-handle';
+    }
     render();
-    if (!grew) return;
+    if (!grew) {
+      syncGift(fresh);
+      return;
+    }
     // A new room upstairs: show its floor (B4 review), in the dollhouse.
     const next = floorAfterGrowing(fresh.rooms, fresh.level, floor);
     if (next !== floor) {
@@ -520,6 +665,90 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       walk = null;
     }
     options.showScene(build);
+  }
+
+  /**
+   * Keeps the scene's gift box in step with the house: an opened gift (or
+   * none) folds the box away; a new one (tomorrow's, on a screen left open)
+   * builds the scene again with it.
+   */
+  function syncGift(fresh: HouseView): void {
+    const key = placementKey(giftPlacement(fresh, (id) => cast.has(id)));
+    if (key === giftDrawn || !scene3d) return;
+    if (key === 'none') {
+      scene3d.removeGift();
+      giftDrawn = 'none';
+      draw();
+      return;
+    }
+    options.showScene(build);
+  }
+
+  /** Where the gift box is on screen (CSS px), or null: none drawn, or behind the camera. */
+  function giftOnScreen(): { x: number; y: number } | null {
+    const at = scene3d?.giftPoint ?? null;
+    if (!at || !base || glide) return null;
+    const pose = kid ? blend(base, kid, zoom) : base;
+    const vp = viewport();
+    if (vp.width <= 0 || vp.height <= 0) return null;
+    const p = project(pose, vp.width / vp.height, at);
+    if (!(p.depth > 0) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    return { x: ((p.x + 1) / 2) * vp.width, y: ((1 - p.y) / 2) * vp.height };
+  }
+
+  /** A tap on the box (CSS px from the screen's top left). */
+  function giftHit(x: number, y: number): boolean {
+    if (sheet !== 'peek' && sheet !== 'open') return false;
+    if (!wrappedGift(view)) return false;
+    const at = giftOnScreen();
+    const box = overlay.getBoundingClientRect();
+    return (
+      at !== null && Math.hypot(x - box.left - at.x, y - box.top - at.y) <= HOUSE_GIFT.tapRadius
+    );
+  }
+
+  /** Open it!: one claim, then the unwrap (or the server's kind word, as given). */
+  async function openGift(): Promise<void> {
+    const id = mapId;
+    const gift = wrappedGift(view);
+    if (!id || !gift || opening) return;
+    opening = true;
+    sync.drop(); // the claim's reply is newer than any read in flight
+    renderSheet();
+    const outcome = await opener.open(id, gift.day, () => isOpen && mapId === id);
+    opening = false;
+    if (!isOpen || mapId !== id) return;
+    if (outcome.kind === 'dropped') {
+      renderSheet();
+      return;
+    }
+    if (outcome.kind === 'failed') {
+      note = outcome.message;
+      noteKind = 'calm';
+      focusNext = 'house-note';
+      renderSheet();
+      // Opened on another device, or the day moved on: read what's true now.
+      void refresh();
+      return;
+    }
+    // A read sent while opening may land after this reply: drop it.
+    sync.drop();
+    opened += 1;
+    // The box pops where it stood, then it's gone.
+    const at = giftOnScreen();
+    if (at) giftPop(overlay, at, reducedMotion.matches);
+    options.cue?.('pop');
+    scene3d?.removeGift();
+    giftDrawn = 'none';
+    sheet = 'peek';
+    note = giftToast(gift);
+    noteKind = 'ok';
+    focusNext = 'house-note';
+    applyView(outcome.view);
+    // The gift line went: the folded sheet is a row shorter, so the house refits.
+    refit();
+    // Yesterday's gift opened after midnight: today's rolls on the next read (its ticket is newer).
+    if (rereadAfterOpen(gift, outcome.view, localDayIn(zone, clock()))) void refresh();
   }
 
   /** Re-reads the house (the sheet opened): requirements and the bag move all the time. */
@@ -661,8 +890,71 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
     renderFloor();
+    // Welcome home's hop, once the roof is off.
+    if (hopPending && !glide) {
+      hopPending = false;
+      if (s.hop(now)) {
+        hops += 1;
+        options.cue?.('boop');
+      }
+    }
+    const moving = s.update(now);
     options.invalidate();
-    if (glide || walk) draw();
+    if (glide || walk || moving) draw();
+  }
+
+  /** The fire flickers on a slow timer on medium and high (never on low, nor with reduced motion). */
+  function startFlicker(): void {
+    const s = scene3d;
+    const tier = builtTier;
+    if (!isOpen || !s || tier === null) return;
+    flicker.start(s.flickers && !reducedMotion.matches ? HOUSE_FLICKER.hz[tier] : 0);
+  }
+
+  /** The light at this moment on the patch's clock. */
+  const lookNow = (): HouseLightLook => houseLookNow(zone, clock());
+
+  /** Once a minute (and back from the background): a new time of day relights the house. */
+  function checkLook(): void {
+    if (!isOpen || !scene3d) return;
+    // A new patch day since the house was read: today's gift rolls on a read.
+    if (shouldReread({ readDay, today: localDayIn(zone, clock()), busy: building || opening }))
+      void refresh();
+    const next = lookNow();
+    if (look && sameHouseLook(next, look)) return;
+    look = next;
+    scene3d.setLook(next);
+    frameOnce();
+  }
+
+  /**
+   * Welcome home, the first time the house opens on a patch day (decided
+   * once per open, after the first frame): the line, and a hop unless
+   * reduced motion is on.
+   */
+  function greet(): void {
+    const id = mapId;
+    if (!welcomePending || !isOpen || !id) return;
+    welcomePending = false;
+    if (!welcomeOnce(storage, id, localDayIn(zone, clock()))) return;
+    welcomed = true;
+    hopPending = !reducedMotion.matches;
+    if (note === '') {
+      note = WELCOME_TEXT.line;
+      noteKind = 'ok';
+      renderSheet();
+      if (welcomeTimer !== null) clearTimeout(welcomeTimer);
+      const lineMs = options.welcomeLineMs ?? HOUSE_WELCOME.lineMs;
+      if (lineMs > 0) {
+        welcomeTimer = setTimeout(() => {
+          welcomeTimer = null;
+          if (!isOpen || note !== WELCOME_TEXT.line) return;
+          note = '';
+          renderSheet();
+        }, lineMs);
+      }
+    }
+    draw();
   }
 
   /** Refits the dollhouse to the screen (a turn, a resize). */
@@ -701,8 +993,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   // a finger: one finger taps (skips the glide), two pinch the zoom.
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch: { spread: number; zoom: number } | null = null;
-  const taps = new TapDetector(() => {
+  const taps = new TapDetector((x, y) => {
     skipGlide();
+    // A tap on the gift box opens its card (the peek bar's line does too).
+    if (giftHit(x, y)) setSheet('gift');
   });
   const spread = () => {
     const [a, b] = [...pointers.values()];
@@ -783,10 +1077,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   );
   window.addEventListener('keydown', (e) => {
     if (!isOpen || e.key !== 'Escape') return;
-    // While building, the confirm stays put ("Building…" can't be dismissed).
-    if (building && sheet !== 'peek') return;
+    // While building or opening, the sheet stays put ("Building…" can't be dismissed).
+    if ((building || opening) && sheet !== 'peek') return;
     // Escape steps back one sheet at a time, then leaves the house.
-    if (sheet === 'confirm') setSheet('grow');
+    if (sheet === 'gift') setSheet('peek');
+    else if (sheet === 'confirm') setSheet('grow');
     else if (sheet === 'grow') setSheet('open');
     else if (sheet === 'open') setSheet('peek');
     else close();
@@ -799,6 +1094,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const tier = options.tier();
     const fresh = builtTier === null;
     builtTier = tier;
+    look = lookNow();
+    const gift = giftPlacement(view, (id) => cast.has(id));
+    giftDrawn = placementKey(gift);
     const built = new HouseScene(scene, view, {
       tier,
       registry,
@@ -806,8 +1104,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       keeperWearing: options.keeperWearing?.() ?? [],
       cast,
       signText: owner() ? HOUSE_TEXT.sign(owner() ?? '') : HOUSE_TEXT.yourHouse,
+      look,
+      gift,
     });
     scene3d = built;
+    startFlicker();
     built.setFloor(floor);
     fit(built);
     renderFloor();
@@ -825,6 +1126,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     scene.onAfterRenderObservable.addOnce(() => {
       draw();
       playSparkle();
+      greet();
     });
     return built.content;
   };
@@ -857,8 +1159,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       const kind = species.get(s.speciesId);
       if (kind) cast.set(s.id, { species: kind, accessory: s.accessory });
     }
+    const known = speciesMap(home);
+    names = new Map(home.squishies.map((s) => [s.id, squishyName(s, known)]));
+    // Before onOpen: the map's view (and its time zone) steps out with it.
+    zone = options.timeZone?.(id) ?? null;
     mapId = id;
     view = fresh;
+    readDay = localDayIn(zone, new Date(fresh.now));
     zoom = 0;
     floor = 0;
     panner.reset();
@@ -869,7 +1176,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     foldedBand = 0;
     foldedSheet = 0;
     celebrate = false;
+    opening = false;
+    welcomePending = true;
+    welcomed = false;
+    hopPending = false;
+    giftDrawn = 'none';
     isOpen = true;
+    if (lookTimer !== null) clearInterval(lookTimer);
+    lookTimer = setInterval(checkLook, HOUSE_LOOK_EVERY_MS);
     options.onOpen(id);
     render();
     options.showScene(build);
@@ -889,6 +1203,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     note = '';
     sync.drop();
     celebrate = false;
+    // Nothing ticks once the house is gone: the flicker, the clock, the welcome line.
+    flicker.stop();
+    if (lookTimer !== null) clearInterval(lookTimer);
+    lookTimer = null;
+    if (welcomeTimer !== null) clearTimeout(welcomeTimer);
+    welcomeTimer = null;
+    welcomePending = false;
+    hopPending = false;
     render();
   }
 
@@ -931,6 +1253,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         sheet,
         building,
         sparkles,
+        gift: {
+          shown: isOpen && !giftLine.hidden,
+          opening,
+          opened,
+        },
+        welcomed,
+        hops,
+        flicker: { running: flicker.running, hz: flicker.hz, ticks: flicker.ticks },
         reread: () => {
           void refresh();
         },
