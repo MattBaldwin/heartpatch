@@ -153,6 +153,12 @@ process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
 // from the device: pin the browser's zone so specs never meet dusk (#326).
 const timezoneId = pinMapTime();
 
+// An iPad runs a spec about 1.3-1.6 times slower than an iPhone on CI (12.7-15.8 min a group
+// against 5.9-9.5, #429): 19 of 26 first-try failures in 7 runs were iPad, several of them a 5 s
+// `expect` default running out. Give its assertions twice that. Specs that set their own
+// timeout keep it.
+const IPAD_EXPECT = { timeout: 10_000 };
+
 const projects = chromiumPath
   ? [
       {
@@ -165,6 +171,7 @@ const projects = chromiumPath
       },
       {
         name: 'ipad-chromium',
+        expect: IPAD_EXPECT,
         use: {
           ...devices['iPad Pro 11'],
           browserName: 'chromium' as const,
@@ -186,7 +193,7 @@ const projects = chromiumPath
     ]
   : [
       { name: 'iphone-webkit', use: { ...devices['iPhone 15'] } },
-      { name: 'ipad-webkit', use: { ...devices['iPad Pro 11'] } },
+      { name: 'ipad-webkit', expect: IPAD_EXPECT, use: { ...devices['iPad Pro 11'] } },
     ];
 
 export default defineConfig({
