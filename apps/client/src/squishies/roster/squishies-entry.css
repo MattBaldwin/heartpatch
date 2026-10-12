@@ -1,0 +1,94 @@
+/* The top bar's Squishies button (#375): a 48pt round 🐾 like Chat and
+   Friends: first of the round buttons by the Keeper menu on the map,
+   top-left at home, and under Back in explore. */
+
+.squishies-open {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 250 252 / 94%);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font-size: 22px;
+  line-height: 1;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.squishies-open[hidden] {
+  display: none;
+}
+
+.squishies-open-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* On the map it leads Chat and Friends (the slot draws them round). On the
+   narrowest phones the row tightens so it never reaches "My patches". */
+@media (max-width: 359px) {
+  .tray-top-right {
+    gap: 4px;
+  }
+
+  .tray-top-right > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tray-top-left > button {
+    padding-inline: var(--hp-pad-x);
+    font-size: 14px;
+  }
+}
+
+/* At home the top-left corner is free (the home header sits lower). */
+.squishies-open-home {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 12px);
+}
+
+/* In explore, under Back (explore's top row is its own: Back, the tile's
+   name, the tool and the bag). */
+.squishies-open-explore {
+  position: fixed;
+  /* Over explore's glints (z-index 5), never under a sparkle. */
+  z-index: 6;
+  top: calc(env(safe-area-inset-top) + 68px);
+  /* Right under Back: explore's top row is centred at up to 640px wide. */
+  left: calc(env(safe-area-inset-left) + 16px + max(0px, (100vw - 672px) / 2));
+}
+
+/* The account pill (top right at home) stops short of the button; its name
+   shortens with "…" rather than covering it (#385 owns the pill itself). */
+body:has(.squishies-open-home:not([hidden])) .auth-chip {
+  max-width: calc(100vw - 84px - env(safe-area-inset-left) - env(safe-area-inset-right));
+}
+
+/* The narrowest phones at home: the pill keeps a wave and Log out on one line. */
+@media (max-width: 359px) {
+  body:has(.squishies-open-home:not([hidden])) .auth-chip-name {
+    font-size: 0;
+  }
+
+  body:has(.squishies-open-home:not([hidden])) .auth-chip-name::before {
+    content: '👋';
+    font-size: 18px;
+  }
+
+  body:has(.squishies-open-home:not([hidden])) .auth-chip .auth-button-small {
+    white-space: nowrap;
+  }
+}

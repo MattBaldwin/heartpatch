@@ -8,6 +8,7 @@ import { createLoreConsumer } from './modules/lore/consumer.js';
 import { createMilestonesConsumer } from './modules/milestones/consumer.js';
 import { createMilestonesService } from './modules/milestones/service.js';
 import { relayoutHomes } from './modules/buildings/layout.js';
+import { relayoutTileUses } from './modules/buildings/tile-uses.js';
 import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
@@ -86,16 +87,39 @@ createMilestonesService({ db: db.db, clock })
 // Homes built before today's rules (#202, #204): home fires pack up with a
 // full refund, and misplaced buildings move on their own tile. Idempotent,
 // so every boot can run it; it never blocks start.
+// Then one building per tile (#295): extra buildings move to a free tile
+// they're allowed on, or come down with everything back, once.
 relayoutHomes(db.db, clock, (owner, err) => {
   app.log.error({ err, ...owner }, 'home re-layout skipped a player');
-}).then(
-  (done) => {
-    if (done.packed + done.moved > 0) app.log.info(done, 'tidied homes to the building rules');
-  },
-  (err: unknown) => {
-    app.log.error({ err }, 'home re-layout failed');
-  },
-);
+})
+  .then(
+    (done) => {
+      if (done.packed + done.moved > 0) app.log.info(done, 'tidied homes to the building rules');
+    },
+    (err: unknown) => {
+      app.log.error({ err }, 'home re-layout failed');
+    },
+  )
+  .then(() =>
+    relayoutTileUses(
+      db.db,
+      clock,
+      (owner, err) => {
+        app.log.error({ err, ...owner }, 'tile-use pass skipped a player');
+      },
+      (owner, done) => {
+        app.log.info({ ...owner, ...done }, 'tile-use pass tidied a player');
+      },
+    ),
+  )
+  .then(
+    (done) => {
+      app.log.info(done, 'tile-use pass done');
+    },
+    (err: unknown) => {
+      app.log.error({ err }, 'tile-use pass failed');
+    },
+  );
 // Trading posts (#269) for patches made before them. Idempotent, so every
 // boot can run it; it never blocks start. A patch with no fair spot free is
 // skipped (no land is ever taken) and tried again next boot.

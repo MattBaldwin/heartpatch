@@ -114,8 +114,9 @@ export interface HomeScreenOptions {
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
-   * The peek bar's "🐾 Squishies" (#412). Without it, the button opens the
-   * sheet to the squishy list; the Squishies roster (#375) can take it over.
+   * The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375).
+   * Without it, the button only unfolds the sheet (the squishies themselves
+   * live in the roster now).
    */
   onSquishies?: (mapId: string) => void;
   /**
@@ -218,7 +219,6 @@ export const HOME_TEXT = {
   cozy: 'Loves it here!',
   full: 'Full',
   yours: 'Your buildings',
-  friends: 'Your squishies',
   jobs: '🧺 Jobs & team',
   /** The peek bar's button to the squishies (#412; 🐾 as the Squishies roster, #375). */
   squishies: '🐾 Squishies',
@@ -753,7 +753,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             true,
           ),
         );
-        const species = speciesMap(current);
         const jobs =
           current.squishies.length > 0 &&
           options.onJobs &&
@@ -804,28 +803,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           );
           break;
         }
-        const friends = current.squishies.map((s) =>
-          button(
-            `💗 ${squishyName(s, species)}`,
-            () => {
-              if (mapId) options.onCare?.(mapId, s.id);
-            },
-            { 'data-care-squishy': s.id, class: 'home-chip' },
-            true,
-          ),
-        );
         body.replaceChildren(
           el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
           ...houseCardNodes(current),
-          ...(friends.length > 0 && options.onCare
-            ? [
-                el('h3', { class: 'home-section-title' }, HOME_TEXT.friends),
-                el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
-              ]
-            : []),
+          // Your squishies live in the Squishies roster (#375): 🐾 at the top,
+          // or the peek bar's Squishies.
           ...(jobs ? [row(jobs)] : []),
           actions,
         );

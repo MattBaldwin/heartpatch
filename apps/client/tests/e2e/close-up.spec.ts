@@ -4,7 +4,7 @@ import { api, hook } from './dev-hook.js';
 import { freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
-import { homeFriends } from './home-sheet.js';
+import { careFromRoster, openRoster } from './roster.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -86,8 +86,7 @@ async function playerWithFriend(page: Page): Promise<void> {
 async function openFromHome(page: Page): Promise<CloseUpDebug> {
   await (await trayButton(page, 'home-open')).tap();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
-  await (await homeFriends(page)).locator('[data-care-squishy]').first().tap();
-  await slowExpect(page.getByTestId('care')).toBeVisible();
+  await careFromRoster(page);
   await page.getByTestId('care-close-up').tap();
   await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');
   const shown = (await state(page))!;
@@ -252,8 +251,8 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   await expect.poll(() => state(page), slow).toBeNull();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
   await slowExpect(view).toBeHidden();
-  // Home base shows the new name.
-  await slowExpect(await homeFriends(page)).toContainText('Sir Puffs');
+  // The Squishies roster shows the new name.
+  await slowExpect(await openRoster(page)).toContainText('Sir Puffs');
   expect(errors).toEqual([]);
   // Don't leave this player's page drawing while later specs run.
   await page.context().close();

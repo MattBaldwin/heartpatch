@@ -71,7 +71,16 @@ const E2E_GROUPS = [
     'squishy-gallery',
   ],
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted. Keep it light.
-  ['cinematic', 'friendly', 'inventory', 'milestones', 'renderer-error', 'starter', 'version'],
+  [
+    'cinematic',
+    'friendly',
+    'inventory',
+    'milestones',
+    'renderer-error',
+    'roster',
+    'starter',
+    'version',
+  ],
   // ~11.1 iPad, ~8.0 iPhone: taps alone is ~4.5-6.5.
   [
     'auth',

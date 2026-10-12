@@ -68,6 +68,21 @@
   transform-origin: 50% 100%;
 }
 
+/* The real squishy (#375): its picture in place of the drawn blob. */
+.care-blob-real {
+  width: 96px;
+  height: 96px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.care-portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .care-face {
   position: absolute;
   inset: 0;
@@ -542,6 +557,11 @@
   .care-blob {
     width: 58px;
     height: 52px;
+  }
+
+  .care-blob-real {
+    width: 64px;
+    height: 64px;
   }
 
   .care-drift[data-mood='steady'],

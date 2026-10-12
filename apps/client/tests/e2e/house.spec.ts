@@ -131,9 +131,7 @@ test('with the house switched off there is no house card and no cottage', async 
   await slowExpect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByTestId('home-house-shortcut')).toHaveCount(0);
   await page.getByTestId('home-handle').tap();
-  await expect(page.getByTestId('home-friends').or(page.getByTestId('home-build'))).not.toHaveCount(
-    0,
-  );
+  await expect(page.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('home-house')).toHaveCount(0);
   expect((await homeState(page))?.scene?.house).toBeNull();
 });
