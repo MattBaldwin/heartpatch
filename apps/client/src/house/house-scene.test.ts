@@ -1,7 +1,18 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { blend, fitHouse, kidPose, project, safeArea } from './house-camera.js';
+import {
+  blend,
+  boxesMeet,
+  chevronBox,
+  fitHouse,
+  framedFocus,
+  kidPose,
+  project,
+  residentBoxes,
+  safeArea,
+} from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { yardPumpkins } from './house-models.js';
@@ -28,8 +39,10 @@ describe('house scene', () => {
       const { scene, house } = buildHouse(level, 'low');
       const rooms = sampleHouse(level).view.rooms;
       expect(house.stats.rooms).toBe(rooms.length);
-      for (const room of rooms) {
-        expect(scene.getMeshByName(`house-${room.id}-floor`)).not.toBeNull();
+      // Every floor's planks, walls and furniture: one mesh per material per floor (B4).
+      for (const floor of new Set(rooms.map((r) => r.layout.floor))) {
+        expect(scene.getMeshByName(`house-f${String(floor)}-floor`)).not.toBeNull();
+        expect(scene.getMeshByName(`house-f${String(floor)}-solid`)).not.toBeNull();
       }
       scene.getEngine().dispose();
     }
@@ -50,12 +63,18 @@ describe('house scene', () => {
     expect(seen).toEqual(['low', 'high']);
   });
 
-  it('takes the open front off the dollhouse and keeps the other walls', () => {
+  it('takes the open front off the dollhouse and keeps the other walls, merged into the floor’s solid', () => {
     const { scene } = buildHouse(1, 'low');
     expect(scene.getMeshByName('house-snug-wall-south')).toBeNull();
     expect(scene.getMeshByName('house-snug-wall-front')!.isEnabled()).toBe(false);
     for (const side of ['north', 'east', 'west'])
-      expect(scene.getMeshByName(`house-snug-wall-${side}`)).not.toBeNull();
+      expect(scene.getMeshByName(`house-snug-wall-${side}`)).toBeNull();
+    // The back wall is there: the solid reaches the back grid line, full height.
+    const solid = scene.getMeshByName('house-f0-solid')!;
+    solid.computeWorldMatrix(true);
+    const box = solid.getBoundingInfo().boundingBox;
+    expect(box.maximumWorld.z).toBeGreaterThan(3 * HOUSE_GRID.cell);
+    expect(box.maximumWorld.y).toBeGreaterThanOrEqual(HOUSE_GRID.storey);
     scene.getEngine().dispose();
   });
 
@@ -171,13 +190,15 @@ describe('house scene', () => {
     const { scene, house } = buildHouse(3, 'low');
     expect(house.stats.rooms).toBe(3);
     house.setPose(kidPose(house.focusRoom!, vp), 1);
-    // The kitchen's ceiling is built (nothing above it) but stays off: not the focus room.
-    expect(scene.getMeshByName('house-kitchen-ceiling')?.isEnabled()).toBe(false);
+    // Kid height walks in on the ground floor: only its rooms have a ceiling to show.
+    expect(scene.getMeshByName('house-kitchen-ceiling')).toBeNull();
+    expect(scene.getMeshByName('house-playroom-ceiling')?.isEnabled()).toBe(false);
     const extras = scene.meshes
       .filter((m) => /^house-.*-(porch|ceiling|ceiling-glow|wall-front)$/.test(m.name))
       .filter((m) => m.isEnabled())
       .map((m) => m.name);
-    expect(extras).toEqual(['house-snug-porch']);
+    // The Snug's beamed ceiling stands in for the Kitchen's floor the cut took away.
+    expect(extras).toEqual(['house-snug-porch', 'house-snug-ceiling']);
     scene.getEngine().dispose();
   });
 
@@ -238,6 +259,237 @@ describe('house scene', () => {
     high.house.setPose(kidPose(high.house.focusRoom!, vp), 1);
     expect(high.house.stats.heroes).toBe(0);
     high.scene.getEngine().dispose();
+  });
+
+  describe('the floor cut (B4)', () => {
+    const enabled = (scene: Scene, re: RegExp) =>
+      scene.meshes.filter((m) => re.test(m.name) && m.isEnabled() && m.getTotalIndices() > 0);
+
+    for (const level of [3, 4]) {
+      it(`level ${String(level)}: the ground floor draws nothing of upstairs, and the Keeper's room is open`, () => {
+        const { scene, house } = buildHouse(level, 'low');
+        house.setRoof(1);
+        expect(house.floors).toEqual([0, 1]);
+        expect(house.floor).toBe(0);
+        expect(house.stats.floor).toBe(0);
+        expect(enabled(scene, /^house-(f1-|glow-f1)/)).toEqual([]);
+        expect(enabled(scene, /^house-kitchen-/)).toEqual([]);
+        expect(scene.getMeshByName('house-f0-solid')!.isEnabled()).toBe(true);
+        // The Kitchen's two residents aren't drawn; the Keeper and the rest are.
+        const all = sampleHouse(level).view.rooms.flatMap((r) => r.residents).length;
+        expect(house.stats.residents).toBe(all - 2);
+        expect(house.stats.keeper).toBe(true);
+        // Its two beds aren't drawn either (thin instances, one per bed).
+        const beds = scene.getMeshByName('house-beds') as Mesh;
+        const allBeds = sampleHouse(level).view.rooms.reduce((n, r) => n + r.beds, 0);
+        expect(beds.thinInstanceCount).toBe(allBeds - 2);
+        scene.getEngine().dispose();
+      });
+
+      it(`level ${String(level)}: upstairs keeps the ground floor and the Hall's glow, and leaves out who's under the Kitchen`, () => {
+        const { scene, house } = buildHouse(level, 'high');
+        house.setRoof(1);
+        house.setFloor(1);
+        expect(house.floor).toBe(1);
+        for (const name of ['house-f0-solid', 'house-f0-floor', 'house-f1-solid', 'house-f1-floor'])
+          expect(scene.getMeshByName(name)!.isEnabled(), name).toBe(true);
+        if (level === 4) expect(scene.getMeshByName('house-glow-f0')!.isEnabled()).toBe(true);
+        // Every bed is back.
+        const beds = scene.getMeshByName('house-beds') as Mesh;
+        const allBeds = sampleHouse(level).view.rooms.reduce((n, r) => n + r.beds, 0);
+        expect(beds.thinInstanceCount).toBe(allBeds);
+        // The Snug's two and the Keeper sit under the Kitchen's floor: not drawn.
+        const all = sampleHouse(level).view.rooms.flatMap((r) => r.residents).length;
+        expect(house.stats.residents).toBe(all - 2);
+        expect(house.stats.keeper).toBe(false);
+        // And back down: as before.
+        house.setFloor(0);
+        expect(enabled(scene, /^house-(f1-|glow-f1)/)).toEqual([]);
+        expect(house.stats.keeper).toBe(true);
+        scene.getEngine().dispose();
+      });
+    }
+
+    it('fades upstairs away with the roof in the entry glide', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      const upstairs = scene.getMeshByName('house-f1-solid')!;
+      house.setRoof(0.3);
+      expect(upstairs.isEnabled()).toBe(true);
+      expect(upstairs.visibility).toBeCloseTo(0.7);
+      house.setRoof(1);
+      expect(upstairs.isEnabled()).toBe(false);
+      scene.getEngine().dispose();
+    });
+
+    it('fits the shown floor: level 3’s ground floor is one storey tall, upstairs the whole house', () => {
+      const { scene, house } = buildHouse(3, 'low');
+      expect(house.frameBounds.maxY).toBe(HOUSE_GRID.storey);
+      house.setFloor(1);
+      expect(house.frameBounds).toEqual(house.bounds);
+      scene.getEngine().dispose();
+    });
+
+    it('has one floor and no switch below level 3', () => {
+      for (const level of [1, 2]) {
+        const { scene, house } = buildHouse(level, 'low');
+        expect(house.floors).toEqual([0]);
+        house.setFloor(1);
+        expect(house.floor).toBe(0);
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('cuts the Snug–Playroom wall low with the Hall behind it: no post stands in front of the Hall (render check)', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      house.setRoof(1);
+      const tall = (name: string) => {
+        const mesh = scene.getMeshByName(name)!;
+        const pos = mesh.getVerticesData('position') ?? [];
+        let n = 0;
+        for (let i = 0; i < pos.length; i += 3) {
+          const [x, y, z] = [pos[i]!, pos[i + 1]!, pos[i + 2]!];
+          if (
+            Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 &&
+            z > 0.5 &&
+            z < 4.5 &&
+            y > HOUSE_GRID.cut + 0.2 &&
+            y < HOUSE_GRID.storey
+          )
+            n += 1;
+        }
+        return n;
+      };
+      // Downstairs, the partition stops at the cut; its upper part goes with the Kitchen.
+      expect(tall('house-f0-solid')).toBe(0);
+      expect(tall('house-f1-solid')).toBeGreaterThan(0);
+      scene.getEngine().dispose();
+    });
+
+    it('keeps upstairs clear of the Hall too: the Kitchen’s side wall over the Playroom is cut low (round 2)', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      house.setRoof(1);
+      house.setFloor(1);
+      const mesh = scene.getMeshByName('house-f1-solid')!;
+      const pos = mesh.getVerticesData('position') ?? [];
+      let top = 0;
+      for (let i = 0; i < pos.length; i += 3) {
+        const [x, y, z] = [pos[i]!, pos[i + 1]!, pos[i + 2]!];
+        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && z > 0.5 && z < 4.5) top = Math.max(top, y);
+      }
+      expect(top).toBeGreaterThan(HOUSE_GRID.storey); // there's a low wall
+      expect(top).toBeLessThan(HOUSE_GRID.storey + HOUSE_GRID.cut + 0.2);
+      // Every Hall resident drawn upstairs.
+      expect(house.residentSpots.length).toBe(house.stats.residents);
+      scene.getEngine().dispose();
+    });
+
+    it('stands the Snug’s side wall back up at kid height, closing the room in (round 2: the crown showed past it)', () => {
+      const { scene } = buildHouse(4, 'low');
+      const ceiling = scene.getMeshByName('house-snug-ceiling')!;
+      const pos = ceiling.getVerticesData('position') ?? [];
+      let wall = 0;
+      for (let i = 0; i < pos.length; i += 3) {
+        const [x, y] = [pos[i]!, pos[i + 1]!];
+        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && y > HOUSE_GRID.cut + 0.3 && y < 2.6)
+          wall += 1;
+      }
+      expect(wall).toBeGreaterThan(0);
+      scene.getEngine().dispose();
+    });
+
+    it('frames a phone so no resident is cut by the screen’s edge, every face seen (round 3)', () => {
+      const vp = { width: 390, height: 844, top: 70, bottom: 148, sheet: 68 };
+      for (const [level, floor] of [
+        [2, 0],
+        [3, 0],
+        [3, 1],
+        [4, 0],
+        [4, 1],
+      ] as const) {
+        const { scene, house } = buildHouse(level, 'high', sampleHouse(level), vp);
+        house.setRoof(1);
+        house.setFloor(floor);
+        const focus = framedFocus(house.frameBounds, vp, house.focusRoom, house.residentSpots);
+        house.setPose(fitHouse(house.frameBounds, vp, undefined, focus), 0);
+        scene.render();
+        for (const m of scene.meshes) m.computeWorldMatrix(true);
+        const faces = house.faceReport();
+        const at = `level ${String(level)} floor ${String(floor)}`;
+        expect(faces.cut, at).toBe(0);
+        expect(faces.visible, at).toBe(faces.total);
+        // The chevron pills keep off every resident's face (round 4: one sat on the cyan's eye).
+        const pose = fitHouse(house.frameBounds, vp, undefined, focus);
+        const guess = residentBoxes(pose, vp, house.residentSpots);
+        for (const side of ['left', 'right'] as const) {
+          const pill = chevronBox(side, vp, guess);
+          for (const b of faces.boxes) {
+            const drawn = {
+              x0: b.x0 * vp.width,
+              x1: b.x1 * vp.width,
+              y0: b.y0 * vp.height,
+              y1: b.y1 * vp.height,
+            };
+            expect(boxesMeet(pill, drawn), `${at} ${side} pill`).toBe(false);
+          }
+        }
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('counts a face hidden when a wall stands in front of it, not just its middle', () => {
+      const vp = { width: 390, height: 844 };
+      const { scene, house } = buildHouse(4, 'high', sampleHouse(4), vp);
+      house.setRoof(1);
+      // From behind the Hall's back wall, looking in: every face is behind it.
+      house.setPose(
+        { eye: { x: 6, y: 1.2, z: 16 }, target: { x: 6, y: 0.6, z: 6 }, fov: 0.9, pitch: 0.06 },
+        0,
+      );
+      scene.render();
+      for (const m of scene.meshes) m.computeWorldMatrix(true);
+      expect(house.faceReport().visible).toBe(0);
+      scene.getEngine().dispose();
+    });
+
+    it('hangs the sign on a header over the Snug’s opening at kid height (level 4), back on the low wall outside', () => {
+      const vp = { width: 820, height: 1180, top: 70, bottom: 90 };
+      const { scene, house } = buildHouse(4, 'low');
+      const sign = scene.getMeshByName('house-sign')!;
+      house.setPose(kidPose(house.focusRoom!, vp), 1);
+      expect(sign.position.y).toBeGreaterThan(HOUSE_GRID.storey - HOUSE_KID.header);
+      expect(scene.getMeshByName('house-snug-ceiling')!.isEnabled()).toBe(true);
+      house.setPose(fitHouse(house.bounds, vp), 0);
+      expect(sign.position.y).toBeLessThan(HOUSE_GRID.cut + 0.6);
+      scene.getEngine().dispose();
+    });
+
+    it('lights every squishy by the fill, the hero field’s smoother swap included (render check: grey on low)', () => {
+      const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+      const { scene, house } = buildHouse(1, 'low');
+      const doll = fitHouse(house.bounds, vp);
+      house.setPose(doll, 0);
+      scene.render();
+      house.setPose(blend(doll, kidPose(house.focusRoom!, vp), 1), 1);
+      scene.render();
+      scene.render();
+      const fill = scene.getLightByName('house-fill')!;
+      const cast = scene.meshes.filter(
+        (m) => /^squishy-(?!.*shadow)/.test(m.name) && m.isEnabled(),
+      );
+      expect(cast.some((m) => m.name.endsWith('-high'))).toBe(true);
+      for (const m of cast) expect(fill.includedOnlyMeshes, m.name).toContain(m);
+      scene.getEngine().dispose();
+    });
+
+    it('stands the sign on the Snug’s low back wall once the Heart Hall is behind it, not in the air', () => {
+      const { scene } = buildHouse(4, 'low');
+      const sign = scene.getMeshByName('house-sign')!;
+      sign.computeWorldMatrix(true);
+      const box = sign.getBoundingInfo().boundingBox;
+      expect(box.minimumWorld.y).toBeGreaterThan(HOUSE_GRID.cut);
+      expect(box.maximumWorld.y).toBeLessThan(HOUSE_GRID.cut + 0.8);
+      scene.getEngine().dispose();
+    });
   });
 
   it('lifts the roof away for the entry glide', () => {

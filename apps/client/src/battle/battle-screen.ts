@@ -7,6 +7,7 @@ import {
   GAME_EVENTS,
   LIVE_BATTLE_RULES,
   quickMessageById,
+  rareFindTier,
   visualRegistry,
   type BattleSideId,
   type BattleTimeOfDay,
@@ -30,7 +31,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
 import { nearbyNote, tilesToMark } from './wild-pick.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
-import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
+import { BREATHING_FRAME_MS, PLAYBACK, RARE_REVEAL, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
 import {
   applyStep,
@@ -70,6 +71,7 @@ import {
   type PotionTile,
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
+import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
 import { fenceResult, resultLine } from './result-line.js';
 import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
 import { mountLiveBar, type LiveBar } from './live-bar.js';
@@ -126,6 +128,8 @@ export interface BattleScreenOptions {
   keeperWearing?: () => readonly string[];
   /** A step of the log starts playing (sound, #25). */
   onStep?: (step: PlaybackStep) => void;
+  /** A rare-or-better wild squishy's moment starts in full (its chime, #391): its tier's size step. */
+  onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
   charms?: (mapId: string) => Promise<number>;
   /** The player's bag on a map, item id → count (the potion picker shows it, #214). */
@@ -239,6 +243,8 @@ const MESSAGES = {
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
   noXp: 'No XP this time.',
   wildStart: 'A wild squishy wants to play!',
+  /** A rare find names its kind (#391, owner decision 2026-10-12). */
+  wildNamed: (name: string) => `A wild ${name} wants to play!`,
   guardiansStart: 'The guardians want to play!',
   rivalStart: 'Squishies on watch want to play!',
   shadowsStart: 'Shadows from the Hollow want to play!',
@@ -351,6 +357,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let cheering = false;
   /** The live battle's opponent's name, once known (`memberName`). */
   let opponentLabel: string | null = null;
+  /** The rare-find moment on screen (#391), if any. */
+  let reveal: RareReveal | null = null;
 
   // ── Entry button (shown over the map) ─────────────────────────────────
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
@@ -904,7 +912,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                   ? JOURNEY_TEXT.startCaption
                   : battle.kind === 'friendly'
                     ? LIVE_TEXT.startCaption(opponentName(battle))
-                    : MESSAGES.wildStart,
+                    : wildStartCaption(battle),
         );
       }
     } else {
@@ -917,6 +925,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       refreshLive();
     }
   };
+
+  /** A wild battle's first words: a rare find (Rare and up, #391) is named. */
+  function wildStartCaption(b: PlayerBattle): string {
+    const wild = wildOf(b);
+    const species = wild ? content?.species.get(wild.speciesId) : undefined;
+    if (!wild || !content || !species || !rareFindTier(species.rarity)) return MESSAGES.wildStart;
+    return MESSAGES.wildNamed(content.speciesName(wild.speciesId));
+  }
 
   // ── Live battles (#29) ────────────────────────────────────────────────
 
@@ -1270,6 +1286,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   function open(next: PlayerBattle, replay = false): void {
     const wasOpen = battle !== null;
+    reveal?.dispose();
+    reveal = null;
     clock.clearAll();
     queue = [];
     waiting = false;
@@ -1326,11 +1344,52 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       }
     }
     if (frame === 0) frame = requestAnimationFrame(tick);
+    startReveal(next, replay);
+  }
+
+  /**
+   * A rare-or-better wild squishy's moment (#391), once the arena is drawn:
+   * the squishy has to be on screen to dim around it and sparkle.
+   */
+  function startReveal(next: PlayerBattle, replay: boolean): void {
+    const plan = content ? revealPlan(next, content.species, replay) : null;
+    if (!plan) return;
+    const wildSide = next.mySide === 'a' ? 'b' : 'a';
+    let frames = 0;
+    const begin = (): void => {
+      if (battle?.id !== next.id || reveal) return;
+      const spot = scene3d?.screenSpot(wildSide) ?? null;
+      // A few frames for the arena to build; then mid-screen will do.
+      if (!spot && (frames += 1) < RARE_REVEAL.waitFrames) {
+        requestAnimationFrame(begin);
+        return;
+      }
+      const h = window.innerHeight || 1;
+      reveal = showRareReveal(options.root, {
+        plan,
+        layout: {
+          spot,
+          sheetTop: hud.sheetTop(),
+          pillsBottom: hud.safe().top * h,
+          width: window.innerWidth || 1,
+          height: h,
+        },
+        reducedMotion: reducedMotion.matches,
+        clock,
+        onDone: () => {
+          reveal = null;
+        },
+      });
+      if (plan.full) options.onRareFind?.(plan.tier.scale);
+    };
+    requestAnimationFrame(begin);
   }
 
   /** Takes the battle off screen; `returnToMap` hands the screen back to the map. */
   function close(returnToMap = true): void {
     const closedMap = returnToMap ? (battle?.mapId ?? null) : null;
+    reveal?.dispose();
+    reveal = null;
     clock.clearAll();
     queue = [];
     if (frame !== 0) cancelAnimationFrame(frame);
