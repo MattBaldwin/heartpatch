@@ -1,7 +1,8 @@
 import type { GameEventPayload, LocalDate } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
-import { finishLostTraining, takeDownOnLostLand } from '../buildings/service.js';
+import { finishLostBuildings, takeDownOnLostLand } from '../buildings/service.js';
+import { planGrants } from '../factory/service.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
@@ -115,14 +116,17 @@ export async function rewildTiles(
     ...new Set([...workers, ...trainees, ...watches.map((w) => w.squishyId)]),
   ]);
   await writeGuardCheckpoints(tx, watches, at);
+  // A lost Factory's batches grant too (#295): their rows lock with the refunds.
+  const toLock = [...refunds, ...planGrants(lostFires.flatMap((l) => l.batches))];
   const events: NewGameEvent[] =
-    workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, refunds) : [];
-  if (workers.length === 0) await lockGrantRows(tx, mapId, refunds);
+    workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, toLock) : [];
+  if (workers.length === 0) await lockGrantRows(tx, mapId, toLock);
   for (const { userId, items, refId } of refunds) {
     await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
   }
-  // Trainees land what they earned and stop, then their Training Grounds go (#277).
-  const training = await finishLostTraining(tx, mapId, lostFires, at);
+  // A lost Factory's batches bank and give back (#295); trainees land what
+  // they earned and stop, then their Training Grounds go (#277).
+  const training = await finishLostBuildings(tx, mapId, lostFires, at);
   events.push(
     ...homesteads,
     ...lostFires.map((l) => l.event),

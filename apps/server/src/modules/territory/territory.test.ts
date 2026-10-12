@@ -38,7 +38,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
+import { buildings, factoryQueues, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -1147,6 +1147,71 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         outcome: 'taken',
         lostFire: refund,
       });
+    });
+
+    it("gives the defender's lost Crafting Factory back in full, with its batches stopped (#295)", async () => {
+      const server = await start();
+      const { kid, rival, mapId, near } = await rivals(server);
+      // A level-2 Factory out on the land (as one stands on a homestead once
+      // #295's client ships), ten charms going at a minute each, four done.
+      const [factory] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: rival.id,
+          tileId: near.id,
+          buildingId: 'crafting-factory',
+          kind: 'factory',
+          spot: 1,
+          level: 2,
+        })
+        .returning({ id: buildings.id });
+      const [batch] = await db
+        .insert(factoryQueues)
+        .values({
+          mapId,
+          userId: rival.id,
+          buildingId: factory!.id,
+          recipeId: 'heart-charm',
+          total: 10,
+          itemSeconds: 60,
+          output: { 'heart-charm': 1 },
+          inputs: { timber: 2, treats: 1 },
+          startedAt: new Date(clock.getTime() - 270_000),
+        })
+        .returning({ id: factoryQueues.id });
+
+      const res = await attack(server, kid, mapId, near);
+      expect(res.statusCode, res.body).toBe(201);
+      await playOut(server, kid, battleOf(res));
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+
+      const ledgerOf = (userId: string, reason: 'build-refund' | 'factory') =>
+        db.query.resourceLedger
+          .findMany({
+            where: (t, { and, eq }) =>
+              and(eq(t.mapId, mapId), eq(t.userId, userId), eq(t.reason, reason)),
+          })
+          .then((rows) => {
+            const sum: Record<string, number> = {};
+            for (const r of rows) sum[r.itemId] = (sum[r.itemId] ?? 0) + r.delta;
+            return sum;
+          });
+      // Both levels in full (owner decision 2026-10-11), not half.
+      expect(await ledgerOf(rival.id, 'build-refund')).toEqual({ timber: 90, stone: 70 });
+      // Its batch: the four charms made, and six charms' inputs back.
+      expect(await ledgerOf(rival.id, 'factory')).toEqual({
+        'heart-charm': 4,
+        timber: 12,
+        treats: 6,
+      });
+      expect(
+        await db.query.factoryQueues.findFirst({ where: (t, { eq }) => eq(t.id, batch!.id) }),
+      ).toMatchObject({ banked: 4, endReason: 'taken-down' });
+      expect(await ledgerOf(kid.id, 'factory')).toEqual({});
+      const types = (await eventsOf(mapId)).map((e) => e.type);
+      expect(types).toContain('building.removed');
+      expect(types.filter((t) => t.startsWith('factory.'))).not.toEqual([]);
     });
 
     it("takes the defender's Training Grounds down for half back, landing its trainees first (#277)", async () => {
