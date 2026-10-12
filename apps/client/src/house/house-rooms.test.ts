@@ -24,6 +24,7 @@ function kit(scene: Scene, level: number, index: number) {
     shadow: () => undefined,
     pool: () => undefined,
     light: (kind) => made.lights.push(kind),
+    heartSeed: () => undefined,
     sign: () => (made.signs += 1),
   };
   return { k, made, room };

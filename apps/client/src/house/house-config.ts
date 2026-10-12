@@ -109,7 +109,8 @@ export const HOUSE_CAST = {
   squishyScale: 0.95, // TUNE
   /** The Keeper, standing by the hearth until PR C lets it walk. */
   keeperScale: 0.8, // TUNE
-  keeperLean: 0.05, // TUNE
+  /** Leans back so its face looks up at the dollhouse camera (render check: hair hid it at 56°). */
+  keeperLean: 0.24, // TUNE
   /** At most this far off facing the camera, radians. */
   faceTurn: 0.3, // TUNE
 } as const;

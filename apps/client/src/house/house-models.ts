@@ -77,15 +77,15 @@ export function floorDisc(scene: Scene, r: number, at: Vec, hex: string, s: Vec 
 }
 
 /**
- * Paints a glowing part: its vertex colour is the glow colour times `k`
- * (over 1 blooms on the tiers with bloom), drawn unlit by the scene's one
- * glow material.
+ * Paints a glowing part its glow colour, drawn unlit (lit from inside) by
+ * the scene's one glow material. Colours stay as given, never scaled past
+ * 1: a vertex colour past white clips to a pale cream (render check, PR B1).
  */
-export function glowing(mesh: Mesh, hex: string, k = 1): Mesh {
+export function glowing(mesh: Mesh, hex: string): Mesh {
   const c = linear(hex);
   const count = mesh.getTotalVertices();
   const colors = new Float32Array(count * 4);
-  for (let i = 0; i < count; i++) colors.set([c.r * k, c.g * k, c.b * k, 1], i * 4);
+  for (let i = 0; i < count; i++) colors.set([c.r, c.g, c.b, 1], i * 4);
   mesh.setVerticesData(VertexBuffer.ColorKind, colors);
   return mesh;
 }
@@ -227,8 +227,8 @@ export function hearth(scene: Scene, wide: boolean): Parts {
   const h = wide ? 2.5 : 1.7;
   const log = tube(scene, 0.62, 0.17, 0.17, [0, 0.12, 0.4], '#6b4a30', 7);
   log.rotation.z = Math.PI / 2;
-  const tongue = (d: number, at: Vec, stretch: number, lean: number, hex: string, k: number) => {
-    const t = glowing(CreateSphere('house-part', { diameter: d, segments: 10 }, scene), hex, k);
+  const tongue = (d: number, at: Vec, stretch: number, lean: number, hex: string) => {
+    const t = glowing(CreateSphere('house-part', { diameter: d, segments: 10 }, scene), hex);
     t.position.set(...at);
     t.scaling.set(1, stretch, 0.75);
     t.rotation.z = lean;
@@ -243,13 +243,13 @@ export function hearth(scene: Scene, wide: boolean): Parts {
       log,
     ],
     glow: [
-      tongue(0.34, [0, 0.55, 0.36], 2.0, 0, '#ff7a32', 1.1),
-      tongue(0.26, [-0.22, 0.46, 0.37], 1.6, 0.25, '#ff7a32', 1.1),
-      tongue(0.26, [0.22, 0.47, 0.36], 1.7, -0.25, '#ff7a32', 1.1),
-      tongue(0.26, [0, 0.5, 0.42], 1.8, 0, '#ffc04d', 1.25),
-      tongue(0.2, [-0.15, 0.44, 0.43], 1.5, 0.2, '#ffc04d', 1.25),
-      tongue(0.2, [0.15, 0.45, 0.42], 1.5, -0.2, '#ffc04d', 1.25),
-      tongue(0.14, [0, 0.42, 0.47], 1.6, 0, '#fff2c0', 1.5),
+      tongue(0.34, [0, 0.55, 0.36], 2.0, 0, '#ff7a32'),
+      tongue(0.26, [-0.22, 0.46, 0.37], 1.6, 0.25, '#ff7a32'),
+      tongue(0.26, [0.22, 0.47, 0.36], 1.7, -0.25, '#ff7a32'),
+      tongue(0.26, [0, 0.5, 0.42], 1.8, 0, '#ffc04d'),
+      tongue(0.2, [-0.15, 0.44, 0.43], 1.5, 0.2, '#ffc04d'),
+      tongue(0.2, [0.15, 0.45, 0.42], 1.5, -0.2, '#ffc04d'),
+      tongue(0.14, [0, 0.42, 0.47], 1.6, 0, '#fff2c0'),
     ],
   };
 }
@@ -272,9 +272,8 @@ export function tableLamp(scene: Scene, x: number, z: number, y: number, shade: 
           scene,
         ),
         shade,
-        1.25,
       ),
-      glowing(CreateSphere('house-part', { diameter: 0.12, segments: 8 }, scene), '#fff2c8', 1.6),
+      glowing(CreateSphere('house-part', { diameter: 0.12, segments: 8 }, scene), '#fff2c8'),
     ].map((m, i) => {
       m.position.set(x, y + (i === 0 ? 0.72 : 0.56), z);
       return m;
@@ -321,14 +320,24 @@ export function plant(scene: Scene, x: number, z: number, y = 0): Mesh[] {
   ];
 }
 
-/** A ball, a picture book with a heart and a block, low enough to keep out of sight lines. */
-export function toys(scene: Scene, x: number, z: number): Mesh[] {
+/** Toys on the floor at `y`: a pink ball, an open picture book with a heart, a little block. */
+export function toys(
+  scene: Scene,
+  spots: { ball: [number, number]; book: [number, number]; block: [number, number] },
+  y = 0,
+): Mesh[] {
+  const [bx, bz] = spots.ball;
+  const [kx, kz] = spots.book;
+  const [cx, cz] = spots.block;
+  const page = (side: number) =>
+    box(scene, [0.17, 0.012, 0.22], [kx + side * 0.085, y + 0.03, kz], '#fff6ec', side * 0.08);
   return [
-    ball(scene, 0.24, [x - 0.75, 0.12, z], '#ff7aa2'),
-    box(scene, [0.26, 0.04, 0.2], [x + 0.55, 0.02, z - 0.05], '#8fc5ff', 0.35),
-    box(scene, [0.22, 0.012, 0.16], [x + 0.55, 0.045, z - 0.05], '#fff6ec', 0.35),
-    ball(scene, 0.07, [x + 0.55, 0.055, z - 0.05], '#ff7aa2', [1, 0.25, 0.9], 6),
-    box(scene, [0.16, 0.16, 0.16], [x + 0.95, 0.08, z + 0.3], '#ffd166', 0.5),
+    ball(scene, 0.26, [bx, y + 0.13, bz], '#ff7aa2'),
+    box(scene, [0.38, 0.03, 0.26], [kx, y + 0.015, kz], '#8fc5ff'),
+    page(-1),
+    page(1),
+    ball(scene, 0.07, [kx + 0.09, y + 0.04, kz], '#ff7aa2', [1, 0.25, 0.9], 6),
+    box(scene, [0.17, 0.17, 0.17], [cx, y + 0.085, cz], '#ffd166', 0.5),
   ];
 }
 
@@ -386,10 +395,16 @@ export function treeParts(scene: Scene, segments: number): { trunk: Mesh[]; crow
 export const TREE_TOP = 3.4;
 
 /** The front yard: a stepping-stone path, two lantern posts (glass glowing), pumpkins, a fence, bushes. */
-export function frontYard(scene: Scene, x0: number, x1: number, front: number): Parts {
+export function frontYard(
+  scene: Scene,
+  x0: number,
+  x1: number,
+  front: number,
+): Parts & { lanterns: [number, number][] } {
   const cx = (x0 + x1) / 2;
   const solid: Mesh[] = [];
   const glow: Mesh[] = [];
+  const lanterns: [number, number][] = [];
   for (let i = 0; i < 4; i++) {
     const st = tube(
       scene,
@@ -403,6 +418,7 @@ export function frontYard(scene: Scene, x0: number, x1: number, front: number): 
     solid.push(st);
   }
   for (const x of [cx - 1.6, cx + 1.7]) {
+    lanterns.push([x, front - 1.2]);
     const cap = tube(scene, 0.14, 0, 0.3, [x, 1.13, front - 1.2], '#5a4036', 4);
     cap.rotation.y = Math.PI / 4;
     solid.push(
@@ -410,9 +426,7 @@ export function frontYard(scene: Scene, x0: number, x1: number, front: number): 
       box(scene, [0.22, 0.04, 0.22], [x, 0.6, front - 1.2], '#5a4036'),
       cap,
     );
-    glow.push(
-      glowing(box(scene, [0.3, 0.42, 0.3], [x, 0.83, front - 1.2], '#ffd27a'), '#ffd27a', 1.6),
-    );
+    glow.push(glowing(box(scene, [0.3, 0.42, 0.3], [x, 0.83, front - 1.2], '#ffd27a'), '#ffd27a'));
   }
   solid.push(
     ball(scene, 0.5, [cx - 2.6, -0.1, front - 0.7], '#ff9a3c', [1.1, 0.8, 1.1]),
@@ -432,7 +446,7 @@ export function frontYard(scene: Scene, x0: number, x1: number, front: number): 
       ball(scene, 0.16, [x + 0.12, 0.05, front - 2.75], blooms[i % 4] ?? '#ffb3c8', [1, 1, 1], 6),
     );
   }
-  return { solid, glow };
+  return { solid, glow, lanterns };
 }
 
 /**

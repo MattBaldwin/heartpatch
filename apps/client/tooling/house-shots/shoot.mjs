@@ -168,15 +168,17 @@ async function shoot(job) {
     pitch: scene.pitch,
     facesVisible: house.faces ? `${house.faces.visible}/${house.faces.total}` : null,
     keeper: scene.keeper,
-    lowBudget: {
-      drawCalls: `${gl.draws}/${LOW_BUDGET.drawCalls}`,
-      triangles: `${gl.triangles}/${LOW_BUDGET.triangles}`,
-      lights: `${scene.lights}/${LOW_BUDGET.lights}`,
-      within:
-        gl.draws <= LOW_BUDGET.drawCalls &&
-        gl.triangles <= LOW_BUDGET.triangles &&
-        scene.lights <= LOW_BUDGET.lights,
-    },
+    ...(quality?.tier === 'low' && {
+      lowBudget: {
+        drawCalls: `${gl.draws}/${LOW_BUDGET.drawCalls}`,
+        triangles: `${gl.triangles}/${LOW_BUDGET.triangles}`,
+        lights: `${scene.lights}/${LOW_BUDGET.lights}`,
+        within:
+          gl.draws <= LOW_BUDGET.drawCalls &&
+          gl.triangles <= LOW_BUDGET.triangles &&
+          scene.lights <= LOW_BUDGET.lights,
+      },
+    }),
     ...(overflow.length > 0 && { overflow }),
   };
   console.log(JSON.stringify(rec));

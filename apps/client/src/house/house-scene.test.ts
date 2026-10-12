@@ -2,6 +2,7 @@ import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
 import { fitHouse } from './house-camera.js';
+import { HOUSE_GRID } from './house-config.js';
 import { sampleHouse } from './house-fixtures.js';
 import { buildHouse } from './house-test-scene.js';
 
@@ -93,6 +94,33 @@ describe('house scene', () => {
     house.setPose(fitHouse(house.bounds, { width: 390, height: 844, top: 80, bottom: 90 }));
     scene.render();
     expect(scene.animatables).toHaveLength(0);
+    scene.getEngine().dispose();
+  });
+
+  it('shows the name sign in the dollhouse: enabled, in view, in front of the back wall', () => {
+    const { scene, house } = buildHouse(1, 'high');
+    house.setPose(fitHouse(house.bounds, { width: 390, height: 844, top: 80, bottom: 90 }));
+    scene.render();
+    // Unlit materials never get ready on a NullEngine, so place every mesh by hand.
+    for (const m of scene.meshes) m.computeWorldMatrix(true);
+    const sign = scene.getMeshByName('house-sign')!;
+    expect(sign.isEnabled()).toBe(true);
+    expect(sign.isInFrustum(scene.frustumPlanes)).toBe(true);
+    // Its whole box stands clear of the back wall's inside face (it was inside the wall, PR B1).
+    const room = sampleHouse(1).view.rooms[0]!;
+    const backInside = (room.layout.gy + room.layout.d) * HOUSE_GRID.cell - HOUSE_GRID.wall / 2;
+    const box = sign.getBoundingInfo().boundingBox;
+    expect(box.maximumWorld.z).toBeLessThan(backInside);
+    // And nothing of the room stands in front of it: the front is open, only the cut lip.
+    expect(box.minimumWorld.y).toBeGreaterThan(HOUSE_GRID.cut);
+    scene.getEngine().dispose();
+  });
+
+  it('puts the Heart Seed keepsake on the mantel as glossy vinyl, not a flat glow', () => {
+    const { scene } = buildHouse(1, 'low');
+    const seeds = scene.getMeshByName('house-heart-seeds')!;
+    expect(seeds.isEnabled()).toBe(true);
+    expect(seeds.material?.name).toBe('heart-seed-mat');
     scene.getEngine().dispose();
   });
 

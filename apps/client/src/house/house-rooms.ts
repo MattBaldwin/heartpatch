@@ -1,10 +1,8 @@
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseRoomLook } from '@heartpatch/shared';
 import {
   braidedRug,
-  glowing,
   hearth,
   hearthSize,
   mug,
@@ -14,6 +12,7 @@ import {
   toys,
   type Parts,
 } from './house-models.js';
+import { HOUSE_GRID } from './house-config.js';
 import type { RoomBox } from './house-layout.js';
 
 /*
@@ -47,6 +46,8 @@ export interface RoomKit {
   pool(x: number, z: number, radius: number): void;
   /** Asks for a warm point light here; the scene lights as many as the tier allows. */
   light(kind: 'fire' | 'lamp', x: number, y: number, z: number): void;
+  /** The Heart Seed keepsake (glossy vinyl, softly glowing), e.g. on a mantel. */
+  heartSeed(x: number, y: number, z: number, scale: number): void;
   /** The house's name sign on a wall, facing -z. */
   sign(x: number, y: number, z: number, width: number): void;
 }
@@ -140,15 +141,18 @@ export const snugRoom: RoomBuilder = (kit) => {
   const [hx, hz] = at(0.62, d * 0.42);
   const facing = (2 * Math.PI) / 3; // TUNE
   const fire: Parts = hearth(scene, false);
-  const seed = glowing(
-    CreateSphere('house-part', { diameter: 0.24, segments: 12 }, scene),
-    '#ff8fb8',
-    0.9,
-  );
-  seed.position.set(hearthSize(false).w * 0.3, hearthSize(false).h + 0.28, 0.1);
   kit.solid([placed(fire.solid, hx, y, hz, facing)]);
-  kit.glow([placed([...fire.glow, seed], hx, y, hz, facing)]);
+  kit.glow([placed(fire.glow, hx, y, hz, facing)]);
   const fwd = { x: Math.sin(facing), z: Math.cos(facing) };
+  // The Heart Seed keepsake on the mantel, toward its right end.
+  const size = hearthSize(false);
+  const along = { x: Math.cos(facing), z: -Math.sin(facing) };
+  kit.heartSeed(
+    hx + along.x * size.w * 0.3 + fwd.x * 0.1,
+    y + size.h + 0.24,
+    hz + along.z * size.w * 0.3 + fwd.z * 0.1,
+    0.85,
+  );
   kit.shadow(hx + fwd.x * 0.4, hz + fwd.z * 0.4, 2.4, 1.4);
   kit.pool(hx + fwd.x * 1.3, hz + fwd.z * 1.3, 1.9);
   kit.light('fire', hx + fwd.x * 0.9, y + 0.75, hz + fwd.z * 0.9);
@@ -171,7 +175,7 @@ export const snugRoom: RoomBuilder = (kit) => {
   const [tx, tz] = at(w - 0.65, 0.75);
   kit.solid([...sideTable(scene, tx, tz, y), ...mug(scene, tx - 0.15, y + 0.66, tz + 0.15)]);
   kit.shadow(tx, tz, 1.3, 1.3);
-  const lamp = tableLamp(scene, tx + 0.2, tz - 0.15, y + 0.66, '#ffd9a8');
+  const lamp = tableLamp(scene, tx + 0.2, tz - 0.15, y + 0.66, '#f6a83c'); // amber
   kit.solid(lamp.solid);
   kit.glow(lamp.glow);
   kit.pool(tx, tz, 1.5);
@@ -180,15 +184,13 @@ export const snugRoom: RoomBuilder = (kit) => {
   const [px, pz] = at(0.45, 0.45);
   kit.solid(plant(scene, px, pz, y));
   kit.shadow(px, pz, 0.9, 0.9);
-  const [ox, oz] = at(1.15, 0.7);
+  // The pink ball beside the plant, the open book at the rug's front edge.
   kit.solid(
-    toys(scene, ox, oz).map((m) => {
-      m.position.y += y;
-      return m;
-    }),
+    toys(scene, { ball: at(1.05, 0.95), book: at(w * 0.4, 0.62), block: at(w * 0.62, 0.42) }, y),
   );
 
-  kit.sign(box.x0 + w / 2, y + 2.62, box.z1 - 0.06, 1.9);
+  // Over the back window, in front of the wall's inside face (and its light band).
+  kit.sign(box.x0 + w / 2, y + 2.62, box.z1 - HOUSE_GRID.wall / 2 - 0.05, 1.9);
   return {
     keeper: { x: box.x0 + w * 0.46, z: box.z0 + 0.75 },
     residents: [at(w * 0.36, d * 0.42), at(w * 0.64, d * 0.48), at(w * 0.5, d * 0.62)].map(

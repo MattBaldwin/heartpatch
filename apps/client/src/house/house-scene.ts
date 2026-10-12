@@ -29,6 +29,7 @@ import type { QualityTier } from '../engine/config.js';
 import type { SceneContent } from '../engine/stage.js';
 import { activeTriangles } from '../engine/render-stats.js';
 import { linear, merged } from '../map/map-props.js';
+import { buildHeartSeed, placeAt, setInstances } from '../map/map-scene.js';
 import { accessoryItem } from '../procedural/accessory.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { faceYaw } from '../procedural/face-yaw.js';
@@ -163,6 +164,7 @@ export class HouseScene {
   readonly #contact: Matrix[] = [];
   readonly #pools: Matrix[] = [];
   readonly #requests: { kind: 'fire' | 'lamp'; at: Vector3 }[] = [];
+  readonly #seeds: Matrix[] = [];
   #signAt: { x: number; y: number; z: number; width: number } | null = null;
   readonly #instrumentation: SceneInstrumentation;
   readonly #rooms: number;
@@ -237,6 +239,7 @@ export class HouseScene {
       this.#mergeRoom(parts);
     }
     this.#buildBeds();
+    this.#buildSeeds();
     this.#buildDecals(low);
     this.#buildSign(options.signText);
     this.#roof = this.#buildRoof(rooms, runs);
@@ -539,6 +542,9 @@ export class HouseScene {
         );
       },
       light: (kind, x, y, z) => this.#requests.push({ kind, at: new Vector3(x, y, z) }),
+      heartSeed: (x, y, z, s) => {
+        this.#seeds.push(placeAt(x, y, z, new Vector3(s, s, s)));
+      },
       sign: (x, y, z, width) => {
         this.#signAt ??= { x, y, z, width };
         const board = merged('house-sign-board', signBoard(scene, width));
@@ -649,6 +655,15 @@ export class HouseScene {
     if (cast) this.#shadows?.addShadowCaster(mesh);
     this.#house.push(mesh);
     return mesh;
+  }
+
+  /** Heart Seed keepsakes: the map's glossy, softly glowing seed, one draw call for all. */
+  #buildSeeds(): void {
+    if (this.#seeds.length === 0) return;
+    const seed = buildHeartSeed(this.#scene);
+    seed.name = 'house-heart-seeds';
+    setInstances(seed, this.#seeds);
+    this.#house.push(seed);
   }
 
   /** Every bed in the house: one frame mesh and one blanket mesh, thin-instanced (two draw calls). */
@@ -815,6 +830,10 @@ export class HouseScene {
     this.#treeMeshes = { trunks, crowns };
     this.frameOutside(null);
     const yard = frontYard(scene, b.minX, b.maxX, b.minZ);
+    // A warm pool on the lawn under each lantern.
+    for (const [x, z] of yard.lanterns) {
+      this.#pools.push(Matrix.Scaling(2, 1, 2).multiply(Matrix.Translation(x, -0.28, z)));
+    }
     const footing = box(
       scene,
       [b.maxX - b.minX + 0.6, 0.3, b.maxZ - b.minZ + 0.6],
