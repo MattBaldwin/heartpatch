@@ -88,6 +88,7 @@ const MESSAGES = {
   notYours: 'Squishies can only gather on your own land.',
   napping: 'This homestead is napping. Join it back up to home first!',
   nothingHere: "There's nothing to gather here.",
+  buildingHere: "A building stands here, so there's nothing to gather. Try another spot!",
   outOfSeason: (resource: string, season: string) => `${resource} only turn up around ${season}!`,
   spotTaken: (name: string) => `${name} is already gathering here!`,
   teamFull: 'Your team is full! Take someone off first.',
@@ -445,7 +446,11 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       .filter((r) => r.teamSlot !== null)
       .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
       .map((r) => r.squishy.id);
+    // A building blocks its tile's land yield outside home (owner decision
+    // 2026-10-11, #295): no spot there. A home building leaves its ring node be.
+    const built = new Set(buildings.filter((b) => b.homeSlot === null).map((b) => b.tileId));
     const spots = owned.flatMap((tile) => {
+      if (tile.homeSlot === null && built.has(tile.id)) return [];
       const source = workSource(tile, GAME_DATA.resources, JOB_RULES);
       if (!source) return [];
       const resource = GAME_DATA.resources.find((r) => r.id === source.resource);
@@ -638,6 +643,18 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (workTile.ownerUserId !== user.id) throw new AppError('FORBIDDEN', MESSAGES.notYours);
           source = workSource(workTile, GAME_DATA.resources, JOB_RULES);
           if (!source) throw new AppError('CONFLICT', MESSAGES.nothingHere);
+          // A building blocks its tile's land yield outside home (owner
+          // decision 2026-10-11, #295). Read under the tile lock, which placing
+          // a building takes too.
+          const tileId = workTile.id;
+          if (
+            workTile.homeSlot === null &&
+            (await createBuildingsRepo(tx).listOwned(map.id, user.id)).some(
+              (b) => b.tileId === tileId,
+            )
+          ) {
+            throw new AppError('CONFLICT', MESSAGES.buildingHere);
+          }
           // A homestead cut off from home naps (#199), as for the Keeper.
           if (homesteadOf(await createExploreRepo(tx).findRow(user.id, workTile.id)) === 'paused') {
             throw new AppError('CONFLICT', MESSAGES.napping);

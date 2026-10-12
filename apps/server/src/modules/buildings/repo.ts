@@ -2,12 +2,14 @@ import {
   BuildingKindSchema,
   ElementIdSchema,
   FeelingIdSchema,
+  ItemCountsSchema,
   type BuildingRowKind,
   type ElementId,
   type FeelingId,
   type SquishyState,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyHouseRoom } from '../house/repo.js';
@@ -15,9 +17,13 @@ import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import {
   buildings,
+  maps,
   packedHomeFires,
   packedTrainingGrounds,
   squishies,
+  tileClears,
+  tileExplore,
+  tileUseNotes,
   tiles,
 } from '../../db/schema.js';
 
@@ -88,6 +94,38 @@ export interface HomeListRow extends HomeSquishyRow {
  * player's home tiles (`lockHomeTiles`), then buildings, then squishies, then
  * inventory rows (`consumeItems` / `grantItems`), then `maps` (the event).
  */
+/** A tile as the one-building-per-tile rules read it (#295). */
+export interface TileUseTileRow {
+  id: string;
+  q: number;
+  r: number;
+  homeSlot: number | null;
+  nodeResource: string | null;
+  joinedAt: Date | null;
+  pausedAt: Date | null;
+  resumedAt: Date | null;
+  /** The player is clearing it (#242): nothing moves onto it. */
+  clearing: boolean;
+}
+
+/** The tidy-up note's content (#295), as `tile_use_notes` keeps it. */
+export interface TileUseNoteContent {
+  moved: { buildingId: string; from: { q: number; r: number }; to: { q: number; r: number } }[];
+  packed: { buildingId: string; q: number; r: number }[];
+  refund: Record<string, number>;
+  stoppedGatherers: { squishyId: string; name: string }[];
+}
+
+export type TileUseNote = TileUseNoteContent & { notedAt: Date };
+
+const HexAtSchema = z.object({ q: z.number().int(), r: z.number().int() });
+const TileUseNoteSchema = z.object({
+  moved: z.array(z.object({ buildingId: z.string(), from: HexAtSchema, to: HexAtSchema })),
+  packed: z.array(z.object({ buildingId: z.string(), q: z.number().int(), r: z.number().int() })),
+  refund: ItemCountsSchema,
+  stoppedGatherers: z.array(z.object({ squishyId: z.string(), name: z.string() })),
+});
+
 export interface BuildingsRepo {
   transaction: <T>(fn: (repo: BuildingsTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
@@ -154,6 +192,37 @@ export interface BuildingsRepo {
     mapId: string,
     userId: string,
   ) => Promise<{ refund: Record<string, number>; packedAt: Date } | null>;
+  /**
+   * One building per tile (#295): the player's tiles with what the tile-use
+   * rules read (home slot, spot, homestead flags from their explore row).
+   */
+  listTileUseTiles: (mapId: string, userId: string) => Promise<TileUseTileRow[]>;
+  /** The player's squishies gathering on any of these tiles, in id order. */
+  gatherersOnTiles: (
+    mapId: string,
+    userId: string,
+    tileIds: readonly string[],
+  ) => Promise<string[]>;
+  /**
+   * Every building on a multiplayer map with its tile (for the tidy-up's
+   * scan), and the players with a squishy gathering on a tile of theirs out
+   * on the land that has a building.
+   */
+  scanTileUses: () => Promise<{
+    rows: { mapId: string; userId: string; tileId: string; buildingId: string; home: boolean }[];
+    working: { mapId: string; userId: string }[];
+  }>;
+  /** The ids of every tile the player owns on the map, in id order. */
+  ownedTileIds: (mapId: string, userId: string) => Promise<string[]>;
+  /** The player's tidy-up note (#295), or null. JSON is checked on read. */
+  tileUseNote: (mapId: string, userId: string) => Promise<TileUseNote | null>;
+  /** Writes the player's tidy-up note, replacing any earlier one. After the bag's rows, before `maps`. */
+  setTileUseNote: (
+    mapId: string,
+    userId: string,
+    note: TileUseNoteContent,
+    at: Date,
+  ) => Promise<void>;
   /** Locks all my Hearthfires on this map, in id order (Fuel all fires, #202). */
   lockFires: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** The player's buildings on this map, by tile then spot. */
@@ -176,6 +245,12 @@ export interface BuildingsRepo {
    * a Train takes one off watch, work or the team).
    */
   listSquishies: (mapId: string, userId: string) => Promise<HomeListRow[]>;
+  /**
+   * How many of the player's squishies gather on this tile (#295: a building
+   * doesn't go up where one works). Read under the tile's lock, which
+   * posting a gatherer takes too.
+   */
+  gatherersOn: (tileId: string, userId: string) => Promise<number>;
   /** Row-locks a squishy until commit. */
   lockSquishy: (squishyId: string) => Promise<(HomeSquishyRow & { mapId: string }) | null>;
   /**
@@ -386,6 +461,106 @@ function queries(db: Executor): BuildingsRepo {
       return row ?? null;
     },
 
+    listTileUseTiles: (mapId, userId) =>
+      db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          homeSlot: tiles.homeSlot,
+          nodeResource: tiles.nodeResource,
+          joinedAt: tileExplore.joinedAt,
+          pausedAt: tileExplore.pausedAt,
+          resumedAt: tileExplore.resumedAt,
+          clearing: sql<boolean>`exists (
+            select 1 from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id}
+              and ${tileClears.userId} = ${userId}
+              and ${tileClears.endedAt} is null
+          )`,
+        })
+        .from(tiles)
+        .leftJoin(
+          tileExplore,
+          and(eq(tileExplore.tileId, tiles.id), eq(tileExplore.userId, userId)),
+        )
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId)))
+        .orderBy(asc(tiles.id)),
+
+    gatherersOnTiles: async (mapId, userId, tileIds) => {
+      if (tileIds.length === 0) return [];
+      const rows = await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(
+          and(
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+            inArray(squishies.workTileId, [...tileIds]),
+          ),
+        )
+        .orderBy(asc(squishies.id));
+      return rows.map((r) => r.id);
+    },
+
+    scanTileUses: async () => {
+      const rows = await db
+        .select({
+          mapId: buildings.mapId,
+          userId: buildings.ownerUserId,
+          tileId: buildings.tileId,
+          buildingId: buildings.buildingId,
+          home: sql<boolean>`${tiles.homeSlot} is not null`,
+        })
+        .from(buildings)
+        .innerJoin(tiles, eq(tiles.id, buildings.tileId))
+        .innerJoin(maps, eq(maps.id, buildings.mapId))
+        .where(eq(maps.kind, 'multiplayer'))
+        .orderBy(asc(buildings.mapId), asc(buildings.ownerUserId), asc(buildings.id));
+      const working = await db
+        .selectDistinct({ mapId: squishies.mapId, userId: squishies.ownerUserId })
+        .from(squishies)
+        .innerJoin(
+          buildings,
+          and(
+            eq(buildings.tileId, squishies.workTileId),
+            eq(buildings.ownerUserId, squishies.ownerUserId),
+          ),
+        )
+        .innerJoin(tiles, eq(tiles.id, buildings.tileId))
+        .innerJoin(maps, eq(maps.id, buildings.mapId))
+        .where(and(isNull(tiles.homeSlot), eq(maps.kind, 'multiplayer')));
+      return { rows, working };
+    },
+
+    ownedTileIds: async (mapId, userId) =>
+      (
+        await db
+          .select({ id: tiles.id })
+          .from(tiles)
+          .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId)))
+          .orderBy(asc(tiles.id))
+      ).map((t) => t.id),
+
+    tileUseNote: async (mapId, userId) => {
+      const [row] = await db
+        .select()
+        .from(tileUseNotes)
+        .where(and(eq(tileUseNotes.mapId, mapId), eq(tileUseNotes.userId, userId)));
+      // JSON is checked on read, so a hand-edited row fails loudly.
+      return row ? { ...TileUseNoteSchema.parse(row), notedAt: row.notedAt } : null;
+    },
+
+    setTileUseNote: async (mapId, userId, note, at) => {
+      await db
+        .insert(tileUseNotes)
+        .values({ mapId, userId, ...note, notedAt: at })
+        .onConflictDoUpdate({
+          target: [tileUseNotes.mapId, tileUseNotes.userId],
+          set: { ...note, notedAt: at, seenAt: null },
+        });
+    },
+
     lockFires: async (mapId, userId) =>
       (
         await selectBuildings()
@@ -492,6 +667,14 @@ function queries(db: Executor): BuildingsRepo {
         );
       const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
+    },
+
+    gatherersOn: async (tileId, userId) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(squishies)
+        .where(and(eq(squishies.workTileId, tileId), eq(squishies.ownerUserId, userId)));
+      return row?.n ?? 0;
     },
 
     listSquishies: async (mapId, userId) =>

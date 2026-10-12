@@ -3,15 +3,16 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { hexKey, hexToWorld, type HexKey, type MapView } from '@heartpatch/shared';
+import { hexKey, hexToWorld, type HexKey, type MapView, type PublicTile } from '@heartpatch/shared';
 import { HEX_SIZE } from '../map/map-config.js';
+import { findHomeBases } from '../map/map-layout.js';
 import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js';
 import type { MapLayer } from '../map/map-screen.js';
 import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import type { Rect } from '../ui/geometry.js';
 import './trading.css';
-import { flagSpot, type FlagRoom } from './flag-spot.js';
+import { flagSpot, keeperCover, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -51,23 +52,28 @@ const FLAG_MIN_HEIGHT_PX = 26;
  */
 const TOP_BAR =
   '.tray-top-left, .tray-top-right, .auth-chip-toggle, body:not(.hp-trays-on) .auth-chip';
-/** Everything over the map: the corner buttons (an open Keeper menu too), the patch name pill and every open sheet or panel. */
-const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, ${SHEET_SELECTOR}`;
+/**
+ * Everything over the map: the corner buttons (an open Keeper menu too), the
+ * patch name pill, the tray handles (#426) and every open sheet or panel.
+ */
+const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, ${SHEET_SELECTOR}`;
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
- * with none shown) and the boxes of everything over the map. Measured, not
+ * with none shown), the boxes of everything over the map and my Keeper (the
+ * Heart Seed's tile and the room they stand up into). Measured, not
  * constants: the bar follows the safe area and, on an iPad in landscape, the
  * trays' layout, and sheets differ per screen. Shut ones (hidden, inert, a
  * closed tray) don't count: the tutorial's own test for an open sheet.
  */
-function flagRoom(): FlagRoom {
+function flagRoom(keeper: Rect | null): FlagRoom {
   let top = 0;
   for (const node of document.querySelectorAll(TOP_BAR)) {
     const box = boxOf(node)?.box;
     if (box) top = Math.max(top, box.y + box.height);
   }
   const covers: Rect[] = [];
+  if (keeper) covers.push(keeperCover(keeper));
   for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = boxOf(node)?.box;
     if (box) covers.push(box);
@@ -82,6 +88,8 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   let scene: Scene | null = null;
   const flags = new Map<HexKey, Flag>();
   const rings = new Map<HexKey, Mesh>();
+  /** My Heart Seed's tile, where my Keeper stands; null with no land here. */
+  let seed: PublicTile | null = null;
   let ringMat: StandardMaterial | null = null;
 
   const place = (flag: Flag, room: FlagRoom) => {
@@ -106,9 +114,10 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       if (wasHidden) place(flag, room);
     }
   };
+  const measure = () => flagRoom(scene && seed ? tileScreenRectOf(scene, seed) : null);
   const placeAll = () => {
     if (flags.size === 0) return;
-    const room = flagRoom();
+    const room = measure();
     for (const flag of flags.values()) place(flag, room);
   };
   // A sheet opening or shutting over an idle map draws no frame, so watch
@@ -156,7 +165,12 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   /** Matches flags and rings to the view's posts and how I reach them now. */
   const draw = (view: MapView) => {
     let room: FlagRoom | null = null;
-    const wanted = new Map(postFlags(view, me()).map((p) => [hexKey(p.tile), p] as const));
+    const mine = me();
+    seed =
+      mine === null
+        ? null
+        : (findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === mine)?.seed ?? null);
+    const wanted = new Map(postFlags(view, mine).map((p) => [hexKey(p.tile), p] as const));
     for (const [key, flag] of flags) {
       if (!wanted.has(key)) {
         flag.node.remove();
@@ -199,13 +213,14 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       root.append(node);
       const added: Flag = { post, node, at: '', label, size: null };
       flags.set(key, added);
-      place(added, (room ??= flagRoom()));
+      place(added, (room ??= measure()));
     }
   };
 
   const clear = () => {
     for (const flag of flags.values()) flag.node.remove();
     flags.clear();
+    seed = null;
     // The rings go with their scene; just forget them.
     rings.clear();
     ringMat = null;

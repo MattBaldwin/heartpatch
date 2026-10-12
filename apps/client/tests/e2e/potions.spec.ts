@@ -68,7 +68,12 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   const bag = await api<{ items: Record<string, number> }>(page, 'GET', `/maps/${mapId}/inventory`);
   expect(bag.body.items['brave-brew']).toBe(1);
 
-  // A wild battle: "Use item" counts the bag.
+  // A wild battle: "Use item" counts the bag. The dev fight is always the first
+  // species (puddlepuff), whose Belly Flop can make the sipper dizzy and skip the
+  // move this test waits for (#429). Fight Emberbun instead: it has no status moves.
+  await page.route('**/api/v1/maps/*/dev/battles', (route) =>
+    route.continue({ postData: JSON.stringify({ opponent: { speciesId: 'emberbun' } }) }),
+  );
   await realTap(await trayButton(page, 'battle-dev-fight'));
   await expect(page.getByTestId('battle-hud')).toBeVisible();
   const state = await settled(page);
