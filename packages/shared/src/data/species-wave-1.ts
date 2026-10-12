@@ -51,12 +51,12 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['spooky', 'sleepy'],
     },
   },
-  // #443 kid (stage 2): Moonmoth grows a fluffy collar, before Lunamoth's tufted ears.
+  // #443 kid (stage 2): Moonmoth grows a fluffy ruff, before Lunamoth's floppy ears.
   {
     id: 'duskmoth',
     name: 'Duskmoth',
     description:
-      'Its fluffy collar keeps it warm on long moonlit nights. It still glows like a little moon.',
+      'A fluffy ruff grew around its middle, like a little cloud to sit on. It still glows like a little moon.',
     element: 'shadow',
     feeling: 'spooky',
     rarity: 'rare',
@@ -80,7 +80,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'lunamoth',
     name: 'Lunamoth',
     description:
-      'Tufted ears, a wispy tail and wings like moonlight. Owls stop to say good evening.',
+      'Soft floppy ears, a wispy tail and wings like moonlight. Owls stop to say good evening.',
     element: 'shadow',
     feeling: 'spooky',
     rarity: 'epic',
@@ -93,7 +93,7 @@ export const WAVE_1_SPECIES: Species[] = [
       parts: [
         'spooky-eyes',
         'tiny-smile',
-        'tuft-ears',
+        'floppy-ears',
         'moth-wings',
         'zing-antennae',
         'fur-ruff',
@@ -166,7 +166,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'starblaze',
     name: 'Starblaze',
     description:
-      'Its crest grew into a crown of rays, and its arms got strong from carrying wishes.',
+      'Its arms got strong from carrying wishes. It still takes its time getting anywhere.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'epic',
@@ -176,7 +176,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'comet-star',
       palette: ['#ff86cc', '#ffe6f5', '#ffd23f', '#ffb347'],
-      parts: ['happy-eyes', 'smirk', 'blush-cheeks', 'sun-rays', 'strong-arms', 'bolt-chain'],
+      parts: ['happy-eyes', 'smirk', 'blush-cheeks', 'spark-crest', 'strong-arms', 'bolt-chain'],
       size: 1.9,
       finish: 'sparkle',
       glow: 'body',
@@ -321,11 +321,12 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['cozy', 'sleepy'],
     },
   },
-  // #443 kid (stage 2): Gnomnom wears a garden leaf on its back, before Gnomguard's strong arms.
+  // #443 kid (stage 2): Gnomnom wears a garden leaf behind its head, before Gnomguard's strong arms.
   {
     id: 'gnomnibble',
     name: 'Gnomnibble',
-    description: 'A big leaf got stuck to its back in the veggie patch. It decided to keep it.',
+    description:
+      'A big green leaf got stuck behind its head in the veggie patch. It decided to keep it.',
     element: 'stone',
     feeling: 'cozy',
     rarity: 'uncommon',
@@ -334,7 +335,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [{ into: 'gnomguard', level: 26 }], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'pear',
-      palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#7a6f66'],
+      palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#5fa847'],
       parts: [
         'oval-eyes',
         'smile',
@@ -344,7 +345,6 @@ export const WAVE_1_SPECIES: Species[] = [
         'stuck-leaf',
         'stubby-legs',
         'stubby-arms',
-        'freckles',
       ],
       size: 1.25,
       stance: 0.25,
@@ -358,7 +358,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'gnomguard',
     name: 'Gnomguard',
     description:
-      'Strong arms for carrying pumpkins and a beard for keeping snacks in. Best garden guard ever.',
+      'Strong arms for carrying pumpkins and a fluffy ruff to keep warm. Best garden guard ever.',
     element: 'stone',
     feeling: 'cozy',
     rarity: 'rare',
@@ -367,7 +367,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'pear',
-      palette: ['#b2aa9e', '#fff4e6', '#d9453b', '#7a6f66'],
+      palette: ['#b2aa9e', '#fff4e6', '#d9453b', '#5fa847'],
       parts: [
         'sharp-eyes',
         'smile',
@@ -377,7 +377,6 @@ export const WAVE_1_SPECIES: Species[] = [
         'stuck-leaf',
         'biped-legs',
         'strong-arms',
-        'freckles',
       ],
       size: 1.43,
       stance: 0.4,
