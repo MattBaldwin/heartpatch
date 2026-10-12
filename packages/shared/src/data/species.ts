@@ -1584,7 +1584,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone', 'light'], feelings: ['joy'] },
   },
-  // #443 kid (stage 2): little crystal horns and its first crystal spines.
+  // #443 kid (stage 2): crystal horns and its first crystal spines.
   {
     id: 'gemling',
     name: 'Gemling',
@@ -1606,7 +1606,7 @@ export const SPECIES: Species[] = [
         'smile',
         'blush-cheeks',
         'crystal-crown',
-        'nub-horns',
+        'cone-horns',
         'crystal-spines',
         'stubby-arms',
         'biped-legs',
@@ -1822,11 +1822,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['cozy'] },
   },
-  // #443 kid (stage 2): leafy ears and little arms on the walking muffin.
+  // #443 kid (stage 2): leafy arms on the walking muffin, before Mossquilt's.
   {
     id: 'sproutcake',
     name: 'Sproutcake',
-    description: 'Grew two leafy ears and two little arms. It waves at everyone who walks by.',
+    description: 'Grew two leafy arms. It waves them at everyone who walks by.',
     element: 'leaf',
     feeling: 'cozy',
     rarity: 'rare',
@@ -1839,15 +1839,7 @@ export const SPECIES: Species[] = [
     visual: {
       body: 'bun',
       palette: ['#dcab76', '#fff3e2', '#64b250', '#5a9a48'],
-      parts: [
-        'oval-eyes',
-        'smile',
-        'blush-cheeks',
-        'muffin-cap',
-        'leaf-ears',
-        'stubby-arms',
-        'biped-legs',
-      ],
+      parts: ['oval-eyes', 'smile', 'blush-cheeks', 'muffin-cap', 'leaf-arms', 'biped-legs'],
       size: 1.15,
       stance: 0.18,
       pose: 'stand',
