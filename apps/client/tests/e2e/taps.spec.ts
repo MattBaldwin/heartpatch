@@ -121,6 +121,15 @@ async function opensAndCloses(open: Locator, sheet: Locator, close: Locator): Pr
   await expect(sheet).toBeHidden();
 }
 
+// Every test opens its own player (newPlayer); a page left on the map keeps drawing, which starves
+// the next test's page when rendering is in software. In CI "gathers with one tap" runs second in
+// its worker and never got a gather offered on its first try (it passed in a fresh worker on
+// retry, 6 times in 5 runs, #429). Close them all when the test is done, as battle-ui and the
+// others do.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
+
 test('one real tap opens each sheet and works each button over the map', async ({ browser }) => {
   // A full map build; CI renders in software. It took up to 168 s on iPad CI (and ran out of
   // 180 s twice in 8 runs), so the limit is well clear of that (#429).
