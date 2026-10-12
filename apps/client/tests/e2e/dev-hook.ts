@@ -35,6 +35,7 @@ export type HookName =
   | 'friendly'
   | 'audio'
   | 'jobs'
+  | 'roster'
   | 'posts'
   | 'journey'
   | 'post'
