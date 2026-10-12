@@ -99,8 +99,9 @@ test('a patch-mate’s Legendary friend tells the patch, by name only to who has
       timeout: 30_000,
     })
     .toBe('live');
-  // Sprout's first-visit hint would hold the line back: say OK to it.
+  // Sprout's first-visit hint (a new player's) would hold the line back: say OK to it.
   const hintOk = friend.getByTestId('tray-hint-ok');
+  await hintOk.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined);
   if (await hintOk.isVisible()) await hintOk.tap();
 
   const mapId = (await hook<{ id: string }>(owner, 'map'))!.id;
@@ -119,6 +120,9 @@ test('a patch-mate’s Legendary friend tells the patch, by name only to who has
 
   // An Epic friend never tells the patch.
   await befriend(owner, mapId, 'dawndrop');
+  await friend.waitForTimeout(3000);
+  await expect(line).toBeHidden();
+  expect((await hook<{ waiting: number }>(friend, 'patchLine'))?.waiting).toBe(0);
 
   // Once the friend has met one, they hear its name. (A fresh page: their own
   // battle may have taken the screen.)

@@ -79,16 +79,23 @@ export function lineFor(
  * `take` drops stale ones and hands out the oldest fresh one.
  */
 export class PatchLineQueue {
-  #items: { text: string; at: number }[] = [];
+  #items: { text: string; at: number; mapId: string }[] = [];
 
-  add(text: string, at: number, now: number): void {
+  add(text: string, at: number, now: number, mapId: string): void {
     if (now - at > PATCH_LINE.staleMs) return;
-    this.#items.push({ text, at });
+    this.#items.push({ text, at, mapId });
     while (this.#items.length > PATCH_LINE.maxQueued) this.#items.shift();
   }
 
-  take(now: number): string | null {
-    this.#items = this.#items.filter((item) => now - item.at <= PATCH_LINE.staleMs);
+  /** Drops lines gone stale, and any for another map than `mapId` (a different patch is up). */
+  prune(now: number, mapId: string | null): void {
+    this.#items = this.#items.filter(
+      (item) => now - item.at <= PATCH_LINE.staleMs && (mapId === null || item.mapId === mapId),
+    );
+  }
+
+  take(now: number, mapId: string | null = null): string | null {
+    this.prune(now, mapId);
     return this.#items.shift()?.text ?? null;
   }
 
@@ -141,22 +148,25 @@ export function createPatchLine(options: PatchLineOptions): PatchLine {
   function pump(): void {
     window.clearTimeout(timer);
     timer = 0;
+    // Stale lines (or another patch's) go first, so a long wait stops polling.
+    queue.prune(now(), options.mapId());
     if (showing !== null || queue.size === 0) return;
     if (options.busy()) {
       timer = window.setTimeout(pump, PATCH_LINE.retryMs);
       return;
     }
-    const text = queue.take(now());
+    const text = queue.take(now(), options.mapId());
     if (text !== null) show(text);
   }
 
   return {
     liveEvent: (event) => {
-      const news = newsOf(event, options.mapId());
-      if (!news) return;
+      const mapId = options.mapId();
+      const news = newsOf(event, mapId);
+      if (!news || mapId === null) return;
       const text = lineFor(news, { player: options.playerName, kind: options.kindName });
       if (text === null) return;
-      queue.add(text, news.at, now());
+      queue.add(text, news.at, now(), mapId);
       if (showing === null) pump();
     },
     get debug() {

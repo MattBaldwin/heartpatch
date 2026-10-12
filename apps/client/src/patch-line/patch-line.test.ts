@@ -41,22 +41,33 @@ describe('the patch line (#391)', () => {
 
   it('ignores other maps, other events and bad data', () => {
     expect(newsOf(celebrated({ userId: SAM, rarity: 'legendary' }), 'another-map')).toBeNull();
-    expect(
-      newsOf({ ...celebrated({}), type: 'squishy.captured' }, MAP),
-    ).toBeNull();
+    expect(newsOf({ ...celebrated({}), type: 'squishy.captured' }, MAP)).toBeNull();
     expect(newsOf(celebrated({ userId: 'nope', rarity: 'legendary' }), MAP)).toBeNull();
   });
 
   it('drops old news, keeps a few lines at most, and hands them out oldest first', () => {
     const queue = new PatchLineQueue();
     const now = 1_000_000_000;
-    queue.add('stale', now - PATCH_LINE.staleMs - 1, now);
+    queue.add('stale', now - PATCH_LINE.staleMs - 1, now, MAP);
     expect(queue.size).toBe(0);
-    for (let i = 0; i < PATCH_LINE.maxQueued + 2; i++) queue.add(`line ${String(i)}`, now, now);
+    for (let i = 0; i < PATCH_LINE.maxQueued + 2; i++)
+      queue.add(`line ${String(i)}`, now, now, MAP);
     expect(queue.size).toBe(PATCH_LINE.maxQueued);
     expect(queue.take(now)).toBe('line 2');
     // Lines that waited too long go unseen.
     expect(queue.take(now + PATCH_LINE.staleMs + 1)).toBeNull();
     expect(queue.size).toBe(0);
+  });
+
+  it('keeps a line to its own patch: another patch on screen drops it', () => {
+    const queue = new PatchLineQueue();
+    const now = 1_000_000_000;
+    queue.add('from patch A', now, now, MAP);
+    queue.prune(now, 'another-map');
+    expect(queue.size).toBe(0);
+    queue.add('from patch A', now, now, MAP);
+    // Off every map (null): it waits.
+    queue.prune(now, null);
+    expect(queue.take(now, MAP)).toBe('from patch A');
   });
 });

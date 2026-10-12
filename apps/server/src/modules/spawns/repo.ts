@@ -141,7 +141,8 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
       const rows = await db
         .select({ userId: speciesSeen.userId })
         .from(speciesSeen)
-        .where(and(eq(speciesSeen.mapId, mapId), eq(speciesSeen.speciesId, speciesId)));
+        .where(and(eq(speciesSeen.mapId, mapId), eq(speciesSeen.speciesId, speciesId)))
+        .orderBy(asc(speciesSeen.userId));
       return rows.map((row) => row.userId);
     },
 
