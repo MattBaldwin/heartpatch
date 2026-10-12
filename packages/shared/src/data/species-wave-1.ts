@@ -314,7 +314,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'bean',
-      palette: ['#ffffff', '#e4f3ff', '#6bb8fb', '#bfe6fb'],
+      palette: ['#ffffff', '#a8d8ff', '#6bb8fb', '#bfe6fb'],
       parts: [
         'happy-eyes',
         'smirk',
@@ -362,11 +362,12 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['brave', 'joy'],
     },
   },
-  // #443 kid (stage 2): Chillypep's first whisker flames, before Jalapow's flame mane.
+  // #443 kid (stage 2): Chillypep's first leaf tufts, before Jalapow's leafy mane.
   {
     id: 'pepperpip',
     name: 'Pepperpip',
-    description: 'Little flames flicker on its cheeks when it gets excited. It gets excited a lot.',
+    description:
+      'Two leafy tufts popped up by its stem. They wiggle when it gets excited, which is a lot.',
     element: 'fire',
     feeling: 'brave',
     rarity: 'common',
@@ -399,7 +400,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'jalapow',
     name: 'Jalapow',
-    description: 'A mane of flames and two strong arms. It still says brrr. Nobody knows why.',
+    description:
+      'Its leafy top grew big and bushy, and so did its arms. It still says brrr. Nobody knows why.',
     element: 'fire',
     feeling: 'brave',
     rarity: 'uncommon',
@@ -481,7 +483,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'frostbold',
     name: 'Frostbold',
-    description: 'Crystal spines grew down its back. It stands guard so the snow can nap.',
+    description:
+      'Now it stands on two feet, with crystal spines down its back. It guards the snow while it naps.',
     element: 'frost',
     feeling: 'brave',
     rarity: 'uncommon',
@@ -490,7 +493,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'tiered',
-      palette: ['#93c8f2', '#ffffff', '#ffffff', '#bfe6fb'],
+      palette: ['#93c8f2', '#ffffff', '#d2ecff', '#bfe6fb'],
       parts: [
         'brave-brows',
         'sharp-eyes',
