@@ -178,18 +178,20 @@ if (fiRare > 0.5 && vSquishLook < 0.5) {
   float fiS = fiRare < 1.5 ? fiKs.x : fiRare < 2.5 ? fiKs.y : fiRare < 3.5 ? fiKs.z : fiKs.w;
   float fiEdge = 1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
   float fiR = pow(fiEdge, ${num(RARE_GLOW.halo.falloff)});
-  // Legendary's rainbow rim and mythic's shimmer keep the outermost edge.
+  // Legendary's rainbow edge and mythic's shimmer keep the outer edge: their
+  // glow is a band just inside it.
   float fiTierOf = fiCode - ${num(FINISH_CODE.glow)} * step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
-  if (fiTierOf > 1.5) fiR *= 1.0 - ${num(RARE_GLOW.halo.rainbowKeep)} * smoothstep(0.55, 0.92, fiEdge);
-  // The glow never makes a squishy dimmer (Light kinds keep their bloom).
+  if (fiTierOf > 1.5) fiR = ${num(RARE_GLOW.halo.bandBoost)} * smoothstep(0.12, 0.38, fiEdge) * (1.0 - smoothstep(0.42, 0.62, fiEdge));
+  // Light added in each part's own colour, so the glow can only brighten.
+  // Near-white, pale vinyl already shines, so it takes less (keeps it from
+  // clipping to white and losing its colour).
   float fiLumWas = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-  vec3 fiNew = mix(finalColor.rgb, fiOwn * ${num(RARE_GLOW.halo.bright)}, clamp(fiS * fiR * 1.6, 0.0, 1.0));
-  float fiLumNew = dot(fiNew, vec3(0.2126, 0.7152, 0.0722));
-  finalColor.rgb = fiNew * max(1.0, fiLumWas / max(fiLumNew, 0.001));
+  float fiCalm = 1.0 - ${num(RARE_GLOW.halo.paleCalm)} * smoothstep(0.6, 1.0, fiLumWas) * (1.0 - smoothstep(0.1, 0.4, fiSat));
+  finalColor.rgb += fiOwn * (fiS * fiR * fiCalm);
+  float fiLum = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
 ${RARE_GLOW_STYLE === 'inner' ? `  // Lit from inside in its own colour, capped: more where the vinyl is dim, so pale kinds never wash out.
   vec4 fiI = vec4(${RARE_GLOW.inner.map(num).join(', ')});
   float fiIn = fiRare < 1.5 ? fiI.x : fiRare < 2.5 ? fiI.y : fiRare < 3.5 ? fiI.z : fiI.w;
-  float fiLum = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   finalColor.rgb += fiOwn * fiIn * (1.0 - smoothstep(0.15, 0.85, fiLum));` : ''}
 }
 if (fiCode > 0.5 && vSquishLook < 0.5) {

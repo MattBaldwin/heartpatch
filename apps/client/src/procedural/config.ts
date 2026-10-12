@@ -192,11 +192,15 @@ export const RARITY_LEVEL: Readonly<Record<string, number>> = {
 export const RARE_GLOW = {
   /** The coloured edge glow: how far the rim moves to the squishy's own glowing colour, per level 1–4. */
   halo: {
-    halo: [0.62, 0.74, 0.86, 1.0],
+    halo: [0.42, 0.52, 0.62, 0.72],
     inner: [0.3, 0.36, 0.42, 0.48],
     motes: [0.3, 0.36, 0.42, 0.48],
     falloff: 1.7,
-    bright: 1.1,
+    bright: 1.0,
+    /** How much less glow near-white, pale vinyl takes. */
+    paleCalm: 0.6,
+    /** Strength of the inner glow band on legendary and up (inside the rainbow edge). */
+    bandBoost: 1.1,
     saturate: 1.25,
     /** How much of the outermost edge is left to legendary's rainbow rim and mythic's shimmer. */
     rainbowKeep: 0.85,
