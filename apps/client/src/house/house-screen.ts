@@ -112,6 +112,8 @@ const isPage = (s: HouseSheet): boolean =>
 export interface HouseOpenOptions {
   /** The squishy the picker opens on (#375's row detail). */
   readonly pick?: string;
+  /** The room the picker opens on (the dev gallery's `?picker=`); else the first with a free bed. */
+  readonly room?: string;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not pixels). */
@@ -625,6 +627,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** The open sheet's beds, room by room. */
   function drawBeds(current: HouseView): HTMLElement[] {
+    // One room: its bed line ("The Snug · 1 of 2 beds") says it all, so the
+    // peek line steps aside while the sheet is open (drawSheet shows it again).
+    if (current.rooms.length === 1) peekText.hidden = true;
     return bedsPanel(
       roomBeds(current, people),
       chosen,
@@ -1057,8 +1062,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** Opened from the roster's "Move into the house": straight to the picker, on that squishy. */
   function openOn(how: HouseOpenOptions): void {
-    const room = how.pick && view ? roomFor(view) : null;
-    if (how.pick && room) openPicker(room, how.pick);
+    if (!view || (!how.pick && !how.room)) return;
+    const room = how.room ?? roomFor(view);
+    if (room) openPicker(room, how.pick ?? null);
   }
 
   function close(): void {

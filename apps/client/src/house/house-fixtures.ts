@@ -229,25 +229,38 @@ const SAMPLE_OUTSIDERS: readonly { speciesId: string; nickname: string | null; l
  * A house with a bit of everything for the beds and the picker (C2b): the
  * Snug with one resident home and one out gathering, the Playroom with one
  * waiting at a trading post and one empty bed, and squishies outside (the
- * first just moved out: back in 5 h).
+ * first just moved out: back in 5 h). `away` instead fills the Snug with
+ * one on watch and one training, and the Playroom with one taken to the
+ * Hollow beside the empty bed.
  */
-export function sampleMix(): HouseSample & { care: CareListResponse } {
+export function sampleMix(
+  variant: 'mix' | 'away' = 'mix',
+): HouseSample & { care: CareListResponse } {
   const base = sampleHouse(2);
-  const [home, out, post] = base.squishies;
+  const [first, second, third] = base.squishies;
+  const [a, b, c]: [ResidentAway | null, ResidentAway, ResidentAway] =
+    variant === 'away' ? ['guarding', 'training', 'hollow'] : [null, 'gathering', 'in-trade'];
   const resident = (s: HomeSquishy | undefined, away: ResidentAway | null) =>
     s ? [{ squishyId: s.id, since: NOW, away }] : [];
   const rooms = base.view.rooms.map((room) => ({
     ...room,
     residents:
       room.id === 'snug'
-        ? [...resident(home, null), ...resident(out, 'gathering')]
+        ? [...resident(first, a), ...resident(second, b)]
         : room.id === 'playroom'
-          ? resident(post, 'in-trade')
+          ? resident(third, c)
           : [],
   }));
-  const kept = [home, out, post].flatMap((s) =>
-    s ? [{ ...s, job: s === out ? ('gatherer' as const) : s.job }] : [],
-  );
+  const JOBS = { guarding: 'guard', training: 'training', gathering: 'gatherer' } as const;
+  const jobOf = (away: ResidentAway | null) =>
+    away === 'guarding' || away === 'training' || away === 'gathering' ? JOBS[away] : null;
+  const kept = (
+    [
+      [first, a],
+      [second, b],
+      [third, c],
+    ] as const
+  ).flatMap(([s, away]) => (s ? [{ ...s, job: jobOf(away) ?? s.job }] : []));
   const extra = SAMPLE_OUTSIDERS.flatMap((o, i): HomeSquishy[] => {
     const species = GAME_DATA.species.find((s) => s.id === o.speciesId);
     if (!species) return [];

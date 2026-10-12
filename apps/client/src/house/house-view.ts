@@ -97,13 +97,24 @@ export const RESIDENT_TEXT = {
   /** An empty bed's chip. */
   moveIn: 'Move in',
   moveInIcon: '+',
-  /** Why a resident isn't in its bed right now (`HouseResident.away`). */
+  /**
+   * Why a resident isn't in its bed right now (`HouseResident.away`), in a
+   * picker row or a bed's detail. The last word and its emoji never part.
+   */
   away: {
-    gathering: 'Out gathering 🧺',
-    guarding: 'On watch 🛡️',
-    training: 'Training 🎯',
-    hollow: 'In the Hollow',
-    'in-trade': 'Waiting at the post 📬',
+    gathering: 'Out\u00A0gathering\u00A0🧺',
+    guarding: 'On watch\u00A0🛡️',
+    training: 'Training\u00A0🎯',
+    hollow: 'In the\u00A0Hollow',
+    'in-trade': 'Waiting at the\u00A0post\u00A0📬',
+  } satisfies Record<ResidentAway, string>,
+  /** The same, short enough for a bed chip on the narrowest phone. */
+  awayShort: {
+    gathering: 'Gathering\u00A0🧺',
+    guarding: 'On watch\u00A0🛡️',
+    training: 'Training\u00A0🎯',
+    hollow: 'In the\u00A0Hollow',
+    'in-trade': 'At the\u00A0post\u00A0📬',
   } satisfies Record<ResidentAway, string>,
   /** A resident at home, while its mood is still loading. */
   home: 'Home 🏠',
@@ -117,7 +128,9 @@ export const RESIDENT_TEXT = {
   livesIn: (room: string) => `Lives in ${room}`,
   livesHere: 'Lives here',
   /** Picker rows that can't come, and why (the server checks again). */
-  cantCooldown: (h: number) => `Back in ${hours(h)}`,
+  cantCooldown: (h: number) => `Can move back in ${hours(h)}\u00A0🏠`,
+  /** A row while the room has no free bed. */
+  cantFull: 'No free bed',
   noOne: 'No squishies yet. Befriend one on the map!',
   moving: 'Moving in…',
   moved: (name: string, room: string) => `${name} moved into ${room}! 🏠`,

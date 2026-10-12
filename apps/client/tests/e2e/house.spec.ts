@@ -416,6 +416,8 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   await page.getByTestId('house-peek-handle').tap();
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('open');
   await expect(page.getByTestId('house-room-snug')).toHaveText('The Snug · 0 of 2 beds');
+  // One room: its bed line is the only heading (the peek line steps aside while open).
+  await expect(page.getByTestId('house-peek-line')).toBeHidden();
   await expect(beds).toHaveCount(2);
   await expect(beds.first()).toHaveAttribute('data-kind', 'empty');
   await expect(beds.first()).toHaveText(/Move in/);
@@ -491,7 +493,9 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('picker');
   await expect(pick).toHaveAttribute('data-kind', 'cooldown');
   await expect(pick).toHaveAttribute('aria-disabled', 'true');
-  await expect(pick.getByTestId('house-pick-reason')).toHaveText('Back in 24\u00A0h');
+  await expect(pick.getByTestId('house-pick-reason')).toHaveText(
+    'Can move back in 24\u00A0h\u00A0🏠',
+  );
   await pick.tap({ force: true });
   await page.waitForTimeout(500);
   expect(moves).toHaveLength(2);
@@ -509,6 +513,8 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   expect((await houseState(page))?.pickRoom).toBe('snug');
   await expect(page.getByTestId('roster')).toBeHidden();
   await expect(pick).toHaveClass(/house-pick-focus/);
-  await expect(pick.getByTestId('house-pick-reason')).toHaveText('Back in 24\u00A0h');
+  await expect(pick.getByTestId('house-pick-reason')).toHaveText(
+    'Can move back in 24\u00A0h\u00A0🏠',
+  );
   expect(errors).toEqual([]);
 });

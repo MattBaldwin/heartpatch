@@ -24,7 +24,9 @@ import '../../styles.css';
  * bed empty; `?still=1` skips the entry glide; `?grow=not-yet|ready` fills
  * in Grow the house (Build it! then builds the next level, no server);
  * `?beds=mix` puts residents home, away and in a trade with an empty bed
- * and squishies outside (moving in and out works, no server); plus
+ * and squishies outside (moving in and out works, no server); `?beds=away`
+ * has residents on watch, training and in the Hollow; `?picker=snug` opens
+ * the move-in picker on that room; plus
  * `?renderer=webgpu`.
  */
 
@@ -39,7 +41,8 @@ const level = levelParam === 'top' ? 99 : Number(levelParam) || 1;
 const residents = params.get('empty') !== '1';
 const growParam = params.get('grow');
 const grow: SampleGrow = growParam === 'ready' ? 'ready' : 'not-yet';
-const mix = params.get('beds') === 'mix' ? sampleMix() : null;
+const bedsParam = params.get('beds');
+const mix = bedsParam === 'mix' || bedsParam === 'away' ? sampleMix(bedsParam) : null;
 let sample: HouseSample = withGrow(mix ?? sampleHouse(level, residents), grow);
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -150,4 +153,5 @@ await boot(canvas, {
     console.error('Could not start the renderer', err);
   },
 });
-await house.open('gallery', sample);
+const pickerRoom = params.get('picker');
+await house.open('gallery', sample, pickerRoom ? { room: pickerRoom } : {});

@@ -29,8 +29,10 @@ export interface BedChip {
   readonly person: RosterRow | null;
   /** The resident's name, or "+ Move in". */
   readonly name: string;
-  /** Its mood ("😊 Happy"), where it is instead ("Out gathering 🧺"), or "" on an empty bed. */
+  /** Its mood ("😊 Happy"), where it is instead ("Gathering 🧺"), or "" on an empty bed. */
   readonly line: string;
+  /** The longer words for its detail ("Out gathering 🧺", the mood's sentence), or "". */
+  readonly about: string;
 }
 
 export interface RoomBeds {
@@ -60,10 +62,11 @@ function residentChip(
     name: person?.name ?? SOMEONE,
     line:
       away !== null
-        ? RESIDENT_TEXT.away[away]
+        ? RESIDENT_TEXT.awayShort[away]
         : mood
           ? `${MOOD_WORDS[mood.mood].icon} ${MOOD_WORDS[mood.mood].word}`
           : RESIDENT_TEXT.home,
+    about: away !== null ? RESIDENT_TEXT.away[away] : (mood?.line ?? ''),
   };
 }
 
@@ -88,6 +91,7 @@ export function roomBeds(
       person: null,
       name: RESIDENT_TEXT.moveIn,
       line: '',
+      about: '',
     }));
     return {
       room,
@@ -211,7 +215,7 @@ export function pickerFor(
     }
     const from = home ? rooms.get(home.roomId) : undefined;
     const tag = from ? RESIDENT_TEXT.livesIn(inSentence(from.name)) : null;
-    if (full) return { row, kind: 'full', can: false, tag, reason: null };
+    if (full) return { row, kind: 'full', can: false, tag, reason: RESIDENT_TEXT.cantFull };
     return { row, kind: from ? 'over' : 'in', can: true, tag, reason: null };
   });
   picked.sort(

@@ -14,21 +14,45 @@ import { RESIDENT_TEXT } from './house-view.js';
  * and the replies.
  */
 
-/** The squishy's real picture, a blob of its colour until it's drawn (or with no renderer). */
+/** A picture that didn't come is asked for again this many times, this far apart. */
+const PORTRAIT_RETRIES = 3; // TUNE
+const PORTRAIT_RETRY_MS = 1500; // TUNE
+
+/**
+ * The squishy's real picture. Until it's drawn, a soft round glow of its
+ * colour that breathes gently (not a flat blob); with no renderer, the blob.
+ */
 export function faceEl(person: RosterRow | null, portraits: Portraits | undefined): HTMLElement {
   const blob = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
   if (person) blob.style.background = person.color;
-  const wrap = el('span', { class: 'house-face', 'aria-hidden': 'true' }, blob);
-  if (portraits && person?.species) {
-    void portraits
-      .get({ species: person.species, instanceId: person.id, accessory: person.accessory })
-      .then((url) => {
-        if (!url) return;
-        const img = el('img', { src: url, alt: '', class: 'house-face-img' });
-        img.decoding = 'async';
-        wrap.replaceChildren(img);
-        wrap.dataset['ready'] = 'true';
+  const waiting = Boolean(portraits && person?.species);
+  const wrap = el(
+    'span',
+    { class: `house-face${waiting ? ' house-face-wait' : ''}`, 'aria-hidden': 'true' },
+    blob,
+  );
+  const species = person?.species;
+  if (portraits && person && species) {
+    const look = { species, instanceId: person.id, accessory: person.accessory };
+    // A first draw can give up (shaders still compiling, a busy engine): ask
+    // again a few times while the face is still on screen.
+    const ask = (triesLeft: number): void => {
+      void portraits.get(look).then((url) => {
+        if (url) {
+          const img = el('img', { src: url, alt: '', class: 'house-face-img' });
+          img.decoding = 'async';
+          wrap.replaceChildren(img);
+          wrap.classList.remove('house-face-wait');
+          wrap.dataset['ready'] = 'true';
+          return;
+        }
+        if (triesLeft <= 0) return;
+        setTimeout(() => {
+          if (wrap.isConnected) ask(triesLeft - 1);
+        }, PORTRAIT_RETRY_MS);
       });
+    };
+    ask(PORTRAIT_RETRIES);
   }
   return wrap;
 }
@@ -85,8 +109,13 @@ function bedChip(
   return b;
 }
 
-/** Under an opened resident's chip: who it is, how it feels, and Move out. */
-function bedDetail(chip: BedChip, busy: boolean, on: BedHandlers): HTMLElement {
+/** Under an opened resident's chip, in its tint: its picture, who it is, how it feels, and Move out. */
+function bedDetail(
+  chip: BedChip,
+  busy: boolean,
+  on: BedHandlers,
+  portraits: Portraits | undefined,
+): HTMLElement {
   const p = chip.person;
   const out = houseButton(
     `${RESIDENT_TEXT.moveOut} 👋`,
@@ -99,17 +128,31 @@ function bedDetail(chip: BedChip, busy: boolean, on: BedHandlers): HTMLElement {
   if (busy) out.setAttribute('aria-disabled', 'true');
   return el(
     'div',
-    { class: 'house-bed-detail', 'data-testid': 'house-bed-detail' },
+    {
+      class: `house-bed-detail house-bed-detail-${chip.kind === 'home' ? 'home' : 'away'}${
+        chip.kind === 'hollow' ? ' house-bed-hollow' : ''
+      }`,
+      'data-testid': 'house-bed-detail',
+    },
     el(
-      'p',
-      { class: 'house-bed-about' },
-      el('strong', {}, chip.name),
-      ...(p
-        ? [` · Lv ${String(p.level)}${p.name === p.speciesName ? '' : ` · ${p.speciesName}`}`]
-        : []),
+      'div',
+      { class: 'house-bed-detail-top' },
+      faceEl(p, portraits),
+      el(
+        'div',
+        { class: 'house-bed-detail-words' },
+        el(
+          'p',
+          { class: 'house-bed-about' },
+          el('strong', {}, chip.name),
+          // The species when a nickname hides it ("Mochi · Lv 6 · Fuzzbolt").
+          ...(p
+            ? [` · Lv ${String(p.level)}${p.name === p.speciesName ? '' : ` · ${p.speciesName}`}`]
+            : []),
+        ),
+        ...(chip.about ? [el('p', { class: 'house-bed-mood' }, chip.about)] : []),
+      ),
     ),
-    ...(p?.mood && chip.kind === 'home' ? [el('p', { class: 'house-bed-mood' }, p.mood.line)] : []),
-    ...(chip.kind !== 'home' ? [el('p', { class: 'house-bed-mood' }, chip.line)] : []),
     out,
   );
 }
@@ -122,6 +165,8 @@ export function bedsPanel(
   on: BedHandlers,
   portraits?: Portraits,
 ): HTMLElement[] {
+  // One room: its line is the sheet's only heading (the house screen hides the peek line).
+  const only = rooms.length === 1;
   return rooms.map((r) => {
     const opened = r.chips.find((c) => c.squishyId !== null && c.squishyId === chosen) ?? null;
     return el(
@@ -129,11 +174,15 @@ export function bedsPanel(
       { class: 'house-room', 'data-testid': 'house-room', 'data-room': r.room.id },
       el(
         'h4',
-        { class: 'house-room-title', tabindex: '-1', 'data-testid': `house-room-${r.room.id}` },
+        {
+          class: `house-room-title${only ? ' house-room-title-only' : ''}`,
+          tabindex: '-1',
+          'data-testid': `house-room-${r.room.id}`,
+        },
         r.title,
       ),
       el('div', { class: 'house-beds' }, ...r.chips.map((c) => bedChip(c, chosen, on, portraits))),
-      ...(opened ? [bedDetail(opened, busy, on)] : []),
+      ...(opened ? [bedDetail(opened, busy, on, portraits)] : []),
     );
   });
 }
@@ -184,10 +233,8 @@ function pickRow(
   portraits: Portraits | undefined,
 ): HTMLElement {
   const { row } = p;
-  const sub =
-    row.name === row.speciesName
-      ? `Lv ${String(row.level)}`
-      : `Lv ${String(row.level)} · ${row.speciesName}`;
+  // The species on every row, so the rows read alike.
+  const sub = `Lv ${String(row.level)} · ${row.speciesName}`;
   const extra: HTMLElement[] = [];
   if (p.reason) {
     extra.push(

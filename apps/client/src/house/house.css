@@ -610,6 +610,30 @@
   box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%);
 }
 
+/* Still drawing: a soft round glow of its colour, breathing, never a flat shape. */
+.house-face-wait .jobs-blob {
+  width: calc(var(--face) * 0.7);
+  height: calc(var(--face) * 0.7);
+  border-radius: 50%;
+  box-shadow: none;
+  opacity: 0.45;
+  filter: blur(3px);
+  animation: house-face-breathe 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes house-face-breathe {
+  to {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-face-wait .jobs-blob {
+    animation: none;
+  }
+}
+
 .house-face-img {
   display: block;
   width: var(--face);
@@ -638,6 +662,12 @@
   font-size: 16px;
   font-weight: 800;
   color: #7a2d55;
+}
+
+/* One room: its bed line is the sheet's own line, in the peek line's look. */
+.house-room-title-only {
+  font-size: 18px;
+  color: #4a3150;
 }
 
 .house-room-title:focus:not(:focus-visible) {
@@ -724,13 +754,36 @@
 }
 
 /* An opened resident: who it is, how it feels, and Move out. */
+/* In the opened chip's tint and edge, so it reads as that chip opened up. */
 .house-bed-detail {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 10px 12px;
-  border-radius: 16px;
-  background: #fff7fb;
+  border: 2px solid #d9649b;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.house-bed-detail-away {
+  background: #f5eff6;
+}
+
+.house-bed-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.house-bed-detail .house-face {
+  --face: 56px;
+}
+
+.house-bed-detail-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .house-bed-about,
@@ -893,5 +946,10 @@
 
   .house-pick .house-face {
     --face: 72px;
+  }
+
+  /* The picker is a list to read down: a narrower panel, so rows aren't stretched wide. */
+  .house-peek-open:has(.house-picks) {
+    max-width: 480px;
   }
 }

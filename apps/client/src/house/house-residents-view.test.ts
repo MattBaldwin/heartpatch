@@ -30,12 +30,12 @@ describe('the beds (plan §10.2)', () => {
     expect(a!.free).toBe(0);
     expect(a!.chips.map((c) => [c.kind, c.line])).toEqual([
       ['home', '🌟 Glowing'],
-      ['gathering', 'Out gathering 🧺'],
+      ['gathering', 'Gathering\u00A0🧺'],
     ]);
     expect(a!.chips[0]!.name).toBe(people.get(snug.residents[0]!.squishyId)!.name);
     expect(b!.title).toBe('The Playroom · 1 of 2 beds');
     expect(b!.chips.map((c) => [c.kind, c.name, c.line])).toEqual([
-      ['in-trade', expect.any(String), 'Waiting at the post 📬'],
+      ['in-trade', expect.any(String), 'At the\u00A0post\u00A0📬'],
       ['empty', 'Move in', ''],
     ]);
     expect(b!.chips[1]).toMatchObject({ roomId: 'playroom', squishyId: null, person: null });
@@ -54,14 +54,20 @@ describe('the beds (plan §10.2)', () => {
     };
     const [beds] = roomBeds({ rooms: [room] }, new Map());
     expect(beds!.chips.map((c) => c.line)).toEqual([
-      'Out gathering 🧺',
-      'On watch 🛡️',
-      'Training 🎯',
-      'In the Hollow',
-      'Waiting at the post 📬',
+      'Gathering\u00A0🧺',
+      'On watch\u00A0🛡️',
+      'Training\u00A0🎯',
+      'In the\u00A0Hollow',
+      'At the\u00A0post\u00A0📬',
       '',
     ]);
     expect(beds!.chips.map((c) => c.kind)).toEqual([...kinds, 'empty']);
+    // The detail says it in full; the short chip words keep their emoji on the word.
+    expect(beds!.chips.map((c) => c.about)).toEqual([
+      ...kinds.map((k) => RESIDENT_TEXT.away[k]),
+      '',
+    ]);
+    for (const c of beds!.chips.slice(0, -1)) expect(c.line).not.toMatch(/ \S+$/u);
     // Not in the reads yet: still named, never blank.
     expect(beds!.chips[0]!.name).toBe('Your squishy');
   });
@@ -103,7 +109,7 @@ describe('the move-in picker (plan §10.3)', () => {
     expect(over.every((r) => r.can && r.tag === 'Lives in the Snug')).toBe(true);
     const mochi = picker.rows.find((r) => r.row.name === 'Mochi')!;
     expect(mochi).toMatchObject({ kind: 'cooldown', can: false });
-    expect(mochi.reason).toBe(`Back in 5\u00A0h`);
+    expect(mochi.reason).toBe(`Can move back in 5\u00A0h\u00A0🏠`);
     expect(picker.rows.find((r) => r.row.name === 'Biscuit')).toMatchObject({
       kind: 'in',
       can: true,
@@ -115,7 +121,11 @@ describe('the move-in picker (plan §10.3)', () => {
   it('dims a squishy waiting at a post or in the Hollow, wherever it lives', () => {
     const picker = pickerFor(mix.view, 'snug', rows, NOW_MS)!;
     const post = picker.rows.find((r) => r.row.id === playroom.residents[0]!.squishyId)!;
-    expect(post).toMatchObject({ kind: 'in-trade', can: false, reason: 'Waiting at the post 📬' });
+    expect(post).toMatchObject({
+      kind: 'in-trade',
+      can: false,
+      reason: 'Waiting at the\u00A0post\u00A0📬',
+    });
     // From the job board: a squishy taken to the Hollow (not a resident).
     const biscuit = byName('Biscuit');
     const taken: RosterRow = {
@@ -124,7 +134,11 @@ describe('the move-in picker (plan §10.3)', () => {
       away: true,
     };
     const again = pickerFor(mix.view, 'playroom', [taken], NOW_MS)!;
-    expect(again.rows[0]).toMatchObject({ kind: 'hollowed', can: false, reason: 'In the Hollow' });
+    expect(again.rows[0]).toMatchObject({
+      kind: 'hollowed',
+      can: false,
+      reason: 'In the\u00A0Hollow',
+    });
     // A resident the house says is in the Hollow.
     const hollowView = {
       ...mix.view,
@@ -143,6 +157,9 @@ describe('the move-in picker (plan §10.3)', () => {
     expect(picker.full).toBe(true);
     expect(picker.line).toBe('The Snug is full! Move someone out first.');
     expect(picker.rows.some((r) => r.can)).toBe(false);
+    const full = picker.rows.filter((r) => r.kind === 'full');
+    expect(full.length).toBeGreaterThan(0);
+    expect(full.every((r) => r.reason === 'No free bed')).toBe(true);
     // Its own residents read "Lives here".
     expect(picker.rows.filter((r) => r.kind === 'here').map((r) => r.reason)).toEqual([
       'Lives here',
@@ -196,6 +213,8 @@ describe('residents, the rest', () => {
       RESIDENT_TEXT.beds('The Snug', 1, 2),
       RESIDENT_TEXT.moveIn,
       ...Object.values(RESIDENT_TEXT.away),
+      ...Object.values(RESIDENT_TEXT.awayShort),
+      RESIDENT_TEXT.cantFull,
       RESIDENT_TEXT.home,
       RESIDENT_TEXT.pickerTitle('the Snug'),
       RESIDENT_TEXT.free(1),
