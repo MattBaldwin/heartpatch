@@ -101,6 +101,7 @@ function squishy(
     trainingId: where.trainingId ?? null,
     job: where.trainingId ? 'training' : 'resting',
     accessory: null,
+    houseRoomId: null,
   };
 }
 

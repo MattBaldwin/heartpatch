@@ -15,6 +15,7 @@ import {
   jobOf,
   planFuelAll,
   removeRefund,
+  spentOn,
   upgradeCost,
   type Building,
   type FuelAllResponse,
@@ -50,7 +51,7 @@ import { homesteadOf } from '../explore/homesteads.js';
 import { clearGoingOn } from '../clearing/repo.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createFactoryRepo } from '../factory/repo.js';
-import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
+import { applyBatchPlans, planGrants, stopPlan, type BatchPlan } from '../factory/service.js';
 import { createHouseRepo } from '../house/repo.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
@@ -295,6 +296,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           training: s.trainingBuildingId !== null,
         }),
         accessory: worn.get(s.id) ?? null,
+        // Not gated, like the job board and the care sheet: only the
+        // switched routes can make a resident, so it's null while it's off.
+        houseRoomId: s.houseRoomId,
       })),
       speciesDefs,
       items,
@@ -497,8 +501,14 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
               throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
             }
           } else {
-            if (same.filter((b) => b.tileId === tile.id).length >= (building.maxPerTile ?? 0)) {
+            // One a tile (#295), and a building with a per-player cap (the
+            // Crafting Factory, once it stands on a homestead) keeps it
+            // across home and land.
+            if (same.filter((b) => b.tileId === tile.id).length >= (building.maxPerTile ?? 1)) {
               throw new AppError('CONFLICT', MESSAGES.tileHasOne(building.name));
+            }
+            if (building.maxPerHome !== undefined && same.length >= building.maxPerHome) {
+              throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
             }
             // A building blocks its tile's land yield (owner decision
             // 2026-10-11, #295): it doesn't go up where a squishy gathers,
@@ -843,6 +853,12 @@ export function takeDownRefund(row: BuildingRow, local: MapLocalTime): ItemCount
   return refund;
 }
 
+/** Everything a Crafting Factory cost, all levels (#295: lost with its land, it all comes back). */
+function lostFactoryRefund(row: BuildingRow): ItemCounts {
+  const building = BUILDING_DATA.get(row.buildingId);
+  return building ? spentOn(building, row.level) : {};
+}
+
 /** A building that came down with its land (#202), for the caller to finish. */
 export interface LostBuilding {
   readonly ownerUserId: string;
@@ -852,10 +868,18 @@ export interface LostBuilding {
   readonly event: NewGameEvent<'building.removed'>;
   /**
    * A Training Grounds' trainees (#277; empty for anything else): the caller
-   * locks them with its own squishies (step 10), then `finishLostTraining`
+   * locks them with its own squishies (step 10), then `finishLostBuildings`
    * lands what they earned and takes the building down.
    */
   readonly trainees: readonly string[];
+  /**
+   * A Crafting Factory's batches (#295, owner decision 2026-10-11; empty for
+   * anything else), locked and planned to stop: the caller locks
+   * `planGrants(batches)` with the refunds (step 11), then `applyBatchPlans`
+   * banks what they made and gives back the unfinished inputs, with their
+   * `factory.*` events.
+   */
+  readonly batches: readonly BatchPlan[];
 }
 
 /**
@@ -864,7 +888,7 @@ export interface LostBuilding {
  * 8, id order) and deletes its fires; the caller grants each `refund` to its
  * owner at step 11 (after any squishy locks) and appends the events, so the
  * rival never gets the fire and nothing is lost but the fire itself.
- * Training Grounds on a homestead (#277) stay until `finishLostTraining`:
+ * Training Grounds on a homestead (#277) stay until `finishLostBuildings`:
  * deleting one now would clear its trainees' rows (the foreign key) before
  * their XP lands, and before the caller has locked them.
  */
@@ -879,8 +903,17 @@ export async function takeDownOnLostLand(
   const repo = createBuildingsRepo(tx);
   const local = mapLocalTime(at, timeZone);
   const down: LostBuilding[] = [];
+  const factory = createFactoryRepo(tx);
   for (const row of await repo.lockOnTiles(tileIds)) {
-    const refund = takeDownRefund(row, local);
+    // A Crafting Factory lost with its land gives everything back (owner
+    // decision 2026-10-11): its full cost, and its batches stop (made things
+    // kept, unfinished inputs back). Its batches lock after the buildings
+    // (step 8, id order), as taking one down does.
+    const isFactory = row.kind === 'factory';
+    const refund = isFactory ? lostFactoryRefund(row) : takeDownRefund(row, local);
+    const batches = isFactory
+      ? (await factory.lockRunningIn(row.id)).map((b) => stopPlan(b, at, 'taken-down'))
+      : [];
     // Under the tile lock nobody starts training here. One may stop (moving
     // into a habitat locks only the squishy): `landTraining` reads them again
     // after the squishy locks, so nothing lands twice.
@@ -891,6 +924,7 @@ export async function takeDownOnLostLand(
       tileId: row.tileId,
       refund,
       trainees,
+      batches,
       event: {
         mapId,
         type: 'building.removed',
@@ -912,28 +946,35 @@ export async function takeDownOnLostLand(
 }
 
 /**
- * The rest of `takeDownOnLostLand` for Training Grounds (#277): after the
- * caller has locked their trainees (step 10) and granted the refunds (step
- * 11), the trainees land what they earned and stop (an evolution writes
- * `species_seen`, after the bag's rows), and the buildings go. Returns the
- * training events to append after the caller's own.
+ * The rest of `takeDownOnLostLand`, after the caller has locked the trainees
+ * (step 10) and every inventory row (step 11: the refunds and
+ * `planGrants` of the batches) and granted the refunds: a lost Factory's
+ * batches bank what they made and give back their unfinished inputs
+ * (#295), then Training Grounds' trainees land what they earned and stop
+ * (#277; an evolution writes `species_seen`, after the bag's rows), and the
+ * Training Grounds go. Returns the events to append after the caller's own.
  */
-export async function finishLostTraining(
+export async function finishLostBuildings(
   tx: Executor,
   mapId: string,
   lost: readonly LostBuilding[],
   at: Date,
 ): Promise<NewGameEvent[]> {
+  const stopped = await applyBatchPlans(
+    tx,
+    lost.flatMap((l) => l.batches),
+    at,
+  );
   const grounds = lost.filter(
     (l) => BUILDING_DATA.get(l.event.payload.buildingId)?.kind === 'training-grounds',
   );
-  if (grounds.length === 0) return [];
+  if (grounds.length === 0) return stopped.events;
   const trainees = grounds.flatMap((l) => l.trainees);
   const events =
     trainees.length > 0 ? (await landTraining(tx, { id: mapId }, trainees, at, true)).events : [];
   const repo = createBuildingsRepo(tx);
   for (const l of grounds) await repo.deleteBuilding(l.event.payload.buildingRowId);
-  return events;
+  return [...stopped.events, ...events];
 }
 
 /**

@@ -70,7 +70,8 @@ import {
   type TerritoryTileRow,
   type TileAttackRow,
 } from './repo.js';
-import { finishLostTraining, takeDownOnLostLand } from '../buildings/service.js';
+import { finishLostBuildings, takeDownOnLostLand } from '../buildings/service.js';
+import { planGrants } from '../factory/service.js';
 import { createFencesRepo } from '../fences/repo.js';
 import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
 import { clearGoingOn } from '../clearing/repo.js';
@@ -948,10 +949,12 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
             refId: l.fenceId,
           })),
         ].filter((r) => Object.keys(r.items).length > 0),
+        // A lost Factory's batches grant too (#295): battles locks their rows with the refunds.
+        alsoLock: planGrants(lostFires.flatMap((l) => l.batches)),
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
         guards,
-        afterRefunds: (inner, when) => finishLostTraining(inner, attack.mapId, lostFires, when),
+        afterRefunds: (inner, when) => finishLostBuildings(inner, attack.mapId, lostFires, when),
       };
     },
   };

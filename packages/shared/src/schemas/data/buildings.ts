@@ -22,7 +22,9 @@ const buildingBase = {
   season: ContentIdSchema.optional(),
   /**
    * How many of this building one home base can have. Required unless it
-   * stands only on captured land (`checkGameData`).
+   * stands only on captured land (`checkGameData`). On a building that
+   * stands out on the land too (a homestead Crafting Factory, #295), it caps
+   * the player's whole patch.
    */
   maxPerHome: z.number().int().positive().optional(),
   /**

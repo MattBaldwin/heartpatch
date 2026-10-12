@@ -6,6 +6,12 @@ import { trayButton } from './trays.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
+
+/** The map's id once its debug view exists: the hook is null for a moment after the map is up (#429). */
+async function mapIdOf(page: Page): Promise<string> {
+  await slowExpect.poll(async () => (await hook<{ id: string }>(page, 'map'))?.id).toBeTruthy();
+  return (await hook<{ id: string }>(page, 'map'))!.id;
+}
 const slow = { timeout: 30_000 };
 
 /**
@@ -40,7 +46,7 @@ test('a dressed squishy wears its accessory in battle and on the trail', async (
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
   // Dress the starter in the Tiny Bow everyone owns.
-  const map = (await hook<{ id: string }>(page, 'map'))!.id;
+  const map = await mapIdOf(page);
   const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${map}/care`);
   const id = care.body.squishies[0]!.id;
   const dressed = await api(page, 'POST', `/maps/${map}/squishies/${id}/accessory`, {
@@ -77,7 +83,7 @@ test('the battle arena draws what my squishy wears, and a wild one wears nothing
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
 
-  const map = (await hook<{ id: string }>(page, 'map'))!.id;
+  const map = await mapIdOf(page);
   const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${map}/care`);
   for (const s of care.body.squishies) {
     expect(

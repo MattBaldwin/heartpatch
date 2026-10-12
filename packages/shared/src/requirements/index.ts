@@ -209,6 +209,17 @@ export function requirementAmount(
 const plural = (n: number, one: string, many: string) => `${String(n)} ${n === 1 ? one : many}`;
 
 /**
+ * A content name made plural: "Cozy Meadow" → "Cozy Meadows", "Berry
+ * Nursery" → "Berry Nurseries" (a consonant then y), a name already ending in
+ * s ("Training Grounds") kept as it is.
+ */
+export function pluralName(name: string): string {
+  if (name.endsWith('s')) return name;
+  if (/[^aeiou]y$/i.test(name)) return `${name.slice(0, -1)}ies`;
+  return `${name}s`;
+}
+
+/**
  * The kid-readable line for a requirement (style guide §2: short, common
  * words, no stats-speak). Built on the server and sent as text.
  */
@@ -227,7 +238,7 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
         const name = context.buildingName(req.buildingId);
         return req.count === 1
           ? `Build a ${name}`
-          : `Build ${String(req.count)} ${name.endsWith('s') ? name : `${name}s`}`;
+          : `Build ${String(req.count)} ${pluralName(name)}`;
       }
       if (req.buildingKind === 'habitat')
         return `Build ${plural(req.count, 'habitat', 'habitats')}`;

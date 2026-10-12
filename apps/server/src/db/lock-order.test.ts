@@ -806,6 +806,61 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     ).toEqual([]);
   });
 
+  /** A Keeper with one squishy to move into the Snug, for a move's locks (#381 PR C). */
+  async function moveInSetup(prefix: string) {
+    const { kid, mapId } = await houseSetup(prefix);
+    const [pet] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    const house = createHouseService({ db, house: { mode: 'on', testers: [] } });
+    const moveIn = () => house.moveResident(kid, mapId, pet!.id, 'snug');
+    const living = async () =>
+      (
+        await db
+          .select({ roomId: houseResidents.roomId })
+          .from(houseResidents)
+          .where(eq(houseResidents.squishyId, pet!.id))
+      )[0]?.roomId;
+    return { kid, mapId, petId: pet!.id, moveIn, living };
+  }
+
+  it('takes the member row before the house (house `moveResident`, #381 step 2 then 8c)', async () => {
+    const { kid, mapId, moveIn, living } = await moveInSetup('movemember');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      moveIn,
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+    );
+    expect(await living()).toBe('snug');
+  });
+
+  it('takes the house before the squishy (house `moveResident`, #381 step 8c then 10)', async () => {
+    const { kid, mapId, petId, moveIn, living } = await moveInSetup('movehouse');
+    await holdThen(
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+      moveIn,
+      (tx) => lockSquishy(tx, petId),
+    );
+    expect(await living()).toBe('snug');
+  });
+
+  it('writes the residency and checkpoint under the squishy, before `maps` (house `moveResident`, #381 step 10 then 13)', async () => {
+    const { mapId, petId, moveIn, living } = await moveInSetup('movesquishy');
+    await holdThen(
+      (tx) => lockSquishy(tx, petId),
+      moveIn,
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await living()).toBe('snug');
+  });
+
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {
     const { kid, heroId, battle, fights, finishing } = await oneMoveFromWinning('earner');
     await holdThen(
@@ -1870,5 +1925,65 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(inArray(squishies.id, ids))
       .orderBy(asc(squishies.id));
     expect(owners.map((r) => r.owner)).toEqual([lee.id, sam.id, lee.id, sam.id]);
+  });
+
+  /** Moves a squishy into its owner's Snug (the row the house's move writes, #381). */
+  const residentOf = (mapId: string, userId: string, squishyId: string) =>
+    db
+      .insert(houseResidents)
+      .values({ squishyId, mapId, userId, roomId: 'snug', movedInAt: new Date() });
+
+  it('ends residency after the squishy locks and before the inventory rows (trades `accept`, `leaveHouse`, #381 step 10 then 11)', async () => {
+    const { mapId, lee, sam, ids, trades, post, offerId } = await tradeSetup('swap_house');
+    await residentOf(mapId, lee.id, ids[3]!);
+    await holdThen(
+      // A residency writer (step 10) holding the row the yes must end…
+      (tx) =>
+        tx
+          .select({ id: houseResidents.squishyId })
+          .from(houseResidents)
+          .where(eq(houseResidents.squishyId, ids[3]!))
+          .for('update'),
+      () => trades.accept(sam, mapId, offerId, post),
+      async (tx) => {
+        // …finds the yes holding both squishies while it waits there…
+        const squishyFree = db.transaction(async (other) => {
+          await other.execute(sql`set local lock_timeout = '200ms'`);
+          await lockSquishy(other, ids[3]!);
+        });
+        await expect(squishyFree).rejects.toThrow();
+        // …and none of the inventory rows yet, so taking them next can't deadlock.
+        await createInventoryRepo(tx).lockItems({ mapId, userId: sam.id }, ['stone', 'timber']);
+      },
+    );
+    expect(
+      await db.select().from(houseResidents).where(eq(houseResidents.squishyId, ids[3]!)),
+    ).toEqual([]);
+    const [moved] = await db.select().from(squishies).where(eq(squishies.id, ids[3]!));
+    expect(moved!.ownerUserId).toBe(sam.id);
+  });
+
+  it('lets a yes and a move-in of the same squishy go one at a time (trades `accept`, house `moveResident`, #381)', async () => {
+    const { mapId, sam, ids, trades, post, offerId } = await tradeSetup('swap_movein');
+    const house = createHouseService({ db, house: { mode: 'on', testers: [] } });
+    let running: Promise<unknown[]> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      // Sam's squishy that the yes hands to Lee, held while both start.
+      await lockSquishy(tx, ids[0]!);
+      const pid = await backendPid(tx);
+      running = Promise.all([
+        outcome(house.moveResident(sam, mapId, ids[0]!, 'snug')),
+        outcome(trades.accept(sam, mapId, offerId, post)),
+      ]);
+      await waitUntilBlockedBy(db, pid, 2);
+    });
+    const [moved, accepted] = (await running)!;
+    expect(accepted).toBe('ok');
+    // In first then out with the yes, or refused as no longer Sam's: never a deadlock.
+    expect(moved === 'ok' || code(moved) === 'NOT_FOUND').toBe(true);
+    expect(
+      await db.select().from(houseResidents).where(eq(houseResidents.squishyId, ids[0]!)),
+    ).toEqual([]);
   });
 });

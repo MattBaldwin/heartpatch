@@ -54,6 +54,7 @@ export function sampleHouse(level: number, residents = true): HouseSample {
         trainingId: null,
         job: 'resting',
         accessory: null,
+        houseRoomId: room.id,
       });
       return [{ squishyId, since: NOW, away: null }];
     });
