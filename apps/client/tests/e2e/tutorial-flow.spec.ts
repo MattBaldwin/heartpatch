@@ -360,6 +360,8 @@ async function playTutorial(page: Page): Promise<void> {
   await readAll();
   await tapOn(main); // Let's go!
   await openHome();
+  // The peek bar's Squishies opens the list (#412), then the Partner's name.
+  await tapOn(page.getByTestId('home-squishies'));
   await tapOn(page.getByTestId('home-friends').getByRole('button').first());
   const care = page.getByTestId('care');
   await expect(care).toBeVisible();
@@ -552,6 +554,13 @@ async function playTutorial(page: Page): Promise<void> {
 // Each run is its own new player, so the two can go on separate workers: back
 // to back on one, they made this file 12-16 min of a CI group (#296).
 test.describe.configure({ mode: 'parallel' });
+
+// Every test opens its own player (newPlayer); a page left in the Glade keeps
+// drawing, which starves the next test's pages when rendering is in software
+// (#397). Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
 
 test('The First Patch, every step tapped for real with a reload at each: Sprout never gets in the way', async ({
   browser,

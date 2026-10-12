@@ -225,7 +225,9 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
     case 'buildingsBuilt':
       if (req.buildingId !== undefined) {
         const name = context.buildingName(req.buildingId);
-        return req.count === 1 ? `Build a ${name}` : `Build ${name} × ${String(req.count)}`;
+        return req.count === 1
+          ? `Build a ${name}`
+          : `Build ${String(req.count)} ${name.endsWith('s') ? name : `${name}s`}`;
       }
       if (req.buildingKind === 'habitat')
         return `Build ${plural(req.count, 'habitat', 'habitats')}`;
@@ -241,7 +243,7 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
     case 'decorations':
       return `Place ${plural(req.count, 'decoration', 'decorations')}`;
     case 'residentsContent':
-      return plural(req.count, `${req.mood} resident`, `${req.mood} residents`);
+      return `Have ${plural(req.count, `${req.mood} resident`, `${req.mood} residents`)}`;
     case 'residentsLevel':
       return `${plural(req.count, 'resident', 'residents')} at level ${String(req.level)}+`;
     case 'residentsEvolved':

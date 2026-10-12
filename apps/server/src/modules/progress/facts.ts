@@ -15,6 +15,8 @@ import {
 import type { Executor } from '../../db/client.js';
 import { fireStateAt } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
+import { createHouseRepo } from '../house/repo.js';
+import { contentmentsOf } from '../jobs/contentment.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
 import { createProgressRepo } from './repo.js';
 
@@ -25,9 +27,10 @@ import { createProgressRepo } from './repo.js';
  * the house build transaction next (A2), and by the Heart Seed (#221) later,
  * which reads the same facts and ignores what it doesn't use.
  *
+ * Residents count only while they're active (one in a trade or in the
+ * Hollow is away), with contentment worked out now (CLAUDE.md rule 4).
  * Not yet gathered, and why: `heartSeedLevel` reads 1 until Heart Seed
- * levels land (#221); `residents` is empty until the house tables land (A2)
- * and residents move in (C); `decorations` is 0 until furniture (Phase 2).
+ * levels land (#221); `decorations` is 0 until furniture (Phase 2).
  */
 
 /** Milestones a kid can see (secret tracks are server-only, CLAUDE.md rule 6). */
@@ -56,6 +59,7 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
     offers,
     wonPosts,
     homesteads,
+    residentRows,
   ] = await Promise.all([
     createTerritoryRepo(tx).listTiles(mapId),
     createTendingRepo(tx).outerTiles(mapId, userId),
@@ -67,7 +71,15 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
     repo.acceptedOffers(mapId, userId),
     repo.wonPostTileIds(mapId, userId),
     repo.homesteadCount(mapId, userId),
+    createHouseRepo(tx).residents(mapId, userId),
   ]);
+  const residents = residentRows.filter((r) => r.state === 'active');
+  const contentment = await contentmentsOf(
+    tx,
+    mapId,
+    residents.map((r) => r.squishyId),
+    at,
+  );
 
   const owned = mapTiles.filter((t) => t.ownerUserId === userId);
   const seed = heartSeedOf(owned.filter((t) => t.homeSlot !== null));
@@ -109,6 +121,11 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
     trades: offers.map((o) => ({
       kind: o.kind,
       partnerUserId: o.fromUserId === userId ? o.toUserId : o.fromUserId,
+    })),
+    residents: residents.map((r) => ({
+      contentment: contentment.get(r.squishyId)?.contentment ?? 0,
+      level: r.level,
+      evolved: r.evolved,
     })),
     postsUsed: posts.size,
     tilesTended: owned.length - fading,

@@ -18,6 +18,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { homesteadOf } from '../explore/homesteads.js';
+import { clearGoingOn } from '../clearing/repo.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { createInventoryService, grantItems, seasonsOn, toGather } from '../inventory/service.js';
@@ -50,6 +51,7 @@ const MESSAGES = {
   notReady: 'Not ready yet. Check back soon!',
   outOfSeason: (name: string, season: string) => `${name} only turn up around ${season}!`,
   napping: 'This homestead is napping. Join it back up to home first!',
+  clearing: "You're clearing this land. Let it finish first!",
 } as const;
 
 /** A gather's yield on a joined homestead (#199): its resource's share gets the homestead bonus. */
@@ -172,6 +174,10 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
           // A homestead (#199) gives +1 a gather, and naps while it's cut off from home.
           const homestead = homesteadOf(await createExploreRepo(tx).findRow(user.id, tile.id));
           if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.napping);
+          // Its spot goes into the clear's drop (#242).
+          if (await clearGoingOn(tx, tile.id, user.id)) {
+            throw new AppError('CONFLICT', MESSAGES.clearing);
+          }
 
           // The node's gather still going: a finished one goes in its
           // gatherer's bag first (no Collect, owner decision 2026-10-06), even

@@ -993,6 +993,61 @@ export const gatherJobs = pgTable(
 );
 
 /**
+ * Clearing land (#242): one row per clear, the timer and the record. Starting
+ * spends a tool use and fixes `drop`; at `ready_at` the next settle turns the
+ * tile into cleared land (`tiles.terrain = 'clearing'`, its node gone) and
+ * banks `drop` (`ended_at`, `end_reason = 'cleared'`). If the tile changes
+ * hands before `ready_at`, the clear ends `lost` with nothing banked. If it
+ * finished in time but someone else holds the tile by the settle, `drop`
+ * still banks and the clear ends `cleared`, but their land stays as it is
+ * (wild land still clears), and so does land that's no longer
+ * `from_terrain` (a trading post made since). `from_terrain` and
+ * `from_node` keep what the tile was. One clear per tile and one per player
+ * at a time.
+ */
+export const tileClears = pgTable(
+  'tile_clears',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    fromTerrain: text('from_terrain').notNull(),
+    fromNode: text('from_node'),
+    // The clearing tool's item id (`CLEARING_RULES.tools`).
+    tool: text('tool').notNull(),
+    // Item id → quantity the clear banks.
+    drop: jsonb('drop').$type<Record<string, number>>().notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+    endReason: text('end_reason'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'tile_clears_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    uniqueIndex('tile_clears_one_active_per_tile_key')
+      .on(t.tileId)
+      .where(sql`${t.endedAt} is null`),
+    uniqueIndex('tile_clears_one_active_per_player_key')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.endedAt} is null`),
+    check('tile_clears_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+    check(
+      'tile_clears_end_reason',
+      sql`(${t.endedAt} is null and ${t.endReason} is null) or (${t.endedAt} is not null and ${t.endReason} in ('cleared', 'lost'))`,
+    ),
+  ],
+);
+
+/**
  * Crafts (#17, design doc §12 recipes): the inputs are used up when one
  * starts; collecting after `ready_at` puts `items` in the bag. One on the go
  * per player per map.
@@ -1347,6 +1402,34 @@ export const packedTrainingGrounds = pgTable(
     userId: uuid('user_id').notNull(),
     refund: jsonb('refund').$type<Record<string, number>>().notNull(),
     packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
+);
+
+/**
+ * One building per tile (#295): what the one-time tidy-up pass moved or
+ * packed for a player, for a one-time note in the morning report (shown once
+ * per device, like the packed-fire note; `seen_at` is kept for a later
+ * every-device "seen"). One row per player per map, written by the boot pass
+ * only when something changed.
+ */
+export const tileUseNotes = pgTable(
+  'tile_use_notes',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // Buildings that moved: `{ buildingId, from: {q, r}, to: {q, r} }[]`.
+    moved: jsonb('moved').notNull().default([]),
+    // Buildings taken down with nowhere to go: `{ buildingId, q, r }[]`.
+    packed: jsonb('packed').notNull().default([]),
+    // Everything that came back to the bag.
+    refund: jsonb('refund').$type<Record<string, number>>().notNull().default({}),
+    // Squishies that stopped gathering on a tile that keeps a building.
+    stoppedGatherers: jsonb('stopped_gatherers').notNull().default([]),
+    notedAt: timestamptz('noted_at').notNull(),
+    seenAt: timestamptz('seen_at'),
   },
   (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
 );
@@ -2055,5 +2138,99 @@ export const challenges = pgTable(
     // "Who's asking me?" and the rate limits (asks to one player lately).
     index('challenges_map_id_to_user_id_idx').on(t.mapId, t.toUserId, t.createdAt),
     index('challenges_map_id_from_user_id_idx').on(t.mapId, t.fromUserId, t.createdAt),
+  ],
+);
+
+/**
+ * The Keeper's house (#381): one row per Keeper per patch, holding the house
+ * level. No row reads as level 1 (the Snug sprouts with the Heart Seed, free),
+ * so nothing is backfilled; the first build inserts the row. A built level
+ * never comes down. Leaving a patch deletes it with the buildings (a
+ * returning player gets a fresh home). Lock order: step 8c, after the
+ * buildings and the Factory, before the Hollow's rows (tech spec §7).
+ */
+export const keeperHouses = pgTable(
+  'keeper_houses',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    level: smallint('level').notNull().default(1),
+    // When the current level was built.
+    builtAt: timestamptz('built_at').notNull(),
+    updatedAt: timestamptz('updated_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId] }),
+    foreignKey({
+      name: 'keeper_houses_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('keeper_houses_level_positive', sql`${t.level} >= 1`),
+  ],
+);
+
+/**
+ * The house's residents (#381): one row per squishy that is, or was, a
+ * resident; `room_id` set means it lives there now. Residents are extra
+ * favourites: a resident keeps its habitat, its job and every squishy column,
+ * so the squishy spine doesn't change. `moved_out_at` drives the move-back-in
+ * cooldown. Written only under the squishy's own lock (step 10), as
+ * `tile_defenders` are under their tile's, so there's no foreign key to
+ * `maps`; the squishy's cascade covers a deleted patch.
+ */
+export const houseResidents = pgTable(
+  'house_residents',
+  {
+    squishyId: uuid('squishy_id')
+      .primaryKey()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    // A room id from the shared house data; null once it moved out.
+    roomId: text('room_id'),
+    movedInAt: timestamptz('moved_in_at'),
+    movedOutAt: timestamptz('moved_out_at'),
+  },
+  (t) => [
+    index('house_residents_map_id_user_id_idx')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.roomId} is not null`),
+    check('house_residents_in_or_out', sql`(${t.roomId} is null) = (${t.movedInAt} is null)`),
+  ],
+);
+
+/**
+ * The house's daily gift (#381 PR H): at most one per Keeper per patch per
+ * day, rolled lazily on the first house read of the day from a seed (never
+ * client-rolled) and claimed once. Deleted with its house.
+ */
+export const houseGifts = pgTable(
+  'house_gifts',
+  {
+    id: id(),
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    // The Keeper's local day the gift belongs to.
+    day: date('day', { mode: 'string' }).notNull(),
+    // The resident who left it; null once it's gone.
+    giverSquishyId: uuid('giver_squishy_id').references(() => squishies.id, {
+      onDelete: 'set null',
+    }),
+    itemId: text('item_id').notNull(),
+    count: smallint('count').notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+    claimedAt: timestamptz('claimed_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'house_gifts_house_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [keeperHouses.mapId, keeperHouses.userId],
+    }).onDelete('cascade'),
+    unique('house_gifts_map_id_user_id_day_key').on(t.mapId, t.userId, t.day),
+    check('house_gifts_count_positive', sql`${t.count} >= 1`),
   ],
 );

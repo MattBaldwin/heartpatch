@@ -76,6 +76,25 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
   await done.tap();
 }
 
+/**
+ * Taps "Sign up" and waits for the server's answer (#408). On a busy CI
+ * runner the tap and the answer took up to 7 s (200 sign-ups: p99 5.3 s),
+ * more than the 5 s the code screen's check allows, while the screen followed
+ * the answer within 1.3 s. So wait on the answer, then the screen.
+ */
+export async function submitSignUp(overlay: Locator): Promise<void> {
+  const [answer] = await Promise.all([
+    overlay
+      .page()
+      .waitForResponse(
+        (res) => res.url().endsWith('/api/v1/auth/signup') && res.request().method() === 'POST',
+        { timeout: 30_000 },
+      ),
+    overlay.getByRole('button', { name: 'Sign up' }).tap(),
+  ]);
+  expect(answer.status()).toBe(201);
+}
+
 export interface SignUpOptions {
   /** The device's time zone, so its patches keep that map time (map-time.ts); the suite's unless given. */
   timezoneId?: string;
@@ -106,7 +125,7 @@ export async function signUp(
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption(options.birthYear ?? '2014');
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await submitSignUp(overlay);
   await savedCode(overlay);
   const { helper } = options;
   if (!helper) return;

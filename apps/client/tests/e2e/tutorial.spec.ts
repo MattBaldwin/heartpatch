@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { expectClear } from './layout.js';
-import { newPlayer, savedCode, TEST_PASSWORD, uniqueName } from './players.js';
+import { newPlayer, savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
 import { realTap } from './touch.js';
 import { openTray, traysState, traySettled } from './trays.js';
 
@@ -87,6 +87,13 @@ async function celebrateFirstPatch(page: Page): Promise<void> {
   await party.getByTestId('milestone-yay').tap();
   await expect(party).toBeHidden();
 }
+
+// Most tests open their own player (newPlayer); a page left on the map or the
+// starter picker keeps drawing, which starves the next test's pages when
+// rendering is in software (#397). Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
 
 test('the optional tutorial: start, resume after reload, graduate, replay and skip', async ({
   browser,
@@ -217,7 +224,7 @@ test("an update can't reload away a new account's recovery code", async ({ page 
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   expect(await updatesHeld(page)).toBe(false);
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await submitSignUp(overlay);
 
   await expect(overlay.getByTestId('auth-recovery-code')).toBeVisible();
   expect(await updatesHeld(page)).toBe(true);

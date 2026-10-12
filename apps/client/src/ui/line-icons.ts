@@ -16,6 +16,10 @@ export const ICON_PATHS = {
   lantern: 'M12 2.5v2 M9.5 4.5h5 M8 7h8 M9 7v11h6V7 M12 10.5v4 M7 20h10',
   rock: 'M4 18l2.5-6 4-4 5 1.5 3.5 4 1 4.5Z',
   log: 'M6 8h12a4 4 0 0 1 0 8H6 M6 8a4 4 0 0 0 0 8a4 4 0 0 0 0-8 M6 11v2',
+  // Clearing tools (#242): an Axe, a Pickaxe and a Spade.
+  axe: 'M6 21L16 8 M13 4.5c3-1.5 6.5 0 7 3.5l-4 2.5z',
+  pickaxe: 'M7 21l9-12 M5 7.5c4-4 10-4 14 0 M12 5l2 3',
+  spade: 'M12 3v11 M9 3h6 M8 14h8v3a4 4 0 0 1-8 0z',
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

@@ -161,11 +161,11 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
   }
 
   /** A plain home tile (no Heart Seed, no node) to build on. */
-  async function plainHomeTile(server: FastifyInstance, who: Player, mapId: string) {
+  async function plainHomeTile(server: FastifyInstance, who: Player, mapId: string, nth = 0) {
     const res = await call(server, 'GET', `/maps/${mapId}/home`, who);
     expect(res.statusCode).toBe(200);
     // Any ring tile: its node takes the middle, so tests build on spots 1–6.
-    const tile = HomeResponseSchema.parse(res.json()).tiles.find((t) => !t.heartSeed)!;
+    const tile = HomeResponseSchema.parse(res.json()).tiles.filter((t) => !t.heartSeed)[nth]!;
     return { q: tile.q, r: tile.r };
   }
 
@@ -222,10 +222,11 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     const mapId = await newMap(server, kid);
     await give(server, kid, mapId, { timber: 30, stone: 30, treats: 2 });
     await craftAndCollect(server, kid, mapId, 'heart-charm');
-    const tile = await plainHomeTile(server, kid, mapId);
-    // Habitats go around a home tile's middle (#204); fires only out on land (#202).
+    // Habitats go around a home tile's middle (#204), one a tile (#295); fires
+    // only out on land (#202).
     for (const [i, buildingId] of ['ember-den', 'cozy-meadow'].entries()) {
-      const res = await place(server, kid, mapId, { buildingId, ...tile, spot: i + 1 });
+      const tile = await plainHomeTile(server, kid, mapId, i);
+      const res = await place(server, kid, mapId, { buildingId, ...tile, spot: 1 });
       expect(res.statusCode, res.body).toBe(201);
     }
     const res = await place(server, kid, mapId, {

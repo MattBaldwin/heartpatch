@@ -18,6 +18,13 @@ const slow = { timeout: 30_000 };
 const scene = <T>(page: Page, name: 'battle' | 'explore') =>
   hook<{ scene: T | null }>(page, name).then((s) => s?.scene ?? null);
 
+// Every test opens its own player (newPlayer); a page left mid-battle keeps
+// drawing, which starves the next test's pages when rendering is in software
+// (#397). Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
+
 test('a dressed squishy wears its accessory in battle and on the trail', async ({ browser }) => {
   test.setTimeout(300_000); // two scene builds; CI renders in software
   const page = await newPlayer(browser, uniqueName('wear'));

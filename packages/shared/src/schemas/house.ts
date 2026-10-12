@@ -78,3 +78,9 @@ export type HouseView = z.infer<typeof HouseViewSchema>;
  */
 export const HomeHouseSchema = z.object({ level: z.number().int().min(1) });
 export type HomeHouse = z.infer<typeof HomeHouseSchema>;
+
+/** `POST /maps/:mapId/house/build`: build the next level (it must be the next one). */
+export const BuildHouseRequestSchema = z.strictObject({
+  toLevel: z.number().int().min(2),
+});
+export type BuildHouseRequest = z.infer<typeof BuildHouseRequestSchema>;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema, DescriptionSchema, DisplayNameSchema } from './common.js';
+import { ClearToolIdSchema } from './clearing.js';
 import { ToolIdSchema } from './explore.js';
 
 /**
@@ -65,9 +66,14 @@ export const ResourceSchema = z.strictObject({
    */
   tool: ToolIdSchema.optional(),
   /**
+   * A clearing tool (#242): counted in uses like an explore tool, and a
+   * clear spends one. Only crafted items, and the id must be the tool's.
+   */
+  clearTool: ClearToolIdSchema.optional(),
+  /**
    * Can it be traded or gifted at a trading post (#271)? Missing means yes.
-   * Explore tools are worn in uses, so they stay with their Keeper
-   * (`checkGameData` refuses a tradable tool).
+   * Explore and clearing tools are worn in uses, so they stay with their
+   * Keeper (`checkGameData` refuses a tradable tool).
    */
   tradable: z.boolean().optional(),
 });

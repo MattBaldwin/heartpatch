@@ -594,6 +594,36 @@ export const GAME_EVENTS = {
       notable: ExploreNotableSchema.nullable(),
     }),
   },
+  /**
+   * A player started clearing one of their homesteads (#242): members see
+   * "clearing here, ready at …" on the tile. The tool and drop stay internal.
+   */
+  'clearing.started': {
+    internal: z.strictObject({
+      clearId: z.uuid(),
+      userId: z.uuid(),
+      ...coords,
+      tool: z.string(),
+      drop: z.record(z.string(), z.number().int().min(1)),
+      readyAt: z.iso.datetime(),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, readyAt: z.iso.datetime() }),
+  },
+  /**
+   * A tile finished clearing (#242): it's cleared land now, its spot gone.
+   * `from` is the terrain it was. What it dropped stays internal.
+   */
+  'tile.cleared': {
+    internal: z.strictObject({
+      clearId: z.uuid(),
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      from: z.string(),
+      drop: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, terrain: z.string(), from: z.string() }),
+  },
   /** A player searched every spot on one of their tiles (#199): it's fully explored ✨. */
   'tile.explored': {
     internal: z.strictObject({ userId: z.uuid(), ...coords, terrain: z.string() }),
@@ -665,6 +695,19 @@ export const GAME_EVENTS = {
       cost: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
+  /**
+   * A Keeper built their house's next level (#381). The whole patch hears it
+   * (coordinator call): "Lee's house grew to level 3! 🏠". The cost stays
+   * internal.
+   */
+  'house.built': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      level: z.number().int().min(2),
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), level: z.number().int().min(2) }),
   },
   /** A player moved one of their buildings to another spot (#18). */
   'building.moved': {

@@ -22,6 +22,7 @@ import {
   outfits,
   squishies,
   tileAttacks,
+  tileClears,
   tileDefenders,
   tiles,
   users,
@@ -613,6 +614,13 @@ function queries(db: Executor): MapsRepo {
           homeSlot: tiles.homeSlot,
           guardianStrength: tiles.guardianStrength,
           gatheringReadyAt: gatherJobs.readyAt,
+          // "Clearing here" (#242): only the tile owner's own clear counts.
+          clearingReadyAt: sql<string | null>`(
+            select ${tileClears.readyAt} from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id}
+              and ${tileClears.endedAt} is null
+              and ${tileClears.userId} = ${tiles.ownerUserId}
+          )`,
           // The raid cooldown (#15): the latest tile battle's, past or not.
           cooldownUntil: sql<string | null>`(
             select max(${tileAttacks.cooldownUntil}) from ${tileAttacks}
@@ -648,9 +656,11 @@ function queries(db: Executor): MapsRepo {
         )
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return rows.map(({ gatheringReadyAt, cooldownUntil, ...tile }) => ({
+      return rows.map(({ gatheringReadyAt, clearingReadyAt, cooldownUntil, ...tile }) => ({
         ...tile,
         gathering: gatheringReadyAt ? { readyAt: gatheringReadyAt.toISOString() } : null,
+        clearing:
+          clearingReadyAt === null ? null : { readyAt: new Date(clearingReadyAt).toISOString() },
         cooldownUntil: cooldownUntil === null ? null : new Date(cooldownUntil).toISOString(),
       }));
     },

@@ -317,8 +317,18 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     const [far] = await landAt(mapId, kid, [5], ['forest', 'meadow', 'hills']);
     const land = createLandTending({ db, clock: () => clock });
     await land.nightfall(mapId, '2026-10-02');
-    // A fire there, with two nights of fuel left when the land goes, and a
-    // gatherer, so the refund and its banking lock the bag together.
+    // A gatherer there and a fire with two nights of fuel left when the land
+    // goes, so the refund and the work's banking lock the bag together. Since
+    // #295 the two can't share a tile, but a patch from before the tidy-up
+    // pass can still hold both: the gatherer goes first, the fire's row after.
+    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, { level: 5 });
+    const gatherer = SquishyResponseSchema.parse(granted.json()).squishy;
+    const job = await call(server, 'POST', `/maps/${mapId}/squishies/${gatherer.id}/job`, kid, {
+      job: 'gatherer',
+      q: far!.q,
+      r: far!.r,
+    });
+    expect(job.statusCode, job.body).toBe(200);
     const [fire] = await db
       .insert(buildings)
       .values({
@@ -331,14 +341,6 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
         fuelledThrough: '2026-10-16',
       })
       .returning({ id: buildings.id });
-    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, { level: 5 });
-    const gatherer = SquishyResponseSchema.parse(granted.json()).squishy;
-    const job = await call(server, 'POST', `/maps/${mapId}/squishies/${gatherer.id}/job`, kid, {
-      job: 'gatherer',
-      q: far!.q,
-      r: far!.r,
-    });
-    expect(job.statusCode, job.body).toBe(200);
 
     advance(RULES.wildAfterDays);
     expect(await land.nightfall(mapId, '2026-10-14')).toEqual({ wild: 1 });
