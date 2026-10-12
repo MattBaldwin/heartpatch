@@ -109,10 +109,10 @@ export interface HomeScreenOptions {
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
-   * How each of my squishies feels about its job (#393, the jobs view): the
-   * happy ones bounce now and then, the ones that aren't keen droop.
+   * Asks for how each of my squishies feels about its job (#393, the jobs
+   * view); the moods arrive through `setWorkMoods`, newest only.
    */
-  workMoods?: (mapId: string) => Promise<ReadonlyMap<string, WorkMood>>;
+  loadWorkMoods?: (mapId: string) => void;
   /**
    * "📖 Recipe book" on a build row short of something you make (the
    * Jack-o'-Lantern): leaves the home and opens the recipe book.
@@ -1274,13 +1274,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     options.showScene(build);
     render();
     syncWander();
-    // How they feel about their jobs (#393): the home shows without it.
-    void options
-      .workMoods?.(id)
-      .then((next) => {
-        if (at === generation) applyMoods(id, next);
-      })
-      .catch(() => undefined);
+    // How they feel about their jobs (#393): arrives through `setWorkMoods`; the home shows without it.
+    options.loadWorkMoods?.(id);
   }
 
   function hide(): void {

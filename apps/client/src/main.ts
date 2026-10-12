@@ -505,7 +505,9 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
-  workMoods: (mapId) => jobs.workMoods(mapId),
+  loadWorkMoods: (mapId) => {
+    jobs.loadView(mapId);
+  },
   onRecipeBook: () => {
     recipeBook.open();
   },

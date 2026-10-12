@@ -11,7 +11,7 @@ import { el } from '../../ui/dom.js';
 import { createGathererBadges, type GathererBadges } from './gatherer-badges.js';
 import { createJobBoard, type JobBoard, type JobBoardDebug } from './job-board.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
-import { JOBS_TEXT, workMoods, type WorkMood } from './jobs-view.js';
+import { JOBS_TEXT, type WorkMood } from './jobs-view.js';
 import { createViewFeed } from './view-feed.js';
 import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-picker.js';
 
@@ -55,10 +55,10 @@ export interface Jobs {
   /** The map layer that puts a 🧺 over tiles with a gatherer (pass it to the map screen). */
   readonly badges: GathererBadges;
   /**
-   * How each of my squishies feels about its job on a map (#393), fresh
-   * from the server: for the home's bounce and droop.
+   * Asks for my fresh jobs view of a map (#393): it reaches `onView` (only if
+   * it's still the newest), for the home's bubbles, bounce and droop.
    */
-  workMoods: (mapId: string) => Promise<Map<string, WorkMood>>;
+  loadView: (mapId: string) => void;
   /** Calls `listener` with every fresh jobs view (a job changed, the board opened). */
   onView: (listener: (mapId: string, view: JobsView) => void) => void;
   readonly isOpen: boolean;
@@ -98,12 +98,11 @@ export function createJobs(options: JobsOptions): Jobs {
   const picker: TeamPicker = createTeamPicker({ root: options.root, api });
   let userId: string | null = null;
   const glade = (mapId: string) => options.isGlade?.(mapId) ?? false;
-  const badges = createGathererBadges(options.root, {
-    // My gatherers' moods: never on the Tutorial Glade, never signed out.
-    load: (mapId) => {
-      if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
-    },
-  });
+  /** My jobs view, for the moods: never on the Tutorial Glade, never signed out. */
+  const loadView = (mapId: string) => {
+    if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
+  };
+  const badges = createGathererBadges(options.root, { load: loadView });
   feed.listen((mapId, view) => {
     badges.setMine(mapId, view);
   });
@@ -210,7 +209,7 @@ export function createJobs(options: JobsOptions): Jobs {
       refresh();
     },
     badges,
-    workMoods: async (mapId) => (glade(mapId) ? new Map() : workMoods(await api.view(mapId))),
+    loadView,
     onView: feed.listen,
     get isOpen() {
       return board.isOpen || picker.isOpen;
