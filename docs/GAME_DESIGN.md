@@ -134,12 +134,20 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less (50%, then 25%, then 10%). Patch Coins from care are capped per account per day **[DEFAULT: 10]**, and only full-value actions earn one. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
 - **Heart Snack (rare treat).** A care button that costs **[DEFAULT: 3]** Heartdust and adds **[DEFAULT: 25]** contentment. It always counts in full, sits outside the day's diminishing returns and earns no Patch Coins, so Heartdust from rescues has a use (owner decision 2026-10-06).
 - **Why three everyday actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
-- **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +0]** of its level, so a lone Partner beats an ordinary one about 75% of the time as it grows (owner decision 2026-10-07). The XP curve steepens past level 16 (when starters grow up) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). `pnpm sim:progression` shows the pace day by day.
+- **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +0]** of its level, so a lone Partner beats an ordinary one about 75% of the time as it grows (owner decision 2026-10-07). The XP curve steepens past level 16 (when starters reach their kid stage) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). `pnpm sim:progression` shows the pace day by day.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
 ## 8. Evolution
 
-Squishies evolve at level thresholds. The evolved form **branches by feeling plus rare conditions**, and the whole environment the player builds influences the outcome.
+Squishies evolve at level thresholds through **four stages: baby → kid → teen → grown-up** (owner decisions 2026-10-12, #443). Each stage is a bit bigger and fiercer, and stays cute (ART_BIBLE §1.3). For a line whose baby first evolves at level E (by default 16 common, 18 uncommon, 22 rare, 26 epic, 30 legendary; secret Heartlet 25):
+
+- **Kid** at **E**: one shared form, the same rarity as the baby.
+- **Teen** at **E + 8 [DEFAULT]**: the step that **branches**, one rarity step up. Today's two evolved forms of each line are its teens.
+- **Grown-up** at **E + 20 [DEFAULT]**: one per teen, so the branch the kid grew into decides it; one more rarity step, capped at legendary.
+
+Kids land in batches (#443): until a line's kid ships, its baby evolves straight to its teens at E.
+
+The teen step **branches by feeling plus rare conditions**, and the whole environment the player builds influences the outcome.
 
 When a squishy is ready, the server rolls a **weighted table** of possible forms for that species:
 
@@ -153,7 +161,7 @@ When a squishy is ready, the server rolls a **weighted table** of possible forms
 - **Pity protection.** Each common result for a well-cared-for squishy slightly raises that player's next rare roll odds.
 - Rolls are server-side with a seeded RNG; inputs are logged so any result can be explained and replayed.
 
-Phase 1 ships simple level-based single-form evolution; branching arrives in Phase 2.
+**Phase 1** ships the kid forms and the branching teen step (feeling-aimed odds, whispers and pity, #32; the 8 wave-1 lines get a kid and a single teen, and their branch teens follow in Phase 2); a line whose grown-up hasn't shipped yet stops at its teen ("Fully evolved") and evolves on its next XP once the grown-up lands. **Phase 2** adds the grown-ups. A squishy never goes back a stage: one that grew up before its line's kid existed keeps its form.
 
 ## 9. Breeding
 
@@ -346,9 +354,9 @@ A second collection alongside the squishy catalog.
 
 ## 22. Phased roadmap
 
-**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
+**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and evolution (kids and the branching teens, #32, #443); the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
-**Phase 2 — Thanksgiving:** trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
+**Phase 2 — Thanksgiving:** trading and gifting (squishies and clothing); free text chat with filtering and parent controls; grown-up evolutions (#443); outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
 **Phase 3 — Christmas:** breeding and hybrids; presents; Home Base Harmony; full Lorebook and chihuahua Easter eggs; web push notifications; New Year fireworks; passkeys.
 
