@@ -76,9 +76,9 @@ describe('who joined the patch (#279)', () => {
   });
 
   it('names an evolved guardian by the form one step back (owner decision 2026-10-08)', () => {
-    // Juniper's Gap: a Hearthbun guardian joins as an Emberbun.
+    // Juniper's Gap: a Hearthbun guardian joins as Kindlebun, Emberbun's kid (#443).
     const b = ended([{ speciesId: 'hearthbun' }], 0, over('captured'));
-    expect(newFriends(b)).toEqual(['emberbun']);
+    expect(newFriends(b)).toEqual(['kindlebun']);
   });
 
   it('keeps the ones that came along before a knockout win, or a loss', () => {

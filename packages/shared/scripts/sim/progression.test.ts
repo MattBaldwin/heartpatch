@@ -64,8 +64,10 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
   });
 
   it('moves no target by more than a day with Training Grounds (owner decision 2026-10-06)', () => {
-    // A 30-day run, as the brief's targets are on days 14 and 30.
-    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 4 };
+    // A 30-day run, as the brief's targets are on days 14 and 30. Gap odds from
+    // 8 games: at 4, adding species (#443's kids) reshuffles the seeded fights
+    // enough to move Gap-ready by two days either way.
+    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 8 };
     for (const kid of [casual!, engaged!]) {
       const now = summarise(runProgression(data, month, CURRENT_RULES, kid, 4), month);
       const without = summarise(runProgression(data, month, NO_TRAINING_RULES, kid, 4), month);

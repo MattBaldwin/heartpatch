@@ -292,6 +292,14 @@ export function checkRosterArt(
     }
   }
 
+  // A line's first form, however the rows are ordered: `line` was filled in
+  // one pass, so a kid listed after its teens (#443) points at a middle form.
+  const lineOf = (id: string): string => {
+    let at = id;
+    for (let i = 0; i < species.length && line.has(at); i++) at = rootOf(at);
+    return at;
+  };
+
   const seen = new Map<string, { id: string; line: string }>();
   species.forEach((s, i) => {
     const key = [
@@ -299,7 +307,7 @@ export function checkRosterArt(
       dominantPart(s.visual, registry),
       hueFamily(s.visual.palette[0] ?? '#ffffff'),
     ].join(' + ');
-    const mine = rootOf(s.id);
+    const mine = lineOf(s.id);
     const other = seen.get(key);
     if (other && other.line !== mine) {
       report(

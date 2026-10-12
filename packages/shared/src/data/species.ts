@@ -4,7 +4,12 @@ import { WAVE_1_SPECIES } from './species-wave-1.js';
 
 /*
  * The Phase 1 launch roster (design doc §4, issue #10): 14 base lines plus 4
- * Halloween lines, each with a level-based evolution (§8). Lines branch
+ * Halloween lines. Each line grows in four stages (§8, #443): baby → kid →
+ * teen → grown-up. A kid comes at the baby's evolution level, keeps its
+ * rarity and adds about 18% to its stats; the teens come 8 levels later
+ * (the forms that shipped as each line's evolution before #443), and the
+ * grown-ups arrive in Phase 2. Kids land in batches, so a line without one
+ * still goes baby → teen. Lines branch at the teen step
  * (#32): a second form at the same level is a sidegrade, the same element
  * and rarity with a different feeling; how it's reached is server-only
  * (`data/server/evolution-rules.ts`). Public:
@@ -534,14 +539,46 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 50, defense: 45, speed: 55 }, // TUNE:
     moves: ['giggle-drizzle', 'belly-flop', 'bubble-bath'],
-    evolutions: [
-      { into: 'splashmallow', level: 16 },
-      { into: 'drizzledoze', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'rippletad', level: 16 }], // TUNE:
     visual: {
       body: 'drop',
       palette: ['#7cc0f4', '#e8f6ff', '#3f86d8'],
       parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'belly-patch', 'water-curl', 'wiggle-tail'],
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
+  },
+  // #443 kid (stage 2): a tadpole sprouting its first feet and a fin ridge,
+  // before Drizzledoze the frog or Splashmallow the sea serpent.
+  {
+    id: 'rippletad',
+    name: 'Rippletad',
+    description: 'Just grew two little feet and a fin. Now it hops and swims at the same time.',
+    element: 'water',
+    feeling: 'silly',
+    rarity: 'common',
+    baseStats: { hp: 71, attack: 59, defense: 53, speed: 65 }, // TUNE: ×1.18 Puddlepuff
+    moves: ['giggle-drizzle', 'belly-flop', 'bubble-bath'],
+    evolutions: [
+      { into: 'splashmallow', level: 24 },
+      { into: 'drizzledoze', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'drop',
+      palette: ['#76bcf3', '#e8f6ff', '#3a80d4', '#ffffff'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'water-curl',
+        'fin-crest',
+        'fin-row',
+        'hop-feet',
+        'wiggle-tail',
+      ],
+      size: 1.15,
+      stance: 0.15,
       pose: 'sit',
       attackPart: 'tail',
     },
@@ -705,10 +742,7 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 50, attack: 55, defense: 45, speed: 50 }, // TUNE:
     moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle'],
-    evolutions: [
-      { into: 'hearthbun', level: 16 },
-      { into: 'embernap', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'kindlebun', level: 16 }], // TUNE:
     visual: {
       body: 'blob',
       palette: ['#ffad73', '#fff0e0', '#ff6a2e'],
@@ -724,6 +758,44 @@ export const SPECIES: Species[] = [
       ],
       glow: 'accent',
       head: { body: 'orb', size: 1.1, forward: 0.08, up: 0.55 },
+      stance: 0.3,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
+  },
+  // #443 kid (stage 2): Emberbun's three little flames, a belly patch like
+  // Hearthbun's and a fluffy tail like Embernap's.
+  {
+    id: 'kindlebun',
+    name: 'Kindlebun',
+    description: 'Its little flame tuft grew into three flickers. It pats them to keep warm.',
+    element: 'fire',
+    feeling: 'cozy',
+    rarity: 'common',
+    baseStats: { hp: 59, attack: 65, defense: 53, speed: 59 }, // TUNE: ×1.18 Emberbun
+    moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle'],
+    evolutions: [
+      { into: 'hearthbun', level: 24 },
+      { into: 'embernap', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'blob',
+      palette: ['#ffa86b', '#fff0e0', '#ff6a2e', '#ffd166'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'long-ears',
+        'flame-crown',
+        'biped-legs',
+        'stubby-arms',
+        'belly-patch',
+        'fluff-tail',
+      ],
+      glow: 'accent',
+      size: 1.15,
+      head: { body: 'orb', size: 1.0, forward: 0.1, up: 0.62 },
       stance: 0.3,
       pose: 'stand',
       attackPart: 'arms',
@@ -1120,16 +1192,47 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 55, attack: 70, defense: 55, speed: 45 }, // TUNE:
     moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff'],
-    evolutions: [
-      { into: 'bristlebloom', level: 18 },
-      { into: 'petalprance', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'bristlepip', level: 18 }], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#9fd672', '#f2ffe6', '#b06fd8'],
       parts: ['oval-eyes', 'brave-brows', 'cat-mouth', 'spike-coat', 'biped-legs', 'leaf-tail'],
       stance: 0.12,
       pose: 'sit',
+      attackPart: 'spikes',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
+  },
+  // #443 kid (stage 2): the burr ball grows the leafy arms both Bristlebloom
+  // and Petalprance keep.
+  {
+    id: 'bristlepip',
+    name: 'Bristlepip',
+    description: 'Grew two leafy arms and waves them at everyone. Hugs are a bit prickly.',
+    element: 'leaf',
+    feeling: 'brave',
+    rarity: 'uncommon',
+    baseStats: { hp: 65, attack: 83, defense: 65, speed: 53 }, // TUNE: ×1.18 Thistlepip
+    moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff'],
+    evolutions: [
+      { into: 'bristlebloom', level: 26 },
+      { into: 'petalprance', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#98d26a', '#f2ffe6', '#a862d6', '#5aa83a'],
+      parts: [
+        'oval-eyes',
+        'brave-brows',
+        'cat-mouth',
+        'spike-coat',
+        'leaf-arms',
+        'biped-legs',
+        'leaf-tail',
+      ],
+      size: 1.15,
+      stance: 0.2,
+      pose: 'stand',
       attackPart: 'spikes',
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
@@ -1713,10 +1816,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 40 }, // TUNE:
     moves: ['pumpkin-roll', 'leafy-tickle', 'boo'],
-    evolutions: [
-      { into: 'glowgourd', level: 16 },
-      { into: 'squashboo', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'pumpkip', level: 16 }], // TUNE:
     visual: {
       body: 'pumpkin',
       palette: ['#ff9a3c', '#ffe0b8', '#4f9a45'],
@@ -1730,6 +1830,42 @@ export const SPECIES: Species[] = [
         'vine-tail',
       ],
       stance: 0.12,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
+  },
+  // #443 kid (stage 2): a skipping pumpkin with little arms of its own, before
+  // Glowgourd's leaf arms or Squashboo's wings.
+  {
+    id: 'pumpkip',
+    name: 'Pumpkip',
+    description: 'Skips everywhere now. Its new little arms are great for waving hello.',
+    element: 'leaf',
+    feeling: 'silly',
+    rarity: 'common',
+    season: 'halloween',
+    baseStats: { hp: 71, attack: 59, defense: 65, speed: 47 }, // TUNE: ×1.18 Gourdon
+    moves: ['pumpkin-roll', 'leafy-tickle', 'boo'],
+    evolutions: [
+      { into: 'glowgourd', level: 24 },
+      { into: 'squashboo', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pumpkin',
+      palette: ['#ff9433', '#ffe0b8', '#4a9440', '#ffd23f'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'stem',
+        'leaf-ears',
+        'stubby-arms',
+        'biped-legs',
+        'vine-tail',
+      ],
+      size: 1.15,
+      stance: 0.22,
       pose: 'stand',
       attackPart: 'tail',
     },
@@ -1981,16 +2117,48 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 50, attack: 60, defense: 45, speed: 65 }, // TUNE:
     moves: ['wiggle-wick', 'ember-boop', 'boo'],
-    evolutions: [
-      { into: 'wickwhisker', level: 18 },
-      { into: 'sparklewick', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'wickitten', level: 18 }], // TUNE:
     visual: {
       body: 'tall',
       palette: ['#3d3550', '#fff1d6', '#ffb43c'],
       parts: ['spooky-eyes', 'cat-mouth', 'pointy-ears', 'flame-tuft', 'curly-tail'],
       ink: '#fff4dc',
       glow: 'accent',
+      pose: 'sit',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
+  },
+  // #443 kid (stage 2): the candle cat grows the whisker flames both
+  // Wickwhisker and Sparklewick keep.
+  {
+    id: 'wickitten',
+    name: 'Wickitten',
+    description: 'Its whiskers caught a spark and kept it. They flicker when it purrs.',
+    element: 'fire',
+    feeling: 'spooky',
+    rarity: 'uncommon',
+    season: 'halloween',
+    baseStats: { hp: 59, attack: 71, defense: 53, speed: 77 }, // TUNE: ×1.18 Candlekit
+    moves: ['wiggle-wick', 'ember-boop', 'boo'],
+    evolutions: [
+      { into: 'wickwhisker', level: 26 },
+      { into: 'sparklewick', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'tall',
+      palette: ['#3a3250', '#fff1d6', '#ffaa30', '#ffe066'],
+      ink: '#fff4dc',
+      parts: [
+        'spooky-eyes',
+        'cat-mouth',
+        'pointy-ears',
+        'flame-tuft',
+        'whisker-flames',
+        'curly-tail',
+      ],
+      glow: 'accent',
+      size: 1.1,
       pose: 'sit',
       attackPart: 'crown',
     },

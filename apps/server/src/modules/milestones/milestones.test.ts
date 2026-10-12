@@ -192,7 +192,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     who: Player,
     squishyId: string = randomUUID(),
     from = 'puddlepuff',
-    into = 'splashmallow',
+    into = 'rippletad',
     level = 16,
   ): NewGameEvent => ({
     mapId,
