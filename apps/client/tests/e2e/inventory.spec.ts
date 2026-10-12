@@ -134,6 +134,9 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // The bag starts with just Sprout's Heart Charms from the first starter pick
   // (owner decision 2026-10-04), on the server's season (the dev server runs
   // on today's date).
+  // The bag's hook is null until the bag has read the new patch, a round trip after the map has
+  // its tiles (it was null on both attempts of a main run, #429).
+  await expect.poll(async () => (await bagState(page)) !== null, { timeout: 30_000 }).toBe(true);
   const state = await bagState(page);
   expect(state).toMatchObject({
     items: { 'heart-charm': 3 },
