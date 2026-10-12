@@ -1,4 +1,5 @@
 import {
+  addDays,
   CARE_RULES,
   evaluateRequirements,
   GAME_DATA,
@@ -69,6 +70,8 @@ export const HOUSE_MESSAGES = {
   noSquishy: "We couldn't find that squishy.",
   noGift: 'No gift yet today. Check back soon! 🎁',
   giftOpened: 'Already opened! Come back tomorrow 🎁',
+  /** A claim for a day before yesterday: that gift can't be opened now. */
+  giftLost: 'That gift got lost in the mail… a new one comes tomorrow! 🎁',
   /** The giver's name on a note when the giver is gone from the patch. */
   someone: 'A little friend',
   move: {
@@ -95,8 +98,12 @@ export interface HouseService {
     squishyId: string,
     roomId: string | null,
   ) => Promise<HouseView>;
-  /** Opens today's gift from a resident, once: its items go in my bag. */
-  claimGift: (user: PublicUser, mapId: string) => Promise<HouseView>;
+  /**
+   * Opens the gift a resident left on `day` (the day the screen showed:
+   * today, or yesterday for a screen left open past midnight), once: its
+   * items go in my bag.
+   */
+  claimGift: (user: PublicUser, mapId: string, day: string) => Promise<HouseView>;
 }
 
 export interface HouseServiceOptions {
@@ -443,12 +450,17 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
       return result;
     },
 
-    claimGift: async (user, mapId) => {
+    claimGift: async (user, mapId, day) => {
       const at = now();
       const result = await createHouseRepo(db).transaction(async (repo, tx) => {
         const map = await requireHouse(tx, user, mapId);
+        // Today's gift, or yesterday's from a screen still showing it past
+        // midnight (the view only ever shows, and rolls, today's).
+        const today = localDate(at, map.timeZone);
+        if (day < addDays(today, -1)) throw new AppError('CONFLICT', HOUSE_MESSAGES.giftLost);
+        if (day > today) throw new AppError('CONFLICT', HOUSE_MESSAGES.noGift);
         // Lock order (tech spec §7): the member row (step 2: one house
-        // command at a time per player), the house (8c), today's gift row
+        // command at a time per player), the house (8c), that day's gift row
         // under it (8c), the inventory row it fills (11), then `maps` (13).
         // The giver is read, never locked: one traded away or gone since
         // still leaves the gift, which is the Keeper's once rolled.
@@ -456,7 +468,6 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
           throw new AppError('NOT_FOUND', HOUSE_MESSAGES.noHouse);
         }
         await repo.lockHouse(mapId, user.id, HOUSE_START_LEVEL, at);
-        const day = localDate(at, map.timeZone);
         const gift = await repo.lockUnclaimedGift(mapId, user.id, day);
         if (!gift) {
           const opened = await repo.gift(mapId, user.id, day);

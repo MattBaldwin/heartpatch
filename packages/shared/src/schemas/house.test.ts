@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { HomeSquishySchema } from './buildings.js';
 import { CareSquishySchema } from './care.js';
 import { GAME_EVENTS, parseGameEventPayload } from './events.js';
-import { HouseViewSchema, MoveResidentRequestSchema } from './house.js';
+import {
+  ClaimHouseGiftRequestSchema,
+  HouseViewSchema,
+  MoveResidentRequestSchema,
+} from './house.js';
 import { JobSquishySchema } from './jobs.js';
 
 const squishyId = '0190a000-0000-7000-8000-000000000001';
@@ -61,6 +65,15 @@ describe('house.gift (#381 PR H)', () => {
       count: 3,
     });
     expect(() => parseGameEventPayload('house.gift', { ...payload, count: 0 })).toThrow();
+  });
+});
+
+describe('ClaimHouseGiftRequestSchema (#381 PR H)', () => {
+  it('takes the day the screen showed, a real date, nothing else', () => {
+    expect(ClaimHouseGiftRequestSchema.parse({ day: '2026-10-12' })).toEqual({ day: '2026-10-12' });
+    expect(ClaimHouseGiftRequestSchema.safeParse({}).success).toBe(false);
+    expect(ClaimHouseGiftRequestSchema.safeParse({ day: '2026-02-30' }).success).toBe(false);
+    expect(ClaimHouseGiftRequestSchema.safeParse({ day: '2026-10-12', x: 1 }).success).toBe(false);
   });
 });
 

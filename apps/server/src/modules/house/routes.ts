@@ -1,5 +1,6 @@
 import {
   BuildHouseRequestSchema,
+  ClaimHouseGiftRequestSchema,
   HouseViewSchema,
   MapIdParamsSchema,
   MoveResidentRequestSchema,
@@ -23,8 +24,8 @@ export interface HouseRoutesOptions {
  * next level needs), `POST /maps/:mapId/house/build` (build the next
  * level) and `POST /maps/:mapId/house/residents` (move a squishy in, to
  * another room, or out), both with `Idempotency-Key`, and
- * `POST /maps/:mapId/house/gift/claim` (open today's gift from a resident,
- * once; `Idempotency-Key`). NOT_FOUND while `HP_HOUSE` is off for the player.
+ * `POST /maps/:mapId/house/gift/claim { day }` (open the gift the screen
+ * showed, today's or yesterday's, once; `Idempotency-Key`). NOT_FOUND while `HP_HOUSE` is off for the player.
  */
 export const houseRoutes =
   (service: HouseService, options: HouseRoutesOptions): FastifyPluginCallback =>
@@ -81,11 +82,16 @@ export const houseRoutes =
     app.post(
       '/maps/:mapId/house/gift/claim',
       {
-        schema: { params: MapIdParamsSchema, response: { 200: HouseViewSchema } },
+        schema: {
+          params: MapIdParamsSchema,
+          body: ClaimHouseGiftRequestSchema,
+          response: { 200: HouseViewSchema },
+        },
         preHandler: [requireAuth, rateLimit('gift'), idempotency.preHandler],
         onSend: idempotency.onSend,
       },
-      async (request) => service.claimGift(requireUser(request), request.params.mapId),
+      async (request) =>
+        service.claimGift(requireUser(request), request.params.mapId, request.body.day),
     );
 
     done();

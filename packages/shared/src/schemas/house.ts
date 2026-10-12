@@ -107,6 +107,14 @@ export const BuildHouseRequestSchema = z.strictObject({
 export type BuildHouseRequest = z.infer<typeof BuildHouseRequestSchema>;
 
 /**
+ * `POST /maps/:mapId/house/gift/claim`: open the gift the house screen
+ * showed (`HouseView.gift.day`). The server takes today's, or yesterday's
+ * from a screen left open past midnight, and nothing older or newer.
+ */
+export const ClaimHouseGiftRequestSchema = z.strictObject({ day: LocalDateSchema });
+export type ClaimHouseGiftRequest = z.infer<typeof ClaimHouseGiftRequestSchema>;
+
+/**
  * `POST /maps/:mapId/house/residents`: move one of my squishies into a room
  * of my house, into another room, or out (`roomId: null`). Replies with the
  * `HouseView`.

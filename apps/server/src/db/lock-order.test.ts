@@ -888,7 +888,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await withTransaction(db, (tx) =>
       grantItems(tx, { mapId, userId: kid.id }, { [gift!.itemId]: 1 }, 'dev-grant'),
     );
-    const claim = () => house.claimGift(kid, mapId);
+    const claim = () => house.claimGift(kid, mapId, gift!.day);
     const opened = async () =>
       (
         await db

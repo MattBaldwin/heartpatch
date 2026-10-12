@@ -948,12 +948,15 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       who: Player,
       mapId: string,
       key: string = crypto.randomUUID(),
+      // The day the screen showed: today on these UTC patches unless a test says.
+      day: string = clock.toISOString().slice(0, 10),
     ) =>
       server.inject({
         method: 'POST',
         url: `/api/v1/maps/${mapId}/house/gift/claim`,
         headers: { ...HEADERS, 'idempotency-key': key },
         cookies: { [SESSION_COOKIE]: who.token },
+        payload: { day },
       });
 
     const giftRows = (mapId: string, who: Player) =>
@@ -1093,7 +1096,66 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(gift).not.toBeNull();
     });
 
-    it('brings a new gift tomorrow, and only today’s can be opened', async () => {
+    it("opens yesterday's gift from a screen left open past midnight, once", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      later(11.5); // 23:30 on Oct 2
+      const shown = (await house(server, kid, mapId)).gift!;
+      expect(shown.day).toBe('2026-10-02');
+      later(1); // the tap lands at 00:30 on Oct 3
+      const res = await claim(server, kid, mapId, 'late-tap', shown.day);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(await bag(mapId, kid)).toMatchObject({ [shown.itemId]: shown.count });
+      const [event] = await giftEvents(mapId);
+      expect(event!.payload).toMatchObject({ day: '2026-10-02' });
+      // The reply shows today's (rolled on the next read), never yesterday's.
+      expect(HouseViewSchema.parse(res.json()).gift).toBeNull();
+      // A replay sends the same reply; a fresh tap is refused; it paid once.
+      const replay = await claim(server, kid, mapId, 'late-tap', shown.day);
+      expect(replay.json()).toEqual(res.json());
+      const again = await claim(server, kid, mapId, undefined, shown.day);
+      expect(ApiErrorSchema.parse(again.json()).error.message).toBe(
+        'Already opened! Come back tomorrow 🎁',
+      );
+      expect(await giftLedger(mapId, kid)).toHaveLength(1);
+      // Today's is its own gift.
+      const today = (await house(server, kid, mapId)).gift!;
+      expect(today).toMatchObject({ day: '2026-10-03', claimed: false });
+    });
+
+    it('refuses a day two back, a day ahead, and a body without a day', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      const shown = (await house(server, kid, mapId)).gift!;
+      later(48); // Oct 4: Oct 2's gift is two days back
+      const old = await claim(server, kid, mapId, undefined, shown.day);
+      expect(old.statusCode).toBe(409);
+      expect(ApiErrorSchema.parse(old.json()).error.message).toBe(
+        'That gift got lost in the mail… a new one comes tomorrow! 🎁',
+      );
+      await house(server, kid, mapId); // rolls Oct 4's
+      const ahead = await claim(server, kid, mapId, undefined, '2026-10-05');
+      expect(ahead.statusCode).toBe(409);
+      expect(ApiErrorSchema.parse(ahead.json()).error.message).toBe(
+        'No gift yet today. Check back soon! 🎁',
+      );
+      const noDay = await server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/house/gift/claim`,
+        headers: { ...HEADERS, 'idempotency-key': crypto.randomUUID() },
+        cookies: { [SESSION_COOKIE]: kid.token },
+        payload: {},
+      });
+      expect(noDay.statusCode).toBe(400);
+      expect(await giftLedger(mapId, kid)).toEqual([]);
+      expect((await giftRows(mapId, kid)).every((r) => r.claimedAt === null)).toBe(true);
+    });
+
+    it('brings a new gift tomorrow', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
