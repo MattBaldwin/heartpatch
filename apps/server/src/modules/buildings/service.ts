@@ -50,6 +50,7 @@ import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createFactoryRepo } from '../factory/repo.js';
 import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
+import { createHouseRepo } from '../house/repo.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
@@ -238,6 +239,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
   ): Promise<HomeResponse> {
     const userId = user.id;
     const { timeZone } = map;
+    const houseShown = map.kind === 'multiplayer' && houseOpenFor(house, user);
     const local = mapLocalTime(at, timeZone);
     const [tiles, buildings, squishies, items] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
@@ -294,10 +296,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       seasons: seasonsOn(at, timeZone),
       tonight: hearthfireState(null, local, HOME_BASE_RULES).tonight,
       now: at.toISOString(),
-      // The Keeper's house (#381): level 1 for everyone until its tables land
-      // (A2). The Tutorial Glade has none, so Sprout's steps don't change.
-      ...(map.kind === 'multiplayer' && houseOpenFor(house, user)
-        ? { house: { level: HOUSE_START_LEVEL } }
+      // The Keeper's house (#381): no row reads as level 1. The Tutorial Glade
+      // has none, so Sprout's steps don't change.
+      ...(houseShown
+        ? {
+            house: { level: (await createHouseRepo(tx).level(mapId, userId)) ?? HOUSE_START_LEVEL },
+          }
         : {}),
     };
   }

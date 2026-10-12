@@ -117,7 +117,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Show your Partner some love',
     sproutLines: [
       'Happy squishies learn more and evolve sooner! Visit them often.',
-      'Open My Home, then Home. Tap 🐾 at the top, then Care on your Partner, then Pet, Play or Feed!',
+      'Open My Home, then Home. Tap Squishies, then Care on your Partner, then Pet, Play or Feed!',
     ],
     highlightTarget: 'care-buttons',
     completeOn: { eventType: 'squishy.cared', actor: 'player', where: [] },

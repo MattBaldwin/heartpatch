@@ -1,5 +1,6 @@
 import { el } from '../ui/dom.js';
 import { INSTALL_GUIDE_SEEN_KEY } from './config.js';
+import { keepOne } from './keep-one.js';
 import { isIosSafari, shouldShowInstallGuide } from './platform.js';
 import '../ui/auth/auth.css';
 
@@ -60,36 +61,38 @@ export function createInstallGuide(): InstallGuide {
       },
       readSeen(),
     );
+  // One card, kept while it's up: a lobby re-render re-appends it, so a tap on "Got it!" mid-refresh still lands (#423).
+  const card = keepOne((drop) => {
+    const close = el(
+      'button',
+      { type: 'button', class: 'auth-button auth-button-small pwa-guide-close' },
+      'Got it!',
+    );
+    const node = el(
+      'section',
+      {
+        class: 'pwa-guide',
+        'aria-labelledby': 'pwa-guide-title',
+        'data-testid': 'install-guide',
+      },
+      el('h2', { class: 'pwa-guide-title', id: 'pwa-guide-title' }, 'Make Heartpatch an app!'),
+      el(
+        'ol',
+        { class: 'pwa-guide-steps' },
+        el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
+        el('li', {}, 'Pick “Add to Home Screen”.'),
+        el('li', {}, 'Open Heartpatch from your home screen!'),
+      ),
+      close,
+    );
+    close.addEventListener('click', () => {
+      markSeen();
+      node.remove();
+      drop();
+    });
+    return node;
+  });
   return {
-    cards: () => {
-      if (!wanted()) return [];
-      const close = el(
-        'button',
-        { type: 'button', class: 'auth-button auth-button-small pwa-guide-close' },
-        'Got it!',
-      );
-      const card = el(
-        'section',
-        {
-          class: 'pwa-guide',
-          'aria-labelledby': 'pwa-guide-title',
-          'data-testid': 'install-guide',
-        },
-        el('h2', { class: 'pwa-guide-title', id: 'pwa-guide-title' }, 'Make Heartpatch an app!'),
-        el(
-          'ol',
-          { class: 'pwa-guide-steps' },
-          el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
-          el('li', {}, 'Pick “Add to Home Screen”.'),
-          el('li', {}, 'Open Heartpatch from your home screen!'),
-        ),
-        close,
-      );
-      close.addEventListener('click', () => {
-        markSeen();
-        card.remove();
-      });
-      return [card];
-    },
+    cards: () => (wanted() ? [card()] : []),
   };
 }

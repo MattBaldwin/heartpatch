@@ -3,6 +3,7 @@
    in the bottom sheet, and the title and fire status sit at the top. */
 
 .home-open[hidden],
+.home-handle[hidden],
 .home[hidden] {
   display: none;
 }
@@ -392,4 +393,41 @@
   background: #fff3d6;
   font-size: 15px;
   font-weight: 700;
+}
+
+/* The peek bar (#412): on opening Home the sheet is short, so the squishies by
+   the Heart Seed stay in view; its handle opens it into the full lists. */
+.home-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  /* The grip sits in the sheet's top padding; the button stays 44pt tall. */
+  margin: -12px 0 -10px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.home-handle::before {
+  content: '';
+  width: 44px;
+  height: 6px;
+  border-radius: 3px;
+  background: #d9c3d6;
+}
+
+.home-handle:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+.home-peek-row > .home-button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
 }

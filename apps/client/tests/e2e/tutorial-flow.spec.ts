@@ -360,8 +360,8 @@ async function playTutorial(page: Page): Promise<void> {
   await readAll();
   await tapOn(main); // Let's go!
   await openHome();
-  // The Squishies button at the top, then Care on the Partner's row (#375).
-  await tapOn(page.locator('[data-testid="squishies-open"]:visible'));
+  // The peek bar's Squishies opens the roster (#412, #375), then Care on the Partner's row.
+  await tapOn(page.getByTestId('home-squishies'));
   await tapOn(page.getByTestId('roster-care').first());
   const care = page.getByTestId('care');
   await expect(care).toBeVisible();

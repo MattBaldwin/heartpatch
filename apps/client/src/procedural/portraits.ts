@@ -6,6 +6,7 @@ import { CreateScreenshotUsingRenderTargetAsync } from '@babylonjs/core/Misc/scr
 import { Scene } from '@babylonjs/core/scene';
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { cameraFor } from '../close-up/close-up-view.js';
+import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
 import type { SquishyDetail } from './config.js';
@@ -105,6 +106,28 @@ async function cropToSquishy(dataUrl: string, px: number): Promise<string> {
   return to.toDataURL('image/png');
 }
 
+/** A draw that hasn't finished by then is given up (it resolves to null). */
+const DRAW_TIMEOUT_MS = 8_000; // TUNE
+
+/** `work`, or null if it hasn't settled within `ms`. */
+function withTimeout<T>(work: Promise<T | null>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      resolve(null);
+    }, ms);
+    work.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        window.clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
 export function createPortraits(options: PortraitOptions): Portraits {
   const cache = new Map<string, Promise<string | null>>();
   /** One render at a time, each after the last, so the map never stalls for long. */
@@ -140,7 +163,7 @@ export function createPortraits(options: PortraitOptions): Portraits {
 
   async function draw(look: PortraitLook): Promise<string | null> {
     const engine = options.engine();
-    if (!engine) return null;
+    if (!engine || engine.isDisposed) return null;
     const { scene, field, camera } = stageFor(engine);
     const handle = field.add(look.species, look.instanceId, { x: 0, z: 0 });
     try {
@@ -157,7 +180,9 @@ export function createPortraits(options: PortraitOptions): Portraits {
       field.flush();
       await scene.whenReadyAsync();
       const css = window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX;
-      const px = Math.round(css * Math.min(3, Math.max(2, window.devicePixelRatio)));
+      // The game's own pixel-ratio cap (CLAUDE.md rule 8): at 2× and up to
+      // the crop's scale it stays crisp on a 3× iPhone.
+      const px = Math.round(css * MAX_DPR);
       // Drawn bigger with room to spare, then cut to the squishy's own
       // outline, so long ears and tall toppers fit as well as round bodies.
       const shot = await CreateScreenshotUsingRenderTargetAsync(
@@ -182,9 +207,22 @@ export function createPortraits(options: PortraitOptions): Portraits {
       const key = `${look.species.id}|${look.instanceId}|${look.accessory ?? ''}`;
       let entry = cache.get(key);
       if (!entry) {
-        entry = queue.then(() => draw(look));
+        // Each draw gives up after a while (a lost GPU context never finishes
+        // its snapshot), so one stuck draw can't hold up every picture after it.
+        entry = queue.then(() => withTimeout(draw(look), DRAW_TIMEOUT_MS));
         queue = entry.catch(() => null);
         cache.set(key, entry);
+        // No picture (no engine yet, a failure, a timeout): forget it, so the
+        // next look tries again rather than keeping the blob all session.
+        const mine = entry;
+        void entry.then((url) => {
+          if (url !== null) return;
+          if (cache.get(key) === mine) cache.delete(key);
+          // A draw that gave up may have left its squishy in the scene: start
+          // the next one from a fresh scene.
+          stage?.scene.dispose();
+          stage = null;
+        });
       }
       return entry;
     },

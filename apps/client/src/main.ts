@@ -316,6 +316,7 @@ const closeUp = createCloseUpScreen({
   onOpen: () => {
     maps.close();
     catalog.close();
+    roster.close();
     care.close();
     void inventory.setMap(null);
     void territory.setMap(null);
@@ -359,6 +360,8 @@ const closeUp = createCloseUpScreen({
     lobby.hide();
   },
   onProblem: (message) => {
+    // It didn't open: nothing to return to the roster from.
+    rosterReturn = null;
     lobby.showMessage(message);
   },
   onTouch: (kind) => {
@@ -603,6 +606,10 @@ const home = createHomeScreen({
   onCare: (mapId, squishyId) => {
     void care.open(mapId, squishyId);
   },
+  // The peek bar's Squishies (#412) opens the roster, like 🐾 at the top (#375).
+  onSquishies: (mapId) => {
+    void roster.open(mapId);
+  },
   onCloseUp: (mapId, squishyId) => {
     audio.cue('squeak');
     void closeUp.open(mapId, squishyId, 'home');
@@ -729,6 +736,7 @@ const maps = createMapScreen({
     postScreen.close();
     void battles.setMap(null);
     catalog.close();
+    roster.close();
     care.close();
     void inventory.setMap(null);
     void territory.setMap(null);
@@ -834,6 +842,7 @@ const tutorial = createTutorialScreen({
       // home base, battles, territory and the night, like a patch. No chat.
       glade = mapId;
       catalog.close();
+      roster.close();
       care.close();
       await socialSetMap(null);
       await maps.open(mapId);
@@ -860,6 +869,7 @@ const tutorial = createTutorialScreen({
       explore.setMap(null);
       // A care sheet left open on the Glade (an evolution's "Whoa!") would
       // sit over the lobby's forms (#129).
+      roster.close();
       care.close();
       maps.close();
       lobby.show();
@@ -919,6 +929,7 @@ const defense = createDefensePrompt({
   openBattle: (battle) => {
     // The server has seated them already: whatever is open steps aside.
     catalog.close();
+    roster.close();
     care.close();
     closeUp.close();
     battles.open(battle);
@@ -972,6 +983,7 @@ const battles = createBattleScreen({
     if (live) maps.hide();
     else maps.close();
     catalog.close();
+    roster.close();
     care.close();
     jobs.close();
     void inventory.setMap(null);
@@ -1085,6 +1097,7 @@ const keeper = createKeeperScreen({
     explore.setMap(null);
     maps.close();
     catalog.close();
+    roster.close();
     care.close();
     lobby.stepOut();
   },
@@ -1115,6 +1128,7 @@ const cinematic = createCinematicScreen({
     explore.setMap(null);
     maps.close();
     catalog.close();
+    roster.close();
     care.close();
     lobby.stepOut();
   },
@@ -1157,6 +1171,7 @@ const wardrobe = createWardrobeScreen({
     explore.setMap(null);
     maps.close();
     catalog.close();
+    roster.close();
     care.close();
     jobs.close();
     lobby.stepOut();
@@ -1228,6 +1243,7 @@ const lobby = mountLobby(document.body, {
   canResume: async () => !opensByItself(await tutorialApi.state()),
   onOpen: async (mapId) => {
     catalog.close();
+    roster.close();
     care.close();
     try {
       await starters.ensure(mapId);
@@ -1270,7 +1286,8 @@ const lobby = mountLobby(document.body, {
     ...lorebook.settings(),
     ...account.settings(),
   ],
-}); // The map's Squishies button leads the round buttons by the Keeper menu
+});
+// The map's Squishies button leads the round buttons by the Keeper menu
 // (before Chat and Friends).
 const mapSquishies = squishiesButton(() => {
   if (hudMapId) void roster.open(hudMapId);
@@ -1353,6 +1370,8 @@ mountAuth(document.body, {
     catalog.setUser(user);
     care.setUser(user);
     jobs.setUser(user);
+    // Another player's squishies never stay on screen (shared iPads).
+    roster.close();
     closeUp.setUser(user);
     inventory.setUser(user);
     recipeBook.setUser(user);

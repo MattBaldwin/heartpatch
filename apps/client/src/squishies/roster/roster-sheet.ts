@@ -90,6 +90,8 @@ export interface RosterSheet {
 }
 
 const SORT_LABELS = ROSTER_TEXT.sort;
+/** While reads fail, a landed countdown asks again at most this often. */
+const ASK_AGAIN_MS = 5_000; // TUNE
 
 /** Sets a bar's fill (0–1) as its width. */
 function fillTo(node: HTMLElement, fill: number): HTMLElement {
@@ -117,6 +119,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
   let working = false;
   let ticker: number | undefined;
+  /** When a landed countdown last asked for fresh views (device ms), 0 for never. */
+  let askedAt = 0;
   /** Bumped by every open and close, so a late reply is dropped. */
   let ticket = 0;
   /** Each working row's status chip, so the countdown updates its text and nothing else. */
@@ -675,11 +679,12 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       const text = statusLine(row.status, nowMs);
       if (node.textContent !== text) node.textContent = text;
     }
-    // A cycle landed: ask for fresh views once, which redraws with the next countdown.
-    if (finished && mapId) {
-      const id = mapId;
-      const mine = ticket;
-      void load(id, mine);
+    // A cycle landed: ask for fresh views, which redraws with the next
+    // countdown. At most every few seconds, so a failing read (offline) or a
+    // reply that still says "landed" never loops.
+    if (finished && mapId && Date.now() - askedAt >= ASK_AGAIN_MS) {
+      askedAt = Date.now();
+      void load(mapId, ticket);
       return;
     }
     ticker = window.setTimeout(tick, 1000);
@@ -687,6 +692,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
 
   function closeSheet(): void {
     sheet.classList.remove('roster-covered');
+    askedAt = 0;
     ticket += 1;
     window.clearTimeout(ticker);
     sheet.hidden = true;
