@@ -58,10 +58,11 @@ const TOP_BAR =
  */
 const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, ${SHEET_SELECTOR}`;
 /**
- * How far up from my Heart Seed's tile my Keeper reaches on screen, in tile
- * heights: a flag never covers them (#426). TUNE.
+ * Where my Keeper reaches on screen past my Heart Seed's tile, in tile sizes:
+ * up (they stand tall) and right (they stand near the seed's right rim,
+ * `KEEPER_PLACES.map.offset`). A flag never covers them (#426). TUNE.
  */
-const KEEPER_TILES_UP = 1;
+const KEEPER_REACH = { up: 1, right: 0.5 };
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
@@ -79,8 +80,14 @@ function flagRoom(keeper: Rect | null): FlagRoom {
   }
   const covers: Rect[] = [];
   if (keeper) {
-    const up = keeper.height * KEEPER_TILES_UP;
-    covers.push({ ...keeper, y: keeper.y - up, height: keeper.height + up });
+    const up = keeper.height * KEEPER_REACH.up;
+    const right = keeper.width * KEEPER_REACH.right;
+    covers.push({
+      x: keeper.x,
+      y: keeper.y - up,
+      width: keeper.width + right,
+      height: keeper.height + up,
+    });
   }
   for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = boxOf(node)?.box;

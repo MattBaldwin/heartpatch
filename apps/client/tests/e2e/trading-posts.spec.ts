@@ -140,19 +140,21 @@ test('a post’s flag shows whole, clear of the tray handles, on phones and an i
   await shutTrays(page);
   // At 320 the nearest post's flag ran under the Home handle, reading
   // "Mossy Mailbox · 2 t"; the Adventure handle clipped others from the left.
-  for (const { width, height } of FLAG_SCREENS) {
-    await page.setViewportSize({ width, height });
-    await expect
-      .poll(async () => (await posts(page))?.shown ?? 0, { timeout: 30_000 })
-      .toBeGreaterThan(0);
-    await expect.poll(() => flagsUnderCovers(page)).toEqual([]);
-    // Its words aren't cut short either.
-    const cut = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('[data-testid="post-flag"]')]
-        .filter((f) => !f.hidden && f.scrollWidth > f.clientWidth)
-        .map((f) => f.textContent),
-    );
-    expect(cut, `${String(width)}x${String(height)}`).toEqual([]);
+  for (const { name, width, height } of FLAG_SCREENS) {
+    await test.step(name, async () => {
+      await page.setViewportSize({ width, height });
+      await expect
+        .poll(async () => (await posts(page))?.shown ?? 0, { message: name, timeout: 30_000 })
+        .toBeGreaterThan(0);
+      await expect.poll(() => flagsUnderCovers(page), { message: name }).toEqual([]);
+      // Its words aren't cut short either.
+      const cut = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('[data-testid="post-flag"]')]
+          .filter((f) => !f.hidden && f.scrollWidth > f.clientWidth)
+          .map((f) => f.textContent),
+      );
+      expect(cut, name).toEqual([]);
+    });
   }
 });
 
