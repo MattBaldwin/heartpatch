@@ -1143,15 +1143,37 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 50, attack: 60, defense: 45, speed: 60 }, // TUNE:
     moves: ['zip-zap', 'fizzy-pop', 'zoomies'],
-    evolutions: [
-      { into: 'zingaling', level: 18 },
-      { into: 'snugglestar', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'twinklepop', level: 18 }], // TUNE:
     visual: {
       body: 'star',
       palette: ['#ffc93c', '#fffbe6', '#ff8fc0'],
       parts: ['happy-eyes', 'smile', 'blush-cheeks', 'nub-wings'],
       stance: 0.3,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy'] },
+  },
+  // #443 kid (stage 2): a little crest of pink sparks on the star sprite.
+  {
+    id: 'twinklepop',
+    name: 'Twinklepop',
+    description: 'Little sparks pop off its points when it laughs. It laughs a lot.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'uncommon',
+    baseStats: { hp: 59, attack: 71, defense: 53, speed: 71 }, // TUNE: ×1.18 Fizzlepop
+    moves: ['zip-zap', 'fizzy-pop', 'zoomies'],
+    evolutions: [
+      { into: 'zingaling', level: 26 },
+      { into: 'snugglestar', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'star',
+      palette: ['#ffc432', '#fffbe6', '#ff86bb', '#ffffff'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'nub-wings'],
+      size: 1.15,
+      stance: 0.35,
       pose: 'hover',
       attackPart: 'wings',
     },
@@ -1210,14 +1232,46 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 70, attack: 50, defense: 60, speed: 40 }, // TUNE:
     moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop'],
-    evolutions: [
-      { into: 'bubbletide', level: 18 },
-      { into: 'bubblejelly', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'bubblenub', level: 18 }], // TUNE:
     visual: {
       body: 'bun',
       palette: ['#8fded9', '#f4fffe', '#3fb5bf'],
       parts: ['oval-eyes', 'smile', 'blush-cheeks', 'bubble-crown', 'side-fins', 'tail-fan'],
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['cozy'] },
+  },
+  // #443 kid (stage 2): a fin row along its back and two tiny horn nubs, before
+  // Bubbletide's horn.
+  {
+    id: 'bubblenub',
+    name: 'Bubblenub',
+    description: 'A fin popped up along its back. It blows bubbles to show it off.',
+    element: 'water',
+    feeling: 'cozy',
+    rarity: 'uncommon',
+    baseStats: { hp: 83, attack: 59, defense: 71, speed: 47 }, // TUNE: ×1.18 Bubbletub
+    moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop'],
+    evolutions: [
+      { into: 'bubbletide', level: 26 },
+      { into: 'bubblejelly', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'bun',
+      palette: ['#86dbd6', '#f4fffe', '#37aeb8', '#ffffff'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'bubble-crown',
+        'nub-horns',
+        'fin-row',
+        'side-fins',
+        'tail-fan',
+      ],
+      size: 1.15,
+      stance: 0.08,
       pose: 'sit',
       attackPart: 'tail',
     },
@@ -1399,16 +1453,47 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 55, attack: 70, defense: 50, speed: 55 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
-    evolutions: [
-      { into: 'blusterpup', level: 22 },
-      { into: 'mittenpup', level: 22 },
-    ], // TUNE:
+    evolutions: [{ into: 'gustypup', level: 22 }], // TUNE:
     visual: {
       body: 'barrel',
       palette: ['#b8dcff', '#ffffff', '#5f8fdb'],
       parts: ['dot-eyes', 'brave-brows', 'cat-mouth', 'floppy-ears', 'stubby-legs', 'curly-tail'],
       head: { body: 'orb', size: 1.1, forward: 0.45, up: 0.3 },
       stance: 0.15,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['brave'] },
+  },
+  // #443 kid (stage 2): its first icicles pop up between pointy ears (the #443 mockup).
+  {
+    id: 'gustypup',
+    name: 'Gustypup',
+    description: 'Its first icicles just popped up. It shows them off to every snowflake.',
+    element: 'frost',
+    feeling: 'brave',
+    rarity: 'rare',
+    baseStats: { hp: 65, attack: 83, defense: 59, speed: 65 }, // TUNE: ×1.18 Flurrypup
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
+    evolutions: [
+      { into: 'blusterpup', level: 30 },
+      { into: 'mittenpup', level: 30 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'barrel',
+      palette: ['#b0d7ff', '#ffffff', '#5487d8', '#e0f0ff'],
+      parts: [
+        'dot-eyes',
+        'brave-brows',
+        'cat-mouth',
+        'pointy-ears',
+        'icicle-crown',
+        'long-legs',
+        'curly-tail',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 1.0, forward: 0.52, up: 0.48 },
+      stance: 0.3,
       pose: 'stand',
       attackPart: 'tail',
     },
@@ -1574,10 +1659,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 55 }, // TUNE:
     moves: ['peekaboo', 'shadow-snuggle', 'mossy-nap'],
-    evolutions: [
-      { into: 'snugglenook', level: 18 },
-      { into: 'mothnook', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'nibblenook', level: 18 }], // TUNE:
     visual: {
       body: 'blob',
       palette: ['#5f5ba6', '#d9d6ff', '#ffd27a'],
@@ -1586,6 +1668,41 @@ export const SPECIES: Species[] = [
       head: { body: 'orb', size: 1.15, forward: 0.1, up: 0.5 },
       stance: 0.08,
       pose: 'sit',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
+  },
+  // #443 kid (stage 2): little antler buds and a fluffy tail, as both its teens have.
+  {
+    id: 'nibblenook',
+    name: 'Nibblenook',
+    description: 'Two soft buds are growing between its ears. It keeps checking them in puddles.',
+    element: 'shadow',
+    feeling: 'cozy',
+    rarity: 'uncommon',
+    baseStats: { hp: 71, attack: 59, defense: 65, speed: 65 }, // TUNE: ×1.18 Nookling
+    moves: ['peekaboo', 'shadow-snuggle', 'mossy-nap'],
+    evolutions: [
+      { into: 'snugglenook', level: 26 },
+      { into: 'mothnook', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'blob',
+      palette: ['#5a56a0', '#d9d6ff', '#ffd27a', '#ffd27a'],
+      ink: '#fff4dc',
+      parts: [
+        'oval-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'long-ears',
+        'nub-horns',
+        'hop-feet',
+        'fluff-tail',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 1.05, forward: 0.1, up: 0.58 },
+      stance: 0.25,
+      pose: 'stand',
       attackPart: 'legs',
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
@@ -2387,10 +2504,7 @@ export const SPECIES: Species[] = [
     season: 'thanksgiving',
     baseStats: { hp: 55, attack: 60, defense: 45, speed: 60 }, // TUNE:
     moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies'],
-    evolutions: [
-      { into: 'maplecrunch', level: 18 },
-      { into: 'huddlenut', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'scamperkin', level: 18 }], // TUNE:
     visual: {
       body: 'bean',
       palette: ['#e8a066', '#fff1dc', '#b5693a', '#7cc96a'],
@@ -2407,6 +2521,44 @@ export const SPECIES: Species[] = [
       ],
       head: { body: 'orb', size: 1.12, forward: 0.1, up: 0.55 },
       stance: 0.12,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
+  },
+  // #443 kid (stage 2): a stem on its acorn cap, and a taller stance.
+  {
+    id: 'scamperkin',
+    name: 'Scamperkin',
+    description: 'Its acorn cap grew a stem, and it stands up taller. It scampers everywhere now.',
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'uncommon',
+    season: 'thanksgiving',
+    baseStats: { hp: 65, attack: 71, defense: 53, speed: 71 }, // TUNE: ×1.18 Crunchkin
+    moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies'],
+    evolutions: [
+      { into: 'maplecrunch', level: 26 },
+      { into: 'huddlenut', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'bean',
+      palette: ['#e69c60', '#fff1dc', '#b0633a', '#7cc96a'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'round-ears',
+        'acorn-cap',
+        'acorn-stem',
+        'stuck-leaf',
+        'stubby-arms',
+        'biped-legs',
+        'bushy-tail',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 1.0, forward: 0.1, up: 0.62 },
+      stance: 0.2,
       pose: 'sit',
       attackPart: 'tail',
     },
