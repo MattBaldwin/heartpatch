@@ -17,9 +17,9 @@ describe('rare finds glow codes (#391)', () => {
   });
 
   it('turns off with ?rareglow=0 (a device frame-rate check), and only then', () => {
-    expect(rareGlowOff('?fps=1&rareglow=0')).toBe(true);
-    expect(rareGlowOff('?fps=1')).toBe(false);
-    expect(rareGlowOff('?rareglow=1')).toBe(false);
+    expect(rareGlowOff(new URLSearchParams('?fps=1&rareglow=0'))).toBe(true);
+    expect(rareGlowOff(new URLSearchParams('?fps=1'))).toBe(false);
+    expect(rareGlowOff(new URLSearchParams('?rareglow=1'))).toBe(false);
     expect(rareGlowCode('mythic', ['#ff0000'], true)).toBe(0);
     expect(rareGlowCode('mythic', ['#ff0000'], false)).toBeGreaterThan(0);
   });
@@ -67,10 +67,8 @@ describe('rare finds glow codes (#391)', () => {
     }
   });
 
-  it('steps the edge up with each level and the rainbow at legendary and mythic', () => {
-    for (let i = 1; i < RARE_GLOW.edge.length; i++) {
-      expect(RARE_GLOW.edge[i]).toBeGreaterThan(RARE_GLOW.edge[i - 1]!);
-    }
+  it('steps the edge up from rare to epic and the rainbow at legendary and mythic', () => {
+    expect(RARE_GLOW.edge[1]).toBeGreaterThan(RARE_GLOW.edge[0]);
     expect(RARE_GLOW.rainbow[0]).toBeGreaterThan(1);
     expect(RARE_GLOW.rainbow[1]).toBeGreaterThan(RARE_GLOW.rainbow[0]);
   });

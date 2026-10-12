@@ -42,20 +42,24 @@ export function rareGlowLevel(rarity: Rarity | undefined): number {
 /**
  * `?rareglow=0` in the address turns the glow off, so the owner can compare
  * a real device's frame rate with and without it (with `?fps=1`, #391).
- * Cosmetic only: nothing else reads it.
+ * Cosmetic only. `main.ts` reads the address, like `showsStats`.
  */
-export function rareGlowOff(search: string): boolean {
-  return new URLSearchParams(search).get('rareglow') === '0';
+export function rareGlowOff(params: URLSearchParams): boolean {
+  return params.get('rareglow') === '0';
 }
-const OFF = typeof location !== 'undefined' && rareGlowOff(location.search);
+let off = false;
+/** Turns the glow off for squishies added from now on (the frame-rate check). */
+export function setRareGlowOff(value: boolean): void {
+  off = value;
+}
 
 /** What a squishy adds to its glowing pieces' codes: 0 below rare. */
 export function rareGlowCode(
   rarity: Rarity | undefined,
   palette: readonly string[],
-  off = OFF,
+  glowOff = off,
 ): number {
-  const level = off ? 0 : rareGlowLevel(rarity);
+  const level = glowOff ? 0 : rareGlowLevel(rarity);
   if (level === 0) return 0;
   return level * RARE_GLOW_CODE.level + glowHueIndex(palette) * RARE_GLOW_CODE.hue;
 }

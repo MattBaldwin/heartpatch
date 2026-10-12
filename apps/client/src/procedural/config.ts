@@ -170,8 +170,11 @@ export const FINISH_CODE = {
  * shared data (`RARE_GLOW_LEVEL`). Judge in the gallery and roster sheets.
  */
 export const RARE_GLOW = {
-  /** Edge glow strength at levels 1–4 (rare, epic; legendary and mythic use `rainbow`). */
-  edge: [0.42, 0.52, 0.62, 0.72], // TUNE
+  /**
+   * Edge glow strength for rare (level 1) and epic (level 2). Legendary and up
+   * always wear a rainbow edge (`finishByRarity`), so they use `rainbow` instead.
+   */
+  edge: [0.42, 0.52], // TUNE
   /** How tightly the edge glow hugs the outline (higher is thinner). */
   falloff: 1.7, // TUNE
   /** Below this much edge glow a pixel skips the glow's colour work (it would add under 1/255). */

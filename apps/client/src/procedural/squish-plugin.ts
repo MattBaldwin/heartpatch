@@ -168,8 +168,9 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     // no hue at all, borrows the palette's most colourful one. Legendary and
     // up already wear a rainbow edge: theirs glows brighter below instead.
     float fiEdge = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(RARE_GLOW.falloff)});
-    float fiStrength = fiRare < 1.5 ? ${num(RARE_GLOW.edge[0])} : fiRare < 2.5 ? ${num(RARE_GLOW.edge[1])} : fiRare < 3.5 ? ${num(RARE_GLOW.edge[2])} : ${num(RARE_GLOW.edge[3])};
-    // Only the outline glows: the middle of the body skips the colour work.
+    float fiStrength = fiRare < 1.5 ? ${num(RARE_GLOW.edge[0])} : ${num(RARE_GLOW.edge[1])};
+    // The flat middle of each part (about the central tenth, where the glow
+    // would add under 1/255) skips the colour work.
     if (fiStrength * fiEdge > ${num(RARE_GLOW.minEdge)}) {
       float fiMx = max(max(surfaceAlbedo.r, surfaceAlbedo.g), max(surfaceAlbedo.b, 0.001));
       float fiSat = (fiMx - min(min(surfaceAlbedo.r, surfaceAlbedo.g), surfaceAlbedo.b)) / fiMx;

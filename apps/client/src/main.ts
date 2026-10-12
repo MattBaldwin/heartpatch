@@ -3,6 +3,7 @@ import { battleCue, careCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { showsStats } from './engine/stats-flag.js';
+import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
@@ -92,6 +93,8 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 installStickyTaps(document);
 
 const params = new URLSearchParams(window.location.search);
+// `?rareglow=0` turns the rare glow off for a device frame-rate check with `?fps=1` (#391).
+setRareGlowOff(rareGlowOff(params));
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
 /**
  * Dev only: `?tier=` pins a tier for honest review captures (#335). The

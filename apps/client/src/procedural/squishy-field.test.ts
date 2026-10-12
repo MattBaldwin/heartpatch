@@ -597,21 +597,53 @@ describe('SquishyField rare finds glow (#391)', () => {
     return s;
   };
 
-  it('lights the torso and sticking-out parts of a rare kind, never its face', () => {
+  it('lights the torso and every sticking-out part of a rare kind, never its face', () => {
+    const { scene, f } = make();
+    // Every rare kind, so parts of every shape and kind are covered.
+    const rares = GAME_DATA.species.filter((s) => s.rarity === 'rare');
+    const expected = new Map<string, { lit: number; unlit: number }>();
+    const count = (key: string, lit: boolean, n = 1) => {
+      const e = expected.get(key) ?? { lit: 0, unlit: 0 };
+      if (lit) e.lit += n;
+      else e.unlit += n;
+      expected.set(key, e);
+    };
+    rares.forEach((s, i) => {
+      const h = f.add(s, `r-${String(i)}`, { x: i * 3, z: 0 });
+      count(`body:${h.params.body.id}`, true);
+      if (h.params.head) count(`body:${h.params.head.id}`, true);
+      for (const part of h.params.parts) {
+        count(`part:${part.shape}`, !part.surface, part.placements.length);
+      }
+      if (h.params.floater) count(`${FLOATER_BATCH}${h.params.floater.glyph}`, false);
+    });
+    f.flush();
+    const seen = new Set<string>();
+    for (const [name, list] of decoded(scene)) {
+      const key = [...expected.keys()].find((k) => name === `squishy-${k}-low`);
+      expect(key, name).toBeDefined();
+      seen.add(key!);
+      const e = expected.get(key!)!;
+      expect(list.filter((c) => c.level === 1).length, `${name} lit`).toBe(e.lit);
+      expect(list.filter((c) => c.level === 0).length, `${name} unlit`).toBe(e.unlit);
+    }
+    expect([...seen].sort()).toEqual([...expected.keys()].sort());
+    // The kinds really have both: sticking-out parts lit, faces and patterns not.
+    const parts = [...expected].filter(([k]) => k.startsWith('part:')).map(([, e]) => e);
+    expect(parts.some((e) => e.lit > 0)).toBe(true);
+    expect(parts.some((e) => e.unlit > 0)).toBe(true);
+  });
+
+  it('gives each lit piece its squishy’s own palette hue', () => {
     const { scene, f } = make();
     const rare = kind('rare');
     f.add(rare, 'r', { x: 0, z: 0 });
     f.flush();
-    const all = decoded(scene);
-    const body = [...all].find(([name]) => name.startsWith('squishy-body:'))![1];
-    for (const c of body) {
-      expect(c.level).toBe(1);
-      expect(c.hue).toBe(glowHueIndex(rare.visual.palette));
+    for (const [name, list] of decoded(scene)) {
+      for (const c of list) {
+        if (c.level > 0) expect(c.hue, name).toBe(glowHueIndex(rare.visual.palette));
+      }
     }
-    // Faces and patterns (surface parts) stay unlit: some part instance has level 0.
-    const levels = [...all].flatMap(([, list]) => list.map((c) => c.level));
-    expect(levels).toContain(0);
-    expect(levels.filter((l) => l === 1).length).toBeGreaterThan(body.length - 1);
   });
 
   it('gives a legendary kind level 3 (its rainbow edge glows brighter)', () => {
