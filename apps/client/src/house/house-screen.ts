@@ -85,7 +85,15 @@ import type { Portraits } from '../procedural/portraits.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { mergeRoster, type RosterRow } from '../squishies/roster/roster-view.js';
 import { createResidentMover } from './house-move.js';
-import { bedsPanel, faceEl, facesWaiting, moveOutPanel, pickerPanel } from './house-residents.js';
+import {
+  bedsPanel,
+  faceEl,
+  facesNow,
+  facesWaiting,
+  moveOutPanel,
+  pickerPanel,
+  stopFaces,
+} from './house-residents.js';
 import {
   castKey,
   movedLine,
@@ -461,6 +469,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   );
   overlay.hidden = true;
   options.root.append(overlay);
+  // The sheet's buttons ring only when focus came from the keyboard, so a page
+  // opened by a tap never shows a ring on its ✕ (C2b render check): one look.
+  window.addEventListener('keydown', () => {
+    overlay.classList.add('house-keys');
+  });
+  window.addEventListener('pointerdown', () => {
+    overlay.classList.remove('house-keys');
+  });
   back.addEventListener('click', () => {
     close();
   });
@@ -705,19 +721,24 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (sheet === 'open' || !next) {
       sheetBody.replaceChildren(
         ...drawBeds(current),
-        next
-          ? houseButton(
-              `${GROW_TEXT.openIcon} ${GROW_TEXT.open}`,
-              () => {
-                setSheet('grow');
-              },
-              { class: 'house-grow-open', 'data-testid': 'house-grow-open' },
-            )
-          : el(
-              'p',
-              { class: 'house-all-grown', 'data-testid': 'house-all-grown' },
-              GROW_TEXT.allGrown,
-            ),
+        // While a resident's bed is opened, the sheet is about them: Grow waits.
+        ...(chosen !== null
+          ? []
+          : [
+              next
+                ? houseButton(
+                    `${GROW_TEXT.openIcon} ${GROW_TEXT.open}`,
+                    () => {
+                      setSheet('grow');
+                    },
+                    { class: 'house-grow-open', 'data-testid': 'house-grow-open' },
+                  )
+                : el(
+                    'p',
+                    { class: 'house-all-grown', 'data-testid': 'house-all-grown' },
+                    GROW_TEXT.allGrown,
+                  ),
+            ]),
       );
       return;
     }
@@ -955,7 +976,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     houseDrawn = resolve;
   });
   const sheetPortraits: Portraits | undefined = options.portraits && {
-    get: (look) => drawnOnce.then(() => options.portraits?.get(look) ?? null),
+    get: (look) => {
+      // A request from a house that has closed since answers nothing (no draw).
+      const asked = facesNow();
+      return drawnOnce.then(() =>
+        asked === facesNow() ? (options.portraits?.get(look) ?? null) : null,
+      );
+    },
   };
   /** A new open: pictures wait for this house's first frame again. */
   function awaitFirstFrame(): void {
@@ -1056,7 +1083,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         {
           onPick: (squishyId) => void moveSquishy(squishyId, picker.room.id),
           onClose: () => {
-            setSheet('open');
+            if (!moving) setSheet('open');
           },
         },
         sheetPortraits,
@@ -1560,6 +1587,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     sync.drop();
     celebrate = false;
     resetResidents(null);
+    // Nothing of the sheet stays behind (its faces would keep asking for pictures).
+    sheetBody.replaceChildren();
+    head?.remove();
+    head = null;
     // Nothing ticks once the house is gone: the flicker, the clock, the welcome line.
     flicker.stop();
     if (lookTimer !== null) clearInterval(lookTimer);
@@ -1583,6 +1614,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     chosen = null;
     movedRoom = null;
     lastFrame = '';
+    // The faces drawn so far stop asking for pictures; a request still waiting
+    // for the first frame is let go (it answers nothing, see sheetPortraits).
+    stopFaces();
+    houseDrawn();
     if (home) awaitFirstFrame();
     remergePeople();
   }

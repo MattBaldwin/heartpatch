@@ -8,6 +8,7 @@ import {
   movedLine,
   MOVE_BACK_IN_HOURS,
   pickerFor,
+  portraitStep,
   residentRooms,
   roomBeds,
   roomFor,
@@ -121,7 +122,7 @@ describe('the move-in picker (plan §10.3)', () => {
     expect(over.every((r) => r.can && r.tag === 'Lives in the Snug')).toBe(true);
     const mochi = picker.rows.find((r) => r.row.name === 'Mochi')!;
     expect(mochi).toMatchObject({ kind: 'cooldown', can: false });
-    expect(mochi.reason).toBe(`Can move back in 5\u00A0h\u00A0🏠`);
+    expect(mochi.reason).toBe(`Can move back in 5\u00A0hours\u00A0🏠`);
     expect(picker.rows.find((r) => r.row.name === 'Biscuit')).toMatchObject({
       kind: 'in',
       can: true,
@@ -199,6 +200,23 @@ describe('the move-in picker (plan §10.3)', () => {
   });
 });
 
+describe('a face’s picture (review: retries after close, failed after one redraw)', () => {
+  it('shows a picture on a live face, and retries, then gives up, only while live', () => {
+    expect(portraitStep({ url: 'blob:1', triesLeft: 2, live: true })).toBe('show');
+    expect(portraitStep({ url: null, triesLeft: 2, live: true })).toBe('retry');
+    expect(portraitStep({ url: null, triesLeft: 0, live: true })).toBe('give-up');
+  });
+
+  it('a face a redraw replaced, or from a closed house, just stops, never "failed for good"', () => {
+    // Disconnected by a redraw after a single failed draw: stop, not give up.
+    expect(portraitStep({ url: null, triesLeft: 4, live: false })).toBe('stop');
+    // Even on its last try: only a live face may give up.
+    expect(portraitStep({ url: null, triesLeft: 0, live: false })).toBe('stop');
+    // A picture for a face that's gone isn't drawn into it.
+    expect(portraitStep({ url: 'blob:1', triesLeft: 3, live: false })).toBe('stop');
+  });
+});
+
 describe('residents, the rest', () => {
   it('picks the first room with a free bed for the roster’s “Move into the house”', () => {
     expect(roomFor(mix.view)).toBe('playroom');
@@ -250,5 +268,7 @@ describe('residents, the rest', () => {
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
     expect(RESIDENT_TEXT.free(2)).toBe('2 beds free');
+    expect(RESIDENT_TEXT.cantCooldown(1)).toBe('Can move back in 1\u00A0hour\u00A0🏠');
+    expect(RESIDENT_TEXT.hollowNext).not.toMatch(/rescue/);
   });
 });

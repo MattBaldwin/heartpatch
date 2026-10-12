@@ -95,6 +95,8 @@ export const GROW_TEXT = {
  * not; these are only the words the client shows around its replies.
  */
 const hours = (n: number) => `${String(n)}\u00A0h`;
+/** Hours in words: "1 hour", "5 hours". */
+const hoursWord = (n: number) => `${String(n)}\u00A0${n === 1 ? 'hour' : 'hours'}`;
 /** A wait in kid words: "a day" for 24 h, "2 days", else hours. */
 const afterHours = (n: number) =>
   n === 24 ? 'a\u00A0day' : n % 24 === 0 ? `${String(n / 24)}\u00A0days` : hours(n);
@@ -129,7 +131,7 @@ export const RESIDENT_TEXT = {
     'in-trade': 'Trading\u00A0📬',
   } satisfies Record<ResidentAway, string>,
   /** The next step under a resident taken to the Hollow (style guide §3.5), as the map says it. */
-  hollowNext: 'Rescue them from 🌙\u00A0Hollow on the map!',
+  hollowNext: 'Find the Hollow 🌙 on the map to bring\u00A0them\u00A0home!',
   /** A resident at home, while its mood is still loading. */
   home: 'Home 🏠',
   /** The picker's eyebrow and title. */
@@ -142,7 +144,7 @@ export const RESIDENT_TEXT = {
   livesIn: (room: string) => `Lives in ${room}`,
   livesHere: 'Lives here',
   /** Picker rows that can't come, and why (the server checks again). */
-  cantCooldown: (h: number) => `Can move back in ${hours(h)}\u00A0🏠`,
+  cantCooldown: (h: number) => `Can move back in ${hoursWord(h)}\u00A0🏠`,
   /** A row while the room has no free bed. */
   cantFull: 'No free bed',
   noOne: 'No squishies yet. Befriend one on the map!',

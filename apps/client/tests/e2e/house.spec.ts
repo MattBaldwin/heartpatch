@@ -627,7 +627,7 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   await expect(pick).toHaveAttribute('data-kind', 'cooldown');
   await expect(pick).toHaveAttribute('aria-disabled', 'true');
   await expect(pick.getByTestId('house-pick-reason')).toHaveText(
-    'Can move back in 24\u00A0h\u00A0🏠',
+    'Can move back in 24\u00A0hours\u00A0🏠',
   );
   await pick.tap({ force: true });
   await page.waitForTimeout(500);
@@ -647,7 +647,7 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   await expect(page.getByTestId('roster')).toBeHidden();
   await expect(pick).toHaveClass(/house-pick-focus/);
   await expect(pick.getByTestId('house-pick-reason')).toHaveText(
-    'Can move back in 24\u00A0h\u00A0🏠',
+    'Can move back in 24\u00A0hours\u00A0🏠',
   );
   expect(errors).toEqual([]);
 });

@@ -3,7 +3,13 @@ import type { Portraits } from '../procedural/portraits.js';
 import type { RosterRow } from '../squishies/roster/roster-view.js';
 import { el } from '../ui/dom.js';
 import { houseButton } from './house-grow.js';
-import type { BedChip, Picker, PickRow, RoomBeds } from './house-residents-view.js';
+import {
+  portraitStep,
+  type BedChip,
+  type Picker,
+  type PickRow,
+  type RoomBeds,
+} from './house-residents-view.js';
 import { RESIDENT_TEXT } from './house-view.js';
 
 /*
@@ -26,14 +32,30 @@ const PORTRAIT_FORGET_MS = 60_000; // TUNE
  */
 const known = new Map<string, { url: string } | { failedAt: number }>();
 
+/**
+ * Bumped when the house closes or opens anew: a face from before stops
+ * asking for its picture (it may still be in a detached sheet).
+ */
+let generation = 0;
+
+/** The faces drawn so far belong to a house that's gone: none of them asks again. */
+export function stopFaces(): void {
+  generation += 1;
+}
+
+/** The current generation, for a caller that hands out pictures later (it checks it's still now). */
+export const facesNow = (): number => generation;
+
 const lookKey = (person: RosterRow) => `${person.speciesId}|${person.id}|${person.accessory ?? ''}`;
 
-/** The squishy's own flat look, on purpose: its colour, a body and two eyes (CSS). */
+/** The squishy's own flat look, on purpose: its colour, two eyes, a smile and pink cheeks (CSS). */
 function flatFace(wrap: HTMLElement, color: string | null): void {
   const body = el(
     'span',
     { class: 'jobs-blob house-face-flat-blob', 'aria-hidden': 'true' },
     el('span', { class: 'house-face-eyes' }),
+    el('span', { class: 'house-face-cheeks' }),
+    el('span', { class: 'house-face-smile' }),
   );
   if (color) body.style.background = color;
   wrap.replaceChildren(body);
@@ -79,24 +101,25 @@ export function faceEl(person: RosterRow | null, portraits: Portraits | undefine
   wrap.classList.add('house-face-wait');
   wrap.dataset['state'] = 'wait';
   const look = { species, instanceId: person.id, accessory: person.accessory };
+  const mine = generation;
+  // On screen, in this house: a face a redraw replaced, or one from a house
+  // that has closed, just stops (it never marks the picture as failed).
+  const live = () => wrap.isConnected && mine === generation;
   // A first draw can give up (shaders still compiling, a busy engine): ask
-  // again a few times while the face is still on screen, then settle on the
-  // flat look.
+  // again a few times while the face is live, then settle on the flat look.
   const ask = (triesLeft: number): void => {
     void portraits.get(look).then((url) => {
-      if (url) {
-        known.set(key, { url });
-        showPicture(wrap, url);
-        return;
-      }
-      if (triesLeft <= 0 || !wrap.isConnected) {
+      const step = portraitStep({ url, triesLeft, live: live() });
+      if (url) known.set(key, { url });
+      if (step === 'show' && url) showPicture(wrap, url);
+      else if (step === 'give-up') {
         known.set(key, { failedAt: Date.now() });
         flatFace(wrap, person.color);
-        return;
+      } else if (step === 'retry') {
+        setTimeout(() => {
+          if (live()) ask(triesLeft - 1);
+        }, PORTRAIT_RETRY_MS);
       }
-      setTimeout(() => {
-        if (wrap.isConnected) ask(triesLeft - 1);
-      }, PORTRAIT_RETRY_MS);
     });
   };
   ask(PORTRAIT_RETRIES);

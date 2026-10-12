@@ -938,6 +938,38 @@
   right: 30%;
 }
 
+/* A small smile, and pink cheeks either side of it. */
+.house-face-smile {
+  position: absolute;
+  top: 58%;
+  left: 42%;
+  width: 16%;
+  height: 10%;
+  border: 2px solid #3b2640;
+  border-top: none;
+  border-radius: 0 0 999px 999px;
+  box-sizing: border-box;
+}
+
+.house-face-cheeks::before,
+.house-face-cheeks::after {
+  content: '';
+  position: absolute;
+  top: 56%;
+  width: 14%;
+  height: 10%;
+  border-radius: 50%;
+  background: rgb(255 120 160 / 55%);
+}
+
+.house-face-cheeks::before {
+  left: 18%;
+}
+
+.house-face-cheeks::after {
+  right: 18%;
+}
+
 /* What to do next, under a resident's detail (rescue from the Hollow). */
 .house-bed-next {
   margin: 0;
@@ -958,14 +990,16 @@
   --face: 64px;
 }
 
-/* ✕ and the other sheet buttons: one focus ring, the house's pink, from the keyboard only. */
-.house-button:focus-visible {
-  outline: 3px solid #b8487a;
-  outline-offset: 2px;
+/* ✕ and the other sheet buttons: one focus ring, the house's pink, only when
+   the keyboard moved focus (`.house-keys`, set by the screen), so a page a tap
+   opened looks the same every time. */
+.house-button:focus {
+  outline: none;
 }
 
-.house-button:focus:not(:focus-visible) {
-  outline: none;
+.house-keys .house-button:focus {
+  outline: 3px solid #b8487a;
+  outline-offset: 2px;
 }
 
 /* An opened resident: who it is, how it feels, and Move out. */

@@ -260,6 +260,28 @@ export function roomFor(view: Pick<HouseView, 'rooms'>): string | null {
   return open?.id ?? null;
 }
 
+/**
+ * What a face does with a picture request's answer:
+ * - `show` the picture (a live face that got one);
+ * - `retry` (no picture yet, tries left, still live);
+ * - `give-up` for good, the flat look (no picture, no tries left, still live);
+ * - `stop` (no longer live: a redraw replaced it, or the house closed). It
+ *   never counts as failed, so the next face asks afresh.
+ * A picture that arrives for a face no longer live is still worth keeping
+ * (the caller caches any URL).
+ */
+export type PortraitStep = 'show' | 'retry' | 'give-up' | 'stop';
+
+export function portraitStep(answer: {
+  readonly url: string | null;
+  readonly triesLeft: number;
+  readonly live: boolean;
+}): PortraitStep {
+  if (!answer.live) return 'stop';
+  if (answer.url) return 'show';
+  return answer.triesLeft > 0 ? 'retry' : 'give-up';
+}
+
 /** A room's name from the house data, mid-sentence ("the Snug"), for a view with no house reply. */
 export function roomNameOf(roomId: string): string {
   const name = HOUSE_DATA.levels.find((l) => l.room.id === roomId)?.room.name;

@@ -142,6 +142,18 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
   /** The resident whose "Move out of the house" is asking to confirm (#381), or null. */
   let confirmOut: string | null = null;
+  /** The confirm that just opened, to scroll into view once. */
+  let revealAsk: string | null = null;
+
+  /** Scrolls the sheet so the row holding `inside` shows to its bottom edge, with room under it. */
+  function revealRowEnd(inside: HTMLElement): void {
+    const row = inside.closest('.roster-row');
+    if (!row || !inside.isConnected) return;
+    const gap = row.getBoundingClientRect().bottom - sheet.getBoundingClientRect().bottom;
+    // The sheet's own bottom padding and a little air under the card's edge.
+    const room = 14 + 8; // TUNE
+    if (gap + room > 0) sheet.scrollTop += gap + room;
+  }
   let working = false;
   let ticker: number | undefined;
   /** When a landed countdown last asked for fresh views (device ms), 0 for never. */
@@ -423,10 +435,14 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           true,
         );
         yes.disabled = working;
-        // The confirm's buttons come into view (the sheet scrolls, it never grows over home).
-        requestAnimationFrame(() => {
-          if (yes.isConnected) yes.scrollIntoView({ block: 'nearest' });
-        });
+        // Just opened: the whole card, its buttons and its edge, comes into view
+        // (the sheet scrolls; it never grows over home). Once, not every redraw.
+        if (revealAsk === row.id) {
+          revealAsk = null;
+          requestAnimationFrame(() => {
+            revealRowEnd(yes);
+          });
+        }
         parts.push(
           el(
             'p',
@@ -440,6 +456,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           RESIDENT_TEXT.rosterMoveOut,
           () => {
             confirmOut = row.id;
+            revealAsk = row.id;
             render();
           },
           { 'data-testid': 'roster-house-out' },
