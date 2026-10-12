@@ -178,6 +178,8 @@ export const RARE_REVEAL = {
   fadeMs: 250,
   /** Frames to wait for the arena to draw the squishy before dimming mid-screen instead. */
   waitFrames: 30,
+  /** How long after a skipping tap lifts its click is swallowed (ms; it follows at once). */
+  clickGraceMs: 700,
 } as const;
 
 /** A step's value from one of `RARE_REVEAL`'s lists (the last past the end). */
