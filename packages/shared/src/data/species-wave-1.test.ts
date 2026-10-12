@@ -8,18 +8,23 @@ import { WAVE_1_SPECIES } from './species-wave-1.js';
 /*
  * Wave 1 of the 500-squishy plan (#382). Schema, move, part and art-rule
  * checks live in `checkGameData`; these pin the wave's shape: the rarity mix,
- * the stat bands, and that every kind has a biome to be found in.
+ * the stat bands, and that every kind has a biome to be found in. A kind's
+ * kid and teen (#443) are evolved forms, held to the roster's evolution
+ * checks in `species.test.ts`; the "kinds" here are the first forms.
  */
 
 const total = (s: (typeof WAVE_1_SPECIES)[number]) =>
   s.baseStats.hp + s.baseStats.attack + s.baseStats.defense + s.baseStats.speed;
-const wave1Ids = new Set(WAVE_1_SPECIES.map((s) => s.id));
+const evolvedInto = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
+/** The 8 kinds: each wave-1 line's first form. */
+const KINDS = WAVE_1_SPECIES.filter((s) => !evolvedInto.has(s.id));
+const wave1Ids = new Set(KINDS.map((s) => s.id));
 const tables = SPAWN_TABLES.filter((t) => t.id.startsWith('wave-1-'));
 
 describe('wave 1 (#382)', () => {
   it('is 8 kinds: 4 common, 2 uncommon, 2 rare, all in the public roster', () => {
-    expect(WAVE_1_SPECIES).toHaveLength(8);
-    const count = (r: string) => WAVE_1_SPECIES.filter((s) => s.rarity === r).length;
+    expect(KINDS).toHaveLength(8);
+    const count = (r: string) => KINDS.filter((s) => s.rarity === r).length;
     expect([count('common'), count('uncommon'), count('rare')]).toEqual([4, 2, 2]);
     for (const s of WAVE_1_SPECIES) expect(SPECIES, s.id).toContain(s);
     expect(new Set(SPECIES.map((s) => s.id)).size).toBe(SPECIES.length);
@@ -31,7 +36,7 @@ describe('wave 1 (#382)', () => {
       uncommon: [210, 240],
       rare: [225, 245],
     };
-    for (const s of WAVE_1_SPECIES) {
+    for (const s of KINDS) {
       const band = bands[s.rarity];
       expect(band, `${s.id} is ${s.rarity}`).toBeDefined();
       const [min, max] = band!;
@@ -40,14 +45,15 @@ describe('wave 1 (#382)', () => {
     }
   });
 
-  it('is everyday, standalone content: no season, no evolutions, no guardian duty', () => {
+  // #443: a converted line is baby → kid → one teen (its branch teen comes
+  // in Phase 2). No form of a wave-1 line guards a tile.
+  it('is everyday content with no guardian duty, and each line has at most one teen', () => {
     const guarding = new Set(GUARDIAN_RULES.tables.flatMap((t) => t.entries.map((e) => e.species)));
-    const evolvedInto = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
     for (const s of WAVE_1_SPECIES) {
       expect(s.season, s.id).toBeUndefined();
-      expect(s.evolutions, s.id).toEqual([]);
+      expect(s.evolutions.length, s.id).toBeLessThanOrEqual(1);
       expect(guarding, s.id).not.toContain(s.id);
-      expect(evolvedInto, s.id).not.toContain(s.id);
+      for (const e of s.evolutions) expect(wave1Ids, e.into).not.toContain(e.into);
     }
   });
 
@@ -57,7 +63,7 @@ describe('wave 1 (#382)', () => {
       expect([t.season, t.timeOfDay], t.id).toEqual([undefined, undefined]);
       for (const e of t.entries) expect(wave1Ids, `${t.id}: ${e.species}`).toContain(e.species);
     }
-    for (const s of WAVE_1_SPECIES) {
+    for (const s of KINDS) {
       const homes = tables.filter((t) => t.entries.some((e) => e.species === s.id));
       expect(homes.length, s.id).toBeGreaterThanOrEqual(1);
     }
@@ -68,7 +74,7 @@ describe('wave 1 (#382)', () => {
     const covered = new Set(tables.flatMap((t) => t.terrains));
     for (const terrain of covered) expect(wild, terrain).toContain(terrain);
     expect(covered.size).toBeGreaterThanOrEqual(5);
-    const byId = new Map(WAVE_1_SPECIES.map((s) => [s.id, s]));
+    const byId = new Map(KINDS.map((s) => [s.id, s]));
     const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 1 };
     for (const t of tables) {
       for (const e of t.entries) {

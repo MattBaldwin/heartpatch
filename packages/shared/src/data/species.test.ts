@@ -21,8 +21,13 @@ import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 const byId = new Map(SPECIES.map((s) => [s.id, s]));
 const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
-/** Wave-1 kinds (#382) are standalone: no evolutions yet, so they're not lines. */
-const standalone = SPECIES.filter((s) => WAVE_1_SPECIES.some((w) => w.id === s.id));
+/**
+ * Wave-1 kinds (#382): their first forms, measured apart from the launch
+ * lines. Their kids and teens (#443) are evolved forms like any other.
+ */
+const standalone = SPECIES.filter(
+  (s) => !evolvedIds.has(s.id) && WAVE_1_SPECIES.some((w) => w.id === s.id),
+);
 const standaloneIds = new Set(standalone.map((s) => s.id));
 /** Base forms: the first squishy of each launch line. */
 const bases = SPECIES.filter((s) => !evolvedIds.has(s.id) && !standaloneIds.has(s.id));
