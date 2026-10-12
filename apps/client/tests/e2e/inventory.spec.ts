@@ -30,6 +30,42 @@ function bagState(page: Page): Promise<InventoryDebug | null> {
   return hook<InventoryDebug>(page, 'inventory');
 }
 
+/**
+ * Notes the landing banner as it shows (#429): its words, classes and whether it takes taps. It
+ * is up for 4 s, and a loaded runner can take longer than that to get from a look to a tap. An
+ * init script, so it is also there after the reload the landing follows.
+ */
+async function watchBanner(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { bannerSeen: unknown };
+    w.bannerSeen = null;
+    new MutationObserver(() => {
+      const el = document.querySelector('[data-testid="landed-toast"]');
+      if (el && !el.hasAttribute('hidden') && el.textContent) {
+        w.bannerSeen = {
+          text: el.textContent,
+          className: el.className,
+          pointerEvents: getComputedStyle(el).pointerEvents,
+        };
+      }
+    }).observe(document, { attributes: true, childList: true, characterData: true, subtree: true });
+  });
+}
+
+/** What `watchBanner` saw when the banner first showed; null if it has not shown. */
+function bannerSeen(
+  page: Page,
+): Promise<{ text: string; className: string; pointerEvents: string } | null> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          bannerSeen: { text: string; className: string; pointerEvents: string } | null;
+        }
+      ).bannerSeen,
+  );
+}
+
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
 async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
   await page.evaluate(
@@ -150,7 +186,13 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(bag).toBeHidden();
 
   // Both finish while the Bag is shut: what landed shows as a banner of chips
-  // (#419), and as news on the My Home tab until the Bag is opened.
+  // (#419), and as news on the My Home tab until the Bag is opened. The banner
+  // is up for 4 s and hides itself, which a loaded runner can outlast between a
+  // look at it and a tap on it (a tap then waits for a banner that is gone,
+  // until the test times out, #429). So what it looked like when it showed is
+  // read from a watcher set up before, and its click is sent to the element,
+  // which still opens the card after the banner has hidden.
+  await watchBanner(page);
   const mapId = (await bagState(page))!.mapId;
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
@@ -160,19 +202,19 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 60_000 });
   const banner = page.getByTestId('landed-toast');
   // Roomy: the settle is one round trip, slow under a full CI run.
-  await expect(banner).toBeVisible({ timeout: 15_000 });
-  await expect(banner).toContainText('Heart Charm');
+  await expect
+    .poll(async () => (await bannerSeen(page))?.text ?? '', { timeout: 30_000 })
+    .toContain('Heart Charm');
   // With motion on, they flew in from the map: the gather's from its node
   // (even on a fresh start), the craft from home base.
   expect((await bagState(page))?.summary.flown).toBeGreaterThan(0);
   expect((await bagState(page))?.fromTiles).toBeGreaterThan(0);
-  // Two kinds: the banner (not the one-thing pill), and a real tap opens the
-  // card with everything: on a plain map it takes taps (shut trays don't count
-  // as open sheets). The banner hides itself after a few seconds, so the tap
-  // comes straight after the look.
-  await expect(banner).not.toHaveClass(/away-one|away-quiet/);
-  expect(await banner.evaluate((n) => getComputedStyle(n).pointerEvents)).not.toBe('none');
-  await banner.tap();
+  // Two kinds: the banner (not the one-thing pill), and on a plain map it takes
+  // taps (shut trays don't count as open sheets).
+  const seen = (await bannerSeen(page))!;
+  expect(seen.className).not.toMatch(/away-one|away-quiet/);
+  expect(seen.pointerEvents).not.toBe('none');
+  await banner.dispatchEvent('click');
   const card = page.getByTestId('away-card');
   await expect(card).toBeVisible();
   await expect(card).toContainText('Heart Charm');
