@@ -100,9 +100,10 @@ describe('walking in: kid height', () => {
     expect(kid.eye.z).toBeLessThan(room.minZ); // back from the open front
     const aspect = iphone.width / iphone.height;
     // Never wider than the back wall: nothing past the side walls in the frame.
-    for (const x of [room.minX, room.maxX]) {
-      const p = project(kid, aspect, { x, y: 1.5, z: room.maxZ });
-      expect(Math.abs(p.x)).toBeGreaterThanOrEqual(0.98);
+    // (the wall's own thickness, `sideRoom`, may show at the edges).
+    for (const x of [room.minX - HOUSE_KID.sideRoom, room.maxX + HOUSE_KID.sideRoom]) {
+      const p = project(kid, aspect, { x, y: kid.eye.y, z: room.maxZ });
+      expect(Math.abs(p.x)).toBeGreaterThanOrEqual(0.99);
     }
     // A tall phone caps its vertical view (less floor in the frame).
     expect(deg(kid.fov)).toBeLessThanOrEqual(HOUSE_KID.maxVerticalFov + 1e-9);

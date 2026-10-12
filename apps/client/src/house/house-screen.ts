@@ -87,9 +87,9 @@ export interface HouseScreen {
   /** Opens the house of this patch; the home reply says who the residents are. */
   open: (mapId: string, home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>) => Promise<void>;
   close: () => void;
-  /** Drops an open still waiting for its reply (Home was put away). */
-  cancel: () => void;
   readonly isOpen: boolean;
+  /** The patch whose house is open, or null (cheap: no scene stats). */
+  readonly mapId: string | null;
   readonly debug: HouseDebug | null;
 }
 
@@ -457,8 +457,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     },
     open,
     close,
-    cancel: () => {
-      gate.cancel();
+    get mapId() {
+      return isOpen ? mapId : null;
     },
     get isOpen() {
       return isOpen;

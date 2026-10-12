@@ -87,7 +87,7 @@ test('enter the house from home, walk in and step out, and go back home', async 
   // Big, roomy controls, all on screen.
   await expectRoomyLabels(page, '[data-testid="house-back"], [data-testid="house-pill"]');
 
-  // Walk in: down to kid height, the front wall between the camera and the room faded.
+  // Walk in: down to kid height; the front wall in the way fades, then is gone.
   const walk = page.getByTestId('house-walk');
   await expect(walk).toHaveText('👣 Walk in');
   await expectRoomyLabels(page, '[data-testid="house-walk"]');
@@ -96,8 +96,9 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await expect.poll(async () => (await houseState(page))?.scene?.pitch, slow).toBeLessThan(15);
   const inside = (await houseState(page))!;
   expect(inside.zoom).toBe(1);
-  expect(inside.scene!.frontWallAlpha).not.toBeNull();
-  expect(inside.scene!.frontWallAlpha!).toBeLessThan(0.2);
+  // Standing in the room, the front wall between the camera and it is gone
+  // (alpha 0, not drawn): no veil, no seams through the squishies.
+  expect(inside.scene!.frontWallAlpha).toBe(0);
   await expect(walk).toHaveText('🚪 Step out');
 
   // Step out: back up to the dollhouse, its front open again.
