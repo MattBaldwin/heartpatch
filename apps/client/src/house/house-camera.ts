@@ -238,6 +238,71 @@ export function framedFocus(
   return { ...room, peek: clear ?? usual };
 }
 
+/** A box on the screen, CSS px from the top left. */
+export interface ScreenBox {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+/** Each resident's box on the screen from a pose (CSS px, top left), from its middle and reach. */
+export function residentBoxes(
+  pose: HousePose,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  residents: readonly FramedSpot[],
+): ScreenBox[] {
+  const aspect = vp.width / Math.max(1, vp.height);
+  const t = Math.tan(pose.fov / 2);
+  return residents.flatMap((p) => {
+    const c = project(pose, aspect, p);
+    if (c.depth <= 0) return [];
+    const w = p.r / c.depth / (t * aspect);
+    const h = p.r / c.depth / t;
+    const px = (x: number) => ((x + 1) / 2) * vp.width;
+    const py = (y: number) => ((1 - y) / 2) * vp.height;
+    return [{ x0: px(c.x - w), x1: px(c.x + w), y0: py(c.y + h), y1: py(c.y - h) }];
+  });
+}
+
+/** Whether two screen boxes overlap, with `gap` px kept between them. */
+export const boxesMeet = (a: ScreenBox, b: ScreenBox, gap = 0): boolean =>
+  a.x0 < b.x1 + gap && a.x1 > b.x0 - gap && a.y0 < b.y1 + gap && a.y1 > b.y0 - gap;
+
+/**
+ * Where the "more this way" chevron pill sits on a side (B4 round 4: in the
+ * middle of the edge it covered a resident's face): the middle of the frame
+ * if that's clear of every resident, else the nearest clear spot along the
+ * edge, looking all the way down first (toward the lawn), then up, within the bands the HUD
+ * leaves. Returns the pill's box.
+ */
+export function chevronBox(
+  side: 'left' | 'right',
+  vp: HouseViewport,
+  residents: readonly ScreenBox[],
+): ScreenBox {
+  const { width, height, inset, gap } = HOUSE_CAMERA.chevron;
+  const x0 = side === 'left' ? inset : vp.width - inset - width;
+  const at = (mid: number): ScreenBox => ({
+    x0,
+    x1: x0 + width,
+    y0: mid - height / 2,
+    y1: mid + height / 2,
+  });
+  const lo = vp.top + height / 2 + gap;
+  const hi = vp.height - vp.bottom - height / 2 - gap;
+  const mid = vp.height / 2;
+  // Down toward the lawn first, then up.
+  const ys: number[] = [];
+  for (let y = mid; y <= hi; y += 8) ys.push(y);
+  for (let y = mid - 8; y >= lo; y -= 8) ys.push(y);
+  for (const y of ys) {
+    const box = at(y);
+    if (!residents.some((r) => boxesMeet(box, r, gap))) return box;
+  }
+  return at(mid);
+}
+
 /**
  * How far a sideways drag may slide the dollhouse from its fit, metres
  * along x: as far as brings each end of the house to the edge where the fit

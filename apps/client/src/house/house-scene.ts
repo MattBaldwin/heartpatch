@@ -685,11 +685,17 @@ export class HouseScene {
    * face counts when it's inside the frame and nothing of the house stands
    * between it and the camera.
    */
-  faceReport(): { visible: number; total: number; cut: number } {
+  faceReport(): {
+    visible: number;
+    total: number;
+    cut: number;
+    /** Each resident's box on the screen, as shares of its width and height from the top left. */
+    boxes: { x0: number; y0: number; x1: number; y1: number }[];
+  } {
     const scene = this.#scene;
     const camera = scene.activeCamera;
     const drawn = this.#drawnSquishies();
-    if (!camera) return { visible: 0, total: drawn.length, cut: 0 };
+    if (!camera) return { visible: 0, total: drawn.length, cut: 0, boxes: [] };
     const engine = scene.getEngine();
     const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
     const eye = camera.globalPosition;
@@ -704,6 +710,7 @@ export class HouseScene {
     const right = Vector3.Cross(Vector3.Up(), camera.getForwardRay().direction).normalize();
     let visible = 0;
     let cut = 0;
+    const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
     for (const { centre, height } of drawn) {
       const reach = height * HOUSE_CAST.reach;
       // Partly off the screen's sides or ends (render check: a frame edge sliced one).
@@ -715,6 +722,14 @@ export class HouseScene {
       const inside = (v: number) => v >= 0 && v <= 1;
       const partly = xs.some(inside) !== xs.every(inside) || ys.some(inside) !== ys.every(inside);
       if (partly) cut += 1;
+      const top = screen(centre.add(Vector3.Up().scale(reach))).y;
+      const bottom = screen(centre.add(Vector3.Up().scale(-reach))).y;
+      boxes.push({
+        x0: Math.min(...xs),
+        x1: Math.max(...xs),
+        y0: Math.min(top, bottom),
+        y1: Math.max(top, bottom),
+      });
       // The face counts when its middle and both sides are in the frame and
       // nothing of the house stands in front of any of them (round 3: a wall
       // over half a face still counted from its middle alone).
@@ -739,7 +754,7 @@ export class HouseScene {
       });
       if (seen) visible += 1;
     }
-    return { visible, total: drawn.length, cut };
+    return { visible, total: drawn.length, cut, boxes };
   }
 
   /** The house's own meshes (shell, fixtures, outside), not the cast: the budget test counts these. */

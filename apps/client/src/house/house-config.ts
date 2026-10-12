@@ -219,6 +219,8 @@ export const HOUSE_CAMERA = {
    * neighbour, metres (the rest is a sideways drag away).
    */
   peek: 1.1, // TUNE: B4: the Snug big enough to read its squishies, the Playroom's edge in view
+  /** The "more this way" chevron pill (CSS px): its size, how far in from the edge, and the gap it keeps from a resident. */
+  chevron: { width: 28, height: 44, inset: 4, gap: 8 }, // TUNE: house.css .house-more matches
   /** Room kept between a frame edge and a resident it would slice, normalised device units. */
   edgeClear: 0.04, // TUNE
   /** How deep the front yard is (path, lanterns, bushes, fence), metres: kept in frame when there's room. */
@@ -270,7 +272,7 @@ export const HOUSE_KID = {
   /** Walk in / Step out takes this long, seconds. */
   walkSeconds: 1.2, // TUNE
   /** The header over a back wall cut low (the Snug's, with the Heart Hall behind), metres deep: it holds the sign. */
-  header: 0.75, // TUNE
+  header: 0.9, // TUNE: B4 round 4: deep enough that the Heart Tree's crown never peeks under it
   /** The porch you stand on at kid height, outside the open front, metres deep. */
   porch: 5.4, // TUNE
 } as const;

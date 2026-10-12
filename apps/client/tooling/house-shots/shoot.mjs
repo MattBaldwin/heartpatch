@@ -160,6 +160,24 @@ async function shoot(job) {
     }
     return bad;
   });
+  // HUD hints over a resident (B4 round 4: the chevron pill sat on a face): each shown
+  // .house-more's rect against every resident's box on the screen.
+  const uiOverlap = await page.evaluate((boxes) => {
+    const hits = [];
+    for (const n of document.querySelectorAll('.house-more')) {
+      if (n.hidden) continue;
+      const r = n.getBoundingClientRect();
+      for (const b of boxes) {
+        const x0 = b.x0 * innerWidth;
+        const x1 = b.x1 * innerWidth;
+        const y0 = b.y0 * innerHeight;
+        const y1 = b.y1 * innerHeight;
+        if (r.left < x1 && r.right > x0 && r.top < y1 && r.bottom > y0)
+          hits.push(`${n.className} over a resident`);
+      }
+    }
+    return hits;
+  }, house.faces?.boxes ?? []);
   await page.screenshot({ path: path.join(OUT, job.file), timeout: 240_000 });
   await ctx.close();
   const scene = house.scene;
@@ -189,6 +207,7 @@ async function shoot(job) {
     facesVisible: house.faces ? `${house.faces.visible}/${house.faces.total}` : null,
     // Residents partly off the screen's edges (should be 0: the phone's frame edge falls between them).
     edgeCut: house.faces?.cut ?? null,
+    uiOverlap,
     keeper: scene.keeper,
     ...(quality?.tier === 'low' && {
       lowBudget: {

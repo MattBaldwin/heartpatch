@@ -25,6 +25,7 @@ import {
   clampZoom,
   entryGlide,
   fitHouse,
+  chevronBox,
   framedFocus,
   glidePose,
   kidPose,
@@ -32,6 +33,7 @@ import {
   panPose,
   panRange,
   pinchedOut,
+  residentBoxes,
   pinchZoom,
   roofAt,
   walkedIn,
@@ -669,6 +671,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     panLimits = panRange(s.frameBounds, vp, focus);
     pan = Math.min(panLimits.max, Math.max(panLimits.min, pan));
     base = panPose(fitted, pan);
+    // The chevrons sit along their edge clear of every resident's face (B4 round 4).
+    const faces = residentBoxes(base, vp, s.residentSpots);
+    for (const [cue, side] of [
+      [moreLeft, 'left'],
+      [moreRight, 'right'],
+    ] as const)
+      cue.style.top = `${String(chevronBox(side, vp, faces).y0)}px`;
     kid = room ? kidPose(room, vp) : null;
     frameOutside(s, base);
   }

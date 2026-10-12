@@ -2,7 +2,17 @@ import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { blend, fitHouse, framedFocus, kidPose, project, safeArea } from './house-camera.js';
+import {
+  blend,
+  boxesMeet,
+  chevronBox,
+  fitHouse,
+  framedFocus,
+  kidPose,
+  project,
+  residentBoxes,
+  safeArea,
+} from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { yardPumpkins } from './house-models.js';
@@ -407,6 +417,21 @@ describe('house scene', () => {
         const at = `level ${String(level)} floor ${String(floor)}`;
         expect(faces.cut, at).toBe(0);
         expect(faces.visible, at).toBe(faces.total);
+        // The chevron pills keep off every resident's face (round 4: one sat on the cyan's eye).
+        const pose = fitHouse(house.frameBounds, vp, undefined, focus);
+        const guess = residentBoxes(pose, vp, house.residentSpots);
+        for (const side of ['left', 'right'] as const) {
+          const pill = chevronBox(side, vp, guess);
+          for (const b of faces.boxes) {
+            const drawn = {
+              x0: b.x0 * vp.width,
+              x1: b.x1 * vp.width,
+              y0: b.y0 * vp.height,
+              y1: b.y1 * vp.height,
+            };
+            expect(boxesMeet(pill, drawn), `${at} ${side} pill`).toBe(false);
+          }
+        }
         scene.getEngine().dispose();
       }
     });

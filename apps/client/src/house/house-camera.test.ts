@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   clampZoom,
   entryGlide,
+  boxesMeet,
+  chevronBox,
   fitBox,
   fitHouse,
   framedFocus,
@@ -168,6 +170,22 @@ describe('fitHouse', () => {
       );
       // An iPad keeps the room as it is (the whole house shows).
       expect(framedFocus(two, ipad, snugRoom, [spot])).toEqual(snugRoom);
+    });
+
+    it('slides the chevron pill along its edge clear of a resident, lower first', () => {
+      const vp2: HouseViewport = { width: 390, height: 844, top: 70, bottom: 148 };
+      const mid = chevronBox('right', vp2, []);
+      expect((mid.y0 + mid.y1) / 2).toBe(422);
+      expect(mid.x1).toBe(390 - HOUSE_CAMERA.chevron.inset);
+      const face = { x0: 340, x1: 400, y0: 380, y1: 470 };
+      const moved = chevronBox('right', vp2, [face]);
+      expect(boxesMeet(moved, face)).toBe(false);
+      expect(moved.y0).toBeGreaterThan(face.y1); // below it, toward the lawn
+      expect(chevronBox('left', vp2, [face])).toEqual({
+        ...mid,
+        x0: 4,
+        x1: 4 + HOUSE_CAMERA.chevron.width,
+      });
     });
 
     it('slides as far as either end of the house, and no further', () => {
