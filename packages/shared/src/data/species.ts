@@ -1204,10 +1204,8 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 55, attack: 70, defense: 50, speed: 55 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
-    evolutions: [
-      { into: 'blusterpup', level: 22 },
-      { into: 'mittenpup', level: 22 },
-    ], // TUNE:
+    // MOCKUP (evolution chains plan): baby → kid → teen (branch) → grown-up.
+    evolutions: [{ into: 'gustypup', level: 22 }], // TUNE:
     visual: {
       body: 'barrel',
       palette: ['#b8dcff', '#ffffff', '#5f8fdb'],
@@ -1228,7 +1226,7 @@ export const SPECIES: Species[] = [
     rarity: 'epic',
     baseStats: { hp: 75, attack: 100, defense: 70, speed: 75 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster', 'chilly-yawn'],
-    evolutions: [],
+    evolutions: [{ into: 'blizzhowl', level: 42 }], // TUNE: MOCKUP
     visual: {
       body: 'barrel',
       palette: ['#a8d2ff', '#ffffff', '#4a7fd6', '#e0f0ff'],
@@ -1260,7 +1258,7 @@ export const SPECIES: Species[] = [
     rarity: 'epic',
     baseStats: { hp: 110, attack: 81, defense: 96, speed: 76 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'chilly-yawn', 'snow-snuggle'],
-    evolutions: [],
+    evolutions: [{ into: 'reindoodle', level: 42 }], // TUNE: MOCKUP
     visual: {
       body: 'barrel',
       palette: ['#b8dcff', '#ffffff', '#ff8fa8', '#e0f0ff'],
@@ -1277,6 +1275,110 @@ export const SPECIES: Species[] = [
       finish: 'sparkle',
       head: { body: 'orb', size: 0.92, forward: 0.6, up: 0.62 },
       stance: 0.4,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['cozy', 'brave'] },
+  },
+  // MOCKUP (evolution chains plan): Flurrypup's kid stage, between the baby
+  // and the teen branch (Blusterpup or Mittenpup).
+  {
+    id: 'gustypup',
+    name: 'Gustypup',
+    description: 'Its first icicles just popped up. It shows them off to every snowflake.',
+    element: 'frost',
+    feeling: 'brave',
+    rarity: 'rare',
+    baseStats: { hp: 64, attack: 84, defense: 59, speed: 65 }, // TUNE: ×1.18 of Flurrypup
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
+    evolutions: [
+      { into: 'blusterpup', level: 30 },
+      { into: 'mittenpup', level: 30 },
+    ], // TUNE:
+    visual: {
+      body: 'barrel',
+      palette: ['#b0d7ff', '#ffffff', '#5487d8', '#e0f0ff'],
+      parts: [
+        'dot-eyes',
+        'brave-brows',
+        'cat-mouth',
+        'pointy-ears',
+        'icicle-crown',
+        'long-legs',
+        'curly-tail',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 1.0, forward: 0.52, up: 0.48 },
+      stance: 0.3,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['brave'] },
+  },
+  // MOCKUP: Blusterpup's grown-up.
+  {
+    id: 'blizzhowl',
+    name: 'Blizzhowl',
+    description: 'One big howl and it snows for a whole afternoon. It always says sorry.',
+    element: 'frost',
+    feeling: 'brave',
+    rarity: 'legendary',
+    baseStats: { hp: 88, attack: 120, defense: 82, speed: 90 }, // TUNE: ×1.65 of Flurrypup
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster', 'chilly-yawn'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#9cc8ff', '#ffffff', '#3d6fcc', '#e6f3ff'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'fangs',
+        'swept-ears',
+        'icicle-mane',
+        'icicle-crown',
+        'back-spines',
+        'long-legs',
+        'spike-tail',
+      ],
+      size: 1.55,
+      finish: 'iridescent',
+      head: { body: 'orb', size: 0.78, forward: 0.7, up: 0.85 },
+      stance: 0.55,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['brave'] },
+  },
+  // MOCKUP: Mittenpup's grown-up, a cozy reindeer pup.
+  {
+    id: 'reindoodle',
+    name: 'Reindoodle',
+    description: 'Grew snowy antlers and the warmest coat around. Pulls sleds just for fun.',
+    element: 'frost',
+    feeling: 'cozy',
+    rarity: 'legendary',
+    baseStats: { hp: 128, attack: 95, defense: 112, speed: 89 }, // TUNE: Mittenpup ×1.17
+    moves: ['snowball-toss', 'frosty-pounce', 'chilly-yawn', 'snow-snuggle'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#b8dcff', '#ffffff', '#f5e6d3', '#e0f0ff'],
+      parts: [
+        'sharp-eyes',
+        'smile',
+        'blush-cheeks',
+        'fangs',
+        'floppy-ears',
+        'antlers',
+        'fur-ruff',
+        'long-legs',
+        'fluff-tail',
+      ],
+      size: 1.5,
+      finish: 'iridescent',
+      head: { body: 'orb', size: 0.82, forward: 0.66, up: 0.74 },
+      stance: 0.5,
       pose: 'stand',
       attackPart: 'tail',
     },
