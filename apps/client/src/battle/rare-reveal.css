@@ -13,6 +13,8 @@
 /* The full moment holds the battle buttons; a tap skips it. */
 .rare-reveal-full {
   pointer-events: auto;
+  /* iOS Safari sends a tap's click to a plain element only when it looks tappable. */
+  cursor: pointer;
 }
 
 .rare-reveal-out {

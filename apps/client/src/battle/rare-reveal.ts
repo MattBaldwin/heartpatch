@@ -170,7 +170,9 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
       }
     }
   }
-  const banner = el('div', { class: 'rare-reveal-banner', role: 'status' }, plan.tier.banner);
+  // Its words go in just after it's on the page, so VoiceOver reads them out
+  // (a live region that arrives already filled is often not announced).
+  const banner = el('div', { class: 'rare-reveal-banner', role: 'status' });
   const wide = layout.width > RARE_REVEAL.wideScreen ? RARE_REVEAL.wideBanner : 1;
   banner.style.fontSize = `${Math.round(revealStep(RARE_REVEAL.banner, scale) * wide)}px`;
   banner.style.setProperty('--reveal-ring', `${revealStep(RARE_REVEAL.ring, scale)}px`);
@@ -178,29 +180,58 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
   root.append(banner);
 
   let done = false;
+  /** A finger or button is down on the moment: it stays until that tap's click. */
+  let pressed = false;
+  let due = false;
   const timers: number[] = [];
+  const doc = root.ownerDocument;
   const finish = (notify: boolean): void => {
     if (done) return;
     done = true;
     for (const id of timers) clock.cancel(id);
+    doc.removeEventListener('keydown', onKey, true);
     root.remove();
     if (notify) options.onDone();
   };
-  // The full moment holds the battle buttons: a tap anywhere skips it instead.
+  // Ends on time, unless a tap is halfway through: then on that tap's click,
+  // so the click can't land on a battle button the moment uncovered.
+  const end = (): void => {
+    if (pressed) due = true;
+    else finish(true);
+  };
+  // The full moment holds the battle buttons. A tap skips it, ending on the
+  // tap's own click (on the moment, not on a button under it: the browser
+  // still sends that click after a pointerdown, so the moment stays till then).
+  function onKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    finish(true);
+  }
   if (plan.full) {
     root.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      pressed = true;
+    });
+    root.addEventListener('pointercancel', () => {
+      pressed = false;
+      if (due) finish(true);
+    });
+    root.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
       finish(true);
     });
+    doc.addEventListener('keydown', onKey, true);
   }
   timers.push(
+    clock.later(0, () => {
+      banner.textContent = plan.tier.banner;
+    }),
     clock.later(Math.max(0, ms - RARE_REVEAL.fadeMs), () => {
       root.classList.add('rare-reveal-out');
     }),
-    clock.later(ms, () => {
-      finish(true);
-    }),
+    clock.later(ms, end),
   );
   host.append(root);
   return {

@@ -605,7 +605,6 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   const opponentOf = (row: BattleRow, live: LiveRow, side: BattleSideId): string =>
     side === PLAYER_SIDE ? live.bUserId : row.playerUserId;
 
-  /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   /**
    * A wild battle before its first move (#391): is this the player's first
    * meeting with its kind on this map? Starting the battle marks the kind
@@ -622,6 +621,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return at !== null && at.getTime() === row.startedAt.getTime();
   };
 
+  /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   const toPlayerBattle = async (
     tx: Executor,
     row: BattleRow,

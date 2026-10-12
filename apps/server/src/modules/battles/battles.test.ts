@@ -475,8 +475,9 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(again.firstMeeting).toBe(false);
       await act(server, kid, again, { type: 'forfeit' });
 
+      // A public rare kind, met for the first time.
       const other = await pickFight(server, kid, mapId, {
-        opponent: { speciesId: SECRET_IDS[1], level: 5 },
+        opponent: { speciesId: 'huddlenut', level: 5 },
       });
       expect(other.firstMeeting).toBe(true);
     });
@@ -1183,6 +1184,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
           }),
       );
       expect(battle).toMatchObject({ kind: 'tile', terrain: tile.terrain, timeOfDay: 'dusk' });
+      // A land guardian is no wild find: no first-meeting moment (#391).
+      expect(battle).not.toHaveProperty('firstMeeting');
     });
 
     it('shows a battle from before arenas were stored on the home terrain, by day', async () => {
