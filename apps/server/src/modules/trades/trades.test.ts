@@ -1,8 +1,10 @@
 import {
   ApiErrorSchema,
+  CareListResponseSchema,
   GAME_DATA,
   heartSeedOf,
   hexDistance,
+  HouseViewSchema,
   JobsViewSchema,
   JoinMapResponseSchema,
   MapResponseSchema,
@@ -90,6 +92,7 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
       NODE_ENV: 'test',
       DATABASE_URL: url!,
       HP_DEV_SQUISHY_GRANTS: 'true',
+      HP_HOUSE: 'on',
     });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
@@ -907,5 +910,154 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     expect(
       await db.query.tradeOffers.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
     ).toHaveLength(1);
+  });
+
+  describe("residents of the Keeper's house (#381)", () => {
+    /** Moves `id` into `kid`'s Snug through the house route. */
+    async function moveIn(server: FastifyInstance, mapId: string, kid: Player, id: string) {
+      const res = await call(server, 'POST', `/maps/${mapId}/house/residents`, kid, {
+        squishyId: id,
+        roomId: 'snug',
+      });
+      expect(res.statusCode, res.body).toBe(200);
+    }
+    const residencyOf = (id: string) =>
+      db.query.houseResidents.findFirst({ where: (t, { eq }) => eq(t.squishyId, id) });
+    /** `kid`'s Snug residents and why each is away. */
+    const snugOf = async (server: FastifyInstance, mapId: string, kid: Player) =>
+      HouseViewSchema.parse((await call(server, 'GET', `/maps/${mapId}/house`, kid)).json())
+        .rooms.find((r) => r.id === 'snug')!
+        .residents.map((r) => [r.squishyId, r.away]);
+    const accept = (
+      server: FastifyInstance,
+      mapId: string,
+      sam: Player,
+      offerId: string,
+      at: object,
+    ) => call(server, 'POST', `/maps/${mapId}/trades/${offerId}/accept`, sam, at);
+
+    it('ends both residencies at a yes, in the same commit as the owners change, and the new squishy is no resident', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      const pip = await pet(mapId, lee);
+      await pet(mapId, lee);
+      const fizz = await pet(mapId, sam);
+      await pet(mapId, sam);
+      await moveIn(server, mapId, lee, pip);
+      await moveIn(server, mapId, sam, fizz);
+      const sent = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'trade',
+        toUserId: sam.id,
+        give: [{ kind: 'squishy', squishyId: pip }],
+        want: [{ kind: 'squishy', squishyId: fizz }],
+      });
+      expect(sent.statusCode, sent.body).toBe(201);
+      // Waiting at the post, Pip keeps its bed.
+      expect(await snugOf(server, mapId, lee)).toEqual([[pip, 'in-trade']]);
+      const yes = await accept(server, mapId, sam, tradesOf(sent).offers[0]!.id, postOf(sam));
+      expect(yes.statusCode, yes.body).toBe(200);
+      expect(await squishyRow(pip)).toMatchObject({ ownerUserId: sam.id });
+      expect(await squishyRow(fizz)).toMatchObject({ ownerUserId: lee.id, state: 'in-trade' });
+      // Both rows went with the yes: nobody's bed, nobody's cooldown.
+      expect(await residencyOf(pip)).toBeUndefined();
+      expect(await residencyOf(fizz)).toBeUndefined();
+      expect(await snugOf(server, mapId, lee)).toEqual([]);
+      expect(await snugOf(server, mapId, sam)).toEqual([]);
+      const care = CareListResponseSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/care`, sam)).json(),
+      );
+      expect(care.squishies.find((s) => s.id === pip)!.houseRoomId).toBeNull();
+      // Sam can move Pip in at once: no cooldown carried over from Lee.
+      await moveIn(server, mapId, sam, pip);
+    });
+
+    it('leaves every bed as it was when a yes is refused after its squishy locks (rolled back with it)', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      const pip = await pet(mapId, lee);
+      await pet(mapId, lee);
+      const fizz = await pet(mapId, sam);
+      await pet(mapId, sam);
+      await moveIn(server, mapId, lee, pip);
+      await moveIn(server, mapId, sam, fizz);
+      const sent = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'trade',
+        toUserId: sam.id,
+        give: [{ kind: 'squishy', squishyId: pip }],
+        want: [{ kind: 'squishy', squishyId: fizz }],
+      });
+      const before = [await residencyOf(pip), await residencyOf(fizz)];
+      // Fizz joins the team: the yes is refused once both squishies are
+      // locked and their residency rows already written in that transaction.
+      await db.execute(`update squishies set team_slot = 0 where id = '${fizz}'`);
+      const yes = await accept(server, mapId, sam, tradesOf(sent).offers[0]!.id, postOf(sam));
+      expect(yes.statusCode).toBe(409);
+      expect(errorOf(yes).message).toMatch(/busy/);
+      expect([await residencyOf(pip), await residencyOf(fizz)]).toEqual(before);
+      expect(before.map((r) => r?.roomId)).toEqual(['snug', 'snug']);
+      expect(await squishyRow(pip)).toMatchObject({ ownerUserId: lee.id, state: 'in-trade' });
+      expect(await squishyRow(fizz)).toMatchObject({ ownerUserId: sam.id, state: 'active' });
+    });
+
+    it('keeps the bed through a declined or a cancelled offer', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      const pip = await pet(mapId, lee);
+      await pet(mapId, lee);
+      await pet(mapId, sam);
+      await grant(mapId, sam, { stone: 2 });
+      await moveIn(server, mapId, lee, pip);
+      const body = {
+        kind: 'trade' as const,
+        toUserId: sam.id,
+        give: [{ kind: 'squishy' as const, squishyId: pip }],
+        want: [{ kind: 'item' as const, itemId: 'stone', quantity: 1 }],
+      };
+      const first = await offer(server, mapId, lee, postOf(lee), body);
+      const no = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/trades/${tradesOf(first).offers[0]!.id}/decline`,
+        sam,
+      );
+      expect(no.statusCode, no.body).toBe(200);
+      expect(await snugOf(server, mapId, lee)).toEqual([[pip, null]]);
+      const second = await offer(server, mapId, lee, postOf(lee), body);
+      const off = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/trades/${tradesOf(second).offers[0]!.id}/cancel`,
+        lee,
+      );
+      expect(off.statusCode, off.body).toBe(200);
+      expect(await snugOf(server, mapId, lee)).toEqual([[pip, null]]);
+      expect(await residencyOf(pip)).toMatchObject({ userId: lee.id, roomId: 'snug' });
+    });
+
+    it('keeps a gifted resident’s bed until the pickup, which ends it', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      const pip = await pet(mapId, lee);
+      await pet(mapId, lee);
+      await moveIn(server, mapId, lee, pip);
+      const sent = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'gift',
+        toUserId: sam.id,
+        give: [{ kind: 'squishy', squishyId: pip }],
+        want: [],
+      });
+      expect(sent.statusCode, sent.body).toBe(201);
+      expect(await snugOf(server, mapId, lee)).toEqual([[pip, 'in-trade']]);
+      const picked = await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, sam, postOf(sam));
+      expect(picked.statusCode, picked.body).toBe(200);
+      expect(await squishyRow(pip)).toMatchObject({ ownerUserId: sam.id, state: 'active' });
+      expect(await residencyOf(pip)).toBeUndefined();
+      expect(await snugOf(server, mapId, lee)).toEqual([]);
+      expect(await snugOf(server, mapId, sam)).toEqual([]);
+    });
   });
 });

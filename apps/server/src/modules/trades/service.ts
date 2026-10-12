@@ -27,6 +27,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
+import { leaveHouse } from '../house/service.js';
 import { checkpointContentment } from '../jobs/contentment.js';
 import { requirePostAccess } from '../journeys/service.js';
 import { createMapsRepo } from '../maps/repo.js';
@@ -57,7 +58,9 @@ import {
  *
  * Lock order (tech spec §7): the sender's member row (step 2, a send only),
  * `outfits` (4), offers then mailbox rows (9b, id order), both players'
- * squishies in one id-ordered lock (10), clothing pieces (10b, id order),
+ * squishies in one id-ordered lock (10) and, on a yes or a gift's pickup,
+ * their residency rows under those locks (`leaveHouse`, #381: squishies
+ * changing hands leave the house), clothing pieces (10b, id order),
  * inventory rows (11, `lockGrantRows`), `species_seen`, then `maps` last.
  */
 
@@ -672,6 +675,15 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
 
       // Both players' squishies in one id-ordered lock (step 10), then pieces (10b).
       const pets = await repo.lockSquishies([...squishyIds(give), ...squishyIds(want)]);
+      // Both sides change hands: they leave their Keepers' houses (#381) under
+      // those locks, in this transaction, so a refusal below puts every bed
+      // back (atomic economy, CLAUDE.md rule 7).
+      await leaveHouse(tx, {
+        mapId,
+        squishyIds: [...squishyIds(give), ...squishyIds(want)],
+        at,
+        rehomed: true,
+      });
       const pieces = await repo.lockPieces([...pieceIds(give), ...pieceIds(want)]);
       // The want side is checked again now: the patch-mate may have changed.
       refuse(sideProblem(want, await sideOf(repo, mapId, user.id, pets), rules));
@@ -799,8 +811,17 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       const lines = rows.flatMap((m) => m.lines);
 
       const pets = await repo.lockSquishies(squishyIds(lines)); // step 10
-      const pieces = await repo.lockPieces(pieceIds(lines)); // step 10b
       const heldPets = pets.filter((p) => p.state === 'in-trade');
+      // A gift's squishies change hands now: they leave the giver's house
+      // (#381), kept until here so a gift said no to costs no bed. A trade's
+      // already left at its yes.
+      await leaveHouse(tx, {
+        mapId,
+        squishyIds: heldPets.map((p) => p.id),
+        at,
+        rehomed: true,
+      });
+      const pieces = await repo.lockPieces(pieceIds(lines)); // step 10b
       await repo.moveSquishies(
         heldPets.map((p) => p.id),
         user.id,

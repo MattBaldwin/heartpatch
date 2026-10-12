@@ -709,6 +709,25 @@ export const GAME_EVENTS = {
     }),
     public: z.object({ userId: z.uuid(), level: z.number().int().min(2) }),
   },
+  /**
+   * A squishy moved into a room of its Keeper's house, into another room, or
+   * out (`roomId` null) (#381). The patch hears who and where it lives now;
+   * the room it left stays internal.
+   */
+  'resident.moved': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      roomId: ContentIdSchema.nullable(),
+      /** The room it left, if it lived in one. */
+      fromRoomId: ContentIdSchema.nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      roomId: ContentIdSchema.nullable(),
+    }),
+  },
   /** A player moved one of their buildings to another spot (#18). */
   'building.moved': {
     internal: z.strictObject({

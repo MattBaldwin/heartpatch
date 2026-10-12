@@ -417,6 +417,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         fullXpResetAt:
           battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
         gatherFits: gatherFitsFor(traitsOf(row.squishy), JOB_RULES),
+        houseRoomId: row.houseRoomId,
       };
     });
     // One a homestead (#277), each with its room and its night.

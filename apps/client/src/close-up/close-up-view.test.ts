@@ -52,6 +52,7 @@ function squishy(over: Partial<CareSquishy> = {}): CareSquishy {
     nextCareAt: {},
     newEvolution: null,
     accessory: null,
+    houseRoomId: null,
     whisper: null,
     moodDrift: null,
     ...over,

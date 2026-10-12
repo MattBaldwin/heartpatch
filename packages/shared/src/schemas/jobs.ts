@@ -77,6 +77,11 @@ export const JobSquishySchema = z.object({
    * drifts down (owner decision on #376). An older server sends none.
    */
   gatherFits: z.array(ContentIdSchema).default([]),
+  /**
+   * The room of the Keeper's house it lives in (#381), or null. A resident
+   * keeps its job; its bed shows where it went. An older server sends none.
+   */
+  houseRoomId: ContentIdSchema.nullable().default(null),
 });
 export type JobSquishy = z.infer<typeof JobSquishySchema>;
 

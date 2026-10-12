@@ -54,6 +54,7 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     training: null,
     fullXpResetAt: null,
     gatherFits: [],
+    houseRoomId: null,
     ...over,
   };
 }
