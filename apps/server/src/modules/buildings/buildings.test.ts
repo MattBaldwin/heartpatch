@@ -173,6 +173,19 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     return { seed: at(seed), plain: at(plain[0]!), plain2: at(plain[1]!), tiles };
   }
 
+  /** Hand-edits a tile's resource spot (map generation isn't this module's). */
+  const setNode = (tileId: string, node: string | null) =>
+    db.execute(
+      `update tiles set node_resource = ${node === null ? 'null' : `'${node}'`} where id = '${tileId}'`,
+    );
+
+  /** A homestead with no resource spot, so a building can go up without clearing it (#295). */
+  async function openHomestead(mapId: string, who: Player, nth = 0) {
+    const plot = await makeHomestead(db, mapId, who.id, clock, nth);
+    await setNode(plot.id, null);
+    return plot;
+  }
+
   /**
    * Captured land for fires (#202: Hearthfires stand only out there, owner
    * decision 2026-10-07): `count` neutral outer tiles with a free middle,
@@ -364,7 +377,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await join(server, kid, friend, mapId);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      const { plain, plain2, tiles } = await homeTiles(server, kid, mapId);
       const theirs = (await home(server, friend, mapId)).tiles[0]!;
       const wild = (await view(server, kid, mapId)).tiles.find((t) => t.ownerUserId === null)!;
 
@@ -394,16 +407,27 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         r: plain.r,
         spot: 1,
       });
-      expect(errorOf(twice).message).toBe('Something is already there. Try another spot!');
-      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain, spot: 2 });
-      const third = await place(server, kid, mapId, {
-        buildingId: 'cozy-meadow',
+      // One building a tile (#295): another spot on the same tile is taken too.
+      expect(errorOf(twice).message).toBe('Only one building fits on a tile! Try another one.');
+      const other = await place(server, kid, mapId, {
+        buildingId: 'ember-den',
         q: plain.q,
         r: plain.r,
+        spot: 2,
+      });
+      expect(errorOf(other).message).toBe('Only one building fits on a tile! Try another one.');
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain2, spot: 2 });
+      const third = tiles.filter((t) => !t.heartSeed)[2]!;
+      const tooMany = await place(server, kid, mapId, {
+        buildingId: 'cozy-meadow',
+        q: third.q,
+        r: third.r,
         spot: 3,
       });
-      expect(third.statusCode).toBe(409);
-      expect(errorOf(third).message).toBe('Your home already has all the Cozy Meadow it can hold!');
+      expect(tooMany.statusCode).toBe(409);
+      expect(errorOf(tooMany).message).toBe(
+        'Your home already has all the Cozy Meadow it can hold!',
+      );
 
       const unknown = await place(server, kid, mapId, {
         buildingId: 'castle',
@@ -592,14 +616,17 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         spot: 0,
       });
       const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 2 });
-      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain, spot: 3 });
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain2, spot: 3 });
       const move = (id: string, body: object) =>
         call(server, 'POST', `/maps/${mapId}/buildings/${id}/move`, kid, body);
 
-      expect(errorOf(await move(den.id, { q: plain.q, r: plain.r, spot: 3 })).message).toBe(
-        'Something is already there. Try another spot!',
+      // One building a tile (#295): the meadow's tile is taken.
+      expect(errorOf(await move(den.id, { q: plain2.q, r: plain2.r, spot: 4 })).message).toBe(
+        'Only one building fits on a tile! Try another one.',
       );
-      expect(errorOf(await move(den.id, { q: plain2.q, r: plain2.r, spot: 0 })).message).toBe(
+      // Another spot on its own tile is fine.
+      expect((await move(den.id, { q: plain.q, r: plain.r, spot: 4 })).statusCode).toBe(200);
+      expect(errorOf(await move(den.id, { q: seed.q, r: seed.r, spot: 0 })).message).toBe(
         'The Ember Den goes around the middle of a tile!',
       );
       // A fire out on my land stays put; it never comes home (owner decision 2026-10-07).
@@ -613,7 +640,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       ).toMatchObject({ q: seed.q, r: seed.r, spot: 6 });
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'building.moved',
-        payload: { from: { q: plain.q, r: plain.r, spot: 2 }, building: { spot: 6 } },
+        payload: { from: { q: plain.q, r: plain.r, spot: 4 }, building: { spot: 6 } },
       });
       // Back where it was: a no-op move writes no event.
       const seq = (await eventsOf(mapId)).length;
@@ -932,7 +959,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
       // On a homestead (owner decision 4 on #277).
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,
@@ -996,19 +1023,27 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const [land] = await landFor(mapId, kid, 1);
       const onLand = await place(server, kid, mapId, body(land!));
       expect(onLand.statusCode).toBe(403);
-      // On a homestead, around the middle, one a tile.
+      // A homestead with a resource spot is cleared first (#242, #295).
       const plot = await makeHomestead(db, mapId, kid.id, clock);
+      await setNode(plot.id, 'timber');
+      const spot = await place(server, kid, mapId, body(plot));
+      expect(spot.statusCode).toBe(409);
+      expect(errorOf(spot).message).toContain('Clear this land first');
+      // On open homestead land, around the middle, one building a tile.
+      await setNode(plot.id, null);
       const middle = await place(server, kid, mapId, body(plot, 0));
       expect(middle.statusCode).toBe(409);
       await placed(server, kid, mapId, body(plot, 1));
       const second = await place(server, kid, mapId, body(plot, 2));
       expect(second.statusCode).toBe(409);
-      expect(errorOf(second).message).toBe('This tile already has a Training Grounds!');
+      expect(errorOf(second).message).toBe('Only one building fits on a tile! Try another one.');
       // A second homestead takes its own.
       const other = await makeHomestead(db, mapId, kid.id, clock, 1);
+      await setNode(other.id, null);
       await placed(server, kid, mapId, body(other, 3));
       // A napping homestead (cut off from home) takes none.
       const third = await makeHomestead(db, mapId, kid.id, clock, 2);
+      await setNode(third.id, null);
       await db.execute(
         `update tile_explore set paused_at = '${clock.toISOString()}' where tile_id = '${third.id}'`,
       );
@@ -1024,7 +1059,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,
@@ -1073,7 +1108,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,

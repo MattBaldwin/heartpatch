@@ -1000,7 +1000,8 @@ export const gatherJobs = pgTable(
  * hands before `ready_at`, the clear ends `lost` with nothing banked. If it
  * finished in time but someone else holds the tile by the settle, `drop`
  * still banks and the clear ends `cleared`, but their land stays as it is
- * (wild land still clears). `from_terrain` and
+ * (wild land still clears), and so does land that's no longer
+ * `from_terrain` (a trading post made since). `from_terrain` and
  * `from_node` keep what the tile was. One clear per tile and one per player
  * at a time.
  */
@@ -1407,9 +1408,10 @@ export const packedTrainingGrounds = pgTable(
 
 /**
  * One building per tile (#295): what the one-time tidy-up pass moved or
- * packed for a player, for a one-time note at the top of the morning report
- * (`seen_at` once shown, on any device). One row per player per map, written
- * by the boot pass only when something changed.
+ * packed for a player, for a one-time note in the morning report (shown once
+ * per device, like the packed-fire note; `seen_at` is kept for a later
+ * every-device "seen"). One row per player per map, written by the boot pass
+ * only when something changed.
  */
 export const tileUseNotes = pgTable(
   'tile_use_notes',
@@ -1420,7 +1422,7 @@ export const tileUseNotes = pgTable(
     userId: uuid('user_id').notNull(),
     // Buildings that moved: `{ buildingId, from: {q, r}, to: {q, r} }[]`.
     moved: jsonb('moved').notNull().default([]),
-    // Buildings taken down with nowhere to go: building ids.
+    // Buildings taken down with nowhere to go: `{ buildingId, q, r }[]`.
     packed: jsonb('packed').notNull().default([]),
     // Everything that came back to the bag.
     refund: jsonb('refund').$type<Record<string, number>>().notNull().default({}),

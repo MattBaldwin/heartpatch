@@ -18,7 +18,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, squishies, tileClears, users } from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -276,13 +276,11 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
         spot: 0,
       }),
     ).rejects.toThrow();
-    // Only the middle, and not a node's.
+    // Only the middle, and not on a resource spot: that land is cleared first (#295).
     const ring = await place(server, kid, mapId, { ...fire(plain[1]!), spot: 2 });
     expect(errorOf(ring).message).toBe('Hearthfires go in the middle of a tile!');
     const onNode = await place(server, kid, mapId, fire(node));
-    expect(errorOf(onNode).message).toBe(
-      'The middle of this tile is taken. A fire next door can reach it!',
-    );
+    expect(errorOf(onNode).message).toBe('Clear this land first 🌱. Then you can build here!');
     // Not someone else's land, not wild land, and no habitats out here.
     const notMine = await place(server, friend, mapId, fire(plain[1]!));
     expect(notMine.statusCode).toBe(403);
@@ -533,5 +531,55 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       () => undefined,
     );
     expect(await eventsOf(mapId)).toHaveLength(events.length);
+  });
+
+  it("doesn't go up where a squishy gathers or a clear is running (#295, #242)", async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await give(mapId, kid, PLENTY);
+    const { plain } = await land(mapId, kid, 2);
+    const [worked, cleared] = plain;
+    const tileId = (t: { q: number; r: number }) =>
+      db.query.tiles
+        .findFirst({
+          where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, t.q), eq(x.r, t.r)),
+        })
+        .then((x) => x!.id);
+    const [pal] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: 'puddlepuff',
+        element: 'water',
+        feeling: 'silly',
+        workTileId: await tileId(worked!),
+        workSince: clock,
+        workStartedAt: clock,
+      })
+      .returning({ id: squishies.id });
+    const busy = await place(server, kid, mapId, fire(worked!));
+    expect(busy.statusCode).toBe(409);
+    expect(errorOf(busy).message).toContain('Ask your squishy to move first');
+    await db.execute(
+      `update squishies set work_tile_id = null, work_since = null, work_started_at = null where id = '${pal!.id}'`,
+    );
+    await placed(server, kid, mapId, fire(worked!));
+
+    await db.insert(tileClears).values({
+      mapId,
+      userId: kid.id,
+      tileId: await tileId(cleared!),
+      fromTerrain: 'meadow',
+      fromNode: null,
+      tool: 'spade',
+      drop: {},
+      startedAt: clock,
+      readyAt: new Date(clock.getTime() + 120_000),
+    });
+    const clearing = await place(server, kid, mapId, fire(cleared!));
+    expect(clearing.statusCode).toBe(409);
+    expect(errorOf(clearing).message).toContain('clearing this land');
   });
 });

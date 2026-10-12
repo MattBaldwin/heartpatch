@@ -16,7 +16,8 @@
     "ops:reset-password": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/reset-password.ts",
     "ops:signup-code": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/signup-code.ts",
     "ops:grant-admin": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/grant-admin.ts",
-    "ops:enrol-totp": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/enrol-totp.ts"
+    "ops:enrol-totp": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/enrol-totp.ts",
+    "tile-uses:check": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/tile-uses-check.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

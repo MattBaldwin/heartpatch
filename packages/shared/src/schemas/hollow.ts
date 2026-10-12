@@ -110,6 +110,26 @@ export const HollowStatusSchema = z.object({
    * device, like `homeFirePacked`; null when I never had one at home.
    */
   trainingGroundsPacked: z.object({ refund: ItemCountsSchema, at: z.iso.datetime() }).nullable(),
+  /**
+   * One building per tile (#295): what the one-time tidy-up did to my
+   * buildings: which moved where, which had no free tile and came down
+   * (everything they cost back, in `refund`), and which squishies stopped
+   * gathering on a tile that keeps a building (what they had ready banked).
+   * Said once per device, like `homeFirePacked`. Null, or missing from an
+   * older server: nothing changed.
+   */
+  tileUseNote: z
+    .object({
+      moved: z.array(z.object({ buildingId: ContentIdSchema, from: HexSchema, to: HexSchema })),
+      packed: z.array(
+        z.object({ buildingId: ContentIdSchema, q: HexSchema.shape.q, r: HexSchema.shape.r }),
+      ),
+      refund: ItemCountsSchema,
+      stoppedGatherers: z.array(z.object({ squishyId: z.uuid(), name: z.string() })),
+      at: z.iso.datetime(),
+    })
+    .nullable()
+    .optional(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });
