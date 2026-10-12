@@ -206,9 +206,21 @@ interface BannerModules {
 }
 
 test('the "what landed" banner shows whole chips at the smallest width (#419)', async ({
-  page,
+  browser,
 }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
+  // Its own 320-point phone (an iPhone SE): resizing the iPad's page would keep
+  // its 820-point screen, and `width=device-width` would lay out at 820.
+  const { baseURL } = test.info().project.use;
+  const phone = { width: 320, height: 568 };
+  const context = await browser.newContext({
+    viewport: phone,
+    screen: phone,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    ...(baseURL ? { baseURL } : {}),
+  });
+  const page = await context.newPage();
   await page.goto('/');
   const results = await page.evaluate(async () => {
     const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
@@ -285,4 +297,5 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
   expect(ten.more).toBeGreaterThan(0);
   expect(ten.chips + ten.more).toBe(ten.entries);
+  await context.close();
 });
