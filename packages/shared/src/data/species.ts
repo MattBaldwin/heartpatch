@@ -549,12 +549,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
   },
-  // #443 kid (stage 2): a tadpole sprouting its first feet and a fin crest,
-  // before Drizzledoze the frog or Splashmallow's fin row.
+  // #443 kid (stage 2): a tadpole sprouting its first feet and a fin ridge,
+  // before Drizzledoze the frog or Splashmallow the sea serpent.
   {
     id: 'rippletad',
     name: 'Rippletad',
-    description: 'Just grew two little back feet. Now it hops and swims at the same time.',
+    description: 'Just grew two little feet and a fin. Now it hops and swims at the same time.',
     element: 'water',
     feeling: 'silly',
     rarity: 'common',
@@ -574,6 +574,7 @@ export const SPECIES: Species[] = [
         'belly-patch',
         'water-curl',
         'fin-crest',
+        'fin-row',
         'hop-feet',
         'wiggle-tail',
       ],
@@ -1203,8 +1204,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
   },
-  // #443 kid (stage 2): the burr ball grows leafy arms and a sprout, which
-  // both Bristlebloom and Petalprance keep.
+  // #443 kid (stage 2): the burr ball grows the leafy arms both Bristlebloom
+  // and Petalprance keep.
   {
     id: 'bristlepip',
     name: 'Bristlepip',
@@ -1226,7 +1227,6 @@ export const SPECIES: Species[] = [
         'brave-brows',
         'cat-mouth',
         'spike-coat',
-        'leaf-sprout',
         'leaf-arms',
         'biped-legs',
         'leaf-tail',
@@ -2129,8 +2129,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
   },
-  // #443 kid (stage 2): the candle cat stands up, with the whisker flames
-  // both Wickwhisker and Sparklewick keep.
+  // #443 kid (stage 2): the candle cat's flame grows into a crown, with the
+  // whisker flames both Wickwhisker and Sparklewick keep.
   {
     id: 'wickitten',
     name: 'Wickitten',
@@ -2155,13 +2155,11 @@ export const SPECIES: Species[] = [
         'pointy-ears',
         'flame-crown',
         'whisker-flames',
-        'stubby-legs',
         'curly-tail',
       ],
       glow: 'accent',
-      size: 1.15,
-      stance: 0.2,
-      pose: 'stand',
+      size: 1.1,
+      pose: 'sit',
       attackPart: 'crown',
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
