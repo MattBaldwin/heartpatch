@@ -764,8 +764,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
-  // #443 kid (stage 2): Emberbun's three little flames, before Hearthbun's
-  // mane or Embernap's crown.
+  // #443 kid (stage 2): Emberbun's three little flames, a belly patch like
+  // Hearthbun's and a fluffy tail like Embernap's.
   {
     id: 'kindlebun',
     name: 'Kindlebun',
@@ -790,7 +790,8 @@ export const SPECIES: Species[] = [
         'flame-crown',
         'biped-legs',
         'stubby-arms',
-        'ball-tail',
+        'belly-patch',
+        'fluff-tail',
       ],
       glow: 'accent',
       size: 1.15,
@@ -1852,7 +1853,7 @@ export const SPECIES: Species[] = [
     ], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'pumpkin',
-      palette: ['#ff9433', '#ffe0b8', '#4a9440', '#ffd23f'],
+      palette: ['#ff9433', '#ffe0b8', '#4a9440', '#5aa83a'],
       parts: [
         'dot-eyes',
         'open-mouth',
