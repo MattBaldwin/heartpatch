@@ -223,7 +223,7 @@ describe('evolutionStage', () => {
       of: 3,
       evolvesAt: 24,
     });
-    expect(evolutionStage('fuzzbolt', 5, { percent: 0, levelsToGo: 11 })).toMatchObject({
+    expect(evolutionStage('glimmerock', 5, { percent: 0, levelsToGo: 17 })).toMatchObject({
       stage: 1,
       of: 2,
     });

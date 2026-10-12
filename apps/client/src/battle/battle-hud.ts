@@ -135,6 +135,8 @@ export interface BattleHud {
   hideResult: () => void;
   /** Where the fight may be drawn: under the pills, above the sheet (fractions of the height). */
   safe: () => SafeRegion;
+  /** The bottom sheet's top edge on the page, CSS px (#391's banner sits above it). */
+  sheetTop: () => number;
   readonly visible: boolean;
   dispose: () => void;
 }
@@ -712,6 +714,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       const top = pillBottom > 0 ? (pillBottom + 10) / h : 0.14;
       safe = { top: Math.min(0.4, top), bottom: 1 - SHEET_SHARE };
       return safe;
+    },
+    sheetTop: () => {
+      const top = sheet.getBoundingClientRect().top;
+      return top > 0 ? top : (window.innerHeight || 1) * (1 - SHEET_SHARE);
     },
     get visible() {
       return !hud.hidden;

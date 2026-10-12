@@ -1,0 +1,163 @@
+/* Finding a rare one (#391): the dim, sparkles and banner over the battle,
+   as drawn in the owner-approved mockup. Only transform and opacity move. */
+
+.rare-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  transition: opacity var(--reveal-fade-ms) ease-in;
+}
+
+/* The full moment holds the battle buttons; a tap skips it. */
+.rare-reveal-full {
+  pointer-events: auto;
+  /* iOS Safari sends a tap's click to a plain element only when it looks tappable. */
+  cursor: pointer;
+}
+
+.rare-reveal-out {
+  opacity: 0;
+}
+
+.rare-reveal-dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--reveal-x) var(--reveal-y),
+    rgb(20 10 40 / 0%) calc(var(--reveal-r) * 0.55),
+    rgb(20 10 40 / var(--reveal-dim)) var(--reveal-r)
+  );
+  animation: rare-reveal-dim var(--reveal-ms) ease-out both;
+}
+
+.rare-reveal-sparkle {
+  position: absolute;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 6px rgb(255 255 255 / 90%);
+  animation: rare-reveal-burst var(--reveal-ms) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.rare-reveal-sparkle-tint {
+  color: var(--rarity);
+}
+
+.rare-reveal-banner {
+  position: absolute;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 3px solid #2d1b33;
+  border-radius: 12px;
+  background: var(--reveal-banner);
+  box-shadow:
+    0 0 0 var(--reveal-ring) var(--rarity),
+    0 6px 18px rgb(0 0 0 / 25%);
+  color: #2d1b33;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  transform: translateX(-50%) rotate(-3deg);
+  animation: rare-reveal-pop var(--reveal-ms) ease-out both;
+}
+
+.rare-reveal.rarity-rare {
+  --reveal-banner: linear-gradient(180deg, #e7f1ff, #c9e0ff);
+}
+
+.rare-reveal.rarity-epic {
+  --reveal-banner: linear-gradient(180deg, #f1e8ff, #dccbff);
+}
+
+.rare-reveal.rarity-legendary {
+  --reveal-banner: linear-gradient(180deg, #fff4cf, #ffd66b);
+}
+
+.rare-reveal.rarity-mythic {
+  --reveal-banner: linear-gradient(100deg, #d9fbff, #f7e1ff, #fff6cf, #d9fbff);
+}
+
+/* A secret kind's moment is "Special" (#391): its own pink, never the word "secret". */
+.rare-reveal.rarity-secret {
+  --reveal-banner: linear-gradient(180deg, #ffe6f1, #ffc2dc);
+}
+
+/* Met before: just the banner, quickly in. */
+.rare-reveal:not(.rare-reveal-full) .rare-reveal-banner {
+  animation-name: rare-reveal-fade;
+}
+
+/* Reduce Motion: no sparkles (none are made), no tilt and no pop. */
+.rare-reveal-calm .rare-reveal-banner {
+  transform: translateX(-50%);
+  animation-name: rare-reveal-fade;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rare-reveal-banner {
+    transform: translateX(-50%);
+    animation-name: rare-reveal-fade;
+  }
+}
+
+@keyframes rare-reveal-dim {
+  0% {
+    opacity: 0;
+  }
+
+  12%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes rare-reveal-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot));
+  }
+}
+
+@keyframes rare-reveal-pop {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translateX(-50%) rotate(-3deg) scale(0.6);
+  }
+
+  22% {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-3deg) scale(1.12);
+  }
+
+  30%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-3deg) scale(1);
+  }
+}
+
+@keyframes rare-reveal-fade {
+  0% {
+    opacity: 0;
+  }
+
+  20%,
+  100% {
+    opacity: 1;
+  }
+}

@@ -1,4 +1,5 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
+import type { QualityTier } from '../engine/config.js';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
@@ -64,21 +65,55 @@ function frameCost(scene: Scene, house: HouseScene): { drawCalls: number; triang
   };
 }
 
-describe('house models: the low-tier budget', () => {
-  const low = HOUSE_BUDGET.low;
+/**
+ * Every frame the house can show: each floor of the dollhouse (the floor
+ * cut), the entry glide's heaviest frame (the roof still on, upstairs fading out with it),
+ * and the walk in to kid height, which is on the ground floor.
+ */
+function framesOf(level: number): { label: string; floor: number; zoom: number; roof: number }[] {
+  const floors = [...new Set(sampleHouse(level).view.rooms.map((r) => r.layout.floor))].sort();
+  return [
+    // The glide's heaviest frame: the dollhouse pose with the roof still on and upstairs fading.
+    { label: 'the dollhouse mid-glide (roof at 0.3)', floor: 0, zoom: 0, roof: 0.3 },
+    ...ZOOMS.map((zoom) => ({ label: `floor 0 at zoom ${String(zoom)}`, floor: 0, zoom, roof: 1 })),
+    ...floors
+      .filter((f) => f > 0)
+      .map((f) => ({ label: `floor ${String(f)}`, floor: f, zoom: 0, roof: 1 })),
+  ];
+}
 
-  for (const level of sampleLevels()) {
-    for (const zoom of ZOOMS) {
-      it(`house level ${String(level)} fits the low tier at zoom ${String(zoom)}`, () => {
-        const { scene, house } = buildHouse(level, 'low');
-        poseAt(house, zoom);
-        const frame = frameCost(scene, house);
-        expect(frame.drawCalls).toBeLessThanOrEqual(low.drawCalls);
-        expect(frame.triangles).toBeLessThanOrEqual(low.triangles);
-        expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(low.lights);
-        expect(house.stats.shadowMap).toBe(false);
-        scene.getEngine().dispose();
-      });
+/** Builds the house and shows it as `frame` says, as the screen does. */
+function shown(level: number, tier: QualityTier, frame: ReturnType<typeof framesOf>[number]) {
+  const built = buildHouse(level, tier);
+  built.house.setFloor(frame.floor);
+  built.house.setRoof(frame.roof);
+  poseAt(built.house, frame.zoom);
+  return built;
+}
+
+/**
+ * B4 headroom: the low and high tiers keep about a tenth of their caps
+ * spare (the older iPad holds exactly 30 fps), so a later PR can add a
+ * little without the top level going over.
+ */
+const HEADROOM = 0.9; // TUNE
+
+describe('house models: the budget, every tier, every floor', () => {
+  for (const tier of ['low', 'medium', 'high'] as const) {
+    const cap = HOUSE_BUDGET[tier];
+    const keep = tier === 'medium' ? 1 : HEADROOM;
+    for (const level of sampleLevels()) {
+      for (const frame of framesOf(level)) {
+        it(`house level ${String(level)} fits the ${tier} tier: ${frame.label}, the shadow pass counted`, () => {
+          const { scene, house } = shown(level, tier, frame);
+          const cost = frameCost(scene, house);
+          expect(cost.drawCalls).toBeLessThanOrEqual(Math.floor(cap.drawCalls * keep));
+          expect(cost.triangles).toBeLessThanOrEqual(cap.triangles * keep);
+          expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(cap.lights);
+          expect(house.stats.shadowMap).toBe(tier !== 'low');
+          scene.getEngine().dispose();
+        });
+      }
     }
   }
 
@@ -89,21 +124,18 @@ describe('house models: the low-tier budget', () => {
     scene.getEngine().dispose();
   });
 
-  for (const level of sampleLevels()) {
-    for (const zoom of ZOOMS) {
-      it(`house level ${String(level)} keeps the high tier inside its caps at zoom ${String(zoom)}, the shadow pass counted`, () => {
-        const { scene, house } = buildHouse(level, 'high');
-        poseAt(house, zoom);
-        const frame = frameCost(scene, house);
-        expect(frame.drawCalls).toBeLessThanOrEqual(HOUSE_BUDGET.high.drawCalls);
-        expect(frame.triangles).toBeLessThanOrEqual(HOUSE_BUDGET.high.triangles);
-        expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(
-          HOUSE_BUDGET.high.lights,
-        );
-        scene.getEngine().dispose();
-      });
-    }
-  }
+  it('keeps little pieces out of the shadow pass (they cast nothing you’d see)', () => {
+    const { scene, house } = buildHouse(sampleLevels().at(-1)!, 'high');
+    scene.render();
+    const casters = scene.lights.flatMap(
+      (l) => l.getShadowGenerator()?.getShadowMap()?.renderList ?? [],
+    );
+    const small = house.houseMeshes.filter((m) => /^house-f\d+-small$/.test(m.name));
+    expect(small.length).toBeGreaterThan(0);
+    for (const m of small) expect(casters).not.toContain(m);
+    expect(casters.map((m) => m.name)).toContain('house-f0-solid');
+    scene.getEngine().dispose();
+  });
 
   it('furnishes every room with its own builder, so the budget cases count the real rooms (B3)', () => {
     const top = sampleLevels().at(-1)!;

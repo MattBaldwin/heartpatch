@@ -70,12 +70,13 @@ const E2E_GROUPS = [
     'potions',
     'squishy-gallery',
   ],
-  // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted. Keep it light.
+  // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal (#391). Keep it light.
   [
     'cinematic',
     'friendly',
     'inventory',
     'milestones',
+    'rare-reveal',
     'renderer-error',
     'roster',
     'starter',

@@ -1,7 +1,17 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HOUSE_GRID } from './house-config.js';
-import { houseBounds, roomBox, wallRuns } from './house-layout.js';
+import {
+  covers,
+  floorAfterGrowing,
+  floorCut,
+  houseBounds,
+  houseFloors,
+  roomBox,
+  runFloor,
+  shownAt,
+  wallRuns,
+} from './house-layout.js';
 
 const { cell, storey, wall, frontLip } = HOUSE_GRID;
 const top = HOUSE_DATA.levels.length;
@@ -67,5 +77,90 @@ describe('house layout', () => {
         }
       }
     }
+  });
+});
+
+describe('the floor cut (B4)', () => {
+  const boxes = (level: number) => roomsAt(HOUSE_DATA, level).map(roomBox);
+
+  it('lists the floors rooms start on: one until the Kitchen goes upstairs, the Hall counting on its first', () => {
+    expect(houseFloors(boxes(1))).toEqual([0]);
+    expect(houseFloors(boxes(2))).toEqual([0]);
+    expect(houseFloors(boxes(3))).toEqual([0, 1]);
+    expect(houseFloors(boxes(top))).toEqual([0, 1]);
+  });
+
+  it('shows the ground floor with the Kitchen taken away, the Hall whole, and only uncovered rooms’ residents', () => {
+    const cut = floorCut(boxes(top), 0);
+    expect(cut.floor).toBe(0);
+    expect([...cut.shown].sort()).toEqual(['heart-hall', 'playroom', 'snug']);
+    expect([...cut.cast].sort()).toEqual(['heart-hall', 'playroom', 'snug']);
+    // The Hall's two storeys keep the box as tall as the whole house.
+    expect(cut.bounds.maxY).toBe(2 * storey);
+    // Level 3: just the ground floor's storey.
+    expect(floorCut(boxes(3), 0).bounds.maxY).toBe(storey);
+  });
+
+  it('shows upstairs with the ground floor under it, leaving out the residents under the Kitchen', () => {
+    const cut = floorCut(boxes(top), 1);
+    expect(cut.shown.size).toBe(4);
+    // The Snug is under the Kitchen's floor; the Playroom and the Hall are open to the sky.
+    expect([...cut.cast].sort()).toEqual(['heart-hall', 'kitchen', 'playroom']);
+    expect(cut.bounds).toEqual(houseBounds(boxes(top)));
+  });
+
+  it('clamps to the house’s floors', () => {
+    expect(floorCut(boxes(1), 3).floor).toBe(0);
+    expect(floorCut(boxes(top), 9).floor).toBe(1);
+    expect(floorCut(boxes(top), -2).floor).toBe(0);
+  });
+
+  it('files a wall by the higher of its rooms, so the Hall’s wall over the Snug goes with the Kitchen', () => {
+    const all = boxes(top);
+    const runs = wallRuns(roomsAt(HOUSE_DATA, top));
+    const stub = runs.find(
+      (r) => r.floor === 1 && r.room === 'heart-hall' && r.other === 'kitchen',
+    );
+    expect(stub).toBeDefined();
+    expect(runFloor(stub!, all)).toBe(1);
+    const hallBack = runs.find(
+      (r) => r.floor === 1 && r.room === 'heart-hall' && r.side === 'north',
+    );
+    expect(runFloor(hallBack!, all)).toBe(0);
+    expect(shownAt(1, 0)).toBe(false);
+    expect(shownAt(0, 1)).toBe(true);
+  });
+
+  it('marks the walls the cut leaves uncovered, for a cap on their top edge', () => {
+    const runs = wallRuns(roomsAt(HOUSE_DATA, top));
+    const snugWest = runs.find((r) => r.floor === 0 && r.room === 'snug' && r.side === 'west');
+    expect(snugWest).toMatchObject({ top: false, upper: 1 });
+    // The Hall's own walls go on up: nothing to cap.
+    const hallWest = runs.find(
+      (r) => r.floor === 0 && r.room === 'heart-hall' && r.side === 'west',
+    );
+    expect(hallWest).toMatchObject({ top: false, upper: null });
+    expect(runs.filter((r) => r.top).every((r) => r.upper === null)).toBe(true);
+  });
+
+  it('knows which room stands over which', () => {
+    const [snug, , kitchen, hall] = boxes(top);
+    expect(covers(kitchen!, snug!)).toBe(true);
+    expect(covers(snug!, kitchen!)).toBe(false);
+    expect(covers(kitchen!, hall!)).toBe(false);
+  });
+
+  it('shows the new room’s floor after growing when it’s upstairs, and keeps the floor otherwise', () => {
+    const rooms = (level: number) =>
+      roomsAt(HOUSE_DATA, level).map((room) => ({
+        ...room,
+        level: HOUSE_DATA.levels.find((l) => l.room.id === room.id)?.level ?? 1,
+      }));
+    // Level 2 → 3: the Kitchen is upstairs.
+    expect(floorAfterGrowing(rooms(3), 3, 0)).toBe(1);
+    // Level 3 → 4 from upstairs: the Hall starts downstairs but stands two storeys tall.
+    expect(floorAfterGrowing(rooms(top), top, 1)).toBe(1);
+    expect(floorAfterGrowing(rooms(top), top, 0)).toBe(0);
+    expect(floorAfterGrowing(rooms(2), 2, 0)).toBe(0);
   });
 });
