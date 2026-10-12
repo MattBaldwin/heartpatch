@@ -16,7 +16,7 @@ The design is in tech spec §10 (config), §11 (infrastructure) and §12 (CI/CD)
 - [5. Connect GitHub to the server](#5-connect-github-to-the-server)
 - [6. Put the production settings on the server](#6-put-the-production-settings-on-the-server)
 - [7. First deploy](#7-first-deploy)
-- [8. Day-to-day operations](#8-day-to-day-operations): logs, backups and restore, rollback
+- [8. Day-to-day operations](#8-day-to-day-operations): logs, backups and restore, dry runs on live data, rollback
 - [9. Playtesting](#9-playtesting): seed accounts, a local playtest on your Wi-Fi
 - [Troubleshooting](#troubleshooting)
 - [Testing the deploy setup locally](#testing-the-deploy-setup-locally)
@@ -327,6 +327,23 @@ bin/restore.sh backups/heartpatch-<time>.dump
 It asks you to type `restore`, then: takes a **safety backup** of the current database, restores the dump into a scratch database while the game keeps running, and only if that worked, stops the server for a few seconds, swaps the databases, applies any newer migrations and checks `/health` and `/ready`. If anything fails, the live database is left (or put back) as it was.
 
 **Restore the whole server** (it won't boot, or was badly misconfigured): Lightsail → **Snapshots** → pick one → **Create new instance** (same plan) → move the static IP to the new instance (**Networking** → detach from old, attach to new). DNS needs no change because the IP is the same. Delete the old instance once the new one works.
+
+### Dry runs on live data
+
+Some changes come with a read-only check (a dry run) that says what they'd do to the real data before they merge, e.g. `tile-uses:check` for one building per tile (#295). The **Live-data dry run** workflow runs one against a throwaway copy of last night's backup and posts the counts on the PR. Nothing on the server needs doing by hand.
+
+1. GitHub → **Actions** → **Live-data dry run** → **Run workflow**.
+2. Leave **Use workflow from** on `main`. Fill in:
+   - **Branch or commit**: the PR's branch (e.g. `claude/295-one-building-per-tile`);
+   - **Which check**: pick it from the list;
+   - **PR number**: where to post the results (e.g. `436`), or blank for the run's summary page only.
+3. **Run workflow**. It takes about 5–10 minutes; the results appear as a comment on the PR.
+
+What it does: builds the server image from that branch on GitHub (nothing is pushed to the registry), copies it to the server, restores the newest `backups/heartpatch-*.dump` into a scratch Postgres container on its own private Docker network (the live database isn't on it and can't be reached from it), applies the branch's migrations to the copy, makes the copy read-only, and runs the check there with `infra/scripts/ops-check.sh`. Only the check's summary and plan lines (counts, building kinds, tile coordinates) leave the server; per-player lines, ids and logs are deleted with the copy. The scratch container, its network and the image are removed at the end, even if the run fails or is cancelled.
+
+While it runs it holds the same lock as deploys and restores (a few minutes), so a merge that lands meanwhile fails its deploy with "another deploy or a restore is running": re-run that deploy afterwards (Actions → the failed run → **Re-run jobs**). It refuses to start if the newest backup is more than 48 hours old or the disk is short of room.
+
+If it fails, the run's log says which step. To look closer, run the check by hand on the server against a copy you restore yourself.
 
 ### Rolling back
 

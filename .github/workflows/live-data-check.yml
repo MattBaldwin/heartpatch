@@ -1,0 +1,212 @@
+name: Live-data dry run
+
+# A read-only ops check against a throwaway copy of last night's backup, run by
+# hand from the Actions tab (docs/DEPLOY.md, "Dry runs on live data"). It
+# builds the server image from `ref`, restores the newest nightly dump into a
+# scratch Postgres on the server with infra/scripts/ops-check.sh, runs the
+# check there, and posts only its counts and plan lines (on PR `pr`, if given).
+# The live database is never touched, and nothing is left behind.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to build the check from
+        required: true
+        type: string
+      check:
+        description: Which check to run
+        required: true
+        type: choice
+        options:
+          - tile-uses-check
+      pr:
+        description: PR number to post the results on (optional)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # One dry run at a time, never cancelled halfway (its own cleanup must run).
+  # Not deploy.yml's group: a queued run there would cancel a waiting deploy.
+  # On the server, ops-check.sh holds deploy.sh's lock instead.
+  group: live-data-check
+  cancel-in-progress: false
+
+env:
+  IMAGE: heartpatch-ops-check:${{ github.run_id }}
+
+jobs:
+  # The branch's code is only built here, in a job with no secrets.
+  build:
+    # The workflow and ops-check.sh always come from main; only the image is
+    # built from `ref`.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - name: Check the PR number
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          if [ -n "$PR" ] && ! [[ $PR =~ ^[1-9][0-9]{0,6}$ ]]; then
+            echo "::error::pr must be a PR number, like 436"
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Resolve the commit
+        id: ref
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the server image from ${{ steps.ref.outputs.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/server.Dockerfile
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE }}
+          build-args: |
+            APP_VERSION=${{ steps.ref.outputs.sha }}
+          # Local only: never pushed, so it can't count against the
+          # registry's kept releases or be deployed by mistake.
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+          cache-from: type=gha,scope=server
+          provenance: false
+      - name: Compress
+        run: gzip -1 "$RUNNER_TEMP/image.tar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ops-check-image
+          path: ${{ runner.temp }}/image.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  check:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ops-check-image
+          path: ${{ runner.temp }}
+
+      - name: Set up SSH
+        id: ssh
+        env:
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+          LIGHTSAIL_SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          LIGHTSAIL_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          for name in LIGHTSAIL_HOST LIGHTSAIL_USER LIGHTSAIL_SSH_KEY LIGHTSAIL_KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set (docs/DEPLOY.md step 5)"
+              exit 1
+            fi
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$LIGHTSAIL_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: refuse to connect if the server isn't the one we set up.
+          printf '%s\n' "$LIGHTSAIL_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host lightsail
+            HostName $LIGHTSAIL_HOST
+            User $LIGHTSAIL_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ConnectTimeout 20
+            ServerAliveInterval 15
+          EOF
+
+      # Into a fresh folder of its own, not incoming/ (a deploy replaces that).
+      - name: Upload ops-check.sh
+        id: upload
+        run: |
+          remote=$(ssh lightsail 'mktemp -d /tmp/heartpatch-ops-check.XXXXXX')
+          [[ $remote =~ ^/tmp/heartpatch-ops-check\.[A-Za-z0-9]{6}$ ]]
+          echo "dir=$remote" >> "$GITHUB_OUTPUT"
+          scp infra/scripts/ops-check.sh "lightsail:$remote/"
+
+      - name: Is there a fresh backup and room for a copy?
+        env:
+          REMOTE: ${{ steps.upload.outputs.dir }}
+        run: |
+          # $REMOTE expands here on purpose (a mktemp path, checked above).
+          # shellcheck disable=SC2029
+          ssh lightsail "$REMOTE/ops-check.sh preflight"
+
+      - name: Load the image on the server
+        run: ssh lightsail 'docker load -q' < "$RUNNER_TEMP/image.tar.gz"
+
+      - name: Run ${{ inputs.check }} on a scratch copy
+        env:
+          REMOTE: ${{ steps.upload.outputs.dir }}
+          CHECK: ${{ inputs.check }}
+        timeout-minutes: 20
+        run: |
+          # The check (a choice input) and image name are checked again on the server.
+          # shellcheck disable=SC2029
+          ssh lightsail "$REMOTE/ops-check.sh run '$CHECK' '$IMAGE'" > "$RUNNER_TEMP/results.txt"
+
+      - name: Remove everything from the server
+        if: always() && steps.upload.outputs.dir != ''
+        env:
+          REMOTE: ${{ steps.upload.outputs.dir }}
+        run: |
+          # shellcheck disable=SC2029
+          ssh lightsail "$REMOTE/ops-check.sh cleanup; rm -rf '$REMOTE'"
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -rf ~/.ssh
+
+      - name: Post the results
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          CHECK: ${{ inputs.check }}
+          REF: ${{ inputs.ref }}
+          SHA: ${{ needs.build.outputs.sha }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          results="$RUNNER_TEMP/results.txt"
+          touch "$results"
+          backup=$(sed -n 's/^backup: //p' "$results")
+          {
+            echo "### Live-data dry run: \`$CHECK\`"
+            echo
+            echo "Built from \`$REF\` at $SHA, run on a scratch copy of ${backup:-the newest nightly backup}. The live database was not touched, and the copy has been removed."
+            echo
+            if [ "$JOB_STATUS" = success ]; then
+              echo '```text'
+              grep -v '^backup: ' "$results" || true
+              echo '```'
+            else
+              echo "**The dry run failed** (no results). See [the run]($RUN_URL) for which step."
+            fi
+            echo
+            echo "[Run log]($RUN_URL)"
+          } > "$RUNNER_TEMP/comment.md"
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          fi
