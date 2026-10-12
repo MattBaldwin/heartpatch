@@ -210,7 +210,7 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   // A new Keeper: the server's rows, grouped, with what's done and what's not.
   await openGrow(page);
   await expect(page.getByTestId('house-grow-title')).toContainText('House 1 → 2');
-  await expect(page.getByTestId('house-grow-room')).toHaveText('The Playroom · room for 2');
+  await expect(page.getByTestId('house-grow-room')).toHaveText('The Playroom · +2 beds');
   // The scene and the HUD dim behind it and can't be reached: one way out, the ✕.
   await expect(page.getByTestId('house-scrim')).toBeVisible();
   const hudHidden = () =>

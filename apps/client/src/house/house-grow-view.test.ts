@@ -18,7 +18,10 @@ import {
   inSentence,
   rowCount,
   rowFill,
+  sparkleSpot,
 } from './house-grow-view.js';
+import { fitHouse } from './house-camera.js';
+import { houseBounds, roomBox } from './house-layout.js';
 import { GROW_TEXT } from './house-view.js';
 
 const row = (over: Partial<RequirementProgress>): RequirementProgress => ({
@@ -168,13 +171,14 @@ describe('grow the house: the words', () => {
     // No-break spaces keep "room for 2" and "House 2 → 3" whole when they wrap.
     expect(growHeader({ level: 2 }, next())).toEqual({
       levels: 'House\u00A02\u00A0→\u00A03',
-      room: 'The Kitchen · room\u00A0for\u00A02',
+      room: 'The Kitchen · +2\u00A0beds',
     });
   });
 
   it('lists the cost with my counts, short ones marked', () => {
     expect(costLine({ timber: 60, stone: 50, glimmer: 4 })).toBe(
-      '60\u00A0Timber · 50\u00A0Stone · 4\u00A0Glimmer',
+      // Each " ·" break keeps its dot with the item after it.
+      '60\u00A0Timber ·\u00A050\u00A0Stone ·\u00A04\u00A0Glimmer',
     );
     const needs = growNeeds({ items: { timber: 60, stone: 10 } }, next());
     expect(needs.map((n) => [n.id, n.have, n.ok])).toEqual([
@@ -225,5 +229,37 @@ describe('grow the house: the words', () => {
       GROW_TEXT.toDo,
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
+  });
+});
+
+describe('grow the house: the sparkle', () => {
+  const vp = { width: 390, height: 844, top: 80, bottom: 120 };
+
+  it('bursts over the new room as the camera sees it, inside the scene above the sheet', () => {
+    const two = sampleHouse(2).view;
+    const boxes = two.rooms.map((r) => roomBox(r));
+    const pose = fitHouse(houseBounds(boxes), vp);
+    const snug = sparkleSpot(
+      pose,
+      boxes.find((b) => b.id === 'snug')!,
+      vp,
+    );
+    const playroom = sparkleSpot(
+      pose,
+      boxes.find((b) => b.id === 'playroom')!,
+      vp,
+    );
+    // The Playroom stands east of the Snug, so its sparkle is to the right.
+    expect(playroom.x).toBeGreaterThan(snug.x);
+    for (const at of [snug, playroom]) {
+      expect(at.x).toBeGreaterThan(0);
+      expect(at.x).toBeLessThan(vp.width);
+      expect(at.y).toBeGreaterThanOrEqual(vp.top);
+      expect(at.y).toBeLessThanOrEqual(vp.height - vp.bottom);
+    }
+  });
+
+  it('falls back to the middle of the scene with no room or no camera', () => {
+    expect(sparkleSpot(null, null, vp)).toEqual({ x: 195, y: (80 + 28 + (844 - 120 - 28)) / 2 });
   });
 });

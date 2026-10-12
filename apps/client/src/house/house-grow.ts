@@ -121,14 +121,23 @@ function cost(view: HouseView, next: HouseNextLevel): HTMLElement[] {
  * The sheet's sticky header (mockup "Grow the house"): the eyebrow, ✕ at
  * the top right, "House 1 → 2" big and the new room on its own line.
  */
-function head(view: HouseView, next: HouseNextLevel, onClose: () => void): HTMLElement {
+function head(view: HouseView, next: HouseNextLevel, onClose: (() => void) | null): HTMLElement {
   const { levels, room } = growHeader(view, next);
-  const close = houseButton(
-    GROW_TEXT.closeIcon,
-    onClose,
-    { class: 'house-grow-close', 'data-testid': 'house-grow-close', 'aria-label': GROW_TEXT.close },
-    true,
-  );
+  // The confirm has one way out ("Not now"), so no ✕ there.
+  const close = onClose
+    ? [
+        houseButton(
+          GROW_TEXT.closeIcon,
+          onClose,
+          {
+            class: 'house-grow-close',
+            'data-testid': 'house-grow-close',
+            'aria-label': GROW_TEXT.close,
+          },
+          true,
+        ),
+      ]
+    : [];
   return el(
     'header',
     { class: 'house-grow-head' },
@@ -143,7 +152,7 @@ function head(view: HouseView, next: HouseNextLevel, onClose: () => void): HTMLE
         el('span', { class: 'house-grow-room', 'data-testid': 'house-grow-room' }, room),
       ),
     ),
-    close,
+    ...close,
   );
 }
 
@@ -174,13 +183,14 @@ export function growPanel(view: HouseView, next: HouseNextLevel, on: GrowHandler
     ...(state.kind === 'not-yet' && state.first
       ? [el('p', { class: 'house-grow-next', 'data-testid': 'house-grow-next' }, state.first)]
       : []),
+    // A soft fade where the list runs on under the sheet's bottom edge.
+    el('span', { class: 'house-grow-fade', 'aria-hidden': 'true' }),
   ];
 }
 
 export interface ConfirmHandlers {
   onYes: () => void;
   onNo: () => void;
-  onClose: () => void;
 }
 
 /** "Build the Kitchen for 60 Timber, 50 Stone and 4 Glimmer?" (style guide §3.6). */
@@ -198,7 +208,7 @@ export function confirmPanel(
   yes.disabled = busy;
   no.disabled = busy;
   return [
-    head(view, next, on.onClose),
+    head(view, next, null),
     el(
       'p',
       { class: 'house-grow-confirm', 'data-testid': 'house-grow-confirm' },
@@ -208,25 +218,34 @@ export function confirmPanel(
   ];
 }
 
+/** Bits in one sparkle burst. */
+const SPARKLE_BITS = 8; // TUNE
+
 /**
- * A little burst of sparkles from the top of `from` (the sheet) after a
- * build, drawn on `layer` so the sheet's scroll never clips it; nothing
- * under reduced motion.
+ * A little burst of sparkles at `at` (CSS px: the new room on screen) after
+ * a build, drawn on `layer` over the scene; nothing under reduced motion.
+ * The bits fly out in a ring; CSS sizes the ring (bigger on iPad).
  */
-export function sparkle(layer: HTMLElement, from: HTMLElement, reducedMotion: boolean): void {
+export function sparkle(
+  layer: HTMLElement,
+  at: { x: number; y: number },
+  reducedMotion: boolean,
+): void {
   if (reducedMotion) return;
-  const box = from.getBoundingClientRect();
   const burst = el(
     'span',
     { class: 'house-sparkle', 'aria-hidden': 'true' },
-    ...Array.from({ length: 7 }, (_, i) => {
+    ...Array.from({ length: SPARKLE_BITS }, (_, i) => {
       const s = el('span', { class: 'house-sparkle-bit' }, i % 2 ? '✨' : '💖');
+      const angle = (i / SPARKLE_BITS) * Math.PI * 2 - Math.PI / 2;
       s.style.setProperty('--i', String(i));
+      s.style.setProperty('--dx', Math.cos(angle).toFixed(3));
+      s.style.setProperty('--dy', Math.sin(angle).toFixed(3));
       return s;
     }),
   );
-  burst.style.left = `${String(box.left + box.width / 2)}px`;
-  burst.style.top = `${String(box.top)}px`;
+  burst.style.left = `${String(at.x)}px`;
+  burst.style.top = `${String(at.y)}px`;
   layer.append(burst);
   burst.addEventListener('animationend', (e) => {
     if (e.target === burst.lastElementChild) burst.remove();

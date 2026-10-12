@@ -46,8 +46,8 @@ export const GROW_TEXT = {
   allGrown: 'Your house is all grown! ✨',
   /** The header's big line. */
   levels: (from: number, to: number) => `House\u00A0${String(from)}\u00A0→\u00A0${String(to)}`,
-  /** Under it: the new room. */
-  room: (room: string, n: number) => `${room} · room\u00A0for\u00A0${String(n)}`,
+  /** Under it: the new room and the beds it adds. */
+  room: (room: string, n: number) => `${room} · +${String(n)}\u00A0${n === 1 ? 'bed' : 'beds'}`,
   close: 'Close',
   closeIcon: '✕',
   /** One heading per kind of "getting better", with its picture. */

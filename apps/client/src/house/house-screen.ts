@@ -17,7 +17,8 @@ import { el, messageOf } from '../ui/dom.js';
 import { houseApi, type HouseApi } from './house-api.js';
 import { createHouseBuilder } from './house-build.js';
 import { confirmPanel, growPanel, houseButton, sparkle } from './house-grow.js';
-import { builtLine } from './house-grow-view.js';
+import { builtLine, sparkleSpot } from './house-grow-view.js';
+import { roomBox } from './house-layout.js';
 import {
   blend,
   clampZoom,
@@ -367,9 +368,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
           onNo: () => {
             setSheet('grow');
           },
-          onClose: () => {
-            setSheet('peek');
-          },
         }),
       ),
     );
@@ -440,7 +438,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     celebrate = false;
     if (reducedMotion.matches) return;
     sparkles += 1;
-    sparkle(overlay, peek, false);
+    // Over the new room as the camera sees it, above the folded sheet.
+    const room = view?.rooms.find((r) => r.level === view?.level) ?? null;
+    const pose = base ? (kid ? blend(base, kid, zoom) : base) : null;
+    sparkle(overlay, sparkleSpot(pose, room ? roomBox(room) : null, viewport()), false);
   }
 
   /** The canvas and the bands the HUD covers, for fitting the house between them. */

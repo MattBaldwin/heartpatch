@@ -6,6 +6,8 @@ import {
   type RequirementProgress,
 } from '@heartpatch/shared';
 import { needChips, type NeedChip } from '../home/home-view.js';
+import { project, type HousePose, type HouseViewport } from './house-camera.js';
+import type { RoomBox } from './house-layout.js';
 import { itemName } from '../inventory/bag-view.js';
 import { GROW_TEXT } from './house-view.js';
 
@@ -53,9 +55,12 @@ export const growNeeds = (view: Pick<HouseView, 'items'>, next: Pick<HouseNextLe
 
 /** "60 Timber · 50 Stone · 4 Glimmer". */
 export function costLine(cost: Readonly<Record<string, number>>): string {
-  return Object.entries(cost)
-    .map(([id, n]) => `${String(n)}\u00A0${itemName(id)}`)
-    .join(' · ');
+  return (
+    Object.entries(cost)
+      .map(([id, n]) => `${String(n)}\u00A0${itemName(id)}`)
+      // The dot stays with the item after it, so a line never ends on "·".
+      .join(' ·\u00A0')
+  );
 }
 
 /** "60 Timber, 50 Stone and 4 Glimmer", for the confirm. */
@@ -142,4 +147,35 @@ export function builtLine(built: Pick<HouseView, 'rooms' | 'level' | 'final' | '
   const room = built.rooms.find((r) => r.level === built.level) ?? built.rooms.at(-1);
   const name = room?.name ?? GROW_TEXT.open;
   return built.final || built.next === null ? GROW_TEXT.builtFinal(name) : GROW_TEXT.built(name);
+}
+
+/** How far the sparkle keeps from the screen's edges and the HUD bands (CSS px). */
+const SPARKLE_MARGIN = 28; // TUNE
+
+/**
+ * Where the build's sparkle bursts (CSS px): over the new room as the camera
+ * sees it (the room's middle, a little above its floor), kept inside the
+ * scene's area above the folded sheet; the middle of that area when there's
+ * no room or it's behind the camera.
+ */
+export function sparkleSpot(
+  pose: HousePose | null,
+  room: Pick<RoomBox, 'x0' | 'x1' | 'y0' | 'y1' | 'z0' | 'z1'> | null,
+  vp: HouseViewport,
+): { x: number; y: number } {
+  const top = vp.top + SPARKLE_MARGIN;
+  const bottom = Math.max(top, vp.height - vp.bottom - SPARKLE_MARGIN);
+  const middle = { x: vp.width / 2, y: (top + bottom) / 2 };
+  if (!pose || !room || vp.width <= 0 || vp.height <= 0) return middle;
+  const at = project(pose, vp.width / vp.height, {
+    x: (room.x0 + room.x1) / 2,
+    y: room.y0 + (room.y1 - room.y0) * 0.35,
+    z: (room.z0 + room.z1) / 2,
+  });
+  if (!(at.depth > 0) || !Number.isFinite(at.x) || !Number.isFinite(at.y)) return middle;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return {
+    x: clamp(((at.x + 1) / 2) * vp.width, SPARKLE_MARGIN, vp.width - SPARKLE_MARGIN),
+    y: clamp(((1 - at.y) / 2) * vp.height, top, bottom),
+  };
 }

@@ -479,6 +479,17 @@
   text-align: center;
 }
 
+/* The bottom fade: pinned to the sheet's bottom edge while the list runs on below. */
+.house-grow-fade {
+  position: sticky;
+  bottom: -14px;
+  flex: none;
+  height: 18px;
+  margin-top: -18px;
+  background: linear-gradient(rgb(255 250 252 / 0%), #fffafc);
+  pointer-events: none;
+}
+
 .house-grow-confirm {
   margin: 4px 0 0;
   font-size: 18px;
@@ -494,18 +505,24 @@
   pointer-events: none;
 }
 
+/* The bits fly out in a ring from the new room (--dx/--dy: each bit's direction). */
+.house-sparkle {
+  --ring: 64px;
+  --bit: 26px;
+}
+
 .house-sparkle-bit {
   position: absolute;
-  font-size: 22px;
+  font-size: var(--bit);
   opacity: 0;
   animation: house-sparkle 1.1s ease-out forwards;
-  animation-delay: calc(var(--i) * 40ms);
+  animation-delay: calc(var(--i) * 25ms);
 }
 
 @keyframes house-sparkle {
   0% {
     opacity: 0;
-    transform: translate(-50%, 0) scale(0.4);
+    transform: translate(-50%, -50%) scale(0.4);
   }
 
   25% {
@@ -514,7 +531,11 @@
 
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + (var(--i) - 3) * 34px), -70px) scale(1.15);
+    transform: translate(
+        calc(-50% + var(--dx) * var(--ring)),
+        calc(-50% + var(--dy) * var(--ring) - 16px)
+      )
+      scale(1.2);
   }
 }
 
@@ -524,6 +545,16 @@
   .house-peek-open {
     max-width: 600px;
     max-height: 40dvh;
+  }
+
+  /* The Grow sheet itself: tall enough that the list and Build it! fit. */
+  .house-peek-grow {
+    max-height: 80dvh;
+  }
+
+  .house-sparkle {
+    --ring: 96px;
+    --bit: 36px;
   }
 }
 
