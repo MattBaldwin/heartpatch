@@ -94,8 +94,6 @@ export interface HomeScreenOptions {
   onClosed: (mapId: string) => void;
   /** The home couldn't open (offline): say why where the player is looking. */
   onProblem: (message: string) => void;
-  /** A squishy chip was tapped: open its care sheet (#19). */
-  onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /**
@@ -117,11 +115,7 @@ export interface HomeScreenOptions {
    * view); the moods arrive through `setWorkMoods`, newest only.
    */
   loadWorkMoods?: (mapId: string) => void;
-  /**
-   * The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375).
-   * Without it, the button only unfolds the sheet (the squishies themselves
-   * live in the roster now).
-   */
+  /** The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375). No button without it. */
   onSquishies?: (mapId: string) => void;
   /**
    * "📖 Recipe book" on a build row short of something you make (the
@@ -225,7 +219,10 @@ export const HOME_TEXT = {
   squishies: '🐾 Squishies',
   /** The sheet handle, for VoiceOver (#412). */
   showMore: 'Show more',
+  /** The handle's own words (#433): it opens to your buildings, or folds back. */
   showLess: 'Show less',
+  more: 'More',
+  less: 'Less',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
   confirm: (name: string, back: string) =>
@@ -335,7 +332,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     fuelAllBox,
   );
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
-  const body = el('div', { class: 'home-body' });
+  const body = el('div', { class: 'home-body', id: 'home-body' });
   const homeSheet = createBuildSheet();
   // The sheet's handle (#412), at the very top of the main view's sheet: a
   // tap opens or folds it, a swipe goes the finger's way. A finger or mouse
@@ -346,7 +343,12 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     type: 'button',
     class: 'home-handle',
     'data-testid': 'home-handle',
+    // The disclosure it opens and folds (#433).
+    'aria-controls': 'home-body',
   });
+  // Its word, next to the grip, so the way to your buildings is visible (#433).
+  const handleWord = el('span', { class: 'home-handle-word', 'aria-hidden': 'true' });
+  handle.append(handleWord);
   let pressY: number | null = null;
   let releasedAt = -Infinity;
   handle.addEventListener('pointerdown', (e) => {
@@ -661,6 +663,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       case 'idle': {
         handle.setAttribute('aria-expanded', String(sheetOpen));
         handle.setAttribute('aria-label', sheetOpen ? HOME_TEXT.showLess : HOME_TEXT.showMore);
+        handleWord.textContent = sheetOpen ? `${HOME_TEXT.less} ▾` : `${HOME_TEXT.more} ▴`;
         const chips = atHome(current).buildings.map((b) =>
           button(
             `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
@@ -698,12 +701,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         if (peek) {
           // The peek bar (#412): the squishies stay in view above it.
           const squishies =
-            current.squishies.length > 0 && (options.onSquishies || options.onCare)
+            current.squishies.length > 0 && options.onSquishies && mapId
               ? button(
                   HOME_TEXT.squishies,
                   () => {
-                    if (options.onSquishies && mapId) options.onSquishies(mapId);
-                    else setSheet(true);
+                    if (mapId) options.onSquishies?.(mapId);
                   },
                   { 'data-testid': 'home-squishies' },
                   true,

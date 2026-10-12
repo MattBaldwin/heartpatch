@@ -2,9 +2,12 @@ import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
+import { blend, fitHouse, kidPose } from './house-camera.js';
 import { HOUSE_BUDGET } from './house-config.js';
-import { sampleLevels } from './house-fixtures.js';
+import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { buildCottage } from './house-models.js';
+import { hasRoomBuilder } from './house-rooms.js';
+import type { HouseScene } from './house-scene.js';
 import { buildHouse, cost } from './house-test-scene.js';
 
 // NullEngine has no 2D canvas: a plain quad, under the real mesh's name so it's counted.
@@ -27,25 +30,56 @@ vi.mock('./house-textures.js', async () => {
  * residents and the Keeper, stays inside its draw calls and triangles,
  * counted on a NullEngine (plan §1c). house-shots records the real frames.
  */
+/** The iPhone the kid-height cases stand in for (CSS px, HUD bands). */
+const PHONE = { width: 390, height: 844, top: 80, bottom: 150 };
+
+/** The dollhouse (0), passing the front wall (0.75) and standing in the room (1). */
+const ZOOMS = [0, 0.75, 1] as const;
+
+/** Poses the camera `zoom` of the way from the dollhouse to kid height, as the screen does. */
+function poseAt(house: HouseScene, zoom: number): void {
+  const doll = fitHouse(house.bounds, PHONE);
+  house.setPose(blend(doll, kidPose(house.focusRoom!, PHONE), zoom), zoom);
+}
+
+/** Shell plus cast, plus the shadow pass when there is one (every caster draws once more). */
+function frameCost(scene: Scene, house: HouseScene): { drawCalls: number; triangles: number } {
+  scene.render();
+  const casters = scene.lights
+    .map((l) => l.getShadowGenerator()?.getShadowMap()?.renderList ?? [])
+    .flat()
+    .filter((m): m is Mesh => m instanceof Mesh);
+  const parts = [
+    cost(house.houseMeshes),
+    cost(
+      scene.meshes.filter(
+        (m): m is Mesh => m instanceof Mesh && /^(squishy-|keeper-)/.test(m.name),
+      ),
+    ),
+    cost(casters),
+  ];
+  return {
+    drawCalls: parts.reduce((n, c) => n + c.drawCalls, 0),
+    triangles: parts.reduce((n, c) => n + c.triangles, 0),
+  };
+}
+
 describe('house models: the low-tier budget', () => {
   const low = HOUSE_BUDGET.low;
 
   for (const level of sampleLevels()) {
-    it(`house level ${String(level)} fits the low tier`, () => {
-      const { scene, house } = buildHouse(level, 'low');
-      scene.render();
-      const shell = cost(house.houseMeshes);
-      const cast = cost(
-        scene.meshes.filter(
-          (m): m is Mesh => m instanceof Mesh && /^(squishy-|keeper-)/.test(m.name),
-        ),
-      );
-      expect(shell.drawCalls + cast.drawCalls).toBeLessThanOrEqual(low.drawCalls);
-      expect(shell.triangles + cast.triangles).toBeLessThanOrEqual(low.triangles);
-      expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(low.lights);
-      expect(house.stats.shadowMap).toBe(false);
-      scene.getEngine().dispose();
-    });
+    for (const zoom of ZOOMS) {
+      it(`house level ${String(level)} fits the low tier at zoom ${String(zoom)}`, () => {
+        const { scene, house } = buildHouse(level, 'low');
+        poseAt(house, zoom);
+        const frame = frameCost(scene, house);
+        expect(frame.drawCalls).toBeLessThanOrEqual(low.drawCalls);
+        expect(frame.triangles).toBeLessThanOrEqual(low.triangles);
+        expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(low.lights);
+        expect(house.stats.shadowMap).toBe(false);
+        scene.getEngine().dispose();
+      });
+    }
   }
 
   it('merges a room into a few meshes, not one per piece', () => {
@@ -55,31 +89,39 @@ describe('house models: the low-tier budget', () => {
     scene.getEngine().dispose();
   });
 
-  it('keeps the high tier inside its own caps, the cast and the shadow pass counted', () => {
-    for (const level of sampleLevels()) {
-      const { scene, house } = buildHouse(level, 'high');
-      scene.render();
-      const shell = cost(house.houseMeshes);
-      const cast = cost(
-        scene.meshes.filter(
-          (m): m is Mesh => m instanceof Mesh && /^(squishy-|keeper-)/.test(m.name),
-        ),
-      );
-      // Every shadow caster draws once more into the shadow map.
-      const casters = scene.lights
-        .map((l) => l.getShadowGenerator()?.getShadowMap()?.renderList ?? [])
-        .flat()
-        .filter((m): m is Mesh => m instanceof Mesh);
-      const shadow = cost(casters);
-      expect(shell.drawCalls + cast.drawCalls + shadow.drawCalls).toBeLessThanOrEqual(
-        HOUSE_BUDGET.high.drawCalls,
-      );
-      expect(shell.triangles + cast.triangles + shadow.triangles).toBeLessThanOrEqual(
-        HOUSE_BUDGET.high.triangles,
-      );
-      expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(
-        HOUSE_BUDGET.high.lights,
-      );
+  for (const level of sampleLevels()) {
+    for (const zoom of ZOOMS) {
+      it(`house level ${String(level)} keeps the high tier inside its caps at zoom ${String(zoom)}, the shadow pass counted`, () => {
+        const { scene, house } = buildHouse(level, 'high');
+        poseAt(house, zoom);
+        const frame = frameCost(scene, house);
+        expect(frame.drawCalls).toBeLessThanOrEqual(HOUSE_BUDGET.high.drawCalls);
+        expect(frame.triangles).toBeLessThanOrEqual(HOUSE_BUDGET.high.triangles);
+        expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(
+          HOUSE_BUDGET.high.lights,
+        );
+        scene.getEngine().dispose();
+      });
+    }
+  }
+
+  it('furnishes every room with its own builder, so the budget cases count the real rooms (B3)', () => {
+    const top = sampleLevels().at(-1)!;
+    for (const room of sampleHouse(top).view.rooms) expect(hasRoomBuilder(room.look)).toBe(true);
+  });
+
+  it('merges glowing bits into one mesh per floor, not one per room, at every tier', () => {
+    const top = sampleLevels().at(-1)!;
+    for (const tier of ['low', 'medium', 'high'] as const) {
+      const { scene, house } = buildHouse(top, tier);
+      const glows = house.houseMeshes.filter((m) => /^house-glow-f\d+$/.test(m.name));
+      const floors = new Set(sampleHouse(top).view.rooms.map((r) => r.layout.floor));
+      expect(glows.length).toBeLessThanOrEqual(floors.size);
+      const rooms = sampleHouse(top).view.rooms.map((r) => `house-${r.id}-glow`);
+      expect(house.houseMeshes.filter((m) => rooms.includes(m.name))).toEqual([]);
+      // Low: nothing upstairs glows (the Kitchen's stove fire is solid), so floor 1 draws no glow.
+      if (tier === 'low')
+        expect(glows.filter((m) => m.isEnabled()).map((m) => m.name)).toEqual(['house-glow-f0']);
       scene.getEngine().dispose();
     }
   });

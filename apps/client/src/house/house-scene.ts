@@ -1,5 +1,6 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { Ray } from '@babylonjs/core/Culling/ray';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Constants } from '@babylonjs/core/Engines/constants';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -38,12 +39,13 @@ import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { lodFor } from '../procedural/motion.js';
 import type { SquishySpecies } from '../procedural/params.js';
 import { SquishyField } from '../procedural/squishy-field.js';
-import { project, type HousePose } from './house-camera.js';
+import { frontAlpha, project, wallFade, type FadeWall, type HousePose } from './house-camera.js';
 import {
   HOUSE_BLANKETS,
   HOUSE_CAST,
   HOUSE_GLIDE,
   HOUSE_GRID,
+  HOUSE_KID,
   HOUSE_LIGHT,
   HOUSE_OUTSIDE,
   HOUSE_PALETTE,
@@ -65,6 +67,7 @@ import {
   floorPlanks,
   frontYard,
   gableRoof,
+  roofInside,
   TREE_TOP,
   treeParts,
   signBoard,
@@ -122,10 +125,33 @@ export interface HouseSceneStats {
   readonly pitch: number;
   /** How far the roof has lifted off (1: gone). */
   readonly roof: number;
+  /**
+   * The front walls past the dollhouse (null in the dollhouse, which has
+   * none): the most see-through one's alpha, a faint veil while the camera
+   * passes it and 0 (not drawn) once you stand in the room.
+   */
+  readonly frontWallAlpha: number | null;
+  /** Residents drawn at the hero detail (low tier: the nearest ones at kid height, `HOUSE_CAST.lowHeroes`). */
+  readonly heroes: number;
 }
 
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
 const CAST = /^(squishy-|keeper-)(?!.*shadow)/;
+
+/**
+ * An upstairs floor's underside, one board under its planks (merged with
+ * them, so no extra draw): kid height looks up at it from the room below
+ * and sees no sky through the gaps between the boards.
+ */
+function underside(scene: Scene, room: RoomBox, z0: number): Mesh {
+  return box(
+    scene,
+    // TUNE: a thin board just under the 0.16 m planks.
+    [room.x1 - room.x0, 0.02, room.z1 - z0],
+    [(room.x0 + room.x1) / 2, room.y0 - 0.17, (z0 + room.z1) / 2],
+    HOUSE_PALETTE.planks[2],
+  );
+}
 
 interface RoomParts {
   readonly box: RoomBox;
@@ -161,10 +187,22 @@ export class HouseScene {
   readonly #pools: Matrix[] = [];
   readonly #requests: { kind: 'fire' | 'lamp'; at: Vector3 }[] = [];
   readonly #seeds: Matrix[] = [];
+  /** Every room's glowing bits, by floor: one glow mesh per floor, not per room (draw calls, B3). */
+  readonly #glowByFloor = new Map<number, Mesh[]>();
   #signAt: { x: number; y: number; z: number; width: number } | null = null;
   readonly #instrumentation: SceneInstrumentation;
   readonly #rooms: number;
   readonly #lookAt = new Vector3();
+  /** Front walls (off in the dollhouse, faded at kid height) and the porch you stand on. */
+  readonly #fronts: { room: string; mesh: Mesh; material: PBRMaterial; wall: FadeWall }[] = [];
+  readonly #porch: { room: string; mesh: Mesh }[] = [];
+  /** The roof seen from inside, at kid height only (the focus room's alone). */
+  readonly #ceilings: { room: string; mesh: Mesh }[] = [];
+  #frontAlpha: number | null = null;
+  /** The room kid height walks into (the Keeper's room), its floor's middle at eye level. */
+  #focus: { id: string; room: HouseBounds; point: Vector3 } | null = null;
+  /** Low tier: the nearest residents at kid height drawn smooth (owner check #4), their own field. */
+  #hero: SquishyField | null = null;
   #meshCount = 0;
   readonly #trees: { x: number; z: number; s: number; hex: string }[] = [];
   #treeMeshes: { trunks: Mesh; crowns: Mesh } | null = null;
@@ -204,7 +242,7 @@ export class HouseScene {
     this.#fill.specular = this.#look.specular
       ? linear(HOUSE_LIGHT.fill.color).scale(HOUSE_LIGHT.fill.specular)
       : Color3.Black();
-    this.#fill.intensity = HOUSE_LIGHT.fill.intensity;
+    this.#fill.intensity = this.#look.fill;
     this.#fill.includedOnlyMeshes = [];
     // The fields make their meshes as they first draw (in beforeRender):
     // sort any new ones before the camera renders, every frame the mesh
@@ -230,15 +268,20 @@ export class HouseScene {
       const frontOpen = runs.some((r) => r.room === box.id && r.front && r.exterior);
       const z0 = frontOpen ? box.z0 - HOUSE_GRID.frontLip : box.z0;
       parts.floor.push(...floorPlanks(scene, box.x0, z0, box.x1 - box.x0, box.z1 - z0, box.y0));
+      if (box.y0 > 0) parts.floor.push(underside(scene, box, z0));
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
       this.#mergeRoom(parts);
+    }
+    for (const [floor, list] of this.#glowByFloor) {
+      this.#static(`house-glow-f${String(floor)}`, list, this.#glow, false);
     }
     this.#buildBeds();
     this.#buildSeeds();
     this.#buildDecals(low);
     this.#buildSign(options.signText);
     this.#roof = this.#buildRoof(rooms, runs);
+    this.#buildCeilings(rooms);
     this.#lightRequests(low);
 
     this.#squishies = new SquishyField(scene, {
@@ -281,9 +324,17 @@ export class HouseScene {
     };
   }
 
-  /** Where the camera is (the screen's pose: the glide, the dollhouse, a pinch). */
-  setPose(pose: HousePose): void {
+  /**
+   * Where the camera is (the screen's pose: the glide, the dollhouse, a
+   * pinch or Walk in) and how far toward kid height it has come (0
+   * dollhouse, 1 kid height): the open front walls and the porch come in
+   * past `frontFrom`, faded where they stand in the way.
+   */
+  setPose(pose: HousePose, zoom = 0): void {
     this.#pose = pose;
+    this.#fadeFronts(pose, zoom);
+    // Hero detail only once they're big on screen: the dollhouse is near the low cap already.
+    this.#hero?.setLod(zoom >= HOUSE_KID.frontFrom ? 'high' : this.#squishies.lod);
     // The fill comes from just above the camera, so every face is lit.
     const f = new Vector3(
       pose.target.x - pose.eye.x,
@@ -318,10 +369,11 @@ export class HouseScene {
       const top = project(frame.pose, frame.aspect, { x: t.x, y: TREE_TOP * t.s, z: t.z });
       const foot = project(frame.pose, frame.aspect, { x: t.x, y: -0.3, z: t.z });
       if (foot.depth <= 0) return false;
-      const footIn = foot.y < 1 && Math.abs(foot.x) < 1.1;
-      const cut = top.y > 0.97 && footIn;
-      const underBar = top.y > frame.topBar && footIn;
-      return !cut && !underBar;
+      // Whole in the frame below the top bar, or wholly past its top edge:
+      // never a trunk or a crown cut by an edge (render check, PR B2).
+      const whole = top.y < Math.min(0.97, frame.topBar) && Math.abs(foot.x) < 1.1;
+      const past = foot.y > 1.05;
+      return whole || past;
     });
     const matrices = new Float32Array(Math.max(1, kept.length) * 16);
     const colors = new Float32Array(Math.max(1, kept.length) * 4);
@@ -337,6 +389,39 @@ export class HouseScene {
       mesh.setEnabled(kept.length > 0);
     }
     meshes.crowns.thinInstanceSetBuffer('color', colors, 4, false);
+  }
+
+  /**
+   * Kid height draws only what the focus room's frame needs (the draw and
+   * triangle caps): that room's porch, ceiling and front walls, plus any
+   * other front wall standing in the line of sight (not on the low tier:
+   * those only flash a faint veil on the way in, and the draw is the cap's
+   * last). Every other room stays a dollhouse cutaway, out of frame anyway.
+   */
+  #fadeFronts(pose: HousePose, zoom: number): void {
+    const focus = zoom >= HOUSE_KID.frontFrom ? this.#focus : null;
+    let least: number | null = null;
+    for (const f of this.#fronts) {
+      const fade = focus ? wallFade(pose.eye, focus.point, f.wall) : 1;
+      const other = focus !== null && f.room !== focus.id;
+      if (!focus || (other && (fade >= 1 || this.#tier === 'low'))) {
+        f.mesh.setEnabled(false);
+        continue;
+      }
+      const alpha = frontAlpha(fade, zoom);
+      f.material.alpha = alpha;
+      // Gone means not drawn at all: no veil, no seams at the door's edges.
+      f.mesh.setEnabled(alpha > 0.001);
+      least = least === null ? alpha : Math.min(least, alpha);
+    }
+    for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
+    for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
+    this.#frontAlpha = least;
+  }
+
+  /** The room kid height walks into, as a box (the camera takes only that). */
+  get focusRoom(): HouseBounds | null {
+    return this.#focus?.room ?? null;
   }
 
   /** Squishy and Keeper meshes take the neutral fill and none of the warm lights. */
@@ -382,6 +467,8 @@ export class HouseScene {
       triangles: activeTriangles(this.#scene),
       pitch: Math.round(pitch * 10) / 10,
       roof: this.#roofLift,
+      frontWallAlpha: this.#frontAlpha,
+      heroes: this.#hero?.lod === 'high' ? this.#hero.handles.length : 0,
     };
   }
 
@@ -393,17 +480,18 @@ export class HouseScene {
   faceReport(): { visible: number; total: number } {
     const scene = this.#scene;
     const camera = scene.activeCamera;
-    const handles = this.#squishies.handles;
+    const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
+    const handles = fields.flatMap((f) => f.handles.map((h) => ({ f, h })));
     if (!camera) return { visible: 0, total: handles.length };
     const engine = scene.getEngine();
     const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
     const eye = camera.globalPosition;
     const solid = new Set<AbstractMesh>(
-      this.#house.filter((m) => !/(sky|lawn|pools|contact|sign|panes)/.test(m.name)),
+      this.#house.filter((m) => !/(sky|lawn|pools|contact|sign|panes|wall-front)/.test(m.name)),
     );
     let visible = 0;
-    for (const handle of handles) {
-      const centre = this.#squishies.centre(handle);
+    for (const { f, h } of handles) {
+      const centre = f.centre(h);
       if (!centre) continue;
       const toEye = eye.subtract(centre).normalize();
       const face = centre.add(toEye.scale(0.3 * HOUSE_CAST.squishyScale));
@@ -429,6 +517,7 @@ export class HouseScene {
 
   dispose(): void {
     this.#squishies.dispose();
+    this.#hero?.dispose();
     this.#keepers.dispose();
     this.#instrumentation.dispose();
   }
@@ -522,6 +611,7 @@ export class HouseScene {
     return {
       scene,
       box: parts.box,
+      tier: this.#tier,
       solid: (list) => parts.solid.push(...list),
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {
@@ -558,13 +648,15 @@ export class HouseScene {
    * outer walls facing the camera are off and the inner ones cut low.
    */
   #wall(parts: RoomParts, run: WallRun): void {
-    if (run.front && run.exterior) return;
     const scene = this.#scene;
     const { wall: thick, cut } = HOUSE_GRID;
-    const height = run.front ? cut : run.height;
+    // The open front: off in the dollhouse, full height and faded at kid height.
+    const open = run.front && run.exterior;
+    const height = run.front && !open ? cut : run.height;
     const length = run.to - run.from;
     const out = run.side === 'north' || run.side === 'east' ? 1 : -1;
     const holes = [...run.doors, ...run.windows];
+    const panesBefore = parts.panes.length;
     const place = (list: Mesh[], n: number): Mesh[] => {
       for (const p of list) {
         const u = p.position.x;
@@ -620,18 +712,72 @@ export class HouseScene {
       pane.position.set(win.u, win.y, 0);
       parts.panes.push(...place([pane], out * thick * 0.3));
     }
+    if (open) {
+      this.#frontWall(parts.box.id, run, list, parts.panes.splice(panesBefore));
+      return;
+    }
     const key = run.side;
     parts.walls.set(key, [...(parts.walls.get(key) ?? []), ...list]);
   }
 
-  /** A room's pieces as a few meshes: walls by side (they fade one by one at kid height), then one per material. */
+  /**
+   * An open front wall as its own see-through mesh: hidden in the dollhouse,
+   * shown past `frontFrom` and faded where it stands between the camera and
+   * the room, with a soft foot (it fades to nothing at the floor). Also the
+   * porch in front of it, where kid height stands.
+   */
+  #frontWall(id: string, run: WallRun, list: Mesh[], panes: Mesh[]): void {
+    for (const p of panes) p.dispose();
+    const mesh = merged(`house-${id}-wall-front`, list);
+    const pos = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
+    const colors = mesh.getVerticesData(VertexBuffer.ColorKind) ?? [];
+    for (let i = 0; i < pos.length / 3; i++) {
+      const t = Math.min(1, Math.max(0, ((pos[i * 3 + 1] ?? 0) - run.y0) / HOUSE_KID.softFoot));
+      colors[i * 4 + 3] = t * t * (3 - 2 * t);
+    }
+    mesh.setVerticesData(VertexBuffer.ColorKind, colors);
+    mesh.hasVertexAlpha = true;
+    const material = this.#vinyl.clone(`house-${id}-wall-front`);
+    material.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+    material.alpha = HOUSE_KID.fadedAlpha;
+    mesh.material = material;
+    mesh.alwaysSelectAsActiveMesh = false;
+    mesh.isPickable = false;
+    mesh.setEnabled(false);
+    this.#house.push(mesh);
+    this.#fronts.push({ room: id, mesh, material, wall: run });
+    if (run.y0 === 0) {
+      const z1 = run.at - HOUSE_GRID.frontLip;
+      const planks = floorPlanks(
+        this.#scene,
+        run.from - 0.6,
+        z1 - HOUSE_KID.porch,
+        run.to - run.from + 1.2,
+        HOUSE_KID.porch,
+        0,
+      );
+      const porch = merged(`house-${id}-porch`, planks);
+      porch.material = this.#matte;
+      porch.setEnabled(false);
+      this.#house.push(porch);
+      this.#porch.push({ room: id, mesh: porch });
+    }
+  }
+
+  /**
+   * A room's pieces as a few meshes: walls by side (they fade one by one at
+   * kid height), then one per material; its glowing bits wait to merge with
+   * the rest of its floor's.
+   */
   #mergeRoom(parts: RoomParts): void {
     const id = parts.box.id;
     for (const [side, list] of parts.walls)
       this.#static(`house-${id}-wall-${side}`, list, this.#vinyl, true);
     this.#static(`house-${id}-floor`, parts.floor, this.#matte, false).receiveShadows = true;
     this.#static(`house-${id}-solid`, parts.solid, this.#vinyl, true);
-    this.#static(`house-${id}-glow`, parts.glow, this.#glow, false);
+    const glow = this.#glowByFloor.get(parts.box.floor) ?? [];
+    glow.push(...parts.glow);
+    this.#glowByFloor.set(parts.box.floor, glow);
     if (parts.panes.length > 0)
       this.#static(`house-${id}-panes`, parts.panes, duskPaneMaterial(this.#scene), false);
   }
@@ -736,6 +882,40 @@ export class HouseScene {
     plane.position.set(at.x, at.y, at.z - 0.05);
     plane.isPickable = false;
     this.#house.push(plane);
+  }
+
+  /** The roof seen from inside over every room with nothing above it (kid height only). */
+  #buildCeilings(rooms: readonly RoomBox[]): void {
+    for (const r of rooms) {
+      if (
+        rooms.some(
+          (o) =>
+            o !== r && o.y0 >= r.y1 && o.x0 < r.x1 && o.x1 > r.x0 && o.z0 < r.z1 && o.z1 > r.z0,
+        )
+      )
+        continue;
+      // It reaches out over the porch, so kid height (standing out there) sees no sky above.
+      const parts = roofInside(
+        this.#scene,
+        r.x0,
+        r.z0,
+        r.x1 - r.x0,
+        r.z1 - r.z0,
+        r.y1,
+        HOUSE_KID.minStandBack + 0.6,
+      );
+      for (const [name, list, material] of [
+        [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
+        [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],
+      ] as const) {
+        const mesh = merged(name, list);
+        mesh.material = material;
+        mesh.alwaysSelectAsActiveMesh = false;
+        mesh.setEnabled(false);
+        this.#house.push(mesh);
+        this.#ceilings.push({ room: r.id, mesh });
+      }
+    }
   }
 
   /** A gable roof over every room with nothing above it, for the entry glide to lift away. */
@@ -859,6 +1039,36 @@ export class HouseScene {
       return faceYaw(camera.x - spot.x, camera.z - spot.z) + turn;
     };
     let n = 0;
+    const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
+    if (keeperRoom) {
+      const k = roomBox(keeperRoom);
+      this.#focus = {
+        id: keeperRoom.id,
+        room: { minX: k.x0, maxX: k.x1, minY: k.y0, maxY: k.y1, minZ: k.z0, maxZ: k.z1 },
+        point: new Vector3((k.x0 + k.x1) / 2, k.y0 + HOUSE_KID.eyeHeight, (k.z0 + k.z1) / 2),
+      };
+    }
+    // Low tier: the residents nearest the kid-height camera in that room
+    // (`HOUSE_CAST.lowHeroes`) are the ones big on screen, so they alone are
+    // drawn smooth (owner check #4), from `frontFrom` on (see setPose).
+    const heroes = new Set<string>();
+    if (this.#tier === 'low' && keeperRoom) {
+      const plan = plans.get(keeperRoom.id);
+      keeperRoom.residents
+        .filter((r) => r.away === null)
+        .map((r, i) => ({ id: r.squishyId, z: plan?.residents[i]?.z ?? Infinity }))
+        .filter((r) => options.cast.has(r.id))
+        .sort((a, b) => a.z - b.z)
+        .slice(0, HOUSE_CAST.lowHeroes)
+        .forEach((r) => heroes.add(r.id));
+      if (heroes.size > 0) {
+        this.#hero = new SquishyField(this.#scene, {
+          registry: options.registry,
+          lod: this.#squishies.lod,
+          breathing: false,
+        });
+      }
+    }
     for (const room of view.rooms) {
       const plan = plans.get(room.id);
       const box = roomBox(room);
@@ -867,19 +1077,19 @@ export class HouseScene {
         const member = options.cast.get(resident.squishyId);
         const spot = plan?.residents[i] ?? { x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 };
         if (!member) return;
-        const handle = this.#squishies.add(member.species, resident.squishyId, {
+        const field = heroes.has(resident.squishyId) && this.#hero ? this.#hero : this.#squishies;
+        const handle = field.add(member.species, resident.squishyId, {
           x: spot.x,
           z: spot.z,
           y: box.y0,
           yaw: facing(spot, n),
           scale: HOUSE_CAST.squishyScale,
         });
-        this.#squishies.setAccessory(handle, accessoryItem(member.accessory));
+        field.setAccessory(handle, accessoryItem(member.accessory));
         n += 1;
       });
     }
     this.#residents = n;
-    const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
     if (!keeperRoom) return;
     const box = roomBox(keeperRoom);
     const spot = plans.get(keeperRoom.id)?.keeper ?? { x: (box.x0 + box.x1) / 2, z: box.z0 + 0.8 };

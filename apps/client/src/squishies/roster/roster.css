@@ -47,6 +47,11 @@
   font-size: 22px;
 }
 
+/* Focus lands here to start VoiceOver reading (#433); no ring for it. */
+.roster-sheet h2:focus {
+  outline: none;
+}
+
 .roster-count {
   flex: 1;
   margin: 4px 0 0 10px;
@@ -271,6 +276,12 @@
 .roster-needs {
   background: #ff8fb1;
   color: #4a1f33;
+}
+
+/* A resident of the Keeper's house (#381): just the little house. */
+.roster-resident {
+  padding: 3px 8px;
+  background: #ffefc9;
 }
 
 .roster-status-team {

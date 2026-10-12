@@ -1,6 +1,6 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
-import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
+import { HOUSE_DATA, roomsAt, type HouseRoomLook } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { roomBox } from './house-layout.js';
 import {
@@ -18,6 +18,7 @@ function kit(scene: Scene, level: number, index: number) {
   const k: RoomKit = {
     scene,
     box: roomBox(room),
+    tier: 'low',
     solid: (parts) => (made.solid += parts.length),
     glow: (parts) => (made.glow += parts.length),
     bed: () => (made.beds += 1),
@@ -36,11 +37,11 @@ afterEach(() => {
 });
 
 describe('room builders', () => {
-  it('registers the Snug; other looks draw as the plain room until they get theirs', () => {
+  it('registers the Snug; a look with no builder from a newer server draws as the plain room', () => {
     scene = new Scene(new NullEngine());
     expect(hasRoomBuilder('snug')).toBe(true);
     expect(roomBuilder('snug')).toBe(snugRoom);
-    expect(roomBuilder('heart-hall')).toBe(plainRoom);
+    expect(roomBuilder('nook' as HouseRoomLook)).toBe(plainRoom);
   });
 
   it('lets a look plug in by registering a builder', () => {

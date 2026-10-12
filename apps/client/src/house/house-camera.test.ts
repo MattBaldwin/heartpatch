@@ -10,10 +10,15 @@ import {
   project,
   roofAt,
   safeArea,
-  zoomPose,
+  blend,
+  frontAlpha,
+  kidPose,
+  wallFade,
+  walkedIn,
+  walkZoom,
   type HouseViewport,
 } from './house-camera.js';
-import { HOUSE_CAMERA, HOUSE_GLIDE } from './house-config.js';
+import { HOUSE_CAMERA, HOUSE_GLIDE, HOUSE_KID } from './house-config.js';
 import type { HouseBounds } from './house-layout.js';
 
 const snug: HouseBounds = { minX: -0.24, maxX: 5.04, minY: 0, maxY: 3, minZ: -0.35, maxZ: 5.04 };
@@ -83,19 +88,95 @@ describe('fitHouse', () => {
   });
 });
 
-describe('dollhouse zoom', () => {
-  const pose = fitHouse(snug, iphone);
-  const dist = (p: typeof pose) =>
-    Math.hypot(p.eye.x - p.target.x, p.eye.y - p.target.y, p.eye.z - p.target.z);
+describe('walking in: kid height', () => {
+  const room: HouseBounds = { minX: 0, maxX: 4.8, minY: 0, maxY: 3, minZ: 0, maxZ: 4.8 };
+  const doll = fitHouse(snug, iphone);
+  const kid = kidPose(room, iphone);
 
-  it('moves in along the same line, no closer than `closest`, and never out past the dollhouse', () => {
-    expect(dist(zoomPose(pose, 0))).toBeCloseTo(dist(pose));
-    expect(dist(zoomPose(pose, 1))).toBeCloseTo(dist(pose) * HOUSE_CAMERA.closest);
-    expect(dist(zoomPose(pose, 5))).toBeCloseTo(dist(pose) * HOUSE_CAMERA.closest);
-    expect(dist(zoomPose(pose, -1))).toBeCloseTo(dist(pose));
-    expect(zoomPose(pose, 0.5).pitch).toBe(pose.pitch);
+  it('stands at a small squishy’s eye level, tilted up 3–4°, the frame no wider than the back wall', () => {
+    expect(kid.eye.y).toBeCloseTo(HOUSE_KID.eyeHeight);
+    expect(-deg(kid.pitch)).toBeGreaterThanOrEqual(3);
+    expect(-deg(kid.pitch)).toBeLessThanOrEqual(4);
+    expect(kid.eye.z).toBeLessThan(room.minZ); // back from the open front
+    const aspect = iphone.width / iphone.height;
+    // Never wider than the back wall: nothing past the side walls in the frame.
+    // (the wall's own thickness, `sideRoom`, may show at the edges).
+    for (const x of [room.minX - HOUSE_KID.sideRoom, room.maxX + HOUSE_KID.sideRoom]) {
+      const p = project(kid, aspect, { x, y: kid.eye.y, z: room.maxZ });
+      expect(Math.abs(p.x)).toBeGreaterThanOrEqual(0.99);
+    }
+    // A tall phone caps its vertical view (less floor in the frame).
+    expect(deg(kid.fov)).toBeLessThanOrEqual(HOUSE_KID.maxVerticalFov + 1e-9);
+    // Only the room's box: a room upstairs is the same pose, a storey up.
+    const up = kidPose({ ...room, minY: 3, maxY: 6 }, iphone);
+    expect(up.eye.y - kid.eye.y).toBeCloseTo(3);
   });
 
+  it('blends from the dollhouse at 0 to kid height at 1', () => {
+    const at0 = blend(doll, kid, 0);
+    const at1 = blend(doll, kid, 1);
+    for (const k of ['x', 'y', 'z'] as const) {
+      expect(at0.eye[k]).toBeCloseTo(doll.eye[k]);
+      expect(at1.eye[k]).toBeCloseTo(kid.eye[k]);
+    }
+    expect(deg(at1.pitch)).toBeLessThan(15);
+  });
+
+  it('keeps looking down through most of the zoom, then eases to kid height over the last part', () => {
+    const early = blend(doll, kid, HOUSE_KID.pitchFrom * 0.9);
+    expect(early.pitch).toBeCloseTo(doll.pitch);
+    const late = blend(doll, kid, 0.85);
+    expect(late.pitch).toBeLessThan(doll.pitch);
+    expect(late.pitch).toBeGreaterThan(kid.pitch);
+    let last = Infinity;
+    for (let z = 0; z <= 1.0001; z += 0.1) {
+      const p = blend(doll, kid, z);
+      const d = Math.hypot(p.eye.x - p.target.x, p.eye.y - p.target.y, p.eye.z - p.target.z);
+      expect(d).toBeLessThanOrEqual(last + 1e-9); // always moving in
+      last = d;
+    }
+  });
+
+  it('fades only the walls between the camera and the room', () => {
+    const focus = { x: 2.4, y: 0.8, z: 2.4 };
+    const front = { axis: 'x' as const, at: 0, from: 0, to: 4.8, y0: 0, height: 3 };
+    const back = { axis: 'x' as const, at: 4.8, from: 0, to: 4.8, y0: 0, height: 3 };
+    const left = { axis: 'z' as const, at: 0, from: 0, to: 4.8, y0: 0, height: 3 };
+    expect(wallFade(kid.eye, focus, front)).toBe(HOUSE_KID.fadedAlpha);
+    expect(wallFade(kid.eye, focus, back)).toBe(1);
+    expect(wallFade(kid.eye, focus, left)).toBe(1);
+    // From high above the dollhouse the line of sight passes over the front wall.
+    expect(wallFade(doll.eye, focus, front)).toBe(1);
+    // An upstairs wall isn't in the way of a ground-floor look.
+    expect(wallFade(kid.eye, focus, { ...front, y0: 3 })).toBe(1);
+  });
+
+  it('takes the wall in the way away at rest at kid height, veiling it only on the way', () => {
+    const focus = { x: 2.4, y: 0.8, z: 2.4 };
+    const front = { axis: 'x' as const, at: 0, from: 0, to: 4.8, y0: 0, height: 3 };
+    const fade = wallFade(kid.eye, focus, front);
+    expect(fade).toBe(HOUSE_KID.fadedAlpha);
+    expect(frontAlpha(fade, 1)).toBe(0); // at rest: gone
+    expect(frontAlpha(fade, 0)).toBe(0); // the dollhouse: none
+    const passing = frontAlpha(fade, 0.75);
+    expect(passing).toBeGreaterThan(0);
+    expect(passing).toBeLessThanOrEqual(HOUSE_KID.fadedAlpha);
+    expect(frontAlpha(1, 1)).toBe(1); // a wall not in the way stays solid
+  });
+
+  it('walks in and out over a beat, or cuts with reduced motion', () => {
+    expect(walkZoom(0, 1, 0, false)).toBe(0);
+    expect(walkZoom(0, 1, HOUSE_KID.walkSeconds, false)).toBe(1);
+    const mid = walkZoom(0, 1, HOUSE_KID.walkSeconds / 2, false);
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+    expect(walkZoom(1, 0, 0, true)).toBe(0);
+    expect(walkedIn(0.2)).toBe(false);
+    expect(walkedIn(1)).toBe(true);
+  });
+});
+
+describe('pinch', () => {
   it('pinches by the finger spread, and a pinch out past the dollhouse goes home', () => {
     expect(pinchZoom(0, 100, 100)).toBe(0);
     expect(pinchZoom(0, 100, 200)).toBeGreaterThan(0);

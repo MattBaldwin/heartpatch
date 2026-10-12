@@ -30,6 +30,8 @@ describe('house view', () => {
       HOUSE_TEXT.cardLine(2, 4),
       HOUSE_TEXT.goInside,
       HOUSE_TEXT.back,
+      HOUSE_TEXT.walkIn,
+      HOUSE_TEXT.stepOut,
       HOUSE_TEXT.pill(3),
       HOUSE_TEXT.sign('Mia'),
       HOUSE_TEXT.room('The Snug', 1),

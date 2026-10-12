@@ -137,9 +137,16 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await sheet.getByTestId('home-squishies').tap();
   await slowExpect(page.getByTestId('roster')).toBeVisible();
   await closeRoster(page);
+  // The handle says what it does (#433): "More" folded, "Less" open, and
+  // names the area it opens and folds.
+  const handle = sheet.getByTestId('home-handle');
+  await expect(handle).toHaveAttribute('aria-controls', 'home-body');
+  await expect(page.locator('#home-body')).toHaveCount(1);
+  await expect(handle).toContainText('More');
   // The handle opens the full sheet and folds it back.
   await sheet.getByTestId('home-handle').tap();
   await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(handle).toContainText('Less');
   await sheet.getByTestId('home-handle').tap();
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
   // A swipe up on the handle opens it, a swipe down folds it.

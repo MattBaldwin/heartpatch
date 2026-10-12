@@ -58,12 +58,14 @@ export interface HouseTierLook {
   readonly clearCoat: boolean;
   /** Trees round the clearing. */
   readonly trees: number;
+  /** The squishy-only fill's strength: higher without bloom and the window light. */
+  readonly fill: number;
 }
 
 export const HOUSE_TIERS: Readonly<Record<QualityTier, HouseTierLook>> = {
-  high: { lights: 4, shadowMap: 2048, specular: true, clearCoat: true, trees: 30 }, // TUNE
-  medium: { lights: 3, shadowMap: 1024, specular: true, clearCoat: true, trees: 20 }, // TUNE
-  low: { lights: 2, shadowMap: 0, specular: false, clearCoat: false, trees: 12 }, // TUNE
+  high: { lights: 4, shadowMap: 2048, specular: true, clearCoat: true, trees: 30, fill: 2.6 }, // TUNE
+  medium: { lights: 3, shadowMap: 1024, specular: true, clearCoat: true, trees: 20, fill: 2.8 }, // TUNE
+  low: { lights: 2, shadowMap: 0, specular: false, clearCoat: false, trees: 12, fill: 3.2 }, // TUNE
 };
 
 /**
@@ -100,7 +102,7 @@ export const HOUSE_LIGHT = {
    * a neutral light on squishies and the Keeper alone, while every warm
    * light leaves them out, so Puddlepuff's pale belly stays pale.
    */
-  fill: { intensity: 2.1, color: '#fff7f0', specular: 0.35 }, // TUNE
+  fill: { color: '#ffffff', specular: 0.35 }, // TUNE: neutral, so Puddlepuff's belly reads #e8f6ff (owner check #4)
 } as const;
 
 /** Blanket colours, bed by bed (sRGB). */
@@ -129,6 +131,12 @@ export const HOUSE_CAST = {
   keeperScale: 0.8, // TUNE
   /** Leans back so its face looks up at the dollhouse camera (render check: hair hid it at 56°). */
   keeperLean: 0.24, // TUNE
+  /**
+   * Low tier: this many residents nearest the kid-height camera in its room
+   * are drawn at the smooth detail, so the big ones on screen never look
+   * faceted (owner check #4). The rest keep the low detail.
+   */
+  lowHeroes: 2, // TUNE: the Snug's two beds; about 10k triangles each
   /** At most this far off facing the camera, radians. */
   faceTurn: 0.3, // TUNE
 } as const;
@@ -138,19 +146,53 @@ export const HOUSE_CAMERA = {
   /** A viewport narrower than this (width / height) is a portrait phone. */
   phoneAspect: 0.62, // TUNE
   /** Tilt down, degrees: portrait phones look down steeper so a tall frame fills. */
-  pitch: { phone: 56, wide: 48 }, // TUNE: plan 52–58° phones, 40–52° iPad/landscape
+  pitch: { phone: 58, wide: 48 }, // TUNE: plan 52–58° phones (steepest: a tall frame fills with house, owner check #1), 40–52° iPad/landscape
   /** Vertical field of view, degrees. */
   fov: { phone: 50, wide: 44 }, // TUNE
   /** Space kept round the house inside the safe area, CSS px. */
   margin: 10, // TUNE
-  /** Pinch zoom in the dollhouse: closest, as a share of the fitted distance. */
-  closest: 0.6, // TUNE
   /** Pinch out past the dollhouse by this much (zoom units) and you're back home. */
   exitOvershoot: 0.18, // TUNE
   /** A mouse wheel's travel (px; a notch is about 100) that moves zoom by 1. */
   wheelPerZoom: 400, // TUNE
   /** How much pinch (log of the finger spread ratio) moves zoom by 1. */
   pinchPerZoom: 0.9, // TUNE
+} as const;
+
+/** Kid height (`kidPose`, `blend`, `wallFade`): walking into a room. */
+export const HOUSE_KID = {
+  /** Eye height above the room's floor: a small squishy's eye level. */
+  eyeHeight: 0.83, // TUNE: the approved captures
+  /** Tilted up this much, degrees, so faces sit just under the middle (owner check #2: 3–4°). */
+  tiltUp: 3.5, // TUNE
+  /** Horizontal view angle, degrees: the room's walls and its residents across the frame. */
+  horizontalFov: 44, // TUNE
+  /** A tall phone's vertical view angle is capped here, degrees (less floor in view). */
+  maxVerticalFov: 72, // TUNE: subjects big on a tall phone (render check: rafters and floor took half the frame)
+  /** Kid height stands this far in front of the room's front, metres. */
+  minStandBack: 2.9, // TUNE: residents big in the frame, the back wall still in view
+  /** Room either side of the back wall in the frame, metres. */
+  sideRoom: 0.3, // TUNE
+  /** How far ahead the camera looks, metres (the pose's target). */
+  lookAhead: 5, // TUNE
+  /** The pitch holds the dollhouse look until this much of the zoom. */
+  pitchFrom: 0.6, // TUNE: plan "the last 40%"
+  /** A wall between the camera and the room, faded. */
+  fadedAlpha: 0.15, // TUNE: the render check's ~0.15
+  /** A wall this close to the line of sight still fades, metres. */
+  fadeMargin: 0.4, // TUNE
+  /** The front walls appear (faded) past this much zoom; the dollhouse has none. */
+  frontFrom: 0.55, // TUNE
+  /** A wall in the way is gone (alpha 0, not drawn) from this much zoom: none at rest at kid height. */
+  clearFrom: 0.85, // TUNE
+  /** How tall the soft foot is: a faded wall fades to nothing at the floor over this, metres. */
+  softFoot: 1.2, // TUNE
+  /** Past this much zoom you count as walked in: the button says Step out. */
+  walkedIn: 0.5, // TUNE
+  /** Walk in / Step out takes this long, seconds. */
+  walkSeconds: 1.2, // TUNE
+  /** The porch you stand on at kid height, outside the open front, metres deep. */
+  porch: 5.4, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */
@@ -172,4 +214,67 @@ export const HOUSE_OUTSIDE = {
   /** The dollhouse haze starts this far past the house and is thick here. */
   hazeFrom: 4, // TUNE
   hazeTo: 24, // TUNE
+} as const;
+
+/**
+ * The grown rooms (#381 B3): the Playroom, the Kitchen loft and the Heart
+ * Hall. Their pieces are boxes and low-segment rounds so the whole top-level
+ * house stays inside the low tier's triangles; every piece merges into its
+ * room's one solid mesh (and one glow mesh), so furniture adds no draw calls.
+ */
+export const HOUSE_GROWN = {
+  /** Segments on the rounds (balls, jars, the tree's crown): low, so L4 fits the low tier. */
+  segments: 4, // TUNE
+  /** Sides on the round tubes (the table, stools, plates, the tree's trunk). */
+  sides: 7, // TUNE
+  /** Sides on the six-sided pieces (the tent, jars, paper lanterns): faceted on purpose. */
+  facets: 6, // TUNE
+  playroom: {
+    /** The play mat's squares, front-left to back-right (sRGB). */
+    mat: ['#ffb3c8', '#bfe3ff', '#ffe29a', '#b9ecc8'], // TUNE
+    /** One square of the play mat, metres. */
+    matCell: 0.62, // TUNE
+    chest: '#c9764f', // TUNE: the toy chest's painted wood
+    chestLid: '#e97a9b', // TUNE: pink, so the open lid reads against the wall
+    tent: '#9ad8ff', // TUNE: the play tent's canvas
+    tentStripe: '#fff6ec', // TUNE
+    nightLight: '#ffe6a0', // TUNE: the star night-light's glow
+  },
+  kitchen: {
+    stove: '#4a4250', // TUNE: the little iron stove
+    stoveFire: '#ff8a3c', // TUNE: its glowing window
+    pot: '#fff2e3', // TUNE: white enamel (pink read as a gem on high)
+    counter: '#f2d7b8', // TUNE
+    counterTop: '#9a6a46', // TUNE
+    table: '#b9825a', // TUNE
+    cloth: '#ffd1dc', // TUNE: the checked table cloth
+    pie: '#e8a25a', // TUNE
+    shelf: '#8d5a3b', // TUNE
+    /** Jars and plates on the shelves (sRGB). */
+    jars: ['#ffd166', '#9fe0c8', '#ff9ab8', '#c9a0ff', '#9ad8ff'], // TUNE
+  },
+  hall: {
+    /** How far the gallery (at the second storey) reaches out from the back wall, metres. */
+    galleryDepth: 1.3, // TUNE
+    deck: '#c98b5a', // TUNE: planks, like the floor
+    rail: '#8d5a3b', // TUNE
+    gold: '#f2c14e', // TUNE: the top level's gold accents
+    trunk: '#9b7a62', // TUNE
+    /** The Heart Tree's crown, a heart of two pink rounds (sRGB). */
+    crown: ['#ffb0d0', '#ff9cc4'], // TUNE: left and right lobes; light, so high tier's shade stays pink
+    lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
+    sparkle: '#fff2b0', // TUNE: the tree's sparkles
+    rug: '#e97a9b', // TUNE
+    rugEdge: '#f2c14e', // TUNE
+    /** Where the first residents stand, as shares of the hall's width and depth. */
+    residentBand: [
+      [0.56, 0.25],
+      [0.72, 0.22],
+      [0.8, 0.45],
+      [0.8, 0.68],
+    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
+    /** Steps up to the gallery. */
+    steps: 10, // TUNE
+    stairWidth: 1.0, // TUNE: metres
+  },
 } as const;

@@ -1162,7 +1162,7 @@ _Owner decisions of 2026-10-08 (the mockup and all 9 recommendations). Proposed 
 - **A batch is one recipe, as many as the bag can pay for,** paid up front. The only cap is a technical 999 (`FACTORY_RULES.maxBatch`). The same recipe can run in two batches.
 - **Stopping keeps what's made and gives back every unfinished run,** the one being made included.
 - **Seasonal recipes only start in season;** a batch started in season finishes after it. Only open recipe-book pages can be queued. Speed-ups are fixed when the batch starts.
-- **Upgrades keep batches running.** Taking the Factory down, or leaving the patch, stops them with that refund, plus half the building's cost for a take-down.
+- **Upgrades keep batches running.** Taking the Factory down, or leaving the patch, stops them with that refund, plus half the building's cost for a take-down. _Later: a player who leaves gets the half share too (2026-10-12 morning)._
 - **"Queue in Factory" stays hidden until a Factory is built,** with a one-time Sprout tip.
 - **Welcome back:** the first settle after 30+ minutes away (the patch off screen) that lands Factory things shows a card, after the land's card if both have news. Shorter trips get the usual pop-up.
 - **Name and look:** "Crafting Factory", a cozy toy workshop with 🏭.
@@ -1469,7 +1469,7 @@ _Owner answers to the coordinator on 2026-10-11, asked one question at a time wi
 
 **Schedule and process**
 - **The Oct 15–18 migration freeze is lifted.** The family playtest becomes one extended test session once all Phase 1 items are in. One migration in flight at a time still holds.
-- **The Keeper's home (#381) moves into Phase 1.** Coordinator: it ships behind a server switch, `HP_HOUSE` = off, testers or on (default off), with the testers list set only on the server. Go/no-go around Oct 27: the #381 Phase 1 PRs merged and at least 30 fps on the low tier on the iPad 9th gen walk-through; otherwise it stays off and lands in Phase 2. Its one Phase 1 migration takes the slot after #242's migration A; furniture and the guestbook move to Phase 2.
+- **The Keeper's home (#381) moves into Phase 1.** Coordinator: it ships behind a server switch, `HP_HOUSE` = off, testers or on (default off), with the testers list set only on the server. Go/no-go around Oct 27: the #381 Phase 1 PRs merged and at least 30 fps on the low tier on the iPad 9th gen walk-through; otherwise it stays off and lands in Phase 2. _Later: the gate is a testers-mode walk-through, with the same fps bar (2026-10-12 morning)._ Its one Phase 1 migration takes the slot after #242's migration A; furniture and the guestbook move to Phase 2.
 - **Decisions go through the coordinator.** Every lane sends decisions to the coordinator as "#<issue> decision needed: …" with a picture or link and a recommendation; the coordinator puts them to the owner, one question at a time. Lanes never ask the owner directly.
 
 ## 2026-10-12 — Owner decisions and coordinator calls (overnight)
@@ -1505,3 +1505,25 @@ _Owner answers to the coordinator late on 2026-10-11 and early on 2026-10-12, as
   - Lanes post the reviewer verdict comment naming the head SHA before reporting "ready".
   - One green CI run on the final head is enough. The coordinator's two-run bar (in practice since #408) was dropped once #416 fixed the flake behind it.
   - Owner decisions are recorded in one docs PR per evening.
+
+## 2026-10-12 — Owner decisions and coordinator calls (morning)
+
+_Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator"._
+
+**Game rules**
+- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision.
+- **The house perk stays as built (#381).** The owner kept it as built: it applies to any resident who is not in the Hollow or at a post.
+
+**Schedule and process**
+- **The live-data dry run is waived (#295).** This is the #441 one-click workflow, not the `tile-uses:check` run before #242 PR 2b. The owner called a one-click production dry run overkill while the game is in dev and testers expect some chaos. PR #441 was closed without merging.
+- **The #381 gate moves to a testers walk-through.** Coordinator: house PRs B1–B4 merge on reviewer APPROVE plus green CI, behind `HP_HOUSE`. The owner's go/no-go is a testers-mode walk-through before Oct 27, which still needs at least 30 fps on the low tier on iPad 9th gen. This replaces the PR-merged gate in the 2026-10-11 night entry.
+- **B3 runs in its own lane.** Coordinator: the grown rooms (B3) work in a second #381 lane once B1 merged. The daily gift (H1, #452) uses `house_gifts` from 0046, so it needed no migration.
+
+**Coordinator calls**
+- **Factory take-down share (#295).** A player who leaves a shared Factory gets the half take-down share as well. This extends the 2026-10-08 Crafting Factory rule, where only a take-down paid half the building's cost.
+- **Additive contract changes approved.** #419 adds `speciesId` to the gather summary payload; squishy portraits in the summary are deferred. #381 C1 and C2 add fields only.
+- **Flaky tests (#429).**
+  - Fixed by root cause: #439, #453, the map-id race in #440, and the home-node tap and toast observer in #445. #453 is test-side plus a dev-hook field: `visitPost` taps the connected post's tile.
+  - Budget and timeout raises: #438 (map.spec 240 s), #447 (iPad `expect` 10 s), the 30 s live polls in #440, the 30 s landing waits in #445, and #451 (three whole-test budgets to about twice their measured iPad runtime).
+  - The recipe-book and wardrobe stalls keep their budgets, because a bigger limit would only hide a stall. A re-scan on the new main decides whether the lane stands down.
+- **Post flags keep their hide rule (#426).** A connected post whose flag would sit under a tray handle stays unlabelled until the map moves. That is noted as polish for a 393 px phone, not changed.

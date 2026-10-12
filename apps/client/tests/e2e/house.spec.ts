@@ -16,9 +16,16 @@ interface HouseDebug {
   open: boolean;
   level: number;
   rooms: number;
-  pose: 'glide' | 'dollhouse';
+  pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
   zoom: number;
-  scene: { rooms: number; keeper: boolean; pitch: number; roof: number; lights: number } | null;
+  scene: {
+    rooms: number;
+    keeper: boolean;
+    pitch: number;
+    roof: number;
+    lights: number;
+    frontWallAlpha: number | null;
+  } | null;
 }
 
 interface HomeDebug {
@@ -43,7 +50,7 @@ async function patchAndHome(page: Page): Promise<void> {
   await expect.poll(async () => (await homeState(page))?.scene?.tiles, slow).toBe(7);
 }
 
-test('enter the house from home, see the dollhouse, and go back home', async ({ browser }) => {
+test('enter the house from home, walk in and step out, and go back home', async ({ browser }) => {
   test.setTimeout(180_000); // two scene builds; CI renders in software
   const page = await newPlayer(browser, uniqueName('house'));
   const errors: string[] = [];
@@ -79,6 +86,29 @@ test('enter the house from home, see the dollhouse, and go back home', async ({ 
   await expect(page.getByTestId('home')).toBeHidden();
   // Big, roomy controls, all on screen.
   await expectRoomyLabels(page, '[data-testid="house-back"], [data-testid="house-pill"]');
+
+  // Walk in: down to kid height; the front wall in the way fades, then is gone.
+  const walk = page.getByTestId('house-walk');
+  await expect(walk).toHaveText('👣 Walk in');
+  await expectRoomyLabels(page, '[data-testid="house-walk"]');
+  await walk.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('kid');
+  await expect.poll(async () => (await houseState(page))?.scene?.pitch, slow).toBeLessThan(15);
+  const inside = (await houseState(page))!;
+  expect(inside.zoom).toBe(1);
+  // Standing in the room, the front wall between the camera and it is gone
+  // (alpha 0, not drawn): no veil, no seams through the squishies.
+  expect(inside.scene!.frontWallAlpha).toBe(0);
+  await expect(walk).toHaveText('🚪 Step out');
+
+  // Step out: back up to the dollhouse, its front open again.
+  await walk.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+  const out = (await houseState(page))!;
+  expect(out.zoom).toBe(0);
+  expect(out.scene!.pitch).toBeGreaterThanOrEqual(40);
+  expect(out.scene!.frontWallAlpha).toBeNull();
+  await expect(walk).toHaveText('👣 Walk in');
 
   await page.getByTestId('house-back').tap();
   await expect(page.getByTestId('house')).toBeHidden();
