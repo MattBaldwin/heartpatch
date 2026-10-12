@@ -1560,3 +1560,23 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each la
   - inventory:66 is being fixed by root cause in #476 (open): the landed banner hides itself after 4 s, and on a slow runner the spec's checks could outlast that before it tapped.
   - factory.spec:29 is fixed in #475: about 1 map in 30 had no clearable land within 2 steps of home.
   - hollow:51 is runner starvation on the slowest iPad shard, not an ordering bug. The plan is to re-scan after about 5 more main runs. If the shard still stalls, one mechanical PR adds `afterEach` context-close to the specs without it. hollow:51's timeouts stay as they are.
+
+## 2026-10-12 — Owner decisions and coordinator calls (evening)
+
+_Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator call"._
+
+**Game rules**
+- **Kid batches 3 and 4 are approved as is (#443).** Owner: batch 3 (#481) and batch 4 (#484) ship as shown.
+- **A Mythic reveal tier is approved for Phase 2 (#391).** Owner: Mythic gets its own row, bigger than Legendary. It does not ship now; until Phase 2, Mythic falls back to the Legendary row. The approved row for the tier table in `packages/shared/src/data/rare-finds.ts` (#478):
+  `mythic: { ms: 2600, scale: 4, label: 'Mythic', banner: '🌈 Something mythic is here! 🌈', patchLine: true }`
+  Reveal lengths: Rare 1.8 s, Epic 2.0 s, Legendary 2.2 s, Special 2.2 s, with a 1 s banner when the player has met the kind before. #391 is closed, done via #478, #483 and #485.
+- **"First ever!" is for kinds you befriend yourself (#483).** Coordinator call: the badge shows only for a kind the player befriends themself in battle. A starter, or a kind first gained by trade, counts as already befriended and gets no badge. The badge celebrates a friendship you won, and the starter has its own intro moment.
+- **The Legendary patch line names the kind only to those who have met it (#485).** Coordinator call: it names the kind only to patch members who have already met it (`metBy`); other patch-mates see "a Legendary squishy". The finder hears nothing, and secret kinds never send a line (CLAUDE.md rule 6). It uses a new `game_events` type, `squishy.celebrated`.
+- **Wave-1 kids and teens stay off the guardian tables (#443).** Coordinator call: wave 1 had no guardian duty, so its new stages don't join them.
+
+**Coordinator calls**
+- **Flaky tests (#429), round 4.**
+  - The slow iPad group 3 is rebalanced first (#488), by measured per-test times: close-up, explore and squishy-gallery move to g6, and fences to g5. Predicted: every iPad group at 13.0 min or less, down from about 19.
+  - The `afterEach` context-close sweep across 46 specs is held until a re-scan shows leaked pages causing stalls.
+  - inventory:111 was fixed in #486 (a null hook read).
+- **The portrait crash gets its own Fix: PR (#465).** The scene was disposed while a portrait snapshot was pending, which froze the screen in slow iPad test runs (2 of 4 on a CI simulator). It is fixed in #487 (open), not inside #482 (open). Portrait snapshots now run one at a time.
