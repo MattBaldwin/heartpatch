@@ -4,6 +4,8 @@ import { createPortraits, inUse, opaqueBox } from './portraits.js';
 
 // The portrait scene, as small as the draw's lifecycle needs (no WebGL here).
 const scenes: { disposed: boolean }[] = [];
+/** When a scene is ready: at once, unless a test says never (as Babylon's own wait can be). */
+let whenReady = () => Promise.resolve();
 let shots: { resolve: (url: string) => void; timeOut: () => void }[] = [];
 vi.mock('@babylonjs/core/scene', () => ({
   Scene: class {
@@ -14,7 +16,7 @@ vi.mock('@babylonjs/core/scene', () => ({
       scenes.push(this as unknown as { disposed: boolean });
     }
     whenReadyAsync() {
-      return Promise.resolve();
+      return whenReady();
     }
     dispose() {
       this.isDisposed = true;
@@ -122,6 +124,7 @@ describe('createPortraits', () => {
     vi.stubGlobal('window', { setTimeout, clearTimeout, innerWidth: 390 });
     scenes.length = 0;
     shots = [];
+    whenReady = () => Promise.resolve();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -164,6 +167,25 @@ describe('createPortraits', () => {
     expect(scenes[0]?.disposed).toBe(true);
     expect(scenes).toHaveLength(2);
     expect(scenes[1]?.disposed).toBeFalsy();
+  });
+
+  it('gives up on a scene that never gets ready, before any snapshot', async () => {
+    const portraits = portraitsFor();
+    whenReady = () => new Promise<void>(() => undefined);
+    const first = portraits.get(look);
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(await first).toBeNull();
+    // No snapshot was started, and the draw ended: its scene goes.
+    expect(shots).toHaveLength(0);
+    expect(scenes[0]?.disposed).toBe(true);
+
+    // The next picture draws (and snapshots) on a fresh scene.
+    whenReady = () => Promise.resolve();
+    void portraits.get({ ...look, instanceId: 'b' });
+    await vi.waitFor(() => {
+      expect(shots).toHaveLength(1);
+    });
+    expect(scenes).toHaveLength(2);
   });
 
   it('moves on when a snapshot never gets ready (Babylon gives up on it)', async () => {
