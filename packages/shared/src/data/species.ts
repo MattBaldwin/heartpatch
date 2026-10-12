@@ -535,7 +535,7 @@ export const MOVES: Move[] = [
   {
     id: 'raincloud-snore',
     name: 'Raincloud Snore',
-    description: 'Snores so hard a little raincloud pours. Drip, drop, doze.',
+    description: 'Snores so hard a little raincloud pours. Drip, drop, maybe a doze.',
     element: 'water',
     power: 80, // TUNE:
     accuracy: 90, // TUNE:
@@ -735,7 +735,7 @@ export const SPECIES: Species[] = [
   {
     id: 'cloudcroak',
     name: 'Cloudcroak',
-    description: 'A big sleepy toad who wears a raincloud like a hat. Its snores make puddles.',
+    description: 'A big sleepy toad who wears a fluffy cloud like a hat. Its snores make puddles.',
     element: 'water',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -1674,7 +1674,7 @@ export const SPECIES: Species[] = [
     id: 'petalwhirl',
     name: 'Petalwhirl',
     description:
-      'A whirl of petals with a ring of blossoms on top. Wherever it dances, flowers pop up.',
+      'A whirl of petals with round purple petals on top. Wherever it dances, flowers pop up.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
