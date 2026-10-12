@@ -8,6 +8,7 @@ import { createFactoryPanel } from '../factory/factory-panel.js';
 import { createFactoryStrip } from '../factory/factory-strip.js';
 import { FACTORY_TEXT, recipeIcon } from '../factory/factory-view.js';
 import { formatTimeLeft } from '../inventory/game-clock.js';
+import { itemIconNode } from '../inventory/item-icons.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   bookOrder,
@@ -634,12 +635,16 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       ...(page.season ? [el('span', { class: 'rbook-ribbon' }, page.season)] : []),
     );
 
+  /** A page's picture: a tool's drawn icon (the clearing tools, #242), else its emoji. */
+  const pageIcon = (page: PageView, className: string): Node | string =>
+    page.kind === 'recipe' ? itemIconNode(page.output, className) : page.icon;
+
   const recipePage = (page: PageView) => [
     head(page),
     el(
       'div',
       { class: 'rbook-picture', 'aria-hidden': 'true' },
-      page.icon,
+      pageIcon(page, 'rbook-picture-icon'),
       ...(page.isNew ? [el('span', { class: 'rbook-sticker' }, RECIPE_BOOK_TEXT.newTag)] : []),
     ),
     el('h3', { class: 'rbook-name' }, page.name),
@@ -999,7 +1004,11 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         const row = el(
           'button',
           { type: 'button', class: 'rbook-result', 'data-page': p.key },
-          el('span', { class: 'rbook-ing-icon', 'aria-hidden': 'true' }, p.icon),
+          el(
+            'span',
+            { class: 'rbook-ing-icon', 'aria-hidden': 'true' },
+            pageIcon(p, 'rbook-line-icon'),
+          ),
           el('span', { class: 'rbook-result-name' }, p.name),
           el('span', { class: 'rbook-toc-page' }, RECIPE_BOOK_TEXT.page(order.indexOf(p.key))),
         );

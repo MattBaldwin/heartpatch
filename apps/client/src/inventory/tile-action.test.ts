@@ -102,4 +102,22 @@ describe('tileAction', () => {
     expect(tileAction(tile({ nodeResource: null }), me, none, NOW)).toEqual({ kind: 'none' });
     expect(tileAction(tile({}), null, none, NOW)).toEqual({ kind: 'none' });
   });
+
+  it("says a tile is being cleared, mine straight away and anyone's from the map (#242)", () => {
+    const readyAt = '2026-10-02T12:02:00Z';
+    expect(tileAction(tile({ clearing: { readyAt } }), me, none, NOW)).toEqual({
+      kind: 'clearing',
+      readyAt,
+    });
+    const mine = { ...none, clears: [{ q: 1, r: 0, readyAt }] };
+    expect(tileAction(tile({ homeSlot: null }), me, mine, NOW)).toEqual({
+      kind: 'clearing',
+      readyAt,
+    });
+    // Land with no spot shows it too.
+    expect(tileAction(tile({ nodeResource: null, clearing: { readyAt } }), me, none, NOW)).toEqual({
+      kind: 'clearing',
+      readyAt,
+    });
+  });
 });

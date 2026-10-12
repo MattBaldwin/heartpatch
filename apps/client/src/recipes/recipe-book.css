@@ -311,6 +311,13 @@
   color: #4a3150;
 }
 
+.rbook-picture-icon,
+.rbook-line-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
 .rbook-picture {
   position: relative;
   display: grid;
