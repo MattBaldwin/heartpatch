@@ -99,8 +99,8 @@ declare global {
       jobs?(): JobsDebug;
       /** The Squishies roster (#375): open, rows shown, sort, filter, the open row. */
       roster?(): RosterDebug;
-      /** Trading posts on the map (#269): flags on screen and gold rings. */
-      posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen'>;
+      /** Trading posts on the map (#269): flags on screen, gold rings, and the posts my land reaches. */
+      posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen' | 'connected'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
       journey?(): JourneyDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
