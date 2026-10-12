@@ -6,9 +6,9 @@ import type { Species } from '../schemas/data/species.js';
  * 2 rare (the brief's 30; the rest did not read at a glance as toys and were
  * dropped rather than shipped weak). Each is built round one hook a kid can say in five words (the
  * creative brief the owner approved): a moth carrying its own moon, a shooting
- * star turned snail, a snowflake afraid of melting. Every one is a
- * standalone kind for now: no evolutions (branching kinds are a later lever),
- * so none is met as a guardian either. Public data like the rest of
+ * star turned snail, a snowflake afraid of melting. #443 gives each line a
+ * kid and one teen, listed after its kind (the branch teens come in Phase 2).
+ * No wave-1 form is met as a guardian. Public data like the rest of
  * `species.ts`; where each one spawns is server-only.
  *
  * Stat budgets (hp + attack + defense + speed) follow the launch bands in
@@ -35,7 +35,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 55,
     },
     moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
-    evolutions: [],
+    evolutions: [{ into: 'duskmoth', level: 22 }], // TUNE: #443 kid at the rare level
     visual: {
       body: 'orb',
       palette: ['#8fb2ff', '#dce8ff', '#ffd45a', '#4a64b0'],
@@ -51,6 +51,63 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['spooky', 'sleepy'],
     },
   },
+  // #443 kid (stage 2): Moonmoth grows a fluffy ruff, before Lunamoth's little arms.
+  {
+    id: 'duskmoth',
+    name: 'Duskmoth',
+    description:
+      'A fluffy ruff grew around its middle, like a little cloud to sit on. It still glows like a little moon.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'rare',
+    baseStats: { hp: 77, attack: 71, defense: 65, speed: 65 }, // TUNE: ×1.18 Moonmoth
+    moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
+    evolutions: [{ into: 'lunamoth', level: 30 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#8fb2ff', '#dce8ff', '#ffd45a', '#4a64b0'],
+      parts: ['spooky-eyes', 'tiny-smile', 'moth-wings', 'zing-antennae', 'fur-ruff', 'fluff-tail'],
+      size: 1.65,
+      glow: 'accent',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'sleepy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'lunamoth',
+    name: 'Lunamoth',
+    description:
+      'Little arms, a soft tail and wings like moonlight. It waves at owls to say good evening.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'epic',
+    baseStats: { hp: 91, attack: 84, defense: 77, speed: 77 }, // TUNE: ×1.4 Moonmoth
+    moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
+    evolutions: [],
+    visual: {
+      body: 'orb',
+      palette: ['#86a8fb', '#dce8ff', '#ffd45a', '#4a64b0'],
+      parts: [
+        'spooky-eyes',
+        'tiny-smile',
+        'moth-wings',
+        'zing-antennae',
+        'fur-ruff',
+        'stubby-arms',
+        'wisp-tail',
+      ],
+      size: 1.9,
+      finish: 'sparkle',
+      glow: 'accent',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'sleepy'] },
+  },
   {
     id: 'cometsnail',
     name: 'Cometsnail',
@@ -65,7 +122,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 50,
     },
     moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
-    evolutions: [],
+    evolutions: [{ into: 'sparksnail', level: 22 }], // TUNE: #443 kid at the rare level
     visual: {
       body: 'comet-star',
       palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
@@ -80,6 +137,54 @@ export const WAVE_1_SPECIES: Species[] = [
       elements: ['spark'],
       feelings: ['joy', 'cozy'],
     },
+  },
+  // #443 kid (stage 2): Cometsnail grows little arms, before Starblaze's strong ones.
+  {
+    id: 'sparksnail',
+    name: 'Sparksnail',
+    description: 'It grew two little arms. It waves them at shooting stars, very slowly.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 77, attack: 65, defense: 71, speed: 59 }, // TUNE: ×1.18 Cometsnail
+    moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
+    evolutions: [{ into: 'starblaze', level: 30 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'comet-star',
+      palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'stubby-arms', 'bolt-chain'],
+      size: 1.65,
+      glow: 'body',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'cozy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'starblaze',
+    name: 'Starblaze',
+    description:
+      'Its arms grew long from carrying wishes. It still takes its time getting anywhere.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'epic',
+    baseStats: { hp: 91, attack: 77, defense: 84, speed: 70 }, // TUNE: ×1.4 Cometsnail
+    moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
+    evolutions: [],
+    visual: {
+      body: 'comet-star',
+      palette: ['#ff86cc', '#ffe6f5', '#ffd23f', '#ffb347'],
+      parts: ['happy-eyes', 'smirk', 'blush-cheeks', 'spark-crest', 'strong-arms', 'bolt-chain'],
+      size: 1.9,
+      finish: 'sparkle',
+      glow: 'body',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'cozy'] },
   },
   {
     id: 'shellnap',
@@ -96,7 +201,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 30,
     },
     moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle'],
-    evolutions: [],
+    evolutions: [{ into: 'sipsnooze', level: 18 }], // TUNE: #443 kid at the uncommon level
     visual: {
       body: 'pebble',
       palette: ['#9fe0c0', '#fff4e6', '#ffe9d6', '#ff9ec4'],
@@ -116,6 +221,69 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['sleepy', 'cozy'],
     },
   },
+  // #443 kid (stage 2): Shellnap grows a tea leaf on its head, before Brewtle's big feet.
+  {
+    id: 'sipsnooze',
+    name: 'Sipsnooze',
+    description: 'A little green sprout popped up on its head. It wiggles when Sipsnooze snores.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'uncommon',
+    baseStats: { hp: 83, attack: 53, defense: 89, speed: 35 }, // TUNE: ×1.18 Shellnap
+    moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle'],
+    evolutions: [{ into: 'brewtle', level: 26 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pebble',
+      palette: ['#9fe0c0', '#b9e48f', '#ffe9d6', '#ff9ec4'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'leaf-sprout',
+        'shell-dome',
+        'stubby-legs',
+        'handle-arc',
+        'freckles',
+      ],
+      size: 1.2,
+      head: { body: 'orb', size: 0.66, forward: 0.62, up: 0.18 },
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'brewtle',
+    name: 'Brewtle',
+    description:
+      'Four big round feet for paddling and a teacup shell for napping. It never spills a drop.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 98, attack: 63, defense: 105, speed: 42 }, // TUNE: ×1.4 Shellnap
+    moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle', 'splish-splash'],
+    evolutions: [],
+    visual: {
+      body: 'pebble',
+      palette: ['#93d9b6', '#addf80', '#ffe9d6', '#ff9ec4'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'leaf-sprout',
+        'shell-dome',
+        'side-fins',
+        'round-paws',
+        'handle-arc',
+        'freckles',
+      ],
+      size: 1.38,
+      head: { body: 'orb', size: 0.64, forward: 0.64, up: 0.22 },
+      stance: 0.2,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
   {
     id: 'gnomnom',
     name: 'Gnomnom',
@@ -130,7 +298,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 40,
     },
     moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
-    evolutions: [],
+    evolutions: [{ into: 'gnomnibble', level: 18 }], // TUNE: #443 kid at the uncommon level
     visual: {
       body: 'pear',
       palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#7a6f66'],
@@ -153,6 +321,70 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['cozy', 'sleepy'],
     },
   },
+  // #443 kid (stage 2): Gnomnom wears a garden leaf behind its head, before Gnomguard's strong arms.
+  {
+    id: 'gnomnibble',
+    name: 'Gnomnibble',
+    description:
+      'A big green leaf got stuck behind its head in the veggie patch. It decided to keep it.',
+    element: 'stone',
+    feeling: 'cozy',
+    rarity: 'uncommon',
+    baseStats: { hp: 77, attack: 65, defense: 77, speed: 47 }, // TUNE: ×1.18 Gnomnom
+    moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
+    evolutions: [{ into: 'gnomguard', level: 26 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pear',
+      palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#5fa847'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'nightcap',
+        'fur-ruff',
+        'stuck-leaf',
+        'stubby-legs',
+        'stubby-arms',
+      ],
+      size: 1.25,
+      stance: 0.25,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['cozy', 'sleepy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'gnomguard',
+    name: 'Gnomguard',
+    description:
+      'Long arms for carrying pumpkins and a fluffy ruff to keep warm. Best garden guard ever.',
+    element: 'stone',
+    feeling: 'cozy',
+    rarity: 'rare',
+    baseStats: { hp: 91, attack: 77, defense: 91, speed: 56 }, // TUNE: ×1.4 Gnomnom
+    moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
+    evolutions: [],
+    visual: {
+      body: 'pear',
+      palette: ['#b2aa9e', '#fff4e6', '#d9453b', '#5fa847'],
+      parts: [
+        'sharp-eyes',
+        'smile',
+        'blush-cheeks',
+        'nightcap',
+        'fur-ruff',
+        'stuck-leaf',
+        'biped-legs',
+        'strong-arms',
+      ],
+      size: 1.43,
+      stance: 0.4,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['cozy', 'sleepy'] },
+  },
   {
     id: 'lilyhop',
     name: 'Lilyhop',
@@ -167,7 +399,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 55,
     },
     moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop'],
-    evolutions: [],
+    evolutions: [{ into: 'lilyleap', level: 16 }], // TUNE: #443 kid at the common level
     visual: {
       body: 'blob',
       palette: ['#8ad65f', '#e6ffd0', '#ff9ec4', '#3fae3a'],
@@ -180,6 +412,60 @@ export const WAVE_1_SPECIES: Species[] = [
       elements: ['water'],
       feelings: ['silly', 'joy'],
     },
+  },
+  // #443 kid (stage 2): Lilyhop grows a water curl, before Croakaroo's bubble crown.
+  {
+    id: 'lilyleap',
+    name: 'Lilyleap',
+    description: 'A curl of pond water bobs on its head. It splashes it at friends to say hi.',
+    element: 'water',
+    feeling: 'silly',
+    rarity: 'common',
+    baseStats: { hp: 65, attack: 59, defense: 53, speed: 65 }, // TUNE: ×1.18 Lilyhop
+    moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop'],
+    evolutions: [{ into: 'croakaroo', level: 24 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'blob',
+      palette: ['#86d45a', '#e6ffd0', '#6cc4f0', '#3fae3a'],
+      parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'eye-bumps', 'water-curl', 'hop-feet'],
+      size: 1.15,
+      stance: 0.3,
+      pose: 'sit',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'croakaroo',
+    name: 'Croakaroo',
+    description:
+      'Wears a crown of pond bubbles and has arms strong enough to lift a lily pad. It sticks out its tongue to say hi.',
+    element: 'water',
+    feeling: 'silly',
+    rarity: 'uncommon',
+    baseStats: { hp: 77, attack: 70, defense: 63, speed: 77 }, // TUNE: ×1.4 Lilyhop
+    moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop', 'splish-splash'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#7fcf52', '#e6ffd0', '#5cb8ec', '#3fae3a'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'giggle-tongue',
+        'eye-bumps',
+        'bubble-crown',
+        'hop-feet',
+        'strong-arms',
+        'spots',
+      ],
+      size: 1.3,
+      stance: 0.45,
+      pose: 'sit',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
   },
   {
     id: 'hailhop',
@@ -195,7 +481,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 60,
     },
     moves: ['snowball-toss', 'twirly-whirl', 'frosty-pounce'],
-    evolutions: [],
+    evolutions: [{ into: 'hailbounce', level: 16 }], // TUNE: #443 kid at the common level
     visual: {
       body: 'bean',
       palette: ['#ffffff', '#e4f3ff', '#7ec4ff', '#bfe6fb'],
@@ -217,6 +503,68 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['joy', 'cozy'],
     },
   },
+  // #443 kid (stage 2): Hailhop's ball tail fluffs out, before Hailhare's mane.
+  {
+    id: 'hailbounce',
+    name: 'Hailbounce',
+    description: 'Its tail fluffed up like a snowdrift. Every bounce shakes off a little flurry.',
+    element: 'frost',
+    feeling: 'joy',
+    rarity: 'common',
+    baseStats: { hp: 65, attack: 59, defense: 53, speed: 71 }, // TUNE: ×1.18 Hailhop
+    moves: ['snowball-toss', 'twirly-whirl', 'frosty-pounce'],
+    evolutions: [{ into: 'hailhare', level: 24 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'bean',
+      palette: ['#ffffff', '#e4f3ff', '#7ec4ff', '#bfe6fb'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'long-ears',
+        'icicle-crown',
+        'hop-feet',
+        'fluff-tail',
+      ],
+      size: 1.15,
+      stance: 0.3,
+      pose: 'sit',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['joy', 'cozy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'hailhare',
+    name: 'Hailhare',
+    description:
+      'Wears a frosty mane like a scarf. It races the snowflakes down the mountain, and wins.',
+    element: 'frost',
+    feeling: 'joy',
+    rarity: 'uncommon',
+    baseStats: { hp: 80, attack: 76, defense: 66, speed: 88 }, // TUNE: ×1.4 Hailhop, plus 16 (sim: 35% at ×1.4)
+    moves: ['snowball-toss', 'twirly-whirl', 'frosty-pounce', 'brrr-bluster'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#ffffff', '#a8d8ff', '#6bb8fb', '#bfe6fb'],
+      parts: [
+        'happy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'long-ears',
+        'icicle-crown',
+        'icicle-mane',
+        'long-legs',
+        'fluff-tail',
+      ],
+      size: 1.3,
+      stance: 0.45,
+      pose: 'stand',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['joy', 'cozy'] },
+  },
   {
     id: 'chillypep',
     name: 'Chillypep',
@@ -231,7 +579,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 55,
     },
     moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble'],
-    evolutions: [],
+    evolutions: [{ into: 'pepperpip', level: 16 }], // TUNE: #443 kid at the common level
     visual: {
       body: 'tall',
       palette: ['#f46a5c', '#ffd2c2', '#5fbf4a', '#3fae3a'],
@@ -247,6 +595,74 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['brave', 'joy'],
     },
   },
+  // #443 kid (stage 2): Chillypep's first leaf tufts, before Jalapow's leafy mane.
+  {
+    id: 'pepperpip',
+    name: 'Pepperpip',
+    description:
+      'Two leafy tufts popped up by its stem. They wiggle when it gets excited, which is a lot.',
+    element: 'fire',
+    feeling: 'brave',
+    rarity: 'common',
+    baseStats: { hp: 59, attack: 71, defense: 53, speed: 65 }, // TUNE: ×1.18 Chillypep
+    moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble'],
+    evolutions: [{ into: 'jalapow', level: 24 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'tall',
+      palette: ['#f46a5c', '#ffd2c2', '#5fbf4a', '#3fae3a'],
+      parts: [
+        'brave-brows',
+        'dot-eyes',
+        'smirk',
+        'blush-cheeks',
+        'stem',
+        'whisker-flames',
+        'stubby-legs',
+        'stubby-arms',
+      ],
+      ink: '#1a0f16',
+      size: 1.25,
+      glow: 'accent',
+      stance: 0.3,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['brave', 'joy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'jalapow',
+    name: 'Jalapow',
+    description:
+      'Its leafy top grew big and bushy, and so did its arms. It still says brrr. Nobody knows why.',
+    element: 'fire',
+    feeling: 'brave',
+    rarity: 'uncommon',
+    baseStats: { hp: 70, attack: 84, defense: 63, speed: 77 }, // TUNE: ×1.4 Chillypep
+    moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble', 'cozy-crackle'],
+    evolutions: [],
+    visual: {
+      body: 'tall',
+      palette: ['#f25c4e', '#ffd2c2', '#5fbf4a', '#3fae3a'],
+      parts: [
+        'brave-brows',
+        'sharp-eyes',
+        'smirk',
+        'blush-cheeks',
+        'stem',
+        'flame-mane',
+        'long-legs',
+        'strong-arms',
+      ],
+      ink: '#1a0f16',
+      size: 1.42,
+      glow: 'accent',
+      stance: 0.45,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['brave', 'joy'] },
+  },
   {
     id: 'flakefluff',
     name: 'Flakefluff',
@@ -261,7 +677,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 55,
     },
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
-    evolutions: [],
+    evolutions: [{ into: 'snowtuft', level: 16 }], // TUNE: #443 kid at the common level
     visual: {
       body: 'tiered',
       palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
@@ -273,5 +689,58 @@ export const WAVE_1_SPECIES: Species[] = [
       elements: ['frost'],
       feelings: ['brave', 'joy'],
     },
+  },
+  // #443 kid (stage 2): Flakefluff grows little snow arms, before Frostbold's strong ones.
+  {
+    id: 'snowtuft',
+    name: 'Snowtuft',
+    description:
+      'It grew two tiny arms. It holds them out wide to catch every snowflake that falls.',
+    element: 'frost',
+    feeling: 'brave',
+    rarity: 'common',
+    baseStats: { hp: 59, attack: 65, defense: 53, speed: 65 }, // TUNE: ×1.18 Flakefluff
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
+    evolutions: [{ into: 'frostbold', level: 24 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'tiered',
+      palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
+      parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'icicle-crown', 'stubby-arms'],
+      size: 1.15,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['brave', 'joy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'frostbold',
+    name: 'Frostbold',
+    description:
+      'Now it stands on its own feet, with crystal spines down its back. It guards the snow while it naps.',
+    element: 'frost',
+    feeling: 'brave',
+    rarity: 'uncommon',
+    baseStats: { hp: 70, attack: 77, defense: 63, speed: 77 }, // TUNE: ×1.4 Flakefluff
+    moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster', 'twirly-whirl'],
+    evolutions: [],
+    visual: {
+      body: 'tiered',
+      palette: ['#93c8f2', '#ffffff', '#d2ecff', '#bfe6fb'],
+      parts: [
+        'brave-brows',
+        'sharp-eyes',
+        'smirk',
+        'icicle-crown',
+        'crystal-spines',
+        'strong-arms',
+        'stubby-legs',
+      ],
+      size: 1.3,
+      stance: 0.45,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['brave', 'joy'] },
   },
 ];
