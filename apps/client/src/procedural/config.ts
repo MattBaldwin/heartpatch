@@ -162,6 +162,41 @@ export const FINISH_CODE = {
   offFace: 16,
 } as const;
 
+/**
+ * Rare finds glow (#391, the owner picked the coloured edge). Rare and epic
+ * squishies get an outline that glows in each part's own colour; legendary
+ * and up already wear a rainbow edge (iridescent, shimmer), so theirs glows
+ * brighter instead. Faces and patterns never glow. The level per rarity is
+ * shared data (`RARE_GLOW_LEVEL`). Judge in the gallery and roster sheets.
+ */
+export const RARE_GLOW = {
+  /** Edge glow strength at levels 1–4 (rare, epic; legendary and mythic use `rainbow`). */
+  edge: [0.42, 0.52, 0.62, 0.72], // TUNE
+  /** How tightly the edge glow hugs the outline (higher is thinner). */
+  falloff: 1.7, // TUNE
+  /** How much richer than the part's own colour the glow is (pushed away from grey, same hue). */
+  saturate: 1.25, // TUNE
+  /** A pale part's glow is pushed to at least this saturation, keeping its own hue. */
+  minSaturation: 0.55, // TUNE
+  /** A part's glow brightness is its own brightness times this (capped at 1, floored), so brown glows brown. */
+  darkLift: 1.6, // TUNE
+  darkFloor: 0.12, // TUNE
+  /** How much less glow near-white, pale vinyl takes, so it doesn't clip to plain white. */
+  paleCalm: 0.3, // TUNE
+  /** Saturation of the palette colour a pure white part borrows. */
+  paletteSaturation: 0.7, // TUNE
+  /** How much brighter the rainbow edge glows at level 3 (legendary, secret) and 4 (mythic). */
+  rainbow: [2.6, 3.2], // TUNE
+} as const;
+
+/**
+ * Where the rare glow rides in `squishEvent.w`, above every `FINISH_CODE`
+ * sum (which stays below `level`): the level times `level`, plus the glow
+ * hue (one of `hues`, from the palette) times `hue`. Floats hold these sums
+ * exactly.
+ */
+export const RARE_GLOW_CODE = { level: 32, hue: 160, hues: 36 } as const;
+
 /** A material finish a piece can be drawn with: the shared `Finish`s plus the costumes' soft shimmer. */
 export type FinishName = Exclude<keyof typeof FINISH_CODE, 'glow' | 'offFace'>;
 
