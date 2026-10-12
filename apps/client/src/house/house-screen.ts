@@ -14,14 +14,17 @@ import { TapDetector } from '../map/tap-detector.js';
 import { el, messageOf } from '../ui/dom.js';
 import { houseApi, type HouseApi } from './house-api.js';
 import {
+  blend,
   clampZoom,
   entryGlide,
   fitHouse,
   glidePose,
+  kidPose,
   pinchedOut,
   pinchZoom,
   roofAt,
-  zoomPose,
+  walkedIn,
+  walkZoom,
   type HousePose,
   type HouseViewport,
 } from './house-camera.js';
@@ -71,8 +74,8 @@ export interface HouseDebug {
   readonly open: boolean;
   readonly level: number;
   readonly rooms: number;
-  /** `glide` while the roof lifts off, then `dollhouse`. */
-  readonly pose: 'glide' | 'dollhouse';
+  /** `glide` while the roof lifts off, `walk` while Walk in or Step out moves, else `dollhouse` or `kid`. */
+  readonly pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
   readonly zoom: number;
   readonly scene: HouseSceneStats | null;
   /** Residents whose faces the camera sees, of those drawn. */
@@ -84,9 +87,9 @@ export interface HouseScreen {
   /** Opens the house of this patch; the home reply says who the residents are. */
   open: (mapId: string, home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>) => Promise<void>;
   close: () => void;
-  /** Drops an open still waiting for its reply (Home was put away). */
-  cancel: () => void;
   readonly isOpen: boolean;
+  /** The patch whose house is open, or null (cheap: no scene stats). */
+  readonly mapId: string | null;
   readonly debug: HouseDebug | null;
 }
 
@@ -97,7 +100,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)');
   // Turned on mid-glide: cut to the end, as the close-up does.
   reducedMotion.addEventListener?.('change', () => {
-    if (reducedMotion.matches) skipGlide();
+    if (!reducedMotion.matches) return;
+    skipGlide();
+    if (walk) {
+      zoom = walk.goal;
+      walk = null;
+      renderWalk();
+      draw();
+    }
   });
   /** One open at a time; a late reply after Back, a logout or another player is dropped. */
   const gate = createOpenGate();
@@ -112,7 +122,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The fitted dollhouse pose for the screen as it is now. */
   let base: HousePose | null = null;
   let glide: { shot: CinematicShot; start: number | null } | null = null;
+  /** Kid height in the focus room, for the screen as it is now. */
+  let kid: HousePose | null = null;
+  /** 0 the dollhouse, 1 kid height. */
   let zoom = 0;
+  /** Walk in or Step out under way: from where, to where, since when (ms). */
+  let walk: { from: number; goal: number; start: number | null } | null = null;
   let frame = 0;
 
   // ── DOM ───────────────────────────────────────────────────────────────
@@ -124,6 +139,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   );
   const pill = el('span', { class: 'house-pill', 'data-testid': 'house-pill' });
   const top = el('div', { class: 'house-top' }, back, pill);
+  const walkButton = el('button', {
+    type: 'button',
+    class: 'house-walk',
+    'data-testid': 'house-walk',
+  });
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
   const peek = el(
     'section',
@@ -136,6 +156,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     { class: 'house', 'data-testid': 'house', role: 'dialog', 'aria-label': HOUSE_TEXT.yourHouse },
     touch,
     top,
+    walkButton,
     peek,
   );
   overlay.hidden = true;
@@ -143,6 +164,27 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   back.addEventListener('click', () => {
     close();
   });
+  // The button alternative to the pinch (style guide §3.3).
+  walkButton.addEventListener('click', () => {
+    skipGlide();
+    walk = { from: zoom, goal: walkedIn(zoom) ? 0 : 1, start: null };
+    renderWalk();
+    draw();
+  });
+
+  /** Walk in or Step out, by where the camera is going (or is). */
+  function renderWalk(): void {
+    const inside = walk ? walk.goal === 1 : walkedIn(zoom);
+    // The emoji is decoration: screen readers hear just the words.
+    walkButton.replaceChildren(
+      el(
+        'span',
+        { class: 'house-walk-icon', 'aria-hidden': 'true' },
+        inside ? HOUSE_TEXT.stepOutIcon : HOUSE_TEXT.walkInIcon,
+      ),
+      ` ${inside ? HOUSE_TEXT.stepOut : HOUSE_TEXT.walkIn}`,
+    );
+  }
 
   const owner = () => user?.username ?? null;
 
@@ -152,6 +194,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     top.style.top = `${String(Math.max(0, options.coveredTop?.() ?? 0))}px`;
     pill.textContent = HOUSE_TEXT.pill(view.level);
     peekText.textContent = peekLine(view, owner());
+    renderWalk();
   }
 
   /** The canvas and the bands the HUD covers, for fitting the house between them. */
@@ -160,7 +203,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const width = box.width || window.innerWidth;
     const height = box.height || window.innerHeight;
     const topBand = top.getBoundingClientRect().bottom - box.top;
-    const bottomBand = box.bottom - peek.getBoundingClientRect().top;
+    const bottomBand =
+      box.bottom -
+      Math.min(peek.getBoundingClientRect().top, walkButton.getBoundingClientRect().top);
     return { width, height, top: Math.max(0, topBand), bottom: Math.max(0, bottomBand) };
   }
 
@@ -179,7 +224,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       glide = null;
       scene3d?.setRoof(1);
     }
-    return zoomPose(base, clampZoom(zoom));
+    if (walk) {
+      walk.start ??= now;
+      zoom = walkZoom(walk.from, walk.goal, (now - walk.start) / 1000, reducedMotion.matches);
+      if (zoom === walk.goal) walk = null;
+      renderWalk();
+    }
+    return kid ? blend(base, kid, zoom) : base;
   }
 
   /** Puts the camera where it is now and draws; keeps drawing while the glide plays. */
@@ -198,19 +249,27 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       return;
     }
     const pose = poseNow(now);
-    if (pose) s.setPose(pose);
+    if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
     options.invalidate();
-    if (glide) draw();
+    if (glide || walk) draw();
   }
 
   /** Refits the dollhouse to the screen (a turn, a resize). */
   function refit(): void {
     if (!isOpen || !scene3d) return;
-    base = fitHouse(scene3d.bounds, viewport());
-    frameOutside(scene3d, base);
+    fit(scene3d);
     draw();
   }
   window.addEventListener('resize', refit);
+
+  /** The dollhouse and kid-height poses for the screen as it is now. */
+  function fit(s: HouseScene): void {
+    const vp = viewport();
+    base = fitHouse(s.bounds, vp);
+    const room = s.focusRoom;
+    kid = room ? kidPose(room, vp) : null;
+    frameOutside(s, base);
+  }
 
   /** Drops trees the dollhouse frame would clip, or that would stand under the top bar. */
   function frameOutside(s: HouseScene, pose: HousePose): void {
@@ -251,6 +310,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     taps.pointerDown(sample(e));
     if (pointers.size === 2) {
       skipGlide();
+      walk = null;
       pinch = { spread: spread(), zoom };
     }
   });
@@ -260,6 +320,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     taps.pointerMove(sample(e));
     if (pinch && pointers.size === 2) {
       zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
+      renderWalk();
       draw();
     }
   });
@@ -284,6 +345,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     (e) => {
       e.preventDefault();
       skipGlide();
+      walk = null;
       zoom -= e.deltaY / HOUSE_CAMERA.wheelPerZoom;
       if (pinchedOut(zoom)) {
         close();
@@ -314,13 +376,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       signText: owner() ? HOUSE_TEXT.sign(owner() ?? '') : HOUSE_TEXT.yourHouse,
     });
     scene3d = built;
-    base = fitHouse(built.bounds, viewport());
-    frameOutside(built, base);
+    fit(built);
+    if (!base) throw new Error('no dollhouse pose');
     // The roof lifts off as you arrive; a rebuild for a new tier doesn't glide again.
     glide = fresh && !reducedMotion.matches ? { shot: entryGlide(base), start: null } : null;
     built.setRoof(glide ? 0 : 1);
     const pose = poseNow(performance.now());
-    if (pose) built.setPose(pose);
+    if (pose) built.setPose(pose, glide ? 0 : clampZoom(zoom));
     scene.onDisposeObservable.addOnce(() => {
       built.dispose();
       if (scene3d === built) scene3d = null;
@@ -363,6 +425,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     mapId = id;
     view = fresh;
     zoom = 0;
+    walk = null;
     builtTier = null;
     isOpen = true;
     options.onOpen(id);
@@ -376,6 +439,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     glide = null;
+    walk = null;
     pointers.clear();
     pinch = null;
     scene3d = null;
@@ -401,8 +465,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     },
     open,
     close,
-    cancel: () => {
-      gate.cancel();
+    get mapId() {
+      return isOpen ? mapId : null;
     },
     get isOpen() {
       return isOpen;
@@ -414,7 +478,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         open: isOpen,
         level: view.level,
         rooms: view.rooms.length,
-        pose: glide ? 'glide' : 'dollhouse',
+        pose: glide ? 'glide' : walk ? 'walk' : walkedIn(zoom) ? 'kid' : 'dollhouse',
         zoom,
         scene: scene3d?.stats ?? null,
         faces: scene3d?.faceReport() ?? null,

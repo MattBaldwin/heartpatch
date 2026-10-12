@@ -1,9 +1,11 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { fitHouse } from './house-camera.js';
-import { HOUSE_GRID } from './house-config.js';
-import { sampleHouse } from './house-fixtures.js';
+import { blend, fitHouse, kidPose, project, safeArea } from './house-camera.js';
+import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
+import { sampleHouse, sampleLevels } from './house-fixtures.js';
+import { yardPumpkins } from './house-models.js';
+import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -33,9 +35,25 @@ describe('house scene', () => {
     }
   });
 
+  it('hands room builders the quality tier, so a room can pick lighter parts on low', () => {
+    const snug = roomBuilder('snug');
+    const seen: RoomKit['tier'][] = [];
+    registerRoom('snug', (kit) => {
+      seen.push(kit.tier);
+      return snug(kit);
+    });
+    try {
+      for (const tier of ['low', 'high'] as const) buildHouse(1, tier).scene.getEngine().dispose();
+    } finally {
+      registerRoom('snug', snug);
+    }
+    expect(seen).toEqual(['low', 'high']);
+  });
+
   it('takes the open front off the dollhouse and keeps the other walls', () => {
     const { scene } = buildHouse(1, 'low');
     expect(scene.getMeshByName('house-snug-wall-south')).toBeNull();
+    expect(scene.getMeshByName('house-snug-wall-front')!.isEnabled()).toBe(false);
     for (const side of ['north', 'east', 'west'])
       expect(scene.getMeshByName(`house-snug-wall-${side}`)).not.toBeNull();
     scene.getEngine().dispose();
@@ -122,6 +140,104 @@ describe('house scene', () => {
     expect(seeds.isEnabled()).toBe(true);
     expect(seeds.material?.name).toBe('heart-seed-mat');
     scene.getEngine().dispose();
+  });
+
+  it('has no front walls in the dollhouse, veils them on the way in and takes them away at kid height', () => {
+    const { scene, house } = buildHouse(1, 'low');
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    const front = scene.getMeshByName('house-snug-wall-front')!;
+    const porch = scene.getMeshByName('house-snug-porch')!;
+    house.setPose(fitHouse(house.bounds, vp), 0);
+    expect(front.isEnabled()).toBe(false);
+    expect(porch.isEnabled()).toBe(false);
+    expect(house.stats.frontWallAlpha).toBeNull();
+    // Passing the wall on the way in: a faint veil.
+    const doll = fitHouse(house.bounds, vp);
+    const kid = kidPose(house.focusRoom!, vp);
+    house.setPose(blend(doll, kid, 0.75), 0.75);
+    expect(front.isEnabled()).toBe(true);
+    expect(house.stats.frontWallAlpha!).toBeGreaterThan(0);
+    expect(house.stats.frontWallAlpha!).toBeLessThanOrEqual(HOUSE_KID.fadedAlpha);
+    // Standing in the room: gone, not drawn at all (no seams through the squishies).
+    house.setPose(kid, 1);
+    expect(front.isEnabled()).toBe(false);
+    expect(porch.isEnabled()).toBe(true);
+    expect(house.stats.frontWallAlpha).toBe(0);
+    scene.getEngine().dispose();
+  });
+
+  it('turns on only the focus room’s extras at kid height in a house of many rooms', () => {
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    const { scene, house } = buildHouse(3, 'low');
+    expect(house.stats.rooms).toBe(3);
+    house.setPose(kidPose(house.focusRoom!, vp), 1);
+    // The kitchen's ceiling is built (nothing above it) but stays off: not the focus room.
+    expect(scene.getMeshByName('house-kitchen-ceiling')?.isEnabled()).toBe(false);
+    const extras = scene.meshes
+      .filter((m) => /^house-.*-(porch|ceiling|ceiling-glow|wall-front)$/.test(m.name))
+      .filter((m) => m.isEnabled())
+      .map((m) => m.name);
+    expect(extras).toEqual(['house-snug-porch']);
+    scene.getEngine().dispose();
+  });
+
+  it('shows the yard pumpkins in the dollhouse and keeps them out of the kid-height frame', () => {
+    const viewports = {
+      iPhone: { width: 390, height: 844, top: 80, bottom: 150 },
+      iPad: { width: 820, height: 1180, top: 70, bottom: 90 },
+    };
+    for (const level of sampleLevels()) {
+      const { scene, house } = buildHouse(level, 'low');
+      const b = house.bounds;
+      for (const [device, vp] of Object.entries(viewports)) {
+        const aspect = vp.width / vp.height;
+        const doll = fitHouse(b, vp);
+        const kid = kidPose(house.focusRoom!, vp);
+        const safe = safeArea(vp);
+        for (const pumpkin of yardPumpkins(b.minX, b.maxX, b.minZ)) {
+          const at = `level ${String(level)} ${device} pumpkin x ${pumpkin.at[0].toFixed(2)}`;
+          const [x, y, z] = pumpkin.at;
+          const r = pumpkin.d / 2;
+          // The dollhouse: the whole pumpkin inside the safe area (clear of the HUD).
+          for (const p of [
+            { x: x - r, y, z },
+            { x: x + r, y, z },
+            { x, y: y + r, z: z - r },
+            { x, y: y - r, z: z + r },
+          ]) {
+            const q = project(doll, aspect, p);
+            expect(q.x, at).toBeGreaterThan(safe.left);
+            expect(q.x, at).toBeLessThan(safe.right);
+            expect(q.y, at).toBeLessThan(safe.top);
+            expect(q.y, at).toBeGreaterThan(safe.bottom);
+          }
+          // Kid height: its inner edge (a whole diameter in, to be safe) still past the side.
+          const edge = x < kid.eye.x ? x + pumpkin.d : x - pumpkin.d;
+          const q = project(kid, aspect, { x: edge, y, z });
+          expect(Math.abs(q.x), at).toBeGreaterThan(1);
+        }
+      }
+      scene.getEngine().dispose();
+    }
+  });
+
+  it('draws the nearest residents smooth on the low tier from frontFrom on, none extra on high', () => {
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    const low = buildHouse(1, 'low');
+    const doll = fitHouse(low.house.bounds, vp);
+    const kid = kidPose(low.house.focusRoom!, vp);
+    low.house.setPose(doll, 0);
+    expect(low.house.stats.heroes).toBe(0);
+    low.house.setPose(blend(doll, kid, HOUSE_KID.frontFrom), HOUSE_KID.frontFrom);
+    expect(low.house.stats.heroes).toBe(2);
+    expect(low.house.stats.residents).toBe(2);
+    low.house.setPose(doll, 0);
+    expect(low.house.stats.heroes).toBe(0);
+    low.scene.getEngine().dispose();
+    const high = buildHouse(1, 'high');
+    high.house.setPose(kidPose(high.house.focusRoom!, vp), 1);
+    expect(high.house.stats.heroes).toBe(0);
+    high.scene.getEngine().dispose();
   });
 
   it('lifts the roof away for the entry glide', () => {
