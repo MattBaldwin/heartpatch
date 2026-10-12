@@ -122,6 +122,20 @@ const tradeAnsweredView = definePublicView({
 });
 
 /**
+ * The patch line (#391): everyone but the player who befriended it hears of
+ * it; only members who have met the kind hear its name (CLAUDE.md rule 6).
+ */
+const celebratedView = definePublicView({
+  schema: GAME_EVENTS['squishy.celebrated'].public,
+  build: (event, recipient) => {
+    const payload = parseGameEventPayload('squishy.celebrated', event.payload);
+    if (payload.userId === recipient.userId) return null;
+    const { userId, rarity, speciesId, metBy } = payload;
+    return metBy.includes(recipient.userId) ? { userId, rarity, speciesId } : { userId, rarity };
+  },
+});
+
+/**
  * The views live sync sends: one per type in the shared event registry
  * (`packages/shared/src/schemas/events.ts`), built from that type's `public`
  * schema. **Default deny:** a type that isn't registered has no entry and is
@@ -132,6 +146,7 @@ export const PUBLIC_VIEWS: PublicViews = {
   ...Object.fromEntries(GAME_EVENT_TYPES.map((type) => [type, registryView(type)])),
   // Which squishy the Hollow Man took, or which came home, is the owner's
   // news (#21); everyone sees who lost someone in `hollow.nightfall`.
+  'squishy.celebrated': celebratedView,
   'squishy.hollowed': ownerOnlyView('squishy.hollowed'),
   'squishy.rescued': ownerOnlyView('squishy.rescued'),
   // A player's battle team is their own business (squishy jobs).

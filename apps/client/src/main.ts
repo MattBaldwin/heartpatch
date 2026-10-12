@@ -56,6 +56,8 @@ import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
 import { mountVersionMenu } from './pwa/version-menu.js';
 import { createWhatsNew } from './whats-new/whats-new.js';
+import { createPatchLine } from './patch-line/patch-line.js';
+import { boxOf, SHEET_SELECTOR } from './tutorial/sheets.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
@@ -866,6 +868,8 @@ const maps = createMapScreen({
     journeys.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
+    // A patch-mate's Legendary friend (#391).
+    patchLine.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -1414,6 +1418,33 @@ const whatsNew = createWhatsNew({
   // async: a missing clipboard (an http page) rejects instead of throwing.
   copy: async (text) => navigator.clipboard.writeText(text),
 });
+// The patch line (#391): a patch-mate befriended a Legendary squishy. It waits
+// off the map and behind anything else at the top or over the map (a card, a
+// sheet, the "What landed" banner, Sprout's hint, another toast); the land
+// chip steps aside for it (patch-line.css).
+const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast';
+const patchLineBusy = (): boolean =>
+  hudMapId === null ||
+  battles.debug !== null ||
+  whatsNewOpen ||
+  raidReportOpen ||
+  hollowReportOpen() ||
+  trays.debug.hint ||
+  trays.debug.open !== null ||
+  (maps.debug?.selected ?? null) !== null ||
+  inventory.debug?.summary.shown === 'banner' ||
+  milestones.debug.showing !== null ||
+  lorebook.debug.showing !== null ||
+  [...document.querySelectorAll(SHEET_SELECTOR)].some((sheet) => boxOf(sheet) !== null) ||
+  [...document.querySelectorAll(TOP_NOTES)].some((note) => boxOf(note) !== null);
+const patchLine = createPatchLine({
+  root: document.body,
+  mapId: () => hudMapId,
+  busy: patchLineBusy,
+  playerName: (userId) =>
+    maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  kindName: (speciesId) => GAME_DATA.species.find((s) => s.id === speciesId)?.name ?? null,
+});
 // The game's version under the name, and "Update now" when one is ready (#198).
 const version = mountVersionMenu({
   client: CLIENT_BUILD,
@@ -1530,6 +1561,7 @@ if (import.meta.env.DEV) {
     milestones: () => milestones.debug,
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
+    patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
     audio: () => audio.debug,
   };
 }

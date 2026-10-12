@@ -62,6 +62,31 @@ export const SECRET_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
   },
+  // #443 kid (stage 2): a Heartlet budding little arms, before it blooms
+  // (Heartbloom) or sings (Heartsong). Secret, like its whole line.
+  {
+    id: 'heartbud',
+    name: 'Heartbud',
+    description: 'A Heartlet that grew two little arms. It hugs everything it can reach.',
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'secret',
+    baseStats: { hp: 71, attack: 65, defense: 71, speed: 65 }, // TUNE: ×1.18 Heartlet
+    moves: ['sunny-beam', 'cozy-crackle', 'heart-glow'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#ffbcd2', '#fff6f9', '#ff74a0', '#ffe066'],
+      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'nub-wings', 'stubby-arms'],
+      size: 1.15,
+      finish: 'iridescent',
+      glow: 'body',
+      stance: 0.38,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
+  },
   {
     id: 'heartbloom',
     name: 'Heartbloom',
@@ -134,12 +159,15 @@ export const SECRET_SPECIES: Species[] = [
 ];
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
-  { from: 'heartlet', into: 'heartbloom', level: 25 }, // TUNE:
+  // #443: Heartlet grows into its kid, Heartbud, at its old level, and
+  // Heartbud branches into the teens 8 levels later.
+  { from: 'heartlet', into: 'heartbud', level: 25 }, // TUNE:
+  { from: 'heartbud', into: 'heartbloom', level: 33 }, // TUNE: kid level + 8 (#443)
   // Heartlet's branch (#32): Joy, at dusk or night, beside a fire full of fuel.
   {
-    from: 'heartlet',
+    from: 'heartbud',
     into: 'heartsong',
-    level: 25, // TUNE:
+    level: 33, // TUNE: kid level + 8 (#443)
     trigger: {
       kind: 'rare',
       conditions: [{ kind: 'time', times: ['dusk', 'night'] }, { kind: 'fire-full' }],
