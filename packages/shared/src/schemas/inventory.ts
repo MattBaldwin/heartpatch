@@ -54,6 +54,8 @@ export const ItemChangeReasonSchema = z.enum([
    * what the cleared tile drops. Ledgered against the clear.
    */
   'clear',
+  /** Building the next level of the Keeper's house (#381), ledgered against the house's level. */
+  'house-build',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
