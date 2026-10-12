@@ -96,8 +96,6 @@ export interface HomeScreenOptions {
   onClosed: (mapId: string) => void;
   /** The home couldn't open (offline): say why where the player is looking. */
   onProblem: (message: string) => void;
-  /** A squishy chip was tapped: open its care sheet (#19). */
-  onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /**
@@ -107,11 +105,7 @@ export interface HomeScreenOptions {
   onJobs?: (mapId: string, at?: { q: number; r: number }) => void;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
-  /**
-   * The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375).
-   * Without it, the button only unfolds the sheet (the squishies themselves
-   * live in the roster now).
-   */
+  /** The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375). No button without it. */
   onSquishies?: (mapId: string) => void;
   /**
    * "📖 Recipe book" on a build row short of something you make (the
@@ -218,6 +212,8 @@ export const HOME_TEXT = {
   squishies: '🐾 Squishies',
   /** The sheet handle, for VoiceOver (#412). */
   showMore: 'Show more',
+  /** The peek bar's labelled way to the full sheet (your buildings), #433. */
+  more: 'More',
   showLess: 'Show less',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
@@ -338,7 +334,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     fuelAllBox,
   );
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
-  const body = el('div', { class: 'home-body' });
+  const body = el('div', { class: 'home-body', id: 'home-body' });
   const homeSheet = createBuildSheet();
   // The sheet's handle (#412), at the very top of the main view's sheet: a
   // tap opens or folds it, a swipe goes the finger's way. A finger or mouse
@@ -349,6 +345,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     type: 'button',
     class: 'home-handle',
     'data-testid': 'home-handle',
+    // The disclosure it opens and folds (#433).
+    'aria-controls': 'home-body',
   });
   let pressY: number | null = null;
   let releasedAt = -Infinity;
@@ -772,18 +770,30 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         if (peek) {
           // The peek bar (#412): the squishies stay in view above it.
           const squishies =
-            current.squishies.length > 0 && (options.onSquishies || options.onCare)
+            current.squishies.length > 0 && options.onSquishies && mapId
               ? button(
                   HOME_TEXT.squishies,
                   () => {
-                    if (options.onSquishies && mapId) options.onSquishies(mapId);
-                    else setSheet(true);
+                    if (mapId) options.onSquishies?.(mapId);
                   },
                   { 'data-testid': 'home-squishies' },
                   true,
                 )
               : null;
-          const shortcuts = [squishies, jobs].filter((b) => b !== null);
+          // A labelled way to the full sheet (your buildings), beside the
+          // handle that has no words (#433); focus follows to its title.
+          const more = button(
+            HOME_TEXT.more,
+            () => {
+              setSheet(true);
+              body
+                .querySelector<HTMLElement>('.home-section-title')
+                ?.focus({ preventScroll: true });
+            },
+            { 'data-testid': 'home-more', 'aria-controls': 'home-body', 'aria-expanded': 'false' },
+            true,
+          );
+          const shortcuts = [squishies, jobs, more].filter((b) => b !== null);
           body.replaceChildren(
             ...(shortcuts.length > 0
               ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
@@ -793,7 +803,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           break;
         }
         body.replaceChildren(
-          el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
+          el('h3', { class: 'home-section-title', tabindex: '-1' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),

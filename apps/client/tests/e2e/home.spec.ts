@@ -124,7 +124,7 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   // Seed stay in view, and every button is on screen with no scrolling.
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
   const view = page.viewportSize()!;
-  for (const id of ['home-squishies', 'home-build', 'home-back']) {
+  for (const id of ['home-squishies', 'home-more', 'home-build', 'home-back']) {
     const box = (await sheet.getByTestId(id).boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(view.width);
@@ -137,6 +137,14 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await sheet.getByTestId('home-squishies').tap();
   await slowExpect(page.getByTestId('roster')).toBeVisible();
   await closeRoster(page);
+  // More (#433) opens the full sheet with focus on its title, and the handle
+  // names what it opens and folds.
+  await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-controls', 'home-body');
+  await sheet.getByTestId('home-more').tap();
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
+  await expect(sheet.locator('.home-section-title').first()).toBeFocused();
+  await sheet.getByTestId('home-handle').tap();
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
   // The handle opens the full sheet and folds it back.
   await sheet.getByTestId('home-handle').tap();
   await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');

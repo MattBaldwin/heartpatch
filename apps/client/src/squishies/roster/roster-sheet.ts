@@ -131,6 +131,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     { type: 'button', class: 'tile-panel-close', 'aria-label': ROSTER_TEXT.close },
     '×',
   );
+  // Focus moves here when the roster opens (#433), so VoiceOver starts at the top.
+  const title = el('h2', { id: 'roster-title', tabindex: '-1' }, ROSTER_TEXT.title);
+  /** What had focus before the roster opened; it gets it back on close. */
+  let returnFocus: HTMLElement | null = null;
   const count = el('p', { class: 'roster-count', 'data-testid': 'roster-count' });
   const note = el('p', { class: 'roster-note', role: 'status', 'data-testid': 'roster-note' });
   // Sort and Show are one compact row of two pickers; tapping one opens its
@@ -691,6 +695,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   }
 
   function closeSheet(): void {
+    const wasOpen = !sheet.hidden;
     sheet.classList.remove('roster-covered');
     askedAt = 0;
     ticket += 1;
@@ -705,6 +710,11 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     picking = null;
     menu = null;
     say('');
+    // Back to the button that opened it, if it's still on screen.
+    const back = returnFocus;
+    returnFocus = null;
+    if (wasOpen && back?.isConnected && back.offsetParent !== null)
+      back.focus({ preventScroll: true });
   }
 
   close.addEventListener('click', closeSheet);
@@ -716,10 +726,15 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       mapId = id;
       expanded = null;
       picking = null;
+      if (sheet.hidden) {
+        const active = document.activeElement;
+        returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
+      }
       sheet.hidden = false;
       say('');
       remerge();
       render();
+      title.focus({ preventScroll: true });
       await load(id, mine);
     },
     refresh: async () => {

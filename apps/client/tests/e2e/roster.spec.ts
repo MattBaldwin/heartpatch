@@ -66,6 +66,8 @@ test('the Squishies roster: one tap from the top bar, care in two', async ({ bro
   await expectTapSize(page, '[data-testid="squishies-open"]');
   const roster = await openRoster(page);
   await expect.poll(async () => (await rosterState(page))?.rows, slow).toBe(2);
+  // Focus starts at the roster's title, for VoiceOver (#433).
+  await expect(page.locator('#roster-title')).toBeFocused();
   const rows = page.getByTestId('roster-row');
   // Each row: the real squishy (drawn on the game's engine), hearts and mood, stage, status.
   await slowExpect(page.locator('[data-testid="roster-portrait"][data-ready="true"]')).toHaveCount(
