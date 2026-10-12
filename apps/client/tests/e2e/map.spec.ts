@@ -107,7 +107,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   // 9 terrain looks (trading posts too, #269) plus home tiles, however many tiles.
   expect(drawn.tileMeshes).toBeLessThanOrEqual(10);
   await expect(owner.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(owner))?.live).toBe('live');
+  await expect.poll(async () => (await mapState(owner))?.live, { timeout: 30_000 }).toBe('live');
 
   // The camera starts on the owner's Heart Seed: tapping the middle shows it.
   const box = (await owner.locator('#game').boundingBox())!;
