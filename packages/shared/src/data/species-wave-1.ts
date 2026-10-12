@@ -35,7 +35,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 55,
     },
     moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
-    evolutions: [],
+    evolutions: [{ into: 'duskmoth', level: 22 }], // TUNE: #443 kid at the rare level
     visual: {
       body: 'orb',
       palette: ['#8fb2ff', '#dce8ff', '#ffd45a', '#4a64b0'],
@@ -51,6 +51,63 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['spooky', 'sleepy'],
     },
   },
+  // #443 kid (stage 2): Moonmoth grows a fluffy collar, before Lunamoth's tufted ears.
+  {
+    id: 'duskmoth',
+    name: 'Duskmoth',
+    description:
+      'Its fluffy collar keeps it warm on long moonlit nights. It still glows like a little moon.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'rare',
+    baseStats: { hp: 77, attack: 71, defense: 65, speed: 65 }, // TUNE: ×1.18 Moonmoth
+    moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
+    evolutions: [{ into: 'lunamoth', level: 30 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#8fb2ff', '#dce8ff', '#ffd45a', '#4a64b0'],
+      parts: ['spooky-eyes', 'tiny-smile', 'moth-wings', 'zing-antennae', 'fur-ruff', 'fluff-tail'],
+      size: 1.65,
+      glow: 'accent',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'sleepy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'lunamoth',
+    name: 'Lunamoth',
+    description:
+      'Tufted ears, a wispy tail and wings like moonlight. Owls stop to say good evening.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'epic',
+    baseStats: { hp: 91, attack: 84, defense: 77, speed: 77 }, // TUNE: ×1.4 Moonmoth
+    moves: ['peekaboo', 'night-light', 'shadow-snuggle', 'upside-flop'],
+    evolutions: [],
+    visual: {
+      body: 'orb',
+      palette: ['#86a8fb', '#dce8ff', '#ffd45a', '#4a64b0'],
+      parts: [
+        'spooky-eyes',
+        'tiny-smile',
+        'tuft-ears',
+        'moth-wings',
+        'zing-antennae',
+        'fur-ruff',
+        'wisp-tail',
+      ],
+      size: 1.9,
+      finish: 'sparkle',
+      glow: 'accent',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'sleepy'] },
+  },
   {
     id: 'cometsnail',
     name: 'Cometsnail',
@@ -65,7 +122,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 50,
     },
     moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
-    evolutions: [],
+    evolutions: [{ into: 'sparksnail', level: 22 }], // TUNE: #443 kid at the rare level
     visual: {
       body: 'comet-star',
       palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
@@ -80,6 +137,62 @@ export const WAVE_1_SPECIES: Species[] = [
       elements: ['spark'],
       feelings: ['joy', 'cozy'],
     },
+  },
+  // #443 kid (stage 2): Cometsnail grows snail eye stalks, before Starshell's shell.
+  {
+    id: 'sparksnail',
+    name: 'Sparksnail',
+    description: 'Two sparkly eye stalks popped up. It waves them at shooting stars, very slowly.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 77, attack: 65, defense: 71, speed: 59 }, // TUNE: ×1.18 Cometsnail
+    moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
+    evolutions: [{ into: 'starshell', level: 30 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'comet-star',
+      palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'zing-antennae', 'bolt-chain'],
+      size: 1.65,
+      glow: 'body',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'cozy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'starshell',
+    name: 'Starshell',
+    description:
+      'At last it found a shell, a golden one. It carries a little starlight wherever it goes.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'epic',
+    baseStats: { hp: 91, attack: 77, defense: 84, speed: 70 }, // TUNE: ×1.4 Cometsnail
+    moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
+    evolutions: [],
+    visual: {
+      body: 'comet-star',
+      palette: ['#ff86cc', '#ffe6f5', '#ffd23f', '#ffb347'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'spark-crest',
+        'zing-antennae',
+        'shell-dome',
+        'bolt-chain',
+      ],
+      size: 1.9,
+      finish: 'sparkle',
+      glow: 'body',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'cozy'] },
   },
   {
     id: 'shellnap',
@@ -96,7 +209,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 30,
     },
     moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle'],
-    evolutions: [],
+    evolutions: [{ into: 'sipsnooze', level: 18 }], // TUNE: #443 kid at the uncommon level
     visual: {
       body: 'pebble',
       palette: ['#9fe0c0', '#fff4e6', '#ffe9d6', '#ff9ec4'],
@@ -116,6 +229,69 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['sleepy', 'cozy'],
     },
   },
+  // #443 kid (stage 2): Shellnap grows a tea leaf on its head, before Brewtle's flippers.
+  {
+    id: 'sipsnooze',
+    name: 'Sipsnooze',
+    description: 'A tea leaf sprouted on its head. It naps under it like a tiny umbrella.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'uncommon',
+    baseStats: { hp: 83, attack: 53, defense: 89, speed: 35 }, // TUNE: ×1.18 Shellnap
+    moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle'],
+    evolutions: [{ into: 'brewtle', level: 26 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pebble',
+      palette: ['#9fe0c0', '#fff4e6', '#ffe9d6', '#ff9ec4'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'leaf-sprout',
+        'shell-dome',
+        'stubby-legs',
+        'handle-arc',
+        'freckles',
+      ],
+      size: 1.2,
+      head: { body: 'orb', size: 0.66, forward: 0.62, up: 0.18 },
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'brewtle',
+    name: 'Brewtle',
+    description:
+      'Big flippers for paddling and a teacup shell for napping. It never spills a drop.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 98, attack: 63, defense: 105, speed: 42 }, // TUNE: ×1.4 Shellnap
+    moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle', 'splish-splash'],
+    evolutions: [],
+    visual: {
+      body: 'pebble',
+      palette: ['#93d9b6', '#fff4e6', '#ffe9d6', '#ff9ec4'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'leaf-sprout',
+        'shell-dome',
+        'side-fins',
+        'round-paws',
+        'handle-arc',
+        'freckles',
+      ],
+      size: 1.38,
+      head: { body: 'orb', size: 0.64, forward: 0.64, up: 0.22 },
+      stance: 0.2,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
   {
     id: 'gnomnom',
     name: 'Gnomnom',
@@ -130,7 +306,7 @@ export const WAVE_1_SPECIES: Species[] = [
       speed: 40,
     },
     moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
-    evolutions: [],
+    evolutions: [{ into: 'gnomnibble', level: 18 }], // TUNE: #443 kid at the uncommon level
     visual: {
       body: 'pear',
       palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#7a6f66'],
@@ -152,6 +328,71 @@ export const WAVE_1_SPECIES: Species[] = [
       elements: ['stone'],
       feelings: ['cozy', 'sleepy'],
     },
+  },
+  // #443 kid (stage 2): Gnomnom wears a garden leaf on its back, before Gnomguard's strong arms.
+  {
+    id: 'gnomnibble',
+    name: 'Gnomnibble',
+    description: 'A big leaf got stuck to its back in the veggie patch. It decided to keep it.',
+    element: 'stone',
+    feeling: 'cozy',
+    rarity: 'uncommon',
+    baseStats: { hp: 77, attack: 65, defense: 77, speed: 47 }, // TUNE: ×1.18 Gnomnom
+    moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
+    evolutions: [{ into: 'gnomguard', level: 26 }], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pear',
+      palette: ['#b9b2a7', '#fff4e6', '#d9453b', '#7a6f66'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'nightcap',
+        'fur-ruff',
+        'stuck-leaf',
+        'stubby-legs',
+        'stubby-arms',
+        'freckles',
+      ],
+      size: 1.25,
+      stance: 0.25,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['cozy', 'sleepy'] },
+  },
+  // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
+  {
+    id: 'gnomguard',
+    name: 'Gnomguard',
+    description:
+      'Strong arms for carrying pumpkins and a beard for keeping snacks in. Best garden guard ever.',
+    element: 'stone',
+    feeling: 'cozy',
+    rarity: 'rare',
+    baseStats: { hp: 91, attack: 77, defense: 91, speed: 56 }, // TUNE: ×1.4 Gnomnom
+    moves: ['pebble-plop', 'sturdy-sit', 'rock-a-bye', 'rumble-roll'],
+    evolutions: [],
+    visual: {
+      body: 'pear',
+      palette: ['#b2aa9e', '#fff4e6', '#d9453b', '#7a6f66'],
+      parts: [
+        'sharp-eyes',
+        'smile',
+        'blush-cheeks',
+        'nightcap',
+        'fur-ruff',
+        'stuck-leaf',
+        'biped-legs',
+        'strong-arms',
+        'freckles',
+      ],
+      size: 1.43,
+      stance: 0.4,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['cozy', 'sleepy'] },
   },
   {
     id: 'lilyhop',
