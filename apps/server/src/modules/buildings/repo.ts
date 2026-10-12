@@ -20,6 +20,7 @@ import {
   packedHomeFires,
   packedTrainingGrounds,
   squishies,
+  tileClears,
   tileExplore,
   tileUseNotes,
   tiles,
@@ -100,6 +101,8 @@ export interface TileUseTileRow {
   joinedAt: Date | null;
   pausedAt: Date | null;
   resumedAt: Date | null;
+  /** The player is clearing it (#242): nothing moves onto it. */
+  clearing: boolean;
 }
 
 /** The tidy-up note's content (#295), as `tile_use_notes` keeps it. */
@@ -466,6 +469,12 @@ function queries(db: Executor): BuildingsRepo {
           joinedAt: tileExplore.joinedAt,
           pausedAt: tileExplore.pausedAt,
           resumedAt: tileExplore.resumedAt,
+          clearing: sql<boolean>`exists (
+            select 1 from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id}
+              and ${tileClears.userId} = ${userId}
+              and ${tileClears.endedAt} is null
+          )`,
         })
         .from(tiles)
         .leftJoin(

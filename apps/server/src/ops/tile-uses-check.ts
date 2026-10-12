@@ -14,7 +14,11 @@ import { createDbClient } from '../db/client.js';
 import { listTileUseOwners, planOwnerTileUses, tidies } from '../modules/buildings/tile-uses.js';
 
 const log = pino({ name: 'ops' });
-const { values } = parseArgs({ options: { totals: { type: 'boolean', default: false } } });
+// `allowPositionals`: `pnpm tile-uses:check -- --totals` passes a bare `--` along.
+const { values } = parseArgs({
+  allowPositionals: true,
+  options: { totals: { type: 'boolean', default: false } },
+});
 
 const config = loadConfig();
 const client = createDbClient(config.DATABASE_URL, { max: 1 });

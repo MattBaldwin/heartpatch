@@ -1422,7 +1422,7 @@ export const tileUseNotes = pgTable(
     userId: uuid('user_id').notNull(),
     // Buildings that moved: `{ buildingId, from: {q, r}, to: {q, r} }[]`.
     moved: jsonb('moved').notNull().default([]),
-    // Buildings taken down with nowhere to go: building ids.
+    // Buildings taken down with nowhere to go: `{ buildingId, q, r }[]`.
     packed: jsonb('packed').notNull().default([]),
     // Everything that came back to the bag.
     refund: jsonb('refund').$type<Record<string, number>>().notNull().default({}),

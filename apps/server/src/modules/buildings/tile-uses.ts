@@ -72,18 +72,32 @@ export const tidies = (uses: Pick<OwnerTileUses, 'plan' | 'gatherers'>): boolean
   uses.plan.move.length + uses.plan.pack.length + uses.gatherers.length > 0;
 
 /** One player's plan, read through `db` (the caller decides on locks). */
-export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Promise<OwnerTileUses> {
+export async function planOwnerTileUses(
+  db: Executor,
+  owner: TileUseOwner,
+  /** Plan over these tiles only: the ones the pass holds locked. */
+  lockedTileIds?: ReadonlySet<string>,
+): Promise<OwnerTileUses> {
   const repo = createBuildingsRepo(db);
   const [tileRows, rows] = await Promise.all([
     repo.listTileUseTiles(owner.mapId, owner.userId),
     repo.listOwned(owner.mapId, owner.userId),
   ]);
-  const ownTiles: TileUseTile[] = tileRows.map(({ joinedAt, pausedAt, resumedAt, ...tile }) => ({
-    ...tile,
-    homestead: tile.homeSlot === null ? homesteadOf({ joinedAt, pausedAt, resumedAt }) : null,
-  }));
+  // The pass plans only over tiles it holds locked; a tile being cleared
+  // takes no new building (as placing one refuses), so nothing moves onto it.
+  const ownTiles: TileUseTile[] = tileRows
+    .filter((t) => !lockedTileIds || lockedTileIds.has(t.id))
+    .map(({ joinedAt, pausedAt, resumedAt, id, q, r, homeSlot, nodeResource }) => ({
+      id,
+      q,
+      r,
+      homeSlot,
+      nodeResource,
+      homestead: homeSlot === null ? homesteadOf({ joinedAt, pausedAt, resumedAt }) : null,
+    }));
+  const clearing = new Set(tileRows.filter((t) => t.clearing).map((t) => t.id));
   const plan = planTileUses(
-    ownTiles,
+    ownTiles.filter((t) => !clearing.has(t.id) || rows.some((b) => b.tileId === t.id)),
     rows.map((r) => ({
       id: r.id,
       tileId: r.tileId,
@@ -198,11 +212,11 @@ async function tidyOne(
     const jobs = createSquishyJobsRepo(tx);
     // Step 6: every tile I own, one id-ordered lock (a building may move to any of them).
     const tileIds = await repo.ownedTileIds(owner.mapId, owner.userId);
-    await jobs.lockTiles(tileIds);
+    const locked = (await jobs.lockTiles(tileIds)).filter((t) => t.ownerUserId === owner.userId);
     const map = await createMapsRepo(tx).findMap(owner.mapId);
     if (!map || map.kind !== 'multiplayer') return none;
     // Planned again under the locks: a command may have changed things since the scan.
-    const uses = await planOwnerTileUses(tx, owner);
+    const uses = await planOwnerTileUses(tx, owner, new Set(locked.map((t) => t.id)));
     if (!tidies(uses)) return none;
     const { plan, rows, gatherers } = uses;
     const local = mapLocalTime(at, map.timeZone);

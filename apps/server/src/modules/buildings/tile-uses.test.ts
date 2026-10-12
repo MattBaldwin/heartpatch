@@ -9,7 +9,17 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
+import {
+  buildings,
+  keepers,
+  mapMembers,
+  maps,
+  sessions,
+  squishies,
+  tileClears,
+  tiles,
+  users,
+} from '../../db/schema.js';
 import { makeHomestead } from '../../../tests/homestead.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -112,16 +122,25 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
 
   /** My home tiles' ids: the Heart Seed's, then the ring's, by (q, r). */
   async function homeTileIds(server: FastifyInstance, who: Player, mapId: string) {
-    const { tiles } = HomeResponseSchema.parse(
+    const { tiles: home } = HomeResponseSchema.parse(
       (await call(server, 'GET', `/maps/${mapId}/home`, who)).json(),
     );
     const idOf = async (t: { q: number; r: number }) =>
       (await db.query.tiles.findFirst({
         where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, t.q), eq(x.r, t.r)),
       }))!.id;
-    const seed = tiles.find((t) => t.heartSeed)!;
-    const ring = tiles.filter((t) => !t.heartSeed);
+    const seed = home.find((t) => t.heartSeed)!;
+    const ring = home.filter((t) => !t.heartSeed);
     return { seed: await idOf(seed), ring: await Promise.all(ring.map(idOf)) };
+  }
+
+  /** The (q, r) of my `nth` ring tile. */
+  async function homeHex(server: FastifyInstance, who: Player, mapId: string, nth: number) {
+    const { tiles: home } = HomeResponseSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/home`, who)).json(),
+    );
+    const t = home.filter((h) => !h.heartSeed)[nth]!;
+    return { q: t.q, r: t.r };
   }
 
   /** A building as the old rules let it stand, placed `daysAgo` days ago. */
@@ -323,6 +342,13 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
     });
     expect(Object.fromEntries(bag.map((b) => [b.itemId, b.quantity]))).toEqual(refund);
+    // The ledger reconciles: the refund is written once, against the building.
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.reason, 'build-refund')),
+    });
+    expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(refund);
+    expect(new Set(ledger.map((l) => l.refId))).toEqual(new Set([grounds]));
     expect(await noteOf(server, kid, mapId)).toMatchObject({
       moved: [],
       packed: [{ buildingId: 'training-grounds', q: plot.q, r: plot.r }],
@@ -344,5 +370,75 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     await pass(mapId);
     expect((await rowsOf(mapId)).find((r) => r.id === grounds)?.tileId).toBe(plot.id);
     expect(await noteOf(server, kid, mapId)).toBeNull();
+  });
+
+  it('moves nothing onto land being cleared, and leaves a tutorial map alone', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    const plot = await openHomestead(mapId, kid, 0);
+    const clearing = await openHomestead(mapId, kid, 1);
+    await db.insert(tileClears).values({
+      mapId,
+      userId: kid.id,
+      tileId: clearing.id,
+      fromTerrain: 'forest',
+      fromNode: null,
+      tool: 'axe',
+      drop: {},
+      startedAt: clock,
+      readyAt: new Date(clock.getTime() + 120_000),
+    });
+    const grounds = await old(mapId, kid, 'training-grounds', 'training-grounds', plot.id, 1, 3);
+    await old(mapId, kid, 'hearthfire', 'hearthfire', plot.id, 0, 1);
+    await pass(mapId);
+    // The only other homestead is being cleared: the Training Grounds packs instead.
+    expect((await rowsOf(mapId)).find((r) => r.id === grounds)).toBeUndefined();
+    expect(await noteOf(server, kid, mapId)).toMatchObject({ moved: [] });
+
+    // A tutorial glade is never tidied.
+    const [glade] = await db
+      .insert(maps)
+      .values({ kind: 'tutorial', name: 'Glade', timeZone: ZONE, maxPlayers: 1 })
+      .returning({ id: maps.id });
+    await db.insert(mapMembers).values({ mapId: glade!.id, userId: kid.id, role: 'owner' });
+    const [ring] = await db
+      .insert(tiles)
+      .values({ mapId: glade!.id, q: 0, r: 0, terrain: 'meadow', ownerUserId: kid.id, homeSlot: 0 })
+      .returning({ id: tiles.id });
+    await old(glade!.id, kid, 'ember-den', 'habitat', ring!.id, 1, 2);
+    await old(glade!.id, kid, 'cozy-meadow', 'habitat', ring!.id, 2, 1);
+    await pass(glade!.id);
+    expect(await rowsOf(glade!.id)).toHaveLength(2);
+  });
+
+  it('runs alongside a settle and a placement for the same player without a deadlock', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    const { ring } = await homeTileIds(server, kid, mapId);
+    await old(mapId, kid, 'ember-den', 'habitat', ring[0]!, 1, 3);
+    await old(mapId, kid, 'cozy-meadow', 'habitat', ring[0]!, 2, 2);
+    await db.execute(
+      `insert into inventories (map_id, user_id, item_id, quantity)
+       values ('${mapId}', '${kid.id}', 'timber', 50), ('${mapId}', '${kid.id}', 'stone', 50)`,
+    );
+    const [, settled, placed] = await Promise.all([
+      pass(mapId),
+      call(server, 'POST', `/maps/${mapId}/settle`, kid),
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/buildings`,
+        headers: HEADERS,
+        cookies: { [SESSION_COOKIE]: kid.token },
+        payload: { buildingId: 'ember-den', ...(await homeHex(server, kid, mapId, 5)), spot: 1 },
+      }),
+    ]);
+    expect(settled.statusCode).toBe(200);
+    // The placement either won its tile or found it taken by a move: never a deadlock (500).
+    expect([201, 409]).toContain(placed.statusCode);
+    const perTile = new Map<string, number>();
+    for (const r of await rowsOf(mapId)) perTile.set(r.tileId, (perTile.get(r.tileId) ?? 0) + 1);
+    expect(Math.max(...perTile.values())).toBe(1);
   });
 });
