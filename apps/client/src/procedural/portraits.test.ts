@@ -4,7 +4,7 @@ import { createPortraits, inUse, opaqueBox } from './portraits.js';
 
 // The portrait scene, as small as the draw's lifecycle needs (no WebGL here).
 const scenes: { disposed: boolean }[] = [];
-let shots: { resolve: (url: string) => void }[] = [];
+let shots: { resolve: (url: string) => void; timeOut: () => void }[] = [];
 vi.mock('@babylonjs/core/scene', () => ({
   Scene: class {
     isDisposed = false;
@@ -32,12 +32,14 @@ vi.mock('@babylonjs/core/Cameras/targetCamera', () => ({
     }
   },
 }));
-// A snapshot that finishes only when the test says so (a slow device).
+// A snapshot that finishes (or times out) only when the test says so (a slow device).
 vi.mock('@babylonjs/core/Misc/screenshotTools', () => ({
-  CreateScreenshotUsingRenderTargetAsync: () =>
-    new Promise<string>((resolve) => {
-      shots.push({ resolve });
-    }),
+  CreateScreenshotUsingRenderTarget: (...args: unknown[]) => {
+    shots.push({
+      resolve: args[3] as (url: string) => void,
+      timeOut: args[15] as () => void,
+    });
+  },
 }));
 vi.mock('../engine/lighting/lighting.js', () => ({ setupLighting: () => undefined }));
 vi.mock('./accessory.js', () => ({ accessoryItem: () => null }));
@@ -126,37 +128,55 @@ describe('createPortraits', () => {
     vi.useRealTimers();
   });
 
-  it('keeps the scene of a draw it gave up on until its snapshot is done (#375)', async () => {
-    const portraits = createPortraits({
+  const portraitsFor = () =>
+    createPortraits({
       engine: () => ({ isDisposed: false }) as never,
       registry: { bodies: new Map() } as unknown as VisualRegistry,
       lod: () => 'high',
       invalidate: () => undefined,
     });
-    const look = { species: { id: 'puddlepuff' } as Species, instanceId: 'a', accessory: null };
+  const look = { species: { id: 'puddlepuff' } as Species, instanceId: 'a', accessory: null };
+
+  it('keeps the scene of a draw it gave up on until its snapshot is done (#375)', async () => {
+    const portraits = portraitsFor();
     const first = portraits.get(look);
     await vi.waitFor(() => {
       expect(shots).toHaveLength(1);
     });
-    // The draw gives up while its snapshot is still pending: no picture, and
-    // its scene stays (disposing it under the snapshot froze the game).
+    // The screen asking gives up while the snapshot is still pending: no
+    // picture, and its scene stays (disposing it under the snapshot froze the game).
     await vi.advanceTimersByTimeAsync(8_000);
     expect(await first).toBeNull();
     expect(scenes[0]?.disposed).toBeFalsy();
 
-    // The next picture draws on a fresh scene meanwhile.
+    // The next picture waits: two snapshots at once would leave the engine's
+    // render size wrong.
     void portraits.get({ ...look, instanceId: 'b' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(shots).toHaveLength(1);
+
+    // The late snapshot lands (its crop fails here, with no Image in node:
+    // the draw still ends), the old scene goes, and the next draws on a fresh one.
+    shots[0]?.resolve('data:image/png;base64,');
     await vi.waitFor(() => {
       expect(shots).toHaveLength(2);
     });
+    expect(scenes[0]?.disposed).toBe(true);
     expect(scenes).toHaveLength(2);
-    expect(scenes[0]?.disposed).toBeFalsy();
-
-    // The late snapshot lands: now the old scene goes.
-    shots[0]?.resolve('data:image/png;base64,');
-    await vi.waitFor(() => {
-      expect(scenes[0]?.disposed).toBe(true);
-    });
     expect(scenes[1]?.disposed).toBeFalsy();
+  });
+
+  it('moves on when a snapshot never gets ready (Babylon gives up on it)', async () => {
+    const portraits = portraitsFor();
+    const first = portraits.get(look);
+    void portraits.get({ ...look, instanceId: 'b' });
+    await vi.waitFor(() => {
+      expect(shots).toHaveLength(1);
+    });
+    shots[0]?.timeOut();
+    expect(await first).toBeNull();
+    await vi.waitFor(() => {
+      expect(shots).toHaveLength(2);
+    });
   });
 });
