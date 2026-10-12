@@ -655,16 +655,49 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 45, defense: 65, speed: 25 }, // TUNE:
     moves: ['pebble-plop', 'rock-a-bye', 'sturdy-sit'],
-    evolutions: [
-      { into: 'boulderdoze', level: 16 },
-      { into: 'rumblehorn', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'cobblenap', level: 16 }], // TUNE:
     visual: {
       body: 'pebble',
       palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
       parts: ['sleepy-eyes', 'tiny-smile', 'round-ears', 'nightcap', 'stubby-legs', 'freckles'],
       head: { body: 'orb', size: 0.75, forward: 0.62, up: 0.05 },
       stance: 0.12,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
+  },
+  // #443 kid (stage 2): two little horn nubs and its first crag bumps, before Boulderdoze's
+  // horns or Rumblehorn's.
+  {
+    id: 'cobblenap',
+    name: 'Cobblenap',
+    description: 'Two little horns poked up under its nightcap. It still naps through anything.',
+    element: 'stone',
+    feeling: 'sleepy',
+    rarity: 'common',
+    baseStats: { hp: 71, attack: 53, defense: 77, speed: 30 }, // TUNE: ×1.18 Pebblesnooze
+    moves: ['pebble-plop', 'rock-a-bye', 'sturdy-sit'],
+    evolutions: [
+      { into: 'boulderdoze', level: 24 },
+      { into: 'rumblehorn', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'pebble',
+      palette: ['#b0a99e', '#e9e3d9', '#8574c0', '#6f665b'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'round-ears',
+        'nightcap',
+        'nub-horns',
+        'crag-nubs',
+        'stubby-legs',
+        'freckles',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 0.7, forward: 0.64, up: 0.08 },
+      stance: 0.16,
       pose: 'stand',
       attackPart: 'crown',
     },
@@ -878,14 +911,42 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 40 }, // TUNE:
     moves: ['snowball-toss', 'chilly-yawn', 'frosty-pounce'],
-    evolutions: [
-      { into: 'drowsiberg', level: 16 },
-      { into: 'twirlicle', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'snoozeflake', level: 16 }], // TUNE:
     visual: {
       body: 'tiered',
       palette: ['#d4f0ff', '#ffffff', '#86c5eb'],
       parts: ['sleepy-eyes', 'tiny-smile', 'pointy-ears', 'stubby-arms', 'ball-tail'],
+      pose: 'sit',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
+  },
+  // #443 kid (stage 2): a frosty icicle crown on the little snowman.
+  {
+    id: 'snoozeflake',
+    name: 'Snoozeflake',
+    description: 'Grew a crown of icicles while it slept. It jingles when it yawns.',
+    element: 'frost',
+    feeling: 'sleepy',
+    rarity: 'common',
+    baseStats: { hp: 71, attack: 59, defense: 65, speed: 47 }, // TUNE: ×1.18 Snoozicle
+    moves: ['snowball-toss', 'chilly-yawn', 'frosty-pounce'],
+    evolutions: [
+      { into: 'drowsiberg', level: 24 },
+      { into: 'twirlicle', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'tiered',
+      palette: ['#cdeeff', '#ffffff', '#7fbfe8', '#e8f8ff'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'pointy-ears',
+        'icicle-crown',
+        'stubby-arms',
+        'ball-tail',
+      ],
+      size: 1.15,
       pose: 'sit',
       attackPart: 'arms',
     },
@@ -963,16 +1024,47 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 50, attack: 50, defense: 45, speed: 70 }, // TUNE:
     moves: ['zip-zap', 'fizzy-pop', 'pebble-plop'], // TUNE: Fizzy Pop, so it can hit hard
-    evolutions: [
-      { into: 'frizzbolt', level: 16 },
-      { into: 'glidebolt', level: 16 },
-    ], // TUNE:
+    evolutions: [{ into: 'zipkit', level: 16 }], // TUNE:
     visual: {
       body: 'barrel',
       palette: ['#ffe45c', '#fff9db', '#f5a800'],
       parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'bolt-ears', 'stubby-legs', 'bolt-chain'],
       head: { body: 'orb', size: 1.05, forward: 0.45, up: 0.3 },
       stance: 0.15,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
+  },
+  // #443 kid (stage 2): its fur frizzes up into a little spark crest.
+  {
+    id: 'zipkit',
+    name: 'Zipkit',
+    description: 'Its fur frizzed up into a spiky crest. Every pat gives a tiny zap.',
+    element: 'spark',
+    feeling: 'silly',
+    rarity: 'common',
+    baseStats: { hp: 59, attack: 59, defense: 53, speed: 83 }, // TUNE: ×1.18 Fuzzbolt
+    moves: ['zip-zap', 'fizzy-pop', 'pebble-plop'],
+    evolutions: [
+      { into: 'frizzbolt', level: 24 },
+      { into: 'glidebolt', level: 24 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'barrel',
+      palette: ['#ffe04f', '#fff9db', '#f5a300', '#ffffff'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'bolt-ears',
+        'spark-crest',
+        'stubby-legs',
+        'bolt-chain',
+      ],
+      size: 1.15,
+      head: { body: 'orb', size: 0.95, forward: 0.5, up: 0.42 },
+      stance: 0.28,
       pose: 'stand',
       attackPart: 'tail',
     },
@@ -1939,16 +2031,41 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 65, defense: 60, speed: 65 }, // TUNE:
     moves: ['night-light', 'boo', 'peekaboo'],
-    evolutions: [
-      { into: 'brightboo', level: 22 },
-      { into: 'lullaboo', level: 22 },
-    ], // TUNE:
+    evolutions: [{ into: 'wispyboo', level: 22 }], // TUNE:
     visual: {
       body: 'ghost',
       palette: ['#f1ecff', '#fff6c7', '#c9b8ff'],
       parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stubby-arms'],
       glow: 'body',
       stance: 0.25,
+      pose: 'hover',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
+  },
+  // #443 kid (stage 2): a little ghost growing tiny wings and its first wispy tail, before
+  // Brightboo's wisps or Lullaboo's.
+  {
+    id: 'wispyboo',
+    name: 'Wispyboo',
+    description: 'Its tail turned wispy overnight. It swishes it to say boo, very softly.',
+    element: 'light',
+    feeling: 'spooky',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 71, attack: 77, defense: 71, speed: 77 }, // TUNE: ×1.18 Glowboo
+    moves: ['night-light', 'boo', 'peekaboo'],
+    evolutions: [
+      { into: 'brightboo', level: 30 },
+      { into: 'lullaboo', level: 30 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'ghost',
+      palette: ['#f1ecff', '#d6c6ff', '#c9b8ff', '#ffe066'],
+      glow: 'body',
+      parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stubby-arms', 'nub-wings', 'wisp-tail'],
+      size: 1.15,
+      stance: 0.3,
       pose: 'hover',
       attackPart: 'arms',
     },
@@ -2032,16 +2149,40 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 55, attack: 60, defense: 45, speed: 70 }, // TUNE:
     moves: ['upside-flop', 'peekaboo', 'zip-zap'],
-    evolutions: [
-      { into: 'topsywing', level: 18 },
-      { into: 'hushwing', level: 18 },
-    ], // TUNE:
+    evolutions: [{ into: 'flitterbat', level: 18 }], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#4a3a7a', '#eadcff', '#9b7fd4'],
       parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'pointy-ears', 'bat-wings'],
       ink: '#fff4dc',
       stance: 0.35,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['silly', 'spooky'] },
+  },
+  // #443 kid (stage 2): big tufted ears and a fluffy tail, before its teens' big wings.
+  {
+    id: 'flitterbat',
+    name: 'Flitterbat',
+    description: 'Hangs upside down to listen with its big fluffy ears. It hears every giggle.',
+    element: 'shadow',
+    feeling: 'silly',
+    rarity: 'uncommon',
+    season: 'halloween',
+    baseStats: { hp: 65, attack: 71, defense: 53, speed: 83 }, // TUNE: ×1.18 Upsybat
+    moves: ['upside-flop', 'peekaboo', 'zip-zap'],
+    evolutions: [
+      { into: 'topsywing', level: 26 },
+      { into: 'hushwing', level: 26 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#47387a', '#eadcff', '#9b7fd4', '#ff9ad5'],
+      ink: '#fff4dc',
+      parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'tuft-ears', 'bat-wings', 'ball-tail'],
+      size: 1.15,
+      stance: 0.4,
       pose: 'hover',
       attackPart: 'wings',
     },
