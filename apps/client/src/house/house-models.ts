@@ -698,7 +698,7 @@ const G = HOUSE_GROWN;
 function flatDisc(scene: Scene, d: number, at: Vec, hex: string): Mesh {
   const m = CreateDisc(
     'house-part',
-    { radius: d / 2, tessellation: 8, sideOrientation: Mesh.DOUBLESIDE },
+    { radius: d / 2, tessellation: G.sides, sideOrientation: Mesh.DOUBLESIDE },
     scene,
   );
   m.position.set(...at);
@@ -765,7 +765,7 @@ export function playTent(scene: Scene): Mesh[] {
   door.rotation.x = 0.33; // lean with the canvas
   return [
     tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, G.facets),
-    // Three bands round the cone, a little proud of the canvas.
+    // Three bands round the cone.
     ...[0.3, 0.68, 1.06].map((y) => {
       // Flush with the canvas (a painted band, not a ledge).
       const at = (yy: number) => 1.45 * (1 - yy / h) + 0.01;
@@ -806,7 +806,7 @@ export function stove(scene: Scene, pipe: number): Parts {
     box(scene, [0.98, 0.06, 0.7], [0, 0.88, 0], '#2f2a36'),
     tube(scene, pipe - 0.9, 0.16, 0.16, [0, 0.9 + (pipe - 0.9) / 2, 0.18], c.stove, G.sides),
     // A round pot with a lid, a knob and a handle.
-    tube(scene, 0.26, 0.4, 0.34, [-0.16, 1.04, -0.06], c.pot, 12),
+    tube(scene, 0.26, 0.4, 0.34, [-0.16, 1.04, -0.06], c.pot, 12), // TUNE: smoother than G.sides, so it reads as a pot
     tube(scene, 0.04, 0.36, 0.42, [-0.16, 1.19, -0.06], c.pot, 12),
     box(scene, [0.07, 0.06, 0.07], [-0.16, 1.24, -0.06], '#2f2a36'),
     box(scene, [0.22, 0.04, 0.05], [0.12, 1.08, -0.06], '#2f2a36'),
@@ -963,13 +963,13 @@ export function heartTree(scene: Scene, h: number): Parts {
   });
   // A heart: two lobes and a point below, flattened front to back.
   // Its top tucked inside the lobes (render check r3: a wider top showed as pink wings).
-  const point = tube(scene, r * 1.8, r * 2.0, 0.05, [0, top - r * 1.2, 0], c.crown[0], 6);
+  const point = tube(scene, r * 1.8, r * 2.0, 0.05, [0, top - r * 1.2, 0], c.crown[0], G.facets);
   point.scaling.z = 0.55;
   const solid = [
     tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
     ...boughs,
     ball(scene, r * 2.1, [-r * 0.72, top, 0], c.crown[0], [1, 1, 0.62], G.segments),
-    ball(scene, r * 2.1, [r * 0.72, top, 0], c.crown[2], [1, 1, 0.62], G.segments),
+    ball(scene, r * 2.1, [r * 0.72, top, 0], c.crown[1], [1, 1, 0.62], G.segments),
     point,
     // Roots spreading on the floor, with a gold ring round them.
     tube(scene, 0.12, 1.5, 1.6, [0, 0.06, 0], '#8a6a52', G.sides),
@@ -1044,7 +1044,7 @@ export function goldHeart(scene: Scene, size: number): Mesh[] {
   return [lobe(-r * 0.8), lobe(r * 0.8), point];
 }
 
-/** A few toy blocks, a ball-ish block and a book, cheap enough for the top level (Snug's `toys` are rounder). */
+/** A few toy blocks and a book, cheap enough for the top level (Snug's `toys` are rounder). */
 export function toyBlocks(scene: Scene): Mesh[] {
   const book = box(scene, [0.34, 0.04, 0.26], [0.9, 0.02, 0.3], '#7fb2e5', 0.3);
   return [
@@ -1061,6 +1061,10 @@ export function ovalRug(scene: Scene, rx: number, rz: number): Mesh[] {
   const c = G.hall;
   return [
     floorDisc(scene, 1, [0, 0.012, 0], c.rugEdge, [rx, rz, 1]),
-    floorDisc(scene, 1, [0, 0.016, 0], c.rug, [rx - 0.14, rz - 0.14, 1]),
+    floorDisc(scene, 1, [0, 0.016, 0], c.rug, [
+      Math.max(0.1, rx - 0.14),
+      Math.max(0.1, rz - 0.14),
+      1,
+    ]),
   ];
 }

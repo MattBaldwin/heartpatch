@@ -260,8 +260,8 @@ export const HOUSE_GROWN = {
     rail: '#8d5a3b', // TUNE
     gold: '#f2c14e', // TUNE: the top level's gold accents
     trunk: '#9b7a62', // TUNE
-    /** The Heart Tree's crown, a heart of pink rounds (sRGB). */
-    crown: ['#ffb0d0', '#ffc4da', '#ff9cc4'], // TUNE: light, so high tier's shade stays pink
+    /** The Heart Tree's crown, a heart of two pink rounds (sRGB). */
+    crown: ['#ffb0d0', '#ff9cc4'], // TUNE: left and right lobes; light, so high tier's shade stays pink
     lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
     sparkle: '#fff2b0', // TUNE: the tree's sparkles
     rug: '#e97a9b', // TUNE
