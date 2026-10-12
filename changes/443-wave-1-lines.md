@@ -3,5 +3,5 @@ title: Wild kinds grow up too
 area: squishies
 ---
 
-Lilyhop, Hailhop, Chillypep and Flakefluff now grow up! They become a kid at level 16 (Lilyleap, Hailbounce, Pepperpip and Snowtuft) and a teen at level 24 (Croakaroo, Hailhare, Jalapow and Frostbold).
+Lilyhop, Hailhop, Chillypep, Flakefluff, Shellnap, Gnomnom, Moonmoth and Cometsnail now grow up! Each one becomes a kid, then a teen: Croakaroo, Hailhare, Jalapow, Frostbold, Brewtle, Gnomguard, Lunamoth and Starblaze are waiting.
 **Try it:** open your Squishies list. A Lilyhop now says "Stage 1 of 3".
