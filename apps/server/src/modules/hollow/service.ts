@@ -55,6 +55,7 @@ import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
+import { readTileUseNote } from '../buildings/tile-use-notes.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { addNightWatchLean } from '../care/evolution.js';
@@ -574,6 +575,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         squishyRows,
         packed,
         packedTraining,
+        tileUseNote,
       ] = await Promise.all([
         store.nightsSince(mapId, since, rules.reportNights),
         store.hollowedOf(mapId, user.id),
@@ -584,6 +586,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         store.nightSquishies(mapId, { lock: false }),
         createBuildingsRepo(db).packedFires(mapId, user.id),
         createBuildingsRepo(db).packedTraining(mapId, user.id),
+        readTileUseNote(db, { mapId, userId: user.id }),
       ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
@@ -693,6 +696,15 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           : null,
         trainingGroundsPacked: packedTraining
           ? { refund: packedTraining.refund, at: packedTraining.packedAt.toISOString() }
+          : null,
+        tileUseNote: tileUseNote
+          ? {
+              moved: tileUseNote.moved,
+              packed: tileUseNote.packed,
+              refund: tileUseNote.refund,
+              stoppedGatherers: tileUseNote.stoppedGatherers,
+              at: tileUseNote.notedAt.toISOString(),
+            }
           : null,
         now: at.toISOString(),
       };
