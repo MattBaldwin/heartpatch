@@ -16,10 +16,9 @@ export const TEST_PASSWORD = 'squishy-secret';
 // consonant+vowel syllables instead. Every stem x worker letter x prefix used
 // here was checked against the real filter; `le` is left out because
 // `hit` + `le` + `ra…` squashes to a name the filter rightly refuses.
-const SYLLABLES = [...'bdlmrvz']
-  .flatMap((c) => [...'aeiou'].map((v) => c + v))
-  .filter((s) => s !== 'le');
-const WORKER_LETTERS = 'bdlmrvz';
+const CONSONANTS = ['b', 'd', 'l', 'm', 'r', 'v', 'z'];
+const VOWELS = ['a', 'e', 'i', 'o', 'u'];
+const SYLLABLES = CONSONANTS.flatMap((c) => VOWELS.map((v) => c + v)).filter((s) => s !== 'le');
 
 /**
  * A name nobody has used yet, e.g. `own_zavodib` (usernames are global): three
@@ -32,10 +31,10 @@ export function uniqueName(prefix: string): string {
   let t = Date.now() % size ** 3;
   let stem = '';
   for (let i = 0; i < 3; i++) {
-    stem += SYLLABLES[t % size];
+    stem += SYLLABLES[t % size] ?? '';
     t = Math.floor(t / size);
   }
-  const worker = WORKER_LETTERS[(workerIndex + 3 * retry) % WORKER_LETTERS.length];
+  const worker = CONSONANTS[(workerIndex + 3 * retry) % CONSONANTS.length] ?? 'b';
   return `${prefix.slice(0, 8)}_${stem}${worker}`;
 }
 
