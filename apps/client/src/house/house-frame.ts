@@ -16,6 +16,21 @@ export const framesAboveSheet = (sheet: string): boolean =>
   sheet === 'picker' || sheet === 'move-out';
 
 /**
+ * The room a residents page is about, which a tall phone frames instead of
+ * the Keeper's: the picker's room, or the room of the resident moving out.
+ * Null on every other sheet (the house frames as B4 does).
+ */
+export function framedRoomId(
+  sheet: string,
+  pickRoom: string | null,
+  movingOutOf: string | null,
+): string | null {
+  if (sheet === 'picker') return pickRoom;
+  if (sheet === 'move-out') return movingOutOf;
+  return null;
+}
+
+/**
  * The bands to fit with: the folded ones, or, while a residents page is
  * open, the open sheet's height (CSS px from the screen's bottom) for both
  * (the Walk in button hides under the page).

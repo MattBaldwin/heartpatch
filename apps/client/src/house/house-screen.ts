@@ -39,7 +39,7 @@ import {
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
 import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
-import { framesAboveSheet, sheetBands } from './house-frame.js';
+import { framedRoomId, framesAboveSheet, sheetBands } from './house-frame.js';
 import { createHousePan, type PanFrame } from './house-pan.js';
 import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine, RESIDENT_TEXT } from './house-view.js';
 import { careApi, type CareApi } from '../care/care-api.js';
@@ -194,7 +194,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     measure: () => {
       const s = scene3d;
       if (!s) throw new Error('no house to fit');
-      return { vp: viewport(), bounds: s.frameBounds, room: s.focusRoom, spots: s.residentSpots };
+      // C2b: a residents page frames its own room on a tall phone.
+      const room = pageRoom() ?? s.focusRoom;
+      return { vp: viewport(), bounds: s.frameBounds, room, spots: s.residentSpots };
     },
     frameOutside: (pose, vp) => {
       const height = Math.max(1, vp.height);
@@ -694,6 +696,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
    */
   function reframeForSheet(from: HouseSheet, to: HouseSheet): void {
     if (framesAboveSheet(from) !== framesAboveSheet(to)) refit();
+  }
+
+  /** The room a residents page is about, as the framing wants it (x only), or null. */
+  function pageRoom(): { minX: number; maxX: number } | null {
+    const movingOutOf =
+      view?.rooms.find((r) => r.residents.some((x) => x.squishyId === chosen))?.id ?? null;
+    const id = framedRoomId(sheet, pickRoom, movingOutOf);
+    const room = id ? view?.rooms.find((r) => r.id === id) : undefined;
+    if (!room) return null;
+    const box = roomBox(room);
+    return { minX: box.x0, maxX: box.x1 };
   }
 
   /** Where focus goes when a resident page opens or closes. */

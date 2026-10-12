@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fitHouse, project, type HouseViewport } from './house-camera.js';
-import { framesAboveSheet, sheetBands } from './house-frame.js';
+import { framedRoomId, framesAboveSheet, sheetBands } from './house-frame.js';
 import type { HouseBounds } from './house-layout.js';
 
 const snug: HouseBounds = { minX: -0.24, maxX: 5.04, minY: 0, maxY: 3, minZ: -0.35, maxZ: 5.04 };
@@ -24,6 +24,13 @@ describe('framing the house above an open residents page (C2b)', () => {
     expect(framesAboveSheet('picker')).toBe(true);
     expect(framesAboveSheet('move-out')).toBe(true);
     for (const s of ['peek', 'open', 'grow', 'confirm']) expect(framesAboveSheet(s)).toBe(false);
+  });
+
+  it('frames the room the page is about, and nothing special elsewhere', () => {
+    expect(framedRoomId('picker', 'playroom', 'snug')).toBe('playroom');
+    expect(framedRoomId('move-out', 'playroom', 'snug')).toBe('snug');
+    for (const s of ['peek', 'open', 'grow', 'confirm'])
+      expect(framedRoomId(s, 'playroom', 'snug')).toBeNull();
   });
 
   it('fits with the open sheet’s height while one is open, else the folded bands', () => {
