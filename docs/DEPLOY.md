@@ -416,7 +416,7 @@ The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where t
 
 Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. That is the only thing stopping it there (the server's database host, `db`, counts as local), so never override `NODE_ENV` to run the seed on the real server. Before inviting anyone, check `HP_TUTORIAL_REQUIRED=true` (PLAYTEST.md, "Before inviting testers").
 
-The frame-rate badge only exists in dev builds, so the performance checks use a local playtest.
+The frame-rate badge shows on the live site too: add `?fps=1` to the address (for example `https://play.pumpkinpatchgames.com/?fps=1`, #335). It shows the frame rate, renderer, quality tier, render scale, draw calls and triangles over every screen, the Keeper's house included. A local playtest (below) also shows it, with the seed accounts.
 
 ### A local playtest on your Wi-Fi
 

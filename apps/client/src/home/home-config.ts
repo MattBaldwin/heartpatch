@@ -64,6 +64,17 @@ export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as cons
 export const WANDER = { everyMs: 3500, jitterMs: 1500, hopMs: 650, hopHeight: 0.35 } as const; // TUNE
 
 /**
+ * The Keeper's house cottage on the Heart Seed tile (#381): behind the Heart
+ * Seed, in the gap between the tile's two back spots (the last ones filled),
+ * in hex sizes from the Heart Seed. Taps this near it open the house.
+ */
+export const HOME_HOUSE = {
+  offset: { x: 0, z: 0.74 }, // TUNE
+  scale: 1.25, // TUNE: the biggest cottage is about two metres across here
+  tapReach: 0.36, // TUNE
+} as const;
+
+/**
  * How squishies show how they feel about their job at home (#393). A small
  * bubble floats over each one on every tier: 💕 at a job it loves, 🌧️ at one
  * it isn't keen on (the map's 🧺 badges use the same pair). A happy one also

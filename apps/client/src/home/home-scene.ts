@@ -16,7 +16,10 @@ import {
   hexToWorld,
   KEEPER_DATA,
   Rng,
+  HOUSE_DATA,
+  houseLevelData,
   type HomeResponse,
+  type HouseExterior,
   type KeeperConfig,
   type Species,
   type VisualRegistry,
@@ -49,8 +52,9 @@ import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { accessoryItem } from '../procedural/accessory.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
+import { buildCottage } from '../house/house-models.js';
 import type { WorkMood } from '../squishies/jobs/jobs-view.js';
-import { HOME_VIEW, MOOD_CUES, SPOT_SIZE, WANDER } from './home-config.js';
+import { HOME_HOUSE, HOME_VIEW, MOOD_CUES, SPOT_SIZE, WANDER } from './home-config.js';
 import { centreOf, spotWorld } from './home-layout.js';
 import type { HomeSpot } from './home-view.js';
 
@@ -78,6 +82,8 @@ export interface HomeSceneStats {
   readonly spots: number;
   /** Building draw calls (one per look, not per building). */
   readonly buildingMeshes: number;
+  /** The cottage on the Heart Seed tile (#381), by its exterior; null while the house is switched off. */
+  readonly house: HouseExterior | null;
   /** Squishies at a job they love (💕, and a bounce now and then), and ones drooping (🌧️, #393). */
   readonly happy: number;
   readonly drooping: number;
@@ -90,6 +96,8 @@ export type HomePick =
   | { readonly kind: 'spot'; readonly spot: HomeSpot }
   | { readonly kind: 'squishy'; readonly id: string }
   | { readonly kind: 'building'; readonly id: string }
+  /** The cottage on the Heart Seed tile (#381). */
+  | { readonly kind: 'house' }
   | null;
 
 /** A tap this close to a squishy's feet counts as on it (they're small), in hex sizes. */
@@ -142,6 +150,8 @@ export class HomeScene {
   #home: HomeResponse;
   #spots: HomeSpot[] = [];
   #counts = { housed: 0, firelit: 0 };
+  /** The cottage drawn now, if the house is on for this player. */
+  #cottage: { exterior: HouseExterior; mesh: Mesh } | null = null;
   /** Each of my squishies' work mood (#393), by squishy id. */
   #moods: ReadonlyMap<string, WorkMood> = new Map();
   #cheers = 0;
@@ -249,6 +259,7 @@ export class HomeScene {
       keeperWearing: this.#keepers.handles[0]?.params.worn ?? [],
       spots: this.#spots.length,
       buildingMeshes: this.#buildings.stats.meshes,
+      house: this.#cottage?.exterior ?? null,
       happy: this.happy.length,
       drooping: [...this.#residents.values()].filter((r) => r.mood === 'meh').length,
       cheers: this.#cheers,
@@ -290,6 +301,7 @@ export class HomeScene {
       }),
     );
     const firelit = this.#showFirelight(home);
+    this.#showCottage(home);
 
     // Squishies: at their habitat or the Training Grounds they practice at,
     // or waiting by the Heart Seed.
@@ -414,6 +426,26 @@ export class HomeScene {
     return lit.size;
   }
 
+  /**
+   * The Keeper's house (#381): a cottage behind the Heart Seed, between the
+   * tile's back building spots, sized by its level's exterior. None at all
+   * while the house is switched off for this player (no `home.house`).
+   */
+  #showCottage(home: HomeResponse): void {
+    const exterior = home.house ? houseLevelData(HOUSE_DATA, home.house.level).exterior : null;
+    if (this.#cottage?.exterior === exterior) return;
+    // Its material too: each swap makes a new one.
+    this.#cottage?.mesh.dispose(false, true);
+    this.#cottage = null;
+    if (!exterior) return;
+    const mesh = buildCottage(this.#scene, exterior);
+    mesh.material = vinyl(this.#scene, 'home-cottage-mat', { color: '#ffffff' });
+    const at = HOME_HOUSE.offset;
+    mesh.position.set(at.x * HOME_VIEW.hexSize, this.#ground, at.z * HOME_VIEW.hexSize);
+    mesh.scaling.setAll(HOME_HOUSE.scale);
+    this.#cottage = { exterior, mesh };
+  }
+
   /** Lights up free spots to tap while placing or moving (empty: off). */
   showSpots(spots: readonly HomeSpot[]): void {
     this.#spots = [...spots];
@@ -488,6 +520,16 @@ export class HomeScene {
     const spot = near(this.#spots, (s) => this.spotAt(s));
     if (spot) return { kind: 'spot', spot };
     const building = near(this.#home.buildings, (b) => this.spotAt(b));
+    // The cottage (#381) when the tap is nearer it than any building it sits beside.
+    if (this.#cottage && this.#spots.length === 0) {
+      const c = this.#cottage.mesh.position;
+      const r = HOME_HOUSE.tapReach * HOME_VIEW.hexSize;
+      const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2;
+      const toBuilding = building
+        ? (this.spotAt(building).x - p.x) ** 2 + (this.spotAt(building).z - p.z) ** 2
+        : Infinity;
+      if (d < r * r && d < toBuilding) return { kind: 'house' };
+    }
     if (this.#spots.length === 0) {
       // Near a squishy's feet counts too (they're small), unless the tap is
       // nearer the building it lives by.
