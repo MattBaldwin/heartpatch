@@ -26,7 +26,7 @@ import '../../styles.css';
  * `?beds=mix` puts residents home, away and in a trade with an empty bed
  * and squishies outside (moving in and out works, no server); `?beds=away`
  * has residents on watch, training and in the Hollow; `?picker=snug` opens
- * the move-in picker on that room; plus
+ * the move-in picker on that room; `?portraits=0` draws no pictures; plus
  * `?renderer=webgpu`.
  */
 
@@ -104,13 +104,17 @@ const house = createHouseScreen({
       return sample.view;
     },
   },
-  // The squishies' real pictures on the beds and in the picker, as main.ts draws them.
-  portraits: createPortraits({
-    engine: () => stage?.renderer.engine ?? null,
-    registry: visualRegistry(GAME_DATA),
-    lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
-    invalidate: () => stage?.invalidate(),
-  }),
+  // The squishies' real pictures on the beds and in the picker, as main.ts draws them
+  // (`?portraits=0` shows the flat look a face falls back to when it can't be drawn).
+  portraits:
+    params.get('portraits') === '0'
+      ? undefined
+      : createPortraits({
+          engine: () => stage?.renderer.engine ?? null,
+          registry: visualRegistry(GAME_DATA),
+          lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+          invalidate: () => stage?.invalidate(),
+        }),
   ...(mix && {
     care: { list: () => Promise.resolve(mix.care) },
     jobs: { view: () => Promise.reject(new Error('no jobs in the gallery')) },
