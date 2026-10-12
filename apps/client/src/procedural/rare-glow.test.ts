@@ -1,4 +1,4 @@
-import { FinishSchema, RARE_GLOW_LEVEL, RaritySchema } from '@heartpatch/shared';
+import { FinishSchema, GAME_DATA, RARE_GLOW_LEVEL, RaritySchema } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { FINISH_CODE, RARE_GLOW, RARE_GLOW_CODE } from './config.js';
 import {
@@ -60,6 +60,22 @@ describe('rare finds glow codes (#391)', () => {
       const i = glowHueIndex([hex]);
       expect(i).toBeGreaterThanOrEqual(0);
       expect(i).toBeLessThan(RARE_GLOW_CODE.hues);
+    }
+  });
+
+  it('finds a real hue for every rare-and-up kind’s white parts to borrow', () => {
+    // An all-grey palette would fall back to hue 0 (red): keep every glowing kind colourful.
+    for (const s of GAME_DATA.species) {
+      if (rareGlowLevel(s.rarity) === 0) continue;
+      const sat = Math.max(
+        ...s.visual.palette.map((hex) => {
+          const n = Number.parseInt(hex.slice(1, 7), 16);
+          const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+          const max = Math.max(...c);
+          return max === 0 ? 0 : (max - Math.min(...c)) / max;
+        }),
+      );
+      expect(sat, s.id).toBeGreaterThanOrEqual(0.15);
     }
   });
 

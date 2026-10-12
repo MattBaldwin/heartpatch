@@ -47,6 +47,9 @@ export function rareGlowLevel(rarity: Rarity | undefined): number {
 export function rareGlowOff(params: URLSearchParams): boolean {
   return params.get('rareglow') === '0';
 }
+// One switch for every scene: there's one stage on screen at a time, so the
+// last tier applied is the one being drawn. Two live stages on different
+// tiers would share it.
 let addressOff = false;
 let tierOn = true;
 /** `?rareglow=0` (the frame-rate check): set once from `main.ts`. */
