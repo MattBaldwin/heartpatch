@@ -71,6 +71,7 @@ export function sampleHouse(level: number, residents = true): HouseSample {
       next: null,
       items: {},
       gift: null,
+      cooldowns: [],
       now: NOW,
     },
     squishies,

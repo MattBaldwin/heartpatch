@@ -478,6 +478,22 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       { class: 'roster-status-row' },
       ...(row.rarity ? [rarityChip(row.rarity)] : []),
       status,
+      ...(row.houseRoomId !== null
+        ? [
+            el(
+              'span',
+              {
+                class: 'roster-tag roster-resident',
+                role: 'img',
+                'aria-label': ROSTER_TEXT.residentLabel,
+                title: ROSTER_TEXT.residentLabel,
+                'data-testid': 'roster-resident',
+                'data-room': row.houseRoomId,
+              },
+              ROSTER_TEXT.resident,
+            ),
+          ]
+        : []),
       ...(drift !== null
         ? [
             el(

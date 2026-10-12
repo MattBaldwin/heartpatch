@@ -175,6 +175,14 @@ describe('careSheet', () => {
     expect(careSheet(squishy({ moodDrift: null }), reply()).drift).toBeNull();
   });
 
+  it("says a resident of the Keeper's house fades slower (#381), and nothing for anyone else", () => {
+    expect(CARE_TEXT.livesInHouse.replace(/\s/gu, ' ')).toBe(
+      'Lives in your house: happiness fades slower 🏠',
+    );
+    expect(careSheet(squishy({ houseRoomId: 'snug' }), reply()).house).toBe(CARE_TEXT.livesInHouse);
+    expect(careSheet(squishy({ houseRoomId: null }), reply()).house).toBeNull();
+  });
+
   it('droops the mood title and the hearts bar while happiness drifts (#376)', () => {
     expect(careSheet(squishy({ moodDrift: 'steady' }), reply())).toMatchObject({
       mood: 'Happy and bouncy!',
