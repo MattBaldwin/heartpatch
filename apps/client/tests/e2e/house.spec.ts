@@ -155,12 +155,12 @@ test('a house with an upstairs shows one floor at a time, and walking in goes do
   // Upstairs: the Kitchen's floor comes back over the Snug, and the Keeper
   // (under it) isn't drawn.
   const floorButton = page.getByTestId('house-floor');
-  await expect(floorButton).toHaveText('⬆ Upstairs');
+  await expect(floorButton).toHaveText('⬆️ Upstairs');
   await expectRoomyLabels(page, '[data-testid="house-floor"], [data-testid="house-walk"]');
   await floorButton.tap();
   await expect.poll(async () => (await houseState(page))?.scene?.floor, slow).toBe(1);
   expect((await houseState(page))!.scene!.keeper).toBe(false);
-  await expect(floorButton).toHaveText('⬇ Downstairs');
+  await expect(floorButton).toHaveText('⬇️ Downstairs');
 
   // Walk in: kid height is in the Keeper's room, on the ground floor.
   await page.getByTestId('house-walk').tap();
@@ -171,7 +171,7 @@ test('a house with an upstairs shows one floor at a time, and walking in goes do
   // Step out: the dollhouse on the ground floor, the switch back.
   await page.getByTestId('house-walk').tap();
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
-  await expect(floorButton).toHaveText('⬆ Upstairs');
+  await expect(floorButton).toHaveText('⬆️ Upstairs');
   expect(errors).toEqual([]);
 });
 
