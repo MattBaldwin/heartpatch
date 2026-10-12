@@ -35,6 +35,7 @@ function homeSquishy(n: number, over: Partial<HomeSquishy> = {}): HomeSquishy {
     trainingId: null,
     job: 'resting',
     accessory: null,
+    houseRoomId: null,
     ...over,
   };
 }
@@ -63,6 +64,7 @@ function careSquishy(n: number, over: Partial<CareSquishy> = {}): CareSquishy {
     newEvolution: null,
     whisper: null,
     accessory: null,
+    houseRoomId: null,
     ...over,
   };
 }
@@ -89,6 +91,7 @@ function jobSquishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     training: null,
     fullXpResetAt: null,
     gatherFits: [],
+    houseRoomId: null,
     ...over,
   };
 }
