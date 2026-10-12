@@ -33,6 +33,8 @@ export interface BedChip {
   readonly line: string;
   /** The longer words for its detail ("Out gathering 🧺", the mood's sentence), or "". */
   readonly about: string;
+  /** What to do next, under the detail (style guide §3.5): how to rescue one in the Hollow. */
+  readonly next: string | null;
 }
 
 export interface RoomBeds {
@@ -67,6 +69,7 @@ function residentChip(
           ? `${MOOD_WORDS[mood.mood].icon} ${MOOD_WORDS[mood.mood].word}`
           : RESIDENT_TEXT.home,
     about: away !== null ? RESIDENT_TEXT.away[away] : (mood?.line ?? ''),
+    next: away === 'hollow' ? RESIDENT_TEXT.hollowNext : null,
   };
 }
 
@@ -92,6 +95,7 @@ export function roomBeds(
       name: RESIDENT_TEXT.moveIn,
       line: '',
       about: '',
+      next: null,
     }));
     return {
       room,
@@ -187,17 +191,30 @@ export function pickerFor(
   const picked = rows.map((row): PickRow => {
     const home = lives.get(row.id) ?? null;
     const away = home?.away ?? null;
+    // Where it lives, on every row that lives somewhere: "Lives here" or "Lives in the Snug".
+    const homeRoom = home ? rooms.get(home.roomId) : undefined;
+    const livesTag = homeRoom
+      ? homeRoom.id === roomId
+        ? RESIDENT_TEXT.livesHere
+        : RESIDENT_TEXT.livesIn(inSentence(homeRoom.name))
+      : null;
     if (away === 'in-trade' || row.status.kind === 'in-trade') {
       return {
         row,
         kind: 'in-trade',
         can: false,
-        tag: null,
+        tag: livesTag,
         reason: RESIDENT_TEXT.away['in-trade'],
       };
     }
     if (away === 'hollow' || row.status.kind === 'hollowed') {
-      return { row, kind: 'hollowed', can: false, tag: null, reason: RESIDENT_TEXT.away.hollow };
+      return {
+        row,
+        kind: 'hollowed',
+        can: false,
+        tag: livesTag,
+        reason: RESIDENT_TEXT.away.hollow,
+      };
     }
     if (home?.roomId === roomId) {
       return { row, kind: 'here', can: false, tag: null, reason: RESIDENT_TEXT.livesHere };
@@ -213,10 +230,10 @@ export function pickerFor(
         reason: RESIDENT_TEXT.cantCooldown(wait),
       };
     }
-    const from = home ? rooms.get(home.roomId) : undefined;
-    const tag = from ? RESIDENT_TEXT.livesIn(inSentence(from.name)) : null;
-    if (full) return { row, kind: 'full', can: false, tag, reason: RESIDENT_TEXT.cantFull };
-    return { row, kind: from ? 'over' : 'in', can: true, tag, reason: null };
+    if (full) {
+      return { row, kind: 'full', can: false, tag: livesTag, reason: RESIDENT_TEXT.cantFull };
+    }
+    return { row, kind: homeRoom ? 'over' : 'in', can: true, tag: livesTag, reason: null };
   });
   picked.sort(
     (a, b) =>

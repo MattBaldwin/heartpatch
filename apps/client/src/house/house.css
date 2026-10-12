@@ -797,11 +797,70 @@
   white-space: nowrap;
 }
 
+/* One line on every chip (the short words are one unbreakable piece), so tiles match. */
 .house-bed-line {
+  overflow: hidden;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #7a5d80;
+}
+
+/* Can't be drawn: the squishy's own flat look, on purpose: its colour and two eyes. */
+.house-face-flat-blob {
+  position: relative;
+  border-radius: 50% 50% 44% 44%;
+}
+
+.house-face-eyes::before,
+.house-face-eyes::after {
+  content: '';
+  position: absolute;
+  top: 42%;
+  width: 12%;
+  height: 16%;
+  border-radius: 50%;
+  background: #3b2640;
+}
+
+.house-face-eyes::before {
+  left: 30%;
+}
+
+.house-face-eyes::after {
+  right: 30%;
+}
+
+/* What to do next, under a resident's detail (rescue from the Hollow). */
+.house-bed-next {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #7a2d55;
+}
+
+/* The move-out confirm: the resident beside the question. */
+.house-move-out-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.house-move-out-body .house-face {
+  --face: 64px;
+}
+
+/* ✕ and the other sheet buttons: one focus ring, the house's pink, from the keyboard only. */
+.house-button:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 2px;
+}
+
+.house-button:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* An opened resident: who it is, how it feels, and Move out. */
@@ -922,10 +981,22 @@
   transform: none;
 }
 
-.house-pick-dim .house-face,
-.house-pick-dim .house-pick-top,
-.house-pick-dim .house-pick-sub {
+/* Dimmed by colour, not opacity, so the words keep 4.5:1 on the grey row. */
+.house-pick-dim .house-face {
   opacity: 0.6;
+}
+
+.house-pick-dim .house-pick-name {
+  color: #6b5470;
+}
+
+.house-pick-dim .house-pick-sub {
+  color: #66506b;
+}
+
+/* Taken to the Hollow: grey until rescued, as on the beds (style guide §5). */
+.house-pick-hollowed .house-face {
+  filter: grayscale(1);
 }
 
 .house-pick-words {
@@ -987,6 +1058,10 @@
 
   .house-bed-name {
     font-size: 15px;
+  }
+
+  .house-bed-line {
+    font-size: 12px;
   }
 }
 

@@ -528,7 +528,7 @@ test('residents: move my squishy into the Snug, see it in the roster, then move 
   await page.getByTestId('house-move-out').tap();
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('move-out');
   await expect(page.getByTestId('house-move-out-ask')).toHaveText(
-    `Move ${name} out? They can move back in after 24\u00A0h.`,
+    'Move them out? They can move back in after a\u00A0day.',
   );
   await expect.poll(() => focused(page), slow).toBe('house-move-out-yes');
   await page.getByTestId('house-move-out-yes').tap();

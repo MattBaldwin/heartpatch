@@ -273,6 +273,16 @@ const roster = createRosterSheet({
   // The Keeper's house (#381): a row's "Move into the house" opens the house's
   // picker on it, from Home on that patch (the house steps in over Home).
   canMoveIntoHouse: (mapId) => homeOpen() && home.debug?.mapId === mapId,
+  // Never over home's banner or the account chip: a long detail scrolls in the sheet instead.
+  coveredTop: () => {
+    let bottom = 0;
+    for (const node of document.querySelectorAll<HTMLElement>('.home-top, .auth-chip')) {
+      const box = node.getBoundingClientRect();
+      if (node.closest('[hidden]') || box.height === 0) continue;
+      bottom = Math.max(bottom, box.bottom);
+    }
+    return bottom;
+  },
   onMoveIntoHouse: (mapId, current, squishyId) => {
     roster.close();
     void house.open(mapId, current, { pick: squishyId });

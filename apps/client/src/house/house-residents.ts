@@ -2,7 +2,6 @@ import { moodHeartsEl } from '../care/mood-hearts.js';
 import type { Portraits } from '../procedural/portraits.js';
 import type { RosterRow } from '../squishies/roster/roster-view.js';
 import { el } from '../ui/dom.js';
-import { rarityDot } from '../ui/rarity/rarity.js';
 import { houseButton } from './house-grow.js';
 import type { BedChip, Picker, PickRow, RoomBeds } from './house-residents-view.js';
 import { RESIDENT_TEXT } from './house-view.js';
@@ -15,46 +14,100 @@ import { RESIDENT_TEXT } from './house-view.js';
  */
 
 /** A picture that didn't come is asked for again this many times, this far apart. */
-const PORTRAIT_RETRIES = 3; // TUNE
-const PORTRAIT_RETRY_MS = 1500; // TUNE
+const PORTRAIT_RETRIES = 4; // TUNE
+const PORTRAIT_RETRY_MS = 2000; // TUNE
+/** A picture that failed for good is tried again after this long (a new open, say). */
+const PORTRAIT_FORGET_MS = 60_000; // TUNE
 
 /**
- * The squishy's real picture. Until it's drawn, a soft round glow of its
- * colour that breathes gently (not a flat blob); with no renderer, the blob.
+ * Pictures this screen already has, by look: a URL, or when one failed for
+ * good. A redraw of the sheet shows a known picture at once (no flash of
+ * the placeholder) and doesn't ask again for one that just failed.
+ */
+const known = new Map<string, { url: string } | { failedAt: number }>();
+
+const lookKey = (person: RosterRow) => `${person.speciesId}|${person.id}|${person.accessory ?? ''}`;
+
+/** The squishy's own flat look, on purpose: its colour, a body and two eyes (CSS). */
+function flatFace(wrap: HTMLElement, color: string | null): void {
+  const body = el(
+    'span',
+    { class: 'jobs-blob house-face-flat-blob', 'aria-hidden': 'true' },
+    el('span', { class: 'house-face-eyes' }),
+  );
+  if (color) body.style.background = color;
+  wrap.replaceChildren(body);
+  wrap.classList.remove('house-face-wait');
+  wrap.dataset['state'] = 'flat';
+}
+
+function showPicture(wrap: HTMLElement, url: string): void {
+  const img = el('img', { src: url, alt: '', class: 'house-face-img' });
+  img.decoding = 'async';
+  wrap.replaceChildren(img);
+  wrap.classList.remove('house-face-wait');
+  wrap.dataset['state'] = 'ready';
+  wrap.dataset['ready'] = 'true';
+}
+
+/**
+ * The squishy's real picture (`data-state="ready"`). Until it's drawn, a
+ * soft round glow of its colour that breathes gently (`wait`); if it can't
+ * be drawn (no renderer, or every try gave up), its flat look with eyes
+ * (`flat`), never a faceless blur.
  */
 export function faceEl(person: RosterRow | null, portraits: Portraits | undefined): HTMLElement {
-  const blob = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
-  if (person) blob.style.background = person.color;
-  const waiting = Boolean(portraits && person?.species);
-  const wrap = el(
-    'span',
-    { class: `house-face${waiting ? ' house-face-wait' : ''}`, 'aria-hidden': 'true' },
-    blob,
-  );
+  const wrap = el('span', { class: 'house-face', 'aria-hidden': 'true' });
   const species = person?.species;
-  if (portraits && person && species) {
-    const look = { species, instanceId: person.id, accessory: person.accessory };
-    // A first draw can give up (shaders still compiling, a busy engine): ask
-    // again a few times while the face is still on screen.
-    const ask = (triesLeft: number): void => {
-      void portraits.get(look).then((url) => {
-        if (url) {
-          const img = el('img', { src: url, alt: '', class: 'house-face-img' });
-          img.decoding = 'async';
-          wrap.replaceChildren(img);
-          wrap.classList.remove('house-face-wait');
-          wrap.dataset['ready'] = 'true';
-          return;
-        }
-        if (triesLeft <= 0) return;
-        setTimeout(() => {
-          if (wrap.isConnected) ask(triesLeft - 1);
-        }, PORTRAIT_RETRY_MS);
-      });
-    };
-    ask(PORTRAIT_RETRIES);
+  if (!portraits || !person || !species) {
+    flatFace(wrap, person?.color ?? null);
+    return wrap;
   }
+  const key = lookKey(person);
+  const had = known.get(key);
+  if (had && 'url' in had) {
+    showPicture(wrap, had.url);
+    return wrap;
+  }
+  if (had && Date.now() - had.failedAt < PORTRAIT_FORGET_MS) {
+    flatFace(wrap, person.color);
+    return wrap;
+  }
+  const glow = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
+  glow.style.background = person.color;
+  wrap.append(glow);
+  wrap.classList.add('house-face-wait');
+  wrap.dataset['state'] = 'wait';
+  const look = { species, instanceId: person.id, accessory: person.accessory };
+  // A first draw can give up (shaders still compiling, a busy engine): ask
+  // again a few times while the face is still on screen, then settle on the
+  // flat look.
+  const ask = (triesLeft: number): void => {
+    void portraits.get(look).then((url) => {
+      if (url) {
+        known.set(key, { url });
+        showPicture(wrap, url);
+        return;
+      }
+      if (triesLeft <= 0 || !wrap.isConnected) {
+        known.set(key, { failedAt: Date.now() });
+        flatFace(wrap, person.color);
+        return;
+      }
+      setTimeout(() => {
+        if (wrap.isConnected) ask(triesLeft - 1);
+      }, PORTRAIT_RETRY_MS);
+    });
+  };
+  ask(PORTRAIT_RETRIES);
   return wrap;
+}
+
+/** How many faces on screen are still waiting for their picture (the dev hook's signal). */
+export function facesWaiting(root: ParentNode): number {
+  return [...root.querySelectorAll<HTMLElement>('.house-face[data-state="wait"]')].filter(
+    (f) => f.getBoundingClientRect().width > 0,
+  ).length;
 }
 
 export interface BedHandlers {
@@ -151,6 +204,9 @@ function bedDetail(
             : []),
         ),
         ...(chip.about ? [el('p', { class: 'house-bed-mood' }, chip.about)] : []),
+        ...(chip.next
+          ? [el('p', { class: 'house-bed-next', 'data-testid': 'house-bed-next' }, chip.next)]
+          : []),
       ),
     ),
     out,
@@ -233,8 +289,11 @@ function pickRow(
   portraits: Portraits | undefined,
 ): HTMLElement {
   const { row } = p;
-  // The species on every row, so the rows read alike.
-  const sub = `Lv ${String(row.level)} · ${row.speciesName}`;
+  // The species when a nickname hides it (never "Puddlepuff · Lv 1 · Puddlepuff").
+  const sub =
+    row.name === row.speciesName
+      ? `Lv ${String(row.level)}`
+      : `Lv ${String(row.level)} · ${row.speciesName}`;
   const extra: HTMLElement[] = [];
   if (p.reason) {
     extra.push(
@@ -251,7 +310,9 @@ function pickRow(
     'button',
     {
       type: 'button',
-      class: `house-pick${p.can ? '' : ' house-pick-dim'}${row.id === focus ? ' house-pick-focus' : ''}`,
+      class: `house-pick${p.can ? '' : ' house-pick-dim'}${
+        p.kind === 'hollowed' ? ' house-pick-hollowed' : ''
+      }${row.id === focus ? ' house-pick-focus' : ''}`,
       'data-testid': 'house-pick',
       'data-squishy': row.id,
       'data-kind': p.kind,
@@ -261,12 +322,7 @@ function pickRow(
     el(
       'span',
       { class: 'house-pick-words' },
-      el(
-        'span',
-        { class: 'house-pick-top' },
-        el('strong', { class: 'house-pick-name' }, row.name),
-        ...(row.rarity ? [rarityDot(row.rarity)] : []),
-      ),
+      el('span', { class: 'house-pick-top' }, el('strong', { class: 'house-pick-name' }, row.name)),
       el('span', { class: 'house-pick-sub' }, sub),
       ...extra,
     ),
@@ -311,12 +367,13 @@ export interface MoveOutHandlers {
   onNo: () => void;
 }
 
-/** "Move Mochi out? They can move back in after 24 h." (style guide §3.6). */
+/** "Move them out? They can move back in after a day." (style guide §3.6), under the name. */
 export function moveOutPanel(
   name: string,
   ask: string,
   busy: boolean,
   on: MoveOutHandlers,
+  face: HTMLElement | null = null,
 ): HTMLElement[] {
   // While moving, both stay focusable (focus doesn't fall to the page) but ignore taps.
   const yes = houseButton(
@@ -337,7 +394,12 @@ export function moveOutPanel(
   for (const b of [yes, no]) if (busy) b.setAttribute('aria-disabled', 'true');
   return [
     pageHead(RESIDENT_TEXT.moveOut, name, 'house-move-out-title', null),
-    el('p', { class: 'house-grow-confirm', 'data-testid': 'house-move-out-ask' }, ask),
+    el(
+      'div',
+      { class: 'house-move-out-body' },
+      ...(face ? [face] : []),
+      el('p', { class: 'house-grow-confirm', 'data-testid': 'house-move-out-ask' }, ask),
+    ),
     el('div', { class: 'house-sheet-row' }, yes, no),
   ];
 }

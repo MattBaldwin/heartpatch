@@ -35,7 +35,7 @@ describe('the beds (plan §10.2)', () => {
     expect(a!.chips[0]!.name).toBe(people.get(snug.residents[0]!.squishyId)!.name);
     expect(b!.title).toBe('The Playroom · 1 of 2 beds');
     expect(b!.chips.map((c) => [c.kind, c.name, c.line])).toEqual([
-      ['in-trade', expect.any(String), 'At the\u00A0post\u00A0📬'],
+      ['in-trade', expect.any(String), 'Trading\u00A0📬'],
       ['empty', 'Move in', ''],
     ]);
     expect(b!.chips[1]).toMatchObject({ roomId: 'playroom', squishyId: null, person: null });
@@ -55,10 +55,10 @@ describe('the beds (plan §10.2)', () => {
     const [beds] = roomBeds({ rooms: [room] }, new Map());
     expect(beds!.chips.map((c) => c.line)).toEqual([
       'Gathering\u00A0🧺',
-      'On watch\u00A0🛡️',
+      'On\u00A0watch\u00A0🛡️',
       'Training\u00A0🎯',
-      'In the\u00A0Hollow',
-      'At the\u00A0post\u00A0📬',
+      'Hollow\u00A0🌙',
+      'Trading\u00A0📬',
       '',
     ]);
     expect(beds!.chips.map((c) => c.kind)).toEqual([...kinds, 'empty']);
@@ -67,6 +67,18 @@ describe('the beds (plan §10.2)', () => {
       ...kinds.map((k) => RESIDENT_TEXT.away[k]),
       '',
     ]);
+    // Style guide §9 and §3.5: the Hollow says "you can rescue them!", with how.
+    expect(RESIDENT_TEXT.away.hollow).toMatch(/^Taken to the Hollow, but you can rescue.them!$/u);
+    expect(beds!.chips.map((c) => c.next)).toEqual([
+      null,
+      null,
+      null,
+      RESIDENT_TEXT.hollowNext,
+      null,
+      null,
+    ]);
+    // Short chip words are one unbreakable piece (no plain spaces).
+    for (const short of Object.values(RESIDENT_TEXT.awayShort)) expect(short).not.toMatch(/ /);
     for (const c of beds!.chips.slice(0, -1)) expect(c.line).not.toMatch(/ \S+$/u);
     // Not in the reads yet: still named, never blank.
     expect(beds!.chips[0]!.name).toBe('Your squishy');
@@ -126,6 +138,10 @@ describe('the move-in picker (plan §10.3)', () => {
       can: false,
       reason: 'Waiting at the\u00A0post\u00A0📬',
     });
+    // Where it lives shows too: another room here, "Lives here" in its own room's picker.
+    expect(post.tag).toBe('Lives in the Playroom');
+    const own = pickerFor(mix.view, 'playroom', rows, NOW_MS)!;
+    expect(own.rows.find((r) => r.row.id === post.row.id)?.tag).toBe('Lives here');
     // From the job board: a squishy taken to the Hollow (not a resident).
     const biscuit = byName('Biscuit');
     const taken: RosterRow = {
@@ -137,7 +153,7 @@ describe('the move-in picker (plan §10.3)', () => {
     expect(again.rows[0]).toMatchObject({
       kind: 'hollowed',
       can: false,
-      reason: 'In the\u00A0Hollow',
+      reason: 'Taken to the Hollow, but you can rescue\u00A0them!',
     });
     // A resident the house says is in the Hollow.
     const hollowView = {
@@ -207,7 +223,7 @@ describe('residents, the rest', () => {
     expect(movedLine(mix.view, 'Mochi', 'snug')).toBe('Mochi moved into the Snug! 🏠');
     expect(roomNameOf('heart-hall')).toBe('the Heart Hall');
     expect(RESIDENT_TEXT.moveOutAsk('Mochi', MOVE_BACK_IN_HOURS)).toBe(
-      'Move Mochi out? They can move back in after 24\u00A0h.',
+      'Move Mochi out? They can move back in after a\u00A0day.',
     );
     const lines = [
       RESIDENT_TEXT.beds('The Snug', 1, 2),
@@ -215,6 +231,8 @@ describe('residents, the rest', () => {
       ...Object.values(RESIDENT_TEXT.away),
       ...Object.values(RESIDENT_TEXT.awayShort),
       RESIDENT_TEXT.cantFull,
+      RESIDENT_TEXT.hollowNext,
+      RESIDENT_TEXT.moveOutAsk(null, 24),
       RESIDENT_TEXT.home,
       RESIDENT_TEXT.pickerTitle('the Snug'),
       RESIDENT_TEXT.free(1),

@@ -30,6 +30,7 @@ import {
   kidPose,
   pinchedOut,
   pinchZoom,
+  residentBoxes,
   roofAt,
   walkedIn,
   walkZoom,
@@ -39,7 +40,13 @@ import {
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
 import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
-import { framedRoomId, framesAboveSheet, sheetBands } from './house-frame.js';
+import {
+  frameKey,
+  framedRoomId,
+  framesAboveSheet,
+  sheetBands,
+  type FrameState,
+} from './house-frame.js';
 import { createHousePan, type PanFrame } from './house-pan.js';
 import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine, RESIDENT_TEXT } from './house-view.js';
 import { careApi, type CareApi } from '../care/care-api.js';
@@ -47,7 +54,7 @@ import type { Portraits } from '../procedural/portraits.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { mergeRoster, type RosterRow } from '../squishies/roster/roster-view.js';
 import { createResidentMover } from './house-move.js';
-import { bedsPanel, moveOutPanel, pickerPanel } from './house-residents.js';
+import { bedsPanel, faceEl, facesWaiting, moveOutPanel, pickerPanel } from './house-residents.js';
 import {
   castKey,
   movedLine,
@@ -138,6 +145,11 @@ export interface HouseDebug {
   readonly moving: boolean;
   /** The room the move-in picker fills, while it's open. */
   readonly pickRoom: string | null;
+  /** Squishy pictures on the sheet still being drawn (0: every face is drawn or flat). */
+  readonly facesWaiting: number;
+  /** Each drawn resident on screen (CSS px), and the sheet's top edge, for the shots' check. */
+  readonly residentBoxes: readonly { x0: number; x1: number; y0: number; y1: number }[];
+  readonly sheetTop: number;
   /**
    * Re-reads the house now, as opening the sheet does. Dev hook only: e2e
    * starts a read while a build is in flight (the UI can't) to prove the
@@ -259,6 +271,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let pickFocus: string | null = null;
   let chosen: string | null = null;
   let moving = false;
+  /** The room a squishy just moved into (or out of), framed while its line shows. */
+  let movedRoom: string | null = null;
+  /** What the last fit framed (`frameKey`): the house refits only when it changes. */
+  let lastFrame = '';
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
@@ -453,9 +469,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const from = sheet;
     sheet = next;
     note = '';
+    movedRoom = null;
     focusNext = focusFor(from, next);
     renderSheet();
-    reframeForSheet(from, next);
     if (from === 'peek') void refresh();
   }
 
@@ -499,6 +515,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         ? (active.dataset['testid'] ?? null)
         : null;
     drawSheet();
+    reframe();
     const want = focusNext;
     focusNext = null;
     if (want) {
@@ -691,18 +708,51 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     (view ? Date.parse(view.now) : Date.now()) + (viewAt ? Date.now() - viewAt : 0);
 
   /**
-   * A residents page opened or closed: fit the house once (through
-   * `panner.fit()`) above the open sheet, or back above the folded one.
+   * The squishy pictures on the sheet wait for the house's first frame, so
+   * they don't fight its shaders for the engine at the start (a draw that
+   * gives up costs a retry). Reset on every open.
    */
-  function reframeForSheet(from: HouseSheet, to: HouseSheet): void {
-    if (framesAboveSheet(from) !== framesAboveSheet(to)) refit();
+  let houseDrawn: () => void = () => undefined;
+  let drawnOnce = new Promise<void>((resolve) => {
+    houseDrawn = resolve;
+  });
+  const sheetPortraits: Portraits | undefined = options.portraits && {
+    get: (look) => drawnOnce.then(() => options.portraits?.get(look) ?? null),
+  };
+  /** A new open: pictures wait for this house's first frame again. */
+  function awaitFirstFrame(): void {
+    drawnOnce = new Promise<void>((resolve) => {
+      houseDrawn = resolve;
+    });
   }
 
-  /** The room a residents page is about, as the framing wants it (x only), or null. */
-  function pageRoom(): { minX: number; maxX: number } | null {
-    const movingOutOf =
+  /** What the sheet points at, for the framing (house-frame.ts). */
+  function frameState(): FrameState {
+    const chosenRoom =
       view?.rooms.find((r) => r.residents.some((x) => x.squishyId === chosen))?.id ?? null;
-    const id = framedRoomId(sheet, pickRoom, movingOutOf);
+    return { sheet, pickRoom, chosenRoom, movedRoom };
+  }
+
+  /** The sheet's height as it stands now (CSS px from the screen's bottom). */
+  function sheetHeight(): number {
+    return overlay.getBoundingClientRect().bottom - peek.getBoundingClientRect().top;
+  }
+
+  /**
+   * The sheet now points at another room, at none, or grew a step: fit the
+   * house once (through `panner.fit()`) above it, or back above the folded
+   * sheet. Never per frame.
+   */
+  function reframe(): void {
+    const key = isOpen ? frameKey(frameState(), sheetHeight()) : '';
+    if (key === lastFrame) return;
+    lastFrame = key;
+    refit();
+  }
+
+  /** The room the sheet is about, as the framing wants it (x only), or null. */
+  function pageRoom(): { minX: number; maxX: number } | null {
+    const id = framedRoomId(frameState());
     const room = id ? view?.rooms.find((r) => r.id === id) : undefined;
     if (!room) return null;
     const box = roomBox(room);
@@ -737,6 +787,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         onChoose: (squishyId) => {
           chosen = chosen === squishyId ? null : squishyId;
           note = '';
+          movedRoom = null;
           renderSheet();
         },
         onMoveOut: (squishyId) => {
@@ -744,7 +795,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
           setSheet('move-out');
         },
       },
-      options.portraits,
+      sheetPortraits,
     );
   }
 
@@ -770,7 +821,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
             setSheet('open');
           },
         },
-        options.portraits,
+        sheetPortraits,
       );
     } else {
       const who = chosen;
@@ -780,12 +831,18 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         drawSheet();
         return;
       }
-      parts = moveOutPanel(name, RESIDENT_TEXT.moveOutAsk(name, MOVE_BACK_IN_HOURS), moving, {
-        onYes: () => void moveSquishy(who, null),
-        onNo: () => {
-          setSheet('open');
+      parts = moveOutPanel(
+        name,
+        RESIDENT_TEXT.moveOutAsk(null, MOVE_BACK_IN_HOURS),
+        moving,
+        {
+          onYes: () => void moveSquishy(who, null),
+          onNo: () => {
+            setSheet('open');
+          },
         },
-      });
+        faceEl(people.get(who) ?? null, sheetPortraits),
+      );
     }
     const [header, ...rest] = parts;
     // The header goes above the note line, so the live region never moves.
@@ -838,7 +895,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       renderSheet();
       return;
     }
-    const was = sheet;
     if (outcome.kind === 'failed') {
       // The picker stays up with the server's kind word; a move-out goes back to the beds.
       if (sheet === 'move-out') sheet = 'open';
@@ -846,7 +902,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       noteKind = 'calm';
       focusNext = 'house-note';
       renderSheet();
-      reframeForSheet(was, sheet);
       // Who can come may have moved (another device, a trade, the Hollow).
       void refresh();
       return;
@@ -857,11 +912,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     note = roomId ? movedLine(outcome.view, name, roomId) : RESIDENT_TEXT.movedOut(name);
     noteKind = 'ok';
     focusNext = 'house-note';
+    // The success frames the room it was about, above the sheet as it now stands.
+    movedRoom =
+      roomId ??
+      view?.rooms.find((r) => r.residents.some((x) => x.squishyId === squishyId))?.id ??
+      null;
     chosen = null;
     pickFocus = null;
     applyView(outcome.view);
-    // Back on the beds: the house fits above the folded sheet again.
-    reframeForSheet(was, sheet);
   }
 
   function playSparkle(): void {
@@ -891,7 +949,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     // C2b: a residents page frames the house above its open sheet.
     const bands = sheetBands(
       { bottom: Math.max(0, foldedBand), sheet: Math.max(0, foldedSheet) },
-      framesAboveSheet(sheet) ? box.bottom - peek.getBoundingClientRect().top : null,
+      framesAboveSheet(frameState()) ? box.bottom - peek.getBoundingClientRect().top : null,
     );
     return { width, height, top: Math.max(0, topBand), ...bands };
   }
@@ -1110,6 +1168,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     scene.onAfterRenderObservable.addOnce(() => {
       draw();
       playSparkle();
+      houseDrawn();
     });
     return built.content;
   };
@@ -1191,6 +1250,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     pickRoom = null;
     pickFocus = null;
     chosen = null;
+    movedRoom = null;
+    lastFrame = '';
+    if (home) awaitFirstFrame();
     remergePeople();
   }
 
@@ -1242,6 +1304,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         sparkles,
         moving,
         pickRoom: sheet === 'picker' ? pickRoom : null,
+        facesWaiting: facesWaiting(peek),
+        residentBoxes: (() => {
+          const pose = base ? (kid ? blend(base, kid, zoom) : base) : null;
+          const box = overlay.getBoundingClientRect();
+          return pose && scene3d
+            ? residentBoxes(pose, { width: box.width, height: box.height }, scene3d.residentSpots)
+            : [];
+        })(),
+        sheetTop: peek.getBoundingClientRect().top,
         reread: () => {
           void refresh();
         },

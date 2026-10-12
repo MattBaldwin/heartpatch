@@ -77,6 +77,12 @@ export interface RosterOptions {
   hasJobs?: (mapId: string) => boolean;
   /** The real squishy pictures (the game's 3D renderer); without them, plain blobs. */
   portraits?: Portraits;
+  /**
+   * What the screen behind keeps on show at the top (CSS px from the top:
+   * home's banner, the account chip). The sheet never grows over it, so a
+   * long detail scrolls inside the sheet instead of cutting through a line.
+   */
+  coveredTop?: () => number;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
 }
@@ -417,6 +423,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           true,
         );
         yes.disabled = working;
+        // The confirm's buttons come into view (the sheet scrolls, it never grows over home).
+        requestAnimationFrame(() => {
+          if (yes.isConnected) yes.scrollIntoView({ block: 'nearest' });
+        });
         parts.push(
           el(
             'p',
@@ -772,6 +782,11 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     ticker = undefined;
     chips = new Map();
     if (sheet.hidden) return;
+    const keep = Math.max(0, options.coveredTop?.() ?? 0);
+    sheet.style.maxHeight =
+      keep > 0
+        ? `calc(100dvh - ${String(Math.ceil(keep) + 8)}px - env(safe-area-inset-bottom) - 12px)`
+        : '';
     renderChips();
     const shown = visibleRows(rows, sort, filter);
     count.textContent =
