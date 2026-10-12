@@ -138,6 +138,21 @@ export interface HouseSceneStats {
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
 const CAST = /^(squishy-|keeper-)(?!.*shadow)/;
 
+/**
+ * An upstairs floor's underside, one board under its planks (merged with
+ * them, so no extra draw): kid height looks up at it from the room below
+ * and sees no sky through the gaps between the boards.
+ */
+function underside(scene: Scene, room: RoomBox, z0: number): Mesh {
+  return box(
+    scene,
+    // TUNE: a thin board just under the 0.16 m planks.
+    [room.x1 - room.x0, 0.02, room.z1 - z0],
+    [(room.x0 + room.x1) / 2, room.y0 - 0.17, (z0 + room.z1) / 2],
+    HOUSE_PALETTE.planks[2],
+  );
+}
+
 interface RoomParts {
   readonly box: RoomBox;
   readonly solid: Mesh[];
@@ -251,6 +266,7 @@ export class HouseScene {
       const frontOpen = runs.some((r) => r.room === box.id && r.front && r.exterior);
       const z0 = frontOpen ? box.z0 - HOUSE_GRID.frontLip : box.z0;
       parts.floor.push(...floorPlanks(scene, box.x0, z0, box.x1 - box.x0, box.z1 - z0, box.y0));
+      if (box.y0 > 0) parts.floor.push(underside(scene, box, z0));
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
       this.#mergeRoom(parts);
