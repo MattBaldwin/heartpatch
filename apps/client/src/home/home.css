@@ -464,3 +464,11 @@
   flex: none;
   min-height: 44px;
 }
+
+/* The peek bar's way into the house (#381): a round icon button, 44pt+, in the Build row. */
+.home-row > .home-house-shortcut {
+  flex: none;
+  min-width: 52px;
+  padding: var(--hp-pad-y);
+  font-size: 22px;
+}

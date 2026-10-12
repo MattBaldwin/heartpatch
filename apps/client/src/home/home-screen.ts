@@ -792,7 +792,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   true,
                 )
               : null;
-          const shortcuts = [squishies, jobs, houseShortcut(current)].filter((b) => b !== null);
+          const shortcuts = [squishies, jobs].filter((b) => b !== null);
+          // The house's round 🏠 rides the Build row, so the peek bar never grows a row (#381).
+          const house = houseShortcut(current);
+          if (house) actions.prepend(house);
           body.replaceChildren(
             ...(shortcuts.length > 0
               ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
@@ -986,7 +989,18 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** The peek bar's way into the house (#381), beside Squishies and Jobs: only while the house is on. */
   function houseShortcut(current: HomeResponse): HTMLButtonElement | null {
     if (!houseCard(current) || !options.onHouse) return null;
-    const b = button(HOUSE_TEXT.shortcut, goInside, { 'data-testid': 'home-house-shortcut' }, true);
+    // A round icon button, so the peek bar stays one row beside Squishies and Jobs.
+    const b = button(
+      HOUSE_TEXT.shortcutIcon,
+      goInside,
+      {
+        'data-testid': 'home-house-shortcut',
+        class: 'home-house-shortcut',
+        'aria-label': HOUSE_TEXT.shortcut,
+        title: HOUSE_TEXT.shortcut,
+      },
+      true,
+    );
     b.disabled = working || houseOpening;
     return b;
   }

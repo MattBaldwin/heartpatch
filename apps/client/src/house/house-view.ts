@@ -13,7 +13,8 @@ export const HOUSE_TEXT = {
   cardLine: (level: number, n: number) => `House ${String(level)} · ${beds(n)}`,
   goInside: 'Go inside',
   /** The home peek bar's shortcut, beside 🐾 Squishies and 🧺 Jobs. */
-  shortcut: '🏠 House',
+  shortcut: 'Your house',
+  shortcutIcon: '🏠',
   back: 'Back',
   pill: (level: number) => `🏠 House ${String(level)}`,
   room: (name: string, n: number) => `${name} · ${beds(n)}`,

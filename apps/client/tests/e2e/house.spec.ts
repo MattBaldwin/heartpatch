@@ -51,10 +51,12 @@ test('enter the house from home, see the dollhouse, and go back home', async ({ 
   await patchAndHome(page);
 
   // The cottage stands on the Heart Seed tile. Home opens as its peek bar
-  // (#412), with a 🏠 House shortcut; the opened sheet has the house card.
+  // (#412), with a 🏠 shortcut; the opened sheet has the house card.
   expect((await homeState(page))?.scene?.house).toBe('hut');
   const shortcut = page.getByTestId('home-house-shortcut');
-  await slowExpect(shortcut).toHaveText('🏠 House');
+  await slowExpect(shortcut).toHaveAccessibleName('Your house');
+  const peek = (await page.getByTestId('home').boundingBox())!;
+  expect(peek.height).toBeLessThan(page.viewportSize()!.height * 0.3); // still one short row
   await expectRoomyLabels(page, '[data-testid="home-house-shortcut"]');
   await page.getByTestId('home-handle').tap();
   const card = page.getByTestId('home-house');
