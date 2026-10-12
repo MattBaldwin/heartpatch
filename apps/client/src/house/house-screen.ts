@@ -311,7 +311,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
               },
               { class: 'house-grow-open', 'data-testid': 'house-grow-open' },
             )
-          : el('p', { class: 'house-all-grown', 'data-testid': 'house-all-grown' }, GROW_TEXT.allGrown),
+          : el(
+              'p',
+              { class: 'house-all-grown', 'data-testid': 'house-all-grown' },
+              GROW_TEXT.allGrown,
+            ),
       );
       return;
     }

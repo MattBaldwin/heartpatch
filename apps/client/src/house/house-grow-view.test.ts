@@ -1,4 +1,8 @@
-import { findAvoidedWords, type HouseNextLevel, type RequirementProgress } from '@heartpatch/shared';
+import {
+  findAvoidedWords,
+  type HouseNextLevel,
+  type RequirementProgress,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { sampleHouse, withGrow } from './house-fixtures.js';
 import {
@@ -67,7 +71,9 @@ describe('grow the house: the rows', () => {
 
   it('has a heading for every group the server can send', () => {
     const all = ['seed', 'home', 'residents', 'patch-mates', 'land', 'adventure'] as const;
-    const groups = growGroups(next({ requirements: all.map((group) => row({ id: group, group })) }));
+    const groups = growGroups(
+      next({ requirements: all.map((group) => row({ id: group, group })) }),
+    );
     expect(groups.map((g) => g.icon)).toEqual(['🌱', '🏡', '💗', '💌', '🗺️', '⚔️']);
   });
 
@@ -102,7 +108,12 @@ describe('grow the house: Build it! or not yet', () => {
         requirements: [
           row({ id: 'seed', kind: 'heartSeedLevel', group: 'seed', done: true, have: 1 }),
           row({ id: 'land', kind: 'tilesTended', group: 'land', line: 'Tend 16 tiles of land' }),
-          row({ id: 'res', kind: 'residentsLevel', group: 'residents', line: '2 residents at level 10+' }),
+          row({
+            id: 'res',
+            kind: 'residentsLevel',
+            group: 'residents',
+            line: '2 residents at level 10+',
+          }),
         ],
       }),
       items: { timber: 60, stone: 10, glimmer: 0 },
@@ -158,7 +169,9 @@ describe('grow the house: the words', () => {
   });
 
   it('lists the cost with my counts, short ones marked', () => {
-    expect(costLine({ timber: 60, stone: 50, glimmer: 4 })).toBe('60 Timber · 50 Stone · 4 Glimmer');
+    expect(costLine({ timber: 60, stone: 50, glimmer: 4 })).toBe(
+      '60 Timber · 50 Stone · 4 Glimmer',
+    );
     const needs = growNeeds({ items: { timber: 60, stone: 10 } }, next());
     expect(needs.map((n) => [n.id, n.have, n.ok])).toEqual([
       ['timber', 60, true],

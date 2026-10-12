@@ -227,7 +227,10 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect(page.getByTestId('house-grow-next')).toHaveText(/^Next up: .+/);
   const steps = (text: string | null) => Number(/(\d+)/.exec(text ?? '')?.[1]);
   const before = steps(await build.textContent());
-  await expectRoomyLabels(page, '[data-testid="house-grow-build"], [data-testid="house-grow-back"]');
+  await expectRoomyLabels(
+    page,
+    '[data-testid="house-grow-build"], [data-testid="house-grow-back"]',
+  );
 
   // Fill the bag: the sheet re-reads the house when it opens again.
   await grantItems(page, mapId, { timber: 30, stone: 20 });
@@ -270,7 +273,9 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
     if (posts.length === 1) {
       await route.fulfill({
         status: 409,
-        json: { error: { code: 'CONFLICT', message: 'Not quite yet! Check what the house needs.' } },
+        json: {
+          error: { code: 'CONFLICT', message: 'Not quite yet! Check what the house needs.' },
+        },
       });
       return;
     }

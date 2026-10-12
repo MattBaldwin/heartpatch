@@ -50,11 +50,7 @@ export function createHouseBuilder(deps: HouseBuildDeps): HouseBuilder {
       if (busy) return { kind: 'dropped' };
       busy = true;
       try {
-        const view = await sendCommand(
-          send,
-          (key) => deps.build(mapId, toLevel, key),
-          stillWanted,
-        );
+        const view = await sendCommand(send, (key) => deps.build(mapId, toLevel, key), stillWanted);
         if (!view || !stillWanted()) return { kind: 'dropped' };
         return { kind: 'built', view };
       } catch (err) {

@@ -55,7 +55,11 @@ function row(r: RequirementProgress): HTMLElement {
     },
     el(
       'span',
-      { class: 'house-grow-mark', role: 'img', 'aria-label': r.done ? GROW_TEXT.done : GROW_TEXT.toDo },
+      {
+        class: 'house-grow-mark',
+        role: 'img',
+        'aria-label': r.done ? GROW_TEXT.done : GROW_TEXT.toDo,
+      },
       r.done ? '✅' : '⬜',
     ),
     el(
@@ -131,7 +135,11 @@ export function growPanel(view: HouseView, next: HouseNextLevel, on: GrowHandler
       'div',
       { class: 'house-grow-head' },
       houseButton(`‹ ${GROW_TEXT.back}`, on.onBack, { 'data-testid': 'house-grow-back' }, true),
-      el('h3', { class: 'house-grow-title', 'data-testid': 'house-grow-title' }, growHeader(view, next)),
+      el(
+        'h3',
+        { class: 'house-grow-title', 'data-testid': 'house-grow-title' },
+        growHeader(view, next),
+      ),
     ),
     ...growGroups(next).map(group),
     ...cost(view, next),
@@ -148,7 +156,11 @@ export interface ConfirmHandlers {
 }
 
 /** "Build the Kitchen for 60 Timber, 50 Stone and 4 Glimmer?" (style guide §3.6). */
-export function confirmPanel(next: HouseNextLevel, busy: boolean, on: ConfirmHandlers): HTMLElement[] {
+export function confirmPanel(
+  next: HouseNextLevel,
+  busy: boolean,
+  on: ConfirmHandlers,
+): HTMLElement[] {
   const yes = houseButton(busy ? GROW_TEXT.building : GROW_TEXT.confirmYes, on.onYes, {
     class: 'house-grow-yes',
     'data-testid': 'house-grow-yes',
@@ -157,7 +169,11 @@ export function confirmPanel(next: HouseNextLevel, busy: boolean, on: ConfirmHan
   yes.disabled = busy;
   no.disabled = busy;
   return [
-    el('p', { class: 'house-grow-confirm', 'data-testid': 'house-grow-confirm' }, confirmLine(next)),
+    el(
+      'p',
+      { class: 'house-grow-confirm', 'data-testid': 'house-grow-confirm' },
+      confirmLine(next),
+    ),
     el('div', { class: 'house-sheet-row' }, yes, no),
   ];
 }
