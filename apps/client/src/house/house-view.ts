@@ -115,7 +115,15 @@ export function peekLine(view: Pick<HouseView, 'rooms'>, focus: string | null = 
  * server wrote; the client's own joins use no-break spaces already.
  */
 export function keepTail(line: string): string {
-  const words = line.split(' ');
-  if (words.length < 4) return line;
-  return [words.slice(0, -2).join(' '), ...words.slice(-2)].join('\u00A0');
+  // Words and the plain-space runs between them; spaces at either end and
+  // no-break spaces already in the line are left as they are.
+  const lead = /^ */.exec(line)?.[0] ?? '';
+  const trail = / *$/.exec(line.slice(lead.length))?.[0] ?? '';
+  const body = line.slice(lead.length, line.length - trail.length);
+  const parts = body.split(/( +)/);
+  // parts: word, gap, word, gap, …, word
+  if ((parts.length + 1) / 2 < 4) return line;
+  parts[parts.length - 2] = '\u00A0';
+  parts[parts.length - 4] = '\u00A0';
+  return lead + parts.join('') + trail;
 }

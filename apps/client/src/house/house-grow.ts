@@ -181,7 +181,13 @@ export function growPanel(view: HouseView, next: HouseNextLevel, on: GrowHandler
     ...cost(view, next),
     go,
     ...(state.kind === 'not-yet' && state.first
-      ? [el('p', { class: 'house-grow-next', 'data-testid': 'house-grow-next' }, state.first)]
+      ? [
+          el(
+            'p',
+            { class: 'house-grow-next', 'data-testid': 'house-grow-next' },
+            keepTail(state.first),
+          ),
+        ]
       : []),
     // A soft fade where the list runs on under the sheet's bottom edge.
     el('span', { class: 'house-grow-fade', 'aria-hidden': 'true' }),

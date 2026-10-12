@@ -109,7 +109,9 @@ export function growState(view: Pick<HouseView, 'next' | 'items'>): GrowState {
   // says locked still counts one step, so the button never lights wrongly.
   const rows = next.unlocked ? 0 : Math.max(1, unmet.length);
   const steps = rows + (next.affordable ? 0 : 1);
-  const first = unmet[0]?.line ?? (next.affordable ? null : firstShort(growNeeds(view, next)));
+  // The same rows `steps` counts: none once the server says unlocked.
+  const named = next.unlocked ? [] : unmet;
+  const first = named[0]?.line ?? (next.affordable ? null : firstShort(growNeeds(view, next)));
   return { kind: 'not-yet', steps, first: first === null ? null : GROW_TEXT.nextUp(first) };
 }
 

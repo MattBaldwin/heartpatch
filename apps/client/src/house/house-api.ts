@@ -1,4 +1,4 @@
-import { HouseViewSchema, type HouseView } from '@heartpatch/shared';
+import { HouseViewSchema, type BuildHouseRequest, type HouseView } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
 /**
@@ -16,7 +16,7 @@ export const houseApi = {
   build: (mapId: string, toLevel: number, key: string): Promise<HouseView> =>
     apiCallFor(`/maps/${mapId}/house/build`, {
       method: 'POST',
-      body: { toLevel },
+      body: { toLevel } satisfies BuildHouseRequest,
       schema: HouseViewSchema,
       headers: { 'idempotency-key': key },
     }),

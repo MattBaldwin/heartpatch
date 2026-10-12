@@ -188,6 +188,20 @@
   color: #2f6b3d;
 }
 
+/* A refusal or a problem: calm and kind, not the ta-da's green (style guide §3.7). */
+.house-note-calm {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff1f7;
+  color: #7a2d55;
+  font-weight: 700;
+}
+
+/* It takes focus after a build or a refusal; no ring unless from the keyboard. */
+.house-note:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .house-sheet-row {
   display: flex;
   flex-wrap: wrap;
@@ -416,6 +430,7 @@
 }
 
 .house-grow-hint {
+  overflow-wrap: anywhere;
   text-wrap: pretty;
   font-size: 14px;
   font-weight: 600;

@@ -19,6 +19,7 @@ interface HouseDebug {
   open: boolean;
   sheet: 'peek' | 'open' | 'grow' | 'confirm';
   sparkles: number;
+  building: boolean;
   level: number;
   rooms: number;
   pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
@@ -141,6 +142,10 @@ test('with the house switched off there is no house card and no cottage', async 
   expect((await homeState(page))?.scene?.house).toBeNull();
 });
 
+/** The `data-testid` of what has focus (the modal sheet keeps it inside). */
+const focused = (page: Page) =>
+  page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset['testid'] ?? null);
+
 /** Opens the house's sheet and its Grow the house page. */
 async function openGrow(page: Page): Promise<void> {
   await page.getByTestId('house-peek-handle').tap();
@@ -211,6 +216,8 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await openGrow(page);
   await expect(page.getByTestId('house-grow-title')).toContainText('House 1 → 2');
   await expect(page.getByTestId('house-grow-room')).toHaveText('The Playroom · +2 beds');
+  // Focus moves into the sheet: its ✕.
+  await expect.poll(() => focused(page), slow).toBe('house-grow-close');
   // The scene and the HUD dim behind it and can't be reached: one way out, the ✕.
   await expect(page.getByTestId('house-scrim')).toBeVisible();
   const hudHidden = () =>
@@ -245,12 +252,15 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('peek');
   await expect(page.getByTestId('house-scrim')).toBeHidden();
   expect(await hudHidden()).toBe(false);
+  // Folded, focus goes back to the handle that opened it.
+  await expect.poll(() => focused(page), slow).toBe('house-peek-handle');
   await openGrow(page);
   await expect(page.getByTestId('house-grow-need')).toHaveText(['🪵 30/30 ✓', '🪨 20/20 ✓']);
   expect(steps(await build.textContent())).toBe(before - 1);
 
   // Meeting every requirement for real takes days of play, so from here the
-  // server's replies are stood in for: every row done, then the build's reply.
+  // screen is shown every row done. The first build still goes to the real
+  // server, which refuses it (the rows aren't met); only the success is stood in for.
   let levelOne: HouseView | null = null;
   let built: HouseView | null = null;
   await page.route('**/api/v1/maps/*/house', async (route: Route) => {
@@ -278,14 +288,11 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
     const request = route.request();
     posts.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
     if (posts.length === 1) {
-      await route.fulfill({
-        status: 409,
-        json: {
-          error: { code: 'CONFLICT', message: 'Not quite yet! Check what the house needs.' },
-        },
-      });
+      await route.continue();
       return;
     }
+    // Slow enough to try dismissing "Building…" while it's in flight.
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
     built = grown(levelOne!);
     await route.fulfill({ json: built });
   });
@@ -297,24 +304,31 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect(build).toHaveText('Build it!');
   await expect(page.getByTestId('house-grow-next')).toHaveCount(0);
 
-  // Build it! asks first (style guide §3.6); a refusal reads kindly.
+  // Build it! asks first (style guide §3.6), with focus on its yes; the real
+  // server's refusal reads calmly.
   await build.tap();
   await expect(page.getByTestId('house-grow-confirm')).toHaveText(
     'Build the Playroom for 30 Timber and 20 Stone?',
   );
+  await expect.poll(() => focused(page), slow).toBe('house-grow-yes');
   await page.getByTestId('house-grow-yes').tap();
-  await expect(page.getByTestId('house-note')).toHaveText(
-    'Not quite yet! Check what the house needs.',
-  );
+  const note = page.getByTestId('house-note');
+  await expect(note).toHaveText('Not quite yet! Check what the house needs.', slow);
+  await expect(note).toHaveClass(/house-note-calm/);
   expect((await houseState(page))?.sheet).toBe('grow');
+  await expect.poll(() => focused(page), slow).toBe('house-note');
 
-  // Again: a new attempt, a new key; the house grows its Playroom.
+  // Again: a new attempt, a new key. While it builds, Escape and the scrim
+  // can't dismiss it; then the house grows its Playroom.
   await build.tap();
   await page.getByTestId('house-grow-yes').tap();
-  await expect(page.getByTestId('house-note')).toHaveText(
-    'Ta-da! The Playroom is ready. Who moves in?',
-    slow,
-  );
+  await expect.poll(async () => (await houseState(page))?.building, slow).toBe(true);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('house-scrim').tap({ position: { x: 20, y: 200 }, force: true });
+  expect(await houseState(page)).toMatchObject({ sheet: 'confirm', building: true });
+  await expect(note).toHaveText('Ta-da! The Playroom is ready. Who moves in?', slow);
+  await expect(note).not.toHaveClass(/house-note-calm/);
+  await expect.poll(() => focused(page), slow).toBe('house-note');
   await expect(page.getByTestId('house-pill')).toHaveText('🏠 House 2');
   await expect.poll(async () => (await houseState(page))?.scene?.rooms, slow).toBe(2);
   expect(await houseState(page)).toMatchObject({ level: 2, rooms: 2, sheet: 'open' });
