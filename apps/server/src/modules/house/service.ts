@@ -368,9 +368,16 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
       const map = await requireHouse(db, user, mapId);
       // One read of the residents and today's gift serves the roll and the view.
       const reads = await readToday(db, map, user.id, at);
-      if (!reads.gift && giversAmong(reads.residents).length > 0) {
+      const day = localDate(at, map.timeZone);
+      if (
+        !reads.gift &&
+        giversAmong(reads.residents).length > 0 &&
+        // A plain look first, so a Keeper back after a leave doesn't take the
+        // locks on every read that day; the roll checks again under them.
+        !(await createHouseRepo(db).openedGiftOn(map.id, user.id, day))
+      ) {
         if (await rollTodaysGift(map, user.id, at)) {
-          reads.gift = await createHouseRepo(db).gift(mapId, user.id, localDate(at, map.timeZone));
+          reads.gift = await createHouseRepo(db).gift(mapId, user.id, day);
         }
       }
       return view(db, map, user.id, at, reads);
