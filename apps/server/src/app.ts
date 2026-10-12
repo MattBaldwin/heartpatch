@@ -473,7 +473,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         // The Keeper's house (#381), behind `HP_HOUSE` (off by default).
         await api.register(
-          houseRoutes(createHouseService({ db, clock, house }), { hooks: authHooks }),
+          houseRoutes(createHouseService({ db, clock, house, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
         );
         // Keeper milestones (#44): the `milestones` consumer counts progress.
         await api.register(

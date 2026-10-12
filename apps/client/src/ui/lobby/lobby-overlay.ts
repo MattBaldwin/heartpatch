@@ -172,7 +172,11 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     pollTimer = undefined;
   };
 
+  /** Set by a list refresh: the next `show` keeps the scroll where it is (#423). */
+  let keepScroll = false;
+
   const show = (...children: Node[]) => {
+    const top = card.scrollTop;
     stopPolling();
     releaseUpdates?.();
     releaseUpdates = null;
@@ -181,7 +185,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     shown += 1;
     card.replaceChildren(...children);
     setMode('list');
-    card.scrollTop = 0;
+    card.scrollTop = keepScroll ? top : 0;
+    keepScroll = false;
   };
 
   const title = (text: string) => el('h1', { class: 'auth-title', id: 'lobby-title' }, text);
@@ -241,7 +246,15 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
 
   async function showList(message?: string): Promise<void> {
     refresh = () => void showList();
-    loading();
+    // A list already on screen stays put while the new one loads, so a tap
+    // mid-refresh isn't lost and the scroll doesn't jump (#423).
+    const inPlace = onList && !panel.hidden;
+    if (inPlace) {
+      stopPolling();
+      shown += 1;
+    } else {
+      loading();
+    }
     const at = shown;
     let mine: MyMapsResponse;
     try {
@@ -262,7 +275,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (await resume(mine, at)) return;
       if (at !== shown) return;
     }
-    renderList(mine, message);
+    renderList(mine, message, inPlace);
   }
 
   /**
@@ -307,7 +320,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
             return;
           }
           const joined = joinedSince(mine, next)[0];
-          renderList(next, joined === undefined ? undefined : `Yay! You're in ${joined}!`);
+          renderList(next, joined === undefined ? undefined : `Yay! You're in ${joined}!`, true);
         })
         .catch(() => {
           // Offline for a moment: try again on the next beat.
@@ -316,7 +329,16 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     }, WAITING_POLL_MS);
   }
 
-  function renderList(mine: MyMapsResponse, message?: string): void {
+  function renderList(mine: MyMapsResponse, message?: string, keepPlace = false): void {
+    keepScroll = keepPlace;
+    try {
+      drawList(mine, message);
+    } finally {
+      keepScroll = false;
+    }
+  }
+
+  function drawList(mine: MyMapsResponse, message?: string): void {
     const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-maps' });
     for (const map of mine.maps) {
       const open = el(

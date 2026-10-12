@@ -33,6 +33,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
+import { createHouseRepo } from '../house/repo.js';
 import { listPublicFences, removeMemberFences } from '../fences/service.js';
 import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
@@ -329,8 +330,14 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // member's own commands wait on the archive and the account lock above,
       // and every other writer of a guard or gatherer takes its tile first,
       // which `releaseTiles` holds.
-      await jobs.lockSquishies(theirs);
+      // Their residents leave the house (#381) under their squishy locks (step
+      // 10), taken with the job squishies in one id-ordered lock and before
+      // any inventory row (step 11), as every residency writer does.
+      const house = createHouseRepo(tx);
+      const residents = await house.residentSquishyIds(mapId, memberId);
+      await jobs.lockSquishies([...new Set([...theirs, ...residents])]);
       await writeContentmentCheckpoints(tx, checkpoints, at);
+      await house.deleteResidents(residents);
       // A returning player gets a fresh home base (#4), so their buildings go
       // (#18); fires on their captured land give back what a lost fire does (#202).
       const map = await repo.findMap(mapId);
@@ -339,6 +346,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // After the buildings' grants: safe, as every fence command takes the
       // tile lock first, and this transaction already holds their tiles.
       const lostFences = await removeMemberFences(tx, mapId, memberId);
+      // Their house goes with the buildings (#381; plan Q5), its gifts by
+      // cascade (step 8c; the residents left above, under their squishy locks).
+      await house.deleteHouse(mapId, memberId);
       for (const event of lostFires) await repo.appendEvent(event);
       for (const event of lostFences) await repo.appendEvent(event);
       await repo.appendEvent({

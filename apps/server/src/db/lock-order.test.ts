@@ -8,6 +8,7 @@ import {
   hexDistance,
   hexKey,
   hexNeighbors,
+  HOUSE_DATA,
   STARTERS,
   type BattleAction,
   type PlayerBattleAction,
@@ -28,6 +29,8 @@ import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js
 import { createGatheringService } from '../modules/gathering/service.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
+import { createHouseRepo } from '../modules/house/repo.js';
+import { createHouseService } from '../modules/house/service.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
@@ -67,6 +70,7 @@ import {
   gameEvents,
   tileExplore,
   gatherJobs,
+  houseResidents,
   inventories,
   journeys,
   loreFound,
@@ -672,6 +676,134 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockMapRow(tx, mapId),
     );
     expect(await coinRows(kid.id)).toEqual([{ source: 'care', amount: 1 }]);
+  });
+
+  /** A patch whose house can grow with one Timber (only the Seed cap to meet), for the build's locks. */
+  async function houseSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 1 }, 'dev-grant'),
+    );
+    const data = structuredClone(HOUSE_DATA);
+    data.levels[1]!.requirements = [{ kind: 'heartSeedLevel', level: 1 }];
+    data.levels[1]!.cost = { timber: 1 };
+    const service = createHouseService({ db, house: { mode: 'on', testers: [] }, data });
+    const build = () => service.build(kid, map.id, 2);
+    return { kid, mapId: map.id, build };
+  }
+
+  const lockTimber = (tx: Transaction, mapId: string, userId: string) =>
+    tx
+      .select({ itemId: inventories.itemId })
+      .from(inventories)
+      .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, userId)))
+      .for('update');
+
+  it('takes the member row before the house (house `build`, #381 step 2 then 8c)', async () => {
+    const { kid, mapId, build } = await houseSetup('housemember');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      build,
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it('takes the house before the inventory rows (house `build`, #381 step 8c then 11)', async () => {
+    const { kid, mapId, build } = await houseSetup('househouse');
+    await holdThen(
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+      build,
+      (tx) => lockTimber(tx, mapId, kid.id),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it('spends the cost before its event (house `build`, #381 step 11 then 13)', async () => {
+    const { kid, mapId, build } = await houseSetup('housebill');
+    await holdThen(
+      (tx) => lockTimber(tx, mapId, kid.id),
+      build,
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it("takes a leaving member's residents before any inventory row (maps `leave`, #381 step 10 then 11)", async () => {
+    // A resident's writer (PR C) holds the squishy (step 10) and its residency
+    // row; the leave must wait there before locking inventory for its lost
+    // fire's refund (step 11), so taking inventory next can't deadlock it.
+    const owner = await player('houseowner');
+    const kid = await player('houseleaver');
+    const mapsService = createMapsService({ db, tutorialRequired: false, keeperRequired: false });
+    const map = await mapsService.create(owner, { name: 'Lock Patch', timeZone: 'UTC' });
+    await db.insert(mapMembers).values({ mapId: map.id, userId: kid.id, role: 'member' });
+    const [land] = await db
+      .select({ id: tiles.id })
+      .from(tiles)
+      .where(
+        and(
+          eq(tiles.mapId, map.id),
+          sql`${tiles.ownerUserId} is null`,
+          sql`${tiles.homeSlot} is null`,
+          sql`${tiles.nodeResource} is null`,
+        ),
+      )
+      .orderBy(asc(tiles.id))
+      .limit(1);
+    await db.update(tiles).set({ ownerUserId: kid.id }).where(eq(tiles.id, land!.id));
+    await db.insert(buildings).values({
+      mapId: map.id,
+      ownerUserId: kid.id,
+      tileId: land!.id,
+      buildingId: 'hearthfire',
+      kind: 'hearthfire',
+      spot: 0,
+      fuelledThrough: '2099-01-01',
+    });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 1 }, 'dev-grant'),
+    );
+    const [pet] = await db
+      .insert(squishies)
+      .values({
+        mapId: map.id,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    await db.insert(houseResidents).values({
+      squishyId: pet!.id,
+      mapId: map.id,
+      userId: kid.id,
+      roomId: 'snug',
+      movedInAt: new Date(),
+    });
+    await holdThen(
+      async (tx) => {
+        await tx
+          .select({ id: squishies.id })
+          .from(squishies)
+          .where(eq(squishies.id, pet!.id))
+          .for('no key update');
+        await tx
+          .update(houseResidents)
+          .set({ movedOutAt: new Date() })
+          .where(eq(houseResidents.squishyId, pet!.id));
+      },
+      () => mapsService.leave(kid, map.id),
+      (tx) => lockTimber(tx, map.id, kid.id),
+    );
+    expect(
+      await db.select().from(houseResidents).where(eq(houseResidents.squishyId, pet!.id)),
+    ).toEqual([]);
   });
 
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {
