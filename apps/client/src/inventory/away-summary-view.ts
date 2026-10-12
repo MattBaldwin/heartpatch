@@ -93,6 +93,12 @@ function sheetOpen(): boolean {
   );
 }
 
+/** How far below its resting place an element's entrance has it right now (its animated translateY). */
+function settleOffset(node: Element): number {
+  const transform = getComputedStyle(node).transform;
+  return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
+}
+
 /** The player asked for less motion (iOS Settings → Accessibility → Motion). */
 function reducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -359,7 +365,10 @@ export function createAwaySummary(
     // neighbouring tiles on a small phone) are spread and never hide a number.
     root.append(...trips.map((t) => t.flyer));
     const sizes = trips.map((t) => t.flyer.getBoundingClientRect());
-    const below = banner.getBoundingClientRect().bottom;
+    // The banner is still sliding up into place (`away-in`): everything in it
+    // is measured where it will be once it has, when the chips get there.
+    const slide = settleOffset(banner);
+    const below = banner.getBoundingClientRect().bottom - slide;
     const starts = spreadStarts(
       trips.map((t) => t.spot),
       sizes,
@@ -372,7 +381,7 @@ export function createAwaySummary(
       const size = sizes[k] ?? flyer.getBoundingClientRect();
       const start = starts[k] ?? spot;
       const box = slot.getBoundingClientRect();
-      const end = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      const end = { x: box.left + box.width / 2, y: box.top - slide + box.height / 2 };
       const at = (p: ScreenPoint, scale: number) =>
         `translate(${String(p.x - size.width / 2)}px, ${String(p.y - size.height / 2)}px) scale(${String(scale)})`;
       const pop = POP_MS / (POP_MS + FLY_MS);

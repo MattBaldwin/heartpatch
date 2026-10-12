@@ -23,6 +23,7 @@ interface InventoryDebug {
   };
   bagNew: number;
   landings: number;
+  fromTiles: number;
 }
 
 function bagState(page: Page): Promise<InventoryDebug | null> {
@@ -153,13 +154,18 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   const mapId = (await bagState(page))!.mapId;
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Back the way a kid often is after hours away: iOS has closed the app, so
+  // it starts afresh and lands back on the patch (#160).
+  await page.reload();
+  await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 60_000 });
   const banner = page.getByTestId('landed-toast');
   // Roomy: the settle is one round trip, slow under a full CI run.
   await expect(banner).toBeVisible({ timeout: 15_000 });
   await expect(banner).toContainText('Heart Charm');
-  // With motion on, they flew in from the map (the gather's node, home for the craft).
+  // With motion on, they flew in from the map: the gather's from its node
+  // (even on a fresh start), the craft from home base.
   expect((await bagState(page))?.summary.flown).toBeGreaterThan(0);
+  expect((await bagState(page))?.fromTiles).toBeGreaterThan(0);
   // Two kinds: the banner (not the one-thing pill), and a real tap opens the
   // card with everything: on a plain map it takes taps (shut trays don't count
   // as open sheets). The banner hides itself after a few seconds, so the tap
@@ -369,13 +375,25 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
     };
     const hint = dialog('tray-hint');
     const withHint = land();
+    // The first chip lands right on its slot, though the banner was still
+    // sliding up into place when the flight was set (CSS `away-in`).
+    const flyer = document.querySelector<HTMLElement>('.away-flyer');
+    const effect = flyer?.getAnimations()[0]?.effect;
+    const last =
+      effect instanceof KeyframeEffect ? effect.getKeyframes().at(-1)?.['transform'] : null;
+    const flyerY = Number(/translate\([^,]+, ([-\d.]+)px\)/.exec(String(last))?.[1]);
+    const flyerMid = flyerY + (flyer?.offsetHeight ?? 0) / 2;
+    await new Promise((done) => window.setTimeout(done, 1500));
+    const slot = node().querySelector('.away-chip')!.getBoundingClientRect();
+    const landsOff = Math.abs(flyerMid - (slot.top + slot.height / 2));
     hint.remove();
     const sheet = dialog('chat-sheet');
     const withSheet = land();
     sheet.remove();
-    return { withHint, withSheet };
+    return { withHint, withSheet, landsOff };
   });
   expect(gate.withHint).toEqual({ flew: true, quiet: false });
   expect(gate.withSheet).toEqual({ flew: false, quiet: true });
+  expect(gate.landsOff).toBeLessThan(1.5);
   await context.close();
 });

@@ -102,7 +102,11 @@ export interface ScreenPoint {
   readonly y: number;
 }
 
-/** How far a chip's path bows to the side, as a share of the trip (TUNE: a gentle curve). */
+/**
+ * How far a chip's path bows to the side, as a share of the trip (TUNE: a
+ * gentle curve). Keep it under about 0.5: past that the distance to the
+ * target stops shrinking all the way, and a chip would swing away first.
+ */
 const FLIGHT_BOW = 0.18;
 
 /**

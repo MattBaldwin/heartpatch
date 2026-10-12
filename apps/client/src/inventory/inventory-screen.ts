@@ -124,6 +124,8 @@ export interface InventoryDebug {
   readonly bagNew: number;
   /** Settles so far that put something in the bag. */
   readonly landings: number;
+  /** Chips of the last landing that flew from their own tile, not home base (#419). */
+  readonly fromTiles: number;
   /** Crafting Factory batches going (#294), null with no Factory. */
   readonly batches: number | null;
   /** The Factory sheet is open, and what its panel shows. */
@@ -495,6 +497,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** Bumped by every settle sent, so an older reply can't put an older bag back. */
   let settlesSent = 0;
 
+  /** The gathers on the go, without banking anything (none if it can't tell). */
+  async function gathersGoing(id: string): Promise<readonly Gather[]> {
+    try {
+      return (await api.get(id)).gathers;
+    } catch {
+      return [];
+    }
+  }
+
   async function refresh(): Promise<void> {
     const id = mapId;
     const at = generation;
@@ -503,7 +514,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     const sent = settlesSent;
     try {
       // The gathers going before, so what finished can fly from its tile (#419).
-      const before = state?.gathers ?? [];
+      // A map just opened has no bag yet: one read first (it banks nothing),
+      // so the first settle, the one that says "Welcome back!", knows them too.
+      const before = state?.gathers ?? (await gathersGoing(id));
+      if (at !== generation) return;
       const { landed, trained, cleared = [], nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
@@ -602,6 +616,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
    * Where each chip flies from (#419): the tile of a gather that gave it, else
    * my home base (crafts, the Factory, training), else nowhere (it just appears).
    */
+  /** Chips of the last landing that flew from their own tile (the dev hook, for the e2e). */
+  let fromTiles = 0;
   const flyFrom =
     (locate: NonNullable<InventoryScreenOptions['locate']>, sources: readonly LandedFrom[]) =>
     (entry: SummaryEntry): ScreenPoint | null => {
@@ -613,7 +629,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         return onScreen(at, innerWidth, innerHeight) ? at : null;
       };
-      return centre(source ? locate.tile(source) : null) ?? centre(locate.home());
+      const tile = centre(source ? locate.tile(source) : null);
+      if (tile) fromTiles += 1;
+      return tile ?? centre(locate.home());
     };
 
   /** Pops up what just landed (#419), and counts it as news until the Bag opens. */
@@ -631,6 +649,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     const entries = summaryEntries(landed, trained);
     if (entries.length > 0) {
       const sentence = [note, summarySentence(landed, trained)].filter((t) => t !== '').join(' ');
+      fromTiles = 0;
       summary.show({
         entries,
         sentence,
@@ -1261,6 +1280,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         summary: summary.debug,
         bagNew,
         landings,
+        fromTiles,
         batches: state.factory ? state.factory.batches.length : null,
         factorySheet: factorySheet.hidden ? null : factoryPanel.mode,
         welcome: !welcome.hidden,
