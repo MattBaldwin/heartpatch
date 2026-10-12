@@ -208,9 +208,10 @@ const inventory = createInventoryScreen({
   onCollected: () => {
     void recipeBook.check();
   },
-  // The welcome-back card's "See Factory" (#294): home, where the Factory stands.
+  // The welcome-back card's "See Factory" (#294): its batches, wherever it
+  // stands (on a homestead since #295).
   onSeeFactory: () => {
-    void home.open();
+    inventory.openFactory();
   },
   lore: loreBag,
   onBagOpen: () => {
@@ -585,6 +586,10 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  // My Crafting Factory's tile card (#295): its batches sheet.
+  onOpenFactory: () => {
+    inventory.openFactory();
+  },
   onJobs: (mapId, at) => {
     void jobs.openJobBoard(mapId, at);
   },

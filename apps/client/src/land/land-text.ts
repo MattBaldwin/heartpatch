@@ -29,11 +29,15 @@ export const LAND_TEXT = {
     n === 1
       ? 'Its guardians are back. You can claim it again!'
       : 'Their guardians are back. You can claim them again!',
-  /** My fires came down with the land (#202): what came back is shown under it. */
+  /**
+   * My buildings came down with the land (#202): a fire, or since #295 a
+   * Training Grounds or Crafting Factory on a homestead. What came back is
+   * shown under it.
+   */
   welcomeFire: (n: number) =>
     n === 1
-      ? 'Your fire out there went out when the land went wild. You got some things back 🔥'
-      : `Your ${String(n)} fires out there went out when the land went wild. You got some things back 🔥`,
+      ? 'Your building out there came down when the land went wild. You got some things back 🏡'
+      : `Your ${String(n)} buildings out there came down when the land went wild. You got some things back 🏡`,
   ok: 'Okay!',
 } as const;
 

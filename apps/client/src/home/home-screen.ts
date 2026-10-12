@@ -58,6 +58,7 @@ import {
   FIRES_ON_LAND,
   freeHomeSpots,
   fuelAllOffer,
+  factoryTileOffer,
   groundsTileOffer,
   landTileOffer,
   type GroundsTileOffer,
@@ -113,6 +114,8 @@ export interface HomeScreenOptions {
    * move it). `at`: Training Grounds on that homestead come first (#277).
    */
   onJobs?: (mapId: string, at?: { q: number; r: number }) => void;
+  /** "Open" on my Crafting Factory's tile card (#295): its batches sheet. */
+  onOpenFactory?: () => void;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
@@ -268,6 +271,10 @@ export const HOME_TEXT = {
   // Training Grounds on a homestead (#277, mockup screen 6).
   groundsBuilt: 'Ta-da! Your Training Grounds are ready. Send someone to practice!',
   trainHere: '🎯 Train here',
+  factoryBuilt: 'Ta-da! Your Crafting Factory is up. Tap it to start a batch!',
+  openFactory: '🏭 Open',
+  factoryLose:
+    'If you lose this land, everything it cost and everything in its batches comes back.',
   groundsLit: '🔥 In fire light',
   groundsDark: '🌙 Dark at night',
   groundsNight:
@@ -676,7 +683,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }));
     const card = pickCard(cards, mode.kind === 'build' ? mode.buildingId : null, current.items);
     const row = rows.find((r) => r.building.id === card?.id);
-    const spots = row ? freeHomeSpots(atHome(current), null, row.building.slot) : [];
+    // A blocked card (out of season, no room) shows why, with no spots lit.
+    const spots =
+      row && row.option.kind !== 'blocked'
+        ? freeHomeSpots(atHome(current), null, row.building.slot)
+        : [];
     const wanted = mode.kind === 'build' ? mode.spot : null;
     const spot =
       spots.find((s) => s.q === wanted?.q && s.r === wanted.r && s.spot === wanted.spot) ??
@@ -1441,8 +1452,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** What the panel shows for a fire on my land (#202): its card, or a step of a command. */
   type TileMode = 'card' | 'upgrade' | 'confirm';
   let tileMode: TileMode = 'card';
-  /** Whose card a step is for: the tile's fire, or its Training Grounds (#277). */
-  let tileTarget: 'fire' | 'grounds' = 'fire';
+  /** Whose card a step is for: the tile's fire, its Training Grounds (#277) or Crafting Factory (#295). */
+  type TileTarget = 'fire' | 'grounds' | 'factory';
+  let tileTarget: TileTarget = 'fire';
   let tileNote = '';
   let tileWorking = false;
 
@@ -1543,6 +1555,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
    */
   function landTileNodes(tile: PublicTile): Node[] {
     if (!home) return [];
+    // My Crafting Factory on this homestead (#295): one building a tile, so
+    // it's the tile's only card.
+    const factory = factoryTileOffer(tile, home);
+    if (factory?.kind === 'factory') return factoryNodes(factory.factory);
     const grounds = groundsTileOffer(tile, home);
     if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
       return groundsNodes(tile, grounds);
@@ -1586,17 +1602,95 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ];
     }
     const { grounds, napping } = offer;
-    const card: Node[] = [cardHead(grounds, grounds.level)];
-    const upgradeAt = upgradeOffer(current, grounds);
+    const train = tileButton(
+      HOME_TEXT.trainHere,
+      () => {
+        if (mapId) options.onJobs?.(mapId, { q: tile.q, r: tile.r });
+      },
+      'tile-grounds-train',
+      'small',
+    );
+    if (napping || !options.onJobs) train.disabled = true;
+    return standingNodes(
+      grounds,
+      'grounds',
+      'grounds',
+      [
+        el('span', { class: 'home-effects' }, light),
+        el(
+          'p',
+          { class: 'home-card-note', 'data-testid': 'tile-grounds-note' },
+          buildingNote(grounds),
+        ),
+        el(
+          'p',
+          { class: 'home-card-note' },
+          napping ? HOME_TEXT.groundsNapping : HOME_TEXT.groundsNight,
+        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.groundsLose),
+      ],
+      [train],
+    );
+  }
+
+  /**
+   * A building of mine standing on a tile out on the land (#277, #295): its
+   * card with `lines` and `actions`, plus Upgrade and Take down, or a step
+   * of either. `prefix` names its test ids (`tile-<prefix>-…`).
+   */
+  /** My Crafting Factory on a homestead (#295): Open, Upgrade, Take down. */
+  function factoryNodes(factory: MyBuilding): Node[] {
+    const open = tileButton(
+      HOME_TEXT.openFactory,
+      () => {
+        options.onOpenFactory?.();
+      },
+      'tile-factory-open',
+      'small',
+    );
+    if (!options.onOpenFactory) open.disabled = true;
+    return standingNodes(
+      factory,
+      'factory',
+      'factory',
+      [
+        // Sprout's tip the first time a kid sees their Factory (#294), on its homestead now.
+        ...factoryTip(factory.id),
+        el(
+          'p',
+          { class: 'home-card-note', 'data-testid': 'tile-factory-note' },
+          buildingNote(factory),
+        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.factoryLose),
+      ],
+      [open],
+    );
+  }
+
+  function standingNodes(
+    b: MyBuilding,
+    target: TileTarget,
+    prefix: string,
+    lines: readonly Node[],
+    actions: readonly Node[],
+  ): Node[] {
+    const current = home;
+    if (!current) return [];
+    const note =
+      tileMode !== 'card' && tileNote
+        ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)]
+        : [];
+    const card: Node[] = [cardHead(b, b.level)];
+    const upgradeAt = upgradeOffer(current, b);
     if (tileMode === 'upgrade' && upgradeAt) {
       const go = tileButton(
         HOME_TEXT.upgradeNow,
         () =>
           void tileAct(
-            (id, send) => send((key) => api.upgrade(id, grounds.id, key)),
-            HOME_TEXT.upgraded(buildingName(grounds.buildingId), upgradeAt.to),
+            (id, send) => send((key) => api.upgrade(id, b.id, key)),
+            HOME_TEXT.upgraded(buildingName(b.buildingId), upgradeAt.to),
           ),
-        'tile-grounds-upgrade-confirm',
+        `tile-${prefix}-upgrade-confirm`,
       );
       if (!upgradeAt.affordable) go.disabled = true;
       card.push(
@@ -1610,19 +1704,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               tileMode = 'card';
               renderTile();
             },
-            'tile-grounds-upgrade-cancel',
+            `tile-${prefix}-upgrade-cancel`,
             true,
           ),
         ),
       );
     } else if (tileMode === 'confirm') {
-      const back = costText(refundPreview(grounds));
+      const back = costText(refundPreview(b));
       card.push(
-        el(
-          'p',
-          { class: 'home-card-note' },
-          HOME_TEXT.confirm(buildingName(grounds.buildingId), back),
-        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.confirm(buildingName(b.buildingId), back)),
         tileRow(
           tileButton(
             HOME_TEXT.yes,
@@ -1630,7 +1720,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               let refund = '';
               void tileAct(
                 async (id, send) => {
-                  const res = await send((key) => api.remove(id, grounds.id, key));
+                  const res = await send((key) => api.remove(id, b.id, key));
                   if (!res) return null;
                   refund = describeItems(res.refund);
                   return res.home;
@@ -1638,7 +1728,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 () => HOME_TEXT.removed(refund),
               );
             },
-            'tile-grounds-remove-confirm',
+            `tile-${prefix}-remove-confirm`,
           ),
           tileButton(
             HOME_TEXT.keep,
@@ -1646,47 +1736,27 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               tileMode = 'card';
               renderTile();
             },
-            'tile-grounds-keep',
+            `tile-${prefix}-keep`,
             true,
           ),
         ),
       );
     } else {
-      const train = tileButton(
-        HOME_TEXT.trainHere,
-        () => {
-          if (mapId) options.onJobs?.(mapId, { q: tile.q, r: tile.r });
-        },
-        'tile-grounds-train',
-        'small',
-      );
-      if (napping || !options.onJobs) train.disabled = true;
       card.push(
-        el('span', { class: 'home-effects' }, light),
-        el(
-          'p',
-          { class: 'home-card-note', 'data-testid': 'tile-grounds-note' },
-          buildingNote(grounds),
-        ),
-        el(
-          'p',
-          { class: 'home-card-note' },
-          napping ? HOME_TEXT.groundsNapping : HOME_TEXT.groundsNight,
-        ),
-        el('p', { class: 'home-card-note' }, HOME_TEXT.groundsLose),
+        ...lines,
         tileRow(
-          train,
+          ...actions,
           ...(upgradeAt
             ? [
                 tileButton(
                   HOME_TEXT.upgrade,
                   () => {
                     tileMode = 'upgrade';
-                    tileTarget = 'grounds';
+                    tileTarget = target;
                     tileNote = '';
                     renderTile();
                   },
-                  'tile-grounds-upgrade',
+                  `tile-${prefix}-upgrade`,
                   'small',
                 ),
               ]
@@ -1695,17 +1765,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             HOME_TEXT.takeDown,
             () => {
               tileMode = 'confirm';
-              tileTarget = 'grounds';
+              tileTarget = target;
               tileNote = '';
               renderTile();
             },
-            'tile-grounds-remove',
+            `tile-${prefix}-remove`,
             true,
           ),
         ),
       );
     }
-    return [el('div', { class: 'home-card', 'data-testid': 'tile-grounds' }, ...card), ...note];
+    return [el('div', { class: 'home-card', 'data-testid': `tile-${prefix}` }, ...card), ...note];
   }
 
   /** A fire out on my land, or the offer to build one (#202). */
@@ -1892,6 +1962,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       });
       const fire = landTileOffer(tile, home);
       const grounds = groundsTileOffer(tile, home);
+      const factory = factoryTileOffer(tile, home);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
         ...(fire.kind === 'build'
@@ -1915,6 +1986,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               ),
             ]
           : []),
+        ...(factory?.kind === 'build'
+          ? [
+              card(
+                factory.building,
+                effectChips(factory.building)[0] ?? factory.building.description,
+              ),
+            ]
+          : []),
       ];
     },
     build: async (card, tile) => {
@@ -1923,8 +2002,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (!id || !current) return null;
       const at = generation;
       const grounds = groundsTileOffer(tile, current);
+      const factory = factoryTileOffer(tile, current);
       const isGrounds = grounds?.kind === 'build' && grounds.building.id === card.id;
-      const spot = isGrounds ? grounds.spot : 0;
+      const isFactory = factory?.kind === 'build' && factory.building.id === card.id;
+      const spot = isGrounds ? grounds.spot : isFactory ? factory.spot : 0;
       try {
         const next = await sendCommand(
           sendDeps,
@@ -1935,7 +2016,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         home = next;
         tileNote = '';
         renderTile();
-        return isGrounds ? HOME_TEXT.groundsBuilt : HOME_TEXT.fireBuilt;
+        return isGrounds
+          ? HOME_TEXT.groundsBuilt
+          : isFactory
+            ? HOME_TEXT.factoryBuilt
+            : HOME_TEXT.fireBuilt;
       } catch (err) {
         if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
           home = null;

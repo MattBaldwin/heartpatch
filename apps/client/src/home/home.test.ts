@@ -27,6 +27,8 @@ import {
   freeHomeSpots,
   fuelAllOffer,
   landFires,
+  BUILT_ON_HOMESTEAD,
+  factoryTileOffer,
   groundsTileOffer,
   landTileOffer,
   LAND_FIRE,
@@ -450,6 +452,57 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(carved.kind === 'build' && carved.lantern).toMatchObject({
       building: { id: 'jack-o-lantern-hearthfire' },
       needs: [{ ok: true }],
+    });
+  });
+});
+
+describe('the Crafting Factory on a homestead (#295)', () => {
+  const factory = {
+    ...fire({ id: ID(12), q: 3, r: 1, spot: 1 }),
+    buildingId: 'crafting-factory',
+    kind: 'factory' as const,
+    nightsLeft: null,
+    fuelSpace: null,
+    lit: null,
+    safeRadius: null,
+  };
+  const tile = (extra: Partial<{ homestead: 'joined' | 'paused' | null; q: number }> = {}) => ({
+    q: 3,
+    r: 1,
+    nodeResource: null,
+    homestead: 'joined' as const,
+    buildings: [] as { spot: number }[],
+    ...extra,
+  });
+
+  it('shows mine standing there, and offers my one Factory on an empty, open homestead', () => {
+    expect(
+      factoryTileOffer({ ...tile(), buildings: [{ spot: 1 }] }, homeWith({ buildings: [factory] })),
+    ).toEqual({
+      kind: 'factory',
+      factory,
+    });
+    const offer = factoryTileOffer(tile(), homeWith());
+    expect(offer).toMatchObject({ kind: 'build', building: { id: 'crafting-factory' } });
+    expect(offer?.kind === 'build' && offer.spot).toEqual(expect.any(Number));
+  });
+
+  it('offers nothing with a Factory elsewhere, on a spot, a napping or non-homestead, or a taken tile', () => {
+    const elsewhere = homeWith({ buildings: [{ ...factory, q: 9 }] });
+    expect(factoryTileOffer(tile(), elsewhere)).toBeNull();
+    expect(factoryTileOffer({ ...tile(), nodeResource: 'timber' }, homeWith())).toBeNull();
+    expect(factoryTileOffer(tile({ homestead: 'paused' }), homeWith())).toBeNull();
+    expect(factoryTileOffer(tile({ homestead: null }), homeWith())).toBeNull();
+    expect(factoryTileOffer({ ...tile(), buildings: [{ spot: 0 }] }, homeWith())).toBeNull();
+  });
+
+  it('says where it goes on the home Build sheet, and that it is built once it is', () => {
+    const row = (home: HomeResponse) =>
+      buildRows(home).find((r) => r.building.id === 'crafting-factory')!;
+    expect(row(homeWith()).option).toEqual({ kind: 'homestead', note: GROUNDS_ON_HOMESTEAD });
+    expect(row(homeWith({ buildings: [factory] })).option).toEqual({
+      kind: 'built',
+      note: BUILT_ON_HOMESTEAD,
     });
   });
 });
