@@ -434,7 +434,7 @@ describe('house scene', () => {
         }
         scene.getEngine().dispose();
       }
-    });
+    }, 30_000); // five houses built and drawn: 1.6 s alone, 6.2 s under load (#429)
 
     it('counts a face hidden when a wall stands in front of it, not just its middle', () => {
       const vp = { width: 390, height: 844 };
