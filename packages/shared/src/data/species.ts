@@ -1584,11 +1584,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone', 'light'], feelings: ['joy'] },
   },
-  // #443 kid (stage 2): crystal horns and its first crystal spines.
+  // #443 kid (stage 2): the gem pebble grows strong arms, before Glittercrag's.
   {
     id: 'gemling',
     name: 'Gemling',
-    description: 'Two little crystals grew on its head. It polishes them every morning.',
+    description: 'Its little arms grew big and strong. It lifts pebbles just for fun.',
     element: 'stone',
     feeling: 'joy',
     rarity: 'rare',
@@ -1601,18 +1601,9 @@ export const SPECIES: Species[] = [
     visual: {
       body: 'mochi',
       palette: ['#ccb8f0', '#fbf7ff', '#5fd2ea', '#ffffff'],
-      parts: [
-        'happy-eyes',
-        'smile',
-        'blush-cheeks',
-        'crystal-crown',
-        'cone-horns',
-        'crystal-spines',
-        'stubby-arms',
-        'biped-legs',
-      ],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'crystal-crown', 'strong-arms', 'biped-legs'],
       size: 1.15,
-      stance: 0.15,
+      stance: 0.2,
       pose: 'stand',
       attackPart: 'arms',
     },
