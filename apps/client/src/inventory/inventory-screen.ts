@@ -523,7 +523,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     return landed.filter((l) => l.kind === 'factory').map((l) => ({ ...at, items: l.items }));
   }
 
-  /** The gathers on the go, without banking anything (none if it can't tell). */
   /** The trained squishies with their pictures, as many as are ready in time (#465). */
   async function withPortraits(trained: SettleResponse['trained']): Promise<TrainedSquishy[]> {
     const portraits = options.portraits;
@@ -532,14 +531,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const species = t.speciesId === undefined ? undefined : SPECIES.get(t.speciesId);
         if (!portraits || !species) return null;
         const look = { species, instanceId: t.squishyId, accessory: t.accessory ?? null };
-        return Promise.race([
-          portraits.get(look).catch(() => null),
-          new Promise<null>((done) => {
-            window.setTimeout(() => {
-              done(null);
-            }, PORTRAIT_WAIT_MS);
-          }),
-        ]);
+        let timer: number | undefined;
+        const late = new Promise<null>((done) => {
+          timer = window.setTimeout(() => {
+            done(null);
+          }, PORTRAIT_WAIT_MS);
+        });
+        const picture = await Promise.race([portraits.get(look).catch(() => null), late]);
+        window.clearTimeout(timer);
+        return picture;
       }),
     );
     return trained.map(({ name, xp }, i) => {
@@ -548,6 +548,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     });
   }
 
+  /** The gathers on the go, without banking anything (none if it can't tell). */
   async function gathersGoing(id: string): Promise<readonly Gather[]> {
     try {
       return (await api.get(id)).gathers;

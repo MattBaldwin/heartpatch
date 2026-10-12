@@ -47,6 +47,8 @@ async function watchBanner(page: Page): Promise<void> {
           text: el.textContent,
           className: el.className,
           pointerEvents: getComputedStyle(el).pointerEvents,
+          // Trained squishies' faces in it (#465).
+          faces: el.querySelectorAll('img.away-face').length,
         };
       }
     }).observe(document, { attributes: true, childList: true, characterData: true, subtree: true });
@@ -56,12 +58,17 @@ async function watchBanner(page: Page): Promise<void> {
 /** What `watchBanner` saw when the banner first showed; null if it has not shown. */
 function bannerSeen(
   page: Page,
-): Promise<{ text: string; className: string; pointerEvents: string } | null> {
+): Promise<{ text: string; className: string; pointerEvents: string; faces: number } | null> {
   return page.evaluate(
     () =>
       (
         window as unknown as {
-          bannerSeen: { text: string; className: string; pointerEvents: string } | null;
+          bannerSeen: {
+            text: string;
+            className: string;
+            pointerEvents: string;
+            faces: number;
+          } | null;
         }
       ).bannerSeen,
   );
@@ -312,7 +319,12 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   });
   const page = await context.newPage();
   await page.goto('/');
-  const { fits: results, cardFaces } = await page.evaluate(async () => {
+  const {
+    fits: results,
+    stack,
+    cardFaces,
+    pair,
+  } = await page.evaluate(async () => {
     const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
     const m = {
       summary: await load('/src/inventory/away-summary.ts'),
@@ -398,13 +410,42 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
         inside: box.left >= 0 && box.right <= innerWidth,
       };
     }
+    // Four trained with faces, beside other chips: three faces, then how many.
+    const stackChip = [...document.querySelectorAll<HTMLElement>('.away-banner')]
+      .at(-1)!
+      .querySelector('.away-chip-faces');
+    const stack = {
+      faces: stackChip?.querySelectorAll('img.away-face').length ?? 0,
+      text: stackChip?.textContent ?? '',
+    };
     // The card behind the last one (opened in code: this bare page's sign-up
     // sheet makes the banner only to read).
     [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!.click();
     const card = [...document.querySelectorAll<HTMLElement>('[data-testid="away-card"]')].at(-1)!;
+    const cardFaces = card.querySelectorAll('.away-trained img.away-trained-face').length;
+    // Only training landed, two squishies: the pill opens nothing, so it
+    // says their XP, not how many.
+    banner.show({
+      entries: m.summary.summaryEntries(
+        [],
+        faces([
+          { name: 'Glimmerock', xp: 2 },
+          { name: 'Emberbun', xp: 4 },
+        ]),
+      ),
+      sentence: 'pair',
+      away: true,
+    });
+    const pill = [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!;
     return {
       fits: out,
-      cardFaces: card.querySelectorAll('.away-trained img.away-trained-face').length,
+      stack,
+      cardFaces,
+      pair: {
+        shown: banner.debug.shown,
+        faces: pill.querySelectorAll('img.away-face').length,
+        text: pill.querySelector('.away-chip')?.textContent ?? '',
+      },
     };
   });
   expect(results['three']).toMatchObject({
@@ -425,11 +466,10 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
     expect(r.chips + r.more, name).toBe(r.entries);
   }
   // Four trained with faces: three overlap in the chip, then how many ("🎯4").
-  const chip = page.locator('.away-banner').last().locator('.away-chip-faces');
-  await expect(chip.locator('img.away-face')).toHaveCount(3);
-  await expect(chip).toContainText('🎯4');
+  expect(stack).toEqual({ faces: 3, text: '🎯4' });
   // The card: each trained squishy's row has its face.
   expect(cardFaces).toBe(4);
+  expect(pair).toEqual({ shown: 'pill', faces: 2, text: '+6 XP' });
 
   // Sprout's first-visit tray hint is a dialog but no sheet: with it up, the
   // chips still fly and the banner takes taps. A real sheet open: nothing
@@ -491,6 +531,7 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
 test('a trained squishy lands with its own face (#465)', async ({ browser }) => {
   test.setTimeout(240_000); // a patch, a scene build and a portrait; CI renders in software
   const page = await newPlayer(browser, uniqueName('trained'));
+  await watchBanner(page);
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   const lobby = page.getByTestId('lobby');
@@ -540,16 +581,15 @@ test('a trained squishy lands with its own face (#465)', async ({ browser }) => 
   expect((await api(page, 'POST', `/maps/${mapId}/dev/mood/age`, { minutes: 60 })).status).toBe(
     200,
   );
-  const landed = (await bagState(page))!.landings;
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Read as it showed (`watchBanner`): it's up for 4 s, and a busy runner is slower.
   await expect
-    .poll(async () => (await bagState(page))?.landings, { timeout: 15_000 })
-    .toBe(landed + 1);
-  const banner = page.getByTestId('landed-toast');
-  await expect(banner).toContainText('trained');
+    .poll(async () => (await bannerSeen(page))?.text ?? '', { timeout: 30_000 })
+    .toContain('trained');
   // One squishy, one thing: the pill, its face and its XP.
-  await expect(banner).toHaveClass(/away-one/);
-  await expect(banner.locator('img.away-face')).toHaveCount(1);
-  await expect(banner.locator('.away-chip')).toContainText(/\+\d+ XP/);
+  const seen = (await bannerSeen(page))!;
+  expect(seen.className).toContain('away-one');
+  expect(seen.faces).toBe(1);
+  expect(seen.text).toMatch(/\+\d+ XP/);
   expect(errors).toEqual([]);
 });

@@ -510,7 +510,8 @@ describe.skipIf(!url)(
       later(30 * 60 * MINUTE_MS);
       const capped = await settle(server, kid, mapId);
       const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pet) });
-      // Its kind as it is after the XP landed.
+      // Its kind as the database has it after the XP landed (read again then,
+      // so an evolution would show; at level 3 it's still a Puddlepuff).
       expect(capped.trained).toEqual([
         {
           squishyId: pet,

@@ -273,10 +273,12 @@ export function createAwaySummary(
     if (e.key === 'Escape') closeCard();
   });
 
-  function chipFor(entry: SummaryEntry): HTMLElement {
+  /** A chip; `alone` for the one-thing pill, which opens nothing, so it says the XP. */
+  function chipFor(entry: SummaryEntry, alone = false): HTMLElement {
     if (entry.kind === 'trained') {
-      // Their faces when they're drawn (#465): one squishy and its XP, or up
-      // to three overlapping and how many trained. Else the 🎯 and the XP.
+      // Their faces when they're drawn (#465): up to three overlapping, then
+      // the XP; beside other chips, several say how many trained instead (the
+      // card, a tap away, has each one's XP). Else the 🎯 and the XP.
       const faces = entry.squishies.flatMap((s) => (s.portrait ? [s.portrait] : []));
       const one = entry.squishies.length === 1;
       if (faces.length === 0) {
@@ -295,7 +297,7 @@ export function createAwaySummary(
           { class: 'away-faces' },
           ...faces.slice(0, MAX_FACES).map((src) => faceImg(src, 'away-face')),
         ),
-        one ? AWAY_TEXT.xp(entry.xp) : AWAY_TEXT.trainedCount(entry.squishies.length),
+        one || alone ? AWAY_TEXT.xp(entry.xp) : AWAY_TEXT.trainedCount(entry.squishies.length),
       );
     }
     return el(
@@ -309,7 +311,7 @@ export function createAwaySummary(
   /** Every chip if they fit; else as many whole ones as fit beside "N more", which counts the rest. */
   function fitChips(entries: readonly SummaryEntry[]): void {
     chips.classList.remove('away-fit');
-    chips.replaceChildren(...entries.map(chipFor));
+    chips.replaceChildren(...entries.map((e) => chipFor(e)));
     chipsShown = entries.length;
     more.hidden = true;
     if (!overflows()) {
@@ -389,7 +391,7 @@ export function createAwaySummary(
       const spot = from(entry);
       const slot = i < chipsShown ? chips.children[i] : more;
       if (!spot || !(slot instanceof HTMLElement) || slot.hidden) return [];
-      const flyer = chipFor(entry);
+      const flyer = chipFor(entry, what.entries.length === 1);
       flyer.classList.add('away-flyer');
       flyer.setAttribute('aria-hidden', 'true');
       return [{ spot, slot, flyer }];
@@ -484,7 +486,7 @@ export function createAwaySummary(
         chips.replaceChildren(
           one.kind === 'item'
             ? el('span', { class: 'away-chip', 'data-item': one.id }, one.line)
-            : chipFor(one),
+            : chipFor(one, true),
         );
         chipsShown = 1;
         more.hidden = true;
