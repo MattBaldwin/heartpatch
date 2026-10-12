@@ -80,10 +80,15 @@ describe('the hearts (#391)', () => {
       bottom: 560 - BEFRIEND_CHEER.heartClear * 3,
       width: 390,
     });
-    // A phone held sideways: the card rests under the pills, so the band is
-    // empty and the card skips its hearts (dressResult checks bottom > top).
+    // A phone held sideways: the card rests under the pills, so the band is empty.
     const tight = heartBand(300, 290, 390);
     expect(tight.bottom).toBeLessThanOrEqual(tight.top);
+  });
+
+  it('skip the hearts when there is no room above the card, rather than piling them', () => {
+    expect(heartSpots(20, heartBand(300, 290, 390), 9)).toHaveLength(0);
+    // Just room enough still gets every heart.
+    expect(heartSpots(20, heartBand(140, 560, 390), 9)).toHaveLength(20);
   });
 
   it('come to rest across the screen, between the pills and the card', () => {

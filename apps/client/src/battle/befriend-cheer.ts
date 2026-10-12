@@ -59,14 +59,18 @@ function seeded(seed: number): () => number {
   return () => (x = (x * 1103515245 + 12345) % 2147483648) / 2147483648;
 }
 
-/** Where the hearts come to rest: across the screen, between the pills and the card. */
+/**
+ * Where the hearts come to rest: across the screen, between the pills and the
+ * card. None when the band is empty (no room above the card), rather than a pile.
+ */
 export function heartSpots(
   count: number,
   band: { top: number; bottom: number; width: number },
   seed: number,
 ): { x: number; y: number; rot: number; size: number; tint: boolean; glyph: string }[] {
+  if (band.bottom <= band.top) return [];
   const rand = seeded(seed);
-  const span = Math.max(0, band.bottom - band.top);
+  const span = band.bottom - band.top;
   return Array.from({ length: count }, (_, k) => ({
     x: Math.round(band.width * (0.08 + rand() * 0.84)),
     y: Math.round(band.top + rand() * span),
@@ -77,7 +81,10 @@ export function heartSpots(
   }));
 }
 
-/** Where the hearts may land: between the pills and the card, clear of both. */
+/**
+ * Where the hearts may land: between the pills and the card, clear of both.
+ * It can come back empty (`bottom <= top`) when the card rests under the pills.
+ */
 export function heartBand(
   pillsBottom: number,
   cardTop: number,
@@ -141,10 +148,9 @@ export function dressResult(
       ? BEFRIEND_CHEER.calmHearts
       : revealStep(BEFRIEND_CHEER.hearts, cheer.rare.scale);
     const band = heartBand(options.pillsBottom, restingTop(card), options.width);
-    // No room above the card (a phone held sideways): no hearts, rather than a pile.
-    const hearts = band.bottom > band.top ? count : 0;
     const seed = cheer.rare.rarity.length * 31 + Math.round(options.width);
-    for (const h of heartSpots(hearts, band, seed)) {
+    // No room above the card (a phone held sideways): heartSpots gives none.
+    for (const h of heartSpots(count, band, seed)) {
       const heart = el('span', { class: 'battle-heart', 'aria-hidden': 'true' }, h.glyph);
       heart.style.left = `${String(h.x)}px`;
       heart.style.top = `${String(h.y)}px`;
