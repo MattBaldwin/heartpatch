@@ -205,6 +205,13 @@ export const FLOATER = {
   dome: 0.7, // TUNE
 } as const;
 
+/**
+ * A glum face (#393, a squishy not keen on its job), made from its own face
+ * parts: the eyes half close (their height times `eyeLid`) and the mouth turns
+ * upside down, so a smile becomes a little frown. No new parts or meshes.
+ */
+export const GLUM_FACE = { eyeLid: 0.55 } as const; // TUNE
+
 /** Contact shadow: a soft dark disc under each squishy. */
 export const CONTACT_SHADOW = {
   color: '#6b4b6e', // TUNE: plum, matches the test scene

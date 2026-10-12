@@ -53,7 +53,8 @@ import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { accessoryItem } from '../procedural/accessory.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { buildCottage } from '../house/house-models.js';
-import { HOME_HOUSE, HOME_VIEW, SPOT_SIZE, WANDER } from './home-config.js';
+import type { WorkMood } from '../squishies/jobs/jobs-view.js';
+import { HOME_HOUSE, HOME_VIEW, MOOD_CUES, SPOT_SIZE, WANDER } from './home-config.js';
 import { centreOf, spotWorld } from './home-layout.js';
 import type { HomeSpot } from './home-view.js';
 
@@ -83,6 +84,11 @@ export interface HomeSceneStats {
   readonly buildingMeshes: number;
   /** The cottage on the Heart Seed tile (#381), by its exterior; null while the house is switched off. */
   readonly house: HouseExterior | null;
+  /** Squishies at a job they love (💕, and a bounce now and then), and ones drooping (🌧️, #393). */
+  readonly happy: number;
+  readonly drooping: number;
+  /** Happy bounces started so far (#393). */
+  readonly cheers: number;
 }
 
 /** What a tap hit. */
@@ -115,8 +121,14 @@ interface Resident {
    */
   readonly training: number | null;
   at: WorldPoint;
+  /** Which way it faces (it turns to where it last hopped). */
+  yaw: number;
+  /** Where it is this frame, mid-hop included (its mood bubble follows it). */
+  readonly now: { x: number; z: number; lift: number };
   hop: { from: WorldPoint; to: WorldPoint; start: number } | null;
   hops: number;
+  /** How it feels about its job (#393), or null: it looks as it always does. */
+  mood: WorkMood | null;
 }
 
 export class HomeScene {
@@ -140,6 +152,11 @@ export class HomeScene {
   #counts = { housed: 0, firelit: 0 };
   /** The cottage drawn now, if the house is on for this player. */
   #cottage: { exterior: HouseExterior; mesh: Mesh } | null = null;
+  /** Each of my squishies' work mood (#393), by squishy id. */
+  #moods: ReadonlyMap<string, WorkMood> = new Map();
+  #cheers = 0;
+  #happy: string[] = [];
+  #drawOrder: string[] = [];
 
   constructor(scene: Scene, home: HomeResponse, options: HomeSceneOptions) {
     this.#scene = scene;
@@ -243,6 +260,9 @@ export class HomeScene {
       spots: this.#spots.length,
       buildingMeshes: this.#buildings.stats.meshes,
       house: this.#cottage?.exterior ?? null,
+      happy: this.happy.length,
+      drooping: [...this.#residents.values()].filter((r) => r.mood === 'meh').length,
+      cheers: this.#cheers,
     };
   }
 
@@ -325,10 +345,22 @@ export class HomeScene {
       const at = anchor
         ? this.#wanderPoint(anchor, squishy.id, 0, training)
         : (waitAt ?? { x: 0, z: 0 });
-      const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0));
+      const mood = this.#moods.get(squishy.id) ?? null;
+      const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0, 0, mood));
       // What it wears (#340): the same pieces as up close.
       this.#squishies.setAccessory(handle, accessoryItem(squishy.accessory));
-      this.#residents.set(squishy.id, { handle, home: anchor, training, at, hop: null, hops: 0 });
+      if (mood === 'meh') this.#squishies.setFace(handle, 'glum');
+      this.#residents.set(squishy.id, {
+        handle,
+        home: anchor,
+        training,
+        at,
+        now: { x: at.x, z: at.z, lift: 0 },
+        yaw: 0,
+        hop: null,
+        hops: 0,
+        mood,
+      });
     }
     for (const [id, resident] of this.#residents) {
       if (keep.has(id)) continue;
@@ -336,6 +368,7 @@ export class HomeScene {
       this.#residents.delete(id);
     }
     this.#counts = { housed, firelit };
+    this.#countHappy();
 
     this.#keepers.clear();
     if (this.#options.keeper) {
@@ -521,9 +554,97 @@ export class HomeScene {
     return null;
   }
 
-  /** Squishies that live in a habitat (only they wander). */
+  /** Squishies that live in a habitat (only they wander; a drooping one sits still, #393). */
   get wanderers(): string[] {
-    return [...this.#residents].filter(([, r]) => r.home !== null).map(([id]) => id);
+    return [...this.#residents]
+      .filter(([, r]) => r.home !== null && r.mood !== 'meh')
+      .map(([id]) => id);
+  }
+
+  /** Squishies at a job they love (#393): they bounce now and then. Kept, not rebuilt per frame. */
+  get happy(): readonly string[] {
+    return this.#happy;
+  }
+
+  /** Each squishy's work mood (#393), as last set. */
+  get moods(): ReadonlyMap<string, WorkMood> {
+    return this.#moods;
+  }
+
+  /** Every squishy drawn, nearest the camera first (#393's bubbles keep their spots in this order). */
+  get drawOrder(): readonly string[] {
+    return this.#drawOrder;
+  }
+
+  /**
+   * Sets how each squishy feels about its job (#393; missing: no mood). A
+   * drooping one sits squashed where it stands; the rest stand up again.
+   */
+  setMoods(moods: ReadonlyMap<string, WorkMood>): void {
+    this.#moods = moods;
+    for (const [id, r] of this.#residents) {
+      const mood = moods.get(id) ?? null;
+      if (mood === r.mood) continue;
+      r.mood = mood;
+      this.#squishies.setFace(r.handle, mood === 'meh' ? 'glum' : null);
+      if (!r.hop) this.#squishies.move(r.handle, this.#placement(r.at, r.yaw, 0, mood));
+    }
+    this.#countHappy();
+  }
+
+  #countHappy(): void {
+    this.#happy = [...this.#residents].filter(([, r]) => r.mood === 'loves').map(([id]) => id);
+    this.#sortDrawOrder();
+  }
+
+  /** Nearest first, again after anyone moved (a hop landed). */
+  #sortDrawOrder(): void {
+    // The home camera looks along +z without turning, so a smaller z is nearer (squishies face −z).
+    this.#drawOrder = [...this.#residents]
+      .sort(([, a], [, b]) => a.at.z - b.at.z)
+      .map(([id]) => id);
+  }
+
+  /** A happy squishy does its little bounce (#393), on the spot (`now`: wall-clock ms). */
+  cheer(squishyId: string, now: number): void {
+    const r = this.#residents.get(squishyId);
+    if (r?.mood !== 'loves') return;
+    this.#cheers += 1;
+    this.#squishies.play(r.handle, 'bounce', now, MOOD_CUES.bounceStrength);
+  }
+
+  /**
+   * The world points at the top of a squishy's head and at its feet, where it
+   * is this frame (#393's mood bubbles), written into `top` and `foot`; false
+   * if it isn't drawn.
+   */
+  headAndFeet(squishyId: string, top: Vector3, foot: Vector3): boolean {
+    const r = this.#residents.get(squishyId);
+    if (!r) return false;
+    const tall = this.#squishies.heightOf(r.handle) * HOME_VIEW.squishyScale;
+    const squash = r.mood === 'meh' ? MOOD_CUES.droop : 1;
+    const y = this.#ground + r.now.lift;
+    top.set(r.now.x, y + tall * squash, r.now.z);
+    foot.set(r.now.x, y, r.now.z);
+    return true;
+  }
+
+  /**
+   * Whether a squishy stands tucked inside its habitat building, where its
+   * face can't be seen (#393: a bubble needn't keep clear of it). Wander
+   * spots can fall inside the building's footprint.
+   */
+  tucked(squishyId: string): boolean {
+    const r = this.#residents.get(squishyId);
+    if (!r?.home || r.training !== null) return false;
+    const reach = HOME_VIEW.buildingScale * MOOD_CUES.tuckedWithin;
+    return (r.now.x - r.home.x) ** 2 + (r.now.z - r.home.z) ** 2 < reach * reach;
+  }
+
+  /** The face a squishy is pulling (#393; tests). */
+  faceOf(squishyId: string): 'glum' | null {
+    const r = this.#residents.get(squishyId);
+    return r ? this.#squishies.faceOf(r.handle) : null;
   }
 
   /** Starts one wander hop for a housed squishy (`now`: wall-clock ms). */
@@ -541,22 +662,29 @@ export class HomeScene {
   /** Moves hops along; true while anything still moves (keep drawing). */
   step(now: number): boolean {
     let moving = false;
+    let landed = false;
     for (const r of this.#residents.values()) {
       if (!r.hop) continue;
       const t = Math.min(1, (now - r.hop.start) / WANDER.hopMs);
       const { from, to } = r.hop;
       const at = { x: from.x + (to.x - from.x) * t, z: from.z + (to.z - from.z) * t };
+      r.now.x = at.x;
+      r.now.z = at.z;
       const lift = 4 * t * (1 - t) * WANDER.hopHeight;
+      r.now.lift = t >= 1 ? 0 : lift;
       const yaw = faceYaw(to.x - from.x, to.z - from.z);
-      this.#squishies.move(r.handle, this.#placement(at, yaw, lift));
+      this.#squishies.move(r.handle, this.#placement(at, yaw, lift, r.mood));
       if (t >= 1) {
         r.at = to;
+        r.yaw = yaw;
         r.hop = null;
+        landed = true;
         this.#squishies.play(r.handle, 'wobble', now);
       } else {
         moving = true;
       }
     }
+    if (landed) this.#sortDrawOrder();
     return this.#squishies.update(now) || moving;
   }
 
@@ -568,8 +696,16 @@ export class HomeScene {
     return [...GAME_DATA.species, ...this.#home.speciesDefs];
   }
 
-  #placement(at: WorldPoint, yaw: number, lift = 0) {
-    return { x: at.x, z: at.z, y: this.#ground + lift, yaw, scale: HOME_VIEW.squishyScale };
+  #placement(at: WorldPoint, yaw: number, lift = 0, mood: WorkMood | null = null) {
+    return {
+      x: at.x,
+      z: at.z,
+      y: this.#ground + lift,
+      yaw,
+      scale: HOME_VIEW.squishyScale,
+      // Not keen on its job: it droops a little (#393).
+      ...(mood === 'meh' ? { squash: MOOD_CUES.droop } : {}),
+    };
   }
 
   /**

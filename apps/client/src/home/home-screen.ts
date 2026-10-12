@@ -37,11 +37,13 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { rarityDot } from '../ui/rarity/rarity.js';
-import { HOME_SHEET, WANDER } from './home-config.js';
+import { HOME_SHEET, MOOD_CUES, WANDER } from './home-config.js';
 import { mapSafeTiles } from './home-layout.js';
 import { homeApi, type HomeApi } from './home-api.js';
 import { afterHandle } from './home-peek.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
+import { createMoodMarks, type MoodMarkLayout } from './mood-marks.js';
+import type { WorkMood } from '../squishies/jobs/jobs-view.js';
 import {
   atHome,
   buildingIcon,
@@ -114,6 +116,11 @@ export interface HomeScreenOptions {
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
+   * Asks for how each of my squishies feels about its job (#393, the jobs
+   * view); the moods arrive through `setWorkMoods`, newest only.
+   */
+  loadWorkMoods?: (mapId: string) => void;
+  /**
    * The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375).
    * Without it, the button only unfolds the sheet (the squishies themselves
    * live in the roster now).
@@ -166,6 +173,12 @@ export interface HomeDebug {
   readonly scene: HomeSceneStats | null;
   /** Wander hops started since the home opened. */
   readonly hops: number;
+  /** The mood cues (#393): `bounce` while happy squishies may hop, else `static`. */
+  readonly moodCues: 'bounce' | 'static';
+  /** Mood bubbles on screen now, by mood (#393). */
+  readonly moodMarks: Readonly<Record<WorkMood, number>>;
+  /** Where each bubble went and why (#393, mood-layout.ts). */
+  readonly moodLayout: readonly MoodMarkLayout[];
   /** The main view's sheet (#412): the short peek bar, or opened into the full lists. */
   readonly sheet: 'peek' | 'open';
   /** The Factory card's batches going (#294), null while it's not loaded. */
@@ -184,6 +197,8 @@ export interface HomeScreen {
   readonly tileActions: TileActions;
   /** Fires, lanterns and Training Grounds the shared Build sheet can put up on my land (#371). */
   readonly buildSource: BuildSource;
+  /** My newest jobs view's moods for a map (#393), from the jobs feed: the only way moods reach the home. */
+  setWorkMoods: (mapId: string, moods: ReadonlyMap<string, WorkMood>) => void;
   readonly debug: HomeDebug | null;
 }
 
@@ -286,6 +301,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let wanderTimer: number | undefined;
   let frame = 0;
   let wanderTurn = 0;
+  /** Wander beats so far; every `MOOD_CUES.cheerEvery`-th one, a happy squishy bounces (#393). */
+  let beats = 0;
+  let cheerTurn = 0;
+  /** My squishies' work moods (#393) and the map they're for. */
+  let moods: { mapId: string; moods: ReadonlyMap<string, WorkMood> } | null = null;
   let lastTier: QualityTier | null = null;
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
 
@@ -1274,6 +1294,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       keeperWearing: options.keeperWearing?.() ?? [],
     });
     scene3d = built;
+    if (moods && moods.mapId === mapId) built.setMoods(moods.moods);
+    marks.attach(scene, built);
     syncScene();
     const canvas = scene.getEngine().getRenderingCanvas();
     if (canvas) {
@@ -1308,8 +1330,24 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     syncWander();
   });
 
+  /** No happy bounces (#393) with Reduce Motion or on the low quality tier; the bubbles stay. */
+  const staticCues = () => reducedMotion.matches || options.tier() === 'low';
+  const marks = createMoodMarks(options.root);
+
+  /** My squishies' work moods for a map arrived (#393): show them if it's this home. */
+  function applyMoods(id: string, next: ReadonlyMap<string, WorkMood>): void {
+    moods = { mapId: id, moods: next };
+    if (id !== mapId || !scene3d) return;
+    scene3d.setMoods(next);
+    marks.refresh();
+    options.invalidate();
+    syncWander();
+  }
+
   function syncWander(): void {
-    const wanted = isOpen && !reducedMotion.matches && (scene3d?.wanderers.length ?? 0) > 0;
+    const s = scene3d;
+    const cheering = !staticCues() && (s?.happy.length ?? 0) > 0;
+    const wanted = isOpen && !reducedMotion.matches && ((s?.wanderers.length ?? 0) > 0 || cheering);
     if (wanted && wanderTimer === undefined) scheduleHop();
     if (!wanted && wanderTimer !== undefined) {
       window.clearTimeout(wanderTimer);
@@ -1325,10 +1363,19 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const ids = s?.wanderers ?? [];
       const id = ids[wanderTurn % Math.max(1, ids.length)];
       wanderTurn += 1;
-      if (s && id) {
-        s.hop(id, performance.now());
-        if (frame === 0) frame = requestAnimationFrame(tick);
+      const now = performance.now();
+      if (s && id) s.hop(id, now);
+      // A happy squishy's bounce rides the same beat (#393), so its frames
+      // land with a hop's rather than adding their own.
+      beats += 1;
+      const happy = s && !staticCues() ? s.happy : [];
+      const cheer =
+        beats % MOOD_CUES.cheerEvery === 0 ? happy[cheerTurn % Math.max(1, happy.length)] : null;
+      if (s && cheer) {
+        cheerTurn += 1;
+        s.cheer(cheer, now);
       }
+      if (s && (id || cheer) && frame === 0) frame = requestAnimationFrame(tick);
       syncWander();
     }, delay);
   }
@@ -1369,6 +1416,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     options.showScene(build);
     render();
     syncWander();
+    // How they feel about their jobs (#393): arrives through `setWorkMoods`; the home shows without it.
+    options.loadWorkMoods?.(id);
   }
 
   function hide(): void {
@@ -1907,6 +1956,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   return {
     buildSource,
+    setWorkMoods: (id, next) => {
+      applyMoods(id, next);
+    },
     setMap: (next) => {
       if (next === mapId) return;
       generation += 1;
@@ -1921,6 +1973,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (next?.id === user?.id) return;
       user = next;
       generation += 1;
+      moods = null;
       factoryBag = null;
       factoryTried = false;
       mapId = null;
@@ -1970,6 +2023,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         squishies: home?.squishies.length ?? 0,
         scene: scene3d?.stats ?? null,
         hops: scene3d?.hops ?? 0,
+        moodCues: staticCues() ? ('static' as const) : ('bounce' as const),
+        moodMarks: marks.shown,
+        moodLayout: marks.layout,
         sheet: sheetOpen ? ('open' as const) : ('peek' as const),
         factoryBatches: factoryBag?.factory ? factoryBag.factory.batches.length : null,
         factoryPanel: factoryPanel.element.isConnected ? factoryPanel.mode : null,

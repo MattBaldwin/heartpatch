@@ -23,6 +23,15 @@ interface JobsDebug {
   };
   team: { open: boolean; picked: string[]; saved: string[]; note: string };
   badges: number;
+  badgeMoods: { loves: number; meh: number };
+}
+
+/** The part of `HomeDebug` (src/home/home-screen.ts) the mood test reads. */
+interface HomeMoodDebug {
+  open: boolean;
+  scene: { happy: number; drooping: number } | null;
+  moodCues: 'bounce' | 'static';
+  moodLayout: { id: string; mood: 'loves' | 'meh' | null }[];
 }
 
 interface BattleBody {
@@ -31,6 +40,7 @@ interface BattleBody {
 
 const jobsState = (page: Page) => hook<JobsDebug>(page, 'jobs');
 const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
+const homeState = (page: Page) => hook<HomeMoodDebug>(page, 'home');
 
 test('a squishy gathers on its own, and the picked team goes to battle', async ({ browser }) => {
   test.setTimeout(180_000); // a full map build; CI renders in software
@@ -181,5 +191,78 @@ test('a gatherer on a spot it loves stays happy while a resting one drifts (#376
   });
   expect(after.get(starterId)!.contentment).toBeLessThan(before.get(starterId)!.contentment);
   expect(after.get(starterId)!.moodDrift).toBe('resting');
+  expect(errors).toEqual([]);
+});
+
+test('my gatherers show how they feel on the map and at home (#393)', async ({ browser }) => {
+  test.setTimeout(180_000); // a full map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('cue'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Moody Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  const mapId = (await mapState(page))!.id;
+
+  const grant = async () => {
+    const res = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {
+      speciesId: 'mossmuffin',
+      level: 4,
+    });
+    expect(res.status).toBe(201);
+    return (res.body as { squishy: { id: string } }).squishy.id;
+  };
+  const happyId = await grant();
+  const glumId = await grant();
+
+  // One on a spot it loves, one on a spot that isn't its thing.
+  await (await trayButton(page, 'jobs-open')).tap();
+  const board = page.getByTestId('jobs');
+  const sendTo = async (id: string, kind: 'loved' | 'meh') => {
+    const row = board.locator(`[data-testid="jobs-row"][data-squishy="${id}"]`);
+    await row.getByRole('button', { name: /Gather/ }).tap();
+    await row
+      .getByTestId('jobs-picker')
+      .locator(`.jobs-spot-${kind}`)
+      .first()
+      .getByTestId('jobs-spot')
+      .tap();
+    await expect.poll(async () => (await jobsState(page))?.board.jobs[id]).toBe('gatherer');
+  };
+  await sendTo(happyId, 'loved');
+  await sendTo(glumId, 'meh');
+  await board.getByRole('button', { name: 'Close' }).tap();
+
+  // On the map, my two 🧺 badges say how each gatherer feels.
+  await expect
+    .poll(async () => (await jobsState(page))?.badgeMoods, { timeout: 15_000 })
+    .toEqual({ loves: 1, meh: 1 });
+  const badges = page.locator('.gatherer-badge');
+  await expect(badges.filter({ hasText: '💕' })).toHaveCount(1);
+  await expect(badges.filter({ hasText: '🌧️' })).toHaveCount(1);
+
+  // At home, each has its bubble (shown, or waiting hidden behind a neighbour):
+  // the happy one may bounce, the glum one droops.
+  await (await trayButton(page, 'home-open')).tap();
+  await expect.poll(async () => (await homeState(page))?.scene?.happy, { timeout: 30_000 }).toBe(1);
+  expect((await homeState(page))!.scene!.drooping).toBe(1);
+  await expect
+    .poll(async () => {
+      const layout = (await homeState(page))?.moodLayout ?? [];
+      return Object.fromEntries(layout.filter((l) => l.mood).map((l) => [l.id, l.mood]));
+    })
+    .toEqual({ [happyId]: 'loves', [glumId]: 'meh' });
+  await expect(page.getByTestId('home-mood-mark')).toHaveCount(2);
+
+  // Reduce Motion: the bubbles and the droop stay, the bounce doesn't.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(async () => (await homeState(page))?.moodCues).toBe('static');
+  await expect(page.getByTestId('home-mood-mark')).toHaveCount(2);
   expect(errors).toEqual([]);
 });

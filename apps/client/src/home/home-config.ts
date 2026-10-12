@@ -73,3 +73,38 @@ export const HOME_HOUSE = {
   scale: 1.25, // TUNE: the biggest cottage is about two metres across here
   tapReach: 0.36, // TUNE
 } as const;
+
+/**
+ * How squishies show how they feel about their job at home (#393). A small
+ * bubble floats over each one on every tier: 💕 at a job it loves, 🌧️ at one
+ * it isn't keen on (the map's 🧺 badges use the same pair). A happy one also
+ * does a little bounce now and then: one at a time, on the wander timer's
+ * beat, every `cheerEvery`-th beat, so the frames it costs land with a hop's;
+ * not with Reduce Motion or on the low quality tier. One that isn't keen
+ * droops: it sits squashed (`droop`, height scale about its feet; the width
+ * grows to keep its volume), pulls a glum face (procedural GLUM_FACE) and
+ * doesn't wander.
+ */
+export const MOOD_CUES = {
+  cheerEvery: 2, // TUNE: a bounce on every 2nd wander beat (about every 7 s)
+  bounceStrength: 0.8, // TUNE: of the shared happy bounce (SQUISH.bounce)
+  droop: 0.74, // TUNE: 0.86 was hard to spot at the home's start zoom (#393 mockups)
+  /**
+   * The mood bubbles on screen (CSS px, see mood-layout.ts): their size, the
+   * space over the head, how far one may climb or slide to clear other faces
+   * before it hides instead, and how much of a squishy counts as its face.
+   */
+  marks: {
+    width: 30,
+    height: 26,
+    gap: 6,
+    maxLift: 48,
+    step: 4,
+    slide: 10,
+    faceWidth: 0.8,
+    faceHeight: 0.5,
+    faceCover: 0.25,
+  }, // TUNE
+  /** A squishy this close to its habitat's middle (× building scale) stands inside it, out of sight. */
+  tuckedWithin: 0.4, // TUNE: building models are about 1 unit across at scale 1
+} as const;

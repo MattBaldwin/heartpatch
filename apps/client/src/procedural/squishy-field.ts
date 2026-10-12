@@ -19,6 +19,7 @@ import {
   CONTACT_SHADOW,
   FINISH_CODE,
   FLOATER_BATCH,
+  GLUM_FACE,
   LOD,
   SHADOW_LOOK,
   SQUISH_LOOK_CODE,
@@ -76,6 +77,9 @@ export interface SquishyPlacement {
   /** The contact shadow's opacity, 0–1 (it fades as the body rises, #323). */
   readonly shadowAlpha?: number;
 }
+
+/** A face a squishy can pull on top of its own (#393): `glum`, not keen on its job. */
+export type SquishyFace = 'glum';
 
 export interface SquishyHandle {
   readonly id: number;
@@ -147,6 +151,9 @@ interface Squishy {
   } | null;
   /** Its own `crown` parts (a stem, a nightcap): put away while a crown accessory is on. */
   readonly crownParts: { batch: Batch; instance: Instance }[];
+  /** Its eyes and mouth, with where each sits on a plain face (a `face` reshapes them). */
+  readonly faceParts: { batch: Batch; instance: Instance; slot: 'eyes' | 'mouth'; base: Matrix }[];
+  face: SquishyFace | null;
 }
 
 interface Batch {
@@ -289,6 +296,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       instances: [],
       accessory: null,
       crownParts: [],
+      faceParts: [],
+      face: null,
     };
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
@@ -371,6 +380,41 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       instances.push(instance);
     }
     squishy.accessory = { id: item.id, instances, top };
+  }
+
+  /**
+   * Pulls a face over the squishy's own (#393): `glum` half closes its eyes
+   * and turns its mouth upside down; null puts its usual face back. Only the
+   * parts' matrices change (like a move), so it costs no buffers or draw calls.
+   */
+  setFace(handle: SquishyHandle, face: SquishyFace | null): void {
+    const squishy = this.#squishies.get(handle.id);
+    if (!squishy || squishy.face === face) return;
+    squishy.face = face;
+    for (const part of squishy.faceParts) {
+      const m = part.instance.local;
+      m.copyFrom(part.base);
+      if (face === 'glum') {
+        const m0 = part.base.m;
+        const b = (i: number) => m0[i] ?? 0;
+        if (part.slot === 'eyes') {
+          // Rows are the scaled x, y and z axes: shorten y (the eye's height).
+          const k = GLUM_FACE.eyeLid;
+          m.setRowFromFloats(1, b(4) * k, b(5) * k, b(6) * k, b(7));
+        } else {
+          // Half a turn about the face's normal: the smile curves down.
+          m.setRowFromFloats(0, -b(0), -b(1), -b(2), b(3));
+          m.setRowFromFloats(1, -b(4), -b(5), -b(6), b(7));
+        }
+      }
+      m.multiplyToRef(squishy.world, part.instance.matrix);
+      part.batch.moved = true;
+    }
+  }
+
+  /** The face it's pulling (#393), or null for its own. */
+  faceOf(handle: SquishyHandle): SquishyFace | null {
+    return this.#squishies.get(handle.id)?.face ?? null;
   }
 
   /**
@@ -646,6 +690,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
         const entry = attach(batch, local, color, finish, part.slot === 'eyes');
         if (part.slot === 'crown') squishy.crownParts.push(entry);
+        if (part.slot === 'eyes' || part.slot === 'mouth') {
+          squishy.faceParts.push({ ...entry, slot: part.slot, base: local.clone() });
+        }
       }
     }
 
