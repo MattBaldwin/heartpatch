@@ -128,6 +128,50 @@ function withTimeout<T>(work: Promise<T | null>, ms: number): Promise<T | null> 
   });
 }
 
+/**
+ * Something draws keep using, disposed only once it's retired and no draw is
+ * still on it: a draw given up on (`DRAW_TIMEOUT_MS`) may still have its
+ * snapshot pending, and disposing the scene under it breaks the engine's
+ * render loop (readPixels comes back null).
+ */
+export interface InUse {
+  /** A draw starts on it; the returned call says it's done. */
+  begin(): () => void;
+  /** No new draws; it goes once the last one in progress is done. */
+  retire(): void;
+  readonly retired: boolean;
+}
+
+export function inUse(dispose: () => void): InUse {
+  let drawing = 0;
+  let retired = false;
+  let gone = false;
+  const settle = () => {
+    if (!retired || drawing > 0 || gone) return;
+    gone = true;
+    dispose();
+  };
+  return {
+    begin() {
+      drawing += 1;
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        drawing -= 1;
+        settle();
+      };
+    },
+    retire() {
+      retired = true;
+      settle();
+    },
+    get retired() {
+      return retired;
+    },
+  };
+}
+
 export function createPortraits(options: PortraitOptions): Portraits {
   const cache = new Map<string, Promise<string | null>>();
   /** One render at a time, each after the last, so the map never stalls for long. */
@@ -139,11 +183,18 @@ export function createPortraits(options: PortraitOptions): Portraits {
     scene: Scene;
     field: SquishyField<SquishyDetail>;
     camera: TargetCamera;
+    use: InUse;
   } | null = null;
 
+  /** No new draws on the current scene: it goes once its draws are done. */
+  function retireStage(): void {
+    stage?.use.retire();
+    stage = null;
+  }
+
   function stageFor(engine: AbstractEngine): NonNullable<typeof stage> {
-    if (stage?.engine === engine && !stage.scene.isDisposed) return stage;
-    stage?.scene.dispose();
+    if (stage?.engine === engine && !stage.use.retired && !stage.scene.isDisposed) return stage;
+    retireStage();
     const scene = new Scene(engine, { virtual: true });
     scene.clearColor = new Color4(0, 0, 0, 0);
     setupLighting(scene);
@@ -157,15 +208,24 @@ export function createPortraits(options: PortraitOptions): Portraits {
     camera.fov = FOV;
     camera.minZ = 0.1;
     scene.activeCamera = camera;
-    stage = { engine, scene, field, camera };
+    stage = {
+      engine,
+      scene,
+      field,
+      camera,
+      use: inUse(() => {
+        scene.dispose();
+      }),
+    };
     return stage;
   }
 
   async function draw(look: PortraitLook): Promise<string | null> {
     const engine = options.engine();
     if (!engine || engine.isDisposed) return null;
-    const { scene, field, camera } = stageFor(engine);
+    const { scene, field, camera, use } = stageFor(engine);
     const handle = field.add(look.species, look.instanceId, { x: 0, z: 0 });
+    const done = use.begin();
     try {
       field.setAccessory(handle, accessoryItem(look.accessory));
       const height = field.heightOf(handle);
@@ -199,6 +259,8 @@ export function createPortraits(options: PortraitOptions): Portraits {
     } finally {
       field.remove(handle);
       options.invalidate();
+      // Its scene goes now if it was retired meanwhile (a timeout).
+      done();
     }
   }
 
@@ -218,10 +280,10 @@ export function createPortraits(options: PortraitOptions): Portraits {
         void entry.then((url) => {
           if (url !== null) return;
           if (cache.get(key) === mine) cache.delete(key);
-          // A draw that gave up may have left its squishy in the scene: start
-          // the next one from a fresh scene.
-          stage?.scene.dispose();
-          stage = null;
+          // A draw that gave up may have left its squishy in the scene, and
+          // may still be drawing: the next one starts on a fresh scene, and
+          // this one goes once that draw is done.
+          retireStage();
         });
       }
       return entry;
