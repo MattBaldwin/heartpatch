@@ -6,7 +6,13 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
 import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type Floater } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FINISH_CODE, FLOATER_BATCH, SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
+import {
+  FINISH_CODE,
+  FLOATER_BATCH,
+  GLUM_FACE,
+  SQUISH_LOOK_CODE,
+  type SquishyLod,
+} from './config.js';
 import type { SquishySpecies } from './params.js';
 import { SquishyField } from './squishy-field.js';
 
@@ -483,5 +489,68 @@ describe('SquishyField sparkle kept off a face', () => {
     for (const [name, list] of codes(scene)) {
       for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
     }
+  });
+});
+
+describe('SquishyField glum face (#393)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** The first instance matrix's y row (the part's height axis) on the mesh named `prefix…`. */
+  function yRow(scene: Scene, prefix: string): number[] {
+    const mesh = scene.meshes.find((m) => m.name.startsWith(prefix)) as Mesh;
+    const m = mesh.thinInstanceGetWorldMatrices()[0]!.m;
+    return [m[4]!, m[5]!, m[6]!];
+  }
+
+  it('half closes the eyes and turns the smile over, with no new instances, and comes back', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const bare = f.stats;
+    f.flush();
+    const eye = yRow(scene, 'squishy-part:ellipsoid');
+    const mouth = yRow(scene, 'squishy-part:arc');
+
+    f.setFace(h, 'glum');
+    f.flush();
+    expect(f.faceOf(h)).toBe('glum');
+    expect(f.stats).toEqual(bare);
+    yRow(scene, 'squishy-part:ellipsoid').forEach((v, i) => {
+      expect(v).toBeCloseTo(eye[i]! * GLUM_FACE.eyeLid, 5);
+    });
+    yRow(scene, 'squishy-part:arc').forEach((v, i) => {
+      expect(v).toBeCloseTo(-mouth[i]!, 5);
+    });
+
+    f.setFace(h, null);
+    f.flush();
+    expect(f.faceOf(h)).toBeNull();
+    yRow(scene, 'squishy-part:ellipsoid').forEach((v, i) => {
+      expect(v).toBeCloseTo(eye[i]!, 5);
+    });
+    yRow(scene, 'squishy-part:arc').forEach((v, i) => {
+      expect(v).toBeCloseTo(mouth[i]!, 5);
+    });
+  });
+
+  it('keeps the face through a move', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    f.setFace(h, 'glum');
+    f.flush();
+    const before = yRow(scene, 'squishy-part:arc');
+    f.move(h, { x: 2, z: 1 });
+    f.flush();
+    expect(yRow(scene, 'squishy-part:arc')).toEqual(before);
   });
 });

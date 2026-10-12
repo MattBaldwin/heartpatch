@@ -22,6 +22,7 @@ import {
 } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
+import { squishyHouseRoom } from '../house/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { buildings, careLog, squishies, squishyEvolutions } from '../../db/schema.js';
 
@@ -108,7 +109,11 @@ export interface CareRepo {
   transaction: <T>(fn: (repo: CareTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
   /** The player's active squishies on this map, oldest first. */
-  listActive: (mapId: string, userId: string) => Promise<CareSquishyRow[]>;
+  /** With the room of its owner's house each lives in (#381, `squishyHouseRoom`), or null. */
+  listActive: (
+    mapId: string,
+    userId: string,
+  ) => Promise<(CareSquishyRow & { houseRoomId: string | null })[]>;
   findSquishy: (squishyId: string) => Promise<CareSquishyRow | null>;
   /** Row-locks a squishy until commit. */
   lockSquishy: (squishyId: string) => Promise<CareSquishyRow | null>;
@@ -224,7 +229,7 @@ function queries(db: Executor): CareRepo {
 
     listActive: async (mapId, userId) => {
       const rows = await db
-        .select(squishyColumns)
+        .select({ ...squishyColumns, houseRoomId: squishyHouseRoom() })
         .from(squishies)
         .where(
           and(

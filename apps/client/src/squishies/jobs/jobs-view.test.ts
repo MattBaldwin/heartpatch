@@ -10,6 +10,7 @@ import { itemName } from '../../inventory/bag-view.js';
 import { itemIcon } from '../../inventory/item-icons.js';
 import { workableByMe } from './index.js';
 import {
+  badgeLabel,
   canTrain,
   groundsLabel,
   trainHintText,
@@ -25,8 +26,10 @@ import {
   spotLabel,
   teamCost,
   teamSlots,
+  tileMoods,
   toggleTeam,
   workLine,
+  workMoods,
 } from './jobs-view.js';
 
 const NOW = Date.parse('2026-10-10T12:00:00Z');
@@ -54,6 +57,7 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     training: null,
     fullXpResetAt: null,
     gatherFits: [],
+    houseRoomId: null,
     ...over,
   };
 }
@@ -328,5 +332,51 @@ describe('work mood (#376)', () => {
         }),
       ),
     ).toBe('meh');
+  });
+});
+
+describe('job moods on the map and at home (#393)', () => {
+  const loves = squishy(1, { job: 'gatherer', gatherFits: ['timber'], work: work() });
+  const meh = squishy(2, {
+    job: 'gatherer',
+    gatherFits: [],
+    work: work({ q: 3, r: 4, resource: 'stone' }),
+  });
+  const full = squishy(3, {
+    job: 'gatherer',
+    gatherFits: ['timber'],
+    work: work({ q: 5, r: 6, full: true }),
+  });
+
+  it('gives each of my squishies with a mood its mood, and leaves the rest out', () => {
+    const moods = workMoods({
+      squishies: [loves, meh, full, squishy(4, { job: 'team' }), squishy(5)],
+    });
+    expect([...moods]).toEqual([
+      [id(1), 'loves'],
+      [id(2), 'meh'],
+      [id(4), 'loves'],
+    ]);
+  });
+
+  it('marks the tiles my gatherers work, with no mood where a basket is full', () => {
+    const moods = tileMoods({ squishies: [loves, meh, full, squishy(4, { job: 'team' })] });
+    expect([...moods]).toEqual([
+      ['1,2', 'loves'],
+      ['3,4', 'meh'],
+    ]);
+  });
+
+  it('says meh for a tile where any of mine is not keen, whatever the order', () => {
+    const both = squishy(6, { job: 'gatherer', gatherFits: [], work: work() });
+    expect(tileMoods({ squishies: [loves, both] }).get('1,2')).toBe('meh');
+    expect(tileMoods({ squishies: [both, loves] }).get('1,2')).toBe('meh');
+  });
+
+  it('labels the badge with the count and the mood', () => {
+    expect(badgeLabel(1, null)).toBe('🧺');
+    expect(badgeLabel(2, null)).toBe('🧺2');
+    expect(badgeLabel(1, 'loves')).toBe('🧺💕');
+    expect(badgeLabel(3, 'meh')).toBe('🧺3🌧️');
   });
 });

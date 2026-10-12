@@ -3,6 +3,8 @@ import { CARE_ACTIONS } from '../data/care-actions.js';
 import { CARE_RULES, GROWTH_RULES } from '../data/care.js';
 import { SPECIES } from '../data/species.js';
 import { findAvoidedWords } from '../data/avoided-words.js';
+import { HOUSE_DATA } from '../data/house.js';
+import { residentDrainPercent } from '../house/index.js';
 import { checkCareRules, checkGrowthRules, type CareRules } from '../schemas/data/care.js';
 import {
   careCoins,
@@ -170,6 +172,44 @@ describe('contentment held by a job (#376)', () => {
     expect(
       contentmentAfterCare(half, at(12), 20, CARE_RULES, [{ fromMs: ms(0), toMs: null }]),
     ).toBe(70);
+  });
+});
+
+describe("a house resident's slower drain (#381 perk)", () => {
+  const full = { contentment: 100, since: at(0) };
+  const ms = (hours: number) => at(hours).getTime();
+  const perk = residentDrainPercent(HOUSE_DATA.rules, true);
+
+  it('fades a resident at rest at half the rate: 24 h is half the drop', () => {
+    expect(perk).toBe(50);
+    const drop = 100 - contentmentAt(full, at(24), CARE_RULES);
+    const residentDrop = 100 - contentmentAt(full, at(24), CARE_RULES, [], perk);
+    expect(drop).toBe(100);
+    expect(residentDrop).toBe(drop / 2);
+    expect(contentmentAt(full, at(12), CARE_RULES, [], perk)).toBe(75);
+  });
+
+  it('still holds a resident on a fitting job (zero × anything)', () => {
+    expect(contentmentAt(full, at(12), CARE_RULES, [{ fromMs: ms(0), toMs: null }], perk)).toBe(
+      100,
+    );
+    // Held 0–6h, then six hours of drift at half the rate: an eighth of the range.
+    const held = [{ fromMs: ms(0), toMs: ms(6) }];
+    expect(contentmentAt(full, at(12), CARE_RULES, held, perk)).toBe(88);
+  });
+
+  it('is the same as before for anyone else (100 %), whole numbers only', () => {
+    expect(residentDrainPercent(HOUSE_DATA.rules, false)).toBe(100);
+    const odd = { contentment: 97, since: new Date(1_760_000_000_123) };
+    const now = new Date(1_760_000_000_123 + 7 * HOUR + 1_234_567);
+    expect(contentmentAt(odd, now, CARE_RULES, [], 100)).toBe(contentmentAt(odd, now, CARE_RULES));
+    const value = contentmentAt(odd, now, CARE_RULES, [], perk);
+    // floor(26_434_567 * 100 * 50 / (86_400_000 * 100)) = 15.
+    expect(value).toBe(97 - 15);
+  });
+
+  it('builds care on the slower-faded value', () => {
+    expect(contentmentAfterCare(full, at(12), 20, CARE_RULES, [], perk)).toBe(95);
   });
 });
 

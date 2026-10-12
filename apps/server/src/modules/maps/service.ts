@@ -319,20 +319,34 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // Only those whose job stops here: guards on their land, gatherers at
       // work there and trainees. Any other row (the team, the Hollow, a
       // trade) keeps its own count, and a rescue may be writing it right now.
-      const theirs = (await jobs.listMine(mapId, memberId))
+      const mine = await jobs.listMine(mapId, memberId);
+      const theirs = mine
         .filter(
           (r) => r.squishy.state === 'active' && (r.onWatch || r.atWork || r.training !== null),
         )
         .map((r) => r.squishy.id);
-      const checkpoints = await contentmentCheckpointsOf(tx, mapId, theirs, at);
+      // Residents leaving the house (#381) fade at the normal rate from now:
+      // the time so far counts at the perk's (only those home to enjoy it;
+      // one in the Hollow or a trade already fades at the normal rate).
+      const living = mine
+        .filter((r) => r.squishy.state === 'active' && r.houseRoomId !== null)
+        .map((r) => r.squishy.id);
+      const checkpoints = await contentmentCheckpointsOf(
+        tx,
+        mapId,
+        [...new Set([...theirs, ...living])],
+        at,
+      );
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
       // Written here, before the buildings (tech spec §7 exception): the
       // member's own commands wait on the archive and the account lock above,
       // and every other writer of a guard or gatherer takes its tile first,
-      // which `releaseTiles` holds.
-      // Their residents leave the house (#381) under their squishy locks (step
-      // 10), taken with the job squishies in one id-ordered lock and before
-      // any inventory row (step 11), as every residency writer does.
+      // which `releaseTiles` holds. Their residents' checkpoints join this
+      // early read on the same footing (#381): a move in or out is one of the
+      // member's own commands, behind the member row.
+      // Their residents leave the house under their squishy locks (step 10),
+      // taken with the job squishies in one id-ordered lock and before any
+      // inventory row (step 11), as every residency writer does.
       const house = createHouseRepo(tx);
       const residents = await house.residentSquishyIds(mapId, memberId);
       await jobs.lockSquishies([...new Set([...theirs, ...residents])]);

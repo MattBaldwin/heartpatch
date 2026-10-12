@@ -5,26 +5,32 @@ import {
   HOUSE_DATA,
   HOUSE_START_LEVEL,
   houseLevelData,
+  jobOf,
   MILESTONE_TRACKS,
+  moveInProblem,
   nextHouseLevel,
   requirementsMet,
+  residentAwayOf,
   roomsAt,
   type HouseData,
   type HouseView,
   type ItemCounts,
+  type MoveInProblem,
   type PublicUser,
   type RequirementContext,
-  type ResidentAway,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems } from '../inventory/service.js';
+import { checkpointContentment } from '../jobs/contentment.js';
+import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { squishyName } from '../jobs/work.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { gatherProgressFacts } from '../progress/facts.js';
-import { createHouseRepo, type ResidentRow } from './repo.js';
+import { createHouseRepo } from './repo.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from './switch.js';
 
 /*
@@ -33,7 +39,10 @@ import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from './switch.js';
  * cost, evaluated on the server with the shared requirement evaluator
  * (CLAUDE.md rule 1). `POST /house/build` is "unlock, then build": inside one
  * transaction it re-reads every fact under the house lock, so a build can't
- * pass on a stale screen, then spends the cost and raises the level. Behind
+ * pass on a stale screen, then spends the cost and raises the level.
+ * `POST /house/residents` moves one of my squishies into a room, into
+ * another, or out; a resident's happiness fades slower (the perk rides
+ * #376's contentment checkpoint, so every move writes one first). Behind
  * the `HP_HOUSE` switch: while it's off for a player, the house doesn't exist
  * for them (NOT_FOUND, the same words as a missing patch, so nothing can be
  * probed).
@@ -46,6 +55,14 @@ export const HOUSE_MESSAGES = {
   allGrown: 'Your house is all grown! ✨',
   notYet: 'Not quite yet! Check what the house needs.',
   seedFirst: 'Your Heart Seed needs to grow first 🌱',
+  noSquishy: "We couldn't find that squishy.",
+  move: {
+    'in-trade': () => 'That squishy is waiting at a trading post right now. 📬',
+    hollowed: () => 'That squishy is in the Hollow right now. Rescue them first!',
+    'no-room': () => "That room isn't built yet. Grow the house first! 🌱",
+    cooldown: (name: string) => `${name} just moved out. Let them stretch their legs first!`,
+    full: (_name: string, room: string) => `${room} is full! Pick another room.`,
+  } satisfies Record<MoveInProblem, (name: string, room: string) => string>,
 } as const;
 
 const BUILDING_NAMES = new Map(GAME_DATA.buildings.map((b) => [b.id, b.name]));
@@ -56,6 +73,13 @@ export interface HouseService {
   get: (user: PublicUser, mapId: string) => Promise<HouseView>;
   /** Builds my house's next level (`toLevel` must be the next one). */
   build: (user: PublicUser, mapId: string, toLevel: number) => Promise<HouseView>;
+  /** Moves my squishy into a room of my house, into another room, or out (`roomId` null). */
+  moveResident: (
+    user: PublicUser,
+    mapId: string,
+    squishyId: string,
+    roomId: string | null,
+  ) => Promise<HouseView>;
 }
 
 export interface HouseServiceOptions {
@@ -73,11 +97,31 @@ export interface HouseServiceOptions {
 const costCovered = (cost: ItemCounts, items: ItemCounts): boolean =>
   Object.entries(cost).every(([id, n]) => (items[id] ?? 0) >= n);
 
-/** Why a resident isn't in its room right now (`HouseResident.away`). */
-function awayOf(row: ResidentRow): ResidentAway | null {
-  if (row.state === 'hollowed') return 'hollow';
-  if (row.state === 'in-trade') return 'in-trade';
-  return null;
+/**
+ * Ends these squishies' residency (#381), inside the caller's transaction
+ * and right after its squishy locks (step 10), before any inventory row
+ * (11): every residency writer holds the squishy, so this never waits on a
+ * lock out of order. Each one living in its owner's house gets its
+ * contentment checkpoint first (`checkpointContentment`: the time so far
+ * counts at the perk's rate, the time after at the normal one).
+ *
+ * `rehomed`: the squishies are changing hands (a trade's yes, a gift's
+ * pickup), so their rows go entirely: the new Keeper starts fresh, and the
+ * old one's leave or cooldown never touches them. Otherwise they move out
+ * of their room and the move-back-in cooldown starts.
+ */
+export async function leaveHouse(
+  tx: Executor,
+  options: { mapId: string; squishyIds: readonly string[]; at: Date; rehomed: boolean },
+): Promise<string[]> {
+  const { mapId, squishyIds, at, rehomed } = options;
+  if (squishyIds.length === 0) return [];
+  const repo = createHouseRepo(tx);
+  const living = await repo.livingIn(squishyIds);
+  await checkpointContentment(tx, mapId, living, at);
+  if (rehomed) await repo.deleteResidents(squishyIds);
+  else await repo.moveOut(living, at);
+  return living;
 }
 
 export function createHouseService(options: HouseServiceOptions): HouseService {
@@ -118,6 +162,20 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
       repo.residents(map.id, userId),
       createInventoryRepo(executor).list({ mapId: map.id, userId }),
     ]);
+    // A resident keeps its job: its bed says where it went (plan Q5).
+    const jobs = new Map(
+      (await createSquishyJobsRepo(executor).listByIds(residents.map((r) => r.squishyId))).map(
+        (row) => [
+          row.squishy.id,
+          jobOf({
+            teamSlot: row.teamSlot,
+            atWork: row.atWork,
+            onWatch: row.onWatch,
+            training: row.training !== null,
+          }),
+        ],
+      ),
+    );
     const level = built ?? HOUSE_START_LEVEL;
     const current = houseLevelData(data, level);
     const next = nextHouseLevel(data, level);
@@ -159,7 +217,7 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
           .map((r) => ({
             squishyId: r.squishyId,
             since: r.movedInAt.toISOString(),
-            away: awayOf(r),
+            away: residentAwayOf(r.state, jobs.get(r.squishyId) ?? 'resting'),
           })),
       })),
       next: nextView,
@@ -215,6 +273,71 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
         return view(tx, map, user.id, at);
       });
       void options.publish?.(mapId);
+      return result;
+    },
+
+    moveResident: async (user, mapId, squishyId, roomId) => {
+      const at = now();
+      const { view: result, moved } = await createHouseRepo(db).transaction(async (repo, tx) => {
+        const map = await requireHouse(tx, user, mapId);
+        // Lock order (tech spec §7): the member row (step 2: one house
+        // command at a time per player), the house (8c: serialises the bed
+        // count, and a build), the squishy (10) with its residency row and
+        // its contentment checkpoint, then `maps` (13).
+        if (!(await createMapsRepo(tx).lockMember(mapId, user.id))) {
+          throw new AppError('NOT_FOUND', HOUSE_MESSAGES.noHouse);
+        }
+        const level = await repo.lockHouse(mapId, user.id, HOUSE_START_LEVEL, at);
+        const squishy = await repo.lockSquishy(squishyId);
+        if (squishy?.mapId !== mapId || squishy.ownerUserId !== user.id) {
+          throw new AppError('NOT_FOUND', HOUSE_MESSAGES.noSquishy);
+        }
+        const row = await repo.residency(squishyId);
+        // A row from a Keeper who owned it before is no move of mine.
+        const mine = row?.userId === user.id && row.mapId === mapId ? row : null;
+        const fromRoomId = mine?.roomId ?? null;
+        if (roomId === fromRoomId) return { view: await view(tx, map, user.id, at), moved: false };
+
+        if (roomId === null) {
+          // Moving out is free; the bed frees at once.
+          await leaveHouse(tx, { mapId, squishyIds: [squishyId], at, rehomed: false });
+        } else {
+          const room = roomsAt(data, level).find((r) => r.id === roomId) ?? null;
+          const problem = moveInProblem(
+            {
+              state: squishy.state,
+              room,
+              inRoom: room ? await repo.countInRoom(mapId, user.id, roomId) : 0,
+              movingRooms: fromRoomId !== null,
+              movedOutAt: fromRoomId === null ? (mine?.movedOutAt ?? null) : null,
+              now: at,
+            },
+            data.rules,
+          );
+          if (problem) {
+            const message = HOUSE_MESSAGES.move[problem](squishyName(squishy), room?.name ?? '');
+            throw new AppError('CONFLICT', message);
+          }
+          // The checkpoint first: the time so far counts at the old rate.
+          await checkpointContentment(tx, mapId, [squishyId], at);
+          await repo.moveIn({
+            squishyId,
+            mapId,
+            userId: user.id,
+            roomId,
+            // A move between rooms keeps when it first moved in.
+            movedInAt: (fromRoomId !== null ? mine?.movedInAt : null) ?? at,
+          });
+        }
+        await repo.appendEvent({
+          mapId,
+          type: 'resident.moved',
+          actorUserId: user.id,
+          payload: { userId: user.id, squishyId, roomId, fromRoomId },
+        });
+        return { view: await view(tx, map, user.id, at), moved: true };
+      });
+      if (moved) void options.publish?.(mapId);
       return result;
     },
   };

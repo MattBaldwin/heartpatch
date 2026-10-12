@@ -56,6 +56,7 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   nextCareAt: {},
   newEvolution: null,
   accessory: null,
+  houseRoomId: null,
   whisper: null,
   moodDrift: null,
   ...extra,
