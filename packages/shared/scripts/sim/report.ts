@@ -86,7 +86,7 @@ export function buildRows(results: readonly MatchResult[], config: SimConfig): R
   }
 
   // Species against the rest of their bracket.
-  for (const bracket of ['base', 'kid', 'evolved'] as const) {
+  for (const bracket of ['base', 'kid', 'evolved', 'grown'] as const) {
     const tallies = new Tallies();
     for (const r of results) if (r.matchup.bracket === bracket) addBoth(tallies, r, (e) => e.key);
     for (const [key, t] of tallies.byKey) {
@@ -226,11 +226,18 @@ const pct = (rate: number) => `${(rate * 100).toFixed(1)}%`;
 const flagMark = (r: ReportRow) =>
   r.flag === 'strong' ? '🔺 strong' : r.flag === 'weak' ? '🔻 weak' : '';
 
+const STAGE_NAMES: Readonly<Record<string, string>> = {
+  base: 'base form',
+  kid: 'kid form',
+  evolved: 'evolved form',
+  grown: 'grown-up',
+};
+
 /** A row's name in the flags table, e.g. "base form glowboo" or "stance aggressive vs defensive". */
 export function describe(r: ReportRow): string {
   switch (r.section) {
     case 'species':
-      return `${r.group === 'base' ? 'base form' : r.group === 'kid' ? 'kid form' : 'evolved form'} ${r.subject}`;
+      return `${STAGE_NAMES[r.group] ?? 'evolved form'} ${r.subject}`;
     case 'stance':
       return `stance ${r.subject} vs ${r.opponent}`;
     case 'pair':
@@ -313,7 +320,7 @@ How to read it: see "Balance simulator" in the README.
 - Content hash: \`${info.contentHash}\` (root seed \`${config.rootSeed}\`)
 - ${info.battles} battles, ${info.averageTurns.toFixed(1)} turns on average, ${info.seconds.toFixed(1)} s
 - Flagged: win rate above ${pct(high)} or below ${pct(low)} (draws count half)
-- Levels: base forms ${config.levels.base}, kid forms ${config.levels.kid}, evolved forms ${config.levels.evolved}, combos ${config.levels.combo}; stances ${config.policies.join(', ')}
+- Levels: base forms ${config.levels.base}, kid forms ${config.levels.kid}, evolved forms ${config.levels.evolved}, grown-ups ${config.levels.grown}, combos ${config.levels.combo}; stances ${config.policies.join(', ')}
 
 ## Flags (${flags.length})
 
@@ -337,6 +344,10 @@ ${rateTable(section('species', 'kid'), true)}
 ## Evolved forms (level ${config.levels.evolved}, each against every other evolved form)
 
 ${rateTable(section('species', 'evolved'), true)}
+
+## Grown-ups (level ${config.levels.grown}, each against every other grown-up)
+
+${rateTable(section('species', 'grown'), true)}
 
 ## Elements (equal stats, against other elements)
 

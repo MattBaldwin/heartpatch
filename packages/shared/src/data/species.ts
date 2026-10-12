@@ -522,8 +522,61 @@ export const MOVES: Move[] = [
     accuracy: 100,
     effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }], // TUNE:
   },
+  // Grown-ups' signature moves (#495, #443 §5): one per grown-up, on existing effect types.
+  {
+    id: 'tidal-twirl',
+    name: 'Tidal Twirl',
+    description: 'Spins into a big swirly wave. Whoosh!',
+    element: 'water',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+  },
+  {
+    id: 'raincloud-snore',
+    name: 'Raincloud Snore',
+    description: 'Snores so hard a little raincloud pours. Drip, drop, doze.',
+    element: 'water',
+    power: 80, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 20 }], // TUNE:
+  },
+  {
+    id: 'bonfire-hug',
+    name: 'Bonfire Hug',
+    description: 'A big warm hug that leaves everyone toasty, even itself.',
+    element: 'fire',
+    power: 75, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'heal', percent: 15 }], // TUNE:
+  },
+  {
+    id: 'ember-dream',
+    name: 'Ember Dream',
+    description: 'Dreams of a cozy fire and wakes up feeling sturdy.',
+    element: 'fire',
+    power: 80, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 50 }], // TUNE:
+  },
+  {
+    id: 'thistle-charge',
+    name: 'Thistle Charge',
+    description: 'Charges in with its prickly shield up. Boop!',
+    element: 'leaf',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 20 }], // TUNE:
+  },
+  {
+    id: 'petal-storm',
+    name: 'Petal Storm',
+    description: 'A whirl of petals that leaves everyone a little slower to catch up.',
+    element: 'leaf',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 }], // TUNE:
+  },
 ];
-
 /*
  * Species, base form then its evolution. Stats, rarities and evolution
  * levels are all first guesses: // TUNE: every `baseStats` and `level`.
@@ -593,7 +646,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 80, attack: 70, defense: 65, speed: 75 }, // TUNE:
     moves: ['giggle-drizzle', 'belly-flop', 'bubble-bath', 'splish-splash'],
-    evolutions: [],
+    evolutions: [{ into: 'tsunoodle', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'orb',
       palette: ['#6cb6f2', '#e8f6ff', '#3477cc', '#ffffff'],
@@ -613,6 +666,39 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
   },
+  // #495 grown-up (stage 4): Splashmallow's sea serpent grows big fin wings and little horns.
+  {
+    id: 'tsunoodle',
+    name: 'Tsunoodle',
+    description:
+      'A long, swooshy sea noodle with fin wings. It surfs its own waves just for the giggles.',
+    element: 'water',
+    feeling: 'silly',
+    rarity: 'rare',
+    baseStats: { hp: 94, attack: 83, defense: 77, speed: 89 }, // TUNE: ×1.18 Splashmallow
+    moves: ['tidal-twirl', 'belly-flop', 'bubble-bath', 'splish-splash'],
+    evolutions: [],
+    visual: {
+      body: 'orb',
+      palette: ['#5aa9ee', '#e8f6ff', '#2a6cc4', '#ffffff'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'open-mouth',
+        'fangs',
+        'cone-horns',
+        'water-curl',
+        'fin-row',
+        'big-wings',
+        'serpent-body',
+      ],
+      size: 1.53,
+      stance: 0.55,
+      pose: 'slither',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
+  },
   {
     id: 'drizzledoze',
     name: 'Drizzledoze',
@@ -622,7 +708,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 92, attack: 63, defense: 83, speed: 68 }, // TUNE:
     moves: ['giggle-drizzle', 'splish-splash', 'bubble-bath', 'snore-drizzle'],
-    evolutions: [],
+    evolutions: [{ into: 'cloudcroak', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bun',
       palette: ['#7cc0f4', '#e8f6ff', '#3f86d8', '#ffffff'],
@@ -639,6 +725,39 @@ export const SPECIES: Species[] = [
       size: 1.3,
       head: { body: 'orb', size: 0.8, forward: 0.3, up: 0.5 },
       stance: 0.15,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['sleepy', 'cozy'] },
+  },
+  // #495 grown-up (stage 4): Drizzledoze's frog trades its water curl for a raincloud crown.
+  {
+    id: 'cloudcroak',
+    name: 'Cloudcroak',
+    description: 'A big sleepy toad who wears a raincloud like a hat. Its snores make puddles.',
+    element: 'water',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 109, attack: 74, defense: 98, speed: 80 }, // TUNE: ×1.18 Drizzledoze
+    moves: ['raincloud-snore', 'splish-splash', 'bubble-bath', 'snore-drizzle'],
+    evolutions: [],
+    visual: {
+      body: 'bun',
+      palette: ['#6cb4ef', '#e8f6ff', '#3478cf', '#ffffff'],
+      parts: [
+        'sleepy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'belly-patch',
+        'cloud-crown',
+        'side-fins',
+        'round-hands',
+        'hop-feet',
+        'wiggle-tail',
+      ],
+      size: 1.53,
+      head: { body: 'orb', size: 0.72, forward: 0.32, up: 0.56 },
+      stance: 0.25,
       pose: 'sit',
       attackPart: 'tail',
     },
@@ -844,7 +963,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 70, attack: 80, defense: 60, speed: 70 }, // TUNE:
     moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle', 'pebble-plop'],
-    evolutions: [],
+    evolutions: [{ into: 'bonfirebun', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'pear',
       palette: ['#ff9a55', '#fff0e0', '#ff5a1f', '#ffd166'],
@@ -868,6 +987,43 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
+  // #495 grown-up (stage 4): Hearthbun's brawler grows tall ears and a crown of flames.
+  {
+    id: 'bonfirebun',
+    name: 'Bonfirebun',
+    description:
+      'Tall ears, a crown of flames and the warmest hugs in the patch. Everyone gathers round.',
+    element: 'fire',
+    feeling: 'cozy',
+    rarity: 'rare',
+    baseStats: { hp: 83, attack: 94, defense: 71, speed: 83 }, // TUNE: ×1.18 Hearthbun
+    moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle', 'bonfire-hug'],
+    evolutions: [],
+    visual: {
+      body: 'pear',
+      palette: ['#ff8f47', '#fff0e0', '#ff4f14', '#ffd166'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'blush-cheeks',
+        'fangs',
+        'long-ears',
+        'flame-crown',
+        'flame-mane',
+        'biped-legs',
+        'strong-arms',
+        'flame-tail',
+      ],
+      size: 1.53,
+      glow: 'accent',
+      head: { body: 'orb', size: 0.66, forward: 0.12, up: 0.82 },
+      stance: 0.5,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
+  },
   {
     id: 'embernap',
     name: 'Embernap',
@@ -877,7 +1033,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 93, attack: 75, defense: 88, speed: 55 }, // TUNE:
     moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle', 'toasty-snore'],
-    evolutions: [],
+    evolutions: [{ into: 'emberslumber', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bun',
       palette: ['#ffad73', '#fff0e0', '#ff6a2e', '#ffd166'],
@@ -895,6 +1051,40 @@ export const SPECIES: Species[] = [
       glow: 'accent',
       head: { body: 'orb', size: 0.85, forward: 0.45, up: 0.3 },
       stance: 0.1,
+      pose: 'sit',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['sleepy', 'cozy'] },
+  },
+  // #495 grown-up (stage 4): Embernap's coal grows a flame mane and big round paws.
+  {
+    id: 'emberslumber',
+    name: 'Emberslumber',
+    description: 'A big cozy coal with a mane of soft flames. It glows brighter with every snore.',
+    element: 'fire',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 110, attack: 89, defense: 104, speed: 65 }, // TUNE: ×1.18 Embernap
+    moves: ['ember-dream', 'toasty-tumble', 'cozy-crackle', 'toasty-snore'],
+    evolutions: [],
+    visual: {
+      body: 'bun',
+      palette: ['#ffa266', '#fff0e0', '#ff5d22', '#ffd166'],
+      parts: [
+        'sleepy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'floppy-ears',
+        'flame-crown',
+        'flame-mane',
+        'stubby-arms',
+        'round-paws',
+        'fluff-tail',
+      ],
+      size: 1.53,
+      glow: 'accent',
+      head: { body: 'orb', size: 0.76, forward: 0.48, up: 0.4 },
+      stance: 0.2,
       pose: 'sit',
       attackPart: 'crown',
     },
@@ -1392,7 +1582,7 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 80, attack: 95, defense: 75, speed: 65 }, // TUNE:
     moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff', 'mossy-nap'],
-    evolutions: [],
+    evolutions: [{ into: 'thistleknight', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'tall',
       palette: ['#86c955', '#f2ffe6', '#9a52cf', '#5aa83a'],
@@ -1413,6 +1603,41 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
   },
+  // #495 grown-up (stage 4): Bristlebloom's knight grows a coat of soft spikes and strong arms.
+  {
+    id: 'thistleknight',
+    name: 'Thistleknight',
+    description:
+      'A thistle knight in a coat of soft spikes. It guards the meadow and always says please.',
+    element: 'leaf',
+    feeling: 'brave',
+    rarity: 'epic',
+    baseStats: { hp: 94, attack: 112, defense: 89, speed: 77 }, // TUNE: ×1.18 Bristlebloom
+    moves: ['thistle-charge', 'prickle-roll', 'pollen-puff', 'mossy-nap'],
+    evolutions: [],
+    visual: {
+      body: 'tall',
+      palette: ['#7cc24a', '#f2ffe6', '#8f44c7', '#4f9c31'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'fangs',
+        'thistle-crown',
+        'back-spines',
+        'spike-coat',
+        'biped-legs',
+        'strong-arms',
+      ],
+      size: 1.48,
+      finish: 'sparkle',
+      head: { body: 'orb', size: 0.54, forward: 0.08, up: 0.92 },
+      stance: 0.5,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['brave'] },
+  },
   {
     id: 'petalprance',
     name: 'Petalprance',
@@ -1422,7 +1647,7 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 79, attack: 90, defense: 69, speed: 95 }, // TUNE:
     moves: ['leafy-tickle', 'pollen-puff', 'leaf-pile-leap', 'petal-party'],
-    evolutions: [],
+    evolutions: [{ into: 'petalwhirl', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'star',
       palette: ['#9fd672', '#f2ffe6', '#b06fd8', '#5aa83a'],
@@ -1437,6 +1662,39 @@ export const SPECIES: Species[] = [
       ],
       size: 1.3,
       stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'brave'] },
+  },
+  // #495 grown-up (stage 4): Petalprance grows a halo of blossoms and a leafy tail.
+  {
+    id: 'petalwhirl',
+    name: 'Petalwhirl',
+    description: 'A whirl of petals with a halo of blossoms. Wherever it dances, flowers pop up.',
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'epic',
+    baseStats: { hp: 93, attack: 106, defense: 81, speed: 112 }, // TUNE: ×1.18 Petalprance
+    moves: ['petal-storm', 'pollen-puff', 'leaf-pile-leap', 'petal-party'],
+    evolutions: [],
+    visual: {
+      body: 'star',
+      palette: ['#93d066', '#f2ffe6', '#a75fd3', '#4f9c31'],
+      parts: [
+        'happy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'leaf-sprout',
+        'sun-crown',
+        'leaf-wings',
+        'leaf-arms',
+        'leaf-tail',
+        'freckles',
+      ],
+      size: 1.53,
+      finish: 'sparkle',
+      stance: 0.55,
       pose: 'hover',
       attackPart: 'wings',
     },
