@@ -18,10 +18,12 @@ import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
+import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
 import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
+import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
@@ -214,6 +216,9 @@ const inventory = createInventoryScreen({
   onBagOpen: () => {
     lorebook.refresh();
   },
+  // The "what landed" banner stays below the patch's name, a wardrobe find
+  // and the trays' hint line and first-visit hint (#419).
+  clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
@@ -584,6 +589,9 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
+  loadWorkMoods: (mapId) => {
+    jobs.loadView(mapId);
+  },
   onRecipeBook: () => {
     recipeBook.open();
   },
@@ -614,6 +622,8 @@ const home = createHomeScreen({
     audio.cue('squeak');
     void closeUp.open(mapId, squishyId, 'home');
   },
+  // The Keeper's house (#381): only offered while the server switch is on for the player.
+  onHouse: (mapId, current) => house.open(mapId, current),
   onClosed: (mapId) => {
     homeSquishies.hidden = true;
     roster.close();
@@ -634,6 +644,36 @@ const home = createHomeScreen({
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       });
     lobby.hide();
+  },
+});
+// The Keeper's house (#381): the dollhouse you step into from home. Like
+// the close-up it owns the screen while open; Back goes home again.
+const house = createHouseScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
+  coveredTop: () => {
+    const chip = document.querySelector<HTMLElement>('.auth-chip');
+    return chip && !chip.hidden ? chip.getBoundingClientRect().bottom : 0;
+  },
+  // Only while Home is still open on that patch when the reply lands.
+  canOpen: (mapId) => homeOpen() && home.debug?.mapId === mapId,
+  onOpen: () => {
+    care.close();
+    home.setMap(null);
+    explore.setMap(null);
+    lobby.stepOut();
+  },
+  onClosed: (mapId) => {
+    home.setMap(mapId);
+    explore.setMap(mapId);
+    void home.open();
+  },
+  onProblem: (message) => {
+    lobby.showMessage(message);
   },
 });
 // Exploring your land (#199): "Explore" on a tile of mine opens it up
@@ -1068,6 +1108,10 @@ trays.slot('adventure').append(
   }),
 );
 jobs.mountTeamButton(jobsBox, () => hudMapId);
+// A job changed or the board read a fresh view: the home's moods follow (#393).
+jobs.onView((mapId, view) => {
+  home.setWorkMoods(mapId, workMoods(view));
+});
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -1146,6 +1190,7 @@ function patchOnScreen(): string | null {
   if (hudMapId !== null) return hudMapId;
   if (homeOpen()) return home.debug?.mapId ?? null;
   if (closeUp.isOpen) return closeUp.debug?.mapId ?? null;
+  if (house.isOpen) return house.debug?.mapId ?? null;
   return battles.debug !== null ? battleMapId : null;
 }
 /** Where the wardrobe was opened, so "Done" goes back there. */
@@ -1324,6 +1369,7 @@ const whatsNew = createWhatsNew({
     catalog.isOpen ||
     care.isOpen ||
     closeUp.isOpen ||
+    house.isOpen ||
     (wardrobe.debug?.open ?? false) ||
     recipeBook.isOpen ||
     postScreen.isOpen ||
@@ -1375,6 +1421,7 @@ mountAuth(document.body, {
     rosterReturn = null;
     roster.close();
     closeUp.setUser(user);
+    house.setUser(user);
     inventory.setUser(user);
     recipeBook.setUser(user);
     territory.setUser(user);
@@ -1438,6 +1485,7 @@ if (import.meta.env.DEV) {
     explore: () => explore.debug,
     care: () => care.debug,
     closeUp: () => closeUp.debug,
+    house: () => house.debug,
     wardrobe: () => wardrobe.debug,
     jobs: () => jobs.debug,
     roster: () => roster.debug,

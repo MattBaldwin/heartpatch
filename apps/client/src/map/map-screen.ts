@@ -99,6 +99,13 @@ export interface TileActions {
   hide: () => void;
 }
 
+/** The middle of a screen rect, or null when there is none. */
+function homeNodeMiddle(
+  rect: { x: number; y: number; width: number; height: number } | null,
+): { x: number; y: number } | null {
+  return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
+}
+
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface MapDebug extends MapSceneStats {
   readonly id: string;
@@ -110,6 +117,8 @@ export interface MapDebug extends MapSceneStats {
   readonly wild: readonly { key: HexKey; x: number; y: number }[];
   /** Each open home's Heart Seed spot on screen (CSS pixels), for e2e taps (#318). */
   readonly openHomes: readonly { key: HexKey; x: number; y: number }[];
+  /** The middle of this player's home node tile on screen (CSS pixels), for e2e taps (#429); null off screen. */
+  readonly homeNode: { x: number; y: number } | null;
 }
 
 export interface MapScreen {
@@ -515,6 +524,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
           x: rect.x + rect.width / 2,
           y: rect.y + rect.height / 2,
         })),
+        homeNode: homeNodeMiddle(scene3d.homeNodeRect(user?.id ?? null)),
       };
     },
   };

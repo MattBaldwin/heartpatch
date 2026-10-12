@@ -5,7 +5,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA, visualRegistry, type HomeResponse } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SquishyField, type SquishyPlacement } from '../procedural/squishy-field.js';
-import { WANDER } from './home-config.js';
+import { MOOD_CUES, WANDER } from './home-config.js';
 import { HomeScene } from './home-scene.js';
 
 // The contact shadow paints a 2D canvas, which NullEngine hasn't got: a plain quad stands in.
@@ -110,5 +110,120 @@ describe('home scene wandering', () => {
     }
     // At least one hop went sideways, where a mirrored yaw shows.
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe('home scene: the Keeper’s house cottage (#381)', () => {
+  let engine: NullEngine | null = null;
+  afterEach(() => {
+    engine?.dispose();
+    engine = null;
+  });
+
+  const build = (house: HomeResponse['house']) => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    const homeScene = new HomeScene(
+      scene,
+      { ...home, ...(house ? { house } : {}) },
+      {
+        registry: visualRegistry(GAME_DATA),
+        lod: 'low',
+        keeper: null,
+      },
+    );
+    return { scene, homeScene };
+  };
+
+  it('draws no cottage while the house is switched off (no `house` in the reply)', () => {
+    const { scene, homeScene } = build(undefined);
+    expect(homeScene.stats.house).toBeNull();
+    expect(scene.meshes.some((m) => m.name.startsWith('house-cottage'))).toBe(false);
+  });
+
+  it('draws the cottage for the house’s level, and swaps it when the house grows', () => {
+    const { scene, homeScene } = build({ level: 1 });
+    expect(homeScene.stats.house).toBe('hut');
+    homeScene.update({ ...home, house: { level: 4 } });
+    expect(homeScene.stats.house).toBe('heart-tree');
+    const cottages = scene.meshes.filter(
+      (m) => m.name.startsWith('house-cottage') && !m.isDisposed(),
+    );
+    expect(cottages).toHaveLength(1);
+    // The old cottage's material goes with it: a swap never leaks one.
+    const mats = () => scene.materials.filter((m) => m.name === 'home-cottage-mat').length;
+    expect(mats()).toBe(1);
+    homeScene.update(home);
+    expect(homeScene.stats.house).toBeNull();
+    expect(mats()).toBe(0);
+  });
+});
+
+describe('home scene mood cues (#393)', () => {
+  let engine: NullEngine | null = null;
+  afterEach(() => {
+    vi.restoreAllMocks();
+    engine?.dispose();
+    engine = null;
+  });
+
+  const make = () => {
+    engine = new NullEngine();
+    return new HomeScene(new Scene(engine), home, {
+      registry: visualRegistry(GAME_DATA),
+      lod: 'low',
+      keeper: null,
+    });
+  };
+
+  it('droops a squishy that is not keen, which then sits still, and stands it up again', () => {
+    const homeScene = make();
+    const moves: SquishyPlacement[] = [];
+    vi.spyOn(SquishyField.prototype, 'move').mockImplementation((_h, p) => {
+      moves.push(p);
+    });
+    homeScene.setMoods(new Map([[SQUISHY, 'meh']]));
+    expect(moves.at(-1)?.squash).toBe(MOOD_CUES.droop);
+    expect(homeScene.faceOf(SQUISHY)).toBe('glum');
+    expect(homeScene.stats).toMatchObject({ drooping: 1, happy: 0 });
+    expect(homeScene.wanderers).toEqual([]);
+    // The same mood again moves nothing.
+    homeScene.setMoods(new Map([[SQUISHY, 'meh']]));
+    expect(moves).toHaveLength(1);
+    homeScene.setMoods(new Map());
+    expect(moves.at(-1)?.squash).toBeUndefined();
+    expect(homeScene.faceOf(SQUISHY)).toBeNull();
+    expect(homeScene.wanderers).toEqual([SQUISHY]);
+  });
+
+  it('bounces only a happy squishy, through the shared bounce with no new draw calls', () => {
+    const homeScene = make();
+    const plays: string[] = [];
+    vi.spyOn(SquishyField.prototype, 'play').mockImplementation((_h, move) => {
+      plays.push(move);
+    });
+    homeScene.cheer(SQUISHY, 0);
+    expect(plays).toEqual([]);
+    homeScene.setMoods(new Map([[SQUISHY, 'loves']]));
+    expect(homeScene.happy).toEqual([SQUISHY]);
+    homeScene.cheer(SQUISHY, 0);
+    expect(plays).toEqual(['bounce']);
+    expect(homeScene.stats).toMatchObject({ happy: 1, drooping: 0, cheers: 1 });
+  });
+
+  it('keeps a mood set before the squishies arrive, and puts a bubble over its head', () => {
+    const homeScene = make();
+    homeScene.setMoods(new Map([[SQUISHY, 'loves']]));
+    homeScene.update({ ...home, squishies: [] });
+    expect(homeScene.happy).toEqual([]);
+    homeScene.update(home);
+    expect(homeScene.happy).toEqual([SQUISHY]);
+    const top = new Vector3();
+    const foot = new Vector3();
+    expect(homeScene.headAndFeet(SQUISHY, top, foot)).toBe(true);
+    expect(top.y).toBeGreaterThan(foot.y);
+    expect(top.x).toBe(foot.x);
+    expect(homeScene.drawOrder).toEqual([SQUISHY]);
+    expect(homeScene.headAndFeet('nobody', top, foot)).toBe(false);
   });
 });
