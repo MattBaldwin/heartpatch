@@ -85,7 +85,7 @@ export function heartBand(
 ): { top: number; bottom: number; width: number } {
   return {
     top: pillsBottom + BEFRIEND_CHEER.heartClear,
-    bottom: Math.max(pillsBottom, cardTop - BEFRIEND_CHEER.heartClear * 3),
+    bottom: cardTop - BEFRIEND_CHEER.heartClear * 3,
     width,
   };
 }
@@ -141,8 +141,10 @@ export function dressResult(
       ? BEFRIEND_CHEER.calmHearts
       : revealStep(BEFRIEND_CHEER.hearts, cheer.rare.scale);
     const band = heartBand(options.pillsBottom, restingTop(card), options.width);
+    // No room above the card (a phone held sideways): no hearts, rather than a pile.
+    const hearts = band.bottom > band.top ? count : 0;
     const seed = cheer.rare.rarity.length * 31 + Math.round(options.width);
-    for (const h of heartSpots(count, band, seed)) {
+    for (const h of heartSpots(hearts, band, seed)) {
       const heart = el('span', { class: 'battle-heart', 'aria-hidden': 'true' }, h.glyph);
       heart.style.left = `${String(h.x)}px`;
       heart.style.top = `${String(h.y)}px`;

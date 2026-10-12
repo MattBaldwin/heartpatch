@@ -80,9 +80,10 @@ describe('the hearts (#391)', () => {
       bottom: 560 - BEFRIEND_CHEER.heartClear * 3,
       width: 390,
     });
-    // Never an upside-down band on a squashed screen.
+    // A phone held sideways: the card rests under the pills, so the band is
+    // empty and the card skips its hearts (dressResult checks bottom > top).
     const tight = heartBand(300, 290, 390);
-    expect(tight.bottom).toBeGreaterThanOrEqual(300);
+    expect(tight.bottom).toBeLessThanOrEqual(tight.top);
   });
 
   it('come to rest across the screen, between the pills and the card', () => {
