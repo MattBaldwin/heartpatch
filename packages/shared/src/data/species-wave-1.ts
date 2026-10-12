@@ -51,7 +51,7 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['spooky', 'sleepy'],
     },
   },
-  // #443 kid (stage 2): Moonmoth grows a fluffy ruff, before Lunamoth's floppy ears.
+  // #443 kid (stage 2): Moonmoth grows a fluffy ruff, before Lunamoth's little arms.
   {
     id: 'duskmoth',
     name: 'Duskmoth',
@@ -80,7 +80,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'lunamoth',
     name: 'Lunamoth',
     description:
-      'Soft floppy ears, a wispy tail and wings like moonlight. Owls stop to say good evening.',
+      'Little arms, a wispy tail and wings like moonlight. It waves at owls to say good evening.',
     element: 'shadow',
     feeling: 'spooky',
     rarity: 'epic',
@@ -93,10 +93,10 @@ export const WAVE_1_SPECIES: Species[] = [
       parts: [
         'spooky-eyes',
         'tiny-smile',
-        'floppy-ears',
         'moth-wings',
         'zing-antennae',
         'fur-ruff',
+        'stubby-arms',
         'wisp-tail',
       ],
       size: 1.9,
