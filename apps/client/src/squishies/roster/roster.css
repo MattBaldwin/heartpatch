@@ -47,6 +47,11 @@
   font-size: 22px;
 }
 
+/* Focus lands here to start VoiceOver reading (#433); no ring for it. */
+.roster-sheet h2:focus {
+  outline: none;
+}
+
 .roster-count {
   flex: 1;
   margin: 4px 0 0 10px;

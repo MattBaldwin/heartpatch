@@ -611,9 +611,6 @@ const home = createHomeScreen({
     lobby.stepOut();
     void care.celebrateNews(mapId);
   },
-  onCare: (mapId, squishyId) => {
-    void care.open(mapId, squishyId);
-  },
   // The peek bar's Squishies (#412) opens the roster, like 🐾 at the top (#375).
   onSquishies: (mapId) => {
     void roster.open(mapId);
