@@ -1572,7 +1572,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       lit ? HOME_TEXT.groundsLit : HOME_TEXT.groundsDark,
     );
-    if (offer.kind === 'build') {
+    if (offer.kind === 'build' || offer.kind === 'clear-first') {
       // Building them is the shared Build sheet's job (#371); this says how
       // the tile stands for the night.
       return [
@@ -1892,6 +1892,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       });
       const fire = landTileOffer(tile, home);
       const grounds = groundsTileOffer(tile, home);
+      // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
         ...(fire.kind === 'build'
           ? [

@@ -26,14 +26,12 @@ describe('clearDrop (#242)', () => {
 });
 
 describe('clearToolMakeable (#242)', () => {
-  it("is false while the tool's recipe is hidden, and true once it ships", () => {
-    expect(clearToolMakeable('axe', RECIPES)).toBe(false);
-    const shipped = RECIPES.map((recipe) => {
-      const r = { ...recipe };
-      delete r.hidden;
-      return r;
-    });
-    expect(clearToolMakeable('axe', shipped)).toBe(true);
-    expect(clearToolMakeable('no-such-tool', shipped)).toBe(false);
+  it('is true for a tool a recipe in the game makes, and false while its recipe is hidden', () => {
+    expect(clearToolMakeable('axe', RECIPES)).toBe(true);
+    const hidden = RECIPES.map((r) =>
+      r.output.resource === 'axe' ? { ...r, hidden: true as const } : r,
+    );
+    expect(clearToolMakeable('axe', hidden)).toBe(false);
+    expect(clearToolMakeable('no-such-tool', RECIPES)).toBe(false);
   });
 });

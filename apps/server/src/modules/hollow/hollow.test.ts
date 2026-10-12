@@ -806,13 +806,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const mapId = await patch(server, kid);
       await pvpOn(mapId);
       const tile = await spotsAllAround(mapId, kid, 'mountains');
-      // The clearing tools' recipes as they'll ship (PR 3 drops `hidden`).
-      const shipped = GAME_DATA.recipes.map((recipe) => {
-        const r = { ...recipe };
-        delete r.hidden;
-        return r;
-      });
-      await hollowService(WEAK_SHADOWS, BOLDEST, shipped).runNightfall(mapId, TONIGHT);
+      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
     });
 
@@ -821,9 +815,12 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await patch(server, kid);
       await pvpOn(mapId);
-      // The Pickaxe's recipe is still hidden, so the Stone spot can't go.
+      // With the Pickaxe's recipe hidden, the Stone spot can't go.
       await spotsAllAround(mapId, kid, 'mountains');
-      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
+      const hidden = GAME_DATA.recipes.map((r) =>
+        r.output.resource === 'pickaxe' ? { ...r, hidden: true as const } : r,
+      );
+      await hollowService(WEAK_SHADOWS, BOLDEST, hidden).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
     });
 

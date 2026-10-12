@@ -30,6 +30,8 @@ import {
 } from './bag-view.js';
 import { AWAY_TEXT, summaryCount, summaryEntries, summarySentence } from './away-summary.js';
 import { createAwaySummary, type AwaySummaryDebug } from './away-summary-view.js';
+import type { BuildSource } from '../building/tile-build.js';
+import { CLEAR_CARD_ID, CLEAR_TEXT, clearCards, clearedNote } from './clear-model.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -107,6 +109,8 @@ export interface InventoryScreen {
   setMap: (mapId: string | null) => Promise<void>;
   setUser: (user: PublicUser | null) => void;
   readonly tileActions: TileActions;
+  /** The Build sheet's Clear land card on my homesteads (#242). */
+  readonly clearSource: BuildSource;
   /** The bag on screen now (items, crafts, seasons), or null. */
   readonly bag: InventoryResponse | null;
   /** Settles the map on screen (banks what finished, owner decision 2026-10-06) and reads the bag again. */
@@ -468,7 +472,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     settlesSent += 1;
     const sent = settlesSent;
     try {
-      const { landed, trained, nextAt, ...fresh } = await api.settle(id);
+      const { landed, trained, cleared = [], nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
       // banked still pops up (the server put it in the bag).
@@ -479,15 +483,22 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         serverNextAt = nextAt;
       }
       const away = presence.awayMs(id);
-      if (landed.length > 0 || trained.length > 0) {
+      if (landed.length > 0 || trained.length > 0 || cleared.length > 0) {
         landings += 1;
         // After a while away, the Factory's things get their own card (#294).
         const card = showsWelcomeBack(landed, away);
         if (card) showWelcome(landed);
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
-        // The card's things are in the Bag too: they count as news.
-        showLanded(popped, trained, away >= WELCOME_BACK_MS, landed);
-        if (landed.length > 0) options.onCollected?.();
+        // The card's things are in the Bag too: they count as news. Land
+        // that finished clearing (#242) drops its things into the same banner.
+        showLanded(
+          [...popped, ...cleared],
+          trained,
+          away >= WELCOME_BACK_MS,
+          [...landed, ...cleared],
+          clearedNote(cleared),
+        );
+        if (landed.length > 0 || cleared.length > 0) options.onCollected?.();
       }
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
@@ -526,6 +537,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       ...(serverNextAt ? [serverNextAt] : []),
       ...state.crafts.map((c) => c.readyAt),
       ...state.gathers.map((g) => g.readyAt),
+      ...(state.clears ?? []).map((c) => c.readyAt),
       ...(state.factory?.batches.flatMap((b) => (b.nextAt ? [b.nextAt] : [])) ?? []),
     ].map((iso) => clock.msUntil(iso));
     if (due.length === 0) return;
@@ -558,10 +570,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     away = false,
     /** Everything that went in the Bag, if more than shows (the Factory's own card). */
     inBag: readonly Pick<Landed, 'items'>[] = landed,
+    /** A line said first, for screen readers ("Land cleared, ready to build!", #242). */
+    note = '',
   ) => {
     const entries = summaryEntries(landed, trained);
     if (entries.length > 0) {
-      summary.show({ entries, sentence: summarySentence(landed, trained), away });
+      const sentence = [note, summarySentence(landed, trained)].filter((t) => t !== '').join(' ');
+      summary.show({ entries, sentence, away });
     }
     const count = summaryCount(summaryEntries(inBag, []));
     if (sheet.hidden && count > 0) {
@@ -983,6 +998,21 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       case 'sleeping':
         container.replaceChildren(line(action.note));
         break;
+      case 'clearing': {
+        const left =
+          clock.msUntil(action.readyAt) > 0
+            ? countdown(
+                tileCountdowns,
+                'p',
+                'tile-action-note tile-action-waiting',
+                action.readyAt,
+                CLEAR_TEXT.clearing,
+              )
+            : line(CLEAR_TEXT.clearingDone);
+        left.dataset['testid'] = 'tile-clearing';
+        container.replaceChildren(left);
+        break;
+      }
       case 'busy':
         container.replaceChildren(
           clock.msUntil(action.readyAt) > 0
@@ -1026,6 +1056,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     renderTile();
     renderChip();
     syncTicker();
+    for (const listener of clearListeners) listener();
   }
 
   /** One tick: rewrite countdown texts; redraw only when one has finished. */
@@ -1050,7 +1081,53 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }
   }
 
+  /** Who to tell when the bag changed (the Build sheet's Clear land card). */
+  const clearListeners: (() => void)[] = [];
+
+  /**
+   * Clearing land from the Build sheet (#242): Clear land on an empty
+   * homestead of mine that a tool can clear, and on a spot, the buildings it
+   * makes room for (`clearCards`). The server checks the tool, the tile and
+   * what's on it (CLAUDE.md rule 1).
+   */
+  const clearSource: BuildSource = {
+    cards: (tile) => (state ? clearCards(tile, user?.id ?? null, state, clock.now()) : []),
+    build: async (card, tile) => {
+      // The waiting building cards are only ever shown, never built.
+      if (card.id !== CLEAR_CARD_ID) return null;
+      const id = mapId;
+      if (!id || !state) return null;
+      const at = generation;
+      try {
+        const res = await sendCommand(
+          sendDeps,
+          (key) => api.clear(id, { q: tile.q, r: tile.r }, key),
+          () => at === generation,
+        );
+        if (!res || !apply(at, { now: res.now, items: res.items })) return null;
+        state = { ...state, clears: [...(state.clears ?? []), res.clearing] };
+        scheduleSettle();
+        render();
+        return CLEAR_TEXT.started;
+      } catch (err) {
+        // Something changed (a tool used up, a clear already going): read it all again.
+        if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
+          void refresh();
+        }
+        throw err;
+      }
+    },
+    onChange: (listener) => {
+      clearListeners.push(listener);
+    },
+    // Another card built something that took from the bag: read it again.
+    invalidate: () => {
+      void refresh();
+    },
+  };
+
   return {
+    clearSource,
     setMap: async (next) => {
       if (next === mapId) return;
       if (mapId) presence.left(mapId);

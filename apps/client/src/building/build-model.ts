@@ -9,6 +9,7 @@ import { itemIcon } from '../inventory/item-icons.js';
 /** One building the sheet can put up, ready for a card. */
 export interface BuildCard {
   readonly id: string;
+  /** An emoji, or a drawn icon's name (`ui/line-icons`). */
   readonly icon: string;
   readonly name: string;
   /** What it does, in one short line. */
@@ -58,6 +59,16 @@ export function buildStatus(card: BuildCard, bag: ItemCounts | null, areas: numb
   if (areas < 1) return { kind: 'no-area' };
   if (bag && !canAfford(bag, buildTotal(card, areas))) return { kind: 'short' };
   return { kind: 'ready' };
+}
+
+/**
+ * Can this card be tapped? Every card, blocked ones too, while nothing's
+ * building: a tap on a blocked card shows why it waits (its `blocked` line),
+ * and Build! stays off (`buildStatus`). A disabled card next to one that
+ * works would hide its reason for good.
+ */
+export function cardTappable(working: boolean): boolean {
+  return !working;
 }
 
 /** A cost as icons and counts, for one tight line: "32 🌿 4 🪵". */
