@@ -194,7 +194,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [{ into: 'croakaroo', level: 24 }], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'blob',
-      palette: ['#86d45a', '#e6ffd0', '#ff9ec4', '#3fae3a'],
+      palette: ['#86d45a', '#e6ffd0', '#6cc4f0', '#3fae3a'],
       parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'eye-bumps', 'water-curl', 'hop-feet'],
       size: 1.15,
       stance: 0.3,
@@ -207,7 +207,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'croakaroo',
     name: 'Croakaroo',
-    description: 'Its long legs can leap a whole pond. It sticks out its tongue when it lands.',
+    description:
+      'Its big hands catch dragonflies, then let them go again. It sticks out its tongue to say hi.',
     element: 'water',
     feeling: 'silly',
     rarity: 'uncommon',
@@ -216,20 +217,20 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'blob',
-      palette: ['#7fcf52', '#e6ffd0', '#ff9ec4', '#3fae3a'],
+      palette: ['#7fcf52', '#e6ffd0', '#5cb8ec', '#3fae3a'],
       parts: [
         'sharp-eyes',
         'open-mouth',
         'giggle-tongue',
         'eye-bumps',
         'water-curl',
-        'long-legs',
+        'hop-feet',
         'round-hands',
         'spots',
       ],
       size: 1.3,
-      stance: 0.45,
-      pose: 'stand',
+      stance: 0.4,
+      pose: 'sit',
       attackPart: 'legs',
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
