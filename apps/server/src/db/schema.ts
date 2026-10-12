@@ -1982,8 +1982,9 @@ export const coinBalances = pgTable(
  * Keeper milestone progress (#44, design doc §24): one row per account and
  * track, written by the `milestones` event consumer. `progress` is in
  * hundredths of a step (`MILESTONE_UNIT`), so Gentle's half share counts half
- * a tile; `kinds` holds what a "kinds of" track has already counted (species
- * ids). Account-level (DECISIONS F). A missing row is no progress.
+ * a tile; `kinds` holds the values a distinct track has already counted
+ * (species ids for Collector, squishy ids for the evolution track).
+ * Account-level (DECISIONS F). A missing row is no progress.
  */
 export const milestoneProgress = pgTable(
   'milestone_progress',
