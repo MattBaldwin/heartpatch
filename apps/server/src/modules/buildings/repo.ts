@@ -204,6 +204,12 @@ export interface BuildingsRepo {
     tileIds: readonly string[],
   ) => Promise<string[]>;
   /**
+   * How many tiles hold two or more buildings (#295), on multiplayer maps
+   * and on the rest (the Tutorial Glade, which the tidy-up pass leaves
+   * alone). Counts only. `mapIds` limits it to those maps (tests).
+   */
+  crowdedTiles: (mapIds?: readonly string[]) => Promise<{ multiplayer: number; other: number }>;
+  /**
    * Every building on a multiplayer map with its tile (for the tidy-up's
    * scan), and the players with a squishy gathering on a tile of theirs out
    * on the land that has a building.
@@ -501,6 +507,18 @@ function queries(db: Executor): BuildingsRepo {
         )
         .orderBy(asc(squishies.id));
       return rows.map((r) => r.id);
+    },
+
+    crowdedTiles: async (mapIds) => {
+      const rows = await db
+        .select({ kind: maps.kind })
+        .from(buildings)
+        .innerJoin(maps, eq(maps.id, buildings.mapId))
+        .where(mapIds ? inArray(buildings.mapId, [...mapIds]) : undefined)
+        .groupBy(buildings.tileId, maps.kind)
+        .having(sql`count(*) > 1`);
+      const multiplayer = rows.filter((r) => r.kind === 'multiplayer').length;
+      return { multiplayer, other: rows.length - multiplayer };
     },
 
     scanTileUses: async () => {
