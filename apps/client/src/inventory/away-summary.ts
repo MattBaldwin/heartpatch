@@ -24,11 +24,19 @@ export type SummaryEntry =
     }
   | {
       readonly kind: 'trained';
-      /** Each squishy the Training Grounds trained, with its XP. */
-      readonly squishies: readonly { readonly name: string; readonly xp: number }[];
+      /** Each squishy the Training Grounds trained, with its XP and its picture if it's drawn (#465). */
+      readonly squishies: readonly TrainedSquishy[];
       /** All their XP added up, for the one chip. */
       readonly xp: number;
     };
+
+/** A squishy the Training Grounds trained, as the banner and card show it. */
+export interface TrainedSquishy {
+  readonly name: string;
+  readonly xp: number;
+  /** Its portrait (#465), when one was ready to show; else the 🎯 stands in. */
+  readonly portrait?: string;
+}
 
 // Player-facing text (style guide §6).
 export const AWAY_TEXT = {
@@ -36,6 +44,8 @@ export const AWAY_TEXT = {
   tagAway: 'Welcome back!',
   tagNow: 'In your Bag!',
   more: (n: number) => `${String(n)} more`,
+  /** Several trained squishies in one chip: their faces, then how many. */
+  trainedCount: (n: number) => `🎯${String(n)}`,
   cardTagAway: 'While you were away…',
   cardTagNow: 'Into your Bag!',
   cardTitle: 'Your patch kept busy!',
@@ -55,13 +65,17 @@ export const AWAY_TEXT = {
  */
 export function summaryEntries(
   landed: readonly Pick<Landed, 'items'>[],
-  trained: readonly { readonly name: string; readonly xp: number }[],
+  trained: readonly TrainedSquishy[],
 ): SummaryEntry[] {
   const entries: SummaryEntry[] = [];
   if (trained.length > 0) {
     entries.push({
       kind: 'trained',
-      squishies: trained.map(({ name, xp }) => ({ name, xp })),
+      squishies: trained.map(({ name, xp, portrait }) => ({
+        name,
+        xp,
+        ...(portrait === undefined ? {} : { portrait }),
+      })),
       xp: trained.reduce((sum, t) => sum + t.xp, 0),
     });
   }
