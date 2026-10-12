@@ -121,6 +121,11 @@
   white-space: nowrap;
   pointer-events: auto;
   touch-action: manipulation;
+  cursor: pointer;
+}
+
+.house-floor:active {
+  transform: scale(0.97);
 }
 
 /* More house past a side the phone crops (B4): a small soft chevron pill. */

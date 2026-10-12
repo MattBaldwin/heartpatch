@@ -22,9 +22,9 @@ export const HOUSE_TEXT = {
   stepOutIcon: '🚪',
   /** The floor switch (B4), with more than one floor. */
   upstairs: 'Upstairs',
-  upstairsIcon: '⬆',
+  upstairsIcon: '⬆️',
   downstairs: 'Downstairs',
-  downstairsIcon: '⬇',
+  downstairsIcon: '⬇️',
   pill: (level: number) => `🏠 House ${String(level)}`,
   room: (name: string, n: number) => `${name} · ${beds(n)}`,
   /** More than one room in view: how many, and every bed. */

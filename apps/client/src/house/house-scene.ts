@@ -50,8 +50,8 @@ import {
 } from './house-camera.js';
 import {
   HOUSE_BLANKETS,
-  HOUSE_CAMERA,
   HOUSE_CAST,
+  HOUSE_FIT_FLOOR,
   HOUSE_GLIDE,
   HOUSE_GRID,
   HOUSE_KID,
@@ -579,10 +579,10 @@ export class HouseScene {
 
   /**
    * The box the dollhouse camera fits: the shown floor's rooms (or the
-   * whole house, `HOUSE_CAMERA.fitFloor` off).
+   * whole house, `HOUSE_FIT_FLOOR` off).
    */
   get frameBounds(): HouseBounds {
-    return HOUSE_CAMERA.fitFloor ? this.#cut.bounds : this.bounds;
+    return HOUSE_FIT_FLOOR ? this.#cut.bounds : this.bounds;
   }
 
   /**

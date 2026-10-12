@@ -67,13 +67,14 @@ function frameCost(scene: Scene, house: HouseScene): { drawCalls: number; triang
 
 /**
  * Every frame the house can show: each floor of the dollhouse (the floor
- * cut), the entry glide (the roof lifting, upstairs fading out with it),
+ * cut), the entry glide's heaviest frame (the roof still on, upstairs fading out with it),
  * and the walk in to kid height, which is on the ground floor.
  */
 function framesOf(level: number): { label: string; floor: number; zoom: number; roof: number }[] {
   const floors = [...new Set(sampleHouse(level).view.rooms.map((r) => r.layout.floor))].sort();
   return [
-    { label: 'the entry glide', floor: 0, zoom: 0, roof: 0.3 },
+    // The glide's heaviest frame: the dollhouse pose with the roof still on and upstairs fading.
+    { label: 'the dollhouse mid-glide (roof at 0.3)', floor: 0, zoom: 0, roof: 0.3 },
     ...ZOOMS.map((zoom) => ({ label: `floor 0 at zoom ${String(zoom)}`, floor: 0, zoom, roof: 1 })),
     ...floors
       .filter((f) => f > 0)

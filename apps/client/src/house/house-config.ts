@@ -225,12 +225,6 @@ export const HOUSE_CAMERA = {
   edgeClear: 0.04, // TUNE
   /** How deep the front yard is (path, lanterns, bushes, fence), metres: kept in frame when there's room. */
   yard: 3.7, // TUNE: frontYard's fence and last stepping stone
-  /**
-   * The dollhouse fits the floor it shows (the floor cut's rooms) rather
-   * than the whole house: on the ground floor of a two-floor house the
-   * camera comes in closer.
-   */
-  fitFloor: true as boolean, // TUNE: B4 captures show both
   /** Pinch out past the dollhouse by this much (zoom units) and you're back home. */
   exitOvershoot: 0.18, // TUNE
   /** A mouse wheel's travel (px; a notch is about 100) that moves zoom by 1. */
@@ -238,6 +232,13 @@ export const HOUSE_CAMERA = {
   /** How much pinch (log of the finger spread ratio) moves zoom by 1. */
   pinchPerZoom: 0.9, // TUNE
 } as const;
+
+/**
+ * The dollhouse fits the floor it shows (the floor cut's rooms) rather than
+ * the whole house: on the ground floor of a two-floor house the camera
+ * comes in closer. A plain boolean, so turning it off needs no other change.
+ */
+export const HOUSE_FIT_FLOOR: boolean = true; // TUNE: B4 captures showed both
 
 /** Kid height (`kidPose`, `blend`, `wallFade`): walking into a room. */
 export const HOUSE_KID = {

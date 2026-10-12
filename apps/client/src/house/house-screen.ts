@@ -18,22 +18,15 @@ import { houseApi, type HouseApi } from './house-api.js';
 import { createHouseBuilder } from './house-build.js';
 import { confirmPanel, growPanel, houseButton, sparkle } from './house-grow.js';
 import { builtLine, sparkleSpot } from './house-grow-view.js';
-import { roomBox } from './house-layout.js';
+import { floorAfterGrowing, roomBox } from './house-layout.js';
 import { createViewSync } from './house-view-sync.js';
 import {
   blend,
   clampZoom,
   entryGlide,
-  fitHouse,
-  chevronBox,
-  framedFocus,
   glidePose,
   kidPose,
-  panPerPixel,
-  panPose,
-  panRange,
   pinchedOut,
-  residentBoxes,
   pinchZoom,
   roofAt,
   walkedIn,
@@ -44,6 +37,7 @@ import {
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
 import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
+import { createHousePan, type PanFrame } from './house-pan.js';
 import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine } from './house-view.js';
 import './house.css';
 
@@ -152,10 +146,18 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let builtTier: QualityTier | null = null;
   /** The fitted dollhouse pose for the screen as it is now. */
   let base: HousePose | null = null;
-  /** The dollhouse as fitted, and how far a sideways drag has slid it from there (metres). */
-  let fitted: HousePose | null = null;
-  let pan = 0;
-  let panLimits = { min: 0, max: 0 };
+  /** The sideways drag on a tall phone: fits once, slides per frame (house-pan.ts). */
+  const panner = createHousePan({
+    measure: () => {
+      const s = scene3d;
+      if (!s) throw new Error('no house to fit');
+      return { vp: viewport(), bounds: s.frameBounds, room: s.focusRoom, spots: s.residentSpots };
+    },
+    frameOutside: (pose, vp) => {
+      const height = Math.max(1, vp.height);
+      scene3d?.frameOutside({ pose, aspect: vp.width / height, topBar: 1 - (2 * vp.top) / height });
+    },
+  });
   let glide: { shot: CinematicShot; start: number | null } | null = null;
   /** Kid height in the focus room, for the screen as it is now. */
   let kid: HousePose | null = null;
@@ -333,8 +335,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function renderFloor(): void {
     // Hidden while the sheet is open, as Walk in is (B3b: the HUD behind it is inert).
     const dollhouse = walk === null && zoom <= 0 && sheet === 'peek';
-    moreLeft.hidden = !dollhouse || pan <= panLimits.min + 0.05;
-    moreRight.hidden = !dollhouse || pan >= panLimits.max - 0.05;
+    moreLeft.hidden = !dollhouse || panner.pan <= panner.limits.min + 0.05;
+    moreRight.hidden = !dollhouse || panner.pan >= panner.limits.max - 0.05;
     const floors = scene3d?.floors ?? [];
     floorButton.hidden = floors.length < 2 || !dollhouse;
     const up = floor === 0;
@@ -509,7 +511,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const grew = view !== null && fresh.level !== view.level;
     view = fresh;
     render();
-    if (grew) options.showScene(build);
+    if (!grew) return;
+    // A new room upstairs: show its floor (B4 review), in the dollhouse.
+    const next = floorAfterGrowing(fresh.rooms, fresh.level, floor);
+    if (next !== floor) {
+      floor = next;
+      zoom = 0;
+      walk = null;
+    }
+    options.showScene(build);
   }
 
   /** Re-reads the house (the sheet opened): requirements and the bag move all the time. */
@@ -646,6 +656,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       s.setFloor(0);
       fit(s);
     }
+    const slid = panner.step();
+    if (slid) showPan(slid);
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
     renderFloor();
@@ -663,30 +675,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** The dollhouse and kid-height poses for the screen as it is now. */
   function fit(s: HouseScene): void {
-    const vp = viewport();
-    const room = s.focusRoom;
     // B4: a tall phone fits the Keeper's room and drags sideways to the rest.
-    const focus = framedFocus(s.frameBounds, vp, room, s.residentSpots);
-    fitted = fitHouse(s.frameBounds, vp, undefined, focus);
-    panLimits = panRange(s.frameBounds, vp, focus);
-    pan = Math.min(panLimits.max, Math.max(panLimits.min, pan));
-    base = panPose(fitted, pan);
-    // The chevrons sit along their edge clear of every resident's face (B4 round 4).
-    const faces = residentBoxes(base, vp, s.residentSpots);
-    for (const [cue, side] of [
-      [moreLeft, 'left'],
-      [moreRight, 'right'],
-    ] as const)
-      cue.style.top = `${String(chevronBox(side, vp, faces).y0)}px`;
-    kid = room ? kidPose(room, vp) : null;
-    frameOutside(s, base);
+    showPan(panner.fit());
+    const room = s.focusRoom;
+    kid = room ? kidPose(room, viewport()) : null;
   }
 
-  /** Drops trees the dollhouse frame would clip, or that would stand under the top bar. */
-  function frameOutside(s: HouseScene, pose: HousePose): void {
-    const vp = viewport();
-    const height = Math.max(1, vp.height);
-    s.frameOutside({ pose, aspect: vp.width / height, topBar: 1 - (2 * vp.top) / height });
+  /** The dollhouse where the drag has slid it, the chevrons clear of every resident's face. */
+  function showPan(frame: PanFrame): void {
+    base = frame.base;
+    moreLeft.style.top = `${String(frame.cues.left.y0)}px`;
+    moreRight.style.top = `${String(frame.cues.right.y0)}px`;
   }
 
   /** Skips the glide to the dollhouse (a tap, or reduced motion). */
@@ -719,6 +718,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     touch.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
+    if (pointers.size === 1) panner.down(e.clientX);
     if (pointers.size === 2) {
       skipGlide();
       walk = null;
@@ -729,10 +729,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const was = pointers.get(e.pointerId);
     if (!was) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    // One finger in the dollhouse slides it sideways (a tall phone shows one room or two).
-    if (pointers.size === 1 && zoom === 0 && !walk && fitted && scene3d) {
-      pan -= (e.clientX - was.x) * panPerPixel(fitted, viewport());
-      fit(scene3d);
+    // One finger in the dollhouse slides it sideways (a tall phone shows one
+    // room or two), gathered and applied once a frame in step().
+    if (pointers.size === 1 && zoom === 0 && !walk && panner.move(e.clientX)) {
+      skipGlide();
       draw();
     }
     taps.pointerMove(sample(e));
@@ -746,6 +746,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!pointers.delete(e.pointerId)) return;
     if (e.type === 'pointercancel') taps.pointerCancel(sample(e));
     else taps.pointerUp(sample(e));
+    if (pointers.size === 0) {
+      const last = panner.up();
+      if (last) {
+        showPan(last);
+        draw();
+      }
+    }
     if (pinch && pointers.size < 2) {
       pinch = null;
       if (pinchedOut(zoom)) {
@@ -854,7 +861,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     view = fresh;
     zoom = 0;
     floor = 0;
-    pan = 0;
+    panner.reset();
     walk = null;
     builtTier = null;
     sheet = 'peek';

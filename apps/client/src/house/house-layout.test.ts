@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { HOUSE_GRID } from './house-config.js';
 import {
   covers,
+  floorAfterGrowing,
   floorCut,
   houseBounds,
   houseFloors,
@@ -147,5 +148,19 @@ describe('the floor cut (B4)', () => {
     expect(covers(kitchen!, snug!)).toBe(true);
     expect(covers(snug!, kitchen!)).toBe(false);
     expect(covers(kitchen!, hall!)).toBe(false);
+  });
+
+  it('shows the new room’s floor after growing when it’s upstairs, and keeps the floor otherwise', () => {
+    const rooms = (level: number) =>
+      roomsAt(HOUSE_DATA, level).map((room) => ({
+        ...room,
+        level: HOUSE_DATA.levels.find((l) => l.room.id === room.id)?.level ?? 1,
+      }));
+    // Level 2 → 3: the Kitchen is upstairs.
+    expect(floorAfterGrowing(rooms(3), 3, 0)).toBe(1);
+    // Level 3 → 4 from upstairs: the Hall starts downstairs but stands two storeys tall.
+    expect(floorAfterGrowing(rooms(top), top, 1)).toBe(1);
+    expect(floorAfterGrowing(rooms(top), top, 0)).toBe(0);
+    expect(floorAfterGrowing(rooms(2), 2, 0)).toBe(0);
   });
 });

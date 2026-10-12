@@ -355,3 +355,18 @@ export function floorCut(rooms: readonly RoomBox[], floor: number): FloorCut {
 
 /** Whether something on floor `tag` is drawn while the dollhouse shows `floor`. */
 export const shownAt = (tag: number, floor: number): boolean => tag <= floor;
+
+/**
+ * The floor the dollhouse shows once the house has grown to `level`: the
+ * new room's when it starts above the floor shown (the Kitchen, upstairs at
+ * level 3, would be cut away), else the floor shown (a room below it, like
+ * the two-storey Heart Hall, is in view either way).
+ */
+export function floorAfterGrowing(
+  rooms: readonly { readonly level: number; readonly layout: Pick<HouseRoomLayout, 'floor'> }[],
+  level: number,
+  shown: number,
+): number {
+  const added = rooms.find((r) => r.level === level);
+  return added && added.layout.floor > shown ? added.layout.floor : shown;
+}
