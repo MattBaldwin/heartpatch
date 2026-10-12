@@ -74,8 +74,8 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
   { from: 'rippletad', into: 'drizzledoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
   { from: 'kindlebun', into: 'embernap', trigger: { kind: 'feeling', feeling: 'sleepy' } },
   { from: 'bristlepip', into: 'petalprance', trigger: { kind: 'feeling', feeling: 'joy' } },
-  { from: 'fuzzbolt', into: 'glidebolt', trigger: { kind: 'feeling', feeling: 'joy' } },
-  { from: 'snoozicle', into: 'twirlicle', trigger: { kind: 'feeling', feeling: 'silly' } },
+  { from: 'zipkit', into: 'glidebolt', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'snoozeflake', into: 'twirlicle', trigger: { kind: 'feeling', feeling: 'silly' } },
   // Batch 2: the Halloween lines (and Pebblesnooze).
   {
     from: 'pumpkip',
@@ -96,10 +96,10 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
       },
     },
   },
-  { from: 'glowboo', into: 'lullaboo', trigger: { kind: 'feeling', feeling: 'cozy' } },
-  { from: 'upsybat', into: 'hushwing', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'wispyboo', into: 'lullaboo', trigger: { kind: 'feeling', feeling: 'cozy' } },
+  { from: 'flitterbat', into: 'hushwing', trigger: { kind: 'feeling', feeling: 'sleepy' } },
   { from: 'wickitten', into: 'sparklewick', trigger: { kind: 'feeling', feeling: 'joy' } },
-  { from: 'pebblesnooze', into: 'rumblehorn', trigger: { kind: 'feeling', feeling: 'brave' } },
+  { from: 'cobblenap', into: 'rumblehorn', trigger: { kind: 'feeling', feeling: 'brave' } },
   // Batch 3.
   { from: 'fizzlepop', into: 'snugglestar', trigger: { kind: 'feeling', feeling: 'cozy' } },
   { from: 'bubbletub', into: 'bubblejelly', trigger: { kind: 'feeling', feeling: 'joy' } },
