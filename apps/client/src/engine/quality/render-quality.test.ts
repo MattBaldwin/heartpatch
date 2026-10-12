@@ -3,6 +3,8 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as rareGlow from '../../procedural/rare-glow.js';
+import { TIER_SETTINGS } from '../config.js';
 import { createPostProcessing, RenderQuality } from './render-quality.js';
 
 describe('createPostProcessing', () => {
@@ -67,6 +69,16 @@ describe('RenderQuality', () => {
     expect(scaling).toHaveBeenCalledTimes(1);
     expect(quality.snapshot.renderScale).toBeLessThan(1);
     expect(quality.applyPending()).toBe(false);
+  });
+
+  it('switches the rare glow with each tier’s setting (#391)', () => {
+    const shown = vi.spyOn(rareGlow, 'setRareGlowForTier');
+    for (const tier of ['high', 'medium', 'low'] as const) {
+      const scene = new Scene(engine);
+      new RenderQuality(scene, new TargetCamera('cam', Vector3.Zero(), scene), tier);
+      expect(shown).toHaveBeenLastCalledWith(TIER_SETTINGS[tier].rareGlow);
+    }
+    shown.mockRestore();
   });
 
   it('holds a pinned tier at full resolution, however slow (dev captures, #335)', () => {

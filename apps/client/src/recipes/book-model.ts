@@ -40,6 +40,8 @@ export const BOOK_TEXT = {
   noteHome: 'You pick the spot at home.',
   noteHomestead: 'Tap a homestead on the map, then 🔨 Build.',
   noteLand: 'Tap your land on the map, then 🔨 Build.',
+  buildIt: 'Build it',
+  findSpot: 'Find a spot',
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
   sealed: 'Collect something new to open this page.',
@@ -173,15 +175,32 @@ export function buildWhere(buildingId: string): {
   readonly atHome: boolean;
   readonly meta: string;
   readonly note: string;
+  /** The page's button: build it at home, or find its spot on the map. */
+  readonly button: string;
 } {
   switch (BUILDINGS.get(buildingId)?.placement) {
     case 'homestead':
-      return { atHome: false, meta: BOOK_TEXT.buildOnHomestead, note: BOOK_TEXT.noteHomestead };
+      return {
+        atHome: false,
+        meta: BOOK_TEXT.buildOnHomestead,
+        note: BOOK_TEXT.noteHomestead,
+        button: BOOK_TEXT.findSpot,
+      };
     case 'land':
     case 'owned':
-      return { atHome: false, meta: BOOK_TEXT.buildOnLand, note: BOOK_TEXT.noteLand };
+      return {
+        atHome: false,
+        meta: BOOK_TEXT.buildOnLand,
+        note: BOOK_TEXT.noteLand,
+        button: BOOK_TEXT.findSpot,
+      };
     default:
-      return { atHome: true, meta: BOOK_TEXT.build, note: BOOK_TEXT.noteHome };
+      return {
+        atHome: true,
+        meta: BOOK_TEXT.build,
+        note: BOOK_TEXT.noteHome,
+        button: BOOK_TEXT.buildIt,
+      };
   }
 }
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
