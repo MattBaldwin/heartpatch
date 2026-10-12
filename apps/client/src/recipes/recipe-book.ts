@@ -13,6 +13,7 @@ import { el, messageOf } from '../ui/dom.js';
 import {
   bookOrder,
   bookTabs,
+  buildWhere,
   bookSpreads,
   cookingView,
   freshPages,
@@ -115,7 +116,7 @@ export const RECIPE_BOOK_TEXT = {
   nextPage: 'Next page',
   contents: 'Contents',
   make: 'Make',
-  build: 'Build at home',
+  build: 'Build',
   sealedName: 'A sealed page',
   sealedNote: 'Collect everything it needs and this page opens by itself!',
   stillSealed: (n: number) =>
@@ -132,7 +133,6 @@ export const RECIPE_BOOK_TEXT = {
   makeIt: 'Make it',
   buildIt: 'Build it',
   making: (name: string) => `Making ${name}! Come back when it’s ready.`,
-  buildNote: 'You pick the spot at home.',
   newPage: 'New page!',
   foundAll: 'You found everything it needs.',
   turnToIt: 'Turn to it',
@@ -590,7 +590,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     button.addEventListener('click', () => {
       if (!make) {
         closeBook();
-        options.openHome();
+        // Homestead and land buildings go up from a tile on the map (#295),
+        // which is right under the book.
+        if (buildWhere(page.output).atHome) options.openHome();
         return;
       }
       busy = true;
@@ -613,7 +615,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     const note = page.canMake
       ? make
         ? (page.meta.split(' · ')[1] ?? '')
-        : RECIPE_BOOK_TEXT.buildNote
+        : buildWhere(page.output).note
       : (page.note ?? '');
     const queue = queueButton(page);
     if (queue.length === 0) return [button, el('p', { class: 'rbook-note' }, note)];

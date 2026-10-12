@@ -9,7 +9,13 @@ import { testView } from '../map/test-view.js';
 import { VISIT_KEYS, visitFrames } from '../procedural/hollow-man/hollow-man-config.js';
 import { NIGHT_LOOK } from './hollow-config.js';
 import { HollowLayer } from './hollow-layer.js';
-import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
+import {
+  changesMyNight,
+  HOLLOW_TEXT,
+  reportText,
+  tileUseLines,
+  unseenReports,
+} from './hollow-report.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000002${String(n).padStart(2, '0')}`;
 const takenOne = (n: number, inHollow = true) => ({
@@ -254,5 +260,24 @@ describe('the Hollow Man on the map', () => {
     expect(layer.visit()).toBe(false);
     layer.setNight(true);
     expect(layer.debug).toEqual({ night: true, visiting: false, visits: 0, walking: 0, steps: 0 });
+  });
+});
+
+describe('the one-building-a-tile tidy-up note (#295)', () => {
+  it('says what moved where, what packed up and who stopped gathering, kindly', () => {
+    const lines = tileUseLines({
+      moved: [{ buildingId: 'cozy-meadow' }, { buildingId: 'crafting-factory' }],
+      packed: [{ buildingId: 'training-grounds' }],
+      stoppedGatherers: [{ name: 'Bun' }, { name: 'Pip' }],
+    });
+    expect(lines).toEqual([
+      'Tidy-up time! Each tile holds one building now.',
+      'Your Cozy Meadow moved to a roomier home tile.',
+      'Your Crafting Factory moved out to a homestead 🏡.',
+      'Your Training Grounds packed up, and everything came back:',
+      'Bun and Pip stopped gathering where a building stands now.',
+    ]);
+    for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
+    expect(tileUseLines({ moved: [], packed: [], stoppedGatherers: [] })).toEqual([]);
   });
 });

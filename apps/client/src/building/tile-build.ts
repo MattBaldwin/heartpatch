@@ -2,7 +2,7 @@ import type { ItemCounts, MapView, PublicTile } from '@heartpatch/shared';
 import type { MapScreen, TileActions } from '../map/map-screen.js';
 import { el, messageOf } from '../ui/dom.js';
 import { ApiRequestError } from '../net/api.js';
-import { BUILD_TEXT, pickCard, type BuildCard } from './build-model.js';
+import { BUILD_TEXT, buildStatus, pickCard, type BuildCard } from './build-model.js';
 import { createBuildSheet } from './build-sheet.js';
 import { setPanelFocus } from './panel-focus.js';
 
@@ -217,6 +217,9 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
     const cards = cardsFor(tile, view);
     const card = pickCard(cards, selectedId, bag);
     if (!card) return;
+    // Build! is off unless this is ready; a blocked card is only ever shown.
+    const areas = card.area === 'edges' ? picked.length : 1;
+    if (buildStatus(card, bag, areas).kind !== 'ready') return;
     const source = sourceOf(tile, view, card);
     if (!source) return;
     const edges = card.area === 'edges' ? picked : [];

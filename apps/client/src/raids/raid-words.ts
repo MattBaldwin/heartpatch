@@ -91,11 +91,14 @@ function liveRaidLine(who: string, raid: Pick<Raid, 'outcome' | 'reason'>): stri
   }
 }
 
-/** A fire that came down with the land (#202), or null when there was none there. */
+/**
+ * A building that came down with the land (#202: a fire; #295: any building
+ * out there, the Crafting Factory too), or null when there was none there.
+ */
 export function raidFireLine(raid: Pick<Raid, 'lostFire'>): string | null {
   return raid.lostFire === null
     ? null
-    : 'Your fire there went out when the land changed hands. You got some things back 🔥';
+    : 'Your building there came down when the land changed hands. You got some things back 🏡';
 }
 
 /** My fences destroyed when the land was taken (#203), or null when there were none there. */

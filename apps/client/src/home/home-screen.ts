@@ -14,18 +14,12 @@ import {
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
-import type { InventoryResponse } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import { BUILD_TEXT, pickCard, type BuildCard } from '../building/build-model.js';
 import { createBuildSheet } from '../building/build-sheet.js';
 import { setPanelFocus } from '../building/panel-focus.js';
 import type { BuildSource } from '../building/tile-build.js';
-import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
-import { createFactoryPanel } from '../factory/factory-panel.js';
-import { FACTORY_TEXT, goingCount } from '../factory/factory-view.js';
-import { GameClock } from '../inventory/game-clock.js';
-import { inventoryApi } from '../inventory/inventory-api.js';
-import { recipeBookApi } from '../recipes/recipe-book-api.js';
+import { FACTORY_TEXT } from '../factory/factory-view.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { describeItems } from '../inventory/bag-view.js';
@@ -58,6 +52,7 @@ import {
   FIRES_ON_LAND,
   freeHomeSpots,
   fuelAllOffer,
+  factoryTileOffer,
   groundsTileOffer,
   landTileOffer,
   type GroundsTileOffer,
@@ -111,6 +106,8 @@ export interface HomeScreenOptions {
    * move it). `at`: Training Grounds on that homestead come first (#277).
    */
   onJobs?: (mapId: string, at?: { q: number; r: number }) => void;
+  /** "Open" on my Crafting Factory's tile card (#295): its batches sheet. */
+  onOpenFactory?: () => void;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
@@ -126,16 +123,9 @@ export interface HomeScreenOptions {
    */
   onRecipeBook?: () => void;
   api?: HomeApi;
-  /** The Crafting Factory card's calls (#294): its batches come with every settle. */
+  /** The Crafting Factory's tile card (#294, on a homestead since #295). */
   factory?: {
-    api?: FactoryApi;
-    /**
-     * Reads the bag, batches included, with no side effects. Home never
-     * settles: the Bag screen does (one settle loop, and the welcome-back
-     * card sees what landed), when the kid is back on the map.
-     */
-    read?: (mapId: string) => Promise<InventoryResponse>;
-    openPages?: () => Promise<readonly string[]>;
+    /** Where Sprout's one-time tip is remembered (null: nowhere). */
     storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   };
 }
@@ -175,10 +165,6 @@ export interface HomeDebug {
   readonly moodLayout: readonly MoodMarkLayout[];
   /** The main view's sheet (#412): the short peek bar, or opened into the full lists. */
   readonly sheet: 'peek' | 'open';
-  /** The Factory card's batches going (#294), null while it's not loaded. */
-  readonly factoryBatches: number | null;
-  /** What the Factory card's panel shows, null when it isn't on screen. */
-  readonly factoryPanel: 'list' | 'pick' | 'stop' | null;
 }
 
 export interface HomeScreen {
@@ -265,6 +251,10 @@ export const HOME_TEXT = {
   // Training Grounds on a homestead (#277, mockup screen 6).
   groundsBuilt: 'Ta-da! Your Training Grounds are ready. Send someone to practice!',
   trainHere: '🎯 Train here',
+  factoryBuilt: 'Ta-da! Your Crafting Factory is up. Tap Open to start a batch!',
+  openFactory: '🏭 Open',
+  factoryLose:
+    'If you lose this land, everything it cost and everything in its batches comes back.',
   groundsLit: '🔥 In fire light',
   groundsDark: '🌙 Dark at night',
   groundsNight:
@@ -306,32 +296,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let lastTier: QualityTier | null = null;
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
 
-  // ── The Crafting Factory card (#294) ─────────────────────────────────
-  const fapi = options.factory?.api ?? factoryApi;
-  const readFactory = options.factory?.read ?? ((id: string) => inventoryApi.get(id));
-  const readPages =
-    options.factory?.openPages ?? (() => recipeBookApi.get().then((res) => res.unlocked));
+  // ── Sprout's Factory tip (#294) ───────────────────────────────────────
   const tipStorage =
     options.factory?.storage === undefined ? safeStorage() : options.factory.storage;
-  const factoryClock = new GameClock();
-  /** The bag as the Factory card last read it (its batches, items and seasons). */
-  let factoryBag: InventoryResponse | null = null;
-  let factoryPages = new Set<string>();
-  /** Read once per map without being asked (a failed read waits for the next tap). */
-  let factoryTried = false;
   /** The Factory card showing Sprout's one-time tip (#294), or null. */
   let tipFor: string | null = null;
-  const factoryPanel = createFactoryPanel({
-    now: () => factoryClock.now(),
-    start: (recipeId, count) => factoryCommand((id, key) => fapi.start(id, recipeId, count, key)),
-    stop: (batchId) =>
-      factoryCommand(async (id, key) => {
-        const res = await fapi.stop(id, batchId, key);
-        say(FACTORY_TEXT.stopped(describeItems(res.refunded)));
-        return res;
-      }),
-    isOpen: (key) => factoryPages.has(key),
-  });
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const entry = el(
@@ -466,66 +435,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       show(fresh);
     } catch (err) {
       if (at === generation) say(messageOf(err));
-    }
-  }
-
-  /**
-   * Reads the Factory's batches and redraws its card. A read, not a settle:
-   * counts and countdowns run on the game clock, and what's made lands in
-   * the bag through the Bag screen's settle (or as the next batch starts).
-   */
-  async function loadFactory(): Promise<void> {
-    const id = mapId;
-    const at = generation;
-    if (!id) return;
-    factoryTried = true;
-    try {
-      const [res] = await Promise.all([
-        readFactory(id),
-        readPages()
-          .then((keys) => {
-            factoryPages = new Set(keys);
-          })
-          .catch(() => undefined),
-      ]);
-      if (at !== generation) return;
-      factoryClock.sync(res.now);
-      factoryBag = res;
-      render();
-    } catch (err) {
-      if (at === generation) say(messageOf(err));
-    }
-  }
-
-  const factoryCardUp = () =>
-    isOpen &&
-    mode.kind === 'selected' &&
-    home?.buildings.find((b) => 'id' in mode && b.id === mode.id)?.kind === 'factory';
-
-  /** A Factory command; its reply is the whole bag. Null once it ran, else why not. */
-  async function factoryCommand(
-    run: (mapId: string, key: string) => Promise<InventoryResponse>,
-  ): Promise<string | null> {
-    const id = mapId;
-    if (!id) return null;
-    const at = generation;
-    try {
-      const res = await sendCommand(
-        sendDeps,
-        (key) => run(id, key),
-        () => at === generation,
-      );
-      if (!res || at !== generation) return null;
-      factoryClock.sync(res.now);
-      factoryBag = res;
-      // The bag changed: the home's costs and chips read it again.
-      void refresh();
-      return null;
-    } catch (err) {
-      if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
-        void loadFactory();
-      }
-      return messageOf(err);
     }
   }
 
@@ -678,7 +587,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }));
     const card = pickCard(cards, mode.kind === 'build' ? mode.buildingId : null, current.items);
     const row = rows.find((r) => r.building.id === card?.id);
-    const spots = row ? freeHomeSpots(atHome(current), null, row.building.slot) : [];
+    // A blocked card (out of season, no room) shows why, with no spots lit.
+    const spots =
+      row && row.option.kind !== 'blocked'
+        ? freeHomeSpots(atHome(current), null, row.building.slot)
+        : [];
     const wanted = mode.kind === 'build' ? mode.spot : null;
     const spot =
       spots.find((s) => s.q === wanted?.q && s.r === wanted.r && s.spot === wanted.spot) ??
@@ -706,12 +619,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   function show(next: HomeResponse): void {
     home = next;
-    // An upgrade (or a take-down) changes the Factory's spots: read its batches again.
-    const factory = next.buildings.find((b) => b.kind === 'factory');
-    const known = factoryBag?.factory ?? null;
-    if (known && (factory?.id !== known.buildingId || factory.level !== known.level)) {
-      void loadFactory();
-    }
     // A building that's gone can't stay selected.
     const m = mode;
     if ('id' in m && !next.buildings.some((b) => b.id === m.id)) mode = { kind: 'idle' };
@@ -736,18 +643,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     say('');
     syncScene();
     render();
-    if (factoryCardUp()) {
-      factoryPanel.showList();
-      void loadFactory();
-    } else {
-      tipFor = null;
-      factoryPanel.pause();
-    }
   };
 
   function render(): void {
-    // The Factory card opened (a tap on it, or just built): read its batches once.
-    if (factoryBag === null && !factoryTried && factoryCardUp()) void loadFactory();
     entry.hidden = mapId === null || isOpen;
     overlay.hidden = !isOpen;
     if (!isOpen || !home) {
@@ -768,7 +666,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         handleWord.textContent = sheetOpen ? `${HOME_TEXT.less} ▾` : `${HOME_TEXT.more} ▴`;
         const chips = atHome(current).buildings.map((b) =>
           button(
-            `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}${factoryChip(b)}`,
+            `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
             () => {
               setMode({ kind: 'selected', id: b.id });
             },
@@ -1137,17 +1035,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ),
       );
     }
-    if (b.kind === 'factory') {
-      // The queue panel (#294): batches going, Start a batch, Stop.
-      if (factoryBag?.factory) {
-        factoryPanel.update({
-          view: factoryBag.factory,
-          items: factoryBag.items,
-          seasons: factoryBag.seasons,
-        });
-      }
-      card.push(...factoryTip(b.id), factoryPanel.element);
-    }
     actions.push(
       button(
         HOME_TEXT.move,
@@ -1184,14 +1071,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ),
     );
     return card;
-  }
-
-  /** " · 2 going" on the Factory's chip while batches are going (#294). */
-  function factoryChip(b: MyBuilding): string {
-    const view = factoryBag?.factory;
-    if (b.kind !== 'factory' || !view) return '';
-    const going = goingCount(view, factoryClock.now());
-    return going > 0 ? ` · ${String(going)} going` : '';
   }
 
   /** Sprout's tip the first time a kid sees their Factory (#294, owner decision 2026-10-08). */
@@ -1443,8 +1322,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** What the panel shows for a fire on my land (#202): its card, or a step of a command. */
   type TileMode = 'card' | 'upgrade' | 'confirm';
   let tileMode: TileMode = 'card';
-  /** Whose card a step is for: the tile's fire, or its Training Grounds (#277). */
-  let tileTarget: 'fire' | 'grounds' = 'fire';
+  /** Whose card a step is for: the tile's fire, its Training Grounds (#277) or Crafting Factory (#295). */
+  type TileTarget = 'fire' | 'grounds' | 'factory';
+  let tileTarget: TileTarget = 'fire';
   let tileNote = '';
   let tileWorking = false;
 
@@ -1545,6 +1425,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
    */
   function landTileNodes(tile: PublicTile): Node[] {
     if (!home) return [];
+    // My Crafting Factory on this homestead (#295): one building a tile, so
+    // it's the tile's only card.
+    const factory = factoryTileOffer(tile, home);
+    if (factory?.kind === 'factory') return factoryNodes(factory.factory);
     const grounds = groundsTileOffer(tile, home);
     if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
       return groundsNodes(tile, grounds);
@@ -1588,17 +1472,95 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ];
     }
     const { grounds, napping } = offer;
-    const card: Node[] = [cardHead(grounds, grounds.level)];
-    const upgradeAt = upgradeOffer(current, grounds);
+    const train = tileButton(
+      HOME_TEXT.trainHere,
+      () => {
+        if (mapId) options.onJobs?.(mapId, { q: tile.q, r: tile.r });
+      },
+      'tile-grounds-train',
+      'small',
+    );
+    if (napping || !options.onJobs) train.disabled = true;
+    return standingNodes(
+      grounds,
+      'grounds',
+      'grounds',
+      [
+        el('span', { class: 'home-effects' }, light),
+        el(
+          'p',
+          { class: 'home-card-note', 'data-testid': 'tile-grounds-note' },
+          buildingNote(grounds),
+        ),
+        el(
+          'p',
+          { class: 'home-card-note' },
+          napping ? HOME_TEXT.groundsNapping : HOME_TEXT.groundsNight,
+        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.groundsLose),
+      ],
+      [train],
+    );
+  }
+
+  /** My Crafting Factory on a homestead (#295): Open, Upgrade, Take down. */
+  function factoryNodes(factory: MyBuilding): Node[] {
+    const open = tileButton(
+      HOME_TEXT.openFactory,
+      () => {
+        options.onOpenFactory?.();
+      },
+      'tile-factory-open',
+      'small',
+    );
+    if (!options.onOpenFactory) open.disabled = true;
+    return standingNodes(
+      factory,
+      'factory',
+      'factory',
+      [
+        // Sprout's tip the first time a kid sees their Factory (#294), on its homestead now.
+        ...factoryTip(factory.id),
+        el(
+          'p',
+          { class: 'home-card-note', 'data-testid': 'tile-factory-note' },
+          buildingNote(factory),
+        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.factoryLose),
+      ],
+      [open],
+    );
+  }
+
+  /**
+   * A building of mine standing on a tile out on the land (#277, #295): its
+   * card with `lines` and `actions`, plus Upgrade and Take down, or a step
+   * of either. `prefix` names its test ids (`tile-<prefix>-…`).
+   */
+  function standingNodes(
+    b: MyBuilding,
+    target: TileTarget,
+    prefix: string,
+    lines: readonly Node[],
+    actions: readonly Node[],
+  ): Node[] {
+    const current = home;
+    if (!current) return [];
+    const note =
+      tileMode !== 'card' && tileNote
+        ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)]
+        : [];
+    const card: Node[] = [cardHead(b, b.level)];
+    const upgradeAt = upgradeOffer(current, b);
     if (tileMode === 'upgrade' && upgradeAt) {
       const go = tileButton(
         HOME_TEXT.upgradeNow,
         () =>
           void tileAct(
-            (id, send) => send((key) => api.upgrade(id, grounds.id, key)),
-            HOME_TEXT.upgraded(buildingName(grounds.buildingId), upgradeAt.to),
+            (id, send) => send((key) => api.upgrade(id, b.id, key)),
+            HOME_TEXT.upgraded(buildingName(b.buildingId), upgradeAt.to),
           ),
-        'tile-grounds-upgrade-confirm',
+        `tile-${prefix}-upgrade-confirm`,
       );
       if (!upgradeAt.affordable) go.disabled = true;
       card.push(
@@ -1612,19 +1574,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               tileMode = 'card';
               renderTile();
             },
-            'tile-grounds-upgrade-cancel',
+            `tile-${prefix}-upgrade-cancel`,
             true,
           ),
         ),
       );
     } else if (tileMode === 'confirm') {
-      const back = costText(refundPreview(grounds));
+      const back = costText(refundPreview(b));
       card.push(
-        el(
-          'p',
-          { class: 'home-card-note' },
-          HOME_TEXT.confirm(buildingName(grounds.buildingId), back),
-        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.confirm(buildingName(b.buildingId), back)),
         tileRow(
           tileButton(
             HOME_TEXT.yes,
@@ -1632,7 +1590,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               let refund = '';
               void tileAct(
                 async (id, send) => {
-                  const res = await send((key) => api.remove(id, grounds.id, key));
+                  const res = await send((key) => api.remove(id, b.id, key));
                   if (!res) return null;
                   refund = describeItems(res.refund);
                   return res.home;
@@ -1640,7 +1598,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 () => HOME_TEXT.removed(refund),
               );
             },
-            'tile-grounds-remove-confirm',
+            `tile-${prefix}-remove-confirm`,
           ),
           tileButton(
             HOME_TEXT.keep,
@@ -1648,47 +1606,27 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               tileMode = 'card';
               renderTile();
             },
-            'tile-grounds-keep',
+            `tile-${prefix}-keep`,
             true,
           ),
         ),
       );
     } else {
-      const train = tileButton(
-        HOME_TEXT.trainHere,
-        () => {
-          if (mapId) options.onJobs?.(mapId, { q: tile.q, r: tile.r });
-        },
-        'tile-grounds-train',
-        'small',
-      );
-      if (napping || !options.onJobs) train.disabled = true;
       card.push(
-        el('span', { class: 'home-effects' }, light),
-        el(
-          'p',
-          { class: 'home-card-note', 'data-testid': 'tile-grounds-note' },
-          buildingNote(grounds),
-        ),
-        el(
-          'p',
-          { class: 'home-card-note' },
-          napping ? HOME_TEXT.groundsNapping : HOME_TEXT.groundsNight,
-        ),
-        el('p', { class: 'home-card-note' }, HOME_TEXT.groundsLose),
+        ...lines,
         tileRow(
-          train,
+          ...actions,
           ...(upgradeAt
             ? [
                 tileButton(
                   HOME_TEXT.upgrade,
                   () => {
                     tileMode = 'upgrade';
-                    tileTarget = 'grounds';
+                    tileTarget = target;
                     tileNote = '';
                     renderTile();
                   },
-                  'tile-grounds-upgrade',
+                  `tile-${prefix}-upgrade`,
                   'small',
                 ),
               ]
@@ -1697,17 +1635,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             HOME_TEXT.takeDown,
             () => {
               tileMode = 'confirm';
-              tileTarget = 'grounds';
+              tileTarget = target;
               tileNote = '';
               renderTile();
             },
-            'tile-grounds-remove',
+            `tile-${prefix}-remove`,
             true,
           ),
         ),
       );
     }
-    return [el('div', { class: 'home-card', 'data-testid': 'tile-grounds' }, ...card), ...note];
+    return [el('div', { class: 'home-card', 'data-testid': `tile-${prefix}` }, ...card), ...note];
   }
 
   /** A fire out on my land, or the offer to build one (#202). */
@@ -1876,8 +1814,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   /**
    * What the shared Build sheet can put up on one of my tiles out on the land
-   * (#371): the Hearthfire, the Jack-o'-Lantern in season, and Training
-   * Grounds on a homestead. All of them go on the tile's one spot.
+   * (#371): the Hearthfire, the Jack-o'-Lantern in season, and on a
+   * homestead the Training Grounds and my one Crafting Factory (#295). Each
+   * takes the whole tile.
    */
   const buildSource: BuildSource = {
     cards: (tile) => {
@@ -1894,6 +1833,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       });
       const fire = landTileOffer(tile, home);
       const grounds = groundsTileOffer(tile, home);
+      const factory = factoryTileOffer(tile, home);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
         ...(fire.kind === 'build'
@@ -1917,6 +1857,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               ),
             ]
           : []),
+        ...(factory?.kind === 'build'
+          ? [
+              card(
+                factory.building,
+                effectChips(factory.building)[0] ?? factory.building.description,
+              ),
+            ]
+          : []),
       ];
     },
     build: async (card, tile) => {
@@ -1925,8 +1873,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (!id || !current) return null;
       const at = generation;
       const grounds = groundsTileOffer(tile, current);
+      const factory = factoryTileOffer(tile, current);
       const isGrounds = grounds?.kind === 'build' && grounds.building.id === card.id;
-      const spot = isGrounds ? grounds.spot : 0;
+      const isFactory = factory?.kind === 'build' && factory.building.id === card.id;
+      const spot = isGrounds ? grounds.spot : isFactory ? factory.spot : 0;
       try {
         const next = await sendCommand(
           sendDeps,
@@ -1937,7 +1887,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         home = next;
         tileNote = '';
         renderTile();
-        return isGrounds ? HOME_TEXT.groundsBuilt : HOME_TEXT.fireBuilt;
+        return isGrounds
+          ? HOME_TEXT.groundsBuilt
+          : isFactory
+            ? HOME_TEXT.factoryBuilt
+            : HOME_TEXT.fireBuilt;
       } catch (err) {
         if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
           home = null;
@@ -1965,8 +1919,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     setMap: (next) => {
       if (next === mapId) return;
       generation += 1;
-      factoryBag = null;
-      factoryTried = false;
       mapId = next;
       home = null;
       if (isOpen) hide();
@@ -1977,8 +1929,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       user = next;
       generation += 1;
       moods = null;
-      factoryBag = null;
-      factoryTried = false;
       mapId = null;
       home = null;
       if (isOpen) hide();
@@ -1992,6 +1942,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           tileMode = 'card';
           tileTarget = 'fire';
           tileNote = '';
+          // Sprout's Factory tip shows once: not again on the next card.
+          tipFor = null;
           // Read my fires and bag afresh for a tile of mine out on my land.
           if (!isOpen && tile.homeSlot === null && tile.ownerUserId === user?.id) home = null;
         }
@@ -2000,6 +1952,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         render();
       },
       hide: () => {
+        tipFor = null;
         panel?.container.replaceChildren();
         if (panel) setPanelFocus(panel.container, 'home-fire', false);
         panel = null;
@@ -2030,8 +1983,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         moodMarks: marks.shown,
         moodLayout: marks.layout,
         sheet: sheetOpen ? ('open' as const) : ('peek' as const),
-        factoryBatches: factoryBag?.factory ? factoryBag.factory.batches.length : null,
-        factoryPanel: factoryPanel.element.isConnected ? factoryPanel.mode : null,
       };
     },
   };
