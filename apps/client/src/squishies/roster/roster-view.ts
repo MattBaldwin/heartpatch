@@ -49,6 +49,9 @@ export const ROSTER_TEXT = {
   gathering: 'Gathering',
   training: 'Training',
   resting: 'Resting',
+  // A resident of the Keeper's house (#381): a small tag, its words for VoiceOver.
+  resident: '🏠',
+  residentLabel: 'Lives in your house',
   level: (n: number) => `Lv ${String(n)}`,
   stage: (n: number, of: number) => `Stage ${String(n)} of ${String(of)}`,
   evolvesAt: (lv: number) => `evolves at Lv ${String(lv)}`,
@@ -130,6 +133,8 @@ export interface RosterRow {
   /** Away (hollowed, in a trade): no care, jobs or habitat. */
   readonly away: boolean;
   readonly habitatId: string | null;
+  /** The room of my house it lives in (#381), or null: not a resident. */
+  readonly houseRoomId: string | null;
   readonly accessory: string | null;
   /** Its jobs row, for the shared job actions; null with no jobs read or while away. */
   readonly job: JobSquishy | null;
@@ -310,6 +315,8 @@ export function mergeRoster(sources: RosterSources): RosterRow[] {
       away,
       // Home's is freshest right after a move; care and jobs fill in for an away one.
       habitatId: h ? h.habitatId : (c?.habitatId ?? j?.habitatId ?? null),
+      // Away ones keep their beds, so the job board fills in for them (#381).
+      houseRoomId: h ? h.houseRoomId : (c?.houseRoomId ?? j?.houseRoomId ?? null),
       accessory: c?.accessory ?? h?.accessory ?? null,
       job: away ? null : j,
     };

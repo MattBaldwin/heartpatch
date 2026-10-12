@@ -32,6 +32,7 @@ interface PostsDebug {
   shown: number;
   rings: number;
   onScreen: { name: string; x: number; y: number }[];
+  connected: { name: string; x: number; y: number }[];
 }
 
 const posts = (page: Page) => hook<PostsDebug>(page, 'posts');
