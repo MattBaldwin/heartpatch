@@ -485,3 +485,44 @@
   white-space: nowrap;
   padding: var(--hp-pad-y) var(--hp-pad-x);
 }
+
+/* The home's house card (#381): under "Your buildings". */
+.home-house {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 8px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 16px;
+  background: #fff1f7;
+}
+
+.home-house-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.home-house-title {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.home-house-line {
+  font-size: 15px;
+  color: #7a5a7e;
+}
+
+.home-house .home-button {
+  flex: none;
+  min-height: 44px;
+}
+
+/* The peek bar's way into the house (#381): a round icon button, 44pt+, in the Build row. */
+.home-row > .home-house-shortcut {
+  flex: none;
+  min-width: 52px;
+  padding: var(--hp-pad-y);
+  font-size: 22px;
+}

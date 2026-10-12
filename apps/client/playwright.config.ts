@@ -55,7 +55,7 @@ const E2E_GROUPS = [
     'tutorial-flow',
     'whats-new',
   ],
-  // ~11.4 iPad, ~7.5 iPhone.
+  // ~11.4 iPad, ~7.5 iPhone, before house (#381, two short tests).
   [
     'accessory-everywhere',
     'account-help',
@@ -64,6 +64,7 @@ const E2E_GROUPS = [
     'explore',
     'fences',
     'hollow',
+    'house',
     'jobs',
     'map',
     'potions',
@@ -143,6 +144,9 @@ process.env['HP_DEV_MAP_CREATE_LIMIT_PER_IP'] ??= '500';
 // Battles (#13) need a squishy and a wild opponent, which spawns (#14) and the
 // tutorial's starter don't hand out yet; the dev routes do. Dev and tests only.
 process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
+// The Keeper's house (#381) ships behind HP_HOUSE (off by default); house.spec.ts
+// needs it on, and stands in a home reply without it to check the off case.
+process.env['HP_HOUSE'] ??= 'on';
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
 // leaves a slow software-rendered phone time to play a turn back). Dev and

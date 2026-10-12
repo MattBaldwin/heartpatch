@@ -113,6 +113,52 @@ describe('home scene wandering', () => {
   });
 });
 
+describe('home scene: the Keeper’s house cottage (#381)', () => {
+  let engine: NullEngine | null = null;
+  afterEach(() => {
+    engine?.dispose();
+    engine = null;
+  });
+
+  const build = (house: HomeResponse['house']) => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    const homeScene = new HomeScene(
+      scene,
+      { ...home, ...(house ? { house } : {}) },
+      {
+        registry: visualRegistry(GAME_DATA),
+        lod: 'low',
+        keeper: null,
+      },
+    );
+    return { scene, homeScene };
+  };
+
+  it('draws no cottage while the house is switched off (no `house` in the reply)', () => {
+    const { scene, homeScene } = build(undefined);
+    expect(homeScene.stats.house).toBeNull();
+    expect(scene.meshes.some((m) => m.name.startsWith('house-cottage'))).toBe(false);
+  });
+
+  it('draws the cottage for the house’s level, and swaps it when the house grows', () => {
+    const { scene, homeScene } = build({ level: 1 });
+    expect(homeScene.stats.house).toBe('hut');
+    homeScene.update({ ...home, house: { level: 4 } });
+    expect(homeScene.stats.house).toBe('heart-tree');
+    const cottages = scene.meshes.filter(
+      (m) => m.name.startsWith('house-cottage') && !m.isDisposed(),
+    );
+    expect(cottages).toHaveLength(1);
+    // The old cottage's material goes with it: a swap never leaks one.
+    const mats = () => scene.materials.filter((m) => m.name === 'home-cottage-mat').length;
+    expect(mats()).toBe(1);
+    homeScene.update(home);
+    expect(homeScene.stats.house).toBeNull();
+    expect(mats()).toBe(0);
+  });
+});
+
 describe('home scene mood cues (#393)', () => {
   let engine: NullEngine | null = null;
   afterEach(() => {

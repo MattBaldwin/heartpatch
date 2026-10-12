@@ -72,6 +72,7 @@ import {
   type ReachTile,
 } from './home-view.js';
 import { homeTileLines } from './home-tile-info.js';
+import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
 import './home.css';
 
 // The home base (#18, design doc §13–14): a Home button over the map opens
@@ -102,6 +103,11 @@ export interface HomeScreenOptions {
   onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
+  /**
+   * "Go inside" on the house card, or a tap on the cottage (#381): opens the
+   * Keeper's house. Only offered while `HomeResponse.house` is there.
+   */
+  onHouse?: (mapId: string, home: HomeResponse) => Promise<void>;
   /**
    * "Jobs & team": opens the squishy job board (temporary entry; the trays
    * move it). `at`: Training Grounds on that homestead come first (#277).
@@ -287,6 +293,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** The main view's sheet is opened into the full lists (#412); it starts as the peek bar. */
   let sheetOpen = false;
   let working = false;
+  /** The house is opening (#381): its card and shortcut wait, so a double tap opens it once. */
+  let houseOpening = false;
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
   let scene3d: HomeScene | null = null;
@@ -804,6 +812,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 )
               : null;
           const shortcuts = [squishies, jobs].filter((b) => b !== null);
+          // The house's round 🏠 rides the Build row, so the peek bar never grows a row (#381).
+          const house = houseShortcut(current);
+          if (house) actions.prepend(house);
           body.replaceChildren(
             ...(shortcuts.length > 0
               ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
@@ -817,6 +828,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
+          ...houseCardNodes(current),
           // Your squishies live in the Squishies roster (#375): 🐾 at the top,
           // or the peek bar's Squishies.
           ...(jobs ? [row(jobs)] : []),
@@ -954,6 +966,61 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         break;
       }
     }
+  }
+
+  /** The Keeper's house card (#381): only while the house is on for this player. */
+  function houseCardNodes(current: HomeResponse): Node[] {
+    const card = houseCard(current);
+    if (!card || !options.onHouse) return [];
+    return [
+      el(
+        'div',
+        { class: 'home-house', 'data-testid': 'home-house' },
+        el(
+          'span',
+          { class: 'home-house-text' },
+          el('span', { class: 'home-house-title' }, card.title),
+          el('span', { class: 'home-house-line' }, card.line),
+        ),
+        (() => {
+          const b = button(HOUSE_TEXT.goInside, goInside, { 'data-testid': 'home-house-open' });
+          b.disabled = working || houseOpening;
+          return b;
+        })(),
+      ),
+    ];
+  }
+
+  /** The peek bar's way into the house (#381), in the Build row: only while the house is on. */
+  function houseShortcut(current: HomeResponse): HTMLButtonElement | null {
+    if (!houseCard(current) || !options.onHouse) return null;
+    // A round icon button, so the Build row (and the peek bar) stays one row.
+    const b = button(
+      HOUSE_TEXT.shortcutIcon,
+      goInside,
+      {
+        'data-testid': 'home-house-shortcut',
+        class: 'home-house-shortcut',
+        'aria-label': HOUSE_TEXT.shortcut,
+        title: HOUSE_TEXT.shortcut,
+      },
+      true,
+    );
+    b.disabled = working || houseOpening;
+    return b;
+  }
+
+  /** Opens the house, once: the card and the shortcut wait while it loads. */
+  function goInside(): void {
+    const current = home;
+    const id = mapId;
+    if (!id || !current?.house || working || houseOpening || !options.onHouse) return;
+    houseOpening = true;
+    render();
+    void options.onHouse(id, current).finally(() => {
+      houseOpening = false;
+      if (isOpen) render();
+    });
   }
 
   /** The home's top card: how many fires are out on my land, and "Fuel all fires" (#202). */
@@ -1243,6 +1310,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           const hit = built.pick(x, y);
           if (hit?.kind === 'spot') chooseSpot(hit.spot);
           else if (hit?.kind === 'squishy' && mapId && !working) options.onCloseUp?.(mapId, hit.id);
+          else if (hit?.kind === 'house' && mode.kind === 'idle') goInside();
           else if (hit?.kind === 'building' && mode.kind !== 'build' && mode.kind !== 'moving') {
             setMode({ kind: 'selected', id: hit.id });
           }

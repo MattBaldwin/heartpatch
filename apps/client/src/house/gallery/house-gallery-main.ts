@@ -1,0 +1,100 @@
+import type { HouseView } from '@heartpatch/shared';
+import { boot } from '../../engine/boot.js';
+import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
+import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
+import { mountStage, type SceneBuilder, type Stage } from '../../engine/stage.js';
+import { sampleHouse } from '../house-fixtures.js';
+import { createHouseScreen } from '../house-screen.js';
+import '../../styles.css';
+
+/**
+ * Dev-only house gallery at `/house.html` (a separate Vite page, never part
+ * of the production build): the real house screen (#381) over a sample
+ * house, with no server, for judging the look and for house-shots.
+ * `?level=1` (default) up to the top level, or `top`; `?tier=high|medium|low`
+ * pins a tier (the governor off, as on the main page); `?empty=1` leaves every
+ * bed empty; `?still=1` skips the entry glide; plus `?renderer=webgpu`.
+ */
+
+if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
+
+const params = new URLSearchParams(window.location.search);
+const pinned = params.get('tier');
+const pinTier = isQualityTier(pinned);
+let tier = pickInitialTier(pinned, params.get('quality'));
+const levelParam = params.get('level');
+const level = levelParam === 'top' ? 99 : Number(levelParam) || 1;
+const sample = sampleHouse(level, params.get('empty') !== '1');
+
+const canvas = document.querySelector<HTMLCanvasElement>('#game');
+if (!canvas) throw new Error('missing #game canvas');
+
+let stage: Stage | null = null;
+let builder: SceneBuilder = () => ({ bounds: { minX: -1, maxX: 1, minZ: -1, maxZ: 1 } });
+
+/** Swaps the scene on the running renderer, as main.ts does. */
+function showScene(build: SceneBuilder | null): void {
+  builder = build ?? builder;
+  if (!stage) return;
+  const { renderer } = stage;
+  const target = renderer.engine.getRenderingCanvas();
+  tier = stage.quality.snapshot.tier;
+  stage.dispose();
+  stage = null;
+  if (target) stage = mountStage(renderer, target, builder, tier, {}, pinTier);
+}
+
+const house = createHouseScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => null,
+  onOpen: () => undefined,
+  onClosed: () => {
+    // Back: open it again, so the gallery always shows the house.
+    void house.open('gallery', sample);
+  },
+  onProblem: (message) => {
+    console.error(message);
+  },
+  api: { get: (): Promise<HouseView> => Promise.resolve(sample.view) },
+  // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
+  ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
+});
+house.setUser({ id: '0190a000-0000-7000-8000-00000000aaaa', username: 'Mia' });
+
+window.__heartpatch = {
+  renderer: () => stage?.renderer.kind ?? null,
+  quality: () => stage?.quality.snapshot ?? null,
+  camera: () => stage?.camera.state ?? null,
+  draws: () => stage?.draws ?? 0,
+  idle: () => stage?.idle ?? false,
+  invalidate: () => stage?.invalidate(),
+  house: () => house.debug,
+};
+
+await boot(canvas, {
+  preference: parseRendererPreference(params.get('renderer')),
+  createRenderer,
+  freshCanvas: () => {
+    const current = document.querySelector<HTMLCanvasElement>('#game');
+    if (!current) throw new Error('missing #game canvas');
+    const fresh = current.cloneNode(false) as HTMLCanvasElement;
+    current.replaceWith(fresh);
+    return fresh;
+  },
+  mount: (renderer, target) => {
+    stage = mountStage(renderer, target, builder, tier, {}, pinTier);
+    return {
+      dispose: () => {
+        stage?.dispose();
+        stage = null;
+      },
+    };
+  },
+  onError: (err: unknown) => {
+    console.error('Could not start the renderer', err);
+  },
+});
+await house.open('gallery', sample);
