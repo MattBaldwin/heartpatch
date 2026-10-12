@@ -178,23 +178,24 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // Both finish while the Bag is shut: what landed shows as a banner of chips
   // (#419), and as news on the My Home tab until the Bag is opened. The banner
   // is up for 4 s and hides itself, which a loaded runner can outlast between a
-  // look at it and a tap on it (the tap then waits for a banner that is gone,
-  // until the test times out, #429). So the tap comes first, the moment the
-  // banner shows, and what it looked like is read from a watcher set up before.
+  // look at it and a tap on it (a tap then waits for a banner that is gone,
+  // until the test times out, #429). So what it looked like when it showed is
+  // read from a watcher set up before, and its click is sent to the element,
+  // which still opens the card after the banner has hidden.
   await watchBanner(page);
   const mapId = (await bagState(page))!.mapId;
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  // A real tap opens the card with everything: on a plain map it takes taps
-  // (shut trays don't count as open sheets). Roomy: the settle is one round
-  // trip, slow under a full CI run.
-  await page.getByTestId('landed-toast').tap({ timeout: 30_000 });
-  // Two kinds: the banner (not the one-thing pill) that took the tap.
-  const seen = await bannerSeen(page);
-  expect(seen?.text).toContain('Heart Charm');
-  expect(seen?.className).not.toMatch(/away-one|away-quiet/);
-  expect(seen?.pointerEvents).not.toBe('none');
+  // Roomy: the settle is one round trip, slow under a full CI run.
+  await expect.poll(() => bannerSeen(page), { timeout: 30_000 }).not.toBeNull();
+  // Two kinds: the banner (not the one-thing pill), and on a plain map it takes
+  // taps (shut trays don't count as open sheets).
+  const seen = (await bannerSeen(page))!;
+  expect(seen.text).toContain('Heart Charm');
+  expect(seen.className).not.toMatch(/away-one|away-quiet/);
+  expect(seen.pointerEvents).not.toBe('none');
+  await page.getByTestId('landed-toast').dispatchEvent('click');
   const card = page.getByTestId('away-card');
   await expect(card).toBeVisible();
   await expect(card).toContainText('Heart Charm');
