@@ -139,7 +139,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 
 ## 8. Evolution
 
-Squishies evolve at level thresholds through **four stages: baby → kid → teen → grown-up** (owner decisions 2026-10-12, #443). Each stage is a bit bigger and fiercer, and stays cute (ART_BIBLE §1.3). For a line whose baby first evolves at level E (16 common, 18 uncommon, 22 rare, 26 epic, 30 legendary):
+Squishies evolve at level thresholds through **four stages: baby → kid → teen → grown-up** (owner decisions 2026-10-12, #443). Each stage is a bit bigger and fiercer, and stays cute (ART_BIBLE §1.3). For a line whose baby first evolves at level E (by default 16 common, 18 uncommon, 22 rare, 26 epic, 30 legendary; secret Heartlet 25):
 
 - **Kid** at **E**: one shared form, the same rarity as the baby.
 - **Teen** at **E + 8 [DEFAULT]**: the step that **branches**, one rarity step up. Today's two evolved forms of each line are its teens.
@@ -159,7 +159,7 @@ When a squishy is ready, the server rolls a **weighted table** of possible forms
 - **Pity protection.** Each common result for a well-cared-for squishy slightly raises that player's next rare roll odds.
 - Rolls are server-side with a seeded RNG; inputs are logged so any result can be explained and replayed.
 
-**Phase 1** ships the kid forms and the branching teen step (feeling-aimed odds, whispers and pity, #32); a line whose grown-up hasn't shipped yet stops at its teen ("Fully evolved") and evolves on its next XP once the grown-up lands. **Phase 2** adds the grown-ups. A squishy never goes back a stage: one that grew up before its line's kid existed keeps its form.
+**Phase 1** ships the kid forms and the branching teen step (feeling-aimed odds, whispers and pity, #32; the 8 wave-1 lines get a kid and a single teen, and their branch teens follow in Phase 2); a line whose grown-up hasn't shipped yet stops at its teen ("Fully evolved") and evolves on its next XP once the grown-up lands. **Phase 2** adds the grown-ups. A squishy never goes back a stage: one that grew up before its line's kid existed keeps its form.
 
 ## 9. Breeding
 
@@ -352,9 +352,9 @@ A second collection alongside the squishy catalog.
 
 ## 22. Phased roadmap
 
-**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
+**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and evolution (kids and the branching teens, #32, #443); the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
-**Phase 2 — Thanksgiving:** trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
+**Phase 2 — Thanksgiving:** trading and gifting (squishies and clothing); free text chat with filtering and parent controls; grown-up evolutions (#443); outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
 **Phase 3 — Christmas:** breeding and hybrids; presents; Home Base Harmony; full Lorebook and chihuahua Easter eggs; web push notifications; New Year fireworks; passkeys.
 

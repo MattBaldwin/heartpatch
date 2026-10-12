@@ -52,20 +52,23 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 
 Every line has four stages (#443). The kid is an in-between of the baby and its teens; the teens are the forms that shipped as "evolutions" before #443 (and branch, #32); the grown-up is the one new big step.
 
-| | Baby | Kid | Teen | Grown-up |
-|---|---|---|---|---|
-| Size against the baby | 1.0 | 1.10–1.20 | 1.25–1.35 | 1.45–1.70 |
-| Head ÷ torso height | 1.0 or more | 0.95–1.05 | 0.85–0.92 | 0.75–0.82 |
-| Stance | 0.1–0.2 | 0.25–0.35 | 0.4–0.45 | 0.5–0.6 |
-| Face | the baby kit | the baby's eyes plus brave brows or a grin, still round | `sharp-eyes`, a smirk, small fang nubs allowed | `sharp-eyes`, a smirk, fang nubs; never cross or mean |
-| New sticking-out parts | — | at least one: a small preview of what its teens grow (Gustypup's icicle tuft before Blusterpup's mane) | at least one | at least one, the biggest signature yet; its biggest part differs from its teen's |
-| Rarity and tier (§1.4) | the line's | the baby's | one step up | one more step, capped at legendary |
-| Pose | sit or stand | stand | readier | the readiest (stand or upright) |
+- **[checked]** Each evolution step is a set share bigger than the form it grows from (`artRules.evolutionScale`): **×1.2–1.4** today, and **×1.08–1.4** once #443's first kid batch lands (a kid is a smaller step). The 1.4 top lets a line whose kid hasn't shipped yet still go baby → teen in one step. Each step also adds **at least one new sticking-out part**.
+- **[checked]** A form never shares body + dominant part + hue family with another line's form (§1.2).
+- Every form keeps its line's colour family and signature, so the family resemblance is obvious. Within a line, a grown-up's biggest part should differ from its teen's, so the last step changes the silhouette. (Review rules, not checked.)
 
-- **[checked]** Each evolution step is **×1.08–1.3** the size of the form it grows from (`artRules.evolutionScale`; ×1.2–1.4 before #443's first kid batch, when every evolution was baby → teen) and adds **at least one new sticking-out part**. It keeps the base's colour family and signature, so the family resemblance is obvious.
-- **[checked]** A form never shares body + dominant part + hue family with another line's form (§1.2). Within a line, a grown-up's biggest part should differ from its teen's, so the last step changes the silhouette (a review rule, not checked).
-- Proportions grow up step by step: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and the stance gets readier (sit → stand → upright).
-- Kids keep their baby's rarity; teens are one rarity step up (Thunderpuff → Thunderplume stays legendary), and so usually gain a material tier (§1.4); grown-ups take one more step.
+**Targets for each new form** (#443 §6). The shipped teens vary (a sleepy or sitting branch sits low, a golem has a tiny head), so a new kid is placed **between its baby and its teens**, and a grown-up grows **from its own teen**:
+
+| | Kid | Grown-up |
+|---|---|---|
+| Size | ×1.08 or more over the baby, and the teens still ×1.08 or more over it (about ×1.15 the baby for a ×1.3 teen) | ×1.12–1.25 its teen |
+| Head ÷ torso height | between the baby's and the teens' | smaller than its teen's |
+| Stance and pose | between the baby's and the teens' (a sitting teen keeps a sitting kid) | its teen's or readier |
+| Face | the baby's eyes plus brave brows or a grin, still round | the teen's kit, a little bolder: `sharp-eyes`, a smirk, fang nubs; never cross or mean |
+| New sticking-out parts | at least one: a small preview of what its teens grow (Gustypup's icicle tuft before Blusterpup's mane) | at least one, the biggest signature yet |
+| Rarity and tier (§1.4) | the baby's | one step over its teen, capped at legendary |
+
+- Proportions grow up step by step: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and most lines' stance gets readier (sit → stand → upright).
+- Teens are one rarity step up from the baby (Thunderpuff → Thunderplume stays legendary), and so usually gain a material tier (§1.4).
 - The kid-safe rules in §1.1 hold at every stage.
 
 ### 1.4 Rarity material tiers
@@ -111,9 +114,9 @@ Seasonal lines may keep their season's colour (Gourdon is an orange pumpkin) but
 |---|---|---|
 | Sleepy | `sleepy-eyes` | closed, drowsy arcs |
 | Joy | `happy-eyes` | ^ ^ |
-| Silly | `dot-eyes` (or grown-up `sharp-eyes`) + `open-mouth` | wide-eyed, giggling |
-| Cozy | `oval-eyes` (or grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
-| Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or grown-up `sharp-eyes` | determined, never cross |
+| Silly | `dot-eyes` (or teen and grown-up `sharp-eyes`) + `open-mouth` | wide-eyed, giggling |
+| Cozy | `oval-eyes` (or teen and grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
+| Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or teen and grown-up `sharp-eyes` | determined, never cross |
 | Spooky | `spooky-eyes` (new, tall and glinty) | "boo!" |
 
 Idle animations (Silly spins, Sleepy nods off, Brave puffs up) add to this in the close-up view; the face alone must carry it in battle and on the map.
@@ -142,9 +145,9 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 ### 1.10 Roster
 
-Every line, baby → teen, as shipped before #443 (the "Grown up" column below is now each line's **teen**, stage 3, at ×1.25–1.35 the baby's size). The kids (stage 2) and grown-ups (stage 4) join this chapter with their #443 batches; the 8 wave-1 lines get their kid and teen there too.
+Every line, baby → teen, as shipped before #443 (the Teen column is stage 3, at ×1.25–1.35 the baby's size). The kids (stage 2) and grown-ups (stage 4) join this chapter with their #443 batches; the 8 wave-1 lines get their kid and teen there too.
 
-| Line | Element · Feeling | Body plan | Baby | Grown up | Pose · attack part |
+| Line | Element · Feeling | Body plan | Baby | Teen | Pose · attack part |
 |---|---|---|---|---|---|
 | Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole, wiggly tail | sea serpent: long swinging body, fin row, toothy grin | sit → slither · tail |
 | Pebblesnooze → Boulderdoze | Stone · Sleepy | boulder tortoise | pebble shell, stubby legs, head in a nightcap | big boulder tortoise: crag nubs on the shell, horns, smirk | stand · crown → back |
@@ -166,7 +169,7 @@ Every line, baby → teen, as shipped before #443 (the "Grown up" column below i
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
-**Branch forms (#32).** Every line has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
+**Branch forms (#32).** Every line has a second teen form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
 
 | Line | Branch form | Feeling | Body plan | Pose · attack part |
 |---|---|---|---|---|
