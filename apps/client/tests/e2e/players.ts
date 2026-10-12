@@ -10,9 +10,33 @@ const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
  */
 export const TEST_PASSWORD = 'squishy-secret';
 
-/** A name nobody has used yet, e.g. `own_lq3x9a0` (usernames are global). */
+// Sign-up runs the name through the server's text filter, which rejects digit
+// runs (phone numbers) and any letters that squash into a rude word. A base-36
+// timestamp hits both now and then (~1 in 750 names), so names are built from
+// consonant+vowel syllables instead. Every stem x worker letter x prefix used
+// here was checked against the real filter; `le` is left out because
+// `hit` + `le` + `ra…` squashes to a name the filter rightly refuses.
+const SYLLABLES = [...'bdlmrvz']
+  .flatMap((c) => [...'aeiou'].map((v) => c + v))
+  .filter((s) => s !== 'le');
+const WORKER_LETTERS = 'bdlmrvz';
+
+/**
+ * A name nobody has used yet, e.g. `own_zavodib` (usernames are global): three
+ * syllables from the clock, then a letter for the worker and retry, so two
+ * workers (or a test and its retry) never pick the same name.
+ */
 export function uniqueName(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${String(test.info().workerIndex)}`;
+  const { workerIndex, retry } = test.info();
+  const size = SYLLABLES.length;
+  let t = Date.now() % size ** 3;
+  let stem = '';
+  for (let i = 0; i < 3; i++) {
+    stem += SYLLABLES[t % size];
+    t = Math.floor(t / size);
+  }
+  const worker = WORKER_LETTERS[(workerIndex + 3 * retry) % WORKER_LETTERS.length];
+  return `${prefix.slice(0, 8)}_${stem}${worker}`;
 }
 
 /**
@@ -92,7 +116,8 @@ export async function submitSignUp(overlay: Locator): Promise<void> {
       ),
     overlay.getByRole('button', { name: 'Sign up' }).tap(),
   ]);
-  expect(answer.status()).toBe(201);
+  // The answer's text says why a refusal happened (the log only had the status).
+  expect(answer.status(), await answer.text()).toBe(201);
 }
 
 export interface SignUpOptions {
