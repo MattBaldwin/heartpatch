@@ -18,6 +18,7 @@ interface HouseDebug {
   mapId: string;
   open: boolean;
   sheet: 'peek' | 'open' | 'grow' | 'confirm';
+  sparkles: number;
   level: number;
   rooms: number;
   pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
@@ -208,9 +209,15 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
 
   // A new Keeper: the server's rows, grouped, with what's done and what's not.
   await openGrow(page);
-  await expect(page.getByTestId('house-grow-title')).toHaveText(
-    'House 1 → 2 · The Playroom (room for 2)',
-  );
+  await expect(page.getByTestId('house-grow-title')).toContainText('House 1 → 2');
+  await expect(page.getByTestId('house-grow-room')).toHaveText('The Playroom · room for 2');
+  // The scene and the HUD dim behind it and can't be reached: one way out, the ✕.
+  await expect(page.getByTestId('house-scrim')).toBeVisible();
+  const hudHidden = () =>
+    page
+      .getByTestId('house-back')
+      .evaluate((b) => b.closest('[inert]') !== null && b.closest('[aria-hidden="true"]') !== null);
+  expect(await hudHidden()).toBe(true);
   const rows = page.getByTestId('house-grow-row');
   await expect(rows).toHaveCount(HOUSE_DATA.levels[1]!.requirements.length);
   for (const group of ['seed', 'home', 'residents', 'land']) {
@@ -223,24 +230,24 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect(page.getByTestId('house-grow-cost')).toHaveText('You need: 30 Timber · 20 Stone');
   const build = page.getByTestId('house-grow-build');
   await expect(build).toBeDisabled();
-  await expect(build).toHaveText(/^Not yet: \d+ things? to go!$/);
+  await expect(build).toHaveText(/^⏳\s*Not yet: \d+\s+things? to go!$/);
   await expect(page.getByTestId('house-grow-next')).toHaveText(/^Next up: .+/);
   const steps = (text: string | null) => Number(/(\d+)/.exec(text ?? '')?.[1]);
   const before = steps(await build.textContent());
   await expectRoomyLabels(
     page,
-    '[data-testid="house-grow-build"], [data-testid="house-grow-back"]',
+    '[data-testid="house-grow-build"], [data-testid="house-grow-close"]',
   );
 
   // Fill the bag: the sheet re-reads the house when it opens again.
   await grantItems(page, mapId, { timber: 30, stone: 20 });
-  await page.getByTestId('house-peek-handle').tap();
+  await page.getByTestId('house-grow-close').tap();
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('peek');
+  await expect(page.getByTestId('house-scrim')).toBeHidden();
+  expect(await hudHidden()).toBe(false);
   await openGrow(page);
   await expect(page.getByTestId('house-grow-need')).toHaveText(['🪵 30/30 ✓', '🪨 20/20 ✓']);
-  await expect(build).toHaveText(
-    before - 1 === 1 ? 'Not yet: 1 thing to go!' : `Not yet: ${String(before - 1)} things to go!`,
-  );
+  expect(steps(await build.textContent())).toBe(before - 1);
 
   // Meeting every requirement for real takes days of play, so from here the
   // server's replies are stood in for: every row done, then the build's reply.
@@ -282,7 +289,8 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
     built = grown(levelOne!);
     await route.fulfill({ json: built });
   });
-  await page.getByTestId('house-peek-handle').tap();
+  // A tap on the dimmed scene closes the sheet too.
+  await page.getByTestId('house-scrim').tap({ position: { x: 20, y: 200 } });
   await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('peek');
   await openGrow(page);
   await expect(build).toBeEnabled();
@@ -310,6 +318,8 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect(page.getByTestId('house-pill')).toHaveText('🏠 House 2');
   await expect.poll(async () => (await houseState(page))?.scene?.rooms, slow).toBe(2);
   expect(await houseState(page)).toMatchObject({ level: 2, rooms: 2, sheet: 'open' });
+  // The ta-da sparkle played once the new room drew (reduced motion would skip it).
+  await expect.poll(async () => (await houseState(page))?.sparkles, slow).toBe(1);
   await expect(page.getByTestId('house-grow-open')).toBeVisible();
   expect(posts.map((p) => p.body)).toEqual([{ toLevel: 2 }, { toLevel: 2 }]);
   expect(posts[0]!.key).toMatch(/^[0-9a-f]{32}$/);

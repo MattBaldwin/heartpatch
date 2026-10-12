@@ -12,7 +12,7 @@ import {
   rowFill,
   type GrowGroup,
 } from './house-grow-view.js';
-import { GROW_TEXT } from './house-view.js';
+import { GROW_TEXT, keepTail } from './house-view.js';
 
 /*
  * The Grow the house sheet's DOM (#381 plan §10.4–10.5): the header, the
@@ -68,7 +68,7 @@ function row(r: RequirementProgress): HTMLElement {
       el(
         'span',
         { class: 'house-grow-top' },
-        el('span', { class: 'house-grow-line' }, r.line),
+        el('span', { class: 'house-grow-line' }, keepTail(r.line)),
         el('span', { class: 'house-grow-count' }, rowCount(r)),
       ),
       el('span', { class: 'house-grow-bar', 'aria-hidden': 'true' }, fill),
@@ -117,30 +117,57 @@ function cost(view: HouseView, next: HouseNextLevel): HTMLElement[] {
   ];
 }
 
+/**
+ * The sheet's sticky header (mockup "Grow the house"): the eyebrow, ✕ at
+ * the top right, "House 1 → 2" big and the new room on its own line.
+ */
+function head(view: HouseView, next: HouseNextLevel, onClose: () => void): HTMLElement {
+  const { levels, room } = growHeader(view, next);
+  const close = houseButton(
+    GROW_TEXT.closeIcon,
+    onClose,
+    { class: 'house-grow-close', 'data-testid': 'house-grow-close', 'aria-label': GROW_TEXT.close },
+    true,
+  );
+  return el(
+    'header',
+    { class: 'house-grow-head' },
+    el(
+      'div',
+      { class: 'house-grow-heading' },
+      el('p', { class: 'house-grow-eyebrow' }, GROW_TEXT.open),
+      el(
+        'h3',
+        { class: 'house-grow-title', 'data-testid': 'house-grow-title' },
+        el('span', { class: 'house-grow-levels' }, levels),
+        el('span', { class: 'house-grow-room', 'data-testid': 'house-grow-room' }, room),
+      ),
+    ),
+    close,
+  );
+}
+
 export interface GrowHandlers {
   onBuild: () => void;
-  onBack: () => void;
+  onClose: () => void;
 }
 
 /** The Grow the house sheet for a house with a next level. */
 export function growPanel(view: HouseView, next: HouseNextLevel, on: GrowHandlers): HTMLElement[] {
   const state = growState(view);
   const go = houseButton(buildLabel(state), on.onBuild, {
-    class: 'house-grow-build',
+    class: `house-grow-build${state.kind === 'ready' ? '' : ' house-grow-wait'}`,
     'data-testid': 'house-grow-build',
   });
-  go.disabled = state.kind !== 'ready';
+  if (state.kind !== 'ready') {
+    // Not yet: a quiet box with a little ⏳, plainly not a button to press.
+    go.disabled = true;
+    go.prepend(
+      el('span', { class: 'house-grow-wait-icon', 'aria-hidden': 'true' }, GROW_TEXT.waitIcon),
+    );
+  }
   return [
-    el(
-      'div',
-      { class: 'house-grow-head' },
-      houseButton(`‹ ${GROW_TEXT.back}`, on.onBack, { 'data-testid': 'house-grow-back' }, true),
-      el(
-        'h3',
-        { class: 'house-grow-title', 'data-testid': 'house-grow-title' },
-        growHeader(view, next),
-      ),
-    ),
+    head(view, next, on.onClose),
     ...growGroups(next).map(group),
     ...cost(view, next),
     go,
@@ -153,10 +180,12 @@ export function growPanel(view: HouseView, next: HouseNextLevel, on: GrowHandler
 export interface ConfirmHandlers {
   onYes: () => void;
   onNo: () => void;
+  onClose: () => void;
 }
 
 /** "Build the Kitchen for 60 Timber, 50 Stone and 4 Glimmer?" (style guide §3.6). */
 export function confirmPanel(
+  view: HouseView,
   next: HouseNextLevel,
   busy: boolean,
   on: ConfirmHandlers,
@@ -169,6 +198,7 @@ export function confirmPanel(
   yes.disabled = busy;
   no.disabled = busy;
   return [
+    head(view, next, on.onClose),
     el(
       'p',
       { class: 'house-grow-confirm', 'data-testid': 'house-grow-confirm' },

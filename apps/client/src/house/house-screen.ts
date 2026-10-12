@@ -95,6 +95,8 @@ export interface HouseDebug {
   readonly sheet: HouseSheet;
   /** A build is in flight. */
   readonly building: boolean;
+  /** Sparkle bursts played after builds (none under reduced motion). */
+  readonly sparkles: number;
 }
 
 export interface HouseScreen {
@@ -148,6 +150,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The sheet's status line: the build's ta-da, or a kind word on a problem. */
   let note = '';
   let building = false;
+  /** A build just landed: sparkle once the new room has drawn its first frame. */
+  let celebrate = false;
+  /** Sparkle bursts played (the dev hook proves the ta-da happened). */
+  let sparkles = 0;
   /** The latest re-read of the house; an older reply (or one a build overtook) is dropped. */
   let refreshTicket = 0;
   /** The bottom band the folded sheet covers, kept while it's open so the house doesn't jump. */
@@ -191,12 +197,20 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     noteLine,
     sheetBody,
   );
+  // Behind an open Grow sheet the scene and the HUD dim, and a tap there
+  // closes the sheet (the HUD's Back can't be mistaken for the sheet's way out).
+  const scrim = el('div', { class: 'house-scrim', 'data-testid': 'house-scrim' });
+  scrim.hidden = true;
+  scrim.addEventListener('click', () => {
+    setSheet('peek');
+  });
   const overlay = el(
     'div',
     { class: 'house', 'data-testid': 'house', role: 'dialog', 'aria-label': HOUSE_TEXT.yourHouse },
     touch,
     top,
     walkButton,
+    scrim,
     peek,
   );
   overlay.hidden = true;
@@ -272,7 +286,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!isOpen || !view) return;
     top.style.top = `${String(Math.max(0, options.coveredTop?.() ?? 0))}px`;
     pill.textContent = HOUSE_TEXT.pill(view.level);
-    peekText.textContent = peekLine(view, owner());
+    peekText.textContent = peekLine(view);
     renderWalk();
     renderSheet();
   }
@@ -290,12 +304,24 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function renderSheet(): void {
     const current = view;
     const open = sheet !== 'peek';
+    const growing = sheet === 'grow' || sheet === 'confirm';
     peek.classList.toggle('house-peek-open', open);
+    peek.classList.toggle('house-peek-grow', growing);
     handle.setAttribute('aria-expanded', String(open));
     walkButton.hidden = open;
-    peekText.hidden = sheet === 'grow' || sheet === 'confirm';
+    peekText.hidden = growing;
+    // The Grow sheet has its own ✕; the grip comes back with the room line.
+    handle.hidden = growing;
+    scrim.hidden = !growing;
+    for (const behind of [touch, top, walkButton]) {
+      behind.toggleAttribute('inert', growing);
+      if (growing) behind.setAttribute('aria-hidden', 'true');
+      else behind.removeAttribute('aria-hidden');
+    }
     noteLine.textContent = note;
     noteLine.hidden = note === '';
+    // The note sits under the room line, or under the Grow sheet's header.
+    if (!growing) peek.insertBefore(noteLine, sheetBody);
     const next = current?.next ?? null;
     if (!current || sheet === 'peek') {
       sheetBody.replaceChildren();
@@ -321,25 +347,37 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     }
     if (sheet === 'grow') {
       sheetBody.replaceChildren(
-        ...growPanel(current, next, {
-          onBuild: () => {
-            setSheet('confirm');
-          },
-          onBack: () => {
-            setSheet('open');
-          },
-        }),
+        ...withNote(
+          growPanel(current, next, {
+            onBuild: () => {
+              setSheet('confirm');
+            },
+            onClose: () => {
+              setSheet('peek');
+            },
+          }),
+        ),
       );
       return;
     }
     sheetBody.replaceChildren(
-      ...confirmPanel(next, building, {
-        onYes: () => void buildNext(),
-        onNo: () => {
-          setSheet('grow');
-        },
-      }),
+      ...withNote(
+        confirmPanel(current, next, building, {
+          onYes: () => void buildNext(),
+          onNo: () => {
+            setSheet('grow');
+          },
+          onClose: () => {
+            setSheet('peek');
+          },
+        }),
+      ),
     );
+  }
+
+  /** The Grow sheet's parts with the note line right under its header. */
+  function withNote([header, ...rest]: HTMLElement[]): HTMLElement[] {
+    return header ? [header, noteLine, ...rest] : rest;
   }
 
   /** Takes a fresh house: a new level rebuilds the scene with its new room. */
@@ -393,7 +431,16 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     sheet = 'open';
     note = builtLine(outcome.view);
     applyView(outcome.view);
-    sparkle(overlay, peek, reducedMotion.matches);
+    // The scene rebuilds first (a heavy frame); the sparkle waits for it.
+    celebrate = true;
+  }
+
+  function playSparkle(): void {
+    if (!celebrate || !isOpen) return;
+    celebrate = false;
+    if (reducedMotion.matches) return;
+    sparkles += 1;
+    sparkle(overlay, peek, false);
   }
 
   /** The canvas and the bands the HUD covers, for fitting the house between them. */
@@ -597,6 +644,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     // The glide waits for the first real frame (shaders compile first).
     scene.onAfterRenderObservable.addOnce(() => {
       draw();
+      playSparkle();
     });
     return built.content;
   };
@@ -697,6 +745,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         faces: scene3d?.faceReport() ?? null,
         sheet,
         building,
+        sparkles,
       };
     },
   };

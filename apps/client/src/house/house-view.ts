@@ -22,7 +22,8 @@ export const HOUSE_TEXT = {
   stepOutIcon: '🚪',
   pill: (level: number) => `🏠 House ${String(level)}`,
   room: (name: string, n: number) => `${name} · ${beds(n)}`,
-  wholeHouse: (owner: string, n: number) => `${owner}’s house · ${beds(n)}`,
+  /** More than one room in view: how many, and every bed. */
+  rooms: (n: number, b: number) => `${String(n)} rooms · ${beds(b)}`,
   /** The sign on the wall. */
   sign: (owner: string) => `${owner}’s house`,
   /** Before the owner's name is known. */
@@ -37,14 +38,18 @@ export const HOUSE_TEXT = {
  * from the server (`RequirementProgress.line`, `.hint`); only the frame
  * around them lives here.
  */
-const things = (n: number) => `${String(n)} ${n === 1 ? 'thing' : 'things'}`;
+const things = (n: number) => `${String(n)}\u00A0${n === 1 ? 'thing' : 'things'}`;
 
 export const GROW_TEXT = {
   open: 'Grow the house',
   openIcon: '🌱',
   allGrown: 'Your house is all grown! ✨',
-  header: (from: number, to: number, room: string, beds: number) =>
-    `House ${String(from)} → ${String(to)} · ${room} (room for ${String(beds)})`,
+  /** The header's big line. */
+  levels: (from: number, to: number) => `House\u00A0${String(from)}\u00A0→\u00A0${String(to)}`,
+  /** Under it: the new room. */
+  room: (room: string, n: number) => `${room} · room\u00A0for\u00A0${String(n)}`,
+  close: 'Close',
+  closeIcon: '✕',
   /** One heading per kind of "getting better", with its picture. */
   groups: {
     seed: { icon: '🌱', title: 'Heart Seed' },
@@ -57,6 +62,8 @@ export const GROW_TEXT = {
   youNeed: 'You need:',
   buildIt: 'Build it!',
   notYet: (n: number) => `Not yet: ${things(n)} to go!`,
+  /** The not-yet box's little cue. */
+  waitIcon: '⏳',
   /** Under "Not yet": the first thing still to do. */
   nextUp: (what: string) => `Next up: ${what}`,
   /** The first thing to do when only the bag is short. */
@@ -65,7 +72,6 @@ export const GROW_TEXT = {
   confirmYes: 'Build it!',
   notNow: 'Not now',
   building: 'Building…',
-  back: 'Back',
   built: (room: string) => `Ta-da! ${room} is ready. Who moves in?`,
   builtFinal: (room: string) => `Ta-da! ${room} is ready. Your house is all grown! ✨`,
   done: 'Done',
@@ -92,17 +98,24 @@ export const houseBeds = (view: Pick<HouseView, 'rooms'>): number =>
   view.rooms.reduce((sum, r) => sum + r.beds, 0);
 
 /**
- * The peek bar's line: the room in view ("The Snug · 2 beds"), or the whole
- * house ("Mia’s house · 10 beds") when more than one room is in view.
+ * The peek bar's line, one pattern at every level: the room in view ("The
+ * Snug · 2 beds"), or the whole house ("2 rooms · 4 beds") when more than
+ * one room is in view. Never the owner's name.
  */
-export function peekLine(
-  view: Pick<HouseView, 'rooms'>,
-  owner: string | null,
-  focus: string | null = null,
-): string {
+export function peekLine(view: Pick<HouseView, 'rooms'>, focus: string | null = null): string {
   const room =
     view.rooms.find((r) => r.id === focus) ?? (view.rooms.length === 1 ? view.rooms[0] : undefined);
   if (room) return HOUSE_TEXT.room(room.name, room.beds);
-  const n = houseBeds(view);
-  return owner ? HOUSE_TEXT.wholeHouse(owner, n) : `${HOUSE_TEXT.yourHouse} · ${beds(n)}`;
+  return HOUSE_TEXT.rooms(view.rooms.length, houseBeds(view));
+}
+
+/**
+ * Keeps a line's last three words together ("to level 1 🌱"), so a wrap
+ * never leaves a number or an emoji alone on the last line. For lines the
+ * server wrote; the client's own joins use no-break spaces already.
+ */
+export function keepTail(line: string): string {
+  const words = line.split(' ');
+  if (words.length < 4) return line;
+  return [words.slice(0, -2).join(' '), ...words.slice(-2)].join('\u00A0');
 }

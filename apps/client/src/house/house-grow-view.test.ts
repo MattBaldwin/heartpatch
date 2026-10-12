@@ -124,7 +124,7 @@ describe('grow the house: Build it! or not yet', () => {
       steps: 3,
       first: 'Next up: 2 residents at level 10+',
     });
-    expect(buildLabel(state)).toBe('Not yet: 3 things to go!');
+    expect(buildLabel(state)).toBe('Not yet: 3\u00A0things to go!');
   });
 
   it('names the short item when only the bag is short', () => {
@@ -133,7 +133,7 @@ describe('grow the house: Build it! or not yet', () => {
       items: { timber: 60, stone: 38, glimmer: 4 },
     });
     expect(state).toEqual({ kind: 'not-yet', steps: 1, first: 'Next up: Gather 12 more Stone' });
-    expect(buildLabel(state)).toBe('Not yet: 1 thing to go!');
+    expect(buildLabel(state)).toBe('Not yet: 1\u00A0thing to go!');
   });
 
   it('trusts the server’s locked over rows that all read done', () => {
@@ -165,12 +165,16 @@ describe('grow the house: Build it! or not yet', () => {
 
 describe('grow the house: the words', () => {
   it('heads the sheet with the levels and the new room', () => {
-    expect(growHeader({ level: 2 }, next())).toBe('House 2 → 3 · The Kitchen (room for 2)');
+    // No-break spaces keep "room for 2" and "House 2 → 3" whole when they wrap.
+    expect(growHeader({ level: 2 }, next())).toEqual({
+      levels: 'House\u00A02\u00A0→\u00A03',
+      room: 'The Kitchen · room\u00A0for\u00A02',
+    });
   });
 
   it('lists the cost with my counts, short ones marked', () => {
     expect(costLine({ timber: 60, stone: 50, glimmer: 4 })).toBe(
-      '60 Timber · 50 Stone · 4 Glimmer',
+      '60\u00A0Timber · 50\u00A0Stone · 4\u00A0Glimmer',
     );
     const needs = growNeeds({ items: { timber: 60, stone: 10 } }, next());
     expect(needs.map((n) => [n.id, n.have, n.ok])).toEqual([
@@ -183,9 +187,11 @@ describe('grow the house: the words', () => {
   it('asks before building, with the room mid-sentence', () => {
     expect(inSentence('The Kitchen')).toBe('the Kitchen');
     expect(inSentence('Theatre')).toBe('Theatre');
-    expect(confirmLine(next())).toBe('Build the Kitchen for 60 Timber, 50 Stone and 4 Glimmer?');
-    expect(costSentence({ timber: 30 })).toBe('30 Timber');
-    expect(costSentence({ timber: 30, stone: 20 })).toBe('30 Timber and 20 Stone');
+    expect(confirmLine(next())).toBe(
+      'Build the Kitchen for 60\u00A0Timber, 50\u00A0Stone and 4\u00A0Glimmer?',
+    );
+    expect(costSentence({ timber: 30 })).toBe('30\u00A0Timber');
+    expect(costSentence({ timber: 30, stone: 20 })).toBe('30\u00A0Timber and 20\u00A0Stone');
   });
 
   it('says ta-da for the new room, and all grown at the top', () => {
@@ -201,7 +207,9 @@ describe('grow the house: the words', () => {
     const lines = [
       GROW_TEXT.open,
       GROW_TEXT.allGrown,
-      GROW_TEXT.header(1, 2, 'The Playroom', 2),
+      GROW_TEXT.levels(1, 2),
+      GROW_TEXT.room('The Playroom', 2),
+      GROW_TEXT.close,
       ...Object.values(GROW_TEXT.groups).map((g) => g.title),
       GROW_TEXT.youNeed,
       GROW_TEXT.buildIt,
@@ -211,7 +219,6 @@ describe('grow the house: the words', () => {
       GROW_TEXT.confirm('the Kitchen', '4 Glimmer'),
       GROW_TEXT.notNow,
       GROW_TEXT.building,
-      GROW_TEXT.back,
       GROW_TEXT.built('The Kitchen'),
       GROW_TEXT.builtFinal('The Heart Hall'),
       GROW_TEXT.done,

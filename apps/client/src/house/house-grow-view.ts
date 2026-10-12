@@ -54,13 +54,13 @@ export const growNeeds = (view: Pick<HouseView, 'items'>, next: Pick<HouseNextLe
 /** "60 Timber · 50 Stone · 4 Glimmer". */
 export function costLine(cost: Readonly<Record<string, number>>): string {
   return Object.entries(cost)
-    .map(([id, n]) => `${String(n)} ${itemName(id)}`)
+    .map(([id, n]) => `${String(n)}\u00A0${itemName(id)}`)
     .join(' · ');
 }
 
 /** "60 Timber, 50 Stone and 4 Glimmer", for the confirm. */
 export function costSentence(cost: Readonly<Record<string, number>>): string {
-  const parts = Object.entries(cost).map(([id, n]) => `${String(n)} ${itemName(id)}`);
+  const parts = Object.entries(cost).map(([id, n]) => `${String(n)}\u00A0${itemName(id)}`);
   if (parts.length <= 1) return parts.join('');
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1] ?? ''}`;
 }
@@ -120,9 +120,14 @@ export function buildLabel(state: GrowState): string {
   }
 }
 
-/** "House 2 → 3 · The Kitchen (room for 2)". */
-export const growHeader = (view: Pick<HouseView, 'level'>, next: HouseNextLevel): string =>
-  GROW_TEXT.header(view.level, next.level, next.room.name, next.room.beds);
+/** The header: "House 2 → 3" big, then "The Kitchen · room for 2" on its own line. */
+export const growHeader = (
+  view: Pick<HouseView, 'level'>,
+  next: Pick<HouseNextLevel, 'level' | 'room'>,
+): { readonly levels: string; readonly room: string } => ({
+  levels: GROW_TEXT.levels(view.level, next.level),
+  room: GROW_TEXT.room(next.room.name, next.room.beds),
+});
 
 /** "Build the Kitchen for 60 Timber, 50 Stone and 4 Glimmer?" */
 export const confirmLine = (next: Pick<HouseNextLevel, 'room' | 'cost'>): string =>
