@@ -204,6 +204,116 @@ export function gableRoof(
   return parts;
 }
 
+/**
+ * The roof seen from inside at kid height (the approved captures): a warm
+ * wooden gable with rafters, a ridge beam and tie beams, the back gable
+ * filled in, two strings of bunting and a hanging lantern. Eaves at `y`.
+ */
+export function roofInside(
+  scene: Scene,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+  /** How far the roof reaches out over the porch in front, metres. */
+  overhang = 0,
+): Parts {
+  const rise = Math.min(1.8, w * 0.28); // TUNE
+  const half = w / 2;
+  const len = Math.hypot(half, rise) + 0.2;
+  const angle = Math.atan2(rise, half);
+  const cx = x0 + half;
+  const solid: Mesh[] = [];
+  for (const side of [-1, 1]) {
+    const slope = box(
+      scene,
+      [len, 0.08, d + 0.3 + overhang],
+      [cx + (side * half) / 2, y + rise / 2 + 0.04, z0 + (d - overhang) / 2],
+      '#e2b088',
+    );
+    slope.rotation.z = -side * angle;
+    solid.push(slope);
+    for (let z = z0 + 0.5 - overhang; z < z0 + d; z += 1.0) {
+      const rafter = box(
+        scene,
+        [len, 0.12, 0.1],
+        [cx + (side * half) / 2, y + rise / 2 - 0.04, z],
+        '#a8754e',
+      );
+      rafter.rotation.z = -side * angle;
+      solid.push(rafter);
+    }
+  }
+  solid.push(box(scene, [0.2, 0.2, d + 0.3], [cx, y + rise - 0.08, z0 + d / 2], '#8a5a39'));
+  for (const t of [0.3, 0.62])
+    solid.push(box(scene, [w, 0.16, 0.16], [cx, y + 0.02, z0 + d * t], '#9a6a46'));
+  // The back gable: a wall triangle, its base on the eaves.
+  const gable = CreateDisc(
+    'house-part',
+    { radius: 1, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+    scene,
+  );
+  gable.rotation.z = Math.PI / 2; // a corner pointing up
+  const sy = rise / 1.5;
+  gable.scaling.set(sy, w / 1.732, 1); // rotated: local x is up
+  gable.position.set(cx, y + 0.5 * sy, z0 + d - 0.13);
+  solid.push(painted(gable, HOUSE_PALETTE.wallTop));
+  // A toy shelf and three framed squishy doodles in the back gable, above the sign.
+  const back = z0 + d - 0.16;
+  const shelfY = y + 0.2;
+  solid.push(box(scene, [w * 0.55, 0.06, 0.22], [cx, shelfY, back], '#8d5a3b'));
+  const toyHex = ['#ff7aa2', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
+  toyHex.forEach((hex, i) => {
+    const tx = cx - w * 0.22 + (w * 0.44 * i) / 4;
+    solid.push(
+      i % 2
+        ? box(scene, [0.16, 0.16, 0.16], [tx, shelfY + 0.11, back], hex, 0.4)
+        : ball(scene, 0.2, [tx, shelfY + 0.13, back], hex, [1, 0.9, 1], 8),
+    );
+  });
+  ['#ffb3c8', '#bfe3ff', '#ffe29a'].forEach((hex, i) => {
+    const fx = cx + (i - 1) * Math.min(0.75, w * 0.14);
+    const fy = y + rise * (i === 1 ? 0.62 : 0.42);
+    const fz = z0 + d - 0.18;
+    solid.push(
+      box(scene, [0.4, 0.34, 0.04], [fx, fy, fz], '#fff6ec'),
+      box(scene, [0.32, 0.26, 0.02], [fx, fy, fz - 0.025], hex),
+      ball(scene, 0.17, [fx, fy - 0.02, fz - 0.04], '#ffffff', [1.1, 0.9, 0.3], 8),
+      ball(scene, 0.03, [fx - 0.035, fy, fz - 0.07], '#3b2a3f', [1, 1, 1], 4),
+      ball(scene, 0.03, [fx + 0.035, fy, fz - 0.07], '#3b2a3f', [1, 1, 1], 4),
+    );
+  });
+  const flags = ['#ff9ab8', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
+  for (const [t, drop] of [
+    [0.5, 0.5],
+    [0.8, 0.45],
+  ] as const) {
+    const n = Math.max(6, Math.round(w / 0.32));
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      const sag = 0.35 * (1 - Math.pow((u - 0.5) * 2, 2));
+      const flag = CreateDisc(
+        'house-part',
+        { radius: 0.12, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+        scene,
+      );
+      flag.rotation.z = -Math.PI / 2; // a point hanging down
+      flag.position.set(x0 + 0.15 + (w - 0.3) * u, y + drop - sag, z0 + d * t);
+      solid.push(painted(flag, flags[i % flags.length] ?? '#ff9ab8'));
+    }
+  }
+  const ly = y + rise - 1.1;
+  solid.push(box(scene, [0.02, 1.0, 0.02], [cx, ly + 0.6, z0 + d * 0.5], '#5a4a52'));
+  const lantern = glowing(
+    CreateSphere('house-part', { diameter: 0.34, segments: 12 }, scene),
+    '#ffd9a0',
+  );
+  lantern.position.set(cx, ly, z0 + d * 0.5);
+  lantern.scaling.set(1, 1.15, 1);
+  return { solid, glow: [lantern] };
+}
+
 // ── Furniture ───────────────────────────────────────────────────────
 
 /** A bed's frame, mattress, pillow and headboard (the blanket is its own part, coloured per bed). */
@@ -394,6 +504,26 @@ export function treeParts(scene: Scene, segments: number): { trunk: Mesh[]; crow
 /** The height of a tree at scale 1 (its crown's top). */
 export const TREE_TOP = 3.4;
 
+/**
+ * The yard's two pumpkins, by the house's front corners: inside the
+ * dollhouse frame (it fits the house with margin round it) but out to the
+ * side of the kid-height frame, which is only as wide as one room's back
+ * wall, so kid height never has one right under its nose.
+ */
+export function yardPumpkins(
+  x0: number,
+  x1: number,
+  front: number,
+): { at: [number, number, number]; d: number; hex: string }[] {
+  // TUNE: how far past the house's ends they sit, metres. Room on every
+  // level and both viewports: about -1.5 (kid frame) to 0.4 (dollhouse frame).
+  const out = 0;
+  return [
+    { at: [x0 - out, -0.1, front - 0.7], d: 0.5, hex: '#ff9a3c' },
+    { at: [x1 + out, -0.15, front - 0.9], d: 0.38, hex: '#f08a2c' },
+  ];
+}
+
 /** The front yard: a stepping-stone path, two lantern posts (glass glowing), pumpkins, a fence, bushes. */
 export function frontYard(
   scene: Scene,
@@ -428,10 +558,9 @@ export function frontYard(
     );
     glow.push(glowing(box(scene, [0.3, 0.42, 0.3], [x, 0.83, front - 1.2], '#ffd27a'), '#ffd27a'));
   }
-  solid.push(
-    ball(scene, 0.5, [cx - 2.6, -0.1, front - 0.7], '#ff9a3c', [1.1, 0.8, 1.1]),
-    ball(scene, 0.38, [cx + 2.8, -0.15, front - 0.9], '#f08a2c', [1.1, 0.8, 1.1]),
-  );
+  for (const p of yardPumpkins(x0, x1, front)) {
+    solid.push(ball(scene, p.d, p.at, p.hex, [1.1, 0.8, 1.1]));
+  }
   const fz = front - 3.4;
   for (let x = x0 - 0.6; x <= x1 + 0.6; x += 0.32) {
     if (Math.abs(x - cx) < 0.7) continue; // the gate gap

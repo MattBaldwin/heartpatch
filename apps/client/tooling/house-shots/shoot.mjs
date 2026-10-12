@@ -1,6 +1,6 @@
 /* global process, console, window, document, setTimeout, URLSearchParams, innerWidth, innerHeight, WebGL2RenderingContext */
 // Captures the real Keeper's house screen (#381) for the owner to judge:
-// the dollhouse at iPhone and iPad sizes, at each quality tier, over a
+// the dollhouse and kid height (Walk in), at iPhone and iPad sizes, at each quality tier, over a
 // sample house from the dev gallery (`/house.html`, no server needed).
 // Dev tooling only: `node tooling/house-shots/shoot.mjs` with the client
 // dev server running (BASE, default http://localhost:5173). Writes PNGs
@@ -12,7 +12,7 @@
 // calls and triangles are counted from the WebGL calls themselves (shadow,
 // scene and post passes) and hold on a device. No dev badges in the shots.
 //
-// LEVELS (default 1), TIERS (high,low), DEVICES (iphone,ipad) narrow the set;
+// LEVELS (default 1), POSES (dollhouse,kid), TIERS (high,low), DEVICES (iphone,ipad) narrow the set;
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -30,7 +30,7 @@ const only = (key, all) => (process.env[key] ? process.env[key].split(',') : all
 const levels = only('LEVELS', ['1']);
 const tiers = only('TIERS', ['high', 'low']);
 const devices = only('DEVICES', ['iphone', 'ipad']);
-const poses = ['dollhouse'];
+const poses = only('POSES', ['dollhouse', 'kid']);
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 2);
 
 const jobs = [];
@@ -107,6 +107,11 @@ async function shoot(job) {
   const q = new URLSearchParams({ level: job.level, tier: job.tier, still: '1' });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
+  if (job.pose === 'kid') {
+    // Walk in (the gallery's `still=1` cuts straight there, as reduced motion does).
+    await page.getByTestId('house-walk').click();
+    await until(page, () => window.__heartpatch.house()?.pose === 'kid');
+  }
   // Frames drawn while shaders still compile skip meshes (SwiftShader
   // compiles slowly): redraw until two frames in a row draw the same.
   const frame = async () => {
@@ -166,6 +171,8 @@ async function shoot(job) {
     shadowMap: scene.shadowMap,
     bloom: quality?.tier !== 'low',
     pitch: scene.pitch,
+    frontWallAlpha: scene.frontWallAlpha,
+    heroes: scene.heroes,
     facesVisible: house.faces ? `${house.faces.visible}/${house.faces.total}` : null,
     keeper: scene.keeper,
     ...(quality?.tier === 'low' && {

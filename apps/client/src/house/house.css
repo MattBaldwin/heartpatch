@@ -76,6 +76,33 @@
   white-space: nowrap;
 }
 
+/* Walk in / Step out: the button alternative to the pinch (style guide §3.3),
+   bottom right above the peek bar, in reach of a thumb. */
+.house-walk {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  min-width: 44px;
+  min-height: 52px;
+  padding: var(--hp-pad-y) 22px;
+  border: none;
+  border-radius: 999px;
+  background: #b8487a;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  color: #fff;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.house-walk:active {
+  transform: scale(0.97);
+}
+
 /* The bottom sheet, collapsed to its handle and the room's name. */
 .house-peek {
   position: absolute;

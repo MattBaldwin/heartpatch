@@ -1194,7 +1194,7 @@ function patchOnScreen(): string | null {
   if (hudMapId !== null) return hudMapId;
   if (homeOpen()) return home.debug?.mapId ?? null;
   if (closeUp.isOpen) return closeUp.debug?.mapId ?? null;
-  if (house.isOpen) return house.debug?.mapId ?? null;
+  if (house.isOpen) return house.mapId;
   return battles.debug !== null ? battleMapId : null;
 }
 /** Where the wardrobe was opened, so "Done" goes back there. */
