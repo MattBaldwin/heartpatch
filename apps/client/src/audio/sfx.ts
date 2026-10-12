@@ -326,6 +326,42 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
   'find-3': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 6),
   'find-4': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 7),
 
+  'friend-fanfare': (kit, out, at, pitch, gain) => {
+    // A harp run up the pentatonic from G, then a bell chord (#391).
+    const run = [0, 2, 4, 7, 9];
+    for (let i = 0; i < 14; i++) {
+      const semis = (run[i % run.length] ?? 0) + 12 * Math.floor(i / run.length);
+      tone(kit.ctx, out, {
+        type: 'triangle',
+        at: at + i * 0.035,
+        dur: 0.5,
+        freq: 392 * pitch * 2 ** (semis / 12),
+        gain: gain * 0.24,
+        attack: 0.004,
+      });
+    }
+    const chord = at + 14 * 0.035 + 0.05;
+    for (const semis of [24, 28, 31, 36]) {
+      const freq = 392 * pitch * 2 ** (semis / 12);
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: chord,
+        dur: 1.4,
+        freq,
+        gain: gain * 0.24,
+        attack: 0.004,
+      });
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: chord,
+        dur: 0.5,
+        freq: freq * 2.76,
+        gain: gain * 0.07,
+      });
+    }
+    return chord - at + 1.4;
+  },
+
   aww: (kit, out, at, pitch, gain) => {
     // Two soft notes, down a little: "aw-ww". Kind, not sad.
     for (const [i, f] of [440, 392].entries()) {

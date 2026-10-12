@@ -1085,8 +1085,8 @@ const battles = createBattleScreen({
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  onStep: (step) => {
-    audio.cue(battleCue(step));
+  onStep: (step, rareFriend) => {
+    audio.cue(battleCue(step, rareFriend));
   },
   onRareFind: (scale) => {
     audio.cue(findCue(scale));

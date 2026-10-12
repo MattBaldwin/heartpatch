@@ -71,6 +71,7 @@ import {
   type PotionTile,
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
+import { cheerFor } from './befriend-cheer.js';
 import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
 import { fenceResult, resultLine } from './result-line.js';
 import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
@@ -126,8 +127,11 @@ export interface BattleScreenOptions {
   keeper?: () => KeeperConfig | null;
   /** What the player's Keeper wears (#43), clothing ids. */
   keeperWearing?: () => readonly string[];
-  /** A step of the log starts playing (sound, #25). */
-  onStep?: (step: PlaybackStep) => void;
+  /**
+   * A step of the log starts playing (sound, #25). `rareFriend`: the battle
+   * ended in befriending a rare-or-better squishy (its win cheers louder, #391).
+   */
+  onStep?: (step: PlaybackStep, rareFriend: boolean) => void;
   /** A rare-or-better wild squishy's moment starts in full (its chime, #391): its tier's size step. */
   onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
@@ -563,7 +567,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!current || !content || waiting || queue.length > 0) return;
     sipped = id;
     const step = sipStep(current, content, id);
-    options.onStep?.(step);
+    options.onStep?.(step, false);
     scene3d?.perform(step, now(), { captured: false });
     hud.callout('mine', SIPPED_CALLOUT);
     plate(current.mySide);
@@ -807,6 +811,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const fullXpAt = b.rewards?.fullXpResetAt;
     const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
     if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
+    // A rare friend, or a first of its kind: the card celebrates (#391). Not on a replay.
+    const cheer = replaying ? null : cheerFor(b, names.species);
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
     const nudge =
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
@@ -819,6 +825,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       evolving,
       done: journey?.done ?? MESSAGES.done,
       ...(nudge ? { nudge } : {}),
+      ...(cheer ? { cheer: { info: cheer, reducedMotion: reducedMotion.matches } } : {}),
     });
   };
 
@@ -1100,7 +1107,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const t = now();
     hud.setCaption(step.text);
-    options.onStep?.(step);
+    options.onStep?.(step, cheerFor(battle, content.species)?.rare != null);
     shown = applyStep(shown, step);
     // The arena acts it out (choreography.ts): a swap brings out `to` once
     // the old squishy has hopped away; a new friend bounces along at the end.
