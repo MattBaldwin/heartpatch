@@ -130,7 +130,7 @@ describe('checkServerGameData', () => {
     });
     expect(problems).toEqual([
       'secretSpecies["fixture-moonpuff"].visual.finish: secret squishies use the "iridescent" finish, not "vinyl"',
-      'secretSpecies["fixture-moonmallow"].visual.size: an evolution is ×1.2–1.4 the size of fixture-moonpuff, not ×1.00',
+      'secretSpecies["fixture-moonmallow"].visual.size: an evolution is ×1.08–1.4 the size of fixture-moonpuff, not ×1.00',
     ]);
   });
 

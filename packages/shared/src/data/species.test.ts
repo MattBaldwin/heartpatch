@@ -28,7 +28,19 @@ const standaloneIds = new Set(standalone.map((s) => s.id));
 const bases = SPECIES.filter((s) => !evolvedIds.has(s.id) && !standaloneIds.has(s.id));
 const halloween = bases.filter((s) => s.season === 'halloween');
 const everyday = bases.filter((s) => s.season === undefined);
-const evolvedFormOf = (s: Species): Species => byId.get(s.evolutions[0]!.into)!;
+/**
+ * A line's kid (#443, stage 2), once its batch has shipped: the baby's one
+ * evolution, which evolves on into the teens. Lines not converted yet go
+ * straight from baby to teen.
+ */
+const kidOf = (base: Species): Species | undefined => {
+  const only = base.evolutions.length === 1 ? byId.get(base.evolutions[0]!.into) : undefined;
+  return only && only.evolutions.length > 0 ? only : undefined;
+};
+/** The form whose evolutions are the line's teens (the #32 branch step). */
+const teenStepOf = (base: Species): Species => kidOf(base) ?? base;
+/** A line's default teen (stage 3; today's evolved form). */
+const evolvedFormOf = (s: Species): Species => byId.get(teenStepOf(s).evolutions[0]!.into)!;
 const statTotal = (s: Species) =>
   s.baseStats.hp + s.baseStats.attack + s.baseStats.defense + s.baseStats.speed;
 const RARITY_ORDER: readonly string[] = RaritySchema.options.filter((r) => r !== 'secret');
@@ -41,6 +53,34 @@ describe('launch roster (issue #10)', () => {
     // Every species is a base form or a form one of them evolves into (#32: one or two).
     expect(SPECIES).toHaveLength(bases.length + evolvedIds.size + standalone.length);
     for (const base of bases) expect(base.evolutions.length, base.id).toBeLessThanOrEqual(2);
+  });
+
+  // #443: a kid sits between the baby and its teens, at the baby's old
+  // evolution level, and keeps everything but its size and stats.
+  it('gives every converted line a kid that keeps its baby’s rarity, element, feeling and season', () => {
+    const kids = bases.flatMap((base) => {
+      const kid = kidOf(base);
+      return kid ? [{ base, kid }] : [];
+    });
+    expect(kids.length).toBeGreaterThan(0);
+    for (const { base, kid } of kids) {
+      expect([kid.element, kid.feeling, kid.season, kid.rarity], kid.id).toEqual([
+        base.element,
+        base.feeling,
+        base.season,
+        base.rarity,
+      ]);
+      expect(statTotal(kid), kid.id).toBeGreaterThan(statTotal(base));
+      expect(kid.visual.size ?? 1, kid.id).toBeGreaterThan(base.visual.size ?? 1);
+      expect(kid.evolutions.length, kid.id).toBeLessThanOrEqual(2);
+      // Teens come 8 levels after the kid (#443 §3).
+      const kidLevel = base.evolutions[0]!.level;
+      for (const evo of kid.evolutions) expect(evo.level, evo.into).toBe(kidLevel + 8);
+      // Stats and size sit between the baby's and the teen's.
+      const teen = evolvedFormOf(base);
+      expect(statTotal(kid), kid.id).toBeLessThan(statTotal(teen));
+      expect(kid.visual.size ?? 1, kid.id).toBeLessThan(teen.visual.size ?? 1);
+    }
   });
 
   it('gives every line a default evolution that keeps its element, feeling and season', () => {
@@ -65,10 +105,12 @@ describe('launch roster (issue #10)', () => {
   // #32: a branch is a sidegrade of its line's default form, not an upgrade.
   it('makes every branch a sibling of its default form', () => {
     const branches = bases.flatMap((base) =>
-      base.evolutions.slice(1).map((evo) => ({ base, evo, branch: byId.get(evo.into)! })),
+      teenStepOf(base)
+        .evolutions.slice(1)
+        .map((evo) => ({ base, evo, branch: byId.get(evo.into)! })),
     );
     for (const { base, evo, branch } of branches) {
-      const first = base.evolutions[0]!;
+      const first = teenStepOf(base).evolutions[0]!;
       const evolved = evolvedFormOf(base);
       expect(evo.level, branch.id).toBe(first.level);
       expect(branch.evolutions, branch.id).toEqual([]);

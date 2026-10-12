@@ -461,7 +461,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
             userId: kid.id,
             squishyId: randomUUID(),
             fromSpeciesId: 'emberbun',
-            intoSpeciesId: 'hearthbun',
+            intoSpeciesId: 'kindlebun',
             level: 16,
           },
         }),
