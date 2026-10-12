@@ -27,6 +27,49 @@ export const HOUSE_TEXT = {
   sign: (owner: string) => `${owner}’s house`,
   /** Before the owner's name is known. */
   yourHouse: 'Your house',
+  /** The sheet's handle, for screen readers. */
+  sheetHandle: 'Show or hide your house’s sheet',
+} as const;
+
+/*
+ * Grow the house (#381 plan §10.4–10.5): the sheet that shows what the next
+ * level needs and builds it. The lines and hints of each requirement come
+ * from the server (`RequirementProgress.line`, `.hint`); only the frame
+ * around them lives here.
+ */
+const things = (n: number) => `${String(n)} ${n === 1 ? 'thing' : 'things'}`;
+
+export const GROW_TEXT = {
+  open: 'Grow the house',
+  openIcon: '🌱',
+  allGrown: 'Your house is all grown! ✨',
+  header: (from: number, to: number, room: string, beds: number) =>
+    `House ${String(from)} → ${String(to)} · ${room} (room for ${String(beds)})`,
+  /** One heading per kind of "getting better", with its picture. */
+  groups: {
+    seed: { icon: '🌱', title: 'Heart Seed' },
+    home: { icon: '🏡', title: 'Your home base' },
+    residents: { icon: '💗', title: 'Your residents' },
+    'patch-mates': { icon: '💌', title: 'Your patch-mates' },
+    land: { icon: '🗺️', title: 'Your land' },
+    adventure: { icon: '⚔️', title: 'Adventure' },
+  },
+  youNeed: 'You need:',
+  buildIt: 'Build it!',
+  notYet: (n: number) => `Not yet: ${things(n)} to go!`,
+  /** Under "Not yet": the first thing still to do. */
+  nextUp: (what: string) => `Next up: ${what}`,
+  /** The first thing to do when only the bag is short. */
+  gatherMore: (n: number, name: string) => `Gather ${String(n)} more ${name}`,
+  confirm: (room: string, cost: string) => `Build ${room} for ${cost}?`,
+  confirmYes: 'Build it!',
+  notNow: 'Not now',
+  building: 'Building…',
+  back: 'Back',
+  built: (room: string) => `Ta-da! ${room} is ready. Who moves in?`,
+  builtFinal: (room: string) => `Ta-da! ${room} is ready. Your house is all grown! ✨`,
+  done: 'Done',
+  toDo: 'Not yet',
 } as const;
 
 /**

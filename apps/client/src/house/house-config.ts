@@ -215,3 +215,13 @@ export const HOUSE_OUTSIDE = {
   hazeFrom: 4, // TUNE
   hazeTo: 24, // TUNE
 } as const;
+
+/** The bottom sheet (Grow the house, #381 B3b). */
+export const HOUSE_SHEET = {
+  /**
+   * A touch's click follows its release within this long: after the handle
+   * opens the sheet, that click would land on whatever opened under the
+   * finger, so it's swallowed.
+   */
+  ghostClickMs: 350, // TUNE
+} as const;
