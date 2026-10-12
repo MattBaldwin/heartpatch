@@ -35,6 +35,11 @@ export const BOOK_TEXT = {
   makes: (n: number, what: string) =>
     `Makes ${String(n)} ${what}${n > 1 && !what.endsWith('s') ? 's' : ''}`,
   build: 'Build it at home',
+  buildOnHomestead: 'Build it on a homestead',
+  buildOnLand: 'Build it on your land',
+  noteHome: 'You pick the spot at home.',
+  noteHomestead: 'Tap a homestead on the map, then 🔨 Build.',
+  noteLand: 'Tap your land on the map, then 🔨 Build.',
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
   sealed: 'Collect something new to open this page.',
@@ -136,7 +141,7 @@ export interface PageView {
   readonly sealed: boolean;
   /** A sealed page's public hint. */
   readonly hint: string;
-  /** "Makes 1 Heart Charm · 1 min" / "Build it at home". */
+  /** "Makes 1 Heart Charm · 1 min" / "Build it at home" / "Build it on a homestead". */
   readonly meta: string;
   readonly ingredients: readonly IngredientView[];
   /** Open, in season, and the bag holds everything. */
@@ -158,6 +163,27 @@ export interface PageEffect {
 }
 
 const BUILDINGS = new Map(GAME_DATA.buildings.map((b) => [b.id, b]));
+
+/**
+ * Where a building page says it goes, and how (#295): home buildings at
+ * home (the home Build sheet), homestead buildings (Training Grounds, the
+ * Crafting Factory) and the rest out on the map, from a tile's Build sheet.
+ */
+export function buildWhere(buildingId: string): {
+  readonly atHome: boolean;
+  readonly meta: string;
+  readonly note: string;
+} {
+  switch (BUILDINGS.get(buildingId)?.placement) {
+    case 'homestead':
+      return { atHome: false, meta: BOOK_TEXT.buildOnHomestead, note: BOOK_TEXT.noteHomestead };
+    case 'land':
+    case 'owned':
+      return { atHome: false, meta: BOOK_TEXT.buildOnLand, note: BOOK_TEXT.noteLand };
+    default:
+      return { atHome: true, meta: BOOK_TEXT.build, note: BOOK_TEXT.noteHome };
+  }
+}
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
 
 /**
@@ -231,7 +257,7 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
           toolMakes(page.output.resource, page.output.quantity, itemName(page.output.resource)) ??
           BOOK_TEXT.makes(page.output.quantity, itemName(page.output.resource))
         } · ${craftTime(page.seconds ?? 0)}`
-      : BOOK_TEXT.build;
+      : buildWhere(page.output.building).meta;
   return {
     key: page.key,
     kind: page.kind,

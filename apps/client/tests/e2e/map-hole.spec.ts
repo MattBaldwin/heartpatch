@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { claimLand, tapCanvas } from './claim-land.js';
+import { claimLand, tapTile } from './claim-land.js';
 import { hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { traysState } from './trays.js';
@@ -14,22 +14,6 @@ import { traysState } from './trays.js';
 
 const mapState = (page: Page) =>
   hook<{ id: string; live: string; selected: string | null }>(page, 'map');
-
-/** Taps outward from the middle of the map until `tile` is the selected one. */
-async function tapTile(page: Page, tile: { q: number; r: number }): Promise<void> {
-  const key = `${String(tile.q)},${String(tile.r)}`;
-  const box = (await page.locator('#game').boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  for (const radius of [0, 40, 60, 80, 100, 130, 160]) {
-    for (let step = 0; step < (radius === 0 ? 1 : 12); step++) {
-      const angle = (step * Math.PI) / 6;
-      await tapCanvas(page, cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
-      if ((await mapState(page))?.selected === key) return;
-    }
-  }
-  throw new Error(`couldn't tap the claimed tile ${key}`);
-}
 
 /** The page background (styles.css `#fde8f0`), which shows through a hole in the canvas. */
 const PAGE_PINK = [253, 232, 240] as const;

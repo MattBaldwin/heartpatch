@@ -71,11 +71,16 @@ describe('Crafting Factory batches (#294)', () => {
     expect(factoryQueues(undefined, 1)).toBe(0);
   });
 
-  it('is one home-ring building a player can build, with valid rules', () => {
+  it('is one homestead building a player can build, one a tile and one a player (#295)', () => {
     const factories = BUILDINGS.filter((b) => b.kind === 'factory');
     expect(factories.map((b) => b.id)).toEqual(['crafting-factory']);
     const [factory] = factories;
-    expect(factory).toMatchObject({ placement: 'home', slot: 'ring', maxPerHome: 1 });
+    expect(factory).toMatchObject({
+      placement: 'homestead',
+      slot: 'ring',
+      maxPerTile: 1,
+      maxPerHome: 1,
+    });
     expect(factory && isBuildable(HOME_BASE_RULES, factory)).toBe(true);
     expect(FactoryRulesSchema.parse(FACTORY_RULES)).toEqual(FACTORY_RULES);
   });

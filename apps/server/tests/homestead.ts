@@ -53,3 +53,19 @@ export async function makeHomestead(
   );
   return { id: tile.id, q: tile.q, r: tile.r, terrain: tile.terrain };
 }
+
+/**
+ * A homestead with no resource spot (#295), so a homestead building (the
+ * Training Grounds, the Crafting Factory) can go up without clearing it.
+ */
+export async function openHomestead(
+  db: Executor,
+  mapId: string,
+  userId: string,
+  at: Date,
+  nth = 0,
+): Promise<HomesteadTile> {
+  const plot = await makeHomestead(db, mapId, userId, at, nth);
+  await db.execute(`update tiles set node_resource = null where id = '${plot.id}'`);
+  return plot;
+}

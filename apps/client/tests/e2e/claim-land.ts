@@ -44,6 +44,43 @@ export async function tapCanvas(page: Page, x: number, y: number): Promise<void>
   );
 }
 
+/** Opens `tile`'s panel through the dev hook (`mapDev().select`), as a tap on it would. */
+export async function selectTile(page: Page, tile: { q: number; r: number }): Promise<void> {
+  const key = `${String(tile.q)},${String(tile.r)}`;
+  await expect
+    .poll(async () => {
+      await page.evaluate(
+        ({ q, r }) =>
+          (
+            window as unknown as {
+              __heartpatch?: { mapDev?: () => { select: (q: number, r: number) => boolean } };
+            }
+          ).__heartpatch
+            ?.mapDev?.()
+            .select(q, r),
+        tile,
+      );
+      return (await mapState(page))?.selected;
+    })
+    .toBe(key);
+}
+
+/** Taps outward from the middle of the map until `tile` is the selected one. */
+export async function tapTile(page: Page, tile: { q: number; r: number }): Promise<void> {
+  const key = `${String(tile.q)},${String(tile.r)}`;
+  const box = (await page.locator('#game').boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  for (const radius of [0, 40, 60, 80, 100, 130, 160]) {
+    for (let step = 0; step < (radius === 0 ? 1 : 12); step++) {
+      const angle = (step * Math.PI) / 6;
+      await tapCanvas(page, cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+      if ((await mapState(page))?.selected === key) return;
+    }
+  }
+  throw new Error(`couldn't tap the tile ${key}`);
+}
+
 /**
  * Taps outward from the Heart Seed (where the camera starts) until the tile
  * panel offers `action`; returns where it tapped. Wild land rings every home

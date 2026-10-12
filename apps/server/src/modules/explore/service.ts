@@ -145,6 +145,17 @@ export function createExploreService(options: ExploreServiceOptions) {
   };
 
   return {
+    /** Dev only (`HP_DEV_SQUISHY_GRANTS`): a ready homestead next to home (#295, e2e). */
+    devHomestead: async (user: PublicUser, mapId: string): Promise<{ q: number; r: number }> => {
+      const made = await exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        return repo.devMakeHomestead(mapId, user.id, now());
+      });
+      if (!made) throw new AppError('CONFLICT', MESSAGES.noTile);
+      published(mapId);
+      return made;
+    },
+
     /** `GET /maps/:mapId/explore?q=&r=`: the explore view of one of my tiles. */
     view: async (
       user: PublicUser,

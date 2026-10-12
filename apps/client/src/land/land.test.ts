@@ -119,7 +119,7 @@ describe('fires that went out with the land (#202)', () => {
     expect(unseenLostFires(t, '2026-10-14')).toEqual({ fires: 1, back: { timber: 2, stone: 2 } });
     expect(unseenLostFires(t, '2026-10-15').fires).toBe(0);
     expect(LAND_TEXT.welcomeFire(1)).toBe(
-      'Your fire out there went out when the land went wild. You got some things back 🔥',
+      'Your building out there came down when the land went wild. You got some things back 🏡',
     );
     for (const n of [1, 2]) expect(findAvoidedWords(LAND_TEXT.welcomeFire(n))).toEqual([]);
   });

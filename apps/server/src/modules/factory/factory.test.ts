@@ -19,6 +19,7 @@ import { createDbClient, withTransaction, type Database, type DbClient } from '.
 import { keepers, sessions, squishies, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { openHomestead } from '../../../tests/homestead.js';
 import { grantItems } from '../inventory/service.js';
 
 const url = inject('testDatabaseUrl');
@@ -128,10 +129,10 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
   }
 
   /** Builds a level 1 Factory on a ring spot of a home tile. */
-  async function buildFactory(server: FastifyInstance, who: Player, mapId: string) {
+  /** The Factory on an open homestead (#295: a homestead building, one a tile). */
+  async function buildFactory(server: FastifyInstance, who: Player, mapId: string, nth = 0) {
     await give(mapId, who, FACTORY_COST);
-    const homeRes = await call(server, 'GET', `/maps/${mapId}/home`, who);
-    const tile = HomeResponseSchema.parse(homeRes.json()).tiles.find((t) => !t.heartSeed)!;
+    const tile = await openHomestead(db, mapId, who.id, clock, nth);
     const res = await call(server, 'POST', `/maps/${mapId}/buildings`, who, {
       buildingId: 'crafting-factory',
       q: tile.q,
@@ -203,16 +204,13 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     expect((await bag(server, kid, mapId)).factory).toBeNull();
     const none = await queue(server, kid, mapId, 'heart-charm', 1);
     expect(none.statusCode).toBe(409);
-    expect(errorOf(none).message).toBe('Build a Crafting Factory at home first!');
+    expect(errorOf(none).message).toBe('Build a Crafting Factory on a homestead first!');
 
     const { factory } = await buildFactory(server, kid, mapId);
     expect(factory).toMatchObject({ kind: 'factory', level: 1 });
-    // One per home (`maxPerHome`).
+    // One per player (`maxPerHome`), on another homestead too.
     await give(mapId, kid, FACTORY_COST);
-    const homeRes = await call(server, 'GET', `/maps/${mapId}/home`, kid);
-    const other = HomeResponseSchema.parse(homeRes.json()).tiles.find(
-      (t) => !t.heartSeed && !(t.q === factory.q && t.r === factory.r),
-    )!;
+    const other = await openHomestead(db, mapId, kid.id, clock, 1);
     const second = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
       buildingId: 'crafting-factory',
       q: other.q,
@@ -220,6 +218,7 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
       spot: 1,
     });
     expect(second.statusCode).toBe(409);
+    expect(errorOf(second).message).toBe('You already have a Crafting Factory! One is plenty.');
 
     // 12 Timber and 5 Treats pay for 5 Heart Charms; "max" asks for them all.
     await give(mapId, kid, { timber: 12, treats: 5 });

@@ -141,10 +141,23 @@ describe('clearCards (#242)', () => {
 
   it('shows the buildings a spot makes room for, waiting, after Clear land', () => {
     const cards = clearCards(tile({ nodeResource: 'timber' }), me, bag(), NOW);
-    expect(ids(cards)).toEqual([CLEAR_CARD_ID, 'hearthfire', 'training-grounds']);
+    expect(ids(cards)).toEqual([
+      CLEAR_CARD_ID,
+      'hearthfire',
+      'training-grounds',
+      'crafting-factory',
+    ]);
     expect(cards.slice(1).map((c) => c.blocked)).toEqual([
       CLEAR_TEXT.firstLine,
       CLEAR_TEXT.firstLine,
+      CLEAR_TEXT.firstLine,
+    ]);
+    // My one Factory is built already (#295): it doesn't wait here.
+    const built = { ...bag(), factory: { buildingId: userId(8) } };
+    expect(ids(clearCards(tile({ nodeResource: 'timber' }), me, built, NOW))).toEqual([
+      CLEAR_CARD_ID,
+      'hearthfire',
+      'training-grounds',
     ]);
     // Land with no spot is built on as it is.
     expect(ids(clearCards(tile(), me, bag(), NOW))).toEqual([CLEAR_CARD_ID]);
