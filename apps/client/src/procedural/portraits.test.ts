@@ -6,7 +6,12 @@ import { createPortraits, inUse, opaqueBox } from './portraits.js';
 const scenes: { disposed: boolean }[] = [];
 /** When a scene is ready: at once, unless a test says never (as Babylon's own wait can be). */
 let whenReady = () => Promise.resolve();
-let shots: { resolve: (url: string) => void; timeOut: () => void }[] = [];
+let shots: {
+  resolve: (url: string) => void;
+  timeOut: () => void;
+  samples: unknown;
+  antialiasing: unknown;
+}[] = [];
 vi.mock('@babylonjs/core/scene', () => ({
   Scene: class {
     isDisposed = false;
@@ -38,8 +43,12 @@ vi.mock('@babylonjs/core/Cameras/targetCamera', () => ({
 vi.mock('@babylonjs/core/Misc/screenshotTools', () => ({
   CreateScreenshotUsingRenderTarget: (...args: unknown[]) => {
     shots.push({
+      // (engine, camera, size, successCallback, mimeType, samples,
+      // antialiasing, …, timeoutInMilliseconds, timeoutErrorCallback)
       resolve: args[3] as (url: string) => void,
       timeOut: args[15] as () => void,
+      samples: args[5],
+      antialiasing: args[6],
     });
   },
 }));
@@ -186,6 +195,14 @@ describe('createPortraits', () => {
       expect(shots).toHaveLength(1);
     });
     expect(scenes).toHaveLength(2);
+  });
+
+  it('snapshots with MSAA and no FXAA pass, which could hold the map until it compiles', async () => {
+    void portraitsFor().get(look);
+    await vi.waitFor(() => {
+      expect(shots).toHaveLength(1);
+    });
+    expect(shots[0]).toMatchObject({ samples: 4, antialiasing: false });
   });
 
   it('moves on when a snapshot never gets ready (Babylon gives up on it)', async () => {
