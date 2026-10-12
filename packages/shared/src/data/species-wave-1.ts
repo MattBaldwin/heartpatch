@@ -181,7 +181,7 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['silly', 'joy'],
     },
   },
-  // #443 kid (stage 2): Lilyhop grows a water curl, a preview of Croakaroo's.
+  // #443 kid (stage 2): Lilyhop grows a water curl, before Croakaroo's bubble crown.
   {
     id: 'lilyleap',
     name: 'Lilyleap',
@@ -208,7 +208,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'croakaroo',
     name: 'Croakaroo',
     description:
-      'Its big hands catch dragonflies, then let them go again. It sticks out its tongue to say hi.',
+      'Wears a crown of pond bubbles and has arms strong enough to lift a lily pad. It sticks out its tongue to say hi.',
     element: 'water',
     feeling: 'silly',
     rarity: 'uncommon',
@@ -223,13 +223,13 @@ export const WAVE_1_SPECIES: Species[] = [
         'open-mouth',
         'giggle-tongue',
         'eye-bumps',
-        'water-curl',
+        'bubble-crown',
         'hop-feet',
-        'round-hands',
+        'strong-arms',
         'spots',
       ],
       size: 1.3,
-      stance: 0.4,
+      stance: 0.45,
       pose: 'sit',
       attackPart: 'legs',
     },
