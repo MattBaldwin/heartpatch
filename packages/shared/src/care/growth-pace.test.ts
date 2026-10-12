@@ -78,6 +78,13 @@ describe('growth pace', () => {
     expect([16, 18, 22, 26, 30].map(at)).toEqual([23, 30, 64, 117, 183]);
   });
 
+  // #443: a line's teens come 8 levels after its kid (common 24, rare 30), and
+  // grown-ups 20 after it (common 36); the kid keeps the old evolution level.
+  it('paces the later stages: teens at kid + 8, grown-ups at kid + 20', () => {
+    const at = (level: number) => winsToReach(level, 100);
+    expect([24, 26, 30, 36].map(at)).toEqual([89, 117, 183, 355]);
+  });
+
   it('makes each level past the knees take more wins than the last (at 2×)', () => {
     const perLevel = [16, 20, 25, 30, 40, 60, 80, 99].map((from) =>
       winsToReach(from + 1, 200, from),

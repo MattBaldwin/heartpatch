@@ -27,7 +27,7 @@ import type * as EvolutionModule from './evolution.js';
 import { createCareRepo } from './repo.js';
 import { applyXp, growthEvents } from './service.js';
 
-/** When set, `formsAt` returns just this form: the roll-free path no real line reaches any more. */
+/** When set, `formsAt` returns just this form, to test a roll-free step at a branching line's step. */
 type Form = ReturnType<typeof EvolutionModule.formsAt>[number];
 const oneForm = vi.hoisted(() => ({ current: null as { from: string; form: Form } | null }));
 vi.mock('./evolution.js', async (importOriginal) => {
@@ -341,6 +341,40 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     } finally {
       oneForm.current = null;
     }
+  });
+
+  // #443: a baby past both levels grows into its kid (one form, no roll) and on
+  // to a teen (the branch roll, from the kid) in a single grant.
+  it('steps a baby through its kid to a teen in one grant, rolling only the kid step', async () => {
+    const baby = GAME_DATA.species.find(
+      (s) => s.evolutions.length === 1 && s.evolutions[0]!.into === BASE.id,
+    );
+    expect(baby, 'the first feeling branch starts from a kid').toBeDefined();
+    const server = await start();
+    const who = await player();
+    const mapId = await newMap(server, who);
+    const id = await squishy(mapId, who, {
+      speciesId: baby!.id,
+      element: baby!.element,
+      feeling: baby!.feeling,
+      level: STEP.level - 1,
+      ...leaning(BRANCH_FEELING),
+    });
+    const growth = await grow(id);
+    expect(growth?.evolutions.map((e) => e.fromSpeciesId)).toEqual([baby!.id, BASE.id]);
+    expect(growth?.evolutions[0]).toEqual({
+      fromSpeciesId: baby!.id,
+      intoSpeciesId: BASE.id,
+      branch: false,
+    });
+    const rows = await evolutionsOf(id);
+    const toKid = rows.find((r) => r.fromSpeciesId === baby!.id)!;
+    const toTeen = rows.find((r) => r.fromSpeciesId === BASE.id)!;
+    expect(toKid).toMatchObject({ intoSpeciesId: BASE.id, roll: null, branch: false });
+    const roll = toTeen.roll as unknown as LoggedRoll;
+    expect(roll.pick).toBe(toTeen.intoSpeciesId);
+    expect(roll.seed).toBe(deriveSeed('heartpatch-dev-evolution-salt', id, BASE.id, STEP.level));
+    expect((await rowOf(id)).speciesId).toBe(toTeen.intoSpeciesId);
   });
 
   it("leaves `branch` off the care list's new-form card for a default form", async () => {
