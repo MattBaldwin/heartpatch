@@ -155,6 +155,7 @@ async function shoot(job) {
     }
     for (const n of document.querySelectorAll('.house button')) {
       const r = n.getBoundingClientRect();
+      if (r.width === 0) continue; // hidden (the floor switch in a one-floor house)
       if (r.width < 44 || r.height < 44) bad.push(`${n.className} is ${r.width}×${r.height}`);
     }
     return bad;
