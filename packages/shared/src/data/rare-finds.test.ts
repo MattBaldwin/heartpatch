@@ -17,6 +17,13 @@ describe('rare finds by tier (#391)', () => {
     }
   });
 
+  it('tells the whole patch about Legendary finds only (owner decision 2026-10-12)', () => {
+    const lines = Object.entries(RARE_FIND_TIERS)
+      .filter(([, tier]) => tier.patchLine)
+      .map(([rarity]) => rarity);
+    expect(lines).toEqual(['legendary']);
+  });
+
   it('gives secret kinds the Legendary-size moment, called Special, with no patch line', () => {
     const secret = RARE_FIND_TIERS.secret!;
     const legendary = RARE_FIND_TIERS.legendary!;

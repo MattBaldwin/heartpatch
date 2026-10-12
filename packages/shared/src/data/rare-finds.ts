@@ -8,7 +8,8 @@ import {
 /**
  * The rare-find moment by rarity (#391). Secret kinds get the Legendary-size
  * moment, called "Special" so nothing ever says "secret", and never a patch
- * line (CLAUDE.md rule 6). No Mythic row in Phase 1: Mythic squishies arrive
+ * line (CLAUDE.md rule 6). Only Legendary finds tell the whole patch (owner
+ * decision 2026-10-12). No Mythic row in Phase 1: Mythic squishies arrive
  * in Phase 2 and get at least the Legendary moment until they have one.
  */
 export const RARE_FIND_TIERS: RareFindTiers = RareFindTiersSchema.parse({
@@ -17,14 +18,14 @@ export const RARE_FIND_TIERS: RareFindTiers = RareFindTiersSchema.parse({
     scale: 1,
     label: 'Rare',
     banner: '✨ Something rare is here! ✨',
-    patchLine: false, // TUNE: a rare one is common enough to be noise
+    patchLine: false,
   },
   epic: {
     ms: 2000, // TUNE
     scale: 2,
     label: 'Epic',
     banner: '✨ Something epic is here! ✨',
-    patchLine: true,
+    patchLine: false,
   },
   legendary: {
     ms: 2200, // TUNE
