@@ -38,29 +38,46 @@ import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { lodFor } from '../procedural/motion.js';
 import type { SquishySpecies } from '../procedural/params.js';
-import { SquishyField } from '../procedural/squishy-field.js';
-import { frontAlpha, project, wallFade, type FadeWall, type HousePose } from './house-camera.js';
+import { SquishyField, type SquishyPlacement } from '../procedural/squishy-field.js';
+import type { KeeperHandle, KeeperPlacement } from '../procedural/keeper/keeper-field.js';
+import {
+  frontAlpha,
+  project,
+  wallFade,
+  type FadeWall,
+  type FramedSpot,
+  type HousePose,
+} from './house-camera.js';
 import {
   HOUSE_BLANKETS,
   HOUSE_CAST,
+  HOUSE_FIT_FLOOR,
   HOUSE_GLIDE,
   HOUSE_GRID,
   HOUSE_KID,
   HOUSE_LIGHT,
   HOUSE_OUTSIDE,
   HOUSE_PALETTE,
+  HOUSE_SHADOW,
   HOUSE_TIERS,
   HOUSE_TREE_CROWNS,
 } from './house-config.js';
 import {
+  covers,
+  floorCut,
   houseBounds,
+  houseFloors,
   roomBox,
+  runFloor,
+  shownAt,
   wallRuns,
+  type FloorCut,
   type HouseBounds,
   type RoomBox,
   type WallRun,
 } from './house-layout.js';
 import {
+  beamCeiling,
   bedBlanket,
   bedFrame,
   box,
@@ -133,6 +150,10 @@ export interface HouseSceneStats {
   readonly frontWallAlpha: number | null;
   /** Residents drawn at the hero detail (low tier: the nearest ones at kid height, `HOUSE_CAST.lowHeroes`). */
   readonly heroes: number;
+  /** The floor the dollhouse shows (the floor cut: every floor above it is taken away). */
+  readonly floor: number;
+  /** The floors it can show, bottom up. */
+  readonly floors: readonly number[];
 }
 
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
@@ -153,13 +174,47 @@ function underside(scene: Scene, room: RoomBox, z0: number): Mesh {
   );
 }
 
+/** A piece's biggest size, metres (its box, scaled). */
+function extent(mesh: Mesh): number {
+  mesh.computeWorldMatrix(true);
+  const { minimumWorld: lo, maximumWorld: hi } = mesh.getBoundingInfo().boundingBox;
+  return Math.max(hi.x - lo.x, hi.y - lo.y, hi.z - lo.z);
+}
+
 interface RoomParts {
   readonly box: RoomBox;
   readonly solid: Mesh[];
   readonly glow: Mesh[];
   readonly floor: Mesh[];
   readonly panes: Mesh[];
-  readonly walls: Map<string, Mesh[]>;
+}
+
+/**
+ * Every floor's pieces, merged by material into one mesh each (draw calls,
+ * B4): the floor cut shows or hides a floor as a whole.
+ */
+interface FloorParts {
+  readonly solid: Mesh[];
+  readonly glow: Mesh[];
+  readonly floor: Mesh[];
+  readonly panes: Mesh[];
+}
+
+/** A thin instance on a floor (beds, contact shadows, pools, keepsakes): the cut drops its floor's. */
+interface Placed {
+  readonly matrix: Matrix;
+  readonly floor: number;
+}
+
+/** A resident or the Keeper as placed, so the floor cut can take it away and put it back. */
+interface CastSpot {
+  readonly room: string;
+  /** Where it stands (its feet), for the framing. */
+  readonly at: { x: number; y: number; z: number };
+  readonly kind: 'resident' | 'keeper';
+  readonly add: () => void;
+  readonly remove: () => void;
+  readonly drawn: () => boolean;
 }
 
 export class HouseScene {
@@ -180,21 +235,51 @@ export class HouseScene {
   readonly #roofMaterial: PBRMaterial;
   readonly #house: Mesh[] = [];
   #pose: HousePose | null = null;
+  #zoom = 0;
   #roofLift = 1;
-  #residents = 0;
-  readonly #beds: Matrix[] = [];
-  readonly #contact: Matrix[] = [];
-  readonly #pools: Matrix[] = [];
+  readonly #beds: Placed[] = [];
+  readonly #contact: Placed[] = [];
+  readonly #pools: Placed[] = [];
   readonly #requests: { kind: 'fire' | 'lamp'; at: Vector3 }[] = [];
-  readonly #seeds: Matrix[] = [];
-  /** Every room's glowing bits, by floor: one glow mesh per floor, not per room (draw calls, B3). */
-  readonly #glowByFloor = new Map<number, Mesh[]>();
-  #signAt: { x: number; y: number; z: number; width: number } | null = null;
+  readonly #seeds: Placed[] = [];
+  /** Every floor's pieces, merged per floor (one mesh per material, not per room: draw calls). */
+  readonly #byFloor = new Map<number, FloorParts>();
+  /** The house's meshes that belong to a floor above the ground, by floor (the cut hides them). */
+  readonly #floorMeshes: { mesh: Mesh; floor: number }[] = [];
+  /** Thin-instanced meshes whose instances sit on floors, rebuilt as the cut moves. */
+  readonly #instanced: { mesh: Mesh; list: readonly Placed[]; color?: (i: number) => number[] }[] =
+    [];
+  readonly #boxes: RoomBox[];
+  /** Walls cut low in the dollhouse that kid height stands back up, by room. */
+  readonly #kidWalls = new Map<string, Mesh[]>();
+  readonly #runs: readonly WallRun[];
+  readonly #floors: readonly number[];
+  #cut: FloorCut;
+  /** Which floors' thin instances are in the buffers now (`all` during the roof lift). */
+  #instancedFor: string | null = null;
+  readonly #cast: CastSpot[] = [];
+  #signAt: {
+    x: number;
+    y: number;
+    z: number;
+    width: number;
+    room: string;
+    /** Where it hangs at kid height (the header over a cut-back room's opening), or null: it stays. */
+    kidY: number | null;
+  } | null = null;
+  /** The sign's meshes that move to the header at kid height. */
+  readonly #signParts: Mesh[] = [];
   readonly #instrumentation: SceneInstrumentation;
   readonly #rooms: number;
   readonly #lookAt = new Vector3();
   /** Front walls (off in the dollhouse, faded at kid height) and the porch you stand on. */
-  readonly #fronts: { room: string; mesh: Mesh; material: PBRMaterial; wall: FadeWall }[] = [];
+  readonly #fronts: {
+    room: string;
+    floor: number;
+    mesh: Mesh;
+    material: PBRMaterial;
+    wall: FadeWall;
+  }[] = [];
   readonly #porch: { room: string; mesh: Mesh }[] = [];
   /** The roof seen from inside, at kid height only (the focus room's alone). */
   readonly #ceilings: { room: string; mesh: Mesh }[] = [];
@@ -203,7 +288,8 @@ export class HouseScene {
   #focus: { id: string; room: HouseBounds; point: Vector3 } | null = null;
   /** Low tier: the nearest residents at kid height drawn smooth (owner check #4), their own field. */
   #hero: SquishyField | null = null;
-  #meshCount = 0;
+  /** Meshes already sorted into the fill (or not cast): checked once each. */
+  readonly #sorted = new WeakSet<AbstractMesh>();
   readonly #trees: { x: number; z: number; s: number; hex: string }[] = [];
   #treeMeshes: { trunks: Mesh; crowns: Mesh } | null = null;
 
@@ -245,10 +331,12 @@ export class HouseScene {
     this.#fill.intensity = this.#look.fill;
     this.#fill.includedOnlyMeshes = [];
     // The fields make their meshes as they first draw (in beforeRender):
-    // sort any new ones before the camera renders, every frame the mesh
-    // count changes.
+    // sort any new ones before the camera renders. Every mesh is checked,
+    // not just a change in the count: the low tier's hero field swaps its
+    // meshes for smoother ones one for one, and those went unlit by the
+    // fill (B4 render check: Puddlepuff grey and muddy at kid height).
     scene.onBeforeCameraRenderObservable.add(() => {
-      if (scene.meshes.length !== this.#meshCount) this.#sortCast();
+      this.#sortCast();
     });
 
     this.#setUpWarmLights(low);
@@ -258,24 +346,31 @@ export class HouseScene {
     }
 
     const rooms = view.rooms.map((r) => roomBox(r));
+    this.#boxes = rooms;
     this.#rooms = rooms.length;
     this.bounds = houseBounds(rooms);
+    this.#floors = houseFloors(rooms);
+    // The Keeper's floor (the ground) first: the floors above it are taken away.
+    this.#cut = floorCut(rooms, this.#floors[0] ?? 0);
     const runs = wallRuns(view.rooms);
+    this.#runs = runs;
     this.#buildOutside(this.bounds);
     const plans = new Map<string, RoomPlan>();
     for (const box of rooms) {
-      const parts: RoomParts = { box, solid: [], glow: [], floor: [], panes: [], walls: new Map() };
+      const parts: RoomParts = { box, solid: [], glow: [], floor: [], panes: [] };
       const frontOpen = runs.some((r) => r.room === box.id && r.front && r.exterior);
       const z0 = frontOpen ? box.z0 - HOUSE_GRID.frontLip : box.z0;
       parts.floor.push(...floorPlanks(scene, box.x0, z0, box.x1 - box.x0, box.z1 - z0, box.y0));
       if (box.y0 > 0) parts.floor.push(underside(scene, box, z0));
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
-      this.#mergeRoom(parts);
+      const own = this.#floorParts(box.floor);
+      own.solid.push(...parts.solid);
+      own.glow.push(...parts.glow);
+      own.floor.push(...parts.floor);
+      own.panes.push(...parts.panes);
     }
-    for (const [floor, list] of this.#glowByFloor) {
-      this.#static(`house-glow-f${String(floor)}`, list, this.#glow, false);
-    }
+    this.#mergeFloors();
     this.#buildBeds();
     this.#buildSeeds();
     this.#buildDecals(low);
@@ -316,6 +411,7 @@ export class HouseScene {
       true,
     );
     this.#instrumentation = new SceneInstrumentation(scene);
+    this.#applyCut();
 
     const b = this.bounds;
     this.content = {
@@ -332,6 +428,7 @@ export class HouseScene {
    */
   setPose(pose: HousePose, zoom = 0): void {
     this.#pose = pose;
+    this.#zoom = zoom;
     this.#fadeFronts(pose, zoom);
     // Hero detail only once they're big on screen: the dollhouse is near the low cap already.
     this.#hero?.setLod(zoom >= HOUSE_KID.frontFrom ? 'high' : this.#squishies.lod);
@@ -404,7 +501,8 @@ export class HouseScene {
     for (const f of this.#fronts) {
       const fade = focus ? wallFade(pose.eye, focus.point, f.wall) : 1;
       const other = focus !== null && f.room !== focus.id;
-      if (!focus || (other && (fade >= 1 || this.#tier === 'low'))) {
+      const cut = !shownAt(f.floor, this.#cut.floor);
+      if (!focus || cut || (other && (fade >= 1 || this.#tier === 'low'))) {
         f.mesh.setEnabled(false);
         continue;
       }
@@ -416,6 +514,11 @@ export class HouseScene {
     }
     for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
     for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
+    const sign = this.#signAt;
+    if (sign?.kidY != null) {
+      const y = sign.room === focus?.id ? sign.kidY : sign.y;
+      for (const m of this.#signParts) m.position.y = y;
+    }
     this.#frontAlpha = least;
   }
 
@@ -424,13 +527,115 @@ export class HouseScene {
     return this.#focus?.room ?? null;
   }
 
+  /**
+   * The residents drawn now, as the framing sees them (their middles and
+   * about how far they reach), so a phone's frame edge can miss them.
+   */
+  get residentSpots(): FramedSpot[] {
+    // From the fields themselves: each squishy's own middle and height, as drawn.
+    return this.#drawnSquishies().map(({ centre, height }) => ({
+      x: centre.x,
+      y: centre.y,
+      z: centre.z,
+      r: height * HOUSE_CAST.reach,
+    }));
+  }
+
+  /** Every resident drawn now, its middle and its height (world metres). */
+  #drawnSquishies(): { centre: Vector3; height: number }[] {
+    const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
+    return fields.flatMap((f) =>
+      f.handles.flatMap((h) => {
+        const centre = f.centre(h);
+        return centre ? [{ centre, height: f.heightOf(h) * HOUSE_CAST.squishyScale }] : [];
+      }),
+    );
+  }
+
+  /** The floors the dollhouse can show, bottom up (one entry: no floor switch). */
+  get floors(): readonly number[] {
+    return this.#floors;
+  }
+
+  /** The floor the dollhouse shows. */
+  get floor(): number {
+    return this.#cut.floor;
+  }
+
+  /**
+   * The floor cut (plan §1c): shows floor `n` (the nearest floor at or
+   * below it) with every floor above taken away, its residents with it,
+   * so the shown floor's rooms lie open to the camera. Kid height walks
+   * into the Keeper's room on the ground floor, so the screen goes back to
+   * floor 0 before it zooms.
+   */
+  setFloor(n: number): void {
+    const cut = floorCut(this.#boxes, n);
+    if (cut.floor === this.#cut.floor) return;
+    this.#cut = cut;
+    this.#applyCut();
+    if (this.#pose) this.#fadeFronts(this.#pose, this.#zoom);
+  }
+
+  /**
+   * The box the dollhouse camera fits: the shown floor's rooms (or the
+   * whole house, `HOUSE_FIT_FLOOR` off).
+   */
+  get frameBounds(): HouseBounds {
+    return HOUSE_FIT_FLOOR ? this.#cut.bounds : this.bounds;
+  }
+
+  /**
+   * Shows what the cut keeps: a floor above it is hidden, except while the
+   * roof lifts in the entry glide, when it fades away with the roof (its
+   * beds and keepsakes go once it's mostly gone).
+   */
+  #applyCut(): void {
+    const floor = this.#cut.floor;
+    const lifting = this.#roof !== null && this.#roofLift < 1;
+    for (const { mesh, floor: tag } of this.#floorMeshes) {
+      const shown = shownAt(tag, floor);
+      mesh.setEnabled(shown || lifting);
+      mesh.visibility = shown ? 1 : 1 - this.#roofLift;
+    }
+    const all = lifting && this.#roofLift < 0.5;
+    const key = all ? 'all' : String(floor);
+    if (key !== this.#instancedFor) {
+      this.#instancedFor = key;
+      for (const { mesh, list, color } of this.#instanced) {
+        const kept = list
+          .map((p, i) => ({ p, i }))
+          .filter(({ p }) => all || shownAt(p.floor, floor));
+        const data = new Float32Array(Math.max(1, kept.length) * 16);
+        kept.forEach(({ p }, i) => {
+          p.matrix.copyToArray(data, i * 16);
+        });
+        mesh.thinInstanceSetBuffer('matrix', data, 16, true);
+        if (color) {
+          const colors = new Float32Array(Math.max(1, kept.length) * 4);
+          kept.forEach(({ i }, j) => {
+            colors.set(color(i), j * 4);
+          });
+          mesh.thinInstanceSetBuffer('color', colors, 4, true);
+        }
+        mesh.thinInstanceCount = kept.length;
+        mesh.setEnabled(kept.length > 0);
+      }
+    }
+    for (const spot of this.#cast) {
+      const wanted = this.#cut.cast.has(spot.room);
+      if (wanted && !spot.drawn()) spot.add();
+      else if (!wanted && spot.drawn()) spot.remove();
+    }
+  }
+
   /** Squishy and Keeper meshes take the neutral fill and none of the warm lights. */
   #sortCast(): void {
-    const scene = this.#scene;
-    this.#meshCount = scene.meshes.length;
     const fill = this.#fill.includedOnlyMeshes;
-    for (const mesh of scene.meshes) {
-      if (!CAST.test(mesh.name) || fill.includes(mesh)) continue;
+    for (const mesh of this.#scene.meshes) {
+      if (this.#sorted.has(mesh)) continue;
+      this.#sorted.add(mesh);
+      if (!CAST.test(mesh.name)) continue;
       fill.push(mesh);
       for (const light of this.#warm) light.excludedMeshes.push(mesh);
     }
@@ -444,6 +649,7 @@ export class HouseScene {
     roof.position.y = lift * HOUSE_GLIDE.roofLift;
     this.#roofMaterial.alpha = 1 - lift;
     roof.setEnabled(lift < 1);
+    this.#applyCut();
   }
 
   get stats(): HouseSceneStats {
@@ -459,7 +665,7 @@ export class HouseScene {
     }
     return {
       rooms: this.#rooms,
-      residents: this.#residents,
+      residents: this.#drawnResidents(),
       keeper: this.#keepers.handles.length > 0,
       lights: this.#scene.lights.filter((l) => l.isEnabled()).length,
       shadowMap: this.#shadows !== null,
@@ -469,6 +675,8 @@ export class HouseScene {
       roof: this.#roofLift,
       frontWallAlpha: this.#frontAlpha,
       heroes: this.#hero?.lod === 'high' ? this.#hero.handles.length : 0,
+      floor: this.#cut.floor,
+      floors: this.#floors,
     };
   }
 
@@ -477,37 +685,76 @@ export class HouseScene {
    * face counts when it's inside the frame and nothing of the house stands
    * between it and the camera.
    */
-  faceReport(): { visible: number; total: number } {
+  faceReport(): {
+    visible: number;
+    total: number;
+    cut: number;
+    /** Each resident's box on the screen, as shares of its width and height from the top left. */
+    boxes: { x0: number; y0: number; x1: number; y1: number }[];
+  } {
     const scene = this.#scene;
     const camera = scene.activeCamera;
-    const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
-    const handles = fields.flatMap((f) => f.handles.map((h) => ({ f, h })));
-    if (!camera) return { visible: 0, total: handles.length };
+    const drawn = this.#drawnSquishies();
+    if (!camera) return { visible: 0, total: drawn.length, cut: 0, boxes: [] };
     const engine = scene.getEngine();
     const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
     const eye = camera.globalPosition;
+    const view = scene.getTransformMatrix();
     const solid = new Set<AbstractMesh>(
       this.#house.filter((m) => !/(sky|lawn|pools|contact|sign|panes|wall-front)/.test(m.name)),
     );
+    const screen = (p: Vector3) => {
+      const q = Vector3.Project(p, Matrix.Identity(), view, vp);
+      return { x: q.x / vp.width, y: q.y / vp.height, z: q.z };
+    };
+    const right = Vector3.Cross(Vector3.Up(), camera.getForwardRay().direction).normalize();
     let visible = 0;
-    for (const { f, h } of handles) {
-      const centre = f.centre(h);
-      if (!centre) continue;
-      const toEye = eye.subtract(centre).normalize();
-      const face = centre.add(toEye.scale(0.3 * HOUSE_CAST.squishyScale));
-      const p = Vector3.Project(face, Matrix.Identity(), scene.getTransformMatrix(), vp);
-      const fx = p.x / vp.width;
-      const fy = p.y / vp.height;
-      if (p.z <= 0 || p.z >= 1 || fx < 0.02 || fx > 0.98 || fy < 0.02 || fy > 0.98) continue;
-      const dir = face.subtract(eye);
-      const length = dir.length();
-      const hit = scene.pickWithRay(
-        new Ray(eye, dir.normalize(), length - 0.05),
-        (m) => solid.has(m) && m.isEnabled(),
+    let cut = 0;
+    const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    for (const { centre, height } of drawn) {
+      const reach = height * HOUSE_CAST.reach;
+      // Partly off the screen's sides or ends (render check: a frame edge sliced one).
+      const sides = [right.scale(reach), right.scale(-reach), Vector3.Up().scale(reach)].map((d) =>
+        screen(centre.add(d)),
       );
-      if (!hit?.hit) visible += 1;
+      const xs = sides.map((p) => p.x);
+      const ys = sides.map((p) => p.y);
+      const inside = (v: number) => v >= 0 && v <= 1;
+      const partly = xs.some(inside) !== xs.every(inside) || ys.some(inside) !== ys.every(inside);
+      if (partly) cut += 1;
+      const top = screen(centre.add(Vector3.Up().scale(reach))).y;
+      const bottom = screen(centre.add(Vector3.Up().scale(-reach))).y;
+      boxes.push({
+        x0: Math.min(...xs),
+        x1: Math.max(...xs),
+        y0: Math.min(top, bottom),
+        y1: Math.max(top, bottom),
+      });
+      // The face counts when its middle and both sides are in the frame and
+      // nothing of the house stands in front of any of them (round 3: a wall
+      // over half a face still counted from its middle alone).
+      const toEye = eye.subtract(centre).normalize();
+      const face = centre.add(toEye.scale(0.3 * height));
+      const points = [
+        face,
+        face.add(right.scale(0.22 * height)),
+        face.add(right.scale(-0.22 * height)),
+      ];
+      const seen = points.every((pt) => {
+        const p = screen(pt);
+        if (p.z <= 0 || p.z >= 1 || p.x < 0.02 || p.x > 0.98 || p.y < 0.02 || p.y > 0.98)
+          return false;
+        const dir = pt.subtract(eye);
+        const length = dir.length();
+        const hit = scene.pickWithRay(
+          new Ray(eye, dir.normalize(), length - 0.05),
+          (m) => solid.has(m) && m.isEnabled(),
+        );
+        return !hit?.hit;
+      });
+      if (seen) visible += 1;
     }
-    return { visible, total: handles.length };
+    return { visible, total: drawn.length, cut, boxes };
   }
 
   /** The house's own meshes (shell, fixtures, outside), not the cast: the budget test counts these. */
@@ -570,7 +817,6 @@ export class HouseScene {
   /** Lights the rooms asked for, as many as the tier allows (the sun and the fill count). */
   #lightRequests(low: boolean): void {
     const scene = this.#scene;
-    const b = this.bounds;
     const cast = this.#fill.includedOnlyMeshes;
     const add = (light: Light) => {
       light.excludedMeshes = [...cast];
@@ -585,14 +831,16 @@ export class HouseScene {
       return light;
     };
     if (low) {
-      // One warm light over the rooms stands in for the fire, the lamps and the window.
-      add(
-        point(
-          'house-light',
-          new Vector3((b.minX + b.maxX) / 2, b.maxY + 0.9, (b.minZ + b.maxZ) / 2 - 1.8),
-          HOUSE_LIGHT.house,
-        ),
-      );
+      // One warm light over the rooms stands in for the fire, the lamps and
+      // the window: a directional one from above the open front, so no wall
+      // top right under it glows orange (B4 render check: the point light
+      // just over the partition lit its cap like a lamp).
+      const [x, y, z] = HOUSE_LIGHT.house.direction;
+      const light = new DirectionalLight('house-light', new Vector3(x, y, z), scene);
+      light.diffuse = linear(HOUSE_LIGHT.house.color);
+      light.specular = Color3.Black();
+      light.intensity = HOUSE_LIGHT.house.intensity;
+      add(light);
       return;
     }
     let free = this.#look.lights - 1 - this.#warm.length; // the fill and the sun so far
@@ -608,6 +856,7 @@ export class HouseScene {
 
   #kit(parts: RoomParts): RoomKit {
     const scene = this.#scene;
+    const floor = parts.box.floor;
     return {
       scene,
       box: parts.box,
@@ -615,26 +864,60 @@ export class HouseScene {
       solid: (list) => parts.solid.push(...list),
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {
-        this.#beds.push(Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)));
+        this.#beds.push({
+          matrix: Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)),
+          floor,
+        });
       },
       shadow: (x, z, width, depth) => {
-        this.#contact.push(
-          Matrix.Scaling(width, 1, depth).multiply(Matrix.Translation(x, parts.box.y0 + 0.025, z)),
-        );
+        this.#contact.push({
+          matrix: Matrix.Scaling(width, 1, depth).multiply(
+            Matrix.Translation(x, parts.box.y0 + 0.025, z),
+          ),
+          floor,
+        });
       },
       pool: (x, z, r) => {
-        this.#pools.push(
-          Matrix.Scaling(r * 2, 1, r * 2).multiply(Matrix.Translation(x, parts.box.y0 + 0.035, z)),
-        );
+        this.#pools.push({
+          matrix: Matrix.Scaling(r * 2, 1, r * 2).multiply(
+            Matrix.Translation(x, parts.box.y0 + 0.035, z),
+          ),
+          floor,
+        });
       },
       light: (kind, x, y, z) => this.#requests.push({ kind, at: new Vector3(x, y, z) }),
       heartSeed: (x, y, z, s) => {
-        this.#seeds.push(placeAt(x, y, z, new Vector3(s, s, s)));
+        this.#seeds.push({ matrix: placeAt(x, y, z, new Vector3(s, s, s)), floor });
       },
-      sign: (x, y, z, width) => {
-        this.#signAt ??= { x, y, z, width };
+      sign: (x, wantY, wantZ, width) => {
+        // A room whose back wall is cut low (a bigger room behind it: the
+        // Heart Hall behind the Snug) stands the sign on that wall's cap,
+        // not in the air over it (render check, B4).
+        // At kid height it hangs on the header over that opening instead
+        // (render check: it hung in the open gap, on a gallery post).
+        const box = parts.box;
+        const cut = this.#cutBack(box);
+        const y = cut ? box.y0 + HOUSE_GRID.cut + 0.08 + 0.29 : wantY;
+        const z = cut ? cut.at - HOUSE_GRID.wall / 2 - 0.06 : wantZ;
+        if (this.#signAt) return;
+        this.#signAt = {
+          x,
+          y,
+          z,
+          width,
+          room: box.id,
+          kidY: cut ? box.y1 - HOUSE_KID.header / 2 : null,
+        };
         const board = merged('house-sign-board', signBoard(scene, width));
         board.position.set(x, y, z);
+        if (cut) {
+          // Its own mesh, so it can move up to the header.
+          board.material = this.#vinyl;
+          board.alwaysSelectAsActiveMesh = false;
+          this.#house.push(board);
+          this.#signParts.push(board);
+          return;
+        }
         board.bakeCurrentTransformIntoVertices();
         parts.solid.push(board);
       },
@@ -652,7 +935,23 @@ export class HouseScene {
     const { wall: thick, cut } = HOUSE_GRID;
     // The open front: off in the dollhouse, full height and faded at kid height.
     const open = run.front && run.exterior;
-    const height = run.front && !open ? cut : run.height;
+    // An inside wall running back to a wall cut low (a big room behind: the
+    // Heart Hall behind the Snug and the Playroom) is cut low with it, or
+    // its end stands up like a post in front of that room's residents
+    // (render check, B4). Its upper part goes with the floor standing on it.
+    // Upstairs too (round 2): the Kitchen's side wall over the Playroom's
+    // roof stood in front of the Hall. A wall on the big room's outer side
+    // lines up with that room's own wall, so it stays.
+    const cutBack =
+      run.axis === 'z' &&
+      this.#runs.some((r) => {
+        if (r.axis !== 'x' || !r.front || r.exterior || r.floor !== run.floor) return false;
+        if (Math.abs(r.at - run.to) > 0.01 || r.from > run.at + 0.01 || r.to < run.at - 0.01)
+          return false;
+        const behind = this.#boxes.find((b) => b.id === r.room);
+        return behind !== undefined && behind.x0 < run.at - 0.01 && behind.x1 > run.at + 0.01;
+      });
+    const height = (run.front && !open) || cutBack ? cut : run.height;
     const length = run.to - run.from;
     const out = run.side === 'north' || run.side === 'east' ? 1 : -1;
     const holes = [...run.doors, ...run.windows];
@@ -678,13 +977,17 @@ export class HouseScene {
         ),
       );
     }
-    if (run.top || run.front) {
+    // Its top edge, capped in dark wood where it shows: always on a cut
+    // edge, and under a floor the cut can take away (slim, so it hides in
+    // the skirting and clapboard of the wall standing on it).
+    const capped = run.top || run.front || cutBack;
+    if (capped || run.upper !== null) {
       list.push(
         ...place(
           [
             box(
               scene,
-              [length + 0.04, 0.08, thick + 0.1],
+              [length + 0.04, 0.08, thick + (capped ? 0.1 : 0.06)],
               [length / 2, height + 0.04, 0],
               HOUSE_PALETTE.cap,
             ),
@@ -707,17 +1010,40 @@ export class HouseScene {
       );
     }
     for (const win of run.windows) {
+      if (win.y - win.h / 2 >= height) continue; // above a wall cut low
       list.push(...place(windowFrame(scene, win, thick), 0));
       const pane = CreatePlane('house-pane', { width: win.w, height: win.h }, scene);
       pane.position.set(win.u, win.y, 0);
       parts.panes.push(...place([pane], out * thick * 0.3));
     }
     if (open) {
-      this.#frontWall(parts.box.id, run, list, parts.panes.splice(panesBefore));
+      this.#frontWall(parts.box, run, list, parts.panes.splice(panesBefore));
       return;
     }
-    const key = run.side;
-    parts.walls.set(key, [...(parts.walls.get(key) ?? []), ...list]);
+    // With the room behind it on its floor, or the floor above (it's there
+    // because of that room, so the cut takes it away with it).
+    this.#floorParts(runFloor(run, this.#boxes)).solid.push(...list);
+    if (!cutBack) return;
+    // The part over the cut: with the floor standing on it, and at kid
+    // height in the ground-floor rooms either side (it closes the room in,
+    // round 2: past it the Heart Tree's crown showed sliced by the ceiling).
+    const lifted = (): Mesh[] => {
+      const up = run.height - cut;
+      const shifted = holes.map((h) => ({ ...h, y: h.y - cut }));
+      const pieces = [
+        ...wallPieces(scene, length, up, thick, shifted, HOUSE_PALETTE.wall),
+        box(scene, [length, 0.4, thick + 0.03], [length / 2, up - 0.2, 0], HOUSE_PALETTE.wallTop),
+      ];
+      for (const p of pieces) p.position.y += cut;
+      return place(pieces, 0);
+    };
+    if (run.upper !== null) this.#floorParts(run.upper).solid.push(...lifted());
+    if (run.floor === (this.#floors[0] ?? 0)) {
+      for (const id of [run.room, run.other]) {
+        if (id === null) continue;
+        this.#kidWalls.set(id, [...(this.#kidWalls.get(id) ?? []), ...lifted()]);
+      }
+    }
   }
 
   /**
@@ -726,7 +1052,8 @@ export class HouseScene {
    * the room, with a soft foot (it fades to nothing at the floor). Also the
    * porch in front of it, where kid height stands.
    */
-  #frontWall(id: string, run: WallRun, list: Mesh[], panes: Mesh[]): void {
+  #frontWall(room: RoomBox, run: WallRun, list: Mesh[], panes: Mesh[]): void {
+    const id = room.id;
     for (const p of panes) p.dispose();
     const mesh = merged(`house-${id}-wall-front`, list);
     const pos = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
@@ -745,16 +1072,28 @@ export class HouseScene {
     mesh.isPickable = false;
     mesh.setEnabled(false);
     this.#house.push(mesh);
-    this.#fronts.push({ room: id, mesh, material, wall: run });
+    this.#fronts.push({ room: id, floor: room.floor, mesh, material, wall: run });
     if (run.y0 === 0) {
       const z1 = run.at - HOUSE_GRID.frontLip;
+      // Three boards past each end, so its boards and their tones run on
+      // from the room's own (render check: a crease where they met, B4).
+      const past = 3 * HOUSE_GRID.plank;
       const planks = floorPlanks(
         this.#scene,
-        run.from - 0.6,
+        run.from - past,
         z1 - HOUSE_KID.porch,
-        run.to - run.from + 1.2,
+        run.to - run.from + 2 * past,
         HOUSE_KID.porch,
         0,
+      );
+      // A board under the porch's boards: no lawn showing through the gaps (render check, B4).
+      planks.push(
+        box(
+          this.#scene,
+          [run.to - run.from + 2 * past, 0.02, HOUSE_KID.porch],
+          [(run.from + run.to) / 2, -0.17, z1 - HOUSE_KID.porch / 2],
+          HOUSE_PALETTE.planks[2],
+        ),
       );
       const porch = merged(`house-${id}-porch`, planks);
       porch.material = this.#matte;
@@ -764,22 +1103,47 @@ export class HouseScene {
     }
   }
 
+  #floorParts(floor: number): FloorParts {
+    let parts = this.#byFloor.get(floor);
+    if (!parts) {
+      parts = { solid: [], glow: [], floor: [], panes: [] };
+      this.#byFloor.set(floor, parts);
+    }
+    return parts;
+  }
+
   /**
-   * A room's pieces as a few meshes: walls by side (they fade one by one at
-   * kid height), then one per material; its glowing bits wait to merge with
-   * the rest of its floor's.
+   * Every floor's pieces as a few meshes, one per material: the walls and
+   * furniture of all its rooms, its planks, its glowing bits and its
+   * window panes (B4: one mesh per floor, not per room or wall, so the top
+   * level fits the low tier's draw calls with room to spare). The floor
+   * cut shows or hides each floor's meshes as a whole.
    */
-  #mergeRoom(parts: RoomParts): void {
-    const id = parts.box.id;
-    for (const [side, list] of parts.walls)
-      this.#static(`house-${id}-wall-${side}`, list, this.#vinyl, true);
-    this.#static(`house-${id}-floor`, parts.floor, this.#matte, false).receiveShadows = true;
-    this.#static(`house-${id}-solid`, parts.solid, this.#vinyl, true);
-    const glow = this.#glowByFloor.get(parts.box.floor) ?? [];
-    glow.push(...parts.glow);
-    this.#glowByFloor.set(parts.box.floor, glow);
-    if (parts.panes.length > 0)
-      this.#static(`house-${id}-panes`, parts.panes, duskPaneMaterial(this.#scene), false);
+  #mergeFloors(): void {
+    for (const [floor, parts] of [...this.#byFloor].sort((a, b) => a[0] - b[0])) {
+      const f = `f${String(floor)}`;
+      // With a shadow map, the little pieces (toys, mugs, jars) go in a mesh
+      // of their own that casts none: the shadow pass draws only what throws
+      // a shadow you'd see.
+      const small = this.#shadows
+        ? parts.solid.filter((m) => extent(m) < HOUSE_SHADOW.minCaster)
+        : [];
+      const big = parts.solid.filter((m) => !small.includes(m));
+      const planks = this.#static(`house-${f}-floor`, parts.floor, this.#matte, false);
+      planks.receiveShadows = true;
+      const meshes = [
+        this.#static(`house-${f}-solid`, big, this.#vinyl, true),
+        planks,
+        this.#static(`house-glow-${f}`, parts.glow, this.#glow, false),
+      ];
+      if (small.length > 0)
+        meshes.push(this.#static(`house-${f}-small`, small, this.#vinyl, false));
+      if (parts.panes.length > 0)
+        meshes.push(
+          this.#static(`house-${f}-panes`, parts.panes, duskPaneMaterial(this.#scene), false),
+        );
+      if (floor > 0) for (const mesh of meshes) this.#floorMeshes.push({ mesh, floor });
+    }
   }
 
   /** Merges parts into one static mesh of the house (culled as a whole). */
@@ -804,46 +1168,44 @@ export class HouseScene {
     if (this.#seeds.length === 0) return;
     const seed = buildHeartSeed(this.#scene);
     seed.name = 'house-heart-seeds';
-    setInstances(seed, this.#seeds);
+    setInstances(
+      seed,
+      this.#seeds.map((s) => s.matrix),
+    );
     this.#house.push(seed);
+    this.#instanced.push({ mesh: seed, list: this.#seeds });
   }
 
   /** Every bed in the house: one frame mesh and one blanket mesh, thin-instanced (two draw calls). */
   #buildBeds(): void {
     if (this.#beds.length === 0) return;
-    const frame = merged('house-beds', bedFrame(this.#scene));
+    const frame = merged('house-beds', bedFrame(this.#scene, this.#look.rounds));
     frame.material = this.#vinyl;
     const blanket = merged('house-blankets', bedBlanket(this.#scene));
     blanket.material = this.#vinyl;
-    const data = new Float32Array(this.#beds.length * 16);
-    this.#beds.forEach((m, i) => {
-      m.copyToArray(data, i * 16);
-    });
-    const colors = new Float32Array(this.#beds.length * 4);
-    this.#beds.forEach((_, i) => {
-      const c = linear(HOUSE_BLANKETS[i % HOUSE_BLANKETS.length] ?? '#ffffff');
-      colors.set([c.r, c.g, c.b, 1], i * 4);
-    });
     for (const mesh of [frame, blanket]) {
-      mesh.thinInstanceSetBuffer('matrix', data.slice(), 16, true);
       mesh.receiveShadows = this.#shadows !== null;
       this.#shadows?.addShadowCaster(mesh);
       this.#house.push(mesh);
     }
-    blanket.thinInstanceSetBuffer('color', colors, 4, true);
+    // Each bed keeps its blanket colour whichever floors the cut shows.
+    const color = (i: number) => {
+      const c = linear(HOUSE_BLANKETS[i % HOUSE_BLANKETS.length] ?? '#ffffff');
+      return [c.r, c.g, c.b, 1];
+    };
+    this.#instanced.push(
+      { mesh: frame, list: this.#beds },
+      { mesh: blanket, list: this.#beds, color },
+    );
   }
 
   /** Contact shadows under furniture (low tier: no shadow map) and warm light pools (every tier). */
   #buildDecals(low: boolean): void {
     const scene = this.#scene;
-    const instance = (mesh: Mesh, list: readonly Matrix[]) => {
-      const data = new Float32Array(list.length * 16);
-      list.forEach((m, i) => {
-        m.copyToArray(data, i * 16);
-      });
-      mesh.thinInstanceSetBuffer('matrix', data, 16, true);
+    const instance = (mesh: Mesh, list: readonly Placed[]) => {
       mesh.isPickable = false;
       this.#house.push(mesh);
+      this.#instanced.push({ mesh, list });
     };
     if (low && this.#contact.length > 0) {
       const contact = createContactShadowMesh(scene);
@@ -882,32 +1244,65 @@ export class HouseScene {
     plane.position.set(at.x, at.y, at.z - 0.05);
     plane.isPickable = false;
     this.#house.push(plane);
+    if (at.kidY !== null) this.#signParts.push(plane);
   }
 
-  /** The roof seen from inside over every room with nothing above it (kid height only). */
+  /** The wall cut low behind a room (a bigger room behind it: the Heart Hall behind the Snug), if any. */
+  #cutBack(box: RoomBox): WallRun | undefined {
+    return this.#runs.find(
+      (r) =>
+        r.axis === 'x' &&
+        r.front &&
+        !r.exterior &&
+        r.other === box.id &&
+        r.floor === box.floor &&
+        Math.abs(r.at - box.z1) < 0.01,
+    );
+  }
+
+  /**
+   * What kid height sees overhead, built for every room on the ground
+   * floor (kid height walks in there): the roof from inside where nothing
+   * stands above, else a beamed ceiling, since the floor cut takes the
+   * floor above away (B4).
+   */
   #buildCeilings(rooms: readonly RoomBox[]): void {
     for (const r of rooms) {
-      if (
-        rooms.some(
-          (o) =>
-            o !== r && o.y0 >= r.y1 && o.x0 < r.x1 && o.x1 > r.x0 && o.z0 < r.z1 && o.z1 > r.z0,
-        )
-      )
-        continue;
+      if (r.floor !== (this.#floors[0] ?? 0)) continue;
+      const covered = rooms.some((o) => covers(o, r));
       // It reaches out over the porch, so kid height (standing out there) sees no sky above.
-      const parts = roofInside(
-        this.#scene,
-        r.x0,
-        r.z0,
-        r.x1 - r.x0,
-        r.z1 - r.z0,
-        r.y1,
-        HOUSE_KID.minStandBack + 0.6,
-      );
+      const overhang = HOUSE_KID.minStandBack + 0.6;
+      const [w, d] = [r.x1 - r.x0, r.z1 - r.z0];
+      // Just over the walls' tops, so the joists clear the sign (render check, B4).
+      const parts = covered
+        ? { solid: beamCeiling(this.#scene, r.x0, r.z0, w, d, r.y1 + 0.04, overhang), glow: [] }
+        : roofInside(this.#scene, r.x0, r.z0, w, d, r.y1, overhang);
+      // Over a back wall cut low, a header across the opening: it frames the
+      // room behind, holds the sign, and keeps that room's tall things (the
+      // Heart Tree's crown) from showing sliced by the ceiling's edge.
+      if (this.#cutBack(r)) {
+        const h = HOUSE_KID.header;
+        parts.solid.push(
+          box(
+            this.#scene,
+            [w, h, HOUSE_GRID.wall],
+            [r.x0 + w / 2, r.y1 - h / 2 + 0.04, r.z1],
+            HOUSE_PALETTE.wall,
+          ),
+          box(
+            this.#scene,
+            [w + 0.04, 0.1, HOUSE_GRID.wall + 0.06],
+            [r.x0 + w / 2, r.y1 - h + 0.04, r.z1],
+            HOUSE_PALETTE.cap,
+          ),
+        );
+      }
+      parts.solid.push(...(this.#kidWalls.get(r.id) ?? []));
       for (const [name, list, material] of [
         [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
         [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],
       ] as const) {
+        if (list.length === 0) continue;
         const mesh = merged(name, list);
         mesh.material = material;
         mesh.alwaysSelectAsActiveMesh = false;
@@ -921,13 +1316,7 @@ export class HouseScene {
   /** A gable roof over every room with nothing above it, for the entry glide to lift away. */
   #buildRoof(rooms: readonly RoomBox[], runs: readonly WallRun[]): Mesh | null {
     const parts = rooms
-      .filter(
-        (r) =>
-          !rooms.some(
-            (o) =>
-              o !== r && o.y0 >= r.y1 && o.x0 < r.x1 && o.x1 > r.x0 && o.z0 < r.z1 && o.z1 > r.z0,
-          ),
-      )
+      .filter((r) => !rooms.some((o) => covers(o, r)))
       .flatMap((r) =>
         gableRoof(this.#scene, r.x0 - 0.2, r.z0 - 0.2, r.x1 - r.x0 + 0.4, r.z1 - r.z0 + 0.4, r.y1),
       );
@@ -995,7 +1384,7 @@ export class HouseScene {
         hex: HOUSE_TREE_CROWNS[i % HOUSE_TREE_CROWNS.length] ?? '#9fcf9a',
       });
     }
-    const parts = treeParts(scene, this.#look.shadowMap > 0 ? 9 : 7);
+    const parts = treeParts(scene, this.#look.treeSegments);
     const trunks = merged('house-tree-trunks', parts.trunk);
     const crowns = merged('house-tree-crowns', parts.crown);
     for (const mesh of [trunks, crowns]) {
@@ -1005,10 +1394,13 @@ export class HouseScene {
     }
     this.#treeMeshes = { trunks, crowns };
     this.frameOutside(null);
-    const yard = frontYard(scene, b.minX, b.maxX, b.minZ);
+    const yard = frontYard(scene, b.minX, b.maxX, b.minZ, this.#look.rounds);
     // A warm pool on the lawn under each lantern.
     for (const [x, z] of yard.lanterns) {
-      this.#pools.push(Matrix.Scaling(2, 1, 2).multiply(Matrix.Translation(x, -0.28, z)));
+      this.#pools.push({
+        matrix: Matrix.Scaling(2, 1, 2).multiply(Matrix.Translation(x, -0.28, z)),
+        floor: 0,
+      });
     }
     const footing = box(
       scene,
@@ -1078,35 +1470,85 @@ export class HouseScene {
         const spot = plan?.residents[i] ?? { x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 };
         if (!member) return;
         const field = heroes.has(resident.squishyId) && this.#hero ? this.#hero : this.#squishies;
-        const handle = field.add(member.species, resident.squishyId, {
+        const placement: SquishyPlacement = {
           x: spot.x,
           z: spot.z,
           y: box.y0,
           yaw: facing(spot, n),
           scale: HOUSE_CAST.squishyScale,
-        });
-        field.setAccessory(handle, accessoryItem(member.accessory));
+        };
+        this.#cast.push(
+          this.#castSpot(
+            room.id,
+            () => {
+              const handle = field.add(member.species, resident.squishyId, placement);
+              field.setAccessory(handle, accessoryItem(member.accessory));
+              return () => {
+                field.remove(handle);
+              };
+            },
+            'resident',
+            { x: spot.x, y: box.y0, z: spot.z },
+          ),
+        );
         n += 1;
       });
     }
-    this.#residents = n;
     if (!keeperRoom) return;
     const box = roomBox(keeperRoom);
     const spot = plans.get(keeperRoom.id)?.keeper ?? { x: (box.x0 + box.x1) / 2, z: box.z0 + 0.8 };
     const base = KEEPER_DATA.bases[0];
     const config = options.keeper ?? (base ? defaultKeeperConfig(base) : null);
     if (!config) return;
-    this.#keepers.add(
-      config,
-      {
-        x: spot.x,
-        z: spot.z,
-        y: box.y0,
-        yaw: facing(spot, 0),
-        scale: HOUSE_CAST.keeperScale,
-        lean: HOUSE_CAST.keeperLean,
-      },
-      keeperItems(options.keeperWearing ?? []),
+    const placement: KeeperPlacement = {
+      x: spot.x,
+      z: spot.z,
+      y: box.y0,
+      yaw: facing(spot, 0),
+      scale: HOUSE_CAST.keeperScale,
+      lean: HOUSE_CAST.keeperLean,
+    };
+    const items = keeperItems(options.keeperWearing ?? []);
+    this.#cast.push(
+      this.#castSpot(
+        keeperRoom.id,
+        () => {
+          const handle: KeeperHandle = this.#keepers.add(config, placement, items);
+          return () => {
+            this.#keepers.remove(handle);
+          };
+        },
+        'keeper',
+        { x: spot.x, y: box.y0, z: spot.z },
+      ),
     );
+  }
+
+  /** One of the cast, drawn while the floor cut shows its room's floor. */
+  #castSpot(
+    room: string,
+    add: () => () => void,
+    kind: CastSpot['kind'],
+    at: CastSpot['at'],
+  ): CastSpot {
+    let remove: (() => void) | null = null;
+    return {
+      room,
+      at,
+      kind,
+      add: () => {
+        remove ??= add();
+      },
+      remove: () => {
+        remove?.();
+        remove = null;
+      },
+      drawn: () => remove !== null,
+    };
+  }
+
+  /** Residents drawn now (the floor cut leaves out the ones on other floors). */
+  #drawnResidents(): number {
+    return this.#cast.filter((c) => c.kind === 'resident' && c.drawn()).length;
   }
 }

@@ -171,10 +171,24 @@ describe('checkRosterArt', () => {
   });
 
   it('refuses an evolution that only recolours', () => {
-    const evo = grown({ size: 1.1, palette: ['#3477cc'] });
+    const evo = grown({ size: 1.05, palette: ['#3477cc'] });
     expect(rosterProblems([base, evo])).toEqual([
-      expect.stringContaining('an evolution is ×1.2–1.4 the size of puff, not ×1.10'),
+      expect.stringContaining('an evolution is ×1.08–1.4 the size of puff, not ×1.05'),
       expect.stringContaining('an evolution adds a new sticking-out part'),
+    ]);
+  });
+
+  // #443: a line has up to four stages, and its rows can come in any order.
+  it('keeps a whole chain in one line, however its rows are ordered', () => {
+    const kid = row({
+      id: 'puff-2',
+      evolutions: [{ into: 'puff-3' }],
+      visual: { size: 1.15, parts: ['dot-eyes', 'open-mouth', 'water-curl', 'fin-crest'] },
+    });
+    // The teen keeps the baby's look (only to test the line, not a real design).
+    const teen = row({ id: 'puff-3', visual: { size: 1.3 } });
+    expect(rosterProblems([kid, teen, base])).toEqual([
+      expect.stringContaining('an evolution adds a new sticking-out part to puff-2'),
     ]);
   });
 

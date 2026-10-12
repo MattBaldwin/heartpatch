@@ -14,7 +14,9 @@ export interface SimConfig {
   readonly levels: {
     /** Base forms fight base forms at this level. */
     readonly base: number;
-    /** Evolved forms fight evolved forms at this level. */
+    /** Kids (#443, a middle stage) fight kids at this level. */
+    readonly kid: number;
+    /** Evolved forms (a line's top stage today) fight evolved forms at this level. */
     readonly evolved: number;
     /** Element × feeling combos (equal stats) fight at this level. */
     readonly combo: number;
@@ -32,6 +34,6 @@ export const SIM_CONFIG: SimConfig = {
   rootSeed: 'heartpatch-balance-sim-v1',
   policies: ['balanced', 'aggressive', 'defensive'],
   thresholds: { low: 0.35, high: 0.65 }, // TUNE: issue #12 "e.g. >65% or <35%"
-  levels: { base: 12, evolved: 25, combo: 15 }, // TUNE: wild 2–6, guardians 14–18, evolutions 16–30
+  levels: { base: 12, kid: 20, evolved: 25, combo: 15 }, // TUNE: wild 2–6, guardians 14–18, kids 16–30, teens 24–38
   games: { species: 100, combo: 20, stance: 100 }, // TUNE: more games, less noise, slower run
 };

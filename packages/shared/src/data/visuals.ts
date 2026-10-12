@@ -1830,7 +1830,7 @@ export const ART_RULES: ArtRules = {
     secret: 'iridescent',
   },
   glowByElement: { light: 'body', fire: 'accent' },
-  evolutionScale: { min: 1.2, max: 1.4 }, // TUNE
+  evolutionScale: { min: 1.08, max: 1.4 }, // TUNE: per step of baby → kid → teen → grown-up (#443); 1.4 lets an unconverted line still go baby → teen in one step
   feelingFaces: {
     sleepy: [['sleepy-eyes']],
     joy: [['happy-eyes']],

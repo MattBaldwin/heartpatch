@@ -20,13 +20,12 @@ import { houseApi, type HouseApi } from './house-api.js';
 import { createHouseBuilder } from './house-build.js';
 import { confirmPanel, growPanel, houseButton, sparkle } from './house-grow.js';
 import { builtLine, sparkleSpot } from './house-grow-view.js';
-import { roomBox } from './house-layout.js';
+import { floorAfterGrowing, roomBox } from './house-layout.js';
 import { createViewSync } from './house-view-sync.js';
 import {
   blend,
   clampZoom,
   entryGlide,
-  fitHouse,
   glidePose,
   kidPose,
   pinchedOut,
@@ -40,6 +39,8 @@ import {
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
 import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
+import { framesAboveSheet, sheetBands } from './house-frame.js';
+import { createHousePan, type PanFrame } from './house-pan.js';
 import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine, RESIDENT_TEXT } from './house-view.js';
 import { careApi, type CareApi } from '../care/care-api.js';
 import type { Portraits } from '../procedural/portraits.js';
@@ -188,11 +189,25 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let builtTier: QualityTier | null = null;
   /** The fitted dollhouse pose for the screen as it is now. */
   let base: HousePose | null = null;
+  /** The sideways drag on a tall phone: fits once, slides per frame (house-pan.ts). */
+  const panner = createHousePan({
+    measure: () => {
+      const s = scene3d;
+      if (!s) throw new Error('no house to fit');
+      return { vp: viewport(), bounds: s.frameBounds, room: s.focusRoom, spots: s.residentSpots };
+    },
+    frameOutside: (pose, vp) => {
+      const height = Math.max(1, vp.height);
+      scene3d?.frameOutside({ pose, aspect: vp.width / height, topBar: 1 - (2 * vp.top) / height });
+    },
+  });
   let glide: { shot: CinematicShot; start: number | null } | null = null;
   /** Kid height in the focus room, for the screen as it is now. */
   let kid: HousePose | null = null;
   /** 0 the dollhouse, 1 kid height. */
   let zoom = 0;
+  /** The floor the dollhouse shows (kid height walks in on the ground floor). */
+  let floor = 0;
   /** Walk in or Step out under way: from where, to where, since when (ms). */
   let walk: { from: number; goal: number; start: number | null } | null = null;
   let frame = 0;
@@ -214,6 +229,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   const sync = createViewSync();
   /** The bottom band the folded sheet covers, kept while it's open so the house doesn't jump. */
   let foldedBand = 0;
+  /** The folded sheet's own band (B4: the yard may run on under Walk in, down to it). */
+  let foldedSheet = 0;
   const builder = createHouseBuilder({
     build: (id, toLevel, key) => api.build(id, toLevel, key),
   });
@@ -255,6 +272,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     class: 'house-walk',
     'data-testid': 'house-walk',
   });
+  // B4 floor switch: shown when the house has more than one floor, in the dollhouse.
+  const floorButton = el('button', {
+    type: 'button',
+    class: 'house-floor',
+    'data-testid': 'house-floor',
+  });
+  // "More this way" at a side the phone's frame crops (B4), a soft fade and a chevron.
+  const moreLeft = el('div', { class: 'house-more house-more-left', 'aria-hidden': 'true' }, '‹');
+  const moreRight = el('div', { class: 'house-more house-more-right', 'aria-hidden': 'true' }, '›');
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
   // The sheet's handle, as home's (#412): a tap opens or folds it, a swipe
   // goes the finger's way; a click with no press before it (keyboard,
@@ -300,6 +326,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     touch,
     top,
     walkButton,
+    floorButton,
+    moreLeft,
+    moreRight,
     scrim,
     peek,
   );
@@ -355,6 +384,40 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     draw();
   });
 
+  floorButton.addEventListener('click', () => {
+    skipGlide();
+    showFloor(floor === 0 ? (scene3d?.floors.at(-1) ?? 0) : 0);
+  });
+
+  /** The dollhouse shows floor `n` (the floors above taken away) and refits to it. */
+  function showFloor(n: number): void {
+    floor = n;
+    scene3d?.setFloor(n);
+    renderFloor();
+    refit();
+  }
+
+  /** Upstairs or Downstairs: only with more than one floor, and only in the dollhouse. */
+  function renderFloor(): void {
+    // Hidden while the sheet is open, as Walk in is (B3b: the HUD behind it is inert).
+    const dollhouse = walk === null && zoom <= 0 && sheet === 'peek';
+    moreLeft.hidden = !dollhouse || panner.pan <= panner.limits.min + 0.05;
+    moreRight.hidden = !dollhouse || panner.pan >= panner.limits.max - 0.05;
+    const floors = scene3d?.floors ?? [];
+    floorButton.hidden = floors.length < 2 || !dollhouse;
+    const up = floor === 0;
+    if (floorButton.dataset['up'] === String(up)) return;
+    floorButton.dataset['up'] = String(up);
+    floorButton.replaceChildren(
+      el(
+        'span',
+        { 'aria-hidden': 'true' },
+        up ? HOUSE_TEXT.upstairsIcon : HOUSE_TEXT.downstairsIcon,
+      ),
+      ` ${up ? HOUSE_TEXT.upstairs : HOUSE_TEXT.downstairs}`,
+    );
+  }
+
   /** Walk in or Step out, by where the camera is going (or is). */
   function renderWalk(): void {
     const inside = walk ? walk.goal === 1 : walkedIn(zoom);
@@ -367,6 +430,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       ),
       ` ${inside ? HOUSE_TEXT.stepOut : HOUSE_TEXT.walkIn}`,
     );
+    renderFloor();
   }
 
   const owner = () => user?.username ?? null;
@@ -389,6 +453,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     note = '';
     focusNext = focusFor(from, next);
     renderSheet();
+    reframeForSheet(from, next);
     if (from === 'peek') void refresh();
   }
 
@@ -450,11 +515,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     peek.classList.toggle('house-peek-grow', growing);
     handle.setAttribute('aria-expanded', String(open));
     walkButton.hidden = open;
+    renderFloor();
     peekText.hidden = growing;
     // The Grow sheet has its own ✕; the grip comes back with the room line.
     handle.hidden = growing;
     scrim.hidden = !growing;
-    for (const behind of [touch, top, walkButton]) {
+    for (const behind of [touch, top, walkButton, floorButton]) {
       behind.toggleAttribute('inert', growing);
       if (growing) behind.setAttribute('aria-hidden', 'true');
       else behind.removeAttribute('aria-hidden');
@@ -524,6 +590,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     view = fresh;
     viewAt = Date.now();
     render();
+    if (grew) {
+      // A new room upstairs: show its floor (B4 review), in the dollhouse.
+      const next = floorAfterGrowing(fresh.rooms, fresh.level, floor);
+      if (next !== floor) {
+        floor = next;
+        zoom = 0;
+        walk = null;
+      }
+    }
     if (grew || recast) options.showScene(build);
   }
 
@@ -612,6 +687,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The server's clock now, run forward from the house reply (for "Back in 5 h"). */
   const serverNow = (): number =>
     (view ? Date.parse(view.now) : Date.now()) + (viewAt ? Date.now() - viewAt : 0);
+
+  /**
+   * A residents page opened or closed: fit the house once (through
+   * `panner.fit()`) above the open sheet, or back above the folded one.
+   */
+  function reframeForSheet(from: HouseSheet, to: HouseSheet): void {
+    if (framesAboveSheet(from) !== framesAboveSheet(to)) refit();
+  }
 
   /** Where focus goes when a resident page opens or closes. */
   function residentFocus(from: HouseSheet, to: HouseSheet): string | null {
@@ -742,6 +825,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       renderSheet();
       return;
     }
+    const was = sheet;
     if (outcome.kind === 'failed') {
       // The picker stays up with the server's kind word; a move-out goes back to the beds.
       if (sheet === 'move-out') sheet = 'open';
@@ -749,6 +833,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       noteKind = 'calm';
       focusNext = 'house-note';
       renderSheet();
+      reframeForSheet(was, sheet);
       // Who can come may have moved (another device, a trade, the Hollow).
       void refresh();
       return;
@@ -762,6 +847,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     chosen = null;
     pickFocus = null;
     applyView(outcome.view);
+    // Back on the beds: the house fits above the folded sheet again.
+    reframeForSheet(was, sheet);
   }
 
   function playSparkle(): void {
@@ -783,11 +870,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const topBand = top.getBoundingClientRect().bottom - box.top;
     // The house fits above the folded sheet; an open sheet floats over it.
     if (sheet === 'peek' || foldedBand === 0) {
-      foldedBand =
-        box.bottom -
-        Math.min(peek.getBoundingClientRect().top, walkButton.getBoundingClientRect().top);
+      const peekTop = peek.getBoundingClientRect().top;
+      foldedBand = box.bottom - Math.min(peekTop, walkButton.getBoundingClientRect().top);
+      // The folded sheet alone (B4: the yard may run on under Walk in, down to it).
+      foldedSheet = box.bottom - peekTop;
     }
-    return { width, height, top: Math.max(0, topBand), bottom: Math.max(0, foldedBand) };
+    // C2b: a residents page frames the house above its open sheet.
+    const bands = sheetBands(
+      { bottom: Math.max(0, foldedBand), sheet: Math.max(0, foldedSheet) },
+      framesAboveSheet(sheet) ? box.bottom - peek.getBoundingClientRect().top : null,
+    );
+    return { width, height, top: Math.max(0, topBand), ...bands };
   }
 
   // ── Camera ────────────────────────────────────────────────────────────
@@ -829,8 +922,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       options.showScene(build);
       return;
     }
+    // Kid height walks into the Keeper's room, on the ground floor.
+    if (floor !== 0 && (zoom > 0 || walk?.goal === 1)) {
+      floor = 0;
+      s.setFloor(0);
+      fit(s);
+    }
+    const slid = panner.step();
+    if (slid) showPan(slid);
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
+    renderFloor();
     options.invalidate();
     if (glide || walk) draw();
   }
@@ -845,18 +947,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** The dollhouse and kid-height poses for the screen as it is now. */
   function fit(s: HouseScene): void {
-    const vp = viewport();
-    base = fitHouse(s.bounds, vp);
+    // B4: a tall phone fits the Keeper's room and drags sideways to the rest.
+    showPan(panner.fit());
     const room = s.focusRoom;
-    kid = room ? kidPose(room, vp) : null;
-    frameOutside(s, base);
+    kid = room ? kidPose(room, viewport()) : null;
   }
 
-  /** Drops trees the dollhouse frame would clip, or that would stand under the top bar. */
-  function frameOutside(s: HouseScene, pose: HousePose): void {
-    const vp = viewport();
-    const height = Math.max(1, vp.height);
-    s.frameOutside({ pose, aspect: vp.width / height, topBar: 1 - (2 * vp.top) / height });
+  /** The dollhouse where the drag has slid it, the chevrons clear of every resident's face. */
+  function showPan(frame: PanFrame): void {
+    base = frame.base;
+    moreLeft.style.top = `${String(frame.cues.left.y0)}px`;
+    moreRight.style.top = `${String(frame.cues.right.y0)}px`;
   }
 
   /** Skips the glide to the dollhouse (a tap, or reduced motion). */
@@ -889,6 +990,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     touch.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
+    if (pointers.size === 1) panner.down(e.clientX);
     if (pointers.size === 2) {
       skipGlide();
       walk = null;
@@ -896,8 +998,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     }
   });
   touch.addEventListener('pointermove', (e) => {
-    if (!pointers.has(e.pointerId)) return;
+    const was = pointers.get(e.pointerId);
+    if (!was) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // One finger in the dollhouse slides it sideways (a tall phone shows one
+    // room or two), gathered and applied once a frame in step().
+    if (pointers.size === 1 && zoom === 0 && !walk && panner.move(e.clientX)) {
+      skipGlide();
+      draw();
+    }
     taps.pointerMove(sample(e));
     if (pinch && pointers.size === 2) {
       zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
@@ -909,6 +1018,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!pointers.delete(e.pointerId)) return;
     if (e.type === 'pointercancel') taps.pointerCancel(sample(e));
     else taps.pointerUp(sample(e));
+    if (pointers.size === 0) {
+      const last = panner.up();
+      if (last) {
+        showPan(last);
+        draw();
+      }
+    }
     if (pinch && pointers.size < 2) {
       pinch = null;
       if (pinchedOut(zoom)) {
@@ -964,7 +1080,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       signText: owner() ? HOUSE_TEXT.sign(owner() ?? '') : HOUSE_TEXT.yourHouse,
     });
     scene3d = built;
+    built.setFloor(floor);
     fit(built);
+    renderFloor();
     if (!base) throw new Error('no dollhouse pose');
     // The roof lifts off as you arrive; a rebuild for a new tier doesn't glide again.
     glide = fresh && !reducedMotion.matches ? { shot: entryGlide(base), start: null } : null;
@@ -1016,11 +1134,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     mapId = id;
     view = fresh;
     zoom = 0;
+    floor = 0;
+    panner.reset();
     walk = null;
     builtTier = null;
     sheet = 'peek';
     note = '';
     foldedBand = 0;
+    foldedSheet = 0;
     celebrate = false;
     resetResidents(home);
     isOpen = true;

@@ -1,6 +1,6 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { type Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
@@ -102,6 +102,52 @@ describe('BattleScene', () => {
     expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
     expect(scene.getMeshByName('arena-sky')).not.toBeNull();
     expect(scene.getMeshByName('arena-hills')).not.toBeNull();
+  });
+
+  it('lays each fighter a contact shadow that faces up, not mirrored, so culling keeps it (#462)', () => {
+    for (const tier of ['high', 'low'] as const) {
+      const { scene, battle } = build('forest', false, tier);
+      battle.sendOut('a', 'puddlepuff', 'mine-1');
+      battle.sendOut('b', 'emberbun', 'wild-1');
+      battle.update(5000);
+      const mesh = scene.getMeshByName('battle-fighter-shadows') as Mesh | null;
+      expect(mesh, tier).not.toBeNull();
+      const shown = (mesh?.thinInstanceGetWorldMatrices() ?? [])
+        .slice(0, mesh?.thinInstanceCount ?? 0)
+        .filter((m) => m.m[0] !== 0 || m.m[2] !== 0);
+      expect(shown.length, tier).toBe(4);
+      // A mirrored instance turns the ground quad's face away, and back-face
+      // culling drops it (#462): every shadow keeps a positive determinant.
+      for (const m of shown) expect(m.determinant(), tier).toBeGreaterThan(0);
+    }
+  });
+
+  it("sizes each prop's contact shadow by the prop, however it's turned (#473)", () => {
+    const { scene } = build('forest');
+    const shadows = scene.getMeshByName('arena-prop-shadows') as Mesh | null;
+    expect(shadows).not.toBeNull();
+    // The X row's length is the scale on X, whatever the turn about Y.
+    const width = (m: Matrix) => Math.hypot(m.m[0] ?? 0, m.m[1] ?? 0, m.m[2] ?? 0);
+    const shadowAt = new Map(
+      (shadows?.thinInstanceGetWorldMatrices() ?? []).map((m) => [
+        `${(m.m[12] ?? 0).toFixed(3)},${(m.m[14] ?? 0).toFixed(3)}`,
+        width(m),
+      ]),
+    );
+    let checked = 0;
+    for (const mesh of scene.meshes) {
+      if (!mesh.name.startsWith('arena-prop-') || mesh === shadows) continue;
+      const ratios = (mesh as Mesh).thinInstanceGetWorldMatrices().flatMap((m) => {
+        const shadow = shadowAt.get(`${(m.m[12] ?? 0).toFixed(3)},${(m.m[14] ?? 0).toFixed(3)}`);
+        return shadow === undefined ? [] : [shadow / width(m)];
+      });
+      // Same kind, same shadow-to-prop ratio: a prop turned 90° keeps a full shadow.
+      for (const r of ratios) expect(r, mesh.name).toBeCloseTo(ratios[0] ?? 0, 5);
+      checked += ratios.length;
+    }
+    // Every shadow found its prop: no key collided, and none was left over.
+    expect(checked).toBe(shadowAt.size);
+    expect(checked).toBeGreaterThan(2);
   });
 
   it('dresses each squishy in what it wears, hat height included, and swaps keep it (#373)', () => {

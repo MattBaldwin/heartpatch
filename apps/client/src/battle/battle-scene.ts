@@ -688,6 +688,33 @@ export class BattleScene {
     return this.#bubbles[side].isEnabled();
   }
 
+  /**
+   * Where a side's squishy sits on the page (#391's rare-find moment): its
+   * middle in CSS pixels and half its height, or null with nobody out or
+   * nothing drawn yet.
+   */
+  screenSpot(side: BattleSideId): { x: number; y: number; r: number } | null {
+    const rig = this.#rigs[side];
+    const fighter = rig.out;
+    const camera = this.#scene.activeCamera;
+    const canvas = this.#scene.getEngine().getRenderingCanvas();
+    if (!fighter || !camera || !canvas) return null;
+    const box = canvas.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return null;
+    const viewport = camera.viewport.toGlobal(box.width, box.height);
+    const transform = camera.getTransformationMatrix();
+    const c = this.#centre(rig, rig.pose, fighter);
+    const half = (fighter.height * rig.pose.scale) / 2;
+    const mid = Vector3.Project(new Vector3(c.x, c.y, c.z), Matrix.Identity(), transform, viewport);
+    const top = Vector3.Project(
+      new Vector3(c.x, c.y + half, c.z),
+      Matrix.Identity(),
+      transform,
+      viewport,
+    );
+    return { x: box.left + mid.x, y: box.top + mid.y, r: Math.max(24, Math.abs(mid.y - top.y)) };
+  }
+
   #placeBubbles(): void {
     for (const side of SIDES) {
       const rig = this.#rigs[side];
@@ -898,9 +925,13 @@ export class BattleScene {
         const d = fighter.radius * 2 * CONTACT_SHADOW.scale * p.scale * lifted * share;
         const across = d;
         const along = d * stretch;
-        m[o] = -uz * across;
+        // X = Y × Z (Y up, Z along the light), so X, Y, Z keep the mesh's own
+        // handedness (positive determinant). The old Z × Y (-uz, 0, ux)
+        // mirrored the quad, its face turned down and back-face culling
+        // dropped every shadow (#462).
+        m[o] = uz * across;
         m[o + 1] = 0;
-        m[o + 2] = ux * across;
+        m[o + 2] = -ux * across;
         m[o + 3] = 0;
         m[o + 4] = 0;
         m[o + 5] = 1;

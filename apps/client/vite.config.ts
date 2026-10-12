@@ -115,7 +115,13 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts', 'tooling/**/*.test.ts'],
-    // Vitest blanks CSS by default; the rarity test reads these sheets as text (#240).
-    css: { include: [/[\\/]ui[\\/](rarity[\\/]rarity|wardrobe[\\/]wardrobe)\.css/] },
+    // Vitest blanks CSS by default; the rarity test reads these sheets as text (#240),
+    // and the rare-find test checks its animations (#391).
+    css: {
+      include: [
+        /[\\/]ui[\\/](rarity[\\/]rarity|wardrobe[\\/]wardrobe)\.css/,
+        /[\\/]battle[\\/]rare-reveal\.css/,
+      ],
+    },
   },
 });

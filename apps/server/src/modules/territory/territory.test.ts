@@ -962,7 +962,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       await grant(server, kid, mapId, 40);
       await giveCharms(server, kid, mapId, 1);
       const [target] = await edgeOf(mapId, kid);
-      // A gap guardian: Hearthbun, Emberbun's evolution (stage 2), at a gap level.
+      // A gap guardian: Hearthbun, Emberbun's teen (stage 3, #443), at a gap level.
       const gap = GUARDIAN_RULES.tables.find((t) => t.id === 'gap-guardians')!;
       expect(gap.entries.map((e) => e.species)).toContain('hearthbun');
       const { battles, territory } = sureServices(
@@ -978,23 +978,24 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       });
       expect(done.view.phase).toMatchObject({ result: { winner: 'a', reason: 'captured' } });
 
-      // It joins as an Emberbun, below Emberbun's own evolution.
-      const emberbun = GAME_DATA.species.find((sp) => sp.id === 'emberbun')!;
+      // It joins one stage back: Kindlebun, Emberbun's kid (#443), below the
+      // kid's own evolution into the teens.
+      const kindlebun = GAME_DATA.species.find((sp) => sp.id === 'kindlebun')!;
       const joined = (await squishiesOf(kid, mapId)).filter((sq) => sq.level !== 40);
       expect(joined).toHaveLength(1);
       expect(joined[0]).toMatchObject({
-        speciesId: 'emberbun',
-        element: emberbun.element,
-        level: befriendedLevel('emberbun', 18, EVOLUTION_STEPS, GROWTH_RULES),
+        speciesId: 'kindlebun',
+        element: kindlebun.element,
+        level: befriendedLevel('kindlebun', 18, EVOLUTION_STEPS, GROWTH_RULES),
       });
-      expect(joined[0]!.level).toBeLessThan(emberbun.evolutions[0]!.level);
+      expect(joined[0]!.level).toBeLessThan(kindlebun.evolutions[0]!.level);
       const captured = (await eventsOf(mapId)).find((e) => e.type === 'squishy.captured')!;
       expect(parseGameEventPayload('squishy.captured', captured.payload)).toMatchObject({
-        speciesId: 'emberbun',
+        speciesId: 'kindlebun',
       });
       expect(
         await db.query.speciesSeen.findFirst({
-          where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.speciesId, 'emberbun')),
+          where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.speciesId, 'kindlebun')),
         }),
       ).toMatchObject({ firstCaughtAt: clock });
     });

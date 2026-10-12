@@ -25,7 +25,9 @@ export const TRADE_VALUES: TradeValues = {
     mythic: 400, // TUNE:
     secret: 400, // TUNE:
   },
-  stage: [1, 1.5, 2.2], // TUNE:
+  // TUNE: baby, kid, teen, grown-up (#443). Kids share the teen's step for now, so
+  // a line's teens are worth the same whether or not its kid has shipped yet.
+  stage: [1, 1.5, 1.5, 2.2],
   levelStep: 0.08, // TUNE: level 9 is worth about 1.6× level 1
   mysteryRarity: 'uncommon', // TUNE: a plain middle value
   items: {
