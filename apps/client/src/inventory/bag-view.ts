@@ -66,18 +66,27 @@ export function describeItems(items: ItemCounts): string {
  * at once added up. Empty when nothing did.
  */
 export function landedText(landed: readonly { items: ItemCounts }[]): string {
+  const parts = landedTotals(landed).map(([id, n]) => landedLine(id, n));
+  return parts.length === 0 ? '' : `${parts.join(', ')}!`;
+}
+
+/** Everything that landed at once, added up per item, in the bag's order (nothing at 0). */
+export function landedTotals(landed: readonly { items: ItemCounts }[]): [string, number][] {
   const total: ItemCounts = {};
   for (const { items } of landed) {
     for (const [id, n] of Object.entries(items)) total[id] = (total[id] ?? 0) + n;
   }
-  const parts = Object.entries(total)
+  return Object.entries(total)
     .filter(([, n]) => n > 0)
-    .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity))
-    .map(
-      ([id, n]) =>
-        toolLanded(id, n, itemName(id)) ?? `${itemIcon(id)} +${String(n)} ${itemName(id)}`,
-    );
-  return parts.length === 0 ? '' : `${parts.join(', ')}!`;
+    .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity));
+}
+
+/** One item's words in a pop-up: "🪵 +5 Timber", or a tool's "⛏️ A new Shovel". */
+export function landedLine(itemId: string, n: number): string {
+  return (
+    toolLanded(itemId, n, itemName(itemId)) ??
+    `${itemIcon(itemId)} +${String(n)} ${itemName(itemId)}`
+  );
 }
 
 /**
