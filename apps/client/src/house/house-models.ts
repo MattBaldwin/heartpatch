@@ -781,17 +781,17 @@ export function starLight(scene: Scene): Parts {
   const star = [0, Math.PI].map((turn) => {
     const t = CreateDisc(
       'house-part',
-      { radius: 0.17, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+      { radius: 0.26, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
       scene,
     );
     t.rotation.z = Math.PI / 2 + turn; // one point up, one down
-    t.position.set(0, 0.3, -0.005 * (turn ? 1 : 0));
+    t.position.set(0, 0.46, -0.005 * (turn ? 1 : 0));
     return glowing(t, G.playroom.nightLight);
   });
   return {
     solid: [
-      box(scene, [0.2, 0.08, 0.14], [0, 0.04, 0], '#c9a0ff'),
-      box(scene, [0.03, 0.1, 0.03], [0, 0.12, 0], '#8d5a3b'),
+      box(scene, [0.3, 0.1, 0.2], [0, 0.05, 0], '#c9a0ff'),
+      box(scene, [0.04, 0.16, 0.04], [0, 0.18, 0], '#8d5a3b'),
     ],
     glow: star,
   };
