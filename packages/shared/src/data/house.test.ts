@@ -81,29 +81,6 @@ describe('HOUSE_DATA (#381)', () => {
     expect(checkHouseData(broken, refs)).toEqual(['rules.perk: care-bonus is not built yet']);
   });
 
-  it('refuses a gift row out of order, past the top level, or naming an unknown resource (PR H)', () => {
-    const broken = copy();
-    const [first, second] = broken.rules.gifts.table;
-    if (!first || !second) throw new Error('fixture');
-    first.fromLevel = 2;
-    second.fromLevel = 9;
-    second.gifts.push({ itemId: 'moonbeams', min: 3, max: 1, weight: 1 });
-    expect(checkHouseData(broken, refs)).toEqual([
-      'rules.gifts.table[0]: the first row starts at level 1',
-      'rules.gifts.table[1]: no level 9',
-      'rules.gifts.table[1].gifts[5]: unknown resource "moonbeams"',
-      'rules.gifts.table[1].gifts[5]: min is more than max',
-      'rules.gifts.table[2]: fromLevel should climb (3)',
-    ]);
-  });
-
-  it('keeps the daily gift to one a day', () => {
-    expect(HOUSE_DATA.rules.gifts.perDay).toBe(1);
-    const broken = copy() as unknown as { rules: { gifts: { perDay: number } } };
-    broken.rules.gifts.perDay = 2;
-    expect(checkHouseData(broken, refs)).not.toEqual([]);
-  });
-
   it('refuses a second final level', () => {
     const broken = copy();
     const [, second] = broken.levels;

@@ -738,7 +738,7 @@ export const GAME_EVENTS = {
       giftId: z.uuid(),
       /** The patch's local day the gift belongs to. */
       day: LocalDateSchema,
-      /** Null once the giver is gone from the patch. */
+      /** Null once the giver's squishy row is deleted. */
       giverSquishyId: z.uuid().nullable(),
       itemId: ContentIdSchema,
       count: z.number().int().min(1),

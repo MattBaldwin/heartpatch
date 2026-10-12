@@ -88,40 +88,10 @@ export const HousePerkSchema = z.discriminatedUnion('kind', [
 ]);
 export type HousePerk = z.infer<typeof HousePerkSchema>;
 
-/** One thing a resident can leave as the day's gift, and how many (`min`..`max`). */
-export const HouseGiftOptionSchema = z.strictObject({
-  itemId: ContentIdSchema,
-  min: z.number().int().min(1).max(99),
-  max: z.number().int().min(1).max(99),
-  /** How often it's picked against the others in its row. */
-  weight: z.number().int().min(1),
-});
-export type HouseGiftOption = z.infer<typeof HouseGiftOptionSchema>;
-
-/** The gifts a house from `fromLevel` up gives (the highest row at or under the level wins). */
-export const HouseGiftRowSchema = z.strictObject({
-  fromLevel: z.number().int().min(1),
-  gifts: z.array(HouseGiftOptionSchema).min(1),
-});
-export type HouseGiftRow = z.infer<typeof HouseGiftRowSchema>;
-
-/**
- * The daily gift (#381 PR H, plan §1c "Daily return reasons"): once a day a
- * resident at home leaves the Keeper a small resource gift, rolled on the
- * server from a seed (never by the client) and claimed once.
- */
-export const HouseGiftRulesSchema = z.strictObject({
-  /** Gifts a day. One: `house_gifts` holds one row per Keeper per patch day. */
-  perDay: z.literal(1),
-  table: z.array(HouseGiftRowSchema).min(1),
-});
-export type HouseGiftRules = z.infer<typeof HouseGiftRulesSchema>;
-
 export const HouseRulesSchema = z.strictObject({
   perk: HousePerkSchema,
   /** Hours before a squishy that moved out can move back in. */
   moveBackInHours: z.number().int().min(0),
-  gifts: HouseGiftRulesSchema,
 });
 export type HouseRules = z.infer<typeof HouseRulesSchema>;
 
@@ -173,22 +143,6 @@ export function checkHouseData(input: unknown, refs: HouseDataRefs): string[] {
   const tracks = new Set(refs.milestoneTrackIds);
   const rooms = new Set<string>();
   const filled = new Map<string, string>();
-
-  rules.gifts.table.forEach((row, i) => {
-    const at = `rules.gifts.table[${String(i)}]`;
-    const before = rules.gifts.table[i - 1];
-    if (i === 0 && row.fromLevel !== 1) problems.push(`${at}: the first row starts at level 1`);
-    if (before && row.fromLevel <= before.fromLevel) {
-      problems.push(`${at}: fromLevel should climb (${String(row.fromLevel)})`);
-    }
-    if (row.fromLevel > levels.length) problems.push(`${at}: no level ${String(row.fromLevel)}`);
-    row.gifts.forEach((gift, j) => {
-      const giftAt = `${at}.gifts[${String(j)}]`;
-      if (!resources.has(gift.itemId))
-        problems.push(`${giftAt}: unknown resource "${gift.itemId}"`);
-      if (gift.min > gift.max) problems.push(`${giftAt}: min is more than max`);
-    });
-  });
 
   levels.forEach((lvl, i) => {
     const at = `levels[${String(i)}]`;

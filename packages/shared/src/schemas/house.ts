@@ -60,7 +60,7 @@ export type HouseNextLevel = z.infer<typeof HouseNextLevelSchema>;
 /**
  * Today's gift (#381 PR H): what a resident left the Keeper, rolled on the
  * server on the first `GET /house` of the patch day, and whether it's been
- * opened. `giverSquishyId` is null once the giver is gone from the patch; a
+ * opened. `giverSquishyId` is null once the giver's squishy row is deleted; a
  * giver traded away since still counts as who left it, and the gift is still
  * the Keeper's to open. `note` is the rendered line, the giver's name in it.
  */

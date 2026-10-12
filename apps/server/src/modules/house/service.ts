@@ -1,11 +1,11 @@
 import {
   addDays,
   CARE_RULES,
+  deriveSeed,
   evaluateRequirements,
   GAME_DATA,
   HOUSE_DATA,
   HOUSE_NOTES,
-  houseGiftNote,
   HOUSE_START_LEVEL,
   houseLevelData,
   jobOf,
@@ -15,7 +15,6 @@ import {
   renderHouseNote,
   requirementsMet,
   residentAwayOf,
-  rollHouseGift,
   roomsAt,
   type HouseData,
   type HouseGift,
@@ -27,6 +26,12 @@ import {
   type PublicUser,
   type RequirementContext,
 } from '@heartpatch/shared';
+import {
+  HOUSE_GIFTS,
+  houseGiftNote,
+  rollHouseGift,
+  type HouseGiftTable,
+} from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
@@ -38,6 +43,7 @@ import { squishyName } from '../jobs/work.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { gatherProgressFacts } from '../progress/facts.js';
+import { createTerritoryRepo } from '../territory/repo.js';
 import { createHouseRepo, type GiftRow, type ResidentRow } from './repo.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from './switch.js';
 
@@ -72,7 +78,7 @@ export const HOUSE_MESSAGES = {
   giftOpened: 'Already opened! Come back tomorrow 🎁',
   /** A claim for a day before yesterday: that gift can't be opened now. */
   giftLost: 'That gift got lost in the mail… a new one comes tomorrow! 🎁',
-  /** The giver's name on a note when the giver is gone from the patch. */
+  /** The giver's name on a note once the giver's squishy row is deleted. */
   someone: 'A little friend',
   move: {
     'in-trade': () => 'That squishy is waiting at a trading post right now. 📬',
@@ -115,6 +121,8 @@ export interface HouseServiceOptions {
   data?: HouseData;
   /** The gift notes; the shipped ones when left out. */
   notes?: readonly HouseNote[];
+  /** The secret gift table; the shipped one when left out. */
+  gifts?: HouseGiftTable;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
 }
@@ -156,6 +164,7 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
   const house = options.house ?? HOUSE_OFF;
   const data = options.data ?? HOUSE_DATA;
   const notes = options.notes ?? HOUSE_NOTES;
+  const gifts = options.gifts ?? HOUSE_GIFTS;
   const levelOf = new Map(data.levels.map((l) => [l.room.id, l.level]));
 
   /** The switch and the patch: NOT_FOUND unless both let this player in. */
@@ -204,19 +213,22 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
   }
 
   /** Residents at home now (not away): who can leave today's gift. */
-  async function giversOf(executor: Executor, mapId: string, userId: string) {
-    return (await residentsOf(executor, mapId, userId))
+  const giversAmong = (residents: Awaited<ReturnType<typeof residentsOf>>) =>
+    residents
       .filter((r) => r.away === null)
       .map((r) => ({ squishyId: r.squishyId, feeling: r.feeling }));
-  }
+
+  /** The map's secret seed (tech spec §8), as spawns and explore read it. Never sent. */
+  const mapSeedOf = async (executor: Executor, mapId: string) =>
+    (await createTerritoryRepo(executor).mapSeed(mapId)) ?? deriveSeed('hand-authored-map', mapId);
 
   /** A gift row as the house screen shows it: the note rendered with the giver's name. */
-  function giftView(row: GiftRow, mapId: string, userId: string): HouseGift {
+  function giftView(row: GiftRow, mapSeed: string, userId: string): HouseGift {
     const { giver } = row;
-    // A giver gone from the patch leaves a note from the ones for anyone.
+    // A giver whose squishy row is gone leaves a note from the ones for anyone.
     const note = houseGiftNote(notes, {
+      mapSeed,
       userId,
-      mapId,
       day: row.day,
       squishyId: row.giverSquishyId ?? '',
       feeling: giver?.feeling ?? null,
@@ -232,30 +244,30 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
   }
 
   /**
-   * Rolls today's gift if there's none yet and a resident is home (the lazy
-   * roll on `GET /house`). Plain reads first, so a read with today's row, or
-   * with nobody home, opens no transaction. The roll takes the member row
-   * (step 2: a leave deletes the house under it, so no house row comes back
-   * for someone who just left) and the house row (8c, inserted at level 1
-   * when missing: the gift's foreign key needs it), reads the residents
-   * plainly under it (every move holds the house lock), then writes the row
-   * ON CONFLICT DO NOTHING, so two first reads racing write one.
+   * Rolls today's gift (the lazy roll on `GET /house`, which has already
+   * seen no row for today and a resident at home in its plain reads, so a
+   * read with today's row, or with nobody home, opens no transaction). The
+   * roll takes the member row (step 2: a leave deletes the house under it,
+   * so no house row comes back for someone who just left) and the house row
+   * (8c, inserted at level 1 when missing: the gift's foreign key needs it),
+   * reads the residents plainly under it (every move holds the house lock),
+   * then writes the row ON CONFLICT DO NOTHING, so two first reads racing
+   * write one. A Keeper who already opened a gift today, then left and came
+   * back (the leave takes the gift rows with the house), gets no second one:
+   * their `house.gift` event for the day says so. Returns whether it wrote.
    */
-  async function rollTodaysGift(map: MapRow, userId: string, at: Date): Promise<void> {
+  async function rollTodaysGift(map: MapRow, userId: string, at: Date): Promise<boolean> {
     const day = localDate(at, map.timeZone);
-    const repo = createHouseRepo(db);
-    if (await repo.gift(map.id, userId, day)) return;
-    if ((await giversOf(db, map.id, userId)).length === 0) return;
-    await repo.transaction(async (txRepo, tx) => {
-      if (!(await createMapsRepo(tx).lockMember(map.id, userId))) return;
+    return createHouseRepo(db).transaction(async (txRepo, tx) => {
+      if (!(await createMapsRepo(tx).lockMember(map.id, userId))) return false;
       const level = await txRepo.lockHouse(map.id, userId, HOUSE_START_LEVEL, at);
-      const givers = await giversOf(tx, map.id, userId);
-      const roll = rollHouseGift(
-        { userId, mapId: map.id, day, level, givers },
-        data.rules.gifts,
-        notes,
-      );
-      if (!roll) return;
+      if (await txRepo.openedGiftOn(map.id, userId, day)) return false;
+      const [givers, mapSeed] = await Promise.all([
+        residentsOf(tx, map.id, userId).then(giversAmong),
+        mapSeedOf(tx, map.id),
+      ]);
+      const roll = rollHouseGift({ mapSeed, userId, day, level, givers }, gifts, notes);
+      if (!roll) return false;
       await txRepo.insertGift({
         mapId: map.id,
         userId,
@@ -265,7 +277,23 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
         count: roll.count,
         at,
       });
+      return true;
     });
+  }
+
+  /** What `view` reads that `GET /house` has already read for the roll. */
+  interface ViewReads {
+    residents: Awaited<ReturnType<typeof residentsOf>>;
+    gift: GiftRow | null;
+  }
+
+  /** Today's gift and the residents, plain reads. */
+  async function readToday(executor: Executor, map: MapRow, userId: string, at: Date) {
+    const [residents, gift] = await Promise.all([
+      residentsOf(executor, map.id, userId),
+      createHouseRepo(executor).gift(map.id, userId, localDate(at, map.timeZone)),
+    ]);
+    return { residents, gift };
   }
 
   /** Everything the house screen shows, read through `executor`. */
@@ -274,14 +302,15 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
     map: MapRow,
     userId: string,
     at: Date,
+    reads?: ViewReads,
   ): Promise<HouseView> {
     const repo = createHouseRepo(executor);
-    const [built, residents, items, gift] = await Promise.all([
+    const [built, { residents, gift }, items] = await Promise.all([
       repo.level(map.id, userId),
-      residentsOf(executor, map.id, userId),
+      reads ?? readToday(executor, map, userId, at),
       createInventoryRepo(executor).list({ mapId: map.id, userId }),
-      repo.gift(map.id, userId, localDate(at, map.timeZone)),
     ]);
+    const mapSeed = gift ? await mapSeedOf(executor, map.id) : null;
     const level = built ?? HOUSE_START_LEVEL;
     const current = houseLevelData(data, level);
     const next = nextHouseLevel(data, level);
@@ -328,7 +357,7 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
       })),
       next: nextView,
       items: Object.fromEntries(Object.keys(next?.cost ?? {}).map((id) => [id, items[id] ?? 0])),
-      gift: gift ? giftView(gift, map.id, userId) : null,
+      gift: gift && mapSeed ? giftView(gift, mapSeed, userId) : null,
       now: at.toISOString(),
     };
   }
@@ -337,8 +366,14 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
     get: async (user, mapId) => {
       const at = now();
       const map = await requireHouse(db, user, mapId);
-      await rollTodaysGift(map, user.id, at);
-      return view(db, map, user.id, at);
+      // One read of the residents and today's gift serves the roll and the view.
+      const reads = await readToday(db, map, user.id, at);
+      if (!reads.gift && giversAmong(reads.residents).length > 0) {
+        if (await rollTodaysGift(map, user.id, at)) {
+          reads.gift = await createHouseRepo(db).gift(mapId, user.id, localDate(at, map.timeZone));
+        }
+      }
+      return view(db, map, user.id, at, reads);
     },
 
     build: async (user, mapId, toLevel) => {

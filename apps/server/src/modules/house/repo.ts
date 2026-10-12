@@ -7,6 +7,7 @@ import {
   houseGifts,
   houseResidents,
   keeperHouses,
+  gameEvents,
   squishies,
   squishyEvolutions,
 } from '../../db/schema.js';
@@ -168,6 +169,13 @@ export interface HouseRepo {
   lockUnclaimedGift: (mapId: string, userId: string, day: string) => Promise<GiftRow | null>;
   /** Marks a gift locked by this transaction as opened. */
   markGiftClaimed: (giftId: string, at: Date) => Promise<void>;
+  /**
+   * The Keeper has already opened a gift for this patch day: a `house.gift`
+   * event names it. Events outlive the gift rows a leave deletes, and their
+   * `day` is the patch day itself (the ledger's `created_at` is the real
+   * clock, which can't say the game day). A plain read.
+   */
+  openedGiftOn: (mapId: string, userId: string, day: string) => Promise<boolean>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -386,6 +394,22 @@ export function createHouseRepo(db: Executor): HouseRepo {
 
     markGiftClaimed: async (giftId, at) => {
       await db.update(houseGifts).set({ claimedAt: at }).where(eq(houseGifts.id, giftId));
+    },
+
+    openedGiftOn: async (mapId, userId, day) => {
+      const [row] = await db
+        .select({ id: gameEvents.id })
+        .from(gameEvents)
+        .where(
+          and(
+            eq(gameEvents.mapId, mapId),
+            eq(gameEvents.type, 'house.gift'),
+            eq(gameEvents.actorUserId, userId),
+            sql`${gameEvents.payload}->>'day' = ${day}`,
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
     },
   };
 }
