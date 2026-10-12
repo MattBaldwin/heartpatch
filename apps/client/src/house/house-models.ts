@@ -8,7 +8,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseExterior } from '@heartpatch/shared';
 import { linear, merged, painted } from '../map/map-props.js';
-import { HOUSE_COTTAGE, HOUSE_PALETTE } from './house-config.js';
+import { HOUSE_COTTAGE, HOUSE_GROWN, HOUSE_PALETTE } from './house-config.js';
 import type { WallHole } from './house-layout.js';
 
 /*
@@ -682,4 +682,363 @@ export function buildCottage(scene: Scene, exterior: HouseExterior): Mesh {
     }
   }
   return merged(`house-cottage-${exterior}`, parts);
+}
+
+// ── The grown rooms (#381 B3) ───────────────────────────────────────
+//
+// Pieces for the Playroom, the Kitchen loft and the Heart Hall, built at the
+// origin with their front toward local -z (the open front of the dollhouse)
+// and placed by the room builders. Boxes and low-segment rounds only
+// (`HOUSE_GROWN.segments`/`sides`): at the top level all three rooms share
+// what the low tier has left.
+
+const G = HOUSE_GROWN;
+
+/** A flat round facing local -z (a plate on its edge, a painted dot): 8 sides, both faces. */
+function flatDisc(scene: Scene, d: number, at: Vec, hex: string): Mesh {
+  const m = CreateDisc(
+    'house-part',
+    { radius: d / 2, tessellation: 8, sideOrientation: Mesh.DOUBLESIDE },
+    scene,
+  );
+  m.position.set(...at);
+  return painted(m, hex);
+}
+
+/** A play mat of coloured squares, `n` × `n`, lying on y = 0. */
+export function playMat(scene: Scene, n = 3): Mesh[] {
+  const cell = G.playroom.matCell;
+  const half = (n * cell) / 2;
+  const parts = [box(scene, [n * cell + 0.12, 0.02, n * cell + 0.12], [0, 0.01, 0], '#fff6ec')];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      parts.push(
+        box(
+          scene,
+          [cell - 0.04, 0.025, cell - 0.04],
+          [-half + cell * (i + 0.5), 0.015, -half + cell * (j + 0.5)],
+          G.playroom.mat[(i + j * n) % G.playroom.mat.length] ?? '#ffb3c8',
+        ),
+      );
+  return parts;
+}
+
+/** A toy chest with its lid propped open and a heart on the front. */
+export function toyChest(scene: Scene): Mesh[] {
+  const c = G.playroom;
+  // The lid stands open, leaning back from its hinge on the back edge.
+  const lid = box(scene, [1.06, 0.62, 0.08], [0, 0.9, 0.34], c.chestLid);
+  lid.rotation.x = 0.22;
+  const heart = box(scene, [0.14, 0.14, 0.02], [0, 0.32, -0.31], '#ff7aa2');
+  heart.rotation.z = Math.PI / 4;
+  return [
+    box(scene, [1.0, 0.56, 0.6], [0, 0.32, 0], c.chest),
+    box(scene, [1.04, 0.06, 0.64], [0, 0.07, 0], '#8d5a3b'),
+    lid,
+    heart,
+    flatDisc(scene, 0.1, [-0.05, 0.37, -0.31], '#ff7aa2'),
+    flatDisc(scene, 0.1, [0.05, 0.37, -0.31], '#ff7aa2'),
+    // Toys peeking out over the rim.
+    box(scene, [0.24, 0.24, 0.24], [-0.24, 0.63, 0], '#9ad8ff', 0.3),
+    box(scene, [0.2, 0.2, 0.2], [0.18, 0.64, 0.05], '#ffd166', 0.5),
+  ];
+}
+
+/** A striped play tent (a six-sided cone) with a dark doorway and a flag on top. */
+export function playTent(scene: Scene): Mesh[] {
+  const c = G.playroom;
+  const h = 1.55;
+  const flag = CreateDisc(
+    'house-part',
+    { radius: 0.13, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+    scene,
+  );
+  flag.position.set(0.1, h + 0.2, 0);
+  const door = CreateDisc(
+    'house-part',
+    { radius: 0.36, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+    scene,
+  );
+  door.rotation.z = Math.PI / 2; // a point up
+  door.scaling.set(1.4, 1, 1);
+  door.position.set(0, 0.36, -0.5);
+  door.rotation.x = 0.33; // lean with the canvas
+  return [
+    tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, 6),
+    tube(scene, 0.22, 0.98, 1.17, [0, 0.5, 0], c.tentStripe, 6),
+    tube(scene, 0.4, 0.03, 0.03, [0, h + 0.1, 0], '#8d5a3b', 4),
+    painted(flag, '#ff9ab8'),
+    painted(door, '#6a4f7a'),
+  ];
+}
+
+/** A crescent-moon night-light on a little stand (the moon glows). */
+export function moonLight(scene: Scene): Parts {
+  const moon = glowing(
+    CreateTorus('house-part', { diameter: 0.26, thickness: 0.08, tessellation: 6 }, scene),
+    G.playroom.nightLight,
+  );
+  moon.rotation.x = Math.PI / 2;
+  moon.position.set(0, 0.24, 0);
+  return { solid: [box(scene, [0.18, 0.06, 0.12], [0, 0.03, 0], '#c9a0ff')], glow: [moon] };
+}
+
+/** A little iron stove on legs, its fire glowing through the door, a pot on top and a pipe up to `pipe` metres. */
+export function stove(scene: Scene, pipe: number): Parts {
+  const c = G.kitchen;
+  const solid = [
+    box(scene, [0.9, 0.7, 0.62], [0, 0.5, 0], c.stove),
+    box(scene, [0.98, 0.06, 0.7], [0, 0.88, 0], '#2f2a36'),
+    tube(scene, pipe - 0.9, 0.16, 0.16, [0, 0.9 + (pipe - 0.9) / 2, 0.18], c.stove, G.sides),
+    tube(scene, 0.26, 0.4, 0.34, [-0.16, 1.04, -0.06], c.pot, G.sides),
+    tube(scene, 0.05, 0.1, 0.42, [-0.16, 1.19, -0.06], c.pot, G.sides),
+  ];
+  for (const [lx, lz] of [
+    [-0.36, -0.24],
+    [0.36, -0.24],
+    [-0.36, 0.24],
+    [0.36, 0.24],
+  ] as const)
+    solid.push(box(scene, [0.08, 0.16, 0.08], [lx, 0.08, lz], '#2f2a36'));
+  return {
+    solid,
+    glow: [box(scene, [0.42, 0.28, 0.02], [0, 0.48, -0.31], c.stoveFire)],
+  };
+}
+
+/** A kitchen counter `w` wide, with cupboard doors on its front. */
+export function counter(scene: Scene, w: number): Mesh[] {
+  const c = G.kitchen;
+  const parts = [
+    box(scene, [w, 0.86, 0.6], [0, 0.43, 0], c.counter),
+    box(scene, [w + 0.06, 0.06, 0.66], [0, 0.89, -0.01], c.counterTop),
+  ];
+  const doors = Math.max(1, Math.round(w / 0.6));
+  for (let i = 0; i < doors; i++) {
+    const dx = -w / 2 + (w * (i + 0.5)) / doors;
+    parts.push(
+      box(scene, [w / doors - 0.1, 0.62, 0.02], [dx, 0.45, -0.31], '#fff2e3'),
+      box(scene, [0.05, 0.05, 0.04], [dx + (i % 2 ? -0.1 : 0.1), 0.62, -0.33], c.counterTop),
+    );
+  }
+  return parts;
+}
+
+/** A round table with a checked cloth, a pie in the middle and two stools. */
+export function kitchenTable(scene: Scene): Mesh[] {
+  const c = G.kitchen;
+  const s = G.sides;
+  return [
+    tube(scene, 0.06, 1.0, 1.0, [0, 0.7, 0], c.table, s),
+    tube(scene, 0.12, 1.08, 1.12, [0, 0.66, 0], c.cloth, s),
+    tube(scene, 0.62, 0.12, 0.16, [0, 0.33, 0], c.table, s),
+    tube(scene, 0.04, 0.5, 0.5, [0, 0.02, 0], c.table, s),
+    tube(scene, 0.1, 0.38, 0.42, [0, 0.78, 0], c.pie, s),
+    tube(scene, 0.03, 0.3, 0.3, [0, 0.84, 0], '#d9603f', s),
+    tube(scene, 0.42, 0.34, 0.3, [-0.78, 0.21, 0.1], c.table, s),
+    tube(scene, 0.42, 0.34, 0.3, [0.78, 0.21, -0.1], c.table, s),
+  ];
+}
+
+/** Two wall shelves `w` wide, lined with jars and plates (against a wall at local +z). */
+export function kitchenShelves(scene: Scene, w: number): Mesh[] {
+  const c = G.kitchen;
+  const parts: Mesh[] = [];
+  [1.35, 1.85].forEach((y, row) => {
+    parts.push(box(scene, [w, 0.05, 0.26], [0, y, 0], c.shelf));
+    const n = Math.max(3, Math.floor(w / 0.42));
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + (w * (i + 0.5)) / n;
+      const hex = c.jars[(i + row * 2) % c.jars.length] ?? '#ffd166';
+      parts.push(
+        (i + row) % 3 === 2
+          ? flatDisc(scene, 0.26, [x, y + 0.16, 0.06], hex) // a plate on edge
+          : tube(scene, 0.22, 0.14, 0.16, [x, y + 0.14, 0], hex, 6),
+      );
+    }
+  });
+  return parts;
+}
+
+/**
+ * The Heart Hall's gallery: a deck `w` wide and `depth` deep standing out
+ * from a back wall at local +z, its floor at y = 0 (the scene lifts it to
+ * the second storey), with a railing of posts and gold caps along its front
+ * and two posts holding it up from `below` metres down.
+ */
+export function gallery(scene: Scene, w: number, depth: number, below: number): Mesh[] {
+  const c = G.hall;
+  const front = -depth / 2;
+  const parts = [
+    box(scene, [w, 0.18, depth], [0, -0.09, 0], c.deck),
+    box(scene, [w, 0.22, 0.08], [0, -0.13, front - 0.02], c.rail),
+    box(scene, [w, 0.08, 0.1], [0, 0.86, front + 0.06], c.rail),
+    box(scene, [w, 0.03, 0.12], [0, 0.915, front + 0.06], c.gold),
+  ];
+  const posts = Math.max(2, Math.round(w / 1.0));
+  for (let i = 0; i <= posts; i++) {
+    const x = -w / 2 + (w * i) / posts;
+    parts.push(box(scene, [0.07, 0.82, 0.07], [x, 0.41, front + 0.06], c.rail));
+  }
+  for (const x of [-w / 2 + 0.3, w / 2 - 0.3])
+    parts.push(
+      tube(scene, below, 0.18, 0.2, [x, -below / 2, front + 0.2], c.rail, G.sides),
+      box(scene, [0.22, 0.08, 0.22], [x, -below + 0.04, front + 0.2], c.gold),
+    );
+  return parts;
+}
+
+/**
+ * Stairs `width` wide climbing `rise` metres over `run` toward local +z,
+ * starting at the origin: chunky steps, a side board and a handrail with a
+ * gold knob at the bottom.
+ */
+export function stairs(
+  scene: Scene,
+  width: number,
+  rise: number,
+  run: number,
+  steps: number,
+): Mesh[] {
+  const c = G.hall;
+  const sh = rise / steps;
+  const sd = run / steps;
+  const parts: Mesh[] = [];
+  for (let i = 0; i < steps; i++)
+    parts.push(
+      box(scene, [width, sh * (i + 1), sd], [0, (sh * (i + 1)) / 2, sd * (i + 0.5)], c.deck),
+    );
+  const len = Math.hypot(run, rise);
+  const tilt = -Math.atan2(rise, run);
+  const rail = box(scene, [0.08, 0.08, len], [-width / 2, rise / 2 + 0.85, run / 2], c.rail);
+  rail.rotation.x = tilt;
+  parts.push(
+    rail,
+    box(scene, [0.08, 0.9, 0.08], [-width / 2, 0.45, 0.1], c.rail),
+    box(scene, [0.16, 0.16, 0.16], [-width / 2, 0.95, 0.1], c.gold, Math.PI / 4),
+  );
+  return parts;
+}
+
+/** Where the Heart Tree's crown heart sits, `h` tall: its height and how far in front of the trunk. */
+export function heartTreeCrown(h: number): { y: number; z: number; r: number } {
+  const r = h * 0.17;
+  return { y: h * 0.62 + r * 0.9, z: -r * 0.66 - 0.04, r };
+}
+
+/**
+ * The Heart Tree, `h` tall, growing up through the hall: a tapering trunk
+ * with two boughs, a heart-shaped crown of pink rounds facing local -z with
+ * a glowing gold heart at its heart, and gold sparkles round it.
+ */
+export function heartTree(scene: Scene, h: number): Parts {
+  const c = G.hall;
+  const trunkH = h * 0.62;
+  const { y: top, z: front, r } = heartTreeCrown(h);
+  const boughs = [-1, 1].map((side) => {
+    const b = tube(scene, h * 0.3, 0.12, 0.2, [side * 0.35, trunkH * 0.82, 0], c.trunk, G.sides);
+    b.rotation.z = -side * 0.7;
+    return b;
+  });
+  // A heart: two lobes and a point below, flattened front to back.
+  const point = tube(scene, r * 1.9, r * 2.6, 0.05, [0, top - r * 1.05, 0], c.crown[0], 6);
+  point.scaling.z = 0.55;
+  const solid = [
+    tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
+    ...boughs,
+    ball(scene, r * 2.1, [-r * 0.72, top, 0], c.crown[0], [1, 1, 0.62], G.segments),
+    ball(scene, r * 2.1, [r * 0.72, top, 0], c.crown[2], [1, 1, 0.62], G.segments),
+    point,
+    // Roots spreading on the floor, with a gold ring round them.
+    tube(scene, 0.12, 1.5, 1.6, [0, 0.06, 0], '#8a6a52', G.sides),
+    tube(scene, 0.08, 1.75, 1.75, [0, 0.04, 0], c.gold, G.sides),
+  ];
+  const heart = goldHeart(scene, r * 0.9);
+  for (const m of heart) m.position.addInPlaceFromFloats(0, top - r * 0.1, front);
+  const glow: Mesh[] = [...heart];
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.4;
+    // A little diamond: a box stood on its corner.
+    const s = glowing(CreateBox('house-part', { size: 0.1 }, scene), c.sparkle);
+    s.rotation.set(Math.PI / 4, 0, Math.PI / 4);
+    s.position.set(
+      Math.cos(a) * r * 1.9,
+      top + Math.sin(a * 1.3) * r * 1.1,
+      Math.sin(a) * r * 0.7 - 0.2,
+    );
+    glow.push(s);
+  }
+  return { solid, glow };
+}
+
+/** A paper lantern hanging `drop` metres on its cord below y = 0, glowing, with gold caps. */
+export function hangingLantern(scene: Scene, drop: number): Parts {
+  const c = G.hall;
+  const lamp = glowing(
+    CreateCylinder(
+      'house-part',
+      { height: 0.36, diameterTop: 0.22, diameterBottom: 0.22, tessellation: 6 },
+      scene,
+    ),
+    c.lantern,
+  );
+  lamp.position.set(0, -drop, 0);
+  return {
+    solid: [
+      box(scene, [0.02, drop - 0.2, 0.02], [0, -(drop - 0.2) / 2, 0], '#5a4a52'),
+      tube(scene, 0.05, 0.16, 0.26, [0, -drop + 0.2, 0], c.gold, 6),
+      tube(scene, 0.05, 0.26, 0.16, [0, -drop - 0.2, 0], c.gold, 6),
+    ],
+    glow: [lamp],
+  };
+}
+
+/** A glowing gold heart facing local -z, `size` metres across: two lobes and a point. */
+export function goldHeart(scene: Scene, size: number): Mesh[] {
+  const hex = G.hall.gold;
+  const r = size * 0.28;
+  const lobe = (x: number) => {
+    const m = glowing(
+      CreateDisc(
+        'house-part',
+        { radius: r, tessellation: 10, sideOrientation: Mesh.DOUBLESIDE },
+        scene,
+      ),
+      hex,
+    );
+    m.position.set(x, r * 0.5, 0);
+    return m;
+  };
+  const point = glowing(
+    CreateDisc(
+      'house-part',
+      { radius: size * 0.5, tessellation: 4, sideOrientation: Mesh.DOUBLESIDE },
+      scene,
+    ),
+    hex,
+  );
+  point.scaling.set(0.92, 0.85, 1);
+  point.position.set(0, -r * 0.35, 0.002);
+  return [lobe(-r * 0.8), lobe(r * 0.8), point];
+}
+
+/** A few toy blocks, a ball-ish block and a book, cheap enough for the top level (Snug's `toys` are rounder). */
+export function toyBlocks(scene: Scene): Mesh[] {
+  const book = box(scene, [0.34, 0.04, 0.26], [0.9, 0.02, 0.3], '#7fb2e5', 0.3);
+  return [
+    box(scene, [0.22, 0.22, 0.22], [0, 0.11, 0], '#ffd166', 0.2),
+    box(scene, [0.2, 0.2, 0.2], [0.24, 0.1, 0.05], '#9fe0a0', -0.3),
+    box(scene, [0.18, 0.18, 0.18], [0.1, 0.31, 0.02], '#ff9ab8', 0.6),
+    book,
+    box(scene, [0.3, 0.02, 0.22], [0.9, 0.05, 0.3], '#fff6ec', 0.3),
+  ];
+}
+
+/** An oval rug with a gold edge, lying on y = 0. */
+export function ovalRug(scene: Scene, rx: number, rz: number): Mesh[] {
+  const c = G.hall;
+  return [
+    floorDisc(scene, 1, [0, 0.012, 0], c.rugEdge, [rx, rz, 1]),
+    floorDisc(scene, 1, [0, 0.016, 0], c.rug, [rx - 0.14, rz - 0.14, 1]),
+  ];
 }

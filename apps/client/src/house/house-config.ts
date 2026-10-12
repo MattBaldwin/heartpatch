@@ -215,3 +215,57 @@ export const HOUSE_OUTSIDE = {
   hazeFrom: 4, // TUNE
   hazeTo: 24, // TUNE
 } as const;
+
+/**
+ * The grown rooms (#381 B3): the Playroom, the Kitchen loft and the Heart
+ * Hall. Their pieces are boxes and low-segment rounds so the whole top-level
+ * house stays inside the low tier's triangles; every piece merges into its
+ * room's one solid mesh (and one glow mesh), so furniture adds no draw calls.
+ */
+export const HOUSE_GROWN = {
+  /** Segments on the rounds (balls, jars, the tree's crown): low, so L4 fits the low tier. */
+  segments: 4, // TUNE
+  /** Sides on the tubes (table legs, jars, the tree's trunk). */
+  sides: 7, // TUNE
+  playroom: {
+    /** The play mat's squares, front-left to back-right (sRGB). */
+    mat: ['#ffb3c8', '#bfe3ff', '#ffe29a', '#b9ecc8'], // TUNE
+    /** One square of the play mat, metres. */
+    matCell: 0.62, // TUNE
+    chest: '#c9764f', // TUNE: the toy chest's painted wood
+    chestLid: '#e9a273', // TUNE
+    tent: '#9ad8ff', // TUNE: the play tent's canvas
+    tentStripe: '#fff6ec', // TUNE
+    nightLight: '#ffe6a0', // TUNE: the moon night-light's glow
+  },
+  kitchen: {
+    stove: '#4a4250', // TUNE: the little iron stove
+    stoveFire: '#ff8a3c', // TUNE: its glowing window
+    pot: '#e97a9b', // TUNE
+    counter: '#f2d7b8', // TUNE
+    counterTop: '#9a6a46', // TUNE
+    table: '#b9825a', // TUNE
+    cloth: '#ffd1dc', // TUNE: the checked table cloth
+    pie: '#e8a25a', // TUNE
+    shelf: '#8d5a3b', // TUNE
+    /** Jars and plates on the shelves (sRGB). */
+    jars: ['#ffd166', '#9fe0c8', '#ff9ab8', '#c9a0ff', '#9ad8ff'], // TUNE
+  },
+  hall: {
+    /** How far the gallery (at the second storey) reaches out from the back wall, metres. */
+    galleryDepth: 1.3, // TUNE
+    deck: '#c98b5a', // TUNE: planks, like the floor
+    rail: '#8d5a3b', // TUNE
+    gold: '#f2c14e', // TUNE: the top level's gold accents
+    trunk: '#9b7a62', // TUNE
+    /** The Heart Tree's crown, a heart of pink rounds (sRGB). */
+    crown: ['#ff9ec4', '#ffc4da', '#ff86b4'], // TUNE
+    lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
+    sparkle: '#fff2b0', // TUNE: the tree's sparkles
+    rug: '#e97a9b', // TUNE
+    rugEdge: '#f2c14e', // TUNE
+    /** Steps up to the gallery. */
+    steps: 10, // TUNE
+    stairWidth: 1.0, // TUNE: metres
+  },
+} as const;

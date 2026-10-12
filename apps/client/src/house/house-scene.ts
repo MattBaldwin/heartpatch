@@ -187,6 +187,8 @@ export class HouseScene {
   readonly #pools: Matrix[] = [];
   readonly #requests: { kind: 'fire' | 'lamp'; at: Vector3 }[] = [];
   readonly #seeds: Matrix[] = [];
+  /** Every room's glowing bits, by floor: one glow mesh per floor, not per room (draw calls, B3). */
+  readonly #glowByFloor = new Map<number, Mesh[]>();
   #signAt: { x: number; y: number; z: number; width: number } | null = null;
   readonly #instrumentation: SceneInstrumentation;
   readonly #rooms: number;
@@ -270,6 +272,9 @@ export class HouseScene {
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
       this.#mergeRoom(parts);
+    }
+    for (const [floor, list] of this.#glowByFloor) {
+      this.#static(`house-glow-f${String(floor)}`, list, this.#glow, false);
     }
     this.#buildBeds();
     this.#buildSeeds();
@@ -759,14 +764,20 @@ export class HouseScene {
     }
   }
 
-  /** A room's pieces as a few meshes: walls by side (they fade one by one at kid height), then one per material. */
+  /**
+   * A room's pieces as a few meshes: walls by side (they fade one by one at
+   * kid height), then one per material; its glowing bits wait to merge with
+   * the rest of its floor's.
+   */
   #mergeRoom(parts: RoomParts): void {
     const id = parts.box.id;
     for (const [side, list] of parts.walls)
       this.#static(`house-${id}-wall-${side}`, list, this.#vinyl, true);
     this.#static(`house-${id}-floor`, parts.floor, this.#matte, false).receiveShadows = true;
     this.#static(`house-${id}-solid`, parts.solid, this.#vinyl, true);
-    this.#static(`house-${id}-glow`, parts.glow, this.#glow, false);
+    const glow = this.#glowByFloor.get(parts.box.floor) ?? [];
+    glow.push(...parts.glow);
+    this.#glowByFloor.set(parts.box.floor, glow);
     if (parts.panes.length > 0)
       this.#static(`house-${id}-panes`, parts.panes, duskPaneMaterial(this.#scene), false);
   }
