@@ -40,6 +40,11 @@
 }
 
 /* One thing: a small pill that says it all, and nothing to tap. */
+/* Over an open sheet: only to read, so taps reach the sheet. */
+.away-banner.away-quiet {
+  pointer-events: none;
+}
+
 .away-banner.away-one {
   min-height: 48px;
   padding: 4px;
@@ -143,37 +148,50 @@
   white-space: nowrap;
 }
 
-/* Each item's own soft colour (the element colours, art bible §2). */
-[data-item='timber'] {
+/* Each item's own soft colour (the element colours, art bible §2), on the
+   banner's chips and the card's tiles only. */
+.away-chip[data-item='timber'],
+.away-tile[data-item='timber'] {
   background: #f3e3cf;
   color: #7a5232;
 }
-[data-item='stone'] {
+.away-chip[data-item='stone'],
+.away-tile[data-item='stone'] {
   background: #ece8e2;
   color: #5f5850;
 }
-[data-item='emberwood'],
-[data-item='pumpkins'] {
+.away-chip[data-item='emberwood'],
+.away-tile[data-item='emberwood'],
+.away-chip[data-item='pumpkins'],
+.away-tile[data-item='pumpkins'] {
   background: #ffe3d2;
   color: #a94a1c;
 }
-[data-item='glimmer'],
-[data-item='water'],
-[data-item='ice'] {
+.away-chip[data-item='glimmer'],
+.away-tile[data-item='glimmer'],
+.away-chip[data-item='water'],
+.away-tile[data-item='water'],
+.away-chip[data-item='ice'],
+.away-tile[data-item='ice'] {
   background: #dff0fd;
   color: #2f6d93;
 }
-[data-item='greens'],
-[data-item='magic-fallen-leaves'] {
+.away-chip[data-item='greens'],
+.away-tile[data-item='greens'],
+.away-chip[data-item='magic-fallen-leaves'],
+.away-tile[data-item='magic-fallen-leaves'] {
   background: #e3f5dc;
   color: #2f6b3d;
 }
-[data-item='treats'],
-[data-item='turkey-feathers'] {
+.away-chip[data-item='treats'],
+.away-tile[data-item='treats'],
+.away-chip[data-item='turkey-feathers'],
+.away-tile[data-item='turkey-feathers'] {
   background: #fbecd9;
   color: #8a5a26;
 }
-[data-item='witch-dust'] {
+.away-chip[data-item='witch-dust'],
+.away-tile[data-item='witch-dust'] {
   background: #ede3f7;
   color: #5b3f86;
 }

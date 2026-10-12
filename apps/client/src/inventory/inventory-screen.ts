@@ -167,7 +167,11 @@ const TEXT = {
   findIt: 'Find it:',
 } as const;
 
-/** Away this long, the banner says "Welcome back!" (shorter: "In your Bag!"). */
+/**
+ * Away this long, the banner says "Welcome back!" (shorter: "In your Bag!").
+ * Only the tag's words: shorter than the Factory card's 30 minutes
+ * (`FACTORY_RULES.welcomeBackMinutes`, a whole card that waits for a tap).
+ */
 const WELCOME_BACK_MS = 5 * 60_000; // TUNE: a quick look at another app isn't "away"
 /** A settle asks a moment after the server's `nextAt`, so it has surely finished by the server's clock. */
 const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
@@ -218,6 +222,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let landings = 0;
   /** Things landed since the Bag was last opened: the Bag button's "+N" and the Home tab's news. */
   let bagNew = 0;
+  /**
+   * The patch `bagNew` is about. A detour off the map (home base, a battle,
+   * the wardrobe) and back keeps the news; another patch or player resets it.
+   */
+  let newFor: string | null = null;
 
   // ── Bag button and sheet ──────────────────────────────────────────────
   const open = el(
@@ -554,6 +563,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     const count = summaryCount(summaryEntries(inBag, []));
     if (sheet.hidden && count > 0) {
       bagNew += count;
+      newFor = mapId;
       showBagNew();
     }
   };
@@ -563,8 +573,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     serverNextAt = null;
     retried = false;
     summary.hide();
-    bagNew = 0;
-    showBagNew();
   };
 
   // Back from another app or a locked screen: things may have finished meanwhile.
@@ -1050,6 +1058,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       sheet.hidden = true;
       factorySheet.hidden = true;
       stopSettling();
+      if (next !== null && next !== newFor) {
+        bagNew = 0;
+        newFor = null;
+        showBagNew();
+      }
       say('');
       render();
       if (next) await refresh();
@@ -1062,6 +1075,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       state = null;
       sheet.hidden = true;
       stopSettling();
+      bagNew = 0;
+      newFor = null;
+      showBagNew();
       render();
     },
     get bag() {

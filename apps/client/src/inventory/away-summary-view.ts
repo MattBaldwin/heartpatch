@@ -42,6 +42,13 @@ export interface AwaySummary {
   readonly debug: AwaySummaryDebug;
 }
 
+/** A sheet or card is open over the map (anything but this banner's own card). */
+function sheetOpen(): boolean {
+  return [...document.querySelectorAll('[role="dialog"]')].some(
+    (d) => !d.closest('[hidden]') && !d.classList.contains('away-card'),
+  );
+}
+
 export interface AwaySummaryOptions {
   /**
    * Things at the top of the screen the banner keeps below while it shows
@@ -84,7 +91,12 @@ export function createAwaySummary(
   const nice = el('button', { type: 'button', class: 'auth-button away-nice' }, AWAY_TEXT.nice);
   const card = el(
     'section',
-    { class: 'away-card', role: 'dialog', 'aria-labelledby': 'away-card-title' },
+    {
+      class: 'away-card',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': 'away-card-title',
+    },
     cardTag,
     el('h2', { id: 'away-card-title' }, AWAY_TEXT.cardTitle),
     grid,
@@ -117,27 +129,38 @@ export function createAwaySummary(
     if (lowest + TAG_ROOM_PX > usual) banner.style.top = `${String(lowest + TAG_ROOM_PX)}px`;
   };
 
-  // A turned phone: the chips are measured again for the new width.
+  // A turned phone: the chips are measured again for the new width. Never
+  // removed: the inventory screen, and so this banner, lasts the app's life.
   window.addEventListener('resize', () => {
     if (banner.hidden || !current || current.entries.length < 2) return;
     fitChips(current.entries);
     place();
   });
 
+  /** Where focus was before the card, so closing it puts it back. */
+  let focusBefore: HTMLElement | null = null;
   const openCard = () => {
     if (!current || current.entries.length < 2) return;
+    focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     hideBanner();
     renderCard(current);
     layer.hidden = false;
     nice.focus();
   };
-  banner.addEventListener('click', openCard);
-  nice.addEventListener('click', () => {
+  const closeCard = () => {
+    if (layer.hidden) return;
     layer.hidden = true;
-  });
-  // A tap outside the card closes it too.
+    if (focusBefore?.isConnected && focusBefore !== banner) focusBefore.focus();
+    focusBefore = null;
+  };
+  banner.addEventListener('click', openCard);
+  nice.addEventListener('click', closeCard);
+  // A tap outside the card, or Escape on a keyboard, closes it too.
   layer.addEventListener('click', (e) => {
-    if (e.target === layer) layer.hidden = true;
+    if (e.target === layer) closeCard();
+  });
+  layer.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCard();
   });
 
   function chipFor(entry: SummaryEntry): HTMLElement {
@@ -220,6 +243,9 @@ export function createAwaySummary(
       sentence.textContent = what.sentence;
       const one = what.entries.length === 1 ? what.entries[0] : undefined;
       banner.classList.toggle('away-one', one !== undefined);
+      // Over an open sheet (the Bag, the job board) it's only something to
+      // read: a tap there is meant for the sheet.
+      banner.classList.toggle('away-quiet', sheetOpen());
       // The pill says it all and opens nothing: no stop for a screen reader either.
       if (one) {
         banner.setAttribute('aria-disabled', 'true');

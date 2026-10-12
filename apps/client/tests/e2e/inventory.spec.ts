@@ -166,6 +166,14 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(card).toBeHidden();
   expect((await bagState(page))?.bagNew).toBeGreaterThan(0);
   await expect.poll(async () => (await traysState(page))?.badges.heartpatch).not.toBeNull();
+  // A detour off the map (home base) and back keeps the news: it's this
+  // patch's until the Bag is opened.
+  await (await trayButton(page, 'home-open')).tap();
+  await expect(page.getByTestId('map-hud')).toBeHidden({ timeout: 30_000 });
+  await page.getByTestId('home').getByTestId('home-back').tap();
+  await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 30_000 });
+  await expect.poll(async () => (await bagState(page))?.bagNew).toBeGreaterThan(0);
+  await expect.poll(async () => (await traysState(page))?.badges.heartpatch).not.toBeNull();
   await (await trayButton(page, 'bag-open')).tap();
   await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
   await bag.getByRole('button', { name: 'Close' }).tap();
