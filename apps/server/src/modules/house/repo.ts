@@ -38,12 +38,19 @@ export interface HouseRepo {
   /** The Keeper's residents now (room set), whatever their state. A plain read. */
   residents: (mapId: string, userId: string) => Promise<ResidentRow[]>;
   /**
-   * A member left or was removed: their house goes with their buildings (a
-   * returning player gets a fresh home), its gifts by cascade, and their
-   * residency rows. Run after the leave transaction's squishy and building
-   * steps, so nothing else is writing these rows.
+   * Squishies the player owns on this patch that have a residency row (in
+   * or moved out), unlocked: the caller locks them (step 10) before
+   * `deleteResidents`. Keyed by the squishy's owner, not the row's
+   * `user_id`, so a traded squishy's row is never the old owner's to delete.
    */
-  deleteForMember: (mapId: string, userId: string) => Promise<void>;
+  residentSquishyIds: (mapId: string, userId: string) => Promise<string[]>;
+  /** Deletes these squishies' residency rows; the caller holds their locks (step 10). */
+  deleteResidents: (squishyIds: readonly string[]) => Promise<void>;
+  /**
+   * A member left or was removed: their house goes with their buildings (a
+   * returning player gets a fresh home), its gifts by cascade. Step 8c.
+   */
+  deleteHouse: (mapId: string, userId: string) => Promise<void>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -128,10 +135,20 @@ export function createHouseRepo(db: Executor): HouseRepo {
           ),
         ),
 
-    deleteForMember: async (mapId, userId) => {
-      await db
-        .delete(houseResidents)
-        .where(and(eq(houseResidents.mapId, mapId), eq(houseResidents.userId, userId)));
+    residentSquishyIds: (mapId, userId) =>
+      db
+        .select({ id: houseResidents.squishyId })
+        .from(houseResidents)
+        .innerJoin(squishies, eq(squishies.id, houseResidents.squishyId))
+        .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
+        .then((rows) => rows.map((r) => r.id)),
+
+    deleteResidents: async (squishyIds) => {
+      if (squishyIds.length === 0) return;
+      await db.delete(houseResidents).where(inArray(houseResidents.squishyId, [...squishyIds]));
+    },
+
+    deleteHouse: async (mapId, userId) => {
       await db
         .delete(keeperHouses)
         .where(and(eq(keeperHouses.mapId, mapId), eq(keeperHouses.userId, userId)));

@@ -42,7 +42,7 @@ import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from './switch.js';
 /** Kid-readable (style guide §6). `noHouse` is `requireMember`'s words, on purpose. */
 export const HOUSE_MESSAGES = {
   noHouse: "We couldn't find that patch.",
-  notNext: 'Your house is already past that. Check Grow the house again!',
+  notNext: "That's not the next level. Check Grow the house again!",
   allGrown: 'Your house is all grown! ✨',
   notYet: 'Not quite yet! Check what the house needs.',
   seedFirst: 'Your Heart Seed needs to grow first 🌱',

@@ -70,6 +70,7 @@ import {
   gameEvents,
   tileExplore,
   gatherJobs,
+  houseResidents,
   inventories,
   journeys,
   loreFound,
@@ -731,6 +732,78 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockMapRow(tx, mapId),
     );
     expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it("takes a leaving member's residents before any inventory row (maps `leave`, #381 step 10 then 11)", async () => {
+    // A resident's writer (PR C) holds the squishy (step 10) and its residency
+    // row; the leave must wait there before locking inventory for its lost
+    // fire's refund (step 11), so taking inventory next can't deadlock it.
+    const owner = await player('houseowner');
+    const kid = await player('houseleaver');
+    const mapsService = createMapsService({ db, tutorialRequired: false, keeperRequired: false });
+    const map = await mapsService.create(owner, { name: 'Lock Patch', timeZone: 'UTC' });
+    await db.insert(mapMembers).values({ mapId: map.id, userId: kid.id, role: 'member' });
+    const [land] = await db
+      .select({ id: tiles.id })
+      .from(tiles)
+      .where(
+        and(
+          eq(tiles.mapId, map.id),
+          sql`${tiles.ownerUserId} is null`,
+          sql`${tiles.homeSlot} is null`,
+          sql`${tiles.nodeResource} is null`,
+        ),
+      )
+      .orderBy(asc(tiles.id))
+      .limit(1);
+    await db.update(tiles).set({ ownerUserId: kid.id }).where(eq(tiles.id, land!.id));
+    await db.insert(buildings).values({
+      mapId: map.id,
+      ownerUserId: kid.id,
+      tileId: land!.id,
+      buildingId: 'hearthfire',
+      kind: 'hearthfire',
+      spot: 0,
+      fuelledThrough: '2099-01-01',
+    });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 1 }, 'dev-grant'),
+    );
+    const [pet] = await db
+      .insert(squishies)
+      .values({
+        mapId: map.id,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    await db.insert(houseResidents).values({
+      squishyId: pet!.id,
+      mapId: map.id,
+      userId: kid.id,
+      roomId: 'snug',
+      movedInAt: new Date(),
+    });
+    await holdThen(
+      async (tx) => {
+        await tx
+          .select({ id: squishies.id })
+          .from(squishies)
+          .where(eq(squishies.id, pet!.id))
+          .for('no key update');
+        await tx
+          .update(houseResidents)
+          .set({ movedOutAt: new Date() })
+          .where(eq(houseResidents.squishyId, pet!.id));
+      },
+      () => mapsService.leave(kid, map.id),
+      (tx) => lockTimber(tx, map.id, kid.id),
+    );
+    expect(
+      await db.select().from(houseResidents).where(eq(houseResidents.squishyId, pet!.id)),
+    ).toEqual([]);
   });
 
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {

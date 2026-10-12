@@ -323,6 +323,20 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     expect(away.rooms[0]!.residents[0]!.away).toBe('in-trade');
   });
 
+  it('stops counting a resident once another Keeper owns the squishy', async () => {
+    const server = await start();
+    const owner = await player();
+    const kid = await player();
+    const mapId = await newMap(server, owner);
+    await join(server, owner, kid, mapId);
+    const id = await resident(mapId, kid);
+    expect(row(await house(server, kid, mapId), 'residentsContent').have).toBe(1);
+    await db.execute(`update squishies set owner_user_id = '${owner.id}' where id = '${id}'`);
+    const view = await house(server, kid, mapId);
+    expect(row(view, 'residentsContent').have).toBe(0);
+    expect(view.rooms[0]!.residents).toEqual([]);
+  });
+
   it('builds the Playroom in one go: pays, levels up, tells the patch, and the home shows it', async () => {
     const server = await start();
     const kid = await player();
