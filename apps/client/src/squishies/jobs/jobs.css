@@ -225,7 +225,7 @@
   border-radius: 999px;
   background: rgb(255 250 252 / 90%);
   box-shadow: 0 2px 6px rgb(107 75 110 / 25%);
-  font-size: 16px;
+  font-size: 20px;
   line-height: 1.2;
   pointer-events: none;
 }
@@ -426,4 +426,16 @@
   .jobs-burst {
     display: none;
   }
+}
+
+/* My gatherers' mood on the map's 🧺 (#393): a warm pink where they love it,
+   a deep rain-blue where they aren't keen, so the white 🌧️ stands out. */
+.gatherer-badge-loves {
+  background: rgb(255 228 240 / 95%);
+  box-shadow: 0 2px 6px rgb(240 67 127 / 35%);
+}
+
+.gatherer-badge-meh {
+  background: rgb(84 112 146 / 95%);
+  color: #fff;
 }
