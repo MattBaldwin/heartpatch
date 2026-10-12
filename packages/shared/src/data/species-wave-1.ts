@@ -80,7 +80,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'lunamoth',
     name: 'Lunamoth',
     description:
-      'Little arms, a wispy tail and wings like moonlight. It waves at owls to say good evening.',
+      'Little arms, a soft tail and wings like moonlight. It waves at owls to say good evening.',
     element: 'shadow',
     feeling: 'spooky',
     rarity: 'epic',
@@ -166,7 +166,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'starblaze',
     name: 'Starblaze',
     description:
-      'Its arms got strong from carrying wishes. It still takes its time getting anywhere.',
+      'Its arms grew long from carrying wishes. It still takes its time getting anywhere.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'epic',
@@ -225,7 +225,7 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'sipsnooze',
     name: 'Sipsnooze',
-    description: 'A tiny tea leaf sprouted on its head. It wiggles when Sipsnooze snores.',
+    description: 'A little green sprout popped up on its head. It wiggles when Sipsnooze snores.',
     element: 'water',
     feeling: 'sleepy',
     rarity: 'uncommon',
@@ -358,7 +358,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'gnomguard',
     name: 'Gnomguard',
     description:
-      'Strong arms for carrying pumpkins and a fluffy ruff to keep warm. Best garden guard ever.',
+      'Long arms for carrying pumpkins and a fluffy ruff to keep warm. Best garden guard ever.',
     element: 'stone',
     feeling: 'cozy',
     rarity: 'rare',
