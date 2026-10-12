@@ -1002,7 +1002,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'pear',
-      palette: ['#ff8f47', '#fff0e0', '#ff4f14', '#ffd166'],
+      palette: ['#ff8f47', '#fff0e0', '#ffc93d', '#ffd166'],
       parts: [
         'sharp-eyes',
         'brave-brows',
@@ -1070,7 +1070,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'bun',
-      palette: ['#ffa266', '#fff0e0', '#ff5d22', '#ffd166'],
+      palette: ['#ffa266', '#fff0e0', '#ffc93d', '#ffd166'],
       parts: [
         'sleepy-eyes',
         'smirk',
