@@ -13,7 +13,8 @@ import {
   residentBoxes,
   safeArea,
 } from './house-camera.js';
-import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID } from './house-config.js';
+import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_TIMES } from './house-config.js';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
 import { houseLookAtMinute } from './house-light-look.js';
 import { yardPumpkins } from './house-models.js';
@@ -587,6 +588,7 @@ describe('house scene', () => {
         const fillLook = [fill.intensity, fill.diffuse.toHexString()];
         const lights = scene.lights.length;
         const meshes = scene.meshes.length;
+        const environment = scene.environmentIntensity;
         expect(house.stats.light).toEqual({ phase: 'dusk', lit: true });
         house.setLook(houseLookAtMinute(23 * 60));
         expect(house.stats.light).toEqual({ phase: 'night', lit: true });
@@ -598,6 +600,16 @@ describe('house scene', () => {
         expect(scene.lights.length).toBe(lights);
         expect(scene.meshes.length).toBe(meshes);
         expect([fill.intensity, fill.diffuse.toHexString()]).toEqual(fillLook);
+        // Daylight brightens the house's own materials only: the scene's
+        // image light, and so the squishies and the Keeper, stay as they are.
+        scene.render();
+        expect(scene.environmentIntensity).toBe(environment);
+        const vinyl = scene.getMaterialByName('house-vinyl') as PBRMaterial;
+        expect(vinyl.environmentIntensity).toBe(tier === 'low' ? 1 : HOUSE_TIMES.day.environment);
+        const cast = scene.materials.filter((m) => /^(squishy|keeper)-/.test(m.name));
+        expect(cast.length).toBeGreaterThan(0);
+        for (const m of cast)
+          if (m instanceof PBRMaterial) expect(m.environmentIntensity, m.name).toBe(1);
         expect(house.stats.lights).toBeLessThanOrEqual(tier === 'low' ? 2 : 4);
         scene.getEngine().dispose();
       }

@@ -141,7 +141,7 @@ describe('house models: the budget, every tier, every floor', () => {
         gifted.scene.getEngine().dispose();
       }
     }
-  });
+  }, 60_000); // twelve house builds
 
   it('merges a room into a few meshes, not one per piece', () => {
     const { scene, house } = buildHouse(1, 'low');

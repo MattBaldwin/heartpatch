@@ -185,7 +185,9 @@ export const snugRoom: RoomBuilder = (kit) => {
   kit.solid(lamp.solid);
   kit.glow(lamp.glow);
   kit.pool(tx, tz, 1.5);
-  kit.light('lamp', tx + 0.2, y + 1.36, tz - 0.15);
+  // The light itself a little in from the shade, toward the room: right by
+  // the east wall its hotspot washed the wall and the table out (H2 render check).
+  kit.light('lamp', tx - 0.35, y + 1.36, tz - 0.15); // TUNE
 
   const [px, pz] = at(0.45, 0.45);
   kit.solid(plant(scene, px, pz, y));

@@ -43,6 +43,8 @@ export const HOUSE_PALETTE = {
     joists: '#c99068', // TUNE: a shade under the boards
     beam: '#8a5a39', // TUNE: the dark beams, like the roof's
     joistEvery: 0.8, // TUNE: metres
+    /** High and medium: the ceiling's own soft warm lift (the fire and the lamp leave it out, H2). */
+    lift: '#6a4630', // TUNE
   },
 } as const;
 
@@ -521,7 +523,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     house: { color: '#ffcf94', intensity: 1.5 }, // TUNE: the lamps carry the room
     ambient: '#46302a', // TUNE
     lamps: 1, // TUNE: as dusk (1.15 turned the Heart Hall's ceiling orange at kid height)
-    lamp: 0.7, // TUNE: the table lamp's hotspot washed the side table out at 1.15
+    lamp: 0.6, // TUNE: the table lamp's hotspot washed the side table out at 1.15
     environment: 1.05, // TUNE
     sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,

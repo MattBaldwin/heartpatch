@@ -729,9 +729,14 @@ export class HouseScene {
       this.#sun.specular = linear(look.sun.color).scale(look.sunSpecular);
       this.#sun.intensity = look.sun.intensity;
     }
-    // High and medium: the image-based light carries the daylight the dimmer lamps leave.
+    // High and medium: the image-based light carries the daylight the dimmer
+    // lamps leave, on the house's own materials only: the squishies' and the
+    // Keeper's stay exactly as they are (art bible: nothing changes them).
     if (this.#tierLook.shadowMap > 0) {
-      scene.environmentIntensity = HOUSE_LIGHT.environment.lit * look.environment;
+      for (const m of scene.materials) {
+        if (m instanceof PBRMaterial && m.name.startsWith('house-'))
+          m.environmentIntensity = look.environment;
+      }
     }
     if (this.#houseLight) {
       this.#houseLight.diffuse = linear(look.house.color);
@@ -1092,6 +1097,10 @@ export class HouseScene {
         kind === 'fire' ? HOUSE_LIGHT.fire : HOUSE_LIGHT.lamp,
       );
       add(light);
+      // The ceilings keep out of the fire's and the lamp's reach (H2 render
+      // check: the Heart Hall's ceiling went hot orange at kid height); their
+      // own warm lift stands in.
+      light.excludedMeshes.push(...this.#ceilings.map((c) => c.mesh));
       this.#points.push({ kind, light });
       free -= 1;
     }
@@ -1569,7 +1578,7 @@ export class HouseScene {
       }
       parts.solid.push(...(this.#kidWalls.get(r.id) ?? []));
       for (const [name, list, material] of [
-        [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
+        [`house-${r.id}-ceiling`, parts.solid, this.#ceilingMaterial()],
         [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],
       ] as const) {
         if (list.length === 0) continue;
@@ -1577,10 +1586,29 @@ export class HouseScene {
         mesh.material = material;
         mesh.alwaysSelectAsActiveMesh = false;
         mesh.setEnabled(false);
+        // The sun comes in through the back windows, never through the roof:
+        // it leaves the ceiling out (H2 render check: an unshadowed rafter
+        // face lit up hard white by day, lavender at night).
+        this.#sun?.excludedMeshes.push(mesh);
         this.#house.push(mesh);
         this.#ceilings.push({ room: r.id, mesh });
       }
     }
+  }
+
+  /**
+   * The ceilings' vinyl on high and medium: lit by neither the sun nor the
+   * fire and lamp (no hard rafter streak, no hot orange), with a soft warm
+   * lift of its own instead. Low keeps the shared vinyl (its one house
+   * light reads well, owner-approved in B4).
+   */
+  #ceilingMaterial(): PBRMaterial {
+    if (this.#tierLook.shadowMap === 0) return this.#vinyl;
+    const found = this.#scene.getMaterialByName('house-ceiling');
+    if (found instanceof PBRMaterial) return found;
+    const m = this.#vinyl.clone('house-ceiling');
+    m.emissiveColor = linear(HOUSE_PALETTE.ceiling.lift);
+    return m;
   }
 
   /** A gable roof over every room with nothing above it, for the entry glide to lift away. */
