@@ -1015,19 +1015,24 @@ export function heartTree(scene: Scene, h: number): Parts {
   // Its top tucked inside the lobes (render check r3: a wider top showed as pink wings).
   const point = tube(scene, r * 1.8, r * 2.0, 0.05, [0, top - r * 1.2, 0], c.crown[0], G.facets);
   point.scaling.z = 0.55;
-  const solid = [
-    tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
-    ...boughs,
+  // The crown glows softly in its own shaded pink (B4: lit, high's dusk sun
+  // from behind turned it mauve while low's stayed pink), lighter on top.
+  const [shade, light] = c.crownGlow;
+  const crown = [
     ball(scene, r * 2.1, [-r * 0.72, top, 0], c.crown[0], [1, 1, 0.62], G.segments),
     ball(scene, r * 2.1, [r * 0.72, top, 0], c.crown[1], [1, 1, 0.62], G.segments),
     point,
+  ].map((m) => ramp(m, top - r * 2.2, top + r * 1.05, shade, light));
+  const solid = [
+    tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
+    ...boughs,
     // Roots spreading on the floor, with a gold ring round them.
     tube(scene, 0.12, 1.5, 1.6, [0, 0.06, 0], '#8a6a52', G.sides),
     tube(scene, 0.08, 1.75, 1.75, [0, 0.04, 0], c.gold, G.sides),
   ];
   const heart = goldHeart(scene, r * 0.9);
   for (const m of heart) m.position.addInPlaceFromFloats(0, top - r * 0.1, front);
-  const glow: Mesh[] = [...heart];
+  const glow: Mesh[] = [...crown, ...heart];
   for (let i = 0; i < 7; i++) {
     const a = i * 2.4;
     // A little diamond: a box stood on its corner.

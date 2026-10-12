@@ -329,6 +329,62 @@ describe('house scene', () => {
       }
     });
 
+    it('cuts the Snug–Playroom wall low with the Hall behind it: no post stands in front of the Hall (render check)', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      house.setRoof(1);
+      const tall = (name: string) => {
+        const mesh = scene.getMeshByName(name)!;
+        const pos = mesh.getVerticesData('position') ?? [];
+        let n = 0;
+        for (let i = 0; i < pos.length; i += 3) {
+          const [x, y, z] = [pos[i]!, pos[i + 1]!, pos[i + 2]!];
+          if (
+            Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 &&
+            z > 0.5 &&
+            z < 4.5 &&
+            y > HOUSE_GRID.cut + 0.2 &&
+            y < HOUSE_GRID.storey
+          )
+            n += 1;
+        }
+        return n;
+      };
+      // Downstairs, the partition stops at the cut; its upper part goes with the Kitchen.
+      expect(tall('house-f0-solid')).toBe(0);
+      expect(tall('house-f1-solid')).toBeGreaterThan(0);
+      scene.getEngine().dispose();
+    });
+
+    it('hangs the sign on a header over the Snug’s opening at kid height (level 4), back on the low wall outside', () => {
+      const vp = { width: 820, height: 1180, top: 70, bottom: 90 };
+      const { scene, house } = buildHouse(4, 'low');
+      const sign = scene.getMeshByName('house-sign')!;
+      house.setPose(kidPose(house.focusRoom!, vp), 1);
+      expect(sign.position.y).toBeGreaterThan(HOUSE_GRID.storey - HOUSE_KID.header);
+      expect(scene.getMeshByName('house-snug-ceiling')!.isEnabled()).toBe(true);
+      house.setPose(fitHouse(house.bounds, vp), 0);
+      expect(sign.position.y).toBeLessThan(HOUSE_GRID.cut + 0.6);
+      scene.getEngine().dispose();
+    });
+
+    it('lights every squishy by the fill, the hero field’s smoother swap included (render check: grey on low)', () => {
+      const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+      const { scene, house } = buildHouse(1, 'low');
+      const doll = fitHouse(house.bounds, vp);
+      house.setPose(doll, 0);
+      scene.render();
+      house.setPose(blend(doll, kidPose(house.focusRoom!, vp), 1), 1);
+      scene.render();
+      scene.render();
+      const fill = scene.getLightByName('house-fill')!;
+      const cast = scene.meshes.filter(
+        (m) => /^squishy-(?!.*shadow)/.test(m.name) && m.isEnabled(),
+      );
+      expect(cast.some((m) => m.name.endsWith('-high'))).toBe(true);
+      for (const m of cast) expect(fill.includedOnlyMeshes, m.name).toContain(m);
+      scene.getEngine().dispose();
+    });
+
     it('stands the sign on the Snug’s low back wall once the Heart Hall is behind it, not in the air', () => {
       const { scene } = buildHouse(4, 'low');
       const sign = scene.getMeshByName('house-sign')!;

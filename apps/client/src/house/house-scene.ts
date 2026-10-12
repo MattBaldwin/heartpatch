@@ -247,7 +247,17 @@ export class HouseScene {
   /** Which floors' thin instances are in the buffers now (`all` during the roof lift). */
   #instancedFor: string | null = null;
   readonly #cast: CastSpot[] = [];
-  #signAt: { x: number; y: number; z: number; width: number } | null = null;
+  #signAt: {
+    x: number;
+    y: number;
+    z: number;
+    width: number;
+    room: string;
+    /** Where it hangs at kid height (the header over a cut-back room's opening), or null: it stays. */
+    kidY: number | null;
+  } | null = null;
+  /** The sign's meshes that move to the header at kid height. */
+  readonly #signParts: Mesh[] = [];
   readonly #instrumentation: SceneInstrumentation;
   readonly #rooms: number;
   readonly #lookAt = new Vector3();
@@ -267,7 +277,8 @@ export class HouseScene {
   #focus: { id: string; room: HouseBounds; point: Vector3 } | null = null;
   /** Low tier: the nearest residents at kid height drawn smooth (owner check #4), their own field. */
   #hero: SquishyField | null = null;
-  #meshCount = 0;
+  /** Meshes already sorted into the fill (or not cast): checked once each. */
+  readonly #sorted = new WeakSet<AbstractMesh>();
   readonly #trees: { x: number; z: number; s: number; hex: string }[] = [];
   #treeMeshes: { trunks: Mesh; crowns: Mesh } | null = null;
 
@@ -309,10 +320,12 @@ export class HouseScene {
     this.#fill.intensity = this.#look.fill;
     this.#fill.includedOnlyMeshes = [];
     // The fields make their meshes as they first draw (in beforeRender):
-    // sort any new ones before the camera renders, every frame the mesh
-    // count changes.
+    // sort any new ones before the camera renders. Every mesh is checked,
+    // not just a change in the count: the low tier's hero field swaps its
+    // meshes for smoother ones one for one, and those went unlit by the
+    // fill (B4 render check: Puddlepuff grey and muddy at kid height).
     scene.onBeforeCameraRenderObservable.add(() => {
-      if (scene.meshes.length !== this.#meshCount) this.#sortCast();
+      this.#sortCast();
     });
 
     this.#setUpWarmLights(low);
@@ -490,6 +503,11 @@ export class HouseScene {
     }
     for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
     for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
+    const sign = this.#signAt;
+    if (sign?.kidY != null) {
+      const y = sign.room === focus?.id ? sign.kidY : sign.y;
+      for (const m of this.#signParts) m.position.y = y;
+    }
     this.#frontAlpha = least;
   }
 
@@ -577,11 +595,11 @@ export class HouseScene {
 
   /** Squishy and Keeper meshes take the neutral fill and none of the warm lights. */
   #sortCast(): void {
-    const scene = this.#scene;
-    this.#meshCount = scene.meshes.length;
     const fill = this.#fill.includedOnlyMeshes;
-    for (const mesh of scene.meshes) {
-      if (!CAST.test(mesh.name) || fill.includes(mesh)) continue;
+    for (const mesh of this.#scene.meshes) {
+      if (this.#sorted.has(mesh)) continue;
+      this.#sorted.add(mesh);
+      if (!CAST.test(mesh.name)) continue;
       fill.push(mesh);
       for (const light of this.#warm) light.excludedMeshes.push(mesh);
     }
@@ -724,7 +742,6 @@ export class HouseScene {
   /** Lights the rooms asked for, as many as the tier allows (the sun and the fill count). */
   #lightRequests(low: boolean): void {
     const scene = this.#scene;
-    const b = this.bounds;
     const cast = this.#fill.includedOnlyMeshes;
     const add = (light: Light) => {
       light.excludedMeshes = [...cast];
@@ -739,14 +756,16 @@ export class HouseScene {
       return light;
     };
     if (low) {
-      // One warm light over the rooms stands in for the fire, the lamps and the window.
-      add(
-        point(
-          'house-light',
-          new Vector3((b.minX + b.maxX) / 2, b.maxY + 0.9, (b.minZ + b.maxZ) / 2 - 1.8),
-          HOUSE_LIGHT.house,
-        ),
-      );
+      // One warm light over the rooms stands in for the fire, the lamps and
+      // the window: a directional one from above the open front, so no wall
+      // top right under it glows orange (B4 render check: the point light
+      // just over the partition lit its cap like a lamp).
+      const [x, y, z] = HOUSE_LIGHT.house.direction;
+      const light = new DirectionalLight('house-light', new Vector3(x, y, z), scene);
+      light.diffuse = linear(HOUSE_LIGHT.house.color);
+      light.specular = Color3.Black();
+      light.intensity = HOUSE_LIGHT.house.intensity;
+      add(light);
       return;
     }
     let free = this.#look.lights - 1 - this.#warm.length; // the fill and the sun so far
@@ -799,21 +818,31 @@ export class HouseScene {
         // A room whose back wall is cut low (a bigger room behind it: the
         // Heart Hall behind the Snug) stands the sign on that wall's cap,
         // not in the air over it (render check, B4).
+        // At kid height it hangs on the header over that opening instead
+        // (render check: it hung in the open gap, on a gallery post).
         const box = parts.box;
-        const cut = this.#runs.find(
-          (r) =>
-            r.axis === 'x' &&
-            r.front &&
-            !r.exterior &&
-            r.other === box.id &&
-            r.floor === box.floor &&
-            Math.abs(r.at - box.z1) < 0.01,
-        );
+        const cut = this.#cutBack(box);
         const y = cut ? box.y0 + HOUSE_GRID.cut + 0.08 + 0.29 : wantY;
         const z = cut ? cut.at - HOUSE_GRID.wall / 2 - 0.06 : wantZ;
-        this.#signAt ??= { x, y, z, width };
+        if (this.#signAt) return;
+        this.#signAt = {
+          x,
+          y,
+          z,
+          width,
+          room: box.id,
+          kidY: cut ? box.y1 - HOUSE_KID.header / 2 : null,
+        };
         const board = merged('house-sign-board', signBoard(scene, width));
         board.position.set(x, y, z);
+        if (cut) {
+          // Its own mesh, so it can move up to the header.
+          board.material = this.#vinyl;
+          board.alwaysSelectAsActiveMesh = false;
+          this.#house.push(board);
+          this.#signParts.push(board);
+          return;
+        }
         board.bakeCurrentTransformIntoVertices();
         parts.solid.push(board);
       },
@@ -831,7 +860,24 @@ export class HouseScene {
     const { wall: thick, cut } = HOUSE_GRID;
     // The open front: off in the dollhouse, full height and faded at kid height.
     const open = run.front && run.exterior;
-    const height = run.front && !open ? cut : run.height;
+    // An inside wall running back to a wall cut low (a big room behind: the
+    // Heart Hall behind the Snug and the Playroom) is cut low with it, or
+    // its end stands up like a post in front of that room's residents
+    // (render check, B4). Its upper part goes with the floor standing on it.
+    const cutBack =
+      run.axis === 'z' &&
+      !run.exterior &&
+      this.#runs.some(
+        (r) =>
+          r.axis === 'x' &&
+          r.front &&
+          !r.exterior &&
+          r.floor === run.floor &&
+          Math.abs(r.at - run.to) < 0.01 &&
+          r.from <= run.at + 0.01 &&
+          r.to >= run.at - 0.01,
+      );
+    const height = (run.front && !open) || cutBack ? cut : run.height;
     const length = run.to - run.from;
     const out = run.side === 'north' || run.side === 'east' ? 1 : -1;
     const holes = [...run.doors, ...run.windows];
@@ -860,7 +906,7 @@ export class HouseScene {
     // Its top edge, capped in dark wood where it shows: always on a cut
     // edge, and under a floor the cut can take away (slim, so it hides in
     // the skirting and clapboard of the wall standing on it).
-    const capped = run.top || run.front;
+    const capped = run.top || run.front || cutBack;
     if (capped || run.upper !== null) {
       list.push(
         ...place(
@@ -902,6 +948,22 @@ export class HouseScene {
     // With the room behind it on its floor, or the floor above (it's there
     // because of that room, so the cut takes it away with it).
     this.#floorParts(runFloor(run, this.#boxes)).solid.push(...list);
+    if (cutBack && run.upper !== null) {
+      const up = run.height - cut;
+      const lifted = [
+        ...wallPieces(
+          scene,
+          length,
+          up,
+          thick,
+          holes.map((h) => ({ ...h, y: h.y - cut })),
+          HOUSE_PALETTE.wall,
+        ),
+        box(scene, [length, 0.4, thick + 0.03], [length / 2, up - 0.2, 0], HOUSE_PALETTE.wallTop),
+      ];
+      for (const p of lifted) p.position.y += cut;
+      this.#floorParts(run.upper).solid.push(...place(lifted, 0));
+    }
   }
 
   /**
@@ -1102,6 +1164,20 @@ export class HouseScene {
     plane.position.set(at.x, at.y, at.z - 0.05);
     plane.isPickable = false;
     this.#house.push(plane);
+    if (at.kidY !== null) this.#signParts.push(plane);
+  }
+
+  /** The wall cut low behind a room (a bigger room behind it: the Heart Hall behind the Snug), if any. */
+  #cutBack(box: RoomBox): WallRun | undefined {
+    return this.#runs.find(
+      (r) =>
+        r.axis === 'x' &&
+        r.front &&
+        !r.exterior &&
+        r.other === box.id &&
+        r.floor === box.floor &&
+        Math.abs(r.at - box.z1) < 0.01,
+    );
   }
 
   /**
@@ -1117,9 +1193,30 @@ export class HouseScene {
       // It reaches out over the porch, so kid height (standing out there) sees no sky above.
       const overhang = HOUSE_KID.minStandBack + 0.6;
       const [w, d] = [r.x1 - r.x0, r.z1 - r.z0];
+      // Just over the walls' tops, so the joists clear the sign (render check, B4).
       const parts = covered
-        ? { solid: beamCeiling(this.#scene, r.x0, r.z0, w, d, r.y1 - 0.2, overhang), glow: [] }
+        ? { solid: beamCeiling(this.#scene, r.x0, r.z0, w, d, r.y1 + 0.04, overhang), glow: [] }
         : roofInside(this.#scene, r.x0, r.z0, w, d, r.y1, overhang);
+      // Over a back wall cut low, a header across the opening: it frames the
+      // room behind, holds the sign, and keeps that room's tall things (the
+      // Heart Tree's crown) from showing sliced by the ceiling's edge.
+      if (this.#cutBack(r)) {
+        const h = HOUSE_KID.header;
+        parts.solid.push(
+          box(
+            this.#scene,
+            [w, h, HOUSE_GRID.wall],
+            [r.x0 + w / 2, r.y1 - h / 2 + 0.04, r.z1],
+            HOUSE_PALETTE.wall,
+          ),
+          box(
+            this.#scene,
+            [w + 0.04, 0.1, HOUSE_GRID.wall + 0.06],
+            [r.x0 + w / 2, r.y1 - h + 0.04, r.z1],
+            HOUSE_PALETTE.cap,
+          ),
+        );
+      }
       for (const [name, list, material] of [
         [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
         [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],
@@ -1204,19 +1301,6 @@ export class HouseScene {
         z,
         s: 1.2 + ((i * 3) % 4) * 0.25,
         hex: HOUSE_TREE_CROWNS[i % HOUSE_TREE_CROWNS.length] ?? '#9fcf9a',
-      });
-    }
-    // A few nearer trees just behind the house (B4 framing: a wide house on
-    // a tall phone left a band of bare lawn over it; the ring stands past
-    // the frame's top there). Same two meshes, so no draw calls.
-    const { trees: backyard, gap } = HOUSE_OUTSIDE.backyard;
-    for (let i = 0; i < backyard; i++) {
-      const u = (i + 0.5) / backyard;
-      this.#trees.push({
-        x: b.minX - 1 + (b.maxX - b.minX + 2) * u + 0.6 * Math.sin(i * 4.1),
-        z: b.maxZ + gap[0] + ((gap[1] - gap[0]) * ((i * 3) % backyard)) / Math.max(1, backyard - 1),
-        s: 0.9 + ((i * 5) % 3) * 0.15,
-        hex: HOUSE_TREE_CROWNS[(i + 2) % HOUSE_TREE_CROWNS.length] ?? '#9fcf9a',
       });
     }
     const parts = treeParts(scene, this.#look.treeSegments);

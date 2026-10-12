@@ -111,7 +111,9 @@ export function fitHouse(
   bounds: HouseBounds,
   vp: HouseViewport,
   yard: number = HOUSE_CAMERA.yard,
+  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null = null,
 ): HousePose {
+  const box = corners(fitBox(bounds, vp, focus));
   const phone = isPhone(vp);
   const pitch = (phone ? HOUSE_CAMERA.pitch.phone : HOUSE_CAMERA.pitch.wide) * DEG;
   const fov = (phone ? HOUSE_CAMERA.fov.phone : HOUSE_CAMERA.fov.wide) * DEG;
@@ -123,7 +125,6 @@ export function fitHouse(
   const cx = (safe.right + safe.left) / 2;
   const h = Math.max(1, vp.height);
   const sheetBottom = -1 + (2 * ((vp.sheet ?? HOUSE_CAMERA.sheet) + HOUSE_CAMERA.margin)) / h;
-  const box = corners(bounds);
   const front = [bounds.minX, bounds.maxX].map((x) => ({ x, y: -0.3, z: bounds.minZ - yard }));
   let target: Vec3 = {
     x: (bounds.minX + bounds.maxX) / 2,
@@ -160,6 +161,60 @@ export function fitHouse(
     target = add(target, scale(up, lift * distance * t * 0.6));
   }
   return { eye: sub(target, scale(forward, distance)), target, fov, pitch };
+}
+
+/**
+ * What the dollhouse fits (B4 framing). A tall phone is too narrow for a
+ * wide house: fitted whole, the Snug and its squishies came out tiny. So
+ * on a portrait phone it fits the focus room (the Keeper's) across, plus
+ * `HOUSE_CAMERA.peek` of each neighbour so you can see there's more house,
+ * the whole house's height and depth kept; the rest is a sideways drag
+ * away (`panRange`). Elsewhere, and when no focus is given, the whole house.
+ */
+export function fitBox(
+  bounds: HouseBounds,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+): HouseBounds {
+  if (!focus || !isPhone(vp)) return bounds;
+  return {
+    ...bounds,
+    minX: Math.max(bounds.minX, focus.minX - HOUSE_CAMERA.peek),
+    maxX: Math.min(bounds.maxX, focus.maxX + HOUSE_CAMERA.peek),
+  };
+}
+
+/**
+ * How far a sideways drag may slide the dollhouse from its fit, metres
+ * along x: as far as brings each end of the house to the edge where the fit
+ * had the focus room's neighbour (none when the whole house is in view).
+ */
+export function panRange(
+  bounds: HouseBounds,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+): { min: number; max: number } {
+  const box = fitBox(bounds, vp, focus);
+  return { min: bounds.minX - box.minX, max: bounds.maxX - box.maxX };
+}
+
+/** The pose slid `dx` metres along x (a sideways drag). */
+export function panPose(pose: HousePose, dx: number): HousePose {
+  return {
+    ...pose,
+    eye: { ...pose.eye, x: pose.eye.x + dx },
+    target: { ...pose.target, x: pose.target.x + dx },
+  };
+}
+
+/** Metres along x that one CSS px of drag moves at the pose's target (the house follows the finger). */
+export function panPerPixel(pose: HousePose, vp: Pick<HouseViewport, 'height'>): number {
+  const d = Math.hypot(
+    pose.eye.x - pose.target.x,
+    pose.eye.y - pose.target.y,
+    pose.eye.z - pose.target.z,
+  );
+  return (2 * d * Math.tan(pose.fov / 2)) / Math.max(1, vp.height);
 }
 
 /**

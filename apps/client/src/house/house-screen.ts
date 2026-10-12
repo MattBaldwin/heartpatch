@@ -20,6 +20,9 @@ import {
   fitHouse,
   glidePose,
   kidPose,
+  panPerPixel,
+  panPose,
+  panRange,
   pinchedOut,
   pinchZoom,
   roofAt,
@@ -121,6 +124,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let builtTier: QualityTier | null = null;
   /** The fitted dollhouse pose for the screen as it is now. */
   let base: HousePose | null = null;
+  /** The dollhouse as fitted, and how far a sideways drag has slid it from there (metres). */
+  let fitted: HousePose | null = null;
+  let pan = 0;
   let glide: { shot: CinematicShot; start: number | null } | null = null;
   /** Kid height in the focus room, for the screen as it is now. */
   let kid: HousePose | null = null;
@@ -309,8 +315,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The dollhouse and kid-height poses for the screen as it is now. */
   function fit(s: HouseScene): void {
     const vp = viewport();
-    base = fitHouse(s.frameBounds, vp);
     const room = s.focusRoom;
+    // B4: a tall phone fits the Keeper's room and drags sideways to the rest.
+    fitted = fitHouse(s.frameBounds, vp, undefined, room);
+    const range = panRange(s.frameBounds, vp, room);
+    pan = Math.min(range.max, Math.max(range.min, pan));
+    base = panPose(fitted, pan);
     kid = room ? kidPose(room, vp) : null;
     frameOutside(s, base);
   }
@@ -359,8 +369,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     }
   });
   touch.addEventListener('pointermove', (e) => {
-    if (!pointers.has(e.pointerId)) return;
+    const was = pointers.get(e.pointerId);
+    if (!was) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // One finger in the dollhouse slides it sideways (a tall phone shows one room or two).
+    if (pointers.size === 1 && zoom === 0 && !walk && fitted && scene3d) {
+      pan -= (e.clientX - was.x) * panPerPixel(fitted, viewport());
+      fit(scene3d);
+      draw();
+    }
     taps.pointerMove(sample(e));
     if (pinch && pointers.size === 2) {
       zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
@@ -472,6 +489,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     view = fresh;
     zoom = 0;
     floor = 0;
+    pan = 0;
     walk = null;
     builtTier = null;
     isOpen = true;
