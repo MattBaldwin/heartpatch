@@ -47,8 +47,10 @@ async function onAPatch(page: Page, name: string): Promise<string> {
 }
 
 /**
- * Taps (for real) around the Heart Seed until the tile panel offers Gather:
- * every home ring has nodes of ours (design doc §11).
+ * Taps (for real) our home node until the tile panel offers Gather: every
+ * home ring has nodes of ours (design doc §11). The map says where the node
+ * is on screen, so there is no guessing around the Heart Seed (#429); a tap
+ * that lands while the camera is still settling is made again.
  */
 async function tapOwnNode(page: Page): Promise<void> {
   // Let the map settle first: picking a tile needs the scene drawn and the
@@ -56,30 +58,26 @@ async function tapOwnNode(page: Page): Promise<void> {
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
   const panel = page.getByTestId('tile-panel');
   const box = (await page.locator('#game').boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  for (const radius of [40, 60, 80, 100, 130]) {
-    for (let step = 0; step < 12; step++) {
-      const angle = (step * Math.PI) / 6;
-      // The panel from the last tap would swallow a tap landing on it (it
-      // covers the lower half of a phone's screen): close it first, as a
-      // player would.
-      if (await panel.isVisible()) {
-        await realTap(panel.getByRole('button', { name: 'Close' }));
-        await expect(panel).toBeHidden();
-      }
-      await realTapAt(page, cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
-      await expect
-        .poll(async () => (await bagState(page))?.tileAction, { timeout: 1000 })
-        .not.toBeNull()
-        .catch(() => undefined);
-      if ((await bagState(page))?.tileAction === 'gather') return;
+  const nodeAt = () =>
+    hook<{ homeNode: { x: number; y: number } | null }>(page, 'map').then(
+      (m) => m?.homeNode ?? null,
+    );
+  await expect(async () => {
+    if ((await bagState(page))?.tileAction === 'gather') return;
+    // The panel from the last tap would swallow a tap landing on it (it
+    // covers the lower half of a phone's screen): close it first, as a
+    // player would.
+    if (await panel.isVisible()) {
+      await realTap(panel.getByRole('button', { name: 'Close' }));
+      await expect(panel).toBeHidden();
     }
-  }
-  const map = await hook<{ selected: string | null; tiles: number; draws: number }>(page, 'map');
-  throw new Error(
-    `no node of ours near the Heart Seed (map ${JSON.stringify(map)}, bag ${JSON.stringify(await bagState(page))}, canvas ${JSON.stringify(box)})`,
-  );
+    const at = await nodeAt();
+    expect(at, 'our home node is on screen').not.toBeNull();
+    await realTapAt(page, box.x + at!.x, box.y + at!.y);
+    await expect
+      .poll(async () => (await bagState(page))?.tileAction, { timeout: 5_000 })
+      .toBe('gather');
+  }).toPass({ timeout: 60_000 });
 }
 
 /** The button `testId`, with its tray opened by one real tap on the handle. */
