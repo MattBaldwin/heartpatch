@@ -14,6 +14,7 @@ import {
   type SquishyLod,
 } from './config.js';
 import type { SquishySpecies } from './params.js';
+import { decodeSquishCode, glowHueIndex } from './rare-glow.js';
 import { SquishyField } from './squishy-field.js';
 
 const registry = visualRegistry(GAME_DATA);
@@ -487,7 +488,9 @@ describe('SquishyField sparkle kept off a face', () => {
     GAME_DATA.species.forEach((s, i) => f.add(s, `pub-${i}`, { x: i, z: 0 }));
     f.flush();
     for (const [name, list] of codes(scene)) {
-      for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
+      // The rare glow (#391) rides above the finish code; the finish part is unchanged.
+      for (const code of list)
+        expect(decodeSquishCode(code).base, name).toBeLessThan(FINISH_CODE.offFace);
     }
   });
 });
@@ -552,5 +555,143 @@ describe('SquishyField glum face (#393)', () => {
     f.move(h, { x: 2, z: 1 });
     f.flush();
     expect(yRow(scene, 'squishy-part:arc')).toEqual(before);
+  });
+});
+
+describe('SquishyField rare finds glow (#391)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Each mesh's instances, split back into finish, level and hue. */
+  function decoded(scene: Scene): Map<string, ReturnType<typeof decodeSquishCode>[]> {
+    const out = new Map<string, ReturnType<typeof decodeSquishCode>[]>();
+    for (const mesh of scene.meshes) {
+      const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+        Float32Array | undefined;
+      if (!data || !mesh.isEnabled()) continue;
+      out.set(
+        mesh.name,
+        Array.from({ length: data.length / 4 }, (_, i) => decodeSquishCode(data[i * 4 + 3]!)),
+      );
+    }
+    return out;
+  }
+  const make = () => {
+    const scene = new Scene(engine);
+    return {
+      scene,
+      f: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }),
+    };
+  };
+  const kind = (rarity: 'common' | 'rare' | 'legendary') => {
+    const s = GAME_DATA.species.find((x) => x.rarity === rarity && x.visual.parts.length > 2);
+    if (!s) throw new Error(`no ${rarity} species`);
+    return s;
+  };
+
+  it('lights the torso and every sticking-out part of a rare kind, never its face', () => {
+    const { scene, f } = make();
+    // Every rare kind, so parts of every shape and kind are covered.
+    const rares = GAME_DATA.species.filter((s) => s.rarity === 'rare');
+    const expected = new Map<string, { lit: number; unlit: number }>();
+    const count = (key: string, lit: boolean, n = 1) => {
+      const e = expected.get(key) ?? { lit: 0, unlit: 0 };
+      if (lit) e.lit += n;
+      else e.unlit += n;
+      expected.set(key, e);
+    };
+    rares.forEach((s, i) => {
+      const h = f.add(s, `r-${String(i)}`, { x: i * 3, z: 0 });
+      count(`body:${h.params.body.id}`, true);
+      if (h.params.head) count(`body:${h.params.head.id}`, true);
+      for (const part of h.params.parts) {
+        count(`part:${part.shape}`, !part.surface, part.placements.length);
+      }
+      if (h.params.floater) count(`${FLOATER_BATCH}${h.params.floater.glyph}`, false);
+    });
+    f.flush();
+    const seen = new Set<string>();
+    for (const [name, list] of decoded(scene)) {
+      const key = [...expected.keys()].find((k) => name === `squishy-${k}-low`);
+      expect(key, name).toBeDefined();
+      seen.add(key!);
+      const e = expected.get(key!)!;
+      expect(list.filter((c) => c.level === 1).length, `${name} lit`).toBe(e.lit);
+      expect(list.filter((c) => c.level === 0).length, `${name} unlit`).toBe(e.unlit);
+    }
+    expect([...seen].sort()).toEqual([...expected.keys()].sort());
+    // The kinds really have both: sticking-out parts lit, faces and patterns not.
+    const parts = [...expected].filter(([k]) => k.startsWith('part:')).map(([, e]) => e);
+    expect(parts.some((e) => e.lit > 0)).toBe(true);
+    expect(parts.some((e) => e.unlit > 0)).toBe(true);
+  });
+
+  it('gives each lit piece its squishy’s own palette hue', () => {
+    const { scene, f } = make();
+    const rare = kind('rare');
+    f.add(rare, 'r', { x: 0, z: 0 });
+    f.flush();
+    for (const [name, list] of decoded(scene)) {
+      for (const c of list) {
+        if (c.level > 0) expect(c.hue, name).toBe(glowHueIndex(rare.visual.palette));
+      }
+    }
+  });
+
+  it('gives a legendary kind level 3 (its rainbow edge glows brighter)', () => {
+    const { scene, f } = make();
+    f.add(kind('legendary'), 'l', { x: 0, z: 0 });
+    f.flush();
+    const body = [...decoded(scene)].find(([name]) => name.startsWith('squishy-body:'))![1];
+    for (const c of body) expect(c.level).toBe(3);
+  });
+
+  it('leaves commons, showcase looks and rescue guardians unlit', () => {
+    const { scene, f } = make();
+    f.add(kind('common'), 'c', { x: 0, z: 0 });
+    f.add(species, 'look', { x: 1, z: 0 });
+    f.add(kind('rare'), 'g', { x: 2, z: 0 }, 'shadow');
+    f.flush();
+    for (const [name, list] of decoded(scene)) {
+      for (const c of list) expect(c.level, name).toBe(0);
+    }
+  });
+
+  it('keeps a worn accessory plain vinyl', () => {
+    const { scene, f } = make();
+    const h = f.add(kind('rare'), 'r', { x: 0, z: 0 });
+    f.flush();
+    const before = [...decoded(scene)].reduce(
+      (n, [, l]) => n + l.filter((c) => c.level === 0).length,
+      0,
+    );
+    const scarf = CLOTHING_BY_ID.get('snuggle-scarf');
+    if (!scarf) throw new Error('no scarf');
+    f.setAccessory(h, scarf);
+    f.flush();
+    const after = [...decoded(scene)].reduce(
+      (n, [, l]) => n + l.filter((c) => c.level === 0).length,
+      0,
+    );
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it('adds no meshes: a rare kind draws on the same batches as a common one', () => {
+    const plain = make();
+    plain.f.add({ ...kind('rare'), rarity: 'common' }, 'p', { x: 0, z: 0 });
+    plain.f.flush();
+    const lit = make();
+    lit.f.add(kind('rare'), 'p', { x: 0, z: 0 });
+    lit.f.flush();
+    expect(lit.f.stats.meshes).toBe(plain.f.stats.meshes);
+    expect(lit.f.stats.instances).toBe(plain.f.stats.instances);
   });
 });

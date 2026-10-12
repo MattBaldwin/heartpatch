@@ -8,7 +8,7 @@ import { createLoreConsumer } from './modules/lore/consumer.js';
 import { createMilestonesConsumer } from './modules/milestones/consumer.js';
 import { createMilestonesService } from './modules/milestones/service.js';
 import { relayoutHomes } from './modules/buildings/layout.js';
-import { relayoutTileUses } from './modules/buildings/tile-uses.js';
+import { countCrowdedTiles, relayoutTileUses } from './modules/buildings/tile-uses.js';
 import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
@@ -118,6 +118,17 @@ relayoutHomes(db.db, clock, (owner, err) => {
     },
     (err: unknown) => {
       app.log.error({ err }, 'tile-use pass failed');
+    },
+  )
+  // How many tiles still hold 2+ buildings, counts only: 0 everywhere means
+  // the unique index on buildings.tile_id (migration B) can go in.
+  .then(() => countCrowdedTiles(db.db))
+  .then(
+    (crowded) => {
+      app.log.info({ crowdedTiles: crowded }, 'tiles holding 2+ buildings');
+    },
+    (err: unknown) => {
+      app.log.error({ err }, 'crowded-tile count failed');
     },
   );
 // Trading posts (#269) for patches made before them. Idempotent, so every

@@ -13,6 +13,7 @@ import { el, messageOf } from '../ui/dom.js';
 import {
   bookOrder,
   bookTabs,
+  buildWhere,
   bookSpreads,
   cookingView,
   freshPages,
@@ -28,7 +29,7 @@ import './recipe-book.css';
 // with a cover, a contents page and one recipe per page (two-page spreads on
 // a tablet), turned by a swipe or Next/Back. Each page says what you have of
 // each ingredient, where to find it, and has "Make it" (the server crafts:
-// CLAUDE.md rule 1) or "Build it" (Home). Pages open the first time the
+// CLAUDE.md rule 1), "Build it" (Home) or "Find a spot" (the map). Pages open the first time the
 // account has collected everything they need; a sealed page shows a gentle
 // hint, and a page that just opened gets a "New page!" moment. Which pages
 // the player has looked at is kept on this device, per account.
@@ -115,7 +116,7 @@ export const RECIPE_BOOK_TEXT = {
   nextPage: 'Next page',
   contents: 'Contents',
   make: 'Make',
-  build: 'Build at home',
+  build: 'Build',
   sealedName: 'A sealed page',
   sealedNote: 'Collect everything it needs and this page opens by itself!',
   stillSealed: (n: number) =>
@@ -130,9 +131,7 @@ export const RECIPE_BOOK_TEXT = {
   findLabel: (what: string) => `Find ${what} on the map`,
   haveLabel: (have: number, need: number) => `You have ${String(have)}, you need ${String(need)}`,
   makeIt: 'Make it',
-  buildIt: 'Build it',
   making: (name: string) => `Making ${name}! Come back when it’s ready.`,
-  buildNote: 'You pick the spot at home.',
   newPage: 'New page!',
   foundAll: 'You found everything it needs.',
   turnToIt: 'Turn to it',
@@ -575,7 +574,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   const cta = (page: PageView): HTMLElement[] => {
     const make = page.kind === 'recipe';
-    const label = make ? RECIPE_BOOK_TEXT.makeIt : RECIPE_BOOK_TEXT.buildIt;
+    const where = buildWhere(page.output);
+    // A building that goes out on the map says so (#295): the book closes onto it.
+    const label = make ? RECIPE_BOOK_TEXT.makeIt : where.button;
     const button = el(
       'button',
       {
@@ -590,7 +591,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     button.addEventListener('click', () => {
       if (!make) {
         closeBook();
-        options.openHome();
+        // Homestead and land buildings go up from a tile on the map (#295),
+        // which is right under the book.
+        if (where.atHome) options.openHome();
         return;
       }
       busy = true;
@@ -613,7 +616,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     const note = page.canMake
       ? make
         ? (page.meta.split(' · ')[1] ?? '')
-        : RECIPE_BOOK_TEXT.buildNote
+        : where.note
       : (page.note ?? '');
     const queue = queueButton(page);
     if (queue.length === 0) return [button, el('p', { class: 'rbook-note' }, note)];

@@ -716,6 +716,22 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect((await searched!).statusCode).toBe(200);
   });
 
+  it('dev: makes a ready homestead next to home, where a Crafting Factory goes up at once (#295)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
+    expect(made.statusCode, made.body).toBe(201);
+    const at = made.json<{ q: number; r: number }>();
+    await give(mapId, kid, { timber: 30, stone: 20 });
+    const built = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
+      buildingId: 'crafting-factory',
+      ...at,
+      spot: 1,
+    });
+    expect(built.statusCode, built.body).toBe(201);
+  });
+
   it('counts each search towards the Seeker track (#199)', async () => {
     // Milestones judge membership at the event's game time (its database
     // time, shifted by the clock). Play on today's clock and have both

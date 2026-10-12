@@ -8,4 +8,8 @@ export const EXPLORE_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess; a family on one Wi-Fi
     perUser: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess; quick searches, with retries
   },
+  dev: {
+    perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: e2e signs up and grants from one IP
+    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
+  },
 } as const satisfies RateLimitTable;

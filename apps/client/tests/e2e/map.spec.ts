@@ -205,6 +205,10 @@ test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ 
 
   // Every terrain is dressed (one mesh per prop kind), and only the player's
   // home ring and Juniper's Gap are in full colour: the rest is wild.
+  // The map's debug view is null for a moment after the scene is ready (#429).
+  await expect
+    .poll(async () => (await mapState(page))?.props ?? 0, { timeout: 30_000 })
+    .toBeGreaterThan(1000);
   const drawn = (await mapState(page))!;
   expect(drawn.props).toBeGreaterThan(1000);
   expect(drawn.propKinds).toBeGreaterThanOrEqual(18);

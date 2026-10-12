@@ -14,10 +14,10 @@
 
 ### 1.1 Babies are cute; evolutions grow up
 
-Squishies are collectible vinyl toys, and they come in every shape a toy shelf does. A line starts as a **baby** and **grows up** when it evolves, the way a kid's favourite creature lines do.
+Squishies are collectible vinyl toys, and they come in every shape a toy shelf does. A line starts as a **baby** and **grows up** through four stages, **baby → kid → teen → grown-up** (owner decision 2026-10-12, #443), the way a kid's favourite creature lines do. Each stage is a bit fiercer, and every stage stays cute.
 
 - **Base forms are baby-cute:** a big head on a small body, round eyes, stubby limbs, a soft little mouth.
-- **Evolutions grow up:** a smaller head compared to the body, longer limbs, a more upright or ready stance; a confident face (determined brows, narrower `sharp-eyes`, a smirk, small soft fang nubs); and bigger signature features (horns, spikes, crests, manes, wings).
+- **Each evolution grows up a step:** a smaller head compared to the body, longer limbs, a more upright or ready stance; a confident face (determined brows, narrower `sharp-eyes`, a smirk, small soft fang nubs); and bigger signature features (horns, spikes, crests, manes, wings).
 - **Fierce means cool and strong, never scary or mean.** No blood, gore, scars, claws drawn to hurt, or angry red eyes. Fangs are small, soft and white; spikes are rounded cones. A 10-year-old should want to collect every form.
 
 Everything is procedural and data-driven (CLAUDE.md rule 5): a torso from the body registry, an optional head, up to 12 parts from the part registry, a palette of up to 4 colours, and the fields below. Adding a species is a data entry; `checkGameData` enforces every rule marked **[checked]**.
@@ -31,7 +31,7 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 | Block | Data | Examples |
 |---|---|---|
 | Torso | a registry body (`blob`, `barrel`, `tall`, `pear`, `orb`, …) | a barrel for four-legged animals, a tall body for a cactus knight or a candle |
-| Head | `visual.head`: a registry body, its size against the torso, and where it sits | big heads on babies, smaller heads on grown-ups |
+| Head | `visual.head`: a registry body, its size against the torso, and where it sits | big heads on babies, smaller heads on teens and grown-ups |
 | Stance | `visual.stance`: how far the torso stands off the ground | short legs, long legs, or hovering when there are none |
 | Legs | `legs` slot, `quad` (four) or `pair` (two) layout; legs grow to reach the ground | stubby pup legs, a wolf's long legs, biped feet |
 | Arms | `arms` slot | stubby arms, strong arms, leaf arms |
@@ -48,11 +48,28 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 - **[checked] No two species lines share body + dominant part + hue family.** The *dominant part* is the line's biggest sticking-out part apart from legs (by silhouette area); the *hue family* is the body colour's family (red, orange, yellow, green, cyan, blue, purple, pink, or white, dark and neutral).
 - **Pose and attack part** (for the battle-feel lane): every line names how it stands (`pose`: sit, stand, upright, slither, hover) and the slot a move animation drives (`attackPart`: a tail to swing, arms to punch, wings to flap, spikes to puff). **[checked]** the attack part's slot exists on the species.
 
-### 1.3 Evolutions grow up
+### 1.3 Evolutions grow up, one stage at a time
 
-- **[checked]** An evolution is **×1.2–1.4** the size of the form it grows from and adds **at least one new sticking-out part**. It keeps the base's colour family and signature, so the family resemblance is obvious.
-- Grown-up proportions: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and the stance gets readier (sit → stand → upright).
-- Most evolutions are one rarity step up (Thunderpuff → Thunderplume stays legendary), so they usually also gain a material tier (§1.4).
+Every line has four stages (#443). The kid is an in-between of the baby and its teens; the teens are the forms that shipped as "evolutions" before #443 (and branch, #32); the grown-up is the one new big step.
+
+- **[checked]** Each evolution step is a set share bigger than the form it grows from (`artRules.evolutionScale`): **×1.2–1.4** today, and **×1.08–1.4** once #443's first kid batch lands (a kid is a smaller step). The 1.4 top lets a line whose kid hasn't shipped yet still go baby → teen in one step. Each step also adds **at least one new sticking-out part**.
+- **[checked]** A form never shares body + dominant part + hue family with another line's form (§1.2).
+- Every form keeps its line's colour family and signature, so the family resemblance is obvious. Within a line, a grown-up's biggest part should differ from its teen's, so the last step changes the silhouette. (Review rules, not checked.)
+
+**Targets for each new form** (#443 §6). The shipped teens vary (a sleepy or sitting branch sits low, a golem has a tiny head), so a new kid is placed **between its baby and its teens**, and a grown-up grows **from its own teen**:
+
+| | Kid | Grown-up |
+|---|---|---|
+| Size | ×1.08 or more over the baby, and the teens still ×1.08 or more over it (about ×1.15 the baby for a ×1.3 teen) | ×1.12–1.25 its teen |
+| Head ÷ torso height | between the baby's and the teens' | smaller than its teen's |
+| Stance and pose | between the baby's and the teens' (a sitting teen keeps a sitting kid) | its teen's or readier |
+| Face | the baby's eyes plus brave brows or a grin, still round (no `sharp-eyes` yet: a review rule) | the teen's kit, a little bolder: `sharp-eyes`, a smirk, fang nubs; never cross or mean |
+| New sticking-out parts | at least one: a smaller, different part that previews what its teens grow (Gustypup's icicle tuft before Blusterpup's mane), so each teen still adds a part the kid doesn't have | at least one, the biggest signature yet |
+| Rarity and tier (§1.4) | the baby's | one step over its teen, capped at legendary |
+
+- Proportions grow up step by step: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and most lines' stance gets readier (sit → stand → upright).
+- Teens are one rarity step up from the baby (Thunderpuff → Thunderplume stays legendary), and so usually gain a material tier (§1.4).
+- The kid-safe rules in §1.1 hold at every stage.
 
 ### 1.4 Rarity material tiers
 
@@ -60,16 +77,18 @@ All tiers are the same shared vinyl (§4) plus a per-instance code in the squish
 
 | Tier | Who **[checked]** | Look | Cost |
 |---|---|---|---|
-| Vinyl | common, uncommon, rare | glossy clearcoat + rim (today's look) | — |
+| Vinyl | common, uncommon, rare | glossy clearcoat + rim (rare also wears the rare glow below) | — |
 | **Sparkle** | epic | tiny white flecks in the vinyl that twinkle as the view turns; they sit in each mesh's own space, so they stay put as the squishy breathes, bounces and turns | ~12 ALU per fragment (a 3D cell hash), only on sparkly instances |
 | **Iridescent** | legendary, secret | sparkle **plus** a rainbow rim that shifts with view angle | ~20 ALU per fragment |
 | **Shimmer** | mythic (#261) | iridescent **plus** soft pearly bands that glide over the vinyl as the view turns (never on a timer) | ~28 ALU per fragment |
+| **Rare glow** (#391) | rare and up, by `RARE_GLOW_LEVEL` (shared data): rare 1, epic 2, legendary and secret 3, mythic 4 | rare and epic: light added along the outline in **each part's own colour** (a brown tail glows brown, gold wings glow gold; a pure white part borrows its palette's most colourful hue), stronger for epic; legendary and up: the rainbow rim they already wear glows brighter (×2.6 legendary, ×3.2 mythic) instead. Faces, patterns, accessories, floaters and rescue guardians never glow. View-angle only, never on a timer | ~25 ALU on most pixels of rare and epic instances (a per-pixel branch skips only the flat middle of each part, about the central 10%); a multiply on legendary and up |
 | **Glow** | Light (whole squishy), Fire (its flames, the `accent` parts); others may opt in (Glowgourd's lantern body) | lit from inside: albedo added back as emission, so it reads at dusk and night | ~3 ALU |
 
 - Face parts (eyes, brows, mouth, cheeks) never sparkle or glow, so faces stay clean.
 - A species may set `visual.sparkleOffFace` (off by default) to keep sparkle flecks off the front and underside of its body too, where a fleck between the eyes would read as a nose. It is one more bit in the same per-instance code: no draw call.
-- **Keeper costumes wear their rarity's tier too** (owner, #261): a Mythic costume shimmers, a Legendary one has the rainbow rim. A Mythic costume wears a softer shimmer than the squishies' (owner, #261: fewer, wider bands at lower strength, so a dark, narrow figure gets one pearly sweep instead of stripes). It is its own finish code (`shimmerSoft`, 4) and `FINISH.shimmerSoft` in the client's procedural config; squishies keep the shared shimmer unchanged. The glow bit is code 8, above every finish. Other clothing stays plain vinyl, and a costume piece may glow (the Hollow Man's eyes, the Glow Moth's wing spots) through the same code.
-- The tier decodes from a varying with uniform control flow per instance; fragments on vinyl squishies skip the branches. The rescue guardians' shadow look still wins over every tier.
+- **Keeper costumes wear their rarity's tier too** (owner, #261): a Mythic costume shimmers, a Legendary one has the rainbow rim. A Mythic costume wears a softer shimmer than the squishies' (owner, #261: fewer, wider bands at lower strength, so a dark, narrow figure gets one pearly sweep instead of stripes). It is its own finish code (`shimmerSoft`, 4) and `FINISH.shimmerSoft` in the client's procedural config; squishies keep the shared shimmer unchanged. The glow bit is code 8, above every finish (and `offFace` 16 above that); the rare glow rides above all of those as its level ×32 plus a palette hue step (one of 36) ×160 (`RARE_GLOW_CODE`), all exact in a float. Other clothing stays plain vinyl, and a costume piece may glow (the Hollow Man's eyes, the Glow Moth's wing spots) through the same code.
+- The tier decodes from a varying with uniform control flow per instance; fragments on vinyl squishies skip the branches. Rare and up instances always enter the branch to decode their code (a few ALU, even with the glow switched off); the rare glow adds one per-pixel branch (outline or not) inside rare and epic instances. The rescue guardians' shadow look still wins over every tier.
+- The rare glow has a per-tier switch (`TIER_SETTINGS[tier].rareGlow`, on for every tier today) and `?rareglow=0` for a device frame-rate check. Both reach the shader as one uniform, so switching needs no rebuild. The agreed fallback if the iPad 9th gen can't hold 30 fps is to turn it off on the low tier (#391).
 - WebGPU (opt-in) has no squish plugin yet, so tiers fall back to plain vinyl there, like the rim and the squash today.
 
 ### 1.5 Element at a glance
@@ -97,9 +116,9 @@ Seasonal lines may keep their season's colour (Gourdon is an orange pumpkin) but
 |---|---|---|
 | Sleepy | `sleepy-eyes` | closed, drowsy arcs |
 | Joy | `happy-eyes` | ^ ^ |
-| Silly | `dot-eyes` (or grown-up `sharp-eyes`) + `open-mouth` | wide-eyed, giggling |
-| Cozy | `oval-eyes` (or grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
-| Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or grown-up `sharp-eyes` | determined, never cross |
+| Silly | `dot-eyes` (or teen and grown-up `sharp-eyes`) + `open-mouth` | wide-eyed, giggling |
+| Cozy | `oval-eyes` (or teen and grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
+| Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or teen and grown-up `sharp-eyes` | determined, never cross |
 | Spooky | `spooky-eyes` (new, tall and glinty) | "boo!" |
 
 Idle animations (Silly spins, Sleepy nods off, Brave puffs up) add to this in the close-up view; the face alone must carry it in battle and on the map.
@@ -128,9 +147,9 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 ### 1.10 Roster
 
-Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 the base's size, inside the ×1.2–1.4 rule.
+Every line, baby → teen, as shipped before #443 (the Teen column is stage 3, at ×1.25–1.35 the baby's size). The kids (stage 2) and grown-ups (stage 4) join this chapter with their #443 batches; the 8 wave-1 lines get their kid and teen there too.
 
-| Line | Element · Feeling | Body plan | Baby | Grown up | Pose · attack part |
+| Line | Element · Feeling | Body plan | Baby | Teen | Pose · attack part |
 |---|---|---|---|---|---|
 | Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole, wiggly tail | sea serpent: long swinging body, fin row, toothy grin | sit → slither · tail |
 | Pebblesnooze → Boulderdoze | Stone · Sleepy | boulder tortoise | pebble shell, stubby legs, head in a nightcap | big boulder tortoise: crag nubs on the shell, horns, smirk | stand · crown → back |
@@ -152,7 +171,7 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
-**Branch forms (#32).** Every line has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
+**Branch forms (#32).** Every launch line has a second teen form at the same level (the wave-1 lines get theirs in Phase 2): the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
 
 | Line | Branch form | Feeling | Body plan | Pose · attack part |
 |---|---|---|---|---|

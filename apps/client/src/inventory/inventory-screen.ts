@@ -75,7 +75,7 @@ export interface InventoryScreenOptions {
   openPages?: () => Promise<readonly string[]>;
   /** Where "when did I last see this patch" is kept, for the welcome-back card (null: nowhere). */
   storage?: Storage | null;
-  /** "See Factory" on the welcome-back card: open home (the Factory's own card). */
+  /** "See Factory" on the welcome-back card: the Factory's batches sheet (wherever it stands, #295). */
   onSeeFactory?: () => void;
   /** The Lorebook's way in (#307): a tile at the top of the sheet and a sparkle on the Bag button. */
   lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };
@@ -794,8 +794,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }
   }
 
-  function openFactory(recipeId?: string): void {
-    if (!state?.factory) return;
+  function openFactory(recipeId?: string, reread = true): void {
+    if (!state?.factory) {
+      // Built a moment ago (#295, on a homestead): read the bag, then open.
+      if (reread && mapId) {
+        void refresh().then(() => {
+          openFactory(recipeId, false);
+        });
+      }
+      return;
+    }
     factorySheet.hidden = false;
     renderFactory();
     if (recipeId) factoryPanel.pick(recipeId);
@@ -1249,7 +1257,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     craft: (recipeId) => startCraft(recipeId),
     queue: (recipeId, count) => startBatch(recipeId, count),
     stopBatch: (batchId) => stopBatch(batchId),
-    openFactory,
+    openFactory: (recipeId) => {
+      openFactory(recipeId);
+    },
     gameNow: () => clock.now(),
     isPageOpen: (key) => openPages.has(key),
     msUntil: (iso) => clock.msUntil(iso),

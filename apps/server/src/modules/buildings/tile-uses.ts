@@ -195,6 +195,18 @@ export async function relayoutTileUses(
   return { players, moved, packed, stopped };
 }
 
+/**
+ * Tiles still holding two or more buildings (#295), counts only: logged after
+ * the boot pass, so a deploy log can show it's safe to add the unique index
+ * on `buildings.tile_id` (migration B).
+ */
+export function countCrowdedTiles(
+  db: Executor,
+  mapIds?: readonly string[],
+): Promise<{ multiplayer: number; other: number }> {
+  return createBuildingsRepo(db).crowdedTiles(mapIds);
+}
+
 /** Adds `items` into `into`. */
 function addInto(into: ItemCounts, items: ItemCounts): void {
   for (const [id, n] of Object.entries(items)) into[id] = (into[id] ?? 0) + n;

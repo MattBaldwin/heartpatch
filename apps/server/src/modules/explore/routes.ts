@@ -1,6 +1,7 @@
 import {
   ExploreQuerySchema,
   ExploreTileResponseSchema,
+  HexSchema,
   MapIdParamsSchema,
   SearchSpotRequestSchema,
   SearchSpotResponseSchema,
@@ -17,6 +18,11 @@ export interface ExploreRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /**
+   * `HP_DEV_SQUISHY_GRANTS`: also register the dev route that makes me a
+   * ready homestead next to home (e2e and phone testing). Never in production.
+   */
+  devTools?: boolean;
 }
 
 /** Exploring your land (#199): the explore view of one of my tiles, and searching a spot. */
@@ -54,6 +60,20 @@ export const exploreRoutes =
       },
       async (request) => service.search(requireUser(request), request.params.mapId, request.body),
     );
+
+    if (options.devTools) {
+      app.post(
+        '/maps/:mapId/dev/homestead',
+        {
+          schema: { params: MapIdParamsSchema, response: { 201: HexSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request, reply) =>
+          reply
+            .code(201)
+            .send(await service.devHomestead(requireUser(request), request.params.mapId)),
+      );
+    }
 
     done();
   };

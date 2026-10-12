@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { CLEARED_TERRAIN, CLEARING_RULES, clearToolFor, hexDistance } from '@heartpatch/shared';
+import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { tileExplore, tiles } from '../../db/schema.js';
@@ -65,6 +66,69 @@ const rowColumns = {
  */
 export function createExploreRepo(db: Executor) {
   return {
+    /**
+     * Dev only (`HP_DEV_SQUISHY_GRANTS`, e2e and phone testing): the first
+     * free neutral tile two steps from the player's Heart Seed becomes theirs,
+     * fully explored, joined to home and with no resource spot, so a
+     * homestead building can go up at once (#295). Null when there's none.
+     */
+    devMakeHomestead: async (
+      mapId: string,
+      userId: string,
+      at: Date,
+    ): Promise<{ q: number; r: number } | null> => {
+      const all = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          homeSlot: tiles.homeSlot,
+        })
+        .from(tiles)
+        .where(eq(tiles.mapId, mapId))
+        .orderBy(asc(tiles.id));
+      const seed = all.find((t) => t.ownerUserId === userId && t.homeSlot === 0);
+      // Land a building can go on once its spot is gone: what a tool clears,
+      // or cleared land (never a lake, Juniper's Gap or a trading post).
+      const buildable = (terrain: string) =>
+        terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
+      const tile = seed
+        ? all.find(
+            (t) =>
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              buildable(t.terrain) &&
+              hexDistance(t, seed) === 2,
+          )
+        : undefined;
+      if (!tile) return null;
+      const claimed = await db
+        .update(tiles)
+        .set({ ownerUserId: userId, nodeResource: null })
+        .where(and(eq(tiles.id, tile.id), isNull(tiles.ownerUserId)))
+        .returning({ id: tiles.id });
+      // Someone took it meanwhile: nothing made.
+      if (claimed.length === 0) return null;
+      await db
+        .insert(tileExplore)
+        .values({
+          userId,
+          tileId: tile.id,
+          mapId,
+          layout: 1,
+          terrain: tile.terrain,
+          searched: 7,
+          spotCount: 3,
+          completedAt: at,
+          joinedAt: at,
+          updatedAt: at,
+        })
+        .onConflictDoNothing();
+      return { q: tile.q, r: tile.r };
+    },
+
     /** The tile at `q, r`, unlocked (the explore view's read). */
     findTileAt: async (mapId: string, q: number, r: number): Promise<ExploreTileRow | null> => {
       const [row] = await db
