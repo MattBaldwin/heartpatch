@@ -125,6 +125,7 @@ describe('recipe book pages', () => {
       atHome: false,
       meta: 'Build it on a homestead',
       note: 'Tap a homestead on the map, then 🔨 Build.',
+      button: 'Find a spot',
     });
     expect(buildWhere('hearthfire')).toMatchObject({
       atHome: false,
@@ -133,6 +134,7 @@ describe('recipe book pages', () => {
     expect(buildWhere('ember-den')).toMatchObject({
       atHome: true,
       note: 'You pick the spot at home.',
+      button: 'Build it',
     });
     expect(den.canMake).toBe(true);
   });

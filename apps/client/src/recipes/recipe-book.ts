@@ -131,7 +131,6 @@ export const RECIPE_BOOK_TEXT = {
   findLabel: (what: string) => `Find ${what} on the map`,
   haveLabel: (have: number, need: number) => `You have ${String(have)}, you need ${String(need)}`,
   makeIt: 'Make it',
-  buildIt: 'Build it',
   making: (name: string) => `Making ${name}! Come back when it’s ready.`,
   newPage: 'New page!',
   foundAll: 'You found everything it needs.',
@@ -575,7 +574,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   const cta = (page: PageView): HTMLElement[] => {
     const make = page.kind === 'recipe';
-    const label = make ? RECIPE_BOOK_TEXT.makeIt : RECIPE_BOOK_TEXT.buildIt;
+    // A building that goes out on the map says so (#295): the book closes onto it.
+    const label = make ? RECIPE_BOOK_TEXT.makeIt : buildWhere(page.output).button;
     const button = el(
       'button',
       {
