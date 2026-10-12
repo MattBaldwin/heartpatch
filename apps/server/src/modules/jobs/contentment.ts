@@ -46,9 +46,9 @@ export function contentmentCheckpoint(care: JobRow['care']): CareState {
 
 /**
  * The percent of the normal drain this squishy fades at (#381): the house
- * perk while it lives in its owner's house and is home to enjoy it (not in
- * the Hollow nor at a post: those changes write a checkpoint, so the
- * stretch since the last one is all one rate).
+ * perk for any resident of its owner's house that isn't in the Hollow or at
+ * a post, out on a job too (owner decision 2026-10-12). Those changes write
+ * a checkpoint, so the stretch since the last one is all one rate.
  */
 export function drainPercentOf(row: Pick<JobRow, 'houseRoomId' | 'squishy'>): number {
   return residentDrainPercent(

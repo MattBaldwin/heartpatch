@@ -290,8 +290,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           training: s.trainingBuildingId !== null,
         }),
         accessory: worn.get(s.id) ?? null,
-        // Like `house` below, nothing of the house while it's off for them.
-        houseRoomId: houseShown ? s.houseRoomId : null,
+        // Not gated, like the job board and the care sheet: only the
+        // switched routes can make a resident, so it's null while it's off.
+        houseRoomId: s.houseRoomId,
       })),
       speciesDefs,
       items,
