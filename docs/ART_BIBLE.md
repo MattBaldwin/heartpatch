@@ -147,7 +147,7 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 ### 1.10 Roster
 
-Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×1.15 the baby's size; it keeps the baby's face and adds one preview of a teen part. The Teen column is stage 3, at ×1.25–1.35 the baby's size. The grown-ups (stage 4) join this chapter with their Phase 2 batches (#495).
+Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×1.15 the baby's size; it keeps the baby's face and adds a preview of its teen's parts. The Teen column is stage 3, at ×1.25–1.35 the baby's size. The grown-ups (stage 4) join this chapter with their Phase 2 batches (#495).
 
 | Line | Element · Feeling | Body plan | Baby | Kid (stage 2) | Teen | Pose · attack part |
 |---|---|---|---|---|---|---|
@@ -170,7 +170,7 @@ Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×
 | Upsybat → Topsywing | Shadow · Silly | bat flier | round bat: big ears, little wings | Flitterbat: big tufted ears, a fluffy tail | bat with big wings, fangs, curly tail | hover · wings |
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | Wickitten: whisker flames | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | Crunchkin → Maplecrunch | Leaf · Joy | squirrel → upright squirrel | baby squirrel in an acorn hat, bushy tail | Scamperkin: a stem on its acorn cap, a taller stance | upright squirrel: maple mane, strong arms, pointy ears, fangs | sit → upright · tail |
-| *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | *Heartbud: little arms and nub wings* | fairy: glowing wings, leaf sprout, arms | hover · wings |
+| *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | *Heartbud: little arms* | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
 **Wave-1 lines (#382, #443).** Each of the 8 wave-1 kinds grows into a kid and one teen; their branch teens come in Phase 2 (#495). Kids come at the launch level for the kind's rarity (16 / 18 / 22) and teens 8 levels later, one rarity up.
 
@@ -181,7 +181,7 @@ Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×
 | Chillypep → Pepperpip → Jalapow | Fire · Brave | chilli pepper with a stem | leaf tufts by its stem, little arms | a bushy leaf top, strong arms, long legs | stand |
 | Flakefluff → Snowtuft → Frostbold | Frost · Brave | tiered snowflake with an icicle crown | little arms | feet, strong arms, crystal back spines | stand |
 | Shellnap → Sipsnooze → Brewtle | Water · Sleepy | turtle in a teacup shell | a little green sprout | four big round feet, small side flippers | stand |
-| Gnomnom → Gnomnibble → Gnomguard | Stone · Cozy | garden gnome: nightcap, fluffy ruff | a green leaf behind its head, a bigger ruff | long arms, standing legs, flatter eyes | stand |
+| Gnomnom → Gnomnibble → Gnomguard | Stone · Cozy | garden gnome: nightcap, fluffy ruff | a green leaf behind its head | long arms, standing legs, flatter eyes | stand |
 | Moonmoth → Duskmoth → Lunamoth | Shadow · Spooky | moth orb with moon wings and antennae | a fluffy ruff around its middle | little arms, a soft tail, sparkle (epic) | hover |
 | Cometsnail → Sparksnail → Starblaze | Spark · Joy | shooting-star snail with a spark crest | little arms | long arms, sparkle (epic) | hover |
 

@@ -57,7 +57,7 @@ export interface MilestonesRepo {
   mapContext: (mapId: string, at: Date) => Promise<MapContext | null>;
   /**
    * Adds `amount` hundredths to a track, under the row's lock until commit.
-   * With a `key` (a "kinds of" track), only a key not counted yet adds.
+   * With a `key` (a track with a `distinct` source), only a key not counted yet adds.
    * Returns the new total, or null if nothing changed.
    */
   addProgress: (change: {
