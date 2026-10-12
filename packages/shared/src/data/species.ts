@@ -553,7 +553,7 @@ export const MOVES: Move[] = [
   {
     id: 'ember-dream',
     name: 'Ember Dream',
-    description: 'Dreams of a cozy fire and wakes up feeling sturdy.',
+    description: 'Dreams of a cozy fire and may wake up feeling sturdy.',
     element: 'fire',
     power: 80, // TUNE:
     accuracy: 90, // TUNE:
@@ -562,7 +562,7 @@ export const MOVES: Move[] = [
   {
     id: 'thistle-charge',
     name: 'Thistle Charge',
-    description: 'Charges in, prickles first, feeling braver. Boop!',
+    description: 'Charges in, prickles first, and might feel braver. Boop!',
     element: 'leaf',
     power: 85, // TUNE:
     accuracy: 85, // TUNE:
@@ -1056,7 +1056,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['sleepy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Embernap's coal grows a fluffy ruff, fangs and big round paws.
+  // #495 grown-up (stage 4): Embernap's coal grows a fluffy ruff, bold brows and big round paws.
   {
     id: 'emberslumber',
     name: 'Emberslumber',
@@ -1073,8 +1073,8 @@ export const SPECIES: Species[] = [
       palette: ['#ffa266', '#fff0e0', '#ffc93d', '#ffd166'],
       parts: [
         'sleepy-eyes',
+        'brave-brows',
         'smirk',
-        'fangs',
         'blush-cheeks',
         'floppy-ears',
         'flame-crown',
@@ -1669,7 +1669,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'brave'] },
   },
-  // #495 grown-up (stage 4): Petalprance grows a ring of petals and a leafy tail.
+  // #495 grown-up (stage 4): Petalprance grows a ring of round petals and bold brows.
   {
     id: 'petalwhirl',
     name: 'Petalwhirl',
@@ -1686,13 +1686,12 @@ export const SPECIES: Species[] = [
       palette: ['#93d066', '#f2ffe6', '#a75fd3', '#4f9c31'],
       parts: [
         'happy-eyes',
+        'brave-brows',
         'smirk',
         'blush-cheeks',
-        'leaf-sprout',
         'petal-ruff',
         'leaf-wings',
         'leaf-arms',
-        'leaf-tail',
         'freckles',
       ],
       size: 1.53,

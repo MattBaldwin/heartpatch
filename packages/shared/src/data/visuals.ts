@@ -1809,30 +1809,30 @@ export const PARTS: Part[] = [
     jitter: 0.05,
   },
   // #495 grown-ups: two signature parts on existing shapes.
-  // A mantle of spikes over the shoulders and back, kept off the legs and the face.
+  // A mantle of spikes over both shoulders and the back, kept off the legs and the face.
   {
     id: 'thorn-mantle',
     slot: 'spikes',
     shape: 'cone',
     size: [0.15, 0.27, 0.15],
     color: 'accent',
-    layout: { kind: 'scatter', count: 9, aroundRange: 120, upRange: 30 },
+    layout: { kind: 'ring', count: 9, spread: 110 },
     around: 180,
-    up: 38,
+    up: 46,
     sink: 0.35,
     jitter: 0.12,
   },
-  // A ring of soft petals round the top, like sun-crown but with round petals.
+  // A full ring of round petals splayed out round the top (sun-crown has pointed rays).
   {
     id: 'petal-ruff',
     slot: 'mane',
-    shape: 'teardrop',
-    size: [0.18, 0.32, 0.09],
+    shape: 'ellipsoid',
+    size: [0.24, 0.26, 0.09],
     color: 'accent',
     layout: { kind: 'ring', count: 8, spread: 180 },
     around: 0,
     up: 60,
-    tilt: 30,
+    tilt: 55,
     sink: 0.3,
     jitter: 0.06,
   },
