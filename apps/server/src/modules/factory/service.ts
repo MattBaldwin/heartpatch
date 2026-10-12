@@ -67,7 +67,7 @@ const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 const MESSAGES = {
   noMap: "We couldn't find that patch.",
   unknownRecipe: "We don't know that recipe.",
-  noFactory: 'Build a Crafting Factory at home first!',
+  noFactory: 'Build a Crafting Factory on a homestead first!',
   full: 'Your Factory is busy! A spot frees up when a batch finishes.',
   outOfSeason: (season: string) => `That recipe only works around ${season}!`,
   noBatch: "We couldn't find that batch.",

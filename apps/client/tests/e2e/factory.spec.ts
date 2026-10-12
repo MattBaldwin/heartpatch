@@ -1,15 +1,17 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { selectTile } from './claim-land.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
 /**
  * The Crafting Factory (#294, owner-approved mockup of 2026-10-08): build it
- * at home, start a batch from its card (pick, how many, Max), queue another
- * from the Recipe Book, watch them in the Bag, stop one (what's made stays,
- * the rest comes back), and see the welcome-back card after a while away.
- * Checked through the dev hooks and the server's replies, not pixels.
+ * on a homestead (#295, one building a tile), open it from its tile card and
+ * start a batch (pick, how many, Max), queue another from the Recipe Book,
+ * watch them in the Bag, stop one (what's made stays, the rest comes back),
+ * and see the welcome-back card after a while away. Checked through the dev
+ * hooks and the server's replies, not pixels.
  */
 
 interface InventoryDebug {
@@ -20,18 +22,11 @@ interface InventoryDebug {
   welcome: boolean;
 }
 
-interface HomeDebug {
-  mode: string;
-  factoryBatches: number | null;
-  factoryPanel: 'list' | 'pick' | 'stop' | null;
-}
-
 const bagState = (page: Page) => hook<InventoryDebug>(page, 'inventory');
-const homeState = (page: Page) => hook<HomeDebug>(page, 'home');
 const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
 const slowExpect = expect.configure({ timeout: 30_000 });
 
-test('builds a Factory, runs batches from home, the book and the bag, and welcomes you back', async ({
+test('builds a Factory on a homestead, runs batches from it, the book and the bag, and welcomes you back', async ({
   browser,
 }) => {
   test.setTimeout(180_000); // two scene builds; CI renders in software
@@ -42,30 +37,43 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Busy Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await visitPatch(lobby);
-  await slowExpect(lobby).toBeHidden();
-  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  const mapId = (await mapState(page))!.id;
+  // A ready homestead next to home (dev route): the Factory goes on one (#295).
+  await slowExpect(lobby.getByRole('button', { name: 'Visit patch' })).toBeVisible();
+  const maps = await api<{ maps: { id: string; name: string }[] }>(page, 'GET', '/maps');
+  const mapId = maps.body.maps.find((m) => m.name === 'Busy Patch')!.id;
+  const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`);
+  expect(made.status).toBe(201);
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
     items: { timber: 130, stone: 90, treats: 12, greens: 4 },
   });
   expect(granted.status).toBe(201);
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  expect((await mapState(page))!.id).toBe(mapId);
 
-  // Build it at home: its row says what it does.
-  await (await trayButton(page, 'home-open')).tap();
-  const sheet = page.getByTestId('home');
-  await slowExpect(sheet).toBeVisible();
-  await sheet.getByTestId('home-build').tap();
-  await sheet.locator('[data-build="crafting-factory"]').tap();
-  await expect(sheet.getByTestId('build-detail')).toContainText('🏭 2 batches at once');
-  await sheet.getByTestId('build-go').tap();
-  // Its card opens with Sprout's tip (once) and the queue panel.
-  const panel = sheet.getByTestId('factory-panel');
-  await slowExpect(panel).toBeVisible();
-  await expect(sheet.getByTestId('factory-tip')).toContainText('Ooh, a Factory!');
-  await expect.poll(async () => (await homeState(page))?.factoryBatches).toBe(0);
+  // Build it on the homestead from the Build sheet: its card says what it does.
+  await selectTile(page, made.body);
+  await page.getByTestId('tile-build').tap();
+  await page.locator('[data-build="crafting-factory"]').tap();
+  await expect(page.getByTestId('build-detail')).toContainText('🏭 2 batches at once');
+  await page.getByTestId('build-go').tap();
+  // Its tile card shows Sprout's tip (once); Open shows its batches.
+  const tileCard = page.getByTestId('tile-factory');
+  await slowExpect(tileCard).toBeVisible();
+  await expect(tileCard.getByTestId('factory-tip')).toContainText('Ooh, a Factory!');
+  // Once: closed and opened again, the card has no tip.
+  await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
+  await selectTile(page, made.body);
+  await slowExpect(tileCard).toBeVisible();
+  await expect(tileCard.getByTestId('factory-tip')).toHaveCount(0);
+  await tileCard.getByTestId('tile-factory-open').tap();
+  const factorySheet = page.getByTestId('factory-sheet');
+  await slowExpect(factorySheet).toBeVisible();
+  await expect.poll(async () => (await bagState(page))?.batches).toBe(0);
 
   // Start a batch: pick Heart Charms, Max, then one fewer.
+  const panel = factorySheet;
   await panel.getByTestId('factory-start-batch').tap();
   await panel.locator('[data-testid="factory-pick"][data-recipe="heart-charm"]').tap();
   // 12 Treats pay for 12 Heart Charms (Timber is plenty).
@@ -80,19 +88,23 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   const charms = panel.locator('[data-testid="factory-batch"][data-recipe="heart-charm"]');
   await slowExpect(charms).toBeVisible();
   await expect(charms.getByTestId('factory-count')).toHaveText('0/11');
-  await expect.poll(async () => (await homeState(page))?.factoryBatches).toBe(1);
+  await expect.poll(async () => (await bagState(page))?.batches).toBe(1);
+  await factorySheet.getByTestId('factory-close').tap();
 
-  // Upgrading (60 Timber, 50 Stone) keeps the batch going and makes room for a third.
-  await sheet.getByTestId('home-upgrade').tap();
-  await sheet.getByTestId('home-upgrade-confirm').tap();
-  await slowExpect(panel.locator('.factory-about')).toHaveText('Room for 3 batches at once.');
+  // Upgrading from its tile card (60 Timber, 50 Stone) keeps the batch going
+  // and makes room for a third.
+  await tileCard.getByTestId('tile-factory-upgrade').tap();
+  await page.getByTestId('tile-factory-upgrade-confirm').tap();
+  await slowExpect(page.getByTestId('tile-factory')).toContainText('Level 2');
+  await page.getByTestId('tile-factory-open').tap();
+  await slowExpect(factorySheet.locator('.factory-about')).toHaveText(
+    'Room for 3 batches at once.',
+  );
   await expect(charms).toBeVisible();
-  await expect(panel.getByTestId('factory-start-batch')).toBeVisible();
+  await expect(factorySheet.getByTestId('factory-start-batch')).toBeVisible();
+  await factorySheet.getByTestId('factory-close').tap();
 
-  // Back to the map: the Recipe Book queues Cooked Treats from its page.
-  await sheet.getByTestId('home-done').tap();
-  await sheet.getByTestId('home-back').tap();
-  await expect.poll(async () => (await bagState(page))?.batches, { timeout: 30_000 }).toBe(1);
+  // The Recipe Book queues Cooked Treats from its page.
   await (await trayButton(page, 'recipe-book-open')).tap();
   const book = page.getByTestId('recipe-book');
   await expect(book).toBeVisible();
@@ -114,7 +126,6 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   const bag = page.getByTestId('bag');
   await expect(bag.getByTestId('factory-strip')).toBeVisible();
   await bag.getByTestId('factory-strip').tap();
-  const factorySheet = page.getByTestId('factory-sheet');
   await expect(factorySheet).toBeVisible();
   const before = (await bagState(page))!.items;
   await factorySheet
