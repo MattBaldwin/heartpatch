@@ -27,6 +27,9 @@ describe('short-lived event types', () => {
     for (const kept of ['battle.started', 'battle.ended', 'raid.resolved', 'challenge']) {
       expect(isShortLived(kept)).toBe(false);
     }
+    // The house's daily roll reads today's `house.gift` to stop a second gift
+    // after a leave and rejoin (#381), so it must outlive a patch day.
+    expect(isShortLived('house.gift')).toBe(false);
   });
 
   it('come from the registry: only registered types', () => {

@@ -1492,6 +1492,7 @@ if (import.meta.env.DEV) {
       shown: postFlags.shown,
       rings: postFlags.rings,
       onScreen: postFlags.onScreen,
+      connected: postFlags.connected,
     }),
     starter: () => starters.debug,
     lore: () => lorebook.debug,

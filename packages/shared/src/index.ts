@@ -83,6 +83,7 @@ export * from './data/recipe-book.js';
 export * from './data/jobs.js';
 export * from './data/clearing.js';
 export * from './data/house.js';
+export * from './data/house-notes.js';
 export * from './requirements/index.js';
 export * from './house/index.js';
 export * from './data/explore.js';

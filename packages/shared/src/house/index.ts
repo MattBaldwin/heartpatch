@@ -1,4 +1,11 @@
-import type { HouseData, HouseLevel, HouseRoom, HouseRules } from '../schemas/data/house.js';
+import {
+  HOUSE_NOTE_NAME,
+  type HouseData,
+  type HouseLevel,
+  type HouseNote,
+  type HouseRoom,
+  type HouseRules,
+} from '../schemas/data/house.js';
 import type { ResidentAway } from '../schemas/house.js';
 import type { SquishyJobId } from '../jobs/index.js';
 import type { SquishyState } from '../schemas/squishies.js';
@@ -128,3 +135,7 @@ export function moveInProblem(facts: MoveInFacts, rules: HouseRules): MoveInProb
   if (facts.inRoom >= facts.room.beds) return 'full';
   return null;
 }
+
+/** A note's line with the giver's name in it. */
+export const renderHouseNote = (note: Pick<HouseNote, 'line'>, name: string): string =>
+  note.line.replace(HOUSE_NOTE_NAME, () => name);
