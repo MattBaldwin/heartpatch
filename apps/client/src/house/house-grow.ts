@@ -72,7 +72,7 @@ function row(r: RequirementProgress): HTMLElement {
         el('span', { class: 'house-grow-count' }, rowCount(r)),
       ),
       el('span', { class: 'house-grow-bar', 'aria-hidden': 'true' }, fill),
-      ...(r.hint ? [el('span', { class: 'house-grow-hint' }, r.hint)] : []),
+      ...(r.hint ? [el('span', { class: 'house-grow-hint' }, keepTail(r.hint))] : []),
     ),
   );
 }
