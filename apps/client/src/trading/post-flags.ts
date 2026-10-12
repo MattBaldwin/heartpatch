@@ -30,6 +30,12 @@ export interface PostFlags extends MapLayer {
   readonly rings: number;
   /** Each post on screen: its name and its tile's middle in CSS pixels (the dev hook, for taps). */
   readonly onScreen: readonly { name: string; x: number; y: number }[];
+  /**
+   * Each post my land reaches: its name and its tile's middle in CSS pixels, whether or not its
+   * flag shows (a flag hides when a tray handle covers both spots beside its tile, #426), for
+   * e2e taps (#429).
+   */
+  readonly connected: readonly { name: string; x: number; y: number }[];
 }
 
 interface Flag {
@@ -252,6 +258,15 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     },
     get rings() {
       return rings.size;
+    },
+    get connected() {
+      return [...flags.values()].flatMap((f) => {
+        const rect =
+          scene && f.post.reach?.kind === 'connected' ? tileScreenRectOf(scene, f.post.tile) : null;
+        return rect
+          ? [{ name: f.post.name, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]
+          : [];
+      });
     },
     get onScreen() {
       return [...flags.values()].flatMap((f) => {
