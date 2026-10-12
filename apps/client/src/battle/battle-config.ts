@@ -151,20 +151,19 @@ export const SHIELD_BUBBLE = {
 };
 
 /**
- * Finding a rare one (#391, owner decision 2026-10-12: the mockup's reveal
- * beat). Rare and up only; it grows with rarity: more sparkles, a deeper dim,
- * a bigger banner with a thicker ring and a longer moment. `ms` is the whole
- * moment the first time a player meets the kind on a patch; after that only
- * the banner shows, for `briefMs`, with no pause. `steps` is how many notes
- * the find chime climbs (the `find-*` cues).
+ * Finding a rare one (#391, owner decisions 2026-10-12: the mockup's reveal
+ * beat). Each tier's length, words and size step (`scale`, rare = 1) are
+ * shared data (`RARE_FIND_TIERS`); this is how a step looks here. It grows
+ * with the step: more sparkles, a deeper dim, a bigger banner with a thicker
+ * ring and one more chime note (the `find-*` cues). Index `scale - 1`; a step
+ * past the end uses the last. A kind met before shows only the banner, for
+ * `briefMs`, with no pause.
  */
 export const RARE_REVEAL = {
-  kinds: {
-    rare: { sparkles: 6, dim: 0.14, banner: 16, ring: 2, ms: 1800 }, // TUNE
-    epic: { sparkles: 12, dim: 0.22, banner: 18, ring: 3, ms: 2000 }, // TUNE
-    legendary: { sparkles: 16, dim: 0.28, banner: 19, ring: 4, ms: 2200 }, // TUNE
-    mythic: { sparkles: 20, dim: 0.32, banner: 20, ring: 5, ms: 2400 }, // TUNE
-  },
+  sparkles: [6, 12, 16, 20, 24, 28], // TUNE
+  dim: [0.14, 0.22, 0.28, 0.32, 0.35, 0.38], // TUNE
+  banner: [16, 18, 19, 20, 21, 22], // TUNE
+  ring: [2, 3, 4, 5, 6, 6], // TUNE
   briefMs: 1000, // TUNE
   /** The banner's text grows on wide screens (an iPad), as in the mockup. */
   wideScreen: 500,
@@ -180,3 +179,8 @@ export const RARE_REVEAL = {
   /** Frames to wait for the arena to draw the squishy before dimming mid-screen instead. */
   waitFrames: 30,
 } as const;
+
+/** A step's value from one of `RARE_REVEAL`'s lists (the last past the end). */
+export function revealStep(list: readonly number[], scale: number): number {
+  return list[Math.min(Math.max(scale, 1), list.length) - 1]!;
+}

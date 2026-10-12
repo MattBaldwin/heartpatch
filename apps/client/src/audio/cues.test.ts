@@ -18,9 +18,11 @@ describe('cues', () => {
     for (const cue of [...DUCKING_CUES, ...UI_CUES]) expect(CUE_NAMES).toContain(cue);
   });
 
-  it('gives each rare find its own chime, dipping the music (#391)', () => {
-    const cues = (['rare', 'epic', 'legendary', 'mythic'] as const).map(findCue);
+  it('gives each size of rare find its own chime, dipping the music (#391)', () => {
+    const cues = [1, 2, 3, 4].map(findCue);
     expect(new Set(cues).size).toBe(4);
+    expect(findCue(6)).toBe('find-4');
+    expect(findCue(0)).toBe('find-1');
     for (const cue of cues) {
       expect(CUE_NAMES).toContain(cue);
       expect(DUCKING_CUES.has(cue)).toBe(true);
@@ -67,10 +69,10 @@ describe('cues', () => {
     expect([...DUCKING_CUES].sort()).toEqual([
       'charm',
       'evolve',
-      'find-epic',
-      'find-legendary',
-      'find-mythic',
-      'find-rare',
+      'find-1',
+      'find-2',
+      'find-3',
+      'find-4',
       'hollow-sting',
       'nightfall',
       'title',

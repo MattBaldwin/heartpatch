@@ -1088,8 +1088,8 @@ const battles = createBattleScreen({
   onStep: (step) => {
     audio.cue(battleCue(step));
   },
-  onRareFind: (rarity) => {
-    audio.cue(findCue(rarity));
+  onRareFind: (scale) => {
+    audio.cue(findCue(scale));
   },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends

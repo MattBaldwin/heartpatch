@@ -71,7 +71,7 @@ const FIND_STEPS = [0, 2, 4, 7, 9, 12, 14] as const;
 
 /**
  * A rare find (#391): a soft rising sweep, then a bell glimmer up the
- * pentatonic from high C, `notes` long (one more at each rarity step). Starts
+ * pentatonic from high C, `notes` long (one more at each size step). Starts
  * on the heal twinkle's note but climbs and sweeps, unlike the Heart Charm toss.
  */
 function findGlimmer(
@@ -321,10 +321,10 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
     return end;
   },
 
-  'find-rare': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 4),
-  'find-epic': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 5),
-  'find-legendary': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 6),
-  'find-mythic': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 7),
+  'find-1': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 4),
+  'find-2': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 5),
+  'find-3': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 6),
+  'find-4': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 7),
 
   aww: (kit, out, at, pitch, gain) => {
     // Two soft notes, down a little: "aw-ww". Kind, not sad.

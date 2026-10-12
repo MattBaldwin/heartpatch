@@ -7,6 +7,7 @@ import {
   GAME_EVENTS,
   LIVE_BATTLE_RULES,
   quickMessageById,
+  rareFindTier,
   visualRegistry,
   type BattleSideId,
   type BattleTimeOfDay,
@@ -70,7 +71,7 @@ import {
   type PotionTile,
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
-import { revealPlan, showRareReveal, type RareReveal, type RevealRarity } from './rare-reveal.js';
+import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
 import { fenceResult, resultLine } from './result-line.js';
 import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
 import { mountLiveBar, type LiveBar } from './live-bar.js';
@@ -127,8 +128,8 @@ export interface BattleScreenOptions {
   keeperWearing?: () => readonly string[];
   /** A step of the log starts playing (sound, #25). */
   onStep?: (step: PlaybackStep) => void;
-  /** A rare-or-better wild squishy's moment starts in full (its chime, #391). */
-  onRareFind?: (rarity: RevealRarity) => void;
+  /** A rare-or-better wild squishy's moment starts in full (its chime, #391): its tier's size step. */
+  onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
   charms?: (mapId: string) => Promise<number>;
   /** The player's bag on a map, item id → count (the potion picker shows it, #214). */
@@ -242,6 +243,8 @@ const MESSAGES = {
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
   noXp: 'No XP this time.',
   wildStart: 'A wild squishy wants to play!',
+  /** A rare find names its kind (#391, owner decision 2026-10-12). */
+  wildNamed: (name: string) => `A wild ${name} wants to play!`,
   guardiansStart: 'The guardians want to play!',
   rivalStart: 'Squishies on watch want to play!',
   shadowsStart: 'Shadows from the Hollow want to play!',
@@ -909,7 +912,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                   ? JOURNEY_TEXT.startCaption
                   : battle.kind === 'friendly'
                     ? LIVE_TEXT.startCaption(opponentName(battle))
-                    : MESSAGES.wildStart,
+                    : wildStartCaption(battle),
         );
       }
     } else {
@@ -922,6 +925,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       refreshLive();
     }
   };
+
+  /** A wild battle's first words: a rare find (Rare and up, #391) is named. */
+  function wildStartCaption(b: PlayerBattle): string {
+    const wild = wildOf(b);
+    const species = wild ? content?.species.get(wild.speciesId) : undefined;
+    if (!wild || !content || !species || !rareFindTier(species.rarity)) return MESSAGES.wildStart;
+    return MESSAGES.wildNamed(content.speciesName(wild.speciesId));
+  }
 
   // ── Live battles (#29) ────────────────────────────────────────────────
 
@@ -1369,7 +1380,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           reveal = null;
         },
       });
-      if (plan.full) options.onRareFind?.(plan.rarity);
+      if (plan.full) options.onRareFind?.(plan.tier.scale);
     };
     requestAnimationFrame(begin);
   }

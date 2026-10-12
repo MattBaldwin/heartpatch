@@ -32,12 +32,12 @@ export type CueName =
   | 'aww'
   /**
    * A rare-or-better wild squishy shows up (#391): a bell glimmer over a
-   * rising sweep, one more note at each rarity step.
+   * rising sweep, one more note at each size step of its tier (Rare is 1).
    */
-  | 'find-rare'
-  | 'find-epic'
-  | 'find-legendary'
-  | 'find-mythic'
+  | 'find-1'
+  | 'find-2'
+  | 'find-3'
+  | 'find-4'
   /** The Hollow Man comes by: a quiet low hush while the music dips. */
   | 'nightfall'
   /** The opening cinematic (#46): a squishy blooms out of the ground. */
@@ -74,10 +74,10 @@ export const CUE_NAMES: readonly CueName[] = [
   'wiggle-free',
   'yay',
   'aww',
-  'find-rare',
-  'find-epic',
-  'find-legendary',
-  'find-mythic',
+  'find-1',
+  'find-2',
+  'find-3',
+  'find-4',
   'nightfall',
   'bloom',
   'hollow-sting',
@@ -99,10 +99,10 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'charm',
   'evolve',
   'yay',
-  'find-rare',
-  'find-epic',
-  'find-legendary',
-  'find-mythic',
+  'find-1',
+  'find-2',
+  'find-3',
+  'find-4',
   'title',
 ]);
 
@@ -140,9 +140,10 @@ export function battleCue(
   }
 }
 
-/** A rare-or-better wild squishy shows up (#391). */
-export function findCue(rarity: 'rare' | 'epic' | 'legendary' | 'mythic'): CueName {
-  return `find-${rarity}`;
+/** A rare-or-better wild squishy shows up (#391): its tier's size step, 1–4 (bigger ones share 4's). */
+export function findCue(scale: number): CueName {
+  const step = Math.min(Math.max(Math.round(scale), 1), 4);
+  return step === 1 ? 'find-1' : step === 2 ? 'find-2' : step === 3 ? 'find-3' : 'find-4';
 }
 
 /** A touch on a squishy up close (#20). */

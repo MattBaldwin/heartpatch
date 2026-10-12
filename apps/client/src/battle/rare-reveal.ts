@@ -1,7 +1,14 @@
-import type { PlayerBattle, Rarity, Species } from '@heartpatch/shared';
+import {
+  rareFindTier,
+  type PlayerBattle,
+  type RareFindTier,
+  type RareFindTiers,
+  type Rarity,
+  type Species,
+} from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { rarityClass } from '../ui/rarity/rarity.js';
-import { RARE_REVEAL } from './battle-config.js';
+import { RARE_REVEAL, revealStep } from './battle-config.js';
 import type { BattleClock } from './battle-clock.js';
 import './rare-reveal.css';
 
@@ -9,49 +16,47 @@ import './rare-reveal.css';
  * Finding a rare one (#391, owner decision 2026-10-12): when a rare-or-better
  * wild squishy shows up, the screen dims a touch around it, sparkles burst, a
  * banner says how rare it is and a rising chime plays (the screen's
- * `onRareFind`). The full moment plays the first time the player meets that
- * kind on the patch (the server's `firstMeeting`); after that only the banner
- * shows, briefly, with no pause. Page elements over the 3D scene: no draw
- * calls, and only transform and opacity move (battle.css).
+ * `onRareFind`). Each tier's length, words and size are shared data
+ * (`RARE_FIND_TIERS`). The full moment plays the first time the player meets
+ * that kind on the patch (the server's `firstMeeting`); after that only the
+ * banner shows, briefly, with no pause. Page elements over the 3D scene: no
+ * draw calls, and only transform and opacity move (rare-reveal.css).
  */
 
-/** The rarities with a moment (secret kinds wait on the owner's call, #391). */
-export type RevealRarity = keyof typeof RARE_REVEAL.kinds;
-
-// Player-facing text (style guide §2: short, cozy, kid-readable).
-export const REVEAL_TEXT = {
-  rare: '✨ Something rare is here! ✨',
-  epic: '✨ Something epic is here! ✨',
-  legendary: '🌟 Something legendary is here! 🌟',
-  mythic: '🌈 Something mythic is here! 🌈',
-} as const satisfies Record<RevealRarity, string>;
-
-export function isRevealRarity(rarity: Rarity | undefined): rarity is RevealRarity {
-  return rarity !== undefined && Object.hasOwn(RARE_REVEAL.kinds, rarity);
-}
-
 export interface RevealPlan {
-  readonly rarity: RevealRarity;
+  /** The wild squishy's rarity (its colour), and its tier's moment. */
+  readonly rarity: Rarity;
+  readonly tier: RareFindTier;
   /** The whole moment (first meeting) or just the banner (met before). */
   readonly full: boolean;
 }
 
+/** The wild squishy of a battle opening against one (the side the player isn't). */
+export function wildOf(
+  battle: Pick<PlayerBattle, 'mySide' | 'view'>,
+): { speciesId: string } | undefined {
+  const side = battle.view.sides[battle.mySide === 'a' ? 'b' : 'a'];
+  return side.squishies[side.active];
+}
+
 /**
  * The moment a battle opens with, if any: a wild battle before its first
- * move whose wild squishy is rare or better. A replay never has one.
+ * move whose wild squishy has a rare-find tier (Rare and up, secret kinds
+ * too). A replay never has one.
  */
 export function revealPlan(
   battle: Pick<PlayerBattle, 'kind' | 'status' | 'mySide' | 'view' | 'firstMeeting'>,
   species: ReadonlyMap<string, Pick<Species, 'rarity'>>,
   replay = false,
+  tiers?: RareFindTiers,
 ): RevealPlan | null {
   if (replay || battle.kind !== 'wild' || battle.status !== 'active') return null;
   if (battle.view.log.length > 0) return null;
-  const side = battle.view.sides[battle.mySide === 'a' ? 'b' : 'a'];
-  const wild = side.squishies[side.active];
+  const wild = wildOf(battle);
   const rarity = wild ? species.get(wild.speciesId)?.rarity : undefined;
-  if (!isRevealRarity(rarity)) return null;
-  return { rarity, full: battle.firstMeeting === true };
+  const tier = rarity ? rareFindTier(rarity, tiers) : null;
+  if (!rarity || !tier) return null;
+  return { rarity, tier, full: battle.firstMeeting === true };
 }
 
 /** Where things go on the page, CSS px from the top left. */
@@ -119,8 +124,8 @@ export function sparkleSpots(
 /** Puts the moment on screen inside `host`. */
 export function showRareReveal(host: HTMLElement, options: RevealOptions): RareReveal {
   const { plan, layout, clock } = options;
-  const look = RARE_REVEAL.kinds[plan.rarity];
-  const ms = plan.full ? look.ms : RARE_REVEAL.briefMs;
+  const { scale } = plan.tier;
+  const ms = plan.full ? plan.tier.ms : RARE_REVEAL.briefMs;
   const root = el('div', {
     class: `rare-reveal ${rarityClass(plan.rarity)}${plan.full ? ' rare-reveal-full' : ''}${
       options.reducedMotion ? ' rare-reveal-calm' : ''
@@ -140,11 +145,11 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
     dim.style.setProperty('--reveal-x', `${Math.round(spot.x)}px`);
     dim.style.setProperty('--reveal-y', `${Math.round(spot.y)}px`);
     dim.style.setProperty('--reveal-r', `${Math.round(spot.r * 1.9)}px`);
-    dim.style.setProperty('--reveal-dim', String(look.dim));
+    dim.style.setProperty('--reveal-dim', String(revealStep(RARE_REVEAL.dim, scale)));
     root.append(dim);
     if (!options.reducedMotion) {
       const seed = plan.rarity.length * 97 + Math.round(layout.width);
-      for (const s of sparkleSpots(look.sparkles, { ...layout, spot }, seed)) {
+      for (const s of sparkleSpots(revealStep(RARE_REVEAL.sparkles, scale), { ...layout, spot }, seed)) {
         const sparkle = el(
           'span',
           { class: 'rare-reveal-sparkle', 'aria-hidden': 'true' },
@@ -164,11 +169,11 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
   const banner = el(
     'div',
     { class: 'rare-reveal-banner', role: 'status' },
-    REVEAL_TEXT[plan.rarity],
+    plan.tier.banner,
   );
   const wide = layout.width > RARE_REVEAL.wideScreen ? RARE_REVEAL.wideBanner : 1;
-  banner.style.fontSize = `${Math.round(look.banner * wide)}px`;
-  banner.style.setProperty('--reveal-ring', `${look.ring}px`);
+  banner.style.fontSize = `${Math.round(revealStep(RARE_REVEAL.banner, scale) * wide)}px`;
+  banner.style.setProperty('--reveal-ring', `${revealStep(RARE_REVEAL.ring, scale)}px`);
   banner.style.bottom = `${Math.round(layout.height - layout.sheetTop + RARE_REVEAL.sheetGap)}px`;
   root.append(banner);
 

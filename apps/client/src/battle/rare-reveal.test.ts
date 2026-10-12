@@ -1,8 +1,8 @@
-import type { PlayerBattle, Rarity } from '@heartpatch/shared';
+import { RARE_FIND_TIERS, type PlayerBattle, type Rarity } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { RARE_REVEAL } from './battle-config.js';
+import { RARE_REVEAL, revealStep } from './battle-config.js';
 import revealCss from './rare-reveal.css?raw';
-import { isRevealRarity, REVEAL_TEXT, revealPlan, sparkleSpots } from './rare-reveal.js';
+import { revealPlan, sparkleSpots } from './rare-reveal.js';
 
 type PlanBattle = Parameters<typeof revealPlan>[0];
 
@@ -27,29 +27,47 @@ const species = new Map<string, { rarity: Rarity }>(
 );
 
 describe('revealPlan (#391)', () => {
-  it('plays for rare and up only, never commons, uncommons or (for now) secret kinds', () => {
+  it('plays for Rare and up and for secret kinds, never commons or uncommons', () => {
     const plans = [...species.keys()].map((id) => revealPlan(wildBattle({}, id), species));
-    expect(plans.map((p) => p?.rarity ?? null)).toEqual([
+    expect(plans.map((p) => p?.tier.label ?? null)).toEqual([
       null,
       null,
+      'Rare',
+      'Epic',
+      'Legendary',
+      // No Mythic row in Phase 1: at least the Legendary moment.
+      'Legendary',
+      'Special',
+    ]);
+    expect(plans.map((p) => p?.rarity ?? null).slice(2)).toEqual([
       'rare',
       'epic',
       'legendary',
       'mythic',
-      null,
+      'secret',
     ]);
   });
 
   it('plays in full only on the first meeting; a kind met before gets just the banner', () => {
-    expect(revealPlan(wildBattle({}, 'epic'), species)).toEqual({ rarity: 'epic', full: true });
-    expect(revealPlan(wildBattle({ firstMeeting: false }, 'epic'), species)).toEqual({
+    expect(revealPlan(wildBattle({}, 'epic'), species)).toEqual({
       rarity: 'epic',
-      full: false,
+      tier: RARE_FIND_TIERS.epic,
+      full: true,
     });
+    expect(revealPlan(wildBattle({ firstMeeting: false }, 'epic'), species)?.full).toBe(false);
     // A server from before #391 sends nothing: the short one, never a surprise pause.
     const old = wildBattle({}, 'epic') as Partial<PlayerBattle>;
     delete old.firstMeeting;
     expect(revealPlan(old as PlanBattle, species)?.full).toBe(false);
+  });
+
+  it('takes a new tier from one data row (Mythic, Phase 2)', () => {
+    const mythic = { ms: 2600, scale: 4, label: 'Mythic', banner: 'Wow!', patchLine: true };
+    const plan = revealPlan(wildBattle({}, 'mythic'), species, false, {
+      ...RARE_FIND_TIERS,
+      mythic,
+    });
+    expect(plan?.tier).toEqual(mythic);
   });
 
   it('only opens a wild battle before its first move, and never a replay', () => {
@@ -72,18 +90,20 @@ describe('revealPlan (#391)', () => {
 });
 
 describe('the moment grows with rarity (#391)', () => {
-  it('has words for each, and more of everything at each step', () => {
-    const order = ['rare', 'epic', 'legendary', 'mythic'] as const;
-    for (const r of order) {
-      expect(isRevealRarity(r)).toBe(true);
-      expect(REVEAL_TEXT[r]).toMatch(/is here!/);
+  it('has more of everything at each size step, and keeps the last past the end', () => {
+    for (const list of [
+      RARE_REVEAL.sparkles,
+      RARE_REVEAL.dim,
+      RARE_REVEAL.banner,
+      RARE_REVEAL.ring,
+    ]) {
+      const steps = [1, 2, 3, 4].map((scale) => revealStep(list, scale));
+      expect([...steps].sort((x, y) => x - y)).toEqual(steps);
+      expect(steps[0]).toBeLessThan(steps[3]!);
+      expect(revealStep(list, 99)).toBe(list.at(-1));
+      expect(revealStep(list, 0)).toBe(list[0]);
     }
-    for (const key of ['sparkles', 'dim', 'banner', 'ring', 'ms'] as const) {
-      const values = order.map((r) => RARE_REVEAL.kinds[r][key]);
-      expect([...values].sort((x, y) => x - y)).toEqual(values);
-      expect(values[0]).toBeLessThan(values[3]!);
-    }
-    expect(RARE_REVEAL.briefMs).toBeLessThan(RARE_REVEAL.kinds.rare.ms);
+    expect(RARE_REVEAL.briefMs).toBeLessThan(RARE_FIND_TIERS.rare!.ms);
   });
 
   it('keeps every sparkle off the name pills, the sheet and the screen edges', () => {
@@ -94,8 +114,8 @@ describe('the moment grows with rarity (#391)', () => {
       width: 390,
       height: 844,
     };
-    const spots = sparkleSpots(RARE_REVEAL.kinds.mythic.sparkles, layout, 7);
-    expect(spots).toHaveLength(RARE_REVEAL.kinds.mythic.sparkles);
+    const spots = sparkleSpots(28, layout, 7);
+    expect(spots).toHaveLength(28);
     for (const s of spots) {
       const x = layout.spot.x + s.dx;
       const y = layout.spot.y + s.dy;

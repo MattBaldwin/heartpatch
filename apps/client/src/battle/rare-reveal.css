@@ -79,6 +79,11 @@
   --reveal-banner: linear-gradient(100deg, #d9fbff, #f7e1ff, #fff6cf, #d9fbff);
 }
 
+/* A secret kind's moment is "Special" (#391): its own pink, never the word "secret". */
+.rare-reveal.rarity-secret {
+  --reveal-banner: linear-gradient(180deg, #ffe6f1, #ffc2dc);
+}
+
 /* Met before: just the banner, quickly in. */
 .rare-reveal:not(.rare-reveal-full) .rare-reveal-banner {
   animation-name: rare-reveal-fade;
