@@ -36,6 +36,8 @@ const STAGGER_MS = 70; // TUNE
 const STAGGER_TOTAL_MS = 300; // TUNE
 /** Chips that fly; any more just appear (they're behind "N more" anyway). */
 const MAX_FLYERS = 10; // TUNE
+/** Faces in the training chip when several trained (the mockup's stack); the rest are counted. */
+const MAX_FACES = 3; // TUNE
 /** Points along each flight path. */
 const FLIGHT_STEPS = 12;
 /** Space kept between chips popping up near each other. */
@@ -97,6 +99,13 @@ function sheetOpen(): boolean {
 function settleOffset(node: Element): number {
   const transform = getComputedStyle(node).transform;
   return transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
+}
+
+/** A squishy's portrait (#465): decorative, as its name is said beside it. */
+function faceImg(src: string, className: string): HTMLImageElement {
+  const img = el('img', { src, alt: '', class: className });
+  img.decoding = 'async';
+  return img;
 }
 
 /** The player asked for less motion (iOS Settings → Accessibility → Motion). */
@@ -231,6 +240,9 @@ export function createAwaySummary(
   // removed: the inventory screen, and so this banner, lasts the app's life.
   window.addEventListener('resize', () => {
     if (banner.hidden || !current || current.entries.length < 2) return;
+    // The chips are measured again, so any still flying land first: a flyer
+    // heading for a chip that's been replaced would show it twice.
+    landNow();
     fitChips(current.entries);
     place();
   });
@@ -263,11 +275,27 @@ export function createAwaySummary(
 
   function chipFor(entry: SummaryEntry): HTMLElement {
     if (entry.kind === 'trained') {
+      // Their faces when they're drawn (#465): one squishy and its XP, or up
+      // to three overlapping and how many trained. Else the 🎯 and the XP.
+      const faces = entry.squishies.flatMap((s) => (s.portrait ? [s.portrait] : []));
+      const one = entry.squishies.length === 1;
+      if (faces.length === 0) {
+        return el(
+          'span',
+          { class: 'away-chip away-chip-xp' },
+          el('span', { class: 'away-chip-icon' }, '🎯'),
+          AWAY_TEXT.xp(entry.xp),
+        );
+      }
       return el(
         'span',
-        { class: 'away-chip away-chip-xp' },
-        el('span', { class: 'away-chip-icon' }, '🎯'),
-        AWAY_TEXT.xp(entry.xp),
+        { class: 'away-chip away-chip-xp away-chip-faces' },
+        el(
+          'span',
+          { class: 'away-faces' },
+          ...faces.slice(0, MAX_FACES).map((src) => faceImg(src, 'away-face')),
+        ),
+        one ? AWAY_TEXT.xp(entry.xp) : AWAY_TEXT.trainedCount(entry.squishies.length),
       );
     }
     return el(
@@ -332,6 +360,13 @@ export function createAwaySummary(
         el(
           'li',
           { class: 'away-trained' },
+          s.portrait
+            ? faceImg(s.portrait, 'away-trained-face')
+            : el(
+                'span',
+                { class: 'away-trained-face away-trained-icon', 'aria-hidden': 'true' },
+                '🎯',
+              ),
           el('span', { class: 'away-trained-name' }, s.name),
           el('span', { class: 'away-xp' }, AWAY_TEXT.xp(s.xp)),
         ),
@@ -453,6 +488,8 @@ export function createAwaySummary(
         );
         chipsShown = 1;
         more.hidden = true;
+        // Its one chip always fits: its landing pop isn't clipped.
+        chips.classList.add('away-fit');
       } else {
         tag.textContent = what.away ? AWAY_TEXT.tagAway : AWAY_TEXT.tagNow;
         fitChips(what.entries);

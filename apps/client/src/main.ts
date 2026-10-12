@@ -201,6 +201,15 @@ let battleMapId: string | null = null;
 const loreBag = createLoreBagEntry(() => {
   lorebook.openAt(null);
 });
+// The real squishies for DOM screens, drawn once each on the game's engine
+// (#375): the Squishies roster, the care sheet and the "what landed" banner
+// (#465) share them.
+const portraits = createPortraits({
+  engine: () => stage?.renderer.engine ?? null,
+  registry: visualRegistry(GAME_DATA),
+  lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+  invalidate: () => stage?.invalidate(),
+});
 const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -229,20 +238,14 @@ const inventory = createInventoryScreen({
   // The "what landed" banner stays below the patch's name, a wardrobe find
   // and the trays' hint line and first-visit hint (#419).
   clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),
+  // Trained squishies show their faces (#465).
+  portraits,
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
 /** The patch whose roster the close-up returns to (opened from the roster), or null. */
 let rosterReturn: string | null = null;
-// The real squishies for DOM screens, drawn once each on the game's engine
-// (#375): the Squishies roster and the care sheet share them.
-const portraits = createPortraits({
-  engine: () => stage?.renderer.engine ?? null,
-  registry: visualRegistry(GAME_DATA),
-  lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
-  invalidate: () => stage?.invalidate(),
-});
 // The Squishies roster (#375): every squishy with its happiness, evolution,
 // rarity and job, one tap from the top bar on the map, at home and in
 // explore. Its Care opens the care sheet over it (two taps to care).

@@ -186,9 +186,18 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
   /**
    * Training Grounds XP that landed (owner decision 2026-10-06), per
    * squishy, with its name (only mine, as `JobsView.names`) for the pop-up.
+   * Its kind (after any evolution the XP brought) and the accessory it wears
+   * draw its portrait in the "what landed" banner (#465); both optional so
+   * an older server's reply still parses.
    */
   trained: z.array(
-    z.object({ squishyId: z.uuid(), name: z.string(), xp: z.number().int().min(1) }),
+    z.object({
+      squishyId: z.uuid(),
+      name: z.string(),
+      xp: z.number().int().min(1),
+      speciesId: ContentIdSchema.optional(),
+      accessory: ContentIdSchema.nullable().optional(),
+    }),
   ),
   /**
    * Tiles that finished clearing (#242). Its own list, not a `landed` kind,

@@ -1,10 +1,12 @@
-import type {
-  Gather,
-  InventoryResponse,
-  ItemCounts,
-  Landed,
-  PublicTile,
-  PublicUser,
+import {
+  GAME_DATA,
+  type Gather,
+  type InventoryResponse,
+  type ItemCounts,
+  type Landed,
+  type PublicTile,
+  type PublicUser,
+  type SettleResponse,
 } from '@heartpatch/shared';
 import { createAwayTracker } from '../factory/away.js';
 import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
@@ -37,7 +39,9 @@ import {
   summarySentence,
   type ScreenPoint,
   type SummaryEntry,
+  type TrainedSquishy,
 } from './away-summary.js';
+import type { Portraits } from '../procedural/portraits.js';
 import { createAwaySummary, type AwaySummaryDebug } from './away-summary-view.js';
 import type { BuildSource } from '../building/tile-build.js';
 import { CLEAR_CARD_ID, CLEAR_TEXT, clearCards, clearedNote } from './clear-model.js';
@@ -93,9 +97,11 @@ export interface InventoryScreenOptions {
   };
   /** What the "what landed" banner keeps below at the top of the screen (#419). */
   clearOf?: () => Iterable<Element>;
+  /** The squishies' real pictures (#375), for the trained ones in the banner and its card (#465). */
+  portraits?: Portraits;
 }
 
-/** Something that landed from a tile: a finished gather, or land that finished clearing. */
+/** Something that landed from a tile: a finished gather, land that finished clearing, or a Factory batch. */
 type LandedFrom = Pick<Gather, 'q' | 'r' | 'items'>;
 
 /** A box on screen in CSS pixels (the map's `ScreenRect`). */
@@ -209,6 +215,14 @@ const TEXT = {
  * (`FACTORY_RULES.welcomeBackMinutes`, a whole card that waits for a tap).
  */
 const WELCOME_BACK_MS = 5 * 60_000; // TUNE: a quick look at another app isn't "away"
+/**
+ * How long a landing waits for its trained squishies' pictures (#465): one
+ * drawn before shows at once; a new one that takes longer shows 🎯 this time
+ * (and is ready the next). The banner never changes size once it's up.
+ */
+const PORTRAIT_WAIT_MS = 600; // TUNE
+/** The public kinds; a secret one I befriended has no picture here and shows 🎯. */
+const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 /** A settle asks a moment after the server's `nextAt`, so it has surely finished by the server's clock. */
 const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
 /** A settle that failed (a flaky phone connection, a rate limit) tries once more after this long. */
@@ -510,6 +524,30 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
 
   /** The gathers on the go, without banking anything (none if it can't tell). */
+  /** The trained squishies with their pictures, as many as are ready in time (#465). */
+  async function withPortraits(trained: SettleResponse['trained']): Promise<TrainedSquishy[]> {
+    const portraits = options.portraits;
+    const pictures = await Promise.all(
+      trained.map(async (t) => {
+        const species = t.speciesId === undefined ? undefined : SPECIES.get(t.speciesId);
+        if (!portraits || !species) return null;
+        const look = { species, instanceId: t.squishyId, accessory: t.accessory ?? null };
+        return Promise.race([
+          portraits.get(look).catch(() => null),
+          new Promise<null>((done) => {
+            window.setTimeout(() => {
+              done(null);
+            }, PORTRAIT_WAIT_MS);
+          }),
+        ]);
+      }),
+    );
+    return trained.map(({ name, xp }, i) => {
+      const portrait = pictures[i];
+      return portrait ? { name, xp, portrait } : { name, xp };
+    });
+  }
+
   async function gathersGoing(id: string): Promise<readonly Gather[]> {
     try {
       return (await api.get(id)).gathers;
@@ -541,6 +579,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         serverNextAt = nextAt;
       }
       const away = presence.awayMs(id);
+      const looks = trained.length > 0 ? await withPortraits(trained) : [];
+      if (at !== generation) return;
       if (landed.length > 0 || trained.length > 0 || cleared.length > 0) {
         landings += 1;
         // After a while away, the Factory's things get their own card (#294).
@@ -553,7 +593,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         // flying from the cleared tile; the Factory's from its homestead (#461).
         showLanded(
           [...popped, ...cleared],
-          trained,
+          looks,
           away >= WELCOME_BACK_MS,
           [...finished, ...cleared, ...factoryFrom(popped, fresh.factory)],
           [...landed, ...cleared],
@@ -624,12 +664,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     welcomeOk.focus();
   }
 
-  /**
-   * Where each chip flies from (#419): the tile of a gather that gave it, else
-   * my home base (crafts, the Factory, training), else nowhere (it just appears).
-   */
   /** Chips of the last landing that flew from their own tile (the dev hook, for the e2e). */
   let fromTiles = 0;
+  /**
+   * Where each chip flies from (#419): the tile it came from (a finished
+   * gather, cleared land, the Factory's homestead), else my home base
+   * (crafts, training), else nowhere (it just appears).
+   */
   const flyFrom =
     (locate: NonNullable<InventoryScreenOptions['locate']>, sources: readonly LandedFrom[]) =>
     (entry: SummaryEntry): ScreenPoint | null => {
@@ -649,7 +690,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** Pops up what just landed (#419), and counts it as news until the Bag opens. */
   const showLanded = (
     landed: readonly Pick<Landed, 'items'>[],
-    trained: readonly { name: string; xp: number }[] = [],
+    trained: readonly TrainedSquishy[] = [],
     away = false,
     /** Tiles things came from (finished gathers, cleared land), so they fly from there. */
     sources: readonly LandedFrom[] = [],

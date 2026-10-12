@@ -25,6 +25,7 @@ import { bankableWork, landTraining, squishyName } from '../jobs/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
+import { wornAccessories } from '../wardrobe/accessories.js';
 import { createSettleRepo } from './repo.js';
 
 /*
@@ -217,11 +218,24 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           false,
         );
         const names = new Map(mine.map((r) => [r.squishy.id, squishyName(r.squishy)]));
-        const trained = training.trained.map((t) => ({
-          squishyId: t.squishyId,
-          name: names.get(t.squishyId) ?? 'Your squishy',
-          xp: t.xp,
-        }));
+        // Each one as it is now (the XP may have evolved it) and what it
+        // wears, for its portrait in the "what landed" banner (#465).
+        const trainedIds = training.trained.map((t) => t.squishyId);
+        const [after, worn] = await Promise.all([
+          jobs.listByIds(trainedIds),
+          wornAccessories(tx, user.id, trainedIds),
+        ]);
+        const now = new Map(after.map((r) => [r.squishy.id, r.squishy]));
+        const trained = training.trained.map((t) => {
+          const squishy = now.get(t.squishyId);
+          return {
+            squishyId: t.squishyId,
+            name: squishy ? squishyName(squishy) : (names.get(t.squishyId) ?? 'Your squishy'),
+            xp: t.xp,
+            ...(squishy ? { speciesId: squishy.speciesId } : {}),
+            accessory: worn.get(t.squishyId) ?? null,
+          };
+        });
 
         // Gathers' grants are in: mark them collected and roll for clothing.
         for (const gather of banking) {

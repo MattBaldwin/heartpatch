@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { closeRoster, openRoster } from './roster.js';
 import { trayButton, traysState } from './trays.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
@@ -159,8 +160,9 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await page.reload();
   await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 60_000 });
   const banner = page.getByTestId('landed-toast');
-  // Roomy: the settle is one round trip, slow under a full CI run.
-  await expect(banner).toBeVisible({ timeout: 15_000 });
+  // Roomy: a fresh start's first settle is two round trips (the bag, then the
+  // settle), each slow under a full run (up to 10 s apiece on a busy runner).
+  await expect(banner).toBeVisible({ timeout: 30_000 });
   await expect(banner).toContainText('Heart Charm');
   // With motion on, they flew in from the map: the gather's from its node
   // (even on a fresh start), the craft from home base.
@@ -236,7 +238,7 @@ interface BannerModules {
   summary: {
     summaryEntries: (
       landed: { items: Record<string, number> }[],
-      trained: { name: string; xp: number }[],
+      trained: { name: string; xp: number; portrait?: string }[],
     ) => unknown[];
   };
   view: {
@@ -269,7 +271,7 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   });
   const page = await context.newPage();
   await page.goto('/');
-  const results = await page.evaluate(async () => {
+  const { fits: results, cardFaces } = await page.evaluate(async () => {
     const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
     const m = {
       summary: await load('/src/inventory/away-summary.ts'),
@@ -306,6 +308,31 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
         ],
       ),
     };
+    // With their faces (#465): the training chip is wider, and chips stay whole.
+    const face = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 52;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#9fd3f5';
+      g.beginPath();
+      g.arc(26, 28, 22, 0, Math.PI * 2);
+      g.fill();
+      return c.toDataURL();
+    })();
+    const faces = (list: { name: string; xp: number }[]) =>
+      list.map((t) => ({ ...t, portrait: face }));
+    Object.assign(cases, {
+      threeFaces: m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], faces(xp)),
+      tenFaces: m.summary.summaryEntries(
+        [{ items: { timber: 6, stone: 3, emberwood: 4, glimmer: 1, water: 2, greens: 3 } }],
+        faces([
+          ...xp,
+          { name: 'Emberbun', xp: 4 },
+          { name: 'Puddlepuff', xp: 3 },
+          { name: 'Pebblesnooze', xp: 1 },
+        ]),
+      ),
+    });
     const out: Record<
       string,
       {
@@ -330,7 +357,14 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
         inside: box.left >= 0 && box.right <= innerWidth,
       };
     }
-    return out;
+    // The card behind the last one (opened in code: this bare page's sign-up
+    // sheet makes the banner only to read).
+    [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!.click();
+    const card = [...document.querySelectorAll<HTMLElement>('[data-testid="away-card"]')].at(-1)!;
+    return {
+      fits: out,
+      cardFaces: card.querySelectorAll('.away-trained img.away-trained-face').length,
+    };
   });
   expect(results['three']).toMatchObject({
     shown: 'banner',
@@ -344,6 +378,17 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
   expect(ten.more).toBeGreaterThan(0);
   expect(ten.chips + ten.more).toBe(ten.entries);
+  for (const name of ['threeFaces', 'tenFaces']) {
+    const r = results[name]!;
+    expect(r, name).toMatchObject({ shown: 'banner', cut: false, inside: true });
+    expect(r.chips + r.more, name).toBe(r.entries);
+  }
+  // Four trained with faces: three overlap in the chip, then how many ("🎯4").
+  const chip = page.locator('.away-banner').last().locator('.away-chip-faces');
+  await expect(chip.locator('img.away-face')).toHaveCount(3);
+  await expect(chip).toContainText('🎯4');
+  // The card: each trained squishy's row has its face.
+  expect(cardFaces).toBe(4);
 
   // Sprout's first-visit tray hint is a dialog but no sheet: with it up, the
   // chips still fly and the banner takes taps. A real sheet open: nothing
@@ -396,4 +441,80 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   expect(gate.withSheet).toEqual({ flew: false, quiet: true });
   expect(gate.landsOff).toBeLessThan(1.5);
   await context.close();
+});
+
+/**
+ * Trained squishies land with their own faces (#465): the picture the roster
+ * drew (#375) shows in the banner's XP chip, and beside its row in the card.
+ */
+test('a trained squishy lands with its own face (#465)', async ({ browser }) => {
+  test.setTimeout(240_000); // a patch, a scene build and a portrait; CI renders in software
+  const page = await newPlayer(browser, uniqueName('trained'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  // A Training Grounds on a ready homestead (dev route, as factory.spec.ts;
+  // owner decision 4 on #277), made before the first visit. The dev route
+  // needs free land two steps from home, which a few patches don't have:
+  // then another patch.
+  let made: { mapId: string; name: string; q: number; r: number } | null = null;
+  for (let tries = 1; tries <= 4 && !made; tries++) {
+    const name = `Training Patch ${String(tries)}`;
+    const patch = await api<{ map: { id: string } }>(page, 'POST', '/maps', {
+      name,
+      timeZone: 'America/Chicago',
+    });
+    expect(patch.status).toBeLessThan(300);
+    const mapId = patch.body.map.id;
+    const plot = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`);
+    if (plot.status === 201) made = { mapId, name, ...plot.body };
+  }
+  expect(made).not.toBeNull();
+  const { mapId, name: patchName, q, r } = made!;
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 8, stone: 8 },
+  });
+  expect(granted.status).toBe(201);
+  const built = await api(page, 'POST', `/maps/${mapId}/buildings`, {
+    buildingId: 'training-grounds',
+    q,
+    r,
+    spot: 1,
+  });
+  expect(built.status, JSON.stringify(built.body)).toBe(201);
+  // The lobby reads its patches again, and this one is visited.
+  await page.reload();
+  await lobby.getByText(patchName).tap({ timeout: 30_000 });
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden({ timeout: 30_000 });
+  await expect.poll(async () => (await bagState(page))?.mapId, { timeout: 30_000 }).toBe(mapId);
+  // The starter trains there.
+  const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${mapId}/care`);
+  const pet = care.body.squishies[0]!.id;
+  const job = await api(page, 'POST', `/maps/${mapId}/squishies/${pet}/job`, { job: 'training' });
+  expect(job.status, JSON.stringify(job.body)).toBe(200);
+
+  // The kid has seen it in the roster, so its picture is drawn and kept.
+  await openRoster(page);
+  await expect(page.locator('[data-testid="roster-portrait"][data-ready="true"]')).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await closeRoster(page);
+
+  // An hour of training while away, then back in the app.
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/mood/age`, { minutes: 60 })).status).toBe(
+    200,
+  );
+  const landed = (await bagState(page))!.landings;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 15_000 })
+    .toBe(landed + 1);
+  const banner = page.getByTestId('landed-toast');
+  await expect(banner).toContainText('trained');
+  // One squishy, one thing: the pill, its face and its XP.
+  await expect(banner).toHaveClass(/away-one/);
+  await expect(banner.locator('img.away-face')).toHaveCount(1);
+  await expect(banner.locator('.away-chip')).toContainText(/\+\d+ XP/);
+  expect(errors).toEqual([]);
 });
