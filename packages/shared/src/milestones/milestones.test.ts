@@ -117,8 +117,8 @@ describe('milestoneCredits', () => {
     milestoneCredits(ALL, { type, payload }, seasons);
 
   it('counts each track from its event', () => {
-    expect(credits('squishy.evolved', { userId: KID })).toEqual([
-      { trackId: 'evolution', userId: KID, amount: MILESTONE_UNIT, key: null },
+    expect(credits('squishy.evolved', { userId: KID, squishyId: 'sq-1' })).toEqual([
+      { trackId: 'evolution', userId: KID, amount: MILESTONE_UNIT, key: 'sq-1' },
     ]);
     expect(credits('squishy.rescued', { userId: KID })).toEqual([
       { trackId: 'rescuer', userId: KID, amount: MILESTONE_UNIT, key: null },

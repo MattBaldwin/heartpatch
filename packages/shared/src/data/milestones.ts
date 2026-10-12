@@ -117,7 +117,11 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     secret: false,
     progress: {
       from: 'events',
-      sources: [{ eventType: 'squishy.evolved', where: [], player: 'userId' }],
+      // Squishies that evolved, not evolutions (#443): with four stages one
+      // squishy evolves up to three times, and "Help 5 squishies evolve" means 5.
+      sources: [
+        { eventType: 'squishy.evolved', where: [], player: 'userId', distinct: 'squishyId' },
+      ],
     },
     tiers: [
       {
