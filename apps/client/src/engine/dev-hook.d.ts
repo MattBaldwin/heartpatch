@@ -10,6 +10,7 @@ import type { CareDebug } from '../care/care-sheet.js';
 import type { ChatDebug } from '../chat/chat-screen.js';
 import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
+import type { HouseDebug } from '../house/house-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
@@ -88,6 +89,7 @@ declare global {
       care?(): CareDebug | null;
       /** The close-up view (#20): phase, detail, the squishy's screen spot, care sent and held, or null. */
       closeUp?(): CloseUpDebug | null;
+      house?(): HouseDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */

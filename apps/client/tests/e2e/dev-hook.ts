@@ -26,6 +26,7 @@ export type HookName =
   | 'explore'
   | 'care'
   | 'closeUp'
+  | 'house'
   | 'catalog'
   | 'wardrobe'
   | 'starter'

@@ -69,6 +69,7 @@ import {
   type ReachTile,
 } from './home-view.js';
 import { homeTileLines } from './home-tile-info.js';
+import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
 import './home.css';
 
 // The home base (#18, design doc §13–14): a Home button over the map opens
@@ -99,6 +100,11 @@ export interface HomeScreenOptions {
   onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
+  /**
+   * "Go inside" on the house card, or a tap on the cottage (#381): opens the
+   * Keeper's house. Only offered while `HomeResponse.house` is there.
+   */
+  onHouse?: (mapId: string, home: HomeResponse) => void;
   /**
    * "Jobs & team": opens the squishy job board (temporary entry; the trays
    * move it). `at`: Training Grounds on that homestead come first (#277).
@@ -699,6 +705,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
+          ...houseCardNodes(current),
           ...(friends.length > 0 && options.onCare
             ? [
                 el('h3', { class: 'home-section-title' }, HOME_TEXT.friends),
@@ -861,6 +868,31 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         break;
       }
     }
+  }
+
+  /** The Keeper's house card (#381): only while the house is on for this player. */
+  function houseCardNodes(current: HomeResponse): Node[] {
+    const card = houseCard(current);
+    if (!card || !options.onHouse) return [];
+    return [
+      el(
+        'div',
+        { class: 'home-house', 'data-testid': 'home-house' },
+        el(
+          'span',
+          { class: 'home-house-text' },
+          el('span', { class: 'home-house-title' }, card.title),
+          el('span', { class: 'home-house-line' }, card.line),
+        ),
+        button(HOUSE_TEXT.goInside, goInside, { 'data-testid': 'home-house-open' }),
+      ),
+    ];
+  }
+
+  function goInside(): void {
+    const current = home;
+    if (!mapId || !current?.house || working) return;
+    options.onHouse?.(mapId, current);
   }
 
   /** The home's top card: how many fires are out on my land, and "Fuel all fires" (#202). */
@@ -1148,6 +1180,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           const hit = built.pick(x, y);
           if (hit?.kind === 'spot') chooseSpot(hit.spot);
           else if (hit?.kind === 'squishy' && mapId && !working) options.onCloseUp?.(mapId, hit.id);
+          else if (hit?.kind === 'house' && mode.kind === 'idle') goInside();
           else if (hit?.kind === 'building' && mode.kind !== 'build' && mode.kind !== 'moving') {
             setMode({ kind: 'selected', id: hit.id });
           }
