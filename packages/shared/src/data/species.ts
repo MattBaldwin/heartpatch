@@ -1242,12 +1242,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['water'], feelings: ['cozy'] },
   },
-  // #443 kid (stage 2): two little horn nubs, before Bubbletide's horn.
+  // #443 kid (stage 2): a fin row along its back and two tiny horn nubs, before
+  // Bubbletide's horn.
   {
     id: 'bubblenub',
     name: 'Bubblenub',
-    description:
-      'Two little nubs popped up on its head. It blows bubbles through its nose to show them off.',
+    description: 'A fin popped up along its back. It blows bubbles to show it off.',
     element: 'water',
     feeling: 'cozy',
     rarity: 'uncommon',
@@ -2526,11 +2526,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
-  // #443 kid (stage 2): pointy ears and a stem on its acorn cap.
+  // #443 kid (stage 2): a stem on its acorn cap, and a taller stance.
   {
     id: 'scamperkin',
     name: 'Scamperkin',
-    description: 'Its acorn cap grew a stem, and its ears went pointy. It scampers everywhere now.',
+    description: 'Its acorn cap grew a stem, and it stands up taller. It scampers everywhere now.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'uncommon',
@@ -2548,7 +2548,7 @@ export const SPECIES: Species[] = [
         'happy-eyes',
         'smile',
         'blush-cheeks',
-        'pointy-ears',
+        'round-ears',
         'acorn-cap',
         'acorn-stem',
         'stuck-leaf',
