@@ -311,12 +311,12 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
   // ── Props: the map's own builders, one thin-instanced mesh per kind ──
   const props = arenaProps(spec, seed, options.lowTier ? ARENA_STAGE.lowTier.props : 1);
   {
-    const byKind = new Map<PropKind, Matrix[]>();
+    const byKind = new Map<PropKind, Placement[]>();
     const shadows: Matrix[] = [];
     for (const p of props) {
       let list = byKind.get(p.kind);
       if (!list) byKind.set(p.kind, (list = []));
-      list.push(matrixOf(p));
+      list.push(p);
     }
     const propMat = vinyl(scene, 'arena-prop-mat', { color: '#ffffff' });
     materials.push(propMat);
@@ -341,13 +341,17 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
       } else {
         mesh.material = propMat;
       }
-      setInstances(mesh, at);
+      setInstances(
+        mesh,
+        at.map((p) => matrixOf(p)),
+      );
       still(mesh);
       if (built.shadow > 0) {
-        for (const m of at) {
-          const s = m.m[0] ?? 1;
-          const d = built.shadow * s * 1.6;
-          shadows.push(placeAt(m.m[12] ?? 0, 0.012, m.m[14] ?? 0, new Vector3(d, 1, d)));
+        // Sized by the placement's own scale: the matrix's m[0] is
+        // scale × cos(turn), which shrank a turned prop's shadow (#473).
+        for (const p of at) {
+          const d = built.shadow * p.scale * 1.6;
+          shadows.push(placeAt(p.x, 0.012, p.z, new Vector3(d, 1, d)));
         }
       }
     }
