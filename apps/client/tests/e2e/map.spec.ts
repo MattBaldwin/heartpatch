@@ -75,7 +75,9 @@ async function openPatch(page: Page, name: string): Promise<void> {
 test('draws a patch, shows tile info on tap, and follows land changes live', async ({
   browser,
 }) => {
-  test.setTimeout(120_000); // two players, shader compiles; CI renders in software
+  // Two players, shader compiles; CI renders in software. It ran 1.9-2.0 min on iPad CI, so 120 s
+  // ran out at the friend's join (#429).
+  test.setTimeout(240_000);
   const ownerName = uniqueName('own');
   const friendName = uniqueName('pal');
 
