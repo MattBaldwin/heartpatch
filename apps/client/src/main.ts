@@ -586,9 +586,12 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  // My Crafting Factory's tile card (#295): its batches sheet.
+  // My Crafting Factory's tile card (#295): its batches sheet, read fresh, so
+  // an upgrade or build from the card a moment ago shows.
   onOpenFactory: () => {
-    inventory.openFactory();
+    void inventory.refresh().then(() => {
+      inventory.openFactory();
+    });
   },
   onJobs: (mapId, at) => {
     void jobs.openJobBoard(mapId, at);
@@ -1478,6 +1481,7 @@ if (import.meta.env.DEV) {
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
     battleDev: () => battles.dev,
+    mapDev: () => ({ select: (q: number, r: number) => maps.focus({ q, r }) !== null }),
     keeper: () => keeper.debug,
     cinematic: () => cinematic.debug,
     catalog: () => catalog.debug,

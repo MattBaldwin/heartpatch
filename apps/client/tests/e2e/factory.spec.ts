@@ -1,7 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
-import { tapTile } from './claim-land.js';
+import { selectTile } from './claim-land.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -53,7 +53,7 @@ test('builds a Factory on a homestead, runs batches from it, the book and the ba
   expect((await mapState(page))!.id).toBe(mapId);
 
   // Build it on the homestead from the Build sheet: its card says what it does.
-  await tapTile(page, made.body);
+  await selectTile(page, made.body);
   await page.getByTestId('tile-build').tap();
   await page.locator('[data-build="crafting-factory"]').tap();
   await expect(page.getByTestId('build-detail')).toContainText('🏭 2 batches at once');

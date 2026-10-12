@@ -53,6 +53,12 @@ declare global {
        * Only the game page has it (not dev pages like the squishy gallery).
        */
       map?(): MapDebug | null;
+      /**
+       * Map controls for e2e (#295): `select` opens a tile's panel as a tap
+       * would, without hunting for it on a slow software-rendered canvas.
+       * False when the tile isn't on the open map.
+       */
+      mapDev?(): { select(q: number, r: number): boolean };
       /** The side trays over the map: shown, which is open, the hint, the handles' badges. */
       trays?(): TraysDebug;
       /** The recipe book: open, the pages on screen, unlocked and new pages (owner decision 2026-10-05). */
