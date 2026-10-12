@@ -70,6 +70,7 @@ export function sampleHouse(level: number, residents = true): HouseSample {
       rooms,
       next: null,
       items: {},
+      gift: null,
       now: NOW,
     },
     squishies,

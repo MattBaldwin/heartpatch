@@ -57,7 +57,8 @@ function ownerOnlyView(
     | 'team.picked'
     | 'journey.started'
     | 'journey.ended'
-    | 'mailbox.collected',
+    | 'mailbox.collected'
+    | 'house.gift',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -145,6 +146,8 @@ export const PUBLIC_VIEWS: PublicViews = {
   'trade.cancelled': twoPlayerView('trade.cancelled'),
   'trade.expired': twoPlayerView('trade.expired'),
   'mailbox.collected': ownerOnlyView('mailbox.collected'),
+  // A Keeper's gift from a resident (#381 PR H) is theirs alone.
+  'house.gift': ownerOnlyView('house.gift'),
   // A live battle's turns and cheers (#29) are its two players' business;
   // everyone else sees `battle.started` and `battle.ended`.
   // "Battle me?" (#29): the two Keepers' business; others see the battle start.

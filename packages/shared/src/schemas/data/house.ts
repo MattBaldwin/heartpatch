@@ -6,6 +6,7 @@ import {
   DisplayNameSchema,
   ResourceCostSchema,
 } from './common.js';
+import { FeelingIdSchema } from './elements.js';
 import { formatDataIssues } from './issues.js';
 import { RequirementSchema } from './requirements.js';
 
@@ -192,5 +193,46 @@ export function checkHouseData(input: unknown, refs: HouseDataRefs): string[] {
     });
   });
   problems.push(...scanPlayerFacingText(result.data, 'house'));
+  return problems;
+}
+
+/**
+ * A note a resident leaves with the daily gift (#381 PR H): a fixed line,
+ * never free text (rule 9). `{name}` is the giver's name. A note with a
+ * `feeling` goes only with a giver of that feeling; one without is for anyone.
+ */
+export const HouseNoteSchema = z.strictObject({
+  id: ContentIdSchema,
+  feeling: FeelingIdSchema.optional(),
+  line: z.string().min(1).max(80),
+});
+export type HouseNote = z.infer<typeof HouseNoteSchema>;
+
+export const HouseNotesSchema = z.array(HouseNoteSchema).min(1);
+
+/** Where a note's line names the giver. */
+export const HOUSE_NOTE_NAME = '{name}';
+
+/**
+ * Validates the gift notes and returns readable problems, or `[]`: ids are
+ * unique, every line names the giver exactly once, there are notes for any
+ * giver (no `feeling`), and no line uses an avoided word (style guide §9).
+ */
+export function checkHouseNotes(input: unknown): string[] {
+  const result = HouseNotesSchema.safeParse(input);
+  if (!result.success) return formatDataIssues(input, result.error);
+  const problems: string[] = [];
+  const ids = new Set<string>();
+  for (const note of result.data) {
+    if (ids.has(note.id)) problems.push(`notes: duplicate id "${note.id}"`);
+    ids.add(note.id);
+    if (note.line.split(HOUSE_NOTE_NAME).length !== 2) {
+      problems.push(`notes["${note.id}"]: the line names {name} exactly once`);
+    }
+  }
+  if (!result.data.some((n) => n.feeling === undefined)) {
+    problems.push('notes: needs at least one note for any giver (no feeling)');
+  }
+  problems.push(...scanPlayerFacingText(result.data, 'notes'));
   return problems;
 }

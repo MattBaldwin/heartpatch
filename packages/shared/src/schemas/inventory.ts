@@ -56,6 +56,8 @@ export const ItemChangeReasonSchema = z.enum([
   'clear',
   /** Building the next level of the Keeper's house (#381), ledgered against the house's level. */
   'house-build',
+  /** Opening the day's gift from a resident (#381 PR H), ledgered against the gift. */
+  'house-gift',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

@@ -4,6 +4,7 @@ import type { HouseRules } from '../schemas/data/house.js';
 import {
   HOUSE_START_LEVEL,
   capacityAt,
+  renderHouseNote,
   houseLevelData,
   maxHouseLevel,
   moveBackInAt,
@@ -101,5 +102,14 @@ describe('house rules (#381)', () => {
     expect(houseLevelData(HOUSE_DATA, 0).level).toBe(1);
     expect(houseLevelData(HOUSE_DATA, 99).level).toBe(maxHouseLevel(HOUSE_DATA));
     expect(capacityAt(HOUSE_DATA, 99)).toBe(capacityAt(HOUSE_DATA, maxHouseLevel(HOUSE_DATA)));
+  });
+});
+
+describe('gift notes (#381 PR H)', () => {
+  it("renders a note with the giver's name, even one with a dollar sign", () => {
+    expect(renderHouseNote({ line: '{name} dreamed about pancakes 🥞' }, 'Mochi')).toBe(
+      'Mochi dreamed about pancakes 🥞',
+    );
+    expect(renderHouseNote({ line: 'Hi {name}!' }, '$&$1')).toBe('Hi $&$1!');
   });
 });
