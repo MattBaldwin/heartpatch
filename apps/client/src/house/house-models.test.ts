@@ -4,8 +4,9 @@ import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
 import { blend, fitHouse, kidPose } from './house-camera.js';
 import { HOUSE_BUDGET } from './house-config.js';
-import { sampleLevels } from './house-fixtures.js';
+import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { buildCottage } from './house-models.js';
+import { hasRoomBuilder } from './house-rooms.js';
 import type { HouseScene } from './house-scene.js';
 import { buildHouse, cost } from './house-test-scene.js';
 
@@ -103,6 +104,27 @@ describe('house models: the low-tier budget', () => {
       });
     }
   }
+
+  it('furnishes every room with its own builder, so the budget cases count the real rooms (B3)', () => {
+    const top = sampleLevels().at(-1)!;
+    for (const room of sampleHouse(top).view.rooms) expect(hasRoomBuilder(room.look)).toBe(true);
+  });
+
+  it('merges glowing bits into one mesh per floor, not one per room, at every tier', () => {
+    const top = sampleLevels().at(-1)!;
+    for (const tier of ['low', 'medium', 'high'] as const) {
+      const { scene, house } = buildHouse(top, tier);
+      const glows = house.houseMeshes.filter((m) => /^house-glow-f\d+$/.test(m.name));
+      const floors = new Set(sampleHouse(top).view.rooms.map((r) => r.layout.floor));
+      expect(glows.length).toBeLessThanOrEqual(floors.size);
+      const rooms = sampleHouse(top).view.rooms.map((r) => `house-${r.id}-glow`);
+      expect(house.houseMeshes.filter((m) => rooms.includes(m.name))).toEqual([]);
+      // Low: nothing upstairs glows (the Kitchen's stove fire is solid), so floor 1 draws no glow.
+      if (tier === 'low')
+        expect(glows.filter((m) => m.isEnabled()).map((m) => m.name)).toEqual(['house-glow-f0']);
+      scene.getEngine().dispose();
+    }
+  });
 
   it('builds a cottage for every exterior, as one mesh', () => {
     const { scene } = buildHouse(1, 'low');

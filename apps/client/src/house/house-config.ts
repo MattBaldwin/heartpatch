@@ -215,3 +215,66 @@ export const HOUSE_OUTSIDE = {
   hazeFrom: 4, // TUNE
   hazeTo: 24, // TUNE
 } as const;
+
+/**
+ * The grown rooms (#381 B3): the Playroom, the Kitchen loft and the Heart
+ * Hall. Their pieces are boxes and low-segment rounds so the whole top-level
+ * house stays inside the low tier's triangles; every piece merges into its
+ * room's one solid mesh (and one glow mesh), so furniture adds no draw calls.
+ */
+export const HOUSE_GROWN = {
+  /** Segments on the rounds (balls, jars, the tree's crown): low, so L4 fits the low tier. */
+  segments: 4, // TUNE
+  /** Sides on the round tubes (the table, stools, plates, the tree's trunk). */
+  sides: 7, // TUNE
+  /** Sides on the six-sided pieces (the tent, jars, paper lanterns): faceted on purpose. */
+  facets: 6, // TUNE
+  playroom: {
+    /** The play mat's squares, front-left to back-right (sRGB). */
+    mat: ['#ffb3c8', '#bfe3ff', '#ffe29a', '#b9ecc8'], // TUNE
+    /** One square of the play mat, metres. */
+    matCell: 0.62, // TUNE
+    chest: '#c9764f', // TUNE: the toy chest's painted wood
+    chestLid: '#e97a9b', // TUNE: pink, so the open lid reads against the wall
+    tent: '#9ad8ff', // TUNE: the play tent's canvas
+    tentStripe: '#fff6ec', // TUNE
+    nightLight: '#ffe6a0', // TUNE: the star night-light's glow
+  },
+  kitchen: {
+    stove: '#4a4250', // TUNE: the little iron stove
+    stoveFire: '#ff8a3c', // TUNE: its glowing window
+    pot: '#fff2e3', // TUNE: white enamel (pink read as a gem on high)
+    counter: '#f2d7b8', // TUNE
+    counterTop: '#9a6a46', // TUNE
+    table: '#b9825a', // TUNE
+    cloth: '#ffd1dc', // TUNE: the checked table cloth
+    pie: '#e8a25a', // TUNE
+    shelf: '#8d5a3b', // TUNE
+    /** Jars and plates on the shelves (sRGB). */
+    jars: ['#ffd166', '#9fe0c8', '#ff9ab8', '#c9a0ff', '#9ad8ff'], // TUNE
+  },
+  hall: {
+    /** How far the gallery (at the second storey) reaches out from the back wall, metres. */
+    galleryDepth: 1.3, // TUNE
+    deck: '#c98b5a', // TUNE: planks, like the floor
+    rail: '#8d5a3b', // TUNE
+    gold: '#f2c14e', // TUNE: the top level's gold accents
+    trunk: '#9b7a62', // TUNE
+    /** The Heart Tree's crown, a heart of two pink rounds (sRGB). */
+    crown: ['#ffb0d0', '#ff9cc4'], // TUNE: left and right lobes; light, so high tier's shade stays pink
+    lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
+    sparkle: '#fff2b0', // TUNE: the tree's sparkles
+    rug: '#e97a9b', // TUNE
+    rugEdge: '#f2c14e', // TUNE
+    /** Where the first residents stand, as shares of the hall's width and depth. */
+    residentBand: [
+      [0.56, 0.25],
+      [0.72, 0.22],
+      [0.8, 0.45],
+      [0.8, 0.68],
+    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
+    /** Steps up to the gallery. */
+    steps: 10, // TUNE
+    stairWidth: 1.0, // TUNE: metres
+  },
+} as const;

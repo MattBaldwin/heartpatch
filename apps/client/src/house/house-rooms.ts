@@ -14,6 +14,7 @@ import {
 } from './house-models.js';
 import { HOUSE_GRID } from './house-config.js';
 import type { QualityTier } from '../engine/config.js';
+import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
 import type { RoomBox } from './house-layout.js';
 
 /*
@@ -204,3 +205,6 @@ export const snugRoom: RoomBuilder = (kit) => {
 };
 
 registerRoom('snug', snugRoom);
+registerRoom('playroom', playroomRoom);
+registerRoom('kitchen', kitchenRoom);
+registerRoom('heart-hall', heartHallRoom);
