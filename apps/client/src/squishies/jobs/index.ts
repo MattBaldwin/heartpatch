@@ -12,6 +12,7 @@ import { createGathererBadges, type GathererBadges } from './gatherer-badges.js'
 import { createJobBoard, type JobBoard, type JobBoardDebug } from './job-board.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
 import { JOBS_TEXT, workMoods, type WorkMood } from './jobs-view.js';
+import { createViewFeed } from './view-feed.js';
 import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-picker.js';
 
 // Squishy jobs on the client (owner decisions 2026-10-04): the job board and
@@ -86,20 +87,9 @@ export function openTeamPicker(mapId: string): Promise<void> {
 }
 
 export function createJobs(options: JobsOptions): Jobs {
-  // Every jobs view the sheets or the map read passes through here, so the
-  // map's badges and the home's moods follow a job change at once (#393).
-  const listeners = new Set<(mapId: string, view: JobsView) => void>();
-  const seen = (mapId: string) => (view: JobsView) => {
-    for (const listener of listeners) listener(mapId, view);
-    return view;
-  };
-  const base = options.api ?? jobsApi;
-  const api: JobsApi = {
-    view: (mapId) => base.view(mapId).then(seen(mapId)),
-    setJob: (mapId, squishyId, job, key) =>
-      base.setJob(mapId, squishyId, job, key).then(seen(mapId)),
-    setTeam: (mapId, squishyIds, key) => base.setTeam(mapId, squishyIds, key).then(seen(mapId)),
-  };
+  // My jobs views, newest only, for the map's badges and the home's moods (#393).
+  const feed = createViewFeed(options.api ?? jobsApi);
+  const api = feed.api;
   const board: JobBoard = createJobBoard({
     root: options.root,
     api,
@@ -114,7 +104,7 @@ export function createJobs(options: JobsOptions): Jobs {
       if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
     },
   });
-  listeners.add((mapId, view) => {
+  feed.listen((mapId, view) => {
     badges.setMine(mapId, view);
   });
 
@@ -135,7 +125,14 @@ export function createJobs(options: JobsOptions): Jobs {
       picker.close();
     },
     setUser: (user) => {
-      userId = user?.id ?? null;
+      const next = user?.id ?? null;
+      const changed = next !== userId;
+      userId = next;
+      if (changed) {
+        // Another player (or none): the last one's moods go, and so does anything still on its way.
+        feed.reset();
+        badges.forget();
+      }
       if (!user) jobs.close();
     },
     tileActions: {
@@ -214,9 +211,7 @@ export function createJobs(options: JobsOptions): Jobs {
     },
     badges,
     workMoods: async (mapId) => (glade(mapId) ? new Map() : workMoods(await api.view(mapId))),
-    onView: (listener) => {
-      listeners.add(listener);
-    },
+    onView: feed.listen,
     get isOpen() {
       return board.isOpen || picker.isOpen;
     },

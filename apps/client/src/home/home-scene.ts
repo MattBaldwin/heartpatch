@@ -552,7 +552,12 @@ export class HomeScene {
 
   #countHappy(): void {
     this.#happy = [...this.#residents].filter(([, r]) => r.mood === 'loves').map(([id]) => id);
-    // The camera looks along +z, so a smaller z is nearer (squishies face −z).
+    this.#sortDrawOrder();
+  }
+
+  /** Nearest first, again after anyone moved (a hop landed). */
+  #sortDrawOrder(): void {
+    // The home camera looks along +z without turning, so a smaller z is nearer (squishies face −z).
     this.#drawOrder = [...this.#residents]
       .sort(([, a], [, b]) => a.at.z - b.at.z)
       .map(([id]) => id);
@@ -615,6 +620,7 @@ export class HomeScene {
   /** Moves hops along; true while anything still moves (keep drawing). */
   step(now: number): boolean {
     let moving = false;
+    let landed = false;
     for (const r of this.#residents.values()) {
       if (!r.hop) continue;
       const t = Math.min(1, (now - r.hop.start) / WANDER.hopMs);
@@ -630,11 +636,13 @@ export class HomeScene {
         r.at = to;
         r.yaw = yaw;
         r.hop = null;
+        landed = true;
         this.#squishies.play(r.handle, 'wobble', now);
       } else {
         moving = true;
       }
     }
+    if (landed) this.#sortDrawOrder();
     return this.#squishies.update(now) || moving;
   }
 

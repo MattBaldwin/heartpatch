@@ -34,6 +34,8 @@ export interface GathererBadgesOptions {
 export interface GathererBadges extends MapLayer {
   /** My jobs view of a map: my gatherers' badges say how they feel (#393). */
   setMine: (mapId: string, view: Pick<JobsView, 'squishies'>) => void;
+  /** Drops my moods (another player signed in): every badge is a plain 🧺 again. */
+  forget: () => void;
   /** Badges on screen now (the dev hook). */
   readonly shown: number;
   /** Badges on screen now showing a mood, by mood (the dev hook). */
@@ -207,6 +209,11 @@ export function createGathererBadges(
     setMine: (mapId, jobs) => {
       mine = { mapId, moods: tileMoods(jobs) };
       if (scene && view?.map.id === mapId) draw(view);
+    },
+    forget: () => {
+      mine = null;
+      asked = '';
+      if (scene && view) draw(view);
     },
     get shown() {
       return [...badges.values()].filter((b) => !b.node.hidden).length;

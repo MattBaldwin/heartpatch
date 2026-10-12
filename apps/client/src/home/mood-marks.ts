@@ -72,12 +72,13 @@ export function createMoodMarks(root: HTMLElement): MoodMarks {
     const s = scene;
     const h = home;
     const moods = h?.moods;
-    for (const [id, mark] of marks) {
+    // (forEach, not for…of: no entry arrays every frame.)
+    marks.forEach((mark, id) => {
       const mood = moods?.get(id);
-      if (mood && mood === mark.mood) continue;
+      if (mood && mood === mark.mood) return;
       mark.node.remove();
       marks.delete(id);
-    }
+    });
     const camera = s?.activeCamera;
     const canvas = s?.getEngine().getRenderingCanvas();
     if (!s || !h || !moods || !camera || !canvas || moods.size === 0) return;

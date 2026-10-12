@@ -1836,6 +1836,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (next?.id === user?.id) return;
       user = next;
       generation += 1;
+      moods = null;
       factoryBag = null;
       factoryTried = false;
       mapId = null;
