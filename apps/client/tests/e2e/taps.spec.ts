@@ -223,14 +223,28 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   // Done: the app coming back to the front settles too, and the chip goes.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   const landed = (await bagState(page))!.landings;
+  // The landing toast shows for 3.2 s, and a loaded runner can take longer than that to get from
+  // the landing to a later check, so note it showing as it happens (#429).
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="landed-toast"]');
+    const seen = window as unknown as { toastSeen: boolean };
+    seen.toastSeen = false;
+    new MutationObserver(() => {
+      if (el && !el.hasAttribute('hidden') && el.textContent !== '') seen.toastSeen = true;
+    }).observe(el!, { attributes: true, childList: true, characterData: true, subtree: true });
+  });
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   // The settle's reply arrives in a second or two on a loaded runner and the page counts the
   // landing when it gets round to it, so the 5 s default can run out first (#429).
   await expect
     .poll(async () => (await bagState(page))?.landings, { timeout: 30_000 })
     .toBe(landed + 1);
-  await expect(chip).toBeHidden();
-  await expect(toast).toBeVisible();
+  await expect(chip).toBeHidden({ timeout: 30_000 });
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { toastSeen: boolean }).toastSeen), {
+      timeout: 30_000,
+    })
+    .toBe(true);
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(afterTile);
 
   // A squishy gatherer's work lands by itself too: the job board settles
