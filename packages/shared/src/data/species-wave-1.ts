@@ -225,7 +225,7 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'sipsnooze',
     name: 'Sipsnooze',
-    description: 'A tea leaf sprouted on its head. It naps under it like a tiny umbrella.',
+    description: 'A tiny tea leaf sprouted on its head. It wiggles when Sipsnooze snores.',
     element: 'water',
     feeling: 'sleepy',
     rarity: 'uncommon',
