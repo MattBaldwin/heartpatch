@@ -24,7 +24,13 @@ import { hollowApi, type HollowApi } from './hollow-api.js';
 import { VISIT_FRESH_MS } from './hollow-config.js';
 import { fallPlan, joinsTonight, liveStart, nightChips, nudgeDue } from './night-plan.js';
 import type { HollowLayer } from './hollow-layer.js';
-import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
+import {
+  changesMyNight,
+  HOLLOW_TEXT,
+  reportText,
+  tileUseLines,
+  unseenReports,
+} from './hollow-report.js';
 import { placeOf } from './dark-land.js';
 import { createNightShow, domCaption, type NightShowDebug, type ShowWalk } from './night-show.js';
 import { NIGHT_TEXT, reachText, STAGE_ORDER, STAGES, stageNights } from './night-text.js';
@@ -146,6 +152,8 @@ const packedKey = (userId: string, mapId: string) => `heartpatch.hollow.packed.$
 /** The packed-Training-Grounds note seen on this device (#277): its `at`. */
 const groundsKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.packed-grounds.${userId}.${mapId}`;
+/** The one-building-a-tile tidy-up note seen on this device (#295): its `at`. */
+const tidyKey = (userId: string, mapId: string) => `heartpatch.hollow.tidy.${userId}.${mapId}`;
 /** The last night whose show this device played to the end or skipped (#277). */
 const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
 /** The last night whose dark-land nudge was answered on this device (#277). */
@@ -358,16 +366,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       return null;
     }
   };
-  type PackedNote = { refund: Record<string, number>; at: string };
   /**
-   * A one-time packed-up note (home fires #202, home Training Grounds #277),
-   * while this device hasn't shown it, and the mark that it has.
+   * A one-time note (packed-up home fires #202 and Training Grounds #277, the
+   * one-building-a-tile tidy-up #295), while this device hasn't shown it, and
+   * the mark that it has.
    */
-  const oneTimeNote = (
-    pick: (s: HollowStatus) => PackedNote | null,
+  const oneTimeNote = <N extends { at: string }>(
+    pick: (s: HollowStatus) => N | null,
     key: (userId: string, mapId: string) => string,
   ) => ({
-    note: (): PackedNote | null => {
+    note: (): N | null => {
       const packed = status ? pick(status) : null;
       if (!packed || !user || !mapId) return null;
       try {
@@ -388,6 +396,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   });
   const firesNote = oneTimeNote((s) => s.homeFirePacked, packedKey);
   const groundsNote = oneTimeNote((s) => s.trainingGroundsPacked, groundsKey);
+  const tidyNote = oneTimeNote((s) => s.tileUseNote ?? null, tidyKey);
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -697,10 +706,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     heldBackBefore = heldBack;
     const packed = firesNote.note();
     const packedGrounds = groundsNote.note();
+    const tidy = tidyNote.note();
+    const tidyLines = tidy ? tileUseLines(tidy) : [];
     renderChips();
     reportBox.hidden =
       !on ||
-      (report.length === 0 && !packed && !packedGrounds) ||
+      (report.length === 0 && !packed && !packedGrounds && tidyLines.length === 0) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -717,6 +728,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ...(packedGrounds
           ? [...HOLLOW_TEXT.packedGrounds, describeItems(packedGrounds.refund)]
           : []),
+        ...tidyLines,
+        ...(tidy && tidy.packed.length > 0 ? [describeItems(tidy.refund)] : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -879,6 +892,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     if (newest) markSeen(newest.night);
     firesNote.markSeen();
     groundsNote.markSeen();
+    tidyNote.markSeen();
     report = [];
     render();
   }

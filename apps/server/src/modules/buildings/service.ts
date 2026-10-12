@@ -115,6 +115,7 @@ const MESSAGES = {
   noFires: 'You have no fires to fuel yet. Build one first!',
   allFull: 'All your fires are full! Come back after a night or two.',
   tooMany: (name: string) => `Your home already has all the ${name} it can hold!`,
+  onlyOne: (name: string) => `You already have a ${name}! One is plenty.`,
   noBuilding: "We couldn't find that building.",
   notAFire: 'Only fires need fuel.',
   full: "It's full! Come back after a night or two.",
@@ -508,7 +509,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
               throw new AppError('CONFLICT', MESSAGES.tileHasOne(building.name));
             }
             if (building.maxPerHome !== undefined && same.length >= building.maxPerHome) {
-              throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
+              throw new AppError('CONFLICT', MESSAGES.onlyOne(building.name));
             }
             // A building blocks its tile's land yield (owner decision
             // 2026-10-11, #295): it doesn't go up where a squishy gathers,

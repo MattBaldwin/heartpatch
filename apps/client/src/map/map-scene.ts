@@ -27,7 +27,12 @@ import {
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
 import { activeTriangles } from '../engine/render-stats.js';
-import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
+import {
+  MAP_BUILDING_SCALE,
+  MAP_OUTER_BUILDING_SCALE,
+  MAP_OUTER_FIRE_SCALE,
+  SAFE_GLOW,
+} from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import { BorderField } from './border-field.js';
@@ -207,6 +212,8 @@ interface TileGroup {
   readonly colors: Float32Array;
   /** How muted each tile is drawn: 1 on wild land, part way on land that misses its owner. */
   readonly muted: number[];
+  /** Each tile's terrain as last coloured (a clear changes it, #242). */
+  readonly terrains: string[];
 }
 
 /** One prop kind's instances, for re-muting when ownership changes. */
@@ -218,6 +225,23 @@ interface PropGroup {
   readonly ambient: Float32Array;
   /** The same instances at low detail, for the zoomed-out map (#318). */
   readonly far: Mesh;
+  /** Each instance's placement as built, so props can come back after being cleared away. */
+  readonly base: Matrix[];
+}
+
+/** A prop's instance on a tile that a building fills or that was cleared (#295): drawn at nothing. */
+const GONE = Matrix.Scaling(0, 0, 0);
+
+/** `placements` with every one on a `cleared` tile (by `tiles`, index for index) drawn at nothing. */
+function hideOn(
+  placements: readonly Matrix[],
+  tiles: readonly HexKey[],
+  cleared: ReadonlySet<HexKey>,
+): Matrix[] {
+  return placements.map((m, i) => {
+    const key = tiles[i];
+    return key !== undefined && cleared.has(key) ? GONE : m;
+  });
 }
 
 export function vinyl(
@@ -361,6 +385,13 @@ export class MapScene {
   private propCount = 0;
   /** Contact shadows under the props; up close only (#318). */
   private propShadows: Mesh | null = null;
+  /** Each prop shadow's placement as built, and its tile (`clearProps`). */
+  private shadowBase: Matrix[] = [];
+  private readonly shadowTiles: HexKey[] = [];
+  /** Tiles whose props are cleared away now (`clearProps`). */
+  private propsCleared = new Set<HexKey>();
+  /** Each tile's terrain when the map was built: a tile cleared since loses its props (#242). */
+  private readonly builtTerrain = new Map<HexKey, string>();
   /** Zoomed out: tiles and props draw from their low-detail meshes (`followZoom`). */
   private far = false;
   private readonly instrumentation: SceneInstrumentation;
@@ -408,6 +439,7 @@ export class MapScene {
 
     this.buildIsland(view.tiles);
     this.animated = this.buildTiles(view.tiles);
+    for (const t of view.tiles) this.builtTerrain.set(hexKey(t), t.terrain);
     this.buildProps(view.tiles);
     this.applyDetail();
     this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
@@ -666,6 +698,7 @@ export class MapScene {
   update(view: MapView): void {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.recolour();
+    this.clearProps();
     this.homeNode = null;
     this.borders.set(this.tiles.values(), view.members);
 
@@ -711,7 +744,13 @@ export class MapScene {
         x: at.x,
         z: at.z,
         y: topOf(tile) + DOME * 0.5,
-        scale: HEX_SIZE * (tile.homeSlot === null ? MAP_OUTER_FIRE_SCALE : MAP_BUILDING_SCALE),
+        scale:
+          HEX_SIZE *
+          (tile.homeSlot !== null
+            ? MAP_BUILDING_SCALE
+            : building.kind === 'hearthfire'
+              ? MAP_OUTER_FIRE_SCALE
+              : MAP_OUTER_BUILDING_SCALE),
       })),
     );
     // Fence segments on the edges (#203): a border reads as one fence line.
@@ -924,6 +963,7 @@ export class MapScene {
         tiles: group.tiles,
         colors,
         muted: group.tiles.map(() => 0),
+        terrains: group.tiles.map((t) => t.terrain),
       });
     }
     this.tileMeshes = groups.size;
@@ -952,8 +992,19 @@ export class MapScene {
         const fading = tile.homeSlot === null ? (this.landFade.get(key) ?? 0) : 0;
         const muted = isMuted(tile) ? 1 : Math.min(1, Math.max(0, fading)) * LAND_FADE.most;
         wild.set(key, muted);
-        if (!force && group.muted[i] === muted) continue;
+        // A clear (#242) changes a tile's terrain: its colour and height follow,
+        // so what stands on it (`topOf`) sits on its top.
+        const reshaped = group.terrains[i] !== tile.terrain;
+        if (!force && group.muted[i] === muted && !reshaped) continue;
         group.muted[i] = muted;
+        group.terrains[i] = tile.terrain;
+        if (reshaped) {
+          const p = hexToWorld(tile, HEX_SIZE);
+          const h = group.look.height;
+          const m = placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
+          group.mesh.thinInstanceSetMatrixAt(i, m, true);
+          group.far.thinInstanceSetMatrixAt(i, m, true);
+        }
         changed = true;
         const c =
           tile.homeSlot !== null
@@ -1038,6 +1089,7 @@ export class MapScene {
           // Just over the dome's crown, so no part of the disc dips under the tile
           // top (it doesn't write depth, so the slight float off-centre never shows).
           shadows.push(placeAt(prop.at.x, top + DOME + 0.004, prop.at.z, new Vector3(d, 1, d)));
+          this.shadowTiles.push(key);
         }
       }
     }
@@ -1074,7 +1126,7 @@ export class MapScene {
         m.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
         m.freezeWorldMatrix();
       }
-      this.propGroups.push({ mesh, far, tiles: kind.tiles, ambient });
+      this.propGroups.push({ mesh, far, tiles: kind.tiles, ambient, base: kind.matrices });
       this.propCount += kind.matrices.length;
     }
 
@@ -1093,6 +1145,36 @@ export class MapScene {
     this.propShadows.material = overlayMaterial(this.scene, 'prop-shadow-mat');
     setInstances(this.propShadows, shadows);
     this.propShadows.freezeWorldMatrix();
+    this.shadowBase = shadows;
+  }
+
+  /**
+   * Clears the props (and their shadows) off tiles a building fills or that
+   * were cleared since the map was built (#295, #242: "buildings fill their
+   * tile, with its props cleared away"); a tile that loses its building gets
+   * them back. Home tiles carry no props. Only rewrites a kind's instances
+   * when its cleared set changed.
+   */
+  private clearProps(): void {
+    const cleared = new Set<HexKey>();
+    for (const [key, tile] of this.tiles) {
+      if (tile.homeSlot !== null) continue;
+      const wasCleared = this.builtTerrain.get(key) !== tile.terrain;
+      if (tile.buildings.length > 0 || wasCleared) cleared.add(key);
+    }
+    const same =
+      cleared.size === this.propsCleared.size &&
+      [...cleared].every((k) => this.propsCleared.has(k));
+    if (same) return;
+    this.propsCleared = cleared;
+    for (const group of this.propGroups) {
+      const matrices = hideOn(group.base, group.tiles, cleared);
+      setInstances(group.mesh, matrices);
+      setInstances(group.far, matrices);
+    }
+    if (this.propShadows) {
+      setInstances(this.propShadows, hideOn(this.shadowBase, this.shadowTiles, cleared));
+    }
   }
 
   /**

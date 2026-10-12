@@ -60,12 +60,12 @@ describe('fences in the report (#203)', () => {
   });
 });
 
-describe('a fire lost with the land (#202)', () => {
-  it('says so kindly, only when there was a fire there', () => {
+describe('a building lost with the land (#202, #295)', () => {
+  it('says so kindly, only when there was a building there', () => {
     expect(raidFireLine(raid())).toBeNull();
     const line = raidFireLine(raid({ outcome: 'taken', lostFire: { timber: 2 } }));
     expect(line).toBe(
-      'Your fire there went out when the land changed hands. You got some things back 🔥',
+      'Your building there came down when the land changed hands. You got some things back 🏡',
     );
     expect(findAvoidedWords(line!)).toEqual([]);
   });

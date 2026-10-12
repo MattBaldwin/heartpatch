@@ -199,7 +199,57 @@ export function landTileOffer(
 }
 
 /** Training Grounds: they stand only on a homestead (owner decision 4 on #277). */
-export const GROUNDS = GAME_DATA.buildings.find((b) => b.placement === 'homestead');
+export const GROUNDS = GAME_DATA.buildings.find((b) => b.kind === 'training-grounds');
+
+/** The Crafting Factory: on a homestead since #295 (one building a tile), one per player. */
+export const FACTORY = GAME_DATA.buildings.find((b) => b.kind === 'factory');
+
+/** Where a homestead building goes on an empty homestead: its first free spot. */
+export function homesteadSpot(
+  tile: { nodeResource: string | null; buildings: readonly { spot: number }[] },
+  building: Pick<Building, 'slot'>,
+): number | undefined {
+  const taken = new Set(tile.buildings.map((b) => b.spot));
+  return freeSpots(
+    RULES,
+    { heartSeed: false, nodeResource: tile.nodeResource },
+    taken,
+    building.slot,
+  )[0];
+}
+
+/** What a homestead's tile panel and Build sheet offer for the Crafting Factory (#295). */
+export type FactoryTileOffer =
+  /** Mine stands here: its card opens it. */
+  | { readonly kind: 'factory'; readonly factory: MyBuilding }
+  /** An empty, open homestead and no Factory yet: build it here. */
+  | { readonly kind: 'build'; readonly building: Building; readonly spot: number };
+
+/**
+ * The Crafting Factory on one of my tiles out on the land (#295): mine
+ * standing there, or the offer to build my one Factory on an empty, joined
+ * homestead with no spot to clear. Null otherwise.
+ */
+export function factoryTileOffer(
+  tile: {
+    q: number;
+    r: number;
+    nodeResource: string | null;
+    homestead?: 'joined' | 'paused' | null;
+    buildings: readonly { spot: number }[];
+  },
+  home: HomeResponse,
+): FactoryTileOffer | null {
+  const factory = home.buildings.find(
+    (b) => b.kind === 'factory' && b.q === tile.q && b.r === tile.r,
+  );
+  if (factory) return { kind: 'factory', factory };
+  if (!FACTORY || tile.homestead !== 'joined') return null;
+  if (tile.buildings.length > 0 || tile.nodeResource !== null) return null;
+  if (home.buildings.some((b) => b.kind === 'factory')) return null;
+  const spot = homesteadSpot(tile, FACTORY);
+  return spot === undefined ? null : { kind: 'build', building: FACTORY, spot };
+}
 
 /** What a homestead's tile panel offers for Training Grounds (#277, mockup screen 6). */
 export type GroundsTileOffer =
@@ -247,9 +297,7 @@ export function groundsTileOffer(
       ? { kind: 'clear-first', building: GROUNDS }
       : null;
   }
-  const taken = new Set(tile.buildings.map((b) => b.spot));
-  const features = { heartSeed: false, nodeResource: tile.nodeResource };
-  const spot = freeSpots(RULES, features, taken, GROUNDS.slot)[0];
+  const spot = homesteadSpot(tile, GROUNDS);
   if (spot === undefined) return null;
   return {
     kind: 'build',
@@ -266,8 +314,11 @@ export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
 export const FIRES_ON_LAND =
   'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!';
 
-/** Where Training Grounds go, on the build sheet (owner decision 4 on #277). */
-export const GROUNDS_ON_HOMESTEAD =
+/** My one homestead building of a kind is up (the Crafting Factory, #295). */
+export const BUILT_ON_HOMESTEAD = 'Built! Tap it on its homestead to open it.';
+
+/** Where homestead buildings go, on the build sheet (#277 Training Grounds, #295 the Crafting Factory). */
+export const ON_HOMESTEAD =
   'Goes on a homestead 🏡. Explore a tile next to home, then tap it on the map to build!';
 
 /**
@@ -411,8 +462,16 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           };
         } else if (building.placement === 'land') {
           option = { kind: 'land', note: FIRES_ON_LAND };
+        } else if (
+          building.placement === 'homestead' &&
+          building.maxPerHome !== undefined &&
+          everything.buildings.filter((b) => b.buildingId === building.id).length >=
+            building.maxPerHome
+        ) {
+          // My one Crafting Factory stands on a homestead (#295).
+          option = { kind: 'built', note: BUILT_ON_HOMESTEAD };
         } else if (building.placement === 'homestead') {
-          option = { kind: 'homestead', note: GROUNDS_ON_HOMESTEAD };
+          option = { kind: 'homestead', note: ON_HOMESTEAD };
         } else if (owned >= (building.maxPerHome ?? 0)) {
           option = {
             kind: 'built',

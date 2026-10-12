@@ -95,8 +95,11 @@ export const BUILDINGS: Building[] = [
     kind: 'factory',
     name: 'Crafting Factory',
     description: "Makes lots of things at once, even while you're away!",
-    maxPerHome: 1, // one per player per patch
-    placement: 'home',
+    maxPerHome: 1, // one per player per patch, home or homestead
+    // A homestead building (#295, owner decision 2026-10-11): one building a
+    // tile, so it moved off the crowded home base.
+    placement: 'homestead',
+    maxPerTile: 1,
     slot: 'ring',
     // Costs from the #294 mockup (`pnpm sim:factory`): a casual kid builds
     // level 1 in their first week and level 2 (no Glimmer, owner decision
