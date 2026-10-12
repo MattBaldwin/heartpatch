@@ -142,17 +142,37 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
   /** The resident whose "Move out of the house" is asking to confirm (#381), or null. */
   let confirmOut: string | null = null;
-  /** The confirm that just opened, to scroll into view once. */
-  let revealAsk: string | null = null;
 
   /** Scrolls the sheet so the row holding `inside` shows to its bottom edge, with room under it. */
-  function revealRowEnd(inside: HTMLElement): void {
-    const row = inside.closest('.roster-row');
-    if (!row || !inside.isConnected) return;
+  function revealRowEnd(inside: HTMLElement | null): void {
+    const row = inside?.closest('.roster-row');
+    if (!row) return;
     const gap = row.getBoundingClientRect().bottom - sheet.getBoundingClientRect().bottom;
     // The sheet's own bottom padding and a little air under the card's edge.
     const room = 14 + 8; // TUNE
     if (gap + room > 0) sheet.scrollTop += gap + room;
+  }
+  /** How long after the confirm opens its card keeps itself in view while the row settles. */
+  const REVEAL_SETTLE_MS = 1500; // TUNE
+  /**
+   * The move-out confirm just opened: its whole card comes into view, and
+   * stays there while the row settles (pictures and text finish laying out),
+   * then the player scrolls freely.
+   */
+  function revealConfirm(): void {
+    const yes = () => sheet.querySelector<HTMLElement>('[data-testid="roster-house-out-yes"]');
+    revealRowEnd(yes());
+    const row = yes()?.closest('.roster-row');
+    if (!row || typeof ResizeObserver === 'undefined') return;
+    const watch = new ResizeObserver(() => {
+      revealRowEnd(yes());
+    });
+    watch.observe(row);
+    watch.observe(sheet);
+    watch.observe(list);
+    setTimeout(() => {
+      watch.disconnect();
+    }, REVEAL_SETTLE_MS);
   }
   let working = false;
   let ticker: number | undefined;
@@ -435,14 +455,6 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           true,
         );
         yes.disabled = working;
-        // Just opened: the whole card, its buttons and its edge, comes into view
-        // (the sheet scrolls; it never grows over home). Once, not every redraw.
-        if (revealAsk === row.id) {
-          revealAsk = null;
-          requestAnimationFrame(() => {
-            revealRowEnd(yes);
-          });
-        }
         parts.push(
           el(
             'p',
@@ -456,8 +468,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           RESIDENT_TEXT.rosterMoveOut,
           () => {
             confirmOut = row.id;
-            revealAsk = row.id;
             render();
+            // Just opened: the whole card, its buttons and its edge, comes into view
+            // (the sheet scrolls; it never grows over home). Once, as it opens.
+            revealConfirm();
           },
           { 'data-testid': 'roster-house-out' },
           true,
