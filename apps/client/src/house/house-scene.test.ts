@@ -2,7 +2,7 @@ import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { blend, fitHouse, kidPose, project, safeArea } from './house-camera.js';
+import { blend, fitHouse, framedFocus, kidPose, project, safeArea } from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { yardPumpkins } from './house-models.js';
@@ -384,6 +384,45 @@ describe('house scene', () => {
           wall += 1;
       }
       expect(wall).toBeGreaterThan(0);
+      scene.getEngine().dispose();
+    });
+
+    it('frames a phone so no resident is cut by the screen’s edge, every face seen (round 3)', () => {
+      const vp = { width: 390, height: 844, top: 70, bottom: 148, sheet: 68 };
+      for (const [level, floor] of [
+        [2, 0],
+        [3, 0],
+        [3, 1],
+        [4, 0],
+        [4, 1],
+      ] as const) {
+        const { scene, house } = buildHouse(level, 'high', sampleHouse(level), vp);
+        house.setRoof(1);
+        house.setFloor(floor);
+        const focus = framedFocus(house.frameBounds, vp, house.focusRoom, house.residentSpots);
+        house.setPose(fitHouse(house.frameBounds, vp, undefined, focus), 0);
+        scene.render();
+        for (const m of scene.meshes) m.computeWorldMatrix(true);
+        const faces = house.faceReport();
+        const at = `level ${String(level)} floor ${String(floor)}`;
+        expect(faces.cut, at).toBe(0);
+        expect(faces.visible, at).toBe(faces.total);
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('counts a face hidden when a wall stands in front of it, not just its middle', () => {
+      const vp = { width: 390, height: 844 };
+      const { scene, house } = buildHouse(4, 'high', sampleHouse(4), vp);
+      house.setRoof(1);
+      // From behind the Hall's back wall, looking in: every face is behind it.
+      house.setPose(
+        { eye: { x: 6, y: 1.2, z: 16 }, target: { x: 6, y: 0.6, z: 6 }, fov: 0.9, pitch: 0.06 },
+        0,
+      );
+      scene.render();
+      for (const m of scene.meshes) m.computeWorldMatrix(true);
+      expect(house.faceReport().visible).toBe(0);
       scene.getEngine().dispose();
     });
 

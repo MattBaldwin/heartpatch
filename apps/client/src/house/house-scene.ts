@@ -532,10 +532,24 @@ export class HouseScene {
    * about how far they reach), so a phone's frame edge can miss them.
    */
   get residentSpots(): FramedSpot[] {
-    const r = HOUSE_CAST.squishyScale * HOUSE_CAST.reach;
-    return this.#cast
-      .filter((c) => c.kind === 'resident' && c.drawn())
-      .map((c) => ({ x: c.at.x, y: c.at.y + r, z: c.at.z, r }));
+    // From the fields themselves: each squishy's own middle and height, as drawn.
+    return this.#drawnSquishies().map(({ centre, height }) => ({
+      x: centre.x,
+      y: centre.y,
+      z: centre.z,
+      r: height * HOUSE_CAST.reach,
+    }));
+  }
+
+  /** Every resident drawn now, its middle and its height (world metres). */
+  #drawnSquishies(): { centre: Vector3; height: number }[] {
+    const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
+    return fields.flatMap((f) =>
+      f.handles.flatMap((h) => {
+        const centre = f.centre(h);
+        return centre ? [{ centre, height: f.heightOf(h) * HOUSE_CAST.squishyScale }] : [];
+      }),
+    );
   }
 
   /** The floors the dollhouse can show, bottom up (one entry: no floor switch). */
@@ -671,37 +685,61 @@ export class HouseScene {
    * face counts when it's inside the frame and nothing of the house stands
    * between it and the camera.
    */
-  faceReport(): { visible: number; total: number } {
+  faceReport(): { visible: number; total: number; cut: number } {
     const scene = this.#scene;
     const camera = scene.activeCamera;
-    const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
-    const handles = fields.flatMap((f) => f.handles.map((h) => ({ f, h })));
-    if (!camera) return { visible: 0, total: handles.length };
+    const drawn = this.#drawnSquishies();
+    if (!camera) return { visible: 0, total: drawn.length, cut: 0 };
     const engine = scene.getEngine();
     const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
     const eye = camera.globalPosition;
+    const view = scene.getTransformMatrix();
     const solid = new Set<AbstractMesh>(
       this.#house.filter((m) => !/(sky|lawn|pools|contact|sign|panes|wall-front)/.test(m.name)),
     );
+    const screen = (p: Vector3) => {
+      const q = Vector3.Project(p, Matrix.Identity(), view, vp);
+      return { x: q.x / vp.width, y: q.y / vp.height, z: q.z };
+    };
+    const right = Vector3.Cross(Vector3.Up(), camera.getForwardRay().direction).normalize();
     let visible = 0;
-    for (const { f, h } of handles) {
-      const centre = f.centre(h);
-      if (!centre) continue;
-      const toEye = eye.subtract(centre).normalize();
-      const face = centre.add(toEye.scale(0.3 * HOUSE_CAST.squishyScale));
-      const p = Vector3.Project(face, Matrix.Identity(), scene.getTransformMatrix(), vp);
-      const fx = p.x / vp.width;
-      const fy = p.y / vp.height;
-      if (p.z <= 0 || p.z >= 1 || fx < 0.02 || fx > 0.98 || fy < 0.02 || fy > 0.98) continue;
-      const dir = face.subtract(eye);
-      const length = dir.length();
-      const hit = scene.pickWithRay(
-        new Ray(eye, dir.normalize(), length - 0.05),
-        (m) => solid.has(m) && m.isEnabled(),
+    let cut = 0;
+    for (const { centre, height } of drawn) {
+      const reach = height * HOUSE_CAST.reach;
+      // Partly off the screen's sides or ends (render check: a frame edge sliced one).
+      const sides = [right.scale(reach), right.scale(-reach), Vector3.Up().scale(reach)].map((d) =>
+        screen(centre.add(d)),
       );
-      if (!hit?.hit) visible += 1;
+      const xs = sides.map((p) => p.x);
+      const ys = sides.map((p) => p.y);
+      const inside = (v: number) => v >= 0 && v <= 1;
+      const partly = xs.some(inside) !== xs.every(inside) || ys.some(inside) !== ys.every(inside);
+      if (partly) cut += 1;
+      // The face counts when its middle and both sides are in the frame and
+      // nothing of the house stands in front of any of them (round 3: a wall
+      // over half a face still counted from its middle alone).
+      const toEye = eye.subtract(centre).normalize();
+      const face = centre.add(toEye.scale(0.3 * height));
+      const points = [
+        face,
+        face.add(right.scale(0.22 * height)),
+        face.add(right.scale(-0.22 * height)),
+      ];
+      const seen = points.every((pt) => {
+        const p = screen(pt);
+        if (p.z <= 0 || p.z >= 1 || p.x < 0.02 || p.x > 0.98 || p.y < 0.02 || p.y > 0.98)
+          return false;
+        const dir = pt.subtract(eye);
+        const length = dir.length();
+        const hit = scene.pickWithRay(
+          new Ray(eye, dir.normalize(), length - 0.05),
+          (m) => solid.has(m) && m.isEnabled(),
+        );
+        return !hit?.hit;
+      });
+      if (seen) visible += 1;
     }
-    return { visible, total: handles.length };
+    return { visible, total: drawn.length, cut };
   }
 
   /** The house's own meshes (shell, fixtures, outside), not the cast: the budget test counts these. */

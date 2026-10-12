@@ -350,11 +350,11 @@ export const HOUSE_GROWN = {
     rugEdge: '#f2c14e', // TUNE
     /** Where the first residents stand, as shares of the hall's width and depth. */
     residentBand: [
-      [0.56, 0.25],
-      [0.72, 0.22],
+      [0.66, 0.3],
+      [0.8, 0.22],
       [0.8, 0.45],
       [0.8, 0.68],
-    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
+    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres

@@ -187,6 +187,8 @@ async function shoot(job) {
     frontWallAlpha: scene.frontWallAlpha,
     heroes: scene.heroes,
     facesVisible: house.faces ? `${house.faces.visible}/${house.faces.total}` : null,
+    // Residents partly off the screen's edges (should be 0: the phone's frame edge falls between them).
+    edgeCut: house.faces?.cut ?? null,
     keeper: scene.keeper,
     ...(quality?.tier === 'low' && {
       lowBudget: {

@@ -227,13 +227,15 @@ export function framedFocus(
       return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge);
     });
   };
+  // Every peek from a sliver to the whole house, nearest the usual first
+  // (round 3: two residents side by side left no gap within ±1.4 m).
   const usual = HOUSE_CAMERA.peek;
-  for (let step = 0; step <= 14; step += 1) {
-    const peek = usual + (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 2) * 0.2;
-    if (peek < 0.3) continue;
-    if (!slices(peek)) return { ...room, peek };
-  }
-  return { ...room, peek: usual };
+  const most = Math.max(bounds.maxX - room.maxX, room.minX - bounds.minX, usual);
+  const peeks: number[] = [];
+  for (let p = 0.1; p <= most + 0.05; p += 0.1) peeks.push(Math.round(p * 10) / 10);
+  peeks.sort((a, b) => Math.abs(a - usual) - Math.abs(b - usual) || a - b);
+  const clear = peeks.find((peek) => !slices(peek));
+  return { ...room, peek: clear ?? usual };
 }
 
 /**
