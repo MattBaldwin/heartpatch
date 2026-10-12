@@ -10,6 +10,9 @@ import { careApi, type CareApi } from '../../care/care-api.js';
 import { CARE_TEXT } from '../../care/care-view.js';
 import { moodHeartsEl } from '../../care/mood-hearts.js';
 import { homeApi, type HomeApi } from '../../home/home-api.js';
+import { houseApi, type HouseApi } from '../../house/house-api.js';
+import { MOVE_BACK_IN_HOURS, residentRooms, roomNameOf } from '../../house/house-residents-view.js';
+import { RESIDENT_TEXT } from '../../house/house-view.js';
 import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
 import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
@@ -50,13 +53,26 @@ import './roster.css';
 
 export interface RosterOptions {
   root: HTMLElement;
-  api?: { home?: Pick<HomeApi, 'get' | 'house'>; care?: Pick<CareApi, 'list'>; jobs?: JobsApi };
+  api?: {
+    home?: Pick<HomeApi, 'get' | 'house'>;
+    care?: Pick<CareApi, 'list'>;
+    jobs?: JobsApi;
+    keeperHouse?: Pick<HouseApi, 'moveResident'>;
+  };
   /** Opens the care sheet (a row's Care button: two taps from the home panel). */
   onCare?: (mapId: string, squishyId: string) => void;
   /** Opens the squishy in the close-up view. */
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /** Opens the close-up with Dress up already showing. */
   onDressUp?: (mapId: string, squishyId: string) => void;
+  /**
+   * The Keeper's house (#381): "Move into the house" opens the house's
+   * move-in picker on this squishy. Offered only while the house is on for
+   * the player (`HomeResponse.house`) and `canMoveIntoHouse` says the
+   * house can open from here (home open on this patch).
+   */
+  onMoveIntoHouse?: (mapId: string, home: HomeResponse, squishyId: string) => void;
+  canMoveIntoHouse?: (mapId: string) => boolean;
   /** Jobs exist on this map (not on the Tutorial Glade); without, rows go by home's job. */
   hasJobs?: (mapId: string) => boolean;
   /** The real squishy pictures (the game's 3D renderer); without them, plain blobs. */
@@ -104,6 +120,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   const homeCalls = options.api?.home ?? homeApi;
   const careCalls = options.api?.care ?? careApi;
   const jobCalls = options.api?.jobs ?? jobsApi;
+  const houseCalls = options.api?.keeperHouse ?? houseApi;
   const clock = new GameClock(options.now);
   let mapId: string | null = null;
   let home: HomeResponse | null = null;
@@ -117,6 +134,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let menu: 'sort' | 'filter' | null = null;
   /** The squishy picking a spot or Training Grounds in its detail, or null. */
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
+  /** The resident whose "Move out of the house" is asking to confirm (#381), or null. */
+  let confirmOut: string | null = null;
   let working = false;
   let ticker: number | undefined;
   /** When a landed countdown last asked for fresh views (device ms), 0 for never. */
@@ -241,6 +260,25 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       say(done);
     });
 
+  /** Moves a resident out of the Keeper's house (#381); home's tags follow the reply. */
+  const leaveHouse = (squishyId: string, name: string) =>
+    act(async (id, send) => {
+      const res = await send((key) => houseCalls.moveResident(id, squishyId, null, key));
+      if (!res) return;
+      const rooms = residentRooms(res);
+      if (home) {
+        home = {
+          ...home,
+          squishies: home.squishies.map((s) => ({
+            ...s,
+            houseRoomId: rooms.get(s.id)?.roomId ?? null,
+          })),
+        };
+      }
+      confirmOut = null;
+      say(RESIDENT_TEXT.movedOut(name));
+    });
+
   const actionContext = (current: JobsView): JobActionsContext => ({
     view: current,
     working,
@@ -349,6 +387,77 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     );
   }
 
+  /**
+   * The Keeper's house in a row's detail (#381 plan §10.7): where a resident
+   * lives with Move out (and its confirm, style guide §3.6), or Move into
+   * the house, which opens the house's picker on this squishy.
+   */
+  function houseActions(row: RosterRow, current: HomeResponse, id: string): HTMLElement | null {
+    if (!current.house) return null;
+    if (row.houseRoomId !== null) {
+      const asking = confirmOut === row.id;
+      const parts: HTMLElement[] = [
+        el(
+          'p',
+          { class: 'jobs-small roster-house-line', 'data-testid': 'roster-house-line' },
+          RESIDENT_TEXT.rosterLivesIn(roomNameOf(row.houseRoomId)),
+        ),
+      ];
+      if (asking) {
+        const yes = tapButton(RESIDENT_TEXT.moveOut, () => void leaveHouse(row.id, row.name), {
+          'data-testid': 'roster-house-out-yes',
+        });
+        const no = tapButton(
+          RESIDENT_TEXT.notNow,
+          () => {
+            confirmOut = null;
+            render();
+          },
+          { 'data-testid': 'roster-house-out-no' },
+          true,
+        );
+        yes.disabled = working;
+        parts.push(
+          el(
+            'p',
+            { class: 'roster-house-ask', 'data-testid': 'roster-house-ask' },
+            RESIDENT_TEXT.moveOutAsk(row.name, MOVE_BACK_IN_HOURS),
+          ),
+          el('div', { class: 'roster-habitat-buttons' }, yes, no),
+        );
+      } else {
+        const out = tapButton(
+          RESIDENT_TEXT.rosterMoveOut,
+          () => {
+            confirmOut = row.id;
+            render();
+          },
+          { 'data-testid': 'roster-house-out' },
+          true,
+        );
+        out.disabled = working;
+        parts.push(el('div', { class: 'roster-habitat-buttons' }, out));
+      }
+      return el('div', { class: 'roster-house', 'data-testid': 'roster-house' }, ...parts);
+    }
+    const onMove = options.onMoveIntoHouse;
+    if (!onMove || options.canMoveIntoHouse?.(id) === false) return null;
+    const go = tapButton(
+      RESIDENT_TEXT.rosterMoveIn,
+      () => {
+        onMove(id, current, row.id);
+      },
+      { 'data-testid': 'roster-house-in' },
+      true,
+    );
+    go.disabled = working;
+    return el(
+      'div',
+      { class: 'roster-house', 'data-testid': 'roster-house' },
+      el('div', { class: 'roster-habitat-buttons' }, go),
+    );
+  }
+
   /** The detail under a tapped row: the meters in words, then every action. */
   function detail(row: RosterRow): HTMLElement {
     const id = mapId;
@@ -404,6 +513,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         );
       }
       if (home && habitats(home).length > 0) parts.push(habitatActions(row, home));
+      const inHouse = home ? houseActions(row, home, id) : null;
+      if (inHouse) parts.push(inHouse);
     }
     return el('div', { class: 'roster-detail', 'data-testid': 'roster-detail' }, ...parts);
   }
@@ -529,6 +640,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     head.addEventListener('click', () => {
       expanded = open ? null : row.id;
       picking = null;
+      confirmOut = null;
       render();
     });
     const id = mapId;
@@ -717,6 +829,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     rows = [];
     expanded = null;
     picking = null;
+    confirmOut = null;
     menu = null;
     say('');
     returnFocus = null;

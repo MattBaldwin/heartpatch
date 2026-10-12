@@ -1,9 +1,17 @@
-import type { HouseView } from '@heartpatch/shared';
+import { GAME_DATA, visualRegistry, type HouseView } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from '../../engine/stage.js';
-import { sampleHouse, withGrow, type SampleGrow } from '../house-fixtures.js';
+import { heroLodFor } from '../../procedural/motion.js';
+import { createPortraits } from '../../procedural/portraits.js';
+import {
+  sampleHouse,
+  sampleMix,
+  withGrow,
+  type HouseSample,
+  type SampleGrow,
+} from '../house-fixtures.js';
 import { createHouseScreen } from '../house-screen.js';
 import '../../styles.css';
 
@@ -14,7 +22,9 @@ import '../../styles.css';
  * `?level=1` (default) up to the top level, or `top`; `?tier=high|medium|low`
  * pins a tier (the governor off, as on the main page); `?empty=1` leaves every
  * bed empty; `?still=1` skips the entry glide; `?grow=not-yet|ready` fills
- * in Grow the house (Build it! then builds the next level, no server); plus
+ * in Grow the house (Build it! then builds the next level, no server);
+ * `?beds=mix` puts residents home, away and in a trade with an empty bed
+ * and squishies outside (moving in and out works, no server); plus
  * `?renderer=webgpu`.
  */
 
@@ -29,7 +39,8 @@ const level = levelParam === 'top' ? 99 : Number(levelParam) || 1;
 const residents = params.get('empty') !== '1';
 const growParam = params.get('grow');
 const grow: SampleGrow = growParam === 'ready' ? 'ready' : 'not-yet';
-let sample = withGrow(sampleHouse(level, residents), grow);
+const mix = params.get('beds') === 'mix' ? sampleMix() : null;
+let sample: HouseSample = withGrow(mix ?? sampleHouse(level, residents), grow);
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('missing #game canvas');
@@ -71,7 +82,36 @@ const house = createHouseScreen({
       sample = withGrow(sampleHouse(toLevel, residents), 'not-yet');
       return sample.view;
     },
+    // A pretend move: in (or over) to a room, or out with the cooldown from now.
+    moveResident: async (_mapId: string, squishyId: string, roomId: string | null) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const view = sample.view;
+      const was = view.rooms.flatMap((r) => r.residents).find((r) => r.squishyId === squishyId);
+      const rooms = view.rooms.map((r) => ({
+        ...r,
+        residents: [
+          ...r.residents.filter((x) => x.squishyId !== squishyId),
+          ...(r.id === roomId ? [was ?? { squishyId, since: view.now, away: null }] : []),
+        ],
+      }));
+      const backIn = new Date(Date.parse(view.now) + 24 * 3_600_000).toISOString();
+      const cooldowns = view.cooldowns.filter((c) => c.squishyId !== squishyId);
+      if (roomId === null) cooldowns.push({ squishyId, moveBackInAt: backIn });
+      sample = { ...sample, view: { ...view, rooms, cooldowns } };
+      return sample.view;
+    },
   },
+  // The squishies' real pictures on the beds and in the picker, as main.ts draws them.
+  portraits: createPortraits({
+    engine: () => stage?.renderer.engine ?? null,
+    registry: visualRegistry(GAME_DATA),
+    lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+    invalidate: () => stage?.invalidate(),
+  }),
+  ...(mix && {
+    care: { list: () => Promise.resolve(mix.care) },
+    jobs: { view: () => Promise.reject(new Error('no jobs in the gallery')) },
+  }),
   // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });

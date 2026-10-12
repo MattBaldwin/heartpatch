@@ -1,9 +1,11 @@
 import {
   GAME_DATA,
   visualRegistry,
+  type CareListResponse,
   type CinematicShot,
   type HomeResponse,
   type HouseView,
+  type JobsView,
   type KeeperConfig,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -38,7 +40,21 @@ import {
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
 import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
-import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine } from './house-view.js';
+import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine, RESIDENT_TEXT } from './house-view.js';
+import { careApi, type CareApi } from '../care/care-api.js';
+import type { Portraits } from '../procedural/portraits.js';
+import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
+import { mergeRoster, type RosterRow } from '../squishies/roster/roster-view.js';
+import { createResidentMover } from './house-move.js';
+import { bedsPanel, moveOutPanel, pickerPanel } from './house-residents.js';
+import {
+  castKey,
+  movedLine,
+  MOVE_BACK_IN_HOURS,
+  pickerFor,
+  roomBeds,
+  roomFor,
+} from './house-residents-view.js';
 import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
@@ -73,14 +89,30 @@ export interface HouseScreenOptions {
    * player who left Home mid-fetch never gets the house over the map.
    */
   canOpen?: (mapId: string) => boolean;
+  /** The squishies' real pictures on the beds and in the picker; without, plain blobs. */
+  portraits?: Portraits;
+  /** Moods and away states for the beds and the picker (the roster's reads, #375). */
+  care?: Pick<CareApi, 'list'>;
+  jobs?: Pick<JobsApi, 'view'>;
 }
 
 /**
  * The bottom sheet (#381 plan §10.2): folded to the peek bar so the house
- * fills the screen, opened to the room line and Grow the house, the Grow
- * sheet itself, or the build's confirm.
+ * fills the screen, opened to the rooms' beds and Grow the house, the Grow
+ * sheet itself, the build's confirm, the move-in picker (C2b) or the
+ * move-out confirm.
  */
-export type HouseSheet = 'peek' | 'open' | 'grow' | 'confirm';
+export type HouseSheet = 'peek' | 'open' | 'grow' | 'confirm' | 'picker' | 'move-out';
+
+/** The sheets that are a page of their own over a dimmed house (scrim, ✕, the HUD inert). */
+const isPage = (s: HouseSheet): boolean =>
+  s === 'grow' || s === 'confirm' || s === 'picker' || s === 'move-out';
+
+/** How the house opens: from the roster's "Move into the house", straight to the picker. */
+export interface HouseOpenOptions {
+  /** The squishy the picker opens on (#375's row detail). */
+  readonly pick?: string;
+}
 
 /** Read-only state for the dev hook (Playwright asserts on it, not pixels). */
 export interface HouseDebug {
@@ -99,6 +131,10 @@ export interface HouseDebug {
   readonly building: boolean;
   /** Sparkle bursts played after builds (none under reduced motion). */
   readonly sparkles: number;
+  /** A move in or out is in flight. */
+  readonly moving: boolean;
+  /** The room the move-in picker fills, while it's open. */
+  readonly pickRoom: string | null;
   /**
    * Re-reads the house now, as opening the sheet does. Dev hook only: e2e
    * starts a read while a build is in flight (the UI can't) to prove the
@@ -110,7 +146,11 @@ export interface HouseDebug {
 export interface HouseScreen {
   setUser: (user: PublicUser | null) => void;
   /** Opens the house of this patch; the home reply says who the residents are. */
-  open: (mapId: string, home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>) => Promise<void>;
+  open: (
+    mapId: string,
+    home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>,
+    how?: HouseOpenOptions,
+  ) => Promise<void>;
   close: () => void;
   readonly isOpen: boolean;
   /** The patch whose house is open, or null (cheap: no scene stats). */
@@ -176,6 +216,29 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     build: (id, toLevel, key) => api.build(id, toLevel, key),
   });
 
+  // ── Residents (C2b) ───────────────────────────────────────────────────
+  const careCalls = options.care ?? careApi;
+  const jobCalls = options.jobs ?? jobsApi;
+  const mover = createResidentMover({
+    move: (id, squishyId, roomId, key) => api.moveResident(id, squishyId, roomId, key),
+  });
+  /** The home reply the house opened with: my squishies, for names and pictures. */
+  let homeData: Pick<HomeResponse, 'squishies' | 'speciesDefs'> | null = null;
+  /** The roster's other reads (moods, away ones), or null until they land (#375). */
+  let careRead: CareListResponse | null = null;
+  let jobsRead: JobsView | null = null;
+  /** My squishies as the roster shows them, by id. */
+  let people = new Map<string, RosterRow>();
+  /** Bumped by every people read and by closing, so a late one is dropped. */
+  let peopleTicket = 0;
+  /** When the current `view` arrived (device ms), to run its `now` forward. */
+  let viewAt = 0;
+  /** The room the picker fills, the squishy it opened on, and the opened bed chip. */
+  let pickRoom: string | null = null;
+  let pickFocus: string | null = null;
+  let chosen: string | null = null;
+  let moving = false;
+
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
   const back = el(
@@ -226,8 +289,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     e.preventDefault();
   });
   scrim.addEventListener('click', () => {
-    // While building, the confirm stays put ("Building…" can't be dismissed).
-    if (!building) setSheet('peek');
+    // While building or moving, the page stays put ("Building…" can't be dismissed).
+    if (!building && !moving) setSheet('peek');
   });
   const overlay = el(
     'div',
@@ -337,7 +400,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         return 'house-grow-close';
       case 'confirm':
         return 'house-grow-yes';
+      case 'picker':
+      case 'move-out':
+        return residentFocus(from, to);
       case 'open':
+        if (from === 'picker' || from === 'move-out') return residentFocus(from, to);
         return from === 'peek' ? null : 'house-grow-open';
       case 'peek':
         return from === 'peek' ? null : 'house-peek-handle';
@@ -376,7 +443,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function drawSheet(): void {
     const current = view;
     const open = sheet !== 'peek';
-    const growing = sheet === 'grow' || sheet === 'confirm';
+    const growing = isPage(sheet);
     peek.classList.toggle('house-peek-open', open);
     peek.classList.toggle('house-peek-grow', growing);
     handle.setAttribute('aria-expanded', String(open));
@@ -400,8 +467,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       sheetBody.replaceChildren();
       return;
     }
+    if (sheet === 'picker' || sheet === 'move-out') {
+      drawResidentPage(current);
+      return;
+    }
     if (sheet === 'open' || !next) {
       sheetBody.replaceChildren(
+        ...drawBeds(current),
         next
           ? houseButton(
               `${GROW_TEXT.openIcon} ${GROW_TEXT.open}`,
@@ -445,9 +517,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Takes a fresh house: a new level rebuilds the scene with its new room. */
   function applyView(fresh: HouseView): void {
     const grew = view !== null && fresh.level !== view.level;
+    // The scene seats residents when it's built: a move (or one home from a job) rebuilds it.
+    const recast = view !== null && castKey(fresh) !== castKey(view);
     view = fresh;
+    viewAt = Date.now();
     render();
-    if (grew) options.showScene(build);
+    if (grew || recast) options.showScene(build);
   }
 
   /** Re-reads the house (the sheet opened): requirements and the bag move all the time. */
@@ -456,6 +531,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!id) return;
     const newest = sync.begin();
     const still = () => newest() && isOpen && mapId === id;
+    void loadPeople();
     try {
       const fresh = await api.get(id);
       if (still()) applyView(fresh);
@@ -503,6 +579,183 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     focusNext = 'house-note';
     // The scene rebuilds first (a heavy frame); the sparkle waits for it.
     celebrate = outcome.view.level > fromLevel;
+    applyView(outcome.view);
+  }
+
+  // ── Residents (C2b): the beds, the picker, moving in and out ─────────
+
+  /** My squishies as the roster's rows, from the home reply and whatever reads have landed. */
+  function remergePeople(): void {
+    people = new Map(
+      homeData
+        ? mergeRoster({ home: homeData, care: careRead, jobs: jobsRead }).map((r) => [r.id, r])
+        : [],
+    );
+  }
+
+  /** Reads moods and away states (the roster's reads) for the beds and the picker; best effort. */
+  async function loadPeople(): Promise<void> {
+    const id = mapId;
+    if (!id) return;
+    peopleTicket += 1;
+    const mine = peopleTicket;
+    const [c, j] = await Promise.allSettled([careCalls.list(id), jobCalls.view(id)]);
+    if (mine !== peopleTicket || !isOpen || mapId !== id) return;
+    if (c.status === 'fulfilled') careRead = c.value;
+    if (j.status === 'fulfilled') jobsRead = j.value;
+    remergePeople();
+    if (sheet !== 'peek') renderSheet();
+  }
+
+  /** The server's clock now, run forward from the house reply (for "Back in 5 h"). */
+  const serverNow = (): number =>
+    (view ? Date.parse(view.now) : Date.now()) + (viewAt ? Date.now() - viewAt : 0);
+
+  /** Where focus goes when a resident page opens or closes. */
+  function residentFocus(from: HouseSheet, to: HouseSheet): string | null {
+    if (to === 'picker') return 'house-picker-close';
+    if (to === 'move-out') return 'house-move-out-yes';
+    // Back on the beds: the room the page was about.
+    const room =
+      from === 'picker'
+        ? pickRoom
+        : view?.rooms.find((r) => r.residents.some((x) => x.squishyId === chosen))?.id;
+    return room ? `house-room-${room}` : 'house-grow-open';
+  }
+
+  /** The open sheet's beds, room by room. */
+  function drawBeds(current: HouseView): HTMLElement[] {
+    return bedsPanel(
+      roomBeds(current, people),
+      chosen,
+      moving,
+      {
+        onMoveIn: (roomId) => {
+          openPicker(roomId, null);
+        },
+        onChoose: (squishyId) => {
+          chosen = chosen === squishyId ? null : squishyId;
+          note = '';
+          renderSheet();
+        },
+        onMoveOut: (squishyId) => {
+          chosen = squishyId;
+          setSheet('move-out');
+        },
+      },
+      options.portraits,
+    );
+  }
+
+  /** The picker or the move-out confirm, a page of its own like Grow. */
+  function drawResidentPage(current: HouseView): void {
+    let parts: HTMLElement[];
+    if (sheet === 'picker') {
+      const picker = pickRoom
+        ? pickerFor(current, pickRoom, [...people.values()], serverNow())
+        : null;
+      if (!picker) {
+        sheet = 'open';
+        drawSheet();
+        return;
+      }
+      parts = pickerPanel(
+        picker,
+        moving,
+        pickFocus,
+        {
+          onPick: (squishyId) => void moveSquishy(squishyId, picker.room.id),
+          onClose: () => {
+            setSheet('open');
+          },
+        },
+        options.portraits,
+      );
+    } else {
+      const who = chosen;
+      const name = who ? nameOf(who) : '';
+      if (!who) {
+        sheet = 'open';
+        drawSheet();
+        return;
+      }
+      parts = moveOutPanel(name, RESIDENT_TEXT.moveOutAsk(name, MOVE_BACK_IN_HOURS), moving, {
+        onYes: () => void moveSquishy(who, null),
+        onNo: () => {
+          setSheet('open');
+        },
+      });
+    }
+    const [header, ...rest] = parts;
+    // The header goes above the note line, so the live region never moves.
+    if (header) {
+      head = header;
+      peek.insertBefore(header, noteLine);
+    }
+    sheetBody.replaceChildren(...rest);
+  }
+
+  /** A squishy's name as the roster says it. */
+  const nameOf = (squishyId: string): string => people.get(squishyId)?.name ?? 'Your squishy';
+
+  /** Opens the picker for a room, on one squishy's row when the roster sent it. */
+  function openPicker(roomId: string, focus: string | null): void {
+    pickRoom = roomId;
+    pickFocus = focus;
+    chosen = null;
+    setSheet('picker');
+    if (focus) focusPickRow(focus);
+  }
+
+  /** Puts focus on one picker row and scrolls it into view (opened from the roster). */
+  function focusPickRow(squishyId: string): void {
+    const row = [...peek.querySelectorAll<HTMLElement>('.house-pick')].find(
+      (b) => b.dataset['squishy'] === squishyId,
+    );
+    if (!row) return;
+    row.focus({ preventScroll: true });
+    row.scrollIntoView({ block: 'nearest' });
+  }
+
+  /**
+   * One tap in the picker (a room) or on Move out (null): one move, then the
+   * house it replies with (the scene seats the resident), or the server's
+   * kind word. Like a build, it drops every read in flight.
+   */
+  async function moveSquishy(squishyId: string, roomId: string | null): Promise<void> {
+    const id = mapId;
+    if (!id || moving) return;
+    const name = nameOf(squishyId);
+    moving = true;
+    sync.drop(); // the move's reply is newer than any read in flight
+    note = '';
+    renderSheet();
+    const outcome = await mover.move(id, squishyId, roomId, () => isOpen && mapId === id);
+    moving = false;
+    if (!isOpen || mapId !== id) return;
+    if (outcome.kind === 'dropped') {
+      renderSheet();
+      return;
+    }
+    if (outcome.kind === 'failed') {
+      // The picker stays up with the server's kind word; a move-out goes back to the beds.
+      if (sheet === 'move-out') sheet = 'open';
+      note = outcome.message;
+      noteKind = 'calm';
+      focusNext = 'house-note';
+      renderSheet();
+      // Who can come may have moved (another device, a trade, the Hollow).
+      void refresh();
+      return;
+    }
+    // A read sent while moving may land after this reply: drop it.
+    sync.drop();
+    if (sheet !== 'peek') sheet = 'open';
+    note = roomId ? movedLine(outcome.view, name, roomId) : RESIDENT_TEXT.movedOut(name);
+    noteKind = 'ok';
+    focusNext = 'house-note';
+    chosen = null;
+    pickFocus = null;
     applyView(outcome.view);
   }
 
@@ -681,11 +934,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   );
   window.addEventListener('keydown', (e) => {
     if (!isOpen || e.key !== 'Escape') return;
-    // While building, the confirm stays put ("Building…" can't be dismissed).
-    if (building && sheet !== 'peek') return;
+    // While building or moving, the page stays put ("Building…" can't be dismissed).
+    if ((building || moving) && sheet !== 'peek') return;
     // Escape steps back one sheet at a time, then leaves the house.
     if (sheet === 'confirm') setSheet('grow');
-    else if (sheet === 'grow') setSheet('open');
+    else if (sheet === 'grow' || sheet === 'picker' || sheet === 'move-out') setSheet('open');
     else if (sheet === 'open') setSheet('peek');
     else close();
   });
@@ -728,6 +981,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   async function open(
     id: string,
     home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>,
+    how: HouseOpenOptions = {},
   ): Promise<void> {
     if (isOpen) return;
     await gate.open(
@@ -735,6 +989,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       (fresh) => {
         if (isOpen || options.canOpen?.(id) === false) return;
         show(id, fresh, home);
+        openOn(how);
       },
       (err) => {
         options.onProblem(messageOf(err));
@@ -762,6 +1017,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     note = '';
     foldedBand = 0;
     celebrate = false;
+    resetResidents(home);
     isOpen = true;
     options.onOpen(id);
     render();
@@ -782,7 +1038,27 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     note = '';
     sync.drop();
     celebrate = false;
+    resetResidents(null);
     render();
+  }
+
+  /** Residents (C2b): a fresh start for the beds and the picker on every open and close. */
+  function resetResidents(home: Pick<HomeResponse, 'squishies' | 'speciesDefs'> | null): void {
+    homeData = home;
+    careRead = null;
+    jobsRead = null;
+    peopleTicket += 1;
+    viewAt = Date.now();
+    pickRoom = null;
+    pickFocus = null;
+    chosen = null;
+    remergePeople();
+  }
+
+  /** Opened from the roster's "Move into the house": straight to the picker, on that squishy. */
+  function openOn(how: HouseOpenOptions): void {
+    const room = how.pick && view ? roomFor(view) : null;
+    if (how.pick && room) openPicker(room, how.pick);
   }
 
   function close(): void {
@@ -824,6 +1100,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         sheet,
         building,
         sparkles,
+        moving,
+        pickRoom: sheet === 'picker' ? pickRoom : null,
         reread: () => {
           void refresh();
         },

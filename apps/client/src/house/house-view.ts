@@ -1,4 +1,10 @@
-import { capacityAt, HOUSE_DATA, type HomeResponse, type HouseView } from '@heartpatch/shared';
+import {
+  capacityAt,
+  HOUSE_DATA,
+  type HomeResponse,
+  type HouseView,
+  type ResidentAway,
+} from '@heartpatch/shared';
 
 /*
  * What the house screen and the home's house card say (#381 plan §10),
@@ -76,6 +82,58 @@ export const GROW_TEXT = {
   builtFinal: (room: string) => `Ta-da! ${room} is ready. Your house is all grown! ✨`,
   done: 'Done',
   toDo: 'Not yet',
+} as const;
+
+/*
+ * Residents (#381 plan §10.2–10.3, Q5): the open sheet's beds, the move-in
+ * picker and moving out. The server decides who may move in and says why
+ * not; these are only the words the client shows around its replies.
+ */
+const hours = (n: number) => `${String(n)}\u00A0h`;
+
+export const RESIDENT_TEXT = {
+  /** The open sheet's heading over a room's beds: "The Snug · 1 of 2 beds". */
+  beds: (room: string, used: number, all: number) => `${room} · ${String(used)} of ${beds(all)}`,
+  /** An empty bed's chip. */
+  moveIn: 'Move in',
+  moveInIcon: '+',
+  /** Why a resident isn't in its bed right now (`HouseResident.away`). */
+  away: {
+    gathering: 'Out gathering 🧺',
+    guarding: 'On watch 🛡️',
+    training: 'Training 🎯',
+    hollow: 'In the Hollow',
+    'in-trade': 'Waiting at the post 📬',
+  } satisfies Record<ResidentAway, string>,
+  /** A resident at home, while its mood is still loading. */
+  home: 'Home 🏠',
+  /** The picker's eyebrow and title. */
+  pickerEyebrow: 'Move in',
+  pickerTitle: (room: string) => `Who moves into ${room}?`,
+  /** Beds left in the picked room. */
+  free: (n: number) => `${beds(n)} free`,
+  full: (room: string) => `${room} is full! Move someone out first.`,
+  /** A picker row: lives in another room (a tap moves it over). */
+  livesIn: (room: string) => `Lives in ${room}`,
+  livesHere: 'Lives here',
+  /** Picker rows that can't come, and why (the server checks again). */
+  cantCooldown: (h: number) => `Back in ${hours(h)}`,
+  noOne: 'No squishies yet. Befriend one on the map!',
+  moving: 'Moving in…',
+  moved: (name: string, room: string) => `${name} moved into ${room}! 🏠`,
+  /** A resident's bed chip, opened. */
+  moveOut: 'Move out',
+  /** The move-out confirm (style guide §3.6), with the cooldown from data. */
+  moveOutAsk: (name: string, h: number) =>
+    `Move ${name} out? They can move back in after ${hours(h)}.`,
+  movingOut: 'Moving out…',
+  movedOut: (name: string) => `${name} moved out. See you soon! 👋`,
+  notNow: 'Not now',
+  close: 'Close',
+  /** The roster row's detail (#375). */
+  rosterMoveIn: '🏠 Move into the house',
+  rosterMoveOut: '👋 Move out of the house',
+  rosterLivesIn: (room: string) => `🏠 Lives in ${room}`,
 } as const;
 
 /**
