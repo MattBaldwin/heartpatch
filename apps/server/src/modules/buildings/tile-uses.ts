@@ -114,8 +114,15 @@ export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Prom
  * (home vs out on the land), or a squishy gathering on a tile out on the
  * land with a building. A cheap scan; each one's plan decides.
  */
-export async function listTileUseOwners(db: Executor): Promise<TileUseOwner[]> {
-  const { rows, working } = await createBuildingsRepo(db).scanTileUses();
+export async function listTileUseOwners(
+  db: Executor,
+  mapIds?: readonly string[],
+): Promise<TileUseOwner[]> {
+  const scan = await createBuildingsRepo(db).scanTileUses();
+  // Tests tidy only their own patches (they share one database).
+  const keep = (row: { mapId: string }) => !mapIds || mapIds.includes(row.mapId);
+  const rows = scan.rows.filter(keep);
+  const working = scan.working.filter(keep);
   const owners = new Map<string, TileUseOwner>();
   const perTile = new Map<string, number>();
   for (const row of rows) perTile.set(row.tileId, (perTile.get(row.tileId) ?? 0) + 1);
@@ -151,12 +158,14 @@ export async function relayoutTileUses(
   clock: Clock,
   onError: (owner: TileUseOwner, err: unknown) => void,
   onTidied: (owner: TileUseOwner, done: Omit<TileUsesTidied, 'players'>) => void = () => {},
+  /** Only these maps (tests, which share one database); every map when left out. */
+  mapIds?: readonly string[],
 ): Promise<TileUsesTidied> {
   let players = 0;
   let moved = 0;
   let packed = 0;
   let stopped = 0;
-  for (const owner of await listTileUseOwners(db)) {
+  for (const owner of await listTileUseOwners(db, mapIds)) {
     try {
       const done = await tidyOne(db, clock, owner);
       if (done.moved + done.packed + done.stopped === 0) continue;

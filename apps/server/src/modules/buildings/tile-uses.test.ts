@@ -17,9 +17,8 @@ import { planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
 
 /*
  * One building per tile (#295): the boot pass that tidies patches built
- * under the old rules, its dry run, and its morning-report note. The pass
- * scans every patch in the database (other tests' too), so each test checks
- * only its own patch's rows and events.
+ * under the old rules, its dry run, and its morning-report note. Each test
+ * runs the pass on its own patch only: test files share one database.
  */
 
 const url = inject('testDatabaseUrl');
@@ -158,12 +157,15 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     return plot;
   }
 
-  const pass = async () => {
+  /** The pass, on this test's patch only (test files share one database). */
+  const pass = async (mapId: string) => {
     const errors: unknown[] = [];
     await relayoutTileUses(
       db,
       () => clock,
       (_owner, err) => errors.push(err),
+      () => undefined,
+      [mapId],
     );
     expect(errors).toEqual([]);
   };
@@ -204,7 +206,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       ].sort(),
     );
 
-    await pass();
+    await pass(mapId);
     const after = await rowsOf(mapId);
     expect(after.map((r) => r.id).sort()).toEqual([den, meadow, factory, meadow2].sort());
     // The oldest on each tile stays; the others are now alone on home tiles.
@@ -221,7 +223,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     expect(note?.at).toBe(clock.toISOString());
 
     // Run again: nothing left to do here.
-    await pass();
+    await pass(mapId);
     expect(await eventsOf(mapId)).toHaveLength(events.length);
   });
 
@@ -261,7 +263,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       ])
       .returning({ id: squishies.id });
 
-    await pass();
+    await pass(mapId);
     const after = await rowsOf(mapId);
     expect(after.find((r) => r.id === fire)?.tileId).toBe(plot.id);
     expect(after.find((r) => r.id === grounds)).toMatchObject({ tileId: spare.id, spot: 1 });
@@ -310,7 +312,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       })
       .returning({ id: squishies.id });
 
-    await pass();
+    await pass(mapId);
     expect((await rowsOf(mapId)).find((r) => r.id === grounds)).toBeUndefined();
     expect(
       await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, trainee!.id) }),
@@ -339,7 +341,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     const plot = await makeHomestead(db, mapId, kid.id, clock, 0);
     await db.execute(`update tiles set node_resource = 'stone' where id = '${plot.id}'`);
     const grounds = await old(mapId, kid, 'training-grounds', 'training-grounds', plot.id, 1, 3);
-    await pass();
+    await pass(mapId);
     expect((await rowsOf(mapId)).find((r) => r.id === grounds)?.tileId).toBe(plot.id);
     expect(await noteOf(server, kid, mapId)).toBeNull();
   });

@@ -179,6 +179,13 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       `update tiles set node_resource = ${node === null ? 'null' : `'${node}'`} where id = '${tileId}'`,
     );
 
+  /** A homestead with no resource spot, so a building can go up without clearing it (#295). */
+  async function openHomestead(mapId: string, who: Player, nth = 0) {
+    const plot = await makeHomestead(db, mapId, who.id, clock, nth);
+    await setNode(plot.id, null);
+    return plot;
+  }
+
   /**
    * Captured land for fires (#202: Hearthfires stand only out there, owner
    * decision 2026-10-07): `count` neutral outer tiles with a free middle,
@@ -952,7 +959,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
       // On a homestead (owner decision 4 on #277).
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,
@@ -1052,7 +1059,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,
@@ -1101,7 +1108,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const plot = await openHomestead(mapId, kid);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
         q: plot.q,
