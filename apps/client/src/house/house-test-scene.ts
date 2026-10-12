@@ -30,8 +30,19 @@ export function buildHouse(
   level: number,
   tier: QualityTier,
   sample: HouseSample = sampleHouse(level),
+  /** The canvas in px (projections and face checks follow it), NullEngine's default if left out. */
+  canvas?: { width: number; height: number },
 ): { scene: Scene; house: HouseScene } {
-  const scene = new Scene(new NullEngine());
+  const engine = canvas
+    ? new NullEngine({
+        renderWidth: canvas.width,
+        renderHeight: canvas.height,
+        textureSize: 256,
+        deterministicLockstep: false,
+        lockstepMaxSteps: 1,
+      })
+    : new NullEngine();
+  const scene = new Scene(engine);
   // The stage's key light (setupLighting's sky texture needs a GPU).
   new DirectionalLight('sun', new Vector3(-0.45, -1, 0.6), scene);
   const house = new HouseScene(scene, sample.view, {

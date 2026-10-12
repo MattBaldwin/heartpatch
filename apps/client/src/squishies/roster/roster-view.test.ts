@@ -216,17 +216,14 @@ describe('evolutionStage', () => {
     });
   });
 
-  // #443: a kid is stage 2, and a line without its kid yet still counts 2.
-  it('counts a kid, and a line that has no kid yet', () => {
+  // #443: a kid is stage 2. A wave-1 kind has no stages yet: stage 1 of 1.
+  it('counts a kid, and a kind that has no kid yet', () => {
     expect(evolutionStage('rippletad', 18, { percent: 20, levelsToGo: 6 })).toMatchObject({
       stage: 2,
       of: 3,
       evolvesAt: 24,
     });
-    expect(evolutionStage('nookling', 5, { percent: 0, levelsToGo: 13 })).toMatchObject({
-      stage: 1,
-      of: 2,
-    });
+    expect(evolutionStage('lilyhop', 5, null)).toMatchObject({ stage: 1, of: 1 });
   });
 
   it('says ready at 100%', () => {
