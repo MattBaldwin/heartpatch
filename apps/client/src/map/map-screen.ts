@@ -99,7 +99,6 @@ export interface TileActions {
   hide: () => void;
 }
 
-/** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 /** The middle of a screen rect, or null when there is none. */
 function homeNodeMiddle(
   rect: { x: number; y: number; width: number; height: number } | null,
@@ -107,6 +106,7 @@ function homeNodeMiddle(
   return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
 }
 
+/** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface MapDebug extends MapSceneStats {
   readonly id: string;
   /** The seq of the last map view fetched (live events move on from there). */

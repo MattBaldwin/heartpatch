@@ -37,19 +37,28 @@ const bagState = (page: Page) => hook<InventoryDebug>(page, 'inventory');
 const watchToast = (page: Page) =>
   page.evaluate(() => {
     const el = document.querySelector('[data-testid="landed-toast"]');
-    const seen = window as unknown as { toastSeen: boolean };
+    const seen = window as unknown as { toastSeen: boolean; toastText: string };
     seen.toastSeen = false;
+    seen.toastText = '';
     new MutationObserver(() => {
-      if (el && !el.hasAttribute('hidden') && el.textContent !== '') seen.toastSeen = true;
+      if (el && !el.hasAttribute('hidden') && el.textContent !== '') {
+        seen.toastSeen = true;
+        seen.toastText = el.textContent;
+      }
     }).observe(el!, { attributes: true, childList: true, characterData: true, subtree: true });
   });
-/** Waits for the toast `watchToast` is watching to have shown. */
-const expectToastShown = (page: Page) =>
+/** Waits for the toast `watchToast` is watching to have shown, with `text` in it. */
+const expectToastShown = (page: Page, text = '') =>
   expect
-    .poll(() => page.evaluate(() => (window as unknown as { toastSeen: boolean }).toastSeen), {
-      timeout: 30_000,
-    })
-    .toBe(true);
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const seen = window as unknown as { toastSeen: boolean; toastText: string };
+          return seen.toastSeen ? seen.toastText : null;
+        }),
+      { timeout: 30_000 },
+    )
+    .toContain(text);
 const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
 const itemTotal = (items: Record<string, number>) =>
   Object.values(items).reduce((a, b) => a + b, 0);
@@ -78,7 +87,6 @@ async function tapOwnNode(page: Page): Promise<void> {
   // camera's arrival glide over (both slow under software rendering in CI).
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
   const panel = page.getByTestId('tile-panel');
-  const box = (await page.locator('#game').boundingBox())!;
   const nodeAt = () =>
     hook<{ homeNode: { x: number; y: number } | null }>(page, 'map').then(
       (m) => m?.homeNode ?? null,
@@ -94,7 +102,7 @@ async function tapOwnNode(page: Page): Promise<void> {
     }
     const at = await nodeAt();
     expect(at, 'our home node is on screen').not.toBeNull();
-    await realTapAt(page, box.x + at!.x, box.y + at!.y);
+    await realTapAt(page, at!.x, at!.y);
     await expect
       .poll(async () => (await bagState(page))?.tileAction, { timeout: 5_000 })
       .toBe('gather');
@@ -191,7 +199,6 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   const mapId = await onAPatch(page, 'Collect Patch');
   const panel = page.getByTestId('tile-panel');
   const bag = page.getByTestId('bag');
-  const toast = page.getByTestId('landed-toast');
 
   // Gather on one of our nodes: one tap starts it.
   await tapOwnNode(page);
@@ -205,9 +212,9 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   // timer doesn't know): opening the Bag settles, and it lands with a pop-up.
   // No Collect anywhere (owner decision 2026-10-06).
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
+  await watchToast(page);
   await realTap(await inTray(page, 'bag-open'));
-  await expect(toast).toBeVisible();
-  await expect(toast).toContainText('+');
+  await expectToastShown(page, '+');
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(0);
   const afterTile = itemTotal((await bagState(page))!.items);
   expect(afterTile).toBeGreaterThan(before);
