@@ -811,8 +811,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const fullXpAt = b.rewards?.fullXpResetAt;
     const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
     if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
-    // A rare friend, or a first of its kind: the card celebrates (#391). Not on a replay.
-    const cheer = replaying ? null : cheerFor(b, names.species);
+    // A rare friend, or a first of its kind: the card celebrates (#391). (Replays left above.)
+    const cheer = cheerFor(b, names.species);
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
     const nudge =
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
