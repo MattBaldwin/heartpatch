@@ -631,10 +631,10 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
   });
 
-  it("won't make a clearing tool before the clear sheet ships (#295 PR 3)", async () => {
+  it('makes a clearing tool from the recipe book now the clear sheet has shipped (#295 PR 3)', async () => {
     const { server, kid, mapId } = await forestHomestead();
     await give(mapId, kid, { timber: 10, stone: 10 });
     const res = await call(server, 'POST', `/maps/${mapId}/crafts`, kid, { recipeId: 'axe' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode, res.body).toBe(201);
   });
 });

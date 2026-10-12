@@ -1,8 +1,10 @@
 import type { ItemCounts } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import { iconNode } from '../ui/line-icons.js';
 import {
   BUILD_TEXT,
   buildStatus,
+  cardTappable,
   detailLine,
   pickCard,
   type BuildCard,
@@ -89,13 +91,18 @@ export function createBuildSheet(): BuildSheet {
               type: 'button',
               class: `build-card${off ? ' build-card-off' : ''}`,
               'aria-pressed': on ? 'true' : 'false',
+              ...(off ? { 'aria-disabled': 'true' } : {}),
               'data-testid': 'build-card',
               'data-build': card.id,
             },
-            el('span', { class: 'build-card-icon', 'aria-hidden': 'true' }, card.icon),
+            el(
+              'span',
+              { class: 'build-card-icon', 'aria-hidden': 'true' },
+              iconNode(card.icon, 'build-card-line-icon'),
+            ),
             el('span', { class: 'build-card-name' }, card.name),
           );
-          b.disabled = props.working || off;
+          b.disabled = !cardTappable(props.working);
           b.addEventListener('click', () => {
             props.onSelect(card.id);
           });

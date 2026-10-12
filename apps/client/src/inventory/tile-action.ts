@@ -3,6 +3,7 @@ import {
   GAME_DATA,
   gatherYield,
   inSeason,
+  type Clearing,
   type Gather,
   type ItemCounts,
   type PublicTile,
@@ -25,7 +26,9 @@ export type TileAction =
   /** Your seasonal node, sleeping until its season. */
   | { readonly kind: 'sleeping'; readonly note: string }
   /** Someone else's node, being gathered. */
-  | { readonly kind: 'busy'; readonly readyAt: string };
+  | { readonly kind: 'busy'; readonly readyAt: string }
+  /** The land is being cleared (#242): cleared land at `readyAt`. */
+  | { readonly kind: 'clearing'; readonly readyAt: string };
 
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
@@ -33,9 +36,18 @@ const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 export function tileAction(
   tile: PublicTile,
   me: string | null,
-  state: { gathers: readonly Gather[]; seasons: readonly string[] },
+  state: {
+    gathers: readonly Gather[];
+    seasons: readonly string[];
+    clears?: readonly Pick<Clearing, 'q' | 'r' | 'readyAt'>[];
+  },
   now: number,
 ): TileAction {
+  // Clearing takes the tile's spot away, so nothing's gathered meanwhile (#242).
+  // My own shows straight away, before the map hears of it.
+  const clearing =
+    tile.clearing ?? state.clears?.find((c) => c.q === tile.q && c.r === tile.r) ?? null;
+  if (clearing) return { kind: 'clearing', readyAt: clearing.readyAt };
   const resource = tile.nodeResource ? RESOURCES.get(tile.nodeResource) : undefined;
   if (!resource?.gather) return { kind: 'none' };
   // A seasonal home node isn't there out of season (owner decision 2026-10-06).

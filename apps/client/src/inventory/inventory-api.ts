@@ -1,9 +1,11 @@
 import {
+  ClearResponseSchema,
   CraftResponseSchema,
   GatherResponseSchema,
   InventoryResponseSchema,
   ItemsResponseSchema,
   SettleResponseSchema,
+  type ClearResponse,
   type CraftResponse,
   type GatherResponse,
   type InventoryResponse,
@@ -32,6 +34,15 @@ export const inventoryApi = {
       method: 'POST',
       body: at,
       schema: GatherResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Starts clearing this homestead of mine (#242), with one use of its tool. */
+  clear: (mapId: string, at: { q: number; r: number }, key: string): Promise<ClearResponse> =>
+    apiCallFor(`/maps/${mapId}/clears`, {
+      method: 'POST',
+      body: at,
+      schema: ClearResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 

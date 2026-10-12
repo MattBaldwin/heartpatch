@@ -430,6 +430,10 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     const home = homeWith({ buildings: [outer], items: { timber: 5, stone: 2 } });
     const tile = { q: 3, r: 0, nodeResource: null, buildings: [{ spot: 0 }] };
     expect(landTileOffer(tile, home)).toEqual({ kind: 'fire', fire: outer });
+    // One building a tile (#295): someone else's building there leaves no room.
+    expect(landTileOffer({ ...tile, q: 4, buildings: [{ spot: 2 }] }, home)).toEqual({
+      kind: 'none',
+    });
     const empty = landTileOffer({ ...tile, q: 4, buildings: [] }, home);
     expect(empty).toMatchObject({ kind: 'build', building: { id: 'hearthfire' } });
     expect(empty.kind === 'build' && empty.needs.map((n) => n.ok)).toEqual([true, false]);
@@ -465,6 +469,7 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
   const tile = (extra: Partial<{ homestead: 'joined' | 'paused' | null; q: number }> = {}) => ({
     q: 3,
     r: 1,
+    terrain: 'forest',
     nodeResource: 'timber',
     homestead: 'joined' as const,
     buildings: [{ spot: 0 }],
@@ -481,11 +486,19 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
     });
   });
 
-  it('offers to build them on a homestead, on its first free ring spot', () => {
+  it('offers to build them on an empty homestead, once its spot is cleared (#295)', () => {
     const home = homeWith({ items: { timber: 8, stone: 1 } });
-    const offer = groundsTileOffer({ ...tile(), buildings: [{ spot: 0 }, { spot: 1 }] }, home);
-    expect(offer).toMatchObject({ kind: 'build', building: { id: 'training-grounds' }, spot: 2 });
+    const offer = groundsTileOffer({ ...tile(), nodeResource: null, buildings: [] }, home);
+    expect(offer).toMatchObject({ kind: 'build', building: { id: 'training-grounds' } });
     expect(offer?.kind === 'build' && offer.needs.map((n) => n.ok)).toEqual([true, false]);
+    // A resource spot is cleared first (#242); one building a tile (#295).
+    expect(groundsTileOffer({ ...tile(), buildings: [] }, home)).toMatchObject({
+      kind: 'clear-first',
+      building: { id: 'training-grounds' },
+    });
+    expect(groundsTileOffer({ ...tile(), nodeResource: null }, home)).toBeNull();
+    // Land no tool clears (owner Q5) keeps its spot: nothing to wait for.
+    expect(groundsTileOffer({ ...tile(), terrain: 'old-forest', buildings: [] }, home)).toBeNull();
     // Not on land that isn't a homestead; nothing new on a napping one.
     expect(groundsTileOffer(tile({ homestead: null }), home)).toBeNull();
     expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({ kind: 'napping' });

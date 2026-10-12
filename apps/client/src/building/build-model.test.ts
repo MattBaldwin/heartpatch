@@ -4,6 +4,7 @@ import {
   BUILD_TEXT,
   buildStatus,
   buildTotal,
+  cardTappable,
   detailLine,
   pickCard,
   times,
@@ -75,5 +76,27 @@ describe('the first card you can pay for (#371)', () => {
     expect(pickCard([fire, hedge], null, { greens: 9 })?.id).toBe('hedge');
     // A tapped card stays picked, whatever the bag says.
     expect(pickCard([fire, hedge], 'fire', { greens: 9 })?.id).toBe('fire');
+  });
+});
+
+describe('a blocked card says why (review of #450)', () => {
+  it('stays tappable beside cards that work, and a tap shows its reason with Build! off', () => {
+    const blocked = card({
+      id: 'clear-land',
+      area: 'spot',
+      cost: { axe: 1 },
+      blocked: "You're gathering here. Let it finish first!",
+    });
+    const cards = [blocked, card()];
+    // The sheet lands on the fence the bag can pay for…
+    expect(pickCard(cards, null, { greens: 9, axe: 1 })?.id).toBe('hedge');
+    // …and the blocked card can still be tapped (only a build in flight stops taps).
+    expect(cardTappable(false)).toBe(true);
+    expect(cardTappable(true)).toBe(false);
+    const tapped = pickCard(cards, 'clear-land', { greens: 9, axe: 1 })!;
+    expect(buildStatus(tapped, { axe: 1 }, 1)).toEqual({
+      kind: 'blocked',
+      note: "You're gathering here. Let it finish first!",
+    });
   });
 });
