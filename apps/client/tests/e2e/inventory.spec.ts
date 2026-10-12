@@ -35,8 +35,8 @@ function bagState(page: Page): Promise<InventoryDebug | null> {
  * is up for 4 s, and a loaded runner can take longer than that to get from a look to a tap. An
  * init script, so it is also there after the reload the landing follows.
  */
-function watchBanner(page: Page): Promise<void> {
-  return page.addInitScript(() => {
+async function watchBanner(page: Page): Promise<void> {
+  await page.addInitScript(() => {
     const w = window as unknown as { bannerSeen: unknown };
     w.bannerSeen = null;
     new MutationObserver(() => {
