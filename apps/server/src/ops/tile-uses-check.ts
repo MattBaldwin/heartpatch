@@ -5,13 +5,16 @@
 // Locally: pnpm --filter @heartpatch/server tile-uses:check
 //
 // Prints one line per player the pass would change (what moves where, what
-// comes down, which gatherers stop), then the totals.
+// comes down, which gatherers stop), then the totals. `--totals` prints only
+// the totals line (no ids at all): the line the dry-run workflow posts on a PR.
+import { parseArgs } from 'node:util';
 import { pino } from 'pino';
 import { loadConfig } from '../config.js';
 import { createDbClient } from '../db/client.js';
 import { listTileUseOwners, planOwnerTileUses, tidies } from '../modules/buildings/tile-uses.js';
 
 const log = pino({ name: 'ops' });
+const { values } = parseArgs({ options: { totals: { type: 'boolean', default: false } } });
 
 const config = loadConfig();
 const client = createDbClient(config.DATABASE_URL, { max: 1 });
@@ -50,7 +53,7 @@ try {
   }
   process.stdout.write(
     [
-      ...lines,
+      ...(values.totals ? [] : lines),
       `tile-use dry run: ${String(owners.length)} players scanned, ${String(players)} would change: ` +
         `${String(moved)} moved, ${String(packed)} packed, ${String(stopped)} gatherers stopped.`,
       '',
