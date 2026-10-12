@@ -57,6 +57,19 @@ describe('wave 1 (#382)', () => {
     }
   });
 
+  // #443 §5: like the launch lines, the kid keeps its kind's rarity and the
+  // teen is exactly one step up.
+  it('makes each teen one rarity above its kind', () => {
+    const order = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+    const byId = new Map(SPECIES.map((s) => [s.id, s]));
+    for (const kind of KINDS) {
+      const kid = byId.get(kind.evolutions[0]!.into)!;
+      const teen = byId.get(kid.evolutions[0]!.into)!;
+      expect(kid.rarity, kid.id).toBe(kind.rarity);
+      expect(order.indexOf(teen.rarity), teen.id).toBe(order.indexOf(kind.rarity) + 1);
+    }
+  });
+
   it('spawns only in its biome tables: terrain-tied, any season, any time of day', () => {
     expect(tables.length).toBeGreaterThan(0);
     for (const t of tables) {

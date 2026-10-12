@@ -62,8 +62,9 @@ describe('launch roster (issue #10)', () => {
 
   // #443: a kid sits between the baby and its teens, at the baby's old
   // evolution level, and keeps everything but its size and stats.
+  // Wave-1 kinds (#382) are lines now too: the same kid and teen checks apply.
   it('gives every converted line a kid that keeps its baby’s rarity, element, feeling and season', () => {
-    const kids = bases.flatMap((base) => {
+    const kids = [...bases, ...standalone].flatMap((base) => {
       const kid = kidOf(base);
       return kid ? [{ base, kid }] : [];
     });
@@ -89,7 +90,7 @@ describe('launch roster (issue #10)', () => {
   });
 
   it('gives every line a default evolution that keeps its element, feeling and season', () => {
-    for (const base of bases) {
+    for (const base of [...bases, ...standalone]) {
       expect(base.evolutions.length, base.id).toBeGreaterThanOrEqual(1);
       const evolved = evolvedFormOf(base);
       expect(evolved.evolutions, evolved.id).toEqual([]);
