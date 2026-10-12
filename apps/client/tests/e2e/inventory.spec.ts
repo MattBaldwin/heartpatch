@@ -188,11 +188,12 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   // Roomy: the settle is one round trip, slow under a full CI run.
-  await expect.poll(() => bannerSeen(page), { timeout: 30_000 }).not.toBeNull();
+  await expect
+    .poll(async () => (await bannerSeen(page))?.text ?? '', { timeout: 30_000 })
+    .toContain('Heart Charm');
   // Two kinds: the banner (not the one-thing pill), and on a plain map it takes
   // taps (shut trays don't count as open sheets).
   const seen = (await bannerSeen(page))!;
-  expect(seen.text).toContain('Heart Charm');
   expect(seen.className).not.toMatch(/away-one|away-quiet/);
   expect(seen.pointerEvents).not.toBe('none');
   await page.getByTestId('landed-toast').dispatchEvent('click');
