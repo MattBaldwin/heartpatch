@@ -1,4 +1,9 @@
-import { BuildHouseRequestSchema, HouseViewSchema, MapIdParamsSchema } from '@heartpatch/shared';
+import {
+  BuildHouseRequestSchema,
+  HouseViewSchema,
+  MapIdParamsSchema,
+  MoveResidentRequestSchema,
+} from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
 import { playerRateLimit } from '../../lib/rate-limit.js';
@@ -15,8 +20,10 @@ export interface HouseRoutesOptions {
 
 /**
  * The Keeper's house (#381): `GET /maps/:mapId/house` (my house and what the
- * next level needs) and `POST /maps/:mapId/house/build` (build the next
- * level; `Idempotency-Key`). NOT_FOUND while `HP_HOUSE` is off for the player.
+ * next level needs), `POST /maps/:mapId/house/build` (build the next
+ * level) and `POST /maps/:mapId/house/residents` (move a squishy in, to
+ * another room, or out), both with `Idempotency-Key`. NOT_FOUND while
+ * `HP_HOUSE` is off for the player.
  */
 export const houseRoutes =
   (service: HouseService, options: HouseRoutesOptions): FastifyPluginCallback =>
@@ -48,6 +55,26 @@ export const houseRoutes =
       },
       async (request) =>
         service.build(requireUser(request), request.params.mapId, request.body.toLevel),
+    );
+
+    app.post(
+      '/maps/:mapId/house/residents',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: MoveResidentRequestSchema,
+          response: { 200: HouseViewSchema },
+        },
+        preHandler: [requireAuth, rateLimit('residents'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.moveResident(
+          requireUser(request),
+          request.params.mapId,
+          request.body.squishyId,
+          request.body.roomId,
+        ),
     );
 
     done();

@@ -1,0 +1,59 @@
+/* Five hearts and a mood word (#375), shared by the roster and the care sheet. */
+
+.mood-hearts-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mood-hearts {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 1px;
+  color: #e9d3df;
+}
+
+.mood-hearts::before {
+  content: '♥♥♥♥♥';
+}
+
+.mood-hearts-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  color: #ff5f97;
+  white-space: nowrap;
+}
+
+.mood-hearts-fill::before {
+  content: '♥♥♥♥♥';
+}
+
+.mood-drifting .mood-hearts-fill {
+  color: #e98bb0;
+}
+
+.mood-word {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mood-word-glowing {
+  background: #fff3c4;
+}
+.mood-word-happy {
+  background: #dff5d8;
+}
+.mood-word-calm {
+  background: #eef0f4;
+}
+.mood-word-cuddly {
+  background: #e3e6f7;
+  color: #3f4a7a;
+}

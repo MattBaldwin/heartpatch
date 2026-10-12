@@ -11,10 +11,9 @@ import {
   CLEAR_CARD_ID,
   CLEAR_TEXT,
   clearCards,
-  clearedText,
+  clearedNote,
   clearOffer,
   clearsFirst,
-  settledText,
   toolName,
 } from './clear-model.js';
 
@@ -172,17 +171,10 @@ describe('clearsFirst (#242)', () => {
 describe('clear words', () => {
   const done = { q: 1, r: 0, items: { greens: 4 }, landCleared: true };
 
-  it('pops up cleared land with its drop, or only the drop when the land went to someone else', () => {
-    expect(clearedText([done])).toBe(`${CLEAR_TEXT.cleared} 🌿 +4 Greens!`);
-    expect(clearedText([{ ...done, landCleared: false }])).toBe('🌿 +4 Greens!');
-    expect(clearedText([{ ...done, items: {} }])).toBe(CLEAR_TEXT.cleared);
-  });
-
-  it('puts a gather and cleared land from one settle in one pop-up (review, 3b-1)', () => {
-    const text = settledText([{ items: { timber: 5 } }], [], [done]);
-    expect(text).toContain('+5 Timber');
-    expect(text).toContain(CLEAR_TEXT.cleared);
-    expect(settledText([], [], [])).toBe('');
+  it('says the land is cleared before its drop, unless someone else took it meanwhile', () => {
+    expect(clearedNote([done])).toBe(CLEAR_TEXT.cleared);
+    expect(clearedNote([{ ...done, landCleared: false }])).toBe('');
+    expect(clearedNote([])).toBe('');
   });
 
   it('names the tool with the right article, and keeps every line kid-friendly', () => {

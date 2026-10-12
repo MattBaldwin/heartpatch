@@ -15,7 +15,7 @@ import {
 } from '@heartpatch/shared';
 import type { BuildCard } from '../building/build-model.js';
 import { buildingIcon, buildingName, effectChips, GROUNDS, LAND_FIRE } from '../home/home-view.js';
-import { describeItems, landedText, trainedText } from './bag-view.js';
+import { describeItems } from './bag-view.js';
 import { CLEAR_TOOL_ICONS } from './item-icons.js';
 
 // Clearing land from the Build sheet (#242): a homestead of mine, on land a
@@ -135,25 +135,12 @@ export function clearsFirst(
 }
 
 /**
- * The cleared-land part of a settle's pop-up: "Land cleared, ready to build!
- * 🌱 🌿 +4 Greens!". Land someone else took meanwhile stays as it is, but its
- * drop still lands, so then it's only the drop.
+ * What a settle says about land that finished clearing (#242): "Land cleared,
+ * ready to build! 🌱" before its drop's chips, or nothing when someone else
+ * took the land meanwhile (its drop still lands).
  */
-export function clearedText(cleared: readonly ClearedTile[]): string {
-  const drop = landedText(cleared);
-  if (!cleared.some((c) => c.landCleared)) return drop;
-  return drop === '' ? CLEAR_TEXT.cleared : `${CLEAR_TEXT.cleared} ${drop}`;
-}
-
-/** One settle's single pop-up: what landed, the XP trained, and land cleared. */
-export function settledText(
-  landed: readonly { items: ItemCounts }[],
-  trained: Parameters<typeof trainedText>[0],
-  cleared: readonly ClearedTile[],
-): string {
-  return [landedText(landed), trainedText(trained), clearedText(cleared)]
-    .filter((t) => t !== '')
-    .join(' ');
+export function clearedNote(cleared: readonly Pick<ClearedTile, 'landCleared'>[]): string {
+  return cleared.some((c) => c.landCleared) ? CLEAR_TEXT.cleared : '';
 }
 
 /**

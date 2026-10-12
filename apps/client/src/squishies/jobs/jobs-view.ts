@@ -1,8 +1,10 @@
 import {
   BATTLE_RULES,
   GAME_DATA,
+  hexKey,
   JOB_RULES,
   jobHints,
+  type HexKey,
   jobHintText,
   type ItemCounts,
   type JobSquishy,
@@ -51,6 +53,8 @@ export const JOBS_TEXT = {
   gatheringHere: (n: number) =>
     n === 1 ? '🧺 A squishy is gathering here' : `🧺 ${String(n)} squishies are gathering here`,
   sendGatherer: '🧺 Send a gatherer',
+  /** On the map's 🧺 over my gatherers (#393): it loves this spot, or isn't keen. */
+  badgeMood: { loves: '💕', meh: '🌧️' },
   firelit: '🔥 Safe by the fire tonight',
   dark: '🌙 Outside the firelight. The Hollow Man may visit at night!',
   takenBy: (name: string) => `${name} is here`,
@@ -212,7 +216,7 @@ export function spotFit(
  */
 export function workMood(
   s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work' | 'training'>,
-): 'loves' | 'meh' | null {
+): WorkMood | null {
   if (s.job === 'team' || s.job === 'guard') return 'loves';
   if (s.job === 'training' && s.training) {
     return s.training.full || s.training.napping ? null : 'loves';
@@ -222,6 +226,46 @@ export function workMood(
     return s.work.full ? null : 'loves';
   }
   return null;
+}
+
+/** How a squishy feels about its job (#376): it loves it, or it isn't keen. */
+export type WorkMood = 'loves' | 'meh';
+
+/**
+ * Each of my squishies with a work mood (#393), by squishy id, for the home's
+ * bounce and droop. Squishies without one (resting, away, a stopped job)
+ * aren't in it and look as they always do.
+ */
+export function workMoods(view: Pick<JobsView, 'squishies'>): Map<string, WorkMood> {
+  const moods = new Map<string, WorkMood>();
+  for (const s of view.squishies) {
+    const mood = workMood(s);
+    if (mood) moods.set(s.squishy.id, mood);
+  }
+  return moods;
+}
+
+/**
+ * How my gatherers feel on each tile they work (#393), for the map's 🧺
+ * badge: `meh` when any of mine there isn't keen, else `loves`. Tiles where
+ * none of mine has a mood (a full basket, only a patch-mate's) aren't in it.
+ */
+export function tileMoods(view: Pick<JobsView, 'squishies'>): Map<HexKey, WorkMood> {
+  const moods = new Map<HexKey, WorkMood>();
+  for (const s of view.squishies) {
+    if (s.job !== 'gatherer' || !s.work) continue;
+    const mood = workMood(s);
+    if (!mood) continue;
+    const key = hexKey(s.work);
+    if (moods.get(key) !== 'meh') moods.set(key, mood);
+  }
+  return moods;
+}
+
+/** The 🧺 badge's words (#393): how many gather there, and how mine feel. */
+export function badgeLabel(count: number, mood: WorkMood | null): string {
+  const n = count > 1 ? String(count) : '';
+  return `🧺${n}${mood ? JOBS_TEXT.badgeMood[mood] : ''}`;
 }
 
 /** Everything my gatherers have ready, added up. */

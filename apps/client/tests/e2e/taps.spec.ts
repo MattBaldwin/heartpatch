@@ -29,6 +29,36 @@ interface JobsDebug {
 }
 
 const bagState = (page: Page) => hook<InventoryDebug>(page, 'inventory');
+
+/**
+ * Notes the landing toast showing as it happens (#429). It is up for 3.2 s, and a loaded runner
+ * can take longer than that to get from a landing to a later check of it.
+ */
+const watchToast = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-testid="landed-toast"]');
+    const seen = window as unknown as { toastSeen: boolean; toastText: string };
+    seen.toastSeen = false;
+    seen.toastText = '';
+    new MutationObserver(() => {
+      if (el && !el.hasAttribute('hidden') && el.textContent !== '') {
+        seen.toastSeen = true;
+        seen.toastText = el.textContent;
+      }
+    }).observe(el!, { attributes: true, childList: true, characterData: true, subtree: true });
+  });
+/** Waits for the toast `watchToast` is watching to have shown, with `text` in it. */
+const expectToastShown = (page: Page, text = '') =>
+  expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const seen = window as unknown as { toastSeen: boolean; toastText: string };
+          return seen.toastSeen ? seen.toastText : null;
+        }),
+      { timeout: 30_000 },
+    )
+    .toContain(text);
 const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
 const itemTotal = (items: Record<string, number>) =>
   Object.values(items).reduce((a, b) => a + b, 0);
@@ -47,39 +77,36 @@ async function onAPatch(page: Page, name: string): Promise<string> {
 }
 
 /**
- * Taps (for real) around the Heart Seed until the tile panel offers Gather:
- * every home ring has nodes of ours (design doc §11).
+ * Taps (for real) our home node until the tile panel offers Gather: every
+ * home ring has nodes of ours (design doc §11). The map says where the node
+ * is on screen, so there is no guessing around the Heart Seed (#429); a tap
+ * that lands while the camera is still settling is made again.
  */
 async function tapOwnNode(page: Page): Promise<void> {
   // Let the map settle first: picking a tile needs the scene drawn and the
   // camera's arrival glide over (both slow under software rendering in CI).
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
   const panel = page.getByTestId('tile-panel');
-  const box = (await page.locator('#game').boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  for (const radius of [40, 60, 80, 100, 130]) {
-    for (let step = 0; step < 12; step++) {
-      const angle = (step * Math.PI) / 6;
-      // The panel from the last tap would swallow a tap landing on it (it
-      // covers the lower half of a phone's screen): close it first, as a
-      // player would.
-      if (await panel.isVisible()) {
-        await realTap(panel.getByRole('button', { name: 'Close' }));
-        await expect(panel).toBeHidden();
-      }
-      await realTapAt(page, cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
-      await expect
-        .poll(async () => (await bagState(page))?.tileAction, { timeout: 1000 })
-        .not.toBeNull()
-        .catch(() => undefined);
-      if ((await bagState(page))?.tileAction === 'gather') return;
+  const nodeAt = () =>
+    hook<{ homeNode: { x: number; y: number } | null }>(page, 'map').then(
+      (m) => m?.homeNode ?? null,
+    );
+  await expect(async () => {
+    if ((await bagState(page))?.tileAction === 'gather') return;
+    // The panel from the last tap would swallow a tap landing on it (it
+    // covers the lower half of a phone's screen): close it first, as a
+    // player would.
+    if (await panel.isVisible()) {
+      await realTap(panel.getByRole('button', { name: 'Close' }));
+      await expect(panel).toBeHidden();
     }
-  }
-  const map = await hook<{ selected: string | null; tiles: number; draws: number }>(page, 'map');
-  throw new Error(
-    `no node of ours near the Heart Seed (map ${JSON.stringify(map)}, bag ${JSON.stringify(await bagState(page))}, canvas ${JSON.stringify(box)})`,
-  );
+    const at = await nodeAt();
+    expect(at, 'our home node is on screen').not.toBeNull();
+    await realTapAt(page, at!.x, at!.y);
+    await expect
+      .poll(async () => (await bagState(page))?.tileAction, { timeout: 5_000 })
+      .toBe('gather');
+  }).toPass({ timeout: 60_000 });
 }
 
 /** The button `testId`, with its tray opened by one real tap on the handle. */
@@ -95,7 +122,9 @@ async function opensAndCloses(open: Locator, sheet: Locator, close: Locator): Pr
 }
 
 test('one real tap opens each sheet and works each button over the map', async ({ browser }) => {
-  test.setTimeout(180_000); // a full map build; CI renders in software
+  // A full map build; CI renders in software. It took up to 168 s on iPad CI (and ran out of
+  // 180 s twice in 8 runs), so the limit is well clear of that (#429).
+  test.setTimeout(300_000);
   const page = await newPlayer(browser, uniqueName('tap'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -172,7 +201,6 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   const mapId = await onAPatch(page, 'Collect Patch');
   const panel = page.getByTestId('tile-panel');
   const bag = page.getByTestId('bag');
-  const toast = page.getByTestId('landed-toast');
 
   // Gather on one of our nodes: one tap starts it.
   await tapOwnNode(page);
@@ -186,9 +214,9 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   // timer doesn't know): opening the Bag settles, and it lands with a pop-up.
   // No Collect anywhere (owner decision 2026-10-06).
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
+  await watchToast(page);
   await realTap(await inTray(page, 'bag-open'));
-  await expect(toast).toBeVisible();
-  await expect(toast).toContainText('+');
+  await expectToastShown(page, '+');
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(0);
   const afterTile = itemTotal((await bagState(page))!.items);
   expect(afterTile).toBeGreaterThan(before);
@@ -225,10 +253,15 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   // Done: the app coming back to the front settles too, and the chip goes.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   const landed = (await bagState(page))!.landings;
+  await watchToast(page);
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect.poll(async () => (await bagState(page))?.landings).toBe(landed + 1);
-  await expect(chip).toBeHidden();
-  await expect(toast).toBeVisible();
+  // The settle's reply arrives in a second or two on a loaded runner and the page counts the
+  // landing when it gets round to it, so the 5 s default can run out first (#429).
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 30_000 })
+    .toBe(landed + 1);
+  await expect(chip).toBeHidden({ timeout: 30_000 });
+  await expectToastShown(page);
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(afterTile);
 
   // A squishy gatherer's work lands by itself too: the job board settles
@@ -254,9 +287,12 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   await realTap(board.getByRole('button', { name: 'Close' }));
   const bagBeforeJobs = itemTotal((await bagState(page))!.items);
   const landedBefore = (await bagState(page))!.landings;
+  await watchToast(page);
   await realTap(await inTray(page, 'jobs-open'));
-  await expect.poll(async () => (await bagState(page))?.landings).toBe(landedBefore + 1);
-  await expect(toast).toBeVisible();
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 30_000 })
+    .toBe(landedBefore + 1);
+  await expectToastShown(page);
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(bagBeforeJobs);
   await expect(board.getByRole('button', { name: /Collect/ })).toHaveCount(0);
   expect(errors).toEqual([]);

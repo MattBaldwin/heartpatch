@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
+import { squishyHouseRoom } from '../house/repo.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import {
@@ -83,6 +84,8 @@ export interface HomeListRow extends HomeSquishyRow {
   teamSlot: number | null;
   onWatch: boolean;
   atWork: boolean;
+  /** The room of its owner's house it lives in (#381, `squishyHouseRoom`), or null. */
+  houseRoomId: string | null;
 }
 
 /**
@@ -682,6 +685,7 @@ function queries(db: Executor): BuildingsRepo {
             teamSlot: squishies.teamSlot,
             onWatch: squishyOnWatch(),
             atWork: squishyAtWork(),
+            houseRoomId: squishyHouseRoom(),
           })
           .from(squishies)
           .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))

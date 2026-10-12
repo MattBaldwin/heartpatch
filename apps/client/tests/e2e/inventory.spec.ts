@@ -1,8 +1,8 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { trayButton } from './trays.js';
+import { trayButton, traysState } from './trays.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
 interface InventoryDebug {
@@ -13,6 +13,8 @@ interface InventoryDebug {
   seasons: string[];
   bagOpen: boolean;
   tileAction: string | null;
+  summary: { shown: 'banner' | 'pill' | null; chips: number; more: number; card: boolean };
+  bagNew: number;
 }
 
 function bagState(page: Page): Promise<InventoryDebug | null> {
@@ -62,7 +64,9 @@ async function findOwnNode(page: Page): Promise<void> {
 }
 
 test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ browser }) => {
-  test.setTimeout(120_000); // a full map build; CI renders in software
+  // A full map build; CI renders in software. It took up to 108 s on iPad CI (and ran out of 120 s
+  // twice in 8 runs), so the limit is twice that (#429).
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('bag'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -136,6 +140,47 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
 
+  // Both finish while the Bag is shut: what landed shows as a banner of chips
+  // (#419), and as news on the My Home tab until the Bag is opened.
+  const mapId = (await bagState(page))!.mapId;
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  const banner = page.getByTestId('landed-toast');
+  // Roomy: the settle is one round trip, slow under a full CI run.
+  await expect(banner).toContainText('Heart Charm', { timeout: 15_000 });
+  // Two kinds: the banner (not the one-thing pill), and a real tap opens the
+  // card with everything: on a plain map it takes taps (shut trays don't count
+  // as open sheets). The banner hides itself after a few seconds, so the tap
+  // comes straight after the look.
+  await expect(banner).not.toHaveClass(/away-one|away-quiet/);
+  expect(await banner.evaluate((n) => getComputedStyle(n).pointerEvents)).not.toBe('none');
+  await banner.tap();
+  const card = page.getByTestId('away-card');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Heart Charm');
+  expect(findAvoidedWords((await card.textContent()) ?? '')).toEqual([]);
+  await card.getByRole('button', { name: 'Nice!' }).tap();
+  await expect(card).toBeHidden();
+  expect((await bagState(page))?.bagNew).toBeGreaterThan(0);
+  await expect.poll(async () => (await traysState(page))?.badges.heartpatch).not.toBeNull();
+  // A detour off the map (home base) and back keeps the news: it's this
+  // patch's until the Bag is opened.
+  await (await trayButton(page, 'home-open')).tap();
+  await expect(page.getByTestId('map-hud')).toBeHidden({ timeout: 30_000 });
+  await page.getByTestId('home').getByTestId('home-back').tap();
+  await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 30_000 });
+  await expect.poll(async () => (await bagState(page))?.bagNew).toBeGreaterThan(0);
+  await expect(page.getByTestId('bag-new')).toHaveText(/^\+\d+$/);
+  // Roomy: the trays read their news again once the map is back (a busy CI runner).
+  await expect
+    .poll(async () => (await traysState(page))?.badges.heartpatch, { timeout: 15_000 })
+    .not.toBeNull();
+  await (await trayButton(page, 'bag-open')).tap();
+  await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
+  await bag.getByRole('button', { name: 'Close' }).tap();
+  await expect(bag).toBeHidden();
+
   // Leaving the map (here: Settings → Change Keeper, #42) takes the bag with it.
   await page.getByRole('button', { name: 'My patches' }).tap();
   await lobby.getByTestId('lobby-settings').tap();
@@ -144,4 +189,115 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect.poll(() => bagState(page)).toBeNull();
   await expect(page.getByTestId('bag-open')).toBeHidden();
   expect(errors).toEqual([]);
+});
+
+/** The banner's modules as the dev server serves them, for the fit check below. */
+interface BannerModules {
+  summary: {
+    summaryEntries: (
+      landed: { items: Record<string, number> }[],
+      trained: { name: string; xp: number }[],
+    ) => unknown[];
+  };
+  view: {
+    createAwaySummary: (root: HTMLElement) => {
+      show: (what: { entries: unknown[]; sentence: string; away: boolean }) => void;
+      debug: { shown: string | null; chips: number; more: number };
+    };
+  };
+}
+
+test('the "what landed" banner shows whole chips at the smallest width (#419)', async ({
+  browser,
+}) => {
+  // Its own 320-point phone (an iPhone SE): resizing the iPad's page would keep
+  // its 820-point screen, and `width=device-width` would lay out at 820.
+  const { baseURL } = test.info().project.use;
+  const phone = { width: 320, height: 568 };
+  const context = await browser.newContext({
+    viewport: phone,
+    screen: phone,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    ...(baseURL ? { baseURL } : {}),
+  });
+  const page = await context.newPage();
+  await page.goto('/');
+  const results = await page.evaluate(async () => {
+    const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
+    const m = {
+      summary: await load('/src/inventory/away-summary.ts'),
+      view: await load('/src/inventory/away-summary-view.ts'),
+    } as BannerModules;
+    const banner = m.view.createAwaySummary(document.body);
+    const xp = [{ name: 'Glimmerock', xp: 2 }];
+    const cases = {
+      // Three things: XP, Timber and Stone fit on a 320-point iPhone, so no "N more".
+      three: m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], xp),
+      // Ten kinds and four squishies: whole chips, the rest counted in "N more".
+      ten: m.summary.summaryEntries(
+        [
+          {
+            items: {
+              timber: 6,
+              stone: 3,
+              emberwood: 4,
+              glimmer: 1,
+              water: 2,
+              greens: 3,
+              treats: 3,
+              pumpkins: 5,
+              'witch-dust': 2,
+              ice: 1,
+            },
+          },
+        ],
+        [
+          ...xp,
+          { name: 'Emberbun', xp: 4 },
+          { name: 'Puddlepuff', xp: 3 },
+          { name: 'Pebblesnooze', xp: 1 },
+        ],
+      ),
+    };
+    const out: Record<
+      string,
+      {
+        shown: string | null;
+        chips: number;
+        more: number;
+        entries: number;
+        cut: boolean;
+        inside: boolean;
+      }
+    > = {};
+    for (const [name, entries] of Object.entries(cases)) {
+      banner.show({ entries, sentence: name, away: true });
+      const row = [...document.querySelectorAll<HTMLElement>('.away-chips')].at(-1)!;
+      const box = [...document.querySelectorAll<HTMLElement>('.away-banner')]
+        .at(-1)!
+        .getBoundingClientRect();
+      out[name] = {
+        ...banner.debug,
+        entries: entries.length,
+        cut: row.scrollWidth > row.clientWidth + 1,
+        inside: box.left >= 0 && box.right <= innerWidth,
+      };
+    }
+    return out;
+  });
+  expect(results['three']).toMatchObject({
+    shown: 'banner',
+    chips: 3,
+    more: 0,
+    entries: 3,
+    cut: false,
+    inside: true,
+  });
+  const ten = results['ten']!;
+  expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
+  expect(ten.more).toBeGreaterThan(0);
+  expect(ten.chips + ten.more).toBe(ten.entries);
+  await context.close();
 });

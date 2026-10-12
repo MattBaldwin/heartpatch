@@ -49,6 +49,26 @@ describe('public views', () => {
     ).toEqual({ name: 'Pumpkin Hollow', pvpMode: 'gentle' });
   });
 
+  it('tells the patch where a resident lives now, never the room it left (#381)', () => {
+    const userId = '0190a8c4-0000-7000-8000-000000000002';
+    const squishyId = '0190a8c4-0000-7000-8000-000000000003';
+    const moved = event('resident.moved', {
+      userId,
+      squishyId,
+      roomId: 'playroom',
+      fromRoomId: 'snug',
+    });
+    for (const recipient of [me, { userId }]) {
+      expect(publicViewFor(PUBLIC_VIEWS, moved, recipient)).toEqual({
+        userId,
+        squishyId,
+        roomId: 'playroom',
+      });
+    }
+    const out = event('resident.moved', { userId, squishyId, roomId: null, fromRoomId: 'snug' });
+    expect(publicViewFor(PUBLIC_VIEWS, out, me)).toEqual({ userId, squishyId, roomId: null });
+  });
+
   it('never tells anyone who broke or bumped a fence, the owner included (#203)', () => {
     const owner = '0190a8c4-0000-7000-8000-000000000002';
     const attacker = '0190a8c4-0000-7000-8000-000000000004';

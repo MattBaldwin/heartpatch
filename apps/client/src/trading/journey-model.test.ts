@@ -37,6 +37,7 @@ const squishy = (
   training: null,
   fullXpResetAt: null,
   gatherFits: [],
+  houseRoomId: null,
 });
 const RULES = { teamSize: 3, maxStoredCycles: 4 };
 

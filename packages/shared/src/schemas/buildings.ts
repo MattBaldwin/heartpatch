@@ -93,6 +93,11 @@ export const HomeSquishySchema = z.object({
    * none: nothing worn.
    */
   accessory: ContentIdSchema.nullable().default(null),
+  /**
+   * The room of the Keeper's house it lives in (#381), or null: not a
+   * resident, or the house is switched off. An older server sends none.
+   */
+  houseRoomId: ContentIdSchema.nullable().default(null),
 });
 export type HomeSquishy = z.infer<typeof HomeSquishySchema>;
 

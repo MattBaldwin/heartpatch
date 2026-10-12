@@ -55,7 +55,7 @@ const E2E_GROUPS = [
     'tutorial-flow',
     'whats-new',
   ],
-  // ~11.4 iPad, ~7.5 iPhone.
+  // ~11.4 iPad, ~7.5 iPhone, before house (#381, two short tests).
   [
     'accessory-everywhere',
     'account-help',
@@ -64,13 +64,23 @@ const E2E_GROUPS = [
     'explore',
     'fences',
     'hollow',
+    'house',
     'jobs',
     'map',
     'potions',
     'squishy-gallery',
   ],
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted. Keep it light.
-  ['cinematic', 'friendly', 'inventory', 'milestones', 'renderer-error', 'starter', 'version'],
+  [
+    'cinematic',
+    'friendly',
+    'inventory',
+    'milestones',
+    'renderer-error',
+    'roster',
+    'starter',
+    'version',
+  ],
   // ~11.1 iPad, ~8.0 iPhone: taps alone is ~4.5-6.5.
   [
     'auth',
@@ -134,6 +144,9 @@ process.env['HP_DEV_MAP_CREATE_LIMIT_PER_IP'] ??= '500';
 // Battles (#13) need a squishy and a wild opponent, which spawns (#14) and the
 // tutorial's starter don't hand out yet; the dev routes do. Dev and tests only.
 process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
+// The Keeper's house (#381) ships behind HP_HOUSE (off by default); house.spec.ts
+// needs it on, and stands in a home reply without it to check the off case.
+process.env['HP_HOUSE'] ??= 'on';
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
 // leaves a slow software-rendered phone time to play a turn back). Dev and
@@ -143,6 +156,12 @@ process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
 // Map time is the game clock in the patch's time zone, which the client takes
 // from the device: pin the browser's zone so specs never meet dusk (#326).
 const timezoneId = pinMapTime();
+
+// iPad runs are slower than iPhone ones on CI: in one run (#429), five of the six iPad groups took
+// 1.1-1.7 times as long as the same-numbered iPhone group (the sixth was shorter), and 19 of the 26
+// first-try failures in 7 runs were iPad, several of them a 5 s `expect` default running out. Give
+// its assertions twice that. Specs that set their own timeout keep it; iPhone and laptop stay at 5 s.
+const IPAD_EXPECT = { timeout: 10_000 };
 
 const projects = chromiumPath
   ? [
@@ -156,6 +175,7 @@ const projects = chromiumPath
       },
       {
         name: 'ipad-chromium',
+        expect: IPAD_EXPECT,
         use: {
           ...devices['iPad Pro 11'],
           browserName: 'chromium' as const,
@@ -177,7 +197,7 @@ const projects = chromiumPath
     ]
   : [
       { name: 'iphone-webkit', use: { ...devices['iPhone 15'] } },
-      { name: 'ipad-webkit', use: { ...devices['iPad Pro 11'] } },
+      { name: 'ipad-webkit', expect: IPAD_EXPECT, use: { ...devices['iPad Pro 11'] } },
     ];
 
 export default defineConfig({

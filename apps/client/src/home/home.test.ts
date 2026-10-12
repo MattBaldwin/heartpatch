@@ -324,6 +324,7 @@ describe('build menu', () => {
       trainingId: null,
       job: 'resting' as const,
       accessory: null,
+      houseRoomId: null,
     };
     expect(likesHabitat(pal, 'cozy-meadow')).toBe(true);
     expect(likesHabitat(pal, 'ember-den')).toBe(false);
@@ -342,6 +343,7 @@ describe('build menu', () => {
       trainingId: null,
       job: 'resting' as const,
       accessory: null,
+      houseRoomId: null,
     };
     const rare = GAME_DATA.species.find((s) => s.rarity === 'rare');
     if (!rare) throw new Error('no rare species');

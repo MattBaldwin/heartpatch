@@ -1,4 +1,6 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import type { SquishyState } from '@heartpatch/shared';
+import { and, eq, getTableName, inArray, isNotNull, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { houseResidents, keeperHouses, squishies, squishyEvolutions } from '../../db/schema.js';
@@ -13,6 +15,47 @@ export interface ResidentRow {
   /** It has evolved at least once on this patch. */
   evolved: boolean;
 }
+
+/** A squishy as a move in or out needs it, read under its lock. */
+export interface HouseSquishyRow {
+  id: string;
+  mapId: string;
+  ownerUserId: string;
+  speciesId: string;
+  nickname: string | null;
+  state: SquishyState;
+}
+
+/** A squishy's residency row: `roomId` set while it lives there. */
+export interface ResidencyRow {
+  mapId: string;
+  userId: string;
+  roomId: string | null;
+  movedInAt: Date | null;
+  movedOutAt: Date | null;
+}
+
+/**
+ * The one SQL spelling of "the room of its owner's house a squishy lives in"
+ * (#381), or null: a residency row with a room, on its patch, that is its
+ * owner's (a row left from a Keeper who traded it away doesn't count). Like
+ * `squishyOnWatch`, `squishy` is a `squishies` row of the outer query,
+ * written `"table"."column"`, so the fragment fits a one-table select. The
+ * home, the job board, care and the contentment checkpoint all read it.
+ */
+export const squishyHouseRoom = (
+  squishy: { id: AnyPgColumn; mapId: AnyPgColumn; ownerUserId: AnyPgColumn } = squishies,
+) => {
+  const outer = (column: AnyPgColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  const home = (column: AnyPgColumn) => sql`house_home.${sql.identifier(column.name)}`;
+  return sql<string | null>`(
+    select ${home(houseResidents.roomId)} from ${houseResidents} as house_home
+    where ${home(houseResidents.squishyId)} = ${outer(squishy.id)}
+      and ${home(houseResidents.mapId)} = ${outer(squishy.mapId)}
+      and ${home(houseResidents.userId)} = ${outer(squishy.ownerUserId)}
+  )`;
+};
 
 /**
  * The Keeper's house rows (#381). Lock order (tech spec §7): `keeper_houses`
@@ -46,6 +89,38 @@ export interface HouseRepo {
   residentSquishyIds: (mapId: string, userId: string) => Promise<string[]>;
   /** Deletes these squishies' residency rows; the caller holds their locks (step 10). */
   deleteResidents: (squishyIds: readonly string[]) => Promise<void>;
+  /**
+   * Row-locks a squishy (step 10, `FOR NO KEY UPDATE`, as jobs and housing
+   * do) until commit, and returns what a move needs. Its residency row is
+   * then this transaction's to write.
+   */
+  lockSquishy: (squishyId: string) => Promise<HouseSquishyRow | null>;
+  /** The squishy's residency row (in or moved out, any Keeper's), or null. Read under its lock. */
+  residency: (squishyId: string) => Promise<ResidencyRow | null>;
+  /**
+   * Of these squishies, the ones living in their owner's house now (a room
+   * set, the row their owner's): whose happiness the perk slows.
+   */
+  livingIn: (squishyIds: readonly string[]) => Promise<string[]>;
+  /**
+   * The Keeper's residents in one room now, away ones included (they keep
+   * their beds). Read under the house lock (8c), which every move takes.
+   */
+  countInRoom: (mapId: string, userId: string, roomId: string) => Promise<number>;
+  /**
+   * Moves a squishy into a room (step 10: the caller holds its lock). One
+   * row per squishy: a row left from a move out, or from a Keeper who owned
+   * it before, is taken over, never a primary-key clash.
+   */
+  moveIn: (row: {
+    squishyId: string;
+    mapId: string;
+    userId: string;
+    roomId: string;
+    movedInAt: Date;
+  }) => Promise<void>;
+  /** Moves these squishies out (room cleared, `moved_out_at` for the cooldown); locks held. */
+  moveOut: (squishyIds: readonly string[], at: Date) => Promise<void>;
   /**
    * A member left or was removed: their house goes with their buildings (a
    * returning player gets a fresh home), its gifts by cascade. Step 8c.
@@ -146,6 +221,89 @@ export function createHouseRepo(db: Executor): HouseRepo {
     deleteResidents: async (squishyIds) => {
       if (squishyIds.length === 0) return;
       await db.delete(houseResidents).where(inArray(houseResidents.squishyId, [...squishyIds]));
+    },
+
+    lockSquishy: async (squishyId) => {
+      const [row] = await db
+        .select({
+          id: squishies.id,
+          mapId: squishies.mapId,
+          ownerUserId: squishies.ownerUserId,
+          speciesId: squishies.speciesId,
+          nickname: squishies.nickname,
+          state: squishies.state,
+        })
+        .from(squishies)
+        .where(eq(squishies.id, squishyId))
+        .for('no key update');
+      return row ?? null;
+    },
+
+    residency: async (squishyId) => {
+      const [row] = await db
+        .select({
+          mapId: houseResidents.mapId,
+          userId: houseResidents.userId,
+          roomId: houseResidents.roomId,
+          movedInAt: houseResidents.movedInAt,
+          movedOutAt: houseResidents.movedOutAt,
+        })
+        .from(houseResidents)
+        .where(eq(houseResidents.squishyId, squishyId));
+      return row ?? null;
+    },
+
+    livingIn: async (squishyIds) => {
+      if (squishyIds.length === 0) return [];
+      const rows = await db
+        .select({ id: houseResidents.squishyId })
+        .from(houseResidents)
+        .innerJoin(squishies, eq(squishies.id, houseResidents.squishyId))
+        .where(
+          and(
+            inArray(houseResidents.squishyId, [...squishyIds]),
+            isNotNull(houseResidents.roomId),
+            eq(houseResidents.mapId, squishies.mapId),
+            eq(houseResidents.userId, squishies.ownerUserId),
+          ),
+        );
+      return rows.map((r) => r.id);
+    },
+
+    countInRoom: async (mapId, userId, roomId) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(houseResidents)
+        .innerJoin(squishies, eq(squishies.id, houseResidents.squishyId))
+        .where(
+          and(
+            eq(houseResidents.mapId, mapId),
+            eq(houseResidents.userId, userId),
+            eq(houseResidents.roomId, roomId),
+            // Only squishies the Keeper still owns on this patch.
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+          ),
+        );
+      return row?.n ?? 0;
+    },
+
+    moveIn: async ({ squishyId, mapId, userId, roomId, movedInAt }) => {
+      const living = { mapId, userId, roomId, movedInAt, movedOutAt: null };
+      await db
+        .insert(houseResidents)
+        .values({ squishyId, ...living })
+        .onConflictDoUpdate({ target: houseResidents.squishyId, set: living });
+    },
+
+    moveOut: async (squishyIds, at) => {
+      if (squishyIds.length === 0) return;
+      await db
+        .update(houseResidents)
+        .set({ roomId: null, movedInAt: null, movedOutAt: at })
+        .where(
+          and(inArray(houseResidents.squishyId, [...squishyIds]), isNotNull(houseResidents.roomId)),
+        );
     },
 
     deleteHouse: async (mapId, userId) => {

@@ -131,8 +131,11 @@ function cellsOf(layout: HouseRoomLayout): string[] {
 export function checkHouseData(input: unknown, refs: HouseDataRefs): string[] {
   const result = HouseDataSchema.safeParse(input);
   if (!result.success) return formatDataIssues(input, result.error);
-  const { levels } = result.data;
+  const { levels, rules } = result.data;
   const problems: string[] = [];
+  // The fallback perk isn't built yet (`residentDrainPercent`): naming it
+  // would quietly take the perk away.
+  if (rules.perk.kind === 'care-bonus') problems.push('rules.perk: care-bonus is not built yet');
   const buildings = new Set(refs.buildings.map((b) => b.id));
   const buildingKinds = new Set(refs.buildings.map((b) => b.kind));
   const resources = new Set(refs.resources.map((r) => r.id));

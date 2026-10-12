@@ -101,6 +101,11 @@ export const CareSquishySchema = z.object({
    * none: nothing worn.
    */
   accessory: ContentIdSchema.nullable().default(null),
+  /**
+   * The room of the Keeper's house it lives in (#381), or null: a resident's
+   * happiness fades slower ("Lives in your house"). An older server sends none.
+   */
+  houseRoomId: ContentIdSchema.nullable().default(null),
 });
 export type CareSquishy = z.infer<typeof CareSquishySchema>;
 

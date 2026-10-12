@@ -8,6 +8,11 @@ export const HOUSE_RATE_LIMITS = {
     perIp: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess; a family on one Wi-Fi
     perUser: { max: 30, windowMs: MINUTE_MS }, // TUNE: guess; retries included
   },
+  // Moving residents in and out: a few taps in a row while picking beds.
+  residents: {
+    perIp: { max: 240, windowMs: MINUTE_MS }, // TUNE: guess; a family on one Wi-Fi
+    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess; about one a second
+  },
 } as const satisfies RateLimitTable;
 
 export type HouseAction = keyof typeof HOUSE_RATE_LIMITS;

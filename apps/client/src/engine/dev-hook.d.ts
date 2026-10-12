@@ -10,6 +10,7 @@ import type { CareDebug } from '../care/care-sheet.js';
 import type { ChatDebug } from '../chat/chat-screen.js';
 import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
+import type { HouseDebug } from '../house/house-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
@@ -27,6 +28,7 @@ import type { StarterDebug } from '../starters/starter-screen.js';
 import type { TraysDebug } from '../ui/trays/trays.js';
 import type { RecipeBookDebug } from '../recipes/recipe-book.js';
 import type { JobsDebug } from '../squishies/jobs/index.js';
+import type { RosterDebug } from '../squishies/roster/roster-sheet.js';
 import type { JourneyDebug } from '../trading/journey-screen.js';
 import type { PostFlags } from '../trading/post-flags.js';
 import type { PostDebug } from '../trading/post-screen.js';
@@ -88,12 +90,15 @@ declare global {
       care?(): CareDebug | null;
       /** The close-up view (#20): phase, detail, the squishy's screen spot, care sent and held, or null. */
       closeUp?(): CloseUpDebug | null;
+      house?(): HouseDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
       wardrobe?(): WardrobeDebug | null;
       /** Squishy jobs: the job board and team picker (open, jobs, team, ready work). */
       jobs?(): JobsDebug;
+      /** The Squishies roster (#375): open, rows shown, sort, filter, the open row. */
+      roster?(): RosterDebug;
       /** Trading posts on the map (#269): flags on screen and gold rings. */
       posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
