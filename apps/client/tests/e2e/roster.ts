@@ -9,10 +9,14 @@ const slow = { timeout: 30_000 };
 /** Opens the roster from whichever 🐾 is on screen; resolves once rows show. */
 export async function openRoster(page: Page): Promise<Locator> {
   const roster = page.getByTestId('roster');
-  if (!(await roster.isVisible())) {
-    await page.locator('[data-testid="squishies-open"]:visible').tap();
-  }
-  await expect(roster).toBeVisible(slow);
+  // Right after a view change the last view's 🐾 may still be fading out:
+  // tap whichever one is on screen until the roster opens.
+  await expect(async () => {
+    if (!(await roster.isVisible())) {
+      await page.locator('[data-testid="squishies-open"]:visible').first().tap({ timeout: 3_000 });
+    }
+    await expect(roster).toBeVisible({ timeout: 3_000 });
+  }).toPass(slow);
   await expect(page.getByTestId('roster-row').first()).toBeVisible(slow);
   return roster;
 }
