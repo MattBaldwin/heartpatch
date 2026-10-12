@@ -1573,15 +1573,37 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 60, attack: 60, defense: 75, speed: 40 }, // TUNE:
     moves: ['pebble-plop', 'rumble-roll', 'sunny-beam'],
-    evolutions: [
-      { into: 'glittercrag', level: 22 },
-      { into: 'geodoze', level: 22 },
-    ], // TUNE:
+    evolutions: [{ into: 'gemling', level: 22 }], // TUNE:
     visual: {
       body: 'mochi',
       palette: ['#d2bff2', '#fbf7ff', '#6fd8ee'],
       parts: ['happy-eyes', 'smile', 'blush-cheeks', 'crystal-crown', 'stubby-arms', 'biped-legs'],
       stance: 0.1,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone', 'light'], feelings: ['joy'] },
+  },
+  // #443 kid (stage 2): the gem pebble grows strong arms, before Glittercrag's.
+  {
+    id: 'gemling',
+    name: 'Gemling',
+    description: 'Its little arms grew big and strong. It lifts pebbles just for fun.',
+    element: 'stone',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 71, attack: 71, defense: 89, speed: 47 }, // TUNE: ×1.18 Glimmerock
+    moves: ['pebble-plop', 'rumble-roll', 'sunny-beam'],
+    evolutions: [
+      { into: 'glittercrag', level: 30 },
+      { into: 'geodoze', level: 30 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'mochi',
+      palette: ['#ccb8f0', '#fbf7ff', '#5fd2ea', '#ffffff'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'crystal-crown', 'strong-arms', 'biped-legs'],
+      size: 1.15,
+      stance: 0.2,
       pose: 'stand',
       attackPart: 'arms',
     },
@@ -1780,15 +1802,37 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 65, attack: 55, defense: 65, speed: 40 }, // TUNE:
     moves: ['leafy-tickle', 'mossy-nap', 'prickle-roll'],
-    evolutions: [
-      { into: 'mossquilt', level: 22 },
-      { into: 'sprinklemuff', level: 22 },
-    ], // TUNE:
+    evolutions: [{ into: 'sproutcake', level: 22 }], // TUNE:
     visual: {
       body: 'bun',
       palette: ['#e0b07c', '#fff3e2', '#6fb85a', '#5a9a48'],
       parts: ['oval-eyes', 'smile', 'blush-cheeks', 'muffin-cap', 'biped-legs'],
       stance: 0.1,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['cozy'] },
+  },
+  // #443 kid (stage 2): leafy arms on the walking muffin, before Mossquilt's.
+  {
+    id: 'sproutcake',
+    name: 'Sproutcake',
+    description: 'Grew two leafy arms. It waves them at everyone who walks by.',
+    element: 'leaf',
+    feeling: 'cozy',
+    rarity: 'rare',
+    baseStats: { hp: 77, attack: 65, defense: 77, speed: 47 }, // TUNE: ×1.18 Mossmuffin
+    moves: ['leafy-tickle', 'mossy-nap', 'prickle-roll'],
+    evolutions: [
+      { into: 'mossquilt', level: 30 },
+      { into: 'sprinklemuff', level: 30 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'bun',
+      palette: ['#dcab76', '#fff3e2', '#64b250', '#5a9a48'],
+      parts: ['oval-eyes', 'smile', 'blush-cheeks', 'muffin-cap', 'leaf-arms', 'biped-legs'],
+      size: 1.15,
+      stance: 0.18,
       pose: 'stand',
       attackPart: 'crown',
     },
@@ -1870,10 +1914,7 @@ export const SPECIES: Species[] = [
     rarity: 'epic',
     baseStats: { hp: 60, attack: 65, defense: 55, speed: 65 }, // TUNE:
     moves: ['sunny-beam', 'dazzle-dance', 'glow-up'],
-    evolutions: [
-      { into: 'dazzledrop', level: 26 },
-      { into: 'moondrop', level: 26 },
-    ], // TUNE:
+    evolutions: [{ into: 'sunnydrop', level: 26 }], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#ffe9a8', '#fffdf2', '#ffb347'],
@@ -1881,6 +1922,33 @@ export const SPECIES: Species[] = [
       finish: 'sparkle',
       glow: 'body',
       stance: 0.3,
+      pose: 'hover',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['joy'] },
+  },
+  // #443 kid (stage 2): its little wings grow into orange plumes.
+  {
+    id: 'sunnydrop',
+    name: 'Sunnydrop',
+    description: 'Its wings grew into fluffy plumes. It flies up to say good morning to the sun.',
+    element: 'light',
+    feeling: 'joy',
+    rarity: 'epic',
+    baseStats: { hp: 71, attack: 77, defense: 65, speed: 77 }, // TUNE: ×1.18 Dawndrop
+    moves: ['sunny-beam', 'dazzle-dance', 'glow-up'],
+    evolutions: [
+      { into: 'dazzledrop', level: 34 },
+      { into: 'moondrop', level: 34 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#ffe39a', '#fffdf2', '#ffa63a', '#fff4c2'],
+      finish: 'sparkle',
+      glow: 'body',
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'sun-rays', 'plume-wings'],
+      size: 1.15,
+      stance: 0.38,
       pose: 'hover',
       attackPart: 'crown',
     },
@@ -1950,16 +2018,39 @@ export const SPECIES: Species[] = [
     rarity: 'legendary',
     baseStats: { hp: 70, attack: 70, defense: 60, speed: 60 }, // TUNE:
     moves: ['zip-zap', 'thunder-hug', 'zoomies', 'snowball-toss'],
-    evolutions: [
-      { into: 'thunderplume', level: 30 },
-      { into: 'stormhoot', level: 30 },
-    ], // TUNE:
+    evolutions: [{ into: 'stormchick', level: 30 }], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#96a1ca', '#eef1ff', '#ffd23f'],
       parts: ['oval-eyes', 'brave-brows', 'cat-mouth', 'cloud-crown', 'nub-wings', 'bolt-tail'],
       finish: 'iridescent',
       stance: 0.35,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['brave'] },
+  },
+  // #443 kid (stage 2): the storm-cloud chick grows its first little beak.
+  {
+    id: 'stormchick',
+    name: 'Stormchick',
+    description: 'Grew a little beak and practices its first big thunder-peep.',
+    element: 'spark',
+    feeling: 'brave',
+    rarity: 'legendary',
+    baseStats: { hp: 83, attack: 83, defense: 71, speed: 71 }, // TUNE: ×1.18 Thunderpuff
+    moves: ['zip-zap', 'thunder-hug', 'zoomies', 'snowball-toss'],
+    evolutions: [
+      { into: 'thunderplume', level: 38 },
+      { into: 'stormhoot', level: 38 },
+    ], // TUNE: kid level + 8 (#443)
+    visual: {
+      body: 'orb',
+      palette: ['#96a1ca', '#eef1ff', '#ffd02a', '#c9d1ff'],
+      finish: 'iridescent',
+      parts: ['oval-eyes', 'brave-brows', 'beak', 'cloud-crown', 'nub-wings', 'bolt-tail'],
+      size: 1.15,
+      stance: 0.4,
       pose: 'hover',
       attackPart: 'wings',
     },
