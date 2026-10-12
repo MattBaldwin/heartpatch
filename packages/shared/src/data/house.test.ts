@@ -75,6 +75,12 @@ describe('HOUSE_DATA (#381)', () => {
     ]);
   });
 
+  it('refuses the care-bonus perk until it is built', () => {
+    const broken = copy();
+    broken.rules.perk = { kind: 'care-bonus', extraFullActions: 1 };
+    expect(checkHouseData(broken, refs)).toEqual(['rules.perk: care-bonus is not built yet']);
+  });
+
   it('refuses a second final level', () => {
     const broken = copy();
     const [, second] = broken.levels;

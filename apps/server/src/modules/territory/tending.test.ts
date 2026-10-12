@@ -15,7 +15,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, mapMembers, sessions, users } from '../../db/schema.js';
+import { buildings, factoryQueues, keepers, mapMembers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -364,6 +364,71 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     expect(back.wentWild).toEqual([
       { q: far!.q, r: far!.r, night: '2026-10-14', lostFire: refund },
     ]);
+  });
+
+  it('gives my Crafting Factory back in full when its land goes wild, its batch stopped (#295)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const [far] = await landAt(mapId, kid, [5], ['forest', 'meadow', 'hills']);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+    // A level-1 Factory out on the land with a batch that won't finish before
+    // the land goes: twenty charms, a day each.
+    const [factory] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: far!.id,
+        buildingId: 'crafting-factory',
+        kind: 'factory',
+        spot: 1,
+      })
+      .returning({ id: buildings.id });
+    const [batch] = await db
+      .insert(factoryQueues)
+      .values({
+        mapId,
+        userId: kid.id,
+        buildingId: factory!.id,
+        recipeId: 'heart-charm',
+        total: 20,
+        itemSeconds: 86_400,
+        output: { 'heart-charm': 1 },
+        inputs: { timber: 2, treats: 1 },
+        startedAt: new Date(clock),
+      })
+      .returning({ id: factoryQueues.id });
+
+    advance(RULES.wildAfterDays);
+    expect(await land.nightfall(mapId, '2026-10-14')).toEqual({ wild: 1 });
+    const sums = async (reason: 'build-refund' | 'factory') => {
+      const rows = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) =>
+          and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.reason, reason)),
+      });
+      const sum: Record<string, number> = {};
+      for (const r of rows) sum[r.itemId] = (sum[r.itemId] ?? 0) + r.delta;
+      return sum;
+    };
+    // Level 1 in full (owner decision 2026-10-11), not half.
+    expect(await sums('build-refund')).toEqual({ timber: 30, stone: 20 });
+    const ended = await db.query.factoryQueues.findFirst({
+      where: (t, { eq }) => eq(t.id, batch!.id),
+    });
+    expect(ended?.endReason).toBe('taken-down');
+    const made = ended!.banked;
+    expect(made).toBeGreaterThan(0);
+    expect(made).toBeLessThan(20);
+    expect(await sums('factory')).toEqual({
+      'heart-charm': made,
+      timber: 2 * (20 - made),
+      treats: 20 - made,
+    });
+    expect(
+      await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.id, factory!.id) }),
+    ).toEqual([]);
   });
 
   it('still banks my own gather that finished before its land went wild', async () => {

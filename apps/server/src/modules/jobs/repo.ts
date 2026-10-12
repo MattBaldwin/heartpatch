@@ -12,6 +12,7 @@ import {
   tiles,
   tileTending,
 } from '../../db/schema.js';
+import { squishyHouseRoom } from '../house/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
 /** A tile as the job board needs it. */
@@ -77,6 +78,11 @@ export interface JobRow {
     contentmentAtLastCare: number;
     lastCaredAt: Date | null;
   };
+  /**
+   * The room of its owner's house it lives in (#381, `squishyHouseRoom`), or
+   * null. A resident fades slower (the house perk), out on a job too.
+   */
+  houseRoomId: string | null;
 }
 
 /**
@@ -269,6 +275,7 @@ function queries(db: Executor): SquishyJobsRepo {
         contentmentSince: squishies.contentmentSince,
         contentmentAtLastCare: squishies.contentmentAtLastCare,
         lastCaredAt: squishies.lastCaredAt,
+        houseRoomId: squishyHouseRoom(),
       })
       .from(squishies)
       .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
@@ -371,6 +378,7 @@ function queries(db: Executor): SquishyJobsRepo {
       contentmentAtLastCare: r.contentmentAtLastCare,
       lastCaredAt: r.lastCaredAt,
     },
+    houseRoomId: r.houseRoomId,
   });
 
   return {

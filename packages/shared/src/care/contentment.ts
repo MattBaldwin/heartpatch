@@ -61,12 +61,18 @@ export function heldMs(fromMs: number, toMs: number, spans: readonly HoldSpan[])
  * checkpoint that the `holding` spans don't cover (a suitable job holds it
  * steady; it never raises it). Never below the baseline (or below what it
  * already was, if that's lower).
+ *
+ * `drainPercent` scales the slide: 100 is the normal rate, and a resident of
+ * the Keeper's house fades at the house perk's percent (#381,
+ * `residentDrainPercent`), so the rate is base × fit × resident. It holds for
+ * the whole stretch since the checkpoint: moving in or out writes a new one.
  */
 export function contentmentAt(
   state: CareState,
   now: Date,
   rules: Pick<CareRules, 'maxContentment' | 'baselineContentment' | 'hoursFullToBaseline'>,
   holding: readonly HoldSpan[] = [],
+  drainPercent = 100,
 ): number {
   const { contentment, since } = state;
   const floor = Math.min(contentment, rules.baselineContentment);
@@ -75,7 +81,11 @@ export function contentmentAt(
   const nowMs = Math.max(fromMs, now.getTime());
   const driftMs = nowMs - fromMs - heldMs(fromMs, nowMs, holding);
   const range = rules.maxContentment - rules.baselineContentment;
-  const drop = Math.floor((driftMs * range) / (rules.hoursFullToBaseline * HOUR_MS));
+  // Integers only: whole ms × whole points × whole percent stays well inside
+  // 2^53 for years of drift, and one floor at the end.
+  const drop = Math.floor(
+    (driftMs * range * drainPercent) / (rules.hoursFullToBaseline * HOUR_MS * 100),
+  );
   return Math.max(floor, contentment - drop);
 }
 
@@ -143,8 +153,12 @@ export function contentmentAfterCare(
   gain: number,
   rules: Pick<CareRules, 'maxContentment' | 'baselineContentment' | 'hoursFullToBaseline'>,
   holding: readonly HoldSpan[] = [],
+  drainPercent = 100,
 ): number {
-  return Math.min(rules.maxContentment, contentmentAt(state, now, rules, holding) + gain);
+  return Math.min(
+    rules.maxContentment,
+    contentmentAt(state, now, rules, holding, drainPercent) + gain,
+  );
 }
 
 /**

@@ -5,6 +5,7 @@ import { RequirementSchema, type Requirement } from '../schemas/data/requirement
 import {
   EMPTY_PROGRESS_FACTS,
   evaluateRequirements,
+  pluralName,
   requirementAmount,
   requirementGroup,
   requirementLine,
@@ -129,6 +130,13 @@ describe('requirements (#381 plan §8)', () => {
     expect(
       requirementLine({ kind: 'buildingsBuilt', buildingId: 'cozy-meadow', count: 2 }, context),
     ).toBe('Build 2 Cozy Meadows');
+    // y → ies after a consonant (#430 review): a later building's name reads right.
+    const nursery = { ...context, buildingName: () => 'Berry Nursery' };
+    expect(
+      requirementLine({ kind: 'buildingsBuilt', buildingId: 'cozy-meadow', count: 3 }, nursery),
+    ).toBe('Build 3 Berry Nurseries');
+    expect(pluralName('Toy Bay')).toBe('Toy Bays');
+    expect(pluralName('Training Grounds')).toBe('Training Grounds');
     expect(requirementLine({ kind: 'heartSeedLevel', level: 2 }, context)).toBe(
       'Grow your Heart Seed to level 2 🌱',
     );

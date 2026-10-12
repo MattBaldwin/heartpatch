@@ -442,6 +442,7 @@ export function createCareService(options: CareServiceOptions): CareService {
             }
           : null,
         accessory: worn.get(row.id) ?? null,
+        houseRoomId: row.houseRoomId,
         whisper: whisperOf(
           { ...row, name: nameOf(row) },
           habitat,

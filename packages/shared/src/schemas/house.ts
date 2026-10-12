@@ -84,3 +84,14 @@ export const BuildHouseRequestSchema = z.strictObject({
   toLevel: z.number().int().min(2),
 });
 export type BuildHouseRequest = z.infer<typeof BuildHouseRequestSchema>;
+
+/**
+ * `POST /maps/:mapId/house/residents`: move one of my squishies into a room
+ * of my house, into another room, or out (`roomId: null`). Replies with the
+ * `HouseView`.
+ */
+export const MoveResidentRequestSchema = z.strictObject({
+  squishyId: z.uuid(),
+  roomId: ContentIdSchema.nullable(),
+});
+export type MoveResidentRequest = z.infer<typeof MoveResidentRequestSchema>;
