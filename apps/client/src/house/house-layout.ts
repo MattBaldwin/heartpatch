@@ -84,6 +84,12 @@ export interface WallRun {
   readonly top: boolean;
   readonly doors: readonly WallHole[];
   readonly windows: readonly WallHole[];
+  /**
+   * The floor of the rooms standing on its top edge when they all start
+   * above it (null when nothing does, or its own room goes on up): the
+   * floor cut takes those away, so its top edge gets a dark cap.
+   */
+  readonly upper: number | null;
 }
 
 const { cell, storey, wall, frontLip } = HOUSE_GRID;
@@ -182,7 +188,11 @@ export function wallRuns(rooms: readonly RoomInput[]): WallRun[] {
   const runs: WallRun[] = [];
   for (let floor = 0; floor < top; floor += 1) {
     const edges = edgesOn(cellsOn(rooms, floor));
-    const above = new Set(edgesOn(cellsOn(rooms, floor + 1)).map(edgeKey));
+    const upstairs = edgesOn(cellsOn(rooms, floor + 1));
+    const above = new Set(upstairs.map(edgeKey));
+    const starts = new Map(rooms.map((r) => [r.id, r.layout.floor]));
+    // Which floor the room whose wall stands on each edge upstairs starts on.
+    const aboveFloor = new Map(upstairs.map((e) => [edgeKey(e), starts.get(e.room) ?? 0]));
     // Join neighbours along each grid line.
     const groups = new Map<string, Edge[]>();
     for (const e of edges) {
@@ -210,6 +220,7 @@ export function wallRuns(rooms: readonly RoomInput[]): WallRun[] {
             first,
             last,
             above,
+            aboveFloor,
             boxes.get(first.room),
             boxes.get(first.other ?? ''),
           ),
@@ -228,6 +239,7 @@ function makeRun(
   first: Edge,
   last: Edge,
   above: ReadonlySet<string>,
+  aboveFloor: ReadonlyMap<string, number>,
   box: RoomBox | undefined,
   otherBox: RoomBox | undefined,
 ): WallRun {
@@ -279,5 +291,82 @@ function makeRun(
     top: !run.every((e) => above.has(edgeKey(e))),
     doors: holes,
     windows,
+    upper: run.every((e) => (aboveFloor.get(edgeKey(e)) ?? floor) > floor) ? floor + 1 : null,
   };
+}
+
+// ── The floor cut (plan §1c) ─────────────────────────────────────────
+
+/**
+ * The floors the dollhouse can show, bottom up: every floor a room starts
+ * on. A room that spans storeys (the Heart Hall) counts on its first.
+ */
+export function houseFloors(rooms: readonly Pick<RoomBox, 'floor'>[]): number[] {
+  return [...new Set(rooms.map((r) => r.floor))].sort((a, b) => a - b);
+}
+
+/**
+ * The floor a wall run goes with for the cut: the higher of its two rooms'
+ * first floors. A wall between the Heart Hall (floor 0) and the Kitchen
+ * (floor 1) is only there because of the Kitchen, so it goes with it.
+ */
+export function runFloor(run: Pick<WallRun, 'room' | 'other'>, rooms: readonly RoomBox[]): number {
+  const floorOf = (id: string | null) => rooms.find((r) => r.id === id)?.floor ?? 0;
+  return Math.max(floorOf(run.room), floorOf(run.other));
+}
+
+/** Whether room `o` stands over room `r` (on or above its top, their footprints overlapping). */
+export const covers = (o: RoomBox, r: RoomBox): boolean =>
+  o !== r && o.y0 >= r.y1 && o.x0 < r.x1 && o.x1 > r.x0 && o.z0 < r.z1 && o.z1 > r.z0;
+
+/** What the dollhouse shows at one floor. */
+export interface FloorCut {
+  /** The floor shown (the nearest of the house's floors at or below the one asked for). */
+  readonly floor: number;
+  /** Rooms drawn: every room starting on this floor or below it. */
+  readonly shown: ReadonlySet<string>;
+  /**
+   * Rooms whose residents are drawn: every shown room with no shown room
+   * over it (plan §1c: residents on other floors are not drawn; the Snug's
+   * are under the Kitchen's floor upstairs, the Playroom's in the open).
+   */
+  readonly cast: ReadonlySet<string>;
+  /** The box round the shown rooms. */
+  readonly bounds: HouseBounds;
+}
+
+/**
+ * The floor cut (plan §1c `floorCut`): the dollhouse shows one floor with
+ * every floor above it taken away, so its rooms lie open to the camera.
+ * Anything tagged with a floor (a room's pieces, a wall, a bed) is drawn
+ * while `shownAt(tag, cut.floor)`.
+ */
+export function floorCut(rooms: readonly RoomBox[], floor: number): FloorCut {
+  const floors = houseFloors(rooms);
+  const at = floors.filter((f) => f <= floor).at(-1) ?? floors[0] ?? 0;
+  const shown = rooms.filter((r) => r.floor <= at);
+  return {
+    floor: at,
+    shown: new Set(shown.map((r) => r.id)),
+    cast: new Set(shown.filter((r) => !shown.some((o) => covers(o, r))).map((r) => r.id)),
+    bounds: houseBounds(shown),
+  };
+}
+
+/** Whether something on floor `tag` is drawn while the dollhouse shows `floor`. */
+export const shownAt = (tag: number, floor: number): boolean => tag <= floor;
+
+/**
+ * The floor the dollhouse shows once the house has grown to `level`: the
+ * new room's when it starts above the floor shown (the Kitchen, upstairs at
+ * level 3, would be cut away), else the floor shown (a room below it, like
+ * the two-storey Heart Hall, is in view either way).
+ */
+export function floorAfterGrowing(
+  rooms: readonly { readonly level: number; readonly layout: Pick<HouseRoomLayout, 'floor'> }[],
+  level: number,
+  shown: number,
+): number {
+  const added = rooms.find((r) => r.level === level);
+  return added && added.layout.floor > shown ? added.layout.floor : shown;
 }

@@ -8,7 +8,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseExterior } from '@heartpatch/shared';
 import { linear, merged, painted } from '../map/map-props.js';
-import { HOUSE_COTTAGE, HOUSE_GROWN, HOUSE_PALETTE } from './house-config.js';
+import { HOUSE_COTTAGE, HOUSE_GRID, HOUSE_GROWN, HOUSE_PALETTE } from './house-config.js';
 import type { WallHole } from './house-layout.js';
 
 /*
@@ -165,7 +165,7 @@ export function floorPlanks(
   y: number,
 ): Mesh[] {
   const tones = HOUSE_PALETTE.planks;
-  const n = Math.max(1, Math.round(w / 0.4)); // TUNE: plank width
+  const n = Math.max(1, Math.round(w / HOUSE_GRID.plank));
   return Array.from({ length: n }, (_, i) =>
     box(
       scene,
@@ -287,7 +287,8 @@ export function roofInside(
   const flags = ['#ff9ab8', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
   for (const [t, drop] of [
     [0.5, 0.5],
-    [0.8, 0.45],
+    // TUNE: clear of the gable shelf's toys from kid height (render check: it ran across them at 0.8 / 0.45).
+    [0.7, 0.58],
   ] as const) {
     const n = Math.max(6, Math.round(w / 0.32));
     for (let i = 0; i < n; i++) {
@@ -314,14 +315,52 @@ export function roofInside(
   return { solid, glow: [lantern] };
 }
 
+/**
+ * A room's ceiling under a floor the cut has taken away (B4: kid height in
+ * the Snug once the Kitchen's gone): pale boards on slim joists running
+ * front to back and a beam across, reaching out over the porch like
+ * `roofInside` so kid height sees no sky. Its underside sits at `y`. No
+ * lantern: one hung in front of the window and the sign (render check).
+ */
+export function beamCeiling(
+  scene: Scene,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+  overhang: number,
+): Mesh[] {
+  const c = HOUSE_PALETTE.ceiling;
+  const depth = d + overhang;
+  const zc = z0 + (d - overhang) / 2;
+  const solid: Mesh[] = [
+    box(scene, [w + 0.3, 0.06, depth + 0.2], [x0 + w / 2, y + 0.03, zc], c.boards),
+  ];
+  const n = Math.max(2, Math.round(w / c.joistEvery));
+  for (let i = 0; i <= n; i++) {
+    solid.push(
+      box(
+        scene,
+        // TUNE: slim, so from kid height they read as a light ceiling, not a cage (render check, B4).
+        [0.08, 0.1, depth],
+        [x0 + (w * i) / n, y - 0.05, zc],
+        i % n === 0 ? c.beam : c.joists,
+      ),
+    );
+  }
+  solid.push(box(scene, [w + 0.2, 0.16, 0.16], [x0 + w / 2, y - 0.08, z0 + d * 0.55], c.beam));
+  return solid;
+}
+
 // ── Furniture ───────────────────────────────────────────────────────
 
 /** A bed's frame, mattress, pillow and headboard (the blanket is its own part, coloured per bed). */
-export function bedFrame(scene: Scene): Mesh[] {
+export function bedFrame(scene: Scene, rounds = 10): Mesh[] {
   return [
     box(scene, [1.5, 0.32, 1.1], [0, 0.16, 0], '#8a5a39'),
     box(scene, [1.42, 0.14, 1.02], [0, 0.38, 0], '#fff2e3'),
-    ball(scene, 0.42, [0, 0.5, 0.33], '#ffffff', [1.6, 0.5, 0.9]),
+    ball(scene, 0.42, [0, 0.5, 0.33], '#ffffff', [1.6, 0.5, 0.9], rounds),
     box(scene, [1.5, 0.6, 0.12], [0, 0.3, 0.49], '#8a5a39'),
   ];
 }
@@ -332,13 +371,13 @@ export function bedBlanket(scene: Scene): Mesh[] {
 }
 
 /** A hearth facing +z in local units: stone surround, mantel, firebox, log and a layered flame. */
-export function hearth(scene: Scene, wide: boolean): Parts {
+export function hearth(scene: Scene, wide: boolean, rounds = 10): Parts {
   const w = wide ? 3.0 : 1.9;
   const h = wide ? 2.5 : 1.7;
   const log = tube(scene, 0.62, 0.17, 0.17, [0, 0.12, 0.4], '#6b4a30', 7);
   log.rotation.z = Math.PI / 2;
   const tongue = (d: number, at: Vec, stretch: number, lean: number, hex: string) => {
-    const t = glowing(CreateSphere('house-part', { diameter: d, segments: 10 }, scene), hex);
+    const t = glowing(CreateSphere('house-part', { diameter: d, segments: rounds }, scene), hex);
     t.position.set(...at);
     t.scaling.set(1, stretch, 0.75);
     t.rotation.z = lean;
@@ -530,7 +569,11 @@ export function frontYard(
   x0: number,
   x1: number,
   front: number,
+  /** Segments on its rounds (the tier's `rounds`): the bushes and pumpkins are small in the frame. */
+  rounds = 10,
 ): Parts & { lanterns: [number, number][] } {
+  const bush = Math.min(8, rounds - 1);
+  const bloom = rounds >= 10 ? 6 : 4;
   const cx = (x0 + x1) / 2;
   const solid: Mesh[] = [];
   const glow: Mesh[] = [];
@@ -559,7 +602,7 @@ export function frontYard(
     glow.push(glowing(box(scene, [0.3, 0.42, 0.3], [x, 0.83, front - 1.2], '#ffd27a'), '#ffd27a'));
   }
   for (const p of yardPumpkins(x0, x1, front)) {
-    solid.push(ball(scene, p.d, p.at, p.hex, [1.1, 0.8, 1.1]));
+    solid.push(ball(scene, p.d, p.at, p.hex, [1.1, 0.8, 1.1], rounds));
   }
   const fz = front - 3.4;
   for (let x = x0 - 0.6; x <= x1 + 0.6; x += 0.32) {
@@ -570,9 +613,16 @@ export function frontYard(
   for (let i = 0; i < 10; i++) {
     const x = x0 - 0.3 + ((x1 - x0 + 0.6) * (i + 0.5)) / 10;
     if (Math.abs(x - cx) < 0.9) continue;
-    solid.push(ball(scene, 0.55, [x, -0.12, front - 2.6], '#7cb87a', [1, 0.7, 1], 8));
+    solid.push(ball(scene, 0.55, [x, -0.12, front - 2.6], '#7cb87a', [1, 0.7, 1], bush));
     solid.push(
-      ball(scene, 0.16, [x + 0.12, 0.05, front - 2.75], blooms[i % 4] ?? '#ffb3c8', [1, 1, 1], 6),
+      ball(
+        scene,
+        0.16,
+        [x + 0.12, 0.05, front - 2.75],
+        blooms[i % 4] ?? '#ffb3c8',
+        [1, 1, 1],
+        bloom,
+      ),
     );
   }
   return { solid, glow, lanterns };
@@ -965,19 +1015,24 @@ export function heartTree(scene: Scene, h: number): Parts {
   // Its top tucked inside the lobes (render check r3: a wider top showed as pink wings).
   const point = tube(scene, r * 1.8, r * 2.0, 0.05, [0, top - r * 1.2, 0], c.crown[0], G.facets);
   point.scaling.z = 0.55;
-  const solid = [
-    tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
-    ...boughs,
+  // The crown glows softly in its own shaded pink (B4: lit, high's dusk sun
+  // from behind turned it mauve while low's stayed pink), lighter on top.
+  const [shade, light] = c.crownGlow;
+  const crown = [
     ball(scene, r * 2.1, [-r * 0.72, top, 0], c.crown[0], [1, 1, 0.62], G.segments),
     ball(scene, r * 2.1, [r * 0.72, top, 0], c.crown[1], [1, 1, 0.62], G.segments),
     point,
+  ].map((m) => ramp(m, top - r * 2.2, top + r * 1.05, shade, light));
+  const solid = [
+    tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
+    ...boughs,
     // Roots spreading on the floor, with a gold ring round them.
     tube(scene, 0.12, 1.5, 1.6, [0, 0.06, 0], '#8a6a52', G.sides),
     tube(scene, 0.08, 1.75, 1.75, [0, 0.04, 0], c.gold, G.sides),
   ];
   const heart = goldHeart(scene, r * 0.9);
   for (const m of heart) m.position.addInPlaceFromFloats(0, top - r * 0.1, front);
-  const glow: Mesh[] = [...heart];
+  const glow: Mesh[] = [...crown, ...heart];
   for (let i = 0; i < 7; i++) {
     const a = i * 2.4;
     // A little diamond: a box stood on its corner.

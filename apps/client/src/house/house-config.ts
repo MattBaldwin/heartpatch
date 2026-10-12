@@ -16,6 +16,8 @@ export const HOUSE_GRID = {
   wall: 0.24, // TUNE
   /** How tall a wall that faces the dollhouse camera is cut down to. */
   cut: 1.0, // TUNE: low enough to see over from 50°+
+  /** One floor board's width (the porch's boards line up with the room's). */
+  plank: 0.4, // TUNE
   /** How far the floor reaches past the open front (a little lip). */
   frontLip: 0.35, // TUNE
 } as const;
@@ -34,6 +36,13 @@ export const HOUSE_PALETTE = {
   lawnLift: '#3a3424', // TUNE: emissive lift so the lawn stays pastel at dusk
   haze: '#f0b49a', // TUNE: dusk haze, the backdrop's horizon colour
   sky: '#5a4f9c', // TUNE: clear colour behind everything
+  /** A room's beamed ceiling at kid height once the floor above is cut away (B4). */
+  ceiling: {
+    boards: '#efc9a2', // TUNE: pale warm boards (a flat brown read as a lid, render check)
+    joists: '#c99068', // TUNE: a shade under the boards
+    beam: '#8a5a39', // TUNE: the dark beams, like the roof's
+    joistEvery: 0.8, // TUNE: metres
+  },
 } as const;
 
 /** Windows on exterior walls: one per wall run at least `minRun` cells long. */
@@ -60,12 +69,48 @@ export interface HouseTierLook {
   readonly trees: number;
   /** The squishy-only fill's strength: higher without bloom and the window light. */
   readonly fill: number;
+  /** Segments on the trees' round crowns (far off, in the haze). */
+  readonly treeSegments: number;
+  /**
+   * Segments on the small round props (pillows, the yard's bushes and
+   * pumpkins, the hearth's flames): never on squishies, which keep their
+   * own detail on every tier.
+   */
+  readonly rounds: number;
 }
 
 export const HOUSE_TIERS: Readonly<Record<QualityTier, HouseTierLook>> = {
-  high: { lights: 4, shadowMap: 2048, specular: true, clearCoat: true, trees: 30, fill: 2.6 }, // TUNE
-  medium: { lights: 3, shadowMap: 1024, specular: true, clearCoat: true, trees: 20, fill: 2.8 }, // TUNE
-  low: { lights: 2, shadowMap: 0, specular: false, clearCoat: false, trees: 12, fill: 3.2 }, // TUNE
+  // TUNE: all of it. B4 budget headroom: crowns 9 → 7 (high) and 6, the small rounds 10 → 7 off high.
+  high: {
+    lights: 4,
+    shadowMap: 2048,
+    specular: true,
+    clearCoat: true,
+    trees: 30,
+    fill: 2.45, // TUNE: B4: Puddlepuff's belly reads about #e8f6ff (2.6 clips it to white, 2.35 greys it)
+    treeSegments: 7,
+    rounds: 10,
+  },
+  medium: {
+    lights: 3,
+    shadowMap: 1024,
+    specular: true,
+    clearCoat: true,
+    trees: 20,
+    fill: 2.45, // TUNE: B4: as high (2.8 clipped Puddlepuff's belly to white)
+    treeSegments: 6,
+    rounds: 7,
+  },
+  low: {
+    lights: 2,
+    shadowMap: 0,
+    specular: false,
+    clearCoat: false,
+    trees: 12,
+    fill: 3.2,
+    treeSegments: 6,
+    rounds: 7,
+  },
 };
 
 /**
@@ -77,9 +122,20 @@ export const HOUSE_BUDGET: Readonly<
   Record<QualityTier, { drawCalls: number; triangles: number; lights: number }>
 > = {
   high: { drawCalls: 110, triangles: 220_000, lights: 4 }, // TUNE: plan §1c
-  medium: { drawCalls: 90, triangles: 160_000, lights: 3 }, // TUNE
+  // TUNE: was the plan's 160k, which assumed `low` squishies outside the
+  // focus room; B4 keeps every squishy at full detail on medium (the
+  // owner's bar), and the top level's ground floor alone is ~150k of
+  // squishies and the Keeper. 190k keeps a tenth spare over the worst
+  // frame (the entry glide, ~171k). Needs the coordinator's OK (B4 PR body).
+  medium: { drawCalls: 90, triangles: 190_000, lights: 3 },
   low: { drawCalls: 60, triangles: 90_000, lights: 2 }, // TUNE: binding (iPad 9th gen)
 };
+
+/** The shadow map (high and medium). */
+export const HOUSE_SHADOW = {
+  /** Pieces smaller than this (metres, their biggest size) cast no shadow: the shadow pass skips them. */
+  minCaster: 0.35, // TUNE
+} as const;
 
 /** Light strengths (Babylon units). */
 export const HOUSE_LIGHT = {
@@ -90,19 +146,19 @@ export const HOUSE_LIGHT = {
   /** A lamp's point light (high: a second warm light). */
   lamp: { intensity: 8, color: '#ffcf8a' }, // TUNE
   /** Low tier: the one warm house light over the rooms. */
-  house: { intensity: 22, color: '#ffd6a8' }, // TUNE
+  house: { intensity: 1.6, color: '#ffd6a8', direction: [0.15, -0.8, 0.55] }, // TUNE: B4 directional (was a point light, 22)
   /** Point light range: long, since PBR's range is a hard cut (a seam on the floor). */
   range: 40, // TUNE
   /** Image-based light under the lamps. */
   environment: { lit: 0.4, low: 0.48 }, // TUNE: the lamps carry the room
   /** Low tier: a warm ambient bounce stands in for the window light. */
-  ambient: '#4a2e22', // TUNE
+  ambient: '#5e3c2c', // TUNE: B4: a little more, the low house light now being directional (a roof seen from inside faces away from it)
   /**
    * The squishy-only fill (ART_BIBLE: nothing changes a squishy's colours):
    * a neutral light on squishies and the Keeper alone, while every warm
    * light leaves them out, so Puddlepuff's pale belly stays pale.
    */
-  fill: { color: '#ffffff', specular: 0.35 }, // TUNE: neutral, so Puddlepuff's belly reads #e8f6ff (owner check #4)
+  fill: { color: '#ffffff', specular: 0.2 }, // TUNE: 0.35 left a hot spot on the Keeper's face (B4): neutral, so Puddlepuff's belly reads #e8f6ff (owner check #4)
 } as const;
 
 /** Blanket colours, bed by bed (sRGB). */
@@ -137,6 +193,8 @@ export const HOUSE_CAST = {
    * faceted (owner check #4). The rest keep the low detail.
    */
   lowHeroes: 2, // TUNE: the Snug's two beds; about 10k triangles each
+  /** About how far a resident reaches from its middle at scale 1, metres (spikes and ears included): the phone frame's edge misses it. */
+  reach: 0.62, // TUNE
   /** At most this far off facing the camera, radians. */
   faceTurn: 0.3, // TUNE
 } as const;
@@ -151,6 +209,22 @@ export const HOUSE_CAMERA = {
   fov: { phone: 50, wide: 44 }, // TUNE
   /** Space kept round the house inside the safe area, CSS px. */
   margin: 10, // TUNE
+  /**
+   * The folded sheet's band at the bottom, CSS px (the iPhone's peek bar
+   * and its gap), when the screen doesn't measure it.
+   */
+  sheet: 79, // TUNE
+  /**
+   * A portrait phone fits the focus room across plus this much of each
+   * neighbour, metres (the rest is a sideways drag away).
+   */
+  peek: 1.1, // TUNE: B4: the Snug big enough to read its squishies, the Playroom's edge in view
+  /** The "more this way" chevron pill (CSS px): its size, how far in from the edge, and the gap it keeps from a resident. */
+  chevron: { width: 28, height: 44, inset: 4, gap: 8 }, // TUNE: house.css .house-more matches
+  /** Room kept between a frame edge and a resident it would slice, normalised device units. */
+  edgeClear: 0.04, // TUNE
+  /** How deep the front yard is (path, lanterns, bushes, fence), metres: kept in frame when there's room. */
+  yard: 3.7, // TUNE: frontYard's fence and last stepping stone
   /** Pinch out past the dollhouse by this much (zoom units) and you're back home. */
   exitOvershoot: 0.18, // TUNE
   /** A mouse wheel's travel (px; a notch is about 100) that moves zoom by 1. */
@@ -158,6 +232,13 @@ export const HOUSE_CAMERA = {
   /** How much pinch (log of the finger spread ratio) moves zoom by 1. */
   pinchPerZoom: 0.9, // TUNE
 } as const;
+
+/**
+ * The dollhouse fits the floor it shows (the floor cut's rooms) rather than
+ * the whole house: on the ground floor of a two-floor house the camera
+ * comes in closer. A plain boolean, so turning it off needs no other change.
+ */
+export const HOUSE_FIT_FLOOR: boolean = true; // TUNE: B4 captures showed both
 
 /** Kid height (`kidPose`, `blend`, `wallFade`): walking into a room. */
 export const HOUSE_KID = {
@@ -191,6 +272,8 @@ export const HOUSE_KID = {
   walkedIn: 0.5, // TUNE
   /** Walk in / Step out takes this long, seconds. */
   walkSeconds: 1.2, // TUNE
+  /** The header over a back wall cut low (the Snug's, with the Heart Hall behind), metres deep: it holds the sign. */
+  header: 0.9, // TUNE: B4 round 4: deep enough that the Heart Tree's crown never peeks under it
   /** The porch you stand on at kid height, outside the open front, metres deep. */
   porch: 5.4, // TUNE
 } as const;
@@ -271,18 +354,20 @@ export const HOUSE_GROWN = {
     gold: '#f2c14e', // TUNE: the top level's gold accents
     trunk: '#9b7a62', // TUNE
     /** The Heart Tree's crown, a heart of two pink rounds (sRGB). */
-    crown: ['#ffb0d0', '#ff9cc4'], // TUNE: left and right lobes; light, so high tier's shade stays pink
+    crown: ['#ffc2dc', '#ffb0d2'], // TUNE: left and right lobes
+    /** The crown's glow, its foot to its top (it's unlit, so the same pink on every tier). */
+    crownGlow: ['#c48fa4', '#eebfd0'], // TUNE: the low tier's lit pink (#c7899e) at its middle
     lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
     sparkle: '#fff2b0', // TUNE: the tree's sparkles
     rug: '#e97a9b', // TUNE
     rugEdge: '#f2c14e', // TUNE
     /** Where the first residents stand, as shares of the hall's width and depth. */
     residentBand: [
-      [0.56, 0.25],
-      [0.72, 0.22],
+      [0.66, 0.3],
+      [0.8, 0.22],
       [0.8, 0.45],
       [0.8, 0.68],
-    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
+    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres

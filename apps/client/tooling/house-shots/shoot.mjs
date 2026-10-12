@@ -13,6 +13,7 @@
 // scene and post passes) and hold on a device. No dev badges in the shots.
 //
 // LEVELS (default 1), POSES (dollhouse,kid), TIERS (high,low), DEVICES (iphone,ipad) narrow the set;
+// a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -33,18 +34,22 @@ const devices = only('DEVICES', ['iphone', 'ipad']);
 const poses = only('POSES', ['dollhouse', 'kid']);
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 2);
 
+/** Floors a level's dollhouse has (house-data: the Kitchen upstairs from level 3). */
+const floorsAt = (level) => (Number(level) >= 3 ? [0, 1] : [0]);
 const jobs = [];
 for (const level of levels)
   for (const pose of poses)
-    for (const tier of tiers)
-      for (const device of devices)
-        jobs.push({
-          file: `house${level}-${pose}-${tier}-${device}.png`,
-          level,
-          pose,
-          tier,
-          device,
-        });
+    for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
+      for (const tier of tiers)
+        for (const device of devices)
+          jobs.push({
+            file: `house${level}-${pose}${floor > 0 ? `-f${floor}` : ''}-${tier}-${device}.png`,
+            level,
+            pose,
+            floor,
+            tier,
+            device,
+          });
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 if (ONLY) jobs.splice(0, jobs.length, ...jobs.filter((j) => ONLY.test(j.file)));
 
@@ -107,6 +112,11 @@ async function shoot(job) {
   const q = new URLSearchParams({ level: job.level, tier: job.tier, still: '1' });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
+  if (job.floor > 0) {
+    // Upstairs: the floor switch (the Kitchen's floor; the one below stays).
+    await page.getByTestId('house-floor').click();
+    await until(page, (f) => window.__heartpatch.house()?.scene?.floor === f, job.floor);
+  }
   if (job.pose === 'kid') {
     // Walk in (the gallery's `still=1` cuts straight there, as reduced motion does).
     await page.getByTestId('house-walk').click();
@@ -145,10 +155,29 @@ async function shoot(job) {
     }
     for (const n of document.querySelectorAll('.house button')) {
       const r = n.getBoundingClientRect();
+      if (r.width === 0) continue; // hidden (the floor switch in a one-floor house)
       if (r.width < 44 || r.height < 44) bad.push(`${n.className} is ${r.width}×${r.height}`);
     }
     return bad;
   });
+  // HUD hints over a resident (B4 round 4: the chevron pill sat on a face): each shown
+  // .house-more's rect against every resident's box on the screen.
+  const uiOverlap = await page.evaluate((boxes) => {
+    const hits = [];
+    for (const n of document.querySelectorAll('.house-more')) {
+      if (n.hidden) continue;
+      const r = n.getBoundingClientRect();
+      for (const b of boxes) {
+        const x0 = b.x0 * innerWidth;
+        const x1 = b.x1 * innerWidth;
+        const y0 = b.y0 * innerHeight;
+        const y1 = b.y1 * innerHeight;
+        if (r.left < x1 && r.right > x0 && r.top < y1 && r.bottom > y0)
+          hits.push(`${n.className} over a resident`);
+      }
+    }
+    return hits;
+  }, house.faces?.boxes ?? []);
   await page.screenshot({ path: path.join(OUT, job.file), timeout: 240_000 });
   await ctx.close();
   const scene = house.scene;
@@ -157,6 +186,8 @@ async function shoot(job) {
     level: house.level,
     rooms: house.rooms,
     pose: job.pose,
+    floor: scene.floor,
+    floors: scene.floors,
     tier: quality?.tier,
     pinned: quality?.pinned,
     device: job.device,
@@ -174,6 +205,9 @@ async function shoot(job) {
     frontWallAlpha: scene.frontWallAlpha,
     heroes: scene.heroes,
     facesVisible: house.faces ? `${house.faces.visible}/${house.faces.total}` : null,
+    // Residents partly off the screen's edges (should be 0: the phone's frame edge falls between them).
+    edgeCut: house.faces?.cut ?? null,
+    uiOverlap,
     keeper: scene.keeper,
     ...(quality?.tier === 'low' && {
       lowBudget: {

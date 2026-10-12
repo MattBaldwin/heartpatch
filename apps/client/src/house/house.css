@@ -103,6 +103,57 @@
   transform: scale(0.97);
 }
 
+/* Upstairs / Downstairs (B4 floor cut): bottom left, across from Walk in. */
+.house-floor {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  min-height: 52px;
+  padding: var(--hp-pad-y) 16px;
+  border: none;
+  border-radius: 999px;
+  background: #fffafc;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  color: #7a2d55;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.house-floor:active {
+  transform: scale(0.97);
+}
+
+/* More house past a side the phone crops (B4): a small soft chevron pill. */
+.house-more {
+  position: absolute;
+  top: 50%; /* the screen sets it clear of the residents (chevronBox) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgb(255 250 252 / 72%);
+  box-shadow: 0 2px 8px rgb(74 49 80 / 14%);
+  color: #7a2d55;
+  font-size: 24px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.house-more-left {
+  left: calc(env(safe-area-inset-left) + 4px);
+}
+
+.house-more-right {
+  right: calc(env(safe-area-inset-right) + 4px);
+}
+
 /* The bottom sheet, collapsed to its handle and the room's name. */
 .house-peek {
   position: absolute;
