@@ -7,10 +7,8 @@ import {
   type TileUsePlan,
   type TileUseTile,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
-import { buildings, maps, squishies, tileExplore, tileUseNotes, tiles } from '../../db/schema.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createFactoryRepo } from '../factory/repo.js';
@@ -20,8 +18,13 @@ import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { landTraining, leaveWork, squishyName } from '../jobs/service.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import { packUpRefund } from './layout.js';
-import { createBuildingsRepo, type BuildingRow } from './repo.js';
-import { readTileUseNote, type TileUseNoteContent } from './tile-use-notes.js';
+import {
+  createBuildingsRepo,
+  type BuildingRow,
+  type BuildingsRepo,
+  type TileUseNoteContent,
+} from './repo.js';
+import { createMapsRepo } from '../maps/repo.js';
 
 /*
  * One building per tile (#295, owner decisions 2026-10-11): patches built
@@ -68,38 +71,17 @@ export interface OwnerTileUses {
 export const tidies = (uses: Pick<OwnerTileUses, 'plan' | 'gatherers'>): boolean =>
   uses.plan.move.length + uses.plan.pack.length + uses.gatherers.length > 0;
 
-/** The player's tiles as the tile-use rules see them: home slot, spot, homestead state. */
-async function tileUseTiles(db: Executor, owner: TileUseOwner): Promise<TileUseTile[]> {
-  const rows = await db
-    .select({
-      id: tiles.id,
-      q: tiles.q,
-      r: tiles.r,
-      homeSlot: tiles.homeSlot,
-      nodeResource: tiles.nodeResource,
-      joinedAt: tileExplore.joinedAt,
-      pausedAt: tileExplore.pausedAt,
-      resumedAt: tileExplore.resumedAt,
-    })
-    .from(tiles)
-    .leftJoin(
-      tileExplore,
-      and(eq(tileExplore.tileId, tiles.id), eq(tileExplore.userId, owner.userId)),
-    )
-    .where(and(eq(tiles.mapId, owner.mapId), eq(tiles.ownerUserId, owner.userId)))
-    .orderBy(asc(tiles.id));
-  return rows.map(({ joinedAt, pausedAt, resumedAt, ...tile }) => ({
+/** One player's plan, read through `db` (the caller decides on locks). */
+export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Promise<OwnerTileUses> {
+  const repo = createBuildingsRepo(db);
+  const [tileRows, rows] = await Promise.all([
+    repo.listTileUseTiles(owner.mapId, owner.userId),
+    repo.listOwned(owner.mapId, owner.userId),
+  ]);
+  const ownTiles: TileUseTile[] = tileRows.map(({ joinedAt, pausedAt, resumedAt, ...tile }) => ({
     ...tile,
     homestead: tile.homeSlot === null ? homesteadOf({ joinedAt, pausedAt, resumedAt }) : null,
   }));
-}
-
-/** One player's plan, read through `db` (the caller decides on locks). */
-export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Promise<OwnerTileUses> {
-  const [ownTiles, rows] = await Promise.all([
-    tileUseTiles(db, owner),
-    createBuildingsRepo(db).listOwned(owner.mapId, owner.userId),
-  ]);
   const plan = planTileUses(
     ownTiles,
     rows.map((r) => ({
@@ -122,22 +104,7 @@ export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Prom
         .filter((id) => !home.has(id)),
     ),
   ];
-  const gatherers =
-    built.length === 0
-      ? []
-      : (
-          await db
-            .select({ id: squishies.id })
-            .from(squishies)
-            .where(
-              and(
-                eq(squishies.mapId, owner.mapId),
-                eq(squishies.ownerUserId, owner.userId),
-                inArray(squishies.workTileId, built),
-              ),
-            )
-            .orderBy(asc(squishies.id))
-        ).map((s) => s.id);
+  const gatherers = await repo.gatherersOnTiles(owner.mapId, owner.userId, built);
   return { owner, tiles: ownTiles, rows, plan, gatherers };
 }
 
@@ -148,19 +115,7 @@ export async function planOwnerTileUses(db: Executor, owner: TileUseOwner): Prom
  * land with a building. A cheap scan; each one's plan decides.
  */
 export async function listTileUseOwners(db: Executor): Promise<TileUseOwner[]> {
-  const rows = await db
-    .select({
-      mapId: buildings.mapId,
-      userId: buildings.ownerUserId,
-      tileId: buildings.tileId,
-      buildingId: buildings.buildingId,
-      home: sql<boolean>`${tiles.homeSlot} is not null`,
-    })
-    .from(buildings)
-    .innerJoin(tiles, eq(tiles.id, buildings.tileId))
-    .innerJoin(maps, eq(maps.id, buildings.mapId))
-    .where(eq(maps.kind, 'multiplayer'))
-    .orderBy(asc(buildings.mapId), asc(buildings.ownerUserId), asc(buildings.id));
+  const { rows, working } = await createBuildingsRepo(db).scanTileUses();
   const owners = new Map<string, TileUseOwner>();
   const perTile = new Map<string, number>();
   for (const row of rows) perTile.set(row.tileId, (perTile.get(row.tileId) ?? 0) + 1);
@@ -172,19 +127,6 @@ export async function listTileUseOwners(db: Executor): Promise<TileUseOwner[]> {
       owners.set(`${row.mapId}/${row.userId}`, { mapId: row.mapId, userId: row.userId });
     }
   }
-  const working = await db
-    .selectDistinct({ mapId: squishies.mapId, userId: squishies.ownerUserId })
-    .from(squishies)
-    .innerJoin(
-      buildings,
-      and(
-        eq(buildings.tileId, squishies.workTileId),
-        eq(buildings.ownerUserId, squishies.ownerUserId),
-      ),
-    )
-    .innerJoin(tiles, eq(tiles.id, buildings.tileId))
-    .innerJoin(maps, eq(maps.id, buildings.mapId))
-    .where(and(isNull(tiles.homeSlot), eq(maps.kind, 'multiplayer')));
   for (const w of working) owners.set(`${w.mapId}/${w.userId}`, w);
   return [...owners.values()].sort((a, b) =>
     a.mapId === b.mapId ? (a.userId < b.userId ? -1 : 1) : a.mapId < b.mapId ? -1 : 1,
@@ -246,21 +188,9 @@ async function tidyOne(
     const at = clock();
     const jobs = createSquishyJobsRepo(tx);
     // Step 6: every tile I own, one id-ordered lock (a building may move to any of them).
-    const tileIds = (
-      await tx
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, owner.mapId), eq(tiles.ownerUserId, owner.userId)))
-    )
-      .map((t) => t.id)
-      .sort();
+    const tileIds = await repo.ownedTileIds(owner.mapId, owner.userId);
     await jobs.lockTiles(tileIds);
-    const map = (
-      await tx
-        .select({ id: maps.id, kind: maps.kind, timeZone: maps.timeZone })
-        .from(maps)
-        .where(eq(maps.id, owner.mapId))
-    )[0];
+    const map = await createMapsRepo(tx).findMap(owner.mapId);
     if (!map || map.kind !== 'multiplayer') return none;
     // Planned again under the locks: a command may have changed things since the scan.
     const uses = await planOwnerTileUses(tx, owner);
@@ -409,7 +339,7 @@ async function tidyOne(
 
     // The note, merged with any earlier one (a later rule change may tidy again).
     const names = new Map(mine.map((s) => [s.id, squishyName(s)]));
-    await noteTileUses(tx, owner, at, {
+    await noteTileUses(repo, owner, at, {
       moved: movedNote,
       packed: packing.map((r) => ({ buildingId: r.buildingId, q: r.q, r: r.r })),
       refund: (() => {
@@ -442,12 +372,12 @@ async function tidyOne(
 
 /** Writes (or adds to) the player's tidy-up note. After the bag's rows, before `maps`. */
 async function noteTileUses(
-  tx: Executor,
+  repo: Pick<BuildingsRepo, 'tileUseNote' | 'setTileUseNote'>,
   owner: TileUseOwner,
   at: Date,
   note: TileUseNoteContent,
 ): Promise<void> {
-  const earlier = await readTileUseNote(tx, owner);
+  const earlier = await repo.tileUseNote(owner.mapId, owner.userId);
   const merged: TileUseNoteContent = earlier
     ? {
         moved: [...earlier.moved, ...note.moved],
@@ -457,11 +387,5 @@ async function noteTileUses(
       }
     : { ...note, refund: {} };
   addInto(merged.refund, note.refund);
-  await tx
-    .insert(tileUseNotes)
-    .values({ mapId: owner.mapId, userId: owner.userId, ...merged, notedAt: at })
-    .onConflictDoUpdate({
-      target: [tileUseNotes.mapId, tileUseNotes.userId],
-      set: { ...merged, notedAt: at, seenAt: null },
-    });
+  await repo.setTileUseNote(owner.mapId, owner.userId, merged, at);
 }

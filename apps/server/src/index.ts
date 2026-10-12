@@ -114,7 +114,7 @@ relayoutHomes(db.db, clock, (owner, err) => {
   )
   .then(
     (done) => {
-      if (done) app.log.info(done, 'tile-use pass done');
+      app.log.info(done, 'tile-use pass done');
     },
     (err: unknown) => {
       app.log.error({ err }, 'tile-use pass failed');

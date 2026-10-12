@@ -55,7 +55,6 @@ import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
-import { readTileUseNote } from '../buildings/tile-use-notes.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { addNightWatchLean } from '../care/evolution.js';
@@ -586,7 +585,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         store.nightSquishies(mapId, { lock: false }),
         createBuildingsRepo(db).packedFires(mapId, user.id),
         createBuildingsRepo(db).packedTraining(mapId, user.id),
-        readTileUseNote(db, { mapId, userId: user.id }),
+        createBuildingsRepo(db).tileUseNote(mapId, user.id),
       ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
