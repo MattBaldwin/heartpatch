@@ -264,6 +264,13 @@ export const HOUSE_GROWN = {
     sparkle: '#fff2b0', // TUNE: the tree's sparkles
     rug: '#e97a9b', // TUNE
     rugEdge: '#f2c14e', // TUNE
+    /** Where the first residents stand, as shares of the hall's width and depth (front-left is hidden). */
+    residentBand: [
+      [0.14, 0.62],
+      [0.3, 0.6],
+      [0.68, 0.6],
+      [0.8, 0.64],
+    ], // TUNE
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres

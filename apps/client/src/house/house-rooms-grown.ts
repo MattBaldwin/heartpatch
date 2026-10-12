@@ -208,7 +208,8 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     put(kit, hangingLantern(scene, 2.0), lx, y + tall - 0.1, lz, 0);
   }
 
-  // Beds in a row under the gallery, either side of the tree.
+  // Beds in a row under the gallery, either side of the tree: room for 5 (the
+  // data has 4); a Hall tuned past that would want a second row.
   const n = kit.box.beds;
   const spacing = Math.min(1.7, (w - 1.0) / Math.max(1, n));
   for (let i = 0; i < n; i++) {
@@ -219,9 +220,15 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     bedAt(kit, bx, bz, 0);
   }
 
-  const residents = Array.from({ length: Math.max(n, 4) }, (_, i) => {
-    const t = (i + 0.5) / Math.max(n, 4);
-    return spot(w * (0.18 + 0.64 * t), d * (i % 2 ? 0.26 : 0.36));
+  // Residents stand in the band between the tree and the beds: the Kitchen
+  // loft hides the Hall's front-left from the dollhouse camera (render check,
+  // 2 of 4 faces hidden), so any past the band's four wait in a front row.
+  const band = HOUSE_GROWN.hall.residentBand;
+  const residents = Array.from({ length: Math.max(n, band.length) }, (_, i) => {
+    const b = band[i];
+    if (b) return spot(w * b[0], d * b[1]);
+    const k = i - band.length;
+    return spot(w * (0.4 + 0.1 * (k % 5)), d * (0.16 + 0.16 * Math.floor(k / 5)));
   });
   return { keeper: null, residents };
 };

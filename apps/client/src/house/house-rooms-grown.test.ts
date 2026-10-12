@@ -125,14 +125,24 @@ describe('the grown rooms', () => {
   });
 
   it('beds the Heart Hall apart under its gallery, whatever its bed count', () => {
-    for (const beds of [1, 2, 4, 5]) {
+    // One row under the gallery holds 5 (the data has 4); residents still find room at 12.
+    for (const beds of [1, 2, 4, 5, 12]) {
       scene = new Scene(new NullEngine());
       const { k, made, box } = kit(scene, 'heart-hall', beds);
       heartHallRoom(k);
       expect(made.beds).toHaveLength(beds);
       const xs = made.beds.map((b) => b.x).sort((a, b) => a - b);
-      for (let i = 1; i < xs.length; i++) expect(xs[i]! - xs[i - 1]!).toBeGreaterThanOrEqual(1.5);
+      if (beds <= 5)
+        for (let i = 1; i < xs.length; i++) expect(xs[i]! - xs[i - 1]!).toBeGreaterThanOrEqual(1.5);
       for (const b of made.beds) expect(inside(box, b)).toBe(true);
+      const { residents } = heartHallRoom(kit(scene, 'heart-hall', beds).k);
+      expect(residents.length).toBeGreaterThanOrEqual(beds);
+      for (const r of residents) expect(inside(box, r)).toBe(true);
+      for (let i = 0; i < residents.length; i++)
+        for (let j = i + 1; j < residents.length; j++)
+          expect(
+            Math.hypot(residents[i]!.x - residents[j]!.x, residents[i]!.z - residents[j]!.z),
+          ).toBeGreaterThan(0.9);
       scene.getEngine().dispose();
     }
     scene = new Scene(new NullEngine());
