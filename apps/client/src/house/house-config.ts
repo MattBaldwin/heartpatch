@@ -233,15 +233,15 @@ export const HOUSE_GROWN = {
     /** One square of the play mat, metres. */
     matCell: 0.62, // TUNE
     chest: '#c9764f', // TUNE: the toy chest's painted wood
-    chestLid: '#e9a273', // TUNE
+    chestLid: '#e97a9b', // TUNE: pink, so the open lid reads against the wall
     tent: '#9ad8ff', // TUNE: the play tent's canvas
     tentStripe: '#fff6ec', // TUNE
-    nightLight: '#ffe6a0', // TUNE: the moon night-light's glow
+    nightLight: '#ffe6a0', // TUNE: the star night-light's glow
   },
   kitchen: {
     stove: '#4a4250', // TUNE: the little iron stove
     stoveFire: '#ff8a3c', // TUNE: its glowing window
-    pot: '#e97a9b', // TUNE
+    pot: '#fff2e3', // TUNE: white enamel (pink read as a gem on high)
     counter: '#f2d7b8', // TUNE
     counterTop: '#9a6a46', // TUNE
     table: '#b9825a', // TUNE
@@ -259,18 +259,18 @@ export const HOUSE_GROWN = {
     gold: '#f2c14e', // TUNE: the top level's gold accents
     trunk: '#9b7a62', // TUNE
     /** The Heart Tree's crown, a heart of pink rounds (sRGB). */
-    crown: ['#ff9ec4', '#ffc4da', '#ff86b4'], // TUNE
+    crown: ['#ffb0d0', '#ffc4da', '#ff9cc4'], // TUNE: light, so high tier's shade stays pink
     lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
     sparkle: '#fff2b0', // TUNE: the tree's sparkles
     rug: '#e97a9b', // TUNE
     rugEdge: '#f2c14e', // TUNE
-    /** Where the first residents stand, as shares of the hall's width and depth (front-left is hidden). */
+    /** Where the first residents stand, as shares of the hall's width and depth. */
     residentBand: [
-      [0.14, 0.62],
-      [0.3, 0.6],
-      [0.68, 0.6],
-      [0.8, 0.64],
-    ], // TUNE
+      [0.56, 0.25],
+      [0.72, 0.22],
+      [0.8, 0.45],
+      [0.8, 0.74],
+    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres

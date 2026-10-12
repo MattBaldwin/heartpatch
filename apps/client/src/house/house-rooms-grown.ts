@@ -7,11 +7,11 @@ import {
   heartTreeCrown,
   kitchenShelves,
   kitchenTable,
-  moonLight,
   ovalRug,
   playMat,
   playTent,
   stairs,
+  starLight,
   stove,
   toyChest,
   toyBlocks,
@@ -73,7 +73,7 @@ export const playroomRoom: RoomBuilder = (kit) => {
   const [mx, mz] = at(w * 0.45, d * 0.4);
   put(kit, { solid: playMat(scene), glow: [] }, mx, y, mz, 0);
 
-  const [cx, cz] = at(1.0, d - 0.42);
+  const [cx, cz] = at(1.0, d - 0.62);
   put(kit, { solid: toyChest(scene), glow: [] }, cx, y, cz, 0);
   kit.shadow(cx, cz, 1.3, 0.9);
 
@@ -90,13 +90,13 @@ export const playroomRoom: RoomBuilder = (kit) => {
     bedAt(kit, bx, bz, s.yaw);
   }
 
-  // The night-light on the floor between the east bed and the tent.
-  const [lx, lz] = at(w - 0.32, d * 0.62);
-  put(kit, moonLight(scene), lx, y, lz, WEST);
+  // The star night-light in the open front-left corner, where it reads.
+  const [lx, lz] = at(0.45, 0.45);
+  put(kit, starLight(scene), lx, y, lz, 0);
   kit.pool(lx, lz, 0.9);
   kit.light('lamp', lx, y + 0.9, lz);
 
-  const [bx, bz] = at(w * 0.16, 0.7);
+  const [bx, bz] = at(w * 0.66, 0.55);
   put(kit, { solid: toyBlocks(scene), glow: [] }, bx, y, bz, 0.3);
 
   return {
@@ -154,7 +154,8 @@ export const kitchenRoom: RoomBuilder = (kit) => {
 
   return {
     keeper: null,
-    residents: [spot(w * 0.3, d * 0.3), spot(w * 0.66, d * 0.36), spot(w * 0.5, d * 0.62)],
+    // In front of the table and by the counter: the stools stand behind the table.
+    residents: [spot(w * 0.3, d * 0.16), spot(w * 0.62, d * 0.16), spot(w * 0.5, d * 0.66)],
   };
 };
 
@@ -185,7 +186,9 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
   }
 
-  const [rx, rz] = at(w / 2, d * 0.3);
+  // The tree stands right of the middle: at w / 2 the Kitchen loft's wall hid its trunk.
+  const treeU = w * 0.58;
+  const [rx, rz] = at(treeU, d * 0.3);
   put(
     kit,
     { solid: ovalRug(scene, Math.min(2.2, w * 0.24), Math.min(1.3, d * 0.2)), glow: [] },
@@ -196,7 +199,7 @@ export const heartHallRoom: RoomBuilder = (kit) => {
   );
 
   const treeH = Math.min(5.6, tall - 0.4);
-  const [tx, tz] = at(w / 2, d * 0.56);
+  const [tx, tz] = at(treeU, d * 0.56);
   put(kit, heartTree(scene, treeH), tx, y, tz, 0);
   kit.shadow(tx, tz, 2.0, 2.0);
   // A warm light just in front of the crown's gold heart.
@@ -220,15 +223,15 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     bedAt(kit, bx, bz, 0);
   }
 
-  // Residents stand in the band between the tree and the beds: the Kitchen
-  // loft hides the Hall's front-left from the dollhouse camera (render check,
-  // 2 of 4 faces hidden), so any past the band's four wait in a front row.
+  // Residents stand right of the Kitchen loft, which hides the Hall's left
+  // from the dollhouse camera (render check: faces hidden on the iPad's 48°
+  // pitch). Past the band's four, more wait on the left, out of the way.
   const band = HOUSE_GROWN.hall.residentBand;
   const residents = Array.from({ length: Math.max(n, band.length) }, (_, i) => {
     const b = band[i];
     if (b) return spot(w * b[0], d * b[1]);
     const k = i - band.length;
-    return spot(w * (0.4 + 0.1 * (k % 5)), d * (0.16 + 0.16 * Math.floor(k / 5)));
+    return spot(w * (0.1 + 0.1 * (k % 4)), d * (0.3 + 0.16 * Math.floor(k / 4)));
   });
   return { keeper: null, residents };
 };

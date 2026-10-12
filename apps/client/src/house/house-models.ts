@@ -727,8 +727,8 @@ export function playMat(scene: Scene, n = 3): Mesh[] {
 export function toyChest(scene: Scene): Mesh[] {
   const c = G.playroom;
   // The lid stands open, leaning back from its hinge on the back edge.
-  const lid = box(scene, [1.06, 0.62, 0.08], [0, 0.9, 0.34], c.chestLid);
-  lid.rotation.x = 0.22;
+  const lid = box(scene, [1.06, 0.62, 0.08], [0, 0.88, 0.42], c.chestLid);
+  lid.rotation.x = 0.5;
   const heart = box(scene, [0.14, 0.14, 0.02], [0, 0.32, -0.31], '#ff7aa2');
   heart.rotation.z = Math.PI / 4;
   return [
@@ -765,22 +765,36 @@ export function playTent(scene: Scene): Mesh[] {
   door.rotation.x = 0.33; // lean with the canvas
   return [
     tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, 6),
-    tube(scene, 0.22, 0.98, 1.17, [0, 0.5, 0], c.tentStripe, 6),
+    // Three bands round the cone, a little proud of the canvas.
+    ...[0.3, 0.68, 1.06].map((y) => {
+      const at = (yy: number) => 1.45 * (1 - yy / h) + 0.04;
+      return tube(scene, 0.13, at(y + 0.065), at(y - 0.065), [0, y, 0], c.tentStripe, 6);
+    }),
     tube(scene, 0.4, 0.03, 0.03, [0, h + 0.1, 0], '#8d5a3b', 4),
     painted(flag, '#ff9ab8'),
     painted(door, '#6a4f7a'),
   ];
 }
 
-/** A crescent-moon night-light on a little stand (the moon glows). */
-export function moonLight(scene: Scene): Parts {
-  const moon = glowing(
-    CreateTorus('house-part', { diameter: 0.26, thickness: 0.08, tessellation: 6 }, scene),
-    G.playroom.nightLight,
-  );
-  moon.rotation.x = Math.PI / 2;
-  moon.position.set(0, 0.24, 0);
-  return { solid: [box(scene, [0.18, 0.06, 0.12], [0, 0.03, 0], '#c9a0ff')], glow: [moon] };
+/** A star night-light standing on a little block (the star glows): two triangles, point to point. */
+export function starLight(scene: Scene): Parts {
+  const star = [0, Math.PI].map((turn) => {
+    const t = CreateDisc(
+      'house-part',
+      { radius: 0.17, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+      scene,
+    );
+    t.rotation.z = Math.PI / 2 + turn; // one point up, one down
+    t.position.set(0, 0.3, -0.005 * (turn ? 1 : 0));
+    return glowing(t, G.playroom.nightLight);
+  });
+  return {
+    solid: [
+      box(scene, [0.2, 0.08, 0.14], [0, 0.04, 0], '#c9a0ff'),
+      box(scene, [0.03, 0.1, 0.03], [0, 0.12, 0], '#8d5a3b'),
+    ],
+    glow: star,
+  };
 }
 
 /** A little iron stove on legs, its fire glowing through the door, a pot on top and a pipe up to `pipe` metres. */
@@ -824,7 +838,7 @@ export function counter(scene: Scene, w: number): Mesh[] {
   return parts;
 }
 
-/** A round table with a checked cloth, a pie in the middle and two stools. */
+/** A round table with a cloth, a pie in the middle and two stools behind it (residents stand in front). */
 export function kitchenTable(scene: Scene): Mesh[] {
   const c = G.kitchen;
   const s = G.sides;
@@ -835,8 +849,8 @@ export function kitchenTable(scene: Scene): Mesh[] {
     tube(scene, 0.04, 0.5, 0.5, [0, 0.02, 0], c.table, s),
     tube(scene, 0.1, 0.38, 0.42, [0, 0.78, 0], c.pie, s),
     tube(scene, 0.03, 0.3, 0.3, [0, 0.84, 0], '#d9603f', s),
-    tube(scene, 0.42, 0.34, 0.3, [-0.78, 0.21, 0.1], c.table, s),
-    tube(scene, 0.42, 0.34, 0.3, [0.78, 0.21, -0.1], c.table, s),
+    tube(scene, 0.42, 0.34, 0.3, [-0.55, 0.21, 0.62], c.table, s),
+    tube(scene, 0.42, 0.34, 0.3, [0.55, 0.21, 0.62], c.table, s),
   ];
 }
 
@@ -852,7 +866,7 @@ export function kitchenShelves(scene: Scene, w: number): Mesh[] {
       const hex = c.jars[(i + row * 2) % c.jars.length] ?? '#ffd166';
       parts.push(
         (i + row) % 3 === 2
-          ? flatDisc(scene, 0.26, [x, y + 0.16, 0.06], hex) // a plate on edge
+          ? tube(scene, 0.09, 0.26, 0.22, [x, y + 0.07, 0], hex, 8) // a stack of plates
           : tube(scene, 0.22, 0.14, 0.16, [x, y + 0.14, 0], hex, 6),
       );
     }
@@ -880,10 +894,11 @@ export function gallery(scene: Scene, w: number, depth: number, below: number): 
     const x = -w / 2 + (w * i) / posts;
     parts.push(box(scene, [0.07, 0.82, 0.07], [x, 0.41, front + 0.06], c.rail));
   }
-  for (const x of [-w / 2 + 0.3, w / 2 - 0.3])
+  // Posts under the front edge, a third of the way in from each end (clear of the stairs).
+  for (const x of [-w * 0.3, w * 0.3])
     parts.push(
-      tube(scene, below, 0.18, 0.2, [x, -below / 2, front + 0.2], c.rail, G.sides),
-      box(scene, [0.22, 0.08, 0.22], [x, -below + 0.04, front + 0.2], c.gold),
+      tube(scene, below, 0.18, 0.2, [x, -below / 2, front + 0.05], c.rail, G.sides),
+      box(scene, [0.22, 0.08, 0.22], [x, -below + 0.04, front + 0.05], c.gold),
     );
   return parts;
 }
@@ -914,8 +929,9 @@ export function stairs(
   rail.rotation.x = tilt;
   parts.push(
     rail,
-    box(scene, [0.08, 0.9, 0.08], [-width / 2, 0.45, 0.1], c.rail),
-    box(scene, [0.16, 0.16, 0.16], [-width / 2, 0.95, 0.1], c.gold, Math.PI / 4),
+    // The newel post at the bottom, with a gold cap.
+    box(scene, [0.12, 0.96, 0.12], [-width / 2, 0.48, 0.1], c.rail),
+    box(scene, [0.18, 0.07, 0.18], [-width / 2, 0.99, 0.1], c.gold),
   );
   return parts;
 }

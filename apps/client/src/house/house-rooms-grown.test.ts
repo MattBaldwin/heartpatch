@@ -21,6 +21,8 @@ function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier
     signs: 0,
     seeds: 0,
     points: [] as { x: number; y: number; z: number }[],
+    /** Each piece's box on the floor plan, and how high it starts and reaches. */
+    pieces: [] as { x0: number; x1: number; z0: number; z1: number; y0: number; y1: number }[],
   };
   const k: RoomKit = {
     scene,
@@ -31,6 +33,14 @@ function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier
       for (const p of parts) {
         const b = p.getBoundingInfo().boundingBox;
         made.points.push(b.minimumWorld, b.maximumWorld);
+        made.pieces.push({
+          x0: b.minimumWorld.x,
+          x1: b.maximumWorld.x,
+          z0: b.minimumWorld.z,
+          z1: b.maximumWorld.z,
+          y0: b.minimumWorld.y,
+          y1: b.maximumWorld.y,
+        });
       }
     },
     glow: (parts) => (made.glow += parts.length),
@@ -93,6 +103,21 @@ describe('the grown rooms', () => {
         expect(p.y).toBeGreaterThanOrEqual(box.y0 - 0.01);
         expect(p.y).toBeLessThanOrEqual(box.y1);
       }
+    });
+
+    it(`stands the ${look}'s residents clear of its furniture (render check: the Kitchen's stools)`, () => {
+      scene = new Scene(new NullEngine());
+      const { k, made, box } = kit(scene, look);
+      const { residents } = builder(k);
+      // Pieces standing on the floor: not flat rugs and mats, not lanterns hanging overhead.
+      const standing = made.pieces.filter((p) => p.y1 > box.y0 + 0.1 && p.y0 < box.y0 + 1.0);
+      const clear = 0.2;
+      for (const r of residents)
+        for (const p of standing) {
+          const inside =
+            r.x > p.x0 - clear && r.x < p.x1 + clear && r.z > p.z0 - clear && r.z < p.z1 + clear;
+          expect(inside, `${look} resident at ${r.x.toFixed(2)}, ${r.z.toFixed(2)}`).toBe(false);
+        }
     });
 
     it(`keeps the ${look}'s residents apart, so faces don't overlap`, () => {
