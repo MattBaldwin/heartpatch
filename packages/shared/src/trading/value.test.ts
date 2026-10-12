@@ -57,7 +57,8 @@ describe('evolutionStages', () => {
   it('counts each species’ steps from its first form', () => {
     const stages = evolutionStages(GAME_DATA.species);
     expect(stages.get('emberbun')).toBe(1);
-    expect(stages.get('hearthbun')).toBe(2);
+    expect(stages.get('kindlebun')).toBe(2);
+    expect(stages.get('hearthbun')).toBe(3);
     for (const s of GAME_DATA.species) expect(stages.get(s.id)).toBeGreaterThanOrEqual(1);
   });
 
@@ -82,7 +83,7 @@ describe('tradeValuer', () => {
   const hearth = species('hearthbun');
   const valuer = createTradeValuer({
     values,
-    species: [ember, hearth],
+    species: [ember, species('kindlebun'), hearth],
     synergy: { ...GAME_DATA.synergy, fire: { ...GAME_DATA.synergy.fire, cozy: 1.2 } },
     clothing: CLOTHING,
   });
@@ -91,7 +92,7 @@ describe('tradeValuer', () => {
     expect(ember).toMatchObject({ rarity: 'common', element: 'fire', feeling: 'cozy' });
     // 40 × stage 1 × synergy 1.2 × (1 + 0.5 × 2)
     expect(valuer.lineValue(pet('emberbun', 3))).toBeCloseTo(40 * 1 * 1.2 * 2);
-    // Its evolution is stage 2.
+    // Its teen is stage 3, which takes the last stage factor (#443).
     expect(valuer.lineValue(pet('hearthbun', 1))).toBeCloseTo(
       values.squishyRarity[hearth.rarity] *
         2 *

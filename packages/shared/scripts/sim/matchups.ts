@@ -28,7 +28,7 @@ import type { SimConfig } from './config.js';
  *   - stance: every base form against itself with two different stances.
  */
 
-export type Bracket = 'base' | 'evolved' | 'combo' | 'stance';
+export type Bracket = 'base' | 'kid' | 'evolved' | 'combo' | 'stance';
 
 /** One side of a matchup. `key` is what the report names it by. */
 export interface Entrant {
@@ -67,15 +67,26 @@ export function serverData(): BattleData {
   return serverBattleData(GAME_DATA, SERVER_GAME_DATA);
 }
 
-/** Splits species into base forms and evolved forms (public and secret evolutions). */
-export function speciesForms(data: BattleData): { base: Species[]; evolved: Species[] } {
-  const evolvedIds = new Set([
-    ...data.species.flatMap((s) => s.evolutions.map((e) => e.into)),
-    ...SERVER_GAME_DATA.secretEvolutions.map((e) => e.into),
-  ]);
+/**
+ * Splits species by stage (public and secret evolutions): base forms; kids
+ * (#443), the middle forms that evolve again; and evolved forms, the top of a
+ * line. Each stage is measured against its own stage.
+ */
+export function speciesForms(data: BattleData): {
+  base: Species[];
+  kid: Species[];
+  evolved: Species[];
+} {
+  const steps = [
+    ...data.species.flatMap((s) => s.evolutions.map((e) => ({ from: s.id, into: e.into }))),
+    ...SERVER_GAME_DATA.secretEvolutions,
+  ];
+  const evolvedIds = new Set(steps.map((e) => e.into));
+  const evolvesIds = new Set(steps.map((e) => e.from));
   return {
     base: data.species.filter((s) => !evolvedIds.has(s.id)),
-    evolved: data.species.filter((s) => evolvedIds.has(s.id)),
+    kid: data.species.filter((s) => evolvedIds.has(s.id) && evolvesIds.has(s.id)),
+    evolved: data.species.filter((s) => evolvedIds.has(s.id) && !evolvesIds.has(s.id)),
   };
 }
 
@@ -144,7 +155,7 @@ export function planSim(config: SimConfig): SimPlan {
     { ...data, species: [...data.species, ...stands] },
     BATTLE_RULES,
   );
-  const { base, evolved } = speciesForms(data);
+  const { base, kid, evolved } = speciesForms(data);
 
   const matchups: Matchup[] = [];
   const roundRobin = (bracket: Bracket, entrants: Entrant[], level: number, games: number) => {
@@ -156,6 +167,7 @@ export function planSim(config: SimConfig): SimPlan {
   };
 
   roundRobin('base', base.map(entrantOf), config.levels.base, config.games.species);
+  roundRobin('kid', kid.map(entrantOf), config.levels.kid, config.games.species);
   roundRobin('evolved', evolved.map(entrantOf), config.levels.evolved, config.games.species);
 
   const combos = stands.flatMap((s) =>
