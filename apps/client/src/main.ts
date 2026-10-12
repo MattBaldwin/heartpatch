@@ -529,9 +529,7 @@ const home = createHomeScreen({
     void closeUp.open(mapId, squishyId, 'home');
   },
   // The Keeper's house (#381): only offered while the server switch is on for the player.
-  onHouse: (mapId, current) => {
-    void house.open(mapId, current);
-  },
+  onHouse: (mapId, current) => house.open(mapId, current),
   onClosed: (mapId) => {
     care.close();
     maps
@@ -565,6 +563,8 @@ const house = createHouseScreen({
     const chip = document.querySelector<HTMLElement>('.auth-chip');
     return chip && !chip.hidden ? chip.getBoundingClientRect().bottom : 0;
   },
+  // Only while Home is still open on that patch when the reply lands.
+  canOpen: (mapId) => homeOpen() && home.debug?.mapId === mapId,
   onOpen: () => {
     care.close();
     home.setMap(null);

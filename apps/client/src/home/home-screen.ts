@@ -105,7 +105,7 @@ export interface HomeScreenOptions {
    * "Go inside" on the house card, or a tap on the cottage (#381): opens the
    * Keeper's house. Only offered while `HomeResponse.house` is there.
    */
-  onHouse?: (mapId: string, home: HomeResponse) => void;
+  onHouse?: (mapId: string, home: HomeResponse) => Promise<void>;
   /**
    * "Jobs & team": opens the squishy job board (temporary entry; the trays
    * move it). `at`: Training Grounds on that homestead come first (#277).
@@ -278,6 +278,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** The main view's sheet is opened into the full lists (#412); it starts as the peek bar. */
   let sheetOpen = false;
   let working = false;
+  /** The house is opening (#381): its card and shortcut wait, so a double tap opens it once. */
+  let houseOpening = false;
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
   let scene3d: HomeScene | null = null;
@@ -790,7 +792,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   true,
                 )
               : null;
-          const shortcuts = [squishies, jobs].filter((b) => b !== null);
+          const shortcuts = [squishies, jobs, houseShortcut(current)].filter((b) => b !== null);
           body.replaceChildren(
             ...(shortcuts.length > 0
               ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
@@ -972,15 +974,34 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           el('span', { class: 'home-house-title' }, card.title),
           el('span', { class: 'home-house-line' }, card.line),
         ),
-        button(HOUSE_TEXT.goInside, goInside, { 'data-testid': 'home-house-open' }),
+        (() => {
+          const b = button(HOUSE_TEXT.goInside, goInside, { 'data-testid': 'home-house-open' });
+          b.disabled = working || houseOpening;
+          return b;
+        })(),
       ),
     ];
   }
 
+  /** The peek bar's way into the house (#381), beside Squishies and Jobs: only while the house is on. */
+  function houseShortcut(current: HomeResponse): HTMLButtonElement | null {
+    if (!houseCard(current) || !options.onHouse) return null;
+    const b = button(HOUSE_TEXT.shortcut, goInside, { 'data-testid': 'home-house-shortcut' }, true);
+    b.disabled = working || houseOpening;
+    return b;
+  }
+
+  /** Opens the house, once: the card and the shortcut wait while it loads. */
   function goInside(): void {
     const current = home;
-    if (!mapId || !current?.house || working) return;
-    options.onHouse?.(mapId, current);
+    const id = mapId;
+    if (!id || !current?.house || working || houseOpening || !options.onHouse) return;
+    houseOpening = true;
+    render();
+    void options.onHouse(id, current).finally(() => {
+      houseOpening = false;
+      if (isOpen) render();
+    });
   }
 
   /** The home's top card: how many fires are out on my land, and "Fuel all fires" (#202). */

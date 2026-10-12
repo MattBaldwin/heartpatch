@@ -103,6 +103,24 @@ export const HOUSE_LIGHT = {
   fill: { intensity: 2.1, color: '#fff7f0', specular: 0.35 }, // TUNE
 } as const;
 
+/** Blanket colours, bed by bed (sRGB). */
+export const HOUSE_BLANKETS = ['#9fd0ff', '#c9a0ff', '#ffd166', '#9fe0c8', '#ffb3c8', '#bfe3ff']; // TUNE
+
+/** Tree crown colours round the clearing (sRGB): the pastel world palette. */
+export const HOUSE_TREE_CROWNS = ['#9fcf9a', '#b5d89a', '#a7c9b8', '#c8b6dc', '#f0b9c8']; // TUNE
+
+/** The cottage on the Heart Seed tile (`buildCottage`), sRGB. */
+export const HOUSE_COTTAGE = {
+  wall: '#f6e4d2', // TUNE
+  roof: '#c86a6a', // TUNE
+  wingRoof: '#d98a6a', // TUNE
+  heartRoof: '#d4577e', // TUNE: the top level's rosy roof
+  trim: '#8d5a3b', // TUNE
+  window: '#ffd27a', // TUNE: lit at dusk
+  trunk: '#9b7a62', // TUNE
+  canopy: ['#ff9ec4', '#ffc4da'], // TUNE: the heart-tree's pink crown
+} as const;
+
 /** Residents and the Keeper in the room. */
 export const HOUSE_CAST = {
   /** A resident's size (a squishy at 1 is about a metre tall). */
@@ -129,6 +147,8 @@ export const HOUSE_CAMERA = {
   closest: 0.6, // TUNE
   /** Pinch out past the dollhouse by this much (zoom units) and you're back home. */
   exitOvershoot: 0.18, // TUNE
+  /** A mouse wheel's travel (px; a notch is about 100) that moves zoom by 1. */
+  wheelPerZoom: 400, // TUNE
   /** How much pinch (log of the finger spread ratio) moves zoom by 1. */
   pinchPerZoom: 0.9, // TUNE
 } as const;

@@ -43,22 +43,27 @@ async function patchAndHome(page: Page): Promise<void> {
   await expect.poll(async () => (await homeState(page))?.scene?.tiles, slow).toBe(7);
 }
 
-test('enter the house from the home card, see the dollhouse, and go back home', async ({
-  browser,
-}) => {
+test('enter the house from home, see the dollhouse, and go back home', async ({ browser }) => {
   test.setTimeout(180_000); // two scene builds; CI renders in software
   const page = await newPlayer(browser, uniqueName('house'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   await patchAndHome(page);
 
-  // The cottage stands on the Heart Seed tile, and the card says what's inside.
+  // The cottage stands on the Heart Seed tile. Home opens as its peek bar
+  // (#412), with a 🏠 House shortcut; the opened sheet has the house card.
   expect((await homeState(page))?.scene?.house).toBe('hut');
+  const shortcut = page.getByTestId('home-house-shortcut');
+  await slowExpect(shortcut).toHaveText('🏠 House');
+  await expectRoomyLabels(page, '[data-testid="home-house-shortcut"]');
+  await page.getByTestId('home-handle').tap();
   const card = page.getByTestId('home-house');
   await slowExpect(card).toContainText('🏠 Your house');
   await expect(card).toContainText('House 1 · 2 beds');
+  await page.getByTestId('home-handle').tap();
+  await slowExpect(card).toBeHidden();
 
-  await page.getByTestId('home-house-open').tap();
+  await shortcut.tap();
   await expect.poll(async () => (await houseState(page))?.scene?.rooms, slow).toBe(1);
   // The roof lifts off and the camera settles in the dollhouse pose, looking down.
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
@@ -92,6 +97,11 @@ test('with the house switched off there is no house card and no cottage', async 
   });
   await patchAndHome(page);
   await slowExpect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByTestId('home-house-shortcut')).toHaveCount(0);
+  await page.getByTestId('home-handle').tap();
+  await expect(page.getByTestId('home-friends').or(page.getByTestId('home-build'))).not.toHaveCount(
+    0,
+  );
   await expect(page.getByTestId('home-house')).toHaveCount(0);
   expect((await homeState(page))?.scene?.house).toBeNull();
 });

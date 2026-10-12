@@ -26,6 +26,8 @@ import {
   type HouseViewport,
 } from './house-camera.js';
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
+import { HOUSE_CAMERA } from './house-config.js';
+import { createOpenGate } from './house-open-gate.js';
 import { HOUSE_TEXT, peekLine } from './house-view.js';
 import './house.css';
 
@@ -54,7 +56,13 @@ export interface HouseScreenOptions {
   onProblem: (message: string) => void;
   api?: HouseApi;
   /** `prefers-reduced-motion` (the dev gallery pins it to skip the glide). */
-  reducedMotion?: { readonly matches: boolean };
+  reducedMotion?: Pick<MediaQueryList, 'matches'> &
+    Partial<Pick<MediaQueryList, 'addEventListener'>>;
+  /**
+   * Still wanted when the reply lands (home still open on this patch): a
+   * player who left Home mid-fetch never gets the house over the map.
+   */
+  canOpen?: (mapId: string) => boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not pixels). */
@@ -76,6 +84,8 @@ export interface HouseScreen {
   /** Opens the house of this patch; the home reply says who the residents are. */
   open: (mapId: string, home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>) => Promise<void>;
   close: () => void;
+  /** Drops an open still waiting for its reply (Home was put away). */
+  cancel: () => void;
   readonly isOpen: boolean;
   readonly debug: HouseDebug | null;
 }
@@ -85,6 +95,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   const registry = visualRegistry(GAME_DATA);
   const reducedMotion =
     options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)');
+  // Turned on mid-glide: cut to the end, as the close-up does.
+  reducedMotion.addEventListener?.('change', () => {
+    if (reducedMotion.matches) skipGlide();
+  });
+  /** One open at a time; a late reply after Back, a logout or another player is dropped. */
+  const gate = createOpenGate();
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -268,7 +284,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     (e) => {
       e.preventDefault();
       skipGlide();
-      zoom -= e.deltaY / 400; // TUNE: a mouse wheel's notch is about 100
+      zoom -= e.deltaY / HOUSE_CAMERA.wheelPerZoom;
       if (pinchedOut(zoom)) {
         close();
         return;
@@ -321,13 +337,23 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>,
   ): Promise<void> {
     if (isOpen) return;
-    let fresh: HouseView;
-    try {
-      fresh = await api.get(id);
-    } catch (err) {
-      options.onProblem(messageOf(err));
-      return;
-    }
+    await gate.open(
+      () => api.get(id),
+      (fresh) => {
+        if (isOpen || options.canOpen?.(id) === false) return;
+        show(id, fresh, home);
+      },
+      (err) => {
+        options.onProblem(messageOf(err));
+      },
+    );
+  }
+
+  function show(
+    id: string,
+    fresh: HouseView,
+    home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>,
+  ): void {
     const species = new Map([...GAME_DATA.species, ...home.speciesDefs].map((s) => [s.id, s]));
     cast = new Map();
     for (const s of home.squishies) {
@@ -345,6 +371,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   }
 
   function hide(): void {
+    gate.cancel();
     isOpen = false;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
@@ -367,12 +394,16 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     setUser: (next) => {
       if (next?.id === user?.id) return;
       user = next;
+      gate.cancel();
       if (isOpen) hide();
       mapId = null;
       view = null;
     },
     open,
     close,
+    cancel: () => {
+      gate.cancel();
+    },
     get isOpen() {
       return isOpen;
     },

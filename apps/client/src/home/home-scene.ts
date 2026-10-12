@@ -485,12 +485,17 @@ export class HomeScene {
     };
     const spot = near(this.#spots, (s) => this.spotAt(s));
     if (spot) return { kind: 'spot', spot };
+    const building = near(this.#home.buildings, (b) => this.spotAt(b));
+    // The cottage (#381) when the tap is nearer it than any building it sits beside.
     if (this.#cottage && this.#spots.length === 0) {
       const c = this.#cottage.mesh.position;
       const r = HOME_HOUSE.tapReach * HOME_VIEW.hexSize;
-      if ((c.x - p.x) ** 2 + (c.z - p.z) ** 2 < r * r) return { kind: 'house' };
+      const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2;
+      const toBuilding = building
+        ? (this.spotAt(building).x - p.x) ** 2 + (this.spotAt(building).z - p.z) ** 2
+        : Infinity;
+      if (d < r * r && d < toBuilding) return { kind: 'house' };
     }
-    const building = near(this.#home.buildings, (b) => this.spotAt(b));
     if (this.#spots.length === 0) {
       // Near a squishy's feet counts too (they're small), unless the tap is
       // nearer the building it lives by.

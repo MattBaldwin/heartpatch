@@ -8,7 +8,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseExterior } from '@heartpatch/shared';
 import { linear, merged, painted } from '../map/map-props.js';
-import { HOUSE_PALETTE } from './house-config.js';
+import { HOUSE_COTTAGE, HOUSE_PALETTE } from './house-config.js';
 import type { WallHole } from './house-layout.js';
 
 /*
@@ -495,9 +495,10 @@ export function skyDome(scene: Scene, radius: number): Mesh {
  * across at its biggest, foot at the origin, door facing -z (the camera).
  */
 export function buildCottage(scene: Scene, exterior: HouseExterior): Mesh {
-  const wallC = '#f6e4d2';
-  const roofC = '#c86a6a';
-  const trim = '#8d5a3b';
+  const c = HOUSE_COTTAGE;
+  const wallC = c.wall;
+  const roofC = c.roof;
+  const trim = c.trim;
   const parts: Mesh[] = [];
   const house = (x: number, w: number, d: number, h: number, roof: string) => {
     parts.push(box(scene, [w, h, d], [x, h / 2, 0], wallC));
@@ -520,7 +521,7 @@ export function buildCottage(scene: Scene, exterior: HouseExterior): Mesh {
   };
   const door = (x: number) => parts.push(box(scene, [0.18, 0.28, 0.04], [x, 0.14, -0.31], trim));
   const window_ = (x: number, y: number) =>
-    parts.push(box(scene, [0.15, 0.15, 0.04], [x, y, -0.31], '#ffd27a'));
+    parts.push(box(scene, [0.15, 0.15, 0.04], [x, y, -0.31], c.window));
   switch (exterior) {
     case 'hut':
       house(0, 0.7, 0.6, 0.45, roofC);
@@ -528,26 +529,26 @@ export function buildCottage(scene: Scene, exterior: HouseExterior): Mesh {
       break;
     case 'wing':
       house(-0.2, 0.7, 0.6, 0.45, roofC);
-      house(0.38, 0.5, 0.56, 0.36, '#d98a6a');
+      house(0.38, 0.5, 0.56, 0.36, c.wingRoof);
       door(-0.2);
       window_(0.38, 0.22);
       break;
     case 'loft':
       house(-0.15, 0.8, 0.6, 0.75, roofC);
-      house(0.45, 0.45, 0.56, 0.36, '#d98a6a');
+      house(0.45, 0.45, 0.56, 0.36, c.wingRoof);
       door(-0.15);
       window_(-0.15, 0.55);
       window_(0.45, 0.22);
       break;
     case 'heart-tree': {
-      house(-0.1, 1.0, 0.62, 0.8, '#d4577e');
-      house(0.62, 0.45, 0.56, 0.4, '#d98a6a');
+      house(-0.1, 1.0, 0.62, 0.8, c.heartRoof);
+      house(0.62, 0.45, 0.56, 0.4, c.wingRoof);
       door(-0.1);
       window_(-0.32, 0.58);
       window_(0.12, 0.58);
-      parts.push(tube(scene, 0.9, 0.14, 0.2, [-0.75, 0.45, 0.25], '#9b7a62', 8));
-      parts.push(ball(scene, 0.85, [-0.75, 1.1, 0.25], '#ff9ec4', [1, 0.85, 1], 12));
-      parts.push(ball(scene, 0.55, [-0.48, 1.35, 0.3], '#ffc4da', [1, 0.85, 1], 10));
+      parts.push(tube(scene, 0.9, 0.14, 0.2, [-0.75, 0.45, 0.25], c.trunk, 8));
+      parts.push(ball(scene, 0.85, [-0.75, 1.1, 0.25], c.canopy[0], [1, 0.85, 1], 12));
+      parts.push(ball(scene, 0.55, [-0.48, 1.35, 0.3], c.canopy[1], [1, 0.85, 1], 10));
       break;
     }
   }

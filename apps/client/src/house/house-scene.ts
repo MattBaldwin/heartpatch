@@ -40,6 +40,7 @@ import type { SquishySpecies } from '../procedural/params.js';
 import { SquishyField } from '../procedural/squishy-field.js';
 import { project, type HousePose } from './house-camera.js';
 import {
+  HOUSE_BLANKETS,
   HOUSE_CAST,
   HOUSE_GLIDE,
   HOUSE_GRID,
@@ -47,6 +48,7 @@ import {
   HOUSE_OUTSIDE,
   HOUSE_PALETTE,
   HOUSE_TIERS,
+  HOUSE_TREE_CROWNS,
 } from './house-config.js';
 import {
   houseBounds,
@@ -124,12 +126,6 @@ export interface HouseSceneStats {
 
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
 const CAST = /^(squishy-|keeper-)(?!.*shadow)/;
-
-/** Tree crown colours round the clearing (sRGB): the pastel world palette. */
-const TREE_CROWNS = ['#9fcf9a', '#b5d89a', '#a7c9b8', '#c8b6dc', '#f0b9c8']; // TUNE
-
-/** Blanket colours, bed by bed (sRGB). */
-const BLANKETS = ['#9fd0ff', '#c9a0ff', '#ffd166', '#9fe0c8', '#ffb3c8', '#bfe3ff']; // TUNE
 
 interface RoomParts {
   readonly box: RoomBox;
@@ -679,7 +675,7 @@ export class HouseScene {
     });
     const colors = new Float32Array(this.#beds.length * 4);
     this.#beds.forEach((_, i) => {
-      const c = linear(BLANKETS[i % BLANKETS.length] ?? '#ffffff');
+      const c = linear(HOUSE_BLANKETS[i % HOUSE_BLANKETS.length] ?? '#ffffff');
       colors.set([c.r, c.g, c.b, 1], i * 4);
     });
     for (const mesh of [frame, blanket]) {
@@ -816,7 +812,7 @@ export class HouseScene {
         x,
         z,
         s: 1.2 + ((i * 3) % 4) * 0.25,
-        hex: TREE_CROWNS[i % TREE_CROWNS.length] ?? '#9fcf9a',
+        hex: HOUSE_TREE_CROWNS[i % HOUSE_TREE_CROWNS.length] ?? '#9fcf9a',
       });
     }
     const parts = treeParts(scene, this.#look.shadowMap > 0 ? 9 : 7);

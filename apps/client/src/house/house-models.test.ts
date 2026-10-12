@@ -7,10 +7,10 @@ import { sampleLevels } from './house-fixtures.js';
 import { buildCottage } from './house-models.js';
 import { buildHouse, cost } from './house-test-scene.js';
 
-// NullEngine has no 2D canvas: plain stand-ins for the painted textures.
+// NullEngine has no 2D canvas: a plain quad, under the real mesh's name so it's counted.
 vi.mock('../procedural/contact-shadow.js', () => ({
   createContactShadowMesh: (scene: Scene) =>
-    CreateGround('test-shadow', { width: 1, height: 1 }, scene),
+    CreateGround('squishy-shadows', { width: 1, height: 1 }, scene),
 }));
 vi.mock('./house-textures.js', async () => {
   const { StandardMaterial } = await import('@babylonjs/core/Materials/standardMaterial');
@@ -55,13 +55,28 @@ describe('house models: the low-tier budget', () => {
     scene.getEngine().dispose();
   });
 
-  it('keeps the high tier inside its own caps', () => {
+  it('keeps the high tier inside its own caps, the cast and the shadow pass counted', () => {
     for (const level of sampleLevels()) {
       const { scene, house } = buildHouse(level, 'high');
       scene.render();
       const shell = cost(house.houseMeshes);
-      expect(shell.drawCalls).toBeLessThanOrEqual(HOUSE_BUDGET.high.drawCalls);
-      expect(shell.triangles).toBeLessThanOrEqual(HOUSE_BUDGET.high.triangles);
+      const cast = cost(
+        scene.meshes.filter(
+          (m): m is Mesh => m instanceof Mesh && /^(squishy-|keeper-)/.test(m.name),
+        ),
+      );
+      // Every shadow caster draws once more into the shadow map.
+      const casters = scene.lights
+        .map((l) => l.getShadowGenerator()?.getShadowMap()?.renderList ?? [])
+        .flat()
+        .filter((m): m is Mesh => m instanceof Mesh);
+      const shadow = cost(casters);
+      expect(shell.drawCalls + cast.drawCalls + shadow.drawCalls).toBeLessThanOrEqual(
+        HOUSE_BUDGET.high.drawCalls,
+      );
+      expect(shell.triangles + cast.triangles + shadow.triangles).toBeLessThanOrEqual(
+        HOUSE_BUDGET.high.triangles,
+      );
       expect(scene.lights.filter((l) => l.isEnabled()).length).toBeLessThanOrEqual(
         HOUSE_BUDGET.high.lights,
       );
