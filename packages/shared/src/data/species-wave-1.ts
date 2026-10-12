@@ -309,7 +309,7 @@ export const WAVE_1_SPECIES: Species[] = [
     element: 'frost',
     feeling: 'joy',
     rarity: 'uncommon',
-    baseStats: { hp: 77, attack: 70, defense: 63, speed: 84 }, // TUNE: ×1.4 Hailhop
+    baseStats: { hp: 80, attack: 76, defense: 66, speed: 88 }, // TUNE: ×1.4 Hailhop, plus 16 (sim: 35% at ×1.4)
     moves: ['snowball-toss', 'twirly-whirl', 'frosty-pounce', 'brrr-bluster'],
     evolutions: [],
     visual: {
