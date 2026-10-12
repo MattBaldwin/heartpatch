@@ -1,9 +1,27 @@
-import { CLEARING_RULES, findAvoidedWords, type Gather, type PublicTile } from '@heartpatch/shared';
+import {
+  CLEARING_RULES,
+  findAvoidedWords,
+  type Clearing,
+  type Gather,
+  type PublicTile,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { userId } from '../map/test-view.js';
-import { CLEAR_TEXT, clearedText, clearOffer, clearsFirst, toolName } from './clear-model.js';
+import {
+  CLEAR_CARD_ID,
+  CLEAR_TEXT,
+  clearCards,
+  clearedText,
+  clearOffer,
+  clearsFirst,
+  settledText,
+  toolName,
+} from './clear-model.js';
 
 const me = userId(1);
+const NOW = Date.parse('2026-10-12T12:00:00Z');
+const LATER = '2026-10-12T12:01:00Z';
+const EARLIER = '2026-10-12T11:59:00Z';
 const uses = CLEARING_RULES.tools.find((t) => t.id === 'axe')!.uses;
 
 const tile = (extra: Partial<PublicTile> = {}): PublicTile => ({
@@ -23,33 +41,42 @@ const tile = (extra: Partial<PublicTile> = {}): PublicTile => ({
 });
 
 const bag = (items: Record<string, number> = { axe: uses }) => ({ items, gathers: [] });
+const gatherAt = (q: number, readyAt: string) => ({ q, r: 0, readyAt }) as Gather;
+const clearAt = (q: number, readyAt: string): Clearing => ({
+  id: userId(7),
+  q,
+  r: 0,
+  tool: 'axe',
+  drop: {},
+  startedAt: '2026-10-12T11:58:00Z',
+  readyAt,
+});
 
 describe('clearOffer (#242)', () => {
   it("offers to clear an empty homestead of mine with the land's tool, and what it drops", () => {
-    expect(clearOffer(tile(), me, bag())).toEqual({
+    expect(clearOffer(tile(), me, bag(), NOW)).toEqual({
       tool: 'axe',
       drop: { timber: expect.any(Number) as number },
       blocked: null,
       needTool: false,
     });
-    expect(clearOffer(tile({ terrain: 'meadow' }), me, bag())).toMatchObject({
+    expect(clearOffer(tile({ terrain: 'meadow' }), me, bag(), NOW)).toMatchObject({
       tool: 'spade',
       drop: { greens: 4 },
     });
     // A spot drops one gather of itself.
-    expect(clearOffer(tile({ terrain: 'hills', nodeResource: 'stone' }), me, bag())).toMatchObject({
-      tool: 'spade',
-      drop: { stone: expect.any(Number) as number },
-    });
+    expect(
+      clearOffer(tile({ terrain: 'hills', nodeResource: 'stone' }), me, bag(), NOW),
+    ).toMatchObject({ tool: 'spade', drop: { stone: expect.any(Number) as number } });
   });
 
   it('asks for the tool first when the bag has none', () => {
-    expect(clearOffer(tile(), me, bag({}))).toMatchObject({ needTool: true, blocked: null });
+    expect(clearOffer(tile(), me, bag({}), NOW)).toMatchObject({ needTool: true, blocked: null });
   });
 
   it("isn't offered off a joined homestead of mine, on cleared or unclearable land, or with something on it", () => {
-    const off = (extra: Partial<PublicTile>) => clearOffer(tile(extra), me, bag());
-    expect(clearOffer(tile(), null, bag())).toBeNull();
+    const off = (extra: Partial<PublicTile>) => clearOffer(tile(extra), me, bag(), NOW);
+    expect(clearOffer(tile(), null, bag(), NOW)).toBeNull();
     expect(off({ ownerUserId: userId(2) })).toBeNull();
     expect(off({ homeSlot: 3 })).toBeNull();
     expect(off({ homestead: null })).toBeNull();
@@ -72,28 +99,63 @@ describe('clearOffer (#242)', () => {
         ],
       }),
     ).toBeNull();
-    expect(off({ clearing: { readyAt: '2026-10-12T12:00:00Z' } })).toBeNull();
+    expect(off({ clearing: { readyAt: LATER } })).toBeNull();
+    // My own clear here, before the map hears of it.
+    expect(clearOffer(tile(), me, { ...bag(), clears: [clearAt(2, LATER)] }, NOW)).toBeNull();
   });
 
   it('says why it waits: a gather, a squishy, or another clear going', () => {
-    const gather = { q: 2, r: 0 } as Gather;
-    expect(clearOffer(tile(), me, { ...bag(), gathers: [gather] })?.blocked).toBe(
-      CLEAR_TEXT.gathering,
+    const waits = (state: Parameters<typeof clearOffer>[2], extra: Partial<PublicTile> = {}) =>
+      clearOffer(tile(extra), me, state, NOW)?.blocked;
+    expect(waits({ ...bag(), gathers: [gatherAt(2, LATER)] })).toBe(CLEAR_TEXT.gathering);
+    expect(waits(bag(), { workers: 1 })).toBe(CLEAR_TEXT.squishyBusy);
+    expect(waits(bag(), { defenders: 2 })).toBe(CLEAR_TEXT.squishyBusy);
+    expect(waits({ ...bag(), clears: [clearAt(5, LATER)] })).toBe(CLEAR_TEXT.already);
+  });
+
+  it("doesn't wait on a gather or clear that's finished: the server banks it first", () => {
+    const done = { ...bag(), gathers: [gatherAt(2, EARLIER)], clears: [clearAt(5, EARLIER)] };
+    expect(clearOffer(tile(), me, done, NOW)?.blocked).toBeNull();
+  });
+});
+
+describe('clearCards (#242)', () => {
+  const ids = (cards: readonly { id: string }[]) => cards.map((c) => c.id);
+
+  it("is Clear land with its drawn tool and one use, and nothing on land that can't be cleared", () => {
+    const [card] = clearCards(tile(), me, bag(), NOW);
+    expect(card).toMatchObject({
+      id: CLEAR_CARD_ID,
+      icon: 'axe',
+      name: CLEAR_TEXT.name,
+      cost: { axe: 1 },
+      area: 'spot',
+      blocked: null,
+      craft: null,
+    });
+    expect(clearCards(tile({ terrain: 'meadow' }), me, bag(), NOW)[0]?.icon).toBe('spade');
+    expect(clearCards(tile({ terrain: 'lake' }), me, bag(), NOW)).toEqual([]);
+    expect(clearCards(tile(), me, bag({}), NOW)[0]?.craft).toBe(
+      'Make an Axe in your recipe book first!',
     );
-    expect(clearOffer(tile({ workers: 1 }), me, bag())?.blocked).toBe(CLEAR_TEXT.squishyBusy);
-    expect(clearOffer(tile({ defenders: 2 }), me, bag())?.blocked).toBe(CLEAR_TEXT.squishyBusy);
-    const clears = [
-      {
-        id: userId(7),
-        q: 5,
-        r: 5,
-        tool: 'axe',
-        drop: {},
-        startedAt: '2026-10-12T11:58:00Z',
-        readyAt: '2026-10-12T12:00:00Z',
-      },
-    ];
-    expect(clearOffer(tile(), me, { ...bag(), clears })?.blocked).toBe(CLEAR_TEXT.already);
+  });
+
+  it('shows the buildings a spot makes room for, waiting, after Clear land', () => {
+    const cards = clearCards(tile({ nodeResource: 'timber' }), me, bag(), NOW);
+    expect(ids(cards)).toEqual([CLEAR_CARD_ID, 'hearthfire', 'training-grounds']);
+    expect(cards.slice(1).map((c) => c.blocked)).toEqual([
+      CLEAR_TEXT.firstLine,
+      CLEAR_TEXT.firstLine,
+    ]);
+    // Land with no spot is built on as it is.
+    expect(ids(clearCards(tile(), me, bag(), NOW))).toEqual([CLEAR_CARD_ID]);
+  });
+
+  it("shows only Clear land and why it waits while it can't start (review, 3b-1)", () => {
+    const spot = tile({ nodeResource: 'timber' });
+    const cards = clearCards(spot, me, { ...bag(), gathers: [gatherAt(2, LATER)] }, NOW);
+    expect(cards).toEqual([expect.objectContaining({ blocked: CLEAR_TEXT.gathering })]);
+    expect(ids(clearCards({ ...spot, workers: 1 }, me, bag(), NOW))).toEqual([CLEAR_CARD_ID]);
   });
 });
 
@@ -108,11 +170,19 @@ describe('clearsFirst (#242)', () => {
 });
 
 describe('clear words', () => {
+  const done = { q: 1, r: 0, items: { greens: 4 }, landCleared: true };
+
   it('pops up cleared land with its drop, or only the drop when the land went to someone else', () => {
-    const done = { q: 1, r: 0, items: { greens: 4 }, landCleared: true };
     expect(clearedText([done])).toBe(`${CLEAR_TEXT.cleared} 🌿 +4 Greens!`);
     expect(clearedText([{ ...done, landCleared: false }])).toBe('🌿 +4 Greens!');
     expect(clearedText([{ ...done, items: {} }])).toBe(CLEAR_TEXT.cleared);
+  });
+
+  it('puts a gather and cleared land from one settle in one pop-up (review, 3b-1)', () => {
+    const text = settledText([{ items: { timber: 5 } }], [], [done]);
+    expect(text).toContain('+5 Timber');
+    expect(text).toContain(CLEAR_TEXT.cleared);
+    expect(settledText([], [], [])).toBe('');
   });
 
   it('names the tool with the right article, and keeps every line kid-friendly', () => {

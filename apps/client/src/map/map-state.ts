@@ -139,6 +139,8 @@ export class MapState {
           // owner's homestead events follow, and a refresh fills the rest.
           explored: false,
           homestead: null,
+          // The old owner's clear there is lost (#242).
+          clearing: null,
         });
         return changed ? 'redraw' : 'none';
       }

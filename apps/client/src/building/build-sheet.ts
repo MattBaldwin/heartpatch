@@ -1,5 +1,6 @@
 import type { ItemCounts } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import { iconNode } from '../ui/line-icons.js';
 import {
   BUILD_TEXT,
   buildStatus,
@@ -92,7 +93,11 @@ export function createBuildSheet(): BuildSheet {
               'data-testid': 'build-card',
               'data-build': card.id,
             },
-            el('span', { class: 'build-card-icon', 'aria-hidden': 'true' }, card.icon),
+            el(
+              'span',
+              { class: 'build-card-icon', 'aria-hidden': 'true' },
+              iconNode(card.icon, 'build-card-line-icon'),
+            ),
             el('span', { class: 'build-card-name' }, card.name),
           );
           b.disabled = props.working || off;

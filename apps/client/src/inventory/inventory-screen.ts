@@ -28,10 +28,9 @@ import {
   gatherChip,
   itemName,
   landedText,
-  trainedText,
 } from './bag-view.js';
 import type { BuildSource } from '../building/tile-build.js';
-import { CLEAR_CARD_ID, CLEAR_TEXT, clearedText, clearOffer, toolName } from './clear-model.js';
+import { CLEAR_TEXT, clearCards, settledText } from './clear-model.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -454,20 +453,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         serverNextAt = nextAt;
       }
       const away = presence.awayMs(id);
-      if (landed.length > 0 || trained.length > 0) {
+      if (landed.length > 0 || trained.length > 0 || cleared.length > 0) {
         landings += 1;
         // After a while away, the Factory's things get their own card (#294).
         const card = showsWelcomeBack(landed, away);
         if (card) showWelcome(landed);
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
-        showToast([landedText(popped), trainedText(trained)].filter((t) => t !== '').join(' '));
-        if (landed.length > 0) options.onCollected?.();
-      }
-      if (cleared.length > 0) {
-        // Land finished clearing (#242): its drop is in the bag, and the land's ready.
-        landings += 1;
-        showToast(clearedText(cleared));
-        options.onCollected?.();
+        // Land that finished clearing (#242) shares the one pop-up.
+        showToast(settledText(popped, trained, cleared));
+        if (landed.length > 0 || cleared.length > 0) options.onCollected?.();
       }
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
@@ -1045,29 +1039,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const clearListeners: (() => void)[] = [];
 
   /**
-   * Clearing land from the Build sheet (#242): one card on an empty homestead
-   * of mine that a tool can clear. The server checks the tool, the tile and
+   * Clearing land from the Build sheet (#242): Clear land on an empty
+   * homestead of mine that a tool can clear, and on a spot, the buildings it
+   * makes room for (`clearCards`). The server checks the tool, the tile and
    * what's on it (CLAUDE.md rule 1).
    */
   const clearSource: BuildSource = {
-    cards: (tile) => {
-      if (!state) return [];
-      const offer = clearOffer(tile, user?.id ?? null, state);
-      if (!offer) return [];
-      const drop = describeItems(offer.drop);
-      return [
-        {
-          id: CLEAR_CARD_ID,
-          icon: itemIcon(offer.tool),
-          name: CLEAR_TEXT.name,
-          effect: CLEAR_TEXT.effect(drop),
-          cost: { [offer.tool]: 1 },
-          area: 'spot',
-          blocked: offer.blocked,
-          craft: offer.needTool ? CLEAR_TEXT.needTool(toolName(offer.tool)) : null,
-        },
-      ];
-    },
+    cards: (tile) => (state ? clearCards(tile, user?.id ?? null, state, clock.now()) : []),
     build: async (_card, tile) => {
       const id = mapId;
       if (!id || !state) return null;

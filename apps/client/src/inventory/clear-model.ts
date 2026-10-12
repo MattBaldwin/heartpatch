@@ -4,14 +4,19 @@ import {
   GAME_DATA,
   JOB_RULES,
   clearDrop,
+  buildCost,
   clearToolFor,
+  type ClearToolId,
   type ClearedTile,
   type Clearing,
   type Gather,
   type ItemCounts,
   type PublicTile,
 } from '@heartpatch/shared';
-import { landedText } from './bag-view.js';
+import type { BuildCard } from '../building/build-model.js';
+import { buildingIcon, buildingName, effectChips, GROUNDS, LAND_FIRE } from '../home/home-view.js';
+import { describeItems, landedText, trainedText } from './bag-view.js';
+import { CLEAR_TOOL_ICONS } from './item-icons.js';
 
 // Clearing land from the Build sheet (#242): a homestead of mine, on land a
 // tool can clear, with nothing standing on it. One use of the tool turns it
@@ -25,7 +30,7 @@ export const CLEAR_CARD_ID = 'clear-land';
 /** What clearing one tile takes and gives, or why it can't start just now. */
 export interface ClearOffer {
   /** The clearing tool it takes one use of. */
-  readonly tool: string;
+  readonly tool: ClearToolId;
   /** What lands in the bag when it's done. */
   readonly drop: ItemCounts;
   /** Why it can't start right now, or null. */
@@ -87,19 +92,27 @@ export function clearOffer(
   >,
   me: string | null,
   state: ClearState,
+  now: number,
 ): ClearOffer | null {
   if (me === null || tile.ownerUserId !== me || tile.homeSlot !== null) return null;
   if (tile.terrain === CLEARED_TERRAIN || tile.homestead !== 'joined') return null;
-  if (tile.buildings.length > 0 || tile.clearing) return null;
+  // Something finished but not banked yet doesn't count: the server banks
+  // it first (`settleLeftovers`).
+  const going = <T extends { readyAt: string }>(list: readonly T[] = []) =>
+    list.filter((x) => Date.parse(x.readyAt) > now);
+  const clears = going(state.clears);
+  const here = (at: { q: number; r: number }) => at.q === tile.q && at.r === tile.r;
+  // Mine shows straight away, before the map hears of it.
+  if (tile.buildings.length > 0 || tile.clearing || clears.some(here)) return null;
   const tool = clearToolFor(tile.terrain, CLEARING_RULES);
   if (!tool) return null;
   const drop = clearDrop(tile, GAME_DATA.resources, JOB_RULES, CLEARING_RULES);
   const needTool = (state.items[tool] ?? 0) < 1;
-  const blocked = state.gathers.some((g) => g.q === tile.q && g.r === tile.r)
+  const blocked = going(state.gathers).some(here)
     ? CLEAR_TEXT.gathering
     : (tile.workers ?? 0) > 0 || tile.defenders > 0
       ? CLEAR_TEXT.squishyBusy
-      : (state.clears ?? []).length > 0
+      : clears.length > 0
         ? CLEAR_TEXT.already
         : null;
   return { tool, drop, blocked, needTool };
@@ -122,12 +135,68 @@ export function clearsFirst(
 }
 
 /**
- * The pop-up when a settle finished clears: "Land cleared, ready to build! 🌱
- * 🌿 +4 Greens!". Land someone else took meanwhile stays as it is, but its
+ * The cleared-land part of a settle's pop-up: "Land cleared, ready to build!
+ * 🌱 🌿 +4 Greens!". Land someone else took meanwhile stays as it is, but its
  * drop still lands, so then it's only the drop.
  */
 export function clearedText(cleared: readonly ClearedTile[]): string {
   const drop = landedText(cleared);
   if (!cleared.some((c) => c.landCleared)) return drop;
   return drop === '' ? CLEAR_TEXT.cleared : `${CLEAR_TEXT.cleared} ${drop}`;
+}
+
+/** One settle's single pop-up: what landed, the XP trained, and land cleared. */
+export function settledText(
+  landed: readonly { items: ItemCounts }[],
+  trained: Parameters<typeof trainedText>[0],
+  cleared: readonly ClearedTile[],
+): string {
+  return [landedText(landed), trainedText(trained), clearedText(cleared)]
+    .filter((t) => t !== '')
+    .join(' ');
+}
+
+/**
+ * The Build sheet's cards for clearing this tile: Clear land, then, on a
+ * homestead spot that must be cleared first, the buildings it makes room
+ * for, waiting ("Clear this land first"). Those only show while Clear land
+ * can start, so a kid who can't clear yet sees why, not a card they can't
+ * reach. None when the tile can't be cleared.
+ */
+export function clearCards(
+  tile: Parameters<typeof clearOffer>[0],
+  me: string | null,
+  state: ClearState,
+  now: number,
+): BuildCard[] {
+  const offer = clearOffer(tile, me, state, now);
+  if (!offer) return [];
+  const clear: BuildCard = {
+    id: CLEAR_CARD_ID,
+    icon: CLEAR_TOOL_ICONS[offer.tool],
+    name: CLEAR_TEXT.name,
+    effect: CLEAR_TEXT.effect(describeItems(offer.drop)),
+    cost: { [offer.tool]: 1 },
+    area: 'spot',
+    blocked: offer.blocked,
+    craft: offer.needTool ? CLEAR_TEXT.needTool(toolName(offer.tool)) : null,
+  };
+  if (offer.blocked || !clearsFirst(tile)) return [clear];
+  const waiting = [LAND_FIRE, GROUNDS].flatMap((b) =>
+    b
+      ? [
+          {
+            id: b.id,
+            icon: buildingIcon(b.id),
+            name: buildingName(b.id),
+            effect: effectChips(b)[0] ?? b.description,
+            cost: buildCost(b),
+            area: 'spot' as const,
+            blocked: CLEAR_TEXT.firstLine,
+            craft: null,
+          },
+        ]
+      : [],
+  );
+  return [clear, ...waiting];
 }

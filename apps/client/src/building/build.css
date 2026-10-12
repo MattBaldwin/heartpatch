@@ -87,6 +87,13 @@
   line-height: 1;
 }
 
+/* A drawn icon (the clearing tools, #242) at the emoji's size. */
+.build-card-line-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
 .build-card-name {
   max-width: 100%;
   font-size: 12px;

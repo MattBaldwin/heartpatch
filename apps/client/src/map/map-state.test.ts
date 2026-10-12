@@ -91,6 +91,10 @@ describe('MapState', () => {
     expect(state.tileAt(hexKey(tile))?.clearing).toEqual({ readyAt });
     expect(state.apply(event('clearing.started', { ...at, q: 99, readyAt }))).toBe('none');
     expect(state.apply(event('clearing.started', at))).toBe('resync');
+    // The land changed hands: the clear is lost, and no tile.cleared follows.
+    const captured = { q: tile.q, r: tile.r, userId: userId(2), fromUserId: userId(1) };
+    expect(state.apply(event('tile.captured', captured))).toBe('redraw');
+    expect(state.tileAt(hexKey(tile))?.clearing).toBeNull();
     const cleared = { ...at, terrain: 'clearing', from: tile.terrain };
     expect(state.apply(event('tile.cleared', cleared))).toBe('resync');
   });

@@ -1,6 +1,8 @@
 import {
   buildCost,
   buildingEffects,
+  CLEARING_RULES,
+  clearToolFor,
   fuelCost,
   HOME_BASE_RULES as RULES,
   freeSpots,
@@ -224,6 +226,7 @@ export function groundsTileOffer(
   tile: {
     q: number;
     r: number;
+    terrain: string;
     nodeResource: string | null;
     homestead?: 'joined' | 'paused' | null;
     buildings: readonly { spot: number }[];
@@ -238,7 +241,12 @@ export function groundsTileOffer(
   if (!GROUNDS || !tile.homestead) return null;
   if (napping) return { kind: 'napping' };
   if (tile.buildings.length > 0) return null;
-  if (tile.nodeResource !== null) return { kind: 'clear-first', building: GROUNDS };
+  if (tile.nodeResource !== null) {
+    // Land no tool clears keeps its spot: nothing goes up there.
+    return clearToolFor(tile.terrain, CLEARING_RULES)
+      ? { kind: 'clear-first', building: GROUNDS }
+      : null;
+  }
   const taken = new Set(tile.buildings.map((b) => b.spot));
   const features = { heartSeed: false, nodeResource: tile.nodeResource };
   const spot = freeSpots(RULES, features, taken, GROUNDS.slot)[0];

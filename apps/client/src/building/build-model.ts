@@ -9,6 +9,7 @@ import { itemIcon } from '../inventory/item-icons.js';
 /** One building the sheet can put up, ready for a card. */
 export interface BuildCard {
   readonly id: string;
+  /** An emoji, or a drawn icon's name (`ui/line-icons`). */
   readonly icon: string;
   readonly name: string;
   /** What it does, in one short line. */

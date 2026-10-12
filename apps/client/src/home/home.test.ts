@@ -467,6 +467,7 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
   const tile = (extra: Partial<{ homestead: 'joined' | 'paused' | null; q: number }> = {}) => ({
     q: 3,
     r: 1,
+    terrain: 'forest',
     nodeResource: 'timber',
     homestead: 'joined' as const,
     buildings: [{ spot: 0 }],
@@ -494,6 +495,8 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
       building: { id: 'training-grounds' },
     });
     expect(groundsTileOffer({ ...tile(), nodeResource: null }, home)).toBeNull();
+    // Land no tool clears (owner Q5) keeps its spot: nothing to wait for.
+    expect(groundsTileOffer({ ...tile(), terrain: 'old-forest', buildings: [] }, home)).toBeNull();
     // Not on land that isn't a homestead; nothing new on a napping one.
     expect(groundsTileOffer(tile({ homestead: null }), home)).toBeNull();
     expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({ kind: 'napping' });
