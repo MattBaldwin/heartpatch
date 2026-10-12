@@ -291,14 +291,18 @@ async function tidyOne(
     } else {
       await lockGrantRows(tx, owner.mapId, alsoLock);
     }
-    if (Object.keys(refund).length > 0) {
-      await grantItems(
-        tx,
-        { mapId: owner.mapId, userId: owner.userId },
-        refund,
-        'build-refund',
-        packing[0]?.id,
-      );
+    // Each packed building's refund is ledgered against that building.
+    for (const row of packing) {
+      const back = packUpRefund(row, local);
+      if (Object.keys(back).length > 0) {
+        await grantItems(
+          tx,
+          { mapId: owner.mapId, userId: owner.userId },
+          back,
+          'build-refund',
+          row.id,
+        );
+      }
     }
     const stoppedBatches = await applyBatchPlans(tx, batches, at);
 
