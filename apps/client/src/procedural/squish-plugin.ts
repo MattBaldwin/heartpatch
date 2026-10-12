@@ -8,12 +8,15 @@ import type { Scene } from '@babylonjs/core/scene';
 import {
   FINISH,
   FINISH_CODE,
+  RARE_GLOW,
+  RARE_GLOW_CODE,
   SHADOW_LOOK,
   SQUISH,
   SQUISH_LOOK_CODE,
   SQUISH_MOVE_CODE,
   VINYL,
 } from './config.js';
+import { rareGlowShown } from './rare-glow.js';
 
 /**
  * Squash-and-stretch and rim light for every squishy mesh (design doc §19).
@@ -27,7 +30,8 @@ import {
  * - `squishEvent`: the current move's start time (s), kind code and strength,
  *   and in `w` the instance's material tier and glow (`FINISH_CODE`,
  *   ART_BIBLE §1.4): sparkle flecks, an iridescent rim, Mythic shimmer,
- *   light from inside.
+ *   light from inside; above those, the rare glow's level and hue
+ *   (`RARE_GLOW_CODE`, #391).
  *
  * The vertex shader squashes around the ground point, keeping volume
  * (x and z scale by 1/√s when y scales by s), and corrects normals with the
@@ -146,11 +150,46 @@ const FRAGMENT_RIM = /* glsl */ `
 #ifdef SQUISH
 if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
   // Material tiers (ART_BIBLE §1.4). One code per instance, so a whole
-  // squishy takes the same branches.
-  float fiOffFace = step(${num(FINISH_CODE.offFace)} - 0.5, vSquishFinish);
-  float fiCode = vSquishFinish - ${num(FINISH_CODE.offFace)} * fiOffFace;
+  // squishy takes the same branches. The rare glow (#391) rides above the
+  // finish code: its glow hue, then its level.
+  float fiHueStep = floor(vSquishFinish / ${num(RARE_GLOW_CODE.hue)} + 0.001);
+  float fiRest = vSquishFinish - ${num(RARE_GLOW_CODE.hue)} * fiHueStep;
+  float fiRare = floor(fiRest / ${num(RARE_GLOW_CODE.level)} + 0.001);
+  float fiBase = fiRest - ${num(RARE_GLOW_CODE.level)} * fiRare;
+  float fiOffFace = step(${num(FINISH_CODE.offFace)} - 0.5, fiBase);
+  float fiCode = fiBase - ${num(FINISH_CODE.offFace)} * fiOffFace;
   float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
   float fiTier = fiCode - ${num(FINISH_CODE.glow)} * fiGlow;
+  if (fiRare > 0.5 && fiTier < 1.5 && squishRareGlow > 0.5) {
+    // Rare finds glow: light added along the outline in this part's own
+    // colour, so it only brightens and keeps every part's hue (a brown tail
+    // glows brown, gold wings glow gold). The colour is pushed away from grey
+    // (which keeps its hue) and dimmed for dark parts. A pale part keeps its
+    // faint hue, pushed to a readable minimum; only a pure white part, with
+    // no hue at all, borrows the palette's most colourful one. Legendary and
+    // up already wear a rainbow edge: theirs glows brighter below instead.
+    float fiEdge = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(RARE_GLOW.falloff)});
+    float fiStrength = fiRare < 1.5 ? ${num(RARE_GLOW.edge[0])} : ${num(RARE_GLOW.edge[1])};
+    // The flat middle of each part (about the central tenth, where the glow
+    // would add under 1/255) skips the colour work.
+    if (fiStrength * fiEdge > ${num(RARE_GLOW.minEdge)}) {
+      float fiMx = max(max(surfaceAlbedo.r, surfaceAlbedo.g), max(surfaceAlbedo.b, 0.001));
+      float fiSat = (fiMx - min(min(surfaceAlbedo.r, surfaceAlbedo.g), surfaceAlbedo.b)) / fiMx;
+      vec3 fiNorm = surfaceAlbedo / fiMx;
+      float fiL = dot(fiNorm, vec3(0.2126, 0.7152, 0.0722));
+      float fiK = clamp(max(${num(RARE_GLOW.saturate)}, ${num(RARE_GLOW.minSaturation)} / max(fiSat, 0.001)), 1.0, 12.0);
+      vec3 fiRich = max(vec3(fiL) + fiK * (fiNorm - vec3(fiL)), 0.0);
+      fiRich /= max(max(fiRich.r, fiRich.g), max(fiRich.b, 0.001));
+      fiRich *= clamp(fiMx * ${num(RARE_GLOW.darkLift)}, ${num(RARE_GLOW.darkFloor)}, 1.0);
+      vec3 fiHue6 = clamp(abs(mod(fiHueStep / ${num(RARE_GLOW_CODE.hues)} * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+      vec3 fiPalette = pow(mix(vec3(1.0), fiHue6, ${num(RARE_GLOW.paletteSaturation)}), vec3(2.2));
+      vec3 fiOwn = mix(fiPalette, fiRich, smoothstep(0.015, 0.04, fiSat));
+      // Near-white, pale vinyl already shines: it takes less, so it doesn't clip to plain white.
+      float fiLum = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+      float fiCalm = 1.0 - ${num(RARE_GLOW.paleCalm)} * smoothstep(0.6, 1.0, fiLum) * (1.0 - smoothstep(0.1, 0.4, fiSat));
+      finalColor.rgb += fiOwn * (fiStrength * fiEdge * fiCalm);
+    }
+  }
   if (fiGlow > 0.5) {
     finalColor.rgb += surfaceAlbedo * ${num(FINISH.glow)};
   }
@@ -174,7 +213,9 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     // Iridescent: a rainbow rim that shifts with the view angle and height.
     float fiRim = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(FINISH.iridescent.falloff)});
     vec3 fiHue = 0.5 + 0.5 * cos(6.2831853 * (fiRim * 1.3 + vSquishLocal.y * 0.7 + vec3(0.0, 0.33, 0.67)));
-    finalColor.rgb += fiHue * fiRim * ${num(FINISH.iridescent.strength)};
+    // A rare glow (#391) at legendary and up brightens this rainbow edge.
+    float fiBright = fiRare < 2.5 || squishRareGlow < 0.5 ? 1.0 : fiRare < 3.5 ? ${num(RARE_GLOW.rainbow[0])} : ${num(RARE_GLOW.rainbow[1])};
+    finalColor.rgb += fiHue * fiRim * ${num(FINISH.iridescent.strength)} * fiBright;
   }
   if (fiTier > 2.5) {
     // Mythic shimmer: pearly bands slide over the vinyl as the view turns
@@ -244,9 +285,10 @@ export class SquishPlugin extends MaterialPluginBase {
       ubo: [
         { name: 'squishTime', size: 1, type: 'float' },
         { name: 'squishRim', size: 4, type: 'vec4' },
+        { name: 'squishRareGlow', size: 1, type: 'float' },
       ],
       vertex: 'uniform float squishTime;',
-      fragment: 'uniform vec4 squishRim;',
+      fragment: 'uniform vec4 squishRim;\nuniform float squishRareGlow;',
     };
   }
 
@@ -254,6 +296,8 @@ export class SquishPlugin extends MaterialPluginBase {
     uniformBuffer.updateFloat('squishTime', this.time);
     const [r, g, b] = VINYL.rimColor;
     uniformBuffer.updateFloat4('squishRim', r, g, b, VINYL.rimStrength);
+    // The rare glow (#391): off on a tier that turns it off, or with `?rareglow=0`.
+    uniformBuffer.updateFloat('squishRareGlow', rareGlowShown() ? 1 : 0);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

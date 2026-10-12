@@ -12,6 +12,7 @@ import {
   type PartShape,
   type PartSlot,
   type Pose,
+  type Rarity,
   type SpeciesVisual,
   type VisualRegistry,
 } from '@heartpatch/shared';
@@ -32,10 +33,15 @@ export type Vec3 = readonly [number, number, number];
 /** sRGB, each channel 0–1. */
 export type Rgb = readonly [number, number, number];
 
-/** What the generator needs from a species: its id (for seeding) and its visual. */
+/**
+ * What the generator needs from a species: its id (for seeding) and its
+ * visual, plus its rarity when it has one (rare and up glow, #391; gallery
+ * showcase looks have none).
+ */
 export interface SquishySpecies {
   readonly id: string;
   readonly visual: SpeciesVisual;
+  readonly rarity?: Rarity;
 }
 
 export interface PartPlacement {

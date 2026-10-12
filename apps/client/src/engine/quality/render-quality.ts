@@ -5,6 +5,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import { LIGHTING, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
 import { hardwareScalingFor } from '../dpr.js';
 import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { setRareGlowForTier } from '../../procedural/rare-glow.js';
 
 /**
  * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
@@ -140,6 +141,7 @@ export class RenderQuality {
       const t = TIER_SETTINGS[tier];
       this.pipeline.bloomEnabled = t.bloom;
       if (t.bloom) this.pipeline.bloomKernel = t.bloomKernel;
+      setRareGlowForTier(t.rareGlow);
       this.appliedTier = tier;
     }
     if (renderScale !== this.appliedScale) {
