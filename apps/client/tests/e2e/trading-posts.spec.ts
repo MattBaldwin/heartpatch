@@ -1,6 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
+import { SCREENS } from './layout.js';
 import { api, hook } from './dev-hook.js';
 import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -52,6 +53,9 @@ const battleState = (page: Page) =>
     winner: 'a' | 'b' | 'draw' | null;
     scene: { arena: { terrain: string; known: boolean } } | null;
   }>(page, 'battle');
+
+/** iPhones from the smallest up, and an iPad (#426). */
+const FLAG_SCREENS = SCREENS.filter((s) => [320, 375, 390, 820].includes(s.width));
 
 /** A new patch on screen, live, for a new player. */
 async function newPatch(page: Page): Promise<void> {
@@ -124,6 +128,32 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
 
   expect(errors).toEqual([]);
   await page.context().close();
+});
+
+test('a post’s flag shows whole, clear of the tray handles, on phones and an iPad (#426)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000); // the map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('flagfit'));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await newPatch(page);
+  await shutTrays(page);
+  // At 320 the nearest post's flag ran under the Home handle, reading
+  // "Mossy Mailbox · 2 t"; the Adventure handle clipped others from the left.
+  for (const { width, height } of FLAG_SCREENS) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(async () => (await posts(page))?.shown ?? 0, { timeout: 30_000 })
+      .toBeGreaterThan(0);
+    await expect.poll(() => flagsUnderCovers(page)).toEqual([]);
+    // Its words aren't cut short either.
+    const cut = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[data-testid="post-flag"]')]
+        .filter((f) => !f.hidden && f.scrollWidth > f.clientWidth)
+        .map((f) => f.textContent),
+    );
+    expect(cut, `${String(width)}x${String(height)}`).toEqual([]);
+  }
 });
 
 test('sets off on a journey to a post, wins, and the post opens for a visit (#270)', async ({

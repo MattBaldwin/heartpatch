@@ -9,7 +9,11 @@ export interface FlagRoom {
   height: number;
   /** The bottom of the corner buttons (the top bar): no flag goes above it. */
   top: number;
-  /** What's drawn over the map (the top bar, the patch name, open sheets): a flag never peeks out from under one. */
+  /**
+   * What a flag must not touch: what's drawn over the map (the top bar, the
+   * patch name, the tray handles, open sheets), which it would peek out from
+   * under, and my Keeper, which it would hide (#426).
+   */
   covers: readonly Rect[];
 }
 
@@ -19,8 +23,10 @@ export interface FlagRoom {
  * Upward it keeps below the top bar, and once its tile is mostly under the
  * bar it hides: pinned to the very top it would show between the corner
  * buttons, and on a phone with a sheet open that thin strip is all the map
- * that's left (#310). A flag that would touch anything drawn over the map
- * hides too, rather than show a cut-off sliver beside it.
+ * that's left (#310). A flag that would touch anything in `covers` hangs
+ * under its tile instead, and hides if that touches one too, rather than show
+ * a cut-off sliver: on a small phone the tray handles leave too little room
+ * between them for a flag to slide past (#426).
  */
 export function flagSpot(
   tile: Rect | null,
@@ -38,7 +44,12 @@ export function flagSpot(
   }
   const half = flag.width / 2;
   const x = Math.round(Math.min(Math.max(tile.x + tile.width / 2, half), room.width - half));
-  const y = Math.round(Math.max(tile.y, room.top + flag.height));
-  const box = { x: x - half, y: y - flag.height, width: flag.width, height: flag.height };
-  return room.covers.some((cover) => intersects(box, cover)) ? null : { x, y };
+  const over = Math.round(Math.max(tile.y, room.top + flag.height));
+  const under = Math.round(tile.y + tile.height + flag.height);
+  const clear = (y: number) => {
+    const box = { x: x - half, y: y - flag.height, width: flag.width, height: flag.height };
+    return y <= room.height && !room.covers.some((cover) => intersects(box, cover));
+  };
+  if (clear(over)) return { x, y: over };
+  return clear(under) ? { x, y: under } : null;
 }
