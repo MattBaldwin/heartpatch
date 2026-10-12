@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs a read-only ops check (a dry run) against a throwaway copy of the
-# newest nightly backup, and prints only its counts and plan lines. GitHub
+# newest nightly backup, and prints only its totals line. GitHub
 # Actions' live-data-check workflow runs it on the server; see docs/DEPLOY.md,
 # "Dry runs on live data".
 #
@@ -83,12 +83,13 @@ take_lock() {
   flock -w 600 9 || fail "a deploy or restore has been running for 10 minutes; try again later"
 }
 
-# What each check runs, and the only lines of its output that may leave the
-# server. Lines are matched whole, so an id, a name or a log line can't slip out
-# (a building's catalog id is letters and dashes; a row id never is).
-check_script() {
+# What each check runs (its script, then its arguments), and the only lines of
+# its output that may leave the server. Lines are matched whole, so an id, a
+# name or a log line can't slip out.
+check_command() {
   case $1 in
-    tile-uses-check) echo dist/ops/tile-uses-check.js ;;
+    # --totals: the totals line only, no per-player lines (no ids at all).
+    tile-uses-check) echo dist/ops/tile-uses-check.js --totals ;;
     *) fail "unknown check '$1' (allowed: tile-uses-check)" ;;
   esac
 }
@@ -96,8 +97,7 @@ check_filter() {
   case $1 in
     tile-uses-check)
       grep -E -x \
-        -e 'tile-use dry run: [0-9]+ players scanned, [0-9]+ would change: [0-9]+ moved, [0-9]+ packed, [0-9]+ gatherers stopped\.' \
-        -e '  pack [a-z]{1,32}(-[a-z]{1,32}){0,5} \((-?[0-9]{1,6},-?[0-9]{1,6}|\?)\) \(everything back\)' || true
+        -e 'tile-use dry run: [0-9]+ players scanned, [0-9]+ would change: [0-9]+ moved, [0-9]+ packed, [0-9]+ gatherers stopped\.' || true
       ;;
   esac
 }
@@ -119,8 +119,10 @@ preflight() {
 }
 
 run() {
-  local check=$1 image=$2 script dump pg_image password url work status
-  script=$(check_script "$check")
+  local check=$1 image=$2 command script dump pg_image password url work status
+  command=$(check_command "$check")
+  read -r -a command <<<"$command"
+  script=${command[0]}
   [[ $image =~ ^$NAME:[A-Za-z0-9._-]{1,128}$ ]] || fail "image must be $NAME:<tag>, got '$image'"
   docker image inspect "$image" >/dev/null 2>&1 || fail "$image is not loaded on this server"
   docker run --rm --network none "$image" test -f "$script" ||
@@ -195,13 +197,13 @@ run() {
 
   log "running $check"
   status=0
-  check_container node "$script" >"$work/out" 2>"$work/err" || status=$?
+  check_container node "${command[@]}" >"$work/out" 2>"$work/err" || status=$?
 
   local kept dropped
   kept=$(check_filter "$check" <"$work/out")
   dropped=$(($(wc -l <"$work/out") - $(printf '%s' "$kept" | grep -c '^' || true)))
   [[ -z $kept ]] || printf '%s\n' "$kept"
-  log "$check exited $status; $dropped other output lines (player lines, logs) stayed on the server and were deleted"
+  log "$check exited $status; $dropped other output lines (logs) stayed on the server and were deleted"
   ((status == 0)) || fail "$check failed"
   grep -q -E "$(check_summary "$check")" <<<"$kept" || fail "$check printed no summary line"
   log "done; the scratch copy is being removed"

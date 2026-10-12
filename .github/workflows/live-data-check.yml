@@ -4,7 +4,7 @@ name: Live-data dry run
 # hand from the Actions tab (docs/DEPLOY.md, "Dry runs on live data"). It
 # builds the server image from `ref`, restores the newest nightly dump into a
 # scratch Postgres on the server with infra/scripts/ops-check.sh, runs the
-# check there, and posts only its counts and plan lines (on PR `pr`, if given).
+# check there, and posts only its totals line (on PR `pr`, if given).
 # The live database is never touched, and nothing is left behind.
 
 on:
