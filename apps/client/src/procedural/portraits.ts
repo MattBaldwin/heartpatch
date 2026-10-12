@@ -138,8 +138,11 @@ function snapshot(engine: AbstractEngine, camera: TargetCamera, size: number): P
       size,
       resolve,
       'image/png',
+      // 4× MSAA smooths the edges. No FXAA pass: Babylon only renders once
+      // that effect compiles, holding the engine's frames until then, so one
+      // that never compiled would freeze the map.
       4,
-      true,
+      false,
       undefined,
       false,
       false,

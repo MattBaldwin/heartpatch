@@ -19,8 +19,9 @@ export interface MilestoneCredit {
   /** In hundredths of a step (`MILESTONE_UNIT`). */
   amount: number;
   /**
-   * For tracks that count kinds of things: the kind (a species id). It only
-   * counts the first time; the server keeps the kinds already counted.
+   * For tracks that count different things (a source's `distinct` field): the
+   * value, such as a species id or a squishy id. It only counts the first time;
+   * the server keeps the values already counted.
    */
   key: string | null;
 }

@@ -1580,3 +1580,24 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each la
   - The `afterEach` context-close sweep across 46 specs is held until a re-scan shows leaked pages causing stalls.
   - inventory:111 was fixed in #486 (a null hook read).
 - **The portrait crash gets its own Fix: PR (#465).** The scene was disposed while a portrait snapshot was pending, which froze the screen in slow iPad test runs (2 of 4 on a CI simulator). It is fixed in #487 (open), not inside #482 (open). Portrait snapshots now run one at a time.
+
+## 2026-10-12 — Owner decisions and coordinator calls (late evening)
+
+_Owner answers to the coordinator on 2026-10-12, plus coordinator calls. Each item is labelled "Owner" or "Coordinator call"._
+
+**Game rules**
+- **Wave-1 grown-up forms, parts 1 and 2, are approved as is (#443).** Owner: 16 forms, a kid and a teen each for Lilyhop, Hailhop, Chillypep, Flakefluff, Shellnap, Gnomnom, Moonmoth and Cometsnail, ship as shown. They shipped in #493.
+- **Evolution Phase 1 is done (#443).** Coordinator call: #443 is closed as Phase 1 done. Phase 2 continues in #495 (grown-ups, wave-1 branch teens, wild kids).
+
+**The Keeper's home (#381)**
+- **The look of house H2 is approved.** Owner: the daily gift box, the gift card, the "+3 Timber 🎁" toast, the "Welcome home!" line, and the day/dusk/night look. #492 merged behind `HP_HOUSE`. This approval clears the look for turning the flag on; the testers walk-through gate (2026-10-12 morning) still applies.
+- **What comes next.** Coordinator call: after C2b comes B5 polish (aim: Oct 27), then H3 without tricks. `tricks[]` is a shared house-data schema change, so it is held for a separate decision.
+
+**Squishy portraits (#465)**
+- **The portrait screenshots are approved.** Owner: "Ship". #482 merged, and so did the portrait follow-ups: #487 (no dispose while a snapshot is pending), #491 (an 8 s bound on the ready wait) and #494 (no snapshot starts while `engine.skipFrameRender` is set). #465 is closed.
+- **Portrait snapshots drop the FXAA pass (#497, open).** Coordinator call: snapshots in `apps/client/src/procedural/portraits.ts` keep 4× MSAA but set `antialiasing: false`, because an FXAA effect that never compiled could leave the map not drawing. An independent check of before/after crops found them indistinguishable at display size.
+
+**Coordinator calls**
+- **Flaky tests (#429), round 5.**
+  - #490 gives the floor cut (B4) "round 3" phone-framing test in `apps/client/src/house/house-scene.test.ts` a 30 s per-test budget. It is a measured timeout under load (1.6 s alone, 6.2 s under load, against vitest's 5 s default), not a guess.
+  - #488's iPad group timings are judged on a 5-run scan.
