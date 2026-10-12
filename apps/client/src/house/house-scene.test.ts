@@ -149,12 +149,21 @@ describe('house scene', () => {
     scene.getEngine().dispose();
   });
 
-  it('draws the nearest residents smooth on the low tier, none extra on high', () => {
+  it('draws the nearest residents smooth on the low tier from frontFrom on, none extra on high', () => {
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
     const low = buildHouse(1, 'low');
+    const doll = fitHouse(low.house.bounds, vp);
+    const kid = kidPose(low.house.focusRoom!, vp);
+    low.house.setPose(doll, 0);
+    expect(low.house.stats.heroes).toBe(0);
+    low.house.setPose(blend(doll, kid, HOUSE_KID.frontFrom), HOUSE_KID.frontFrom);
     expect(low.house.stats.heroes).toBe(2);
     expect(low.house.stats.residents).toBe(2);
+    low.house.setPose(doll, 0);
+    expect(low.house.stats.heroes).toBe(0);
     low.scene.getEngine().dispose();
     const high = buildHouse(1, 'high');
+    high.house.setPose(kidPose(high.house.focusRoom!, vp), 1);
     expect(high.house.stats.heroes).toBe(0);
     high.scene.getEngine().dispose();
   });

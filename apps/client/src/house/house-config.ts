@@ -187,6 +187,8 @@ export const HOUSE_KID = {
   clearFrom: 0.85, // TUNE
   /** How tall the soft foot is: a faded wall fades to nothing at the floor over this, metres. */
   softFoot: 1.2, // TUNE
+  /** Past this much zoom you count as walked in: the button says Step out. */
+  walkedIn: 0.5, // TUNE
   /** Walk in / Step out takes this long, seconds. */
   walkSeconds: 1.2, // TUNE
   /** The porch you stand on at kid height, outside the open front, metres deep. */

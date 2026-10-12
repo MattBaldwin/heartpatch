@@ -271,7 +271,7 @@ export function walkZoom(
 }
 
 /** The zoom past which the screen's button says "Step out" rather than "Walk in". */
-export const walkedIn = (zoom: number): boolean => zoom >= 0.5;
+export const walkedIn = (zoom: number): boolean => zoom >= HOUSE_KID.walkedIn;
 
 /** Zoom kept between the dollhouse (0) and kid height (1). */
 export const clampZoom = (zoom: number): number => Math.min(1, Math.max(0, zoom));

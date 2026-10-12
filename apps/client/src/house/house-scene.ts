@@ -131,7 +131,7 @@ export interface HouseSceneStats {
    * passes it and 0 (not drawn) once you stand in the room.
    */
   readonly frontWallAlpha: number | null;
-  /** Residents drawn at the hero detail (low tier: the nearest one at kid height). */
+  /** Residents drawn at the hero detail (low tier: the nearest ones at kid height, `HOUSE_CAST.lowHeroes`). */
   readonly heroes: number;
 }
 
@@ -177,13 +177,13 @@ export class HouseScene {
   readonly #rooms: number;
   readonly #lookAt = new Vector3();
   /** Front walls (off in the dollhouse, faded at kid height) and the porch you stand on. */
-  readonly #fronts: { mesh: Mesh; material: PBRMaterial; wall: FadeWall }[] = [];
-  readonly #porch: Mesh[] = [];
-  /** The roof seen from inside, at kid height only. */
-  readonly #ceilings: Mesh[] = [];
+  readonly #fronts: { room: string; mesh: Mesh; material: PBRMaterial; wall: FadeWall }[] = [];
+  readonly #porch: { room: string; mesh: Mesh }[] = [];
+  /** The roof seen from inside, at kid height only (the focus room's alone). */
+  readonly #ceilings: { room: string; mesh: Mesh }[] = [];
   #frontAlpha: number | null = null;
   /** The room kid height walks into (the Keeper's room), its floor's middle at eye level. */
-  #focus: { room: HouseBounds; point: Vector3 } | null = null;
+  #focus: { id: string; room: HouseBounds; point: Vector3 } | null = null;
   /** Low tier: the nearest residents at kid height drawn smooth (owner check #4), their own field. */
   #hero: SquishyField | null = null;
   #meshCount = 0;
@@ -312,6 +312,8 @@ export class HouseScene {
   setPose(pose: HousePose, zoom = 0): void {
     this.#pose = pose;
     this.#fadeFronts(pose, zoom);
+    // Hero detail only once they're big on screen: the dollhouse is near the low cap already.
+    this.#hero?.setLod(zoom >= HOUSE_KID.frontFrom ? 'high' : this.#squishies.lod);
     // The fill comes from just above the camera, so every face is lit.
     const f = new Vector3(
       pose.target.x - pose.eye.x,
@@ -368,22 +370,29 @@ export class HouseScene {
     meshes.crowns.thinInstanceSetBuffer('color', colors, 4, false);
   }
 
+  /**
+   * Kid height draws only what the focus room's frame needs (the draw and
+   * triangle caps): that room's porch, ceiling and front walls, plus any
+   * other front wall standing in the line of sight. Every other room stays
+   * a dollhouse cutaway, out of frame anyway.
+   */
   #fadeFronts(pose: HousePose, zoom: number): void {
-    const shown = zoom >= HOUSE_KID.frontFrom;
-    const focus = this.#focus?.point;
+    const focus = zoom >= HOUSE_KID.frontFrom ? this.#focus : null;
     let least: number | null = null;
     for (const f of this.#fronts) {
-      if (!shown || !focus) {
+      const fade = focus ? wallFade(pose.eye, focus.point, f.wall) : 1;
+      if (!focus || (f.room !== focus.id && fade >= 1)) {
         f.mesh.setEnabled(false);
         continue;
       }
-      const alpha = frontAlpha(wallFade(pose.eye, focus, f.wall), zoom);
+      const alpha = frontAlpha(fade, zoom);
       f.material.alpha = alpha;
       // Gone means not drawn at all: no veil, no seams at the door's edges.
       f.mesh.setEnabled(alpha > 0.001);
       least = least === null ? alpha : Math.min(least, alpha);
     }
-    for (const p of [...this.#porch, ...this.#ceilings]) p.setEnabled(shown);
+    for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
+    for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
     this.#frontAlpha = least;
   }
 
@@ -436,7 +445,7 @@ export class HouseScene {
       pitch: Math.round(pitch * 10) / 10,
       roof: this.#roofLift,
       frontWallAlpha: this.#frontAlpha,
-      heroes: this.#hero?.handles.length ?? 0,
+      heroes: this.#hero?.lod === 'high' ? this.#hero.handles.length : 0,
     };
   }
 
@@ -712,7 +721,7 @@ export class HouseScene {
     mesh.isPickable = false;
     mesh.setEnabled(false);
     this.#house.push(mesh);
-    this.#fronts.push({ mesh, material, wall: run });
+    this.#fronts.push({ room: id, mesh, material, wall: run });
     if (run.y0 === 0) {
       const z1 = run.at - HOUSE_GRID.frontLip;
       const planks = floorPlanks(
@@ -727,7 +736,7 @@ export class HouseScene {
       porch.material = this.#matte;
       porch.setEnabled(false);
       this.#house.push(porch);
-      this.#porch.push(porch);
+      this.#porch.push({ room: id, mesh: porch });
     }
   }
 
@@ -874,7 +883,7 @@ export class HouseScene {
         mesh.alwaysSelectAsActiveMesh = false;
         mesh.setEnabled(false);
         this.#house.push(mesh);
-        this.#ceilings.push(mesh);
+        this.#ceilings.push({ room: r.id, mesh });
       }
     }
   }
@@ -1004,25 +1013,28 @@ export class HouseScene {
     if (keeperRoom) {
       const k = roomBox(keeperRoom);
       this.#focus = {
+        id: keeperRoom.id,
         room: { minX: k.x0, maxX: k.x1, minY: k.y0, maxY: k.y1, minZ: k.z0, maxZ: k.z1 },
         point: new Vector3((k.x0 + k.x1) / 2, k.y0 + HOUSE_KID.eyeHeight, (k.z0 + k.z1) / 2),
       };
     }
-    // Low tier: the resident nearest the kid-height camera in that room is
-    // the one big on screen, so it alone is drawn smooth (owner check #4).
+    // Low tier: the residents nearest the kid-height camera in that room
+    // (`HOUSE_CAST.lowHeroes`) are the ones big on screen, so they alone are
+    // drawn smooth (owner check #4), from `frontFrom` on (see setPose).
     const heroes = new Set<string>();
     if (this.#tier === 'low' && keeperRoom) {
       const plan = plans.get(keeperRoom.id);
       keeperRoom.residents
-        .filter((r) => r.away === null && options.cast.has(r.squishyId))
+        .filter((r) => r.away === null)
         .map((r, i) => ({ id: r.squishyId, z: plan?.residents[i]?.z ?? Infinity }))
+        .filter((r) => options.cast.has(r.id))
         .sort((a, b) => a.z - b.z)
         .slice(0, HOUSE_CAST.lowHeroes)
         .forEach((r) => heroes.add(r.id));
       if (heroes.size > 0) {
         this.#hero = new SquishyField(this.#scene, {
           registry: options.registry,
-          lod: 'high',
+          lod: this.#squishies.lod,
           breathing: false,
         });
       }

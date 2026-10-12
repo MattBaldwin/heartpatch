@@ -175,7 +175,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Walk in or Step out, by where the camera is going (or is). */
   function renderWalk(): void {
     const inside = walk ? walk.goal === 1 : walkedIn(zoom);
-    walkButton.textContent = inside ? HOUSE_TEXT.stepOut : HOUSE_TEXT.walkIn;
+    // The emoji is decoration: screen readers hear just the words.
+    walkButton.replaceChildren(
+      el(
+        'span',
+        { class: 'house-walk-icon', 'aria-hidden': 'true' },
+        inside ? HOUSE_TEXT.stepOutIcon : HOUSE_TEXT.walkInIcon,
+      ),
+      ` ${inside ? HOUSE_TEXT.stepOut : HOUSE_TEXT.walkIn}`,
+    );
   }
 
   const owner = () => user?.username ?? null;
@@ -374,7 +382,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     glide = fresh && !reducedMotion.matches ? { shot: entryGlide(base), start: null } : null;
     built.setRoof(glide ? 0 : 1);
     const pose = poseNow(performance.now());
-    if (pose) built.setPose(pose, glide ? 0 : zoom);
+    if (pose) built.setPose(pose, glide ? 0 : clampZoom(zoom));
     scene.onDisposeObservable.addOnce(() => {
       built.dispose();
       if (scene3d === built) scene3d = null;
