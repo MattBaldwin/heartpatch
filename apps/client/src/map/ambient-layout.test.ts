@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { AmbientJudge, ambientMode, moteShare, motesFor } from './ambient-layout.js';
+import { AmbientJudge, ambientMode, BreathPacer, moteShare, motesFor } from './ambient-layout.js';
+import { BREATHING_FRAME_MS as BATTLE_BREATH_MS } from '../battle/battle-config.js';
+import { BREATHING_FRAME_MS as CLOSE_UP_BREATH_MS } from '../close-up/close-up-config.js';
 import { AMBIENT, HEX_SIZE, MOTE_KINDS, MOTES, THANKSGIVING } from './map-config.js';
 import { testView } from './test-view.js';
 
@@ -121,5 +123,68 @@ describe('AmbientJudge', () => {
       t = feed(judge, 33, 30, t);
     }
     expect(judge.slow).toBe(false);
+  });
+});
+
+describe('BreathPacer', () => {
+  /**
+   * Runs the render loop's ticks `tickMs` apart for `ms`, as a breathing-only
+   * screen does, and counts the breathing frames it draws.
+   */
+  function breathe(pacer: BreathPacer, tickMs: number, ms: number, from = 0): number {
+    let drawn = 0;
+    for (let t = from; t < from + ms; t += tickMs) if (pacer.due(t)) drawn += 1;
+    return drawn;
+  }
+
+  it('draws about 30 a second on a 60 or 120 Hz display, and keeps breathing', () => {
+    for (const tickMs of [1000 / 60, 1000 / 120]) {
+      const pacer = new BreathPacer(CLOSE_UP_BREATH_MS);
+      const drawn = breathe(pacer, tickMs, 60_000);
+      expect(drawn / 60).toBeGreaterThan(28);
+      expect(drawn / 60).toBeLessThanOrEqual(31);
+      expect(pacer.slow).toBe(false);
+    }
+  });
+
+  it('keeps breathing at iOS Low Power Mode’s 30 fps, ticks a hair early or late', () => {
+    // Both screens' real paces, on a true 30 Hz tick (33.3 ms) with jitter.
+    for (const frameMs of [CLOSE_UP_BREATH_MS, BATTLE_BREATH_MS]) {
+      for (const jitter of [0, 0.3, 1, 2]) {
+        const pacer = new BreathPacer(frameMs);
+        let drawn = 0;
+        for (let i = 0; i < 1800; i++) {
+          if (pacer.due(i * (1000 / 30) + (i % 2 === 0 ? -jitter : jitter))) drawn += 1;
+        }
+        expect(pacer.slow, `${String(frameMs)} ms ±${String(jitter)}`).toBe(false);
+        expect(drawn).toBeGreaterThan(1790);
+      }
+    }
+  });
+
+  it('stops for good on a renderer too slow for it, so the screen goes idle (#397)', () => {
+    // CI's software WebKit: a frame every 0.5–3 s, each one blocking the page.
+    const pacer = new BreathPacer(33);
+    const drawn = breathe(pacer, 600, 60_000);
+    expect(pacer.slow).toBe(true);
+    // A few frames to judge it (the 2 s grace and a window's majority), then none.
+    expect(drawn).toBeLessThan(Math.ceil(AMBIENT.graceMs / 600) + AMBIENT.judgeFrames);
+    expect(breathe(pacer, 16, 10_000, 60_000)).toBe(0);
+  });
+
+  it('never counts a move, or a hidden page, as a slow breath', () => {
+    /** One breath between squish moves (or trips to the background). */
+    const between = (skip: boolean): boolean => {
+      const pacer = new BreathPacer(33);
+      let t = 0;
+      for (let i = 0; i < 50; i++) {
+        breathe(pacer, 1000 / 60, 30, t);
+        t += 30 + 1500;
+        if (skip) pacer.skip();
+      }
+      return pacer.slow;
+    };
+    expect(between(true)).toBe(false);
+    expect(between(false)).toBe(true); // what `skip` is for
   });
 });

@@ -1,9 +1,12 @@
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
-import { CLOTHING_BY_ID, GAME_DATA, visualRegistry } from '@heartpatch/shared';
+import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type Floater } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
+import { FINISH_CODE, FLOATER_BATCH, SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
 import type { SquishySpecies } from './params.js';
 import { SquishyField } from './squishy-field.js';
 
@@ -184,5 +187,301 @@ describe('SquishyField accessories (#340)', () => {
     f.setAccessory(h, item('tiny-crown'));
     expect(f.accessoryOf(h)).toBeNull();
     expect(f.stats).toEqual(bare);
+  });
+});
+
+describe('SquishyField floaters', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  const floater: Floater = {
+    glyph: 'music-note',
+    size: 0.4,
+    above: 0.08,
+    side: 0.42,
+    color: 'detail',
+    bob: { height: 0.04, speed: 0.45 },
+  };
+  const singer: SquishySpecies = {
+    id: 'test-singer',
+    visual: { ...species.visual, palette: ['#9a70f0', '#ffd0e6', '#1e0a2e', '#ffb627'], floater },
+  };
+
+  function field(options: { breathing?: boolean; parent?: TransformNode } = {}) {
+    const scene = new Scene(engine);
+    const camera = new FreeCamera('camera', new Vector3(0, 2, -8), scene);
+    camera.setTarget(new Vector3(0, 1, 0));
+    const f = new SquishyField<SquishyLod>(scene, {
+      registry,
+      lod: 'low',
+      shadows: false,
+      ...options,
+    });
+    return { scene, camera, field: f };
+  }
+  const floaterMesh = (scene: Scene) =>
+    scene.meshes.find((m) => m.name.startsWith(`squishy-${FLOATER_BATCH}`)) as Mesh | undefined;
+  const noteMatrix = (scene: Scene, i = 0) =>
+    floaterMesh(scene)!.thinInstanceGetWorldMatrices()[i]!.clone();
+  /** The note's world matrix: its instance matrix under the mesh's parent (a battle rig). */
+  const noteWorld = (scene: Scene, i = 0) =>
+    noteMatrix(scene, i).multiply(floaterMesh(scene)!.computeWorldMatrix(true));
+  const axis = (m: Matrix, row: number) =>
+    new Vector3(m.m[row * 4], m.m[row * 4 + 1], m.m[row * 4 + 2]).normalize();
+
+  it('costs nothing until a squishy with a floater is on screen', () => {
+    const { scene, field: f } = field();
+    f.add(species, 'plain', { x: 0, z: 0 });
+    expect(f.stats.floaters).toBe(0);
+    expect(floaterMesh(scene)).toBeUndefined();
+  });
+
+  it('adds one draw call for any number of floaters, and drops it when they go', () => {
+    const { scene, field: f } = field();
+    f.add(species, 'plain', { x: 0, z: 0 });
+    const before = f.stats.meshes;
+    const a = f.add(singer, 'a', { x: -2, z: 0 });
+    // The singer's body and face are shared meshes: only the note is new.
+    expect(f.stats).toMatchObject({ floaters: 1, meshes: before + 1 });
+    const b = f.add(singer, 'b', { x: 2, z: 0 });
+    expect(f.stats).toMatchObject({ floaters: 2, meshes: before + 1 });
+    expect(floaterMesh(scene)!.thinInstanceCount).toBe(2);
+    f.remove(a);
+    f.remove(b);
+    expect(f.stats).toMatchObject({ floaters: 0, meshes: before });
+    expect(floaterMesh(scene)!.isEnabled()).toBe(false);
+    f.dispose();
+    expect(floaterMesh(scene)).toBeUndefined();
+  });
+
+  it('never floats over a rescue guardian (the shadow look)', () => {
+    const { field: f } = field();
+    f.add(singer, 'guardian', { x: 0, z: 0 }, 'shadow');
+    expect(f.stats.floaters).toBe(0);
+  });
+
+  it('uses the shared vinyl, its outline in vertex colours, and casts no contact shadow', () => {
+    const { scene, field: f } = field();
+    f.add(singer, 'a', { x: 0, z: 0 });
+    f.flush();
+    const mesh = floaterMesh(scene)!;
+    const body = scene.meshes.find((m) => m.name.startsWith('squishy-body:'))!;
+    expect(mesh.material).toBe(body.material);
+    expect(mesh.material?.fogEnabled).toBe(body.material?.fogEnabled);
+    expect(mesh.isVerticesDataPresent('color')).toBe(true);
+    expect(mesh.isPickable).toBe(false);
+  });
+
+  it('faces the camera straight on and from a 40° battle turn', () => {
+    const { scene, camera, field: f } = field();
+    for (const yaw of [0, (40 * Math.PI) / 180]) {
+      const h = f.add(singer, `yaw-${yaw}`, { x: 0, z: 0, yaw });
+      scene.render();
+      const m = noteWorld(scene);
+      const forward = camera.getDirection(Vector3.Forward());
+      expect(Vector3.Dot(axis(m, 2), forward)).toBeCloseTo(1, 5);
+      expect(Vector3.Dot(axis(m, 1), camera.getDirection(Vector3.Up()))).toBeCloseTo(1, 5);
+      f.remove(h);
+    }
+  });
+
+  it('faces the camera from under a turned battle rig', () => {
+    const { scene, camera } = field();
+    const rig = new TransformNode('rig', scene);
+    rig.rotation.y = 1.1;
+    rig.position.set(1, 0, 2);
+    const f = new SquishyField<SquishyLod>(scene, {
+      registry,
+      lod: 'low',
+      shadows: false,
+      breathing: false,
+      parent: rig,
+    });
+    const h = f.add(singer, 'rig', { x: 0, z: 0 });
+    scene.render();
+    const m = noteWorld(scene);
+    expect(Vector3.Dot(axis(m, 2), camera.getDirection(Vector3.Forward()))).toBeCloseTo(1, 5);
+    // Still beside its squishy: the rig carries it, turned with the squishy.
+    const at = Vector3.TransformCoordinates(
+      new Vector3(...h.params.floater!.at),
+      rig.computeWorldMatrix(true),
+    );
+    expect(m.getTranslation().subtract(at).length()).toBeLessThan(1e-5);
+  });
+
+  /** A battle rig like battle-scene's: the pose scale on `tilt`, the field under `turn`. */
+  function rigged() {
+    const { scene } = field();
+    const tilt = new TransformNode('tilt', scene);
+    const turn = new TransformNode('turn', scene);
+    turn.parent = tilt;
+    tilt.position.set(1, 0, 2);
+    turn.rotation.y = 0.7;
+    const f = new SquishyField<SquishyLod>(scene, {
+      registry,
+      lod: 'low',
+      shadows: false,
+      breathing: false,
+      parent: turn,
+    });
+    const h = f.add(singer, 'rig', { x: 0, z: 0, scale: 2.7 });
+    const body = () => {
+      const mesh = scene.meshes.find((m) => m.name.startsWith('squishy-body:')) as Mesh;
+      const m = mesh.thinInstanceGetWorldMatrices()[0]!.multiply(mesh.computeWorldMatrix(true));
+      return Math.hypot(m.m[4]!, m.m[5]!, m.m[6]!);
+    };
+    /** The note's world height (its mesh is one unit tall) and place. */
+    const note = () => {
+      scene.render();
+      const m = noteWorld(scene);
+      return { height: Math.hypot(m.m[4]!, m.m[5]!, m.m[6]!), at: m.getTranslation() };
+    };
+    return { tilt, turn, h, body, note };
+  }
+
+  it('shrinks and vanishes with its squishy when a battle rig scales it', () => {
+    const { tilt, body, note } = rigged();
+    const full = { note: note().height, body: body() };
+    expect(full.note).toBeGreaterThan(0.5);
+    for (const k of [0.2, 0.001]) {
+      tilt.scaling.setAll(k);
+      const now = note();
+      expect(now.height / full.note, `rig ${k}`).toBeCloseTo(k, 5);
+      expect(body() / full.body, `rig ${k}`).toBeCloseTo(k, 5);
+    }
+    expect(note().height).toBeLessThan(0.01);
+  });
+
+  it('keeps its size through a rig’s squash and stretch, and stays beside the body', () => {
+    const { tilt, turn, h, note } = rigged();
+    const full = note().height;
+    // Volume-keeping squash, as battle-scene poses it.
+    tilt.scaling.set(1 / Math.sqrt(0.7), 0.7, 1 / Math.sqrt(0.7));
+    const squashed = note();
+    expect(squashed.height).toBeCloseTo(full, 5);
+    // Its place goes through the rig like the body's vertices do.
+    const at = Vector3.TransformCoordinates(
+      new Vector3(...h.params.floater!.at).scale(2.7),
+      turn.computeWorldMatrix(true),
+    );
+    expect(squashed.at.subtract(at).length()).toBeLessThan(1e-4);
+  });
+
+  it('floats above and to the viewer’s right of its squishy, and follows it', () => {
+    const { scene, field: f } = field({ breathing: false });
+    const h = f.add(singer, 'a', { x: 0, z: 0 });
+    scene.render();
+    const rest = noteMatrix(scene);
+    expect(rest.m[12]).toBeGreaterThan(0);
+    expect(rest.m[13]).toBeGreaterThan(h.params.height);
+    f.move(h, { x: 3, z: 1, lift: 0.5, scale: 2 });
+    scene.render();
+    const moved = noteMatrix(scene);
+    expect(moved.m[12]! - 3).toBeCloseTo(rest.m[12]! * 2, 5);
+    expect(moved.m[13]).toBeCloseTo(rest.m[13]! * 2 + 0.5, 5);
+    expect(axis(moved, 0).length()).toBeCloseTo(1);
+    expect(Math.hypot(moved.m[4]!, moved.m[5]!, moved.m[6]!)).toBeCloseTo(
+      h.params.floater!.size * 2,
+    );
+  });
+
+  it('bobs while the field breathes, and holds still with reduced motion', () => {
+    const at = (breathing: boolean) => {
+      const { scene, field: f } = field({ breathing });
+      f.add(singer, 'a', { x: 0, z: 0 });
+      return [0, 400, 900].map((ms) => {
+        f.update(1000 + ms);
+        scene.render();
+        return noteMatrix(scene).m[13]!;
+      });
+    };
+    const bobbing = at(true);
+    expect(new Set(bobbing).size).toBe(3);
+    const still = at(false);
+    expect(still[1]).toBe(still[0]);
+    expect(still[2]).toBe(still[0]);
+  });
+
+  it('rebuilds with the rest of the squishy at a new detail level', () => {
+    const { scene, field: f } = field();
+    f.add(singer, 'a', { x: 0, z: 0 });
+    f.flush();
+    const low = floaterMesh(scene)!.getTotalVertices();
+    f.setLod('high');
+    f.flush();
+    const high = scene.meshes.find(
+      (m) => m.name.startsWith(`squishy-${FLOATER_BATCH}`) && m.name.endsWith('-high'),
+    ) as Mesh;
+    expect(high.getTotalVertices()).toBeGreaterThan(low);
+    expect(f.stats.floaters).toBe(1);
+  });
+});
+
+describe('SquishyField sparkle kept off a face', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Every instance's `squishEvent.w` (finish code) across the scene's squishy meshes. */
+  function codes(scene: Scene): Map<string, number[]> {
+    const out = new Map<string, number[]>();
+    for (const mesh of scene.meshes) {
+      const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+        Float32Array | undefined;
+      if (!data || !mesh.isEnabled()) continue;
+      out.set(
+        mesh.name,
+        Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!),
+      );
+    }
+    return out;
+  }
+
+  it('marks only the body of a sparkly species that asks', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    const visual = { ...species.visual, finish: 'iridescent' as const };
+    f.add({ id: 'asks', visual: { ...visual, sparkleOffFace: true } }, 'a', { x: 0, z: 0 });
+    f.flush();
+    const all = codes(scene);
+    const body = [...all].find(([name]) => name.startsWith('squishy-body:'))![1];
+    expect(body).toEqual([FINISH_CODE.iridescent + FINISH_CODE.offFace]);
+    for (const [name, list] of all) {
+      if (name.startsWith('squishy-body:')) continue;
+      for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
+    }
+    // Plain vinyl has no flecks to keep off: no bit.
+    f.add({ id: 'plain', visual: { ...species.visual, sparkleOffFace: true } }, 'b', {
+      x: 2,
+      z: 0,
+    });
+    f.flush();
+    const bodies = [...codes(scene)].find(([name]) => name.startsWith('squishy-body:'))![1];
+    expect(bodies).toContain(FINISH_CODE.vinyl);
+  });
+
+  it('leaves every public species’ codes as they were (no off-face bit)', () => {
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+    GAME_DATA.species.forEach((s, i) => f.add(s, `pub-${i}`, { x: i, z: 0 }));
+    f.flush();
+    for (const [name, list] of codes(scene)) {
+      for (const code of list) expect(code, name).toBeLessThan(FINISH_CODE.offFace);
+    }
   });
 });

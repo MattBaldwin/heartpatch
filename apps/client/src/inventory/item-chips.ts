@@ -18,6 +18,10 @@ const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
 const ITEM_NAMES = new Map(GAME_DATA.resources.map((r) => [r.id, r.name]));
 const CARE_NAMES = new Map(GAME_DATA.careActions.map((c) => [c.id, c.name]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+/** How a clearing tool's chip names the land it clears (#242): "Clears forests". */
+const TERRAIN_PLURALS = new Map(
+  GAME_DATA.terrains.map((t) => [t.id, `${t.name.toLowerCase().replace(/s$/, '')}s`]),
+);
 
 const building = (id: string) => BUILDING_NAMES.get(id) ?? id;
 const article = (name: string) => (/^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`);
@@ -48,6 +52,8 @@ export function itemChip(effect: ItemEffect): ItemChip {
       return chip('💗 Helps befriend a wild squishy');
     case 'explore':
       return chip('🔍 For exploring your land');
+    case 'clear':
+      return chip(`🌱 Clears ${few(effect.terrains.map((t) => TERRAIN_PLURALS.get(t) ?? t))}`);
     case 'builds':
       return chip(`${buildingIcon(effect.building)} Builds ${article(building(effect.building))}`);
     case 'building':

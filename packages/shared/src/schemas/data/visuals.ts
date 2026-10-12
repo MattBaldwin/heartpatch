@@ -119,6 +119,14 @@ export const BodySchema = z.strictObject({
   hem: z
     .strictObject({ count: z.number().int().min(3).max(12), depth: z.number().min(0).max(0.3) })
     .optional(),
+  /**
+   * A heart's single smooth shape: the top dips into a cleft between two
+   * shoulders (`depth`, a share of the height) and the bottom draws in to a
+   * soft point (`tip`, 0 none to 1 a sharp point). Off unless set.
+   */
+  cleft: z
+    .strictObject({ depth: z.number().min(0).max(0.4), tip: z.number().min(0).max(0.9) })
+    .optional(),
   /** Per-squishy proportion variance as a fraction (0.06 is ±6%). */
   jitter: z.number().min(0).max(0.2),
 });

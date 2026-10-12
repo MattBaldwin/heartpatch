@@ -1,4 +1,5 @@
 import {
+  isAvailableRecipe,
   affordableRuns,
   BATTLE_RULES,
   craftSecondsFor,
@@ -57,7 +58,8 @@ import { timing } from './view.js';
  * spends (step 11, one `lockGrantRows`), then `maps`.
  */
 
-const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
+// Only recipes in the game yet (`isAvailableRecipe`): a hidden one can't be made.
+const RECIPES = new Map(GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => [r.id, r]));
 const BUILDINGS = new Map(GAME_DATA.buildings.map((b) => [b.id, b]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 

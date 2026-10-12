@@ -1,4 +1,5 @@
 import {
+  isAvailableRecipe,
   activeSeasons,
   BATTLE_RULES,
   craftSecondsFor,
@@ -28,6 +29,8 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
+import { createClearingRepo } from '../clearing/repo.js';
+import { toClearing } from '../clearing/view.js';
 import { createGatheringRepo, type GatherRow } from '../gathering/repo.js';
 import { factoryView } from '../factory/view.js';
 import { requireMember } from '../maps/members.js';
@@ -41,7 +44,8 @@ import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
  */
 
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
-const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
+// Only recipes in the game yet (`isAvailableRecipe`): a hidden one can't be made.
+const RECIPES = new Map(GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => [r.id, r]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 /** The recipe book (owner decision 2026-10-05), in book order. */
 const BOOK_PAGES = recipeBookPages();
@@ -244,17 +248,19 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       const { map } = await requireMember(db, user, mapId);
       const owner = { mapId, userId: user.id };
       const at = now();
-      const [items, gathers, crafts, factory] = await Promise.all([
+      const [items, gathers, crafts, factory, clears] = await Promise.all([
         store.list(owner),
         createGatheringRepo(db).listActive(mapId, user.id),
         store.listActiveCrafts(owner),
         factoryView(db, owner, at),
+        createClearingRepo(db).listActive(mapId, user.id),
       ]);
       return {
         items,
         gathers: gathers.map(toGather),
         crafts: crafts.map(toCraft),
         factory,
+        clears: clears.map(toClearing),
         seasons: seasonsOn(at, map.timeZone),
         now: at.toISOString(),
       };

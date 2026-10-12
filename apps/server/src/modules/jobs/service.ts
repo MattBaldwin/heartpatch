@@ -36,6 +36,7 @@ import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { foldHabitatLean } from '../care/evolution.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
+import { clearGoingOn } from '../clearing/repo.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
@@ -79,6 +80,7 @@ export { squishyName, trainingAt, trainingLevelOf, type JobMap } from './work.js
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
   noMap: "We couldn't find that patch.",
+  clearing: "You're clearing this land. Let it finish first!",
   noSquishy: "We couldn't find that squishy.",
   inHollow: (name: string) => `${name} is in the Hollow. Rescue them first!`,
   inTrade: (name: string) => `${name} is waiting at a trading post right now. 📬`,
@@ -638,6 +640,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           // A homestead cut off from home naps (#199), as for the Keeper.
           if (homesteadOf(await createExploreRepo(tx).findRow(user.id, workTile.id)) === 'paused') {
             throw new AppError('CONFLICT', MESSAGES.napping);
+          }
+          // Land being cleared (#242): what it grows goes into the clear's drop.
+          if (await clearGoingOn(tx, workTile.id, user.id)) {
+            throw new AppError('CONFLICT', MESSAGES.clearing);
           }
           const resource = GAME_DATA.resources.find((r) => r.id === source?.resource);
           if (resource && !inSeason(resource, new Set(seasonsOn(at, map.timeZone)))) {

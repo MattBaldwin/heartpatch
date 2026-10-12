@@ -588,6 +588,16 @@ await creditCoins(tx, { source: 'milestone', refId: rewardId, userId, mapId: nul
 
 It rolls the source's table (a percent chance, then a weighted pick among pieces that can drop on this tile's terrain in the seasons on now, by the map's local date), grants the piece and appends `clothing.found` (public: who and what). At most one piece per `(source, refId)`, ever, so a retried command can't grant twice. `HP_DEV_DROP_CHANCE` (dev and test only) sets every table's chance.
 
+## The Keeper's house
+
+A walk-around dollhouse grown from the Heart Seed (#381, plan on the issue). It has its own level, one named room per level (`HOUSE_DATA` in `@heartpatch/shared`, checked by `checkHouseData`), and the Keeper's Heart Seed level caps it: every level from 2 carries a `heartSeedLevel` requirement.
+
+**The switch:** `HP_HOUSE` is `off` (the default), `testers` (only the usernames in `HP_HOUSE_TESTERS`) or `on`. While it's off for a player, every house route is `NOT_FOUND` (the same words as a missing patch) and `HomeResponse.house` is left out, so the client draws no house.
+
+**Requirements** use the one shared evaluator (`packages/shared/src/requirements`, 18 kinds), fed by the facts gatherer in `modules/progress/facts.ts`: about ten plain reads on existing indexes (buildings, lit fires tonight, tended land, homesteads, explored tiles, species seen, milestone tiers, accepted trades and gifts, posts reached or won). The Heart Seed level reads 1 until #221; residents and decorations read none until their PRs.
+
+**API:** `GET /maps/:mapId/house` → `HouseView`: the level (1 for everyone until the house tables land: no row reads as level 1), its rooms with their grid layout, and the next level's requirement rows (lines and hints built on the server), cost, `unlocked` and `affordable`. Multiplayer patches only: the Tutorial Glade has no house.
+
 ## Keeper milestones
 
 Account-level goals with tiers (design doc §24, #44). Tracks are data: public ones in `MILESTONE_TRACKS` (`@heartpatch/shared`), secret ones in `SECRET_MILESTONES` (`@heartpatch/shared/server`, CLAUDE.md rule 6), both checked by `checkMilestoneData`. A track's progress comes from game events (`{ eventType, where, player, distinct?, scaleBy? }` with the tutorial's predicates) or, for The First Patch, from `users.tutorial_completed_at`.

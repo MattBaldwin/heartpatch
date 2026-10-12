@@ -6,6 +6,7 @@ import { shortfall, type ItemCounts } from '../gathering/index.js';
 import { buildCost } from '../home/costs.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isBuildable, type HomeBaseRules } from '../schemas/data/home-base.js';
+import { isAvailableRecipe } from '../schemas/data/recipes.js';
 import { terrainNodeResources } from '../schemas/data/terrains.js';
 
 // The recipe book (owner decision 2026-10-05, design doc §12–13): one page per
@@ -48,7 +49,7 @@ export function recipeBookPages(
   data: Pick<GameData, 'recipes' | 'buildings'> = GAME_DATA,
   rules: HomeBaseRules = HOME_BASE_RULES,
 ): RecipeBookPage[] {
-  const make = data.recipes.map((r): RecipeBookPage => ({
+  const make = data.recipes.filter(isAvailableRecipe).map((r): RecipeBookPage => ({
     key: recipePageKey(r.id),
     kind: 'recipe',
     id: r.id,
@@ -142,7 +143,9 @@ export function whereToFind(
     bonusFrom: data.resources
       .filter((r) => r.gather?.extras?.some((e) => e.resource === resourceId) ?? false)
       .map((r) => r.id),
-    madeBy: data.recipes.filter((r) => r.output.resource === resourceId).map((r) => r.id),
+    madeBy: data.recipes
+      .filter((r) => isAvailableRecipe(r) && r.output.resource === resourceId)
+      .map((r) => r.id),
     season: data.resources.find((r) => r.id === resourceId)?.season ?? null,
   };
 }

@@ -29,7 +29,8 @@ export const HOLLOW_RULES: HollowRules = {
     cap: 3, // owner decision 2026-10-08: "up to 3 of each"
     gentleCap: 1, // owner decision 2026-10-08: gentle patches, 1 tile and 1 squishy for good
     landLostPerNight: 3, // TUNE: owner decision 2026-10-08 (Q6), shared with untended land (#194)
-    nodesBlockFires: true, // #242 flips this once a node can be cleared
+    // A node still blocks a fire; a clearable homestead's counts as lightable (#242), since its owner can clear it.
+    nodesBlockFires: true,
   },
   show: { prowlMinutes: 30 }, // TUNE: owner decision 2026-10-08: he strikes at 7:30 PM
   rescue: {

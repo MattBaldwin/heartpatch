@@ -50,10 +50,13 @@ export function clearToolFor(terrain: string, rules: ClearingRules): ClearToolId
 /**
  * Validates the clearing rules against the content they name (real
  * terrains that a generator places, a tool row for every tool a terrain
- * needs, one row per terrain) and returns readable problems, or `[]`. The
- * tools' bag items and recipes arrive with clearing itself (#295 PR 2).
+ * needs, one row per terrain, a bag item for every tool, and recipes that
+ * make one whole tool) and returns readable problems, or `[]`.
  */
-export function checkClearingRules(input: unknown, data: Pick<GameData, 'terrains'>): string[] {
+export function checkClearingRules(
+  input: unknown,
+  data: Pick<GameData, 'terrains' | 'resources' | 'recipes'>,
+): string[] {
   const result = ClearingRulesSchema.safeParse(input);
   if (!result.success) return formatDataIssues(input, result.error);
   const rules = result.data;
@@ -65,6 +68,18 @@ export function checkClearingRules(input: unknown, data: Pick<GameData, 'terrain
   rules.tools.forEach((t, i) => {
     if (tools.has(t.id)) problems.push(`tools[${String(i)}]: duplicate tool "${t.id}"`);
     tools.add(t.id);
+    // The bag holds a tool as an item counted in uses (`Resource.clearTool`).
+    if (!data.resources.some((r) => r.clearTool === t.id && r.id === t.id)) {
+      problems.push(`tools[${String(i)}]: no item with clearTool "${t.id}"`);
+    }
+    // A recipe makes one whole tool: exactly its uses.
+    for (const recipe of data.recipes) {
+      if (recipe.output.resource === t.id && recipe.output.quantity !== t.uses) {
+        problems.push(
+          `tools[${String(i)}]: recipe "${recipe.id}" makes ${String(recipe.output.quantity)} uses, not ${String(t.uses)}`,
+        );
+      }
+    }
   });
   const seen = new Set<string>();
   rules.terrains.forEach((t, i) => {
