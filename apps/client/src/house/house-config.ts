@@ -225,8 +225,10 @@ export const HOUSE_OUTSIDE = {
 export const HOUSE_GROWN = {
   /** Segments on the rounds (balls, jars, the tree's crown): low, so L4 fits the low tier. */
   segments: 4, // TUNE
-  /** Sides on the tubes (table legs, jars, the tree's trunk). */
+  /** Sides on the round tubes (the table, stools, plates, the tree's trunk). */
   sides: 7, // TUNE
+  /** Sides on the six-sided pieces (the tent, jars, paper lanterns): faceted on purpose. */
+  facets: 6, // TUNE
   playroom: {
     /** The play mat's squares, front-left to back-right (sRGB). */
     mat: ['#ffb3c8', '#bfe3ff', '#ffe29a', '#b9ecc8'], // TUNE

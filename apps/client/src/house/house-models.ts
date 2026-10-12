@@ -764,12 +764,12 @@ export function playTent(scene: Scene): Mesh[] {
   door.position.set(0, 0.36, -0.5);
   door.rotation.x = 0.33; // lean with the canvas
   return [
-    tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, 6),
+    tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, G.facets),
     // Three bands round the cone, a little proud of the canvas.
     ...[0.3, 0.68, 1.06].map((y) => {
       // Flush with the canvas (a painted band, not a ledge).
       const at = (yy: number) => 1.45 * (1 - yy / h) + 0.01;
-      return tube(scene, 0.13, at(y + 0.065), at(y - 0.065), [0, y, 0], c.tentStripe, 6);
+      return tube(scene, 0.13, at(y + 0.065), at(y - 0.065), [0, y, 0], c.tentStripe, G.facets);
     }),
     tube(scene, 0.4, 0.03, 0.03, [0, h + 0.1, 0], '#8d5a3b', 4),
     painted(flag, '#ff9ab8'),
@@ -870,8 +870,8 @@ export function kitchenShelves(scene: Scene, w: number): Mesh[] {
       const hex = c.jars[(i + row * 2) % c.jars.length] ?? '#ffd166';
       parts.push(
         (i + row) % 3 === 2
-          ? tube(scene, 0.07, 0.3, 0.26, [x, y + 0.06, -0.03], '#fff6ec', 8) // a stack of white plates
-          : tube(scene, 0.22, 0.14, 0.16, [x, y + 0.14, 0], hex, 6),
+          ? tube(scene, 0.07, 0.3, 0.26, [x, y + 0.06, -0.03], '#fff6ec', G.sides) // a stack of white plates
+          : tube(scene, 0.22, 0.14, 0.16, [x, y + 0.14, 0], hex, G.facets),
       );
     }
   });
@@ -899,11 +899,11 @@ export function gallery(scene: Scene, w: number, depth: number, below: number): 
     const x = -span / 2 + (span * i) / posts;
     parts.push(box(scene, [0.07, 0.82, 0.07], [x, 0.41, front + 0.06], c.rail));
   }
-  // Posts under the front edge, a third of the way in from each end (clear of the stairs).
+  // Posts at the front edge, just in front of the beds below, clear of the stairs.
   for (const x of [-w * 0.3, w * 0.3])
     parts.push(
-      tube(scene, below, 0.18, 0.2, [x, -below / 2, front + 0.05], c.rail, G.sides),
-      box(scene, [0.22, 0.08, 0.22], [x, -below + 0.04, front + 0.05], c.gold),
+      tube(scene, below, 0.18, 0.2, [x, -below / 2, front - 0.08], c.rail, G.sides),
+      box(scene, [0.22, 0.08, 0.22], [x, -below + 0.04, front - 0.08], c.gold),
     );
   return parts;
 }
@@ -999,7 +999,7 @@ export function hangingLantern(scene: Scene, drop: number): Parts {
   const lamp = glowing(
     CreateCylinder(
       'house-part',
-      { height: 0.36, diameterTop: 0.22, diameterBottom: 0.22, tessellation: 6 },
+      { height: 0.36, diameterTop: 0.22, diameterBottom: 0.22, tessellation: G.facets },
       scene,
     ),
     c.lantern,
@@ -1008,8 +1008,8 @@ export function hangingLantern(scene: Scene, drop: number): Parts {
   return {
     solid: [
       box(scene, [0.02, drop - 0.2, 0.02], [0, -(drop - 0.2) / 2, 0], '#5a4a52'),
-      tube(scene, 0.05, 0.16, 0.26, [0, -drop + 0.2, 0], c.gold, 6),
-      tube(scene, 0.05, 0.26, 0.16, [0, -drop - 0.2, 0], c.gold, 6),
+      tube(scene, 0.05, 0.16, 0.26, [0, -drop + 0.2, 0], c.gold, G.facets),
+      tube(scene, 0.05, 0.26, 0.16, [0, -drop - 0.2, 0], c.gold, G.facets),
     ],
     glow: [lamp],
   };

@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { HOUSE_GRID } from './house-config.js';
 import { roomBox, type RoomBox } from './house-layout.js';
 import type { QualityTier } from '../engine/config.js';
-import { roomBuilder, type FloorSpot, type RoomKit } from './house-rooms.js';
+// The grown builders load before house-rooms.ts on purpose: registration
+// must work in either order of the import cycle (function declarations).
 import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
+import { roomBuilder, type FloorSpot, type RoomKit } from './house-rooms.js';
 
 /** A kit that records what a builder asks for, for the room with `look` at the top level. */
 function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier = 'low') {
@@ -18,6 +20,7 @@ function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier
     solid: 0,
     glow: 0,
     beds: [] as FloorSpot[],
+    bedYaws: [] as number[],
     lights: [] as string[],
     signs: 0,
     seeds: 0,
@@ -45,7 +48,10 @@ function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier
       }
     },
     glow: (parts) => (made.glow += parts.length),
-    bed: (x, z) => made.beds.push({ x, z }),
+    bed: (x, z, yaw) => {
+      made.beds.push({ x, z });
+      made.bedYaws.push(yaw);
+    },
     shadow: () => undefined,
     pool: () => undefined,
     light: (kind) => made.lights.push(kind),
@@ -121,6 +127,17 @@ describe('the grown rooms', () => {
             r.x > p.x0 - clear && r.x < p.x1 + clear && r.z > p.z0 - clear && r.z < p.z1 + clear;
           expect(inside, `${look} resident at ${r.x.toFixed(2)}, ${r.z.toFixed(2)}`).toBe(false);
         }
+      // And clear of the beds (1.5 wide, 1.1 deep, turned by their yaw).
+      for (const r of residents)
+        made.beds.forEach((b, i) => {
+          const along = Math.abs(Math.sin(made.bedYaws[i]!)) > 0.5;
+          const hx = (along ? 1.1 : 1.5) / 2 + clear;
+          const hz = (along ? 1.5 : 1.1) / 2 + clear;
+          const onBed = Math.abs(r.x - b.x) < hx && Math.abs(r.z - b.z) < hz;
+          expect(onBed, `${look} resident on the bed at ${b.x.toFixed(2)}, ${b.z.toFixed(2)}`).toBe(
+            false,
+          );
+        });
     });
 
     it(`keeps the ${look}'s residents apart, so faces don't overlap`, () => {

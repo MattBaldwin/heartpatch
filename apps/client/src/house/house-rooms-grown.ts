@@ -1,3 +1,4 @@
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { HOUSE_GRID, HOUSE_GROWN } from './house-config.js';
 import {
   counter,
@@ -17,19 +18,23 @@ import {
   toyBlocks,
   type Parts,
 } from './house-models.js';
-import { placed, type FloorSpot, type RoomBuilder, type RoomKit } from './house-rooms.js';
+import { placed, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
 
 /*
  * The grown rooms (#381 B3, the owner-approved mockup 2026-10-12): what the
  * Playroom, the Kitchen loft and the two-storey Heart Hall hold, registered
  * by look in house-rooms.ts. Each builder places its pieces from the room's
- * box (so a data edit to its size still fits), with every piece merged into
+ * box (so a modest data edit to its size still fits), with every piece merged into
  * the room's one solid mesh and one glow mesh: furniture adds triangles,
  * never draw calls. The Keeper stays in the Snug, so these rooms plan only
  * where their residents stand.
  *
  * Pieces are built facing local -z, toward the open front: yaw 0 faces the
  * dollhouse camera, -π/2 stands against the west wall facing in, π/2 the east.
+ *
+ * The builders are function declarations: house-rooms.ts imports them and
+ * this file imports `placed` back, and a declaration is there whichever
+ * module loads first (a `const` would not be).
  */
 
 const WEST = -Math.PI / 2;
@@ -47,11 +52,21 @@ function frame(kit: RoomKit) {
   };
 }
 
-/** Places a piece's parts (solid and glow) at a spot on the room's floor, turned by `yaw`. */
-function put(kit: RoomKit, parts: Parts, x: number, y: number, z: number, yaw: number): void {
+/** Places a piece (solid meshes, or solid and glow parts) on the room's floor, turned by `yaw`. */
+function put(
+  kit: RoomKit,
+  piece: Parts | readonly Mesh[],
+  x: number,
+  y: number,
+  z: number,
+  yaw: number,
+): void {
+  const parts: Parts = isParts(piece) ? piece : { solid: [...piece], glow: [] };
   if (parts.solid.length > 0) kit.solid([placed(parts.solid, x, y, z, yaw)]);
   if (parts.glow.length > 0) kit.glow([placed(parts.glow, x, y, z, yaw)]);
 }
+
+const isParts = (piece: Parts | readonly Mesh[]): piece is Parts => !Array.isArray(piece);
 
 /** A bed with its contact shadow; `along` says it lies along a side wall. */
 function bedAt(kit: RoomKit, x: number, z: number, yaw: number): void {
@@ -63,23 +78,23 @@ function bedAt(kit: RoomKit, x: number, z: number, yaw: number): void {
 /**
  * The Playroom (level 2): a play mat of coloured squares in the middle, a
  * toy chest with its lid open by the back wall, a striped play tent in the
- * back-right corner and a moon night-light. One bed along the back wall, the
+ * back-right corner and a star night-light in the front corner. One bed along the back wall, the
  * next along the east wall under its window.
  */
-export const playroomRoom: RoomBuilder = (kit) => {
+export function playroomRoom(kit: RoomKit): RoomPlan {
   const { scene } = kit;
   const { w, d, y, at, spot } = frame(kit);
 
   const [mx, mz] = at(w * 0.45, d * 0.4);
-  put(kit, { solid: playMat(scene), glow: [] }, mx, y, mz, 0);
+  put(kit, playMat(scene), mx, y, mz, 0);
 
   // Off the back wall: the lid leans back and must stay clear of it.
   const [cx, cz] = at(0.85, d - 0.8);
-  put(kit, { solid: toyChest(scene), glow: [] }, cx, y, cz, 0);
+  put(kit, toyChest(scene), cx, y, cz, 0);
   kit.shadow(cx, cz, 1.3, 0.9);
 
   const [tx, tz] = at(w - 0.95, d - 0.95);
-  put(kit, { solid: playTent(scene), glow: [] }, tx, y, tz, 0.4);
+  put(kit, playTent(scene), tx, y, tz, 0.4);
   kit.shadow(tx, tz, 1.7, 1.7);
 
   const slots = [
@@ -98,13 +113,13 @@ export const playroomRoom: RoomBuilder = (kit) => {
   kit.light('lamp', lx, y + 0.9, lz);
 
   const [bx, bz] = at(w * 0.66, 0.55);
-  put(kit, { solid: toyBlocks(scene), glow: [] }, bx, y, bz, 0.3);
+  put(kit, toyBlocks(scene), bx, y, bz, 0.3);
 
   return {
     keeper: null,
     residents: [spot(w * 0.34, d * 0.36), spot(w * 0.58, d * 0.44), spot(w * 0.4, d * 0.62)],
   };
-};
+}
 
 /**
  * The Kitchen loft (level 3, upstairs): a little iron stove in the back-left
@@ -112,7 +127,7 @@ export const playroomRoom: RoomBuilder = (kit) => {
  * the window, shelves of jars on the west wall and a round table with a pie
  * in the middle. Its beds stand along the east wall, either side of the door.
  */
-export const kitchenRoom: RoomBuilder = (kit) => {
+export function kitchenRoom(kit: RoomKit): RoomPlan {
   const { scene } = kit;
   const { w, d, y, at, spot } = frame(kit);
 
@@ -132,16 +147,19 @@ export const kitchenRoom: RoomBuilder = (kit) => {
   kit.pool(sx, sz - 0.6, 1.3);
   kit.light('fire', sx, y + 0.8, sz - 0.7);
 
+  // Between the stove and the beds; a Kitchen tuned too narrow goes without.
   const counterW = Math.min(2.0, w - 2.6);
-  const [kx, kz] = at(1.3 + counterW / 2, d - 0.45);
-  put(kit, { solid: counter(scene, counterW), glow: [] }, kx, y, kz, 0);
-  kit.shadow(kx, kz, counterW + 0.3, 0.9);
+  if (counterW >= 0.6) {
+    const [kx, kz] = at(1.3 + counterW / 2, d - 0.45);
+    put(kit, counter(scene, counterW), kx, y, kz, 0);
+    kit.shadow(kx, kz, counterW + 0.3, 0.9);
+  }
 
   const [hx, hz] = at(0.27, d * 0.42);
-  put(kit, { solid: kitchenShelves(scene, Math.min(2.2, d * 0.5)), glow: [] }, hx, y, hz, WEST);
+  put(kit, kitchenShelves(scene, Math.min(2.2, d * 0.5)), hx, y, hz, WEST);
 
   const [tx, tz] = at(w * 0.48, d * 0.4);
-  put(kit, { solid: kitchenTable(scene), glow: [] }, tx, y, tz, 0);
+  put(kit, kitchenTable(scene), tx, y, tz, 0);
   kit.shadow(tx, tz, 2.2, 1.4);
 
   const slots = [
@@ -158,7 +176,7 @@ export const kitchenRoom: RoomBuilder = (kit) => {
     // In front of the table and by the counter: the stools stand behind the table.
     residents: [spot(w * 0.3, d * 0.16), spot(w * 0.62, d * 0.16), spot(w * 0.5, d * 0.66)],
   };
-};
+}
 
 /**
  * The Heart Hall (level 4, the top level, two storeys): the Heart Tree grows
@@ -167,7 +185,7 @@ export const kitchenRoom: RoomBuilder = (kit) => {
  * hang either side of the tree and a gold-edged rug lies in front of it. The
  * beds sleep in a row under the gallery.
  */
-export const heartHallRoom: RoomBuilder = (kit) => {
+export function heartHallRoom(kit: RoomKit): RoomPlan {
   const { scene, box } = kit;
   const { w, d, y, at, spot } = frame(kit);
   const g = HOUSE_GROWN.hall;
@@ -180,25 +198,21 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     const inner = w - HOUSE_GRID.wall;
     const [gx, gz] = at(w / 2, d - HOUSE_GRID.wall / 2 - deck / 2);
     kit.solid([placed(gallery(scene, inner, deck, upper), gx, y + upper, gz, 0)]);
-    // Stairs up the east wall to the gallery's front edge.
+    // Stairs up the east wall to the gallery's front edge (a Hall tuned too
+    // shallow for a walkable flight goes without).
     const front = d - HOUSE_GRID.wall / 2 - deck;
-    const run = Math.max(2, front - 0.6);
-    const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, front - run);
-    kit.solid([placed(stairs(scene, g.stairWidth, upper, run, g.steps), sx, y, sz, 0)]);
-    kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
+    const run = front - 0.6;
+    if (run >= 2) {
+      const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, front - run);
+      kit.solid([placed(stairs(scene, g.stairWidth, upper, run, g.steps), sx, y, sz, 0)]);
+      kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
+    }
   }
 
   // The tree stands right of the middle: at w / 2 the Kitchen loft's wall hid its trunk.
   const treeU = w * 0.58;
   const [rx, rz] = at(treeU, d * 0.3);
-  put(
-    kit,
-    { solid: ovalRug(scene, Math.min(2.2, w * 0.24), Math.min(1.3, d * 0.2)), glow: [] },
-    rx,
-    y,
-    rz,
-    0,
-  );
+  put(kit, ovalRug(scene, Math.min(2.2, w * 0.24), Math.min(1.3, d * 0.2)), rx, y, rz, 0);
 
   const treeH = Math.min(5.6, tall - 0.4);
   const [tx, tz] = at(treeU, d * 0.56);
@@ -237,4 +251,4 @@ export const heartHallRoom: RoomBuilder = (kit) => {
     return spot(w * (0.1 + 0.1 * (k % 4)), d * (0.3 + 0.16 * Math.floor(k / 4)));
   });
   return { keeper: null, residents };
-};
+}
