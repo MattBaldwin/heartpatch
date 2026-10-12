@@ -29,7 +29,7 @@ import './recipe-book.css';
 // with a cover, a contents page and one recipe per page (two-page spreads on
 // a tablet), turned by a swipe or Next/Back. Each page says what you have of
 // each ingredient, where to find it, and has "Make it" (the server crafts:
-// CLAUDE.md rule 1) or "Build it" (Home). Pages open the first time the
+// CLAUDE.md rule 1), "Build it" (Home) or "Find a spot" (the map). Pages open the first time the
 // account has collected everything they need; a sealed page shows a gentle
 // hint, and a page that just opened gets a "New page!" moment. Which pages
 // the player has looked at is kept on this device, per account.
@@ -574,8 +574,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   const cta = (page: PageView): HTMLElement[] => {
     const make = page.kind === 'recipe';
+    const where = buildWhere(page.output);
     // A building that goes out on the map says so (#295): the book closes onto it.
-    const label = make ? RECIPE_BOOK_TEXT.makeIt : buildWhere(page.output).button;
+    const label = make ? RECIPE_BOOK_TEXT.makeIt : where.button;
     const button = el(
       'button',
       {
@@ -592,7 +593,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         closeBook();
         // Homestead and land buildings go up from a tile on the map (#295),
         // which is right under the book.
-        if (buildWhere(page.output).atHome) options.openHome();
+        if (where.atHome) options.openHome();
         return;
       }
       busy = true;
@@ -615,7 +616,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     const note = page.canMake
       ? make
         ? (page.meta.split(' · ')[1] ?? '')
-        : buildWhere(page.output).note
+        : where.note
       : (page.note ?? '');
     const queue = queueButton(page);
     if (queue.length === 0) return [button, el('p', { class: 'rbook-note' }, note)];
