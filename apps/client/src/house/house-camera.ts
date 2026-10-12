@@ -34,6 +34,30 @@ export interface HouseViewport {
   readonly top: number;
   /** Covered at the bottom (the peek bar and the bottom-right button). */
   readonly bottom: number;
+  /**
+   * Covered at the very bottom by the folded sheet alone (the yard may run
+   * on under the Walk in button down to it); `HOUSE_CAMERA.sheet` if the
+   * screen doesn't say.
+   */
+  readonly sheet?: number;
+}
+
+/**
+ * The room a tall phone frames (the Keeper's), and how much of each
+ * neighbour it shows (`HOUSE_CAMERA.peek` unless `framedFocus` moved it).
+ */
+export interface HouseFocus {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly peek?: number;
+}
+
+/** A resident as the framing sees it: its middle and about how far it reaches, metres. */
+export interface FramedSpot {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly r: number;
 }
 
 /** A portrait phone (steeper and wider-angle than a tablet or landscape). */
@@ -91,11 +115,23 @@ export function safeArea(vp: HouseViewport): {
 
 /**
  * The dollhouse pose: looking down at the open-fronted house (yaw 0, from
- * the front), the whole box as big as fits inside the safe area and
- * centred in it. Steeper on a portrait phone, so a tall frame fills with
- * house rather than lawn.
+ * the front), the whole box as big as fits inside the safe area. Steeper
+ * on a portrait phone, so a tall frame fills with house rather than lawn.
+ *
+ * Across, it's centred. Up and down (B4 framing: a wide house on a tall
+ * phone sat small in the middle with empty lawn above it), the house and
+ * its front yard (`yard` metres deep in front of it) are centred together
+ * between the top bar and the folded sheet, so the house rides up under
+ * the top bar and the yard fills the band above the sheet, the house
+ * itself never leaving the safe area.
  */
-export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
+export function fitHouse(
+  bounds: HouseBounds,
+  vp: HouseViewport,
+  yard: number = HOUSE_CAMERA.yard,
+  focus: HouseFocus | null = null,
+): HousePose {
+  const box = corners(fitBox(bounds, vp, focus));
   const phone = isPhone(vp);
   const pitch = (phone ? HOUSE_CAMERA.pitch.phone : HOUSE_CAMERA.pitch.wide) * DEG;
   const fov = (phone ? HOUSE_CAMERA.fov.phone : HOUSE_CAMERA.fov.wide) * DEG;
@@ -105,8 +141,9 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
   const halfW = (safe.right - safe.left) / 2;
   const halfH = Math.max(0.05, (safe.top - safe.bottom) / 2);
   const cx = (safe.right + safe.left) / 2;
-  const cy = (safe.top + safe.bottom) / 2;
-  const box = corners(bounds);
+  const h = Math.max(1, vp.height);
+  const sheetBottom = -1 + (2 * ((vp.sheet ?? HOUSE_CAMERA.sheet) + HOUSE_CAMERA.margin)) / h;
+  const front = [bounds.minX, bounds.maxX].map((x) => ({ x, y: -0.3, z: bounds.minZ - yard }));
   let target: Vec3 = {
     x: (bounds.minX + bounds.maxX) / 2,
     y: (bounds.minY + bounds.maxY) * 0.3,
@@ -130,12 +167,173 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
       minY = Math.min(minY, n.y);
       maxY = Math.max(maxY, n.y);
     }
+    const yardY = Math.min(minY, ...front.map((p) => project(pose, aspect, p).y));
     const k = Math.max((maxX - minX) / 2 / halfW, (maxY - minY) / 2 / halfH);
     distance *= 1 + (k - 1) * 0.7;
+    // House and yard centred between the top bar and the sheet, the house kept inside.
+    const lift = Math.min(
+      Math.max((maxY + yardY) / 2 - (safe.top + sheetBottom) / 2, maxY - safe.top),
+      minY - safe.bottom,
+    );
     target = add(target, scale(right, ((maxX + minX) / 2 - cx) * distance * t * aspect * 0.6));
-    target = add(target, scale(up, ((maxY + minY) / 2 - cy) * distance * t * 0.6));
+    target = add(target, scale(up, lift * distance * t * 0.6));
   }
   return { eye: sub(target, scale(forward, distance)), target, fov, pitch };
+}
+
+/**
+ * What the dollhouse fits (B4 framing). A tall phone is too narrow for a
+ * wide house: fitted whole, the Snug and its squishies came out tiny. So
+ * on a portrait phone it fits the focus room (the Keeper's) across, plus
+ * `HOUSE_CAMERA.peek` of each neighbour so you can see there's more house,
+ * the whole house's height and depth kept; the rest is a sideways drag
+ * away (`panRange`). Elsewhere, and when no focus is given, the whole house.
+ */
+export function fitBox(
+  bounds: HouseBounds,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  focus: HouseFocus | null,
+): HouseBounds {
+  if (!focus || !isPhone(vp)) return bounds;
+  return {
+    ...bounds,
+    minX: Math.max(bounds.minX, focus.minX - (focus.peek ?? HOUSE_CAMERA.peek)),
+    maxX: Math.min(bounds.maxX, focus.maxX + (focus.peek ?? HOUSE_CAMERA.peek)),
+  };
+}
+
+/**
+ * The focus with its peek nudged so the frame's side edges fall between
+ * residents (B4 render check: the edge sliced a neighbour's squishy): the
+ * nearest peek to `HOUSE_CAMERA.peek` at which every resident is wholly in
+ * or wholly out of the frame, or the usual peek when none is.
+ */
+export function framedFocus(
+  bounds: HouseBounds,
+  vp: HouseViewport,
+  room: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+  residents: readonly FramedSpot[],
+): HouseFocus | null {
+  if (!room || !isPhone(vp)) return room;
+  const aspect = vp.width / Math.max(1, vp.height);
+  const slices = (peek: number): boolean => {
+    const pose = fitHouse(bounds, vp, undefined, { ...room, peek });
+    const t = Math.tan(pose.fov / 2) * aspect;
+    return residents.some((p) => {
+      const c = project(pose, aspect, p);
+      if (c.depth <= 0) return false;
+      const w = p.r / c.depth / t + HOUSE_CAMERA.edgeClear;
+      // The screen's own edges crop it (the safe area's are only a margin in).
+      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge);
+    });
+  };
+  // Every peek from a sliver to the whole house, nearest the usual first
+  // (round 3: two residents side by side left no gap within ±1.4 m).
+  const usual = HOUSE_CAMERA.peek;
+  const most = Math.max(bounds.maxX - room.maxX, room.minX - bounds.minX, usual);
+  const peeks: number[] = [];
+  for (let p = 0.1; p <= most + 0.05; p += 0.1) peeks.push(Math.round(p * 10) / 10);
+  peeks.sort((a, b) => Math.abs(a - usual) - Math.abs(b - usual) || a - b);
+  const clear = peeks.find((peek) => !slices(peek));
+  return { ...room, peek: clear ?? usual };
+}
+
+/** A box on the screen, CSS px from the top left. */
+export interface ScreenBox {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+/** Each resident's box on the screen from a pose (CSS px, top left), from its middle and reach. */
+export function residentBoxes(
+  pose: HousePose,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  residents: readonly FramedSpot[],
+): ScreenBox[] {
+  const aspect = vp.width / Math.max(1, vp.height);
+  const t = Math.tan(pose.fov / 2);
+  return residents.flatMap((p) => {
+    const c = project(pose, aspect, p);
+    if (c.depth <= 0) return [];
+    const w = p.r / c.depth / (t * aspect);
+    const h = p.r / c.depth / t;
+    const px = (x: number) => ((x + 1) / 2) * vp.width;
+    const py = (y: number) => ((1 - y) / 2) * vp.height;
+    return [{ x0: px(c.x - w), x1: px(c.x + w), y0: py(c.y + h), y1: py(c.y - h) }];
+  });
+}
+
+/** Whether two screen boxes overlap, with `gap` px kept between them. */
+export const boxesMeet = (a: ScreenBox, b: ScreenBox, gap = 0): boolean =>
+  a.x0 < b.x1 + gap && a.x1 > b.x0 - gap && a.y0 < b.y1 + gap && a.y1 > b.y0 - gap;
+
+/**
+ * Where the "more this way" chevron pill sits on a side (B4 round 4: in the
+ * middle of the edge it covered a resident's face): the middle of the frame
+ * if that's clear of every resident, else the nearest clear spot along the
+ * edge, looking all the way down first (toward the lawn), then up, within the bands the HUD
+ * leaves. Returns the pill's box.
+ */
+export function chevronBox(
+  side: 'left' | 'right',
+  vp: HouseViewport,
+  residents: readonly ScreenBox[],
+): ScreenBox {
+  const { width, height, inset, gap } = HOUSE_CAMERA.chevron;
+  const x0 = side === 'left' ? inset : vp.width - inset - width;
+  const at = (mid: number): ScreenBox => ({
+    x0,
+    x1: x0 + width,
+    y0: mid - height / 2,
+    y1: mid + height / 2,
+  });
+  const lo = vp.top + height / 2 + gap;
+  const hi = vp.height - vp.bottom - height / 2 - gap;
+  const mid = vp.height / 2;
+  // Down toward the lawn first, then up.
+  const ys: number[] = [];
+  for (let y = mid; y <= hi; y += 8) ys.push(y);
+  for (let y = mid - 8; y >= lo; y -= 8) ys.push(y);
+  for (const y of ys) {
+    const box = at(y);
+    if (!residents.some((r) => boxesMeet(box, r, gap))) return box;
+  }
+  return at(mid);
+}
+
+/**
+ * How far a sideways drag may slide the dollhouse from its fit, metres
+ * along x: as far as brings each end of the house to the edge where the fit
+ * had the focus room's neighbour (none when the whole house is in view).
+ */
+export function panRange(
+  bounds: HouseBounds,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  focus: HouseFocus | null,
+): { min: number; max: number } {
+  const box = fitBox(bounds, vp, focus);
+  return { min: bounds.minX - box.minX, max: bounds.maxX - box.maxX };
+}
+
+/** The pose slid `dx` metres along x (a sideways drag). */
+export function panPose(pose: HousePose, dx: number): HousePose {
+  return {
+    ...pose,
+    eye: { ...pose.eye, x: pose.eye.x + dx },
+    target: { ...pose.target, x: pose.target.x + dx },
+  };
+}
+
+/** Metres along x that one CSS px of drag moves at the pose's target (the house follows the finger). */
+export function panPerPixel(pose: HousePose, vp: Pick<HouseViewport, 'height'>): number {
+  const d = Math.hypot(
+    pose.eye.x - pose.target.x,
+    pose.eye.y - pose.target.y,
+    pose.eye.z - pose.target.z,
+  );
+  return (2 * d * Math.tan(pose.fov / 2)) / Math.max(1, vp.height);
 }
 
 /**

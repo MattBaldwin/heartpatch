@@ -1,5 +1,5 @@
 import { createAudio } from './audio/audio.js';
-import { battleCue, careCue, touchCue } from './audio/cues.js';
+import { battleCue, careCue, findCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { showsStats } from './engine/stats-flag.js';
@@ -56,6 +56,8 @@ import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
 import { mountVersionMenu } from './pwa/version-menu.js';
 import { createWhatsNew } from './whats-new/whats-new.js';
+import { createPatchLine } from './patch-line/patch-line.js';
+import { boxOf, SHEET_SELECTOR } from './tutorial/sheets.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
@@ -201,6 +203,15 @@ let battleMapId: string | null = null;
 const loreBag = createLoreBagEntry(() => {
   lorebook.openAt(null);
 });
+// The real squishies for DOM screens, drawn once each on the game's engine
+// (#375): the Squishies roster, the care sheet and the "what landed" banner
+// (#465) share them.
+const portraits = createPortraits({
+  engine: () => stage?.renderer.engine ?? null,
+  registry: visualRegistry(GAME_DATA),
+  lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
+  invalidate: () => stage?.invalidate(),
+});
 const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -220,23 +231,23 @@ const inventory = createInventoryScreen({
   onBagOpen: () => {
     lorebook.refresh();
   },
+  // What landed flies in from its tile on the map (#419).
+  locate: {
+    tile: (h) => maps.tileRect(h),
+    home: () => maps.homeRect(),
+    building: (id) => maps.buildingTile(id),
+  },
   // The "what landed" banner stays below the patch's name, a wardrobe find
   // and the trays' hint line and first-visit hint (#419).
   clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),
+  // Trained squishies show their faces (#465).
+  portraits,
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
 /** The patch whose roster the close-up returns to (opened from the roster), or null. */
 let rosterReturn: string | null = null;
-// The real squishies for DOM screens, drawn once each on the game's engine
-// (#375): the Squishies roster and the care sheet share them.
-const portraits = createPortraits({
-  engine: () => stage?.renderer.engine ?? null,
-  registry: visualRegistry(GAME_DATA),
-  lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
-  invalidate: () => stage?.invalidate(),
-});
 // The Squishies roster (#375): every squishy with its happiness, evolution,
 // rarity and job, one tap from the top bar on the map, at home and in
 // explore. Its Care opens the care sheet over it (two taps to care).
@@ -854,6 +865,8 @@ const maps = createMapScreen({
     journeys.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
+    // A patch-mate's Legendary friend (#391).
+    patchLine.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -1085,8 +1098,11 @@ const battles = createBattleScreen({
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  onStep: (step) => {
-    audio.cue(battleCue(step));
+  onStep: (step, rareFriend) => {
+    audio.cue(battleCue(step, rareFriend));
+  },
+  onRareFind: (scale) => {
+    audio.cue(findCue(scale));
   },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends
@@ -1399,6 +1415,33 @@ const whatsNew = createWhatsNew({
   // async: a missing clipboard (an http page) rejects instead of throwing.
   copy: async (text) => navigator.clipboard.writeText(text),
 });
+// The patch line (#391): a patch-mate befriended a Legendary squishy. It waits
+// off the map and behind anything else at the top or over the map (a card, a
+// sheet, the "What landed" banner, Sprout's hint, another toast); the land
+// chip steps aside for it (patch-line.css).
+const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast';
+const patchLineBusy = (): boolean =>
+  hudMapId === null ||
+  battles.debug !== null ||
+  whatsNewOpen ||
+  raidReportOpen ||
+  hollowReportOpen() ||
+  trays.debug.hint ||
+  trays.debug.open !== null ||
+  (maps.debug?.selected ?? null) !== null ||
+  inventory.debug?.summary.shown === 'banner' ||
+  milestones.debug.showing !== null ||
+  lorebook.debug.showing !== null ||
+  [...document.querySelectorAll(SHEET_SELECTOR)].some((sheet) => boxOf(sheet) !== null) ||
+  [...document.querySelectorAll(TOP_NOTES)].some((note) => boxOf(note) !== null);
+const patchLine = createPatchLine({
+  root: document.body,
+  mapId: () => hudMapId,
+  busy: patchLineBusy,
+  playerName: (userId) =>
+    maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  kindName: (speciesId) => GAME_DATA.species.find((s) => s.id === speciesId)?.name ?? null,
+});
 // The game's version under the name, and "Update now" when one is ready (#198).
 const version = mountVersionMenu({
   client: CLIENT_BUILD,
@@ -1515,6 +1558,7 @@ if (import.meta.env.DEV) {
     milestones: () => milestones.debug,
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
+    patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
     audio: () => audio.debug,
   };
 }

@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   clampZoom,
   entryGlide,
+  boxesMeet,
+  chevronBox,
+  fitBox,
   fitHouse,
+  framedFocus,
   glidePose,
+  panPerPixel,
+  panPose,
+  panRange,
   isPhone,
   pinchedOut,
   pinchZoom,
@@ -58,14 +65,162 @@ describe('fitHouse', () => {
         const wide = (Math.max(...xs) - Math.min(...xs)) / (safe.right - safe.left);
         const tall = (Math.max(...ys) - Math.min(...ys)) / (safe.top - safe.bottom);
         expect(Math.max(wide, tall)).toBeGreaterThan(0.97);
-        // Centred in it.
-        expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(
-          (safe.top + safe.bottom) / 2,
+        // Across, centred; up and down, the house and its yard centred
+        // between the top bar and the sheet, unless the house meets an edge.
+        expect((Math.max(...xs) + Math.min(...xs)) / 2).toBeCloseTo(
+          (safe.left + safe.right) / 2,
           1,
         );
+        const yard = [b.minX, b.maxX].map(
+          (x) => project(pose, aspect, { x, y: -0.3, z: b.minZ - HOUSE_CAMERA.yard }).y,
+        );
+        const sheet = -1 + (2 * (HOUSE_CAMERA.sheet + HOUSE_CAMERA.margin)) / vp.height;
+        const group = (Math.max(...ys) + Math.min(...ys, ...yard)) / 2;
+        const edge = Math.min(
+          Math.abs(Math.max(...ys) - safe.top),
+          Math.abs(Math.min(...ys) - safe.bottom),
+        );
+        expect(Math.min(Math.abs(group - (safe.top + sheet) / 2), edge)).toBeLessThan(0.02);
       });
     }
   }
+
+  it('lifts a wide house up under the top bar on a tall phone, its yard filling the band over the sheet (B4)', () => {
+    const wide: HouseBounds = {
+      minX: -0.24,
+      maxX: 9.84,
+      minY: 0,
+      maxY: 3,
+      minZ: -0.35,
+      maxZ: 5.04,
+    };
+    const vp: HouseViewport = { ...iphone, bottom: 150, sheet: 79 };
+    const pose = fitHouse(wide, vp);
+    const safe = safeArea(vp);
+    const aspect = vp.width / vp.height;
+    const ys = corners(wide).map((p) => project(pose, aspect, p).y);
+    // Width-bound: the house can't fill the height, so it rides up rather than sitting mid-lawn.
+    const above = safe.top - Math.max(...ys);
+    const below = Math.min(...ys) - safe.bottom;
+    expect(above).toBeLessThan(below);
+    expect(above).toBeGreaterThanOrEqual(-0.01);
+    // The yard's fence stays in frame, above the sheet.
+    const sheet = -1 + (2 * (79 + HOUSE_CAMERA.margin)) / vp.height;
+    const fence = project(pose, aspect, { x: 4.8, y: -0.3, z: wide.minZ - HOUSE_CAMERA.yard });
+    expect(fence.y).toBeGreaterThan(sheet);
+    // A taller sheet (measured from the DOM) moves the house and yard up with it.
+    const raised = fitHouse(wide, { ...vp, sheet: 200 });
+    const top = (p: typeof pose) => Math.max(...corners(wide).map((c) => project(p, aspect, c).y));
+    expect(top(raised)).toBeGreaterThan(top(pose));
+    expect(top(raised)).toBeLessThanOrEqual(safe.top + 0.01);
+  });
+
+  describe('a tall phone fits the Keeper’s room and slides to the rest (B4)', () => {
+    // Level 2: the Snug and the Playroom side by side.
+    const two: HouseBounds = { minX: -0.24, maxX: 9.84, minY: 0, maxY: 3, minZ: -0.35, maxZ: 5.04 };
+    const snugRoom = { minX: 0, maxX: 4.8 };
+    const vp: HouseViewport = { ...iphone, bottom: 150, sheet: 79 };
+    const aspect = vp.width / vp.height;
+    const span = (pose: ReturnType<typeof fitHouse>, b: HouseBounds) => {
+      const ys = corners(b).map((p) => project(pose, aspect, p).y);
+      return Math.max(...ys) - Math.min(...ys);
+    };
+
+    it('shows the Snug much bigger than the whole house fitted across, with an edge of the Playroom', () => {
+      const whole = fitHouse(two, vp);
+      const focused = fitHouse(two, vp, undefined, snugRoom);
+      // The Snug's on-screen height grows by half again or more.
+      const snugBox = { ...two, maxX: 4.8 };
+      expect(span(focused, snugBox)).toBeGreaterThan(span(whole, snugBox) * 1.5);
+      // The Snug whole on screen, and the Playroom running off the right edge.
+      const safe = safeArea(vp);
+      const xs = corners(snugBox).map((p) => project(focused, aspect, p).x);
+      expect(Math.min(...xs)).toBeGreaterThanOrEqual(safe.left - 0.01);
+      expect(Math.max(...xs)).toBeLessThan(safe.right);
+      const far = project(focused, aspect, { x: two.maxX, y: 0, z: two.minZ });
+      expect(far.x).toBeGreaterThan(1);
+      const peek = project(focused, aspect, {
+        x: 4.8 + HOUSE_CAMERA.peek * 0.8,
+        y: 0,
+        z: two.minZ,
+      });
+      expect(peek.x).toBeLessThan(1);
+    });
+
+    it('nudges the peek so the frame’s edge falls between residents, never through one (round 2)', () => {
+      const r = 0.6;
+      // A resident right where the usual frame's right edge falls.
+      const usual = fitHouse(two, vp, undefined, snugRoom);
+      const t = Math.tan(usual.fov / 2) * aspect;
+      let x = 5;
+      for (; x < 9; x += 0.05) {
+        const c = project(usual, aspect, { x, y: 0.6, z: 2.4 });
+        if (c.x >= 1) break;
+      }
+      const spot = { x, y: 0.6, z: 2.4, r };
+      const focus = framedFocus(two, vp, snugRoom, [spot])!;
+      expect(focus.peek).not.toBe(HOUSE_CAMERA.peek);
+      const pose = fitHouse(two, vp, undefined, focus);
+      const c = project(pose, aspect, spot);
+      const w = r / c.depth / t;
+      expect(c.x + w <= 1 || c.x - w >= 1).toBe(true);
+      // Nobody near an edge: the usual peek.
+      expect(framedFocus(two, vp, snugRoom, [{ x: 2.4, y: 0.6, z: 2.4, r }])!.peek).toBe(
+        HOUSE_CAMERA.peek,
+      );
+      // An iPad keeps the room as it is (the whole house shows).
+      expect(framedFocus(two, ipad, snugRoom, [spot])).toEqual(snugRoom);
+    });
+
+    it('slides the chevron pill along its edge clear of a resident, lower first', () => {
+      const vp2: HouseViewport = { width: 390, height: 844, top: 70, bottom: 148 };
+      const mid = chevronBox('right', vp2, []);
+      expect((mid.y0 + mid.y1) / 2).toBe(422);
+      expect(mid.x1).toBe(390 - HOUSE_CAMERA.chevron.inset);
+      const face = { x0: 340, x1: 400, y0: 380, y1: 470 };
+      const moved = chevronBox('right', vp2, [face]);
+      expect(boxesMeet(moved, face)).toBe(false);
+      expect(moved.y0).toBeGreaterThan(face.y1); // below it, toward the lawn
+      expect(chevronBox('left', vp2, [face])).toEqual({
+        ...mid,
+        x0: 4,
+        x1: 4 + HOUSE_CAMERA.chevron.width,
+      });
+    });
+
+    it('slides as far as either end of the house, and no further', () => {
+      const range = panRange(two, vp, snugRoom);
+      expect(range.min).toBeCloseTo(0);
+      expect(range.max).toBeCloseTo(two.maxX - (4.8 + HOUSE_CAMERA.peek));
+      // Slid all the way: the Playroom's far end is where the Snug's near end was.
+      const fitted = fitHouse(two, vp, undefined, snugRoom);
+      const slid = panPose(fitted, range.max);
+      const end = project(slid, aspect, { x: two.maxX, y: 0, z: two.minZ }).x;
+      const start = project(fitted, aspect, { x: two.minX, y: 0, z: two.minZ }).x;
+      expect(end).toBeCloseTo(-start, 1);
+      // A drag of the screen's width moves the house about a screen's worth.
+      const metres = panPerPixel(fitted, vp) * vp.width;
+      const moved = project(panPose(fitted, metres), aspect, fitted.target).x;
+      expect(moved).toBeCloseTo(-2, 0);
+    });
+
+    it('keeps the whole house on an iPad, and on a phone when the house is no wider than its room', () => {
+      expect(fitBox(two, ipad, snugRoom)).toEqual(two);
+      expect(panRange(two, ipad, snugRoom)).toEqual({ min: 0, max: 0 });
+      expect(fitBox(snug, vp, { minX: 0, maxX: 4.8 })).toEqual(snug);
+      expect(fitBox(two, vp, null)).toEqual(two);
+    });
+
+    it('keeps the tall top level inside the safe area top to bottom while it comes in closer', () => {
+      const whole = fitHouse(grown, vp);
+      const focused = fitHouse(grown, vp, undefined, snugRoom);
+      const safe = safeArea(vp);
+      expect(span(focused, grown)).toBeGreaterThan(span(whole, grown));
+      const ys = corners(grown).map((p) => project(focused, aspect, p).y);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(safe.top + 0.01);
+      expect(Math.min(...ys)).toBeGreaterThanOrEqual(safe.bottom - 0.01);
+    });
+  });
 
   it('looks down steeper on a portrait phone than on an iPad, inside the planned ranges', () => {
     const phone = deg(fitHouse(snug, iphone).pitch);

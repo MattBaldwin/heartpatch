@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { closeRoster, openRoster } from './roster.js';
 import { trayButton, traysState } from './trays.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
@@ -13,12 +14,64 @@ interface InventoryDebug {
   seasons: string[];
   bagOpen: boolean;
   tileAction: string | null;
-  summary: { shown: 'banner' | 'pill' | null; chips: number; more: number; card: boolean };
+  summary: {
+    shown: 'banner' | 'pill' | null;
+    chips: number;
+    more: number;
+    card: boolean;
+    flying: number;
+    flown: number;
+  };
   bagNew: number;
+  landings: number;
+  fromTiles: number;
 }
 
 function bagState(page: Page): Promise<InventoryDebug | null> {
   return hook<InventoryDebug>(page, 'inventory');
+}
+
+/**
+ * Notes the landing banner as it shows (#429): its words, classes and whether it takes taps. It
+ * is up for 4 s, and a loaded runner can take longer than that to get from a look to a tap. An
+ * init script, so it is also there after the reload the landing follows.
+ */
+async function watchBanner(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { bannerSeen: unknown };
+    w.bannerSeen = null;
+    new MutationObserver(() => {
+      const el = document.querySelector('[data-testid="landed-toast"]');
+      if (el && !el.hasAttribute('hidden') && el.textContent) {
+        w.bannerSeen = {
+          text: el.textContent,
+          className: el.className,
+          pointerEvents: getComputedStyle(el).pointerEvents,
+          // Trained squishies' faces in it (#465).
+          faces: el.querySelectorAll('img.away-face').length,
+        };
+      }
+    }).observe(document, { attributes: true, childList: true, characterData: true, subtree: true });
+  });
+}
+
+/** What `watchBanner` saw when the banner first showed; null if it has not shown. */
+function bannerSeen(
+  page: Page,
+): Promise<{ text: string; className: string; pointerEvents: string; faces: number } | null> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          bannerSeen: {
+            text: string;
+            className: string;
+            pointerEvents: string;
+            faces: number;
+          } | null;
+        }
+      ).bannerSeen,
+  );
 }
 
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
@@ -89,6 +142,9 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // The bag starts with just Sprout's Heart Charms from the first starter pick
   // (owner decision 2026-10-04), on the server's season (the dev server runs
   // on today's date).
+  // The bag's hook is null until the bag has read the new patch, a round trip after the map has
+  // its tiles (it was null on both attempts of a main run, #429).
+  await expect.poll(async () => (await bagState(page)) !== null, { timeout: 30_000 }).toBe(true);
   const state = await bagState(page);
   expect(state).toMatchObject({
     items: { 'heart-charm': 3 },
@@ -141,21 +197,35 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(bag).toBeHidden();
 
   // Both finish while the Bag is shut: what landed shows as a banner of chips
-  // (#419), and as news on the My Home tab until the Bag is opened.
+  // (#419), and as news on the My Home tab until the Bag is opened. The banner
+  // is up for 4 s and hides itself, which a loaded runner can outlast between a
+  // look at it and a tap on it (a tap then waits for a banner that is gone,
+  // until the test times out, #429). So what it looked like when it showed is
+  // read from a watcher set up before, and its click is sent to the element,
+  // which still opens the card after the banner has hidden.
+  await watchBanner(page);
   const mapId = (await bagState(page))!.mapId;
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Back the way a kid often is after hours away: iOS has closed the app, so
+  // it starts afresh and lands back on the patch (#160).
+  await page.reload();
+  await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 60_000 });
   const banner = page.getByTestId('landed-toast');
   // Roomy: the settle is one round trip, slow under a full CI run.
-  await expect(banner).toContainText('Heart Charm', { timeout: 15_000 });
-  // Two kinds: the banner (not the one-thing pill), and a real tap opens the
-  // card with everything: on a plain map it takes taps (shut trays don't count
-  // as open sheets). The banner hides itself after a few seconds, so the tap
-  // comes straight after the look.
-  await expect(banner).not.toHaveClass(/away-one|away-quiet/);
-  expect(await banner.evaluate((n) => getComputedStyle(n).pointerEvents)).not.toBe('none');
-  await banner.tap();
+  await expect
+    .poll(async () => (await bannerSeen(page))?.text ?? '', { timeout: 30_000 })
+    .toContain('Heart Charm');
+  // With motion on, they flew in from the map: the gather's from its node
+  // (even on a fresh start), the craft from home base.
+  expect((await bagState(page))?.summary.flown).toBeGreaterThan(0);
+  expect((await bagState(page))?.fromTiles).toBeGreaterThan(0);
+  // Two kinds: the banner (not the one-thing pill), and on a plain map it takes
+  // taps (shut trays don't count as open sheets).
+  const seen = (await bannerSeen(page))!;
+  expect(seen.className).not.toMatch(/away-one|away-quiet/);
+  expect(seen.pointerEvents).not.toBe('none');
+  await banner.dispatchEvent('click');
   const card = page.getByTestId('away-card');
   await expect(card).toBeVisible();
   await expect(card).toContainText('Heart Charm');
@@ -170,7 +240,10 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(page.getByTestId('map-hud')).toBeHidden({ timeout: 30_000 });
   await page.getByTestId('home').getByTestId('home-back').tap();
   await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 30_000 });
-  await expect.poll(async () => (await bagState(page))?.bagNew).toBeGreaterThan(0);
+  // Roomy: the bag reads itself again once the map is back.
+  await expect
+    .poll(async () => (await bagState(page))?.bagNew, { timeout: 15_000 })
+    .toBeGreaterThan(0);
   await expect(page.getByTestId('bag-new')).toHaveText(/^\+\d+$/);
   // Roomy: the trays read their news again once the map is back (a busy CI runner).
   await expect
@@ -178,8 +251,28 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
     .not.toBeNull();
   await (await trayButton(page, 'bag-open')).tap();
   await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
+
+  // Reduce Motion (#419): nothing flies in from the map; the one thing that
+  // landed is just there, as a small pill.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await bag.locator('[data-recipe="heart-charm"]').tap();
+  await expect.poll(async () => (await bagState(page))?.crafts).toBe(1);
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
+  const landed = (await bagState(page))!.landings;
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Checked once it has landed, whether or not the pill has hidden itself again
+  // (with no flight its few seconds start at once): it was the one-thing pill,
+  // and nothing flew.
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 15_000 })
+    .toBe(landed + 1);
+  await expect(banner).toContainText('Heart Charm');
+  await expect(banner).toHaveClass(/away-one/);
+  expect((await bagState(page))?.summary.flying).toBe(0);
+  await expect(page.locator('.away-flyer')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: null });
 
   // Leaving the map (here: Settings → Change Keeper, #42) takes the bag with it.
   await page.getByRole('button', { name: 'My patches' }).tap();
@@ -196,13 +289,18 @@ interface BannerModules {
   summary: {
     summaryEntries: (
       landed: { items: Record<string, number> }[],
-      trained: { name: string; xp: number }[],
+      trained: { name: string; xp: number; portrait?: string }[],
     ) => unknown[];
   };
   view: {
     createAwaySummary: (root: HTMLElement) => {
-      show: (what: { entries: unknown[]; sentence: string; away: boolean }) => void;
-      debug: { shown: string | null; chips: number; more: number };
+      show: (what: {
+        entries: unknown[];
+        sentence: string;
+        away: boolean;
+        from?: () => { x: number; y: number };
+      }) => void;
+      debug: { shown: string | null; chips: number; more: number; flown: number };
     };
   };
 }
@@ -224,7 +322,12 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   });
   const page = await context.newPage();
   await page.goto('/');
-  const results = await page.evaluate(async () => {
+  const {
+    fits: results,
+    stack,
+    cardFaces,
+    pair,
+  } = await page.evaluate(async () => {
     const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
     const m = {
       summary: await load('/src/inventory/away-summary.ts'),
@@ -261,6 +364,31 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
         ],
       ),
     };
+    // With their faces (#465): the training chip is wider, and chips stay whole.
+    const face = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 52;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#9fd3f5';
+      g.beginPath();
+      g.arc(26, 28, 22, 0, Math.PI * 2);
+      g.fill();
+      return c.toDataURL();
+    })();
+    const faces = (list: { name: string; xp: number }[]) =>
+      list.map((t) => ({ ...t, portrait: face }));
+    Object.assign(cases, {
+      threeFaces: m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], faces(xp)),
+      tenFaces: m.summary.summaryEntries(
+        [{ items: { timber: 6, stone: 3, emberwood: 4, glimmer: 1, water: 2, greens: 3 } }],
+        faces([
+          ...xp,
+          { name: 'Emberbun', xp: 4 },
+          { name: 'Puddlepuff', xp: 3 },
+          { name: 'Pebblesnooze', xp: 1 },
+        ]),
+      ),
+    });
     const out: Record<
       string,
       {
@@ -285,7 +413,43 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
         inside: box.left >= 0 && box.right <= innerWidth,
       };
     }
-    return out;
+    // Four trained with faces, beside other chips: three faces, then how many.
+    const stackChip = [...document.querySelectorAll<HTMLElement>('.away-banner')]
+      .at(-1)!
+      .querySelector('.away-chip-faces');
+    const stack = {
+      faces: stackChip?.querySelectorAll('img.away-face').length ?? 0,
+      text: stackChip?.textContent ?? '',
+    };
+    // The card behind the last one (opened in code: this bare page's sign-up
+    // sheet makes the banner only to read).
+    [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!.click();
+    const card = [...document.querySelectorAll<HTMLElement>('[data-testid="away-card"]')].at(-1)!;
+    const cardFaces = card.querySelectorAll('.away-trained img.away-trained-face').length;
+    // Only training landed, two squishies: the pill opens nothing, so it
+    // says their XP, not how many.
+    banner.show({
+      entries: m.summary.summaryEntries(
+        [],
+        faces([
+          { name: 'Glimmerock', xp: 2 },
+          { name: 'Emberbun', xp: 4 },
+        ]),
+      ),
+      sentence: 'pair',
+      away: true,
+    });
+    const pill = [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!;
+    return {
+      fits: out,
+      stack,
+      cardFaces,
+      pair: {
+        shown: banner.debug.shown,
+        faces: pill.querySelectorAll('img.away-face').length,
+        text: pill.querySelector('.away-chip')?.textContent ?? '',
+      },
+    };
   });
   expect(results['three']).toMatchObject({
     shown: 'banner',
@@ -299,5 +463,136 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
   expect(ten.more).toBeGreaterThan(0);
   expect(ten.chips + ten.more).toBe(ten.entries);
+  for (const name of ['threeFaces', 'tenFaces']) {
+    const r = results[name]!;
+    expect(r, name).toMatchObject({ shown: 'banner', cut: false, inside: true });
+    expect(r.chips + r.more, name).toBe(r.entries);
+  }
+  // Four trained with faces: three overlap in the chip, then how many ("🎯4").
+  expect(stack).toEqual({ faces: 3, text: '🎯4' });
+  // The card: each trained squishy's row has its face.
+  expect(cardFaces).toBe(4);
+  expect(pair).toEqual({ shown: 'pill', faces: 2, text: '+6 XP' });
+
+  // Sprout's first-visit tray hint is a dialog but no sheet: with it up, the
+  // chips still fly and the banner takes taps. A real sheet open: nothing
+  // flies across it, and the banner is only to read.
+  const gate = await page.evaluate(async () => {
+    const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
+    const m = {
+      summary: await load('/src/inventory/away-summary.ts'),
+      view: await load('/src/inventory/away-summary-view.ts'),
+    } as BannerModules;
+    // From a bare map-less page: the sign-up sheet this page opens on is a real sheet.
+    for (const d of document.querySelectorAll('[role="dialog"]')) d.remove();
+    const banner = m.view.createAwaySummary(document.body);
+    const entries = m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], []);
+    const node = () => [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!;
+    const dialog = (className: string) => {
+      const d = document.createElement('div');
+      d.className = className;
+      d.setAttribute('role', 'dialog');
+      d.textContent = className;
+      d.style.cssText = 'position:fixed;left:8px;bottom:8px;width:120px;height:60px';
+      document.body.append(d);
+      return d;
+    };
+    const land = () => {
+      const before = banner.debug.flown;
+      banner.show({ entries, sentence: 'x', away: false, from: () => ({ x: 160, y: 420 }) });
+      return { flew: banner.debug.flown > before, quiet: node().classList.contains('away-quiet') };
+    };
+    const hint = dialog('tray-hint');
+    const withHint = land();
+    // The first chip lands right on its slot, though the banner was still
+    // sliding up into place when the flight was set (CSS `away-in`).
+    const flyer = document.querySelector<HTMLElement>('.away-flyer');
+    const effect = flyer?.getAnimations()[0]?.effect;
+    const last =
+      effect instanceof KeyframeEffect ? effect.getKeyframes().at(-1)?.['transform'] : null;
+    const flyerY = Number(/translate\([^,]+, ([-\d.]+)px\)/.exec(String(last))?.[1]);
+    const flyerMid = flyerY + (flyer?.offsetHeight ?? 0) / 2;
+    await new Promise((done) => window.setTimeout(done, 1500));
+    const slot = node().querySelector('.away-chip')!.getBoundingClientRect();
+    const landsOff = Math.abs(flyerMid - (slot.top + slot.height / 2));
+    hint.remove();
+    const sheet = dialog('chat-sheet');
+    const withSheet = land();
+    sheet.remove();
+    return { withHint, withSheet, landsOff };
+  });
+  expect(gate.withHint).toEqual({ flew: true, quiet: false });
+  expect(gate.withSheet).toEqual({ flew: false, quiet: true });
+  expect(gate.landsOff).toBeLessThan(1.5);
   await context.close();
+});
+
+/**
+ * Trained squishies land with their own faces (#465): the picture the roster
+ * drew (#375) shows in the banner's XP chip, and beside its row in the card.
+ */
+test('a trained squishy lands with its own face (#465)', async ({ browser }) => {
+  test.setTimeout(240_000); // a patch, a scene build and a portrait; CI renders in software
+  const page = await newPlayer(browser, uniqueName('trained'));
+  await watchBanner(page);
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  // A Training Grounds on a ready homestead (dev route, as factory.spec.ts;
+  // owner decision 4 on #277), made before the first visit.
+  const patchName = 'Training Patch';
+  const patch = await api<{ map: { id: string } }>(page, 'POST', '/maps', {
+    name: patchName,
+    timeZone: 'America/Chicago',
+  });
+  expect(patch.status).toBeLessThan(300);
+  const mapId = patch.body.map.id;
+  const plot = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`);
+  expect(plot.status).toBe(201);
+  const { q, r } = plot.body;
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 8, stone: 8 },
+  });
+  expect(granted.status).toBe(201);
+  const built = await api(page, 'POST', `/maps/${mapId}/buildings`, {
+    buildingId: 'training-grounds',
+    q,
+    r,
+    spot: 1,
+  });
+  expect(built.status, JSON.stringify(built.body)).toBe(201);
+  // The lobby reads its patches again, and this one is visited.
+  await page.reload();
+  await lobby.getByText(patchName).tap({ timeout: 30_000 });
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden({ timeout: 30_000 });
+  await expect.poll(async () => (await bagState(page))?.mapId, { timeout: 30_000 }).toBe(mapId);
+  // The starter trains there.
+  const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${mapId}/care`);
+  const pet = care.body.squishies[0]!.id;
+  const job = await api(page, 'POST', `/maps/${mapId}/squishies/${pet}/job`, { job: 'training' });
+  expect(job.status, JSON.stringify(job.body)).toBe(200);
+
+  // The kid has seen it in the roster, so its picture is drawn and kept.
+  await openRoster(page);
+  await expect(page.locator('[data-testid="roster-portrait"][data-ready="true"]')).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await closeRoster(page);
+
+  // An hour of training while away, then back in the app.
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/mood/age`, { minutes: 60 })).status).toBe(
+    200,
+  );
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Read as it showed (`watchBanner`): it's up for 4 s, and a busy runner is slower.
+  await expect
+    .poll(async () => (await bannerSeen(page))?.text ?? '', { timeout: 30_000 })
+    .toContain('trained');
+  // One squishy, one thing: the pill, its face and its XP.
+  const seen = (await bannerSeen(page))!;
+  expect(seen.className).toContain('away-one');
+  expect(seen.faces).toBe(1);
+  expect(seen.text).toMatch(/\+\d+ XP/);
+  expect(errors).toEqual([]);
 });

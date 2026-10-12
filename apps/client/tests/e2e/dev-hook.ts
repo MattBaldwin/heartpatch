@@ -40,7 +40,8 @@ export type HookName =
   | 'posts'
   | 'journey'
   | 'post'
-  | 'whatsNew';
+  | 'whatsNew'
+  | 'patchLine';
 
 type HookWindow = { __heartpatch?: Partial<Record<string, () => unknown>> };
 

@@ -30,6 +30,16 @@ export type CueName =
   | 'wiggle-free'
   | 'yay'
   | 'aww'
+  /**
+   * A rare-or-better wild squishy shows up (#391): a bell glimmer over a
+   * rising sweep, one more note at each size step of its tier (Rare is 1).
+   */
+  | 'find-1'
+  | 'find-2'
+  | 'find-3'
+  | 'find-4'
+  /** A rare-or-better new friend (#391): a harp run up into a bell chord, in place of 'yay'. */
+  | 'friend-fanfare'
   /** The Hollow Man comes by: a quiet low hush while the music dips. */
   | 'nightfall'
   /** The opening cinematic (#46): a squishy blooms out of the ground. */
@@ -66,6 +76,11 @@ export const CUE_NAMES: readonly CueName[] = [
   'wiggle-free',
   'yay',
   'aww',
+  'find-1',
+  'find-2',
+  'find-3',
+  'find-4',
+  'friend-fanfare',
   'nightfall',
   'bloom',
   'hollow-sting',
@@ -87,6 +102,11 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'charm',
   'evolve',
   'yay',
+  'find-1',
+  'find-2',
+  'find-3',
+  'find-4',
+  'friend-fanfare',
   'title',
 ]);
 
@@ -96,6 +116,7 @@ export const UI_CUES: ReadonlySet<CueName> = new Set(['tick']);
 /** A battle step as it plays (`battle-screen`'s playback). */
 export function battleCue(
   step: Pick<PlaybackStep, 'kind' | 'squish'> & Partial<Pick<PlaybackStep, 'effectiveness'>>,
+  rareFriend = false,
 ): CueName | null {
   switch (step.kind) {
     case 'move':
@@ -117,11 +138,19 @@ export function battleCue(
       // The playback bounces a new friend and wobbles one that wiggled free.
       return step.squish === 'bounce' ? 'charm' : 'wiggle-free';
     case 'end':
-      // Only my win bounces; a tie, a scoot or a loss is a soft "aww".
-      return step.squish === 'bounce' ? 'yay' : 'aww';
+      // Only my win bounces; a tie, a scoot or a loss is a soft "aww". A rare
+      // new friend's win is a fanfare (#391).
+      if (step.squish !== 'bounce') return 'aww';
+      return rareFriend ? 'friend-fanfare' : 'yay';
     case 'effect':
       return 'boop';
   }
+}
+
+/** A rare-or-better wild squishy shows up (#391): its tier's size step, 1–4 (bigger ones share 4's). */
+export function findCue(scale: number): CueName {
+  const step = Math.min(Math.max(Math.round(scale), 1), 4);
+  return step === 1 ? 'find-1' : step === 2 ? 'find-2' : step === 3 ? 'find-3' : 'find-4';
 }
 
 /** A touch on a squishy up close (#20). */
