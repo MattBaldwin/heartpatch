@@ -211,7 +211,7 @@ export const heartHallRoom: RoomBuilder = (kit) => {
   // Either side of the tree's crown, clear of the gallery's posts.
   for (const u of [w * 0.32, w * 0.88]) {
     const [lx, lz] = at(u, d * 0.42);
-    put(kit, hangingLantern(scene, 2.0), lx, y + tall - 0.1, lz, 0);
+    put(kit, hangingLantern(scene, 1.6), lx, y + tall - 0.1, lz, 0);
   }
 
   // Beds in a row under the gallery, either side of the tree: room for 5 (the

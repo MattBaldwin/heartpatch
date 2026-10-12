@@ -870,7 +870,7 @@ export function kitchenShelves(scene: Scene, w: number): Mesh[] {
       const hex = c.jars[(i + row * 2) % c.jars.length] ?? '#ffd166';
       parts.push(
         (i + row) % 3 === 2
-          ? tube(scene, 0.09, 0.26, 0.22, [x, y + 0.07, 0], hex, 8) // a stack of plates
+          ? tube(scene, 0.07, 0.3, 0.26, [x, y + 0.06, -0.03], '#fff6ec', 8) // a stack of white plates
           : tube(scene, 0.22, 0.14, 0.16, [x, y + 0.14, 0], hex, 6),
       );
     }
@@ -962,7 +962,8 @@ export function heartTree(scene: Scene, h: number): Parts {
     return b;
   });
   // A heart: two lobes and a point below, flattened front to back.
-  const point = tube(scene, r * 1.9, r * 2.6, 0.05, [0, top - r * 1.05, 0], c.crown[0], 6);
+  // Its top tucked inside the lobes (render check r3: a wider top showed as pink wings).
+  const point = tube(scene, r * 1.8, r * 2.0, 0.05, [0, top - r * 1.2, 0], c.crown[0], 6);
   point.scaling.z = 0.55;
   const solid = [
     tube(scene, trunkH, 0.36, 0.6, [0, trunkH / 2, 0], c.trunk, G.sides),
