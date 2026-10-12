@@ -504,6 +504,22 @@ export function treeParts(scene: Scene, segments: number): { trunk: Mesh[]; crow
 /** The height of a tree at scale 1 (its crown's top). */
 export const TREE_TOP = 3.4;
 
+/**
+ * The yard's two pumpkins: out past the house's ends, so kid height (standing
+ * on the porch in front of any room) never has one right under its nose.
+ */
+export function yardPumpkins(
+  x0: number,
+  x1: number,
+  front: number,
+): { at: [number, number, number]; d: number; hex: string }[] {
+  const out = 0.9; // TUNE: how far past the house's ends they sit, metres
+  return [
+    { at: [x0 - out, -0.1, front - 0.7], d: 0.5, hex: '#ff9a3c' },
+    { at: [x1 + out, -0.15, front - 0.9], d: 0.38, hex: '#f08a2c' },
+  ];
+}
+
 /** The front yard: a stepping-stone path, two lantern posts (glass glowing), pumpkins, a fence, bushes. */
 export function frontYard(
   scene: Scene,
@@ -538,10 +554,9 @@ export function frontYard(
     );
     glow.push(glowing(box(scene, [0.3, 0.42, 0.3], [x, 0.83, front - 1.2], '#ffd27a'), '#ffd27a'));
   }
-  solid.push(
-    ball(scene, 0.5, [cx - 2.6, -0.1, front - 0.7], '#ff9a3c', [1.1, 0.8, 1.1]),
-    ball(scene, 0.38, [cx + 2.8, -0.15, front - 0.9], '#f08a2c', [1.1, 0.8, 1.1]),
-  );
+  for (const p of yardPumpkins(x0, x1, front)) {
+    solid.push(ball(scene, p.d, p.at, p.hex, [1.1, 0.8, 1.1]));
+  }
   const fz = front - 3.4;
   for (let x = x0 - 0.6; x <= x1 + 0.6; x += 0.32) {
     if (Math.abs(x - cx) < 0.7) continue; // the gate gap

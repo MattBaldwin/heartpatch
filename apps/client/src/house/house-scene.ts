@@ -389,15 +389,17 @@ export class HouseScene {
   /**
    * Kid height draws only what the focus room's frame needs (the draw and
    * triangle caps): that room's porch, ceiling and front walls, plus any
-   * other front wall standing in the line of sight. Every other room stays
-   * a dollhouse cutaway, out of frame anyway.
+   * other front wall standing in the line of sight (not on the low tier:
+   * those only flash a faint veil on the way in, and the draw is the cap's
+   * last). Every other room stays a dollhouse cutaway, out of frame anyway.
    */
   #fadeFronts(pose: HousePose, zoom: number): void {
     const focus = zoom >= HOUSE_KID.frontFrom ? this.#focus : null;
     let least: number | null = null;
     for (const f of this.#fronts) {
       const fade = focus ? wallFade(pose.eye, focus.point, f.wall) : 1;
-      if (!focus || (f.room !== focus.id && fade >= 1)) {
+      const other = focus !== null && f.room !== focus.id;
+      if (!focus || (other && (fade >= 1 || this.#tier === 'low'))) {
         f.mesh.setEnabled(false);
         continue;
       }

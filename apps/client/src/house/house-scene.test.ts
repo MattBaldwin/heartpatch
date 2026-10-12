@@ -1,9 +1,10 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { blend, fitHouse, kidPose } from './house-camera.js';
+import { blend, fitHouse, kidPose, project } from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
-import { sampleHouse } from './house-fixtures.js';
+import { sampleHouse, sampleLevels } from './house-fixtures.js';
+import { yardPumpkins } from './house-models.js';
 import { buildHouse } from './house-test-scene.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -147,6 +148,38 @@ describe('house scene', () => {
     expect(porch.isEnabled()).toBe(true);
     expect(house.stats.frontWallAlpha).toBe(0);
     scene.getEngine().dispose();
+  });
+
+  it('turns on only the focus room’s extras at kid height in a house of many rooms', () => {
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    const { scene, house } = buildHouse(3, 'low');
+    expect(house.stats.rooms).toBe(3);
+    house.setPose(kidPose(house.focusRoom!, vp), 1);
+    // The kitchen's ceiling is built (nothing above it) but stays off: not the focus room.
+    expect(scene.getMeshByName('house-kitchen-ceiling')?.isEnabled()).toBe(false);
+    const extras = scene.meshes
+      .filter((m) => /^house-.*-(porch|ceiling|ceiling-glow|wall-front)$/.test(m.name))
+      .filter((m) => m.isEnabled())
+      .map((m) => m.name);
+    expect(extras).toEqual(['house-snug-porch']);
+    scene.getEngine().dispose();
+  });
+
+  it('keeps the yard pumpkins out of the kid-height frame at every level', () => {
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    for (const level of sampleLevels()) {
+      const { scene, house } = buildHouse(level, 'low');
+      const kid = kidPose(house.focusRoom!, vp);
+      const b = house.bounds;
+      for (const pumpkin of yardPumpkins(b.minX, b.maxX, b.minZ)) {
+        const [x, y, z] = pumpkin.at;
+        // Its near edge, toward the frame's middle, still past the side.
+        const edge = x < kid.eye.x ? x + pumpkin.d : x - pumpkin.d;
+        const p = project(kid, vp.width / vp.height, { x: edge, y, z });
+        expect(Math.abs(p.x), `level ${String(level)}`).toBeGreaterThan(1);
+      }
+      scene.getEngine().dispose();
+    }
   });
 
   it('draws the nearest residents smooth on the low tier from frontFrom on, none extra on high', () => {
