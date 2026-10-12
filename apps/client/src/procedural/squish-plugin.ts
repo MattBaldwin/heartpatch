@@ -154,27 +154,38 @@ float fiRare = floor(fiRest / ${num(RARE_GLOW.codeStep)} + 0.001);
 float fiCode = fiRest - ${num(RARE_GLOW.codeStep)} * fiRare;
 // Each part glows in its OWN colour: chroma pushed away from grey (which keeps
 // its hue exactly), renormalised, and dimmed for dark parts so brown stays
-// brown. A pale part (white, cream) has no hue to keep, so it borrows the
-// squishy's palette hue (encoded per squishy).
+// brown. Pale parts (cream, pale lilac) keep their own faint hue, pushed to a
+// readable minimum. Only a truly white part has no hue, so it borrows the
+// squishy's most colourful palette colour (encoded per squishy).
 vec3 fiHue6 = clamp(abs(mod(fiHueI / 36.0 * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
 vec3 fiPal = pow(mix(vec3(1.0), fiHue6, ${num(RARE_GLOW.hueSaturation)}), vec3(2.2));
 float fiMx = max(max(surfaceAlbedo.r, surfaceAlbedo.g), max(surfaceAlbedo.b, 0.001));
 float fiMn = min(min(surfaceAlbedo.r, surfaceAlbedo.g), surfaceAlbedo.b);
+float fiSat = (fiMx - fiMn) / fiMx;
 vec3 fiN = surfaceAlbedo / fiMx;
 float fiL = dot(fiN, vec3(0.2126, 0.7152, 0.0722));
-vec3 fiRich = max(vec3(fiL) + ${num(RARE_GLOW.halo.saturate)} * (fiN - vec3(fiL)), 0.0);
+float fiK = clamp(max(${num(RARE_GLOW.halo.saturate)}, ${num(RARE_GLOW.minSaturation)} / max(fiSat, 0.001)), 1.0, 12.0);
+vec3 fiRich = max(vec3(fiL) + fiK * (fiN - vec3(fiL)), 0.0);
 fiRich /= max(max(fiRich.r, fiRich.g), max(fiRich.b, 0.001));
 fiRich *= clamp(fiMx * ${num(RARE_GLOW.darkLift)}, ${num(RARE_GLOW.darkFloor)}, 1.0);
-vec3 fiOwn = mix(fiPal, fiRich, smoothstep(0.15, 0.3, (fiMx - fiMn) / fiMx));
+vec3 fiOwn = mix(fiPal, fiRich, smoothstep(0.015, 0.04, fiSat));
 if (vSquishLook > ${num(RARE_GLOW.moteLook)} - 0.5) {
   float moTw = 0.75 + 0.25 * sin(dot(viewDirectionW, vec3(9.0, 7.0, 5.0)) + vSquishLocal.x * 20.0);
   finalColor.rgb = mix(vec3(1.0), fiOwn, 0.85) * ${num(RARE_GLOW.motes.bright)} * moTw;
 }
 if (fiRare > 0.5 && vSquishLook < 0.5) {
-  vec4 fiK = vec4(${RARE_GLOW.halo[RARE_GLOW_STYLE === 'off' ? 'halo' : RARE_GLOW_STYLE].map(num).join(', ')});
-  float fiS = fiRare < 1.5 ? fiK.x : fiRare < 2.5 ? fiK.y : fiRare < 3.5 ? fiK.z : fiK.w;
-  float fiR = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(RARE_GLOW.halo.falloff)});
-  finalColor.rgb = mix(finalColor.rgb, fiOwn * ${num(RARE_GLOW.halo.bright)}, clamp(fiS * fiR * 1.6, 0.0, 1.0));
+  vec4 fiKs = vec4(${RARE_GLOW.halo[RARE_GLOW_STYLE === 'off' ? 'halo' : RARE_GLOW_STYLE].map(num).join(', ')});
+  float fiS = fiRare < 1.5 ? fiKs.x : fiRare < 2.5 ? fiKs.y : fiRare < 3.5 ? fiKs.z : fiKs.w;
+  float fiEdge = 1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
+  float fiR = pow(fiEdge, ${num(RARE_GLOW.halo.falloff)});
+  // Legendary's rainbow rim and mythic's shimmer keep the outermost edge.
+  float fiTierOf = fiCode - ${num(FINISH_CODE.glow)} * step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
+  if (fiTierOf > 1.5) fiR *= 1.0 - ${num(RARE_GLOW.halo.rainbowKeep)} * smoothstep(0.55, 0.92, fiEdge);
+  // The glow never makes a squishy dimmer (Light kinds keep their bloom).
+  float fiLumWas = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  vec3 fiNew = mix(finalColor.rgb, fiOwn * ${num(RARE_GLOW.halo.bright)}, clamp(fiS * fiR * 1.6, 0.0, 1.0));
+  float fiLumNew = dot(fiNew, vec3(0.2126, 0.7152, 0.0722));
+  finalColor.rgb = fiNew * max(1.0, fiLumWas / max(fiLumNew, 0.001));
 ${RARE_GLOW_STYLE === 'inner' ? `  // Lit from inside in its own colour, capped: more where the vinyl is dim, so pale kinds never wash out.
   vec4 fiI = vec4(${RARE_GLOW.inner.map(num).join(', ')});
   float fiIn = fiRare < 1.5 ? fiI.x : fiRare < 2.5 ? fiI.y : fiRare < 3.5 ? fiI.z : fiI.w;

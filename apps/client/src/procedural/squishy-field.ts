@@ -145,13 +145,11 @@ function hueSat(hex: string): [number, number] {
 
 /** PROTOTYPE #391: the glow hue index (0–35): the body's hue, or the palette's most colourful when the body is pale. */
 export function glowHue(palette: readonly string[]): number {
-  const [h0, s0] = hueSat(palette[0] ?? '#ffffff');
-  let best = [h0, s0] as [number, number];
-  if (s0 < RARE_GLOW.paleBody) {
-    for (const c of palette.slice(1)) {
-      const hs = hueSat(c);
-      if (hs[1] > best[1]) best = hs;
-    }
+  // Only white parts use this: the palette's most colourful colour.
+  let best: [number, number] = hueSat(palette[0] ?? '#ffffff');
+  for (const c of palette.slice(1)) {
+    const hs = hueSat(c);
+    if (hs[1] > best[1]) best = hs;
   }
   return Math.round(best[0] * 36) % 36;
 }

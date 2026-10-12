@@ -198,6 +198,8 @@ export const RARE_GLOW = {
     falloff: 1.7,
     bright: 1.1,
     saturate: 1.25,
+    /** How much of the outermost edge is left to legendary's rainbow rim and mythic's shimmer. */
+    rainbowKeep: 0.85,
   },
   /** Inner glow: how much of its own glowing colour is added where the vinyl is dim, per level (capped). */
   inner: [0.16, 0.2, 0.24, 0.28],
@@ -213,5 +215,7 @@ export const RARE_GLOW = {
   /** A part's glow brightness is its own brightness times this (capped at 1, floored), so dark parts glow dark. */
   darkLift: 1.6,
   darkFloor: 0.12,
+  /** A pale part's glow is pushed to at least this saturation, keeping its own hue. */
+  minSaturation: 0.35,
   moteLook: 3,
 } as const;
