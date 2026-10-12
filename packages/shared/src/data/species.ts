@@ -571,7 +571,6 @@ export const SPECIES: Species[] = [
         'dot-eyes',
         'open-mouth',
         'blush-cheeks',
-        'belly-patch',
         'water-curl',
         'fin-crest',
         'fin-row',
@@ -2129,8 +2128,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
   },
-  // #443 kid (stage 2): the candle cat's flame grows into a crown, with the
-  // whisker flames both Wickwhisker and Sparklewick keep.
+  // #443 kid (stage 2): the candle cat grows the whisker flames both
+  // Wickwhisker and Sparklewick keep.
   {
     id: 'wickitten',
     name: 'Wickitten',
@@ -2153,7 +2152,7 @@ export const SPECIES: Species[] = [
         'spooky-eyes',
         'cat-mouth',
         'pointy-ears',
-        'flame-crown',
+        'flame-tuft',
         'whisker-flames',
         'curly-tail',
       ],
