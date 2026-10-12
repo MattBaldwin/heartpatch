@@ -149,3 +149,34 @@ export const SHIELD_BUBBLE = {
   alpha: 0.24, // TUNE
   fit: 1.25, // TUNE
 };
+
+/**
+ * Finding a rare one (#391, owner decision 2026-10-12: the mockup's reveal
+ * beat). Rare and up only; it grows with rarity: more sparkles, a deeper dim,
+ * a bigger banner with a thicker ring and a longer moment. `ms` is the whole
+ * moment the first time a player meets the kind on a patch; after that only
+ * the banner shows, for `briefMs`, with no pause. `steps` is how many notes
+ * the find chime climbs (the `find-*` cues).
+ */
+export const RARE_REVEAL = {
+  kinds: {
+    rare: { sparkles: 6, dim: 0.14, banner: 16, ring: 2, ms: 1800 }, // TUNE
+    epic: { sparkles: 12, dim: 0.22, banner: 18, ring: 3, ms: 2000 }, // TUNE
+    legendary: { sparkles: 16, dim: 0.28, banner: 19, ring: 4, ms: 2200 }, // TUNE
+    mythic: { sparkles: 20, dim: 0.32, banner: 20, ring: 5, ms: 2400 }, // TUNE
+  },
+  briefMs: 1000, // TUNE
+  /** The banner's text grows on wide screens (an iPad), as in the mockup. */
+  wideScreen: 500,
+  wideBanner: 1.25, // TUNE
+  /** The banner sits this far above the bottom sheet (CSS px). */
+  sheetGap: 12,
+  /** Sparkles stay this far above the sheet and below the name pills (CSS px). */
+  sparkleClear: { sheet: 70, pills: 10 },
+  /** Sparkles land this far out from the squishy's middle, in its half-heights. */
+  sparkleReach: [1.2, 1.9] as const, // TUNE
+  /** The fade out at the end (ms). */
+  fadeMs: 250,
+  /** Frames to wait for the arena to draw the squishy before dimming mid-screen instead. */
+  waitFrames: 30,
+} as const;

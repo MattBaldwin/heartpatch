@@ -66,6 +66,43 @@ function chime(
   return steps.length * step + 0.7;
 }
 
+/** Pentatonic steps up from the find chime's root (#391). */
+const FIND_STEPS = [0, 2, 4, 7, 9, 12, 14] as const;
+
+/**
+ * A rare find (#391): a soft rising sweep, then a bell glimmer up the
+ * pentatonic from high C, `notes` long (one more at each rarity step). Starts
+ * on the heal twinkle's note but climbs and sweeps, unlike the Heart Charm toss.
+ */
+function findGlimmer(
+  kit: SfxKit,
+  out: AudioNode,
+  at: number,
+  pitch: number,
+  gain: number,
+  notes: number,
+): number {
+  tone(kit.ctx, out, {
+    type: 'triangle',
+    at,
+    dur: 0.35,
+    freq: 700 * pitch,
+    to: 2100 * pitch,
+    glide: 0.3,
+    gain: gain * 0.17,
+    attack: 0.08,
+  });
+  const steps = FIND_STEPS.slice(0, notes);
+  steps.forEach((semis, i) => {
+    const freq = 1046 * pitch * 2 ** (semis / 12);
+    const t = at + 0.18 + i * 0.065;
+    tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.9, freq, gain: gain * 0.4, attack: 0.004 });
+    tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.35, freq: freq * 2.76, gain: gain * 0.13 });
+    tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.15, freq: freq * 5.4, gain: gain * 0.04 });
+  });
+  return 0.18 + steps.length * 0.065 + 0.9;
+}
+
 export const RECIPES: Readonly<Record<CueName, Recipe>> = {
   tick: (kit, out, at, pitch, gain) => {
     tone(kit.ctx, out, {
@@ -283,6 +320,11 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
     squeak(kit, out, at + 0.62, 1100 * pitch, gain * 0.35);
     return end;
   },
+
+  'find-rare': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 4),
+  'find-epic': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 5),
+  'find-legendary': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 6),
+  'find-mythic': (kit, out, at, pitch, gain) => findGlimmer(kit, out, at, pitch, gain, 7),
 
   aww: (kit, out, at, pitch, gain) => {
     // Two soft notes, down a little: "aw-ww". Kind, not sad.

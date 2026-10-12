@@ -4,6 +4,7 @@ import {
   battleCue,
   careCue,
   CUE_NAMES,
+  findCue,
   DUCKING_CUES,
   isCueName,
   touchCue,
@@ -15,6 +16,15 @@ describe('cues', () => {
   it('has a recipe for every cue, and lists every recipe', () => {
     expect(Object.keys(RECIPES).sort()).toEqual([...CUE_NAMES].sort());
     for (const cue of [...DUCKING_CUES, ...UI_CUES]) expect(CUE_NAMES).toContain(cue);
+  });
+
+  it('gives each rare find its own chime, dipping the music (#391)', () => {
+    const cues = (['rare', 'epic', 'legendary', 'mythic'] as const).map(findCue);
+    expect(new Set(cues).size).toBe(4);
+    for (const cue of cues) {
+      expect(CUE_NAMES).toContain(cue);
+      expect(DUCKING_CUES.has(cue)).toBe(true);
+    }
   });
 
   it('gives every battle step kind a sound', () => {
@@ -53,10 +63,14 @@ describe('cues', () => {
     expect(careCue('evolve')).toBe('evolve');
   });
 
-  it('dips the music for his visit, his sting, a new friend, an evolution, a win and the title card', () => {
+  it('dips the music for his visit, his sting, a new friend, an evolution, a win, a rare find and the title card', () => {
     expect([...DUCKING_CUES].sort()).toEqual([
       'charm',
       'evolve',
+      'find-epic',
+      'find-legendary',
+      'find-mythic',
+      'find-rare',
       'hollow-sting',
       'nightfall',
       'title',

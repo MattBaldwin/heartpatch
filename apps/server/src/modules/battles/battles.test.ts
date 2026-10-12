@@ -443,6 +443,44 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(battleOf(got)).toEqual(battle);
     });
 
+    it('says whether a wild battle is the first meeting with its kind (#391)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { level: 5 });
+      const first = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0], level: 5 },
+      });
+      expect(first.firstMeeting).toBe(true);
+      // Still the first meeting when the app comes back before the first move.
+      const resumed = await call(server, 'GET', `/battles/${first.id}`, kid);
+      expect(battleOf(resumed).firstMeeting).toBe(true);
+      // Once a move has played, the moment is over: the field goes.
+      const moved = await act(server, kid, first, {
+        type: 'move',
+        move: myActive(first).moves[0]!,
+      });
+      expect(moved.statusCode).toBe(200);
+      expect(battleOf(moved)).not.toHaveProperty('firstMeeting');
+      if (battleOf(moved).status === 'active') {
+        const done = await act(server, kid, battleOf(moved), { type: 'forfeit' });
+        expect(battleOf(done)).not.toHaveProperty('firstMeeting');
+      }
+
+      clock.setTime(clock.getTime() + 60_000);
+      const again = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0], level: 5 },
+      });
+      expect(again.id).not.toBe(first.id);
+      expect(again.firstMeeting).toBe(false);
+      await act(server, kid, again, { type: 'forfeit' });
+
+      const other = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[1], level: 5 },
+      });
+      expect(other.firstMeeting).toBe(true);
+    });
+
     it('scripts the opponent on a tutorial map (tutorialOverrides)', async () => {
       const server = await start();
       const kid = await player();
