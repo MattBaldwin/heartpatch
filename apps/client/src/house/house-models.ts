@@ -204,6 +204,89 @@ export function gableRoof(
   return parts;
 }
 
+/**
+ * The roof seen from inside at kid height (the approved captures): a warm
+ * wooden gable with rafters, a ridge beam and tie beams, the back gable
+ * filled in, two strings of bunting and a hanging lantern. Eaves at `y`.
+ */
+export function roofInside(
+  scene: Scene,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+): Parts {
+  const rise = Math.min(1.8, w * 0.28); // TUNE
+  const half = w / 2;
+  const len = Math.hypot(half, rise) + 0.2;
+  const angle = Math.atan2(rise, half);
+  const cx = x0 + half;
+  const solid: Mesh[] = [];
+  for (const side of [-1, 1]) {
+    const slope = box(
+      scene,
+      [len, 0.08, d + 0.3],
+      [cx + (side * half) / 2, y + rise / 2 + 0.04, z0 + d / 2],
+      '#e2b088',
+    );
+    slope.rotation.z = -side * angle;
+    solid.push(slope);
+    for (let z = z0 + 0.5; z < z0 + d; z += 1.0) {
+      const rafter = box(
+        scene,
+        [len, 0.12, 0.1],
+        [cx + (side * half) / 2, y + rise / 2 - 0.04, z],
+        '#a8754e',
+      );
+      rafter.rotation.z = -side * angle;
+      solid.push(rafter);
+    }
+  }
+  solid.push(box(scene, [0.2, 0.2, d + 0.3], [cx, y + rise - 0.08, z0 + d / 2], '#8a5a39'));
+  for (const t of [0.3, 0.62])
+    solid.push(box(scene, [w, 0.16, 0.16], [cx, y + 0.02, z0 + d * t], '#9a6a46'));
+  // The back gable: a wall triangle, its base on the eaves.
+  const gable = CreateDisc(
+    'house-part',
+    { radius: 1, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+    scene,
+  );
+  gable.rotation.z = Math.PI / 2; // a corner pointing up
+  const sy = rise / 1.5;
+  gable.scaling.set(sy, w / 1.732, 1); // rotated: local x is up
+  gable.position.set(cx, y + 0.5 * sy, z0 + d - 0.13);
+  solid.push(painted(gable, HOUSE_PALETTE.wallTop));
+  const flags = ['#ff9ab8', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
+  for (const [t, drop] of [
+    [0.35, 0.55],
+    [0.7, 0.5],
+  ] as const) {
+    const n = Math.max(6, Math.round(w / 0.32));
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      const sag = 0.35 * (1 - Math.pow((u - 0.5) * 2, 2));
+      const flag = CreateDisc(
+        'house-part',
+        { radius: 0.12, tessellation: 3, sideOrientation: Mesh.DOUBLESIDE },
+        scene,
+      );
+      flag.rotation.z = -Math.PI / 2; // a point hanging down
+      flag.position.set(x0 + 0.15 + (w - 0.3) * u, y + drop - sag, z0 + d * t);
+      solid.push(painted(flag, flags[i % flags.length] ?? '#ff9ab8'));
+    }
+  }
+  const ly = y + rise - 1.1;
+  solid.push(box(scene, [0.02, 1.0, 0.02], [cx, ly + 0.6, z0 + d * 0.5], '#5a4a52'));
+  const lantern = glowing(
+    CreateSphere('house-part', { diameter: 0.34, segments: 12 }, scene),
+    '#ffd9a0',
+  );
+  lantern.position.set(cx, ly, z0 + d * 0.5);
+  lantern.scaling.set(1, 1.15, 1);
+  return { solid, glow: [lantern] };
+}
+
 // ── Furniture ───────────────────────────────────────────────────────
 
 /** A bed's frame, mattress, pillow and headboard (the blanket is its own part, coloured per bed). */

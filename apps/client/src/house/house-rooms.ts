@@ -186,14 +186,15 @@ export const snugRoom: RoomBuilder = (kit) => {
   kit.shadow(px, pz, 0.9, 0.9);
   // The pink ball beside the plant, the open book at the rug's front edge.
   kit.solid(
-    toys(scene, { ball: at(1.05, 0.95), book: at(w * 0.4, 0.62), block: at(w * 0.62, 0.42) }, y),
+    toys(scene, { ball: at(1.5, 1.05), book: at(w * 0.4, 0.62), block: at(w * 0.62, 0.42) }, y),
   );
 
   // Over the back window, in front of the wall's inside face (and its light band).
   kit.sign(box.x0 + w / 2, y + 2.62, box.z1 - HOUSE_GRID.wall / 2 - 0.05, 1.9);
   return {
-    keeper: { x: box.x0 + w * 0.46, z: box.z0 + 0.75 },
-    residents: [at(w * 0.36, d * 0.42), at(w * 0.64, d * 0.48), at(w * 0.5, d * 0.62)].map(
+    // Behind the two on the rug, between them: in view from the dollhouse and at kid height.
+    keeper: { x: box.x0 + w * 0.5, z: box.z0 + d * 0.66 },
+    residents: [at(w * 0.34, d * 0.4), at(w * 0.64, d * 0.36), at(w * 0.5, d * 0.22)].map(
       ([x, z]) => ({ x, z }),
     ),
   };

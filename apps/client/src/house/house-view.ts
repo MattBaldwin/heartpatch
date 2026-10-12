@@ -16,6 +16,8 @@ export const HOUSE_TEXT = {
   shortcut: 'Your house',
   shortcutIcon: '🏠',
   back: 'Back',
+  walkIn: '👣 Walk in',
+  stepOut: '🚪 Step out',
   pill: (level: number) => `🏠 House ${String(level)}`,
   room: (name: string, n: number) => `${name} · ${beds(n)}`,
   wholeHouse: (owner: string, n: number) => `${owner}’s house · ${beds(n)}`,

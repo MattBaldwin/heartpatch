@@ -1,8 +1,8 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { fitHouse } from './house-camera.js';
-import { HOUSE_GRID } from './house-config.js';
+import { fitHouse, kidPose } from './house-camera.js';
+import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse } from './house-fixtures.js';
 import { buildHouse } from './house-test-scene.js';
 
@@ -36,6 +36,7 @@ describe('house scene', () => {
   it('takes the open front off the dollhouse and keeps the other walls', () => {
     const { scene } = buildHouse(1, 'low');
     expect(scene.getMeshByName('house-snug-wall-south')).toBeNull();
+    expect(scene.getMeshByName('house-snug-wall-front')!.isEnabled()).toBe(false);
     for (const side of ['north', 'east', 'west'])
       expect(scene.getMeshByName(`house-snug-wall-${side}`)).not.toBeNull();
     scene.getEngine().dispose();
@@ -122,6 +123,32 @@ describe('house scene', () => {
     expect(seeds.isEnabled()).toBe(true);
     expect(seeds.material?.name).toBe('heart-seed-mat');
     scene.getEngine().dispose();
+  });
+
+  it('has no front walls in the dollhouse and fades them in the way at kid height, with a porch', () => {
+    const { scene, house } = buildHouse(1, 'low');
+    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+    const front = scene.getMeshByName('house-snug-wall-front')!;
+    const porch = scene.getMeshByName('house-snug-porch')!;
+    house.setPose(fitHouse(house.bounds, vp), 0);
+    expect(front.isEnabled()).toBe(false);
+    expect(porch.isEnabled()).toBe(false);
+    expect(house.stats.frontWallAlpha).toBeNull();
+    house.setPose(kidPose(house.focusRoom!, vp), 1);
+    expect(front.isEnabled()).toBe(true);
+    expect(porch.isEnabled()).toBe(true);
+    expect(house.stats.frontWallAlpha).toBeCloseTo(HOUSE_KID.fadedAlpha);
+    scene.getEngine().dispose();
+  });
+
+  it('draws the nearest residents smooth on the low tier, none extra on high', () => {
+    const low = buildHouse(1, 'low');
+    expect(low.house.stats.heroes).toBe(2);
+    expect(low.house.stats.residents).toBe(2);
+    low.scene.getEngine().dispose();
+    const high = buildHouse(1, 'high');
+    expect(high.house.stats.heroes).toBe(0);
+    high.scene.getEngine().dispose();
   });
 
   it('lifts the roof away for the entry glide', () => {

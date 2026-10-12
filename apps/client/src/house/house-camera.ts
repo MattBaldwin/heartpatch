@@ -1,15 +1,16 @@
 import type { CinematicShot } from '@heartpatch/shared';
 import { cameraBasis, type Vec3 } from '../engine/camera/camera-math.js';
 import { cameraAt } from '../cinematics/timeline.js';
-import { HOUSE_CAMERA, HOUSE_GLIDE } from './house-config.js';
+import { HOUSE_CAMERA, HOUSE_GLIDE, HOUSE_KID } from './house-config.js';
 import type { HouseBounds } from './house-layout.js';
 
 /*
  * The house camera (#381 plan §1c), pure: no Babylon, no DOM, and nothing
  * about what's in the rooms, only the house's box, so it scales by data as
  * the house grows. The dollhouse pose fits the whole house between the HUD's
- * top bar and its bottom controls; a pinch moves in a little and a pinch out
- * past the dollhouse goes back home. The roof-off entry glide is a shot on
+ * top bar and its bottom controls; a pinch (or Walk in) sinks to kid height
+ * with the walls in the way fading, and a pinch out past the dollhouse goes
+ * back home. The roof-off entry glide is a shot on
  * the cinematic `Timeline` (`cameraAt`), so reduced motion cuts to the end.
  */
 
@@ -138,17 +139,132 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
 }
 
 /**
- * The dollhouse pose with a pinch's zoom: 0 is the fitted dollhouse, 1 is
- * as close as the dollhouse goes (`closest`). Below 0 (pinching out) it
- * holds; the screen goes home past `exitOvershoot`.
+ * Kid height in a room (owner decision 15: pinch in and you sink down to
+ * kid height with the walls in the way fading): standing back from the
+ * room's front at a small squishy's eye level, tilted up a little, far
+ * enough back that the room's back wall fits across the frame. Tall frames
+ * keep their vertical view angle capped (less floor, owner check #2) and so
+ * stand further back. Only the room's box is taken, never what's in it.
  */
-export function zoomPose(pose: HousePose, zoom: number): HousePose {
-  const z = clampZoom(zoom);
-  const k = 1 - (1 - HOUSE_CAMERA.closest) * z;
-  return { ...pose, eye: add(pose.target, scale(sub(pose.eye, pose.target), k)) };
+export function kidPose(room: HouseBounds, vp: HouseViewport): HousePose {
+  const aspect = vp.width / Math.max(1, vp.height);
+  const maxV = HOUSE_KID.maxVerticalFov * DEG;
+  let hfov = HOUSE_KID.horizontalFov * DEG;
+  let fov = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
+  if (fov > maxV) {
+    fov = maxV;
+    hfov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
+  }
+  const pitch = -HOUSE_KID.tiltUp * DEG;
+  const width = room.maxX - room.minX;
+  // Far enough back for the back wall to fit across, and never so close the
+  // residents fill the frame (a wide iPad frame would stand right on them).
+  const halfWall = width / 2 + HOUSE_KID.sideRoom;
+  const back = Math.max(
+    halfWall / Math.tan(hfov / 2),
+    room.maxZ - room.minZ + HOUSE_KID.minStandBack,
+  );
+  // Then narrow the view to the back wall, so nothing past the side walls shows.
+  hfov = 2 * Math.atan(halfWall / back);
+  fov = Math.min(maxV, 2 * Math.atan(Math.tan(hfov / 2) / aspect));
+  const eye: Vec3 = {
+    x: (room.minX + room.maxX) / 2,
+    y: room.minY + HOUSE_KID.eyeHeight,
+    z: room.maxZ - back,
+  };
+  const { forward } = cameraBasis(pitch, 0);
+  return { eye, target: add(eye, scale(forward, HOUSE_KID.lookAhead)), fov, pitch };
 }
 
-/** Zoom kept to the dollhouse's range. */
+const smooth = (t: number): number => {
+  const c = Math.min(1, Math.max(0, t));
+  return c * c * (3 - 2 * c);
+};
+
+/**
+ * The camera between the dollhouse (zoom 0) and kid height (zoom 1): the
+ * focus slides into the room and the distance shrinks as you pinch, while
+ * the pitch holds the dollhouse's look down until the last part of the
+ * zoom (`pitchFrom`), then eases down to kid height. At 1 it is exactly the
+ * kid pose.
+ */
+export function blend(doll: HousePose, kid: HousePose, zoom: number): HousePose {
+  const z = clampZoom(zoom);
+  const ez = smooth(z);
+  const target: Vec3 = {
+    x: doll.target.x + (kid.target.x - doll.target.x) * ez,
+    y: doll.target.y + (kid.target.y - doll.target.y) * ez,
+    z: doll.target.z + (kid.target.z - doll.target.z) * ez,
+  };
+  const dd = Math.hypot(
+    doll.eye.x - doll.target.x,
+    doll.eye.y - doll.target.y,
+    doll.eye.z - doll.target.z,
+  );
+  const dk = Math.hypot(
+    kid.eye.x - kid.target.x,
+    kid.eye.y - kid.target.y,
+    kid.eye.z - kid.target.z,
+  );
+  const distance = Math.exp(Math.log(dd) + (Math.log(dk) - Math.log(dd)) * ez);
+  const late = smooth((z - HOUSE_KID.pitchFrom) / (1 - HOUSE_KID.pitchFrom));
+  const pitch = doll.pitch + (kid.pitch - doll.pitch) * late;
+  const fov = doll.fov + (kid.fov - doll.fov) * ez;
+  const { forward } = cameraBasis(pitch, 0);
+  return { eye: sub(target, scale(forward, distance)), target, fov, pitch };
+}
+
+/** A wall as `wallFade` sees it: a vertical rectangle on a grid line. */
+export interface FadeWall {
+  readonly axis: 'x' | 'z';
+  readonly at: number;
+  readonly from: number;
+  readonly to: number;
+  readonly y0: number;
+  readonly height: number;
+}
+
+/**
+ * How see-through a wall is from `eye` looking at `focus`: faded (about
+ * 0.15, `HOUSE_KID.fadedAlpha`) when it stands between them, so the camera
+ * never looks through a solid wall, else 1. The scene adds a soft foot (it
+ * fades to nothing at the floor, so no hard line crosses the room).
+ */
+export function wallFade(eye: Vec3, focus: Vec3, wall: FadeWall): number {
+  const a = wall.axis === 'x' ? eye.z : eye.x;
+  const b = wall.axis === 'x' ? focus.z : focus.x;
+  if ((a - wall.at) * (b - wall.at) > 0 || a === b) return 1;
+  const t = (wall.at - a) / (b - a);
+  const along = wall.axis === 'x' ? eye.x + (focus.x - eye.x) * t : eye.z + (focus.z - eye.z) * t;
+  const y = eye.y + (focus.y - eye.y) * t;
+  const margin = HOUSE_KID.fadeMargin;
+  const inside =
+    along >= wall.from - margin &&
+    along <= wall.to + margin &&
+    y >= wall.y0 - margin &&
+    y <= wall.y0 + wall.height + margin;
+  return inside ? HOUSE_KID.fadedAlpha : 1;
+}
+
+/**
+ * Walk in / Step out: zoom moving toward `goal` over `HOUSE_KID.walkSeconds`
+ * from where it was at `start` (seconds since), eased; reduced motion cuts.
+ */
+export function walkZoom(
+  from: number,
+  goal: number,
+  seconds: number,
+  reducedMotion: boolean,
+): number {
+  if (reducedMotion) return goal;
+  const t = smooth(seconds / HOUSE_KID.walkSeconds);
+  return from + (goal - from) * t;
+}
+
+/** The zoom past which the screen's button says "Step out" rather than "Walk in". */
+export const walkedIn = (zoom: number): boolean => zoom >= 0.5;
+
+/** Zoom kept between the dollhouse (0) and kid height (1). */
 export const clampZoom = (zoom: number): number => Math.min(1, Math.max(0, zoom));
 
 /** A pinch's new zoom from the finger spread now and at its start (CSS px). */
