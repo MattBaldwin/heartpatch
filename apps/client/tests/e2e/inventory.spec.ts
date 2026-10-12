@@ -19,6 +19,7 @@ interface InventoryDebug {
     more: number;
     card: boolean;
     flying: number;
+    flown: number;
   };
   bagNew: number;
   landings: number;
@@ -157,6 +158,8 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // Roomy: the settle is one round trip, slow under a full CI run.
   await expect(banner).toBeVisible({ timeout: 15_000 });
   await expect(banner).toContainText('Heart Charm');
+  // With motion on, they flew in from the map (the gather's node, home for the craft).
+  expect((await bagState(page))?.summary.flown).toBeGreaterThan(0);
   // Two kinds: the banner (not the one-thing pill), and a real tap opens the
   // card with everything: on a plain map it takes taps (shut trays don't count
   // as open sheets). The banner hides itself after a few seconds, so the tap

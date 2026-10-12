@@ -29,8 +29,10 @@ const PLACE_EVERY_MS = 250;
 /** A chip's trip: a pop where it landed, then the flight (about a second over the patch). */
 const POP_MS = 260; // TUNE
 const FLY_MS = 640; // TUNE
-/** The next chip leaves this long after the one before. */
+/** The next chip leaves this long after the one before… */
 const STAGGER_MS = 70; // TUNE
+/** …but all of them leave within this, so a big landing is still about a second. */
+const STAGGER_TOTAL_MS = 300; // TUNE
 /** Chips that fly; any more just appear (they're behind "N more" anyway). */
 const MAX_FLYERS = 10; // TUNE
 /** Points along each flight path. */
@@ -56,14 +58,17 @@ export interface AwaySummaryDebug {
   readonly chips: number;
   readonly more: number;
   readonly card: boolean;
-  /** Chips still flying in. */
+  /** Chips still flying in, and how many have flown since the app started. */
   readonly flying: number;
+  readonly flown: number;
 }
 
 export interface AwaySummary {
   show: (what: AwaySummaryShow) => void;
   /** Hides the banner and the card (leaving the map). */
   hide: () => void;
+  /** Puts every chip still flying in its place at once (a sheet opened over the map). */
+  landNow: () => void;
   /** The sentence while the banner shows, else null. */
   readonly text: string | null;
   readonly debug: AwaySummaryDebug;
@@ -104,6 +109,8 @@ export function createAwaySummary(
   /** The chips in the air, and a count bumped by every show, so a late landing is dropped. */
   let flights: { animation: Animation; flyer: HTMLElement }[] = [];
   let flightRun = 0;
+  /** Chips sent flying so far (the dev hook: the e2e checks something flew). */
+  let flown = 0;
 
   const tag = el('span', { class: 'away-tag' });
   const chips = el('span', { class: 'away-chips', 'aria-hidden': 'true' });
@@ -155,8 +162,8 @@ export function createAwaySummary(
       flyer.remove();
     }
     flights = [];
-    for (const waiting of banner.querySelectorAll('.away-waiting')) {
-      waiting.classList.remove('away-waiting');
+    for (const waiting of banner.querySelectorAll('.away-waiting, .away-landed')) {
+      waiting.classList.remove('away-waiting', 'away-landed');
     }
   };
 
@@ -319,8 +326,8 @@ export function createAwaySummary(
     const run = flightRun;
     const trips = what.entries.slice(0, MAX_FLYERS).flatMap((entry, i) => {
       const spot = from(entry);
-      const slot = i < chipsShown ? (chips.children[i] as HTMLElement | undefined) : more;
-      if (!spot || !slot || slot.hidden) return [];
+      const slot = i < chipsShown ? chips.children[i] : more;
+      if (!spot || !(slot instanceof HTMLElement) || slot.hidden) return [];
       const flyer = chipFor(entry);
       flyer.classList.add('away-flyer');
       flyer.setAttribute('aria-hidden', 'true');
@@ -339,9 +346,11 @@ export function createAwaySummary(
       POP_GAP_PX,
       { top: below + POP_GAP_PX, left: 0, right: innerWidth, bottom: innerHeight },
     );
-    const landed = trips.map(({ slot, flyer }, k) => {
+    const stagger = Math.min(STAGGER_MS, STAGGER_TOTAL_MS / Math.max(1, trips.length - 1));
+    flown += trips.length;
+    const landed = trips.map(({ slot, flyer, spot }, k) => {
       const size = sizes[k] ?? flyer.getBoundingClientRect();
-      const start = starts[k] ?? trips[k]?.spot ?? { x: 0, y: 0 };
+      const start = starts[k] ?? spot;
       const box = slot.getBoundingClientRect();
       const end = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
       const at = (p: ScreenPoint, scale: number) =>
@@ -359,7 +368,7 @@ export function createAwaySummary(
             offset: pop + ((1 - pop) * (j + 1)) / FLIGHT_STEPS,
           })),
         ],
-        { duration: POP_MS + FLY_MS, delay: k * STAGGER_MS, fill: 'both' },
+        { duration: POP_MS + FLY_MS, delay: k * stagger, fill: 'both' },
       );
       flights.push({ animation, flyer });
       return animation.finished.then(() => {
@@ -367,7 +376,16 @@ export function createAwaySummary(
         flyer.remove();
         flights = flights.filter((f) => f.flyer !== flyer);
         slot.classList.remove('away-waiting');
+        // The pop plays once per landing: the class goes when it ends ("N
+        // more" stays for the app's life, and would pop again when next shown).
         slot.classList.add('away-landed');
+        slot.addEventListener(
+          'animationend',
+          () => {
+            slot.classList.remove('away-landed');
+          },
+          { once: true },
+        );
       });
     });
     // A cancelled flight rejects; whatever stopped it has taken over.
@@ -425,6 +443,11 @@ export function createAwaySummary(
       closeCard();
       current = null;
     },
+    landNow: () => {
+      if (flights.length === 0) return;
+      stopFlights();
+      if (!banner.hidden) startHold();
+    },
     get text() {
       return banner.hidden ? null : sentence.textContent;
     },
@@ -436,6 +459,7 @@ export function createAwaySummary(
         more: banner.hidden ? 0 : total - chipsShown,
         card: !layer.hidden,
         flying: flights.length,
+        flown,
       };
     },
   };

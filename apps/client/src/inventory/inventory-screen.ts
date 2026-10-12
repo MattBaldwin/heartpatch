@@ -455,6 +455,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
 
   const openBag = () => {
+    // Chips still flying land at once rather than cross the Bag.
+    summary.landNow();
     sheet.hidden = false;
     bagNew = 0;
     showBagNew();
@@ -604,8 +606,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     (entry: SummaryEntry): ScreenPoint | null => {
       const source =
         entry.kind === 'item' ? sources.find((g) => (g.items[entry.id] ?? 0) > 0) : undefined;
-      const box = (source ? locate.tile(source) : null) ?? locate.home();
-      return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+      // A tile panned off screen gives way to home base, else nothing flies.
+      const centre = (box: ScreenBox | null): ScreenPoint | null => {
+        if (!box) return null;
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        return at.x >= 0 && at.x <= innerWidth && at.y >= 0 && at.y <= innerHeight ? at : null;
+      };
+      return centre(source ? locate.tile(source) : null) ?? centre(locate.home());
     };
 
   /** Pops up what just landed (#419), and counts it as news until the Bag opens. */
@@ -627,8 +634,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         entries,
         sentence,
         away,
-        // Over the map only: with the Bag open, it all just appears.
-        ...(sheet.hidden && options.locate ? { from: flyFrom(options.locate, sources) } : {}),
+        // Over the map only: with the Bag or the Factory's card open, it all just appears.
+        ...(sheet.hidden && welcome.hidden && options.locate
+          ? { from: flyFrom(options.locate, sources) }
+          : {}),
       });
     }
     const count = summaryCount(summaryEntries(inBag, []));

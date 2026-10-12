@@ -138,7 +138,11 @@ export interface MapScreen {
    * glide to, or null when it isn't on the map on screen.
    */
   focus: (h: Hex) => GroundPoint | null;
-  /** A tile's box on screen now (CSS pixels), or null off screen or with no map (#419). */
+  /**
+   * A tile's box on screen now (CSS pixels, #419), or null with no map on
+   * screen or the tile behind the camera. A tile panned past the edge gives
+   * a box off screen: callers check.
+   */
   tileRect: (h: Hex) => ScreenRect | null;
   /** My home base's node on screen now, or null (#419: where things made at home fly from). */
   homeRect: () => ScreenRect | null;
