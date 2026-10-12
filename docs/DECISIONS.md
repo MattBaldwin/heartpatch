@@ -1511,7 +1511,7 @@ _Owner answers to the coordinator late on 2026-10-11 and early on 2026-10-12, as
 _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator"._
 
 **Game rules**
-- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision. _Settled in the afternoon entry below: today's forms are the baby and the teen. GAME_DESIGN.md §8 was rewritten in #463._
+- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision. _Settled later: today's forms are the baby and the teen, and GAME_DESIGN.md §8 was rewritten in #463. See "2026-10-12 — Owner decisions and coordinator calls (afternoon)" below._
 - **The house perk stays as built (#381).** The owner kept it as built: it applies to any resident who is not in the Hollow or at a post.
 
 **Schedule and process**
@@ -1535,21 +1535,21 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each la
 **Game rules**
 - **Today's two forms become the baby and teen stages (#443).** Today's base form is the baby, today's evolved form becomes the teen (stage 3), and the lane adds a new kid stage (stage 2) between them. A grown-up (stage 4) comes later. Rollout, per GAME_DESIGN.md §8: in Phase 1 the wave-1 lines get a kid and a single teen, and their branch teens follow in Phase 2.
 - **Evolution size and caps.** Coordinator: each stage is ×1.08 to ×1.4 the size of the one before. A grown-up's rarity is capped at legendary.
-- **Kid batches 1 and 2 are approved as shown (#443).** Batch 1 is Kindlebun, Rippletad, Bristlepip, Pumpkip and Wickitten (#466). Batch 2 is Wispyboo, Flitterbat, Cobblenap, Snoozeflake and Zipkit (#479). Kids are about ×1.15 size and ×1.18 stats over the baby.
+- **Kid batches 1 and 2 are approved as shown (#443).** Batch 1 is Kindlebun, Rippletad, Bristlepip, Pumpkip and Wickitten (#466). Batch 2 is Wispyboo, Flitterbat, Cobblenap, Snoozeflake and Zipkit (#479, open). Kids are about ×1.15 size and ×1.18 stats over the baby.
 - **The rare glow is a coloured outline (#391, option A).** It shipped in #468 behind the `rareGlow` tier switch.
 - **Rare finds get a reveal beat (#391 part 2).** It plays for rare and up, lasts about 2 s, a little longer for rarer kinds, and a tap skips it. The full moment plays the first time a player meets each rare kind on a patch; after that, a short banner of about 1 s with no pause. It respects Reduce Motion. The owner's four follow-ups, each as recommended:
   - The battle caption names the kind.
   - The befriend card shows "First ever!" when the server says this is the first catch of that kind.
   - A patch-wide line announces Legendary finds. It names the kind only to patch-mates who have met it, otherwise says "a Legendary squishy", and never names a secret kind.
   - Secret kinds get the Legendary-size moment, labelled "Special".
-- **Reveal tiers are data, ready for Mythic (Phase 2).** The owner flagged that Mythic squishies arrive in Phase 2. Coordinator: the reveal lives in a tier table in `packages/shared/src/data/rare-finds.ts` (duration, scale, label, patch line), so Mythic is one new row with no engine change. No Mythic row ships in Phase 1; until one does, Mythic uses the Legendary row. The default Mythic row goes to the owner with the #478 screens.
+- **Reveal tiers are data, ready for Mythic (Phase 2).** The owner flagged that Mythic squishies arrive in Phase 2. Coordinator: the reveal lives (in #478, open) in a tier table in `packages/shared/src/data/rare-finds.ts` (duration, scale, label, patch line), so Mythic is one new row with no engine change. No Mythic row ships in Phase 1; until one does, Mythic uses the Legendary row. The default Mythic row goes to the owner with the #478 screens.
 
 **Performance and devices**
-- **Medium-tier house budget is 190k triangles (#381 B4, was 160k).** Coordinator call: at L4 floor 0, squishies plus the Keeper are about 150k, so 160k would have meant lower squishy detail. Low and high keep about 10% headroom.
+- **Medium-tier house budget is 190k triangles (#381 B4, in #477, open; was 160k).** Coordinator call: at L4 floor 0, squishies plus the Keeper are about 150k, so 160k would have meant lower squishy detail. Low and high keep about 10% headroom.
 - **The owner's walk-through before Oct 27 checks three devices.**
   - iPad 9th gen: the house on the low tier, at least 30 fps.
   - iPhone 12/13: the medium tier, an L4 house on floor 0, at least 30 fps.
-  - iPad: the rare glow on and off.
+  - iPad 9th gen: the rare glow on and off (`?fps=1` vs `?fps=1&rareglow=0`). If glow-on drops the low tier under 30 fps, low turns the glow off.
 
 **Coordinator calls**
 - **Additive contract changes approved for #391.** These are the `firstMeeting` flag on battle start, the "first ever" flag on the battle result, and a new `game_events` type for the patch line. All three are additive.
