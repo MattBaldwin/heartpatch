@@ -149,3 +149,52 @@ export const SHIELD_BUBBLE = {
   alpha: 0.24, // TUNE
   fit: 1.25, // TUNE
 };
+
+/**
+ * Finding a rare one (#391, owner decisions 2026-10-12: the mockup's reveal
+ * beat). Each tier's length, words and size step (`scale`, rare = 1) are
+ * shared data (`RARE_FIND_TIERS`); this is how a step looks here. It grows
+ * with the step: more sparkles, a deeper dim, a bigger banner with a thicker
+ * ring and one more chime note (the `find-*` cues). Index `scale - 1`; a step
+ * past the end uses the last. A kind met before shows only the banner, for
+ * `briefMs`, with no pause.
+ */
+export const RARE_REVEAL = {
+  sparkles: [6, 12, 16, 20, 24, 28], // TUNE
+  dim: [0.14, 0.22, 0.28, 0.32, 0.35, 0.38], // TUNE
+  banner: [16, 18, 19, 20, 21, 22], // TUNE
+  ring: [2, 3, 4, 5, 6, 6], // TUNE
+  briefMs: 1000, // TUNE
+  /** The banner's text grows on wide screens (an iPad), as in the mockup. */
+  wideScreen: 500,
+  wideBanner: 1.25, // TUNE
+  /** The banner sits this far above the bottom sheet (CSS px). */
+  sheetGap: 12,
+  /** Sparkles stay this far above the sheet and below the name pills (CSS px). */
+  sparkleClear: { sheet: 70, pills: 10 },
+  /** Sparkles land this far out from the squishy's middle, in its half-heights. */
+  sparkleReach: [1.2, 1.9] as const, // TUNE
+  /** The fade out at the end (ms). */
+  fadeMs: 250,
+  /** Frames to wait for the arena to draw the squishy before dimming mid-screen instead. */
+  waitFrames: 30,
+  /** How long after a skipping tap lifts its click is swallowed (ms; it follows at once). */
+  clickGraceMs: 350,
+} as const;
+
+/** A step's value from one of `RARE_REVEAL`'s lists (the last past the end). */
+export function revealStep(list: readonly number[], scale: number): number {
+  return list[Math.min(Math.max(scale, 1), list.length) - 1] ?? 0;
+}
+
+/**
+ * Befriending a rare one (#391): hearts that fall over the new friend, by the
+ * tier's size step (index `scale - 1`, the last past the end); fewer, and only
+ * fading in, with Reduce Motion. They keep `heartClear` px off the pills, and
+ * three times that off the card.
+ */
+export const BEFRIEND_CHEER = {
+  hearts: [8, 12, 16, 20, 24], // TUNE
+  calmHearts: 6, // TUNE
+  heartClear: 10,
+} as const;

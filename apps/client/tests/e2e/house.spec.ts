@@ -31,6 +31,9 @@ interface HouseDebug {
     roof: number;
     lights: number;
     frontWallAlpha: number | null;
+    floor: number;
+    floors: number[];
+    residents: number;
   } | null;
 }
 
@@ -92,6 +95,8 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await expect(page.getByTestId('home')).toBeHidden();
   // Big, roomy controls, all on screen.
   await expectRoomyLabels(page, '[data-testid="house-back"], [data-testid="house-pill"]');
+  // One floor: no Upstairs switch.
+  await expect(page.getByTestId('house-floor')).toBeHidden();
 
   // Walk in: down to kid height; the front wall in the way fades, then is gone.
   const walk = page.getByTestId('house-walk');
@@ -120,6 +125,53 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await expect(page.getByTestId('house')).toBeHidden();
   await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
   expect((await houseState(page))?.open ?? false).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('a house with an upstairs shows one floor at a time, and walking in goes downstairs', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const page = await newPlayer(browser, uniqueName('floors'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // Stand in a level-3 house (the Kitchen upstairs over the Snug) for the real reply.
+  await page.route('**/api/v1/maps/*/house', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as HouseView;
+    const rooms = roomsAt(HOUSE_DATA, 3).map((room) => ({
+      ...room,
+      level: HOUSE_DATA.levels.find((l) => l.room.id === room.id)?.level ?? 1,
+      residents: [],
+    }));
+    await route.fulfill({ response, json: { ...body, level: 3, rooms } });
+  });
+  await patchAndHome(page);
+  await page.getByTestId('home-house-shortcut').tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+  const ground = (await houseState(page))!;
+  expect(ground.scene).toMatchObject({ rooms: 3, floor: 0, floors: [0, 1], keeper: true });
+
+  // Upstairs: the Kitchen's floor comes back over the Snug, and the Keeper
+  // (under it) isn't drawn.
+  const floorButton = page.getByTestId('house-floor');
+  await expect(floorButton).toHaveText('⬆️ Upstairs');
+  await expectRoomyLabels(page, '[data-testid="house-floor"], [data-testid="house-walk"]');
+  await floorButton.tap();
+  await expect.poll(async () => (await houseState(page))?.scene?.floor, slow).toBe(1);
+  expect((await houseState(page))!.scene!.keeper).toBe(false);
+  await expect(floorButton).toHaveText('⬇️ Downstairs');
+
+  // Walk in: kid height is in the Keeper's room, on the ground floor.
+  await page.getByTestId('house-walk').tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('kid');
+  expect((await houseState(page))!.scene).toMatchObject({ floor: 0, keeper: true });
+  await expect(floorButton).toBeHidden();
+
+  // Step out: the dollhouse on the ground floor, the switch back.
+  await page.getByTestId('house-walk').tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+  await expect(floorButton).toHaveText('⬆️ Upstairs');
   expect(errors).toEqual([]);
 });
 

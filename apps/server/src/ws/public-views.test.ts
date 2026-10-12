@@ -49,6 +49,33 @@ describe('public views', () => {
     ).toEqual({ name: 'Pumpkin Hollow', pvpMode: 'gentle' });
   });
 
+  it('names a celebrated friend only to members who have met its kind (#391, rule 6)', () => {
+    const finder = '0190a8c4-0000-7000-8000-000000000002';
+    const metIt = '0190a8c4-0000-7000-8000-000000000003';
+    const notYet = '0190a8c4-0000-7000-8000-000000000004';
+    const celebrated = event('squishy.celebrated', {
+      battleId: '0190a8c4-0000-7000-8000-000000000005',
+      userId: finder,
+      speciesId: 'thunderplume',
+      rarity: 'legendary',
+      metBy: [finder, metIt],
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, celebrated, { userId: metIt })).toEqual({
+      userId: finder,
+      rarity: 'legendary',
+      speciesId: 'thunderplume',
+    });
+    const blind = publicViewFor(PUBLIC_VIEWS, celebrated, { userId: notYet });
+    expect(blind).toEqual({ userId: finder, rarity: 'legendary' });
+    expect(JSON.stringify(blind)).not.toContain('thunderplume');
+    // Who met it is never sent to anyone.
+    expect(
+      JSON.stringify(publicViewFor(PUBLIC_VIEWS, celebrated, { userId: metIt })),
+    ).not.toContain(notYet);
+    // The finder's own card already cheered: they hear nothing.
+    expect(publicViewFor(PUBLIC_VIEWS, celebrated, { userId: finder })).toBeNull();
+  });
+
   it('tells the patch where a resident lives now, never the room it left (#381)', () => {
     const userId = '0190a8c4-0000-7000-8000-000000000002';
     const squishyId = '0190a8c4-0000-7000-8000-000000000003';

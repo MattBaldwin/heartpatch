@@ -24,11 +24,19 @@ export type SummaryEntry =
     }
   | {
       readonly kind: 'trained';
-      /** Each squishy the Training Grounds trained, with its XP. */
-      readonly squishies: readonly { readonly name: string; readonly xp: number }[];
+      /** Each squishy the Training Grounds trained, with its XP and its picture if it's drawn (#465). */
+      readonly squishies: readonly TrainedSquishy[];
       /** All their XP added up, for the one chip. */
       readonly xp: number;
     };
+
+/** A squishy the Training Grounds trained, as the banner and card show it. */
+export interface TrainedSquishy {
+  readonly name: string;
+  readonly xp: number;
+  /** Its portrait (#465), when one was ready to show; else the 🎯 stands in. */
+  readonly portrait?: string;
+}
 
 // Player-facing text (style guide §6).
 export const AWAY_TEXT = {
@@ -36,6 +44,8 @@ export const AWAY_TEXT = {
   tagAway: 'Welcome back!',
   tagNow: 'In your Bag!',
   more: (n: number) => `${String(n)} more`,
+  /** Several trained squishies in one chip: their faces, then how many. */
+  trainedCount: (n: number) => `🎯${String(n)}`,
   cardTagAway: 'While you were away…',
   cardTagNow: 'Into your Bag!',
   cardTitle: 'Your patch kept busy!',
@@ -55,13 +65,17 @@ export const AWAY_TEXT = {
  */
 export function summaryEntries(
   landed: readonly Pick<Landed, 'items'>[],
-  trained: readonly { readonly name: string; readonly xp: number }[],
+  trained: readonly TrainedSquishy[],
 ): SummaryEntry[] {
   const entries: SummaryEntry[] = [];
   if (trained.length > 0) {
     entries.push({
       kind: 'trained',
-      squishies: trained.map(({ name, xp }) => ({ name, xp })),
+      squishies: trained.map(({ name, xp, portrait }) => ({
+        name,
+        xp,
+        ...(portrait === undefined ? {} : { portrait }),
+      })),
       xp: trained.reduce((sum, t) => sum + t.xp, 0),
     });
   }
@@ -94,4 +108,116 @@ export function summarySentence(
 /** How many things landed, for the Home tab's line (a tool counts as one thing per tool). */
 export function summaryCount(entries: readonly SummaryEntry[]): number {
   return entries.reduce((sum, e) => sum + (e.kind === 'item' ? e.amount : 0), 0);
+}
+
+/** A point on screen, in CSS pixels. */
+export interface ScreenPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * How far a chip's path bows to the side, as a share of the trip (TUNE: a
+ * gentle curve). Keep it under about 0.5: past that the distance to the
+ * target stops shrinking all the way, and a chip would swing away first.
+ */
+const FLIGHT_BOW = 0.18;
+
+/**
+ * Where a flying chip is along its trip (PR 2 of #419): a gentle curve from
+ * where it landed to its place in the banner, `steps + 1` points from start to
+ * end. It bows a little to the side but always heads for its target: every
+ * point is closer to it than the one before, so no chip swings off the other way.
+ */
+export function flightPath(from: ScreenPoint, to: ScreenPoint, steps: number): ScreenPoint[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  // A little to one side, like a toss; chips heading left mirror chips heading right.
+  const side = dx >= 0 ? 1 : -1;
+  const control = {
+    x: from.x + dx / 2 + side * -dy * FLIGHT_BOW,
+    y: from.y + dy / 2 + side * dx * FLIGHT_BOW,
+  };
+  const points: ScreenPoint[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const a = (1 - t) * (1 - t);
+    const b = 2 * (1 - t) * t;
+    const c = t * t;
+    points.push({
+      x: a * from.x + b * control.x + c * to.x,
+      y: a * from.y + b * control.y + c * to.y,
+    });
+  }
+  return points;
+}
+
+/** A chip's size on screen, in CSS pixels. */
+export interface ChipSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Where flying chips may pop up: on screen, and below the banner they fly to. */
+export interface PopArea {
+  readonly top: number;
+  readonly left: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+/**
+ * Where each flying chip pops up (#419): its own spot, unless that would
+ * cover a chip already placed (two from one tile, or neighbouring tiles on a
+ * small phone, where tiles are narrower than chips). Then it takes the
+ * nearest free spot around it (beside, above or below, a chip apart), kept
+ * inside `area` so it stays on screen and under the banner. If nowhere near
+ * is free it keeps its own spot: a brief overlap beats a chip off screen.
+ */
+export function spreadStarts(
+  spots: readonly ScreenPoint[],
+  sizes: readonly ChipSize[],
+  gap: number,
+  area: PopArea,
+): ScreenPoint[] {
+  const placed: { at: ScreenPoint; size: ChipSize }[] = [];
+  const covers = (at: ScreenPoint, size: ChipSize) =>
+    placed.some(
+      (p) =>
+        Math.abs(p.at.x - at.x) < (p.size.width + size.width) / 2 + gap &&
+        Math.abs(p.at.y - at.y) < (p.size.height + size.height) / 2 + gap,
+    );
+  const inside = (at: ScreenPoint, size: ChipSize) =>
+    at.x - size.width / 2 >= area.left &&
+    at.x + size.width / 2 <= area.right &&
+    at.y - size.height / 2 >= area.top &&
+    at.y + size.height / 2 <= area.bottom;
+  for (const [i, spot] of spots.entries()) {
+    const size = sizes[i] ?? { width: 0, height: 0 };
+    const stepX = size.width + gap;
+    const stepY = size.height + gap;
+    // Nearest first: up to three chips away each way.
+    const candidates: ScreenPoint[] = [];
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        candidates.push({ x: spot.x + dx * stepX, y: spot.y + dy * stepY });
+      }
+    }
+    candidates.sort(
+      (a, b) => Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y),
+    );
+    const at = candidates.find((c) => inside(c, size) && !covers(c, size)) ?? spot;
+    placed.push({ at, size });
+  }
+  return placed.map((p) => p.at);
+}
+
+/** How far apart chips leave (#419): `each` apart, but all within `total` however many fly. */
+export function staggerMs(chips: number, each: number, total: number): number {
+  return chips <= 1 ? 0 : Math.min(each, total / (chips - 1));
+}
+
+/** Whether a point is on a screen `width` × `height` (a tile's middle, before it gives a chip). */
+export function onScreen(at: ScreenPoint, width: number, height: number): boolean {
+  return at.x >= 0 && at.x <= width && at.y >= 0 && at.y <= height;
 }

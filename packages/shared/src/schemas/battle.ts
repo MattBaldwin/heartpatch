@@ -444,6 +444,20 @@ export const PlayerBattleSchema = z.object({
   terrain: ContentIdSchema,
   /** The patch's time of day when the battle started, so a night battle looks like night. */
   timeOfDay: BattleTimeOfDaySchema,
+  /**
+   * A wild battle before its first move (#391): true when this battle is the
+   * player's first meeting with the wild squishy's kind on this patch (its
+   * catalog page was filled in by this battle), so the app plays the rare-find
+   * moment in full; false for a kind met before. Absent on every other battle.
+   */
+  firstMeeting: z.boolean().optional(),
+  /**
+   * A wild battle that ended with the player befriending the wild squishy
+   * (#391): true when that was their first friend of its kind on this patch,
+   * so the celebration card says "First ever!"; false for a kind befriended
+   * before. Absent on every other battle.
+   */
+  firstEver: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */
