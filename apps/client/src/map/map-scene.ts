@@ -202,6 +202,15 @@ export function topOf(tile: PublicTile): number {
   return tile.homeSlot !== null ? look.height : look.height + tileJitter(tile, tile.terrain).height;
 }
 
+/**
+ * A tile instance's placement on a mesh lofted at `height`: the height
+ * wobble scales it, so its top lands at `topOf(tile)`.
+ */
+function tileMatrix(tile: PublicTile, height: number): Matrix {
+  const p = hexToWorld(tile, HEX_SIZE);
+  return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (height + DOME), 1));
+}
+
 /** One instanced tile mesh and the tiles it draws, for recolouring when ownership changes. */
 interface TileGroup {
   readonly mesh: Mesh;
@@ -943,11 +952,7 @@ export class MapScene {
       if (look.glow > 0) mat.emissiveColor = linear(look.color).scale(look.glow);
       const plugin = attachTerrainPlugin(mat, this.clock, { water: group.key === 'lake' });
       if (!plugin) animated = false;
-      // Height wobble scales the tile, so its top lands at `topOf(tile)`.
-      const matrices = group.tiles.map((tile) => {
-        const p = hexToWorld(tile, HEX_SIZE);
-        return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
-      });
+      const matrices = group.tiles.map((tile) => tileMatrix(tile, h));
       // Both detail levels share the colours: recolouring one recolours both.
       const colors = new Float32Array(group.tiles.length * 4);
       for (const m of [mesh, far]) {
@@ -999,9 +1004,7 @@ export class MapScene {
         group.muted[i] = muted;
         group.terrains[i] = tile.terrain;
         if (reshaped) {
-          const p = hexToWorld(tile, HEX_SIZE);
-          const h = group.look.height;
-          const m = placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
+          const m = tileMatrix(tile, group.look.height);
           group.mesh.thinInstanceSetMatrixAt(i, m, true);
           group.far.thinInstanceSetMatrixAt(i, m, true);
         }
