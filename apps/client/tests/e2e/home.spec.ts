@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { closeRoster } from './roster.js';
 import { trayButton } from './trays.js';
 
 /** Longer than one wander gap (home-config.ts `WANDER`: 3.5 s ± 1.5 s). */
@@ -122,7 +123,6 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   // The sheet opens as a short peek bar (#412): the squishies by the Heart
   // Seed stay in view, and every button is on screen with no scrolling.
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
-  await expect(sheet.getByTestId('home-friends')).toHaveCount(0);
   const view = page.viewportSize()!;
   for (const id of ['home-squishies', 'home-build', 'home-back']) {
     const box = (await sheet.getByTestId(id).boundingBox())!;
@@ -133,9 +133,12 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   }
   const bar = (await sheet.boundingBox())!;
   expect(bar.height).toBeLessThan(view.height * 0.3);
-  // Squishies opens the full lists; the handle folds them back.
+  // Squishies opens the Squishies roster (#375), the same as 🐾 at the top.
   await sheet.getByTestId('home-squishies').tap();
-  await expect(sheet.getByTestId('home-friends')).toBeVisible();
+  await slowExpect(page.getByTestId('roster')).toBeVisible();
+  await closeRoster(page);
+  // The handle opens the full sheet and folds it back.
+  await sheet.getByTestId('home-handle').tap();
   await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');
   await sheet.getByTestId('home-handle').tap();
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
@@ -170,7 +173,7 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await swipe(80);
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
   // Opened, it stays open through Build and Cancel (below) while Home is open.
-  await sheet.getByTestId('home-squishies').tap();
+  await sheet.getByTestId('home-handle').tap();
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
 
   // The Hearthfire isn't built at home (owner decision 2026-10-07): the one
@@ -192,7 +195,6 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await sheet.getByTestId('build-cancel').tap();
   await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
   expect((await homeState(page))?.sheet).toBe('open');
-  await expect(sheet.getByTestId('home-friends')).toBeVisible();
 
   // Home opens folded again the next time.
   await sheet.getByTestId('home-back').tap();
