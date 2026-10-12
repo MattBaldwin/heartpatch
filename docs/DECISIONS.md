@@ -1505,3 +1505,25 @@ _Owner answers to the coordinator late on 2026-10-11 and early on 2026-10-12, as
   - Lanes post the reviewer verdict comment naming the head SHA before reporting "ready".
   - One green CI run on the final head is enough. The coordinator's two-run bar (in practice since #408) was dropped once #416 fixed the flake behind it.
   - Owner decisions are recorded in one docs PR per evening.
+
+## 2026-10-12 — Owner decisions and coordinator calls (morning)
+
+_Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator"._
+
+**Game rules**
+- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision.
+- **The house perk stays as built (#381).** The owner kept it as built: it applies to any resident who is not in the Hollow or at a post.
+
+**Schedule and process**
+- **The live-data dry run is waived (#295).** The owner called a one-click production dry run overkill while the game is in dev and testers expect some chaos. PR #441 was closed without merging.
+- **The #381 gate moves to a testers walk-through.** Coordinator: house PRs B1–B4 merge on reviewer APPROVE plus green CI, behind `HP_HOUSE`. The owner's go/no-go is a testers-mode walk-through before Oct 27.
+- **B3 runs in its own lane.** Coordinator: the grown rooms (B3) work in a second #381 lane once B1 merged. The daily gift (H1, #452) uses `house_gifts` from 0046, so it needed no migration.
+
+**Coordinator calls**
+- **Factory take-down share (#295).** A player who leaves a shared Factory gets the half take-down share.
+- **Additive contract changes approved.** #419 adds `speciesId` to the gather summary payload; squishy portraits in the summary are deferred. #381 C1 and C2 add fields only.
+- **Flaky tests (#429).**
+  - Fixed by root cause: #438, #439, #440, #445, #447 and #453. #453 is test-side: `visitPost` taps the connected post's tile through a dev hook.
+  - #451 raises three whole-test budgets to about twice their measured iPad runtime.
+  - The recipe-book and wardrobe stalls keep their budgets, because a bigger limit would only hide a stall. A re-scan on the new main decides whether the lane stands down.
+- **Post flags keep their hide rule (#426).** A connected post whose flag would sit under a tray handle stays unlabelled until the map moves. That is noted as polish for a 393 px phone, not changed.
