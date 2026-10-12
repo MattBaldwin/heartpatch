@@ -817,6 +817,12 @@ export class MapScene {
    * tutorial's `resource-node` spotlight: their Timber node if they have one,
    * else any node on their home base. Null if it isn't in front of the camera.
    */
+  /** A tile's box on screen (CSS pixels), or null if it isn't on the map or in view (#419). */
+  tileRect(h: Hex): ScreenRect | null {
+    const tile = this.tiles.get(hexKey(h));
+    return tile ? tileScreenRectOf(this.scene, tile) : null;
+  }
+
   homeNodeRect(userId: string | null): ScreenRect | null {
     // Called every drawn frame while the tutorial follows it: ownership only
     // changes in `update`, so the tile is looked up once per player.

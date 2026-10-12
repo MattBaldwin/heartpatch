@@ -216,6 +216,11 @@ const inventory = createInventoryScreen({
   onBagOpen: () => {
     lorebook.refresh();
   },
+  // What landed flies in from its tile on the map (#419).
+  locate: {
+    tile: (h) => maps.tileRect(h),
+    home: () => maps.homeRect(),
+  },
   // The "what landed" banner stays below the patch's name, a wardrobe find
   // and the trays' hint line and first-visit hint (#419).
   clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),

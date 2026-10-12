@@ -1,6 +1,12 @@
 import { EXPLORE_RULES, findAvoidedWords } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { AWAY_TEXT, summaryCount, summaryEntries, summarySentence } from './away-summary.js';
+import {
+  AWAY_TEXT,
+  flightPath,
+  summaryCount,
+  summaryEntries,
+  summarySentence,
+} from './away-summary.js';
 import { itemIcon } from './item-icons.js';
 
 describe('summaryEntries', () => {
@@ -102,6 +108,37 @@ describe('AWAY_TEXT', () => {
     for (const line of lines) {
       expect(findAvoidedWords(line), line).toEqual([]);
       expect(line.split(' ').length, line).toBeLessThanOrEqual(10);
+    }
+  });
+});
+
+describe('flightPath', () => {
+  const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  it('starts where the thing landed and ends in its place in the banner', () => {
+    const path = flightPath({ x: 200, y: 400 }, { x: 120, y: 150 }, 12);
+    expect(path).toHaveLength(13);
+    expect(path[0]).toEqual({ x: 200, y: 400 });
+    expect(path.at(-1)?.x).toBeCloseTo(120);
+    expect(path.at(-1)?.y).toBeCloseTo(150);
+  });
+
+  it('always heads for its target, whichever way it goes (no chip swings off the other way)', () => {
+    const from = { x: 195, y: 420 };
+    for (const to of [
+      { x: 40, y: 150 },
+      { x: 360, y: 150 },
+      { x: 195, y: 140 },
+      { x: 60, y: 600 },
+      { x: 380, y: 430 },
+    ]) {
+      const left = flightPath(from, to, 24).map((p) => distance(p, to));
+      for (let i = 1; i < left.length; i++) {
+        expect(left[i], `${JSON.stringify(to)} step ${String(i)}`).toBeLessThan(
+          left[i - 1] ?? Infinity,
+        );
+      }
     }
   });
 });

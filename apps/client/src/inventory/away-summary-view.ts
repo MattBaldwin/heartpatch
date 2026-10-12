@@ -1,6 +1,6 @@
 import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
-import { AWAY_TEXT, type SummaryEntry } from './away-summary.js';
+import { AWAY_TEXT, flightPath, type ScreenPoint, type SummaryEntry } from './away-summary.js';
 import './away-summary.css';
 
 // The "what landed" banner and its card (#419, owner pick 2026-10-12). One
@@ -8,13 +8,27 @@ import './away-summary.css';
 // for whatever doesn't fit; it hides itself after a few seconds, and a tap
 // opens the card with everything. One thing alone is a small pill. Plain DOM
 // over the map: it adds no draw calls.
+//
+// PR 2: each chip pops up where it landed (its tile on the map) and flies
+// into its place in the banner, so the receipt fills chip by chip; the time
+// left starts once the last one is in. Reduce Motion: no flight, the chips
+// are just there. CSS transforms only (Web Animations), off the map's frames.
 
-/** How long the banner stays (its time-left line runs for as long). */
+/** How long the banner stays once everything is in it (its time-left line runs for as long). */
 const BANNER_MS = 4000; // TUNE: long enough to read 4 chips, short enough not to nag
 /** Room above the banner for its tag, under whatever else is at the top. */
 const TAG_ROOM_PX = 18;
 /** While it shows, it checks this often that nothing new sits where it does. */
 const PLACE_EVERY_MS = 250;
+/** A chip's trip: a pop where it landed, then the flight (about a second over the patch). */
+const POP_MS = 260; // TUNE
+const FLY_MS = 640; // TUNE
+/** The next chip leaves this long after the one before. */
+const STAGGER_MS = 70; // TUNE
+/** Chips that fly; any more just appear (they're behind "N more" anyway). */
+const MAX_FLYERS = 10; // TUNE
+/** Points along each flight path. */
+const FLIGHT_STEPS = 12;
 
 export interface AwaySummaryShow {
   readonly entries: readonly SummaryEntry[];
@@ -22,6 +36,8 @@ export interface AwaySummaryShow {
   readonly sentence: string;
   /** Back after a while away: "Welcome back!", else "In your Bag!". */
   readonly away: boolean;
+  /** Where each chip flies in from (its tile on screen), or null to just appear. */
+  readonly from?: (entry: SummaryEntry) => ScreenPoint | null;
 }
 
 /** Read-only state for the dev hook. */
@@ -32,6 +48,8 @@ export interface AwaySummaryDebug {
   readonly chips: number;
   readonly more: number;
   readonly card: boolean;
+  /** Chips still flying in. */
+  readonly flying: number;
 }
 
 export interface AwaySummary {
@@ -54,6 +72,11 @@ function sheetOpen(): boolean {
   );
 }
 
+/** The player asked for less motion (iOS Settings → Accessibility → Motion). */
+function reducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export interface AwaySummaryOptions {
   /**
    * Things at the top of the screen the banner keeps below while it shows
@@ -70,6 +93,9 @@ export function createAwaySummary(
   let placing: number | undefined;
   let current: AwaySummaryShow | null = null;
   let chipsShown = 0;
+  /** The chips in the air, and a count bumped by every show, so a late landing is dropped. */
+  let flights: { animation: Animation; flyer: HTMLElement }[] = [];
+  let flightRun = 0;
 
   const tag = el('span', { class: 'away-tag' });
   const chips = el('span', { class: 'away-chips', 'aria-hidden': 'true' });
@@ -113,12 +139,37 @@ export function createAwaySummary(
   layer.hidden = true;
   root.append(banner, layer);
 
+  /** Lands every chip still flying at once (a new show, the card, leaving the map). */
+  const stopFlights = () => {
+    flightRun += 1;
+    for (const { animation, flyer } of flights) {
+      animation.cancel();
+      flyer.remove();
+    }
+    flights = [];
+    for (const waiting of banner.querySelectorAll('.away-waiting')) {
+      waiting.classList.remove('away-waiting');
+    }
+  };
+
   const hideBanner = () => {
+    stopFlights();
     window.clearTimeout(timer);
     timer = undefined;
     window.clearInterval(placing);
     placing = undefined;
     banner.hidden = true;
+  };
+
+  /** Everything is in the banner: the time left starts. */
+  const startHold = () => {
+    // A fresh time-left line, so it runs down from full again.
+    const fresh = el('span', { class: 'away-bar away-bar-run', 'aria-hidden': 'true' });
+    fresh.style.animationDuration = `${String(BANNER_MS)}ms`;
+    bar.replaceWith(fresh);
+    bar = fresh;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(hideBanner, BANNER_MS);
   };
 
   /** Below its usual spot (CSS), or below anything else up there now. */
@@ -244,6 +295,65 @@ export function createAwaySummary(
     );
   }
 
+  /**
+   * Sends each chip from where it landed to its place in the banner (the "N
+   * more" button for one that didn't fit). False when nothing flies: Reduce
+   * Motion, or nowhere to fly from.
+   */
+  function fly(what: AwaySummaryShow): boolean {
+    const from = what.from;
+    if (!from || reducedMotion()) return false;
+    const run = flightRun;
+    const trips = what.entries.slice(0, MAX_FLYERS).flatMap((entry, i) => {
+      const start = from(entry);
+      const slot = i < chipsShown ? (chips.children[i] as HTMLElement | undefined) : more;
+      return start && slot && !slot.hidden ? [{ entry, start, slot }] : [];
+    });
+    if (trips.length === 0) return false;
+    for (const { slot } of trips) if (slot !== more) slot.classList.add('away-waiting');
+    const landed = trips.map(({ entry, start, slot }, k) => {
+      const flyer = chipFor(entry);
+      flyer.classList.add('away-flyer');
+      flyer.setAttribute('aria-hidden', 'true');
+      root.append(flyer);
+      const size = flyer.getBoundingClientRect();
+      const box = slot.getBoundingClientRect();
+      const end = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      const at = (p: ScreenPoint, scale: number) =>
+        `translate(${String(p.x - size.width / 2)}px, ${String(p.y - size.height / 2)}px) scale(${String(scale)})`;
+      const pop = POP_MS / (POP_MS + FLY_MS);
+      const path = flightPath(start, end, FLIGHT_STEPS);
+      const animation = flyer.animate(
+        [
+          { transform: at(start, 0.4), opacity: 0, offset: 0, easing: 'ease-out' },
+          { transform: at(start, 1.15), opacity: 1, offset: pop * 0.6 },
+          { transform: at(start, 1), opacity: 1, offset: pop, easing: 'ease-in' },
+          ...path.slice(1).map((p, j) => ({
+            transform: at(p, 1 - (0.15 * (j + 1)) / FLIGHT_STEPS),
+            opacity: 1,
+            offset: pop + ((1 - pop) * (j + 1)) / FLIGHT_STEPS,
+          })),
+        ],
+        { duration: POP_MS + FLY_MS, delay: k * STAGGER_MS, fill: 'both' },
+      );
+      flights.push({ animation, flyer });
+      return animation.finished.then(() => {
+        if (run !== flightRun) return;
+        flyer.remove();
+        flights = flights.filter((f) => f.flyer !== flyer);
+        slot.classList.remove('away-waiting');
+        slot.classList.add('away-landed');
+      });
+    });
+    // A cancelled flight rejects; whatever stopped it has taken over.
+    void Promise.all(landed)
+      .then(() => {
+        if (run === flightRun) startHold();
+      })
+      .catch(() => undefined);
+    return true;
+  }
+
   return {
     show: (what) => {
       if (what.entries.length === 0) return;
@@ -251,6 +361,7 @@ export function createAwaySummary(
       sentence.textContent = what.sentence;
       const one = what.entries.length === 1 ? what.entries[0] : undefined;
       banner.classList.toggle('away-one', one !== undefined);
+      stopFlights();
       // The pill says it all and opens nothing: no stop for a screen reader either.
       if (one) {
         banner.setAttribute('aria-disabled', 'true');
@@ -274,16 +385,15 @@ export function createAwaySummary(
         tag.textContent = what.away ? AWAY_TEXT.tagAway : AWAY_TEXT.tagNow;
         fitChips(what.entries);
       }
-      // A fresh time-left line, so it runs down from full again.
-      const fresh = el('span', { class: 'away-bar away-bar-run', 'aria-hidden': 'true' });
-      fresh.style.animationDuration = `${String(BANNER_MS)}ms`;
-      bar.replaceWith(fresh);
-      bar = fresh;
+      // The time-left line holds full until the last chip is in.
+      bar.classList.remove('away-bar-run');
       window.clearTimeout(timer);
-      timer = window.setTimeout(hideBanner, BANNER_MS);
+      timer = undefined;
+      // Placed first, so the chips fly to where the banner really is.
       place();
       window.clearInterval(placing);
       placing = window.setInterval(place, PLACE_EVERY_MS);
+      if (!fly(what)) startHold();
     },
     hide: () => {
       hideBanner();
@@ -300,6 +410,7 @@ export function createAwaySummary(
         chips: banner.hidden ? 0 : chipsShown,
         more: banner.hidden ? 0 : total - chipsShown,
         card: !layer.hidden,
+        flying: flights.length,
       };
     },
   };

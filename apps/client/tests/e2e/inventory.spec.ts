@@ -13,8 +13,15 @@ interface InventoryDebug {
   seasons: string[];
   bagOpen: boolean;
   tileAction: string | null;
-  summary: { shown: 'banner' | 'pill' | null; chips: number; more: number; card: boolean };
+  summary: {
+    shown: 'banner' | 'pill' | null;
+    chips: number;
+    more: number;
+    card: boolean;
+    flying: number;
+  };
   bagNew: number;
+  landings: number;
 }
 
 function bagState(page: Page): Promise<InventoryDebug | null> {
@@ -148,7 +155,8 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   const banner = page.getByTestId('landed-toast');
   // Roomy: the settle is one round trip, slow under a full CI run.
-  await expect(banner).toContainText('Heart Charm', { timeout: 15_000 });
+  await expect(banner).toBeVisible({ timeout: 15_000 });
+  await expect(banner).toContainText('Heart Charm');
   // Two kinds: the banner (not the one-thing pill), and a real tap opens the
   // card with everything: on a plain map it takes taps (shut trays don't count
   // as open sheets). The banner hides itself after a few seconds, so the tap
@@ -170,7 +178,10 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(page.getByTestId('map-hud')).toBeHidden({ timeout: 30_000 });
   await page.getByTestId('home').getByTestId('home-back').tap();
   await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 30_000 });
-  await expect.poll(async () => (await bagState(page))?.bagNew).toBeGreaterThan(0);
+  // Roomy: the bag reads itself again once the map is back.
+  await expect
+    .poll(async () => (await bagState(page))?.bagNew, { timeout: 15_000 })
+    .toBeGreaterThan(0);
   await expect(page.getByTestId('bag-new')).toHaveText(/^\+\d+$/);
   // Roomy: the trays read their news again once the map is back (a busy CI runner).
   await expect
@@ -178,8 +189,28 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
     .not.toBeNull();
   await (await trayButton(page, 'bag-open')).tap();
   await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
+
+  // Reduce Motion (#419): nothing flies in from the map; the one thing that
+  // landed is just there, as a small pill.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await bag.locator('[data-recipe="heart-charm"]').tap();
+  await expect.poll(async () => (await bagState(page))?.crafts).toBe(1);
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
+  const landed = (await bagState(page))!.landings;
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Checked once it has landed, whether or not the pill has hidden itself again
+  // (with no flight its few seconds start at once): it was the one-thing pill,
+  // and nothing flew.
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 15_000 })
+    .toBe(landed + 1);
+  await expect(banner).toContainText('Heart Charm');
+  await expect(banner).toHaveClass(/away-one/);
+  expect((await bagState(page))?.summary.flying).toBe(0);
+  await expect(page.locator('.away-flyer')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: null });
 
   // Leaving the map (here: Settings → Change Keeper, #42) takes the bag with it.
   await page.getByRole('button', { name: 'My patches' }).tap();

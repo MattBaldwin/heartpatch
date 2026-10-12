@@ -95,3 +95,41 @@ export function summarySentence(
 export function summaryCount(entries: readonly SummaryEntry[]): number {
   return entries.reduce((sum, e) => sum + (e.kind === 'item' ? e.amount : 0), 0);
 }
+
+/** A point on screen, in CSS pixels. */
+export interface ScreenPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** How far a chip's path bows to the side, as a share of the trip (TUNE: a gentle curve). */
+const FLIGHT_BOW = 0.18;
+
+/**
+ * Where a flying chip is along its trip (PR 2 of #419): a gentle curve from
+ * where it landed to its place in the banner, `steps + 1` points from start to
+ * end. It bows a little to the side but always heads for its target: every
+ * point is closer to it than the one before, so no chip swings off the other way.
+ */
+export function flightPath(from: ScreenPoint, to: ScreenPoint, steps: number): ScreenPoint[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  // A little to one side, like a toss; chips heading left mirror chips heading right.
+  const side = dx >= 0 ? 1 : -1;
+  const control = {
+    x: from.x + dx / 2 + side * -dy * FLIGHT_BOW,
+    y: from.y + dy / 2 + side * dx * FLIGHT_BOW,
+  };
+  const points: ScreenPoint[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const a = (1 - t) * (1 - t);
+    const b = 2 * (1 - t) * t;
+    const c = t * t;
+    points.push({
+      x: a * from.x + b * control.x + c * to.x,
+      y: a * from.y + b * control.y + c * to.y,
+    });
+  }
+  return points;
+}

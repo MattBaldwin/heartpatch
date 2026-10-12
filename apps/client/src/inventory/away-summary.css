@@ -39,12 +39,12 @@
   animation: away-in 0.3s ease-out;
 }
 
-/* One thing: a small pill that says it all, and nothing to tap. */
 /* Over an open sheet: only to read, so taps reach the sheet. */
 .away-banner.away-quiet {
   pointer-events: none;
 }
 
+/* One thing: a small pill that says it all, and nothing to tap. */
 .away-banner.away-one {
   min-height: 48px;
   padding: 4px;
@@ -146,6 +146,26 @@
   height: 1px;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* PR 2: a chip flying in from where it landed (moved by the Web Animations
+   API, transforms only), and its place in the banner, kept until it's in. */
+.away-flyer {
+  position: fixed;
+  z-index: 7;
+  top: 0;
+  left: 0;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 22%);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.away-waiting {
+  visibility: hidden;
+}
+
+.away-landed {
+  animation: away-chip-pop 0.22s ease-out;
 }
 
 /* Each item's own soft colour (the element colours, art bible §2), on the
@@ -354,6 +374,12 @@
   }
 }
 
+@keyframes away-chip-pop {
+  50% {
+    transform: scale(1.15);
+  }
+}
+
 @keyframes away-bar {
   to {
     transform: scaleX(0);
@@ -363,7 +389,8 @@
 /* Reduce Motion: the banner and card just appear, and the time-left line holds still. */
 @media (prefers-reduced-motion: reduce) {
   .away-banner,
-  .away-card {
+  .away-card,
+  .away-landed {
     animation: none;
   }
 
