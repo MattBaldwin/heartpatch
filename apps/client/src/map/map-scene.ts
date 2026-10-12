@@ -992,10 +992,19 @@ export class MapScene {
         const fading = tile.homeSlot === null ? (this.landFade.get(key) ?? 0) : 0;
         const muted = isMuted(tile) ? 1 : Math.min(1, Math.max(0, fading)) * LAND_FADE.most;
         wild.set(key, muted);
-        // A clear (#242) changes a tile's terrain: its colour follows.
-        if (!force && group.muted[i] === muted && group.terrains[i] === tile.terrain) continue;
+        // A clear (#242) changes a tile's terrain: its colour and height follow,
+        // so what stands on it (`topOf`) sits on its top.
+        const reshaped = group.terrains[i] !== tile.terrain;
+        if (!force && group.muted[i] === muted && !reshaped) continue;
         group.muted[i] = muted;
         group.terrains[i] = tile.terrain;
+        if (reshaped) {
+          const p = hexToWorld(tile, HEX_SIZE);
+          const h = group.look.height;
+          const m = placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
+          group.mesh.thinInstanceSetMatrixAt(i, m, true);
+          group.far.thinInstanceSetMatrixAt(i, m, true);
+        }
         changed = true;
         const c =
           tile.homeSlot !== null

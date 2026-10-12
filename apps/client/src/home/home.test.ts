@@ -19,7 +19,7 @@ import {
   atHome,
   buildingNote,
   buildRows,
-  GROUNDS_ON_HOMESTEAD,
+  ON_HOMESTEAD,
   effectChip,
   effectChips,
   FIRES_ON_LAND,
@@ -408,7 +408,7 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     const row = buildRows(homeWith({ items: { timber: 20, stone: 2 } })).find(
       (r) => r.building.id === 'training-grounds',
     )!;
-    expect(row.option).toEqual({ kind: 'homestead', note: GROUNDS_ON_HOMESTEAD });
+    expect(row.option).toEqual({ kind: 'homestead', note: ON_HOMESTEAD });
     expect(row.where).toBe('');
     expect(row.needs.map((n) => n.label)).toEqual(['🪵 20/8', '🪨 2/8']);
   });
@@ -499,7 +499,7 @@ describe('the Crafting Factory on a homestead (#295)', () => {
   it('says where it goes on the home Build sheet, and that it is built once it is', () => {
     const row = (home: HomeResponse) =>
       buildRows(home).find((r) => r.building.id === 'crafting-factory')!;
-    expect(row(homeWith()).option).toEqual({ kind: 'homestead', note: GROUNDS_ON_HOMESTEAD });
+    expect(row(homeWith()).option).toEqual({ kind: 'homestead', note: ON_HOMESTEAD });
     expect(row(homeWith({ buildings: [factory] })).option).toEqual({
       kind: 'built',
       note: BUILT_ON_HOMESTEAD,

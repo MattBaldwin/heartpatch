@@ -62,6 +62,11 @@ test('builds a Factory on a homestead, runs batches from it, the book and the ba
   const tileCard = page.getByTestId('tile-factory');
   await slowExpect(tileCard).toBeVisible();
   await expect(tileCard.getByTestId('factory-tip')).toContainText('Ooh, a Factory!');
+  // Once: closed and opened again, the card has no tip.
+  await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
+  await selectTile(page, made.body);
+  await slowExpect(tileCard).toBeVisible();
+  await expect(tileCard.getByTestId('factory-tip')).toHaveCount(0);
   await tileCard.getByTestId('tile-factory-open').tap();
   const factorySheet = page.getByTestId('factory-sheet');
   await slowExpect(factorySheet).toBeVisible();

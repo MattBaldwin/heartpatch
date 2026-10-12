@@ -66,7 +66,7 @@ export interface InventoryScreenOptions {
   openPages?: () => Promise<readonly string[]>;
   /** Where "when did I last see this patch" is kept, for the welcome-back card (null: nowhere). */
   storage?: Storage | null;
-  /** "See Factory" on the welcome-back card: open home (the Factory's own card). */
+  /** "See Factory" on the welcome-back card: the Factory's batches sheet (wherever it stands, #295). */
   onSeeFactory?: () => void;
   /** The Lorebook's way in (#307): a tile at the top of the sheet and a sparkle on the Bag button. */
   lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };

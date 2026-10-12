@@ -317,8 +317,8 @@ export const FIRES_ON_LAND =
 /** My one homestead building of a kind is up (the Crafting Factory, #295). */
 export const BUILT_ON_HOMESTEAD = 'Built! Tap it on its homestead to open it.';
 
-/** Where Training Grounds go, on the build sheet (owner decision 4 on #277). */
-export const GROUNDS_ON_HOMESTEAD =
+/** Where homestead buildings go, on the build sheet (#277 Training Grounds, #295 the Crafting Factory). */
+export const ON_HOMESTEAD =
   'Goes on a homestead 🏡. Explore a tile next to home, then tap it on the map to build!';
 
 /**
@@ -471,7 +471,7 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           // My one Crafting Factory stands on a homestead (#295).
           option = { kind: 'built', note: BUILT_ON_HOMESTEAD };
         } else if (building.placement === 'homestead') {
-          option = { kind: 'homestead', note: GROUNDS_ON_HOMESTEAD };
+          option = { kind: 'homestead', note: ON_HOMESTEAD };
         } else if (owned >= (building.maxPerHome ?? 0)) {
           option = {
             kind: 'built',

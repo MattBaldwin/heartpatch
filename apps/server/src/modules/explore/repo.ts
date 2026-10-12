@@ -1,4 +1,4 @@
-import { hexDistance } from '@heartpatch/shared';
+import { CLEARED_TERRAIN, CLEARING_RULES, clearToolFor, hexDistance } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -90,16 +90,27 @@ export function createExploreRepo(db: Executor) {
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.id));
       const seed = all.find((t) => t.ownerUserId === userId && t.homeSlot === 0);
+      // Land a building can go on once its spot is gone: what a tool clears,
+      // or cleared land (never a lake, Juniper's Gap or a trading post).
+      const buildable = (terrain: string) =>
+        terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
       const tile = seed
         ? all.find(
-            (t) => t.ownerUserId === null && t.homeSlot === null && hexDistance(t, seed) === 2,
+            (t) =>
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              buildable(t.terrain) &&
+              hexDistance(t, seed) === 2,
           )
         : undefined;
       if (!tile) return null;
-      await db
+      const claimed = await db
         .update(tiles)
         .set({ ownerUserId: userId, nodeResource: null })
-        .where(and(eq(tiles.id, tile.id), isNull(tiles.ownerUserId)));
+        .where(and(eq(tiles.id, tile.id), isNull(tiles.ownerUserId)))
+        .returning({ id: tiles.id });
+      // Someone took it meanwhile: nothing made.
+      if (claimed.length === 0) return null;
       await db
         .insert(tileExplore)
         .values({
