@@ -182,7 +182,7 @@ export interface HomeScreen {
   readonly tileActions: TileActions;
   /** Fires, lanterns and Training Grounds the shared Build sheet can put up on my land (#371). */
   readonly buildSource: BuildSource;
-  /** A fresh jobs view's moods for a map (#393): a job changed while the home is up. */
+  /** My newest jobs view's moods for a map (#393), from the jobs feed: the only way moods reach the home. */
   setWorkMoods: (mapId: string, moods: ReadonlyMap<string, WorkMood>) => void;
   readonly debug: HomeDebug | null;
 }
