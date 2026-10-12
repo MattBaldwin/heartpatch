@@ -489,7 +489,8 @@ describe('SquishyField sparkle kept off a face', () => {
     f.flush();
     for (const [name, list] of codes(scene)) {
       // The rare glow (#391) rides above the finish code; the finish part is unchanged.
-      for (const code of list) expect(decodeSquishCode(code).base, name).toBeLessThan(FINISH_CODE.offFace);
+      for (const code of list)
+        expect(decodeSquishCode(code).base, name).toBeLessThan(FINISH_CODE.offFace);
     }
   });
 });
@@ -574,8 +575,7 @@ describe('SquishyField rare finds glow (#391)', () => {
     const out = new Map<string, ReturnType<typeof decodeSquishCode>[]>();
     for (const mesh of scene.meshes) {
       const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
-        | Float32Array
-        | undefined;
+        Float32Array | undefined;
       if (!data || !mesh.isEnabled()) continue;
       out.set(
         mesh.name,
@@ -586,7 +586,10 @@ describe('SquishyField rare finds glow (#391)', () => {
   }
   const make = () => {
     const scene = new Scene(engine);
-    return { scene, f: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }) };
+    return {
+      scene,
+      f: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }),
+    };
   };
   const kind = (rarity: 'common' | 'rare' | 'legendary') => {
     const s = GAME_DATA.species.find((x) => x.rarity === rarity && x.visual.parts.length > 2);
@@ -634,12 +637,18 @@ describe('SquishyField rare finds glow (#391)', () => {
     const { scene, f } = make();
     const h = f.add(kind('rare'), 'r', { x: 0, z: 0 });
     f.flush();
-    const before = [...decoded(scene)].reduce((n, [, l]) => n + l.filter((c) => c.level === 0).length, 0);
+    const before = [...decoded(scene)].reduce(
+      (n, [, l]) => n + l.filter((c) => c.level === 0).length,
+      0,
+    );
     const scarf = CLOTHING_BY_ID.get('snuggle-scarf');
     if (!scarf) throw new Error('no scarf');
     f.setAccessory(h, scarf);
     f.flush();
-    const after = [...decoded(scene)].reduce((n, [, l]) => n + l.filter((c) => c.level === 0).length, 0);
+    const after = [...decoded(scene)].reduce(
+      (n, [, l]) => n + l.filter((c) => c.level === 0).length,
+      0,
+    );
     expect(after).toBeGreaterThan(before);
   });
 
