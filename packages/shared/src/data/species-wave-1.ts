@@ -138,21 +138,21 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['joy', 'cozy'],
     },
   },
-  // #443 kid (stage 2): Cometsnail grows snail eye stalks, before Starshell's shell.
+  // #443 kid (stage 2): Cometsnail grows little arms, before Starblaze's strong ones.
   {
     id: 'sparksnail',
     name: 'Sparksnail',
-    description: 'Two sparkly eye stalks popped up. It waves them at shooting stars, very slowly.',
+    description: 'It grew two little arms. It waves them at shooting stars, very slowly.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'rare',
     baseStats: { hp: 77, attack: 65, defense: 71, speed: 59 }, // TUNE: ×1.18 Cometsnail
     moves: ['zip-zap', 'static-glide', 'fizzy-pop', 'zoomies'],
-    evolutions: [{ into: 'starshell', level: 30 }], // TUNE: kid level + 8 (#443)
+    evolutions: [{ into: 'starblaze', level: 30 }], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'comet-star',
       palette: ['#ff8fd0', '#ffe6f5', '#ffd23f', '#ffb347'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'zing-antennae', 'bolt-chain'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'spark-crest', 'stubby-arms', 'bolt-chain'],
       size: 1.65,
       glow: 'body',
       stance: 0.5,
@@ -163,10 +163,10 @@ export const WAVE_1_SPECIES: Species[] = [
   },
   // #443 teen (stage 3): the line's only teen until its branch ships in Phase 2.
   {
-    id: 'starshell',
-    name: 'Starshell',
+    id: 'starblaze',
+    name: 'Starblaze',
     description:
-      'At last it found a shell, a golden one. It carries a little starlight wherever it goes.',
+      'Its crest grew into a crown of rays, and its arms got strong from carrying wishes.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'epic',
@@ -176,15 +176,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'comet-star',
       palette: ['#ff86cc', '#ffe6f5', '#ffd23f', '#ffb347'],
-      parts: [
-        'happy-eyes',
-        'smile',
-        'blush-cheeks',
-        'spark-crest',
-        'zing-antennae',
-        'shell-dome',
-        'bolt-chain',
-      ],
+      parts: ['happy-eyes', 'smirk', 'blush-cheeks', 'sun-rays', 'strong-arms', 'bolt-chain'],
       size: 1.9,
       finish: 'sparkle',
       glow: 'body',
@@ -229,7 +221,7 @@ export const WAVE_1_SPECIES: Species[] = [
       feelings: ['sleepy', 'cozy'],
     },
   },
-  // #443 kid (stage 2): Shellnap grows a tea leaf on its head, before Brewtle's flippers.
+  // #443 kid (stage 2): Shellnap grows a tea leaf on its head, before Brewtle's big feet.
   {
     id: 'sipsnooze',
     name: 'Sipsnooze',
@@ -242,7 +234,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [{ into: 'brewtle', level: 26 }], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'pebble',
-      palette: ['#9fe0c0', '#fff4e6', '#ffe9d6', '#ff9ec4'],
+      palette: ['#9fe0c0', '#b9e48f', '#ffe9d6', '#ff9ec4'],
       parts: [
         'sleepy-eyes',
         'tiny-smile',
@@ -264,7 +256,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'brewtle',
     name: 'Brewtle',
     description:
-      'Big flippers for paddling and a teacup shell for napping. It never spills a drop.',
+      'Four big round feet for paddling and a teacup shell for napping. It never spills a drop.',
     element: 'water',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -273,7 +265,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'pebble',
-      palette: ['#93d9b6', '#fff4e6', '#ffe9d6', '#ff9ec4'],
+      palette: ['#93d9b6', '#addf80', '#ffe9d6', '#ff9ec4'],
       parts: [
         'sleepy-eyes',
         'tiny-smile',
