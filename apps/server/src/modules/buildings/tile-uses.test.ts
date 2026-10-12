@@ -1,4 +1,5 @@
 import {
+  GAME_DATA,
   HollowResponseSchema,
   HomeResponseSchema,
   MapResponseSchema,
@@ -8,9 +9,10 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import {
   buildings,
+  factoryQueues,
   keepers,
   mapMembers,
   maps,
@@ -23,6 +25,7 @@ import {
 import { makeHomestead } from '../../../tests/homestead.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { grantItems } from '../inventory/service.js';
 import { planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
 
 /*
@@ -440,5 +443,128 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     const perTile = new Map<string, number>();
     for (const r of await rowsOf(mapId)) perTile.set(r.tileId, (perTile.get(r.tileId) ?? 0) + 1);
     expect(Math.max(...perTile.values())).toBe(1);
+  });
+
+  describe('once the Crafting Factory stands on a homestead (#295 PR 3 flips its data)', () => {
+    // The data flip ships with the client's homestead Factory flow; these
+    // tests flip it for themselves and put it back.
+    const factoryData = GAME_DATA.buildings.find((b) => b.id === 'crafting-factory')! as {
+      placement: string;
+      maxPerTile?: number;
+    };
+    const was = { placement: factoryData.placement, maxPerTile: factoryData.maxPerTile };
+    beforeAll(() => {
+      Object.assign(factoryData, { placement: 'homestead', maxPerTile: 1 });
+    });
+    afterAll(() => {
+      Object.assign(factoryData, was);
+    });
+
+    it('moves a Factory out of home to a free homestead, batches and all', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const { ring } = await homeTileIds(server, kid, mapId);
+      const plot = await openHomestead(mapId, kid, 0);
+      const factory = await old(mapId, kid, 'crafting-factory', 'factory', ring[1]!, 1, 3);
+      const [batch] = await db
+        .insert(factoryQueues)
+        .values({
+          mapId,
+          userId: kid.id,
+          buildingId: factory,
+          recipeId: 'heart-charm',
+          total: 5,
+          itemSeconds: 60,
+          output: { 'heart-charm': 1 },
+          inputs: { timber: 2, treats: 1 },
+          startedAt: clock,
+        })
+        .returning({ id: factoryQueues.id });
+      await pass(mapId);
+      expect((await rowsOf(mapId)).find((r) => r.id === factory)?.tileId).toBe(plot.id);
+      // Its batch goes with it, still running.
+      expect(
+        await db.query.factoryQueues.findFirst({ where: (t, { eq }) => eq(t.id, batch!.id) }),
+      ).toMatchObject({ buildingId: factory, endedAt: null });
+      expect(await noteOf(server, kid, mapId)).toMatchObject({
+        moved: [{ buildingId: 'crafting-factory', to: { q: plot.q, r: plot.r } }],
+      });
+      // Once out there, a second run plans nothing.
+      const seen = (await eventsOf(mapId)).length;
+      await pass(mapId);
+      expect(await eventsOf(mapId)).toHaveLength(seen);
+    });
+
+    it('packs a Factory with nowhere to go: everything back, its batch stopped', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const { ring } = await homeTileIds(server, kid, mapId);
+      const factory = await old(mapId, kid, 'crafting-factory', 'factory', ring[1]!, 1, 3);
+      // Ten charms at a minute each, started four and a half minutes ago: four made.
+      const [batch] = await db
+        .insert(factoryQueues)
+        .values({
+          mapId,
+          userId: kid.id,
+          buildingId: factory,
+          recipeId: 'heart-charm',
+          total: 10,
+          itemSeconds: 60,
+          output: { 'heart-charm': 1 },
+          inputs: { timber: 2, treats: 1 },
+          startedAt: new Date(clock.getTime() - 270_000),
+        })
+        .returning({ id: factoryQueues.id });
+      await pass(mapId);
+      expect((await rowsOf(mapId)).find((r) => r.id === factory)).toBeUndefined();
+      expect(
+        await db.query.factoryQueues.findFirst({ where: (t, { eq }) => eq(t.id, batch!.id) }),
+      ).toMatchObject({ banked: 4, endReason: 'taken-down' });
+      const sums = async (reason: 'build-refund' | 'factory') => {
+        const rows = await db.query.resourceLedger.findMany({
+          where: (t, { and, eq }) =>
+            and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.reason, reason)),
+        });
+        const sum: Record<string, number> = {};
+        for (const r of rows) sum[r.itemId] = (sum[r.itemId] ?? 0) + r.delta;
+        return sum;
+      };
+      // Level 1 in full, and the batch: four charms made, six charms' inputs back.
+      expect(await sums('build-refund')).toEqual({ timber: 30, stone: 20 });
+      expect(await sums('factory')).toEqual({ 'heart-charm': 4, timber: 12, treats: 6 });
+      expect(await noteOf(server, kid, mapId)).toMatchObject({
+        packed: [{ buildingId: 'crafting-factory' }],
+        refund: { timber: 42, stone: 20, 'heart-charm': 4, treats: 6 },
+      });
+    });
+
+    it('builds one Factory per player, on a homestead', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [plot, other] = [
+        await openHomestead(mapId, kid, 0),
+        await openHomestead(mapId, kid, 1),
+      ];
+      // Collected through the bag, so the Factory's recipe-book page opens.
+      await withTransaction(db, (tx) =>
+        grantItems(tx, { mapId, userId: kid.id }, { timber: 100, stone: 100 }, 'dev-grant'),
+      );
+      const build = (at: { q: number; r: number }) =>
+        server.inject({
+          method: 'POST',
+          url: `/api/v1/maps/${mapId}/buildings`,
+          headers: HEADERS,
+          cookies: { [SESSION_COOKIE]: kid.token },
+          payload: { buildingId: 'crafting-factory', q: at.q, r: at.r, spot: 1 },
+        });
+      const first = await build(plot);
+      expect(first.statusCode, first.body).toBe(201);
+      const second = await build(other);
+      expect(second.statusCode).toBe(409);
+      expect(second.body).toContain('Your home already has all the Crafting Factory it can hold!');
+    });
   });
 });

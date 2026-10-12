@@ -201,6 +201,11 @@ export interface TileBattleEnd {
    */
   refunds?: readonly { userId: string; items: ItemCounts; refId: string }[];
   /**
+   * More inventory rows `afterRefunds` grants into (a lost Crafting
+   * Factory's batches, #295), locked with the refunds' rows before any grant.
+   */
+  alsoLock?: readonly { userId: string; items: ItemCounts }[];
+  /**
    * The defender's squishies the capture moves (trainees at Training Grounds
    * that came down with the land, #277), locked with the team's (step 10,
    * one id order) before the refunds.
@@ -1045,8 +1050,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // inventory rows (step 11) after the squishy locks, before any XP writes
     // `species_seen`.
     const refunds = tile.refunds ?? [];
-    if (refunds.length > 0) {
-      await lockGrantRows(tx, row.mapId, refunds);
+    const alsoLock = tile.alsoLock ?? [];
+    if (refunds.length + alsoLock.length > 0) {
+      await lockGrantRows(tx, row.mapId, [...refunds, ...alsoLock]);
       for (const { userId, items, refId } of refunds) {
         await grantItems(tx, { mapId: row.mapId, userId }, items, 'build-refund', refId);
       }
