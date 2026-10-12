@@ -42,7 +42,9 @@ export function mapBuildings(view: MapView, hexSize: number): PlacedOnMap[] {
       // Out on the land a building fills its tile, in the middle (#295);
       // at home it stands beside the ring node, on its spot.
       const at =
-        tile.homeSlot === null ? hexToWorld(tile, hexSize) : spotWorld(tile, building.spot, hexSize);
+        tile.homeSlot === null
+          ? hexToWorld(tile, hexSize)
+          : spotWorld(tile, building.spot, hexSize);
       placed.push({ tile, building, at });
     }
   }

@@ -232,6 +232,18 @@ interface PropGroup {
 /** A prop's instance on a tile that a building fills or that was cleared (#295): drawn at nothing. */
 const GONE = Matrix.Scaling(0, 0, 0);
 
+/** `placements` with every one on a `cleared` tile (by `tiles`, index for index) drawn at nothing. */
+function hideOn(
+  placements: readonly Matrix[],
+  tiles: readonly HexKey[],
+  cleared: ReadonlySet<HexKey>,
+): Matrix[] {
+  return placements.map((m, i) => {
+    const key = tiles[i];
+    return key !== undefined && cleared.has(key) ? GONE : m;
+  });
+}
+
 export function vinyl(
   scene: Scene,
   name: string,
@@ -1142,19 +1154,17 @@ export class MapScene {
       if (tile.buildings.length > 0 || wasCleared) cleared.add(key);
     }
     const same =
-      cleared.size === this.propsCleared.size && [...cleared].every((k) => this.propsCleared.has(k));
+      cleared.size === this.propsCleared.size &&
+      [...cleared].every((k) => this.propsCleared.has(k));
     if (same) return;
     this.propsCleared = cleared;
     for (const group of this.propGroups) {
-      const matrices = group.base.map((m, i) => (cleared.has(group.tiles[i]!) ? GONE : m));
+      const matrices = hideOn(group.base, group.tiles, cleared);
       setInstances(group.mesh, matrices);
       setInstances(group.far, matrices);
     }
     if (this.propShadows) {
-      setInstances(
-        this.propShadows,
-        this.shadowBase.map((m, i) => (cleared.has(this.shadowTiles[i]!) ? GONE : m)),
-      );
+      setInstances(this.propShadows, hideOn(this.shadowBase, this.shadowTiles, cleared));
     }
   }
 
