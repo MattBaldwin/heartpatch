@@ -38,14 +38,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import {
-  buildings,
-  factoryQueues,
-  keepers,
-  sessions,
-  squishies,
-  users,
-} from '../../db/schema.js';
+import { buildings, factoryQueues, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
