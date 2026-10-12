@@ -1,7 +1,7 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { blend, fitHouse, kidPose, project } from './house-camera.js';
+import { blend, fitHouse, kidPose, project, safeArea } from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { yardPumpkins } from './house-models.js';
@@ -165,18 +165,41 @@ describe('house scene', () => {
     scene.getEngine().dispose();
   });
 
-  it('keeps the yard pumpkins out of the kid-height frame at every level', () => {
-    const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+  it('shows the yard pumpkins in the dollhouse and keeps them out of the kid-height frame', () => {
+    const viewports = {
+      iPhone: { width: 390, height: 844, top: 80, bottom: 150 },
+      iPad: { width: 820, height: 1180, top: 70, bottom: 90 },
+    };
     for (const level of sampleLevels()) {
       const { scene, house } = buildHouse(level, 'low');
-      const kid = kidPose(house.focusRoom!, vp);
       const b = house.bounds;
-      for (const pumpkin of yardPumpkins(b.minX, b.maxX, b.minZ)) {
-        const [x, y, z] = pumpkin.at;
-        // Its near edge, toward the frame's middle, still past the side.
-        const edge = x < kid.eye.x ? x + pumpkin.d : x - pumpkin.d;
-        const p = project(kid, vp.width / vp.height, { x: edge, y, z });
-        expect(Math.abs(p.x), `level ${String(level)}`).toBeGreaterThan(1);
+      for (const [device, vp] of Object.entries(viewports)) {
+        const aspect = vp.width / vp.height;
+        const doll = fitHouse(b, vp);
+        const kid = kidPose(house.focusRoom!, vp);
+        const safe = safeArea(vp);
+        for (const pumpkin of yardPumpkins(b.minX, b.maxX, b.minZ)) {
+          const at = `level ${String(level)} ${device} pumpkin x ${pumpkin.at[0].toFixed(2)}`;
+          const [x, y, z] = pumpkin.at;
+          const r = pumpkin.d / 2;
+          // The dollhouse: the whole pumpkin inside the safe area (clear of the HUD).
+          for (const p of [
+            { x: x - r, y, z },
+            { x: x + r, y, z },
+            { x, y: y + r, z: z - r },
+            { x, y: y - r, z: z + r },
+          ]) {
+            const q = project(doll, aspect, p);
+            expect(q.x, at).toBeGreaterThan(safe.left);
+            expect(q.x, at).toBeLessThan(safe.right);
+            expect(q.y, at).toBeLessThan(safe.top);
+            expect(q.y, at).toBeGreaterThan(safe.bottom);
+          }
+          // Kid height: its inner edge (a whole diameter in, to be safe) still past the side.
+          const edge = x < kid.eye.x ? x + pumpkin.d : x - pumpkin.d;
+          const q = project(kid, aspect, { x: edge, y, z });
+          expect(Math.abs(q.x), at).toBeGreaterThan(1);
+        }
       }
       scene.getEngine().dispose();
     }

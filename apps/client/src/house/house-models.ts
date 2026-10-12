@@ -505,15 +505,19 @@ export function treeParts(scene: Scene, segments: number): { trunk: Mesh[]; crow
 export const TREE_TOP = 3.4;
 
 /**
- * The yard's two pumpkins: out past the house's ends, so kid height (standing
- * on the porch in front of any room) never has one right under its nose.
+ * The yard's two pumpkins, by the house's front corners: inside the
+ * dollhouse frame (it fits the house with margin round it) but out to the
+ * side of the kid-height frame, which is only as wide as one room's back
+ * wall, so kid height never has one right under its nose.
  */
 export function yardPumpkins(
   x0: number,
   x1: number,
   front: number,
 ): { at: [number, number, number]; d: number; hex: string }[] {
-  const out = 0.9; // TUNE: how far past the house's ends they sit, metres
+  // TUNE: how far past the house's ends they sit, metres. Room on every
+  // level and both viewports: about -1.5 (kid frame) to 0.4 (dollhouse frame).
+  const out = 0;
   return [
     { at: [x0 - out, -0.1, front - 0.7], d: 0.5, hex: '#ff9a3c' },
     { at: [x1 + out, -0.15, front - 0.9], d: 0.38, hex: '#f08a2c' },
