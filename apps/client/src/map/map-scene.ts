@@ -861,6 +861,24 @@ export class MapScene {
   }
 
   /**
+   * A tile's box on screen (CSS pixels, #419), or null if it isn't on the map
+   * or isn't in front of the camera. A tile panned past the edge gives a box
+   * off screen: callers check.
+   */
+  tileRect(h: Hex): ScreenRect | null {
+    const tile = this.tiles.get(hexKey(h));
+    return tile ? tileScreenRectOf(this.scene, tile) : null;
+  }
+
+  /** The tile a building stands on (its instance id), or null if it isn't on this map (#419). */
+  buildingTile(id: string): Hex | null {
+    for (const tile of this.tiles.values()) {
+      if (tile.buildings.some((b) => b.id === id)) return { q: tile.q, r: tile.r };
+    }
+    return null;
+  }
+
+  /**
    * Where this player's home node is on screen (CSS pixels), for the
    * tutorial's `resource-node` spotlight: their Timber node if they have one,
    * else any node on their home base. Null if it isn't in front of the camera.
