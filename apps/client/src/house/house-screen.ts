@@ -10,9 +10,16 @@ import {
 import type { Scene } from '@babylonjs/core/scene';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
+import { HOME_SHEET } from '../home/home-config.js';
+import { afterHandle } from '../home/home-peek.js';
 import { TapDetector } from '../map/tap-detector.js';
 import { el, messageOf } from '../ui/dom.js';
 import { houseApi, type HouseApi } from './house-api.js';
+import { createHouseBuilder } from './house-build.js';
+import { confirmPanel, growPanel, houseButton, sparkle } from './house-grow.js';
+import { builtLine, sparkleSpot } from './house-grow-view.js';
+import { roomBox } from './house-layout.js';
+import { createViewSync } from './house-view-sync.js';
 import {
   blend,
   clampZoom,
@@ -33,9 +40,9 @@ import {
   type HouseViewport,
 } from './house-camera.js';
 import { HouseScene, type HouseCastMember, type HouseSceneStats } from './house-scene.js';
-import { HOUSE_CAMERA } from './house-config.js';
+import { HOUSE_CAMERA, HOUSE_SHEET } from './house-config.js';
 import { createOpenGate } from './house-open-gate.js';
-import { HOUSE_TEXT, peekLine } from './house-view.js';
+import { GROW_TEXT, HOUSE_TEXT, keepTail, peekLine } from './house-view.js';
 import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
@@ -72,6 +79,13 @@ export interface HouseScreenOptions {
   canOpen?: (mapId: string) => boolean;
 }
 
+/**
+ * The bottom sheet (#381 plan §10.2): folded to the peek bar so the house
+ * fills the screen, opened to the room line and Grow the house, the Grow
+ * sheet itself, or the build's confirm.
+ */
+export type HouseSheet = 'peek' | 'open' | 'grow' | 'confirm';
+
 /** Read-only state for the dev hook (Playwright asserts on it, not pixels). */
 export interface HouseDebug {
   readonly mapId: string;
@@ -84,6 +98,17 @@ export interface HouseDebug {
   readonly scene: HouseSceneStats | null;
   /** Residents whose faces the camera sees, of those drawn. */
   readonly faces: { visible: number; total: number } | null;
+  readonly sheet: HouseSheet;
+  /** A build is in flight. */
+  readonly building: boolean;
+  /** Sparkle bursts played after builds (none under reduced motion). */
+  readonly sparkles: number;
+  /**
+   * Re-reads the house now, as opening the sheet does. Dev hook only: e2e
+   * starts a read while a build is in flight (the UI can't) to prove the
+   * build's reply wins.
+   */
+  readonly reread: () => void;
 }
 
 export interface HouseScreen {
@@ -139,6 +164,29 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Walk in or Step out under way: from where, to where, since when (ms). */
   let walk: { from: number; goal: number; start: number | null } | null = null;
   let frame = 0;
+  let sheet: HouseSheet = 'peek';
+  /** The sheet's status line: the build's ta-da, or a kind word on a problem. */
+  let note = '';
+  /** A ta-da reads green; a refusal or a problem reads calm. */
+  let noteKind: 'ok' | 'calm' = 'ok';
+  let building = false;
+  /** The Grow sheet's sticky header, a direct child of the sheet's scroll. */
+  let head: HTMLElement | null = null;
+  /** What gets focus after the next render (a `data-testid`), when the sheet moved. */
+  let focusNext: string | null = null;
+  /** A build just landed: sparkle once the new room has drawn its first frame. */
+  let celebrate = false;
+  /** Sparkle bursts played (the dev hook proves the ta-da happened). */
+  let sparkles = 0;
+  /** The newest house reply wins: a read a build overtook is dropped. */
+  const sync = createViewSync();
+  /** The bottom band the folded sheet covers, kept while it's open so the house doesn't jump. */
+  let foldedBand = 0;
+  /** The folded sheet's own band (B4: the yard may run on under Walk in, down to it). */
+  let foldedSheet = 0;
+  const builder = createHouseBuilder({
+    build: (id, toLevel, key) => api.build(id, toLevel, key),
+  });
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
@@ -164,12 +212,44 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   const moreLeft = el('div', { class: 'house-more house-more-left', 'aria-hidden': 'true' }, '‹');
   const moreRight = el('div', { class: 'house-more house-more-right', 'aria-hidden': 'true' }, '›');
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
+  // The sheet's handle, as home's (#412): a tap opens or folds it, a swipe
+  // goes the finger's way; a click with no press before it (keyboard,
+  // VoiceOver) toggles.
+  const handle = el('button', {
+    type: 'button',
+    class: 'house-peek-handle',
+    'data-testid': 'house-peek-handle',
+    'aria-label': HOUSE_TEXT.sheetHandle,
+    'aria-expanded': 'false',
+  });
+  // One live region that never moves: only its words change.
+  const noteLine = el('p', {
+    class: 'house-note',
+    role: 'status',
+    tabindex: '-1',
+    'data-testid': 'house-note',
+  });
+  const sheetBody = el('div', { class: 'house-sheet-body', 'data-testid': 'house-sheet-body' });
   const peek = el(
     'section',
     { class: 'house-peek', 'data-testid': 'house-peek', 'aria-label': HOUSE_TEXT.yourHouse },
-    el('span', { class: 'house-peek-handle', 'aria-hidden': 'true' }),
+    handle,
     peekText,
+    noteLine,
+    sheetBody,
   );
+  // Behind an open Grow sheet the scene and the HUD dim, and a tap there
+  // closes the sheet (the HUD's Back can't be mistaken for the sheet's way out).
+  const scrim = el('div', { class: 'house-scrim', 'data-testid': 'house-scrim' });
+  scrim.hidden = true;
+  // A press on the scrim never takes focus out of the sheet (it would land on the page).
+  scrim.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+  scrim.addEventListener('click', () => {
+    // While building, the confirm stays put ("Building…" can't be dismissed).
+    if (!building) setSheet('peek');
+  });
   const overlay = el(
     'div',
     { class: 'house', 'data-testid': 'house', role: 'dialog', 'aria-label': HOUSE_TEXT.yourHouse },
@@ -179,12 +259,52 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     floorButton,
     moreLeft,
     moreRight,
+    scrim,
     peek,
   );
   overlay.hidden = true;
   options.root.append(overlay);
   back.addEventListener('click', () => {
     close();
+  });
+  let pressY: number | null = null;
+  let releasedAt = -Infinity;
+  handle.addEventListener('pointerdown', (e) => {
+    pressY = e.clientY;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic or already-released pointer can't be captured; harmless.
+    }
+  });
+  handle.addEventListener('pointerup', (e) => {
+    if (pressY === null) return;
+    const dy = e.clientY - pressY;
+    pressY = null;
+    releasedAt = performance.now();
+    setSheet(afterHandle(sheet !== 'peek', dy, HOME_SHEET.swipePx) ? 'open' : 'peek');
+  });
+  handle.addEventListener('pointercancel', () => {
+    pressY = null;
+  });
+  handle.addEventListener('click', () => {
+    if (performance.now() - releasedAt < HOME_SHEET.clickAfterMs) return;
+    setSheet(sheet === 'peek' ? 'open' : 'peek');
+  });
+  // The click a touch fires after the handle's release lands wherever the
+  // finger was, which by then is the opened sheet's Grow button: swallow it.
+  peek.addEventListener(
+    'click',
+    (e) => {
+      if (e.target === handle || performance.now() - releasedAt >= HOUSE_SHEET.ghostClickMs) return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
+  );
+  // The folded bar's room line opens it too (a bigger target than the grip).
+  peekText.addEventListener('click', () => {
+    if (sheet === 'peek') setSheet('open');
   });
   // The button alternative to the pinch (style guide §3.3).
   walkButton.addEventListener('click', () => {
@@ -209,17 +329,22 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** Upstairs or Downstairs: only with more than one floor, and only in the dollhouse. */
   function renderFloor(): void {
-    const dollhouse = walk === null && zoom <= 0;
+    // Hidden while the sheet is open, as Walk in is (B3b: the HUD behind it is inert).
+    const dollhouse = walk === null && zoom <= 0 && sheet === 'peek';
     moreLeft.hidden = !dollhouse || pan <= panLimits.min + 0.05;
     moreRight.hidden = !dollhouse || pan >= panLimits.max - 0.05;
     const floors = scene3d?.floors ?? [];
-    floorButton.hidden = floors.length < 2 || walk !== null || zoom > 0;
+    floorButton.hidden = floors.length < 2 || !dollhouse;
     const up = floor === 0;
     if (floorButton.dataset['up'] === String(up)) return;
     floorButton.dataset['up'] = String(up);
     floorButton.replaceChildren(
-      el('span', { 'aria-hidden': 'true' }, up ? '⬆' : '⬇'),
-      ` ${up ? 'Upstairs' : 'Downstairs'}`,
+      el(
+        'span',
+        { 'aria-hidden': 'true' },
+        up ? HOUSE_TEXT.upstairsIcon : HOUSE_TEXT.downstairsIcon,
+      ),
+      ` ${up ? HOUSE_TEXT.upstairs : HOUSE_TEXT.downstairs}`,
     );
   }
 
@@ -245,8 +370,211 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!isOpen || !view) return;
     top.style.top = `${String(Math.max(0, options.coveredTop?.() ?? 0))}px`;
     pill.textContent = HOUSE_TEXT.pill(view.level);
-    peekText.textContent = peekLine(view, owner());
+    peekText.textContent = peekLine(view);
     renderWalk();
+    renderSheet();
+  }
+
+  /** Opens, folds or moves the sheet; opening it re-reads the house (plan §10: fetch on open). */
+  function setSheet(next: HouseSheet): void {
+    if (next === sheet || !isOpen) return;
+    const from = sheet;
+    sheet = next;
+    note = '';
+    focusNext = focusFor(from, next);
+    renderSheet();
+    if (from === 'peek') void refresh();
+  }
+
+  /**
+   * Where focus goes when the sheet moves (the HUD behind is inert): the ✕
+   * on the Grow sheet, Build it! on the confirm, then back to what opened it.
+   */
+  function focusFor(from: HouseSheet, to: HouseSheet): string | null {
+    switch (to) {
+      case 'grow':
+        return 'house-grow-close';
+      case 'confirm':
+        return 'house-grow-yes';
+      case 'open':
+        return from === 'peek' ? null : 'house-grow-open';
+      case 'peek':
+        return from === 'peek' ? null : 'house-peek-handle';
+    }
+  }
+
+  /** Focuses the sheet's element with this `data-testid`, if it's there and reachable. */
+  function focusIn(testid: string): boolean {
+    const target = overlay.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
+    if (!target?.isConnected || target.hidden || target.closest('[inert], [hidden]')) return false;
+    target.focus({ preventScroll: true });
+    return true;
+  }
+
+  /**
+   * Draws the sheet and keeps focus sensible: the target the move asked
+   * for, or the same control again when a re-render replaced it.
+   */
+  function renderSheet(): void {
+    const active = document.activeElement;
+    const kept =
+      active instanceof HTMLElement && peek.contains(active)
+        ? (active.dataset['testid'] ?? null)
+        : null;
+    drawSheet();
+    const want = focusNext;
+    focusNext = null;
+    if (want) {
+      if (!focusIn(want)) focusIn('house-peek-handle');
+      return;
+    }
+    const now = document.activeElement;
+    if (kept && !(now instanceof HTMLElement && peek.contains(now))) focusIn(kept);
+  }
+
+  function drawSheet(): void {
+    const current = view;
+    const open = sheet !== 'peek';
+    const growing = sheet === 'grow' || sheet === 'confirm';
+    peek.classList.toggle('house-peek-open', open);
+    peek.classList.toggle('house-peek-grow', growing);
+    handle.setAttribute('aria-expanded', String(open));
+    walkButton.hidden = open;
+    renderFloor();
+    peekText.hidden = growing;
+    // The Grow sheet has its own ✕; the grip comes back with the room line.
+    handle.hidden = growing;
+    scrim.hidden = !growing;
+    for (const behind of [touch, top, walkButton, floorButton]) {
+      behind.toggleAttribute('inert', growing);
+      if (growing) behind.setAttribute('aria-hidden', 'true');
+      else behind.removeAttribute('aria-hidden');
+    }
+    noteLine.textContent = keepTail(note);
+    noteLine.hidden = note === '';
+    noteLine.classList.toggle('house-note-calm', noteKind === 'calm');
+    head?.remove();
+    head = null;
+    const next = current?.next ?? null;
+    if (!current || sheet === 'peek') {
+      sheetBody.replaceChildren();
+      return;
+    }
+    if (sheet === 'open' || !next) {
+      sheetBody.replaceChildren(
+        next
+          ? houseButton(
+              `${GROW_TEXT.openIcon} ${GROW_TEXT.open}`,
+              () => {
+                setSheet('grow');
+              },
+              { class: 'house-grow-open', 'data-testid': 'house-grow-open' },
+            )
+          : el(
+              'p',
+              { class: 'house-all-grown', 'data-testid': 'house-all-grown' },
+              GROW_TEXT.allGrown,
+            ),
+      );
+      return;
+    }
+    const [header, ...rest] =
+      sheet === 'grow'
+        ? growPanel(current, next, {
+            onBuild: () => {
+              setSheet('confirm');
+            },
+            onClose: () => {
+              setSheet('peek');
+            },
+          })
+        : confirmPanel(current, next, building, {
+            onYes: () => void buildNext(),
+            onNo: () => {
+              setSheet('grow');
+            },
+          });
+    // The header goes above the note line, so the live region never moves.
+    if (header) {
+      head = header;
+      peek.insertBefore(header, noteLine);
+    }
+    sheetBody.replaceChildren(...rest);
+  }
+
+  /** Takes a fresh house: a new level rebuilds the scene with its new room. */
+  function applyView(fresh: HouseView): void {
+    const grew = view !== null && fresh.level !== view.level;
+    view = fresh;
+    render();
+    if (grew) options.showScene(build);
+  }
+
+  /** Re-reads the house (the sheet opened): requirements and the bag move all the time. */
+  async function refresh(): Promise<void> {
+    const id = mapId;
+    if (!id) return;
+    const newest = sync.begin();
+    const still = () => newest() && isOpen && mapId === id;
+    try {
+      const fresh = await api.get(id);
+      if (still()) applyView(fresh);
+    } catch (err) {
+      // A refusal the server just gave stays up; a failed re-read doesn't replace it.
+      if (!still() || (note !== '' && noteKind === 'calm')) return;
+      note = messageOf(err);
+      noteKind = 'calm';
+      renderSheet();
+    }
+  }
+
+  /** Build it! confirmed: one build, then the new house (or the server's kind word). */
+  async function buildNext(): Promise<void> {
+    const id = mapId;
+    const toLevel = view?.next?.level;
+    if (!id || toLevel === undefined || building) return;
+    const fromLevel = view?.level ?? 0;
+    building = true;
+    sync.drop(); // the build's reply is newer than any read in flight
+    renderSheet();
+    const outcome = await builder.build(id, toLevel, () => isOpen && mapId === id);
+    building = false;
+    if (!isOpen || mapId !== id) return;
+    if (outcome.kind === 'dropped') {
+      renderSheet();
+      return;
+    }
+    if (outcome.kind === 'failed') {
+      // Back to the list from the confirm; never reopen a sheet that's folded.
+      if (sheet === 'confirm') sheet = 'grow';
+      note = outcome.message;
+      noteKind = 'calm';
+      focusNext = 'house-note';
+      renderSheet();
+      // What the house needs may have moved (another device, midnight).
+      void refresh();
+      return;
+    }
+    // A read sent while building may land after this reply: drop it.
+    sync.drop();
+    if (sheet !== 'peek') sheet = 'open';
+    note = builtLine(outcome.view);
+    noteKind = 'ok';
+    focusNext = 'house-note';
+    // The scene rebuilds first (a heavy frame); the sparkle waits for it.
+    celebrate = outcome.view.level > fromLevel;
+    applyView(outcome.view);
+  }
+
+  function playSparkle(): void {
+    if (!celebrate || !isOpen) return;
+    celebrate = false;
+    if (reducedMotion.matches) return;
+    sparkles += 1;
+    // Over the new room as the camera sees it, above the folded sheet.
+    const room = view?.rooms.find((r) => r.level === view?.level) ?? null;
+    const pose = base ? (kid ? blend(base, kid, zoom) : base) : null;
+    sparkle(overlay, sparkleSpot(pose, room ? roomBox(room) : null, viewport()), false);
   }
 
   /** The canvas and the bands the HUD covers, for fitting the house between them. */
@@ -255,11 +583,20 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const width = box.width || window.innerWidth;
     const height = box.height || window.innerHeight;
     const topBand = top.getBoundingClientRect().bottom - box.top;
-    const bottomBand =
-      box.bottom -
-      Math.min(peek.getBoundingClientRect().top, walkButton.getBoundingClientRect().top);
-    const sheet = Math.max(0, box.bottom - peek.getBoundingClientRect().top);
-    return { width, height, top: Math.max(0, topBand), bottom: Math.max(0, bottomBand), sheet };
+    // The house fits above the folded sheet; an open sheet floats over it.
+    if (sheet === 'peek' || foldedBand === 0) {
+      const peekTop = peek.getBoundingClientRect().top;
+      foldedBand = box.bottom - Math.min(peekTop, walkButton.getBoundingClientRect().top);
+      // The folded sheet alone (B4: the yard may run on under Walk in, down to it).
+      foldedSheet = box.bottom - peekTop;
+    }
+    return {
+      width,
+      height,
+      top: Math.max(0, topBand),
+      bottom: Math.max(0, foldedBand),
+      sheet: Math.max(0, foldedSheet),
+    };
   }
 
   // ── Camera ────────────────────────────────────────────────────────────
@@ -429,7 +766,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     { passive: false },
   );
   window.addEventListener('keydown', (e) => {
-    if (isOpen && e.key === 'Escape') close();
+    if (!isOpen || e.key !== 'Escape') return;
+    // While building, the confirm stays put ("Building…" can't be dismissed).
+    if (building && sheet !== 'peek') return;
+    // Escape steps back one sheet at a time, then leaves the house.
+    if (sheet === 'confirm') setSheet('grow');
+    else if (sheet === 'grow') setSheet('open');
+    else if (sheet === 'open') setSheet('peek');
+    else close();
   });
 
   // ── Scene ─────────────────────────────────────────────────────────────
@@ -464,6 +808,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     // The glide waits for the first real frame (shaders compile first).
     scene.onAfterRenderObservable.addOnce(() => {
       draw();
+      playSparkle();
     });
     return built.content;
   };
@@ -503,6 +848,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     pan = 0;
     walk = null;
     builtTier = null;
+    sheet = 'peek';
+    note = '';
+    foldedBand = 0;
+    foldedSheet = 0;
+    celebrate = false;
     isOpen = true;
     options.onOpen(id);
     render();
@@ -519,6 +869,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     pointers.clear();
     pinch = null;
     scene3d = null;
+    sheet = 'peek';
+    note = '';
+    sync.drop();
+    celebrate = false;
     render();
   }
 
@@ -558,6 +912,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         zoom,
         scene: scene3d?.stats ?? null,
         faces: scene3d?.faceReport() ?? null,
+        sheet,
+        building,
+        sparkles,
+        reread: () => {
+          void refresh();
+        },
       };
     },
   };
