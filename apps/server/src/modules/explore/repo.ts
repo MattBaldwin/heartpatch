@@ -1,4 +1,10 @@
-import { CLEARED_TERRAIN, CLEARING_RULES, clearToolFor, hexDistance } from '@heartpatch/shared';
+import {
+  CLEARED_TERRAIN,
+  CLEARING_RULES,
+  clearToolFor,
+  heartSeedOf,
+  hexDistance,
+} from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -96,7 +102,9 @@ export function createExploreRepo(db: Executor) {
         .from(tiles)
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.id));
-      const seed = all.find((t) => t.ownerUserId === userId && t.homeSlot === 0);
+      // The Heart Seed: the middle of my seven home tiles (every one of them
+      // carries my home slot, so "slot 0" alone could pick a ring tile, #429).
+      const seed = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
       // Land a building can go on once its spot is gone: what a tool clears,
       // or cleared land (never a lake, Juniper's Gap or a trading post).
       const buildable = (terrain: string) =>

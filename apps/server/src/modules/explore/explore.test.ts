@@ -724,6 +724,10 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
     expect(made.statusCode, made.body).toBe(201);
     const at = made.json<{ q: number; r: number }>();
+    // It touches home, so the next homestead refresh keeps it joined (#429).
+    expect(
+      await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
+    ).toEqual([]);
     await give(mapId, kid, { timber: 30, stone: 20 });
     const built = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
       buildingId: 'crafting-factory',
@@ -739,11 +743,15 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     const mapId = await patch(server, kid);
     // A home deep in Old Forest: no free land around it that a tool clears.
     await db.execute(
-      `update tiles set terrain = 'old-forest' where map_id = '${mapId}' and owner_user_id is null`,
+      `update tiles set terrain = 'old-forest' where map_id = '${mapId}' and owner_user_id is null and terrain not in ('junipers-gap', 'trading-post')`,
     );
     const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
     expect(made.statusCode, made.body).toBe(201);
     const at = made.json<{ q: number; r: number }>();
+    // It touches home, so the next homestead refresh keeps it joined (#429).
+    expect(
+      await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
+    ).toEqual([]);
     const tile = await db.query.tiles.findFirst({
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.q, at.q), eq(t.r, at.r)),
     });
