@@ -623,8 +623,12 @@ onPanelFocus((focused) => {
   trays.setVisible(!focused);
 });
 const tileBuild = createTileBuild({
-  sources: [home.buildSource, fences.buildSource],
+  // Clear land (#242) sits with the buildings it makes room for.
+  sources: [home.buildSource, inventory.clearSource, fences.buildSource],
   area: () => maps,
+  onRecipeBook: () => {
+    recipeBook.open();
+  },
   reveal: (tile) => {
     // Above the sheet along the bottom, so the lit edges stay in view.
     stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);

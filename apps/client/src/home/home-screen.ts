@@ -29,6 +29,7 @@ import { recipeBookApi } from '../recipes/recipe-book-api.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { describeItems } from '../inventory/bag-view.js';
+import { CLEAR_TEXT, clearsFirst } from '../inventory/clear-model.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { listenForTaps } from '../map/tap-detector.js';
@@ -57,6 +58,7 @@ import {
   freeHomeSpots,
   fuelAllOffer,
   groundsTileOffer,
+  LAND_FIRE,
   landTileOffer,
   type GroundsTileOffer,
   BUILDING_DATA,
@@ -1470,7 +1472,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       lit ? HOME_TEXT.groundsLit : HOME_TEXT.groundsDark,
     );
-    if (offer.kind === 'build') {
+    if (offer.kind === 'build' || offer.kind === 'clear-first') {
       // Building them is the shared Build sheet's job (#371); this says how
       // the tile stands for the night.
       return [
@@ -1778,19 +1780,26 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const buildSource: BuildSource = {
     cards: (tile) => {
       if (!home || !user || tile.ownerUserId !== user.id || tile.homeSlot !== null) return [];
-      const card = (b: Building, effect: string): BuildCard => ({
+      const card = (b: Building, effect: string, blocked: string | null = null): BuildCard => ({
         id: b.id,
         icon: buildingIcon(b.id),
         name: buildingName(b.id),
         effect,
         cost: buildCost(b),
         area: 'spot',
-        blocked: null,
+        blocked,
         craft: null,
       });
       const fire = landTileOffer(tile, home);
       const grounds = groundsTileOffer(tile, home);
+      // A homestead's resource spot is cleared first (#242): its cards wait
+      // beside the Clear land card, so a kid sees what clearing makes room for.
+      const waits = clearsFirst(tile) && tile.buildings.length === 0 && !tile.clearing;
+      const waiting = (b: Building) =>
+        card(b, effectChips(b)[0] ?? b.description, CLEAR_TEXT.firstLine);
       return [
+        ...(fire.kind === 'node' && waits && LAND_FIRE ? [waiting(LAND_FIRE)] : []),
+        ...(grounds?.kind === 'clear-first' && waits ? [waiting(grounds.building)] : []),
         ...(fire.kind === 'build'
           ? [
               card(fire.building, effectChips(fire.building)[0] ?? fire.building.description),

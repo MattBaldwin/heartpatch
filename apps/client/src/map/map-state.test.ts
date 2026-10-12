@@ -81,6 +81,20 @@ describe('MapState', () => {
     expect(state.apply(event('resource.gathered', { q: 'here' }))).toBe('resync');
   });
 
+  it("follows a tile's clearing live: started, then a refetch once it's cleared (#242)", () => {
+    const view = testView(1);
+    const tile = view.tiles.find((t) => t.homeSlot === null)!;
+    const state = new MapState(view);
+    const readyAt = '2026-10-02T12:02:00.000Z';
+    const at = { userId: userId(1), q: tile.q, r: tile.r };
+    expect(state.apply(event('clearing.started', { ...at, readyAt }))).toBe('redraw');
+    expect(state.tileAt(hexKey(tile))?.clearing).toEqual({ readyAt });
+    expect(state.apply(event('clearing.started', { ...at, q: 99, readyAt }))).toBe('none');
+    expect(state.apply(event('clearing.started', at))).toBe('resync');
+    const cleared = { ...at, terrain: 'clearing', from: tile.terrain };
+    expect(state.apply(event('tile.cleared', cleared))).toBe('resync');
+  });
+
   it("dresses a member's Keeper live when their outfit changes (#43)", () => {
     const state = new MapState(testView(2));
     const changed = { userId: userId(2), wearing: ['witch-hat', 'ghost-cape'] };

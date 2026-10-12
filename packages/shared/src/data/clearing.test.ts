@@ -57,14 +57,14 @@ describe('CLEARING_RULES (#242)', () => {
     ]);
   });
 
-  it('keeps the tool recipes out of the game until the clear sheet ships (#295 PR 3)', () => {
+  it('puts the tool recipes in the game with the clear sheet (#295 PR 3)', () => {
     for (const tool of CLEARING_RULES.tools) {
       const recipe = GAME_DATA.recipes.find((r) => r.output.resource === tool.id);
-      expect(recipe && isAvailableRecipe(recipe)).toBe(false);
-      expect(recipeBookPages().some((p) => p.key === `recipe:${recipe?.id ?? ''}`)).toBe(false);
+      expect(recipe && isAvailableRecipe(recipe)).toBe(true);
+      expect(recipeBookPages().some((p) => p.key === `recipe:${recipe?.id ?? ''}`)).toBe(true);
     }
-    // Timber doesn't say it goes into an Axe yet.
+    // Timber says it goes into an Axe now.
     const into = itemEffects('timber').flatMap((e) => (e.kind === 'recipes' ? e.recipes : []));
-    expect(into).not.toContain('axe');
+    expect(into).toContain('axe');
   });
 });

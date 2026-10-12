@@ -175,7 +175,8 @@ export function landTileOffer(
       line: `🔥 Fires go in the middle of a tile. This one has ${middleThing(tile.nodeResource)} there, so a fire next door can reach it!`,
     };
   }
-  if (tile.buildings.some((b) => b.spot === 0)) return { kind: 'none' };
+  // One building a tile (#295).
+  if (tile.buildings.length > 0) return { kind: 'none' };
   const seasons = new Set(home.seasons);
   const lantern =
     GAME_DATA.buildings.find(
@@ -209,12 +210,15 @@ export type GroundsTileOffer =
       readonly spot: number;
     }
   /** A homestead cut off from home: nothing new goes up until it joins again. */
-  | { readonly kind: 'napping' };
+  | { readonly kind: 'napping' }
+  /** A resource spot stands here: it goes up once the land is cleared (#242). */
+  | { readonly kind: 'clear-first'; readonly building: Building };
 
 /**
  * Training Grounds on one of my tiles out on the land: the ones standing
- * there, or the offer to build one on a homestead with a free ring spot.
- * Null: not a homestead, or no room.
+ * there, or the offer to build one on an empty homestead (one building a
+ * tile, #295). A homestead with a resource spot is cleared first (#242).
+ * Null: not a homestead, or something else stands there.
  */
 export function groundsTileOffer(
   tile: {
@@ -233,6 +237,8 @@ export function groundsTileOffer(
   if (grounds) return { kind: 'grounds', grounds, napping };
   if (!GROUNDS || !tile.homestead) return null;
   if (napping) return { kind: 'napping' };
+  if (tile.buildings.length > 0) return null;
+  if (tile.nodeResource !== null) return { kind: 'clear-first', building: GROUNDS };
   const taken = new Set(tile.buildings.map((b) => b.spot));
   const features = { heartSeed: false, nodeResource: tile.nodeResource };
   const spot = freeSpots(RULES, features, taken, GROUNDS.slot)[0];

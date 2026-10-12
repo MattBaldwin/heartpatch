@@ -30,6 +30,8 @@ import {
   landedText,
   trainedText,
 } from './bag-view.js';
+import type { BuildSource } from '../building/tile-build.js';
+import { CLEAR_CARD_ID, CLEAR_TEXT, clearedText, clearOffer, toolName } from './clear-model.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -101,6 +103,8 @@ export interface InventoryScreen {
   setMap: (mapId: string | null) => Promise<void>;
   setUser: (user: PublicUser | null) => void;
   readonly tileActions: TileActions;
+  /** The Build sheet's Clear land card on my homesteads (#242). */
+  readonly clearSource: BuildSource;
   /** The bag on screen now (items, crafts, seasons), or null. */
   readonly bag: InventoryResponse | null;
   /** Settles the map on screen (banks what finished, owner decision 2026-10-06) and reads the bag again. */
@@ -439,7 +443,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     settlesSent += 1;
     const sent = settlesSent;
     try {
-      const { landed, trained, nextAt, ...fresh } = await api.settle(id);
+      const { landed, trained, cleared = [], nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
       // banked still pops up (the server put it in the bag).
@@ -458,6 +462,12 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
         showToast([landedText(popped), trainedText(trained)].filter((t) => t !== '').join(' '));
         if (landed.length > 0) options.onCollected?.();
+      }
+      if (cleared.length > 0) {
+        // Land finished clearing (#242): its drop is in the bag, and the land's ready.
+        landings += 1;
+        showToast(clearedText(cleared));
+        options.onCollected?.();
       }
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
@@ -496,6 +506,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       ...(serverNextAt ? [serverNextAt] : []),
       ...state.crafts.map((c) => c.readyAt),
       ...state.gathers.map((g) => g.readyAt),
+      ...(state.clears ?? []).map((c) => c.readyAt),
       ...(state.factory?.batches.flatMap((b) => (b.nextAt ? [b.nextAt] : [])) ?? []),
     ].map((iso) => clock.msUntil(iso));
     if (due.length === 0) return;
@@ -947,6 +958,21 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       case 'sleeping':
         container.replaceChildren(line(action.note));
         break;
+      case 'clearing': {
+        const left =
+          clock.msUntil(action.readyAt) > 0
+            ? countdown(
+                tileCountdowns,
+                'p',
+                'tile-action-note tile-action-waiting',
+                action.readyAt,
+                CLEAR_TEXT.clearing,
+              )
+            : line(CLEAR_TEXT.clearingDone);
+        left.dataset['testid'] = 'tile-clearing';
+        container.replaceChildren(left);
+        break;
+      }
       case 'busy':
         container.replaceChildren(
           clock.msUntil(action.readyAt) > 0
@@ -990,6 +1016,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     renderTile();
     renderChip();
     syncTicker();
+    for (const listener of clearListeners) listener();
   }
 
   /** One tick: rewrite countdown texts; redraw only when one has finished. */
@@ -1014,7 +1041,67 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }
   }
 
+  /** Who to tell when the bag changed (the Build sheet's Clear land card). */
+  const clearListeners: (() => void)[] = [];
+
+  /**
+   * Clearing land from the Build sheet (#242): one card on an empty homestead
+   * of mine that a tool can clear. The server checks the tool, the tile and
+   * what's on it (CLAUDE.md rule 1).
+   */
+  const clearSource: BuildSource = {
+    cards: (tile) => {
+      if (!state) return [];
+      const offer = clearOffer(tile, user?.id ?? null, state);
+      if (!offer) return [];
+      const drop = describeItems(offer.drop);
+      return [
+        {
+          id: CLEAR_CARD_ID,
+          icon: itemIcon(offer.tool),
+          name: CLEAR_TEXT.name,
+          effect: CLEAR_TEXT.effect(drop),
+          cost: { [offer.tool]: 1 },
+          area: 'spot',
+          blocked: offer.blocked,
+          craft: offer.needTool ? CLEAR_TEXT.needTool(toolName(offer.tool)) : null,
+        },
+      ];
+    },
+    build: async (_card, tile) => {
+      const id = mapId;
+      if (!id || !state) return null;
+      const at = generation;
+      try {
+        const res = await sendCommand(
+          sendDeps,
+          (key) => api.clear(id, { q: tile.q, r: tile.r }, key),
+          () => at === generation,
+        );
+        if (!res || !apply(at, { now: res.now, items: res.items })) return null;
+        state = { ...state, clears: [...(state.clears ?? []), res.clearing] };
+        scheduleSettle();
+        render();
+        return CLEAR_TEXT.started;
+      } catch (err) {
+        // Something changed (a tool used up, a clear already going): read it all again.
+        if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
+          void refresh();
+        }
+        throw err;
+      }
+    },
+    onChange: (listener) => {
+      clearListeners.push(listener);
+    },
+    // Another card built something that took from the bag: read it again.
+    invalidate: () => {
+      void refresh();
+    },
+  };
+
   return {
+    clearSource,
     setMap: async (next) => {
       if (next === mapId) return;
       if (mapId) presence.left(mapId);

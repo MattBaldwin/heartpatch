@@ -285,8 +285,6 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     const sealed = await queue(server, fresh, freshMap, 'brave-brew', 1);
     expect(sealed.statusCode).toBe(403);
     expect((await queue(server, kid, mapId, 'no-such-recipe', 1)).statusCode).toBe(404);
-    // A hidden recipe (#242's clearing tools until PR 3) isn't in the game yet.
-    expect((await queue(server, kid, mapId, 'axe', 1)).statusCode).toBe(404);
   });
 
   it('runs 2 batches at level 1, 3 after an upgrade, and upgrades keep them going', async () => {

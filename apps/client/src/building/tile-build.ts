@@ -37,6 +37,8 @@ export interface TileBuildOptions {
   readonly area: () => Pick<MapScreen, 'setBuildArea'>;
   /** Brings the tile into view above the sheet (the camera glides to it). */
   readonly reveal?: (tile: PublicTile) => void;
+  /** Opens the recipe book, for a card with something to make first (a clearing tool). */
+  readonly onRecipeBook?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -166,6 +168,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
         render();
       },
       onBuild: () => void build(),
+      ...(options.onRecipeBook ? { onRecipeBook: options.onRecipeBook } : {}),
       onCancel: () => {
         leave('');
         render();

@@ -71,12 +71,23 @@ export class MapState {
       // (owner decision 2026-10-06): neutral now, with guardians whose hints
       // come from the map view, so refetch it (once a night at most). Trading
       // posts came to this older patch (#269): new terrain and names, from the view.
+      // A tile finished clearing (#242): new terrain, its spot gone, from the view too.
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
       case 'tile.rewilded':
       case 'post.placed':
+      case 'tile.cleared':
         return 'resync';
+      case 'clearing.started': {
+        // "Clearing, ready at …" on the tile panel (#242).
+        const parsed = GAME_EVENTS['clearing.started'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const changed = this.patchTile(parsed.data, {
+          clearing: { readyAt: parsed.data.readyAt },
+        });
+        return changed ? 'redraw' : 'none';
+      }
       case 'gather.started':
       case 'resource.gathered': {
         // A gather started ("gathering here, ready at …") or was collected (#17).
