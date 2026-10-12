@@ -64,7 +64,9 @@ async function findOwnNode(page: Page): Promise<void> {
 }
 
 test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ browser }) => {
-  test.setTimeout(120_000); // a full map build; CI renders in software
+  // A full map build; CI renders in software. It took up to 108 s on iPad CI (and ran out of 120 s
+  // twice in 8 runs), so the limit is twice that (#429).
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('bag'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
