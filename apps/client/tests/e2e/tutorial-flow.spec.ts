@@ -360,6 +360,8 @@ async function playTutorial(page: Page): Promise<void> {
   await readAll();
   await tapOn(main); // Let's go!
   await openHome();
+  // The peek bar's Squishies opens the list (#412), then the Partner's name.
+  await tapOn(page.getByTestId('home-squishies'));
   await tapOn(page.getByTestId('home-friends').getByRole('button').first());
   const care = page.getByTestId('care');
   await expect(care).toBeVisible();

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { expectClear, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { homeFriends } from './home-sheet.js';
 
 const slowExpect = expect.configure({ timeout: 30_000 });
 
@@ -48,7 +49,7 @@ test('the Keeper chip never covers the care sheet, and the sheet scrolls as one 
   await (await trayButton(page, 'home-open')).tap();
   const sheet = page.getByTestId('care');
   const openSheet = async () => {
-    await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
+    await (await homeFriends(page)).locator('[data-care-squishy]').first().tap();
     await slowExpect(sheet).toBeVisible();
     await slowExpect(page.getByTestId('care-mood')).not.toBeEmpty();
   };

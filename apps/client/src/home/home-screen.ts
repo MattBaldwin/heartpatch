@@ -37,9 +37,10 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { rarityDot } from '../ui/rarity/rarity.js';
-import { WANDER } from './home-config.js';
+import { HOME_SHEET, WANDER } from './home-config.js';
 import { mapSafeTiles } from './home-layout.js';
 import { homeApi, type HomeApi } from './home-api.js';
+import { afterHandle } from './home-peek.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import {
   atHome,
@@ -107,6 +108,11 @@ export interface HomeScreenOptions {
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
+   * The peek bar's "🐾 Squishies" (#412). Without it, the button opens the
+   * sheet to the squishy list; the Squishies roster (#375) can take it over.
+   */
+  onSquishies?: (mapId: string) => void;
+  /**
    * "📖 Recipe book" on a build row short of something you make (the
    * Jack-o'-Lantern): leaves the home and opens the recipe book.
    */
@@ -153,6 +159,8 @@ export interface HomeDebug {
   readonly scene: HomeSceneStats | null;
   /** Wander hops started since the home opened. */
   readonly hops: number;
+  /** The main view's sheet (#412): the short peek bar, or opened into the full lists. */
+  readonly sheet: 'peek' | 'open';
   /** The Factory card's batches going (#294), null while it's not loaded. */
   readonly factoryBatches: number | null;
   /** What the Factory card's panel shows, null when it isn't on screen. */
@@ -206,6 +214,11 @@ export const HOME_TEXT = {
   yours: 'Your buildings',
   friends: 'Your squishies',
   jobs: '🧺 Jobs & team',
+  /** The peek bar's button to the squishies (#412; 🐾 as the Squishies roster, #375). */
+  squishies: '🐾 Squishies',
+  /** The sheet handle, for VoiceOver (#412). */
+  showMore: 'Show more',
+  showLess: 'Show less',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
   confirm: (name: string, back: string) =>
@@ -256,6 +269,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let home: HomeResponse | null = null;
   let isOpen = false;
   let mode: Mode = { kind: 'idle' };
+  /** The main view's sheet is opened into the full lists (#412); it starts as the peek bar. */
+  let sheetOpen = false;
   let working = false;
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
@@ -325,9 +340,44 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
   const body = el('div', { class: 'home-body' });
   const homeSheet = createBuildSheet();
+  // The sheet's handle (#412), at the very top of the main view's sheet: a
+  // tap opens or folds it, a swipe goes the finger's way. A finger or mouse
+  // decides on release (held by pointer capture, so a drag that ends off the
+  // handle still counts) and the click after it is swallowed; a click with no
+  // press before it (keyboard, VoiceOver) toggles.
+  const handle = el('button', {
+    type: 'button',
+    class: 'home-handle',
+    'data-testid': 'home-handle',
+  });
+  let pressY: number | null = null;
+  let releasedAt = -Infinity;
+  handle.addEventListener('pointerdown', (e) => {
+    pressY = e.clientY;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic or already-released pointer can't be captured; harmless.
+    }
+  });
+  handle.addEventListener('pointerup', (e) => {
+    if (pressY === null) return;
+    const dy = e.clientY - pressY;
+    pressY = null;
+    releasedAt = performance.now();
+    setSheet(afterHandle(sheetOpen, dy, HOME_SHEET.swipePx));
+  });
+  handle.addEventListener('pointercancel', () => {
+    pressY = null;
+  });
+  handle.addEventListener('click', () => {
+    if (performance.now() - releasedAt < HOME_SHEET.clickAfterMs) return;
+    setSheet(!sheetOpen);
+  });
   const sheet = el(
     'section',
     { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
+    handle,
     note,
     body,
   );
@@ -339,6 +389,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const say = (text: string) => {
     note.textContent = text;
   };
+
+  function setSheet(open: boolean): void {
+    if (open === sheetOpen) return;
+    sheetOpen = open;
+    render();
+    body.scrollTop = 0;
+    sheet.scrollTop = 0;
+  }
 
   const button = (
     label: string,
@@ -667,12 +725,16 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       return;
     }
     const current = home;
+    const peek = mode.kind === 'idle' && !sheetOpen;
+    handle.hidden = mode.kind !== 'idle';
     status.textContent = HOME_SAFE_LINE;
     renderFuelAll(current);
     const row = (...children: Node[]) => el('div', { class: 'home-row' }, ...children);
 
     switch (mode.kind) {
       case 'idle': {
+        handle.setAttribute('aria-expanded', String(sheetOpen));
+        handle.setAttribute('aria-label', sheetOpen ? HOME_TEXT.showLess : HOME_TEXT.showMore);
         const chips = atHome(current).buildings.map((b) =>
           button(
             `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}${factoryChip(b)}`,
@@ -684,6 +746,53 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           ),
         );
         const species = speciesMap(current);
+        const jobs =
+          current.squishies.length > 0 &&
+          options.onJobs &&
+          mapId &&
+          options.showJobs?.(mapId) !== false
+            ? button(
+                HOME_TEXT.jobs,
+                () => {
+                  if (mapId) options.onJobs?.(mapId);
+                },
+                { 'data-testid': 'home-jobs' },
+                peek,
+              )
+            : null;
+        const actions = row(
+          button(
+            HOME_TEXT.build,
+            () => {
+              setMode({ kind: 'build', buildingId: null, spot: null });
+            },
+            { 'data-testid': 'home-build' },
+          ),
+          button(HOME_TEXT.back, close, { 'data-testid': 'home-back' }, true),
+        );
+        if (peek) {
+          // The peek bar (#412): the squishies stay in view above it.
+          const squishies =
+            current.squishies.length > 0 && (options.onSquishies || options.onCare)
+              ? button(
+                  HOME_TEXT.squishies,
+                  () => {
+                    if (options.onSquishies && mapId) options.onSquishies(mapId);
+                    else setSheet(true);
+                  },
+                  { 'data-testid': 'home-squishies' },
+                  true,
+                )
+              : null;
+          const shortcuts = [squishies, jobs].filter((b) => b !== null);
+          body.replaceChildren(
+            ...(shortcuts.length > 0
+              ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
+              : []),
+            actions,
+          );
+          break;
+        }
         const friends = current.squishies.map((s) =>
           button(
             `💗 ${squishyName(s, species)}`,
@@ -705,29 +814,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
               ]
             : []),
-          ...(friends.length > 0 && options.onJobs && mapId && options.showJobs?.(mapId) !== false
-            ? [
-                row(
-                  button(
-                    HOME_TEXT.jobs,
-                    () => {
-                      if (mapId) options.onJobs?.(mapId);
-                    },
-                    { 'data-testid': 'home-jobs' },
-                  ),
-                ),
-              ]
-            : []),
-          row(
-            button(
-              HOME_TEXT.build,
-              () => {
-                setMode({ kind: 'build', buildingId: null, spot: null });
-              },
-              { 'data-testid': 'home-build' },
-            ),
-            button(HOME_TEXT.back, close, { 'data-testid': 'home-back' }, true),
-          ),
+          ...(jobs ? [row(jobs)] : []),
+          actions,
         );
         break;
       }
@@ -1222,6 +1310,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
     isOpen = true;
     mode = { kind: 'idle' };
+    sheetOpen = false;
     say('');
     options.onOpen(id);
     options.showScene(build);
@@ -1828,6 +1917,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         squishies: home?.squishies.length ?? 0,
         scene: scene3d?.stats ?? null,
         hops: scene3d?.hops ?? 0,
+        sheet: sheetOpen ? ('open' as const) : ('peek' as const),
         factoryBatches: factoryBag?.factory ? factoryBag.factory.batches.length : null,
         factoryPanel: factoryPanel.element.isConnected ? factoryPanel.mode : null,
       };
