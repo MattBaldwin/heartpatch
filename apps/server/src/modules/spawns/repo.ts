@@ -57,6 +57,8 @@ export interface SpawnsRepo {
   /** The player befriended one. Keeps the first time (and marks it seen if somehow it wasn't). */
   markCaught: (mapId: string, userId: string, speciesId: string, at: Date) => Promise<void>;
   listSeen: (mapId: string, userId: string) => Promise<SeenRow[]>;
+  /** The players on this map who have met this species (#391's patch line names it to them). */
+  seenBy: (mapId: string, speciesId: string) => Promise<string[]>;
   /** When the player first met this species on this map, or null if never. */
   firstSeenAt: (mapId: string, userId: string, speciesId: string) => Promise<Date | null>;
   /**
@@ -134,6 +136,14 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
         .from(speciesSeen)
         .where(and(eq(speciesSeen.mapId, mapId), eq(speciesSeen.userId, userId)))
         .orderBy(asc(speciesSeen.firstSeenAt), asc(speciesSeen.speciesId)),
+
+    seenBy: async (mapId, speciesId) => {
+      const rows = await db
+        .select({ userId: speciesSeen.userId })
+        .from(speciesSeen)
+        .where(and(eq(speciesSeen.mapId, mapId), eq(speciesSeen.speciesId, speciesId)));
+      return rows.map((row) => row.userId);
+    },
 
     firstSeenAt: async (mapId, userId, speciesId) => {
       const [row] = await db

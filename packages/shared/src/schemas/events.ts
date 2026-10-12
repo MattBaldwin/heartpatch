@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ClothingDropSourceSchema } from './data/clothing.js';
-import { ContentIdSchema } from './data/common.js';
+import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
@@ -279,6 +279,28 @@ export const GAME_EVENTS = {
       level: z.number().int().min(1),
     }),
     public: z.object({ userId: z.uuid(), squishyId: z.uuid() }),
+  },
+  /**
+   * The patch line (#391): a player befriended a wild squishy whose tier tells
+   * the whole patch (`RARE_FIND_TIERS[…].patchLine`, Legendary only in Phase
+   * 1). Members who have met that kind themselves (`metBy`, internal) hear its
+   * name; everyone else hears only its tier, so a kind someone hasn't met
+   * keeps its surprise (CLAUDE.md rule 6). Secret kinds never send one. The
+   * player who befriended it hears nothing (their card already cheered).
+   */
+  'squishy.celebrated': {
+    internal: z.strictObject({
+      battleId: z.uuid(),
+      userId: z.uuid(),
+      speciesId: ContentIdSchema,
+      rarity: RaritySchema,
+      metBy: z.array(z.uuid()),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      rarity: RaritySchema,
+      speciesId: ContentIdSchema.optional(),
+    }),
   },
   /**
    * A player started gathering a node they own (#17): members see "gathering
