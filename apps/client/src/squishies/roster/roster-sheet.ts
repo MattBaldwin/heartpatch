@@ -131,6 +131,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     { type: 'button', class: 'tile-panel-close', 'aria-label': ROSTER_TEXT.close },
     '×',
   );
+  // Focus moves here when the roster opens (#433), so VoiceOver starts at the top.
+  const title = el('h2', { id: 'roster-title', tabindex: '-1' }, ROSTER_TEXT.title);
+  /** What had focus before the roster opened; it gets it back on close. */
+  let returnFocus: HTMLElement | null = null;
   const count = el('p', { class: 'roster-count', 'data-testid': 'roster-count' });
   const note = el('p', { class: 'roster-note', role: 'status', 'data-testid': 'roster-note' });
   // Sort and Show are one compact row of two pickers; tapping one opens its
@@ -147,13 +151,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       'data-testid': 'roster',
     },
     // The title and × stay pinned while the chips and the list scroll under.
-    el(
-      'div',
-      { class: 'tile-panel-head roster-head-bar' },
-      el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
-      count,
-      close,
-    ),
+    el('div', { class: 'tile-panel-head roster-head-bar' }, title, count, close),
     el('div', { class: 'roster-controls' }, pickers, menuBox),
     note,
     list,
@@ -478,6 +476,22 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       { class: 'roster-status-row' },
       ...(row.rarity ? [rarityChip(row.rarity)] : []),
       status,
+      ...(row.houseRoomId !== null
+        ? [
+            el(
+              'span',
+              {
+                class: 'roster-tag roster-resident',
+                role: 'img',
+                'aria-label': ROSTER_TEXT.residentLabel,
+                title: ROSTER_TEXT.residentLabel,
+                'data-testid': 'roster-resident',
+                'data-room': row.houseRoomId,
+              },
+              ROSTER_TEXT.resident,
+            ),
+          ]
+        : []),
       ...(drift !== null
         ? [
             el(
@@ -705,9 +719,18 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     picking = null;
     menu = null;
     say('');
+    returnFocus = null;
   }
 
-  close.addEventListener('click', closeSheet);
+  // The player shut it: focus goes back to the button that opened it, if it's
+  // still on screen. A hand-off (care, close-up, a battle) leaves focus to the
+  // next screen.
+  close.addEventListener('click', () => {
+    const back = returnFocus;
+    closeSheet();
+    if (back?.isConnected && !back.closest('[inert], [hidden]'))
+      back.focus({ preventScroll: true });
+  });
 
   return {
     open: async (id) => {
@@ -716,11 +739,20 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       mapId = id;
       expanded = null;
       picking = null;
+      if (sheet.hidden) {
+        const active = document.activeElement;
+        returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
+      }
       sheet.hidden = false;
       say('');
       remerge();
       render();
       await load(id, mine);
+      // Focus starts at the title once the list is there (#433), unless the
+      // player has already moved into the roster.
+      if (mine === ticket && !sheet.contains(document.activeElement)) {
+        title.focus({ preventScroll: true });
+      }
     },
     refresh: async () => {
       if (mapId && !sheet.hidden) await load(mapId, ticket);

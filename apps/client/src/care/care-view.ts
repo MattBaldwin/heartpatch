@@ -78,6 +78,8 @@ export const CARE_TEXT = {
     'wrong-job': 'Not loving this job, so happiness drifts\u00a0😕',
     stopped: "Work's on pause, so happiness drifts. Check their\u00a0job!",
   } satisfies Record<MoodDrift, string>,
+  // A resident of the Keeper's house (#381; the owner's words): the perk, under the drift line.
+  livesInHouse: 'Lives in your house: happiness fades slower\u00a0🏠',
   // The mood title while happiness drifts down (#376): the same level, a little droopy.
   droopy: {
     glowing: 'Glowing, but drooping a little…',
@@ -187,6 +189,8 @@ export interface CareSheetModel {
   readonly drift: string | null;
   /** Holding steady or drifting down, for the hearts bar's look (#376); null: unknown. */
   readonly driftMood: 'steady' | 'drifting' | null;
+  /** "Lives in your house…" for a resident of the Keeper's house (#381), else null. */
+  readonly house: string | null;
   /** Hearts meter, 0–1. */
   readonly hearts: number;
   readonly level: string;
@@ -291,6 +295,8 @@ export function careSheet(
     drift: squishy.moodDrift === null ? null : CARE_TEXT.drift[squishy.moodDrift],
     driftMood:
       squishy.moodDrift === null ? null : squishy.moodDrift === 'steady' ? 'steady' : 'drifting',
+    // Set only while the house is switched on for this player (residents exist only then).
+    house: squishy.houseRoomId === null ? null : CARE_TEXT.livesInHouse,
     hearts: squishy.contentment / CARE_RULES.maxContentment,
     level:
       growsAt !== undefined && growsAt > squishy.level

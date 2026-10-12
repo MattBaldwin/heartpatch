@@ -101,6 +101,13 @@ export interface HouseRepo {
   /** The Keeper's residents now (room set), whatever their state. A plain read. */
   residents: (mapId: string, userId: string) => Promise<ResidentRow[]>;
   /**
+   * The Keeper's squishies that moved out of their house and haven't moved
+   * back in (room cleared, `moved_out_at` set), with when they left: the
+   * caller keeps the ones still in the cooldown (shared `moveBackInAt`).
+   * Only squishies the Keeper still owns on this patch. A plain read.
+   */
+  movedOut: (mapId: string, userId: string) => Promise<{ squishyId: string; movedOutAt: Date }[]>;
+  /**
    * Squishies the player owns on this patch that have a residency row (in
    * or moved out), unlocked: the caller locks them (step 10) before
    * `deleteResidents`. Keyed by the squishy's owner, not the row's
@@ -266,6 +273,29 @@ export function createHouseRepo(db: Executor): HouseRepo {
                   },
                 ]
               : [],
+          ),
+        ),
+
+    movedOut: (mapId, userId) =>
+      db
+        .select({ squishyId: houseResidents.squishyId, movedOutAt: houseResidents.movedOutAt })
+        .from(houseResidents)
+        .innerJoin(squishies, eq(squishies.id, houseResidents.squishyId))
+        .where(
+          and(
+            eq(houseResidents.mapId, mapId),
+            eq(houseResidents.userId, userId),
+            isNull(houseResidents.roomId),
+            isNotNull(houseResidents.movedOutAt),
+            // Only squishies the Keeper still owns on this patch.
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+          ),
+        )
+        .orderBy(houseResidents.movedOutAt, houseResidents.squishyId)
+        .then((rows) =>
+          rows.flatMap((r) =>
+            r.movedOutAt !== null ? [{ squishyId: r.squishyId, movedOutAt: r.movedOutAt }] : [],
           ),
         ),
 
