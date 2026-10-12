@@ -3,5 +3,5 @@ title: Squishies have a kid stage now
 area: squishies
 ---
 
-Emberbun, Puddlepuff, Thistlepip, Gourdon and Candlekit now grow into a kid first: Kindlebun, Rippletad, Bristlepip, Pumpkip and Wickitten. Their teen forms come a little later.
-**Try it:** open your Squishies list and look for "Stage 2 of 3".
+Five squishies now grow into a kid before they grow up: Kindlebun, Rippletad, Bristlepip, Pumpkip and Wickitten.
+**Try it:** open your Squishies list. An Emberbun now says "Stage 1 of 3".

@@ -796,7 +796,7 @@ export const SPECIES: Species[] = [
       glow: 'accent',
       size: 1.15,
       head: { body: 'orb', size: 1.0, forward: 0.1, up: 0.62 },
-      stance: 0.33,
+      stance: 0.3,
       pose: 'stand',
       attackPart: 'arms',
     },
@@ -1835,11 +1835,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
   },
-  // #443 kid (stage 2): a skipping pumpkin with its first vine arms.
+  // #443 kid (stage 2): a skipping pumpkin with little arms of its own, before
+  // Glowgourd's leaf arms or Squashboo's wings.
   {
     id: 'pumpkip',
     name: 'Pumpkip',
-    description: 'Skips everywhere now. Its new vine arms are great for waving hello.',
+    description: 'Skips everywhere now. Its new little arms are great for waving hello.',
     element: 'leaf',
     feeling: 'silly',
     rarity: 'common',
@@ -1852,14 +1853,14 @@ export const SPECIES: Species[] = [
     ], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'pumpkin',
-      palette: ['#ff9433', '#ffe0b8', '#4a9440', '#5aa83a'],
+      palette: ['#ff9433', '#ffe0b8', '#4a9440', '#ffd23f'],
       parts: [
         'dot-eyes',
         'open-mouth',
         'blush-cheeks',
         'stem',
         'leaf-ears',
-        'leaf-arms',
+        'stubby-arms',
         'biped-legs',
         'vine-tail',
       ],
