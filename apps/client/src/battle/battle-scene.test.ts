@@ -110,10 +110,10 @@ describe('BattleScene', () => {
       battle.sendOut('a', 'puddlepuff', 'mine-1');
       battle.sendOut('b', 'emberbun', 'wild-1');
       battle.update(5000);
-      const mesh = scene.getMeshByName('battle-fighter-shadows') as Mesh;
-      const shown = mesh
-        .thinInstanceGetWorldMatrices()
-        .slice(0, mesh.thinInstanceCount)
+      const mesh = scene.getMeshByName('battle-fighter-shadows') as Mesh | null;
+      expect(mesh, tier).not.toBeNull();
+      const shown = (mesh?.thinInstanceGetWorldMatrices() ?? [])
+        .slice(0, mesh?.thinInstanceCount ?? 0)
         .filter((m) => m.m[0] !== 0 || m.m[2] !== 0);
       expect(shown.length, tier).toBe(4);
       // A mirrored instance turns the ground quad's face away, and back-face

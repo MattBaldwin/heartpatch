@@ -1,5 +1,5 @@
 ---
-title: Squishies stand on the grass in battles
+title: Squishies stand on the ground in battles
 area: battles
 ---
 
