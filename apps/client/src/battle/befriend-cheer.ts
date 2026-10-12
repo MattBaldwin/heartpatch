@@ -77,6 +77,28 @@ export function heartSpots(
   }));
 }
 
+/** Where the hearts may land: between the pills and the card, clear of both. */
+export function heartBand(
+  pillsBottom: number,
+  cardTop: number,
+  width: number,
+): { top: number; bottom: number; width: number } {
+  return {
+    top: pillsBottom + BEFRIEND_CHEER.heartClear,
+    bottom: Math.max(pillsBottom, cardTop - BEFRIEND_CHEER.heartClear * 3),
+    width,
+  };
+}
+
+/**
+ * The card's top edge on the page once it has come to rest: its layout box
+ * (`offsetTop`), which its entrance animation's transform doesn't move.
+ */
+function restingTop(card: HTMLElement): number {
+  const parent = card.offsetParent;
+  return (parent ? parent.getBoundingClientRect().top : 0) + card.offsetTop;
+}
+
 /**
  * Dresses the result card for `cheer` and drops hearts into `layer`; returns
  * the undo (the card is reused for every battle).
@@ -99,11 +121,17 @@ export function dressResult(
     card.prepend(sticker);
     added.push(sticker);
   }
+  if (cheer.rare) classes.push('battle-result-rare', rarityClass(cheer.rare.rarity));
+  // Dressed first: the hearts are placed against where the card comes to rest.
+  card.classList.add(...classes);
   if (cheer.rare) {
-    classes.push('battle-result-rare', rarityClass(cheer.rare.rarity));
+    // The rarity chip's look (ui/rarity), with the tier's word ("Special").
     const chip = el(
       'span',
-      { class: 'battle-cheer-chip', 'data-testid': 'battle-cheer-chip' },
+      {
+        class: `rarity-chip ${rarityClass(cheer.rare.rarity)}`,
+        'data-testid': 'battle-cheer-chip',
+      },
       cheer.rare.label,
     );
     card.querySelector('.auth-title')?.after(chip);
@@ -112,12 +140,7 @@ export function dressResult(
     const count = options.reducedMotion
       ? BEFRIEND_CHEER.calmHearts
       : revealStep(BEFRIEND_CHEER.hearts, cheer.rare.scale);
-    const cardTop = card.getBoundingClientRect().top;
-    const band = {
-      top: options.pillsBottom + BEFRIEND_CHEER.heartClear,
-      bottom: cardTop - BEFRIEND_CHEER.heartClear * 3,
-      width: options.width,
-    };
+    const band = heartBand(options.pillsBottom, restingTop(card), options.width);
     const seed = cheer.rare.rarity.length * 31 + Math.round(options.width);
     for (const h of heartSpots(count, band, seed)) {
       const heart = el('span', { class: 'battle-heart', 'aria-hidden': 'true' }, h.glyph);
@@ -133,7 +156,6 @@ export function dressResult(
       options.reducedMotion ? ' battle-result-calm' : ''
     }`;
   }
-  card.classList.add(...classes);
   return () => {
     for (const node of added) node.remove();
     card.classList.remove(...classes);

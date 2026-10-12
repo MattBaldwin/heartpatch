@@ -624,6 +624,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       forget();
     },
     hide: () => {
+      undress?.();
+      undress = null;
       hud.hidden = true;
       result.hidden = true;
     },

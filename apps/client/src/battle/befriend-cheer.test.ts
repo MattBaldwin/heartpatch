@@ -2,7 +2,7 @@ import { RARE_FIND_TIERS, type Rarity } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import cheerCss from './befriend-cheer.css?raw';
 import { BEFRIEND_CHEER, revealStep } from './battle-config.js';
-import { cheerFor, heartSpots } from './befriend-cheer.js';
+import { cheerFor, heartBand, heartSpots } from './befriend-cheer.js';
 
 type CheerBattle = Parameters<typeof cheerFor>[0];
 
@@ -71,6 +71,18 @@ describe('the hearts (#391)', () => {
     const counts = [1, 2, 3].map((scale) => revealStep(BEFRIEND_CHEER.hearts, scale));
     expect([...counts].sort((x, y) => x - y)).toEqual(counts);
     expect(BEFRIEND_CHEER.calmHearts).toBeLessThan(counts[0]!);
+  });
+
+  it('land in the open space above the low card, clear of the pills', () => {
+    // A phone: pills end at 140, the rare card rests low at 560.
+    expect(heartBand(140, 560, 390)).toEqual({
+      top: 140 + BEFRIEND_CHEER.heartClear,
+      bottom: 560 - BEFRIEND_CHEER.heartClear * 3,
+      width: 390,
+    });
+    // Never an upside-down band on a squashed screen.
+    const tight = heartBand(300, 290, 390);
+    expect(tight.bottom).toBeGreaterThanOrEqual(300);
   });
 
   it('come to rest across the screen, between the pills and the card', () => {
