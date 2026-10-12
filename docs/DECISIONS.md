@@ -1590,7 +1590,7 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls. Each it
 - **Evolution Phase 1 is done (#443).** Coordinator call: #443 is closed as Phase 1 done. Phase 2 continues in #495 (grown-ups, wave-1 branch teens, wild kids).
 
 **The Keeper's home (#381)**
-- **The look of house H2 is approved.** Owner: the daily gift box, the gift card, the "+3 Timber 🎁" toast, the "Welcome home!" line, and the day/dusk/night look. #492 merged behind `HP_HOUSE`. This approval clears the look for turning the flag on.
+- **The look of house H2 is approved.** Owner: the daily gift box, the gift card, the "+3 Timber 🎁" toast, the "Welcome home!" line, and the day/dusk/night look. #492 merged behind `HP_HOUSE`. This approval clears the look for turning the flag on; the testers walk-through gate (2026-10-12 morning) still applies.
 - **What comes next.** Coordinator call: after C2b comes B5 polish (aim: Oct 27), then H3 without tricks. `tricks[]` is a shared house-data schema change, so it is held for a separate decision.
 
 **Squishy portraits (#465)**
