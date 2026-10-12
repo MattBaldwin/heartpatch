@@ -7,16 +7,18 @@
 # The live database is never touched: the dump is restored into a scratch
 # Postgres container on its own internal Docker network, which the live stack
 # isn't on and which has no way out. The check runs from an image built from
-# the branch under test, on that network only, with the scratch database set
-# read-only. Everything is removed afterwards, whether the check passed or not.
+# the branch under test, on that network only, as a role that can only read.
+# Errors that could quote data (restore, migrations, the check's own logs)
+# stay on the server and are deleted. Everything is removed afterwards,
+# whether the check passed or not.
 #
 # Usage (as the deploy user, on the server):
 #   ops-check.sh preflight             is there a fresh dump and room for a copy?
 #   ops-check.sh run <check> <image>   restore, migrate, check, print the results
 #   ops-check.sh cleanup               remove anything a stopped run left behind
 # <image> is heartpatch-ops-check:<tag>, loaded beforehand with `docker load`.
-# `run` prints a `backup: <dump> (<age>)` line, then the check's allowed lines,
-# on stdout; progress goes to stderr.
+# `run` prints a `backup: <dump> (<age>)` line, then the check's one totals
+# line, on stdout; progress goes to stderr.
 #
 # Environment (for testing; the defaults are right on the server):
 #   HP_DIR              stack folder holding compose.yaml and .env (default /opt/heartpatch)
@@ -97,14 +99,8 @@ check_filter() {
   case $1 in
     tile-uses-check)
       grep -E -x \
-        -e 'tile-use dry run: [0-9]+ players scanned, [0-9]+ would change: [0-9]+ moved, [0-9]+ packed, [0-9]+ gatherers stopped\.' || true
+        -e 'tile-use dry run: [0-9]{1,7} players scanned, [0-9]{1,7} would change: [0-9]{1,7} moved, [0-9]{1,7} packed, [0-9]{1,7} gatherers stopped\.' || true
       ;;
-  esac
-}
-# The line a check must print when it finishes.
-check_summary() {
-  case $1 in
-    tile-uses-check) echo '^tile-use dry run: ' ;;
   esac
 }
 
@@ -118,14 +114,23 @@ preflight() {
   log "newest backup: $(basename "$dump") (${age} hours old)"
 }
 
+# Every container started from the branch's image runs like this: as the
+# image's unprivileged `node` user, nothing writable but /tmp, no capabilities,
+# capped. Callers add the network and the entrypoint.
+branch_container_flags=(
+  --rm --user 1000:1000 --read-only --tmpfs /tmp --cap-drop ALL
+  --security-opt no-new-privileges:true --pids-limit 256 --memory 384m --cpus 1
+)
+
 run() {
-  local check=$1 image=$2 command script dump pg_image password url work status
+  local check=$1 image=$2 command script dump pg_image password reader_password url work status
   command=$(check_command "$check")
   read -r -a command <<<"$command"
   script=${command[0]}
   [[ $image =~ ^$NAME:[A-Za-z0-9._-]{1,128}$ ]] || fail "image must be $NAME:<tag>, got '$image'"
   docker image inspect "$image" >/dev/null 2>&1 || fail "$image is not loaded on this server"
-  docker run --rm --network none "$image" test -f "$script" ||
+  docker run "${branch_container_flags[@]}" --network none --entrypoint test "$image" -f "$script" \
+    >/dev/null 2>&1 ||
     fail "this branch has no $script; is it the branch that adds $check?"
 
   take_lock
@@ -154,18 +159,19 @@ run() {
   # Made up for this run and never shown: the scratch database is reachable
   # only on its own network anyway.
   password=$(openssl rand -hex 24)
+  reader_password=$(openssl rand -hex 24)
   url="postgres://heartpatch:$password@$DB_CONTAINER:5432/$SCRATCH_DB"
 
   log "starting a scratch Postgres ($pg_image) on its own internal network"
   docker network create --internal "$NETWORK" >/dev/null
   # Capped so the live game keeps its CPU and memory. No durability: it's thrown away.
   docker run -d --rm --name "$DB_CONTAINER" --network "$NETWORK" \
-    --memory 512m --cpus 1 --shm-size 128m --security-opt no-new-privileges:true \
+    --memory 384m --cpus 1 --pids-limit 256 --shm-size 128m --security-opt no-new-privileges:true \
     -e POSTGRES_USER=heartpatch -e POSTGRES_DB="$SCRATCH_DB" -e POSTGRES_PASSWORD="$password" \
     "$pg_image" -c fsync=off -c full_page_writes=off -c synchronous_commit=off >/dev/null
   local ready=false
   for _ in $(seq 1 60); do
-    if docker exec "$DB_CONTAINER" pg_isready -q -U heartpatch -d "$SCRATCH_DB" -h 127.0.0.1; then
+    if timeout 10 docker exec "$DB_CONTAINER" pg_isready -q -U heartpatch -d "$SCRATCH_DB" -h 127.0.0.1; then
       ready=true
       break
     fi
@@ -174,38 +180,54 @@ run() {
   [[ $ready == true ]] || fail "the scratch Postgres did not start"
 
   log "restoring $(basename "$dump") into the scratch database"
-  docker exec -i "$DB_CONTAINER" pg_restore -U heartpatch -d "$SCRATCH_DB" \
-    --no-owner --no-acl --exit-on-error --single-transaction <"$dump" ||
-    fail "the restore failed"
+  # Its errors can quote row values, so they stay on the server too.
+  timeout 900 docker exec -i "$DB_CONTAINER" pg_restore -U heartpatch -d "$SCRATCH_DB" \
+    --no-owner --no-acl --exit-on-error --single-transaction <"$dump" 2>"$work/restore.log" ||
+    fail "the restore failed (its log stays on the server and is deleted)"
 
   # The check runs from its branch's image: bring the copy up to that branch's schema.
   # (`timeout` stops a stuck one; the EXIT trap then removes its container.)
   check_container() {
-    timeout 600 docker run --rm --name "$RUN_CONTAINER" --network "$NETWORK" \
-      --memory 512m --cpus 1 --read-only --tmpfs /tmp --cap-drop ALL \
-      --security-opt no-new-privileges:true \
-      -e NODE_ENV=production -e LOG_LEVEL=warn -e DATABASE_URL="$url" \
+    local db_url=$1
+    shift
+    timeout 600 docker run "${branch_container_flags[@]}" --name "$RUN_CONTAINER" --network "$NETWORK" \
+      --entrypoint node -e NODE_ENV=production -e LOG_LEVEL=warn -e DATABASE_URL="$db_url" \
       "$image" "$@"
   }
   log "applying the branch's migrations to the copy"
-  check_container node dist/db/cli.js migrate >"$work/migrate.log" 2>&1 ||
+  check_container "$url" dist/db/cli.js migrate >"$work/migrate.log" 2>&1 ||
     fail "the branch's migrations failed on the copy (its log stays on the server and is deleted)"
 
-  # From here on the copy refuses every write, so the check can't change it.
+  # The check connects as a role that can only read, on a copy that refuses
+  # writes by default, so it can't change anything even by mistake.
+  docker exec -i "$DB_CONTAINER" psql -U heartpatch -d "$SCRATCH_DB" -v ON_ERROR_STOP=1 -q \
+    -v reader_password="$reader_password" >/dev/null 2>"$work/role.log" <<'SQL' ||
+CREATE ROLE ops_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT PASSWORD :'reader_password';
+ALTER ROLE ops_reader SET default_transaction_read_only = on;
+SELECT format('GRANT CONNECT ON DATABASE %I TO ops_reader', current_database()) \gexec
+SELECT format('GRANT USAGE ON SCHEMA %I TO ops_reader', nspname)
+  FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' \gexec
+SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO ops_reader', nspname)
+  FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' \gexec
+SQL
+    fail "couldn't make the read-only role on the copy"
   docker exec "$DB_CONTAINER" psql -U heartpatch -d postgres -v ON_ERROR_STOP=1 -qc \
-    "ALTER DATABASE $SCRATCH_DB SET default_transaction_read_only = on" >/dev/null
+    "ALTER DATABASE $SCRATCH_DB SET default_transaction_read_only = on" >/dev/null 2>&1 ||
+    fail "couldn't make the copy read-only"
 
-  log "running $check"
+  log "running $check as a read-only role"
   status=0
-  check_container node "${command[@]}" >"$work/out" 2>"$work/err" || status=$?
+  check_container "postgres://ops_reader:$reader_password@$DB_CONTAINER:5432/$SCRATCH_DB" \
+    "${command[@]}" >"$work/out" 2>"$work/err" || status=$?
 
-  local kept dropped
+  local kept count
   kept=$(check_filter "$check" <"$work/out")
-  dropped=$(($(wc -l <"$work/out") - $(printf '%s' "$kept" | grep -c '^' || true)))
-  [[ -z $kept ]] || printf '%s\n' "$kept"
-  log "$check exited $status; $dropped other output lines (logs) stayed on the server and were deleted"
+  count=$(printf '%s' "$kept" | grep -c '^' || true)
+  log "$check exited $status; $(($(wc -l <"$work/out") - count)) other output lines (logs) stayed on the server and were deleted"
   ((status == 0)) || fail "$check failed"
-  grep -q -E "$(check_summary "$check")" <<<"$kept" || fail "$check printed no summary line"
+  # Exactly one totals line, or nothing at all is passed on.
+  ((count == 1)) || fail "$check printed $count totals lines, not one; nothing is passed on"
+  printf '%s\n' "$kept"
   log "done; the scratch copy is being removed"
 }
 

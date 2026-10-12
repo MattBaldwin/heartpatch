@@ -330,18 +330,18 @@ It asks you to type `restore`, then: takes a **safety backup** of the current da
 
 ### Dry runs on live data
 
-Some changes come with a read-only check (a dry run) that says what they'd do to the real data before they merge, e.g. `tile-uses:check` for one building per tile (#295). The **Live-data dry run** workflow runs one against a throwaway copy of last night's backup and posts the counts on the PR. Nothing on the server needs doing by hand.
+Some changes come with a read-only check (a dry run) that says what they'd do to the real data before they merge, e.g. `tile-uses:check` for one building per tile (#295). The **Live-data dry run** workflow runs one against a throwaway copy of last night's backup and posts its totals line on the PR. Nothing on the server needs doing by hand.
 
 1. GitHub → **Actions** → **Live-data dry run** → **Run workflow**.
 2. Leave **Use workflow from** on `main`. Fill in:
-   - **Branch or commit**: the PR's branch (e.g. `claude/295-one-building-per-tile`);
+   - **Branch or commit**: the PR's branch (e.g. `claude/295-one-building-per-tile`), or a full 40-character commit SHA on a branch of this repository. Fork and PR refs are refused. Only run it on a branch someone has reviewed: its code runs on the server against a copy of live data.
    - **Which check**: pick it from the list;
    - **PR number**: where to post the results (e.g. `436`), or blank for the run's summary page only.
-3. **Run workflow**. It takes about 5–10 minutes; the results appear as a comment on the PR.
+3. **Run workflow**. It takes about 5–10 minutes; the result appears as a comment on the PR. Off-peak is kindest: the copy and the check use up to about 0.75 GB of the server's memory while they run.
 
-What it does: builds the server image from that branch on GitHub (nothing is pushed to the registry), copies it to the server, restores the newest `backups/heartpatch-*.dump` into a scratch Postgres container on its own private Docker network (the live database isn't on it and can't be reached from it), applies the branch's migrations to the copy, makes the copy read-only, and runs the check there with `infra/scripts/ops-check.sh`. Only the check's totals line (counts, no ids) leaves the server: checks run in their totals-only mode, and anything else they print (logs) is deleted with the copy. The scratch container, its network and the image are removed at the end, even if the run fails or is cancelled.
+What it does: builds the server image from that branch on GitHub (nothing is pushed to the registry) and copies it to the server. It restores the newest `backups/heartpatch-*.dump` into a scratch Postgres container on its own internal Docker network: the live database isn't on it and nothing on it can reach anything else. It applies the branch's migrations to the copy, then runs the check with `infra/scripts/ops-check.sh` as a database role that can only read. Only the check's totals line (counts, no ids) leaves the server, because checks run in their totals-only mode and anything else they print, including restore and migration errors, is deleted with the copy. The repository is public, so that line is all anyone sees. The scratch container, its network and the image are removed at the end, even if the run fails or is cancelled.
 
-While it runs it holds the same lock as deploys and restores (a few minutes), so a merge that lands meanwhile fails its deploy with "another deploy or a restore is running": re-run that deploy afterwards (Actions → the failed run → **Re-run jobs**). It refuses to start if the newest backup is more than 48 hours old or the disk is short of room.
+While it runs it holds the same lock as deploys and restores, usually for a few minutes (at most about 35 if the restore, migrations and check all hit their time limits). A merge that lands meanwhile waits for its deploy to start; if it waits too long, the deploy fails with "another deploy or a restore is running" and changes nothing: re-run it (Actions → the failed run → **Re-run jobs**). The dry run refuses to start if the newest backup is more than 48 hours old or the disk is short of room.
 
 If it fails, the run's log says which step. To look closer, run the check by hand on the server against a copy you restore yourself.
 

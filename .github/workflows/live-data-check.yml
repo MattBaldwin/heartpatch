@@ -48,22 +48,50 @@ jobs:
     timeout-minutes: 30
     outputs:
       sha: ${{ steps.ref.outputs.sha }}
+      ref: ${{ steps.ref.outputs.ref }}
     steps:
-      - name: Check the PR number
+      - name: Check the inputs
         env:
           PR: ${{ inputs.pr }}
+          CHECK: ${{ inputs.check }}
+          REF: ${{ inputs.ref }}
         run: |
           if [ -n "$PR" ] && ! [[ $PR =~ ^[1-9][0-9]{0,6}$ ]]; then
             echo "::error::pr must be a PR number, like 436"
             exit 1
           fi
+          if ! [[ $CHECK =~ ^[a-z-]{1,64}$ ]]; then
+            echo "::error::check must be one of the listed checks"
+            exit 1
+          fi
+          # A branch name or a full commit SHA; never refs/…, a fork or a PR ref.
+          if ! [[ $REF =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]] || [[ $REF == *..* || $REF == refs/* ]]; then
+            echo "::error::ref must be a branch of this repository or a full commit SHA"
+            exit 1
+          fi
+      # Every branch of this repository (and nothing else: no PR or fork refs),
+      # to check `ref` against.
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.ref }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Resolve the commit
         id: ref
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if git ls-remote --exit-code --heads origin "refs/heads/$REF" >/dev/null; then
+            sha=$(git rev-parse --verify "refs/remotes/origin/$REF^{commit}")
+          elif [[ $REF =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$REF^{commit}" 2>/dev/null &&
+            [ -n "$(git branch -r --contains "$REF")" ]; then
+            sha=$REF
+          else
+            echo "::error::ref must be a branch of this repository, or a full commit SHA on one"
+            exit 1
+          fi
+          git checkout -q --detach "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - name: Build the server image from ${{ steps.ref.outputs.sha }}
         uses: docker/build-push-action@v6
@@ -152,8 +180,17 @@ jobs:
           # shellcheck disable=SC2029
           ssh lightsail "$REMOTE/ops-check.sh preflight"
 
+      # Only the one tag this run built may land on the server's Docker.
       - name: Load the image on the server
-        run: ssh lightsail 'docker load -q' < "$RUNNER_TEMP/image.tar.gz"
+        run: |
+          gunzip -c "$RUNNER_TEMP/image.tar.gz" | tar -xO manifest.json > "$RUNNER_TEMP/manifest.json"
+          tags=$(jq -r '[.[].RepoTags[]] | join(" ")' "$RUNNER_TEMP/manifest.json")
+          if [ "$tags" != "$IMAGE" ]; then
+            echo "::error::the image archive must hold exactly $IMAGE"
+            exit 1
+          fi
+          loaded=$(ssh lightsail 'docker load -q' < "$RUNNER_TEMP/image.tar.gz")
+          [ "$loaded" = "Loaded image: $IMAGE" ]
 
       - name: Run ${{ inputs.check }} on a scratch copy
         env:
@@ -162,10 +199,12 @@ jobs:
         timeout-minutes: 20
         run: |
           # The check (a choice input) and image name are checked again on the server.
+          [[ $CHECK =~ ^[a-z-]{1,64}$ ]]
           # shellcheck disable=SC2029
           ssh lightsail "$REMOTE/ops-check.sh run '$CHECK' '$IMAGE'" > "$RUNNER_TEMP/results.txt"
 
       - name: Remove everything from the server
+        id: cleanup
         if: always() && steps.upload.outputs.dir != ''
         env:
           REMOTE: ${{ steps.upload.outputs.dir }}
@@ -183,22 +222,37 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ inputs.pr }}
           CHECK: ${{ inputs.check }}
-          REF: ${{ inputs.ref }}
+          REF: ${{ needs.build.outputs.ref }}
           SHA: ${{ needs.build.outputs.sha }}
           JOB_STATUS: ${{ job.status }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           results="$RUNNER_TEMP/results.txt"
           touch "$results"
-          backup=$(sed -n 's/^backup: //p' "$results")
+          # Only lines of these exact shapes are ever posted (the repo is public).
+          # A new check adds its totals line here and in ops-check.sh.
+          case $CHECK in
+            tile-uses-check)
+              totals='tile-use dry run: [0-9]{1,7} players scanned, [0-9]{1,7} would change: [0-9]{1,7} moved, [0-9]{1,7} packed, [0-9]{1,7} gatherers stopped\.'
+              ;;
+            *) totals='$^' ;;
+          esac
+          backup=$(grep -E -x -m 1 'backup: heartpatch-[0-9]{8}T[0-9]{6}Z\.dump \([0-9]{1,5} hours old\)' "$results" | sed 's/^backup: //' || true)
+          lines=$(grep -E -x "$totals" "$results" || true)
+          if [ "$CLEANUP" = success ]; then
+            removed="and the copy has been removed."
+          else
+            removed="but the cleanup step didn't finish: run this workflow again or see docs/DEPLOY.md, \"Dry runs on live data\"."
+          fi
           {
             echo "### Live-data dry run: \`$CHECK\`"
             echo
-            echo "Built from \`$REF\` at $SHA, run on a scratch copy of ${backup:-the newest nightly backup}. The live database was not touched, and the copy has been removed."
+            echo "Built from \`$REF\` at $SHA, run on a scratch copy of ${backup:-the newest nightly backup}. The live database was not touched, $removed"
             echo
-            if [ "$JOB_STATUS" = success ]; then
+            if [ "$JOB_STATUS" = success ] && [ -n "$lines" ]; then
               echo '```text'
-              grep -v '^backup: ' "$results" || true
+              printf '%s\n' "$lines"
               echo '```'
             else
               echo "**The dry run failed** (no results). See [the run]($RUN_URL) for which step."
@@ -209,4 +263,27 @@ jobs:
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$PR" ]; then
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          fi
+
+  # The build failed (a bad ref, a broken branch): say so on the PR too.
+  build-failed:
+    needs: build
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post the failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          CHECK: ${{ inputs.check }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [[ $CHECK =~ ^[a-z-]{1,64}$ ]] || CHECK=check
+          body="**Live-data dry run of \`$CHECK\` failed before reaching the server** (a ref that isn't a branch of this repository, or the image didn't build). Nothing ran on live data. See [the run]($RUN_URL)."
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          if [[ $PR =~ ^[1-9][0-9]{0,6}$ ]]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
           fi
