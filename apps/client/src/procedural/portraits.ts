@@ -113,8 +113,17 @@ const DRAW_TIMEOUT_MS = 8_000; // TUNE
  * always ends, so the next one can start: Babylon can't take two at once).
  */
 const SNAPSHOT_TIMEOUT_MS = 20_000; // TUNE
-/** The next draw starts after the last one ends, or after this at most (one that never ends). */
-const QUEUE_CAP_MS = SNAPSHOT_TIMEOUT_MS + 10_000; // TUNE
+/**
+ * How long a draw waits for its scene to be ready before the snapshot: Babylon's
+ * own wait never ends if it never is (nor once the scene is disposed).
+ */
+const READY_TIMEOUT_MS = 8_000; // TUNE
+/**
+ * The next draw starts after the last one ends, or after this at most. Longer
+ * than a draw can take (its ready wait, then its snapshot), so two snapshots
+ * never overlap.
+ */
+const QUEUE_CAP_MS = READY_TIMEOUT_MS + SNAPSHOT_TIMEOUT_MS + 5_000; // TUNE
 
 /**
  * A snapshot of what `camera` sees, `size` px square, that always settles.
@@ -276,7 +285,15 @@ export function createPortraits(options: PortraitOptions): Portraits {
       // The field uploads its instances before a scene render; a snapshot
       // renders straight into a texture, so upload them now.
       field.flush();
-      await scene.whenReadyAsync();
+      // Not ready in time: no picture this time, and no snapshot taken.
+      if (
+        !(await withTimeout(
+          scene.whenReadyAsync().then(() => true),
+          READY_TIMEOUT_MS,
+        ))
+      ) {
+        return null;
+      }
       const css = window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX;
       // The game's own pixel-ratio cap (CLAUDE.md rule 8): at 2× and up to
       // the crop's scale it stays crisp on a 3× iPhone.
