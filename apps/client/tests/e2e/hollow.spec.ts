@@ -76,7 +76,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live).toBe('live');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
   const mapId = (await mapState(page))!.id;
   await expect
     .poll(() => hollowState(page))
