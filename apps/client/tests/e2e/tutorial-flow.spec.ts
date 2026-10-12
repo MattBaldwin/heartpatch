@@ -555,6 +555,13 @@ async function playTutorial(page: Page): Promise<void> {
 // to back on one, they made this file 12-16 min of a CI group (#296).
 test.describe.configure({ mode: 'parallel' });
 
+// Every test opens its own player (newPlayer); a page left in the Glade keeps
+// drawing, which starves the next test's pages when rendering is in software
+// (#397). Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
+
 test('The First Patch, every step tapped for real with a reload at each: Sprout never gets in the way', async ({
   browser,
 }) => {
