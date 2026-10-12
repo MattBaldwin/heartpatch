@@ -1,4 +1,5 @@
 import type {
+  Gather,
   InventoryResponse,
   ItemCounts,
   Landed,
@@ -28,7 +29,15 @@ import {
   gatherChip,
   itemName,
 } from './bag-view.js';
-import { AWAY_TEXT, summaryCount, summaryEntries, summarySentence } from './away-summary.js';
+import {
+  AWAY_TEXT,
+  onScreen,
+  summaryCount,
+  summaryEntries,
+  summarySentence,
+  type ScreenPoint,
+  type SummaryEntry,
+} from './away-summary.js';
 import { createAwaySummary, type AwaySummaryDebug } from './away-summary-view.js';
 import type { BuildSource } from '../building/tile-build.js';
 import { CLEAR_CARD_ID, CLEAR_TEXT, clearCards, clearedNote } from './clear-model.js';
@@ -72,8 +81,29 @@ export interface InventoryScreenOptions {
   lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
+  /**
+   * Where things land on screen (#419): a tile's box, and my home base's,
+   * while the map shows (null otherwise). What landed flies from there.
+   */
+  locate?: {
+    readonly tile: (h: { q: number; r: number }) => ScreenBox | null;
+    readonly home: () => ScreenBox | null;
+    /** The tile a building stands on (the Factory, on a homestead since #461). */
+    readonly building?: (id: string) => { q: number; r: number } | null;
+  };
   /** What the "what landed" banner keeps below at the top of the screen (#419). */
   clearOf?: () => Iterable<Element>;
+}
+
+/** Something that landed from a tile: a finished gather, or land that finished clearing. */
+type LandedFrom = Pick<Gather, 'q' | 'r' | 'items'>;
+
+/** A box on screen in CSS pixels (the map's `ScreenRect`). */
+interface ScreenBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -96,6 +126,8 @@ export interface InventoryDebug {
   readonly bagNew: number;
   /** Settles so far that put something in the bag. */
   readonly landings: number;
+  /** Chips of the last landing that flew from their own tile, not home base (#419). */
+  readonly fromTiles: number;
   /** Crafting Factory batches going (#294), null with no Factory. */
   readonly batches: number | null;
   /** The Factory sheet is open, and what its panel shows. */
@@ -428,6 +460,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
 
   const openBag = () => {
+    // Chips still flying land at once rather than cross the Bag.
+    summary.landNow();
     sheet.hidden = false;
     bagNew = 0;
     showBagNew();
@@ -465,6 +499,25 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** Bumped by every settle sent, so an older reply can't put an older bag back. */
   let settlesSent = 0;
 
+  /** The Factory's batches that landed, from the tile it stands on, if the map knows it. */
+  function factoryFrom(
+    landed: readonly Landed[],
+    factory: InventoryResponse['factory'],
+  ): LandedFrom[] {
+    const at = factory ? options.locate?.building?.(factory.buildingId) : null;
+    if (!at) return [];
+    return landed.filter((l) => l.kind === 'factory').map((l) => ({ ...at, items: l.items }));
+  }
+
+  /** The gathers on the go, without banking anything (none if it can't tell). */
+  async function gathersGoing(id: string): Promise<readonly Gather[]> {
+    try {
+      return (await api.get(id)).gathers;
+    } catch {
+      return [];
+    }
+  }
+
   async function refresh(): Promise<void> {
     const id = mapId;
     const at = generation;
@@ -472,6 +525,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     settlesSent += 1;
     const sent = settlesSent;
     try {
+      // The gathers going before, so what finished can fly from its tile (#419).
+      // A map just opened has no bag yet: one read first (it banks nothing),
+      // so the first settle, the one that says "Welcome back!", knows them too.
+      const before = state?.gathers ?? (await gathersGoing(id));
+      if (at !== generation) return;
       const { landed, trained, cleared = [], nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
@@ -489,12 +547,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const card = showsWelcomeBack(landed, away);
         if (card) showWelcome(landed);
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
+        const finished = before.filter((g) => !fresh.gathers.some((f) => f.id === g.id));
         // The card's things are in the Bag too: they count as news. Land
-        // that finished clearing (#242) drops its things into the same banner.
+        // that finished clearing (#242) drops its things into the same banner,
+        // flying from the cleared tile; the Factory's from its homestead (#461).
         showLanded(
           [...popped, ...cleared],
           trained,
           away >= WELCOME_BACK_MS,
+          [...finished, ...cleared, ...factoryFrom(popped, fresh.factory)],
           [...landed, ...cleared],
           clearedNote(cleared),
         );
@@ -563,11 +624,35 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     welcomeOk.focus();
   }
 
+  /**
+   * Where each chip flies from (#419): the tile of a gather that gave it, else
+   * my home base (crafts, the Factory, training), else nowhere (it just appears).
+   */
+  /** Chips of the last landing that flew from their own tile (the dev hook, for the e2e). */
+  let fromTiles = 0;
+  const flyFrom =
+    (locate: NonNullable<InventoryScreenOptions['locate']>, sources: readonly LandedFrom[]) =>
+    (entry: SummaryEntry): ScreenPoint | null => {
+      const source =
+        entry.kind === 'item' ? sources.find((g) => (g.items[entry.id] ?? 0) > 0) : undefined;
+      // A tile panned off screen gives way to home base, else nothing flies.
+      const centre = (box: ScreenBox | null): ScreenPoint | null => {
+        if (!box) return null;
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        return onScreen(at, innerWidth, innerHeight) ? at : null;
+      };
+      const tile = centre(source ? locate.tile(source) : null);
+      if (tile) fromTiles += 1;
+      return tile ?? centre(locate.home());
+    };
+
   /** Pops up what just landed (#419), and counts it as news until the Bag opens. */
   const showLanded = (
     landed: readonly Pick<Landed, 'items'>[],
     trained: readonly { name: string; xp: number }[] = [],
     away = false,
+    /** Tiles things came from (finished gathers, cleared land), so they fly from there. */
+    sources: readonly LandedFrom[] = [],
     /** Everything that went in the Bag, if more than shows (the Factory's own card). */
     inBag: readonly Pick<Landed, 'items'>[] = landed,
     /** A line said first, for screen readers ("Land cleared, ready to build!", #242). */
@@ -576,7 +661,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     const entries = summaryEntries(landed, trained);
     if (entries.length > 0) {
       const sentence = [note, summarySentence(landed, trained)].filter((t) => t !== '').join(' ');
-      summary.show({ entries, sentence, away });
+      fromTiles = 0;
+      summary.show({
+        entries,
+        sentence,
+        away,
+        // Over the map only: with the Bag or the Factory's card open, it all just appears.
+        ...(sheet.hidden && welcome.hidden && options.locate
+          ? { from: flyFrom(options.locate, sources) }
+          : {}),
+      });
     }
     const count = summaryCount(summaryEntries(inBag, []));
     if (sheet.hidden && count > 0) {
@@ -661,7 +755,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       if (banked) {
         // The server banked it (the reply has no bag): say so, and read the bag again.
         landings += 1;
-        showLanded([banked]);
+        showLanded([banked], [], false, [banked]);
         options.onCollected?.();
         void refresh();
       }
@@ -1208,6 +1302,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         summary: summary.debug,
         bagNew,
         landings,
+        fromTiles,
         batches: state.factory ? state.factory.batches.length : null,
         factorySheet: factorySheet.hidden ? null : factoryPanel.mode,
         welcome: !welcome.hidden,
