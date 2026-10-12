@@ -689,7 +689,6 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   }
 
   function closeSheet(): void {
-    const wasOpen = !sheet.hidden;
     sheet.classList.remove('roster-covered');
     askedAt = 0;
     ticket += 1;
@@ -704,14 +703,18 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     picking = null;
     menu = null;
     say('');
-    // Back to the button that opened it, if it's still on screen.
-    const back = returnFocus;
     returnFocus = null;
-    if (wasOpen && back?.isConnected && back.offsetParent !== null)
-      back.focus({ preventScroll: true });
   }
 
-  close.addEventListener('click', closeSheet);
+  // The player shut it: focus goes back to the button that opened it, if it's
+  // still on screen. A hand-off (care, close-up, a battle) leaves focus to the
+  // next screen.
+  close.addEventListener('click', () => {
+    const back = returnFocus;
+    closeSheet();
+    if (back?.isConnected && !back.closest('[inert], [hidden]'))
+      back.focus({ preventScroll: true });
+  });
 
   return {
     open: async (id) => {

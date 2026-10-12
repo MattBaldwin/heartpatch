@@ -132,6 +132,16 @@ test('the Squishies roster: one tap from the top bar, care in two', async ({ bro
   await openRoster(page);
   await expect.poll(async () => (await rosterState(page))?.rows, slow).toBe(2);
   await closeRoster(page);
+  // By keyboard, × hands focus back to the 🐾 that opened it (#433).
+  const homeButton = page.locator('[data-testid="squishies-open"][data-where="home"]');
+  await homeButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(roster).toBeVisible();
+  await expect(page.locator('#roster-title')).toBeFocused(slow);
+  await roster.getByRole('button', { name: 'Close', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(roster).toBeHidden();
+  await expect(homeButton).toBeFocused();
 
   expect(errors).toEqual([]);
   await page.context().close();

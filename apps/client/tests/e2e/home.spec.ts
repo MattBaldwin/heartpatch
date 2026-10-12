@@ -141,6 +141,7 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   // names the area it opens and folds.
   const handle = sheet.getByTestId('home-handle');
   await expect(handle).toHaveAttribute('aria-controls', 'home-body');
+  await expect(page.locator('#home-body')).toHaveCount(1);
   await expect(handle).toContainText('More');
   // The handle opens the full sheet and folds it back.
   await sheet.getByTestId('home-handle').tap();

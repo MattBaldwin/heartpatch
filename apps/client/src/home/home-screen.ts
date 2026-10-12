@@ -213,9 +213,9 @@ export const HOME_TEXT = {
   /** The sheet handle, for VoiceOver (#412). */
   showMore: 'Show more',
   /** The handle's own words (#433): it opens to your buildings, or folds back. */
+  showLess: 'Show less',
   more: 'More',
   less: 'Less',
-  showLess: 'Show less',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
   confirm: (name: string, back: string) =>
