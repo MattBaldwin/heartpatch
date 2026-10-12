@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HomeSquishySchema } from './buildings.js';
 import { CareSquishySchema } from './care.js';
 import { GAME_EVENTS, parseGameEventPayload } from './events.js';
-import { MoveResidentRequestSchema } from './house.js';
+import { HouseViewSchema, MoveResidentRequestSchema } from './house.js';
 import { JobSquishySchema } from './jobs.js';
 
 const squishyId = '0190a000-0000-7000-8000-000000000001';
@@ -36,6 +36,66 @@ describe('resident.moved (#381)', () => {
     expect(() =>
       parseGameEventPayload('resident.moved', { userId, squishyId, roomId: null }),
     ).toThrow();
+  });
+});
+
+describe('house.gift (#381 PR H)', () => {
+  it('keeps the gift id and the giver internal', () => {
+    const payload = {
+      userId,
+      giftId: mapId,
+      day: '2026-10-12',
+      giverSquishyId: squishyId,
+      itemId: 'timber',
+      count: 3,
+    };
+    expect(parseGameEventPayload('house.gift', payload)).toEqual(payload);
+    expect(parseGameEventPayload('house.gift', { ...payload, giverSquishyId: null })).toEqual({
+      ...payload,
+      giverSquishyId: null,
+    });
+    expect(GAME_EVENTS['house.gift'].public.parse(payload)).toEqual({
+      userId,
+      day: '2026-10-12',
+      itemId: 'timber',
+      count: 3,
+    });
+    expect(() => parseGameEventPayload('house.gift', { ...payload, count: 0 })).toThrow();
+  });
+});
+
+describe('HouseView.gift', () => {
+  const view = {
+    level: 1,
+    levelName: 'The Snug',
+    exterior: 'hut',
+    final: false,
+    rooms: [],
+    next: null,
+    items: {},
+    now: '2026-10-12T12:00:00.000Z',
+  };
+
+  it('parses a reply from an older server, with no gift, as null', () => {
+    expect(HouseViewSchema.parse(view).gift).toBeNull();
+  });
+
+  it("parses today's gift", () => {
+    const gift = {
+      day: '2026-10-12',
+      giverSquishyId: squishyId,
+      itemId: 'timber',
+      count: 3,
+      note: 'Mochi dreamed about pancakes 🥞',
+      claimed: false,
+    };
+    expect(HouseViewSchema.parse({ ...view, gift }).gift).toEqual(gift);
+    expect(
+      HouseViewSchema.parse({ ...view, gift: { ...gift, giverSquishyId: null } }).gift,
+    ).toMatchObject({ giverSquishyId: null });
+    expect(HouseViewSchema.safeParse({ ...view, gift: { ...gift, day: 'today' } }).success).toBe(
+      false,
+    );
   });
 });
 

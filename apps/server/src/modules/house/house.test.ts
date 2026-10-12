@@ -488,7 +488,14 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     await join(server, owner, kid, mapId);
     await readyForPlayroom(mapId, kid);
     expect((await buildHouse(server, kid, mapId, 2)).statusCode).toBe(200);
+    // Today's gift (PR H) goes with the house, by cascade.
+    expect((await house(server, kid, mapId)).gift).not.toBeNull();
     expect((await call(server, 'POST', `/maps/${mapId}/leave`, kid)).statusCode).toBe(204);
+    expect(
+      await db.query.houseGifts.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+      }),
+    ).toEqual([]);
     expect(
       await db.query.keeperHouses.findMany({
         where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
@@ -930,6 +937,227 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       // Twelve hours at the perk's half rate, written at the leave.
       expect(await squishyRow(id)).toMatchObject({ contentment: 75, contentmentSince: clock });
       expect(await residencyOf(id)).toBeUndefined();
+    });
+  });
+
+  describe('the daily gift (PR H)', () => {
+    const later = (hours: number) => clock.setTime(clock.getTime() + hours * 60 * 60 * 1000);
+
+    const claim = (
+      server: FastifyInstance,
+      who: Player,
+      mapId: string,
+      key: string = crypto.randomUUID(),
+    ) =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/house/gift/claim`,
+        headers: { ...HEADERS, 'idempotency-key': key },
+        cookies: { [SESSION_COOKIE]: who.token },
+      });
+
+    const giftRows = (mapId: string, who: Player) =>
+      db.query.houseGifts.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, who.id)),
+        orderBy: (t, { asc }) => [asc(t.day)],
+      });
+    const giftEvents = (mapId: string) =>
+      db.query.gameEvents.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, 'house.gift')),
+      });
+    const giftLedger = (mapId: string, who: Player) =>
+      db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) =>
+          and(eq(t.mapId, mapId), eq(t.userId, who.id), eq(t.reason, 'house-gift')),
+      });
+
+    it('rolls one gift on the first read of the day, the same on every read after', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await resident(mapId, kid);
+      const first = await house(server, kid, mapId);
+      expect(first.gift).toMatchObject({
+        day: '2026-10-02',
+        giverSquishyId: id,
+        claimed: false,
+      });
+      expect(first.gift!.count).toBeGreaterThanOrEqual(1);
+      // Puddlepuff, no nickname: the note names its species.
+      expect(first.gift!.note).toMatch(/^Puddlepuff /);
+      later(3);
+      const again = await house(server, kid, mapId);
+      expect(again.gift).toEqual(first.gift);
+      expect(await giftRows(mapId, kid)).toHaveLength(1);
+      // Rolling writes no event; only opening does.
+      expect(await giftEvents(mapId)).toEqual([]);
+    });
+
+    it('writes one row when two first reads race', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      await resident(mapId, kid);
+      const [a, b] = await Promise.all([house(server, kid, mapId), house(server, kid, mapId)]);
+      expect(a.gift).not.toBeNull();
+      expect(a.gift).toEqual(b.gift);
+      expect(await giftRows(mapId, kid)).toHaveLength(1);
+    });
+
+    it('leaves no gift with nobody home, and writes no house row for the read', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      expect((await house(server, kid, mapId)).gift).toBeNull();
+      // A resident away (here at a trading post) can't leave one either.
+      const away = await resident(mapId, kid);
+      await db.execute(`update squishies set state = 'in-trade' where id = '${away}'`);
+      expect((await house(server, kid, mapId)).gift).toBeNull();
+      expect(await giftRows(mapId, kid)).toEqual([]);
+      expect(
+        await db.query.keeperHouses.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+        }),
+      ).toEqual([]);
+      const res = await claim(server, kid, mapId);
+      expect(res.statusCode).toBe(409);
+      expect(ApiErrorSchema.parse(res.json()).error.message).toBe(
+        'No gift yet today. Check back soon! 🎁',
+      );
+    });
+
+    it('opens once: pays the Keeper (ledger `house-gift`), tells only them, then says come back tomorrow', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      await resident(mapId, kid);
+      const { gift } = await house(server, kid, mapId);
+      const res = await claim(server, kid, mapId);
+      expect(res.statusCode, res.body).toBe(200);
+      const view = HouseViewSchema.parse(res.json());
+      expect(view.gift).toEqual({ ...gift, claimed: true });
+      expect(await bag(mapId, kid)).toMatchObject({ [gift!.itemId]: gift!.count });
+      const [ledger] = await giftLedger(mapId, kid);
+      const [row] = await giftRows(mapId, kid);
+      expect(ledger).toMatchObject({ itemId: gift!.itemId, delta: gift!.count, refId: row!.id });
+      expect(row!.claimedAt).toEqual(clock);
+      const [event] = await giftEvents(mapId);
+      expect(event!.payload).toEqual({
+        userId: kid.id,
+        giftId: row!.id,
+        day: '2026-10-02',
+        giverSquishyId: gift!.giverSquishyId,
+        itemId: gift!.itemId,
+        count: gift!.count,
+      });
+      // Only the Keeper hears it; the patch never sees inside their house.
+      expect(publicViewFor(PUBLIC_VIEWS, event!, { userId: kid.id })).toEqual({
+        userId: kid.id,
+        day: '2026-10-02',
+        itemId: gift!.itemId,
+        count: gift!.count,
+      });
+      expect(publicViewFor(PUBLIC_VIEWS, event!, { userId: owner.id })).toBeNull();
+      // A second tap pays nothing.
+      const again = await claim(server, kid, mapId);
+      expect(again.statusCode).toBe(409);
+      expect(ApiErrorSchema.parse(again.json()).error.message).toBe(
+        'Already opened! Come back tomorrow 🎁',
+      );
+      expect(await giftLedger(mapId, kid)).toHaveLength(1);
+      expect((await house(server, kid, mapId)).gift!.claimed).toBe(true);
+    });
+
+    it('pays once for a retried claim (Idempotency-Key) and for two taps racing', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      const { gift } = await house(server, kid, mapId);
+      const first = await claim(server, kid, mapId, 'gift-1');
+      const retry = await claim(server, kid, mapId, 'gift-1');
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json()).toEqual(first.json());
+      expect(await giftLedger(mapId, kid)).toHaveLength(1);
+
+      // Tomorrow: two taps at once.
+      later(24);
+      expect((await house(server, kid, mapId)).gift!.claimed).toBe(false);
+      const racing = await Promise.all([claim(server, kid, mapId), claim(server, kid, mapId)]);
+      expect(racing.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      expect(await giftLedger(mapId, kid)).toHaveLength(2);
+      expect(await giftEvents(mapId)).toHaveLength(2);
+      expect(gift).not.toBeNull();
+    });
+
+    it('brings a new gift tomorrow, and only today’s can be opened', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      await resident(mapId, kid);
+      const today = (await house(server, kid, mapId)).gift!;
+      later(24);
+      const tomorrow = (await house(server, kid, mapId)).gift!;
+      expect(tomorrow.day).toBe('2026-10-03');
+      expect(tomorrow.claimed).toBe(false);
+      expect((await giftRows(mapId, kid)).map((r) => r.day)).toEqual(['2026-10-02', '2026-10-03']);
+      expect(today.day).toBe('2026-10-02');
+      expect((await claim(server, kid, mapId)).statusCode).toBe(200);
+      const [yesterday, opened] = await giftRows(mapId, kid);
+      expect(yesterday!.claimedAt).toBeNull();
+      expect(opened!.claimedAt).toEqual(clock);
+    });
+
+    it('still pays the Keeper for a gift from a resident traded away since, or gone from the patch', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      const id = await resident(mapId, kid);
+      await db.execute(`update squishies set nickname = 'Mochi' where id = '${id}'`);
+      const { gift } = await house(server, kid, mapId);
+      expect(gift!.note).toMatch(/^Mochi /);
+      // Traded to the owner: the residency ends (as `leaveHouse` does), the gift stays.
+      await db.execute(`delete from house_residents where squishy_id = '${id}'`);
+      await db.execute(`update squishies set owner_user_id = '${owner.id}' where id = '${id}'`);
+      const res = await claim(server, kid, mapId);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(HouseViewSchema.parse(res.json()).gift).toEqual({ ...gift, claimed: true });
+      expect(await bag(mapId, kid)).toMatchObject({ [gift!.itemId]: gift!.count });
+      expect(await bag(mapId, owner)).not.toHaveProperty(gift!.itemId);
+
+      // Tomorrow's from a giver that then left the patch: a note for anyone, still paid.
+      const other = await resident(mapId, kid);
+      later(24);
+      expect((await house(server, kid, mapId)).gift!.giverSquishyId).toBe(other);
+      await db.execute(`delete from house_residents where squishy_id = '${other}'`);
+      await db.execute(`delete from squishies where id = '${other}'`);
+      const gone = (await house(server, kid, mapId)).gift!;
+      expect(gone.giverSquishyId).toBeNull();
+      expect(gone.note).toMatch(/^A little friend /);
+      expect((await claim(server, kid, mapId)).statusCode).toBe(200);
+      expect(await giftLedger(mapId, kid)).toHaveLength(2);
+    });
+
+    it('is NOT_FOUND while the switch is off, and on the Tutorial Glade', async () => {
+      const server = await start({});
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await resident(mapId, kid);
+      const res = await claim(server, kid, mapId);
+      expect(res.statusCode).toBe(404);
+      expect(ApiErrorSchema.parse(res.json()).error.message).toBe("We couldn't find that patch.");
+      await app!.close();
+      const on = await start();
+      const started = await call(on, 'POST', '/tutorial/start', kid);
+      const glade = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      expect((await claim(on, kid, glade)).statusCode).toBe(404);
+      expect(await giftRows(mapId, kid)).toEqual([]);
     });
   });
 });

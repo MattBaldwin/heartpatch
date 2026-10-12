@@ -22,8 +22,9 @@ export interface HouseRoutesOptions {
  * The Keeper's house (#381): `GET /maps/:mapId/house` (my house and what the
  * next level needs), `POST /maps/:mapId/house/build` (build the next
  * level) and `POST /maps/:mapId/house/residents` (move a squishy in, to
- * another room, or out), both with `Idempotency-Key`. NOT_FOUND while
- * `HP_HOUSE` is off for the player.
+ * another room, or out), both with `Idempotency-Key`, and
+ * `POST /maps/:mapId/house/gift/claim` (open today's gift from a resident,
+ * once; `Idempotency-Key`). NOT_FOUND while `HP_HOUSE` is off for the player.
  */
 export const houseRoutes =
   (service: HouseService, options: HouseRoutesOptions): FastifyPluginCallback =>
@@ -75,6 +76,16 @@ export const houseRoutes =
           request.body.squishyId,
           request.body.roomId,
         ),
+    );
+
+    app.post(
+      '/maps/:mapId/house/gift/claim',
+      {
+        schema: { params: MapIdParamsSchema, response: { 200: HouseViewSchema } },
+        preHandler: [requireAuth, rateLimit('gift'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) => service.claimGift(requireUser(request), request.params.mapId),
     );
 
     done();

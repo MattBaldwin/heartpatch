@@ -3,6 +3,7 @@ import { ContentIdSchema, DescriptionSchema, DisplayNameSchema } from './data/co
 import { HouseExteriorSchema, HouseRoomLayoutSchema, HouseRoomLookSchema } from './data/house.js';
 import { RequirementProgressSchema } from './data/requirements.js';
 import { ItemCountsSchema } from './inventory.js';
+import { LocalDateSchema } from './time.js';
 
 /*
  * The Keeper's house API (#381 plan §7). Patch-scoped and member-only under
@@ -56,6 +57,24 @@ export const HouseNextLevelSchema = z.object({
 });
 export type HouseNextLevel = z.infer<typeof HouseNextLevelSchema>;
 
+/**
+ * Today's gift (#381 PR H): what a resident left the Keeper, rolled on the
+ * server on the first `GET /house` of the patch day, and whether it's been
+ * opened. `giverSquishyId` is null once the giver is gone from the patch; a
+ * giver traded away since still counts as who left it, and the gift is still
+ * the Keeper's to open. `note` is the rendered line, the giver's name in it.
+ */
+export const HouseGiftSchema = z.object({
+  /** The patch's local day it belongs to. */
+  day: LocalDateSchema,
+  giverSquishyId: z.uuid().nullable(),
+  itemId: ContentIdSchema,
+  count: z.number().int().min(1),
+  note: z.string().min(1),
+  claimed: z.boolean(),
+});
+export type HouseGift = z.infer<typeof HouseGiftSchema>;
+
 /** `GET /maps/:mapId/house`, and later the reply to every house command. */
 export const HouseViewSchema = z.object({
   level: z.number().int().min(1),
@@ -67,6 +86,8 @@ export const HouseViewSchema = z.object({
   next: HouseNextLevelSchema.nullable(),
   /** My bag, for the cost line. */
   items: ItemCountsSchema,
+  /** Today's gift, or null when there's none (no resident home; older servers). */
+  gift: HouseGiftSchema.nullable().default(null),
   now: z.iso.datetime(),
 });
 export type HouseView = z.infer<typeof HouseViewSchema>;

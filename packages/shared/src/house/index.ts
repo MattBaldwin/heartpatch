@@ -1,4 +1,14 @@
-import type { HouseData, HouseLevel, HouseRoom, HouseRules } from '../schemas/data/house.js';
+import { deriveSeed, Rng } from '../rng/index.js';
+import type { FeelingId } from '../schemas/data/elements.js';
+import {
+  HOUSE_NOTE_NAME,
+  type HouseData,
+  type HouseGiftRules,
+  type HouseLevel,
+  type HouseNote,
+  type HouseRoom,
+  type HouseRules,
+} from '../schemas/data/house.js';
 import type { ResidentAway } from '../schemas/house.js';
 import type { SquishyJobId } from '../jobs/index.js';
 import type { SquishyState } from '../schemas/squishies.js';
@@ -128,3 +138,93 @@ export function moveInProblem(facts: MoveInFacts, rules: HouseRules): MoveInProb
   if (facts.inRoom >= facts.room.beds) return 'full';
   return null;
 }
+
+/*
+ * The daily gift (#381 PR H, plan §1c "Daily return reasons"). Once a patch
+ * day, a resident at home leaves its Keeper a small resource gift and a note.
+ * The roll is seeded (tech spec §8), so the server can roll it lazily on the
+ * first read of the day and any re-roll of the same inputs gives the same gift.
+ */
+
+/** A resident that can leave today's gift: at home (not away), with its feeling for the note. */
+export interface HouseGiftGiver {
+  squishyId: string;
+  feeling: FeelingId;
+}
+
+/** What `rollHouseGift` rolls from. `day` is the patch's local day (`YYYY-MM-DD`). */
+export interface HouseGiftInput {
+  userId: string;
+  mapId: string;
+  day: string;
+  level: number;
+  /** Residents at home now; any order (they're sorted by id first). */
+  givers: readonly HouseGiftGiver[];
+}
+
+/** Today's gift: who left it, what, how many, and which note. */
+export interface HouseGiftRoll {
+  giverSquishyId: string;
+  itemId: string;
+  count: number;
+  noteId: string;
+}
+
+/** The seed for one Keeper's gift on one patch day. Never sent to the client. */
+const giftSeed = (input: Pick<HouseGiftInput, 'userId' | 'mapId' | 'day'>, ...labels: string[]) =>
+  deriveSeed('house-gift', input.mapId, input.userId, input.day, ...labels);
+
+/** The gift-table row for a house at `level`: the highest `fromLevel` at or under it. */
+export function houseGiftRow(
+  rules: HouseGiftRules,
+  level: number,
+): HouseGiftRules['table'][number] {
+  const row = rules.table.findLast((r) => r.fromLevel <= level) ?? rules.table[0];
+  if (!row) throw new Error('houseGiftRow: no gift rows');
+  return row;
+}
+
+/**
+ * The note that goes with a gift from a giver of this feeling: one of the
+ * notes for its feeling or for anyone, seeded by the Keeper's day and the
+ * giver, so the same gift always shows the same note. A null feeling (the
+ * giver is gone from the patch) picks from the notes for anyone.
+ */
+export function houseGiftNote(
+  notes: readonly HouseNote[],
+  input: Pick<HouseGiftInput, 'userId' | 'mapId' | 'day'> & {
+    squishyId: string;
+    feeling: FeelingId | null;
+  },
+): HouseNote {
+  const fits = notes.filter((n) => n.feeling === undefined || n.feeling === input.feeling);
+  const pool = fits.length > 0 ? fits : notes;
+  return Rng.fromSeed(giftSeed(input, 'note', input.squishyId)).pick(pool);
+}
+
+/**
+ * Today's gift for this Keeper, or null when no resident is home to leave
+ * one. Pure and deterministic: the same Keeper, patch, day, level and givers
+ * always roll the same gift, and another day rolls afresh.
+ */
+export function rollHouseGift(
+  input: HouseGiftInput,
+  rules: HouseGiftRules,
+  notes: readonly HouseNote[],
+): HouseGiftRoll | null {
+  if (input.givers.length === 0) return null;
+  const givers = [...input.givers].sort((a, b) => (a.squishyId < b.squishyId ? -1 : 1));
+  const rng = Rng.fromSeed(giftSeed(input, 'gift'));
+  const giver = rng.pick(givers);
+  const gift = rng.weighted(houseGiftRow(rules, input.level).gifts);
+  return {
+    giverSquishyId: giver.squishyId,
+    itemId: gift.itemId,
+    count: rng.int(gift.min, gift.max),
+    noteId: houseGiftNote(notes, { ...input, ...giver }).id,
+  };
+}
+
+/** A note's line with the giver's name in it. */
+export const renderHouseNote = (note: Pick<HouseNote, 'line'>, name: string): string =>
+  note.line.replace(HOUSE_NOTE_NAME, () => name);

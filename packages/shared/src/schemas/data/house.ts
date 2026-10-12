@@ -6,6 +6,7 @@ import {
   DisplayNameSchema,
   ResourceCostSchema,
 } from './common.js';
+import { FeelingIdSchema } from './elements.js';
 import { formatDataIssues } from './issues.js';
 import { RequirementSchema } from './requirements.js';
 
@@ -87,10 +88,40 @@ export const HousePerkSchema = z.discriminatedUnion('kind', [
 ]);
 export type HousePerk = z.infer<typeof HousePerkSchema>;
 
+/** One thing a resident can leave as the day's gift, and how many (`min`..`max`). */
+export const HouseGiftOptionSchema = z.strictObject({
+  itemId: ContentIdSchema,
+  min: z.number().int().min(1).max(99),
+  max: z.number().int().min(1).max(99),
+  /** How often it's picked against the others in its row. */
+  weight: z.number().int().min(1),
+});
+export type HouseGiftOption = z.infer<typeof HouseGiftOptionSchema>;
+
+/** The gifts a house from `fromLevel` up gives (the highest row at or under the level wins). */
+export const HouseGiftRowSchema = z.strictObject({
+  fromLevel: z.number().int().min(1),
+  gifts: z.array(HouseGiftOptionSchema).min(1),
+});
+export type HouseGiftRow = z.infer<typeof HouseGiftRowSchema>;
+
+/**
+ * The daily gift (#381 PR H, plan §1c "Daily return reasons"): once a day a
+ * resident at home leaves the Keeper a small resource gift, rolled on the
+ * server from a seed (never by the client) and claimed once.
+ */
+export const HouseGiftRulesSchema = z.strictObject({
+  /** Gifts a day. One: `house_gifts` holds one row per Keeper per patch day. */
+  perDay: z.literal(1),
+  table: z.array(HouseGiftRowSchema).min(1),
+});
+export type HouseGiftRules = z.infer<typeof HouseGiftRulesSchema>;
+
 export const HouseRulesSchema = z.strictObject({
   perk: HousePerkSchema,
   /** Hours before a squishy that moved out can move back in. */
   moveBackInHours: z.number().int().min(0),
+  gifts: HouseGiftRulesSchema,
 });
 export type HouseRules = z.infer<typeof HouseRulesSchema>;
 
@@ -143,6 +174,22 @@ export function checkHouseData(input: unknown, refs: HouseDataRefs): string[] {
   const rooms = new Set<string>();
   const filled = new Map<string, string>();
 
+  rules.gifts.table.forEach((row, i) => {
+    const at = `rules.gifts.table[${String(i)}]`;
+    const before = rules.gifts.table[i - 1];
+    if (i === 0 && row.fromLevel !== 1) problems.push(`${at}: the first row starts at level 1`);
+    if (before && row.fromLevel <= before.fromLevel) {
+      problems.push(`${at}: fromLevel should climb (${String(row.fromLevel)})`);
+    }
+    if (row.fromLevel > levels.length) problems.push(`${at}: no level ${String(row.fromLevel)}`);
+    row.gifts.forEach((gift, j) => {
+      const giftAt = `${at}.gifts[${String(j)}]`;
+      if (!resources.has(gift.itemId))
+        problems.push(`${giftAt}: unknown resource "${gift.itemId}"`);
+      if (gift.min > gift.max) problems.push(`${giftAt}: min is more than max`);
+    });
+  });
+
   levels.forEach((lvl, i) => {
     const at = `levels[${String(i)}]`;
     if (lvl.level !== i + 1)
@@ -192,5 +239,46 @@ export function checkHouseData(input: unknown, refs: HouseDataRefs): string[] {
     });
   });
   problems.push(...scanPlayerFacingText(result.data, 'house'));
+  return problems;
+}
+
+/**
+ * A note a resident leaves with the daily gift (#381 PR H): a fixed line,
+ * never free text (rule 9). `{name}` is the giver's name. A note with a
+ * `feeling` goes only with a giver of that feeling; one without is for anyone.
+ */
+export const HouseNoteSchema = z.strictObject({
+  id: ContentIdSchema,
+  feeling: FeelingIdSchema.optional(),
+  line: z.string().min(1).max(80),
+});
+export type HouseNote = z.infer<typeof HouseNoteSchema>;
+
+export const HouseNotesSchema = z.array(HouseNoteSchema).min(1);
+
+/** Where a note's line names the giver. */
+export const HOUSE_NOTE_NAME = '{name}';
+
+/**
+ * Validates the gift notes and returns readable problems, or `[]`: ids are
+ * unique, every line names the giver exactly once, there are notes for any
+ * giver (no `feeling`), and no line uses an avoided word (style guide §9).
+ */
+export function checkHouseNotes(input: unknown): string[] {
+  const result = HouseNotesSchema.safeParse(input);
+  if (!result.success) return formatDataIssues(input, result.error);
+  const problems: string[] = [];
+  const ids = new Set<string>();
+  for (const note of result.data) {
+    if (ids.has(note.id)) problems.push(`notes: duplicate id "${note.id}"`);
+    ids.add(note.id);
+    if (note.line.split(HOUSE_NOTE_NAME).length !== 2) {
+      problems.push(`notes["${note.id}"]: the line names {name} exactly once`);
+    }
+  }
+  if (!result.data.some((n) => n.feeling === undefined)) {
+    problems.push('notes: needs at least one note for any giver (no feeling)');
+  }
+  problems.push(...scanPlayerFacingText(result.data, 'notes'));
   return problems;
 }

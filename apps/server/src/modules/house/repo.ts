@@ -1,9 +1,15 @@
-import type { SquishyState } from '@heartpatch/shared';
-import { and, eq, getTableName, inArray, isNotNull, sql } from 'drizzle-orm';
+import { FeelingIdSchema, type FeelingId, type SquishyState } from '@heartpatch/shared';
+import { and, eq, getTableName, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { houseResidents, keeperHouses, squishies, squishyEvolutions } from '../../db/schema.js';
+import {
+  houseGifts,
+  houseResidents,
+  keeperHouses,
+  squishies,
+  squishyEvolutions,
+} from '../../db/schema.js';
 
 /** One resident as the house and the progress facts read it. */
 export interface ResidentRow {
@@ -12,8 +18,21 @@ export interface ResidentRow {
   movedInAt: Date;
   level: number;
   state: 'active' | 'hollowed' | 'in-trade';
+  /** Its feeling, for the note on a gift it leaves. */
+  feeling: FeelingId;
   /** It has evolved at least once on this patch. */
   evolved: boolean;
+}
+
+/** A day's gift (#381 PR H), with what the view needs of its giver (null once it's gone). */
+export interface GiftRow {
+  id: string;
+  day: string;
+  giverSquishyId: string | null;
+  itemId: string;
+  count: number;
+  claimedAt: Date | null;
+  giver: { nickname: string | null; speciesId: string; feeling: FeelingId } | null;
 }
 
 /** A squishy as a move in or out needs it, read under its lock. */
@@ -126,6 +145,29 @@ export interface HouseRepo {
    * returning player gets a fresh home), its gifts by cascade. Step 8c.
    */
   deleteHouse: (mapId: string, userId: string) => Promise<void>;
+  /** The Keeper's gift for this patch day, or null. A plain read. */
+  gift: (mapId: string, userId: string, day: string) => Promise<GiftRow | null>;
+  /**
+   * Writes the day's gift unless there is one (ON CONFLICT DO NOTHING on
+   * (map, user, day)), so two first reads racing write one. The caller holds
+   * the house row (8c), which the row's foreign key needs.
+   */
+  insertGift: (row: {
+    mapId: string;
+    userId: string;
+    day: string;
+    giverSquishyId: string;
+    itemId: string;
+    count: number;
+    at: Date;
+  }) => Promise<void>;
+  /**
+   * Row-locks the day's unopened gift (`FOR UPDATE`, under the house lock,
+   * step 8c) and returns it, or null when there's none or it's opened.
+   */
+  lockUnclaimedGift: (mapId: string, userId: string, day: string) => Promise<GiftRow | null>;
+  /** Marks a gift locked by this transaction as opened. */
+  markGiftClaimed: (giftId: string, at: Date) => Promise<void>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -188,6 +230,7 @@ export function createHouseRepo(db: Executor): HouseRepo {
           movedInAt: houseResidents.movedInAt,
           level: squishies.level,
           state: squishies.state,
+          feeling: squishies.feeling,
           evolved: sql<boolean>`exists (select 1 from ${squishyEvolutions} where ${squishyEvolutions.squishyId} = ${houseResidents.squishyId})`,
         })
         .from(houseResidents)
@@ -205,7 +248,15 @@ export function createHouseRepo(db: Executor): HouseRepo {
         .then((rows) =>
           rows.flatMap((r) =>
             r.roomId !== null && r.movedInAt !== null
-              ? [{ ...r, roomId: r.roomId, movedInAt: r.movedInAt, evolved: r.evolved }]
+              ? [
+                  {
+                    ...r,
+                    roomId: r.roomId,
+                    movedInAt: r.movedInAt,
+                    evolved: r.evolved,
+                    feeling: FeelingIdSchema.parse(r.feeling),
+                  },
+                ]
               : [],
           ),
         ),
@@ -311,5 +362,63 @@ export function createHouseRepo(db: Executor): HouseRepo {
         .delete(keeperHouses)
         .where(and(eq(keeperHouses.mapId, mapId), eq(keeperHouses.userId, userId)));
     },
+
+    gift: async (mapId, userId, day) => {
+      const [row] = await giftQuery(db, giftOf(mapId, userId, day));
+      return row ? toGift(row) : null;
+    },
+
+    insertGift: async ({ mapId, userId, day, giverSquishyId, itemId, count, at }) => {
+      await db
+        .insert(houseGifts)
+        .values({ mapId, userId, day, giverSquishyId, itemId, count, createdAt: at })
+        .onConflictDoNothing({ target: [houseGifts.mapId, houseGifts.userId, houseGifts.day] });
+    },
+
+    lockUnclaimedGift: async (mapId, userId, day) => {
+      // Locks the gift row only: the giver's row is read, never locked.
+      const [row] = await giftQuery(
+        db,
+        and(giftOf(mapId, userId, day), isNull(houseGifts.claimedAt)),
+      ).for('update', { of: houseGifts });
+      return row ? toGift(row) : null;
+    },
+
+    markGiftClaimed: async (giftId, at) => {
+      await db.update(houseGifts).set({ claimedAt: at }).where(eq(houseGifts.id, giftId));
+    },
+  };
+}
+
+const giftOf = (mapId: string, userId: string, day: string) =>
+  and(eq(houseGifts.mapId, mapId), eq(houseGifts.userId, userId), eq(houseGifts.day, day));
+
+/** A day's gift with its giver's name and feeling (left join: the giver may be gone). */
+function giftQuery(db: Executor, where: SQL | undefined) {
+  return db
+    .select({
+      id: houseGifts.id,
+      day: houseGifts.day,
+      giverSquishyId: houseGifts.giverSquishyId,
+      itemId: houseGifts.itemId,
+      count: houseGifts.count,
+      claimedAt: houseGifts.claimedAt,
+      nickname: squishies.nickname,
+      speciesId: squishies.speciesId,
+      feeling: squishies.feeling,
+    })
+    .from(houseGifts)
+    .leftJoin(squishies, eq(squishies.id, houseGifts.giverSquishyId))
+    .where(where);
+}
+
+function toGift(row: Awaited<ReturnType<typeof giftQuery>>[number]): GiftRow {
+  const { nickname, speciesId, feeling, ...gift } = row;
+  return {
+    ...gift,
+    giver:
+      speciesId !== null && feeling !== null
+        ? { nickname, speciesId, feeling: FeelingIdSchema.parse(feeling) }
+        : null,
   };
 }

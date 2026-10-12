@@ -728,6 +728,28 @@ export const GAME_EVENTS = {
       roomId: ContentIdSchema.nullable(),
     }),
   },
+  /**
+   * A Keeper opened today's gift from a resident (#381 PR H). Only the Keeper
+   * hears it (`ownerOnlyView`); the patch never sees what's in their house.
+   */
+  'house.gift': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      giftId: z.uuid(),
+      /** The patch's local day the gift belongs to. */
+      day: LocalDateSchema,
+      /** Null once the giver is gone from the patch. */
+      giverSquishyId: z.uuid().nullable(),
+      itemId: ContentIdSchema,
+      count: z.number().int().min(1),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      day: LocalDateSchema,
+      itemId: ContentIdSchema,
+      count: z.number().int().min(1),
+    }),
+  },
   /** A player moved one of their buildings to another spot (#18). */
   'building.moved': {
     internal: z.strictObject({
