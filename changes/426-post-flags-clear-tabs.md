@@ -1,6 +1,6 @@
 ---
 title: Trading post names stay in sight
-area: map
+area: land
 ---
 
 A trading post's name tag no longer hides behind the Adventure or Home tab, and it never sits on top of your Keeper.
