@@ -182,5 +182,5 @@ export const RARE_REVEAL = {
 
 /** A step's value from one of `RARE_REVEAL`'s lists (the last past the end). */
 export function revealStep(list: readonly number[], scale: number): number {
-  return list[Math.min(Math.max(scale, 1), list.length) - 1]!;
+  return list[Math.min(Math.max(scale, 1), list.length) - 1] ?? 0;
 }

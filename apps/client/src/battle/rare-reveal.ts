@@ -116,7 +116,7 @@ export function sparkleSpots(
       rot: Math.round(rand() * 40 - 20),
       size: Math.round(10 + rand() * 12),
       tint: k % 2 === 1,
-      glyph: ['✦', '✧', '✶'][k % 3]!,
+      glyph: k % 3 === 0 ? '✦' : k % 3 === 1 ? '✧' : '✶',
     };
   });
 }
@@ -149,7 +149,11 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
     root.append(dim);
     if (!options.reducedMotion) {
       const seed = plan.rarity.length * 97 + Math.round(layout.width);
-      for (const s of sparkleSpots(revealStep(RARE_REVEAL.sparkles, scale), { ...layout, spot }, seed)) {
+      for (const s of sparkleSpots(
+        revealStep(RARE_REVEAL.sparkles, scale),
+        { ...layout, spot },
+        seed,
+      )) {
         const sparkle = el(
           'span',
           { class: 'rare-reveal-sparkle', 'aria-hidden': 'true' },
@@ -166,11 +170,7 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
       }
     }
   }
-  const banner = el(
-    'div',
-    { class: 'rare-reveal-banner', role: 'status' },
-    plan.tier.banner,
-  );
+  const banner = el('div', { class: 'rare-reveal-banner', role: 'status' }, plan.tier.banner);
   const wide = layout.width > RARE_REVEAL.wideScreen ? RARE_REVEAL.wideBanner : 1;
   banner.style.fontSize = `${Math.round(revealStep(RARE_REVEAL.banner, scale) * wide)}px`;
   banner.style.setProperty('--reveal-ring', `${revealStep(RARE_REVEAL.ring, scale)}px`);
@@ -195,9 +195,21 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
     });
   }
   timers.push(
-    clock.later(Math.max(0, ms - RARE_REVEAL.fadeMs), () => root.classList.add('rare-reveal-out')),
-    clock.later(ms, () => finish(true)),
+    clock.later(Math.max(0, ms - RARE_REVEAL.fadeMs), () => {
+      root.classList.add('rare-reveal-out');
+    }),
+    clock.later(ms, () => {
+      finish(true);
+    }),
   );
   host.append(root);
-  return { element: root, skip: () => finish(true), dispose: () => finish(false) };
+  return {
+    element: root,
+    skip: () => {
+      finish(true);
+    },
+    dispose: () => {
+      finish(false);
+    },
+  };
 }

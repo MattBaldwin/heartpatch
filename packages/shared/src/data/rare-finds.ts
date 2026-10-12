@@ -57,8 +57,10 @@ export function rareFindTier(
   const own = tiers[rarity];
   if (own) return own;
   const at = LADDER.indexOf(rarity);
-  for (let i = at - 1; i >= LADDER.indexOf('rare') && at >= 0; i--) {
-    const below = tiers[LADDER[i]!];
+  if (at < 0) return null;
+  // Walk down from just below it to Rare.
+  for (const step of LADDER.slice(LADDER.indexOf('rare'), at).reverse()) {
+    const below = tiers[step];
     if (below) return below;
   }
   return null;
