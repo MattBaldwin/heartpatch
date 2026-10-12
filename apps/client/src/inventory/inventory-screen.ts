@@ -239,12 +239,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   // What landed since the Bag was last opened (#419): "+14" on the Bag button,
   // and one piece of news on the My Home tab (trays.ts reads `data-tray-alert`).
   const newPill = el('span', { class: 'bag-new', 'aria-hidden': 'true', 'data-testid': 'bag-new' });
-  const newAlert = el('span', { class: 'bag-new-alert', 'aria-hidden': 'true' });
+  const newAlert = el('span', {
+    class: 'bag-new-alert',
+    'aria-hidden': 'true',
+    'data-tray-alert': AWAY_TEXT.bagNews,
+  });
   open.append(newPill, newAlert);
   const showBagNew = () => {
     newPill.textContent = bagNew > 0 ? `+${String(bagNew)}` : '';
     newAlert.textContent = bagNew > 0 ? '1' : '';
-    newAlert.dataset['trayAlert'] = AWAY_TEXT.bagNews;
   };
   open.hidden = true;
 

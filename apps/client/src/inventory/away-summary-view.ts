@@ -1,3 +1,4 @@
+import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import { AWAY_TEXT, type SummaryEntry } from './away-summary.js';
 import './away-summary.css';
@@ -42,10 +43,14 @@ export interface AwaySummary {
   readonly debug: AwaySummaryDebug;
 }
 
-/** A sheet or card is open over the map (anything but this banner's own card). */
+/**
+ * A sheet is open over the map (the Bag, the job board, an open tray), as the
+ * tutorial reads it (`tutorial/sheets.ts`): shut trays (inert) and notes don't
+ * count, nor does this banner's own card.
+ */
 function sheetOpen(): boolean {
-  return [...document.querySelectorAll('[role="dialog"]')].some(
-    (d) => !d.closest('[hidden]') && !d.classList.contains('away-card'),
+  return [...document.querySelectorAll(SHEET_SELECTOR)].some(
+    (d) => !d.classList.contains('away-card') && boxOf(d) !== null,
   );
 }
 
@@ -118,6 +123,9 @@ export function createAwaySummary(
 
   /** Below its usual spot (CSS), or below anything else up there now. */
   const place = () => {
+    // Over an open sheet (the Bag, the job board) it's only something to
+    // read: a tap there is meant for the sheet. Checked again as sheets come and go.
+    banner.classList.toggle('away-quiet', sheetOpen());
     banner.style.top = '';
     const usual = banner.getBoundingClientRect().top;
     let lowest = -Infinity;
@@ -243,9 +251,6 @@ export function createAwaySummary(
       sentence.textContent = what.sentence;
       const one = what.entries.length === 1 ? what.entries[0] : undefined;
       banner.classList.toggle('away-one', one !== undefined);
-      // Over an open sheet (the Bag, the job board) it's only something to
-      // read: a tap there is meant for the sheet.
-      banner.classList.toggle('away-quiet', sheetOpen());
       // The pill says it all and opens nothing: no stop for a screen reader either.
       if (one) {
         banner.setAttribute('aria-disabled', 'true');
@@ -282,7 +287,7 @@ export function createAwaySummary(
     },
     hide: () => {
       hideBanner();
-      layer.hidden = true;
+      closeCard();
       current = null;
     },
     get text() {

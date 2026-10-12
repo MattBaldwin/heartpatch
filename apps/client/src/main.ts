@@ -204,8 +204,8 @@ const inventory = createInventoryScreen({
     lorebook.refresh();
   },
   // The "what landed" banner stays below the patch's name, a wardrobe find
-  // and the trays' hint line (#419).
-  clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say'),
+  // and the trays' hint line and first-visit hint (#419).
+  clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time

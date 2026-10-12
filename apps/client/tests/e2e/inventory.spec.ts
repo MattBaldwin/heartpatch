@@ -147,17 +147,13 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   const banner = page.getByTestId('landed-toast');
   // Roomy: the settle is one round trip, slow under a full CI run.
   await expect(banner).toContainText('Heart Charm', { timeout: 15_000 });
-  // Two kinds: the banner (not the one-thing pill), and a tap opens the card
-  // with everything. The banner hides itself after a few seconds, so the tap
-  // goes in the same breath as the look (CI renders slowly).
-  const shown = await page.evaluate(() => {
-    const node = document.querySelector<HTMLElement>('[data-testid="landed-toast"]');
-    if (!node || node.hidden) return null;
-    const words = node.className;
-    node.click();
-    return words;
-  });
-  expect(shown).not.toContain('away-one');
+  // Two kinds: the banner (not the one-thing pill), and a real tap opens the
+  // card with everything: on a plain map it takes taps (shut trays don't count
+  // as open sheets). The banner hides itself after a few seconds, so the tap
+  // comes straight after the look.
+  await expect(banner).not.toHaveClass(/away-one|away-quiet/);
+  expect(await banner.evaluate((n) => getComputedStyle(n).pointerEvents)).not.toBe('none');
+  await banner.tap();
   const card = page.getByTestId('away-card');
   await expect(card).toBeVisible();
   await expect(card).toContainText('Heart Charm');
@@ -173,7 +169,11 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await page.getByTestId('home').getByTestId('home-back').tap();
   await expect(page.getByTestId('map-hud')).toBeVisible({ timeout: 30_000 });
   await expect.poll(async () => (await bagState(page))?.bagNew).toBeGreaterThan(0);
-  await expect.poll(async () => (await traysState(page))?.badges.heartpatch).not.toBeNull();
+  await expect(page.getByTestId('bag-new')).toHaveText(/^\+\d+$/);
+  // Roomy: the trays read their news again once the map is back (a busy CI runner).
+  await expect
+    .poll(async () => (await traysState(page))?.badges.heartpatch, { timeout: 15_000 })
+    .not.toBeNull();
   await (await trayButton(page, 'bag-open')).tap();
   await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
   await bag.getByRole('button', { name: 'Close' }).tap();
