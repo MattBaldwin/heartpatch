@@ -193,6 +193,8 @@ export const HOUSE_CAST = {
    * faceted (owner check #4). The rest keep the low detail.
    */
   lowHeroes: 2, // TUNE: the Snug's two beds; about 10k triangles each
+  /** About how far a resident reaches from its middle at scale 1, metres (spikes and ears included): the phone frame's edge misses it. */
+  reach: 0.62, // TUNE
   /** At most this far off facing the camera, radians. */
   faceTurn: 0.3, // TUNE
 } as const;
@@ -217,6 +219,8 @@ export const HOUSE_CAMERA = {
    * neighbour, metres (the rest is a sideways drag away).
    */
   peek: 1.1, // TUNE: B4: the Snug big enough to read its squishies, the Playroom's edge in view
+  /** Room kept between a frame edge and a resident it would slice, normalised device units. */
+  edgeClear: 0.04, // TUNE
   /** How deep the front yard is (path, lanterns, bushes, fence), metres: kept in frame when there's room. */
   yard: 3.7, // TUNE: frontYard's fence and last stepping stone
   /**

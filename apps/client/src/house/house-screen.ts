@@ -18,6 +18,7 @@ import {
   clampZoom,
   entryGlide,
   fitHouse,
+  framedFocus,
   glidePose,
   kidPose,
   panPerPixel,
@@ -127,6 +128,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The dollhouse as fitted, and how far a sideways drag has slid it from there (metres). */
   let fitted: HousePose | null = null;
   let pan = 0;
+  let panLimits = { min: 0, max: 0 };
   let glide: { shot: CinematicShot; start: number | null } | null = null;
   /** Kid height in the focus room, for the screen as it is now. */
   let kid: HousePose | null = null;
@@ -158,6 +160,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     class: 'house-floor',
     'data-testid': 'house-floor',
   });
+  // "More this way" at a side the phone's frame crops (B4), a soft fade and a chevron.
+  const moreLeft = el('div', { class: 'house-more house-more-left', 'aria-hidden': 'true' }, '‹');
+  const moreRight = el('div', { class: 'house-more house-more-right', 'aria-hidden': 'true' }, '›');
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
   const peek = el(
     'section',
@@ -172,6 +177,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     top,
     walkButton,
     floorButton,
+    moreLeft,
+    moreRight,
     peek,
   );
   overlay.hidden = true;
@@ -202,6 +209,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   /** Upstairs or Downstairs: only with more than one floor, and only in the dollhouse. */
   function renderFloor(): void {
+    const dollhouse = walk === null && zoom <= 0;
+    moreLeft.hidden = !dollhouse || pan <= panLimits.min + 0.05;
+    moreRight.hidden = !dollhouse || pan >= panLimits.max - 0.05;
     const floors = scene3d?.floors ?? [];
     floorButton.hidden = floors.length < 2 || walk !== null || zoom > 0;
     const up = floor === 0;
@@ -317,9 +327,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const vp = viewport();
     const room = s.focusRoom;
     // B4: a tall phone fits the Keeper's room and drags sideways to the rest.
-    fitted = fitHouse(s.frameBounds, vp, undefined, room);
-    const range = panRange(s.frameBounds, vp, room);
-    pan = Math.min(range.max, Math.max(range.min, pan));
+    const focus = framedFocus(s.frameBounds, vp, room, s.residentSpots);
+    fitted = fitHouse(s.frameBounds, vp, undefined, focus);
+    panLimits = panRange(s.frameBounds, vp, focus);
+    pan = Math.min(panLimits.max, Math.max(panLimits.min, pan));
     base = panPose(fitted, pan);
     kid = room ? kidPose(room, vp) : null;
     frameOutside(s, base);

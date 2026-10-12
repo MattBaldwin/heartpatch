@@ -123,6 +123,34 @@
   touch-action: manipulation;
 }
 
+/* More house past a side the phone crops (B4): a soft fade and a chevron. */
+.house-more {
+  position: absolute;
+  top: 22%;
+  bottom: 22%;
+  display: flex;
+  align-items: center;
+  width: 36px;
+  color: #7a2d55;
+  font-size: 30px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.house-more-left {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: calc(env(safe-area-inset-left) + 6px);
+  background: linear-gradient(to right, rgb(255 250 252 / 55%), rgb(255 250 252 / 0%));
+}
+
+.house-more-right {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: calc(env(safe-area-inset-right) + 6px);
+  background: linear-gradient(to left, rgb(255 250 252 / 55%), rgb(255 250 252 / 0%));
+}
+
 /* The bottom sheet, collapsed to its handle and the room's name. */
 .house-peek {
   position: absolute;

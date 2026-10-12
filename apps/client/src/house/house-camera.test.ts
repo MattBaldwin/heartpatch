@@ -4,6 +4,7 @@ import {
   entryGlide,
   fitBox,
   fitHouse,
+  framedFocus,
   glidePose,
   panPerPixel,
   panPose,
@@ -142,6 +143,31 @@ describe('fitHouse', () => {
         z: two.minZ,
       });
       expect(peek.x).toBeLessThan(1);
+    });
+
+    it('nudges the peek so the frame’s edge falls between residents, never through one (round 2)', () => {
+      const r = 0.6;
+      // A resident right where the usual frame's right edge falls.
+      const usual = fitHouse(two, vp, undefined, snugRoom);
+      const t = Math.tan(usual.fov / 2) * aspect;
+      let x = 5;
+      for (; x < 9; x += 0.05) {
+        const c = project(usual, aspect, { x, y: 0.6, z: 2.4 });
+        if (c.x >= 1) break;
+      }
+      const spot = { x, y: 0.6, z: 2.4, r };
+      const focus = framedFocus(two, vp, snugRoom, [spot])!;
+      expect(focus.peek).not.toBe(HOUSE_CAMERA.peek);
+      const pose = fitHouse(two, vp, undefined, focus);
+      const c = project(pose, aspect, spot);
+      const w = r / c.depth / t;
+      expect(c.x + w <= 1 || c.x - w >= 1).toBe(true);
+      // Nobody near an edge: the usual peek.
+      expect(framedFocus(two, vp, snugRoom, [{ x: 2.4, y: 0.6, z: 2.4, r }])!.peek).toBe(
+        HOUSE_CAMERA.peek,
+      );
+      // An iPad keeps the room as it is (the whole house shows).
+      expect(framedFocus(two, ipad, snugRoom, [spot])).toEqual(snugRoom);
     });
 
     it('slides as far as either end of the house, and no further', () => {

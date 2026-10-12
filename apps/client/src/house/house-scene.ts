@@ -40,7 +40,14 @@ import { lodFor } from '../procedural/motion.js';
 import type { SquishySpecies } from '../procedural/params.js';
 import { SquishyField, type SquishyPlacement } from '../procedural/squishy-field.js';
 import type { KeeperHandle, KeeperPlacement } from '../procedural/keeper/keeper-field.js';
-import { frontAlpha, project, wallFade, type FadeWall, type HousePose } from './house-camera.js';
+import {
+  frontAlpha,
+  project,
+  wallFade,
+  type FadeWall,
+  type FramedSpot,
+  type HousePose,
+} from './house-camera.js';
 import {
   HOUSE_BLANKETS,
   HOUSE_CAMERA,
@@ -202,6 +209,8 @@ interface Placed {
 /** A resident or the Keeper as placed, so the floor cut can take it away and put it back. */
 interface CastSpot {
   readonly room: string;
+  /** Where it stands (its feet), for the framing. */
+  readonly at: { x: number; y: number; z: number };
   readonly kind: 'resident' | 'keeper';
   readonly add: () => void;
   readonly remove: () => void;
@@ -241,6 +250,8 @@ export class HouseScene {
   readonly #instanced: { mesh: Mesh; list: readonly Placed[]; color?: (i: number) => number[] }[] =
     [];
   readonly #boxes: RoomBox[];
+  /** Walls cut low in the dollhouse that kid height stands back up, by room. */
+  readonly #kidWalls = new Map<string, Mesh[]>();
   readonly #runs: readonly WallRun[];
   readonly #floors: readonly number[];
   #cut: FloorCut;
@@ -514,6 +525,17 @@ export class HouseScene {
   /** The room kid height walks into, as a box (the camera takes only that). */
   get focusRoom(): HouseBounds | null {
     return this.#focus?.room ?? null;
+  }
+
+  /**
+   * The residents drawn now, as the framing sees them (their middles and
+   * about how far they reach), so a phone's frame edge can miss them.
+   */
+  get residentSpots(): FramedSpot[] {
+    const r = HOUSE_CAST.squishyScale * HOUSE_CAST.reach;
+    return this.#cast
+      .filter((c) => c.kind === 'resident' && c.drawn())
+      .map((c) => ({ x: c.at.x, y: c.at.y + r, z: c.at.z, r }));
   }
 
   /** The floors the dollhouse can show, bottom up (one entry: no floor switch). */
@@ -864,19 +886,18 @@ export class HouseScene {
     // Heart Hall behind the Snug and the Playroom) is cut low with it, or
     // its end stands up like a post in front of that room's residents
     // (render check, B4). Its upper part goes with the floor standing on it.
+    // Upstairs too (round 2): the Kitchen's side wall over the Playroom's
+    // roof stood in front of the Hall. A wall on the big room's outer side
+    // lines up with that room's own wall, so it stays.
     const cutBack =
       run.axis === 'z' &&
-      !run.exterior &&
-      this.#runs.some(
-        (r) =>
-          r.axis === 'x' &&
-          r.front &&
-          !r.exterior &&
-          r.floor === run.floor &&
-          Math.abs(r.at - run.to) < 0.01 &&
-          r.from <= run.at + 0.01 &&
-          r.to >= run.at - 0.01,
-      );
+      this.#runs.some((r) => {
+        if (r.axis !== 'x' || !r.front || r.exterior || r.floor !== run.floor) return false;
+        if (Math.abs(r.at - run.to) > 0.01 || r.from > run.at + 0.01 || r.to < run.at - 0.01)
+          return false;
+        const behind = this.#boxes.find((b) => b.id === r.room);
+        return behind !== undefined && behind.x0 < run.at - 0.01 && behind.x1 > run.at + 0.01;
+      });
     const height = (run.front && !open) || cutBack ? cut : run.height;
     const length = run.to - run.from;
     const out = run.side === 'north' || run.side === 'east' ? 1 : -1;
@@ -936,6 +957,7 @@ export class HouseScene {
       );
     }
     for (const win of run.windows) {
+      if (win.y - win.h / 2 >= height) continue; // above a wall cut low
       list.push(...place(windowFrame(scene, win, thick), 0));
       const pane = CreatePlane('house-pane', { width: win.w, height: win.h }, scene);
       pane.position.set(win.u, win.y, 0);
@@ -948,21 +970,26 @@ export class HouseScene {
     // With the room behind it on its floor, or the floor above (it's there
     // because of that room, so the cut takes it away with it).
     this.#floorParts(runFloor(run, this.#boxes)).solid.push(...list);
-    if (cutBack && run.upper !== null) {
+    if (!cutBack) return;
+    // The part over the cut: with the floor standing on it, and at kid
+    // height in the ground-floor rooms either side (it closes the room in,
+    // round 2: past it the Heart Tree's crown showed sliced by the ceiling).
+    const lifted = (): Mesh[] => {
       const up = run.height - cut;
-      const lifted = [
-        ...wallPieces(
-          scene,
-          length,
-          up,
-          thick,
-          holes.map((h) => ({ ...h, y: h.y - cut })),
-          HOUSE_PALETTE.wall,
-        ),
+      const shifted = holes.map((h) => ({ ...h, y: h.y - cut }));
+      const pieces = [
+        ...wallPieces(scene, length, up, thick, shifted, HOUSE_PALETTE.wall),
         box(scene, [length, 0.4, thick + 0.03], [length / 2, up - 0.2, 0], HOUSE_PALETTE.wallTop),
       ];
-      for (const p of lifted) p.position.y += cut;
-      this.#floorParts(run.upper).solid.push(...place(lifted, 0));
+      for (const p of pieces) p.position.y += cut;
+      return place(pieces, 0);
+    };
+    if (run.upper !== null) this.#floorParts(run.upper).solid.push(...lifted());
+    if (run.floor === (this.#floors[0] ?? 0)) {
+      for (const id of [run.room, run.other]) {
+        if (id === null) continue;
+        this.#kidWalls.set(id, [...(this.#kidWalls.get(id) ?? []), ...lifted()]);
+      }
     }
   }
 
@@ -1217,6 +1244,7 @@ export class HouseScene {
           ),
         );
       }
+      parts.solid.push(...(this.#kidWalls.get(r.id) ?? []));
       for (const [name, list, material] of [
         [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
         [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],
@@ -1407,6 +1435,7 @@ export class HouseScene {
               };
             },
             'resident',
+            { x: spot.x, y: box.y0, z: spot.z },
           ),
         );
         n += 1;
@@ -1437,15 +1466,22 @@ export class HouseScene {
           };
         },
         'keeper',
+        { x: spot.x, y: box.y0, z: spot.z },
       ),
     );
   }
 
   /** One of the cast, drawn while the floor cut shows its room's floor. */
-  #castSpot(room: string, add: () => () => void, kind: CastSpot['kind']): CastSpot {
+  #castSpot(
+    room: string,
+    add: () => () => void,
+    kind: CastSpot['kind'],
+    at: CastSpot['at'],
+  ): CastSpot {
     let remove: (() => void) | null = null;
     return {
       room,
+      at,
       kind,
       add: () => {
         remove ??= add();

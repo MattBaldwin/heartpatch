@@ -42,6 +42,24 @@ export interface HouseViewport {
   readonly sheet?: number;
 }
 
+/**
+ * The room a tall phone frames (the Keeper's), and how much of each
+ * neighbour it shows (`HOUSE_CAMERA.peek` unless `framedFocus` moved it).
+ */
+export interface HouseFocus {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly peek?: number;
+}
+
+/** A resident as the framing sees it: its middle and about how far it reaches, metres. */
+export interface FramedSpot {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly r: number;
+}
+
 /** A portrait phone (steeper and wider-angle than a tablet or landscape). */
 export const isPhone = (vp: Pick<HouseViewport, 'width' | 'height'>): boolean =>
   vp.width / Math.max(1, vp.height) < HOUSE_CAMERA.phoneAspect;
@@ -111,7 +129,7 @@ export function fitHouse(
   bounds: HouseBounds,
   vp: HouseViewport,
   yard: number = HOUSE_CAMERA.yard,
-  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null = null,
+  focus: HouseFocus | null = null,
 ): HousePose {
   const box = corners(fitBox(bounds, vp, focus));
   const phone = isPhone(vp);
@@ -174,14 +192,48 @@ export function fitHouse(
 export function fitBox(
   bounds: HouseBounds,
   vp: Pick<HouseViewport, 'width' | 'height'>,
-  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+  focus: HouseFocus | null,
 ): HouseBounds {
   if (!focus || !isPhone(vp)) return bounds;
   return {
     ...bounds,
-    minX: Math.max(bounds.minX, focus.minX - HOUSE_CAMERA.peek),
-    maxX: Math.min(bounds.maxX, focus.maxX + HOUSE_CAMERA.peek),
+    minX: Math.max(bounds.minX, focus.minX - (focus.peek ?? HOUSE_CAMERA.peek)),
+    maxX: Math.min(bounds.maxX, focus.maxX + (focus.peek ?? HOUSE_CAMERA.peek)),
   };
+}
+
+/**
+ * The focus with its peek nudged so the frame's side edges fall between
+ * residents (B4 render check: the edge sliced a neighbour's squishy): the
+ * nearest peek to `HOUSE_CAMERA.peek` at which every resident is wholly in
+ * or wholly out of the frame, or the usual peek when none is.
+ */
+export function framedFocus(
+  bounds: HouseBounds,
+  vp: HouseViewport,
+  room: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+  residents: readonly FramedSpot[],
+): HouseFocus | null {
+  if (!room || !isPhone(vp)) return room;
+  const aspect = vp.width / Math.max(1, vp.height);
+  const slices = (peek: number): boolean => {
+    const pose = fitHouse(bounds, vp, undefined, { ...room, peek });
+    const t = Math.tan(pose.fov / 2) * aspect;
+    return residents.some((p) => {
+      const c = project(pose, aspect, p);
+      if (c.depth <= 0) return false;
+      const w = p.r / c.depth / t + HOUSE_CAMERA.edgeClear;
+      // The screen's own edges crop it (the safe area's are only a margin in).
+      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge);
+    });
+  };
+  const usual = HOUSE_CAMERA.peek;
+  for (let step = 0; step <= 14; step += 1) {
+    const peek = usual + (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 2) * 0.2;
+    if (peek < 0.3) continue;
+    if (!slices(peek)) return { ...room, peek };
+  }
+  return { ...room, peek: usual };
 }
 
 /**
@@ -192,7 +244,7 @@ export function fitBox(
 export function panRange(
   bounds: HouseBounds,
   vp: Pick<HouseViewport, 'width' | 'height'>,
-  focus: Pick<HouseBounds, 'minX' | 'maxX'> | null,
+  focus: HouseFocus | null,
 ): { min: number; max: number } {
   const box = fitBox(bounds, vp, focus);
   return { min: bounds.minX - box.minX, max: bounds.maxX - box.maxX };

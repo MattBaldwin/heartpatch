@@ -355,6 +355,38 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
+    it('keeps upstairs clear of the Hall too: the Kitchen’s side wall over the Playroom is cut low (round 2)', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      house.setRoof(1);
+      house.setFloor(1);
+      const mesh = scene.getMeshByName('house-f1-solid')!;
+      const pos = mesh.getVerticesData('position') ?? [];
+      let top = 0;
+      for (let i = 0; i < pos.length; i += 3) {
+        const [x, y, z] = [pos[i]!, pos[i + 1]!, pos[i + 2]!];
+        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && z > 0.5 && z < 4.5) top = Math.max(top, y);
+      }
+      expect(top).toBeGreaterThan(HOUSE_GRID.storey); // there's a low wall
+      expect(top).toBeLessThan(HOUSE_GRID.storey + HOUSE_GRID.cut + 0.2);
+      // Every Hall resident drawn upstairs.
+      expect(house.residentSpots.length).toBe(house.stats.residents);
+      scene.getEngine().dispose();
+    });
+
+    it('stands the Snug’s side wall back up at kid height, closing the room in (round 2: the crown showed past it)', () => {
+      const { scene } = buildHouse(4, 'low');
+      const ceiling = scene.getMeshByName('house-snug-ceiling')!;
+      const pos = ceiling.getVerticesData('position') ?? [];
+      let wall = 0;
+      for (let i = 0; i < pos.length; i += 3) {
+        const [x, y] = [pos[i]!, pos[i + 1]!];
+        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && y > HOUSE_GRID.cut + 0.3 && y < 2.6)
+          wall += 1;
+      }
+      expect(wall).toBeGreaterThan(0);
+      scene.getEngine().dispose();
+    });
+
     it('hangs the sign on a header over the Snug’s opening at kid height (level 4), back on the low wall outside', () => {
       const vp = { width: 820, height: 1180, top: 70, bottom: 90 };
       const { scene, house } = buildHouse(4, 'low');
