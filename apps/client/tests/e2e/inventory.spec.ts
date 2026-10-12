@@ -235,8 +235,13 @@ interface BannerModules {
   };
   view: {
     createAwaySummary: (root: HTMLElement) => {
-      show: (what: { entries: unknown[]; sentence: string; away: boolean }) => void;
-      debug: { shown: string | null; chips: number; more: number };
+      show: (what: {
+        entries: unknown[];
+        sentence: string;
+        away: boolean;
+        from?: () => { x: number; y: number };
+      }) => void;
+      debug: { shown: string | null; chips: number; more: number; flown: number };
     };
   };
 }
@@ -333,5 +338,44 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
   expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
   expect(ten.more).toBeGreaterThan(0);
   expect(ten.chips + ten.more).toBe(ten.entries);
+
+  // Sprout's first-visit tray hint is a dialog but no sheet: with it up, the
+  // chips still fly and the banner takes taps. A real sheet open: nothing
+  // flies across it, and the banner is only to read.
+  const gate = await page.evaluate(async () => {
+    const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
+    const m = {
+      summary: await load('/src/inventory/away-summary.ts'),
+      view: await load('/src/inventory/away-summary-view.ts'),
+    } as BannerModules;
+    // From a bare map-less page: the sign-up sheet this page opens on is a real sheet.
+    for (const d of document.querySelectorAll('[role="dialog"]')) d.remove();
+    const banner = m.view.createAwaySummary(document.body);
+    const entries = m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], []);
+    const node = () => [...document.querySelectorAll<HTMLElement>('.away-banner')].at(-1)!;
+    const dialog = (className: string) => {
+      const d = document.createElement('div');
+      d.className = className;
+      d.setAttribute('role', 'dialog');
+      d.textContent = className;
+      d.style.cssText = 'position:fixed;left:8px;bottom:8px;width:120px;height:60px';
+      document.body.append(d);
+      return d;
+    };
+    const land = () => {
+      const before = banner.debug.flown;
+      banner.show({ entries, sentence: 'x', away: false, from: () => ({ x: 160, y: 420 }) });
+      return { flew: banner.debug.flown > before, quiet: node().classList.contains('away-quiet') };
+    };
+    const hint = dialog('tray-hint');
+    const withHint = land();
+    hint.remove();
+    const sheet = dialog('chat-sheet');
+    const withSheet = land();
+    sheet.remove();
+    return { withHint, withSheet };
+  });
+  expect(gate.withHint).toEqual({ flew: true, quiet: false });
+  expect(gate.withSheet).toEqual({ flew: false, quiet: true });
   await context.close();
 });

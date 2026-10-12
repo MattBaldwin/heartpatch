@@ -76,13 +76,20 @@ export interface AwaySummary {
 }
 
 /**
+ * Dialogs that aren't sheets in the way here: Sprout's first-visit tray hint
+ * and tutorial bubble (hints the map works around; Sprout itself still waits
+ * behind the tray hint, `tutorial/sheets.ts`), and this banner's own card.
+ */
+const NOT_SHEETS = '.tray-hint, .tutorial-bubble, .away-card';
+
+/**
  * A sheet is open over the map (the Bag, the job board, an open tray), as the
  * tutorial reads it (`tutorial/sheets.ts`): shut trays (inert) and notes don't
- * count, nor does this banner's own card.
+ * count, nor do Sprout's hints.
  */
 function sheetOpen(): boolean {
   return [...document.querySelectorAll(SHEET_SELECTOR)].some(
-    (d) => !d.classList.contains('away-card') && boxOf(d) !== null,
+    (d) => !d.closest(NOT_SHEETS) && boxOf(d) !== null,
   );
 }
 
@@ -177,6 +184,13 @@ export function createAwaySummary(
     banner.hidden = true;
   };
 
+  /** Puts every chip still flying in its place at once, and starts the time left. */
+  function landNow(): void {
+    if (flights.length === 0) return;
+    stopFlights();
+    if (!banner.hidden) startHold();
+  }
+
   /** Everything is in the banner: the time left starts. */
   const startHold = () => {
     // A fresh time-left line, so it runs down from full again.
@@ -192,7 +206,10 @@ export function createAwaySummary(
   const place = () => {
     // Over an open sheet (the Bag, the job board) it's only something to
     // read: a tap there is meant for the sheet. Checked again as sheets come and go.
-    banner.classList.toggle('away-quiet', sheetOpen());
+    const quiet = sheetOpen();
+    banner.classList.toggle('away-quiet', quiet);
+    // A sheet opened mid-flight: the chips land at once rather than cross it.
+    if (quiet && flights.length > 0) landNow();
     banner.style.top = '';
     const usual = banner.getBoundingClientRect().top;
     let lowest = -Infinity;
@@ -447,9 +464,7 @@ export function createAwaySummary(
       current = null;
     },
     landNow: () => {
-      if (flights.length === 0) return;
-      stopFlights();
-      if (!banner.hidden) startHold();
+      landNow();
     },
     get text() {
       return banner.hidden ? null : sentence.textContent;
