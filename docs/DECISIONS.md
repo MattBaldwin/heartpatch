@@ -1511,7 +1511,7 @@ _Owner answers to the coordinator late on 2026-10-11 and early on 2026-10-12, as
 _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator"._
 
 **Game rules**
-- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision.
+- **Every squishy gets four stages and three evolutions.** The owner: each evolution looks fiercer but stays cute. Which stage today's two forms become, and the rollout order, are still open with the owner. Until they're decided, the evolution lane plans and mocks up only. GAME_DESIGN.md §8 still says "Phase 1 ships simple level-based single-form evolution"; that line has been out of date since branching shipped (#32) and gets rewritten with the stage decision. _Settled later: today's forms are the baby and the teen, and GAME_DESIGN.md §8 was rewritten in #463. See "2026-10-12 — Owner decisions and coordinator calls (afternoon)" below._
 - **The house perk stays as built (#381).** The owner kept it as built: it applies to any resident who is not in the Hollow or at a post.
 
 **Schedule and process**
@@ -1527,3 +1527,36 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each la
   - Budget and timeout raises: #438 (map.spec 240 s), #447 (iPad `expect` 10 s), the 30 s live polls in #440, the 30 s landing waits in #445, and #451 (three whole-test budgets to about twice their measured iPad runtime).
   - The recipe-book and wardrobe stalls keep their budgets, because a bigger limit would only hide a stall. A re-scan on the new main decides whether the lane stands down.
 - **Post flags keep their hide rule (#426).** A connected post whose flag would sit under a tray handle stays unlabelled until the map moves. That is noted as polish for a 393 px phone, not changed.
+
+## 2026-10-12 — Owner decisions and coordinator calls (afternoon)
+
+_Owner answers to the coordinator on 2026-10-12, plus coordinator calls, each labelled "Coordinator". This settles the evolution question left open in the morning entry._
+
+**Game rules**
+- **Today's two forms become the baby and teen stages (#443).** Today's base form is the baby, today's evolved form becomes the teen (stage 3), and the lane adds a new kid stage (stage 2) between them. A grown-up (stage 4) comes later. Rollout, per GAME_DESIGN.md §8: in Phase 1 the wave-1 lines get a kid and a single teen, and their branch teens follow in Phase 2.
+- **Evolution size and caps.** Coordinator: each stage is ×1.08 to ×1.4 the size of the one before. A grown-up's rarity is capped at legendary.
+- **Kid batches 1 and 2 are approved as shown (#443).** Batch 1 is Kindlebun, Rippletad, Bristlepip, Pumpkip and Wickitten (#466). Batch 2 is Wispyboo, Flitterbat, Cobblenap, Snoozeflake and Zipkit (#479, open). Kids are about ×1.15 size and ×1.18 stats over the baby.
+- **The rare glow is a coloured outline (#391, option A).** It shipped in #468 behind the `rareGlow` tier switch.
+- **Rare finds get a reveal beat (#391 part 2).** It plays for rare and up, lasts about 2 s, a little longer for rarer kinds, and a tap skips it. The full moment plays the first time a player meets each rare kind on a patch; after that, a short banner of about 1 s with no pause. It respects Reduce Motion. The owner's four follow-ups, each as recommended:
+  - The battle caption names the kind.
+  - The befriend card shows "First ever!" when the server says this is the first catch of that kind.
+  - A patch-wide line announces Legendary finds. It names the kind only to patch-mates who have met it, otherwise says "a Legendary squishy", and never names a secret kind.
+  - Secret kinds get the Legendary-size moment, labelled "Special".
+- **Reveal tiers are data, ready for Mythic (Phase 2).** The owner flagged that Mythic squishies arrive in Phase 2. Coordinator: the reveal lives (in #478, open) in a tier table in `packages/shared/src/data/rare-finds.ts` (duration, scale, label, patch line), so Mythic is one new row with no engine change. No Mythic row ships in Phase 1; until one does, Mythic uses the Legendary row. The default Mythic row goes to the owner with the #478 screens.
+
+**Performance and devices**
+- **Medium-tier house budget is 190k triangles (#381 B4, in #477, open; was 160k).** Coordinator call: at L4 floor 0, squishies plus the Keeper are about 150k, so 160k would have meant lower squishy detail. Low and high keep about 10% headroom.
+- **The owner's walk-through before Oct 27 checks three devices.**
+  - iPad 9th gen: the house on the low tier, at least 30 fps.
+  - iPhone 12/13: the medium tier, an L4 house on floor 0, at least 30 fps.
+  - iPad 9th gen: the rare glow on and off (`?fps=1` vs `?fps=1&rareglow=0`). If glow-on drops the low tier under 30 fps, low turns the glow off.
+
+**Coordinator calls**
+- **Additive contract changes approved for #391.** These are the `firstMeeting` flag on battle start, the "first ever" flag on the battle result, and a new `game_events` type for the patch line. All three are additive.
+- **Migration B (#295) waits on the boot log.** Migration B (the unique index on `buildings.tile_id`) runs only once a production boot log from #470 shows 0 tiles holding 2+ buildings, for both `multiplayer` and `other`.
+- **#419 took a fifth review round.** It ran past the four-round limit because each round found new, real issues and the lane kept closing them. #419's PR 2 (#464) merged after round 5. Squishy portraits in the gather summary are filed as #465.
+- **Flaky tests (#429), round 3.**
+  - After #458, #459 and #460, the lane's re-scan of 5 main runs (60 e2e jobs) put first-attempt failures at 0.12 per job, down from 0.31. The sample is small.
+  - inventory:66 is being fixed by root cause in #476 (open): the landed banner hides itself after 4 s, and on a slow runner the spec's checks could outlast that before it tapped.
+  - factory.spec:29 is fixed in #475: about 1 map in 30 had no clearable land within 2 steps of home.
+  - hollow:51 is runner starvation on the slowest iPad shard, not an ordering bug. The plan is to re-scan after about 5 more main runs. If the shard still stalls, one mechanical PR adds `afterEach` context-close to the specs without it. hollow:51's timeouts stay as they are.
