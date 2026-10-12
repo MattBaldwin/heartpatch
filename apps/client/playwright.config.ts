@@ -12,7 +12,7 @@ const testDir = './tests/e2e';
  * per-test medians of six CI runs' list-reporter durations), simulating how
  * the 2 workers pull spec files in name order (a `parallel`-mode file,
  * friendly and tutorial-flow, hands out each test on its own). Each group
- * should take about 11-11.6 min on iPad (friendly's lighter) and 6-11.6 on
+ * should take about 11-13 min on iPad (friendly's lighter) and 6-13 on
  * iPhone.
  *
  * Two specs need room beyond their own time (#408):
@@ -55,21 +55,9 @@ const E2E_GROUPS = [
     'tutorial-flow',
     'whats-new',
   ],
-  // ~11.4 iPad, ~7.5 iPhone, before house (#381, two short tests).
-  [
-    'accessory-everywhere',
-    'account-help',
-    'close-up',
-    'dress-up',
-    'explore',
-    'fences',
-    'hollow',
-    'house',
-    'jobs',
-    'map',
-    'potions',
-    'squishy-gallery',
-  ],
+  // ~13.0 iPad, ~9.6 iPhone. It ran 17-22 min on iPad (the slowest job in every run, 4-6 min over
+  // the next) until close-up, explore, fences and squishy-gallery moved out (#429).
+  ['accessory-everywhere', 'account-help', 'dress-up', 'hollow', 'house', 'jobs', 'map', 'potions'],
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391). Keep it light.
   [
     'cinematic',
@@ -83,21 +71,34 @@ const E2E_GROUPS = [
     'starter',
     'version',
   ],
-  // ~11.1 iPad, ~8.0 iPhone: taps alone is ~4.5-6.5.
+  // ~12.9 iPad, ~9.5 iPhone: taps alone is ~4.5-6.5.
   [
     'auth',
     'boutique',
     'capture',
     'care-layout',
     'chat',
+    'fences',
     'lobby',
     'pwa',
     'taps',
     'trading-posts',
     'wild-picker',
   ],
-  // ~11.3 iPad, ~8.6 iPhone: tutorial alone is ~5-7.
-  ['audio', 'care', 'keeper', 'keeper-gallery', 'raids', 'trade-split', 'tutorial', 'wardrobe'],
+  // ~13.0 iPad, ~8.7 iPhone: tutorial alone is ~5-7.
+  [
+    'audio',
+    'care',
+    'close-up',
+    'explore',
+    'keeper',
+    'keeper-gallery',
+    'raids',
+    'squishy-gallery',
+    'trade-split',
+    'tutorial',
+    'wardrobe',
+  ],
 ];
 
 function e2eGroup(value: string | undefined): { testMatch?: string[] } {

@@ -186,3 +186,15 @@ export const RARE_REVEAL = {
 export function revealStep(list: readonly number[], scale: number): number {
   return list[Math.min(Math.max(scale, 1), list.length) - 1] ?? 0;
 }
+
+/**
+ * Befriending a rare one (#391): hearts that fall over the new friend, by the
+ * tier's size step (index `scale - 1`, the last past the end); fewer, and only
+ * fading in, with Reduce Motion. They keep `heartClear` px off the pills, and
+ * three times that off the card.
+ */
+export const BEFRIEND_CHEER = {
+  hearts: [8, 12, 16, 20, 24], // TUNE
+  calmHearts: 6, // TUNE
+  heartClear: 10,
+} as const;
