@@ -7,6 +7,7 @@ import {
   LIVE_BATTLE_RULES,
   liveTurnAction,
   quickMessageById,
+  rareFindTier,
   sidesToAct,
   battleXpPercent,
   befriendedLevel,
@@ -492,6 +493,7 @@ export function playerBattleView(
     worn?: ReadonlyMap<string, string>;
     defensePrompt?: PlayerBattle['defensePrompt'];
     firstMeeting?: boolean;
+    firstEver?: boolean;
   } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
@@ -519,6 +521,7 @@ export function playerBattleView(
     terrain: row.arena?.terrain ?? MAP_GEN.homeTerrain,
     timeOfDay: row.arena?.timeOfDay ?? 'day',
     ...(options.firstMeeting !== undefined && { firstMeeting: options.firstMeeting }),
+    ...(options.firstEver !== undefined && { firstEver: options.firstEver }),
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     ...(options.live && { live: options.live }),
@@ -621,6 +624,29 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return at !== null && at.getTime() === row.startedAt.getTime();
   };
 
+  /**
+   * A wild battle the player ended by befriending the wild squishy (#391):
+   * was that their first friend of its kind on this map? Befriending marks the
+   * kind caught at the battle's own end time and keeps an earlier first time,
+   * so the two match only when this battle was the first. Null for any other
+   * battle.
+   */
+  const firstEverOf = async (tx: Executor, row: BattleRow): Promise<boolean | null> => {
+    const wild = row.state.sides.b.squishies[0];
+    const befriended =
+      row.kind === 'wild' &&
+      row.status === 'finished' &&
+      row.result?.reason === 'captured' &&
+      row.result.winner === PLAYER_SIDE;
+    if (!befriended || !wild || !row.endedAt) return null;
+    const at = await createSpawnsRepo(tx).firstCaughtAt(
+      row.mapId,
+      row.playerUserId,
+      wild.speciesId,
+    );
+    return at !== null && at.getTime() === row.endedAt.getTime();
+  };
+
   /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   const toPlayerBattle = async (
     tx: Executor,
@@ -637,10 +663,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ...(live ? await wornAccessories(tx, live.bUserId, ids('b')) : []),
     ]);
     const firstMeeting = await firstMeetingOf(tx, row);
+    // Only the battle's own player befriended anything (a defender's replay never).
+    const firstEver = side === PLAYER_SIDE ? await firstEverOf(tx, row) : null;
     return playerBattleView(content, row, {
       mySide: side,
       worn,
       ...(firstMeeting !== null && { firstMeeting }),
+      ...(firstEver !== null && { firstEver }),
       ...(seat?.asking && {
         defensePrompt: {
           expiresAt: seat.asking.expiresAt.toISOString(),
@@ -1004,6 +1033,34 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
 
+  /**
+   * The patch line (#391): a wild friend whose tier tells the whole patch
+   * (Legendary in Phase 1, never a secret kind). Its name goes only to members
+   * who have met it (`metBy`, read by the event's public view).
+   */
+  const appendCelebrated = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    friend: OwnedSquishy,
+  ): Promise<void> => {
+    const rarity = content.species.get(friend.speciesId)?.rarity;
+    if (row.kind !== 'wild' || !rarity || rarity === 'secret') return;
+    if (!rareFindTier(rarity)?.patchLine) return;
+    await repo.appendEvent({
+      mapId: row.mapId,
+      type: 'squishy.celebrated',
+      actorUserId: row.playerUserId,
+      payload: {
+        battleId: row.id,
+        userId: row.playerUserId,
+        speciesId: friend.speciesId,
+        rarity,
+        metBy: await createSpawnsRepo(tx).seenBy(row.mapId, friend.speciesId),
+      },
+    });
+  };
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -1176,7 +1233,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
     await appendGrowthEvents(repo.appendEvent, grown);
-    for (const friend of friends) await appendCaptured(repo, row, friend);
+    for (const friend of friends) {
+      await appendCaptured(repo, row, friend);
+      await appendCelebrated(repo, tx, row, friend);
+    }
     for (const event of tile.events) await repo.appendEvent(event);
     for (const event of landEvents) await repo.appendEvent(event);
     for (const event of journeyEvents) await repo.appendEvent(event);

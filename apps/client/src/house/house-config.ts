@@ -1,3 +1,4 @@
+import type { SkyPhase } from '@heartpatch/shared';
 import type { QualityTier } from '../engine/config.js';
 
 /*
@@ -42,6 +43,8 @@ export const HOUSE_PALETTE = {
     joists: '#c99068', // TUNE: a shade under the boards
     beam: '#8a5a39', // TUNE: the dark beams, like the roof's
     joistEvery: 0.8, // TUNE: metres
+    /** High and medium: the ceiling's own soft warm lift (the fire and the lamp leave it out, H2). */
+    lift: '#6a4630', // TUNE
   },
 } as const;
 
@@ -373,3 +376,191 @@ export const HOUSE_GROWN = {
     stairWidth: 1.0, // TUNE: metres
   },
 } as const;
+
+/*
+ * The living house (#381 H2): the daily gift box, welcome home, and the
+ * light that follows the real clock, with the fire's flicker.
+ */
+
+/** The daily gift box by the giver's bed (or the hearth): vinyl, wrapped, a ribbon and a bow. */
+export const HOUSE_GIFT = {
+  /** The box's edge, metres (a squishy is about a metre tall). */
+  size: 0.38, // TUNE
+  wrap: '#ff8fb8', // TUNE: pink paper
+  lid: '#ffa9c8', // TUNE: a shade lighter, so the lid reads
+  ribbon: '#fff2b0', // TUNE: a pale gold ribbon
+  bow: '#f2c14e', // TUNE: the bow, a little deeper
+  /** The gap between the bed's side and the box, metres. */
+  besideBed: 0.3, // TUNE
+  /** Kept this far inside the room's walls, metres. */
+  wallGap: 0.34, // TUNE
+  /** About how far the Keeper reaches from its middle, metres (the box keeps clear of it). */
+  keeperReach: 0.35, // TUNE
+  /** A tap this close to the box on screen opens it (CSS px). */
+  tapRadius: 52, // TUNE: a 44pt target and a little more
+} as const;
+
+/** Welcome home: the first open of the house on a patch day. */
+export const HOUSE_WELCOME = {
+  /** The line stays up this long, ms, unless the sheet moves first. */
+  lineMs: 4500, // TUNE
+  /** localStorage, per map: the patch day last welcomed (cosmetic; a failure counts as welcomed). */
+  storageKey: 'heartpatch.houseWelcome',
+} as const;
+
+/** The fire and lamp flicker: a slow timer, never per-frame rendering. */
+export const HOUSE_FLICKER = {
+  /** Ticks a second while the house is on screen and the page shows (0: a still fire). */
+  hz: { high: 9, medium: 8, low: 0 } satisfies Readonly<Record<QualityTier, number>>, // TUNE: low stays still, so an idle house draws nothing on the iPad 9th gen
+  /** How far the light dips and lifts, a share of its strength. */
+  depth: { fire: 0.16, lamp: 0.05 }, // TUNE
+} as const;
+
+/** The time-of-day look is checked this often while the house is open, ms (never per frame). */
+export const HOUSE_LOOK_EVERY_MS = 60_000; // TUNE
+
+/** One time of day's light in the house (sRGB): the windows, the sky outside, the lamps. */
+export interface HouseTimeLook {
+  /** The sky dome's colours from the horizon up, at the dome's six stops. */
+  readonly sky: readonly [string, string, string, string, string, string];
+  readonly haze: string;
+  readonly clear: string;
+  /** The lawn outside (night: moonlit blue-green, like explore's ground). */
+  readonly lawn: string;
+  readonly lawnLift: string;
+  /** The windows: the painted picture behind the glass. */
+  readonly pane: 'day' | 'dusk' | 'night';
+  /** The lamps and the fire are lit (dusk and night). */
+  readonly lit: boolean;
+  /** High and medium: the light through the back windows (it casts the shadows). */
+  readonly sun: { readonly color: string; readonly intensity: number };
+  /** Low: the one warm house light. */
+  readonly house: { readonly color: string; readonly intensity: number };
+  /** Low: the warm ambient bounce. */
+  readonly ambient: string;
+  /** The fire's light and the floor's light pools, times their strength. */
+  readonly lamps: number;
+  /** The table lamp's light (high and medium), times its strength: gentler at night, so its hotspot never washes the table out. */
+  readonly lamp: number;
+  /**
+   * High and medium: the image-based light, times `HOUSE_LIGHT.environment.lit`.
+   * By day it stands in for the window light the dimmer lamps leave (the sun
+   * comes through the back windows, so the shell shades most of the room).
+   */
+  readonly environment: number;
+  /** High and medium: the sun's (or moon's) highlight, a share of its colour: soft, so no beam edge glints. */
+  readonly sunSpecular: number;
+  /** Lamp shades, flames and lanterns (their unlit glow), times their colour. */
+  readonly glow: number;
+}
+
+/**
+ * The house's light at each time of day, following explore's sky (#335,
+ * `SKY_LOOKS`). Dusk is the look B1–B4 were judged on, unchanged.
+ * Squishies and the Keeper never take any of it (their own neutral fill).
+ */
+export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
+  dawn: {
+    sky: ['#f6cdb4', '#f6cdb4', '#ffd6b0', '#e8bcc4', '#b8afd8', '#8fa2e3'], // TUNE: SKY_LOOKS.dawn
+    haze: '#f6cdb4', // TUNE
+    clear: '#8fa2e3',
+    lawn: '#a9c58f', // TUNE
+    lawnLift: '#3e3828', // TUNE
+    pane: 'dusk',
+    lit: false,
+    sun: { color: '#ffd9c2', intensity: 1.7 }, // TUNE
+    house: { color: '#ffe0c2', intensity: 1.6 }, // TUNE
+    ambient: '#5e4232', // TUNE
+    lamps: 0.7, // TUNE
+    lamp: 0.7, // TUNE
+    environment: 1.7, // TUNE
+    sunSpecular: 0.3, // TUNE
+    glow: 1,
+  },
+  day: {
+    sky: ['#e3efe0', '#e3efe0', '#e6f7ff', '#bfe6fa', '#96d3f5', '#6fbff0'], // TUNE: SKY_LOOKS.day
+    haze: '#e3efe0', // TUNE: pale, so the far trees fade into daylight
+    clear: '#6fbff0',
+    lawn: '#afcb92', // TUNE: a touch brighter in daylight
+    lawnLift: '#46503a', // TUNE
+    pane: 'day',
+    lit: false,
+    sun: { color: '#fff1dc', intensity: 2.1 }, // TUNE: warm daylight
+    house: { color: '#fff0dc', intensity: 1.75 }, // TUNE
+    ambient: '#6a5444', // TUNE
+    lamps: 0.6, // TUNE: the hearth still glows; the lamps all but off
+    lamp: 0.45, // TUNE
+    environment: 2.0, // TUNE: daylight fills the room (H2 render check: day on high read dimmer than dusk)
+    sunSpecular: 0.12, // TUNE: no white glint along the rafters (H2 render check)
+    glow: 0.9, // TUNE
+  },
+  dusk: {
+    sky: ['#f0b49a', '#f0b49a', '#f3ae98', '#d99bb0', '#8d78b8', '#4e4a96'], // B4's dusk dome
+    haze: HOUSE_PALETTE.haze,
+    clear: HOUSE_PALETTE.sky,
+    lawn: HOUSE_PALETTE.lawn,
+    lawnLift: HOUSE_PALETTE.lawnLift,
+    pane: 'dusk',
+    lit: true,
+    sun: { color: HOUSE_LIGHT.sun.color, intensity: HOUSE_LIGHT.sun.intensity },
+    house: { color: HOUSE_LIGHT.house.color, intensity: HOUSE_LIGHT.house.intensity },
+    ambient: HOUSE_LIGHT.ambient,
+    lamps: 1,
+    lamp: 1,
+    environment: 1,
+    sunSpecular: 0.6,
+    glow: 1,
+  },
+  night: {
+    sky: ['#5a5f96', '#5a5f96', '#4d5596', '#3c4682', '#2c376f', '#1e2a5e'], // TUNE: SKY_LOOKS.night: a friendly blue, never black
+    haze: '#555a90', // TUNE
+    clear: '#1e2a5e',
+    lawn: '#7f9e98', // TUNE: moonlit blue-green (explore's night groundTint)
+    lawnLift: '#1f2434', // TUNE: moonlit
+    pane: 'night',
+    lit: true,
+    sun: { color: '#b9c4ff', intensity: 0.9 }, // TUNE: moonlight through the back windows
+    house: { color: '#ffcf94', intensity: 1.5 }, // TUNE: the lamps carry the room
+    ambient: '#46302a', // TUNE
+    lamps: 1, // TUNE: as dusk (1.15 turned the Heart Hall's ceiling orange at kid height)
+    lamp: 0.6, // TUNE: the table lamp's hotspot washed the side table out at 1.15
+    environment: 1.05, // TUNE
+    sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
+    glow: 1,
+  },
+};
+
+/**
+ * How much each light brightens the room's walls, for `interiorLight` (a
+ * proxy the time-of-day test compares: day must never read dimmer than
+ * dusk). Per unit of strength, judged against the H2 captures' wall samples.
+ */
+export const HOUSE_INTERIOR = {
+  /** High and medium: the image-based light, per unit of intensity. */
+  environment: 1, // TUNE
+  /** High and medium: the fire and the table lamp at full strength. */
+  fire: 0.35, // TUNE
+  lamp: 0.15, // TUNE
+  /** Low: the ambient bounce (its lightness) and the house light (its lightness times strength). */
+  ambient: 1, // TUNE
+  house: 0.35, // TUNE
+} as const;
+
+/** The painted windows (sRGB): the sky behind the glass, top to bottom, and the hills. */
+export const HOUSE_PANES = {
+  day: {
+    sky: ['#6fbff0', '#a9dcf7', '#d8f1ff', '#f2fbff'],
+    hills: '#8fbf86',
+    stars: false,
+  },
+  dusk: {
+    sky: ['#4f4596', '#a46aa6', '#f29a86', '#ffc27a'],
+    hills: '#5c4a6e',
+    stars: true,
+  },
+  night: {
+    sky: ['#141d4a', '#1e2a5e', '#2c376f', '#3c4682'],
+    hills: '#1a2140',
+    stars: true,
+  },
+} as const; // TUNE

@@ -4,6 +4,7 @@ import {
   evaluateRequirements,
   GAME_DATA,
   HOUSE_DATA,
+  HOUSE_NOTES,
   houseLevelData,
   maxHouseLevel,
   nextHouseLevel,
@@ -84,6 +85,44 @@ export function sampleHouse(level: number, residents = true): HouseSample {
     },
     squishies,
     speciesDefs: [],
+  };
+}
+
+/** Who left the sample gift: a resident of this room (its first, or `index`), or nobody drawn. */
+export interface SampleGift {
+  readonly room?: string;
+  readonly index?: number;
+  /** A giver no longer in the house (traded away): the box goes by the hearth. */
+  readonly away?: boolean;
+  readonly claimed?: boolean;
+  readonly itemId?: string;
+  readonly count?: number;
+}
+
+/**
+ * The sample with today's gift from a resident (#381 H2), as the server
+ * rolls it: a note with the giver's name in it, 3 Timber unless asked.
+ */
+export function withGift(sample: HouseSample, gift: SampleGift = {}): HouseSample {
+  const room =
+    sample.view.rooms.find((r) => r.id === (gift.room ?? 'snug')) ?? sample.view.rooms[0];
+  const resident = room?.residents[gift.index ?? 0] ?? null;
+  const giver = gift.away ? id(999) : (resident?.squishyId ?? null);
+  const squishy = sample.squishies.find((s) => s.id === giver);
+  const name = GAME_DATA.species.find((s) => s.id === squishy?.speciesId)?.name ?? 'A friend';
+  return {
+    ...sample,
+    view: {
+      ...sample.view,
+      gift: {
+        day: NOW.slice(0, 10),
+        giverSquishyId: giver,
+        itemId: gift.itemId ?? 'timber',
+        count: gift.count ?? 3,
+        note: (HOUSE_NOTES[0]?.line ?? '{name} left you this').replace('{name}', name),
+        claimed: gift.claimed ?? false,
+      },
+    },
   };
 }
 

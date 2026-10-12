@@ -8,6 +8,7 @@ import { createPortraits } from '../../procedural/portraits.js';
 import {
   sampleHouse,
   sampleMix,
+  withGift,
   withGrow,
   type HouseSample,
   type SampleGrow,
@@ -26,8 +27,12 @@ import '../../styles.css';
  * `?beds=mix` puts residents home, away and in a trade with an empty bed
  * and squishies outside (moving in and out works, no server); `?beds=away`
  * has residents on watch, training and in the Hollow; `?picker=snug` opens
- * the move-in picker on that room; `?portraits=0` draws no pictures; plus
- * `?renderer=webgpu`.
+ * the move-in picker on that room; `?portraits=0` draws no pictures;
+ * `?gift=1` puts today's wrapped gift by a resident's bed (`?gift=hearth`:
+ * its giver is out, so by the hearth), and Open it! opens it, no server;
+ * `?minute=1200` pins the time of day (minutes after midnight: 720 noon,
+ * 1080 dusk, 1200 night; the device's clock if left out); `?welcome=1`
+ * shows welcome home on every load and keeps its line up; plus `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
@@ -43,7 +48,24 @@ const growParam = params.get('grow');
 const grow: SampleGrow = growParam === 'ready' ? 'ready' : 'not-yet';
 const bedsParam = params.get('beds');
 const mix = bedsParam === 'mix' || bedsParam === 'away' ? sampleMix(bedsParam) : null;
-let sample: HouseSample = withGrow(mix ?? sampleHouse(level, residents), grow);
+const giftParam = params.get('gift');
+/** Today's gift as `?gift=` asks: by a resident's bed (the top room's, upstairs too), or the hearth. */
+const gifted = (s: HouseSample): HouseSample =>
+  giftParam === null || giftParam === '0'
+    ? s
+    : withGift(s, giftParam === 'hearth' ? { away: true } : {});
+let sample: HouseSample = gifted(withGrow(mix ?? sampleHouse(level, residents), grow));
+const minuteParam = params.get('minute');
+const minute = minuteParam === null ? null : Number(minuteParam);
+/** `?minute=`: today on the device's clock at that minute. */
+const now = (): Date => {
+  const at = new Date();
+  if (minute === null || !Number.isFinite(minute)) return at;
+  at.setHours(Math.floor(minute / 60) % 24, Math.floor(minute % 60), 0, 0);
+  return at;
+};
+/** Welcome home remembers nothing in the gallery unless `?welcome=1` asks for it every load. */
+const welcome = params.get('welcome') === '1';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('missing #game canvas');
@@ -103,6 +125,13 @@ const house = createHouseScreen({
       sample = { ...sample, view: { ...view, rooms, cooldowns } };
       return sample.view;
     },
+    // A pretend open: the gift, opened.
+    claimGift: async (): Promise<HouseView> => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const gift = sample.view.gift;
+      sample = { ...sample, view: { ...sample.view, gift: gift && { ...gift, claimed: true } } };
+      return sample.view;
+    },
   },
   // The squishies' real pictures on the beds and in the picker, as main.ts draws them
   // (`?portraits=0` shows the flat look a face falls back to when it can't be drawn).
@@ -119,6 +148,11 @@ const house = createHouseScreen({
     care: { list: () => Promise.resolve(mix.care) },
     jobs: { view: () => Promise.reject(new Error('no jobs in the gallery')) },
   }),
+  now,
+  requestFrame: () => stage?.requestFrame(),
+  storage: welcome ? { getItem: () => null, setItem: () => undefined } : null,
+  // `?welcome=1` keeps the line up (for house-shots), until the sheet moves.
+  ...(welcome && { welcomeLineMs: 0 }),
   // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });

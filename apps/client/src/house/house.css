@@ -81,7 +81,7 @@
 .house-walk {
   position: absolute;
   right: calc(env(safe-area-inset-right) + 12px);
-  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  bottom: calc(env(safe-area-inset-bottom) + max(96px, var(--house-peek-clear, 0px)));
   min-width: 44px;
   min-height: 52px;
   padding: var(--hp-pad-y) 22px;
@@ -106,7 +106,7 @@
 /* Upstairs / Downstairs (B4 floor cut): bottom left, across from Walk in. */
 .house-floor {
   position: absolute;
-  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  bottom: calc(env(safe-area-inset-bottom) + max(96px, var(--house-peek-clear, 0px)));
   left: calc(env(safe-area-inset-left) + 12px);
   min-height: 52px;
   padding: var(--hp-pad-y) 16px;
@@ -313,6 +313,11 @@
   background: rgb(46 26 50 / 44%);
   pointer-events: auto;
   touch-action: none;
+}
+
+/* The gift card's backdrop: just a hint, so the squishies stay bright behind it. */
+.house-scrim-light {
+  background: rgb(46 26 50 / 12%);
 }
 
 /* The header stays at the top of the sheet's scroll: the eyebrow, ✕, the
@@ -638,6 +643,106 @@
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── The daily gift (#381 H2) ─────────────────────────────────────────── */
+
+/* The peek bar's gift line: a soft pink pill, the button alternative to tapping the box. */
+.house-gift-line {
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: none;
+  border-radius: 16px;
+  background: #fff1f7;
+  color: #7a2d55;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.house-gift-line:active {
+  transform: scale(0.98);
+}
+
+/* The card: the server's note big, then what's inside, then Open it!. */
+.house-gift-note {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.house-gift-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff6ec;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.house-gift-icon {
+  display: inline-flex;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.house-gift-tool {
+  width: 32px;
+  height: 32px;
+}
+
+/* The unwrap: the box pops up and away in a puff of stars (none under reduced motion). */
+.house-gift-pop {
+  --ring: 56px;
+
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.house-gift-pop-box {
+  position: absolute;
+  font-size: 40px;
+  animation: house-gift-pop 0.7s ease-out forwards;
+}
+
+.house-gift-pop-bit {
+  position: absolute;
+  font-size: 22px;
+  opacity: 0;
+  animation: house-sparkle 0.9s ease-out 0.12s forwards;
+}
+
+@keyframes house-gift-pop {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+
+  45% {
+    opacity: 1;
+    transform: translate(-50%, -90%) scale(1.25);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -130%) scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-gift-pop {
+    display: none;
+  }
 }
 
 /* ── Residents (#381 plan §10.2–10.3, PR C2b) ─────────────────────────── */

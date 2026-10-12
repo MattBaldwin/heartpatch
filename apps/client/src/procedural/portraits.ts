@@ -2,7 +2,7 @@ import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CreateScreenshotUsingRenderTargetAsync } from '@babylonjs/core/Misc/screenshotTools';
+import { CreateScreenshotUsingRenderTarget } from '@babylonjs/core/Misc/screenshotTools';
 import { Scene } from '@babylonjs/core/scene';
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { cameraFor } from '../close-up/close-up-view.js';
@@ -108,6 +108,52 @@ async function cropToSquishy(dataUrl: string, px: number): Promise<string> {
 
 /** A draw that hasn't finished by then is given up (it resolves to null). */
 const DRAW_TIMEOUT_MS = 8_000; // TUNE
+/**
+ * How long a snapshot waits for its scene to be ready before it fails (it
+ * always ends, so the next one can start: Babylon can't take two at once).
+ */
+const SNAPSHOT_TIMEOUT_MS = 20_000; // TUNE
+/**
+ * How long a draw waits for its scene to be ready before the snapshot: Babylon's
+ * own wait never ends if it never is (nor once the scene is disposed).
+ */
+const READY_TIMEOUT_MS = 8_000; // TUNE
+/**
+ * The next draw starts after the last one ends, or after this at most: longer
+ * than a draw normally takes (its ready wait, then its snapshot). A snapshot
+ * still going after it is caught by `draw`'s own check (`skipFrameRender`).
+ */
+const QUEUE_CAP_MS = READY_TIMEOUT_MS + SNAPSHOT_TIMEOUT_MS + 5_000; // TUNE
+
+/**
+ * A snapshot of what `camera` sees, `size` px square, that always settles.
+ * Babylon sizes the engine's render to the snapshot until the snapshot
+ * renders, so only one may be taken at a time (`createPortraits` queues them).
+ */
+function snapshot(engine: AbstractEngine, camera: TargetCamera, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    CreateScreenshotUsingRenderTarget(
+      engine,
+      camera,
+      size,
+      resolve,
+      'image/png',
+      4,
+      true,
+      undefined,
+      false,
+      false,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      SNAPSHOT_TIMEOUT_MS,
+      () => {
+        reject(new Error('portrait snapshot timed out'));
+      },
+    );
+  });
+}
 
 /** `work`, or null if it hasn't settled within `ms`. */
 function withTimeout<T>(work: Promise<T | null>, ms: number): Promise<T | null> {
@@ -128,6 +174,50 @@ function withTimeout<T>(work: Promise<T | null>, ms: number): Promise<T | null> 
   });
 }
 
+/**
+ * Something draws keep using, disposed only once it's retired and no draw is
+ * still on it: a draw given up on (`DRAW_TIMEOUT_MS`) may still have its
+ * snapshot pending, and disposing the scene under it breaks the engine's
+ * render loop (readPixels comes back null).
+ */
+export interface InUse {
+  /** A draw starts on it; the returned call says it's done. */
+  begin(): () => void;
+  /** No new draws; it goes once the last one in progress is done. */
+  retire(): void;
+  readonly retired: boolean;
+}
+
+export function inUse(dispose: () => void): InUse {
+  let drawing = 0;
+  let retired = false;
+  let gone = false;
+  const settle = () => {
+    if (!retired || drawing > 0 || gone) return;
+    gone = true;
+    dispose();
+  };
+  return {
+    begin() {
+      drawing += 1;
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        drawing -= 1;
+        settle();
+      };
+    },
+    retire() {
+      retired = true;
+      settle();
+    },
+    get retired() {
+      return retired;
+    },
+  };
+}
+
 export function createPortraits(options: PortraitOptions): Portraits {
   const cache = new Map<string, Promise<string | null>>();
   /** One render at a time, each after the last, so the map never stalls for long. */
@@ -139,11 +229,18 @@ export function createPortraits(options: PortraitOptions): Portraits {
     scene: Scene;
     field: SquishyField<SquishyDetail>;
     camera: TargetCamera;
+    use: InUse;
   } | null = null;
 
+  /** No new draws on the current scene: it goes once its draws are done. */
+  function retireStage(): void {
+    stage?.use.retire();
+    stage = null;
+  }
+
   function stageFor(engine: AbstractEngine): NonNullable<typeof stage> {
-    if (stage?.engine === engine && !stage.scene.isDisposed) return stage;
-    stage?.scene.dispose();
+    if (stage?.engine === engine && !stage.use.retired && !stage.scene.isDisposed) return stage;
+    retireStage();
     const scene = new Scene(engine, { virtual: true });
     scene.clearColor = new Color4(0, 0, 0, 0);
     setupLighting(scene);
@@ -157,15 +254,25 @@ export function createPortraits(options: PortraitOptions): Portraits {
     camera.fov = FOV;
     camera.minZ = 0.1;
     scene.activeCamera = camera;
-    stage = { engine, scene, field, camera };
+    stage = {
+      engine,
+      scene,
+      field,
+      camera,
+      use: inUse(() => {
+        scene.dispose();
+      }),
+    };
     return stage;
   }
 
   async function draw(look: PortraitLook): Promise<string | null> {
     const engine = options.engine();
     if (!engine || engine.isDisposed) return null;
-    const { scene, field, camera } = stageFor(engine);
+    const { scene, field, camera, use } = stageFor(engine);
     const handle = field.add(look.species, look.instanceId, { x: 0, z: 0 });
+    // Nothing between `stageFor` and here waits, so its scene can't be retired first.
+    const done = use.begin();
     try {
       field.setAccessory(handle, accessoryItem(look.accessory));
       const height = field.heightOf(handle);
@@ -178,27 +285,34 @@ export function createPortraits(options: PortraitOptions): Portraits {
       // The field uploads its instances before a scene render; a snapshot
       // renders straight into a texture, so upload them now.
       field.flush();
-      await scene.whenReadyAsync();
+      // Not ready in time: no picture this time, and no snapshot taken.
+      if (
+        !(await withTimeout(
+          scene.whenReadyAsync().then(() => true),
+          READY_TIMEOUT_MS,
+        ))
+      ) {
+        return null;
+      }
       const css = window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX;
       // The game's own pixel-ratio cap (CLAUDE.md rule 8): at 2× and up to
       // the crop's scale it stays crisp on a 3× iPhone.
       const px = Math.round(css * MAX_DPR);
       // Drawn bigger with room to spare, then cut to the squishy's own
       // outline, so long ears and tall toppers fit as well as round bodies.
-      const shot = await CreateScreenshotUsingRenderTargetAsync(
-        engine,
-        camera,
-        Math.round(px * DRAW_SCALE),
-        'image/png',
-        4,
-        true,
-      );
+      // Another snapshot is still going (one the queue gave up waiting on):
+      // Babylon sets this until it renders, and two at once would leave the
+      // engine's render size wrong. No picture this time.
+      if (engine.skipFrameRender) return null;
+      const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
       return await cropToSquishy(shot, px);
     } catch {
       return null;
     } finally {
       field.remove(handle);
       options.invalidate();
+      // Its scene goes now if it was retired meanwhile (a timeout).
+      done();
     }
   }
 
@@ -207,10 +321,16 @@ export function createPortraits(options: PortraitOptions): Portraits {
       const key = `${look.species.id}|${look.instanceId}|${look.accessory ?? ''}`;
       let entry = cache.get(key);
       if (!entry) {
-        // Each draw gives up after a while (a lost GPU context never finishes
-        // its snapshot), so one stuck draw can't hold up every picture after it.
-        entry = queue.then(() => withTimeout(draw(look), DRAW_TIMEOUT_MS));
-        queue = entry.catch(() => null);
+        // Each picture is given up on after a while (a slow device, a lost GPU
+        // context), so the screen asking doesn't wait on it. The next draw
+        // still waits for this one to end: two snapshots at once would leave
+        // the engine's render size wrong (the map drawn in a small box).
+        const run = queue.then(() => {
+          const work = draw(look);
+          return { work, shown: withTimeout(work, DRAW_TIMEOUT_MS) };
+        });
+        entry = run.then((r) => r.shown);
+        queue = run.then((r) => withTimeout(r.work, QUEUE_CAP_MS)).catch(() => null);
         cache.set(key, entry);
         // No picture (no engine yet, a failure, a timeout): forget it, so the
         // next look tries again rather than keeping the blob all session.
@@ -218,10 +338,10 @@ export function createPortraits(options: PortraitOptions): Portraits {
         void entry.then((url) => {
           if (url !== null) return;
           if (cache.get(key) === mine) cache.delete(key);
-          // A draw that gave up may have left its squishy in the scene: start
-          // the next one from a fresh scene.
-          stage?.scene.dispose();
-          stage = null;
+          // A draw that gave up may have left its squishy in the scene, and
+          // may still be drawing: the next one starts on a fresh scene, and
+          // this one goes once that draw is done.
+          retireStage();
         });
       }
       return entry;

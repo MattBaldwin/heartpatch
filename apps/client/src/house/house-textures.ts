@@ -2,53 +2,81 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Scene } from '@babylonjs/core/scene';
+import { HOUSE_PANES } from './house-config.js';
+
+/** A window's picture: the time of day behind the glass. */
+export type HousePane = keyof typeof HOUSE_PANES;
 
 /*
- * The house's few painted textures (#381): the dusk seen through a window,
+ * The house's few painted textures (#381): the sky seen through a window,
  * the name sign and a soft round light pool. Each paints a small 2D canvas
  * once at build. Kept apart so the scene's unit tests (a NullEngine, no
  * canvas) can stand in for them, as they do for the contact shadow.
  */
 
-/** The dusk sky in a window pane: violet up high, peach at the horizon, a moon and stars. */
-export function duskPaneMaterial(scene: Scene): StandardMaterial {
-  const key = 'house-dusk-pane';
+/**
+ * The sky in a window pane at a time of day (#381 H2): dusk is violet up
+ * high and peach at the horizon with a moon and stars, night a deep blue
+ * with them, day a soft blue with two clouds. Painted once per scene and
+ * time of day, when the look first asks for it.
+ */
+export function paneMaterial(scene: Scene, kind: HousePane = 'dusk'): StandardMaterial {
+  const key = `house-${kind}-pane`;
   const found = scene.getMaterialByName(key);
   if (found instanceof StandardMaterial) return found;
+  const look = HOUSE_PANES[kind];
   const size = 256;
   const tex = new DynamicTexture(key, { width: size, height: size }, scene, true);
   const ctx = tex.getContext() as CanvasRenderingContext2D;
   const g = ctx.createLinearGradient(0, 0, 0, size);
-  g.addColorStop(0, '#4f4596'); // TUNE: deep dusk violet up high
-  g.addColorStop(0.45, '#a46aa6');
-  g.addColorStop(0.78, '#f29a86');
-  g.addColorStop(1, '#ffc27a');
+  const [top, high, low, bottom] = look.sky;
+  g.addColorStop(0, top);
+  g.addColorStop(0.45, high);
+  g.addColorStop(0.78, low);
+  g.addColorStop(1, bottom);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
   ctx.fillStyle = 'rgba(255, 246, 220, 0.95)';
-  for (const [x, y, r] of [
-    [40, 30, 2.2],
-    [96, 52, 1.6],
-    [150, 22, 2],
-    [210, 60, 1.6],
-    [70, 88, 1.3],
-    [232, 18, 1.4],
-  ] as const) {
+  if (look.stars) {
+    for (const [x, y, r] of [
+      [40, 30, 2.2],
+      [96, 52, 1.6],
+      [150, 22, 2],
+      [210, 60, 1.6],
+      [70, 88, 1.3],
+      [232, 18, 1.4],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // A crescent moon.
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(186, 70, 15, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(194, 64, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  } else {
+    // Two soft clouds.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    for (const [x, y, r] of [
+      [62, 64, 18],
+      [84, 58, 22],
+      [106, 66, 16],
+      [176, 104, 14],
+      [194, 98, 18],
+      [212, 106, 13],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-  // A crescent moon.
-  ctx.beginPath();
-  ctx.arc(186, 70, 15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(194, 64, 13, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
   // Soft hills along the bottom.
-  ctx.fillStyle = '#5c4a6e';
+  ctx.fillStyle = look.hills;
   ctx.beginPath();
   ctx.moveTo(0, size);
   ctx.lineTo(0, 214);

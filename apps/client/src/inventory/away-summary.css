@@ -110,6 +110,23 @@
   color: #5a3a12;
 }
 
+/* Trained squishies' faces (#465): the same pictures as the roster, a few
+   overlapping like the mockup's stack. */
+.away-faces {
+  display: flex;
+  flex: none;
+}
+
+.away-face {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.away-face + .away-face {
+  margin-left: -12px;
+}
+
 .away-more {
   display: flex;
   flex: none;
@@ -343,6 +360,19 @@
   background: #fff8ec;
   font-size: 15px;
   font-weight: 800;
+}
+
+.away-trained-face {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.away-trained-icon {
+  display: grid;
+  place-items: center;
+  font-size: 20px;
 }
 
 .away-trained-name {

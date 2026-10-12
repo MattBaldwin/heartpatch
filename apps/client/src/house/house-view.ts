@@ -166,6 +166,34 @@ export const RESIDENT_TEXT = {
   rosterLivesIn: (room: string) => `🏠 Lives in ${room}`,
 } as const;
 
+/*
+ * The daily gift (#381 H2): a resident leaves the Keeper a little something
+ * once a patch day. The note itself comes from the server, the giver's name
+ * already in it; only the frame around it lives here.
+ */
+export const GIFT_TEXT = {
+  icon: '🎁',
+  /** The peek bar's line, the giver by name. */
+  peek: (name: string) => `🎁 ${name} left you something!`,
+  /** When the giver isn't known here (traded away, or not in the home reply). */
+  peekSomeone: '🎁 A little gift is waiting for you!',
+  /** The card's eyebrow. */
+  title: 'A gift for you!',
+  open: 'Open it!',
+  opening: 'Opening…',
+  close: 'Close',
+  closeIcon: '✕',
+  /** What's inside, on the card: "3 Timber". */
+  item: (count: number, name: string) => `${String(count)}\u00A0${name}`,
+  /** The toast once it's open: "+3 Timber 🎁". */
+  toast: (count: number, name: string) => `+${String(count)}\u00A0${name}\u00A0🎁`,
+} as const;
+
+/** Welcome home (#381 H2): the first visit of a patch day. */
+export const WELCOME_TEXT = {
+  line: 'Welcome home! 🏠',
+} as const;
+
 /**
  * The home's house card, or null while the house is switched off for this
  * player (`HomeResponse.house` left out): then there's no card and no cottage.

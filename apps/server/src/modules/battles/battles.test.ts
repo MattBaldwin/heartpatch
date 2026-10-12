@@ -482,6 +482,82 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(other.firstMeeting).toBe(true);
     });
 
+    it('says whether a befriend is the first of its kind ("First ever!", #391)', async () => {
+      const server = await start();
+      const kid = await player();
+      // The Glade: a Heart Charm always works there (tutorialOverrides).
+      const started = await call(server, 'POST', '/tutorial/start', kid);
+      const mapId = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      await grant(server, kid, mapId, { level: 40 });
+      const items = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
+        items: { 'heart-charm': 3 },
+      });
+      expect(items.statusCode, items.body).toBe(201);
+
+      const befriend = async () => {
+        const battle = await pickFight(server, kid, mapId, {
+          opponent: { speciesId: 'huddlenut' },
+        });
+        expect(battle).not.toHaveProperty('firstEver');
+        const done = battleOf(await act(server, kid, battle, { type: 'capture' }));
+        expect(done.view.phase).toMatchObject({ result: { reason: 'captured' } });
+        return done;
+      };
+      const first = await befriend();
+      expect(first.firstEver).toBe(true);
+      // Coming back to it later says the same.
+      expect(battleOf(await call(server, 'GET', `/battles/${first.id}`, kid)).firstEver).toBe(true);
+      clock.setTime(clock.getTime() + 60_000);
+      expect((await befriend()).firstEver).toBe(false);
+
+      // A battle that ended any other way says nothing.
+      clock.setTime(clock.getTime() + 60_000);
+      const ran = await pickFight(server, kid, mapId, { opponent: { speciesId: 'dawndrop' } });
+      const gone = battleOf(await act(server, kid, ran, { type: 'forfeit' }));
+      expect(gone).not.toHaveProperty('firstEver');
+    });
+
+    it('tells the patch of a Legendary friend only, never a secret one (#391)', async () => {
+      const server = await start();
+      const kid = await player();
+      // The Glade: a Heart Charm always works there (tutorialOverrides).
+      const started = await call(server, 'POST', '/tutorial/start', kid);
+      const mapId = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      await grant(server, kid, mapId, { level: 40 });
+      const items = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
+        items: { 'heart-charm': 3 },
+      });
+      expect(items.statusCode, items.body).toBe(201);
+      const befriend = async (speciesId: string) => {
+        clock.setTime(clock.getTime() + 60_000);
+        const battle = await pickFight(server, kid, mapId, { opponent: { speciesId } });
+        const done = battleOf(await act(server, kid, battle, { type: 'capture' }));
+        expect(done.view.phase).toMatchObject({ result: { reason: 'captured' } });
+        return done;
+      };
+      const celebrated = async () =>
+        (await eventsOf(mapId)).filter((e) => e.type === 'squishy.celebrated');
+
+      await befriend('dawndrop'); // Epic: no patch line (owner decision 2026-10-12)
+      await befriend(SECRET_IDS[0]!); // a secret kind never sends one (rule 6)
+      expect(await celebrated()).toEqual([]);
+
+      const legend = await befriend('thunderplume');
+      expect(await celebrated()).toEqual([
+        expect.objectContaining({
+          actorUserId: kid.id,
+          payload: {
+            battleId: legend.id,
+            userId: kid.id,
+            speciesId: 'thunderplume',
+            rarity: 'legendary',
+            // Meeting it in this battle counts: the finder has met it.
+            metBy: [kid.id],
+          },
+        }),
+      ]);
+    });
+
     it('scripts the opponent on a tutorial map (tutorialOverrides)', async () => {
       const server = await start();
       const kid = await player();

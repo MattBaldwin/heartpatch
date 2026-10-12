@@ -1,10 +1,11 @@
 import {
   BuildHouseRequestSchema,
+  ClaimHouseGiftRequestSchema,
   HouseViewSchema,
   MoveResidentRequestSchema,
 } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sampleHouse, withGrow } from './house-fixtures.js';
+import { sampleHouse, withGift, withGrow } from './house-fixtures.js';
 
 const apiCallFor = vi.fn();
 vi.mock('../net/api.js', () => ({ apiCallFor }));
@@ -65,6 +66,20 @@ describe('house api', () => {
     expect(MoveResidentRequestSchema.safeParse(options.body).success).toBe(true);
   });
 
+  it('opens the day’s gift with its Idempotency-Key, the reply checked by the shared schema', async () => {
+    const { houseApi } = await import('./house-api.js');
+    const view = withGift(sampleHouse(1), { claimed: true }).view;
+    apiCallFor.mockResolvedValue(view);
+    await expect(houseApi.claimGift('map-1', '2026-10-12', 'gift-1')).resolves.toBe(view);
+    expect(apiCallFor).toHaveBeenCalledWith('/maps/map-1/house/gift/claim', {
+      method: 'POST',
+      body: { day: '2026-10-12' },
+      schema: HouseViewSchema,
+      headers: { 'idempotency-key': 'gift-1' },
+    });
+    expect(ClaimHouseGiftRequestSchema.safeParse({ day: '2026-10-12' }).success).toBe(true);
+  });
+
   it('the samples it is tested with are real house views', () => {
     for (const level of [1, 2, 3, 4]) {
       expect(HouseViewSchema.safeParse(sampleHouse(level).view).success).toBe(true);
@@ -72,6 +87,11 @@ describe('house api', () => {
         expect(HouseViewSchema.safeParse(withGrow(sampleHouse(level), grow).view).success).toBe(
           true,
         );
+      }
+      for (const claimed of [false, true]) {
+        expect(
+          HouseViewSchema.safeParse(withGift(sampleHouse(level), { claimed }).view).success,
+        ).toBe(true);
       }
     }
   });

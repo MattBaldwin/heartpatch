@@ -65,6 +65,24 @@ describe('summaryEntries', () => {
     expect(summaryEntries([{ items: { timber: 5 } }], []).map((e) => e.kind)).toEqual(['item']);
   });
 
+  it("carries a trained squishy's picture when one is ready, and none otherwise (#465)", () => {
+    const [entry] = summaryEntries(
+      [],
+      [
+        { name: 'Glimmerock', xp: 2, portrait: 'data:image/png;base64,AAAA' },
+        { name: 'Emberbun', xp: 4 },
+      ],
+    );
+    expect(entry).toEqual({
+      kind: 'trained',
+      squishies: [
+        { name: 'Glimmerock', xp: 2, portrait: 'data:image/png;base64,AAAA' },
+        { name: 'Emberbun', xp: 4 },
+      ],
+      xp: 6,
+    });
+  });
+
   it('counts a tool in whole tools, as its pop-up line does', () => {
     const shovel = EXPLORE_RULES.tools.find((t) => t.id === 'shovel');
     if (!shovel) throw new Error('no shovel');
@@ -100,6 +118,7 @@ describe('AWAY_TEXT', () => {
       AWAY_TEXT.tagAway,
       AWAY_TEXT.tagNow,
       AWAY_TEXT.more(3),
+      AWAY_TEXT.trainedCount(4),
       AWAY_TEXT.cardTagAway,
       AWAY_TEXT.cardTagNow,
       AWAY_TEXT.cardTitle,

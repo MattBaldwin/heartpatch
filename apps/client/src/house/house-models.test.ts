@@ -5,7 +5,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
 import { blend, fitHouse, kidPose } from './house-camera.js';
 import { HOUSE_BUDGET } from './house-config.js';
-import { sampleHouse, sampleLevels } from './house-fixtures.js';
+import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
 import { buildCottage } from './house-models.js';
 import { hasRoomBuilder } from './house-rooms.js';
 import type { HouseScene } from './house-scene.js';
@@ -19,7 +19,9 @@ vi.mock('../procedural/contact-shadow.js', () => ({
 vi.mock('./house-textures.js', async () => {
   const { StandardMaterial } = await import('@babylonjs/core/Materials/standardMaterial');
   return {
-    duskPaneMaterial: (scene: Scene) => new StandardMaterial('test-pane', scene),
+    paneMaterial: (scene: Scene, kind = 'dusk') =>
+      scene.getMaterialByName(`test-${kind}-pane`) ??
+      new StandardMaterial(`test-${kind}-pane`, scene),
     signMaterial: (scene: Scene) => new StandardMaterial('test-sign', scene),
     radialTexture: () => null,
   };
@@ -82,9 +84,12 @@ function framesOf(level: number): { label: string; floor: number; zoom: number; 
   ];
 }
 
-/** Builds the house and shows it as `frame` says, as the screen does. */
+/**
+ * Builds the house and shows it as `frame` says, as the screen does, with
+ * today's wrapped gift by a resident's bed (#381 H2: the heaviest it gets).
+ */
 function shown(level: number, tier: QualityTier, frame: ReturnType<typeof framesOf>[number]) {
-  const built = buildHouse(level, tier);
+  const built = buildHouse(level, tier, withGift(sampleHouse(level)));
   built.house.setFloor(frame.floor);
   built.house.setRoof(frame.roof);
   poseAt(built.house, frame.zoom);
@@ -104,7 +109,7 @@ describe('house models: the budget, every tier, every floor', () => {
     const keep = tier === 'medium' ? 1 : HEADROOM;
     for (const level of sampleLevels()) {
       for (const frame of framesOf(level)) {
-        it(`house level ${String(level)} fits the ${tier} tier: ${frame.label}, the shadow pass counted`, () => {
+        it(`house level ${String(level)} fits the ${tier} tier: ${frame.label}, the gift and the shadow pass counted`, () => {
           const { scene, house } = shown(level, tier, frame);
           const cost = frameCost(scene, house);
           expect(cost.drawCalls).toBeLessThanOrEqual(Math.floor(cap.drawCalls * keep));
@@ -116,6 +121,27 @@ describe('house models: the budget, every tier, every floor', () => {
       }
     }
   }
+
+  it('draws the gift box with no draw call of its own, on every tier (#381 H2)', () => {
+    for (const tier of ['low', 'medium', 'high'] as const) {
+      for (const sample of [withGift(sampleHouse(1)), withGift(sampleHouse(1), { away: true })]) {
+        const plain = buildHouse(1, tier);
+        const gifted = buildHouse(1, tier, sample);
+        const frame = { label: '', floor: 0, zoom: 0, roof: 1 };
+        for (const b of [plain, gifted]) poseAt(b.house, frame.zoom);
+        const without = frameCost(plain.scene, plain.house);
+        const withIt = frameCost(gifted.scene, gifted.house);
+        expect(gifted.house.stats.gift).toBe(true);
+        expect(plain.house.stats.gift).toBe(false);
+        expect(withIt.drawCalls).toBe(without.drawCalls);
+        // A little box: a ribbon, a bow, about a thousand triangles at most.
+        expect(withIt.triangles - without.triangles).toBeGreaterThan(0);
+        expect(withIt.triangles - without.triangles).toBeLessThan(2_000);
+        plain.scene.getEngine().dispose();
+        gifted.scene.getEngine().dispose();
+      }
+    }
+  }, 60_000); // twelve house builds
 
   it('merges a room into a few meshes, not one per piece', () => {
     const { scene, house } = buildHouse(1, 'low');

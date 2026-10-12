@@ -18,8 +18,11 @@ import { trayButton } from './trays.js';
 interface HouseDebug {
   mapId: string;
   open: boolean;
-  sheet: 'peek' | 'open' | 'grow' | 'confirm' | 'picker' | 'move-out';
+  sheet: 'peek' | 'open' | 'grow' | 'confirm' | 'gift' | 'picker' | 'move-out';
   sparkles: number;
+  gift: { shown: boolean; opening: boolean; opened: number };
+  welcomed: boolean;
+  flicker: { running: boolean; hz: number; ticks: number };
   building: boolean;
   moving: boolean;
   pickRoom: string | null;
@@ -37,6 +40,8 @@ interface HouseDebug {
     floor: number;
     floors: number[];
     residents: number;
+    gift: boolean;
+    light: { phase: string; lit: boolean };
   } | null;
 }
 
@@ -96,6 +101,12 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await expect(page.getByTestId('house-pill')).toHaveText('🏠 House 1');
   await expect(page.getByTestId('house-peek-line')).toHaveText('The Snug · 2 beds');
   await expect(page.getByTestId('home')).toBeHidden();
+  // The first visit of the patch day says welcome home (#381 H2).
+  // (The line itself shows for a few seconds, which a slow runner can outlast.)
+  expect((await houseState(page))?.welcomed).toBe(true);
+  // No gift today (nobody lives here yet): no gift line, no box.
+  await expect(page.getByTestId('house-gift-line')).toBeHidden();
+  expect((await houseState(page))?.scene?.gift).toBe(false);
   // Big, roomy controls, all on screen.
   await expectRoomyLabels(page, '[data-testid="house-back"], [data-testid="house-pill"]');
   // One floor: no Upstairs switch.
@@ -128,6 +139,77 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await expect(page.getByTestId('house')).toBeHidden();
   await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
   expect((await houseState(page))?.open ?? false).toBe(false);
+  // Nothing ticks once the house is gone: the fire's flicker stopped with it.
+  expect((await houseState(page))?.flicker.running).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('today’s gift waits in the house: open it once and the box goes away', async ({ browser }) => {
+  test.setTimeout(180_000);
+  const page = await newPlayer(browser, uniqueName('gift'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // A resident left a gift today (the server rolls it): every read shows it
+  // wrapped until the claim lands, then opened.
+  let claimed = false;
+  const day = '2026-10-12';
+  const note = 'Someone wrapped this all by themselves! 🎁';
+  const withGift = (body: HouseView): HouseView => ({
+    ...body,
+    gift: { day, giverSquishyId: null, itemId: 'timber', count: 3, note, claimed },
+  });
+  await page.route('**/api/v1/maps/*/house', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: withGift((await response.json()) as HouseView) });
+  });
+  const posts: { key: string | undefined; body: unknown }[] = [];
+  await page.route('**/api/v1/maps/*/house/gift/claim', async (route: Route) => {
+    const request = route.request();
+    posts.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
+    const house = await page.request.get(request.url().replace(/\/gift\/claim$/, ''));
+    claimed = true;
+    await route.fulfill({ json: withGift((await house.json()) as HouseView) });
+  });
+  await patchAndHome(page);
+  await page.getByTestId('home-house-shortcut').tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+
+  // The box sits by the hearth (its giver isn't drawn), and the peek bar says so.
+  expect((await houseState(page))?.scene?.gift).toBe(true);
+  const line = page.getByTestId('house-gift-line');
+  await expect(line).toHaveText('🎁 A little gift is waiting for you!');
+  await expectRoomyLabels(page, '[data-testid="house-gift-line"]');
+
+  // The line opens the card: the server's note as given, what's inside, Open it!.
+  await expect(async () => {
+    await line.tap();
+    expect((await houseState(page))?.sheet).toBe('gift');
+  }).toPass(slow);
+  await expect(page.getByTestId('house-gift-note')).toHaveText(note);
+  await expect(page.getByTestId('house-gift-item')).toHaveText(/3\s+Timber/);
+  const open = page.getByTestId('house-gift-yes');
+  await expect(open).toHaveText('Open it!');
+  await expectRoomyLabels(page, '[data-testid="house-gift-yes"], [data-testid="house-gift-close"]');
+  await expect(page.getByTestId('house-scrim')).toBeVisible();
+
+  // Open it!: one claim with its Idempotency-Key; the box pops and goes, a toast cheers.
+  await open.tap();
+  await expect.poll(async () => (await houseState(page))?.gift.opened, slow).toBe(1);
+  await expect(page.getByTestId('house-note')).toHaveText(/^\+3\s+Timber\s+🎁$/, slow);
+  expect(await houseState(page)).toMatchObject({ sheet: 'peek', gift: { shown: false } });
+  expect((await houseState(page))?.scene?.gift).toBe(false);
+  await expect(line).toBeHidden();
+  await expect(page.getByTestId('house-scrim')).toBeHidden();
+
+  // Opening the sheet re-reads the house: the gift stays opened, nothing comes back.
+  await page.getByTestId('house-peek-handle').tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('open');
+  await page.waitForTimeout(1_000);
+  expect((await houseState(page))?.scene?.gift).toBe(false);
+  await expect(line).toBeHidden();
+  expect(posts).toHaveLength(1);
+  expect(posts[0]!.body).toEqual({ day });
+  expect(posts[0]!.key).toMatch(/^[0-9a-f]{32}$/);
   expect(errors).toEqual([]);
 });
 
