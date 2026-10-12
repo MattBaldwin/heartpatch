@@ -30,7 +30,7 @@ import {
   landedText,
 } from './bag-view.js';
 import type { BuildSource } from '../building/tile-build.js';
-import { CLEAR_TEXT, clearCards, settledText } from './clear-model.js';
+import { CLEAR_CARD_ID, CLEAR_TEXT, clearCards, settledText } from './clear-model.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -1046,7 +1046,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
    */
   const clearSource: BuildSource = {
     cards: (tile) => (state ? clearCards(tile, user?.id ?? null, state, clock.now()) : []),
-    build: async (_card, tile) => {
+    build: async (card, tile) => {
+      // The waiting building cards are only ever shown, never built.
+      if (card.id !== CLEAR_CARD_ID) return null;
       const id = mapId;
       if (!id || !state) return null;
       const at = generation;

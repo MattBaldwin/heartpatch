@@ -61,6 +61,16 @@ export function buildStatus(card: BuildCard, bag: ItemCounts | null, areas: numb
   return { kind: 'ready' };
 }
 
+/**
+ * Can this card be tapped? Every card, blocked ones too, while nothing's
+ * building: a tap on a blocked card shows why it waits (its `blocked` line),
+ * and Build! stays off (`buildStatus`). A disabled card next to one that
+ * works would hide its reason for good.
+ */
+export function cardTappable(working: boolean): boolean {
+  return !working;
+}
+
 /** A cost as icons and counts, for one tight line: "32 🌿 4 🪵". */
 export function costShort(cost: ItemCounts): string {
   return Object.entries(cost)

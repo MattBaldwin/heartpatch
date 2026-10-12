@@ -181,6 +181,8 @@ export function clearCards(
     blocked: offer.blocked,
     craft: offer.needTool ? CLEAR_TEXT.needTool(toolName(offer.tool)) : null,
   };
+  // On land with no spot, Clear land comes after the buildings that can go
+  // up as it is (the home source's cards come first).
   if (offer.blocked || !clearsFirst(tile)) return [clear];
   const waiting = [LAND_FIRE, GROUNDS].flatMap((b) =>
     b
