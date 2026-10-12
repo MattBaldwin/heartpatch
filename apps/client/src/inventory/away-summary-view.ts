@@ -1,6 +1,12 @@
 import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
-import { AWAY_TEXT, flightPath, type ScreenPoint, type SummaryEntry } from './away-summary.js';
+import {
+  AWAY_TEXT,
+  flightPath,
+  spreadStarts,
+  type ScreenPoint,
+  type SummaryEntry,
+} from './away-summary.js';
 import './away-summary.css';
 
 // The "what landed" banner and its card (#419, owner pick 2026-10-12). One
@@ -29,8 +35,8 @@ const STAGGER_MS = 70; // TUNE
 const MAX_FLYERS = 10; // TUNE
 /** Points along each flight path. */
 const FLIGHT_STEPS = 12;
-/** How far apart chips from the same tile pop up. */
-const SAME_TILE_STEP = { x: 22, y: -16 }; // TUNE
+/** Space kept between chips popping up near each other. */
+const POP_GAP_PX = 4; // TUNE
 
 export interface AwaySummaryShow {
   readonly entries: readonly SummaryEntry[];
@@ -311,25 +317,31 @@ export function createAwaySummary(
     const from = what.from;
     if (!from || reducedMotion()) return false;
     const run = flightRun;
-    // Chips from the same tile pop up a little apart, so none hides another's number.
-    const fromSame = new Map<string, number>();
     const trips = what.entries.slice(0, MAX_FLYERS).flatMap((entry, i) => {
-      const at = from(entry);
-      const key = at ? `${String(Math.round(at.x))},${String(Math.round(at.y))}` : '';
-      const nth = fromSame.get(key) ?? 0;
-      fromSame.set(key, nth + 1);
-      const start = at && { x: at.x + nth * SAME_TILE_STEP.x, y: at.y + nth * SAME_TILE_STEP.y };
+      const spot = from(entry);
       const slot = i < chipsShown ? (chips.children[i] as HTMLElement | undefined) : more;
-      return start && slot && !slot.hidden ? [{ entry, start, slot }] : [];
-    });
-    if (trips.length === 0) return false;
-    for (const { slot } of trips) if (slot !== more) slot.classList.add('away-waiting');
-    const landed = trips.map(({ entry, start, slot }, k) => {
+      if (!spot || !slot || slot.hidden) return [];
       const flyer = chipFor(entry);
       flyer.classList.add('away-flyer');
       flyer.setAttribute('aria-hidden', 'true');
-      root.append(flyer);
-      const size = flyer.getBoundingClientRect();
+      return [{ spot, slot, flyer }];
+    });
+    if (trips.length === 0) return false;
+    for (const { slot } of trips) if (slot !== more) slot.classList.add('away-waiting');
+    // Measured first, so chips popping up near each other (one tile, or
+    // neighbouring tiles on a small phone) are spread and never hide a number.
+    root.append(...trips.map((t) => t.flyer));
+    const sizes = trips.map((t) => t.flyer.getBoundingClientRect());
+    const below = banner.getBoundingClientRect().bottom;
+    const starts = spreadStarts(
+      trips.map((t) => t.spot),
+      sizes,
+      POP_GAP_PX,
+      { top: below + POP_GAP_PX, left: 0, right: innerWidth, bottom: innerHeight },
+    );
+    const landed = trips.map(({ slot, flyer }, k) => {
+      const size = sizes[k] ?? flyer.getBoundingClientRect();
+      const start = starts[k] ?? trips[k]?.spot ?? { x: 0, y: 0 };
       const box = slot.getBoundingClientRect();
       const end = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
       const at = (p: ScreenPoint, scale: number) =>

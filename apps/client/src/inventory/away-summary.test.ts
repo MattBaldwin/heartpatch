@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AWAY_TEXT,
   flightPath,
+  spreadStarts,
   summaryCount,
   summaryEntries,
   summarySentence,
@@ -139,6 +140,51 @@ describe('flightPath', () => {
           left[i - 1] ?? Infinity,
         );
       }
+    }
+  });
+});
+
+describe('spreadStarts', () => {
+  const chip = { width: 56, height: 30 };
+  const phone = { top: 200, left: 0, right: 320, bottom: 568 };
+  const overlap = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    gap: number,
+  ): boolean => Math.abs(a.x - b.x) < chip.width + gap && Math.abs(a.y - b.y) < chip.height + gap;
+
+  it('leaves chips that are already apart where they are', () => {
+    const spots = [
+      { x: 60, y: 300 },
+      { x: 200, y: 300 },
+      { x: 130, y: 400 },
+    ];
+    expect(spreadStarts(spots, [chip, chip, chip], 4, phone)).toEqual(spots);
+  });
+
+  it('spreads chips from one tile, or close tiles, so none covers another, on screen and under the banner', () => {
+    // A 320-point phone: six chips from tiles narrower than a chip.
+    const spots = [
+      { x: 150, y: 300 },
+      { x: 150, y: 300 },
+      { x: 170, y: 310 },
+      { x: 130, y: 320 },
+      { x: 160, y: 290 },
+      { x: 150, y: 300 },
+    ];
+    const starts = spreadStarts(
+      spots,
+      spots.map(() => chip),
+      4,
+      phone,
+    );
+    for (const [i, a] of starts.entries()) {
+      for (const b of starts.slice(i + 1)) expect(overlap(a, b, 4)).toBe(false);
+      expect(a.x - chip.width / 2).toBeGreaterThanOrEqual(phone.left);
+      expect(a.x + chip.width / 2).toBeLessThanOrEqual(phone.right);
+      expect(a.y - chip.height / 2).toBeGreaterThanOrEqual(phone.top);
+      // Near its own tile: within a few chips.
+      expect(Math.hypot(a.x - (spots[i]?.x ?? 0), a.y - (spots[i]?.y ?? 0))).toBeLessThan(200);
     }
   });
 });

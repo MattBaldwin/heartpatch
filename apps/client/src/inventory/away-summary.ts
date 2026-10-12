@@ -133,3 +133,63 @@ export function flightPath(from: ScreenPoint, to: ScreenPoint, steps: number): S
   }
   return points;
 }
+
+/** A chip's size on screen, in CSS pixels. */
+export interface ChipSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Where flying chips may pop up: on screen, and below the banner they fly to. */
+export interface PopArea {
+  readonly top: number;
+  readonly left: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+/**
+ * Where each flying chip pops up (#419): its own spot, unless that would
+ * cover a chip already placed (two from one tile, or neighbouring tiles on a
+ * small phone, where tiles are narrower than chips). Then it takes the
+ * nearest free spot around it (beside, above or below, a chip apart), kept
+ * inside `area` so it stays on screen and under the banner. If nowhere near
+ * is free it keeps its own spot: a brief overlap beats a chip off screen.
+ */
+export function spreadStarts(
+  spots: readonly ScreenPoint[],
+  sizes: readonly ChipSize[],
+  gap: number,
+  area: PopArea,
+): ScreenPoint[] {
+  const placed: { at: ScreenPoint; size: ChipSize }[] = [];
+  const covers = (at: ScreenPoint, size: ChipSize) =>
+    placed.some(
+      (p) =>
+        Math.abs(p.at.x - at.x) < (p.size.width + size.width) / 2 + gap &&
+        Math.abs(p.at.y - at.y) < (p.size.height + size.height) / 2 + gap,
+    );
+  const inside = (at: ScreenPoint, size: ChipSize) =>
+    at.x - size.width / 2 >= area.left &&
+    at.x + size.width / 2 <= area.right &&
+    at.y - size.height / 2 >= area.top &&
+    at.y + size.height / 2 <= area.bottom;
+  for (const [i, spot] of spots.entries()) {
+    const size = sizes[i] ?? { width: 0, height: 0 };
+    const stepX = size.width + gap;
+    const stepY = size.height + gap;
+    // Nearest first: up to three chips away each way.
+    const candidates: ScreenPoint[] = [];
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        candidates.push({ x: spot.x + dx * stepX, y: spot.y + dy * stepY });
+      }
+    }
+    candidates.sort(
+      (a, b) => Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y),
+    );
+    const at = candidates.find((c) => inside(c, size) && !covers(c, size)) ?? spot;
+    placed.push({ at, size });
+  }
+  return placed.map((p) => p.at);
+}
