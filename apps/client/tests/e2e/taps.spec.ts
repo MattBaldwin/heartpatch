@@ -95,7 +95,9 @@ async function opensAndCloses(open: Locator, sheet: Locator, close: Locator): Pr
 }
 
 test('one real tap opens each sheet and works each button over the map', async ({ browser }) => {
-  test.setTimeout(180_000); // a full map build; CI renders in software
+  // A full map build; CI renders in software. It took up to 168 s on iPad CI (and ran out of
+  // 180 s twice in 8 runs), so the limit is well clear of that (#429).
+  test.setTimeout(300_000);
   const page = await newPlayer(browser, uniqueName('tap'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
