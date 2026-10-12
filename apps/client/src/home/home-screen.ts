@@ -986,10 +986,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     ];
   }
 
-  /** The peek bar's way into the house (#381), beside Squishies and Jobs: only while the house is on. */
+  /** The peek bar's way into the house (#381), in the Build row: only while the house is on. */
   function houseShortcut(current: HomeResponse): HTMLButtonElement | null {
     if (!houseCard(current) || !options.onHouse) return null;
-    // A round icon button, so the peek bar stays one row beside Squishies and Jobs.
+    // A round icon button, so the Build row (and the peek bar) stays one row.
     const b = button(
       HOUSE_TEXT.shortcutIcon,
       goInside,

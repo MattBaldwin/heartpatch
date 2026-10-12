@@ -12,7 +12,7 @@ export const HOUSE_TEXT = {
   card: '🏠 Your house',
   cardLine: (level: number, n: number) => `House ${String(level)} · ${beds(n)}`,
   goInside: 'Go inside',
-  /** The home peek bar's shortcut, beside 🐾 Squishies and 🧺 Jobs. */
+  /** The home peek bar's shortcut, in its Build row. */
   shortcut: 'Your house',
   shortcutIcon: '🏠',
   back: 'Back',

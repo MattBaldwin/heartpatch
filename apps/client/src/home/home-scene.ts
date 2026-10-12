@@ -401,7 +401,8 @@ export class HomeScene {
   #showCottage(home: HomeResponse): void {
     const exterior = home.house ? houseLevelData(HOUSE_DATA, home.house.level).exterior : null;
     if (this.#cottage?.exterior === exterior) return;
-    this.#cottage?.mesh.dispose();
+    // Its material too: each swap makes a new one.
+    this.#cottage?.mesh.dispose(false, true);
     this.#cottage = null;
     if (!exterior) return;
     const mesh = buildCottage(this.#scene, exterior);
