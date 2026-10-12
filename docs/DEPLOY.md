@@ -340,6 +340,8 @@ A deploy that fails its health checks rolls itself back. To go back from a relea
   ```
   The previous release's images are kept on the server, so this works without GitHub. The next merge to `main` deploys normally again.
 
+A deploy (from GitHub or by hand) waits up to 15 minutes for a running restore or live-data dry run to finish before it starts; if one is still going after that, the deploy fails with nothing changed.
+
 Rollbacks don't undo database migrations. That's by design: migrations are written so the previous release still works on the new schema (tech spec §4, "expand, then contract").
 
 ### Changing a setting

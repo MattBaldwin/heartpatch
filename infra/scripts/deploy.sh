@@ -32,8 +32,10 @@ HP_DIR=$(pwd -P)
 [[ -f .env ]] || fail "$HP_DIR/.env is missing (docs/DEPLOY.md step 6)"
 
 # One deploy at a time (a push and a manual rollback could otherwise overlap).
+# restore.sh and the live-data dry run (ops-check.sh) hold it too: wait for
+# them rather than fail, since a dry run usually takes a few minutes.
 exec 9>"$HP_DIR/.deploy.lock"
-flock -n 9 || fail "another deploy or a restore is running; try again when it finishes"
+flock -w 900 9 || fail "another deploy, a restore or a dry run has held the lock for 15 minutes; nothing changed, try again when it finishes"
 
 # Reads KEY=value from .env without sourcing it (values may hold shell characters).
 env_value() { sed -n "s/^$1=//p" .env | tail -n 1; }
