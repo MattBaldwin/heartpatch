@@ -813,15 +813,17 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         expect.objectContaining({ speciesId: wild.speciesId, firstCaughtAt: clock }),
       );
       // The level-40 dev squishy is past its evolution levels, so its battle XP
-      // grows it up too (#19's `applyXp`): to its kid and on to its teen (#443).
-      const all = (await eventsOf(mapId)).slice(-4);
+      // grows it up too (#19's `applyXp`): to its kid, its teen (#443) and,
+      // for a starter line, its grown-up (#495).
+      const all = (await eventsOf(mapId)).slice(-5);
       expect(all.map((e) => e.type)).toEqual([
         'battle.ended',
         'squishy.evolved',
         'squishy.evolved',
+        'squishy.evolved',
         'squishy.captured',
       ]);
-      const events = [all[0]!, all[3]!];
+      const events = [all[0]!, all[4]!];
       expect(events[1]!.payload).toEqual({
         battleId: battle.id,
         userId: kid.id,

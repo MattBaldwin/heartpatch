@@ -206,21 +206,22 @@ describe('the house tag (#381)', () => {
 });
 
 describe('evolutionStage', () => {
-  it('counts the public line: a first form is stage 1 of 3, evolving at its level', () => {
+  it('counts the public line: a first form is stage 1 of 4, evolving at its level', () => {
     expect(evolutionStage('puddlepuff', 5, { percent: 40, levelsToGo: 11 })).toEqual({
       stage: 1,
-      of: 3,
+      of: 4,
       evolvesAt: 16,
       fill: 0.4,
       ready: false,
     });
   });
 
-  // #443: a kid is stage 2, and a wave-1 line counts its kid and one teen.
+  // #443: a kid is stage 2, and a wave-1 line counts its kid and one teen
+  // (3 stages until its grown-up ships, #495).
   it('counts a kid, in a launch line and in a wave-1 line', () => {
     expect(evolutionStage('rippletad', 18, { percent: 20, levelsToGo: 6 })).toMatchObject({
       stage: 2,
-      of: 3,
+      of: 4,
       evolvesAt: 24,
     });
     expect(evolutionStage('lilyhop', 5, null)).toMatchObject({ stage: 1, of: 3 });
@@ -235,13 +236,27 @@ describe('evolutionStage', () => {
     });
   });
 
-  it('puts an evolved form on its last stage, with no bar', () => {
-    expect(evolutionStage('splashmallow', 30, null)).toEqual({
+  // #495: a teen with a grown-up is stage 3 of 4; the grown-up is the last stage.
+  it('counts a teen and its grown-up', () => {
+    expect(evolutionStage('splashmallow', 30, { percent: 10, levelsToGo: 6 })).toMatchObject({
       stage: 3,
-      of: 3,
+      of: 4,
+      evolvesAt: 36,
+    });
+  });
+
+  it('puts a top form on its last stage, with no bar', () => {
+    expect(evolutionStage('tsunoodle', 40, null)).toEqual({
+      stage: 4,
+      of: 4,
       evolvesAt: null,
       fill: null,
       ready: false,
+    });
+    expect(evolutionStage('croakaroo', 30, null)).toMatchObject({
+      stage: 3,
+      of: 3,
+      evolvesAt: null,
     });
   });
 

@@ -7,9 +7,10 @@ import { WAVE_1_SPECIES } from './species-wave-1.js';
  * Halloween lines. Each line grows in four stages (§8, #443): baby → kid →
  * teen → grown-up. A kid comes at the baby's evolution level, keeps its
  * rarity and adds about 18% to its stats; the teens come 8 levels later
- * (the forms that shipped as each line's evolution before #443), and the
- * grown-ups arrive in Phase 2. Kids land in batches, so a line without one
- * still goes baby → teen. Lines branch at the teen step
+ * (the forms that shipped as each line's evolution before #443), and each
+ * teen's grown-up comes 20 levels after the kid, one rarity up (Phase 2,
+ * #495). Grown-ups land in batches, so a teen without one is still its line's
+ * top form. Lines branch at the teen step
  * (#32): a second form at the same level is a sidegrade, the same element
  * and rarity with a different feeling; how it's reached is server-only
  * (`data/server/evolution-rules.ts`). Public:
