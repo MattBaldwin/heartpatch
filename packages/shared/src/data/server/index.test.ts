@@ -23,4 +23,19 @@ describe('@heartpatch/shared/server', () => {
       expect(name in publicEntry).toBe(false);
     }
   });
+
+  it("keeps the house's gift table, its schema and the roll server-only (#381 PR H)", () => {
+    for (const name of [
+      'HOUSE_GIFTS',
+      'HouseGiftTableSchema',
+      'checkHouseGifts',
+      'rollHouseGift',
+      'houseGiftRow',
+      'houseGiftNote',
+      'houseGiftSeed',
+    ]) {
+      expect(name in serverEntry).toBe(true);
+      expect(name in publicEntry).toBe(false);
+    }
+  });
 });

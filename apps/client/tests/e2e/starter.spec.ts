@@ -86,7 +86,8 @@ test('a new patch asks for a starter once, before the map', async ({ browser }) 
 });
 
 test('a pick or map that fails never leaves the screen blank', async ({ browser }) => {
-  test.setTimeout(120_000);
+  // About 2 min on iPad CI at the slowest, right at the old 120 s, so the limit is twice that (#429).
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('oops'));
   const lobby = page.getByTestId('lobby');
   const picker = page.getByTestId('starter-picker');

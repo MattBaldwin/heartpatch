@@ -1,6 +1,6 @@
 import { expect, type Browser, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, idle } from './dev-hook.js';
 import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -26,7 +26,10 @@ export interface PostDebug {
 export const postState = (page: Page) => hook<PostDebug>(page, 'post');
 
 const posts = (page: Page) =>
-  hook<{ onScreen: { name: string; x: number; y: number }[] }>(page, 'posts');
+  hook<{
+    onScreen: { name: string; x: number; y: number }[];
+    connected: { name: string; x: number; y: number }[];
+  }>(page, 'posts');
 const mapState = (page: Page) => hook<{ live: string | null }>(page, 'map');
 
 /**
@@ -130,15 +133,24 @@ export function flagsUnderCovers(page: Page): Promise<string[]> {
   });
 }
 
-/** Taps the post my land reaches (its flag says 🔗) and goes in with "Visit post". */
+/**
+ * Taps the post my land reaches and goes in with "Visit post". The map says where its tile is
+ * on screen: its flag (🔗) can be hidden by design when a tray handle covers both spots beside
+ * the tile (#426), and a hidden flag must not decide whether the post can be visited (#429). The
+ * tap is made again while the camera is still settling.
+ */
 export async function visitPost(page: Page): Promise<void> {
   await shutTrays(page);
-  const flag = page.getByTestId('post-flag').filter({ hasText: /^🔗 / }).first();
-  await expect(flag).toBeVisible({ timeout: 30_000 });
-  const name = ((await flag.textContent()) ?? '').replace(/^🔗 /, '');
-  const spot = (await posts(page))!.onScreen.find((p) => p.name === name)!;
-  await tapCanvas(page, spot.x, spot.y);
-  await expect(page.getByTestId('tile-panel').locator('#tile-panel-title')).toHaveText(name);
+  await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
+  await expect
+    .poll(async () => (await posts(page))?.connected.length ?? 0, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  const title = page.getByTestId('tile-panel').locator('#tile-panel-title');
+  await expect(async () => {
+    const spot = (await posts(page))!.connected[0]!;
+    await tapCanvas(page, spot.x, spot.y);
+    await expect(title).toHaveText(spot.name, { timeout: 5_000 });
+  }).toPass({ timeout: 30_000 });
   await page.getByTestId('post-visit').tap();
   await expect(page.getByTestId('post')).toBeVisible();
   await expect(page.getByTestId('post-chip')).toHaveText('🔗 Connected');

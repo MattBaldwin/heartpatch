@@ -70,6 +70,7 @@ import {
   gameEvents,
   tileExplore,
   gatherJobs,
+  houseGifts,
   houseResidents,
   inventories,
   journeys,
@@ -859,6 +860,112 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockMapRow(tx, mapId),
     );
     expect(await living()).toBe('snug');
+  });
+
+  /** A Keeper with a resident and today's gift rolled, for the claim's locks (#381 PR H). */
+  async function giftSetup(prefix: string) {
+    const { kid, mapId } = await houseSetup(prefix);
+    const [pet] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    await db.insert(houseResidents).values({
+      squishyId: pet!.id,
+      mapId,
+      userId: kid.id,
+      roomId: 'snug',
+      movedInAt: new Date(),
+    });
+    const house = createHouseService({ db, house: { mode: 'on', testers: [] } });
+    const { gift } = await house.get(kid, mapId);
+    // The gift's item row exists, so holding every inventory row holds it too.
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { [gift!.itemId]: 1 }, 'dev-grant'),
+    );
+    const claim = () => house.claimGift(kid, mapId, gift!.day);
+    const opened = async () =>
+      (
+        await db
+          .select({ claimedAt: houseGifts.claimedAt })
+          .from(houseGifts)
+          .where(and(eq(houseGifts.mapId, mapId), eq(houseGifts.userId, kid.id)))
+      )[0]?.claimedAt != null;
+    const lockGift = (tx: Transaction) =>
+      tx
+        .select({ id: houseGifts.id })
+        .from(houseGifts)
+        .where(and(eq(houseGifts.mapId, mapId), eq(houseGifts.userId, kid.id)))
+        .for('update');
+    return { kid, mapId, house, claim, opened, lockGift };
+  }
+
+  it('takes the member row before the house (house `claimGift`, #381 step 2 then 8c)', async () => {
+    const { kid, mapId, claim, opened } = await giftSetup('giftmember');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      claim,
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+    );
+    expect(await opened()).toBe(true);
+  });
+
+  it('takes the house before the gift row (house `claimGift`, #381 step 8c)', async () => {
+    const { kid, mapId, claim, opened, lockGift } = await giftSetup('gifthouse');
+    await holdThen(
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+      claim,
+      lockGift,
+    );
+    expect(await opened()).toBe(true);
+  });
+
+  it('takes the gift row before the inventory rows (house `claimGift`, #381 step 8c then 11)', async () => {
+    const { kid, mapId, claim, opened, lockGift } = await giftSetup('giftrow');
+    await holdThen(lockGift, claim, (tx) => lockTimber(tx, mapId, kid.id));
+    expect(await opened()).toBe(true);
+  });
+
+  it('fills the bag before its event (house `claimGift`, #381 step 11 then 13)', async () => {
+    const { kid, mapId, claim, opened } = await giftSetup('giftbag');
+    await holdThen(
+      (tx) => lockTimber(tx, mapId, kid.id),
+      claim,
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await opened()).toBe(true);
+  });
+
+  it("rolls today's gift under the member row, then the house (house `get`, #381 step 2 then 8c)", async () => {
+    const { kid, mapId } = await moveInSetup('giftroll');
+    const [pet] = await db
+      .select({ id: squishies.id })
+      .from(squishies)
+      .where(eq(squishies.mapId, mapId))
+      .limit(1);
+    await db.insert(houseResidents).values({
+      squishyId: pet!.id,
+      mapId,
+      userId: kid.id,
+      roomId: 'snug',
+      movedInAt: new Date(),
+    });
+    const house = createHouseService({ db, house: { mode: 'on', testers: [] } });
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      () => house.get(kid, mapId),
+      (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
+    );
+    const rows = await db
+      .select({ id: houseGifts.id })
+      .from(houseGifts)
+      .where(and(eq(houseGifts.mapId, mapId), eq(houseGifts.userId, kid.id)));
+    expect(rows).toHaveLength(1);
   });
 
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {
