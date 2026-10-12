@@ -33,14 +33,14 @@ describe('house api', () => {
       schema: HouseViewSchema,
       headers: { 'idempotency-key': 'key-1' },
     });
-    // Moving out sends a null room, with a fresh key of its own.
-    await moveResident('map-1', squishyId, null);
+    // Moving out sends a null room, with the caller's key for that tap.
+    await moveResident('map-1', squishyId, null, 'key-2');
     const [, options] = apiCallFor.mock.calls[1] as [
       string,
       { body: unknown; headers: Record<string, string> },
     ];
     expect(options.body).toEqual({ squishyId, roomId: null });
-    expect(options.headers['idempotency-key']).toMatch(/^[0-9a-f]{32}$/u);
+    expect(options.headers['idempotency-key']).toBe('key-2');
   });
 
   it('the samples it is tested with are real house views', () => {
