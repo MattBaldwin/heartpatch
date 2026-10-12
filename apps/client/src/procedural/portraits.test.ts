@@ -125,15 +125,18 @@ describe('createPortraits', () => {
     scenes.length = 0;
     shots = [];
     whenReady = () => Promise.resolve();
+    engine.skipFrameRender = false;
   });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
+  /** The game's engine; `skipFrameRender` is set while a snapshot is in flight. */
+  const engine = { isDisposed: false, skipFrameRender: false };
   const portraitsFor = () =>
     createPortraits({
-      engine: () => ({ isDisposed: false }) as never,
+      engine: () => engine as never,
       registry: { bodies: new Map() } as unknown as VisualRegistry,
       lod: () => 'high',
       invalidate: () => undefined,
@@ -186,6 +189,23 @@ describe('createPortraits', () => {
       expect(shots).toHaveLength(1);
     });
     expect(scenes).toHaveLength(2);
+  });
+
+  it('takes no snapshot while another is still in flight', async () => {
+    const portraits = portraitsFor();
+    // One the queue gave up waiting on is still going (Babylon's flag is up).
+    engine.skipFrameRender = true;
+    expect(await portraits.get(look)).toBeNull();
+    expect(shots).toHaveLength(0);
+    expect(scenes[0]?.disposed).toBe(true);
+
+    // Once it's done, the next picture snapshots as usual.
+    engine.skipFrameRender = false;
+    void portraits.get({ ...look, instanceId: 'b' });
+    await vi.waitFor(() => {
+      expect(shots).toHaveLength(1);
+    });
+    expect(scenes[1]?.disposed).toBeFalsy();
   });
 
   it('moves on when a snapshot never gets ready (Babylon gives up on it)', async () => {
