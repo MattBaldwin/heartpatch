@@ -145,6 +145,8 @@ Squishies evolve at level thresholds through **four stages: baby → kid → tee
 - **Teen** at **E + 8 [DEFAULT]**: the step that **branches**, one rarity step up. Today's two evolved forms of each line are its teens.
 - **Grown-up** at **E + 20 [DEFAULT]**: one per teen, so the branch the kid grew into decides it; one more rarity step, capped at legendary.
 
+Kids land in batches (#443): until a line's kid ships, its baby evolves straight to its teens at E.
+
 The teen step **branches by feeling plus rare conditions**, and the whole environment the player builds influences the outcome.
 
 When a squishy is ready, the server rolls a **weighted table** of possible forms for that species:

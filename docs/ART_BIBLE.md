@@ -31,7 +31,7 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 | Block | Data | Examples |
 |---|---|---|
 | Torso | a registry body (`blob`, `barrel`, `tall`, `pear`, `orb`, …) | a barrel for four-legged animals, a tall body for a cactus knight or a candle |
-| Head | `visual.head`: a registry body, its size against the torso, and where it sits | big heads on babies, smaller heads on grown-ups |
+| Head | `visual.head`: a registry body, its size against the torso, and where it sits | big heads on babies, smaller heads on teens and grown-ups |
 | Stance | `visual.stance`: how far the torso stands off the ground | short legs, long legs, or hovering when there are none |
 | Legs | `legs` slot, `quad` (four) or `pair` (two) layout; legs grow to reach the ground | stubby pup legs, a wolf's long legs, biped feet |
 | Arms | `arms` slot | stubby arms, strong arms, leaf arms |
@@ -63,8 +63,8 @@ Every line has four stages (#443). The kid is an in-between of the baby and its 
 | Size | ×1.08 or more over the baby, and the teens still ×1.08 or more over it (about ×1.15 the baby for a ×1.3 teen) | ×1.12–1.25 its teen |
 | Head ÷ torso height | between the baby's and the teens' | smaller than its teen's |
 | Stance and pose | between the baby's and the teens' (a sitting teen keeps a sitting kid) | its teen's or readier |
-| Face | the baby's eyes plus brave brows or a grin, still round | the teen's kit, a little bolder: `sharp-eyes`, a smirk, fang nubs; never cross or mean |
-| New sticking-out parts | at least one: a small preview of what its teens grow (Gustypup's icicle tuft before Blusterpup's mane) | at least one, the biggest signature yet |
+| Face | the baby's eyes plus brave brows or a grin, still round (no `sharp-eyes` yet: a review rule) | the teen's kit, a little bolder: `sharp-eyes`, a smirk, fang nubs; never cross or mean |
+| New sticking-out parts | at least one: a smaller, different part that previews what its teens grow (Gustypup's icicle tuft before Blusterpup's mane), so each teen still adds a part the kid doesn't have | at least one, the biggest signature yet |
 | Rarity and tier (§1.4) | the baby's | one step over its teen, capped at legendary |
 
 - Proportions grow up step by step: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and most lines' stance gets readier (sit → stand → upright).
@@ -169,7 +169,7 @@ Every line, baby → teen, as shipped before #443 (the Teen column is stage 3, a
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
-**Branch forms (#32).** Every line has a second teen form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
+**Branch forms (#32).** Every launch line has a second teen form at the same level (the wave-1 lines get theirs in Phase 2): the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
 
 | Line | Branch form | Feeling | Body plan | Pose · attack part |
 |---|---|---|---|---|
