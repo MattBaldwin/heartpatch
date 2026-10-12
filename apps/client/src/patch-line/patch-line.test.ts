@@ -10,7 +10,7 @@ const names = {
 };
 
 function celebrated(data: Record<string, unknown>, at = '2026-10-31T21:00:00Z'): WsEventMessage {
-  return { v: 1, type: 'squishy.celebrated', mapId: MAP, seq: 9, at, data } as WsEventMessage;
+  return { v: 1, type: 'squishy.celebrated', mapId: MAP, seq: 9, at, data };
 }
 
 describe('the patch line (#391)', () => {
@@ -42,7 +42,7 @@ describe('the patch line (#391)', () => {
   it('ignores other maps, other events and bad data', () => {
     expect(newsOf(celebrated({ userId: SAM, rarity: 'legendary' }), 'another-map')).toBeNull();
     expect(
-      newsOf({ ...celebrated({}), type: 'squishy.captured' } as WsEventMessage, MAP),
+      newsOf({ ...celebrated({}), type: 'squishy.captured' }, MAP),
     ).toBeNull();
     expect(newsOf(celebrated({ userId: 'nope', rarity: 'legendary' }), MAP)).toBeNull();
   });
