@@ -18,7 +18,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, squishies, tileClears, users } from '../../db/schema.js';
+import {
+  buildings,
+  factoryQueues,
+  keepers,
+  sessions,
+  squishies,
+  tileClears,
+  users,
+} from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -26,6 +34,7 @@ import { grantItems } from '../inventory/service.js';
 import { litSafeTiles } from './hearthfire.js';
 import { relayoutHomes } from './layout.js';
 import { createBuildingsRepo } from './repo.js';
+import { takeDownOnLostLand } from './service.js';
 
 /*
  * Hearthfires on captured land (#202) and typed spots (#204): building,
@@ -581,5 +590,57 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     const clearing = await place(server, kid, mapId, fire(cleared!));
     expect(clearing.statusCode).toBe(409);
     expect(errorOf(clearing).message).toContain('clearing this land');
+  });
+
+  it('gives a lost Crafting Factory back in full: build, upgrades, made things and unfinished inputs (#295)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    const { plain } = await land(mapId, kid, 1);
+    const tile = (await db.query.tiles.findFirst({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.q, plain[0]!.q), eq(t.r, plain[0]!.r)),
+    }))!;
+    // A level-2 Factory out on the land, as PR 3's homestead Factory will stand.
+    const [factory] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: tile.id,
+        buildingId: 'crafting-factory',
+        kind: 'factory',
+        spot: 1,
+        level: 2,
+      })
+      .returning({ id: buildings.id });
+    // Ten charms at a minute each, started four and a half minutes ago: four made.
+    const [batch] = await db
+      .insert(factoryQueues)
+      .values({
+        mapId,
+        userId: kid.id,
+        buildingId: factory!.id,
+        recipeId: 'heart-charm',
+        total: 10,
+        itemSeconds: 60,
+        output: { 'heart-charm': 1 },
+        inputs: { timber: 2, treats: 1 },
+        startedAt: new Date(clock.getTime() - 270_000),
+      })
+      .returning({ id: factoryQueues.id });
+
+    const [lost] = await withTransaction(db, (tx) =>
+      takeDownOnLostLand(tx, mapId, [tile.id], clock, 'America/Denver', 'captured'),
+    );
+    // Levels 1 and 2 in full (30+60 Timber, 20+50 Stone), 4 charms, 6 batches' inputs.
+    expect(lost!.refund).toEqual({ timber: 90 + 12, stone: 70, 'heart-charm': 4, treats: 6 });
+    expect(
+      await db.query.buildings.findFirst({ where: (b, { eq }) => eq(b.id, factory!.id) }),
+    ).toBeUndefined();
+    const ended = await db.query.factoryQueues.findFirst({
+      where: (q, { eq }) => eq(q.id, batch!.id),
+    });
+    expect(ended).toMatchObject({ banked: 4, endReason: 'taken-down' });
   });
 });

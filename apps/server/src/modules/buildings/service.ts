@@ -15,6 +15,7 @@ import {
   jobOf,
   planFuelAll,
   removeRefund,
+  spentOn,
   upgradeCost,
   type Building,
   type FuelAllResponse,
@@ -839,6 +840,27 @@ export function takeDownRefund(row: BuildingRow, local: MapLocalTime): ItemCount
   return refund;
 }
 
+/**
+ * A Crafting Factory lost with its land gives everything back (owner
+ * decision 2026-10-11, #295): the full build and upgrade cost, what its
+ * batches made since the last settle, and every unfinished batch's inputs.
+ * Its batches lock after the building (step 8, id order) and end here, `taken-down`;
+ * what they give joins the building's refund, granted by the caller at step 11.
+ */
+async function lostFactoryRefund(tx: Executor, row: BuildingRow, at: Date): Promise<ItemCounts> {
+  const building = BUILDING_DATA.get(row.buildingId);
+  const refund: ItemCounts = building ? spentOn(building, row.level) : {};
+  const factory = createFactoryRepo(tx);
+  for (const batch of await factory.lockRunningIn(row.id)) {
+    const plan = stopPlan(batch, at, 'taken-down');
+    for (const items of [plan.bank, plan.refund]) {
+      for (const [id, n] of Object.entries(items)) refund[id] = (refund[id] ?? 0) + n;
+    }
+    await factory.setBanked(batch.id, plan.done, { at, reason: 'taken-down' });
+  }
+  return refund;
+}
+
 /** A building that came down with its land (#202), for the caller to finish. */
 export interface LostBuilding {
   readonly ownerUserId: string;
@@ -876,7 +898,8 @@ export async function takeDownOnLostLand(
   const local = mapLocalTime(at, timeZone);
   const down: LostBuilding[] = [];
   for (const row of await repo.lockOnTiles(tileIds)) {
-    const refund = takeDownRefund(row, local);
+    const refund =
+      row.kind === 'factory' ? await lostFactoryRefund(tx, row, at) : takeDownRefund(row, local);
     // Under the tile lock nobody starts training here. One may stop (moving
     // into a habitat locks only the squishy): `landTraining` reads them again
     // after the squishy locks, so nothing lands twice.
