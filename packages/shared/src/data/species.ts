@@ -2061,7 +2061,7 @@ export const SPECIES: Species[] = [
     ], // TUNE: kid level + 8 (#443)
     visual: {
       body: 'ghost',
-      palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
+      palette: ['#f1ecff', '#d6c6ff', '#c9b8ff', '#ffe066'],
       glow: 'body',
       parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stubby-arms', 'nub-wings', 'wisp-tail'],
       size: 1.15,
