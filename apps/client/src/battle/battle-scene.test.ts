@@ -104,6 +104,24 @@ describe('BattleScene', () => {
     expect(scene.getMeshByName('arena-hills')).not.toBeNull();
   });
 
+  it('lays each fighter a contact shadow that faces up, not mirrored, so culling keeps it (#462)', () => {
+    for (const tier of ['high', 'low'] as const) {
+      const { scene, battle } = build('forest', false, tier);
+      battle.sendOut('a', 'puddlepuff', 'mine-1');
+      battle.sendOut('b', 'emberbun', 'wild-1');
+      battle.update(5000);
+      const mesh = scene.getMeshByName('battle-fighter-shadows') as Mesh | null;
+      expect(mesh, tier).not.toBeNull();
+      const shown = (mesh?.thinInstanceGetWorldMatrices() ?? [])
+        .slice(0, mesh?.thinInstanceCount ?? 0)
+        .filter((m) => m.m[0] !== 0 || m.m[2] !== 0);
+      expect(shown.length, tier).toBe(4);
+      // A mirrored instance turns the ground quad's face away, and back-face
+      // culling drops it (#462): every shadow keeps a positive determinant.
+      for (const m of shown) expect(m.determinant(), tier).toBeGreaterThan(0);
+    }
+  });
+
   it("sizes each prop's contact shadow by the prop, however it's turned (#473)", () => {
     const { scene } = build('forest');
     const shadows = scene.getMeshByName('arena-prop-shadows') as Mesh | null;
