@@ -49,6 +49,10 @@ describe('cues', () => {
     expect(battleCue({ kind: 'capture', squish: 'bounce' })).toBe('charm');
     expect(battleCue({ kind: 'capture', squish: 'wobble' })).toBe('wiggle-free');
     expect(battleCue({ kind: 'end', squish: 'bounce' })).toBe('yay');
+    // A rare new friend's win is a fanfare instead (#391); the charm's toss stays.
+    expect(battleCue({ kind: 'end', squish: 'bounce' }, true)).toBe('friend-fanfare');
+    expect(battleCue({ kind: 'capture', squish: 'bounce' }, true)).toBe('charm');
+    expect(battleCue({ kind: 'end', squish: null }, true)).toBe('aww');
     expect(battleCue({ kind: 'end', squish: null })).toBe('aww');
     expect(battleCue({ kind: 'hit', squish: 'jiggle' })).toBe('bonk');
     expect(battleCue({ kind: 'hit', squish: 'wobble', effectiveness: 'weak' })).toBe('bonk');
@@ -73,6 +77,7 @@ describe('cues', () => {
       'find-2',
       'find-3',
       'find-4',
+      'friend-fanfare',
       'hollow-sting',
       'nightfall',
       'title',

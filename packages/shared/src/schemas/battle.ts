@@ -451,6 +451,13 @@ export const PlayerBattleSchema = z.object({
    * moment in full; false for a kind met before. Absent on every other battle.
    */
   firstMeeting: z.boolean().optional(),
+  /**
+   * A wild battle that ended with the player befriending the wild squishy
+   * (#391): true when that was their first friend of its kind on this patch,
+   * so the celebration card says "First ever!"; false for a kind befriended
+   * before. Absent on every other battle.
+   */
+  firstEver: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */

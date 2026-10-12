@@ -2,6 +2,7 @@ import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '
 import { CARE_TEXT, evolvingBar } from '../care/care-view.js';
 import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { el } from '../ui/dom.js';
+import { dressResult, type BefriendCheer } from './befriend-cheer.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
@@ -117,6 +118,8 @@ export interface ResultInfo {
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
+  /** A rare friend or a first of its kind: the card celebrates (#391). */
+  cheer?: { readonly info: BefriendCheer; readonly reducedMotion: boolean };
 }
 
 export interface BattleHud {
@@ -302,12 +305,16 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // so none reaches the canvas and the map camera's gestures underneath: the
   // director alone moves the battle camera. The controls sit on top of it.
   const shield = el('div', { class: 'battle-shield', 'data-testid': 'battle-shield' });
+  // A rare friend's hearts (#391), under the card.
+  const hearts = el('div', { class: 'battle-hearts', 'aria-hidden': 'true' });
+  let undress: (() => void) | null = null;
   const hud = el(
     'section',
     { class: 'battle-hud', 'data-testid': 'battle-hud', 'aria-label': 'Squishy showdown' },
     shield,
     top,
     sheet,
+    hearts,
     result,
   );
   hud.hidden = true;
@@ -617,6 +624,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       forget();
     },
     hide: () => {
+      undress?.();
+      undress = null;
       hud.hidden = true;
       result.hidden = true;
     },
@@ -667,6 +676,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       problem.textContent = text;
     },
     showResult: (info) => {
+      undress?.();
+      undress = null;
       result.replaceChildren(
         el('h1', { class: 'auth-title', id: 'battle-result-title' }, info.title),
         el('p', { class: 'auth-subtitle' }, info.subtitle),
@@ -699,8 +710,20 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       );
       result.hidden = false;
       controls.hidden = true;
+      if (info.cheer) {
+        undress = dressResult(result, hearts, info.cheer.info, {
+          reducedMotion: info.cheer.reducedMotion,
+          pillsBottom: Math.max(
+            plates.mine.node.getBoundingClientRect().bottom,
+            plates.theirs.node.getBoundingClientRect().bottom,
+          ),
+          width: window.innerWidth || 1,
+        });
+      }
     },
     hideResult: () => {
+      undress?.();
+      undress = null;
       result.hidden = true;
     },
     safe: () => {

@@ -61,6 +61,8 @@ export interface SpawnsRepo {
   seenBy: (mapId: string, speciesId: string) => Promise<string[]>;
   /** When the player first met this species on this map, or null if never. */
   firstSeenAt: (mapId: string, userId: string, speciesId: string) => Promise<Date | null>;
+  /** When the player first befriended this species on this map, or null if never. */
+  firstCaughtAt: (mapId: string, userId: string, speciesId: string) => Promise<Date | null>;
   /**
    * The level of the player's Partner on this map (the starter they picked,
    * `map_members.starter_squishy_id`), or null if they have none.
@@ -149,6 +151,20 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
     firstSeenAt: async (mapId, userId, speciesId) => {
       const [row] = await db
         .select({ at: speciesSeen.firstSeenAt })
+        .from(speciesSeen)
+        .where(
+          and(
+            eq(speciesSeen.mapId, mapId),
+            eq(speciesSeen.userId, userId),
+            eq(speciesSeen.speciesId, speciesId),
+          ),
+        );
+      return row?.at ?? null;
+    },
+
+    firstCaughtAt: async (mapId, userId, speciesId) => {
+      const [row] = await db
+        .select({ at: speciesSeen.firstCaughtAt })
         .from(speciesSeen)
         .where(
           and(
