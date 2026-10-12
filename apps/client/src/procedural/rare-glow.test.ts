@@ -7,6 +7,9 @@ import {
   rareGlowCode,
   rareGlowLevel,
   rareGlowOff,
+  rareGlowShown,
+  setRareGlowForTier,
+  setRareGlowOff,
 } from './rare-glow.js';
 
 describe('rare finds glow codes (#391)', () => {
@@ -16,12 +19,26 @@ describe('rare finds glow codes (#391)', () => {
     expect(rareGlowCode(undefined, ['#ff0000'])).toBe(0);
   });
 
-  it('turns off with ?rareglow=0 (a device frame-rate check), and only then', () => {
+  it('reads ?rareglow=0 (a device frame-rate check), and only that', () => {
     expect(rareGlowOff(new URLSearchParams('?fps=1&rareglow=0'))).toBe(true);
     expect(rareGlowOff(new URLSearchParams('?fps=1'))).toBe(false);
     expect(rareGlowOff(new URLSearchParams('?rareglow=1'))).toBe(false);
-    expect(rareGlowCode('mythic', ['#ff0000'], true)).toBe(0);
-    expect(rareGlowCode('mythic', ['#ff0000'], false)).toBeGreaterThan(0);
+  });
+
+  it('shows the glow unless the address or the quality tier turns it off', () => {
+    try {
+      expect(rareGlowShown()).toBe(true);
+      setRareGlowForTier(false);
+      expect(rareGlowShown()).toBe(false);
+      setRareGlowForTier(true);
+      setRareGlowOff(true);
+      expect(rareGlowShown()).toBe(false);
+    } finally {
+      setRareGlowOff(false);
+      setRareGlowForTier(true);
+    }
+    // The codes don't change: the shader switches it, so no rebuild is needed.
+    expect(rareGlowCode('mythic', ['#ff0000'])).toBeGreaterThan(0);
   });
 
   it('takes the level from the shared rarity table', () => {

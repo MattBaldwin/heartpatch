@@ -16,6 +16,7 @@ import {
   SQUISH_MOVE_CODE,
   VINYL,
 } from './config.js';
+import { rareGlowShown } from './rare-glow.js';
 
 /**
  * Squash-and-stretch and rim light for every squishy mesh (design doc §19).
@@ -159,7 +160,7 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
   float fiCode = fiBase - ${num(FINISH_CODE.offFace)} * fiOffFace;
   float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
   float fiTier = fiCode - ${num(FINISH_CODE.glow)} * fiGlow;
-  if (fiRare > 0.5 && fiTier < 1.5) {
+  if (fiRare > 0.5 && fiTier < 1.5 && squishRareGlow > 0.5) {
     // Rare finds glow: light added along the outline in this part's own
     // colour, so it only brightens and keeps every part's hue (a brown tail
     // glows brown, gold wings glow gold). The colour is pushed away from grey
@@ -213,7 +214,7 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     float fiRim = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(FINISH.iridescent.falloff)});
     vec3 fiHue = 0.5 + 0.5 * cos(6.2831853 * (fiRim * 1.3 + vSquishLocal.y * 0.7 + vec3(0.0, 0.33, 0.67)));
     // A rare glow (#391) at legendary and up brightens this rainbow edge.
-    float fiBright = fiRare < 2.5 ? 1.0 : fiRare < 3.5 ? ${num(RARE_GLOW.rainbow[0])} : ${num(RARE_GLOW.rainbow[1])};
+    float fiBright = fiRare < 2.5 || squishRareGlow < 0.5 ? 1.0 : fiRare < 3.5 ? ${num(RARE_GLOW.rainbow[0])} : ${num(RARE_GLOW.rainbow[1])};
     finalColor.rgb += fiHue * fiRim * ${num(FINISH.iridescent.strength)} * fiBright;
   }
   if (fiTier > 2.5) {
@@ -284,9 +285,10 @@ export class SquishPlugin extends MaterialPluginBase {
       ubo: [
         { name: 'squishTime', size: 1, type: 'float' },
         { name: 'squishRim', size: 4, type: 'vec4' },
+        { name: 'squishRareGlow', size: 1, type: 'float' },
       ],
       vertex: 'uniform float squishTime;',
-      fragment: 'uniform vec4 squishRim;',
+      fragment: 'uniform vec4 squishRim;\nuniform float squishRareGlow;',
     };
   }
 
@@ -294,6 +296,8 @@ export class SquishPlugin extends MaterialPluginBase {
     uniformBuffer.updateFloat('squishTime', this.time);
     const [r, g, b] = VINYL.rimColor;
     uniformBuffer.updateFloat4('squishRim', r, g, b, VINYL.rimStrength);
+    // The rare glow (#391): off on a tier that turns it off, or with `?rareglow=0`.
+    uniformBuffer.updateFloat('squishRareGlow', rareGlowShown() ? 1 : 0);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

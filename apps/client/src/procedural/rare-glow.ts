@@ -47,19 +47,24 @@ export function rareGlowLevel(rarity: Rarity | undefined): number {
 export function rareGlowOff(params: URLSearchParams): boolean {
   return params.get('rareglow') === '0';
 }
-let off = false;
-/** Turns the glow off for squishies added from now on (the frame-rate check). */
+let addressOff = false;
+let tierOn = true;
+/** `?rareglow=0` (the frame-rate check): set once from `main.ts`. */
 export function setRareGlowOff(value: boolean): void {
-  off = value;
+  addressOff = value;
+}
+/** The quality tier's `rareGlow` setting, set whenever a tier is applied. */
+export function setRareGlowForTier(on: boolean): void {
+  tierOn = on;
+}
+/** Whether the shader draws the rare glow now (read every draw: switching needs no rebuild). */
+export function rareGlowShown(): boolean {
+  return tierOn && !addressOff;
 }
 
 /** What a squishy adds to its glowing pieces' codes: 0 below rare. */
-export function rareGlowCode(
-  rarity: Rarity | undefined,
-  palette: readonly string[],
-  glowOff = off,
-): number {
-  const level = glowOff ? 0 : rareGlowLevel(rarity);
+export function rareGlowCode(rarity: Rarity | undefined, palette: readonly string[]): number {
+  const level = rareGlowLevel(rarity);
   if (level === 0) return 0;
   return level * RARE_GLOW_CODE.level + glowHueIndex(palette) * RARE_GLOW_CODE.hue;
 }
