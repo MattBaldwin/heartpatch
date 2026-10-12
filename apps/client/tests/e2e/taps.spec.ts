@@ -224,7 +224,11 @@ test('gathers with one tap, and finished things land in the bag by themselves', 
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   const landed = (await bagState(page))!.landings;
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect.poll(async () => (await bagState(page))?.landings).toBe(landed + 1);
+  // The settle's reply arrives in a second or two on a loaded runner and the page counts the
+  // landing when it gets round to it, so the 5 s default can run out first (#429).
+  await expect
+    .poll(async () => (await bagState(page))?.landings, { timeout: 30_000 })
+    .toBe(landed + 1);
   await expect(chip).toBeHidden();
   await expect(toast).toBeVisible();
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(afterTile);
