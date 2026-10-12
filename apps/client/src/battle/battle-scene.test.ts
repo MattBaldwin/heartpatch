@@ -145,6 +145,8 @@ describe('BattleScene', () => {
       for (const r of ratios) expect(r, mesh.name).toBeCloseTo(ratios[0] ?? 0, 5);
       checked += ratios.length;
     }
+    // Every shadow found its prop: no key collided, and none was left over.
+    expect(checked).toBe(shadowAt.size);
     expect(checked).toBeGreaterThan(2);
   });
 
