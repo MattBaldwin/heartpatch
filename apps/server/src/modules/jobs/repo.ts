@@ -80,7 +80,7 @@ export interface JobRow {
   };
   /**
    * The room of its owner's house it lives in (#381, `squishyHouseRoom`), or
-   * null. A resident resting at home fades slower (the house perk).
+   * null. A resident fades slower (the house perk), out on a job too.
    */
   houseRoomId: string | null;
 }

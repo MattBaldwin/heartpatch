@@ -50,9 +50,10 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * The percent of the normal happiness drain a squishy fades at (#376's
- * model: rate = base × fit × this). A resident resting in its bed gets the
- * perk; anyone else, and a resident away in the Hollow or at a trading post
- * (the perk pauses with everything else, plan Q5), fades at 100.
+ * model: rate = base × fit × this). A resident gets the perk, out on a job
+ * too (owner, 2026-10-12); anyone else, and a resident away in the Hollow or
+ * at a trading post (the perk pauses with everything else, plan Q5), fades
+ * at 100.
  */
 export function residentDrainPercent(rules: HouseRules, resident: boolean): number {
   if (!resident) return 100;

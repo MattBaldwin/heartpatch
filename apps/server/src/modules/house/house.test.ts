@@ -815,6 +815,28 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(await residencyOf(other)).toMatchObject({ userId: kid.id, roomId: 'snug' });
     });
 
+    it('keeps the perk for a resident out at a job that does not suit it (owner, 2026-10-12)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [seed] = await homeTiles(mapId, kid);
+      const [resident, other] = [await pet(mapId, kid), await pet(mapId, kid)];
+      await moveOk(server, kid, mapId, resident, 'snug');
+      const at = clock.toISOString();
+      await db.execute(
+        `update squishies set work_tile_id = '${seed!.id}', work_since = '${at}', work_started_at = '${at}' where id in ('${resident}', '${other}')`,
+      );
+      later(12);
+      const [mine, theirs] = [
+        await careOf(server, kid, mapId, resident),
+        await careOf(server, kid, mapId, other),
+      ];
+      expect([mine.moodDrift, theirs.moodDrift]).toEqual(['wrong-job', 'wrong-job']);
+      // Out gathering, not in its bed: still half the fade.
+      expect(mine.contentment).toBe(75);
+      expect(theirs.contentment).toBe(50);
+    });
+
     it('shows a resident out at its job as away: gathering, on watch or training', async () => {
       const server = await start();
       const kid = await player();
