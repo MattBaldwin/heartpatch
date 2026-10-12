@@ -193,3 +193,13 @@ export function spreadStarts(
   }
   return placed.map((p) => p.at);
 }
+
+/** How far apart chips leave (#419): `each` apart, but all within `total` however many fly. */
+export function staggerMs(chips: number, each: number, total: number): number {
+  return chips <= 1 ? 0 : Math.min(each, total / (chips - 1));
+}
+
+/** Whether a point is on a screen `width` × `height` (a tile's middle, before it gives a chip). */
+export function onScreen(at: ScreenPoint, width: number, height: number): boolean {
+  return at.x >= 0 && at.x <= width && at.y >= 0 && at.y <= height;
+}

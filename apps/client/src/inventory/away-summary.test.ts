@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AWAY_TEXT,
   flightPath,
+  onScreen,
   spreadStarts,
+  staggerMs,
   summaryCount,
   summaryEntries,
   summarySentence,
@@ -186,5 +188,21 @@ describe('spreadStarts', () => {
       // Near its own tile: within a few chips.
       expect(Math.hypot(a.x - (spots[i]?.x ?? 0), a.y - (spots[i]?.y ?? 0))).toBeLessThan(200);
     }
+  });
+});
+
+describe('staggerMs', () => {
+  it('sends chips 70 ms apart, but all within 300 ms however many', () => {
+    expect(staggerMs(1, 70, 300)).toBe(0);
+    expect(staggerMs(3, 70, 300)).toBe(70);
+    expect(staggerMs(10, 70, 300) * 9).toBeCloseTo(300);
+  });
+});
+
+describe('onScreen', () => {
+  it('takes a tile on screen and gives up one panned past the edge', () => {
+    expect(onScreen({ x: 195, y: 400 }, 390, 844)).toBe(true);
+    expect(onScreen({ x: -10, y: 400 }, 390, 844)).toBe(false);
+    expect(onScreen({ x: 195, y: 900 }, 390, 844)).toBe(false);
   });
 });

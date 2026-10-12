@@ -31,6 +31,7 @@ import {
 } from './bag-view.js';
 import {
   AWAY_TEXT,
+  onScreen,
   summaryCount,
   summaryEntries,
   summarySentence,
@@ -610,7 +611,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       const centre = (box: ScreenBox | null): ScreenPoint | null => {
         if (!box) return null;
         const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-        return at.x >= 0 && at.x <= innerWidth && at.y >= 0 && at.y <= innerHeight ? at : null;
+        return onScreen(at, innerWidth, innerHeight) ? at : null;
       };
       return centre(source ? locate.tile(source) : null) ?? centre(locate.home());
     };

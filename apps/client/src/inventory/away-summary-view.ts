@@ -4,6 +4,7 @@ import {
   AWAY_TEXT,
   flightPath,
   spreadStarts,
+  staggerMs,
   type ScreenPoint,
   type SummaryEntry,
 } from './away-summary.js';
@@ -322,7 +323,9 @@ export function createAwaySummary(
    */
   function fly(what: AwaySummaryShow): boolean {
     const from = what.from;
-    if (!from || reducedMotion()) return false;
+    // Nothing flies across an open sheet (the Bag, chat, the job board…): the
+    // banner is only to read there, and the chips are just in it.
+    if (!from || reducedMotion() || sheetOpen()) return false;
     const run = flightRun;
     const trips = what.entries.slice(0, MAX_FLYERS).flatMap((entry, i) => {
       const spot = from(entry);
@@ -346,7 +349,7 @@ export function createAwaySummary(
       POP_GAP_PX,
       { top: below + POP_GAP_PX, left: 0, right: innerWidth, bottom: innerHeight },
     );
-    const stagger = Math.min(STAGGER_MS, STAGGER_TOTAL_MS / Math.max(1, trips.length - 1));
+    const stagger = staggerMs(trips.length, STAGGER_MS, STAGGER_TOTAL_MS);
     flown += trips.length;
     const landed = trips.map(({ slot, flyer, spot }, k) => {
       const size = sizes[k] ?? flyer.getBoundingClientRect();
@@ -379,13 +382,13 @@ export function createAwaySummary(
         // The pop plays once per landing: the class goes when it ends ("N
         // more" stays for the app's life, and would pop again when next shown).
         slot.classList.add('away-landed');
-        slot.addEventListener(
-          'animationend',
-          () => {
-            slot.classList.remove('away-landed');
-          },
-          { once: true },
-        );
+        const done = () => {
+          slot.classList.remove('away-landed');
+          slot.removeEventListener('animationend', done);
+          slot.removeEventListener('animationcancel', done);
+        };
+        slot.addEventListener('animationend', done);
+        slot.addEventListener('animationcancel', done);
       });
     });
     // A cancelled flight rejects; whatever stopped it has taken over.
