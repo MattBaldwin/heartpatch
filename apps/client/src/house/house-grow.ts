@@ -206,13 +206,29 @@ export function confirmPanel(
   busy: boolean,
   on: ConfirmHandlers,
 ): HTMLElement[] {
-  const yes = houseButton(busy ? GROW_TEXT.building : GROW_TEXT.confirmYes, on.onYes, {
-    class: 'house-grow-yes',
-    'data-testid': 'house-grow-yes',
-  });
-  const no = houseButton(GROW_TEXT.notNow, on.onNo, { 'data-testid': 'house-grow-no' }, true);
-  yes.disabled = busy;
-  no.disabled = busy;
+  // While building, both stay focusable (focus doesn't fall to the page and
+  // "Building…" is read out where the player is) but ignore taps.
+  const yes = houseButton(
+    busy ? GROW_TEXT.building : GROW_TEXT.confirmYes,
+    () => {
+      if (!busy) on.onYes();
+    },
+    {
+      class: 'house-grow-yes',
+      'data-testid': 'house-grow-yes',
+    },
+  );
+  const no = houseButton(
+    GROW_TEXT.notNow,
+    () => {
+      if (!busy) on.onNo();
+    },
+    { 'data-testid': 'house-grow-no' },
+    true,
+  );
+  for (const b of [yes, no]) {
+    if (busy) b.setAttribute('aria-disabled', 'true');
+  }
   return [
     head(view, next, null),
     el(

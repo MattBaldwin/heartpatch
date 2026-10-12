@@ -263,7 +263,15 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   // server, which refuses it (the rows aren't met); only the success is stood in for.
   let levelOne: HouseView | null = null;
   let built: HouseView | null = null;
+  // While `holdReads` is set, a read waits for `releaseReads` and then replies
+  // with the house as it was when it was asked for (a stale read).
+  let holdReads = false;
+  let releaseReads: () => void = () => undefined;
+  const readsReleased = new Promise<void>((resolve) => {
+    releaseReads = resolve;
+  });
   await page.route('**/api/v1/maps/*/house', async (route: Route) => {
+    const held = holdReads;
     const response = await route.fetch();
     const body = (await response.json()) as HouseView;
     levelOne = body;
@@ -281,9 +289,14 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
         affordable: true,
       },
     };
+    if (held) await readsReleased;
     await route.fulfill({ response, json: ready });
   });
   const posts: { key: string | undefined; body: unknown }[] = [];
+  let buildLanded: () => void = () => undefined;
+  const landed = new Promise<void>((resolve) => {
+    buildLanded = resolve;
+  });
   await page.route('**/api/v1/maps/*/house/build', async (route: Route) => {
     const request = route.request();
     posts.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
@@ -295,6 +308,7 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     built = grown(levelOne!);
     await route.fulfill({ json: built });
+    buildLanded();
   });
   // A tap on the dimmed scene closes the sheet too.
   await page.getByTestId('house-scrim').tap({ position: { x: 20, y: 200 } });
@@ -318,14 +332,28 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   expect((await houseState(page))?.sheet).toBe('grow');
   await expect.poll(() => focused(page), slow).toBe('house-note');
 
-  // Again: a new attempt, a new key. While it builds, Escape and the scrim
-  // can't dismiss it; then the house grows its Playroom.
+  // Again: a new attempt, a new key.
   await build.tap();
   await page.getByTestId('house-grow-yes').tap();
   await expect.poll(async () => (await houseState(page))?.building, slow).toBe(true);
+  // A re-read starts while it builds (through the dev hook; the sheet can't
+  // be reopened mid-build). It's held until after the build replies, then
+  // answers with the old level-1 house: the screen must drop it.
+  holdReads = true;
+  await page.evaluate(() => {
+    (window as unknown as { __heartpatch: { house: () => { reread: () => void } } }).__heartpatch
+      .house()
+      .reread();
+  });
+  // While it builds, Escape and the scrim can't dismiss it, and focus stays
+  // on the busy button, which says so.
   await page.keyboard.press('Escape');
   await page.getByTestId('house-scrim').tap({ position: { x: 20, y: 200 }, force: true });
   expect(await houseState(page)).toMatchObject({ sheet: 'confirm', building: true });
+  const yes = page.getByTestId('house-grow-yes');
+  await expect(yes).toHaveText('Building…');
+  await expect(yes).toHaveAttribute('aria-disabled', 'true');
+  expect(await focused(page)).toBe('house-grow-yes');
   await expect(note).toHaveText('Ta-da! The Playroom is ready. Who moves in?', slow);
   await expect(note).not.toHaveClass(/house-note-calm/);
   await expect.poll(() => focused(page), slow).toBe('house-note');
@@ -334,6 +362,14 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   expect(await houseState(page)).toMatchObject({ level: 2, rooms: 2, sheet: 'open' });
   // The ta-da sparkle played once the new room drew (reduced motion would skip it).
   await expect.poll(async () => (await houseState(page))?.sparkles, slow).toBe(1);
+  // Now the held level-1 read lands, after the build's reply: it's dropped.
+  await landed;
+  releaseReads();
+  holdReads = false;
+  await page.waitForTimeout(1_500);
+  expect(await houseState(page)).toMatchObject({ level: 2, rooms: 2 });
+  expect((await houseState(page))?.scene?.rooms).toBe(2);
+  await expect(page.getByTestId('house-pill')).toHaveText('🏠 House 2');
   await expect(page.getByTestId('house-grow-open')).toBeVisible();
   expect(posts.map((p) => p.body)).toEqual([{ toLevel: 2 }, { toLevel: 2 }]);
   expect(posts[0]!.key).toMatch(/^[0-9a-f]{32}$/);

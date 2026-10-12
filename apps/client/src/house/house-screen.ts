@@ -99,6 +99,12 @@ export interface HouseDebug {
   readonly building: boolean;
   /** Sparkle bursts played after builds (none under reduced motion). */
   readonly sparkles: number;
+  /**
+   * Re-reads the house now, as opening the sheet does. Dev hook only: e2e
+   * starts a read while a build is in flight (the UI can't) to prove the
+   * build's reply wins.
+   */
+  readonly reread: () => void;
 }
 
 export interface HouseScreen {
@@ -215,6 +221,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   // closes the sheet (the HUD's Back can't be mistaken for the sheet's way out).
   const scrim = el('div', { class: 'house-scrim', 'data-testid': 'house-scrim' });
   scrim.hidden = true;
+  // A press on the scrim never takes focus out of the sheet (it would land on the page).
+  scrim.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
   scrim.addEventListener('click', () => {
     // While building, the confirm stays put ("Building…" can't be dismissed).
     if (!building) setSheet('peek');
@@ -450,7 +460,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       const fresh = await api.get(id);
       if (still()) applyView(fresh);
     } catch (err) {
-      if (!still()) return;
+      // A refusal the server just gave stays up; a failed re-read doesn't replace it.
+      if (!still() || (note !== '' && noteKind === 'calm')) return;
       note = messageOf(err);
       noteKind = 'calm';
       renderSheet();
@@ -813,6 +824,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         sheet,
         building,
         sparkles,
+        reread: () => {
+          void refresh();
+        },
       };
     },
   };

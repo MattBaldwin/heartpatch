@@ -234,7 +234,8 @@
   transform: scale(0.97);
 }
 
-.house-button:disabled {
+.house-button:disabled,
+.house-button[aria-disabled='true'] {
   cursor: default;
   transform: none;
 }
