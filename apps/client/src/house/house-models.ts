@@ -216,6 +216,8 @@ export function roofInside(
   w: number,
   d: number,
   y: number,
+  /** How far the roof reaches out over the porch in front, metres. */
+  overhang = 0,
 ): Parts {
   const rise = Math.min(1.8, w * 0.28); // TUNE
   const half = w / 2;
@@ -226,13 +228,13 @@ export function roofInside(
   for (const side of [-1, 1]) {
     const slope = box(
       scene,
-      [len, 0.08, d + 0.3],
-      [cx + (side * half) / 2, y + rise / 2 + 0.04, z0 + d / 2],
+      [len, 0.08, d + 0.3 + overhang],
+      [cx + (side * half) / 2, y + rise / 2 + 0.04, z0 + (d - overhang) / 2],
       '#e2b088',
     );
     slope.rotation.z = -side * angle;
     solid.push(slope);
-    for (let z = z0 + 0.5; z < z0 + d; z += 1.0) {
+    for (let z = z0 + 0.5 - overhang; z < z0 + d; z += 1.0) {
       const rafter = box(
         scene,
         [len, 0.12, 0.1],
@@ -257,10 +259,35 @@ export function roofInside(
   gable.scaling.set(sy, w / 1.732, 1); // rotated: local x is up
   gable.position.set(cx, y + 0.5 * sy, z0 + d - 0.13);
   solid.push(painted(gable, HOUSE_PALETTE.wallTop));
+  // A toy shelf and three framed squishy doodles in the back gable, above the sign.
+  const back = z0 + d - 0.16;
+  const shelfY = y + 0.2;
+  solid.push(box(scene, [w * 0.55, 0.06, 0.22], [cx, shelfY, back], '#8d5a3b'));
+  const toyHex = ['#ff7aa2', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
+  toyHex.forEach((hex, i) => {
+    const tx = cx - w * 0.22 + (w * 0.44 * i) / 4;
+    solid.push(
+      i % 2
+        ? box(scene, [0.16, 0.16, 0.16], [tx, shelfY + 0.11, back], hex, 0.4)
+        : ball(scene, 0.2, [tx, shelfY + 0.13, back], hex, [1, 0.9, 1], 8),
+    );
+  });
+  ['#ffb3c8', '#bfe3ff', '#ffe29a'].forEach((hex, i) => {
+    const fx = cx + (i - 1) * Math.min(0.75, w * 0.14);
+    const fy = y + rise * (i === 1 ? 0.62 : 0.42);
+    const fz = z0 + d - 0.18;
+    solid.push(
+      box(scene, [0.4, 0.34, 0.04], [fx, fy, fz], '#fff6ec'),
+      box(scene, [0.32, 0.26, 0.02], [fx, fy, fz - 0.025], hex),
+      ball(scene, 0.17, [fx, fy - 0.02, fz - 0.04], '#ffffff', [1.1, 0.9, 0.3], 8),
+      ball(scene, 0.03, [fx - 0.035, fy, fz - 0.07], '#3b2a3f', [1, 1, 1], 4),
+      ball(scene, 0.03, [fx + 0.035, fy, fz - 0.07], '#3b2a3f', [1, 1, 1], 4),
+    );
+  });
   const flags = ['#ff9ab8', '#ffd166', '#9ad8ff', '#c9a0ff', '#9fe0a0'];
   for (const [t, drop] of [
-    [0.35, 0.55],
-    [0.7, 0.5],
+    [0.5, 0.5],
+    [0.8, 0.45],
   ] as const) {
     const n = Math.max(6, Math.round(w / 0.32));
     for (let i = 0; i < n; i++) {

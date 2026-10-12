@@ -149,24 +149,16 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
 export function kidPose(room: HouseBounds, vp: HouseViewport): HousePose {
   const aspect = vp.width / Math.max(1, vp.height);
   const maxV = HOUSE_KID.maxVerticalFov * DEG;
-  let hfov = HOUSE_KID.horizontalFov * DEG;
-  let fov = 2 * Math.atan(Math.tan(hfov / 2) / aspect);
-  if (fov > maxV) {
-    fov = maxV;
-    hfov = 2 * Math.atan(Math.tan(fov / 2) * aspect);
-  }
   const pitch = -HOUSE_KID.tiltUp * DEG;
   const width = room.maxX - room.minX;
-  // Far enough back for the back wall to fit across, and never so close the
-  // residents fill the frame (a wide iPad frame would stand right on them).
+  // Standing a fixed step back from the room's front, close enough that the
+  // residents are big in the frame (render check, PR B2), the view no wider
+  // than the back wall (so nothing past the side walls shows) and no taller
+  // than `maxVerticalFov` on a tall phone (less rafters and floor).
   const halfWall = width / 2 + HOUSE_KID.sideRoom;
-  const back = Math.max(
-    halfWall / Math.tan(hfov / 2),
-    room.maxZ - room.minZ + HOUSE_KID.minStandBack,
-  );
-  // Then narrow the view to the back wall, so nothing past the side walls shows.
-  hfov = 2 * Math.atan(halfWall / back);
-  fov = Math.min(maxV, 2 * Math.atan(Math.tan(hfov / 2) / aspect));
+  const back = room.maxZ - room.minZ + HOUSE_KID.minStandBack;
+  const hfov = Math.min(HOUSE_KID.horizontalFov * DEG, 2 * Math.atan(halfWall / back));
+  const fov = Math.min(maxV, 2 * Math.atan(Math.tan(hfov / 2) / aspect));
   const eye: Vec3 = {
     x: (room.minX + room.maxX) / 2,
     y: room.minY + HOUSE_KID.eyeHeight,
@@ -244,6 +236,23 @@ export function wallFade(eye: Vec3, focus: Vec3, wall: FadeWall): number {
     y >= wall.y0 - margin &&
     y <= wall.y0 + wall.height + margin;
   return inside ? HOUSE_KID.fadedAlpha : 1;
+}
+
+/**
+ * How see-through a front wall is at a zoom (render check, PR B2: a wall
+ * left at 0.15 at rest drew hard seams through the squishies):
+ *
+ * - none in the dollhouse, then fading in from `frontFrom`;
+ * - one in the way (`wallFade` below 1) is a faint veil only while the
+ *   camera passes it, and gone (0, not drawn) by the time you stand in the
+ *   room, from `clearFrom` on;
+ * - one not in the way comes in solid.
+ */
+export function frontAlpha(fade: number, zoom: number): number {
+  const ramp = Math.min(1, Math.max(0, (zoom - HOUSE_KID.frontFrom) / (1 - HOUSE_KID.frontFrom)));
+  if (fade >= 1) return ramp;
+  const gone = smooth((zoom - HOUSE_KID.clearFrom) / (1 - HOUSE_KID.clearFrom));
+  return Math.min(ramp, fade * (1 - gone));
 }
 
 /**

@@ -168,9 +168,9 @@ export const HOUSE_KID = {
   /** Horizontal view angle, degrees: the room's walls and its residents across the frame. */
   horizontalFov: 44, // TUNE
   /** A tall phone's vertical view angle is capped here, degrees (less floor in view). */
-  maxVerticalFov: 72, // TUNE
-  /** Kid height stands at least this far in front of the room's front, metres. */
-  minStandBack: 3.4, // TUNE: residents a third of the frame, not all of it
+  maxVerticalFov: 72, // TUNE: subjects big on a tall phone (render check: rafters and floor took half the frame)
+  /** Kid height stands this far in front of the room's front, metres. */
+  minStandBack: 2.9, // TUNE: residents big in the frame, the back wall still in view
   /** Room either side of the back wall in the frame, metres. */
   sideRoom: 0.3, // TUNE
   /** How far ahead the camera looks, metres (the pose's target). */
@@ -183,6 +183,8 @@ export const HOUSE_KID = {
   fadeMargin: 0.4, // TUNE
   /** The front walls appear (faded) past this much zoom; the dollhouse has none. */
   frontFrom: 0.55, // TUNE
+  /** A wall in the way is gone (alpha 0, not drawn) from this much zoom: none at rest at kid height. */
+  clearFrom: 0.85, // TUNE
   /** How tall the soft foot is: a faded wall fades to nothing at the floor over this, metres. */
   softFoot: 1.2, // TUNE
   /** Walk in / Step out takes this long, seconds. */

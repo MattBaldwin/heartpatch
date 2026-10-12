@@ -39,7 +39,7 @@ import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { lodFor } from '../procedural/motion.js';
 import type { SquishySpecies } from '../procedural/params.js';
 import { SquishyField } from '../procedural/squishy-field.js';
-import { project, wallFade, type FadeWall, type HousePose } from './house-camera.js';
+import { frontAlpha, project, wallFade, type FadeWall, type HousePose } from './house-camera.js';
 import {
   HOUSE_BLANKETS,
   HOUSE_CAST,
@@ -126,9 +126,9 @@ export interface HouseSceneStats {
   /** How far the roof has lifted off (1: gone). */
   readonly roof: number;
   /**
-   * The front walls at kid height (null in the dollhouse, which has none):
-   * the most see-through one's alpha, about 0.15 when it stands between the
-   * camera and the room.
+   * The front walls past the dollhouse (null in the dollhouse, which has
+   * none): the most see-through one's alpha, a faint veil while the camera
+   * passes it and 0 (not drawn) once you stand in the room.
    */
   readonly frontWallAlpha: number | null;
   /** Residents drawn at the hero detail (low tier: the nearest one at kid height). */
@@ -346,10 +346,11 @@ export class HouseScene {
       const top = project(frame.pose, frame.aspect, { x: t.x, y: TREE_TOP * t.s, z: t.z });
       const foot = project(frame.pose, frame.aspect, { x: t.x, y: -0.3, z: t.z });
       if (foot.depth <= 0) return false;
-      const footIn = foot.y < 1 && Math.abs(foot.x) < 1.1;
-      const cut = top.y > 0.97 && footIn;
-      const underBar = top.y > frame.topBar && footIn;
-      return !cut && !underBar;
+      // Whole in the frame below the top bar, or wholly past its top edge:
+      // never a trunk or a crown cut by an edge (render check, PR B2).
+      const whole = top.y < Math.min(0.97, frame.topBar) && Math.abs(foot.x) < 1.1;
+      const past = foot.y > 1.05;
+      return whole || past;
     });
     const matrices = new Float32Array(Math.max(1, kept.length) * 16);
     const colors = new Float32Array(Math.max(1, kept.length) * 4);
@@ -371,13 +372,15 @@ export class HouseScene {
     const shown = zoom >= HOUSE_KID.frontFrom;
     const focus = this.#focus?.point;
     let least: number | null = null;
-    // Fades in as the camera comes down, never popping in solid.
-    const ramp = Math.min(1, (zoom - HOUSE_KID.frontFrom) / (1 - HOUSE_KID.frontFrom));
     for (const f of this.#fronts) {
-      f.mesh.setEnabled(shown);
-      if (!shown || !focus) continue;
-      const alpha = Math.min(wallFade(pose.eye, focus, f.wall), ramp);
+      if (!shown || !focus) {
+        f.mesh.setEnabled(false);
+        continue;
+      }
+      const alpha = frontAlpha(wallFade(pose.eye, focus, f.wall), zoom);
       f.material.alpha = alpha;
+      // Gone means not drawn at all: no veil, no seams at the door's edges.
+      f.mesh.setEnabled(alpha > 0.001);
       least = least === null ? alpha : Math.min(least, alpha);
     }
     for (const p of [...this.#porch, ...this.#ceilings]) p.setEnabled(shown);
@@ -852,7 +855,16 @@ export class HouseScene {
         )
       )
         continue;
-      const parts = roofInside(this.#scene, r.x0, r.z0, r.x1 - r.x0, r.z1 - r.z0, r.y1);
+      // It reaches out over the porch, so kid height (standing out there) sees no sky above.
+      const parts = roofInside(
+        this.#scene,
+        r.x0,
+        r.z0,
+        r.x1 - r.x0,
+        r.z1 - r.z0,
+        r.y1,
+        HOUSE_KID.minStandBack + 0.6,
+      );
       for (const [name, list, material] of [
         [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
         [`house-${r.id}-ceiling-glow`, parts.glow, this.#glow],

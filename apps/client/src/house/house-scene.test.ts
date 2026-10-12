@@ -1,7 +1,7 @@
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import type { Scene } from '@babylonjs/core/scene';
 import { describe, expect, it, vi } from 'vitest';
-import { fitHouse, kidPose } from './house-camera.js';
+import { blend, fitHouse, kidPose } from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse } from './house-fixtures.js';
 import { buildHouse } from './house-test-scene.js';
@@ -125,7 +125,7 @@ describe('house scene', () => {
     scene.getEngine().dispose();
   });
 
-  it('has no front walls in the dollhouse and fades them in the way at kid height, with a porch', () => {
+  it('has no front walls in the dollhouse, veils them on the way in and takes them away at kid height', () => {
     const { scene, house } = buildHouse(1, 'low');
     const vp = { width: 390, height: 844, top: 80, bottom: 150 };
     const front = scene.getMeshByName('house-snug-wall-front')!;
@@ -134,10 +134,18 @@ describe('house scene', () => {
     expect(front.isEnabled()).toBe(false);
     expect(porch.isEnabled()).toBe(false);
     expect(house.stats.frontWallAlpha).toBeNull();
-    house.setPose(kidPose(house.focusRoom!, vp), 1);
+    // Passing the wall on the way in: a faint veil.
+    const doll = fitHouse(house.bounds, vp);
+    const kid = kidPose(house.focusRoom!, vp);
+    house.setPose(blend(doll, kid, 0.75), 0.75);
     expect(front.isEnabled()).toBe(true);
+    expect(house.stats.frontWallAlpha!).toBeGreaterThan(0);
+    expect(house.stats.frontWallAlpha!).toBeLessThanOrEqual(HOUSE_KID.fadedAlpha);
+    // Standing in the room: gone, not drawn at all (no seams through the squishies).
+    house.setPose(kid, 1);
+    expect(front.isEnabled()).toBe(false);
     expect(porch.isEnabled()).toBe(true);
-    expect(house.stats.frontWallAlpha).toBeCloseTo(HOUSE_KID.fadedAlpha);
+    expect(house.stats.frontWallAlpha).toBe(0);
     scene.getEngine().dispose();
   });
 

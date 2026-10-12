@@ -11,6 +11,7 @@ import {
   roofAt,
   safeArea,
   blend,
+  frontAlpha,
   kidPose,
   wallFade,
   walkedIn,
@@ -92,15 +93,16 @@ describe('walking in: kid height', () => {
   const doll = fitHouse(snug, iphone);
   const kid = kidPose(room, iphone);
 
-  it('stands at a small squishy’s eye level, tilted up 3–4°, with the back wall across the frame', () => {
+  it('stands at a small squishy’s eye level, tilted up 3–4°, the frame no wider than the back wall', () => {
     expect(kid.eye.y).toBeCloseTo(HOUSE_KID.eyeHeight);
     expect(-deg(kid.pitch)).toBeGreaterThanOrEqual(3);
     expect(-deg(kid.pitch)).toBeLessThanOrEqual(4);
     expect(kid.eye.z).toBeLessThan(room.minZ); // back from the open front
     const aspect = iphone.width / iphone.height;
+    // Never wider than the back wall: nothing past the side walls in the frame.
     for (const x of [room.minX, room.maxX]) {
       const p = project(kid, aspect, { x, y: 1.5, z: room.maxZ });
-      expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.x)).toBeGreaterThanOrEqual(0.98);
     }
     // A tall phone caps its vertical view (less floor in the frame).
     expect(deg(kid.fov)).toBeLessThanOrEqual(HOUSE_KID.maxVerticalFov + 1e-9);
@@ -146,6 +148,19 @@ describe('walking in: kid height', () => {
     expect(wallFade(doll.eye, focus, front)).toBe(1);
     // An upstairs wall isn't in the way of a ground-floor look.
     expect(wallFade(kid.eye, focus, { ...front, y0: 3 })).toBe(1);
+  });
+
+  it('takes the wall in the way away at rest at kid height, veiling it only on the way', () => {
+    const focus = { x: 2.4, y: 0.8, z: 2.4 };
+    const front = { axis: 'x' as const, at: 0, from: 0, to: 4.8, y0: 0, height: 3 };
+    const fade = wallFade(kid.eye, focus, front);
+    expect(fade).toBe(HOUSE_KID.fadedAlpha);
+    expect(frontAlpha(fade, 1)).toBe(0); // at rest: gone
+    expect(frontAlpha(fade, 0)).toBe(0); // the dollhouse: none
+    const passing = frontAlpha(fade, 0.75);
+    expect(passing).toBeGreaterThan(0);
+    expect(passing).toBeLessThanOrEqual(HOUSE_KID.fadedAlpha);
+    expect(frontAlpha(1, 1)).toBe(1); // a wall not in the way stays solid
   });
 
   it('walks in and out over a beat, or cuts with reduced motion', () => {

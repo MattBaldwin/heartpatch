@@ -192,9 +192,9 @@ export const snugRoom: RoomBuilder = (kit) => {
   // Over the back window, in front of the wall's inside face (and its light band).
   kit.sign(box.x0 + w / 2, y + 2.62, box.z1 - HOUSE_GRID.wall / 2 - 0.05, 1.9);
   return {
-    // Behind the two on the rug, between them: in view from the dollhouse and at kid height.
-    keeper: { x: box.x0 + w * 0.5, z: box.z0 + d * 0.66 },
-    residents: [at(w * 0.34, d * 0.4), at(w * 0.64, d * 0.36), at(w * 0.5, d * 0.22)].map(
+    // Behind the two on the rug, in the gap between them: clear of both at kid height.
+    keeper: { x: box.x0 + w * 0.55, z: box.z0 + d * 0.7 },
+    residents: [at(w * 0.33, d * 0.4), at(w * 0.67, d * 0.36), at(w * 0.5, d * 0.22)].map(
       ([x, z]) => ({ x, z }),
     ),
   };
