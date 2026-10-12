@@ -492,6 +492,7 @@ export function playerBattleView(
     worn?: ReadonlyMap<string, string>;
     defensePrompt?: PlayerBattle['defensePrompt'];
     firstMeeting?: boolean;
+    firstEver?: boolean;
   } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
@@ -519,6 +520,7 @@ export function playerBattleView(
     terrain: row.arena?.terrain ?? MAP_GEN.homeTerrain,
     timeOfDay: row.arena?.timeOfDay ?? 'day',
     ...(options.firstMeeting !== undefined && { firstMeeting: options.firstMeeting }),
+    ...(options.firstEver !== undefined && { firstEver: options.firstEver }),
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     ...(options.live && { live: options.live }),
@@ -621,6 +623,29 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return at !== null && at.getTime() === row.startedAt.getTime();
   };
 
+  /**
+   * A wild battle the player ended by befriending the wild squishy (#391):
+   * was that their first friend of its kind on this map? Befriending marks the
+   * kind caught at the battle's own end time and keeps an earlier first time,
+   * so the two match only when this battle was the first. Null for any other
+   * battle.
+   */
+  const firstEverOf = async (tx: Executor, row: BattleRow): Promise<boolean | null> => {
+    const wild = row.state.sides.b.squishies[0];
+    const befriended =
+      row.kind === 'wild' &&
+      row.status === 'finished' &&
+      row.result?.reason === 'captured' &&
+      row.result.winner === PLAYER_SIDE;
+    if (!befriended || !wild || !row.endedAt) return null;
+    const at = await createSpawnsRepo(tx).firstCaughtAt(
+      row.mapId,
+      row.playerUserId,
+      wild.speciesId,
+    );
+    return at !== null && at.getTime() === row.endedAt.getTime();
+  };
+
   /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   const toPlayerBattle = async (
     tx: Executor,
@@ -637,10 +662,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ...(live ? await wornAccessories(tx, live.bUserId, ids('b')) : []),
     ]);
     const firstMeeting = await firstMeetingOf(tx, row);
+    // Only the battle's own player befriended anything (a defender's replay never).
+    const firstEver = side === PLAYER_SIDE ? await firstEverOf(tx, row) : null;
     return playerBattleView(content, row, {
       mySide: side,
       worn,
       ...(firstMeeting !== null && { firstMeeting }),
+      ...(firstEver !== null && { firstEver }),
       ...(seat?.asking && {
         defensePrompt: {
           expiresAt: seat.asking.expiresAt.toISOString(),
