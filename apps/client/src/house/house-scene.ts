@@ -606,6 +606,7 @@ export class HouseScene {
     return {
       scene,
       box: parts.box,
+      tier: this.#tier,
       solid: (list) => parts.solid.push(...list),
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {

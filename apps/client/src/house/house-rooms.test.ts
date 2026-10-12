@@ -18,6 +18,7 @@ function kit(scene: Scene, level: number, index: number) {
   const k: RoomKit = {
     scene,
     box: roomBox(room),
+    tier: 'low',
     solid: (parts) => (made.solid += parts.length),
     glow: (parts) => (made.glow += parts.length),
     bed: () => (made.beds += 1),

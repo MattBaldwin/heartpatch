@@ -13,6 +13,7 @@ import {
   type Parts,
 } from './house-models.js';
 import { HOUSE_GRID } from './house-config.js';
+import type { QualityTier } from '../engine/config.js';
 import type { RoomBox } from './house-layout.js';
 
 /*
@@ -34,6 +35,8 @@ export interface FloorSpot {
 export interface RoomKit {
   readonly scene: Scene;
   readonly box: RoomBox;
+  /** The quality tier, so a builder can pick lighter parts on low (the iPad 9th gen budget). */
+  readonly tier: QualityTier;
   /** Matte-vinyl furniture, merged into the room's one mesh. */
   solid(parts: readonly Mesh[]): void;
   /** Glowing bits (lamp shades, flames), merged into the room's glow mesh. */

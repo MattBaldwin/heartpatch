@@ -5,6 +5,7 @@ import { blend, fitHouse, kidPose, project, safeArea } from './house-camera.js';
 import { HOUSE_GRID, HOUSE_KID } from './house-config.js';
 import { sampleHouse, sampleLevels } from './house-fixtures.js';
 import { yardPumpkins } from './house-models.js';
+import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -32,6 +33,21 @@ describe('house scene', () => {
       }
       scene.getEngine().dispose();
     }
+  });
+
+  it('hands room builders the quality tier, so a room can pick lighter parts on low', () => {
+    const snug = roomBuilder('snug');
+    const seen: RoomKit['tier'][] = [];
+    registerRoom('snug', (kit) => {
+      seen.push(kit.tier);
+      return snug(kit);
+    });
+    try {
+      for (const tier of ['low', 'high'] as const) buildHouse(1, tier).scene.getEngine().dispose();
+    } finally {
+      registerRoom('snug', snug);
+    }
+    expect(seen).toEqual(['low', 'high']);
   });
 
   it('takes the open front off the dollhouse and keeps the other walls', () => {
