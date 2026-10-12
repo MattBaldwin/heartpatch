@@ -118,7 +118,8 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   reloading = false;
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
   await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
-  expect((await hollowState(page))!.night).toBe(false);
+  // The hollow status loads after the map is live; its debug view is null until then.
+  await expect.poll(async () => (await hollowState(page))?.night, { timeout: 30_000 }).toBe(false);
   // The reload shut the trays: open the one the nudge lives in again.
   await trayButton(page, 'hollow-fire-hint');
   await expect(hint).toBeVisible();

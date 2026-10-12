@@ -95,8 +95,9 @@ export async function shutTrays(page: Page): Promise<void> {
 
 /**
  * Flags drawn where something over the map covers them (#310): each shown
- * flag whose box touches a corner button, the patch name, or an open sheet
- * or tray. Empty when every flag keeps clear.
+ * flag whose box touches a corner button, the patch name, a tray handle
+ * (#426), or an open sheet or tray, or runs off the screen. Empty when every
+ * flag keeps clear and shows whole.
  */
 export function flagsUnderCovers(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -110,16 +111,20 @@ export function flagsUnderCovers(page: Page): Promise<string[]> {
     };
     const covers = [
       ...document.querySelectorAll(
-        '.tray-top-left, .tray-top-right, .auth-chip, .map-hud, [role="dialog"]:not([aria-modal="false"])',
+        '.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, [role="dialog"]:not([aria-modal="false"])',
       ),
     ].flatMap((el) => seen(el) ?? []);
     return [...document.querySelectorAll('[data-testid="post-flag"]')].flatMap((flag) => {
       const f = seen(flag);
       const hit =
         f &&
-        covers.some(
-          (c) => f.left < c.right && c.left < f.right && f.top < c.bottom && c.top < f.bottom,
-        );
+        (f.left < 0 ||
+          f.top < 0 ||
+          f.right > window.innerWidth ||
+          f.bottom > window.innerHeight ||
+          covers.some(
+            (c) => f.left < c.right && c.left < f.right && f.top < c.bottom && c.top < f.bottom,
+          ));
       return hit ? [flag.textContent] : [];
     });
   });

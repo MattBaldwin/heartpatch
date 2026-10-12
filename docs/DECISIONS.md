@@ -1460,9 +1460,9 @@ _Owner answers to the coordinator on 2026-10-11, asked one question at a time wi
 - Coordinator: before 2b merges, the tidy-up pass is dry-run (`tile-uses:check`) on a restored copy of the live data, and the counts are posted on the PR.
 
 **New evolution forms (#363)**
-- **Huddlenut and Sprinklemuff ship.** The owner approved both looks, each with small polish made without another round. Sprinklemuff's (a wider grin, sprinkles round the dome) landed in PR #363; Huddlenut's (tail tip, head crease, teeth) is a follow-up.
+- **Huddlenut and Sprinklemuff ship.** The owner approved both looks, each with small polish made without another round. Sprinklemuff's (a wider grin, sprinkles round the dome) landed in PR #363; Huddlenut's (tail tip, head crease, teeth) is a follow-up. _Later: two partial polish commits landed in PR #418; see "2026-10-12 — Owner decisions and coordinator calls (overnight)" below._
 - **Sprinklemuff's stats are trimmed by 5 points** (98/92/87/103 to 96/91/86/102), so it stays under the 1.2× sibling ceiling against Mossquilt after Mossquilt's 2% trim (1.21× to 1.19×). Win rate after the trim: 55% (band 38–66%).
-- **Heartsong gets a true heart body and a floating music note.** The owner chose a new heart body drawn as one smooth piece, instead of shipping round 6 or keeping the old look. The gold note floats above it and turns to face the camera (option C, shown as a mock); the owner chose it over no note and over a note attached to the body. Coordinator: both are optional, off-by-default fields in the shared squishy data (a test proves every other kind draws byte-identically). The note costs at most one extra draw call, only while Heartsong is on screen, follows the scene's light and fog, and holds still under Reduce Motion. Heartsong ships in its own PR after Huddlenut and Sprinklemuff.
+- **Heartsong gets a true heart body and a floating music note.** The owner chose a new heart body drawn as one smooth piece, instead of shipping round 6 or keeping the old look. The gold note floats above it and turns to face the camera (option C, shown as a mock); the owner chose it over no note and over a note attached to the body. Coordinator: both are optional, off-by-default fields in the shared squishy data (a test proves every other kind draws byte-identically). The note costs at most one extra draw call, only while Heartsong is on screen, follows the scene's light and fog, and holds still under Reduce Motion. _Later: the note ignores fog like every squishy; see "2026-10-12 — Owner decisions and coordinator calls (overnight)" below._ Heartsong ships in its own PR after Huddlenut and Sprinklemuff.
 
 **Battles (#403)**
 - **The free sip ships as shown.** The owner approved the "Sipped ✓" moment, where moves stay open after drinking.
@@ -1471,3 +1471,37 @@ _Owner answers to the coordinator on 2026-10-11, asked one question at a time wi
 - **The Oct 15–18 migration freeze is lifted.** The family playtest becomes one extended test session once all Phase 1 items are in. One migration in flight at a time still holds.
 - **The Keeper's home (#381) moves into Phase 1.** Coordinator: it ships behind a server switch, `HP_HOUSE` = off, testers or on (default off), with the testers list set only on the server. Go/no-go around Oct 27: the #381 Phase 1 PRs merged and at least 30 fps on the low tier on the iPad 9th gen walk-through; otherwise it stays off and lands in Phase 2. Its one Phase 1 migration takes the slot after #242's migration A; furniture and the guestbook move to Phase 2.
 - **Decisions go through the coordinator.** Every lane sends decisions to the coordinator as "#<issue> decision needed: …" with a picture or link and a recommendation; the coordinator puts them to the owner, one question at a time. Lanes never ask the owner directly.
+
+## 2026-10-12 — Owner decisions and coordinator calls (overnight)
+
+_Owner answers to the coordinator late on 2026-10-11 and early on 2026-10-12, asked one question at a time with the screens, plus coordinator calls, each labelled "Coordinator"._
+
+**Screens and feel**
+- **The home sheet becomes a short peek bar (#412).** The owner picked option C: on iPhone a short bar peeks up from the bottom so the squishies stay in view, with no camera change.
+- **The squishies roster v3 is approved (#375).** The build includes the care-sheet portrait fix shown with it.
+- **Heartsong v9 ships (#32, PR #418).** The owner approved the true heart body and the floating note ("Ship it"). Coordinator: the note ignores fog like every squishy (ART_BIBLE 1.8). This corrects "follows the scene's light and fog" in the night entry above.
+- **Mood bubbles v3 are approved (#393).** Each bubble sits just over its own squishy's head, with a tail. If it would cover another squishy's face, it first slides sideways, then climbs on a stem, and otherwise waits until there is room. Resting squishies show no cue.
+- **The Keeper's home is the walk-around dollhouse in the mockup (#381).** The owner approved the Snug and the grown house (Snug, Playroom, Kitchen loft, two-storey Heart Hall, 10 beds), each with a dollhouse view and a walk-in view at squishy height where the near wall fades. Coordinator: PR B4 also reframes the iPhone grown-house camera, fills the Heart Hall walk-in, gives the Kitchen loft kitchen props, rounds Puddlepuff's belly and fixes clipped props.
+- **The gather summary is "Fly into a receipt" (#419).** The owner flagged today's run-on "resources gathered" toast as unprofessional and picked option D:
+  - Chips fly into a slim "Welcome back!" banner, which holds for about 4 seconds (`// TUNE:`).
+  - The banner then tucks into the Home tab, which keeps a gold "+N" badge until the Bag is opened.
+  - "N more ›" opens the full list as a card.
+
+  Coordinator: it ships as two PRs (the banner, badge and list first, then the flight). Reduce Motion skips the flight, and resource icons stay the game's emoji.
+- **Swimming holds 30+ fps on iPad (#399).** The owner checked it with `?fps=1`.
+
+**Coordinator calls**
+- **Huddlenut polish (#363, PR #418).** Two partial polish commits (teeth, tail-tip cap, head sunk lower) landed with Heartsong in PR #418. The rest is #417 (soft seams), and crown hats letting stems show is #425, both Phase 2.
+- **The house switch (#381).**
+  - `HP_HOUSE` = off, testers or on, plus `HP_HOUSE_TESTERS`, both server-only. The `?fps=1` badge already works on production, so it is not tester-gated.
+  - The house migration is 0046, after #242's 0045.
+  - The client work ships as small PRs behind the switch: B1 the Snug and dollhouse view, B2 walking in, B3 the grown rooms, B3b the Grow the house sheet (after the migration PR), and B4 the coordinator's five fixes above. B2 and B3 run in parallel lanes.
+  - Furniture, the guestbook and personalising the house need expand-only migrations in Phase 2.
+- **The Crafting Factory moves later (#242).** Its move from home to a homestead (the #295 plan) ships with the client PR 3, not 2b, so main never has a Factory kids can't build or open. The tidy-up pass is idempotent, so it moves Factories once.
+- **Lint memory (#414).** ESLint runs with a 6 GB heap (`NODE_OPTIONS=--max-old-space-size=6144`); at 4 GB it runs out of memory on the CI runner.
+- **The iPad freeze fix comes first (#397).** The breathing fix shipped first (#421). #397 closes with #420 once the wardrobe spec stays green.
+- **The dusk test clock is dropped (#422).** A time-zone route can't beat the 10-minute worst case, and a per-map clock offset would touch 9 files for a test-only gain. The issue is closed as not planned.
+- **Process.**
+  - Lanes post the reviewer verdict comment naming the head SHA before reporting "ready".
+  - One green CI run on the final head is enough. The coordinator's two-run bar (in practice since #408) was dropped once #416 fixed the flake behind it.
+  - Owner decisions are recorded in one docs PR per evening.

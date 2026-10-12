@@ -334,6 +334,47 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   });
 
   describe('gatherers', () => {
+    it('finds nothing on a tile with a building out on the land, and the ring node beside a habitat stays (#295)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const forest = await farLand(server, kid, mapId, 'forest');
+      const pet = await squishy(mapId, kid);
+      const spotAt = (view: JobsView, t: { q: number; r: number }) =>
+        view.spots.find((s) => s.q === t.q && s.r === t.r);
+      expect(spotAt(await jobs(server, kid, mapId), forest)).toBeDefined();
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: await tileIdAt(mapId, forest),
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+      });
+      expect(spotAt(await jobs(server, kid, mapId), forest)).toBeUndefined();
+      const res = await setJob(server, kid, mapId, pet, {
+        job: 'gatherer',
+        q: forest.q,
+        r: forest.r,
+      });
+      expect(res.statusCode).toBe(409);
+      expect(errorOf(res).message).toContain('A building stands here');
+
+      // At home a habitat stands beside its ring node, and the node is still worked.
+      const node = await homeNode(server, kid, mapId, 'timber');
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: await tileIdAt(mapId, node),
+        buildingId: 'cozy-meadow',
+        kind: 'habitat',
+        spot: 1,
+      });
+      expect(spotAt(await jobs(server, kid, mapId), node)).toBeDefined();
+      const ring = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
+      expect(ring.statusCode).toBe(200);
+    });
+
     it('works a node on its own, lazily, up to the cap, and collects once', async () => {
       const server = await start();
       const kid = await player();
