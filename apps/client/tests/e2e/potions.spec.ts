@@ -116,7 +116,11 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   const sipped = (await battleState(page))!;
   expect(sipped.sipped).toBe('brave-brew');
   expect(sipped.turn).toBe(0);
-  expect(sipped.scene!.effects.spawned).toBeGreaterThan(sparkles);
+  // The sparkle is spawned by the scene's next frames (its effect cues run in the tick), later
+  // than the shield, which the plate sets at once; frames are slow in software (#429).
+  await expect
+    .poll(async () => (await battleState(page))?.scene?.effects.spawned ?? 0, { timeout: 10_000 })
+    .toBeGreaterThan(sparkles);
   // The sip rides with a move: the Heart Charm and Swap wait.
   await expect(page.getByTestId('battle-capture')).toBeHidden();
   await expectRoomyLabels(page, '.battle-button');
