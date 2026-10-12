@@ -409,6 +409,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           exploreRoutes(createExploreService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // Journeys to trading posts (#270).

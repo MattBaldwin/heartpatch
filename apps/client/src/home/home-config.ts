@@ -47,11 +47,21 @@ export const HOME_SHEET = { swipePx: 24, clickAfterMs: 600 } as const; // TUNE
 /** Spots inside a tile: sub-hex size as a fraction of the tile's hex size. */
 export const SPOT_SIZE = 0.3; // TUNE: ring spots sit about half-way to the tile edge
 
-/** Building scale on the world map, as a fraction of the map's hex size. */
-export const MAP_BUILDING_SCALE = 0.42; // TUNE
+/**
+ * Building scale on the world map, as a fraction of the map's hex size. A
+ * home building has its tile to itself beside the ring node (#295, one
+ * building a tile), so it's drawn about tile-sized.
+ */
+export const MAP_BUILDING_SCALE = 0.72; // TUNE: was 0.42 when tiles held several
 
-/** A fire on captured land stands alone in its tile's middle, so it's drawn bigger (#202). */
-export const MAP_OUTER_FIRE_SCALE = 0.75; // TUNE
+/**
+ * Out on the land a building fills its tile, in its middle, with the tile's
+ * props cleared away (owner decision 2026-10-11, #295): today's models scaled
+ * up until bespoke tile-sized ones come in Phase 2. A fire (#202) is tall and
+ * narrow; the Training Grounds and Crafting Factory are flat and wide.
+ */
+export const MAP_OUTER_FIRE_SCALE = 0.95; // TUNE: was 0.75
+export const MAP_OUTER_BUILDING_SCALE = 1.15; // TUNE
 
 /** The soft glow over Hearthfire-safe tiles on the map (linear RGB, alpha). */
 export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as const; // TUNE

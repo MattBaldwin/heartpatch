@@ -1,4 +1,5 @@
 import type { ArtRules } from '../schemas/data/art-rules.js';
+import type { Rarity } from '../schemas/data/common.js';
 import type { Body, Part } from '../schemas/data/visuals.js';
 
 /**
@@ -1839,4 +1840,21 @@ export const ART_RULES: ArtRules = {
     brave: [['brave-brows'], ['oval-eyes', 'dot-eyes', 'sharp-eyes']],
     spooky: [['spooky-eyes']],
   },
+};
+
+/**
+ * Rare finds glow (#391, the owner picked the coloured-edge look): how
+ * strongly each rarity glows, 0 for none. The client draws rare and epic as
+ * an outline glowing in each part's own colour, and brightens the rainbow
+ * edge that legendary and up already wear. Secret kinds glow like
+ * legendary. Rarity is public already, so this can ship to every client.
+ */
+export const RARE_GLOW_LEVEL: Readonly<Record<Rarity, 0 | 1 | 2 | 3 | 4>> = {
+  common: 0,
+  uncommon: 0,
+  rare: 1, // TUNE
+  epic: 2, // TUNE
+  legendary: 3, // TUNE
+  mythic: 4, // TUNE
+  secret: 3, // TUNE
 };

@@ -14,7 +14,14 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import type { BuildCard } from '../building/build-model.js';
-import { buildingIcon, buildingName, effectChips, GROUNDS, LAND_FIRE } from '../home/home-view.js';
+import {
+  buildingIcon,
+  buildingName,
+  effectChips,
+  FACTORY,
+  GROUNDS,
+  LAND_FIRE,
+} from '../home/home-view.js';
 import { describeItems } from './bag-view.js';
 import { CLEAR_TOOL_ICONS } from './item-icons.js';
 
@@ -44,6 +51,8 @@ export interface ClearState {
   readonly items: ItemCounts;
   readonly gathers: readonly Gather[];
   readonly clears?: readonly Clearing[];
+  /** My Crafting Factory, if I've built it (one per player, #295). */
+  readonly factory?: { readonly buildingId: string } | null;
 }
 
 const TOOL_NAMES = new Map<string, string>(CLEARING_RULES.tools.map((t) => [t.id, t.name]));
@@ -171,7 +180,9 @@ export function clearCards(
   // On land with no spot, Clear land comes after the buildings that can go
   // up as it is (the home source's cards come first).
   if (offer.blocked || !clearsFirst(tile)) return [clear];
-  const waiting = [LAND_FIRE, GROUNDS].flatMap((b) =>
+  // My one Crafting Factory waits here too until I've built it (#295).
+  const factory = state.factory ? undefined : FACTORY;
+  const waiting = [LAND_FIRE, GROUNDS, factory].flatMap((b) =>
     b
       ? [
           {

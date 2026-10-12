@@ -123,15 +123,465 @@
   pointer-events: auto;
 }
 
+/* The grip, as home's (#412): a 44pt button whose bar sits in the sheet's top padding. */
 .house-peek-handle {
-  align-self: center;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin: -10px 0 -18px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.house-peek-handle::before {
+  content: '';
   width: 48px;
   height: 5px;
   border-radius: 999px;
   background: #f0cfe0;
 }
 
+.house-peek-handle:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+/* Opened: one scroll area, never taller than about half the screen, so the
+   house still shows above it (style guide §3; no scroll inside scroll). */
+.house-peek-open {
+  max-height: min(64dvh, calc(100dvh - env(safe-area-inset-top) - 150px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Opened, the grip stays at the top of the scroll and never covers a line. */
+.house-peek-open .house-peek-handle {
+  position: sticky;
+  top: -10px;
+  margin-bottom: -4px;
+  z-index: 1;
+  background: #fffafc;
+}
+
+.house-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.house-sheet-body:empty {
+  display: none;
+}
+
+.house-note {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #2f6b3d;
+}
+
+/* A refusal or a problem: calm and kind, not the ta-da's green (style guide §3.7). */
+.house-note-calm {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff1f7;
+  color: #7a2d55;
+  font-weight: 700;
+}
+
+/* It takes focus after a build or a refusal; no ring unless from the keyboard. */
+.house-note:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.house-sheet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.house-sheet-row > .house-button {
+  flex: 1 1 8em;
+}
+
+/* Buttons in the house's sheet: the home sheet's pink pill, 44pt+. */
+.house-button {
+  min-width: 44px;
+  min-height: 48px;
+  padding: var(--hp-pad-y) 18px;
+  border: none;
+  border-radius: 999px;
+  background: #b8487a;
+  box-shadow: 0 3px 8px rgb(74 49 80 / 14%);
+  color: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.house-button:active {
+  transform: scale(0.97);
+}
+
+.house-button:disabled,
+.house-button[aria-disabled='true'] {
+  cursor: default;
+  transform: none;
+}
+
+.house-button-soft {
+  background: #f6dceb;
+  box-shadow: none;
+  color: #7a2d55;
+}
+
+.house-all-grown {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #8a5a00;
+}
+
+/* ── Grow the house (#381 plan §10.4) ─────────────────────────────────── */
+
+/* Behind an open Grow sheet: the scene and the HUD dim; a tap closes the sheet. */
+.house-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(46 26 50 / 44%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* The header stays at the top of the sheet's scroll: the eyebrow, ✕, the
+   levels and the room, with a short fade under it so rows slide away softly. */
+.house-grow-head {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: -10px -20px 0;
+  padding: 14px 20px 6px;
+  background: #fffafc;
+}
+
+.house-grow-head::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 14px;
+  background: linear-gradient(#fffafc, rgb(255 250 252 / 0%));
+  pointer-events: none;
+}
+
+.house-grow-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.house-grow-eyebrow {
+  margin: 0 0 2px;
+  color: #b8487a;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.house-grow-title {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.house-grow-levels {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.house-grow-room {
+  font-size: 19px;
+  font-weight: 800;
+  color: #6b4b6e;
+}
+
+/* ✕: the sheet's way out, top right, a round 48pt target. */
+.house-grow-head > .house-grow-close {
+  flex: none;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.house-grow-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.house-grow-group-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #7a2d55;
+}
+
+.house-grow-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.house-grow-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px 10px 10px;
+  border-radius: 16px;
+  background: #fff1f7;
+}
+
+.house-grow-row-done {
+  background: #eef7ec;
+}
+
+/* ✅ and ⬜ share one fixed slot, so every label and bar lines up. */
+.house-grow-mark {
+  flex: none;
+  width: 26px;
+  font-size: 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.house-grow-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.house-grow-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.house-grow-line {
+  min-width: 0;
+  text-wrap: pretty;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.house-grow-count {
+  flex: none;
+  font-size: 14px;
+  font-weight: 800;
+  color: #7b6676;
+  font-variant-numeric: tabular-nums;
+}
+
+.house-grow-bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f3dbe8;
+}
+
+.house-grow-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #d9649b;
+}
+
+.house-grow-row-done .house-grow-bar {
+  background: #d7ecd2;
+}
+
+.house-grow-row-done .house-grow-fill {
+  background: #4f9a5c;
+}
+
+.house-grow-hint {
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #8a3a66;
+}
+
+.house-grow-need-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+/* The cost with my counts, as the home's upgrade sheet shows it. */
+.house-grow-needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.house-grow-need {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fde2cf;
+  color: #8a3f17;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.house-grow-need-ok {
+  background: #e3f3df;
+  color: #24572f;
+}
+
+.house-grow-build {
+  margin-top: 4px;
+}
+
+/* Not yet: a quiet box with ⏳, plainly not a button to press. */
+.house-grow-build.house-grow-wait:disabled {
+  border: 2px dashed #e2cfdb;
+  border-radius: 18px;
+  background: #f7f1f4;
+  box-shadow: none;
+  color: #7b6676;
+  font-weight: 700;
+}
+
+.house-grow-wait-icon {
+  margin-right: 6px;
+}
+
+.house-grow-next {
+  margin: -2px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #7b6676;
+  text-align: center;
+}
+
+/* The bottom fade: pinned to the sheet's bottom edge while the list runs on below. */
+.house-grow-fade {
+  position: sticky;
+  bottom: -14px;
+  flex: none;
+  height: 18px;
+  margin-top: -18px;
+  background: linear-gradient(rgb(255 250 252 / 0%), #fffafc);
+  pointer-events: none;
+}
+
+.house-grow-confirm {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/* The ta-da: a little burst of sparkles from the sheet's top (none under reduced motion). */
+.house-sparkle {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* The bits fly out in a ring from the new room (--dx/--dy: each bit's direction). */
+.house-sparkle {
+  --ring: 64px;
+  --bit: 26px;
+}
+
+.house-sparkle-bit {
+  position: absolute;
+  font-size: var(--bit);
+  opacity: 0;
+  animation: house-sparkle 1.1s ease-out forwards;
+  animation-delay: calc(var(--i) * 25ms);
+}
+
+@keyframes house-sparkle {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(
+        calc(-50% + var(--dx) * var(--ring)),
+        calc(-50% + var(--dy) * var(--ring) - 16px)
+      )
+      scale(1.2);
+  }
+}
+
+/* iPad and other big screens: a wider, shorter panel that stays under the
+   squishies by the hearth; it scrolls inside itself. */
+@media (min-width: 700px) and (min-height: 900px) {
+  .house-peek-open {
+    max-width: 600px;
+    max-height: 40dvh;
+  }
+
+  /* The Grow sheet itself: tall enough that the list and Build it! fit. */
+  .house-peek-grow {
+    max-height: 80dvh;
+  }
+
+  .house-sparkle {
+    --ring: 96px;
+    --bit: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-sparkle {
+    display: none;
+  }
+}
+
 .house-peek-line {
+  cursor: pointer;
   overflow: hidden;
   font-size: 18px;
   font-weight: 800;

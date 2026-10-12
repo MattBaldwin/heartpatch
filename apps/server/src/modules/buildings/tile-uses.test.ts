@@ -1,5 +1,4 @@
 import {
-  GAME_DATA,
   HollowResponseSchema,
   HomeResponseSchema,
   MapResponseSchema,
@@ -26,7 +25,7 @@ import { makeHomestead } from '../../../tests/homestead.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
-import { planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
+import { countCrowdedTiles, planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
 
 /*
  * One building per tile (#295): the boot pass that tidies patches built
@@ -208,12 +207,15 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     const kid = await player();
     const mapId = await newMap(server, kid);
     const { ring } = await homeTileIds(server, kid, mapId);
-    // Two habitats on one ring tile, and the Factory sharing another with a
-    // habitat: the old rules allowed several to a tile.
+    // Two habitats on each of two ring tiles: the old rules allowed several
+    // to a tile.
     const den = await old(mapId, kid, 'ember-den', 'habitat', ring[0]!, 1, 3);
     const meadow = await old(mapId, kid, 'cozy-meadow', 'habitat', ring[0]!, 2, 2);
-    const factory = await old(mapId, kid, 'crafting-factory', 'factory', ring[1]!, 1, 3);
+    const den2 = await old(mapId, kid, 'ember-den', 'habitat', ring[1]!, 1, 3);
     const meadow2 = await old(mapId, kid, 'cozy-meadow', 'habitat', ring[1]!, 3, 1);
+
+    // Two crowded tiles before the pass, counted for the boot log (migration B).
+    expect(await countCrowdedTiles(db, [mapId])).toEqual({ multiplayer: 2, other: 0 });
 
     // The dry run sees the same plan and writes nothing.
     const dry = await planOwnerTileUses(db, { mapId, userId: kid.id });
@@ -223,20 +225,21 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       [
         [den, ring[0]],
         [meadow, ring[0]],
-        [factory, ring[1]],
+        [den2, ring[1]],
         [meadow2, ring[1]],
       ].sort(),
     );
 
     await pass(mapId);
     const after = await rowsOf(mapId);
-    expect(after.map((r) => r.id).sort()).toEqual([den, meadow, factory, meadow2].sort());
+    expect(after.map((r) => r.id).sort()).toEqual([den, meadow, den2, meadow2].sort());
     // The oldest on each tile stays; the others are now alone on home tiles.
     expect(after.find((r) => r.id === den)?.tileId).toBe(ring[0]);
-    expect(after.find((r) => r.id === factory)?.tileId).toBe(ring[1]);
+    expect(after.find((r) => r.id === den2)?.tileId).toBe(ring[1]);
     const perTile = new Map<string, number>();
     for (const r of after) perTile.set(r.tileId, (perTile.get(r.tileId) ?? 0) + 1);
     expect(Math.max(...perTile.values())).toBe(1);
+    expect(await countCrowdedTiles(db, [mapId])).toEqual({ multiplayer: 0, other: 0 });
     const events = await eventsOf(mapId);
     expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(2);
     const note = await noteOf(server, kid, mapId);
@@ -411,8 +414,10 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       .returning({ id: tiles.id });
     await old(glade!.id, kid, 'ember-den', 'habitat', ring!.id, 1, 2);
     await old(glade!.id, kid, 'cozy-meadow', 'habitat', ring!.id, 2, 1);
+    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
     await pass(glade!.id);
     expect(await rowsOf(glade!.id)).toHaveLength(2);
+    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
   });
 
   it('runs alongside a settle and a placement for the same player without a deadlock', async () => {
@@ -445,21 +450,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     expect(Math.max(...perTile.values())).toBe(1);
   });
 
-  describe('once the Crafting Factory stands on a homestead (#295 PR 3 flips its data)', () => {
-    // The data flip ships with the client's homestead Factory flow; these
-    // tests flip it for themselves and put it back.
-    const factoryData = GAME_DATA.buildings.find((b) => b.id === 'crafting-factory')! as {
-      placement: string;
-      maxPerTile?: number;
-    };
-    const was = { placement: factoryData.placement, maxPerTile: factoryData.maxPerTile };
-    beforeAll(() => {
-      Object.assign(factoryData, { placement: 'homestead', maxPerTile: 1 });
-    });
-    afterAll(() => {
-      Object.assign(factoryData, was);
-    });
-
+  describe('the Crafting Factory on a homestead (#295)', () => {
     it('moves a Factory out of home to a free homestead, batches and all', async () => {
       const server = await start();
       const kid = await player();
@@ -564,7 +555,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       expect(first.statusCode, first.body).toBe(201);
       const second = await build(other);
       expect(second.statusCode).toBe(409);
-      expect(second.body).toContain('Your home already has all the Crafting Factory it can hold!');
+      expect(second.body).toContain('You already have a Crafting Factory! One is plenty.');
     });
   });
 });

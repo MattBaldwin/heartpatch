@@ -3,7 +3,7 @@ import { boot } from '../../engine/boot.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from '../../engine/stage.js';
-import { sampleHouse } from '../house-fixtures.js';
+import { sampleHouse, withGrow, type SampleGrow } from '../house-fixtures.js';
 import { createHouseScreen } from '../house-screen.js';
 import '../../styles.css';
 
@@ -13,7 +13,9 @@ import '../../styles.css';
  * house, with no server, for judging the look and for house-shots.
  * `?level=1` (default) up to the top level, or `top`; `?tier=high|medium|low`
  * pins a tier (the governor off, as on the main page); `?empty=1` leaves every
- * bed empty; `?still=1` skips the entry glide; plus `?renderer=webgpu`.
+ * bed empty; `?still=1` skips the entry glide; `?grow=not-yet|ready` fills
+ * in Grow the house (Build it! then builds the next level, no server); plus
+ * `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
@@ -24,7 +26,10 @@ const pinTier = isQualityTier(pinned);
 let tier = pickInitialTier(pinned, params.get('quality'));
 const levelParam = params.get('level');
 const level = levelParam === 'top' ? 99 : Number(levelParam) || 1;
-const sample = sampleHouse(level, params.get('empty') !== '1');
+const residents = params.get('empty') !== '1';
+const growParam = params.get('grow');
+const grow: SampleGrow = growParam === 'ready' ? 'ready' : 'not-yet';
+let sample = withGrow(sampleHouse(level, residents), grow);
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('missing #game canvas');
@@ -58,7 +63,15 @@ const house = createHouseScreen({
   onProblem: (message) => {
     console.error(message);
   },
-  api: { get: (): Promise<HouseView> => Promise.resolve(sample.view) },
+  api: {
+    get: (): Promise<HouseView> => Promise.resolve(sample.view),
+    // A pretend build: the next level, its own next level not yet within reach.
+    build: async (_mapId: string, toLevel: number): Promise<HouseView> => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      sample = withGrow(sampleHouse(toLevel, residents), 'not-yet');
+      return sample.view;
+    },
+  },
   // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });

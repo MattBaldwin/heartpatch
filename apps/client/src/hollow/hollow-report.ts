@@ -51,6 +51,12 @@ export const HOLLOW_TEXT = {
   ],
   /** My home Training Grounds packed up and moved out to homesteads (#277, owner decision 4). */
   packedGrounds: ['Your Training Grounds packed up and moved out!', 'Build one on a homestead 🏡.'],
+  /** The tidy-up when one building a tile came in (#295). */
+  tidyUp: 'Tidy-up time! Each tile holds one building now.',
+  movedHome: (name: string) => `Your ${name} moved to a roomier home tile.`,
+  movedOut: (name: string) => `Your ${name} moved out to a homestead 🏡.`,
+  packedUp: (names: string) => `Your ${names} packed up, and everything came back:`,
+  stopped: (names: string) => `${names} stopped gathering where a building stands now.`,
   /** Peeks out beside the Adventure handle while a friend is in the Hollow. */
   news: 'A friend is in the Hollow!',
   mystery: 'a squishy friend',
@@ -136,4 +142,38 @@ export function changesMyNight(
   userId: string,
 ): boolean {
   return NIGHT_EVENTS.has(event.type) && event.data['userId'] === userId;
+}
+
+const BUILDING_NAMES = new Map(GAME_DATA.buildings.map((b) => [b.id, b.name]));
+const HOME_ONLY = new Set(
+  GAME_DATA.buildings.filter((b) => b.placement === 'home').map((b) => b.id),
+);
+
+/** What the one-time tidy-up note (#295) says: what moved, what packed up, who stopped gathering. */
+export interface TileUseNoteLike {
+  readonly moved: readonly { readonly buildingId: string }[];
+  readonly packed: readonly { readonly buildingId: string }[];
+  readonly stoppedGatherers: readonly { readonly name: string }[];
+}
+
+/**
+ * The tidy-up's lines for the morning report (#295): one line a building
+ * moved (home ones to another home tile, the rest out to a homestead), one
+ * for everything that packed up (its refund follows, said by the screen),
+ * and one for squishies that stopped gathering. Empty when nothing changed.
+ */
+export function tileUseLines(note: TileUseNoteLike): string[] {
+  const name = (id: string) => BUILDING_NAMES.get(id) ?? 'building';
+  const lines = note.moved.map((m) =>
+    HOME_ONLY.has(m.buildingId)
+      ? HOLLOW_TEXT.movedHome(name(m.buildingId))
+      : HOLLOW_TEXT.movedOut(name(m.buildingId)),
+  );
+  if (note.packed.length > 0) {
+    lines.push(HOLLOW_TEXT.packedUp(joinNames(note.packed.map((p) => name(p.buildingId)))));
+  }
+  if (note.stoppedGatherers.length > 0) {
+    lines.push(HOLLOW_TEXT.stopped(joinNames(note.stoppedGatherers.map((g) => g.name))));
+  }
+  return lines.length > 0 ? [HOLLOW_TEXT.tidyUp, ...lines] : [];
 }

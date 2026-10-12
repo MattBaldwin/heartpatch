@@ -27,15 +27,21 @@ export interface TierSettings {
    * pixelated.
    */
   minRenderScale: number;
+  /**
+   * Rare and up squishies glow (#391). The fallback if a device can't hold
+   * its frame rate is to turn it off on the low tier only.
+   */
+  rareGlow: boolean;
 }
 
 export const TIER_SETTINGS: Readonly<Record<QualityTier, TierSettings>> = {
   // TUNE: high is the default on playtest devices; spend headroom here first.
-  high: { bloom: true, bloomKernel: 64, minRenderScale: 0.75 },
+  high: { bloom: true, bloomKernel: 64, minRenderScale: 0.75, rareGlow: true },
   // TUNE
-  medium: { bloom: true, bloomKernel: 32, minRenderScale: 0.75 },
+  medium: { bloom: true, bloomKernel: 32, minRenderScale: 0.75, rareGlow: true },
   // TUNE
-  low: { bloom: false, bloomKernel: 0, minRenderScale: 0.7 },
+  // TUNE: rareGlow false here if the iPad 9th gen check shows the glow costs frames (#391).
+  low: { bloom: false, bloomKernel: 0, minRenderScale: 0.7, rareGlow: true },
 };
 
 /**

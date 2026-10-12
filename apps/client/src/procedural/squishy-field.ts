@@ -38,6 +38,7 @@ import {
   type SquishyParams,
   type SquishySpecies,
 } from './params.js';
+import { rareGlowCode } from './rare-glow.js';
 import { orientTriangles, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 import { SquishPlugin } from './squish-plugin.js';
@@ -154,6 +155,8 @@ interface Squishy {
   /** Its eyes and mouth, with where each sits on a plain face (a `face` reshapes them). */
   readonly faceParts: { batch: Batch; instance: Instance; slot: 'eyes' | 'mouth'; base: Matrix }[];
   face: SquishyFace | null;
+  /** Its rare glow (#391): added to the codes of its glowing pieces, 0 below rare. */
+  readonly rareGlow: number;
 }
 
 interface Batch {
@@ -298,6 +301,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       crownParts: [],
       faceParts: [],
       face: null,
+      // A rescue guardian wears the shadow look alone.
+      rareGlow: look === 'shadow' ? 0 : rareGlowCode(species.rarity, species.visual.palette),
     };
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
@@ -614,6 +619,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
 
     const shadow = squishy.handle.look === 'shadow';
     const tier = FINISH_CODE[params.finish];
+    // Rare and up glow (#391) on the torso, head and sticking-out parts.
+    const { rareGlow } = squishy;
     const attach = (
       batch: Batch,
       local: Matrix,
@@ -659,7 +666,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       bodyBatchOf(body),
       Matrix.Scaling(sx, sy, sz).multiply(Matrix.Translation(...torsoAt)),
       linear(params.body.color),
-      tier + glow(params.body.glow) + offFace,
+      tier + glow(params.body.glow) + offFace + rareGlow,
     );
     // A separate head: one more instance in its body kind's batch.
     const headBody = params.head ? this.#registry.bodies.get(params.head.id) : undefined;
@@ -669,7 +676,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         bodyBatchOf(headBody),
         Matrix.Scaling(hx, hy, hz).multiply(Matrix.Translation(...params.head.offset)),
         linear(params.body.color),
-        tier + glow(params.body.glow) + offFace,
+        tier + glow(params.body.glow) + offFace + rareGlow,
       );
     }
 
@@ -680,8 +687,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         false,
       );
       const color = linear(part.color);
-      // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier.
-      const finish = (part.surface ? 0 : tier) + glow(part.glow);
+      // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier and glow.
+      const finish = (part.surface ? 0 : tier + rareGlow) + glow(part.glow);
       const onHead = part.host === 'head' && params.head && headBody;
       const hostBody = onHead ? headBody : body;
       const hostScale = onHead ? params.head.scale : params.body.scale;

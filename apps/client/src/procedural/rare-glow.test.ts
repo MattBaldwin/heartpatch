@@ -1,0 +1,108 @@
+import { FinishSchema, GAME_DATA, RARE_GLOW_LEVEL, RaritySchema } from '@heartpatch/shared';
+import { describe, expect, it } from 'vitest';
+import { FINISH_CODE, RARE_GLOW, RARE_GLOW_CODE } from './config.js';
+import {
+  decodeSquishCode,
+  glowHueIndex,
+  rareGlowCode,
+  rareGlowLevel,
+  rareGlowOff,
+  rareGlowShown,
+  setRareGlowForTier,
+  setRareGlowOff,
+} from './rare-glow.js';
+
+describe('rare finds glow codes (#391)', () => {
+  it('adds nothing below rare, or for a look with no rarity', () => {
+    expect(rareGlowCode('common', ['#ff0000'])).toBe(0);
+    expect(rareGlowCode('uncommon', ['#ff0000'])).toBe(0);
+    expect(rareGlowCode(undefined, ['#ff0000'])).toBe(0);
+  });
+
+  it('reads ?rareglow=0 (a device frame-rate check), and only that', () => {
+    expect(rareGlowOff(new URLSearchParams('?fps=1&rareglow=0'))).toBe(true);
+    expect(rareGlowOff(new URLSearchParams('?fps=1'))).toBe(false);
+    expect(rareGlowOff(new URLSearchParams('?rareglow=1'))).toBe(false);
+  });
+
+  it('shows the glow unless the address or the quality tier turns it off', () => {
+    try {
+      expect(rareGlowShown()).toBe(true);
+      setRareGlowForTier(false);
+      expect(rareGlowShown()).toBe(false);
+      setRareGlowForTier(true);
+      setRareGlowOff(true);
+      expect(rareGlowShown()).toBe(false);
+    } finally {
+      setRareGlowOff(false);
+      setRareGlowForTier(true);
+    }
+    // The codes don't change: the shader switches it, so no rebuild is needed.
+    expect(rareGlowCode('mythic', ['#ff0000'])).toBeGreaterThan(0);
+  });
+
+  it('takes the level from the shared rarity table', () => {
+    for (const rarity of RaritySchema.options) {
+      expect(rareGlowLevel(rarity), rarity).toBe(RARE_GLOW_LEVEL[rarity]);
+    }
+  });
+
+  it('borrows the palette’s most colourful hue', () => {
+    // Glowboo: near-white body, a pale gold and a lilac; the lilac is the most colourful.
+    const lilac = glowHueIndex(['#f1ecff', '#fff6c7', '#c9b8ff']);
+    expect(lilac * (360 / RARE_GLOW_CODE.hues)).toBeGreaterThan(240);
+    expect(lilac * (360 / RARE_GLOW_CODE.hues)).toBeLessThan(270);
+    // Pure red is hue 0; pure blue is two thirds round.
+    expect(glowHueIndex(['#ffffff', '#ff0000'])).toBe(0);
+    expect(glowHueIndex(['#0000ff'])).toBe(RARE_GLOW_CODE.hues * (2 / 3));
+    // Every hue lands on one of the steps.
+    for (const hex of ['#ff00ff', '#ff0001', '#123456']) {
+      const i = glowHueIndex([hex]);
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(i).toBeLessThan(RARE_GLOW_CODE.hues);
+    }
+  });
+
+  it('finds a real hue for every rare-and-up kind’s white parts to borrow', () => {
+    // An all-grey palette would fall back to hue 0 (red): keep every glowing kind colourful.
+    for (const s of GAME_DATA.species) {
+      if (rareGlowLevel(s.rarity) === 0) continue;
+      const sat = Math.max(
+        ...s.visual.palette.map((hex) => {
+          const n = Number.parseInt(hex.slice(1, 7), 16);
+          const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+          const max = Math.max(...c);
+          return max === 0 ? 0 : (max - Math.min(...c)) / max;
+        }),
+      );
+      expect(sat, s.id).toBeGreaterThanOrEqual(0.15);
+    }
+  });
+
+  it('sits above every finish sum, so the shader splits each code back exactly', () => {
+    const finishes = [...FinishSchema.options, 'shimmerSoft'] as const;
+    const bases = finishes.flatMap((f) =>
+      [0, FINISH_CODE.glow].flatMap((g) =>
+        [0, FINISH_CODE.offFace].map((o) => FINISH_CODE[f] + g + o),
+      ),
+    );
+    expect(Math.max(...bases)).toBeLessThan(RARE_GLOW_CODE.level);
+    expect(4 * RARE_GLOW_CODE.level + Math.max(...bases)).toBeLessThan(RARE_GLOW_CODE.hue);
+    for (const base of bases) {
+      for (let level = 0; level <= 4; level++) {
+        for (let hue = 0; hue < RARE_GLOW_CODE.hues; hue++) {
+          const code = base + level * RARE_GLOW_CODE.level + hue * RARE_GLOW_CODE.hue;
+          // The code travels as a 32-bit float in the instance buffer.
+          const sent = new Float32Array([code])[0]!;
+          expect(decodeSquishCode(sent)).toEqual({ base, level, hue });
+        }
+      }
+    }
+  });
+
+  it('steps the edge up from rare to epic and the rainbow at legendary and mythic', () => {
+    expect(RARE_GLOW.edge[1]).toBeGreaterThan(RARE_GLOW.edge[0]);
+    expect(RARE_GLOW.rainbow[0]).toBeGreaterThan(1);
+    expect(RARE_GLOW.rainbow[1]).toBeGreaterThan(RARE_GLOW.rainbow[0]);
+  });
+});

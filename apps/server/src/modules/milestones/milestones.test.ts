@@ -187,17 +187,18 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       level: 3,
     },
   });
-  const evolved = (mapId: string, who: Player): NewGameEvent => ({
+  const evolved = (
+    mapId: string,
+    who: Player,
+    squishyId: string = randomUUID(),
+    from = 'puddlepuff',
+    into = 'rippletad',
+    level = 16,
+  ): NewGameEvent => ({
     mapId,
     type: 'squishy.evolved',
     actorUserId: who.id,
-    payload: {
-      userId: who.id,
-      squishyId: randomUUID(),
-      fromSpeciesId: 'puddlepuff',
-      intoSpeciesId: 'rippletad',
-      level: 16,
-    },
+    payload: { userId: who.id, squishyId, fromSpeciesId: from, intoSpeciesId: into, level },
   });
   const cared = (mapId: string, who: Player, full = true): NewGameEvent => ({
     mapId,
@@ -345,6 +346,21 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       ['hollow-rescuer', 'proud-keeper', 'squishy-pal', 'trailblazer', 'watchful'].sort(),
     );
     expect(view.news).toHaveLength(5);
+  });
+
+  // #443: one squishy evolves up to three times (baby → kid → teen → grown-up),
+  // and "Help 5 squishies evolve" counts squishies, not evolutions.
+  it('counts a squishy that evolves twice as one squishy that evolved', async () => {
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    const once = randomUUID();
+    await append(evolved(mapId, kid, once, 'puddlepuff', 'rippletad', 16));
+    await append(evolved(mapId, kid, once, 'rippletad', 'splashmallow', 24));
+    await append(evolved(mapId, kid));
+    await run(mapId);
+    expect(trackOf(await milestones(server, kid), 'evolution')?.progress).toBe(2);
   });
 
   it('counts the secret ones by their hidden conditions, and only then shows them', async () => {
