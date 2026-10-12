@@ -925,9 +925,13 @@ export class BattleScene {
         const d = fighter.radius * 2 * CONTACT_SHADOW.scale * p.scale * lifted * share;
         const across = d;
         const along = d * stretch;
-        m[o] = -uz * across;
+        // X = Y × Z (Y up, Z along the light), so X, Y, Z keep the mesh's own
+        // handedness (positive determinant). The old Z × Y (-uz, 0, ux)
+        // mirrored the quad, its face turned down and back-face culling
+        // dropped every shadow (#462).
+        m[o] = uz * across;
         m[o + 1] = 0;
-        m[o + 2] = ux * across;
+        m[o + 2] = -ux * across;
         m[o + 3] = 0;
         m[o + 4] = 0;
         m[o + 5] = 1;

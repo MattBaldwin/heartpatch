@@ -1,8 +1,21 @@
-import { CLEARED_TERRAIN, CLEARING_RULES, clearToolFor, hexDistance } from '@heartpatch/shared';
+import {
+  CLEARED_TERRAIN,
+  CLEARING_RULES,
+  clearToolFor,
+  heartSeedOf,
+  hexDistance,
+} from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { tileExplore, tiles } from '../../db/schema.js';
+
+/**
+ * Land no tool clears in Phase 1 (owner Q5) that the dev homestead route
+ * clears itself when its ring has nothing a tool clears (#429). Never a lake,
+ * Juniper's Gap or a trading post.
+ */
+const DEV_CLEARABLE: ReadonlySet<string> = new Set(['old-forest', 'pumpkin-fields']);
 
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
 export interface ExploreTileRow {
@@ -89,24 +102,28 @@ export function createExploreRepo(db: Executor) {
         .from(tiles)
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.id));
-      const seed = all.find((t) => t.ownerUserId === userId && t.homeSlot === 0);
+      // The Heart Seed: the middle of my seven home tiles (every one of them
+      // carries my home slot, so "slot 0" alone could pick a ring tile, #429).
+      const seed = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
       // Land a building can go on once its spot is gone: what a tool clears,
       // or cleared land (never a lake, Juniper's Gap or a trading post).
       const buildable = (terrain: string) =>
         terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
-      const tile = seed
-        ? all.find(
-            (t) =>
-              t.ownerUserId === null &&
-              t.homeSlot === null &&
-              buildable(t.terrain) &&
-              hexDistance(t, seed) === 2,
+      const near = seed
+        ? all.filter(
+            (t) => t.ownerUserId === null && t.homeSlot === null && hexDistance(t, seed) === 2,
           )
-        : undefined;
+        : [];
+      // A home deep in Old Forest or Pumpkin Fields can have nothing a tool
+      // clears two steps out (about 1 map in 30, #429): then one of those
+      // tiles is cleared here, as a finished clear would leave it.
+      const tile =
+        near.find((t) => buildable(t.terrain)) ?? near.find((t) => DEV_CLEARABLE.has(t.terrain));
       if (!tile) return null;
+      const terrain = buildable(tile.terrain) ? tile.terrain : CLEARED_TERRAIN;
       const claimed = await db
         .update(tiles)
-        .set({ ownerUserId: userId, nodeResource: null })
+        .set({ ownerUserId: userId, nodeResource: null, terrain })
         .where(and(eq(tiles.id, tile.id), isNull(tiles.ownerUserId)))
         .returning({ id: tiles.id });
       // Someone took it meanwhile: nothing made.
@@ -118,7 +135,7 @@ export function createExploreRepo(db: Executor) {
           tileId: tile.id,
           mapId,
           layout: 1,
-          terrain: tile.terrain,
+          terrain,
           searched: 7,
           spotCount: 3,
           completedAt: at,

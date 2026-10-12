@@ -180,11 +180,12 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
   root.append(banner);
 
   let done = false;
-  /** A finger or button is down on the moment: it stays until that tap's click. */
+  /** A finger or button is down on the moment: it stays until that tap lifts. */
   let pressed = false;
   let due = false;
   const timers: number[] = [];
   const doc = root.ownerDocument;
+  const view = doc.defaultView;
   const finish = (notify: boolean): void => {
     if (done) return;
     done = true;
@@ -193,15 +194,29 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
     root.remove();
     if (notify) options.onDone();
   };
-  // Ends on time, unless a tap is halfway through: then on that tap's click,
-  // so the click can't land on a battle button the moment uncovered.
+  // Ends on time, unless a tap is halfway through: then when that tap lifts.
   const end = (): void => {
     if (pressed) due = true;
     else finish(true);
   };
-  // The full moment holds the battle buttons. A tap skips it, ending on the
-  // tap's own click (on the moment, not on a button under it: the browser
-  // still sends that click after a pointerdown, so the moment stays till then).
+  // The full moment holds the battle buttons; a tap skips it. It ends as the
+  // finger lifts, and the click the browser sends right after is swallowed
+  // before it reaches anything (it would land on a battle button the moment
+  // uncovered). Nothing calls preventDefault on the press: WebKit then sends
+  // no click at all, so a skip must not wait for one.
+  const swallow = (event: MouseEvent): void => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const lift = (): void => {
+    if (!pressed) return;
+    pressed = false;
+    doc.addEventListener('click', swallow, { capture: true, once: true });
+    view?.setTimeout(() => {
+      doc.removeEventListener('click', swallow, { capture: true });
+    }, RARE_REVEAL.clickGraceMs);
+    finish(true);
+  };
   function onKey(event: KeyboardEvent): void {
     if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
     event.preventDefault();
@@ -209,18 +224,22 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
     finish(true);
   }
   if (plan.full) {
-    root.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
+    const press = (): void => {
       pressed = true;
+    };
+    // Pointer events, and touch events too: whichever the browser sends first.
+    root.addEventListener('pointerdown', press);
+    root.addEventListener('touchstart', press, { passive: true });
+    root.addEventListener('pointerup', lift);
+    root.addEventListener('touchend', lift);
+    // A click that arrives with no press seen (a screen reader's tap) skips it too.
+    root.addEventListener('click', (event) => {
+      swallow(event);
+      finish(true);
     });
     root.addEventListener('pointercancel', () => {
       pressed = false;
       if (due) finish(true);
-    });
-    root.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      finish(true);
     });
     doc.addEventListener('keydown', onKey, true);
   }
