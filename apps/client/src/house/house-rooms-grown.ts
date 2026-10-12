@@ -73,11 +73,12 @@ export const playroomRoom: RoomBuilder = (kit) => {
   const [mx, mz] = at(w * 0.45, d * 0.4);
   put(kit, { solid: playMat(scene), glow: [] }, mx, y, mz, 0);
 
-  const [cx, cz] = at(1.0, d - 0.62);
+  // Off the back wall: the lid leans back and must stay clear of it.
+  const [cx, cz] = at(0.85, d - 0.8);
   put(kit, { solid: toyChest(scene), glow: [] }, cx, y, cz, 0);
   kit.shadow(cx, cz, 1.3, 0.9);
 
-  const [tx, tz] = at(w - 0.85, d - 0.9);
+  const [tx, tz] = at(w - 0.95, d - 0.95);
   put(kit, { solid: playTent(scene), glow: [] }, tx, y, tz, 0.4);
   kit.shadow(tx, tz, 1.7, 1.7);
 
@@ -132,11 +133,11 @@ export const kitchenRoom: RoomBuilder = (kit) => {
   kit.light('fire', sx, y + 0.8, sz - 0.7);
 
   const counterW = Math.min(2.0, w - 2.6);
-  const [kx, kz] = at(1.3 + counterW / 2, d - 0.32);
+  const [kx, kz] = at(1.3 + counterW / 2, d - 0.45);
   put(kit, { solid: counter(scene, counterW), glow: [] }, kx, y, kz, 0);
   kit.shadow(kx, kz, counterW + 0.3, 0.9);
 
-  const [hx, hz] = at(0.15, d * 0.42);
+  const [hx, hz] = at(0.27, d * 0.42);
   put(kit, { solid: kitchenShelves(scene, Math.min(2.2, d * 0.5)), glow: [] }, hx, y, hz, WEST);
 
   const [tx, tz] = at(w * 0.48, d * 0.4);
@@ -177,11 +178,12 @@ export const heartHallRoom: RoomBuilder = (kit) => {
   // The gallery along the back wall, its floor at the second storey.
   if (box.storeys > 1) {
     const inner = w - HOUSE_GRID.wall;
-    const [gx, gz] = at(w / 2, d - deck / 2);
+    const [gx, gz] = at(w / 2, d - HOUSE_GRID.wall / 2 - deck / 2);
     kit.solid([placed(gallery(scene, inner, deck, upper), gx, y + upper, gz, 0)]);
     // Stairs up the east wall to the gallery's front edge.
-    const run = Math.max(2, d - deck - 0.6);
-    const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, d - deck - run);
+    const front = d - HOUSE_GRID.wall / 2 - deck;
+    const run = Math.max(2, front - 0.6);
+    const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, front - run);
     kit.solid([placed(stairs(scene, g.stairWidth, upper, run, g.steps), sx, y, sz, 0)]);
     kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
   }
@@ -206,7 +208,8 @@ export const heartHallRoom: RoomBuilder = (kit) => {
   const crown = heartTreeCrown(treeH);
   kit.light('lamp', tx, y + crown.y - 0.6, tz + crown.z - 1.0);
 
-  for (const u of [w * 0.24, w * 0.76]) {
+  // Either side of the tree's crown, clear of the gallery's posts.
+  for (const u of [w * 0.32, w * 0.88]) {
     const [lx, lz] = at(u, d * 0.42);
     put(kit, hangingLantern(scene, 2.0), lx, y + tall - 0.1, lz, 0);
   }

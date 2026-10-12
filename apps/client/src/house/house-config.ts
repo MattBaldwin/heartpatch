@@ -269,7 +269,7 @@ export const HOUSE_GROWN = {
       [0.56, 0.25],
       [0.72, 0.22],
       [0.8, 0.45],
-      [0.8, 0.74],
+      [0.8, 0.68],
     ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch
     /** Steps up to the gallery. */
     steps: 10, // TUNE

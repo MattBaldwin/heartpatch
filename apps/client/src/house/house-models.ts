@@ -767,7 +767,8 @@ export function playTent(scene: Scene): Mesh[] {
     tube(scene, h, 0, 1.45, [0, h / 2, 0], c.tent, 6),
     // Three bands round the cone, a little proud of the canvas.
     ...[0.3, 0.68, 1.06].map((y) => {
-      const at = (yy: number) => 1.45 * (1 - yy / h) + 0.04;
+      // Flush with the canvas (a painted band, not a ledge).
+      const at = (yy: number) => 1.45 * (1 - yy / h) + 0.01;
       return tube(scene, 0.13, at(y + 0.065), at(y - 0.065), [0, y, 0], c.tentStripe, 6);
     }),
     tube(scene, 0.4, 0.03, 0.03, [0, h + 0.1, 0], '#8d5a3b', 4),
@@ -804,8 +805,11 @@ export function stove(scene: Scene, pipe: number): Parts {
     box(scene, [0.9, 0.7, 0.62], [0, 0.5, 0], c.stove),
     box(scene, [0.98, 0.06, 0.7], [0, 0.88, 0], '#2f2a36'),
     tube(scene, pipe - 0.9, 0.16, 0.16, [0, 0.9 + (pipe - 0.9) / 2, 0.18], c.stove, G.sides),
-    tube(scene, 0.26, 0.4, 0.34, [-0.16, 1.04, -0.06], c.pot, G.sides),
-    tube(scene, 0.05, 0.1, 0.42, [-0.16, 1.19, -0.06], c.pot, G.sides),
+    // A round pot with a lid, a knob and a handle.
+    tube(scene, 0.26, 0.4, 0.34, [-0.16, 1.04, -0.06], c.pot, 12),
+    tube(scene, 0.04, 0.36, 0.42, [-0.16, 1.19, -0.06], c.pot, 12),
+    box(scene, [0.07, 0.06, 0.07], [-0.16, 1.24, -0.06], '#2f2a36'),
+    box(scene, [0.22, 0.04, 0.05], [0.12, 1.08, -0.06], '#2f2a36'),
   ];
   for (const [lx, lz] of [
     [-0.36, -0.24],
@@ -890,8 +894,9 @@ export function gallery(scene: Scene, w: number, depth: number, below: number): 
     box(scene, [w, 0.03, 0.12], [0, 0.915, front + 0.06], c.gold),
   ];
   const posts = Math.max(2, Math.round(w / 1.0));
+  const span = w - 0.1; // the end posts stand just clear of the side walls
   for (let i = 0; i <= posts; i++) {
-    const x = -w / 2 + (w * i) / posts;
+    const x = -span / 2 + (span * i) / posts;
     parts.push(box(scene, [0.07, 0.82, 0.07], [x, 0.41, front + 0.06], c.rail));
   }
   // Posts under the front edge, a third of the way in from each end (clear of the stairs).

@@ -2,6 +2,7 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { HOUSE_DATA, roomsAt, type HouseRoomLook } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
+import { HOUSE_GRID } from './house-config.js';
 import { roomBox, type RoomBox } from './house-layout.js';
 import type { QualityTier } from '../engine/config.js';
 import { roomBuilder, type FloorSpot, type RoomKit } from './house-rooms.js';
@@ -94,12 +95,14 @@ describe('the grown rooms', () => {
       scene = new Scene(new NullEngine());
       const { k, made, box } = kit(scene, look);
       builder(k);
-      const slack = 0.15; // the back wall's inner half: pieces stand against it
+      // The box runs along the walls' centre lines: nothing pokes into a wall
+      // (render check r2: the chest's lid showed above the cut wall's cap).
+      const inset = HOUSE_GRID.wall / 2 - 0.005;
       for (const p of made.points) {
-        expect(p.x).toBeGreaterThanOrEqual(box.x0 - slack);
-        expect(p.x).toBeLessThanOrEqual(box.x1 + slack);
-        expect(p.z).toBeGreaterThanOrEqual(box.z0 - slack);
-        expect(p.z).toBeLessThanOrEqual(box.z1 + slack);
+        expect(p.x).toBeGreaterThanOrEqual(box.x0 + inset);
+        expect(p.x).toBeLessThanOrEqual(box.x1 - inset);
+        expect(p.z).toBeGreaterThanOrEqual(box.z0 - 0.01);
+        expect(p.z).toBeLessThanOrEqual(box.z1 - inset);
         expect(p.y).toBeGreaterThanOrEqual(box.y0 - 0.01);
         expect(p.y).toBeLessThanOrEqual(box.y1);
       }
