@@ -149,7 +149,11 @@ describe('home scene: the Keeper’s house cottage (#381)', () => {
       (m) => m.name.startsWith('house-cottage') && !m.isDisposed(),
     );
     expect(cottages).toHaveLength(1);
+    // The old cottage's material goes with it: a swap never leaks one.
+    const mats = () => scene.materials.filter((m) => m.name === 'home-cottage-mat').length;
+    expect(mats()).toBe(1);
     homeScene.update(home);
     expect(homeScene.stats.house).toBeNull();
+    expect(mats()).toBe(0);
   });
 });
