@@ -26,6 +26,8 @@ import {
   giftPlacement,
   giftToast,
   placementKey,
+  rereadAfterOpen,
+  shouldReread,
   wrappedGift,
 } from './house-gift-view.js';
 import { houseLookNow, sameHouseLook, type HouseLightLook } from './house-light-look.js';
@@ -105,6 +107,8 @@ export interface HouseScreenOptions {
   cue?: (name: CueName) => void;
   /** Where welcome home remembers the day (localStorage; null: never welcomes). */
   storage?: WelcomeStorage | null;
+  /** How long welcome home's line stays, ms (0: until the sheet moves; the gallery's captures). */
+  welcomeLineMs?: number;
 }
 
 /**
@@ -164,6 +168,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)');
   // Turned on mid-glide: cut to the end, as the close-up does.
   reducedMotion.addEventListener?.('change', () => {
+    // The fire's flicker follows it mid-visit: still with reduced motion, back without.
+    startFlicker();
     if (!reducedMotion.matches) return;
     skipGlide();
     if (walk) {
@@ -248,6 +254,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let giftDrawn = 'none';
   /** The patch's time zone, read as the house opens (the map's view goes after). */
   let zone: string | null = null;
+  /** The patch day the shown house was read on (a new day re-reads it: today's gift). */
+  let readDay = '';
   /** The light now (#381 H2): picked as the scene builds and once a minute after. */
   let look: HouseLightLook | null = null;
   let lookTimer: ReturnType<typeof setInterval> | null = null;
@@ -556,6 +564,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     // The Grow sheet and the gift card have their own ✕; the grip comes back with the room line.
     handle.hidden = modal;
     scrim.hidden = !modal;
+    // The gift card dims the house only a little: the squishies stay bright behind it.
+    scrim.classList.toggle('house-scrim-light', sheet === 'gift');
     for (const behind of [touch, top, walkButton, floorButton]) {
       behind.toggleAttribute('inert', modal);
       if (modal) behind.setAttribute('aria-hidden', 'true');
@@ -636,6 +646,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function applyView(fresh: HouseView): void {
     const grew = view !== null && fresh.level !== view.level;
     view = fresh;
+    readDay = localDayIn(zone, new Date(fresh.now));
     // An opened gift (or none, as a claim of yesterday's replies) folds its card away.
     if (sheet === 'gift' && !opening && !wrappedGift(fresh)) {
       sheet = 'peek';
@@ -736,6 +747,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     applyView(outcome.view);
     // The gift line went: the folded sheet is a row shorter, so the house refits.
     refit();
+    // Yesterday's gift opened after midnight: today's rolls on the next read (its ticket is newer).
+    if (rereadAfterOpen(gift, outcome.view, localDayIn(zone, clock()))) void refresh();
   }
 
   /** Re-reads the house (the sheet opened): requirements and the bag move all the time. */
@@ -890,12 +903,23 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (glide || walk || moving) draw();
   }
 
+  /** The fire flickers on a slow timer on medium and high (never on low, nor with reduced motion). */
+  function startFlicker(): void {
+    const s = scene3d;
+    const tier = builtTier;
+    if (!isOpen || !s || tier === null) return;
+    flicker.start(s.flickers && !reducedMotion.matches ? HOUSE_FLICKER.hz[tier] : 0);
+  }
+
   /** The light at this moment on the patch's clock. */
   const lookNow = (): HouseLightLook => houseLookNow(zone, clock());
 
   /** Once a minute (and back from the background): a new time of day relights the house. */
   function checkLook(): void {
     if (!isOpen || !scene3d) return;
+    // A new patch day since the house was read: today's gift rolls on a read.
+    if (shouldReread({ readDay, today: localDayIn(zone, clock()), busy: building || opening }))
+      void refresh();
     const next = lookNow();
     if (look && sameHouseLook(next, look)) return;
     look = next;
@@ -920,12 +944,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       noteKind = 'ok';
       renderSheet();
       if (welcomeTimer !== null) clearTimeout(welcomeTimer);
-      welcomeTimer = setTimeout(() => {
-        welcomeTimer = null;
-        if (!isOpen || note !== WELCOME_TEXT.line) return;
-        note = '';
-        renderSheet();
-      }, HOUSE_WELCOME.lineMs);
+      const lineMs = options.welcomeLineMs ?? HOUSE_WELCOME.lineMs;
+      if (lineMs > 0) {
+        welcomeTimer = setTimeout(() => {
+          welcomeTimer = null;
+          if (!isOpen || note !== WELCOME_TEXT.line) return;
+          note = '';
+          renderSheet();
+        }, lineMs);
+      }
     }
     draw();
   }
@@ -1081,8 +1108,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       gift,
     });
     scene3d = built;
-    // The fire flickers on a slow timer on medium and high (never on low, nor with reduced motion).
-    flicker.start(built.flickers && !reducedMotion.matches ? HOUSE_FLICKER.hz[tier] : 0);
+    startFlicker();
     built.setFloor(floor);
     fit(built);
     renderFloor();
@@ -1139,6 +1165,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     zone = options.timeZone?.(id) ?? null;
     mapId = id;
     view = fresh;
+    readDay = localDayIn(zone, new Date(fresh.now));
     zoom = 0;
     floor = 0;
     panner.reset();

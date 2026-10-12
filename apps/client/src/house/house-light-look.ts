@@ -1,6 +1,13 @@
 import { EXPLORE_RULES, skyAt, type SkyAt, type SkyPhase } from '@heartpatch/shared';
 import { localMinuteIn } from '../explore/explore-sky-look.js';
-import { HOUSE_TIMES, type HouseTimeLook } from './house-config.js';
+import type { QualityTier } from '../engine/config.js';
+import {
+  HOUSE_INTERIOR,
+  HOUSE_LIGHT,
+  HOUSE_TIERS,
+  HOUSE_TIMES,
+  type HouseTimeLook,
+} from './house-config.js';
 
 /*
  * The house's light at a moment (#381 H2): the windows and the light
@@ -34,7 +41,8 @@ export function houseLookAt(at: SkyAt): HouseLightLook {
   const b = HOUSE_TIMES[at.next];
   const t = Math.min(1, Math.max(0, at.blend));
   const pick = t < 0.5 ? a : b;
-  const sky = a.sky.map((c, i) => mix(c, b.sky[i] ?? c, t)) as unknown as HouseTimeLook['sky'];
+  const at6 = (i: 0 | 1 | 2 | 3 | 4 | 5) => mix(a.sky[i], b.sky[i], t);
+  const sky: HouseTimeLook['sky'] = [at6(0), at6(1), at6(2), at6(3), at6(4), at6(5)];
   return {
     phase: t < 0.5 ? at.phase : at.next,
     sky,
@@ -54,6 +62,9 @@ export function houseLookAt(at: SkyAt): HouseLightLook {
     },
     ambient: mix(a.ambient, b.ambient, t),
     lamps: lerp(a.lamps, b.lamps, t),
+    lamp: lerp(a.lamp, b.lamp, t),
+    environment: lerp(a.environment, b.environment, t),
+    sunSpecular: lerp(a.sunSpecular, b.sunSpecular, t),
     glow: lerp(a.glow, b.glow, t),
   };
 }
@@ -72,4 +83,31 @@ export const DUSK_LOOK: HouseLightLook = houseLookAt({ phase: 'dusk', next: 'dus
 /** Do two looks light the house the same? (A quiet minute changes and redraws nothing.) */
 export function sameHouseLook(a: HouseLightLook, b: HouseLightLook): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** A colour's lightness, 0 to 1 (Rec. 709 weights on sRGB). */
+const lightness = (h: string): number => {
+  const [r = 0, g = 0, b = 0] = hex(h);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+};
+
+/**
+ * How bright the room's walls read under a look on a tier (a proxy, not a
+ * render): on high and medium the image-based light and the fire and lamp
+ * the scene lights (the sun mostly falls on the shell's back, not the room);
+ * on low the ambient bounce and the one house light. The time-of-day test
+ * holds day at or above dusk with it, so daylight never reads gloomier.
+ */
+export function interiorLight(look: HouseTimeLook, tier: QualityTier): number {
+  if (HOUSE_TIERS[tier].shadowMap === 0) {
+    return (
+      HOUSE_INTERIOR.ambient * lightness(look.ambient) +
+      HOUSE_INTERIOR.house * lightness(look.house.color) * look.house.intensity
+    );
+  }
+  return (
+    HOUSE_INTERIOR.environment * HOUSE_LIGHT.environment.lit * look.environment +
+    HOUSE_INTERIOR.fire * look.lamps +
+    HOUSE_INTERIOR.lamp * look.lamp
+  );
 }

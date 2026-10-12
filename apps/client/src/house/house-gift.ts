@@ -68,6 +68,11 @@ export function giftPanel(gift: HouseGift, busy: boolean, on: GiftHandlers): HTM
   ];
 }
 
+/** Stars in the unwrap's puff. */
+const POP_BITS = 6; // TUNE
+/** The unwrap's span, ms (house.css's pop and sparkle run inside it). */
+const POP_MS = 1400; // TUNE
+
 /**
  * The unwrap moment at `at` (CSS px: the box on screen): the box pops up
  * and away in a puff of sparkles, drawn on `layer` over the scene; just the
@@ -83,9 +88,9 @@ export function giftPop(
     'span',
     { class: 'house-gift-pop', 'aria-hidden': 'true' },
     el('span', { class: 'house-gift-pop-box' }, GIFT_TEXT.icon),
-    ...Array.from({ length: 6 }, (_, i) => {
+    ...Array.from({ length: POP_BITS }, (_, i) => {
       const s = el('span', { class: 'house-gift-pop-bit' }, i % 2 ? '✨' : '⭐');
-      const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      const angle = (i / POP_BITS) * Math.PI * 2 - Math.PI / 2;
       s.style.setProperty('--dx', Math.cos(angle).toFixed(3));
       s.style.setProperty('--dy', Math.sin(angle).toFixed(3));
       return s;
@@ -97,5 +102,5 @@ export function giftPop(
   // Gone once it's played (and a backstop for a hidden tab, where no animation runs).
   setTimeout(() => {
     pop.remove();
-  }, 1400);
+  }, POP_MS);
 }

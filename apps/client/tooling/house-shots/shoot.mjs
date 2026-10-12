@@ -15,7 +15,7 @@
 // LEVELS (default 1), POSES (dollhouse,kid,card), TIERS (high,low), DEVICES (iphone,ipad),
 // MINUTES (720,1200: noon and night, minutes after midnight; #381 H2) narrow the set;
 // a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
-// `card` is the dollhouse with today's gift card open (#381 H2). GIFT=0 leaves the gift out
+// `card` is the dollhouse with today's gift card open, `welcome` with welcome home's line (#381 H2). GIFT=0 leaves the gift out
 // (by default a resident's wrapped gift waits by its bed).
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
@@ -34,7 +34,7 @@ const only = (key, all) => (process.env[key] ? process.env[key].split(',') : all
 const levels = only('LEVELS', ['1']);
 const tiers = only('TIERS', ['high', 'low']);
 const devices = only('DEVICES', ['iphone', 'ipad']);
-const poses = only('POSES', ['dollhouse', 'kid', 'card']);
+const poses = only('POSES', ['dollhouse', 'kid', 'card', 'welcome']);
 const minutes = only('MINUTES', ['720', '1200']);
 const gift = process.env.GIFT !== '0';
 /** A capture's time of day, by its minute: noon is `day`, 8 pm `night`. */
@@ -57,7 +57,7 @@ for (const level of levels)
   for (const pose of poses)
     for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
       // The gift card: once, at night (the card is DOM; the time of day is behind it).
-      for (const minute of pose === 'card' ? [minutes.at(-1)] : minutes)
+      for (const minute of pose === 'card' || pose === 'welcome' ? [minutes.at(-1)] : minutes)
         for (const tier of tiers)
           for (const device of devices)
             jobs.push({
@@ -134,6 +134,7 @@ async function shoot(job) {
     still: '1',
     minute: job.minute,
     ...(gift && { gift: '1' }),
+    ...(job.pose === 'welcome' && { welcome: '1' }),
   });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
@@ -146,6 +147,10 @@ async function shoot(job) {
     // Walk in (the gallery's `still=1` cuts straight there, as reduced motion does).
     await page.getByTestId('house-walk').click();
     await until(page, () => window.__heartpatch.house()?.pose === 'kid');
+  }
+  if (job.pose === 'welcome') {
+    // Welcome home: the first open of the day (the gallery keeps its line up).
+    await until(page, () => window.__heartpatch.house()?.welcomed === true);
   }
   if (job.pose === 'card') {
     // Today's gift card, opened from the peek bar's gift line.

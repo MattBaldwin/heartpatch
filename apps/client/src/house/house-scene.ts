@@ -99,7 +99,12 @@ import {
   wallPieces,
   windowFrame,
 } from './house-models.js';
-import { besideBed, type BedSpot, type GiftPlacement } from './house-gift-view.js';
+import {
+  besideBed,
+  type BedSpot,
+  type CastFootprint,
+  type GiftPlacement,
+} from './house-gift-view.js';
 import { DUSK_LOOK, type HouseLightLook } from './house-light-look.js';
 import { placed, roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
 import { paneMaterial, radialTexture, signMaterial } from './house-textures.js';
@@ -411,7 +416,7 @@ export class HouseScene {
       own.floor.push(...parts.floor);
       own.panes.push(...parts.panes);
     }
-    this.#buildGift(options.gift ?? null, view, plans);
+    this.#buildGift(options.gift ?? null, view, plans, options.cast);
     this.#mergeFloors();
     this.#buildBeds();
     this.#buildSeeds();
@@ -721,8 +726,12 @@ export class HouseScene {
     }
     if (this.#sun) {
       this.#sun.diffuse = linear(look.sun.color);
-      this.#sun.specular = linear(look.sun.color).scale(0.6);
+      this.#sun.specular = linear(look.sun.color).scale(look.sunSpecular);
       this.#sun.intensity = look.sun.intensity;
+    }
+    // High and medium: the image-based light carries the daylight the dimmer lamps leave.
+    if (this.#tierLook.shadowMap > 0) {
+      scene.environmentIntensity = HOUSE_LIGHT.environment.lit * look.environment;
     }
     if (this.#houseLight) {
       this.#houseLight.diffuse = linear(look.house.color);
@@ -753,7 +762,8 @@ export class HouseScene {
   #lightPoints(): void {
     for (const { kind, light } of this.#points) {
       const base = kind === 'fire' ? HOUSE_LIGHT.fire.intensity : HOUSE_LIGHT.lamp.intensity;
-      light.intensity = base * this.#look.lamps * this.#flicker[kind];
+      const strength = kind === 'fire' ? this.#look.lamps : this.#look.lamp;
+      light.intensity = base * strength * this.#flicker[kind];
     }
   }
 
@@ -831,18 +841,35 @@ export class HouseScene {
     placement: GiftPlacement | null,
     view: HouseView,
     plans: ReadonlyMap<string, RoomPlan>,
+    cast: ReadonlyMap<string, HouseCastMember>,
   ): void {
     if (!placement) return;
+    const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
+    /** Who stands in a room, where #placeCast puts them: the box keeps clear of them all. */
+    const footprints = (id: string): CastFootprint[] => {
+      const plan = plans.get(id);
+      const room = view.rooms.find((r) => r.id === id);
+      if (!plan || !room) return [];
+      const present = room.residents.filter((r) => r.away === null);
+      const out: CastFootprint[] = present.flatMap((resident, i) => {
+        const at = plan.residents[i];
+        return at && cast.has(resident.squishyId)
+          ? [{ x: at.x, z: at.z, r: HOUSE_CAST.reach * HOUSE_CAST.squishyScale, squishy: true }]
+          : [];
+      });
+      if (id === keeperRoom?.id && plan.keeper)
+        out.push({ ...plan.keeper, r: HOUSE_GIFT.keeperReach, squishy: false });
+      return out;
+    };
     let spot: { x: number; z: number } | null = null;
     let room: RoomBox | undefined;
     if (placement.kind === 'bed') {
       room = this.#boxes.find((b) => b.id === placement.roomId);
       const beds = this.#roomBeds.get(placement.roomId) ?? [];
       const bed = beds[placement.bed] ?? beds.at(-1);
-      if (room && bed) spot = besideBed(bed, beds, room);
+      if (room && bed) spot = besideBed(bed, beds, room, footprints(room.id));
     }
     if (!spot || !room) {
-      const keeperRoom = view.rooms.find((r) => plans.get(r.id)?.keeper) ?? view.rooms[0];
       room = this.#boxes.find((b) => b.id === keeperRoom?.id);
       if (!room) return;
       spot = plans.get(room.id)?.gift ?? { x: room.x0 + 0.9, z: room.z0 + 0.7 };

@@ -1,6 +1,7 @@
 import type { HouseGift } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HOUSE_GIFT } from './house-config.js';
+import { localDayIn } from './house-welcome.js';
 import { sampleHouse, withGift } from './house-fixtures.js';
 import {
   besideBed,
@@ -9,6 +10,8 @@ import {
   giftPlacement,
   giftToast,
   placementKey,
+  rereadAfterOpen,
+  shouldReread,
   wrappedGift,
   type BedSpot,
 } from './house-gift-view.js';
@@ -101,6 +104,39 @@ describe('the daily gift (#381 H2)', () => {
     expect(placementKey({ kind: 'bed', roomId: 'snug', bed: 1 })).toBe('bed:snug:1');
   });
 
+  describe('a new day on a screen left open (review: today’s gift rolls only on a read)', () => {
+    const zone = 'America/Chicago';
+    const day = (iso: string) => localDayIn(zone, new Date(iso));
+
+    it('reads again after the patch’s midnight (left open overnight)', () => {
+      const readDay = day('2026-10-13T04:30:00Z'); // 11:30 pm on the 12th in Chicago
+      expect(shouldReread({ readDay, today: day('2026-10-13T04:59:00Z'), busy: false })).toBe(
+        false,
+      );
+      // 7 am on the 13th: the light moved on, and so must the gift.
+      expect(shouldReread({ readDay, today: day('2026-10-13T12:00:00Z'), busy: false })).toBe(true);
+      // Not while a build or an open is in flight: its reply comes first.
+      expect(shouldReread({ readDay, today: day('2026-10-13T12:00:00Z'), busy: true })).toBe(false);
+      // Nothing read yet: nothing to compare.
+      expect(shouldReread({ readDay: '', today: day('2026-10-13T12:00:00Z'), busy: false })).toBe(
+        false,
+      );
+    });
+
+    it('reads again after opening yesterday’s gift just past midnight', () => {
+      const today = day('2026-10-13T05:05:00Z'); // 00:05 on the 13th in Chicago
+      const yesterdays = gift({ day: '2026-10-12' });
+      // The server replies with no gift until the next read rolls today's.
+      expect(rereadAfterOpen(yesterdays, { gift: null }, today)).toBe(true);
+      expect(rereadAfterOpen(yesterdays, { gift: { ...yesterdays, claimed: true } }, today)).toBe(
+        true,
+      );
+      // Today's gift opened: the reply already says so, no second read.
+      const todays = gift({ day: today });
+      expect(rereadAfterOpen(todays, { gift: { ...todays, claimed: true } }, today)).toBe(false);
+    });
+  });
+
   describe('beside a bed', () => {
     const room = { x0: 0, x1: 4.8, z0: 0, z1: 4.8 };
     const r = HOUSE_GIFT.size / 2;
@@ -137,13 +173,37 @@ describe('the daily gift (#381 H2)', () => {
       }
     });
 
-    it('goes beside the bed when its foot would leave the room', () => {
+    it('keeps out from behind a squishy’s leg or ears, and never stands in front of one (H2 render check)', () => {
+      // The Snug at level 1: Emberbun and Puddlepuff on the rug, the Keeper behind them.
+      const bed = { x: 0.62, z: 4.0, yaw: -Math.PI / 2 };
+      const reach = 0.59;
+      const cast = [
+        { x: 1.58, z: 1.92, r: reach, squishy: true },
+        { x: 3.2, z: 1.73, r: reach, squishy: true },
+        { x: 2.64, z: 3.36, r: 0.35, squishy: false },
+      ];
+      const p = besideBed(bed, [bed, { x: 4.18, z: 4.0, yaw: Math.PI / 2 }], room, cast);
+      const eye = { x: 2.4, z: -2.9 };
+      const view = (q: { x: number; z: number }, reachOf: number) => {
+        const far = Math.hypot(q.x - eye.x, q.z - eye.z);
+        return { a: Math.atan2(q.x - eye.x, q.z - eye.z), h: Math.atan(reachOf / far), far };
+      };
+      const box = view(p, r);
+      for (const c of cast) {
+        expect(Math.hypot(p.x - c.x, p.z - c.z)).toBeGreaterThan(c.r + r);
+        const them = view(c, c.r);
+        if (them.far < box.far || c.squishy)
+          expect(Math.abs(box.a - them.a)).toBeGreaterThanOrEqual(box.h + them.h);
+      }
+      expect(within(p)).toBe(true);
+    });
+
+    it('finds a spot inside when its foot would leave the room', () => {
       // A bed facing the front wall up close: its foot is past the wall.
       const bed = { x: 2.4, z: 0.9, yaw: 0 };
       const p = besideBed(bed, [bed], room);
       expect(within(p)).toBe(true);
       expect(clearOf(p, [bed])).toBe(true);
-      expect(Math.abs(p.x - bed.x)).toBeGreaterThan(0.75);
     });
   });
 });

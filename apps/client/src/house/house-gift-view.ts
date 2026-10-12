@@ -1,7 +1,7 @@
 import type { HouseGift, HouseView } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
-import { HOUSE_GIFT } from './house-config.js';
+import { HOUSE_GIFT, HOUSE_KID } from './house-config.js';
 import { GIFT_TEXT } from './house-view.js';
 
 /*
@@ -85,6 +85,27 @@ export function giftPlacement(
   return { kind: 'hearth' };
 }
 
+/**
+ * Re-read the house (#381 H2 review): the server rolls today's gift only
+ * on a read, so a screen left open past the patch's midnight reads again,
+ * unless a build or an open is in flight (its reply comes first).
+ */
+export const shouldReread = (o: {
+  readonly readDay: string;
+  readonly today: string;
+  readonly busy: boolean;
+}): boolean => !o.busy && o.readDay !== '' && o.readDay !== o.today;
+
+/**
+ * After opening a gift: read again when it was yesterday's (opened after
+ * midnight) or the reply shows no gift, so today's can roll and show.
+ */
+export const rereadAfterOpen = (
+  opened: Pick<HouseGift, 'day'>,
+  reply: Pick<HouseView, 'gift'>,
+  today: string,
+): boolean => reply.gift === null || opened.day !== today;
+
 /** The same placement draws the same box: a new one (tomorrow's) means a new scene. */
 export const placementKey = (p: GiftPlacement | null): string =>
   p === null ? 'none' : p.kind === 'bed' ? `bed:${p.roomId}:${String(p.bed)}` : 'hearth';
@@ -122,15 +143,28 @@ function onBed(bed: BedSpot, p: { x: number; z: number }, r: number): boolean {
   return Math.abs(lx) < BED_HALF.x + r && Math.abs(lz) < BED_HALF.z + r;
 }
 
+/** One of the cast standing in the room (its feet, about how far it reaches): the box keeps clear of it. */
+export interface CastFootprint {
+  readonly x: number;
+  readonly z: number;
+  readonly r: number;
+  /** A squishy (never covered by the box), or the Keeper. */
+  readonly squishy: boolean;
+}
+
 /**
- * Where the box stands by a bed: at its foot (toward the room's middle,
- * where the camera sees it), else beside it toward the open front, else its
- * other side; never on another bed, and inside the room's walls.
+ * Where the box stands for its giver (H2 render check: never behind a
+ * squishy's leg or ears): the first of the bed's foot, then spots on the way
+ * from the foot to the room's middle, then the bed's sides, that is inside
+ * the walls, off every bed, clear of the cast, not hidden behind any of them
+ * from kid height, and not standing in front of a squishy. With none clear,
+ * the spot that comes closest.
  */
 export function besideBed(
   bed: BedSpot,
   beds: readonly BedSpot[],
   room: FloorRect,
+  cast: readonly CastFootprint[] = [],
 ): { x: number; z: number } {
   const r = HOUSE_GIFT.size / 2;
   const side = BED_HALF.x + HOUSE_GIFT.besideBed + r;
@@ -138,14 +172,46 @@ export function besideBed(
   const inside = (p: { x: number; z: number }) =>
     p.x >= room.x0 + gap && p.x <= room.x1 - gap && p.z >= room.z0 + gap && p.z <= room.z1 - gap;
   const cx = (room.x0 + room.x1) / 2;
+  const cz = (room.z0 + room.z1) / 2;
+  const foot = toWorld(bed, 0, -(BED_HALF.z + HOUSE_GIFT.besideBed + r));
+  const toward = [0.25, 0.5, 0.75, 1].map((t) => ({
+    x: foot.x + (cx - foot.x) * t,
+    z: foot.z + (cz - foot.z) * t,
+  }));
   const sides = [toWorld(bed, side, -0.15), toWorld(bed, -side, -0.15)].sort(
     (a, b) => a.z - b.z || Math.abs(a.x - cx) - Math.abs(b.x - cx),
   );
-  const foot = toWorld(bed, 0, -(BED_HALF.z + HOUSE_GIFT.besideBed + r));
-  // The foot first: toward the room's middle (or the open front), clear of the
-  // walls and of what stands by them (a side can land behind the hearth).
-  const free = [foot, ...sides].find((p) => inside(p) && !beds.some((b) => onBed(b, p, r + 0.05)));
-  if (free) return free;
+  // Kid height stands in front of the room's middle, looking in (the dollhouse looks from further, higher).
+  const eye = { x: cx, z: room.z0 - HOUSE_KID.minStandBack };
+  const view = (p: { x: number; z: number }, reach: number) => {
+    const dx = p.x - eye.x;
+    const dz = p.z - eye.z;
+    const far = Math.hypot(dx, dz);
+    return { angle: Math.atan2(dx, dz), half: Math.atan(reach / Math.max(far, 0.01)), far };
+  };
+  /** How clear a spot is: below 0 it touches, hides behind or covers someone. */
+  const clearance = (p: { x: number; z: number }): number => {
+    const box = view(p, r);
+    let least = Infinity;
+    for (const c of cast) {
+      least = Math.min(least, Math.hypot(p.x - c.x, p.z - c.z) - (c.r + r + 0.1));
+      const them = view(c, c.r);
+      const apart = Math.abs(box.angle - them.angle) - (box.half + them.half);
+      // In line of sight with it: hidden behind it, or (a squishy) covered by the box.
+      if (them.far < box.far || c.squishy) least = Math.min(least, apart * box.far);
+    }
+    return least;
+  };
+  const spots = [foot, ...toward, ...sides].filter(
+    (p) => inside(p) && !beds.some((b) => onBed(b, p, r + 0.05)),
+  );
+  const clear = spots.find((p) => clearance(p) >= 0);
+  if (clear) return clear;
+  const best = spots.reduce<{ p: { x: number; z: number }; c: number } | null>((acc, p) => {
+    const c = clearance(p);
+    return acc === null || c > acc.c ? { p, c } : acc;
+  }, null);
+  if (best) return best.p;
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
   return {
     x: clamp(foot.x, room.x0 + gap, room.x1 - gap),

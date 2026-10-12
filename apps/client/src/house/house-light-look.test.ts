@@ -6,6 +6,7 @@ import {
   houseLookAt,
   houseLookAtMinute,
   houseLookNow,
+  interiorLight,
   sameHouseLook,
 } from './house-light-look.js';
 
@@ -56,7 +57,7 @@ describe('the house light look (#381 H2)', () => {
     expect(late.pane).toBe('dusk');
     expect(early.clear).not.toBe(HOUSE_TIMES.day.clear);
     expect(early.clear).not.toBe(HOUSE_TIMES.dusk.clear);
-    expect(early.lamps).toBeCloseTo(0.35 + 0.25 * (1 - 0.35));
+    expect(early.lamps).toBeCloseTo(0.6 + 0.25 * (1 - 0.6));
     expect(houseLookAt({ phase: 'day', next: 'dusk', blend: 1 }).clear).toBe(
       HOUSE_TIMES.dusk.clear,
     );
@@ -69,6 +70,24 @@ describe('the house light look (#381 H2)', () => {
       expect(Math.max(r!, g!, b!)).toBeGreaterThan(70);
       expect(b!).toBeGreaterThan(r!);
     }
+  });
+
+  it('never lights the room dimmer by day than at dusk, on any tier (H2 render check)', () => {
+    for (const tier of ['low', 'medium', 'high'] as const) {
+      const dusk = interiorLight(HOUSE_TIMES.dusk, tier);
+      expect(interiorLight(HOUSE_TIMES.day, tier), tier).toBeGreaterThanOrEqual(dusk);
+      expect(interiorLight(houseLookAtMinute(at(12)), tier), tier).toBeGreaterThanOrEqual(dusk);
+      // Dawn sits between night and day, never gloomier than dusk either.
+      expect(interiorLight(HOUSE_TIMES.dawn, tier), tier).toBeGreaterThanOrEqual(dusk);
+    }
+  });
+
+  it('keeps the lamps at night no hotter than dusk (no hotspot, no orange ceiling)', () => {
+    expect(HOUSE_TIMES.night.lamps).toBeLessThanOrEqual(HOUSE_TIMES.dusk.lamps);
+    expect(HOUSE_TIMES.night.lamp).toBeLessThanOrEqual(HOUSE_TIMES.dusk.lamp);
+    // And no hard white or lavender glint along the beams: the highlight stays soft.
+    for (const phase of ['day', 'night'] as const)
+      expect(HOUSE_TIMES[phase].sunSpecular).toBeLessThan(HOUSE_TIMES.dusk.sunSpecular);
   });
 
   it('reads the patch’s own clock, and a quiet minute looks the same', () => {

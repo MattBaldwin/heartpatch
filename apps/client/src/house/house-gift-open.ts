@@ -1,22 +1,18 @@
 import type { HouseView } from '@heartpatch/shared';
-import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
-import { newIdempotencyKey } from '../net/idempotency-key.js';
-import { messageOf } from '../ui/dom.js';
+import { createHouseCommand, type HouseCommandDeps } from './house-command.js';
 
 /*
- * Opening the daily gift (#381 H2), as the house build sends its command
- * (house-build.ts): one `Idempotency-Key` per tap on Open it!, the same key
- * on the one retry after a dropped connection (so a gift that did open is
- * replayed, never "Already opened!"), and a second tap while one is in
- * flight does nothing. The server decides what's inside and opens it once
- * (CLAUDE.md rule 1). Pure (the API, the key and the clock are passed in).
+ * Opening the daily gift (#381 H2), sent as one house command
+ * (house-command.ts, as the build is): one `Idempotency-Key` per tap on
+ * Open it!, the same key on the one retry after a dropped connection (so a
+ * gift that did open is replayed, never "Already opened!"), and a second tap
+ * while one is in flight does nothing. The server decides what's inside and
+ * opens it once (CLAUDE.md rule 1). Pure (the API, the key and the clock are
+ * passed in).
  */
 
-export interface GiftOpenDeps {
+export interface GiftOpenDeps extends HouseCommandDeps {
   claim: (mapId: string, day: string, key: string) => Promise<HouseView>;
-  newKey?: () => string;
-  wait?: (ms: number) => Promise<void>;
-  retryAfterMs?: number;
 }
 
 /** What one tap on Open it! came to. */
@@ -33,35 +29,15 @@ export interface GiftOpener {
   readonly busy: boolean;
 }
 
-const delay = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 export function createGiftOpener(deps: GiftOpenDeps): GiftOpener {
-  let busy = false;
-  const send = {
-    newKey: deps.newKey ?? newIdempotencyKey,
-    wait: deps.wait ?? delay,
-    retryAfterMs: deps.retryAfterMs ?? COMMAND_RETRY_MS,
-  };
+  const command = createHouseCommand(deps);
   return {
     async open(mapId, day, stillWanted) {
-      if (busy) return { kind: 'dropped' };
-      busy = true;
-      try {
-        const view = await sendCommand(send, (key) => deps.claim(mapId, day, key), stillWanted);
-        if (!view || !stillWanted()) return { kind: 'dropped' };
-        return { kind: 'opened', view };
-      } catch (err) {
-        if (!stillWanted()) return { kind: 'dropped' };
-        return { kind: 'failed', message: messageOf(err) };
-      } finally {
-        busy = false;
-      }
+      const outcome = await command.run((key) => deps.claim(mapId, day, key), stillWanted);
+      return outcome.kind === 'done' ? { kind: 'opened', view: outcome.view } : outcome;
     },
     get busy() {
-      return busy;
+      return command.busy;
     },
   };
 }

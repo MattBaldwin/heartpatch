@@ -392,6 +392,8 @@ export const HOUSE_GIFT = {
   besideBed: 0.3, // TUNE
   /** Kept this far inside the room's walls, metres. */
   wallGap: 0.34, // TUNE
+  /** About how far the Keeper reaches from its middle, metres (the box keeps clear of it). */
+  keeperReach: 0.35, // TUNE
   /** A tap this close to the box on screen opens it (CSS px). */
   tapRadius: 52, // TUNE: a 44pt target and a little more
 } as const;
@@ -407,7 +409,7 @@ export const HOUSE_WELCOME = {
 /** The fire and lamp flicker: a slow timer, never per-frame rendering. */
 export const HOUSE_FLICKER = {
   /** Ticks a second while the house is on screen and the page shows (0: a still fire). */
-  hz: { high: 9, medium: 8, low: 0 } as Readonly<Record<QualityTier, number>>, // TUNE: low stays still, so an idle house draws nothing on the iPad 9th gen
+  hz: { high: 9, medium: 8, low: 0 } satisfies Readonly<Record<QualityTier, number>>, // TUNE: low stays still, so an idle house draws nothing on the iPad 9th gen
   /** How far the light dips and lifts, a share of its strength. */
   depth: { fire: 0.16, lamp: 0.05 }, // TUNE
 } as const;
@@ -434,8 +436,18 @@ export interface HouseTimeLook {
   readonly house: { readonly color: string; readonly intensity: number };
   /** Low: the warm ambient bounce. */
   readonly ambient: string;
-  /** The fire's and lamps' lights and their pools on the floor, times their strength. */
+  /** The fire's light and the floor's light pools, times their strength. */
   readonly lamps: number;
+  /** The table lamp's light (high and medium), times its strength: gentler at night, so its hotspot never washes the table out. */
+  readonly lamp: number;
+  /**
+   * High and medium: the image-based light, times `HOUSE_LIGHT.environment.lit`.
+   * By day it stands in for the window light the dimmer lamps leave (the sun
+   * comes through the back windows, so the shell shades most of the room).
+   */
+  readonly environment: number;
+  /** High and medium: the sun's (or moon's) highlight, a share of its colour: soft, so no beam edge glints. */
+  readonly sunSpecular: number;
   /** Lamp shades, flames and lanterns (their unlit glow), times their colour. */
   readonly glow: number;
 }
@@ -457,7 +469,10 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     sun: { color: '#ffd9c2', intensity: 1.7 }, // TUNE
     house: { color: '#ffe0c2', intensity: 1.6 }, // TUNE
     ambient: '#5e4232', // TUNE
-    lamps: 0.55, // TUNE
+    lamps: 0.7, // TUNE
+    lamp: 0.7, // TUNE
+    environment: 1.7, // TUNE
+    sunSpecular: 0.3, // TUNE
     glow: 1,
   },
   day: {
@@ -471,7 +486,10 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     sun: { color: '#fff1dc', intensity: 2.1 }, // TUNE: warm daylight
     house: { color: '#fff0dc', intensity: 1.75 }, // TUNE
     ambient: '#6a5444', // TUNE
-    lamps: 0.35, // TUNE: the hearth still glows, the lamps all but off
+    lamps: 0.6, // TUNE: the hearth still glows; the lamps all but off
+    lamp: 0.45, // TUNE
+    environment: 2.0, // TUNE: daylight fills the room (H2 render check: day on high read dimmer than dusk)
+    sunSpecular: 0.12, // TUNE: no white glint along the rafters (H2 render check)
     glow: 0.9, // TUNE
   },
   dusk: {
@@ -486,6 +504,9 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     house: { color: HOUSE_LIGHT.house.color, intensity: HOUSE_LIGHT.house.intensity },
     ambient: HOUSE_LIGHT.ambient,
     lamps: 1,
+    lamp: 1,
+    environment: 1,
+    sunSpecular: 0.6,
     glow: 1,
   },
   night: {
@@ -499,10 +520,29 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     sun: { color: '#b9c4ff', intensity: 0.9 }, // TUNE: moonlight through the back windows
     house: { color: '#ffcf94', intensity: 1.5 }, // TUNE: the lamps carry the room
     ambient: '#46302a', // TUNE
-    lamps: 1.15, // TUNE
+    lamps: 1, // TUNE: as dusk (1.15 turned the Heart Hall's ceiling orange at kid height)
+    lamp: 0.7, // TUNE: the table lamp's hotspot washed the side table out at 1.15
+    environment: 1.05, // TUNE
+    sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,
   },
 };
+
+/**
+ * How much each light brightens the room's walls, for `interiorLight` (a
+ * proxy the time-of-day test compares: day must never read dimmer than
+ * dusk). Per unit of strength, judged against the H2 captures' wall samples.
+ */
+export const HOUSE_INTERIOR = {
+  /** High and medium: the image-based light, per unit of intensity. */
+  environment: 1, // TUNE
+  /** High and medium: the fire and the table lamp at full strength. */
+  fire: 0.35, // TUNE
+  lamp: 0.15, // TUNE
+  /** Low: the ambient bounce (its lightness) and the house light (its lightness times strength). */
+  ambient: 1, // TUNE
+  house: 0.35, // TUNE
+} as const;
 
 /** The painted windows (sRGB): the sky behind the glass, top to bottom, and the hills. */
 export const HOUSE_PANES = {

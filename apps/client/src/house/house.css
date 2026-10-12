@@ -315,6 +315,11 @@
   touch-action: none;
 }
 
+/* The gift card's backdrop: just a hint, so the squishies stay bright behind it. */
+.house-scrim-light {
+  background: rgb(46 26 50 / 12%);
+}
+
 /* The header stays at the top of the sheet's scroll: the eyebrow, ✕, the
    levels and the room, with a short fade under it so rows slide away softly. */
 .house-grow-head {

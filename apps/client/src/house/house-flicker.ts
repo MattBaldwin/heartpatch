@@ -13,10 +13,11 @@ import { HOUSE_FLICKER } from './house-config.js';
 
 /** How bright the fire (or a lamp, with its smaller `depth`) is at `t` seconds: around 1. */
 export function flickerAt(t: number, depth: number): number {
+  // Three slow waves that never line up; their weights add to 1 (so `depth` is the reach).
   const wave =
-    0.55 * Math.sin(2 * Math.PI * 1.7 * t) +
-    0.3 * Math.sin(2 * Math.PI * 3.1 * t + 1.3) +
-    0.15 * Math.sin(2 * Math.PI * 5.3 * t + 0.4);
+    0.55 * Math.sin(2 * Math.PI * 1.7 * t) + // TUNE: weight and Hz
+    0.3 * Math.sin(2 * Math.PI * 3.1 * t + 1.3) + // TUNE
+    0.15 * Math.sin(2 * Math.PI * 5.3 * t + 0.4); // TUNE
   return 1 + depth * wave;
 }
 

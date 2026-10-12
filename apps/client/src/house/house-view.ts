@@ -104,8 +104,6 @@ export const GIFT_TEXT = {
   item: (count: number, name: string) => `${String(count)}\u00A0${name}`,
   /** The toast once it's open: "+3 Timber 🎁". */
   toast: (count: number, name: string) => `+${String(count)}\u00A0${name}\u00A0🎁`,
-  /** For screen readers, the box in the scene. */
-  boxLabel: 'Open your gift',
 } as const;
 
 /** Welcome home (#381 H2): the first visit of a patch day. */

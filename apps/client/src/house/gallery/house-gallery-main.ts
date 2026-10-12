@@ -25,7 +25,7 @@ import '../../styles.css';
  * its giver is out, so by the hearth), and Open it! opens it, no server;
  * `?minute=1200` pins the time of day (minutes after midnight: 720 noon,
  * 1080 dusk, 1200 night; the device's clock if left out); `?welcome=1`
- * shows welcome home on every load; plus `?renderer=webgpu`.
+ * shows welcome home on every load and keeps its line up; plus `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
@@ -109,6 +109,8 @@ const house = createHouseScreen({
   now,
   requestFrame: () => stage?.requestFrame(),
   storage: welcome ? { getItem: () => null, setItem: () => undefined } : null,
+  // `?welcome=1` keeps the line up (for house-shots), until the sheet moves.
+  ...(welcome && { welcomeLineMs: 0 }),
   // `?still=1`: as reduced motion, the glide cuts straight to the dollhouse.
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });
