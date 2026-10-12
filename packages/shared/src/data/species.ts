@@ -667,7 +667,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
   },
-  // #443 kid (stage 2): two little horn nubs under its nightcap, before Boulderdoze's horns or Rumblehorn's.
+  // #443 kid (stage 2): two little horn nubs and its first crag bumps, before Boulderdoze's
+  // horns or Rumblehorn's.
   {
     id: 'cobblenap',
     name: 'Cobblenap',
@@ -690,6 +691,7 @@ export const SPECIES: Species[] = [
         'round-ears',
         'nightcap',
         'nub-horns',
+        'crag-nubs',
         'stubby-legs',
         'freckles',
       ],
@@ -2041,7 +2043,8 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
-  // #443 kid (stage 2): a little ghost growing its first wispy tail, before Brightboo's wisps or Lullaboo's.
+  // #443 kid (stage 2): a little ghost growing tiny wings and its first wispy tail, before
+  // Brightboo's wisps or Lullaboo's.
   {
     id: 'wispyboo',
     name: 'Wispyboo',
@@ -2060,7 +2063,7 @@ export const SPECIES: Species[] = [
       body: 'ghost',
       palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
       glow: 'body',
-      parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stubby-arms', 'wisp-tail'],
+      parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stubby-arms', 'nub-wings', 'wisp-tail'],
       size: 1.15,
       stance: 0.3,
       pose: 'hover',
