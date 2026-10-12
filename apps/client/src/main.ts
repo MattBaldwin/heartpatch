@@ -929,6 +929,7 @@ const defense = createDefensePrompt({
   openBattle: (battle) => {
     // The server has seated them already: whatever is open steps aside.
     catalog.close();
+    rosterReturn = null; // the close-up swoops out to the battle, not back to the roster
     roster.close();
     care.close();
     closeUp.close();
@@ -1371,6 +1372,7 @@ mountAuth(document.body, {
     care.setUser(user);
     jobs.setUser(user);
     // Another player's squishies never stay on screen (shared iPads).
+    rosterReturn = null;
     roster.close();
     closeUp.setUser(user);
     inventory.setUser(user);

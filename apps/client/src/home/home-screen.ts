@@ -108,8 +108,9 @@ export interface HomeScreenOptions {
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
-   * The peek bar's "🐾 Squishies" (#412). Without it, the button opens the
-   * sheet to the squishy list; the Squishies roster (#375) can take it over.
+   * The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375).
+   * Without it, the button only unfolds the sheet (the squishies themselves
+   * live in the roster now).
    */
   onSquishies?: (mapId: string) => void;
   /**
