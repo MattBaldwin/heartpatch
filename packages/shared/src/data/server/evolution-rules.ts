@@ -71,14 +71,14 @@ export const EVOLUTION_RULES: EvolutionRules = {
  */
 export const EVOLUTION_ODDS: EvolutionOdds[] = [
   // Batch 1: the starters' lines first.
-  { from: 'puddlepuff', into: 'drizzledoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
-  { from: 'emberbun', into: 'embernap', trigger: { kind: 'feeling', feeling: 'sleepy' } },
-  { from: 'thistlepip', into: 'petalprance', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'rippletad', into: 'drizzledoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'kindlebun', into: 'embernap', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'bristlepip', into: 'petalprance', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'fuzzbolt', into: 'glidebolt', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'snoozicle', into: 'twirlicle', trigger: { kind: 'feeling', feeling: 'silly' } },
   // Batch 2: the Halloween lines (and Pebblesnooze).
   {
-    from: 'gourdon',
+    from: 'pumpkip',
     into: 'squashboo',
     trigger: {
       kind: 'rare',
@@ -98,7 +98,7 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
   },
   { from: 'glowboo', into: 'lullaboo', trigger: { kind: 'feeling', feeling: 'cozy' } },
   { from: 'upsybat', into: 'hushwing', trigger: { kind: 'feeling', feeling: 'sleepy' } },
-  { from: 'candlekit', into: 'sparklewick', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'wickitten', into: 'sparklewick', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'pebblesnooze', into: 'rumblehorn', trigger: { kind: 'feeling', feeling: 'brave' } },
   // Batch 3.
   { from: 'fizzlepop', into: 'snugglestar', trigger: { kind: 'feeling', feeling: 'cozy' } },

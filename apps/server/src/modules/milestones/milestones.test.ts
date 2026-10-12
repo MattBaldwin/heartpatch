@@ -195,7 +195,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       userId: who.id,
       squishyId: randomUUID(),
       fromSpeciesId: 'puddlepuff',
-      intoSpeciesId: 'splashmallow',
+      intoSpeciesId: 'rippletad',
       level: 16,
     },
   });
