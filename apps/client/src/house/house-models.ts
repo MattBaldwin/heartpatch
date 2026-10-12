@@ -4,7 +4,6 @@ import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder'
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseExterior } from '@heartpatch/shared';
@@ -318,11 +317,10 @@ export function roofInside(
 
 /**
  * A room's ceiling under a floor the cut has taken away (B4: kid height in
- * the Snug once the Kitchen's gone): pale boards on dark joists running
- * front to back, a beam across, and a paper lantern hanging in the middle,
- * reaching out over the porch like `roofInside` so kid height sees no sky.
- * Its underside sits at `y`. The lantern glows unless `lit` is false (the
- * low tier keeps it bright vinyl in the solid: one draw call fewer).
+ * the Snug once the Kitchen's gone): pale boards on slim joists running
+ * front to back and a beam across, reaching out over the porch like
+ * `roofInside` so kid height sees no sky. Its underside sits at `y`. No
+ * lantern: one hung in front of the window and the sign (render check).
  */
 export function beamCeiling(
   scene: Scene,
@@ -332,8 +330,7 @@ export function beamCeiling(
   d: number,
   y: number,
   overhang: number,
-  lit = true,
-): Parts {
+): Mesh[] {
   const c = HOUSE_PALETTE.ceiling;
   const depth = d + overhang;
   const zc = z0 + (d - overhang) / 2;
@@ -352,14 +349,8 @@ export function beamCeiling(
       ),
     );
   }
-  // A beam across the room's middle, the lantern hanging from it.
   solid.push(box(scene, [w + 0.2, 0.16, 0.16], [x0 + w / 2, y - 0.08, z0 + d * 0.55], c.beam));
-  const lantern = hangingLantern(scene, 0.75);
-  const parts = [...lantern.solid, ...lantern.glow];
-  for (const p of parts) p.position.addInPlace(new Vector3(x0 + w / 2, y - 0.16, z0 + d * 0.55));
-  return lit
-    ? { solid: [...solid, ...lantern.solid], glow: lantern.glow }
-    : { solid: [...solid, ...parts], glow: [] };
+  return solid;
 }
 
 // ── Furniture ───────────────────────────────────────────────────────

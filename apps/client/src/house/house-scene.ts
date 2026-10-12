@@ -944,6 +944,15 @@ export class HouseScene {
         HOUSE_KID.porch,
         0,
       );
+      // A board under the porch's boards: no lawn showing through the gaps (render check, B4).
+      planks.push(
+        box(
+          this.#scene,
+          [run.to - run.from + 2 * past, 0.02, HOUSE_KID.porch],
+          [(run.from + run.to) / 2, -0.17, z1 - HOUSE_KID.porch / 2],
+          HOUSE_PALETTE.planks[2],
+        ),
+      );
       const porch = merged(`house-${id}-porch`, planks);
       porch.material = this.#matte;
       porch.setEnabled(false);
@@ -1109,7 +1118,7 @@ export class HouseScene {
       const overhang = HOUSE_KID.minStandBack + 0.6;
       const [w, d] = [r.x1 - r.x0, r.z1 - r.z0];
       const parts = covered
-        ? beamCeiling(this.#scene, r.x0, r.z0, w, d, r.y1 - 0.2, overhang, this.#tier !== 'low')
+        ? { solid: beamCeiling(this.#scene, r.x0, r.z0, w, d, r.y1 - 0.2, overhang), glow: [] }
         : roofInside(this.#scene, r.x0, r.z0, w, d, r.y1, overhang);
       for (const [name, list, material] of [
         [`house-${r.id}-ceiling`, parts.solid, this.#vinyl],
