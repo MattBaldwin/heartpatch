@@ -290,6 +290,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           training: s.trainingBuildingId !== null,
         }),
         accessory: worn.get(s.id) ?? null,
+        // Like `house` below, nothing of the house while it's off for them.
+        houseRoomId: houseShown ? s.houseRoomId : null,
       })),
       speciesDefs,
       items,

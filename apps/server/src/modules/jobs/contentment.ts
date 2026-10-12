@@ -4,9 +4,11 @@ import {
   GAME_DATA,
   gatherFits,
   holdSpans,
+  HOUSE_DATA,
   inSeason,
   JOB_RULES,
   moodDrift,
+  residentDrainPercent,
   seasonEndMs,
   trainingFullAtMs,
   workFullAtMs,
@@ -27,7 +29,9 @@ import { seasonsAtFor, traitsOf, workAt, type JobMap } from './work.js';
 // as stored, on the server only. Anything that changes a squishy's job calls
 // `checkpointContentment` first, so the time before counts at the old job's
 // rate. Moments a job stops by itself (a full basket, a nap, a season's end,
-// lost land) are timestamps already, so they need no write.
+// lost land) are timestamps already, so they need no write. A resident of
+// the Keeper's house (#381) fades slower: rate = base × fit × resident, and
+// moving in or out (`leaveHouse`, the house's move) checkpoints first too.
 
 /** The checkpoint as read: the newer of the checkpoint pair and the last-care pair. */
 export function contentmentCheckpoint(care: JobRow['care']): CareState {
@@ -38,6 +42,19 @@ export function contentmentCheckpoint(care: JobRow['care']): CareState {
     return { contentment: care.contentmentAtLastCare, since: cared };
   }
   return { contentment: care.contentment, since: checkpoint };
+}
+
+/**
+ * The percent of the normal drain this squishy fades at (#381): the house
+ * perk while it lives in its owner's house and is home to enjoy it (not in
+ * the Hollow nor at a post: those changes write a checkpoint, so the
+ * stretch since the last one is all one rate).
+ */
+export function drainPercentOf(row: Pick<JobRow, 'houseRoomId' | 'squishy'>): number {
+  return residentDrainPercent(
+    HOUSE_DATA.rules,
+    row.houseRoomId !== null && row.squishy.state === 'active',
+  );
 }
 
 /**
@@ -93,7 +110,7 @@ export function contentmentOf(
   const checkpoint = contentmentCheckpoint(row.care);
   const facts = holdFactsOf(row, map, at, checkpoint.since);
   return {
-    contentment: contentmentAt(checkpoint, at, CARE_RULES, holdSpans(facts)),
+    contentment: contentmentAt(checkpoint, at, CARE_RULES, holdSpans(facts), drainPercentOf(row)),
     drift: moodDrift(facts, at.getTime()),
   };
 }
@@ -219,6 +236,7 @@ export async function writeGuardCheckpoints(
       at,
       CARE_RULES,
       holdSpans({ steady: { fromMs } }),
+      drainPercentOf(row),
     );
     await repo.setContentment(row.squishy.id, value, at);
   }

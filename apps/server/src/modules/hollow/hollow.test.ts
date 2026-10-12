@@ -30,6 +30,7 @@ import { createDbClient, type Database, type DbClient } from '../../db/client.js
 import {
   battles,
   buildings,
+  houseResidents,
   keepers,
   sessions,
   squishies,
@@ -1425,6 +1426,58 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const mapId = await patch(server, kid);
       const res = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // The house never changes where a squishy sleeps (#381 plan Q6): home is
+  // safe as it always was, and a resident out on a dark-land job is exposed
+  // like anyone, so there's nothing to park and no exploit.
+  describe("the Keeper's house at night (#381)", () => {
+    /** Moves a squishy into its owner's Snug (the row the house's move writes). */
+    const moveIn = (mapId: string, who: PublicUser, squishyId: string) =>
+      db
+        .insert(houseResidents)
+        .values({ squishyId, mapId, userId: who.id, roomId: 'snug', movedInAt: clock });
+    const residencyOf = (id: string) =>
+      db.query.houseResidents.findFirst({ where: (t, { eq }) => eq(t.squishyId, id) });
+
+    it('still takes a resident gatherer on dark land, keeping its bed, and never one resting at home', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const out = await dark(mapId, kid);
+      const home = await squishy(mapId, kid);
+      await moveIn(mapId, kid, out);
+      await moveIn(mapId, kid, home);
+
+      expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 1 });
+      expect(await stateOf(out)).toBe('hollowed');
+      expect(await stateOf(home)).toBe('active');
+      expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
+        expect.objectContaining({ userId: kid.id, taken: [out], exposed: 1, sheltered: 1 }),
+      ]);
+      // Taken to the Hollow, it keeps its bed for the rescue.
+      expect(await residencyOf(out)).toMatchObject({ roomId: 'snug', userId: kid.id });
+    });
+
+    it('brings a rescued resident straight back to its bed', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await squishy(mapId, kid, { level: 40 });
+      const lost = await squishy(mapId, kid, { state: 'hollowed' });
+      await moveIn(mapId, kid, lost);
+      const hollow = hollowService();
+      const started = await hollow.rescue(kid, mapId, { squishyId: lost });
+      await playOut(server, kid, started.battle);
+      await runConsumer(db, createHollowConsumer(hollow), mapId);
+      expect(await stateOf(lost)).toBe('active');
+      expect(await residencyOf(lost)).toMatchObject({
+        roomId: 'snug',
+        userId: kid.id,
+        movedInAt: clock,
+        movedOutAt: null,
+      });
     });
   });
 });

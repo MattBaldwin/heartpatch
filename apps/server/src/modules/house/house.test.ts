@@ -1,7 +1,9 @@
 import {
   ApiErrorSchema,
+  CareListResponseSchema,
   HomeResponseSchema,
   HouseViewSchema,
+  JobsViewSchema,
   MapResponseSchema,
   TutorialResponseSchema,
   type HouseView,
@@ -11,7 +13,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, houseResidents, keepers, sessions, squishies, users } from '../../db/schema.js';
+import {
+  buildings,
+  houseResidents,
+  keeperHouses,
+  keepers,
+  sessions,
+  squishies,
+  tileDefenders,
+  users,
+} from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { makeHomestead } from '../../../tests/homestead.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -503,5 +514,400 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     const other = await player();
     const theirs = await newMap(server, other);
     expect((await call(server, 'GET', `/maps/${theirs}/house`, kid)).statusCode).toBe(404);
+  });
+
+  describe('residents (PR C)', () => {
+    const HOUR_MS = 60 * 60 * 1000;
+    const later = (hours: number) => clock.setTime(clock.getTime() + hours * HOUR_MS);
+
+    /** A content squishy of mine, resting at home, checkpointed now. */
+    async function pet(mapId: string, who: Player, nickname: string | null = null) {
+      const [row] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: who.id,
+          speciesId: 'puddlepuff',
+          element: 'water',
+          feeling: 'silly',
+          nickname,
+          contentment: 100,
+          contentmentSince: clock,
+        })
+        .returning({ id: squishies.id });
+      return row!.id;
+    }
+
+    const move = (
+      server: FastifyInstance,
+      who: Player,
+      mapId: string,
+      squishyId: string,
+      roomId: string | null,
+      key: string = crypto.randomUUID(),
+    ) =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/house/residents`,
+        headers: { ...HEADERS, 'idempotency-key': key },
+        cookies: { [SESSION_COOKIE]: who.token },
+        payload: { squishyId, roomId },
+      });
+
+    const moveOk = async (...args: Parameters<typeof move>) => {
+      const res = await move(...args);
+      expect(res.statusCode, res.body).toBe(200);
+      return HouseViewSchema.parse(res.json());
+    };
+
+    const refused = async (pending: ReturnType<typeof move>) => {
+      const res = await pending;
+      expect(res.statusCode, res.body).toBe(409);
+      return ApiErrorSchema.parse(res.json()).error.message;
+    };
+
+    const squishyRow = async (id: string) =>
+      (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!;
+    const residencyOf = (id: string) =>
+      db.query.houseResidents.findFirst({ where: (t, { eq }) => eq(t.squishyId, id) });
+    const movedEvents = (mapId: string) =>
+      db.query.gameEvents.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, 'resident.moved')),
+        orderBy: (t, { asc }) => [asc(t.seq)],
+      });
+    const careOf = async (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      CareListResponseSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/care`, who)).json(),
+      ).squishies.find((s) => s.id === id)!;
+    const snug = (view: HouseView) => view.rooms.find((r) => r.id === 'snug')!;
+
+    it('moves a squishy in: a bed, its event, a checkpoint first, and the perk from then on', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await pet(mapId, kid);
+      const rester = await pet(mapId, kid);
+      later(6); // six hours resting: a quarter of the range at the normal rate
+      const view = await moveOk(server, kid, mapId, id, 'snug');
+      expect(snug(view).residents).toEqual([
+        { squishyId: id, since: clock.toISOString(), away: null },
+      ]);
+      // The time before counted at the old rate, written before the move.
+      expect(await squishyRow(id)).toMatchObject({ contentment: 75, contentmentSince: clock });
+      const [event] = await movedEvents(mapId);
+      expect(event!.payload).toEqual({
+        userId: kid.id,
+        squishyId: id,
+        roomId: 'snug',
+        fromRoomId: null,
+      });
+      // The patch hears who moved where, never the room it left.
+      expect(publicViewFor(PUBLIC_VIEWS, event!, { userId: crypto.randomUUID() })).toEqual({
+        userId: kid.id,
+        squishyId: id,
+        roomId: 'snug',
+      });
+      // Twelve hours on: the resident fades at half the rate, the rester at the full one.
+      later(12);
+      expect((await careOf(server, kid, mapId, id)).contentment).toBe(50);
+      expect((await careOf(server, kid, mapId, rester)).contentment).toBe(25);
+      // Every read that shows a squishy says where it lives.
+      expect((await careOf(server, kid, mapId, id)).houseRoomId).toBe('snug');
+      expect((await careOf(server, kid, mapId, rester)).houseRoomId).toBeNull();
+      const jobs = JobsViewSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/jobs`, kid)).json(),
+      );
+      expect(jobs.squishies.find((s) => s.squishy.id === id)!.houseRoomId).toBe('snug');
+      const home = HomeResponseSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/home`, kid)).json(),
+      );
+      expect(home.squishies.find((s) => s.id === id)!.houseRoomId).toBe('snug');
+      expect(home.squishies.find((s) => s.id === rester)!.houseRoomId).toBeNull();
+    });
+
+    it('moves out for free with a checkpoint, frees the bed at once, and holds a move back in for 24 h', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const mochi = await pet(mapId, kid, 'Mochi');
+      const other = await pet(mapId, kid);
+      const third = await pet(mapId, kid);
+      await moveOk(server, kid, mapId, mochi, 'snug');
+      await moveOk(server, kid, mapId, other, 'snug');
+      later(12); // half the rate while it lived there
+      const out = await moveOk(server, kid, mapId, mochi, null);
+      expect(snug(out).residents.map((r) => r.squishyId)).toEqual([other]);
+      expect(await squishyRow(mochi)).toMatchObject({ contentment: 75, contentmentSince: clock });
+      expect(await residencyOf(mochi)).toMatchObject({
+        roomId: null,
+        movedInAt: null,
+        movedOutAt: clock,
+      });
+      expect((await movedEvents(mapId)).at(-1)!.payload).toEqual({
+        userId: kid.id,
+        squishyId: mochi,
+        roomId: null,
+        fromRoomId: 'snug',
+      });
+      // From the move out on, it fades at the normal rate again.
+      later(6);
+      expect((await careOf(server, kid, mapId, mochi)).contentment).toBe(50);
+      // The bed is free for someone else at once…
+      await moveOk(server, kid, mapId, third, 'snug');
+      // …but Mochi waits a day to move back in.
+      expect(await refused(move(server, kid, mapId, mochi, 'snug'))).toBe(
+        'Mochi just moved out. Let them stretch their legs first!',
+      );
+      later(18);
+      await moveOk(server, kid, mapId, third, null);
+      const back = await moveOk(server, kid, mapId, mochi, 'snug');
+      expect(
+        snug(back)
+          .residents.map((r) => r.squishyId)
+          .sort(),
+      ).toEqual([mochi, other].sort());
+      // Moving out of a house it isn't in changes nothing.
+      const events = (await movedEvents(mapId)).length;
+      await moveOk(server, kid, mapId, third, null);
+      expect(await movedEvents(mapId)).toHaveLength(events);
+    });
+
+    it('says a full room is full, and refuses squishies at a post, in the Hollow, or not mine', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      const [a, b, c] = [await pet(mapId, kid), await pet(mapId, kid), await pet(mapId, kid)];
+      await moveOk(server, kid, mapId, a, 'snug');
+      await moveOk(server, kid, mapId, b, 'snug');
+      expect(await refused(move(server, kid, mapId, c, 'snug'))).toBe(
+        'The Snug is full! Pick another room.',
+      );
+      expect(await refused(move(server, kid, mapId, c, 'playroom'))).toBe(
+        "That room isn't built yet. Grow the house first! 🌱",
+      );
+      await moveOk(server, kid, mapId, b, null);
+      await db.execute(`update squishies set state = 'in-trade' where id = '${c}'`);
+      expect(await refused(move(server, kid, mapId, c, 'snug'))).toBe(
+        'That squishy is waiting at a trading post right now. 📬',
+      );
+      await db.execute(`update squishies set state = 'hollowed' where id = '${c}'`);
+      expect(await refused(move(server, kid, mapId, c, 'snug'))).toBe(
+        'That squishy is in the Hollow right now. Rescue them first!',
+      );
+      const theirs = await pet(mapId, owner);
+      const notMine = await move(server, kid, mapId, theirs, 'snug');
+      expect(notMine.statusCode).toBe(404);
+      expect(ApiErrorSchema.parse(notMine.json()).error.message).toBe(
+        "We couldn't find that squishy.",
+      );
+      expect(await residencyOf(theirs)).toBeUndefined();
+      // A refused move writes no event.
+      expect(await movedEvents(mapId)).toHaveLength(3);
+    });
+
+    it('gives the last bed to one of two moves racing for it', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [a, b, c] = [await pet(mapId, kid), await pet(mapId, kid), await pet(mapId, kid)];
+      await moveOk(server, kid, mapId, a, 'snug');
+      const results = await Promise.all([
+        move(server, kid, mapId, b, 'snug'),
+        move(server, kid, mapId, c, 'snug'),
+      ]);
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      const lost = results.find((r) => r.statusCode === 409)!;
+      expect(ApiErrorSchema.parse(lost.json()).error.message).toBe(
+        'The Snug is full! Pick another room.',
+      );
+      expect(snug(await house(server, kid, mapId)).residents).toHaveLength(2);
+    });
+
+    it('evicts nobody from a room tuned below its residents, and lets no one new in until there is room', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      // Three residents in the two-bed Snug: what a tune-down leaves behind.
+      const [a, b, c, d] = [
+        await resident(mapId, kid),
+        await resident(mapId, kid),
+        await resident(mapId, kid),
+        await pet(mapId, kid),
+      ];
+      expect(snug(await house(server, kid, mapId)).residents).toHaveLength(3);
+      expect(await refused(move(server, kid, mapId, d, 'snug'))).toBe(
+        'The Snug is full! Pick another room.',
+      );
+      await moveOk(server, kid, mapId, a, null);
+      expect(await refused(move(server, kid, mapId, d, 'snug'))).toBe(
+        'The Snug is full! Pick another room.',
+      );
+      await moveOk(server, kid, mapId, b, null);
+      const view = await moveOk(server, kid, mapId, d, 'snug');
+      expect(
+        snug(view)
+          .residents.map((r) => r.squishyId)
+          .sort(),
+      ).toEqual([c, d].sort());
+    });
+
+    it('moves between rooms freely, keeping when it first moved in', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await db.insert(keeperHouses).values({
+        mapId,
+        userId: kid.id,
+        level: 2,
+        builtAt: clock,
+        updatedAt: clock,
+      });
+      const id = await pet(mapId, kid);
+      const movedIn = clock.toISOString();
+      await moveOk(server, kid, mapId, id, 'snug');
+      later(1);
+      const view = await moveOk(server, kid, mapId, id, 'playroom');
+      expect(view.rooms.find((r) => r.id === 'playroom')!.residents).toEqual([
+        { squishyId: id, since: movedIn, away: null },
+      ]);
+      expect(snug(view).residents).toEqual([]);
+      expect((await movedEvents(mapId)).at(-1)!.payload).toMatchObject({
+        roomId: 'playroom',
+        fromRoomId: 'snug',
+      });
+    });
+
+    it('takes over the row a previous Keeper left on a squishy, with no clash and no cooldown of theirs', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      const id = await pet(mapId, kid);
+      // The owner had it before a trade, and moved it out an hour before.
+      await db.insert(houseResidents).values({
+        squishyId: id,
+        mapId,
+        userId: owner.id,
+        roomId: null,
+        movedInAt: null,
+        movedOutAt: new Date(clock.getTime() - HOUR_MS),
+      });
+      await moveOk(server, kid, mapId, id, 'snug');
+      expect(await residencyOf(id)).toMatchObject({
+        userId: kid.id,
+        roomId: 'snug',
+        movedOutAt: null,
+      });
+      // …and a row still saying "in the owner's Snug" is taken over too.
+      const other = await pet(mapId, kid);
+      await db.insert(houseResidents).values({
+        squishyId: other,
+        mapId,
+        userId: owner.id,
+        roomId: 'snug',
+        movedInAt: clock,
+      });
+      expect(snug(await house(server, owner, mapId)).residents).toEqual([]);
+      await moveOk(server, kid, mapId, other, 'snug');
+      expect(await residencyOf(other)).toMatchObject({ userId: kid.id, roomId: 'snug' });
+    });
+
+    it('shows a resident out at its job as away: gathering, on watch or training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await db.insert(keeperHouses).values({
+        mapId,
+        userId: kid.id,
+        level: 2,
+        builtAt: clock,
+        updatedAt: clock,
+      });
+      const [seed, ring] = await homeTiles(mapId, kid);
+      const [gatherer, guard, trainee] = [
+        await pet(mapId, kid),
+        await pet(mapId, kid),
+        await pet(mapId, kid),
+      ];
+      await moveOk(server, kid, mapId, gatherer, 'snug');
+      await moveOk(server, kid, mapId, guard, 'snug');
+      await moveOk(server, kid, mapId, trainee, 'playroom');
+      const at = clock.toISOString();
+      await db.execute(
+        `update squishies set work_tile_id = '${seed!.id}', work_since = '${at}', work_started_at = '${at}' where id = '${gatherer}'`,
+      );
+      await db.insert(tileDefenders).values({
+        mapId,
+        tileId: ring!.id,
+        slot: 0,
+        squishyId: guard,
+        assignedAt: clock,
+      });
+      const [grounds] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          tileId: ring!.id,
+          buildingId: 'training-grounds',
+          kind: 'training-grounds',
+          spot: 1,
+        })
+        .returning({ id: buildings.id });
+      await db.execute(
+        `update squishies set training_building_id = '${grounds!.id}', training_since = '${at}' where id = '${trainee}'`,
+      );
+      const view = await house(server, kid, mapId);
+      const away = new Map(
+        view.rooms.flatMap((r) => r.residents).map((r) => [r.squishyId, r.away]),
+      );
+      expect(Object.fromEntries(away)).toEqual({
+        [gatherer]: 'gathering',
+        [guard]: 'guarding',
+        [trainee]: 'training',
+      });
+    });
+
+    it('replays a retried move (Idempotency-Key) once', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await pet(mapId, kid);
+      const first = await move(server, kid, mapId, id, 'snug', 'move-1');
+      await moveOk(server, kid, mapId, id, null);
+      const again = await move(server, kid, mapId, id, 'snug', 'move-1');
+      expect(again.json()).toEqual(first.json());
+      expect(await movedEvents(mapId)).toHaveLength(2);
+      expect((await residencyOf(id))!.roomId).toBeNull();
+    });
+
+    it('is NOT_FOUND while the switch is off', async () => {
+      const server = await start({});
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await pet(mapId, kid);
+      const res = await move(server, kid, mapId, id, 'snug');
+      expect(res.statusCode).toBe(404);
+      expect(ApiErrorSchema.parse(res.json()).error.message).toBe("We couldn't find that patch.");
+      expect(await residencyOf(id)).toBeUndefined();
+    });
+
+    it('writes the checkpoints of residents when their Keeper leaves, before their rows go', async () => {
+      const server = await start();
+      const owner = await player();
+      const kid = await player();
+      const mapId = await newMap(server, owner);
+      await join(server, owner, kid, mapId);
+      const id = await pet(mapId, kid);
+      await moveOk(server, kid, mapId, id, 'snug');
+      later(12);
+      expect((await call(server, 'POST', `/maps/${mapId}/leave`, kid)).statusCode).toBe(204);
+      // Twelve hours at the perk's half rate, written at the leave.
+      expect(await squishyRow(id)).toMatchObject({ contentment: 75, contentmentSince: clock });
+      expect(await residencyOf(id)).toBeUndefined();
+    });
   });
 });
