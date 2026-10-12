@@ -1,13 +1,27 @@
 import { FinishSchema, RARE_GLOW_LEVEL, RaritySchema } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { FINISH_CODE, RARE_GLOW, RARE_GLOW_CODE } from './config.js';
-import { decodeSquishCode, glowHueIndex, rareGlowCode, rareGlowLevel } from './rare-glow.js';
+import {
+  decodeSquishCode,
+  glowHueIndex,
+  rareGlowCode,
+  rareGlowLevel,
+  rareGlowOff,
+} from './rare-glow.js';
 
 describe('rare finds glow codes (#391)', () => {
   it('adds nothing below rare, or for a look with no rarity', () => {
     expect(rareGlowCode('common', ['#ff0000'])).toBe(0);
     expect(rareGlowCode('uncommon', ['#ff0000'])).toBe(0);
     expect(rareGlowCode(undefined, ['#ff0000'])).toBe(0);
+  });
+
+  it('turns off with ?rareglow=0 (a device frame-rate check), and only then', () => {
+    expect(rareGlowOff('?fps=1&rareglow=0')).toBe(true);
+    expect(rareGlowOff('?fps=1')).toBe(false);
+    expect(rareGlowOff('?rareglow=1')).toBe(false);
+    expect(rareGlowCode('mythic', ['#ff0000'], true)).toBe(0);
+    expect(rareGlowCode('mythic', ['#ff0000'], false)).toBeGreaterThan(0);
   });
 
   it('takes the level from the shared rarity table', () => {

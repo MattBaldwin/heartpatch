@@ -174,6 +174,8 @@ export const RARE_GLOW = {
   edge: [0.42, 0.52, 0.62, 0.72], // TUNE
   /** How tightly the edge glow hugs the outline (higher is thinner). */
   falloff: 1.7, // TUNE
+  /** Below this much edge glow a pixel skips the glow's colour work (it would add under 1/255). */
+  minEdge: 0.004, // TUNE
   /** How much richer than the part's own colour the glow is (pushed away from grey, same hue). */
   saturate: 1.25, // TUNE
   /** A pale part's glow is pushed to at least this saturation, keeping its own hue. */
