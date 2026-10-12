@@ -414,8 +414,10 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       .returning({ id: tiles.id });
     await old(glade!.id, kid, 'ember-den', 'habitat', ring!.id, 1, 2);
     await old(glade!.id, kid, 'cozy-meadow', 'habitat', ring!.id, 2, 1);
+    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
     await pass(glade!.id);
     expect(await rowsOf(glade!.id)).toHaveLength(2);
+    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
   });
 
   it('runs alongside a settle and a placement for the same player without a deadlock', async () => {
