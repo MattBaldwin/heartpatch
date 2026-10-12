@@ -37,7 +37,7 @@ export const RARE_FIND_TIERS: RareFindTiers = RareFindTiersSchema.parse({
     ms: 2200, // TUNE
     scale: 3,
     label: 'Special',
-    banner: '✨ Something very special is here! ✨',
+    banner: '✨ Something special is here! ✨',
     patchLine: false,
   },
 } satisfies RareFindTiers);
