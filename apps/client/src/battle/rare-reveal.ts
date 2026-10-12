@@ -211,14 +211,27 @@ export function showRareReveal(host: HTMLElement, options: RevealOptions): RareR
   const lift = (): void => {
     if (!pressed) return;
     pressed = false;
-    doc.addEventListener('click', swallow, { capture: true, once: true });
-    view?.setTimeout(() => {
+    // Disarmed by the next press anywhere, or soon after: a lift with no click
+    // (a long press) must not eat the kid's next real tap.
+    const disarm = (): void => {
       doc.removeEventListener('click', swallow, { capture: true });
-    }, RARE_REVEAL.clickGraceMs);
+      doc.removeEventListener('pointerdown', disarm, { capture: true });
+    };
+    doc.addEventListener('click', swallow, { capture: true, once: true });
+    doc.addEventListener('pointerdown', disarm, { capture: true, once: true });
+    view?.setTimeout(disarm, RARE_REVEAL.clickGraceMs);
     finish(true);
   };
   function onKey(event: KeyboardEvent): void {
     if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
+    // Typing in a text box (chat) is typing, not a skip.
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+    ) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     finish(true);
