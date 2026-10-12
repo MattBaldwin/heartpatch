@@ -13,6 +13,7 @@
 // scene and post passes) and hold on a device. No dev badges in the shots.
 //
 // LEVELS (default 1), POSES (dollhouse,kid), TIERS (high,low), DEVICES (iphone,ipad) narrow the set;
+// a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -33,18 +34,22 @@ const devices = only('DEVICES', ['iphone', 'ipad']);
 const poses = only('POSES', ['dollhouse', 'kid']);
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 2);
 
+/** Floors a level's dollhouse has (house-data: the Kitchen upstairs from level 3). */
+const floorsAt = (level) => (Number(level) >= 3 ? [0, 1] : [0]);
 const jobs = [];
 for (const level of levels)
   for (const pose of poses)
-    for (const tier of tiers)
-      for (const device of devices)
-        jobs.push({
-          file: `house${level}-${pose}-${tier}-${device}.png`,
-          level,
-          pose,
-          tier,
-          device,
-        });
+    for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
+      for (const tier of tiers)
+        for (const device of devices)
+          jobs.push({
+            file: `house${level}-${pose}${floor > 0 ? `-f${floor}` : ''}-${tier}-${device}.png`,
+            level,
+            pose,
+            floor,
+            tier,
+            device,
+          });
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 if (ONLY) jobs.splice(0, jobs.length, ...jobs.filter((j) => ONLY.test(j.file)));
 
@@ -107,6 +112,11 @@ async function shoot(job) {
   const q = new URLSearchParams({ level: job.level, tier: job.tier, still: '1' });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
+  if (job.floor > 0) {
+    // Upstairs: the floor switch (the Kitchen's floor; the one below stays).
+    await page.getByTestId('house-floor').click();
+    await until(page, (f) => window.__heartpatch.house()?.scene?.floor === f, job.floor);
+  }
   if (job.pose === 'kid') {
     // Walk in (the gallery's `still=1` cuts straight there, as reduced motion does).
     await page.getByTestId('house-walk').click();
@@ -157,6 +167,8 @@ async function shoot(job) {
     level: house.level,
     rooms: house.rooms,
     pose: job.pose,
+    floor: scene.floor,
+    floors: scene.floors,
     tier: quality?.tier,
     pinned: quality?.pinned,
     device: job.device,

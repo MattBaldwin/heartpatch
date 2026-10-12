@@ -34,6 +34,12 @@ export interface HouseViewport {
   readonly top: number;
   /** Covered at the bottom (the peek bar and the bottom-right button). */
   readonly bottom: number;
+  /**
+   * Covered at the very bottom by the folded sheet alone (the yard may run
+   * on under the Walk in button down to it); `HOUSE_CAMERA.sheet` if the
+   * screen doesn't say.
+   */
+  readonly sheet?: number;
 }
 
 /** A portrait phone (steeper and wider-angle than a tablet or landscape). */
@@ -91,11 +97,21 @@ export function safeArea(vp: HouseViewport): {
 
 /**
  * The dollhouse pose: looking down at the open-fronted house (yaw 0, from
- * the front), the whole box as big as fits inside the safe area and
- * centred in it. Steeper on a portrait phone, so a tall frame fills with
- * house rather than lawn.
+ * the front), the whole box as big as fits inside the safe area. Steeper
+ * on a portrait phone, so a tall frame fills with house rather than lawn.
+ *
+ * Across, it's centred. Up and down (B4 framing: a wide house on a tall
+ * phone sat small in the middle with empty lawn above it), the house and
+ * its front yard (`yard` metres deep in front of it) are centred together
+ * between the top bar and the folded sheet, so the house rides up under
+ * the top bar and the yard fills the band above the sheet, the house
+ * itself never leaving the safe area.
  */
-export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
+export function fitHouse(
+  bounds: HouseBounds,
+  vp: HouseViewport,
+  yard: number = HOUSE_CAMERA.yard,
+): HousePose {
   const phone = isPhone(vp);
   const pitch = (phone ? HOUSE_CAMERA.pitch.phone : HOUSE_CAMERA.pitch.wide) * DEG;
   const fov = (phone ? HOUSE_CAMERA.fov.phone : HOUSE_CAMERA.fov.wide) * DEG;
@@ -105,8 +121,10 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
   const halfW = (safe.right - safe.left) / 2;
   const halfH = Math.max(0.05, (safe.top - safe.bottom) / 2);
   const cx = (safe.right + safe.left) / 2;
-  const cy = (safe.top + safe.bottom) / 2;
+  const h = Math.max(1, vp.height);
+  const sheetBottom = -1 + (2 * ((vp.sheet ?? HOUSE_CAMERA.sheet) + HOUSE_CAMERA.margin)) / h;
   const box = corners(bounds);
+  const front = [bounds.minX, bounds.maxX].map((x) => ({ x, y: -0.3, z: bounds.minZ - yard }));
   let target: Vec3 = {
     x: (bounds.minX + bounds.maxX) / 2,
     y: (bounds.minY + bounds.maxY) * 0.3,
@@ -130,10 +148,16 @@ export function fitHouse(bounds: HouseBounds, vp: HouseViewport): HousePose {
       minY = Math.min(minY, n.y);
       maxY = Math.max(maxY, n.y);
     }
+    const yardY = Math.min(minY, ...front.map((p) => project(pose, aspect, p).y));
     const k = Math.max((maxX - minX) / 2 / halfW, (maxY - minY) / 2 / halfH);
     distance *= 1 + (k - 1) * 0.7;
+    // House and yard centred between the top bar and the sheet, the house kept inside.
+    const lift = Math.min(
+      Math.max((maxY + yardY) / 2 - (safe.top + sheetBottom) / 2, maxY - safe.top),
+      minY - safe.bottom,
+    );
     target = add(target, scale(right, ((maxX + minX) / 2 - cx) * distance * t * aspect * 0.6));
-    target = add(target, scale(up, ((maxY + minY) / 2 - cy) * distance * t * 0.6));
+    target = add(target, scale(up, lift * distance * t * 0.6));
   }
   return { eye: sub(target, scale(forward, distance)), target, fov, pitch };
 }

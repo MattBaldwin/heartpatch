@@ -126,6 +126,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let kid: HousePose | null = null;
   /** 0 the dollhouse, 1 kid height. */
   let zoom = 0;
+  /** The floor the dollhouse shows (kid height walks in on the ground floor). */
+  let floor = 0;
   /** Walk in or Step out under way: from where, to where, since when (ms). */
   let walk: { from: number; goal: number; start: number | null } | null = null;
   let frame = 0;
@@ -144,6 +146,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     class: 'house-walk',
     'data-testid': 'house-walk',
   });
+  // B4 floor switch: shown when the house has more than one floor, in the dollhouse.
+  const floorButton = el('button', {
+    type: 'button',
+    class: 'house-floor',
+    'data-testid': 'house-floor',
+  });
   const peekText = el('span', { class: 'house-peek-line', 'data-testid': 'house-peek-line' });
   const peek = el(
     'section',
@@ -157,6 +165,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     touch,
     top,
     walkButton,
+    floorButton,
     peek,
   );
   overlay.hidden = true;
@@ -172,6 +181,32 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     draw();
   });
 
+  floorButton.addEventListener('click', () => {
+    skipGlide();
+    showFloor(floor === 0 ? (scene3d?.floors.at(-1) ?? 0) : 0);
+  });
+
+  /** The dollhouse shows floor `n` (the floors above taken away) and refits to it. */
+  function showFloor(n: number): void {
+    floor = n;
+    scene3d?.setFloor(n);
+    renderFloor();
+    refit();
+  }
+
+  /** Upstairs or Downstairs: only with more than one floor, and only in the dollhouse. */
+  function renderFloor(): void {
+    const floors = scene3d?.floors ?? [];
+    floorButton.hidden = floors.length < 2 || walk !== null || zoom > 0;
+    const up = floor === 0;
+    if (floorButton.dataset['up'] === String(up)) return;
+    floorButton.dataset['up'] = String(up);
+    floorButton.replaceChildren(
+      el('span', { 'aria-hidden': 'true' }, up ? '⬆' : '⬇'),
+      ` ${up ? 'Upstairs' : 'Downstairs'}`,
+    );
+  }
+
   /** Walk in or Step out, by where the camera is going (or is). */
   function renderWalk(): void {
     const inside = walk ? walk.goal === 1 : walkedIn(zoom);
@@ -184,6 +219,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       ),
       ` ${inside ? HOUSE_TEXT.stepOut : HOUSE_TEXT.walkIn}`,
     );
+    renderFloor();
   }
 
   const owner = () => user?.username ?? null;
@@ -206,7 +242,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     const bottomBand =
       box.bottom -
       Math.min(peek.getBoundingClientRect().top, walkButton.getBoundingClientRect().top);
-    return { width, height, top: Math.max(0, topBand), bottom: Math.max(0, bottomBand) };
+    const sheet = Math.max(0, box.bottom - peek.getBoundingClientRect().top);
+    return { width, height, top: Math.max(0, topBand), bottom: Math.max(0, bottomBand), sheet };
   }
 
   // ── Camera ────────────────────────────────────────────────────────────
@@ -248,8 +285,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       options.showScene(build);
       return;
     }
+    // Kid height walks into the Keeper's room, on the ground floor.
+    if (floor !== 0 && (zoom > 0 || walk?.goal === 1)) {
+      floor = 0;
+      s.setFloor(0);
+      fit(s);
+    }
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
+    renderFloor();
     options.invalidate();
     if (glide || walk) draw();
   }
@@ -265,7 +309,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The dollhouse and kid-height poses for the screen as it is now. */
   function fit(s: HouseScene): void {
     const vp = viewport();
-    base = fitHouse(s.bounds, vp);
+    base = fitHouse(s.frameBounds, vp);
     const room = s.focusRoom;
     kid = room ? kidPose(room, vp) : null;
     frameOutside(s, base);
@@ -376,7 +420,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       signText: owner() ? HOUSE_TEXT.sign(owner() ?? '') : HOUSE_TEXT.yourHouse,
     });
     scene3d = built;
+    built.setFloor(floor);
     fit(built);
+    renderFloor();
     if (!base) throw new Error('no dollhouse pose');
     // The roof lifts off as you arrive; a rebuild for a new tier doesn't glide again.
     glide = fresh && !reducedMotion.matches ? { shot: entryGlide(base), start: null } : null;
@@ -425,6 +471,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     mapId = id;
     view = fresh;
     zoom = 0;
+    floor = 0;
     walk = null;
     builtTier = null;
     isOpen = true;

@@ -12,7 +12,7 @@ import {
   toys,
   type Parts,
 } from './house-models.js';
-import { HOUSE_GRID } from './house-config.js';
+import { HOUSE_GRID, HOUSE_TIERS } from './house-config.js';
 import type { QualityTier } from '../engine/config.js';
 import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
 import type { RoomBox } from './house-layout.js';
@@ -144,7 +144,7 @@ export const snugRoom: RoomBuilder = (kit) => {
   // The hearth, angled 30° toward the dollhouse camera so the lit fire reads.
   const [hx, hz] = at(0.62, d * 0.42);
   const facing = (2 * Math.PI) / 3; // TUNE
-  const fire: Parts = hearth(scene, false);
+  const fire: Parts = hearth(scene, false, HOUSE_TIERS[kit.tier].rounds);
   kit.solid([placed(fire.solid, hx, y, hz, facing)]);
   kit.glow([placed(fire.glow, hx, y, hz, facing)]);
   const fwd = { x: Math.sin(facing), z: Math.cos(facing) };

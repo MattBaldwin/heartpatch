@@ -58,14 +58,55 @@ describe('fitHouse', () => {
         const wide = (Math.max(...xs) - Math.min(...xs)) / (safe.right - safe.left);
         const tall = (Math.max(...ys) - Math.min(...ys)) / (safe.top - safe.bottom);
         expect(Math.max(wide, tall)).toBeGreaterThan(0.97);
-        // Centred in it.
-        expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(
-          (safe.top + safe.bottom) / 2,
+        // Across, centred; up and down, the house and its yard centred
+        // between the top bar and the sheet, unless the house meets an edge.
+        expect((Math.max(...xs) + Math.min(...xs)) / 2).toBeCloseTo(
+          (safe.left + safe.right) / 2,
           1,
         );
+        const yard = [b.minX, b.maxX].map(
+          (x) => project(pose, aspect, { x, y: -0.3, z: b.minZ - HOUSE_CAMERA.yard }).y,
+        );
+        const sheet = -1 + (2 * (HOUSE_CAMERA.sheet + HOUSE_CAMERA.margin)) / vp.height;
+        const group = (Math.max(...ys) + Math.min(...ys, ...yard)) / 2;
+        const edge = Math.min(
+          Math.abs(Math.max(...ys) - safe.top),
+          Math.abs(Math.min(...ys) - safe.bottom),
+        );
+        expect(Math.min(Math.abs(group - (safe.top + sheet) / 2), edge)).toBeLessThan(0.02);
       });
     }
   }
+
+  it('lifts a wide house up under the top bar on a tall phone, its yard filling the band over the sheet (B4)', () => {
+    const wide: HouseBounds = {
+      minX: -0.24,
+      maxX: 9.84,
+      minY: 0,
+      maxY: 3,
+      minZ: -0.35,
+      maxZ: 5.04,
+    };
+    const vp: HouseViewport = { ...iphone, bottom: 150, sheet: 79 };
+    const pose = fitHouse(wide, vp);
+    const safe = safeArea(vp);
+    const aspect = vp.width / vp.height;
+    const ys = corners(wide).map((p) => project(pose, aspect, p).y);
+    // Width-bound: the house can't fill the height, so it rides up rather than sitting mid-lawn.
+    const above = safe.top - Math.max(...ys);
+    const below = Math.min(...ys) - safe.bottom;
+    expect(above).toBeLessThan(below);
+    expect(above).toBeGreaterThanOrEqual(-0.01);
+    // The yard's fence stays in frame, above the sheet.
+    const sheet = -1 + (2 * (79 + HOUSE_CAMERA.margin)) / vp.height;
+    const fence = project(pose, aspect, { x: 4.8, y: -0.3, z: wide.minZ - HOUSE_CAMERA.yard });
+    expect(fence.y).toBeGreaterThan(sheet);
+    // A taller sheet (measured from the DOM) moves the house and yard up with it.
+    const raised = fitHouse(wide, { ...vp, sheet: 200 });
+    const top = (p: typeof pose) => Math.max(...corners(wide).map((c) => project(p, aspect, c).y));
+    expect(top(raised)).toBeGreaterThan(top(pose));
+    expect(top(raised)).toBeLessThanOrEqual(safe.top + 0.01);
+  });
 
   it('looks down steeper on a portrait phone than on an iPad, inside the planned ranges', () => {
     const phone = deg(fitHouse(snug, iphone).pitch);
