@@ -460,7 +460,7 @@ export const WAVE_1_SPECIES: Species[] = [
       body: 'blob',
       palette: ['#7fcf52', '#e6ffd0', '#5cb8ec', '#3fae3a'],
       parts: [
-        'sharp-eyes',
+        'dot-eyes',
         'open-mouth',
         'giggle-tongue',
         'eye-bumps',
@@ -703,7 +703,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'snowtuft',
     name: 'Snowtuft',
-    description: 'It grew two tiny arms. It holds them up to catch every snowflake that falls.',
+    description:
+      'It grew two tiny arms. It holds them out wide to catch every snowflake that falls.',
     element: 'frost',
     feeling: 'brave',
     rarity: 'common',
@@ -715,7 +716,6 @@ export const WAVE_1_SPECIES: Species[] = [
       palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
       parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'icicle-crown', 'stubby-arms'],
       size: 1.15,
-      stance: 0.3,
       pose: 'stand',
       attackPart: 'crown',
     },
@@ -726,7 +726,7 @@ export const WAVE_1_SPECIES: Species[] = [
     id: 'frostbold',
     name: 'Frostbold',
     description:
-      'Now it stands on two feet, with crystal spines down its back. It guards the snow while it naps.',
+      'Now it stands on its own feet, with crystal spines down its back. It guards the snow while it naps.',
     element: 'frost',
     feeling: 'brave',
     rarity: 'uncommon',
