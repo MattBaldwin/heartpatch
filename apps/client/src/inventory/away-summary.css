@@ -1,6 +1,7 @@
 /* What just landed (#419, owner pick 2026-10-12): a slim banner under the
-   patch's name (map.css `.map-hud`, about 44px tall at +64px), clear of it by
-   the tag's height, and its card. Above the Bag and the recipe book (5) like
+   patch's name (map.css `.map-hud` at +64px: about 44px tall, 60px with its
+   "Reconnecting…" line), clear of it by the tag's height; lower still when
+   something else is up there (away-summary-view.ts `place`). And its card. Above the Bag and the recipe book (5) like
    the pop-up it replaces; the card sits with the other cards (9). */
 .away-banner[hidden],
 .away-card-layer[hidden],
@@ -14,7 +15,7 @@
 .away-banner {
   position: fixed;
   z-index: 6;
-  top: calc(env(safe-area-inset-top) + 128px);
+  top: calc(env(safe-area-inset-top) + 142px);
   left: 50%;
   display: flex;
   align-items: center;
@@ -130,7 +131,7 @@
 }
 
 .away-bar-run {
-  animation: away-bar 4s linear forwards; /* TUNE: matches BANNER_MS */
+  animation: away-bar 4s linear forwards; /* the view sets BANNER_MS */
 }
 
 .away-sr {

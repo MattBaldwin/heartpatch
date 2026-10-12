@@ -70,6 +70,8 @@ export interface InventoryScreenOptions {
   lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
+  /** What the "what landed" banner keeps below at the top of the screen (#419). */
+  clearOf?: () => Iterable<Element>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -233,7 +235,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const showBagNew = () => {
     newPill.textContent = bagNew > 0 ? `+${String(bagNew)}` : '';
     newAlert.textContent = bagNew > 0 ? '1' : '';
-    if (bagNew > 0) newAlert.dataset['trayAlert'] = AWAY_TEXT.bagNews(bagNew);
+    newAlert.dataset['trayAlert'] = AWAY_TEXT.bagNews;
   };
   open.hidden = true;
 
@@ -371,7 +373,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   options.root.append(chip, sheet, factorySheet, welcome);
   // What just landed (#419): a slim banner of chips, wherever the player is
   // looking (the book included), and a card with everything.
-  const summary = createAwaySummary(options.root);
+  const summary = createAwaySummary(
+    options.root,
+    options.clearOf ? { clearOf: options.clearOf } : {},
+  );
 
   if (options.devTools) {
     const dev = el(
@@ -468,7 +473,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const card = showsWelcomeBack(landed, away);
         if (card) showWelcome(landed);
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
-        showLanded(popped, trained, away >= WELCOME_BACK_MS);
+        // The card's things are in the Bag too: they count as news.
+        showLanded(popped, trained, away >= WELCOME_BACK_MS, landed);
         if (landed.length > 0) options.onCollected?.();
       }
       // Only while the kid can see it: a tab left open in the background
@@ -538,12 +544,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     landed: readonly Pick<Landed, 'items'>[],
     trained: readonly { name: string; xp: number }[] = [],
     away = false,
+    /** Everything that went in the Bag, if more than shows (the Factory's own card). */
+    inBag: readonly Pick<Landed, 'items'>[] = landed,
   ) => {
     const entries = summaryEntries(landed, trained);
-    if (entries.length === 0) return;
-    summary.show({ entries, sentence: summarySentence(landed, trained), away });
-    if (sheet.hidden) {
-      bagNew += summaryCount(entries);
+    if (entries.length > 0) {
+      summary.show({ entries, sentence: summarySentence(landed, trained), away });
+    }
+    const count = summaryCount(summaryEntries(inBag, []));
+    if (sheet.hidden && count > 0) {
+      bagNew += count;
       showBagNew();
     }
   };

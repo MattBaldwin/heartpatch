@@ -203,6 +203,8 @@ const inventory = createInventoryScreen({
   onBagOpen: () => {
     lorebook.refresh();
   },
+  // The "what landed" banner stays below the patch's name and a wardrobe find (#419).
+  clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast'),
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time

@@ -42,9 +42,11 @@ export const AWAY_TEXT = {
   training: 'Training Grounds',
   xp: (n: number) => `+${String(n)} XP`,
   nice: 'Nice!',
-  /** The Home tab's peek line until the Bag is opened. */
-  bagNews: (n: number) =>
-    n === 1 ? 'Something new in your Bag!' : `${String(n)} new things in your Bag!`,
+  /**
+   * The Home tab's peek line until the Bag is opened. One line however much
+   * landed, so a gatherer's next landing doesn't peek out again.
+   */
+  bagNews: 'New things in your Bag!',
 } as const;
 
 /**

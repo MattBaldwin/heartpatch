@@ -8,8 +8,12 @@ import './away-summary.css';
 // opens the card with everything. One thing alone is a small pill. Plain DOM
 // over the map: it adds no draw calls.
 
-/** How long the banner stays. */
+/** How long the banner stays (its time-left line runs for as long). */
 const BANNER_MS = 4000; // TUNE: long enough to read 4 chips, short enough not to nag
+/** Room above the banner for its tag, under whatever else is at the top. */
+const TAG_ROOM_PX = 18;
+/** While it shows, it checks this often that nothing new sits where it does. */
+const PLACE_EVERY_MS = 250;
 
 export interface AwaySummaryShow {
   readonly entries: readonly SummaryEntry[];
@@ -38,8 +42,20 @@ export interface AwaySummary {
   readonly debug: AwaySummaryDebug;
 }
 
-export function createAwaySummary(root: HTMLElement): AwaySummary {
+export interface AwaySummaryOptions {
+  /**
+   * Things at the top of the screen the banner keeps below while it shows
+   * (the patch's name, a "You found …" note), so its tag never sits on them.
+   */
+  readonly clearOf?: () => Iterable<Element>;
+}
+
+export function createAwaySummary(
+  root: HTMLElement,
+  options: AwaySummaryOptions = {},
+): AwaySummary {
   let timer: number | undefined;
+  let placing: number | undefined;
   let current: AwaySummaryShow | null = null;
   let chipsShown = 0;
 
@@ -83,8 +99,30 @@ export function createAwaySummary(root: HTMLElement): AwaySummary {
   const hideBanner = () => {
     window.clearTimeout(timer);
     timer = undefined;
+    window.clearInterval(placing);
+    placing = undefined;
     banner.hidden = true;
   };
+
+  /** Below its usual spot (CSS), or below anything else up there now. */
+  const place = () => {
+    banner.style.top = '';
+    const usual = banner.getBoundingClientRect().top;
+    let lowest = -Infinity;
+    for (const other of options.clearOf?.() ?? []) {
+      if (other === banner || other.closest('[hidden]')) continue;
+      const box = other.getBoundingClientRect();
+      if (box.height > 0) lowest = Math.max(lowest, box.bottom);
+    }
+    if (lowest + TAG_ROOM_PX > usual) banner.style.top = `${String(lowest + TAG_ROOM_PX)}px`;
+  };
+
+  // A turned phone: the chips are measured again for the new width.
+  window.addEventListener('resize', () => {
+    if (banner.hidden || !current || current.entries.length < 2) return;
+    fitChips(current.entries);
+    place();
+  });
 
   const openCard = () => {
     if (!current || current.entries.length < 2) return;
@@ -119,20 +157,26 @@ export function createAwaySummary(root: HTMLElement): AwaySummary {
     );
   }
 
-  /** As many whole chips as fit beside the tag and "N more"; the rest go in the count. */
+  /** Every chip if they fit; else as many whole ones as fit beside "N more", which counts the rest. */
   function fitChips(entries: readonly SummaryEntry[]): void {
     chips.replaceChildren(...entries.map(chipFor));
-    more.hidden = false;
-    // Measured with the button at its real width, so the last chip is never cut.
-    more.textContent = `${AWAY_TEXT.more(entries.length)} ›`;
     chipsShown = entries.length;
-    while (chipsShown > 1 && chips.scrollWidth > chips.clientWidth + 1) {
+    more.hidden = true;
+    if (!overflows()) return;
+    more.hidden = false;
+    // Measured with the button at its widest, so the last chip is never cut.
+    more.textContent = `${AWAY_TEXT.more(entries.length)} ›`;
+    while (chipsShown > 1 && overflows()) {
       chips.lastElementChild?.remove();
       chipsShown -= 1;
     }
     const hiddenCount = entries.length - chipsShown;
     more.textContent = `${AWAY_TEXT.more(hiddenCount)} ›`;
     more.hidden = hiddenCount === 0;
+  }
+
+  function overflows(): boolean {
+    return chips.scrollWidth > chips.clientWidth + 1;
   }
 
   function renderCard(what: AwaySummaryShow): void {
@@ -176,6 +220,14 @@ export function createAwaySummary(root: HTMLElement): AwaySummary {
       sentence.textContent = what.sentence;
       const one = what.entries.length === 1 ? what.entries[0] : undefined;
       banner.classList.toggle('away-one', one !== undefined);
+      // The pill says it all and opens nothing: no stop for a screen reader either.
+      if (one) {
+        banner.setAttribute('aria-disabled', 'true');
+        banner.tabIndex = -1;
+      } else {
+        banner.removeAttribute('aria-disabled');
+        banner.removeAttribute('tabindex');
+      }
       banner.hidden = false;
       if (one) {
         // One thing: a small pill that says it all ("🪵 +5 Timber"), nothing to open.
@@ -193,10 +245,14 @@ export function createAwaySummary(root: HTMLElement): AwaySummary {
       }
       // A fresh time-left line, so it runs down from full again.
       const fresh = el('span', { class: 'away-bar away-bar-run', 'aria-hidden': 'true' });
+      fresh.style.animationDuration = `${String(BANNER_MS)}ms`;
       bar.replaceWith(fresh);
       bar = fresh;
       window.clearTimeout(timer);
       timer = window.setTimeout(hideBanner, BANNER_MS);
+      place();
+      window.clearInterval(placing);
+      placing = window.setInterval(place, PLACE_EVERY_MS);
     },
     hide: () => {
       hideBanner();

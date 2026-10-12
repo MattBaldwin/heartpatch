@@ -180,3 +180,101 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await expect(page.getByTestId('bag-open')).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+/** The banner's modules as the dev server serves them, for the fit check below. */
+interface BannerModules {
+  summary: {
+    summaryEntries: (
+      landed: { items: Record<string, number> }[],
+      trained: { name: string; xp: number }[],
+    ) => unknown[];
+  };
+  view: {
+    createAwaySummary: (root: HTMLElement) => {
+      show: (what: { entries: unknown[]; sentence: string; away: boolean }) => void;
+      debug: { shown: string | null; chips: number; more: number };
+    };
+  };
+}
+
+test('the "what landed" banner shows whole chips at the smallest width (#419)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+  const results = await page.evaluate(async () => {
+    const load = (url: string) => import(/* @vite-ignore */ url) as Promise<unknown>;
+    const m = {
+      summary: await load('/src/inventory/away-summary.ts'),
+      view: await load('/src/inventory/away-summary-view.ts'),
+    } as BannerModules;
+    const banner = m.view.createAwaySummary(document.body);
+    const xp = [{ name: 'Glimmerock', xp: 2 }];
+    const cases = {
+      // Three things: XP, Timber and Stone fit on a 320-point iPhone, so no "N more".
+      three: m.summary.summaryEntries([{ items: { timber: 5, stone: 3 } }], xp),
+      // Ten kinds and four squishies: whole chips, the rest counted in "N more".
+      ten: m.summary.summaryEntries(
+        [
+          {
+            items: {
+              timber: 6,
+              stone: 3,
+              emberwood: 4,
+              glimmer: 1,
+              water: 2,
+              greens: 3,
+              treats: 3,
+              pumpkins: 5,
+              'witch-dust': 2,
+              ice: 1,
+            },
+          },
+        ],
+        [
+          ...xp,
+          { name: 'Emberbun', xp: 4 },
+          { name: 'Puddlepuff', xp: 3 },
+          { name: 'Pebblesnooze', xp: 1 },
+        ],
+      ),
+    };
+    const out: Record<
+      string,
+      {
+        shown: string | null;
+        chips: number;
+        more: number;
+        entries: number;
+        cut: boolean;
+        inside: boolean;
+      }
+    > = {};
+    for (const [name, entries] of Object.entries(cases)) {
+      banner.show({ entries, sentence: name, away: true });
+      const row = [...document.querySelectorAll<HTMLElement>('.away-chips')].at(-1)!;
+      const box = [...document.querySelectorAll<HTMLElement>('.away-banner')]
+        .at(-1)!
+        .getBoundingClientRect();
+      out[name] = {
+        ...banner.debug,
+        entries: entries.length,
+        cut: row.scrollWidth > row.clientWidth + 1,
+        inside: box.left >= 0 && box.right <= innerWidth,
+      };
+    }
+    return out;
+  });
+  expect(results['three']).toMatchObject({
+    shown: 'banner',
+    chips: 3,
+    more: 0,
+    entries: 3,
+    cut: false,
+    inside: true,
+  });
+  const ten = results['ten']!;
+  expect(ten).toMatchObject({ shown: 'banner', entries: 11, cut: false, inside: true });
+  expect(ten.more).toBeGreaterThan(0);
+  expect(ten.chips + ten.more).toBe(ten.entries);
+});

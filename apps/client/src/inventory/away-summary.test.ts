@@ -97,14 +97,11 @@ describe('AWAY_TEXT', () => {
       AWAY_TEXT.training,
       AWAY_TEXT.xp(2),
       AWAY_TEXT.nice,
-      AWAY_TEXT.bagNews(1),
-      AWAY_TEXT.bagNews(14),
+      AWAY_TEXT.bagNews,
     ];
     for (const line of lines) {
       expect(findAvoidedWords(line), line).toEqual([]);
       expect(line.split(' ').length, line).toBeLessThanOrEqual(10);
     }
-    expect(AWAY_TEXT.bagNews(1)).toBe('Something new in your Bag!');
-    expect(AWAY_TEXT.bagNews(14)).toBe('14 new things in your Bag!');
   });
 });
