@@ -336,7 +336,10 @@ describe('generateMap: terrain, nodes and guardians', () => {
         seen.add(tile.terrain);
       }
     }
-    expect([...seen].sort()).toEqual(GAME_DATA.terrains.map((t) => t.id).sort());
+    // Cleared land (#242) is only ever written by a player clearing a tile.
+    const generated = GAME_DATA.terrains.map((t) => t.id).filter((id) => id !== 'clearing');
+    expect(seen.has('clearing')).toBe(false);
+    expect([...seen].sort()).toEqual(generated.sort());
   });
 
   it('grows terrain in patches, not noise', () => {

@@ -236,8 +236,14 @@ describe('careSheet', () => {
     const branching = GAME_DATA.species.find(
       (s) => s.evolutions.filter((e) => e.level === s.evolutions[0]?.level).length > 1,
     )!;
-    const single = GAME_DATA.species.find((s) => s.evolutions.length === 1)!;
-    const infoFor = (s: Species) => careSheet(squishy({ speciesId: s.id }), reply()).info;
+    // Nearly every real line branches by now, so a one-form line has to be made up.
+    const single = {
+      ...species('solo', 'Solo', '#aaccee'),
+      evolutions: [{ into: 'moonpuff', level: 16 }],
+    };
+    const infoFor = (s: Species) =>
+      careSheet(squishy({ speciesId: s.id }), reply({ speciesDefs: [...reply().speciesDefs, s] }))
+        .info;
     expect(infoFor(branching)).toContain(CARE_TEXT.feelingsMatter);
     expect(infoFor(single)).not.toContain(CARE_TEXT.feelingsMatter);
     // Forms at two different levels are two steps, not a branch.

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { expectClear } from './layout.js';
-import { newPlayer, savedCode, TEST_PASSWORD, uniqueName } from './players.js';
+import { newPlayer, savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
 import { realTap } from './touch.js';
 import { openTray, traysState, traySettled } from './trays.js';
 
@@ -217,7 +217,7 @@ test("an update can't reload away a new account's recovery code", async ({ page 
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   expect(await updatesHeld(page)).toBe(false);
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await submitSignUp(overlay);
 
   await expect(overlay.getByTestId('auth-recovery-code')).toBeVisible();
   expect(await updatesHeld(page)).toBe(true);

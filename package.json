@@ -18,7 +18,7 @@
     "sim:economy": "pnpm --filter @heartpatch/shared sim:economy",
     "sim:costumes": "pnpm --filter @heartpatch/shared sim:costumes",
     "sim:factory": "pnpm --filter @heartpatch/shared sim:factory",
-    "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
+    "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

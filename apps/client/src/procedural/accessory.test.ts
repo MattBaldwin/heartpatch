@@ -52,7 +52,9 @@ describe('squishy accessories (#340)', () => {
         // the head (a witch's brim may be).
         const hostAt = params.head?.offset[1] ?? params.lift;
         const height = hostBody.height * host.scale[1];
-        const top = hostAt + surfacePoint(hostBody, 0, Math.PI / 2)[1] * host.scale[1];
+        // A heart's top middle dips into its cleft: a hat sits across its shoulders.
+        const topY = hostBody.cleft ? hostBody.height : surfacePoint(hostBody, 0, Math.PI / 2)[1];
+        const top = hostAt + topY * host.scale[1];
         expect(socket!.at[1], item.id).toBeLessThanOrEqual(top + 1e-9);
         expect(socket!.at[1], item.id).toBeGreaterThan(top - 0.45 * height);
         for (const p of accessoryPieces(item, socket!)) {

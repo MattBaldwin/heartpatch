@@ -139,8 +139,13 @@ export const BUBBLE_TOP_PX = 96; // TUNE
 /** When the squishy leaves while up close, its reason stays up this long before the swoop out. */
 export const GONE_MS = 2200; // TUNE
 
-/** Draw about 30 frames a second while the squishy only breathes (tech spec §6). */
-export const BREATHING_FRAME_MS = 33;
+/**
+ * Draw about 30 frames a second while the squishy only breathes (tech spec
+ * §6): a 30 fps interval less half a tick, like the battle's and the map's
+ * ambient pace. A full 33 ms skips a 30 Hz tick that lands a hair early
+ * (iOS Low Power Mode), and `BreathPacer` would judge the 66 ms gap slow (#397).
+ */
+export const BREATHING_FRAME_MS = 29; // TUNE
 
 /** Dress up (#340): a choice goes to the server this long after the last tap. */
 export const DRESS_UP = {

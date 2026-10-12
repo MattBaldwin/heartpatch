@@ -11,6 +11,19 @@ describe('loadConfig', () => {
     expect(config.TRUST_PROXY).toBe(false);
   });
 
+  it('keeps the house switched off unless set (#381)', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_HOUSE).toBe('off');
+    expect(loadConfig({ DATABASE_URL }).HP_HOUSE_TESTERS).toEqual([]);
+    const testers = loadConfig({
+      DATABASE_URL,
+      HP_HOUSE: 'testers',
+      HP_HOUSE_TESTERS: ' Matt, lee ,,',
+    });
+    expect(testers.HP_HOUSE).toBe('testers');
+    expect(testers.HP_HOUSE_TESTERS).toEqual(['matt', 'lee']);
+    expect(() => loadConfig({ DATABASE_URL, HP_HOUSE: 'yes' })).toThrow(/HP_HOUSE/);
+  });
+
   it('refuses invalid values and lists every problem', () => {
     expect(() => loadConfig({ PORT: 'abc', PUBLIC_ORIGIN: 'not a url' })).toThrow(
       /PORT[\s\S]*PUBLIC_ORIGIN/,

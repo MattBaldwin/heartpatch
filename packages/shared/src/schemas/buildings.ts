@@ -3,6 +3,7 @@ import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { SpeciesSchema } from './data/species.js';
+import { HomeHouseSchema } from './house.js';
 import { ItemCountsSchema } from './inventory.js';
 import { SquishyJobIdSchema } from './jobs.js';
 import { LocalDateSchema } from './time.js';
@@ -114,6 +115,11 @@ export const HomeResponseSchema = z.object({
   /** The night the next nightfall belongs to (map-local date). */
   tonight: LocalDateSchema,
   now: z.iso.datetime(),
+  /**
+   * The Keeper's house (#381): left out while the house is switched off for
+   * this player (`HP_HOUSE`) and by older servers, so the client draws none.
+   */
+  house: HomeHouseSchema.optional(),
 });
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 

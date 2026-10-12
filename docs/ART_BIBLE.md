@@ -39,6 +39,9 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 | Spines and rings | `row` (up the back) and `ring` (around) layouts | back spikes, fin rows, manes, crests, tail feathers |
 | Spike coats | `scatter` over the whole body | a burr ball |
 | Wings and fins | flattened teardrops | stubby wings, big thunderbird wings |
+| Floater | `visual.floater`: a flat glyph beside the squishy, always facing the camera | Heartsong's song note |
+
+**Floaters.** A species may set one optional `floater` (off by default): a flat, chunky glyph with a darker outline that floats near the squishy and always faces the camera. The data picks the glyph (`music-note` today; a sleepy Zzz or a sparkle can be added as new glyph kinds), its size, its gap above the squishy's top and its offset to the side (shares of the body's height and width), a palette role, and a gentle bob (height and speed). It is lit like the parts, moves and hops with its squishy, is left off the shadow look, casts no shadow, and holds still with Reduce Motion. All floaters of one glyph share one draw call, and none is drawn when no squishy on screen has one.
 
 **Body plans** across the roster (§1.10): quadrupeds, bipeds with arms, a serpent, fliers and hovering sprites, a tortoise, a golem, a hopper, a swimmer, a ghost, plants and food (a muffin, a pumpkin) and objects (a candle). No two lines share a plan where it can be avoided.
 
@@ -64,6 +67,7 @@ All tiers are the same shared vinyl (§4) plus a per-instance code in the squish
 | **Glow** | Light (whole squishy), Fire (its flames, the `accent` parts); others may opt in (Glowgourd's lantern body) | lit from inside: albedo added back as emission, so it reads at dusk and night | ~3 ALU |
 
 - Face parts (eyes, brows, mouth, cheeks) never sparkle or glow, so faces stay clean.
+- A species may set `visual.sparkleOffFace` (off by default) to keep sparkle flecks off the front and underside of its body too, where a fleck between the eyes would read as a nose. It is one more bit in the same per-instance code: no draw call.
 - **Keeper costumes wear their rarity's tier too** (owner, #261): a Mythic costume shimmers, a Legendary one has the rainbow rim. A Mythic costume wears a softer shimmer than the squishies' (owner, #261: fewer, wider bands at lower strength, so a dark, narrow figure gets one pearly sweep instead of stripes). It is its own finish code (`shimmerSoft`, 4) and `FINISH.shimmerSoft` in the client's procedural config; squishies keep the shared shimmer unchanged. The glow bit is code 8, above every finish. Other clothing stays plain vinyl, and a costume piece may glow (the Hollow Man's eyes, the Glow Moth's wing spots) through the same code.
 - The tier decodes from a varying with uniform control flow per instance; fragments on vinyl squishies skip the branches. The rescue guardians' shadow look still wins over every tier.
 - WebGPU (opt-in) has no squish plugin yet, so tiers fall back to plain vinyl there, like the rim and the squash today.
@@ -148,6 +152,31 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
+**Branch forms (#32).** Every line has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
+
+| Line | Branch form | Feeling | Body plan | Pose · attack part |
+|---|---|---|---|---|
+| Puddlepuff | Drizzledoze | Sleepy | sleepy pond frog: round head on a wide bun, side fins, hop feet | sit · tail |
+| Pebblesnooze | Rumblehorn | Brave | upright boulder boxer: horn, crag nubs, strong arms | upright · arms |
+| Emberbun | Embernap | Sleepy | curled-up coal bunny: floppy ears, flame crown, fluffy tail | sit · crown |
+| Snoozicle | Twirlicle | Silly | skating snowman: fur scarf, flippers, hop feet | stand · wings |
+| Fuzzbolt | Glidebolt | Joy | flying-squirrel cat: big glider wings, bolt tail | hover · wings |
+| Fizzlepop | Snugglestar | Cozy | star in a nightcap with plume wings | hover · wings |
+| Bubbletub | Bubblejelly | Joy | jellyfish ghost: bubble crown, side fins, wispy tail | hover · tail |
+| Thistlepip | Petalprance | Joy | five-petal flower fairy: leaf wings, leaf arms, sprout | hover · wings |
+| Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
+| Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
+| Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
+| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: tall pink frosting dome with a soft scalloped lip overhanging a deeply pleated cream liner that narrows to the bottom, googly eyes and a grin, yellow and chocolate sprinkles, a cherry on a stem | stand · crown |
+| Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
+| Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
+| Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
+| Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
+| Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
+| Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
+| Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, a wide smile above gap-toothed buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: one smooth violet heart body (cleft on top, soft point below), dark happy eyes, rosy blush and a round singing mouth on its front, two little round hands held in front, a gold song note floating just above its right shoulder, always facing you | hover · arms |
+
 ## 2. Palette
 
 - **World:** pastel terrain; wild land muted (saturation 0.5 with a lilac wash, `map-config.ts`); owned land soft and warm. The home-tile pink (`#ff6f9f`) becomes an outline or a lighter fill: nothing on the map is louder than a squishy.
@@ -220,3 +249,4 @@ Sprout (she/her) is "the tiny glowing spirit of your Heart Seed". Proposal for t
   - The gallery shows every body kind at once, so its ceiling is the registry's: `BODIES.length` + the part primitives + 1 shadow mesh (20 today). Doubling the squishies must not add a single draw call, and every piece of every squishy is one thin instance (the count matches what their params call for).
   - The first 12 roster species (9 body kinds, 15 draw calls) stay within the old **16**: a smoke test of a crowded patch, not a guarantee, since 12 species picked for variety could cover 13 body kinds (19 draw calls).
 - Material tiers, ink and fog opt-out add **no** draw calls, meshes, materials or textures (§1.4).
+- A floater (§1.2) adds **one** draw call per glyph kind on screen, shared by every squishy showing that glyph, and none when no squishy on screen has one.

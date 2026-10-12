@@ -9,14 +9,16 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
+import type { Camera } from '@babylonjs/core/Cameras/camera';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
 import { accessoryPieces, accessorySocket } from './accessory.js';
-import { bodyArrays, type MeshArrays } from './body-shape.js';
+import { bodyArrays, bodyRingsFor, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
   FINISH_CODE,
+  FLOATER_BATCH,
   LOD,
   SHADOW_LOOK,
   SQUISH_LOOK_CODE,
@@ -27,8 +29,14 @@ import {
   type SquishyLod,
 } from './config.js';
 import { createContactShadowMesh } from './contact-shadow.js';
+import { floaterArrays } from './floater-shapes.js';
 import { eventAttribute, eventRunning, type SquishEvent } from './motion.js';
-import { squishyParams, type SquishyParams, type SquishySpecies } from './params.js';
+import {
+  squishyParams,
+  type FloaterParams,
+  type SquishyParams,
+  type SquishySpecies,
+} from './params.js';
 import { orientTriangles, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 import { SquishPlugin } from './squish-plugin.js';
@@ -40,7 +48,10 @@ import { SquishPlugin } from './squish-plugin.js';
  *   drawn once with thin instances, so draw calls don't grow with the
  *   number of squishies (50 squishies of 7 body types ≈ 13 draw calls);
  * - colours, squash and placement are per-instance attributes;
- * - motion runs in the vertex shader from one uniform.
+ * - motion runs in the vertex shader from one uniform;
+ * - a floater (a music note, say) is one more thin instance in its
+ *   glyph's batch: one draw call while any squishy shows one, turned to face
+ *   each camera just before it draws, and never a shadow caster.
  *
  * Render on demand (tech spec §6): call `update(now)` every frame from the
  * render loop driver and keep drawing while it returns true; adding,
@@ -97,6 +108,8 @@ export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
   readonly instances: number;
   /** Squishies drawn with the shadow look (rescue guardians). */
   readonly shadowLook: number;
+  /** Floaters drawn (camera-facing glyphs, one draw call per glyph kind on screen). */
+  readonly floaters: number;
   readonly lod: L;
 }
 
@@ -110,6 +123,8 @@ interface Instance {
   readonly look: number;
   /** `FINISH_CODE` sum for this instance: its material tier, plus glow. */
   readonly finish: number;
+  /** A floater, turned to face the camera every frame instead of following `local`. */
+  readonly floater?: FloaterParams;
 }
 
 interface Squishy {
@@ -136,7 +151,7 @@ interface Squishy {
 
 interface Batch {
   readonly key: string;
-  readonly build: (lod: SquishyDetail) => MeshArrays;
+  readonly build: (lod: SquishyDetail) => MeshArrays & { readonly colors?: number[] };
   /** Bodies are pickable (tap to jiggle); parts aren't. */
   readonly pickable: boolean;
   readonly instances: Instance[];
@@ -155,6 +170,14 @@ const PLACE_TURN = new Quaternion();
 const PLACE_AT = new Vector3();
 const SHADOW_TURN = Quaternion.Identity();
 const SHADOW_WORLD = new Matrix();
+// Scratch for turning floaters to the camera.
+const CAMERA_WORLD = new Matrix();
+const PARENT_INVERSE = new Matrix();
+const FLOATER_AT = new Vector3();
+const FLOATER_WORLD = new Matrix();
+const RIGHT = new Vector3();
+const UP = new Vector3();
+const FORWARD = new Vector3();
 const DEG = Math.PI / 180;
 
 function linear(rgb: readonly [number, number, number]): [number, number, number, number] {
@@ -189,7 +212,10 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #shadow: Mesh | null;
   readonly #warned = new Set<string>();
   readonly #beforeRender: Observer<Scene> | null;
+  readonly #beforeCamera: Observer<Camera>;
   #lod: L;
+  /** Seconds on the squishy clock at the last `update` (floaters bob on it). */
+  #time = 0;
   #shadowDirty = true;
   /** The shadows' last buffers, rewritten in place while the count holds. */
   #shadowMatrices: Float32Array | null = null;
@@ -224,6 +250,10 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
     this.#beforeRender = scene.onBeforeRenderObservable.add(() => {
       this.flush();
+    });
+    // After every camera has moved for the frame, before anything draws.
+    this.#beforeCamera = scene.onBeforeCameraRenderObservable.add((camera) => {
+      this.#faceCamera(camera);
     });
   }
 
@@ -379,6 +409,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
    */
   update(now: number): boolean {
     const t = this.#clock(now);
+    this.#time = t;
     if (this.#plugin) this.#plugin.time = t;
     if (!this.#plugin) return false; // nothing animates without the shader
     if (this.#breathing && this.#squishies.size > 0) return true;
@@ -445,7 +476,18 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     }
     let shadowLook = 0;
     for (const s of this.#squishies.values()) if (s.handle.look === 'shadow') shadowLook++;
-    return { squishies: this.#squishies.size, meshes, instances, shadowLook, lod: this.#lod };
+    let floaters = 0;
+    for (const batch of this.#batches.values()) {
+      if (batch.key.startsWith(FLOATER_BATCH)) floaters += batch.instances.length;
+    }
+    return {
+      squishies: this.#squishies.size,
+      meshes,
+      instances,
+      shadowLook,
+      floaters,
+      lod: this.#lod,
+    };
   }
 
   /** Uploads changed instance buffers. Runs before every render; call it to force one. */
@@ -459,6 +501,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
 
   dispose(): void {
     if (this.#beforeRender) this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
+    this.#scene.onBeforeCameraRenderObservable.remove(this.#beforeCamera);
     for (const batch of this.#batches.values()) batch.mesh?.dispose();
     this.#batches.clear();
     this.#squishies.clear();
@@ -533,6 +576,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       color: Instance['color'],
       finish: number,
       eyes = false,
+      floater?: FloaterParams,
     ) => {
       const look = !shadow
         ? SQUISH_LOOK_CODE.normal
@@ -547,6 +591,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         color: shadow && !this.#plugin ? shadowColor(color, eyes) : color,
         look,
         finish,
+        ...(floater && { floater }),
       };
       batch.instances.push(instance);
       batch.dirty = true;
@@ -558,17 +603,19 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     const bodyBatchOf = (shape: Body) =>
       this.#batch(
         `body:${shape.id}`,
-        (lod) => orientTriangles(bodyArrays(shape, LOD[lod].bodyRings)),
+        (lod) => orientTriangles(bodyArrays(shape, bodyRingsFor(shape, LOD[lod].bodyRings))),
         true,
       );
     const [sx, sy, sz] = params.body.scale;
     const glow = (on: boolean) => (on ? FINISH_CODE.glow : 0);
     const torsoAt: [number, number, number] = [0, params.lift, 0];
+    // Sparkle kept off the face: the torso and head carry the face, parts don't.
+    const offFace = params.sparkleOffFace && tier > 0 ? FINISH_CODE.offFace : 0;
     attach(
       bodyBatchOf(body),
       Matrix.Scaling(sx, sy, sz).multiply(Matrix.Translation(...torsoAt)),
       linear(params.body.color),
-      tier + glow(params.body.glow),
+      tier + glow(params.body.glow) + offFace,
     );
     // A separate head: one more instance in its body kind's batch.
     const headBody = params.head ? this.#registry.bodies.get(params.head.id) : undefined;
@@ -578,7 +625,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         bodyBatchOf(headBody),
         Matrix.Scaling(hx, hy, hz).multiply(Matrix.Translation(...params.head.offset)),
         linear(params.body.color),
-        tier + glow(params.body.glow),
+        tier + glow(params.body.glow) + offFace,
       );
     }
 
@@ -601,7 +648,107 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         if (part.slot === 'crown') squishy.crownParts.push(entry);
       }
     }
+
+    // A floater: never on a rescue guardian (the shadow look is the squishy alone).
+    const floater = params.floater;
+    if (floater && !shadow) {
+      const batch = this.#batch(
+        `${FLOATER_BATCH}${floater.glyph}`,
+        (lod) => floaterArrays(floater.glyph, LOD[lod]),
+        false,
+      );
+      // Placed upright for now; `#faceCamera` turns it to the view before every draw.
+      const local = Matrix.Compose(
+        new Vector3(floater.size, floater.size, floater.size),
+        Quaternion.Identity(),
+        new Vector3(...floater.at),
+      );
+      // Plain vinyl like a face (a flat glyph has no rim for a tier), glowing with the parts.
+      attach(batch, local, linear(floater.color), glow(floater.glow), false, floater);
+    }
     this.#shadowDirty = true;
+  }
+
+  /**
+   * Turns every floater to face `camera` (a billboard: its plane parallel to
+   * the screen), at its place beside its squishy plus a gentle bob. Bobs only
+   * while the field breathes, so Reduce Motion and still scenes hold it still.
+   * Runs before each camera draws; costs nothing without floaters.
+   */
+  #faceCamera(camera: Camera): void {
+    let parentWorld: Matrix | null = null;
+    let parentInverse: Matrix | null = null;
+    /** The rig's overall scale: the cube root of its volume scale (see below). */
+    let parentScale = 1;
+    let cameraWorld: Matrix | null = null;
+    const bobbing = this.#breathing && this.#plugin !== null;
+    for (const batch of this.#batches.values()) {
+      const { mesh, instances } = batch;
+      if (!batch.key.startsWith(FLOATER_BATCH) || !mesh || instances.length === 0) continue;
+      if (!cameraWorld) {
+        cameraWorld = camera.getViewMatrix().invertToRef(CAMERA_WORLD);
+        // The camera's own axes: the glyph's x, y and z, so it lies parallel to the screen.
+        Vector3.FromArrayToRef(cameraWorld.m, 0, RIGHT);
+        Vector3.FromArrayToRef(cameraWorld.m, 4, UP);
+        Vector3.FromArrayToRef(cameraWorld.m, 8, FORWARD);
+        if (this.#parent) {
+          parentWorld = this.#parent.computeWorldMatrix();
+          parentInverse = parentWorld.invertToRef(PARENT_INVERSE);
+          // A battle rig scales its fighter: uniformly to shrink it (a swap,
+          // a scoot, charmed) and non-uniformly to squash and stretch it,
+          // keeping its volume. The cube root of the volume scale follows the
+          // first and ignores the second, so the note shrinks and vanishes
+          // with its squishy but doesn't squash like a body.
+          parentScale = Math.cbrt(Math.abs(parentWorld.determinant()));
+        }
+      }
+      for (let i = 0; i < instances.length; i++) {
+        const inst = instances[i];
+        const f = inst?.floater;
+        if (!inst || !f) continue;
+        const { owner } = inst;
+        Vector3.TransformCoordinatesFromFloatsToRef(
+          f.at[0],
+          f.at[1],
+          f.at[2],
+          owner.world,
+          FLOATER_AT,
+        );
+        if (bobbing && f.bob.height > 0) {
+          const phase = owner.handle.params.motion.phase;
+          FLOATER_AT.y +=
+            f.bob.height * owner.scale * Math.sin(2 * Math.PI * (f.bob.speed * this.#time + phase));
+        }
+        // In the scene's space (position and bob go through the rig like the
+        // body's vertices do), so it faces the camera however a rig turns.
+        if (parentWorld) Vector3.TransformCoordinatesToRef(FLOATER_AT, parentWorld, FLOATER_AT);
+        const s = f.size * owner.scale * parentScale;
+        Matrix.FromValuesToRef(
+          RIGHT.x * s,
+          RIGHT.y * s,
+          RIGHT.z * s,
+          0,
+          UP.x * s,
+          UP.y * s,
+          UP.z * s,
+          0,
+          FORWARD.x * s,
+          FORWARD.y * s,
+          FORWARD.z * s,
+          0,
+          FLOATER_AT.x,
+          FLOATER_AT.y,
+          FLOATER_AT.z,
+          1,
+          FLOATER_WORLD,
+        );
+        // Back into the rig's space: the mesh hangs from it.
+        if (parentInverse) FLOATER_WORLD.multiplyToRef(parentInverse, inst.matrix);
+        else inst.matrix.copyFrom(FLOATER_WORLD);
+        mesh.thinInstanceSetMatrixAt(i, inst.matrix, false);
+      }
+      mesh.thinInstanceBufferUpdated('matrix');
+    }
   }
 
   #detach(squishy: Squishy): void {
@@ -630,6 +777,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       data.positions = arrays.positions;
       data.normals = arrays.normals;
       data.indices = arrays.indices;
+      // Floaters darken their outline this way; colours multiply the instance's.
+      if (arrays.colors) data.colors = arrays.colors;
       data.applyToMesh(mesh);
       mesh.material = this.#material;
       mesh.isPickable = batch.pickable;

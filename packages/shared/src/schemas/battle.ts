@@ -127,12 +127,21 @@ const SlotSchema = z.number().int().min(0).max(5);
  * or offer a Heart Charm to the other side's squishy (`capture`, #14; costs
  * the turn too). Only a player side can capture, and only from an AI side.
  * `sure` makes it always work (the tutorial's first capture, design doc §26);
- * the server sets it, never the client. `item`: the squishy that's out uses
- * a battle item (a potion, #214; costs the turn), each kind at most
- * `rules.items.usesEach` times per side per battle.
+ * the server sets it, never the client.
+ *
+ * Potions (#214) are a free sip (owner decision 2026-10-11, #403): a move
+ * may carry an `item`, which the squishy that's out drinks before any move
+ * this turn, and then still makes its move. Each kind at most
+ * `rules.items.usesEach` times per side per battle. The bare `item` choice
+ * is a sip with no move (the whole turn): battles logged before #403 used
+ * it, so it stays, and replays as it always did.
  */
 export const BattleChoiceSchema = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('move'), move: ContentIdSchema }),
+  z.strictObject({
+    type: z.literal('move'),
+    move: ContentIdSchema,
+    item: ContentIdSchema.optional(),
+  }),
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('capture'), sure: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
@@ -470,13 +479,21 @@ export const BattleIdParamsSchema = z.object({ battleId: z.uuid() });
  * never act for the other side.
  */
 export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('move'), move: ContentIdSchema }),
+  /** A move, with an optional potion sipped first (a free sip, #403; costs one from the bag). */
+  z.strictObject({
+    type: z.literal('move'),
+    move: ContentIdSchema,
+    item: ContentIdSchema.optional(),
+  }),
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('replace'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('forfeit') }),
   /** Use a Heart Charm on the wild squishy (wild battles only; costs one charm). */
   z.strictObject({ type: z.literal('capture') }),
-  /** Use a battle item from the bag (a potion, #214; costs one and the turn). */
+  /**
+   * Only a sip, no move (a potion, #214; costs one and the turn). Clients
+   * from before #403 send it; new ones sip with `move`'s `item`.
+   */
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;

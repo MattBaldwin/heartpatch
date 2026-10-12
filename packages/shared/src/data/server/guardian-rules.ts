@@ -27,7 +27,7 @@ export const GUARDIAN_RULES: GuardianRules = {
   tables: [
     {
       id: 'meadow-guardians',
-      terrains: ['meadow', 'pumpkin-fields'],
+      terrains: ['meadow', 'pumpkin-fields', 'clearing'], // #242: cleared land too
       entries: [
         { species: 'emberbun', weight: 3 },
         { species: 'fuzzbolt', weight: 3 },

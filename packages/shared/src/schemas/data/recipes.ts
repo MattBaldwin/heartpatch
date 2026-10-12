@@ -30,5 +30,19 @@ export const RecipeSchema = z.strictObject({
   fasterWith: z
     .strictObject({ element: ElementIdSchema, percent: z.number().int().min(1).max(90) })
     .optional(),
+  /**
+   * Not in the game yet (`isAvailableRecipe`): no recipe-book page, no Bag
+   * row, no "goes into" chip, and the server refuses to make it.
+   */
+  hidden: z.literal(true).optional(),
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
+
+/**
+ * Is this recipe in the game yet? A `hidden` one (a feature still on its way,
+ * #242's clearing tools until their client ships) isn't shown anywhere and
+ * can't be made. Its data and checks stay, so turning it on is one line.
+ */
+export function isAvailableRecipe(recipe: Pick<Recipe, 'hidden'>): boolean {
+  return recipe.hidden !== true;
+}

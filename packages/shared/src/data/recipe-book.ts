@@ -108,5 +108,17 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'recipe:lantern',
       line: 'Find Glimmer in the mountains, plus Timber and Emberwood, and this page opens!',
     },
+    {
+      page: 'recipe:axe',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'recipe:pickaxe',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'recipe:spade',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
   ],
 };

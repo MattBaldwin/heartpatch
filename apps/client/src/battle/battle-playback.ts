@@ -148,6 +148,22 @@ function step(
   };
 }
 
+/**
+ * The sip's own little show when a potion is tapped (#403), before the turn
+ * goes out: the same bounce and sparkle the log's `item` step plays, on the
+ * player's squishy that's out.
+ */
+export function sipStep(battle: PlayerBattle, content: BattleContent, item: string): PlaybackStep {
+  const side = battle.mySide;
+  const slot = battle.view.sides[side].active;
+  const squishy = battle.view.sides[side].squishies[slot];
+  const who = squishy ? content.speciesName(squishy.speciesId) : 'Your squishy';
+  return step('item', side, slot, sipLine(who, item), PLAYBACK.itemMs, {
+    squish: 'bounce',
+    item,
+  });
+}
+
 /** A fence's lines (#203, the owner-approved mockup): it creaks, then cracks. */
 export const FENCE_LINES = {
   hit: (name: string) => `${name} creaks…`,

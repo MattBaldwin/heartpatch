@@ -5,6 +5,10 @@ import { itemIcon } from '../inventory/item-icons.js';
 // next to "Use Heart Charm", the picker it opens, the pill chips, and the
 // words for a sip. Every potion comes from shared data (`battleEffect`), so
 // a new one needs no code here. Pure words and shapes for the HUD.
+//
+// A potion is a free sip (owner decision 2026-10-11, #403): tapping one
+// marks it "Sipped ✓" and the move picker stays open; the sip goes out with
+// the move the player picks.
 
 export interface BattlePotion {
   readonly id: string;
@@ -137,7 +141,24 @@ export const SHIELD_CALLOUT = 'Sparkle shield!';
 export const SHIELD_LINE = 'The sparkle shield soaked up most of it!';
 
 /** The picker's question. */
-export const pickLine = (who: string): string => `Pick a potion! It takes ${who}’s turn.`;
+export const pickLine = (who: string): string => `Pick a potion! ${who} still gets a move.`;
+
+/** The potion button once one is sipped (#403): tap it to put the potion back. */
+export const sippedLabel = (id: string): string => `${potionOf(id)?.icon ?? POTION_GLYPH} Sipped ✓`;
+
+/** What the sipped button says to a screen reader. */
+export const sippedName = (id: string): string =>
+  `${potionOf(id)?.name ?? 'Potion'} sipped. Tap to put it back.`;
+
+/** The callout over the pill when a potion is sipped. */
+export const SIPPED_CALLOUT = 'Sipped ✓';
+
+/**
+ * The caption after a sip, before the move: "Sipped Cozy Cocoa! Now pick a
+ * move!" One line on a 375 px phone, so the sheet keeps the sipped button in view.
+ */
+export const sippedLine = (id: string): string =>
+  `Sipped ${potionOf(id)?.name ?? 'a potion'}! Now pick a move!`;
 
 const NAMES = new Map(RESOURCES.map((r) => [r.id, r.name]));
 
