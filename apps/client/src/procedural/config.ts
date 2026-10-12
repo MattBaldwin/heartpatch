@@ -198,13 +198,15 @@ export const RARE_GLOW = {
     falloff: 1.7,
     bright: 1.0,
     /** How much less glow near-white, pale vinyl takes. */
-    paleCalm: 0.6,
+    paleCalm: 0.3,
     /** Strength of the inner glow band on legendary and up (inside the rainbow edge). */
-    bandBoost: 1.1,
+    bandBoost: 1.3,
     saturate: 1.25,
     /** How much of the outermost edge is left to legendary's rainbow rim and mythic's shimmer. */
     rainbowKeep: 0.85,
   },
+  /** How much brighter the rainbow edge glows at legendary and mythic level. */
+  rainbow: [2.6, 3.2],
   /** Inner glow: how much of its own glowing colour is added where the vinyl is dim, per level (capped). */
   inner: [0.16, 0.2, 0.24, 0.28],
   /** Orbiting motes: how many, size (body heights), orbit radius (body widths), turns per second. */
@@ -220,6 +222,6 @@ export const RARE_GLOW = {
   darkLift: 1.6,
   darkFloor: 0.12,
   /** A pale part's glow is pushed to at least this saturation, keeping its own hue. */
-  minSaturation: 0.35,
+  minSaturation: 0.55,
   moteLook: 3,
 } as const;
