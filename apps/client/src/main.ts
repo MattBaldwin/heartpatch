@@ -1,5 +1,5 @@
 import { createAudio } from './audio/audio.js';
-import { battleCue, careCue, touchCue } from './audio/cues.js';
+import { battleCue, careCue, findCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { showsStats } from './engine/stats-flag.js';
@@ -1093,6 +1093,9 @@ const battles = createBattleScreen({
   keeperWearing: () => wardrobe.wearing,
   onStep: (step) => {
     audio.cue(battleCue(step));
+  },
+  onRareFind: (scale) => {
+    audio.cue(findCue(scale));
   },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends

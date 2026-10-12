@@ -491,6 +491,7 @@ export function playerBattleView(
     /** Squishy id → the accessory it wears (#373), for drawing only. */
     worn?: ReadonlyMap<string, string>;
     defensePrompt?: PlayerBattle['defensePrompt'];
+    firstMeeting?: boolean;
   } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
@@ -517,6 +518,7 @@ export function playerBattleView(
     // A battle from before arenas were stored plays on the home terrain, by day.
     terrain: row.arena?.terrain ?? MAP_GEN.homeTerrain,
     timeOfDay: row.arena?.timeOfDay ?? 'day',
+    ...(options.firstMeeting !== undefined && { firstMeeting: options.firstMeeting }),
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
     ...(options.live && { live: options.live }),
@@ -603,6 +605,22 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   const opponentOf = (row: BattleRow, live: LiveRow, side: BattleSideId): string =>
     side === PLAYER_SIDE ? live.bUserId : row.playerUserId;
 
+  /**
+   * A wild battle before its first move (#391): is this the player's first
+   * meeting with its kind on this map? Starting the battle marks the kind
+   * seen at the battle's own start time and keeps an earlier first time, so
+   * the two match only when this battle was the first. Null for any other
+   * battle, or once the first move has played (the moment is over by then).
+   */
+  const firstMeetingOf = async (tx: Executor, row: BattleRow): Promise<boolean | null> => {
+    const wild = row.state.sides.b.squishies[0];
+    if (row.kind !== 'wild' || row.status !== 'active' || row.state.log.length > 0 || !wild) {
+      return null;
+    }
+    const at = await createSpawnsRepo(tx).firstSeenAt(row.mapId, row.playerUserId, wild.speciesId);
+    return at !== null && at.getTime() === row.startedAt.getTime();
+  };
+
   /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   const toPlayerBattle = async (
     tx: Executor,
@@ -618,9 +636,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ...(await wornAccessories(tx, row.playerUserId, ids('a'))),
       ...(live ? await wornAccessories(tx, live.bUserId, ids('b')) : []),
     ]);
+    const firstMeeting = await firstMeetingOf(tx, row);
     return playerBattleView(content, row, {
       mySide: side,
       worn,
+      ...(firstMeeting !== null && { firstMeeting }),
       ...(seat?.asking && {
         defensePrompt: {
           expiresAt: seat.asking.expiresAt.toISOString(),
