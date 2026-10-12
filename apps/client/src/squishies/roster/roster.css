@@ -278,6 +278,12 @@
   color: #4a1f33;
 }
 
+/* A resident of the Keeper's house (#381): just the little house. */
+.roster-resident {
+  padding: 3px 8px;
+  background: #ffefc9;
+}
+
 .roster-status-team {
   background: #ffe7c2;
 }

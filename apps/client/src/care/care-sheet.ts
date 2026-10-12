@@ -102,6 +102,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
   const drift = el('p', { class: 'care-drift', 'data-testid': 'care-drift' });
+  // A resident of the Keeper's house (#381): its perk, in one line.
+  const houseLine = el('p', { class: 'care-house', 'data-testid': 'care-house' });
   // Five hearts and the mood word, the same as the Squishies roster (#375).
   const hearts = moodHeartsEl('care-hearts');
   // Holding steady or drifting down (#376): a badge at the bar's end.
@@ -178,6 +180,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       rarity,
       mood,
       drift,
+      houseLine,
       heartsRow,
       level,
       xpBar,
@@ -237,6 +240,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       rarity.hidden = true;
       mood.textContent = CARE_TEXT.noneYet;
       drift.hidden = true;
+      houseLine.hidden = true;
       actions.replaceChildren();
       return;
     }
@@ -252,6 +256,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     mood.textContent = model.mood;
     drift.textContent = model.drift ?? '';
     drift.hidden = model.drift === null;
+    houseLine.textContent = model.house ?? '';
+    houseLine.hidden = model.house === null;
     const driftMood = model.driftMood ?? '';
     drift.dataset['mood'] = driftMood;
     heartsRow.dataset['mood'] = driftMood;

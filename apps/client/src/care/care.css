@@ -259,6 +259,18 @@
   display: none;
 }
 
+/* A resident of the Keeper's house (#381): the perk, one quiet line. */
+.care-house {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a5d82;
+}
+
+.care-house[hidden] {
+  display: none;
+}
+
 .care-xp-line {
   font-size: 13px;
   color: #7a5d82;

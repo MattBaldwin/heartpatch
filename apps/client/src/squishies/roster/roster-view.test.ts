@@ -177,6 +177,34 @@ describe('mergeRoster', () => {
   });
 });
 
+describe('the house tag (#381)', () => {
+  it("marks a resident of the Keeper's house, an away one by its jobs row, and nobody else", () => {
+    const rows = mergeRoster({
+      home: home([homeSquishy(1, { houseRoomId: 'snug' }), homeSquishy(2)]),
+      care: care([careSquishy(1, { houseRoomId: 'snug' }), careSquishy(2)]),
+      jobs: jobs([
+        jobSquishy(1, { houseRoomId: 'snug' }),
+        jobSquishy(2),
+        jobSquishy(3, {
+          squishy: { ...jobSquishy(3).squishy, state: 'in-trade' },
+          houseRoomId: 'playroom',
+        }),
+      ]),
+    });
+    expect(rows.map((r) => r.houseRoomId)).toEqual(['snug', null, 'playroom']);
+    expect(ROSTER_TEXT.resident).toBe('🏠');
+  });
+
+  it("follows home's read, freshest right after a move", () => {
+    const [row] = mergeRoster({
+      home: home([homeSquishy(1)]),
+      care: care([careSquishy(1, { houseRoomId: 'snug' })]),
+      jobs: null,
+    });
+    expect(row?.houseRoomId).toBeNull();
+  });
+});
+
 describe('evolutionStage', () => {
   it('counts the public line: a first form is stage 1 of 2, evolving at its level', () => {
     expect(evolutionStage('puddlepuff', 5, { percent: 40, levelsToGo: 11 })).toEqual({

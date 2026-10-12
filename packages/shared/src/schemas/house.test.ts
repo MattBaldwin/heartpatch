@@ -112,6 +112,33 @@ describe('HouseView.gift', () => {
   });
 });
 
+describe('HouseView.cooldowns (#381 PR C2a)', () => {
+  const view = {
+    level: 1,
+    levelName: 'The Snug',
+    exterior: 'hut',
+    final: false,
+    rooms: [],
+    next: null,
+    items: {},
+    gift: null,
+    now: '2026-10-12T12:00:00.000Z',
+  };
+
+  it('parses a reply from an older server, with no cooldowns, as empty', () => {
+    expect(HouseViewSchema.parse(view).cooldowns).toEqual([]);
+  });
+
+  it('parses a cooldown with when it ends', () => {
+    const cooldowns = [{ squishyId, moveBackInAt: '2026-10-13T12:00:00.000Z' }];
+    expect(HouseViewSchema.parse({ ...view, cooldowns }).cooldowns).toEqual(cooldowns);
+    expect(
+      HouseViewSchema.safeParse({ ...view, cooldowns: [{ squishyId, moveBackInAt: 'soon' }] })
+        .success,
+    ).toBe(false);
+  });
+});
+
 /**
  * `houseRoomId` is strictly additive (coordinator, 2026-10-12): a reply from
  * a server before #381 PR C has none and still parses, as "not a resident".
