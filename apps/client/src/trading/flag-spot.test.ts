@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flagSpot } from './flag-spot.js';
+import { flagSpot, keeperCover } from './flag-spot.js';
 
 const flag = { width: 120, height: 26 };
 // An iPhone in portrait; the corner buttons end 60px down.
@@ -92,5 +92,24 @@ describe('flagSpot', () => {
     // Under it would run off the bottom of the screen.
     const above = { x: 0, y: 580, width: 393, height: 40 };
     expect(flagSpot(tile(180, 620), flag, { ...room, covers: [above] })).toBeNull();
+  });
+});
+
+describe('keeperCover', () => {
+  it('reaches up and right of my Heart Seed, where my Keeper stands (#426)', () => {
+    const seed = { x: 100, y: 200, width: 40, height: 30 };
+    expect(keeperCover(seed)).toEqual({ x: 100, y: 170, width: 60, height: 60 });
+  });
+
+  it('keeps a flag off my Keeper (#426)', () => {
+    const seed = { x: 180, y: 300, width: 40, height: 30 };
+    const covers = [keeperCover(seed)];
+    // Just below home: over its tile it would reach up onto my Keeper's
+    // tile, so it hangs under its tile instead.
+    expect(flagSpot(tile(190, 340), flag, { ...room, covers })).toEqual({ x: 210, y: 396 });
+    // Beside my Keeper's head: neither spot is clear, so it hides.
+    expect(flagSpot(tile(190, 280), flag, { ...room, covers })).toBeNull();
+    // Well above home: clear, over its tile.
+    expect(flagSpot(tile(190, 200), flag, { ...room, covers })).toEqual({ x: 210, y: 200 });
   });
 });

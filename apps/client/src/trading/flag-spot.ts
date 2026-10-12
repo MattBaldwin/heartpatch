@@ -53,3 +53,21 @@ export function flagSpot(
   if (clear(over)) return { x, y: over };
   return clear(under) ? { x, y: under } : null;
 }
+
+/**
+ * Where my Keeper reaches on screen past my Heart Seed's tile, in tile sizes:
+ * up (they stand tall) and right (they stand near the seed's right rim,
+ * `KEEPER_PLACES.map.offset`). TUNE.
+ */
+const KEEPER_REACH = { up: 1, right: 0.5 };
+
+/** What a flag keeps clear of so it never covers my Keeper (#426), from my Heart Seed's tile on screen. */
+export function keeperCover(seed: Rect): Rect {
+  const up = seed.height * KEEPER_REACH.up;
+  return {
+    x: seed.x,
+    y: seed.y - up,
+    width: seed.width * (1 + KEEPER_REACH.right),
+    height: seed.height + up,
+  };
+}

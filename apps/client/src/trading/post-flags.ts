@@ -12,7 +12,7 @@ import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import type { Rect } from '../ui/geometry.js';
 import './trading.css';
-import { flagSpot, type FlagRoom } from './flag-spot.js';
+import { flagSpot, keeperCover, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -57,12 +57,6 @@ const TOP_BAR =
  * patch name pill, the tray handles (#426) and every open sheet or panel.
  */
 const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, ${SHEET_SELECTOR}`;
-/**
- * Where my Keeper reaches on screen past my Heart Seed's tile, in tile sizes:
- * up (they stand tall) and right (they stand near the seed's right rim,
- * `KEEPER_PLACES.map.offset`). A flag never covers them (#426). TUNE.
- */
-const KEEPER_REACH = { up: 1, right: 0.5 };
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
@@ -79,16 +73,7 @@ function flagRoom(keeper: Rect | null): FlagRoom {
     if (box) top = Math.max(top, box.y + box.height);
   }
   const covers: Rect[] = [];
-  if (keeper) {
-    const up = keeper.height * KEEPER_REACH.up;
-    const right = keeper.width * KEEPER_REACH.right;
-    covers.push({
-      x: keeper.x,
-      y: keeper.y - up,
-      width: keeper.width + right,
-      height: keeper.height + up,
-    });
-  }
+  if (keeper) covers.push(keeperCover(keeper));
   for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = boxOf(node)?.box;
     if (box) covers.push(box);
