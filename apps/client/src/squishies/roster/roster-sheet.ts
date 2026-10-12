@@ -151,13 +151,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       'data-testid': 'roster',
     },
     // The title and × stay pinned while the chips and the list scroll under.
-    el(
-      'div',
-      { class: 'tile-panel-head roster-head-bar' },
-      el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
-      count,
-      close,
-    ),
+    el('div', { class: 'tile-panel-head roster-head-bar' }, title, count, close),
     el('div', { class: 'roster-controls' }, pickers, menuBox),
     note,
     list,
@@ -734,8 +728,12 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       say('');
       remerge();
       render();
-      title.focus({ preventScroll: true });
       await load(id, mine);
+      // Focus starts at the title once the list is there (#433), unless the
+      // player has already moved into the roster.
+      if (mine === ticket && !sheet.contains(document.activeElement)) {
+        title.focus({ preventScroll: true });
+      }
     },
     refresh: async () => {
       if (mapId && !sheet.hidden) await load(mapId, ticket);

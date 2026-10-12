@@ -212,8 +212,9 @@ export const HOME_TEXT = {
   squishies: '🐾 Squishies',
   /** The sheet handle, for VoiceOver (#412). */
   showMore: 'Show more',
-  /** The peek bar's labelled way to the full sheet (your buildings), #433. */
+  /** The handle's own words (#433): it opens to your buildings, or folds back. */
   more: 'More',
+  less: 'Less',
   showLess: 'Show less',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
@@ -348,6 +349,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // The disclosure it opens and folds (#433).
     'aria-controls': 'home-body',
   });
+  // Its word, next to the grip, so the way to your buildings is visible (#433).
+  const handleWord = el('span', { class: 'home-handle-word', 'aria-hidden': 'true' });
+  handle.append(handleWord);
   let pressY: number | null = null;
   let releasedAt = -Infinity;
   handle.addEventListener('pointerdown', (e) => {
@@ -733,6 +737,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       case 'idle': {
         handle.setAttribute('aria-expanded', String(sheetOpen));
         handle.setAttribute('aria-label', sheetOpen ? HOME_TEXT.showLess : HOME_TEXT.showMore);
+        handleWord.textContent = sheetOpen ? `${HOME_TEXT.less} ▾` : `${HOME_TEXT.more} ▴`;
         const chips = atHome(current).buildings.map((b) =>
           button(
             `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}${factoryChip(b)}`,
@@ -780,20 +785,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   true,
                 )
               : null;
-          // A labelled way to the full sheet (your buildings), beside the
-          // handle that has no words (#433); focus follows to its title.
-          const more = button(
-            HOME_TEXT.more,
-            () => {
-              setSheet(true);
-              body
-                .querySelector<HTMLElement>('.home-section-title')
-                ?.focus({ preventScroll: true });
-            },
-            { 'data-testid': 'home-more', 'aria-controls': 'home-body', 'aria-expanded': 'false' },
-            true,
-          );
-          const shortcuts = [squishies, jobs, more].filter((b) => b !== null);
+          const shortcuts = [squishies, jobs].filter((b) => b !== null);
           body.replaceChildren(
             ...(shortcuts.length > 0
               ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
@@ -803,7 +795,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           break;
         }
         body.replaceChildren(
-          el('h3', { class: 'home-section-title', tabindex: '-1' }, HOME_TEXT.yours),
+          el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
