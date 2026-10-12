@@ -1,0 +1,483 @@
+/* The Squishies roster (#375): a sheet like the job board's (z-index 6, over
+   home base; made before the care sheet, so Care opens over it), one scroll area (the sheet itself), 44pt+ targets, safe
+   areas, one-handed. Rows are two lines of tags that wrap, so 375pt is enough. */
+
+.roster-sheet {
+  position: fixed;
+  z-index: 6;
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  box-sizing: border-box;
+  max-width: 460px;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 72px);
+  margin: 0 auto;
+  padding: 0 14px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A row scrolled into view (focus, VoiceOver) clears the pinned title. */
+  scroll-padding-top: 72px;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 8px 28px rgb(107 75 110 / 24%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.roster-sheet[hidden] {
+  display: none;
+}
+
+/* Under a care sheet opened from a row: out of sight, back when it closes. */
+.roster-covered {
+  visibility: hidden;
+}
+
+/* The title and × stay put while the chips and the list scroll under them. */
+.roster-head-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 14px 0 6px;
+  background: #fffafc;
+}
+
+.roster-sheet h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.roster-count {
+  flex: 1;
+  margin: 4px 0 0 10px;
+  font-size: 14px;
+  color: #7a5d80;
+}
+
+.roster-controls {
+  display: grid;
+  gap: 4px;
+}
+
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.roster-chip {
+  min-height: 44px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: #f6e3ee;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4a70;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roster-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--hp-pad-x, 12px);
+  border: 2px solid #ecd2e2;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  color: #6b4a70;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-picker-label {
+  font-weight: 600;
+  color: #8a6a8f;
+}
+
+.roster-picker-open {
+  border-color: #8a5f86;
+}
+
+.roster-picker-caret {
+  font-size: 12px;
+}
+
+.roster-menu {
+  padding: 6px 0 2px;
+}
+
+.roster-menu[hidden] {
+  display: none;
+}
+
+.roster-chip-on {
+  background: #8a5f86;
+  color: #fff;
+}
+
+.roster-note {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2f6b3d;
+}
+
+.roster-note:empty {
+  display: none;
+}
+
+.roster-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster-row {
+  /* Off-screen rows of a long roster aren't laid out until they scroll near. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
+  padding: 8px 10px 10px;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.roster-open {
+  box-shadow: inset 0 0 0 2px #d9b3d0;
+}
+
+.roster-away {
+  opacity: 0.8;
+}
+
+.roster-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster-head {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 88px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-portrait {
+  /* The squishy is the row's hero (owner rule): the biggest, strongest thing. */
+  --portrait: 88px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--portrait);
+  height: var(--portrait);
+  border-radius: 24px;
+  background: radial-gradient(circle at 50% 70%, #ffe6f0, #fff7fb 70%);
+}
+
+.roster-portrait .jobs-blob {
+  width: 52px;
+  height: 44px;
+}
+
+.roster-portrait-img {
+  display: block;
+  width: var(--portrait);
+  height: var(--portrait);
+}
+
+/* Taken to the Hollow: grey until rescued (style guide §5). */
+.roster-hollowed .roster-portrait-img,
+.roster-hollowed .roster-portrait .jobs-blob {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.roster-names {
+  display: grid;
+  min-width: 0;
+}
+
+.roster-name {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-sub {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #7a5d80;
+}
+
+.roster-status-row .rarity-chip {
+  flex: none;
+}
+
+.roster-action {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 15px;
+}
+
+.roster-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.roster-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.roster-needs {
+  background: #ff8fb1;
+  color: #4a1f33;
+}
+
+.roster-status-team {
+  background: #ffe7c2;
+}
+.roster-status-gathering,
+.roster-status-training,
+.roster-status-guard {
+  background: #d9f0e6;
+}
+.roster-status-hollowed,
+.roster-status-in-trade {
+  background: #e6e0ee;
+  color: #5a4a6a;
+}
+
+.roster-detail {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px dashed #e8c9dd;
+}
+
+.roster-mood-line {
+  margin: 0;
+  font-size: 15px;
+}
+
+.roster-view-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.roster-view-actions .roster-action {
+  flex: 1 1 0;
+}
+
+.roster-habitat-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.roster-habitat-buttons .roster-action {
+  flex: 1 1 auto;
+}
+
+.roster-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* Happiness (owner, 2026-10-11): five hearts filled to contentment, the
+   mood word, the needs-care badge and, when it drifts down (#376), why. */
+.roster-mood-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.roster-drift {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a5a3a;
+}
+
+.roster-drift-line {
+  margin: 0;
+  font-size: 14px;
+  color: #8a5a3a;
+}
+
+/* Evolution (owner, 2026-10-11): "Stage N of M", a little bar, and when. */
+.roster-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5a3a8a;
+}
+
+.roster-stage-n {
+  flex: none;
+}
+
+.roster-stage-bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 40px;
+  max-width: 140px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ece1f7;
+}
+
+.roster-stage-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b79cf0, #8a63d8);
+}
+
+.roster-stage-words {
+  flex: none;
+  font-weight: 600;
+  color: #7a5d80;
+}
+
+.roster-stage-ready .roster-stage-words {
+  color: #8a63d8;
+  font-weight: 800;
+}
+
+.roster-whisper {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f3ecff;
+  font-size: 14px;
+}
+
+.roster-whisper p {
+  margin: 0;
+}
+
+.roster-care {
+  /* Second to the squishy: small and soft. */
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid #f0c6da;
+  border-radius: 999px;
+  background: #fff;
+  color: #9a3a68;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The narrowest phones: a smaller picture, Care as just 💗, and the pickers
+   without their "Sort"/"Show" words (VoiceOver still reads them), so the
+   name and both pickers keep their room. */
+@media (max-width: 359px) {
+  .roster-portrait {
+    --portrait: 72px;
+  }
+
+  .roster-care-word,
+  .roster-picker-label {
+    display: none;
+  }
+
+  .roster-care {
+    min-width: 44px;
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+
+/* iPad and wide windows: a roomier sheet, two squishies a line. */
+@media (min-width: 700px) {
+  .roster-sheet {
+    max-width: 780px;
+  }
+
+  .roster-list {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  .roster-portrait {
+    --portrait: 112px;
+  }
+
+  /* An open row takes the whole width, so its column leaves no hole. */
+  .roster-open {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Over explore, its floating controls step back while the roster is up, so
+   nothing of the walk view sits on the list (they come back on close). */
+body:has(.roster-sheet:not([hidden]))
+  :is(
+    .explore-glint,
+    .explore-stick,
+    .explore-walk-hint,
+    .explore-note,
+    .explore-action,
+    .explore-need,
+    .explore-play,
+    .explore-sheet,
+    .explore-toast,
+    .explore-fly
+  ) {
+  visibility: hidden;
+}
