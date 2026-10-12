@@ -32,7 +32,7 @@ export const MilestoneSourceSchema = z.strictObject({
   player: FieldPathSchema,
   /**
    * Counts how many different values this field has had (Collector: kinds of
-   * squishy) instead of how many events.
+   * squishy; the evolution track: squishies) instead of how many events.
    */
   distinct: FieldPathSchema.optional(),
   /** Scales each event by this payload percent (Gentle's `rewardPercent` on `tile.captured`). */

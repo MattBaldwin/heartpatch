@@ -46,8 +46,10 @@ export const GROWTH_RULES: GrowthRules = {
   // level below its first evolution, so it grows up by training, not by catch.
   befriendBelowEvolution: 1,
   // TUNE: coordinator call (#382, keeps the line above for kinds that never
-  // evolve). 18 is the middle first-evolution level among base forms (they run
-  // 16 to 30). Lower (15 or 16, one under the earliest evolver) is the strict
+  // evolve). Since #443 gave the wave-1 kinds a kid (#493), no shipped species
+  // is standalone, so this applies to nothing today; it's kept for future
+  // kinds that don't evolve. 18 is the middle first-evolution level among base
+  // forms (they run 16 to 30). Lower (15 or 16, one under the earliest evolver) is the strict
   // reading, but then casual Gap-ready slips to day 10 against day 8 with
   // exploring, past the one-day tolerance of #199 (owner decision 2026-10-07 Q6);
   // `pnpm sim:progression` shows it. `care.test.ts` keeps it between the two.
