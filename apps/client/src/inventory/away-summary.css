@@ -1,0 +1,354 @@
+/* What just landed (#419, owner pick 2026-10-12): a slim banner under the
+   patch's name (map.css `.map-hud`, about 44px tall at +64px), clear of it by
+   the tag's height, and its card. Above the Bag and the recipe book (5) like
+   the pop-up it replaces; the card sits with the other cards (9). */
+.away-banner[hidden],
+.away-card-layer[hidden],
+.away-more[hidden],
+.away-grid[hidden],
+.away-card-section[hidden],
+.away-training[hidden] {
+  display: none;
+}
+
+.away-banner {
+  position: fixed;
+  z-index: 6;
+  top: calc(env(safe-area-inset-top) + 128px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(460px, calc(100vw - 24px));
+  min-height: 56px;
+  margin: 0;
+  padding: 0 6px 0 8px;
+  border: 2px solid #fff1c9;
+  border-radius: 999px;
+  background: #fffafc;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font: inherit;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  cursor: pointer;
+  transform: translateX(-50%);
+  touch-action: manipulation;
+  animation: away-in 0.3s ease-out;
+}
+
+/* One thing: a small pill that says it all, and nothing to tap. */
+.away-banner.away-one {
+  min-height: 48px;
+  padding: 4px;
+  pointer-events: none;
+}
+
+.away-tag {
+  position: absolute;
+  top: -13px;
+  left: 18px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ffc94d;
+  color: #5a3a12;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.away-tag:empty {
+  display: none;
+}
+
+.away-chips {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.away-chip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 4px 8px 4px 2px;
+  border-radius: 999px;
+  background: #f6dceb;
+  color: #7a2d55;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.away-one .away-chip {
+  padding: 6px 14px;
+  font-size: 17px;
+}
+
+.away-chip-icon {
+  width: 24px;
+  font-size: 17px;
+  text-align: center;
+}
+
+.away-chip-xp {
+  background: #fff1c9;
+  color: #5a3a12;
+}
+
+.away-more {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f6dceb;
+  color: #7a2d55;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* The time left: a thin line along the bottom that runs out. */
+.away-bar {
+  position: absolute;
+  right: 24px;
+  bottom: 3px;
+  left: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: #b8487a;
+  transform-origin: left;
+}
+
+.away-one .away-bar {
+  display: none;
+}
+
+.away-bar-run {
+  animation: away-bar 4s linear forwards; /* TUNE: matches BANNER_MS */
+}
+
+.away-sr {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Each item's own soft colour (the element colours, art bible §2). */
+[data-item='timber'] {
+  background: #f3e3cf;
+  color: #7a5232;
+}
+[data-item='stone'] {
+  background: #ece8e2;
+  color: #5f5850;
+}
+[data-item='emberwood'],
+[data-item='pumpkins'] {
+  background: #ffe3d2;
+  color: #a94a1c;
+}
+[data-item='glimmer'],
+[data-item='water'],
+[data-item='ice'] {
+  background: #dff0fd;
+  color: #2f6d93;
+}
+[data-item='greens'],
+[data-item='magic-fallen-leaves'] {
+  background: #e3f5dc;
+  color: #2f6b3d;
+}
+[data-item='treats'],
+[data-item='turkey-feathers'] {
+  background: #fbecd9;
+  color: #8a5a26;
+}
+[data-item='witch-dust'] {
+  background: #ede3f7;
+  color: #5b3f86;
+}
+
+/* The card: everything that landed. */
+.away-card-layer {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  padding: 20px 12px calc(env(safe-area-inset-bottom) + 16px);
+  background: rgb(74 49 80 / 28%);
+}
+
+.away-card {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+  padding: 14px 12px;
+  border: 3px solid #fff1c9;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 12px 40px rgb(107 75 110 / 18%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  animation: away-card-in 0.3s ease-out;
+}
+
+.away-card-tag {
+  justify-self: center;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: #ffc94d;
+  color: #5a3a12;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.away-card h2 {
+  margin: 0;
+  color: #7a2d55;
+  font-size: 22px;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.away-grid,
+.away-training {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.away-grid {
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+}
+
+.away-tile {
+  display: grid;
+  justify-items: center;
+  padding: 6px 2px 5px;
+  border-radius: 16px;
+  background: #f6dceb;
+  color: #7a2d55;
+}
+
+.away-tile-top {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.away-tile-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.away-tile-n {
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.away-tile-name {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.away-card-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 2px 0;
+  color: #7a5a80;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.away-card-section::after {
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: #f6dceb;
+  content: '';
+}
+
+.away-trained {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: #fff8ec;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.away-trained-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.away-xp {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #ffc94d;
+  color: #5a3a12;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.away-nice {
+  width: 100%;
+}
+
+/* Up from just below, so it never slides over the patch's name. */
+@keyframes away-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+}
+
+@keyframes away-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+}
+
+@keyframes away-bar {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Reduce Motion: the banner and card just appear, and the time-left line holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .away-banner,
+  .away-card {
+    animation: none;
+  }
+
+  .away-bar {
+    display: none;
+  }
+}

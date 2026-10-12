@@ -1,8 +1,8 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { trayButton } from './trays.js';
+import { trayButton, traysState } from './trays.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
 interface InventoryDebug {
@@ -13,6 +13,8 @@ interface InventoryDebug {
   seasons: string[];
   bagOpen: boolean;
   tileAction: string | null;
+  summary: { shown: 'banner' | 'pill' | null; chips: number; more: number; card: boolean };
+  bagNew: number;
 }
 
 function bagState(page: Page): Promise<InventoryDebug | null> {
@@ -133,6 +135,39 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // Kid-friendly words only (style guide §9).
   const text = (await bag.textContent()) ?? '';
   expect(findAvoidedWords(text)).toEqual([]);
+  await bag.getByRole('button', { name: 'Close' }).tap();
+  await expect(bag).toBeHidden();
+
+  // Both finish while the Bag is shut: what landed shows as a banner of chips
+  // (#419), and as news on the My Home tab until the Bag is opened.
+  const mapId = (await bagState(page))!.mapId;
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  const banner = page.getByTestId('landed-toast');
+  // Roomy: the settle is one round trip, slow under a full CI run.
+  await expect(banner).toContainText('Heart Charm', { timeout: 15_000 });
+  // Two kinds: the banner (not the one-thing pill), and a tap opens the card
+  // with everything. The banner hides itself after a few seconds, so the tap
+  // goes in the same breath as the look (CI renders slowly).
+  const shown = await page.evaluate(() => {
+    const node = document.querySelector<HTMLElement>('[data-testid="landed-toast"]');
+    if (!node || node.hidden) return null;
+    const words = node.className;
+    node.click();
+    return words;
+  });
+  expect(shown).not.toContain('away-one');
+  const card = page.getByTestId('away-card');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Heart Charm');
+  expect(findAvoidedWords((await card.textContent()) ?? '')).toEqual([]);
+  await card.getByRole('button', { name: 'Nice!' }).tap();
+  await expect(card).toBeHidden();
+  expect((await bagState(page))?.bagNew).toBeGreaterThan(0);
+  await expect.poll(async () => (await traysState(page))?.badges.heartpatch).not.toBeNull();
+  await (await trayButton(page, 'bag-open')).tap();
+  await expect.poll(async () => (await bagState(page))?.bagNew).toBe(0);
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
 

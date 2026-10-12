@@ -1,0 +1,95 @@
+import type { Landed } from '@heartpatch/shared';
+import { itemName, landedLine, landedText, landedTotals, trainedText } from './bag-view.js';
+import { itemIcon } from './item-icons.js';
+import { toolOf } from './tool-uses.js';
+
+// What just landed in the bag, as tidy chips (#419, owner pick 2026-10-12:
+// "Fly into a receipt"): a slim banner under the patch's name with one chip
+// per thing, and the full list in a card behind "N more". Pure, so it's
+// unit-tested without the DOM; away-summary-view.ts draws it.
+
+/** One chip in the banner and one row in the card. */
+export type SummaryEntry =
+  | {
+      readonly kind: 'item';
+      readonly id: string;
+      /** How many: items, or whole tools for an explore tool (#199). */
+      readonly amount: number;
+      readonly icon: string;
+      readonly name: string;
+      /** The chip's short words: "+3". */
+      readonly chip: string;
+      /** The whole thing in words: "🪨 +3 Stone" (a tool: "⛏️ A new Shovel"). */
+      readonly line: string;
+    }
+  | {
+      readonly kind: 'trained';
+      /** Each squishy the Training Grounds trained, with its XP. */
+      readonly squishies: readonly { readonly name: string; readonly xp: number }[];
+      /** All their XP added up, for the one chip. */
+      readonly xp: number;
+    };
+
+// Player-facing text (style guide §6).
+export const AWAY_TEXT = {
+  /** The banner's tag after a while away, and otherwise. */
+  tagAway: 'Welcome back!',
+  tagNow: 'In your Bag!',
+  more: (n: number) => `${String(n)} more`,
+  cardTagAway: 'While you were away…',
+  cardTagNow: 'Into your Bag!',
+  cardTitle: 'Your patch kept busy!',
+  training: 'Training Grounds',
+  xp: (n: number) => `+${String(n)} XP`,
+  nice: 'Nice!',
+  /** The Home tab's peek line until the Bag is opened. */
+  bagNews: (n: number) =>
+    n === 1 ? 'Something new in your Bag!' : `${String(n)} new things in your Bag!`,
+} as const;
+
+/**
+ * The chips for what landed: the Training Grounds first (one chip for every
+ * squishy trained), then the items in the bag's order, added up.
+ */
+export function summaryEntries(
+  landed: readonly Pick<Landed, 'items'>[],
+  trained: readonly { readonly name: string; readonly xp: number }[],
+): SummaryEntry[] {
+  const entries: SummaryEntry[] = [];
+  if (trained.length > 0) {
+    entries.push({
+      kind: 'trained',
+      squishies: trained.map(({ name, xp }) => ({ name, xp })),
+      xp: trained.reduce((sum, t) => sum + t.xp, 0),
+    });
+  }
+  for (const [id, count] of landedTotals(landed)) {
+    // A tool counts uses (#199): its chip says how many tools, as its line does.
+    const tool = toolOf(id);
+    const tools = tool && count % tool.uses === 0 ? count / tool.uses : null;
+    const amount = tools ?? count;
+    entries.push({
+      kind: 'item',
+      id,
+      amount,
+      icon: itemIcon(id),
+      name: itemName(id),
+      chip: `+${String(amount)}`,
+      line: landedLine(id, count),
+    });
+  }
+  return entries;
+}
+
+/** The whole summary in one sentence, for screen readers (and the e2e). */
+export function summarySentence(
+  landed: readonly Pick<Landed, 'items'>[],
+  trained: readonly { readonly name: string; readonly xp: number }[],
+): string {
+  return [landedText(landed), trainedText(trained)].filter((t) => t !== '').join(' ');
+}
+
+/** How many things landed, for the Home tab's line (a tool counts as one thing per tool). */
+export function summaryCount(entries: readonly SummaryEntry[]): number {
+  return entries.reduce((sum, e) => sum + (e.kind === 'item' ? e.amount : 0), 0);
+}

@@ -27,9 +27,9 @@ import {
   describeItems,
   gatherChip,
   itemName,
-  landedText,
-  trainedText,
 } from './bag-view.js';
+import { AWAY_TEXT, summaryCount, summaryEntries, summarySentence } from './away-summary.js';
+import { createAwaySummary, type AwaySummaryDebug } from './away-summary-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -84,8 +84,12 @@ export interface InventoryDebug {
   readonly tileAction: TileAction['kind'] | null;
   /** The gathering chip over the map: null while hidden; `ready` for the moment before it lands. */
   readonly chip: 'waiting' | 'ready' | null;
-  /** The "it landed!" pop-up's words while it shows, else null. */
+  /** What just landed, in words, while its banner shows (#419), else null. */
   readonly toast: string | null;
+  /** The banner and its card (#419). */
+  readonly summary: AwaySummaryDebug;
+  /** Things landed since the Bag was last opened (the Home tab's news), 0 for none. */
+  readonly bagNew: number;
   /** Settles so far that put something in the bag. */
   readonly landings: number;
   /** Crafting Factory batches going (#294), null with no Factory. */
@@ -161,8 +165,8 @@ const TEXT = {
   findIt: 'Find it:',
 } as const;
 
-/** How long the "it landed!" pop-up stays. */
-const TOAST_MS = 3200; // TUNE: long enough to read "🪵 +5 Timber!", short enough not to nag
+/** Away this long, the banner says "Welcome back!" (shorter: "In your Bag!"). */
+const WELCOME_BACK_MS = 5 * 60_000; // TUNE: a quick look at another app isn't "away"
 /** A settle asks a moment after the server's `nextAt`, so it has surely finished by the server's clock. */
 const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
 /** A settle that failed (a flaky phone connection, a rate limit) tries once more after this long. */
@@ -209,8 +213,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let shownChip: InventoryDebug['chip'] = null;
   /** The one settle waiting for the next thing to finish (the server's `nextAt`). */
   let settleTimer: number | undefined;
-  let toastTimer: number | undefined;
   let landings = 0;
+  /** Things landed since the Bag was last opened: the Bag button's "+N" and the Home tab's news. */
+  let bagNew = 0;
 
   // ── Bag button and sheet ──────────────────────────────────────────────
   const open = el(
@@ -220,6 +225,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     el('span', { class: 'bag-open-label' }, TEXT.bag),
     ...(options.lore ? [options.lore.badge] : []),
   );
+  // What landed since the Bag was last opened (#419): "+14" on the Bag button,
+  // and one piece of news on the My Home tab (trays.ts reads `data-tray-alert`).
+  const newPill = el('span', { class: 'bag-new', 'aria-hidden': 'true', 'data-testid': 'bag-new' });
+  const newAlert = el('span', { class: 'bag-new-alert', 'aria-hidden': 'true' });
+  open.append(newPill, newAlert);
+  const showBagNew = () => {
+    newPill.textContent = bagNew > 0 ? `+${String(bagNew)}` : '';
+    newAlert.textContent = bagNew > 0 ? '1' : '';
+    if (bagNew > 0) newAlert.dataset['trayAlert'] = AWAY_TEXT.bagNews(bagNew);
+  };
   open.hidden = true;
 
   // The gathering chip: a gather takes minutes on a patch, so the map keeps
@@ -271,14 +286,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     recipesBox,
   );
   sheet.hidden = true;
-  // The "it landed!" pop-up: one cheerful line for everything that just
-  // went into the bag, wherever the player is looking (the book included).
-  const toast = el('p', {
-    class: 'landed-toast',
-    role: 'status',
-    'data-testid': 'landed-toast',
-  });
-  toast.hidden = true;
 
   // The Factory sheet (#294): the queue panel over the map or the Bag.
   const factoryPanel = createFactoryPanel({
@@ -361,7 +368,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   });
 
   (options.entryRoot ?? options.root).append(open);
-  options.root.append(chip, sheet, factorySheet, toast, welcome);
+  options.root.append(chip, sheet, factorySheet, welcome);
+  // What just landed (#419): a slim banner of chips, wherever the player is
+  // looking (the book included), and a card with everything.
+  const summary = createAwaySummary(options.root);
 
   if (options.devTools) {
     const dev = el(
@@ -398,6 +408,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   const openBag = () => {
     sheet.hidden = false;
+    bagNew = 0;
+    showBagNew();
     render();
     void refresh();
     options.onBagOpen?.();
@@ -456,7 +468,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const card = showsWelcomeBack(landed, away);
         if (card) showWelcome(landed);
         const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
-        showToast([landedText(popped), trainedText(trained)].filter((t) => t !== '').join(' '));
+        showLanded(popped, trained, away >= WELCOME_BACK_MS);
         if (landed.length > 0) options.onCollected?.();
       }
       // Only while the kid can see it: a tab left open in the background
@@ -521,25 +533,28 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     welcomeOk.focus();
   }
 
-  const showToast = (text: string) => {
-    if (text === '') return;
-    toast.textContent = text;
-    toast.hidden = false;
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(hideToast, TOAST_MS);
-  };
-  const hideToast = () => {
-    window.clearTimeout(toastTimer);
-    toastTimer = undefined;
-    toast.hidden = true;
-    toast.textContent = '';
+  /** Pops up what just landed (#419), and counts it as news until the Bag opens. */
+  const showLanded = (
+    landed: readonly Pick<Landed, 'items'>[],
+    trained: readonly { name: string; xp: number }[] = [],
+    away = false,
+  ) => {
+    const entries = summaryEntries(landed, trained);
+    if (entries.length === 0) return;
+    summary.show({ entries, sentence: summarySentence(landed, trained), away });
+    if (sheet.hidden) {
+      bagNew += summaryCount(entries);
+      showBagNew();
+    }
   };
   const stopSettling = () => {
     window.clearTimeout(settleTimer);
     settleTimer = undefined;
     serverNextAt = null;
     retried = false;
-    hideToast();
+    summary.hide();
+    bagNew = 0;
+    showBagNew();
   };
 
   // Back from another app or a locked screen: things may have finished meanwhile.
@@ -610,7 +625,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       if (banked) {
         // The server banked it (the reply has no bag): say so, and read the bag again.
         landings += 1;
-        showToast(landedText([banked]));
+        showLanded([banked]);
         options.onCollected?.();
         void refresh();
       }
@@ -628,7 +643,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       scheduleSettle();
       if (banked.length > 0) {
         landings += 1;
-        showToast(landedText(banked));
+        showLanded(banked);
         options.onCollected?.();
       }
     });
@@ -647,7 +662,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       const res = await send((key) => fapi.stop(id, batchId, key));
       if (!res || !apply(at, res)) return;
       say('');
-      showToast(landedText([{ items: res.refunded }]));
+      showLanded([{ items: res.refunded }]);
       scheduleSettle();
     });
 
@@ -1073,7 +1088,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         bagOpen: !sheet.hidden,
         tileAction: shownAction?.kind ?? null,
         chip: shownChip,
-        toast: toast.hidden ? null : toast.textContent,
+        toast: summary.text,
+        summary: summary.debug,
+        bagNew,
         landings,
         batches: state.factory ? state.factory.batches.length : null,
         factorySheet: factorySheet.hidden ? null : factoryPanel.mode,
