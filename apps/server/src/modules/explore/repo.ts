@@ -120,7 +120,7 @@ export function createExploreRepo(db: Executor) {
       // Neither touches my other land outside home: a homestead next door
       // would join an unjoined one at the next refresh, and a new homestead
       // would join land of mine beside it (#242 review).
-      const joined = ask.joined === true || ask.joined === undefined;
+      const touchesHome = ask.joined === true || ask.joined === undefined;
       // A napping one is out there too: it joined once and was cut off since.
       const napping = ask.joined === 'napping';
       const mineOut = all.filter((t) => t.ownerUserId === userId && t.homeSlot === null);
@@ -129,7 +129,7 @@ export function createExploreRepo(db: Executor) {
             (t) =>
               t.ownerUserId === null &&
               t.homeSlot === null &&
-              hexDistance(t, seed) === (joined ? 2 : 3) &&
+              hexDistance(t, seed) === (touchesHome ? 2 : 3) &&
               !mineOut.some((m) => hexDistance(m, t) === 1),
           )
         : [];
@@ -161,7 +161,7 @@ export function createExploreRepo(db: Executor) {
           searched: 7,
           spotCount: 3,
           completedAt: at,
-          joinedAt: joined || napping ? at : null,
+          joinedAt: touchesHome || napping ? at : null,
           pausedAt: napping ? at : null,
           updatedAt: at,
         })

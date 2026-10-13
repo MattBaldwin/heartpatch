@@ -20,6 +20,14 @@ interface MapDebug {
   explored: number;
 }
 
+/** The dev hook's map reader and live-event replay (src/engine/dev-hook.d.ts). */
+type DevWindow = {
+  __heartpatch?: {
+    map?: () => MapDebug | null;
+    mapDev?: () => { replay: (event: unknown) => void };
+  };
+};
+
 const slowExpect = expect.configure({ timeout: 30_000 });
 const mapState = (page: Page) => hook<MapDebug>(page, 'map');
 const looks = async (page: Page) => {
@@ -79,15 +87,17 @@ test('shows joined, napping and explored-only land, and a homestead won back sta
   );
   const me = view.body.tiles.find((t) => t.q === home.q && t.r === home.r)!.ownerUserId!;
   const seq = (await mapState(page))!.viewSeq;
-  await page.evaluate(
-    (event) =>
-      (
-        window as unknown as {
-          __heartpatch?: { mapDev?: () => { replay: (e: unknown) => void } };
-        }
-      ).__heartpatch
-        ?.mapDev?.()
-        .replay(event),
+  // Played and read back in one go: the capture blanks the tile at once (a
+  // synchronous redraw), and the fresh view can't land before this returns,
+  // so the replay provably happened before the glow comes back.
+  const right = await page.evaluate(
+    (event) => {
+      const dev = (window as unknown as DevWindow).__heartpatch;
+      if (!dev?.mapDev || !dev.map) throw new Error('No map dev hook');
+      dev.mapDev().replay(event);
+      const m = dev.map();
+      return m ? [m.homesteads, m.pausedHomesteads, m.explored] : null;
+    },
     {
       v: 1,
       type: 'tile.captured',
@@ -97,6 +107,7 @@ test('shows joined, napping and explored-only land, and a homestead won back sta
       data: { userId: me, fromUserId: null, q: home.q, r: home.r },
     },
   );
+  expect(right).toEqual([0, 1, 2]);
   // The map reads its view again: the glow and the sparkle come back.
   await expect.poll(() => looks(page), { timeout: 30_000 }).toEqual([1, 1, 3]);
   await selectTile(page, home);
