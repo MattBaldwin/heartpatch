@@ -1,7 +1,7 @@
 /**
- * WebGL objects for the `?fps=1` badge (#501): buffers and textures made
- * and freed, and shader programs linked, on one context, counted from when
- * the badge mounted. Something that piles up while a scene only plays (a
+ * WebGL objects for the `?fps=1` badge (#501): buffers, textures and vertex
+ * arrays made and freed, and shader programs linked, on one context, counted
+ * from when the badge first saw it (a lost context's rebuild starts again). Something that piles up while a scene only plays (a
  * buffer per find, a texture per celebration) shows as a gap between made
  * and freed that keeps widening. Wrapped on the context itself, and only
  * once the badge is mounted, so nobody else pays.
@@ -11,6 +11,8 @@ export interface GlCounts {
   buffersFreed: number;
   texturesMade: number;
   texturesFreed: number;
+  vertexArraysMade: number;
+  vertexArraysFreed: number;
   programs: number;
 }
 
@@ -20,6 +22,8 @@ export interface CountedGl {
   deleteBuffer(buffer: object | null): void;
   createTexture(): unknown;
   deleteTexture(texture: object | null): void;
+  createVertexArray(): unknown;
+  deleteVertexArray(vertexArray: object | null): void;
   linkProgram(program: object): void;
 }
 
@@ -34,6 +38,8 @@ export function countGl(gl: CountedGl): GlCounts {
     buffersFreed: 0,
     texturesMade: 0,
     texturesFreed: 0,
+    vertexArraysMade: 0,
+    vertexArraysFreed: 0,
     programs: 0,
   };
   counted.set(gl, counts);
@@ -41,6 +47,8 @@ export function countGl(gl: CountedGl): GlCounts {
   const deleteBuffer = gl.deleteBuffer.bind(gl);
   const createTexture = gl.createTexture.bind(gl);
   const deleteTexture = gl.deleteTexture.bind(gl);
+  const createVertexArray = gl.createVertexArray.bind(gl);
+  const deleteVertexArray = gl.deleteVertexArray.bind(gl);
   const linkProgram = gl.linkProgram.bind(gl);
   gl.createBuffer = () => {
     const made = createBuffer();
@@ -59,6 +67,15 @@ export function countGl(gl: CountedGl): GlCounts {
   gl.deleteTexture = (texture) => {
     if (texture) counts.texturesFreed++;
     deleteTexture(texture);
+  };
+  gl.createVertexArray = () => {
+    const made = createVertexArray();
+    if (made) counts.vertexArraysMade++;
+    return made;
+  };
+  gl.deleteVertexArray = (vertexArray) => {
+    if (vertexArray) counts.vertexArraysFreed++;
+    deleteVertexArray(vertexArray);
   };
   gl.linkProgram = (program) => {
     counts.programs++;

@@ -1,7 +1,8 @@
+import { ThinEngine } from '@babylonjs/core/Engines/thinEngine';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
 import { batchUploads } from '../procedural/batch-uploads.js';
-import { countGl, type CountedGl, type GlCounts } from './gl-counters.js';
+import { countGl, type GlCounts } from './gl-counters.js';
 import { activeTriangles, formatRenderStats, formatResourceStats } from './render-stats.js';
 import type { RendererKind } from './renderer.js';
 import type { Stage } from './stage.js';
@@ -20,7 +21,8 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * `showsStats`), so nobody sees it unless they ask.
  *
  * A second line counts what the scene holds and the WebGL objects made and
- * freed since it mounted (#501: a frame rate that sinks as a session goes on
+ * freed since the badge first saw this engine (a lost context's rebuild
+ * starts again from zero) (#501: a frame rate that sinks as a session goes on
  * shows here as a number that keeps climbing), the squishy batch uploads,
  * and the governor's render scale.
  */
@@ -54,9 +56,8 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
     const { engine } = stage.renderer;
     if (gl?.engine !== engine) {
-      // Babylon keeps its WebGL context on `_gl`; a WebGPU engine has none.
-      const context = (engine as unknown as { _gl?: CountedGl | null })._gl;
-      gl = { engine, counts: context ? countGl(context) : null };
+      // `_gl` is Babylon-internal but typed; a WebGPU engine has no context to count.
+      gl = { engine, counts: engine instanceof ThinEngine ? countGl(engine._gl) : null };
     }
     const { scene } = stage;
     counts.textContent = formatResourceStats({

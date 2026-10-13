@@ -142,6 +142,10 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
     /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx · \d+ draws · \d+k tris$/,
     { timeout: 15_000 },
   );
+  // Its counts line (#501): the scene, WebGL objects made and freed, uploads, render scale.
+  await expect(page.locator('[data-testid="dev-stats-counts"]')).toHaveText(
+    /^\d+ mesh · \d+ mat · \d+ tex · \d+ anim · buf \+\d+\/-\d+ · gltex \+\d+\/-\d+ · vao \+\d+\/-\d+ · \d+ prog · \d+ up · \d\.\d\d scale$/,
+  );
   expect(errors).toEqual([]);
 });
 

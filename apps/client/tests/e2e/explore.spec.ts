@@ -169,7 +169,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     first.keeper,
   );
   let searched = 0;
-  let walkGuarded = false;
+  let guardSkipped: string | null = 'the first hand spot was already in reach';
   let toasted = false;
   for (const hands of handSpots.slice(0, 5)) {
     if (!(await walkTo(page, hands.index))) continue;
@@ -182,17 +182,20 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       }, slow)
       .toBeLessThan(0.25);
     const walked = (await exploreState(page))!;
-    if (
-      searched === 0 &&
-      (walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z)
-    ) {
+    const moved = walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z;
+    // A software renderer's governor may change tier while exploring, and the
+    // walk's first step applies it (the team's detail level rebuilds): that's
+    // a rebuild on purpose, so only a walk on one tier is judged.
+    const sameTier = walked.scene?.land?.tier === settled?.land?.tier;
+    if (searched === 0 && moved && !sameTier) guardSkipped = 'the tier changed during the walk';
+    if (searched === 0 && moved && sameTier) {
       // The frame-rate guard (#501): walking draws every frame, so it must
       // only move what's built. A mesh, material, texture or geometry made
       // per step (a rebuilt fade, glints or ground) would count up here, as
       // a frame over the draw-call budget would show.
       expect(walked.scene?.created).toEqual(builtOnArrival);
       expect(walked.scene?.drawCalls ?? 0).toBeLessThan(DRAW_CALL_CEILING);
-      walkGuarded = true;
+      guardSkipped = null;
     }
     await slowExpect(action).toBeEnabled();
     await action.tap();
@@ -240,11 +243,10 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     break;
   }
   expect(toasted).toBe(true);
-  if (!walkGuarded) {
-    test.info().annotations.push({
-      type: 'skipped',
-      description: 'walk guard (#501): the first hand spot was already in reach',
-    });
+  if (guardSkipped !== null) {
+    test
+      .info()
+      .annotations.push({ type: 'skipped', description: `walk guard (#501): ${guardSkipped}` });
   }
   const after = (await exploreState(page))!;
   expect(after.progress?.searched).toBe(searched);

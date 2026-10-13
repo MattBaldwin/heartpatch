@@ -14,14 +14,22 @@ describe('formatResourceStats', () => {
     materials: 20,
     textures: 5,
     animatables: 0,
-    gl: { buffersMade: 40, buffersFreed: 12, texturesMade: 9, texturesFreed: 2, programs: 27 },
+    gl: {
+      buffersMade: 40,
+      buffersFreed: 12,
+      texturesMade: 9,
+      texturesFreed: 2,
+      vertexArraysMade: 30,
+      vertexArraysFreed: 4,
+      programs: 27,
+    },
     batchUploads: 6,
     renderScale: 1,
   };
 
   it('shows the scene, WebGL objects made and freed, uploads and the render scale', () => {
     expect(formatResourceStats(base)).toBe(
-      '48 mesh · 20 mat · 5 tex · 0 anim · buf +40/-12 · gltex +9/-2 · 27 prog · 6 up · 1.00 scale',
+      '48 mesh · 20 mat · 5 tex · 0 anim · buf +40/-12 · gltex +9/-2 · vao +30/-4 · 27 prog · 6 up · 1.00 scale',
     );
   });
 

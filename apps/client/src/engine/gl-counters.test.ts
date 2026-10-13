@@ -14,6 +14,10 @@ function fakeGl(): CountedGl & { calls: string[] } {
     deleteTexture: () => {
       calls.push('deleteTexture');
     },
+    createVertexArray: () => ({}),
+    deleteVertexArray: () => {
+      calls.push('deleteVertexArray');
+    },
     linkProgram: () => {
       calls.push('linkProgram');
     },
@@ -21,7 +25,7 @@ function fakeGl(): CountedGl & { calls: string[] } {
 }
 
 describe('countGl', () => {
-  it('counts buffers and textures made and freed, and programs linked', () => {
+  it('counts buffers, textures and vertex arrays made and freed, and programs linked', () => {
     const gl = fakeGl();
     const counts = countGl(gl);
     const a = gl.createBuffer();
@@ -29,16 +33,20 @@ describe('countGl', () => {
     gl.deleteBuffer(a as object);
     const t = gl.createTexture();
     gl.deleteTexture(t as object);
+    const v = gl.createVertexArray();
+    gl.deleteVertexArray(v as object);
     gl.linkProgram({});
     expect(counts).toEqual({
       buffersMade: 2,
       buffersFreed: 1,
       texturesMade: 1,
       texturesFreed: 1,
+      vertexArraysMade: 1,
+      vertexArraysFreed: 1,
       programs: 1,
     });
     // The real calls still happen.
-    expect(gl.calls).toEqual(['deleteBuffer', 'deleteTexture', 'linkProgram']);
+    expect(gl.calls).toEqual(['deleteBuffer', 'deleteTexture', 'deleteVertexArray', 'linkProgram']);
   });
 
   it('ignores null (a lost context makes nothing; deleting null frees nothing)', () => {
