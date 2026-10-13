@@ -80,6 +80,43 @@ describe('describeTile', () => {
     );
   });
 
+  it('says in the header whether my land is a homestead (#242)', () => {
+    const mine = (extra: Partial<PublicTile>) =>
+      describeTile(
+        tile({ ownerUserId: userId(1), terrain: 'mountains', ...extra }),
+        lookup,
+        userId(1),
+      );
+    expect(mine({ homestead: 'joined', explored: true })).toMatchObject({
+      title: 'Mountains · Homestead 🏡',
+      owner: 'Your homestead.',
+    });
+    expect(mine({ homestead: 'paused', explored: true })).toMatchObject({
+      title: 'Mountains · Homestead (napping zZ)',
+      owner: 'Your homestead.',
+    });
+    // The owner's case: explored, but not touching home.
+    expect(mine({ homestead: null, explored: true })).toMatchObject({
+      title: 'Mountains',
+      owner: 'Your land, explored ✨. It must touch home to be a homestead.',
+    });
+    expect(mine({ homestead: null, explored: false })).toMatchObject({
+      title: 'Mountains',
+      owner: 'Your land.',
+    });
+    // Someone else's homestead keeps a plain header.
+    expect(
+      describeTile(
+        tile({ ownerUserId: userId(2), terrain: 'mountains', homestead: 'joined' }),
+        lookup,
+        userId(1),
+      ),
+    ).toMatchObject({ title: 'Mountains', owner: "keeper2's land." });
+    for (const homestead of ['joined', 'paused', null] as const) {
+      expect(allText(mine({ homestead, explored: true }))).not.toMatch(AVOIDED);
+    }
+  });
+
   it('says home bases can never be taken, and never offers to claim them', () => {
     const mine = describeTile(tile({ homeSlot: 0, ownerUserId: userId(1) }), lookup, userId(1));
     expect(mine.home).toBe(true);

@@ -157,12 +157,33 @@ export const LAND_FIRE = GAME_DATA.buildings.find(
   (b) => b.placement === 'land' && b.kind === 'hearthfire',
 );
 
+/**
+ * What the spot line adds when a tool clears this land (#242): clear it on a
+ * homestead, or join it up first. Empty on land no tool clears, and on a
+ * napping homestead.
+ */
+export function clearHint(tile: {
+  terrain?: string;
+  homestead?: 'joined' | 'paused' | null;
+}): string {
+  const id = tile.terrain ? clearToolFor(tile.terrain, CLEARING_RULES) : null;
+  const tool = id ? CLEARING_RULES.tools.find((t) => t.id === id)?.name : undefined;
+  // A napping homestead wakes up first; its header and panel say how.
+  if (!tool || tile.homestead === 'paused') return '';
+  const a = /^[aeiou]/i.test(tool) ? 'an' : 'a';
+  return tile.homestead === 'joined'
+    ? ` Or clear it with ${a} ${tool} and build here 🌱`
+    : ` Once it's a homestead, ${a} ${tool} can clear it 🌱`;
+}
+
 export function landTileOffer(
   tile: {
     q: number;
     r: number;
     nodeResource: string | null;
     buildings: readonly { spot: number }[];
+    terrain?: string;
+    homestead?: 'joined' | 'paused' | null;
   },
   home: HomeResponse,
 ): LandTileOffer {
@@ -174,7 +195,7 @@ export function landTileOffer(
   if (tile.nodeResource !== null) {
     return {
       kind: 'node',
-      line: `🔥 Fires go in the middle of a tile. This one has ${middleThing(tile.nodeResource)} there, so a fire next door can reach it!`,
+      line: `🔥 Fires go in the middle of a tile. This one has ${middleThing(tile.nodeResource)} there, so a fire next door can reach it!${clearHint(tile)}`,
     };
   }
   // One building a tile (#295).
