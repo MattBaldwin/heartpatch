@@ -101,7 +101,7 @@ describe('runSim', () => {
     const second = runSim(planSim(SMALL), SMALL);
     expect(second).toEqual(first);
     expect(renderCsv(buildRows(second, SMALL))).toBe(renderCsv(buildRows(first, SMALL)));
-  });
+  }, 30_000); // two full sim runs: 1.7 s alone, 5.7 s with the CPUs oversubscribed (#429)
 
   it('counts every game once, and a different root seed plays different games', () => {
     const matchup: Matchup = { ...plan.matchups[0]!, games: 40 };

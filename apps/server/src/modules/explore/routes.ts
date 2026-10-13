@@ -1,4 +1,5 @@
 import {
+  DevHomesteadRequestSchema,
   ExploreQuerySchema,
   ExploreTileResponseSchema,
   HexSchema,
@@ -65,13 +66,23 @@ export const exploreRoutes =
       app.post(
         '/maps/:mapId/dev/homestead',
         {
-          schema: { params: MapIdParamsSchema, response: { 201: HexSchema } },
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevHomesteadRequestSchema.nullish(),
+            response: { 201: HexSchema },
+          },
           preHandler: [requireAuth, rateLimit('dev')],
         },
         async (request, reply) =>
           reply
             .code(201)
-            .send(await service.devHomestead(requireUser(request), request.params.mapId)),
+            .send(
+              await service.devHomestead(
+                requireUser(request),
+                request.params.mapId,
+                request.body ?? {},
+              ),
+            ),
       );
     }
 

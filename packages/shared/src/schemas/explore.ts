@@ -11,6 +11,21 @@ import { queryInt } from './query.js';
 // and which are done, never what they hold (CLAUDE.md rule 6), and rolls
 // every find (rule 1).
 
+/**
+ * Dev only (`HP_DEV_SQUISHY_GRANTS`): `POST /maps/:mapId/dev/homestead`, a
+ * fully explored tile of mine next to home (#295). An e2e can ask for its
+ * land and resource spot, or for one that hasn't joined home (#242).
+ */
+export const DevHomesteadRequestSchema = z.strictObject({
+  /** Its land (a terrain id); otherwise what's there, or cleared land. */
+  terrain: ContentIdSchema.optional(),
+  /** A resource spot in its middle (a resource id); otherwise none. */
+  nodeResource: ContentIdSchema.optional(),
+  /** False: explored, but three steps from home, so it hasn't joined. */
+  joined: z.boolean().optional(),
+});
+export type DevHomesteadRequest = z.infer<typeof DevHomesteadRequestSchema>;
+
 /** `GET /maps/:mapId/explore?q=&r=`: one of my tiles. */
 export const ExploreQuerySchema = z.object({
   q: queryInt({ min: -32768, max: 32767 }),
