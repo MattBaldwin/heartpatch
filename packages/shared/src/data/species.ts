@@ -633,8 +633,60 @@ export const MOVES: Move[] = [
     accuracy: 95, // TUNE:
     effects: [{ type: 'heal', percent: 15 }], // TUNE:
   },
+  // Batch 3: Candlekit's, Fuzzbolt's and Snoozicle's lines.
+  {
+    id: 'flicker-pounce',
+    name: 'Flicker Pounce',
+    description: 'Pounces in a flicker of candlelight. Now you see it, now you do!',
+    element: 'fire',
+    power: 85, // TUNE:
+    accuracy: 90, // TUNE:
+  },
+  {
+    id: 'firework-fling',
+    name: 'Firework Fling',
+    description: 'Flings a fizzy little firework. Ooh, aah!',
+    element: 'fire',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+  },
+  {
+    id: 'static-roar',
+    name: 'Static Roar',
+    description: 'A big, crackly roar. The other side might get a bit dizzy.',
+    element: 'spark',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
+  },
+  {
+    id: 'thunder-glide',
+    name: 'Thunder Glide',
+    description: 'Glides in on a crackle of sparks and might come out of it faster.',
+    element: 'spark',
+    power: 85, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 20 }], // TUNE:
+  },
+  {
+    id: 'avalanche-yawn',
+    name: 'Avalanche Yawn',
+    description: 'A yawn so big the snow slides off the hills. The other side might nod off.',
+    element: 'frost',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 15 }], // TUNE:
+  },
+  {
+    id: 'blizzard-spin',
+    name: 'Blizzard Spin',
+    description: 'Spins so fast it makes its own snowstorm. The other side might get dizzy.',
+    element: 'frost',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 20 }], // TUNE:
+  },
 ];
-
 /*
  * Species, base form then its evolution. Stats, rarities and evolution
  * levels are all first guesses: // TUNE: every `baseStats` and `level`.
@@ -1210,7 +1262,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 85, attack: 70, defense: 80, speed: 55 }, // TUNE:
     moves: ['snowball-toss', 'chilly-yawn', 'frosty-pounce', 'sturdy-sit'],
-    evolutions: [],
+    evolutions: [{ into: 'yawnalanche', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bean',
       palette: ['#c2e8fc', '#ffffff', '#6fb4e0', '#e8f8ff'],
@@ -1232,6 +1284,40 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
   },
+  // #495 grown-up (stage 4): Drowsiberg grows crystal spines down its back.
+  {
+    id: 'yawnalanche',
+    name: 'Yawnalanche',
+    description:
+      'A great sleepy yeti with crystal spines down its back. When it yawns, the snow slides off the hills.',
+    element: 'frost',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 100, attack: 83, defense: 94, speed: 65 }, // TUNE: ×1.18 Drowsiberg
+    moves: ['avalanche-yawn', 'chilly-yawn', 'frosty-pounce', 'sturdy-sit'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#b6e2fb', '#ffffff', '#5fa8d8', '#e8f8ff'],
+      parts: [
+        'sleepy-eyes',
+        'smirk',
+        'fangs',
+        'pointy-ears',
+        'icicle-crown',
+        'fur-ruff',
+        'crystal-spines',
+        'strong-arms',
+        'biped-legs',
+      ],
+      size: 1.53,
+      head: { body: 'orb', size: 0.56, forward: 0.08, up: 0.86 },
+      stance: 0.45,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
+  },
   {
     id: 'twirlicle',
     name: 'Twirlicle',
@@ -1241,7 +1327,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 77, attack: 77, defense: 65, speed: 98 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster', 'twirly-whirl'],
-    evolutions: [],
+    evolutions: [{ into: 'twirlizzard', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'tiered',
       palette: ['#d4f0ff', '#ffffff', '#86c5eb', '#ff9ad5'],
@@ -1257,6 +1343,39 @@ export const SPECIES: Species[] = [
       ],
       size: 1.3,
       stance: 0.2,
+      pose: 'stand',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['silly', 'joy'] },
+  },
+  // #495 grown-up (stage 4): Twirlicle grows an icicle crown and strong arms.
+  {
+    id: 'twirlizzard',
+    name: 'Twirlizzard',
+    description:
+      'A champion skater with an icicle crown and strong arms for the big spins. Wheeeeee!',
+    element: 'frost',
+    feeling: 'silly',
+    rarity: 'rare',
+    baseStats: { hp: 91, attack: 91, defense: 77, speed: 116 }, // TUNE: ×1.18 Twirlicle
+    moves: ['blizzard-spin', 'frosty-pounce', 'brrr-bluster', 'twirly-whirl'],
+    evolutions: [],
+    visual: {
+      body: 'tiered',
+      palette: ['#c8ebff', '#ffffff', '#78bde8', '#ff9ad5'],
+      parts: [
+        'sharp-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'floppy-ears',
+        'icicle-crown',
+        'fur-ruff',
+        'strong-arms',
+        'side-fins',
+        'hop-feet',
+      ],
+      size: 1.53,
+      stance: 0.35,
       pose: 'stand',
       attackPart: 'wings',
     },
@@ -1328,7 +1447,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 75, attack: 70, defense: 60, speed: 95 }, // TUNE:
     moves: ['zip-zap', 'belly-flop', 'fizzy-pop', 'pebble-plop'], // TUNE: Belly Flop for Stone foes
-    evolutions: [],
+    evolutions: [{ into: 'frizzlion', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'barrel',
       palette: ['#ffd93d', '#fff9db', '#f09a00', '#ffffff'],
@@ -1350,6 +1469,40 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
   },
+  // #495 grown-up (stage 4): Frizzbolt's frizz grows into a fluffy mane.
+  {
+    id: 'frizzlion',
+    name: 'Frizzlion',
+    description: "Its frizz grew into a big fluffy lion's mane. Every roar makes the air crackle.",
+    element: 'spark',
+    feeling: 'silly',
+    rarity: 'rare',
+    baseStats: { hp: 89, attack: 83, defense: 71, speed: 112 }, // TUNE: ×1.18 Frizzbolt
+    moves: ['static-roar', 'belly-flop', 'fizzy-pop', 'pebble-plop'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#ffcf2e', '#fff9db', '#f09a00', '#ffffff'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'open-mouth',
+        'fangs',
+        'bolt-ears',
+        'spark-crest',
+        'fur-ruff',
+        'long-legs',
+        'bolt-chain',
+        'spots',
+      ],
+      size: 1.53,
+      head: { body: 'orb', size: 0.7, forward: 0.62, up: 0.7 },
+      stance: 0.55,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
+  },
   {
     id: 'glidebolt',
     name: 'Glidebolt',
@@ -1359,7 +1512,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 72, attack: 78, defense: 55, speed: 105 }, // TUNE:
     moves: ['zip-zap', 'fizzy-pop', 'zoomies', 'static-glide'],
-    evolutions: [],
+    evolutions: [{ into: 'zoomglider', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'barrel',
       palette: ['#ffe45c', '#fff9db', '#f5a800', '#ffffff'],
@@ -1376,6 +1529,40 @@ export const SPECIES: Species[] = [
       size: 1.3,
       head: { body: 'orb', size: 0.9, forward: 0.55, up: 0.45 },
       stance: 0.35,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['joy', 'silly'] },
+  },
+  // #495 grown-up (stage 4): Glidebolt's wings start to glow, with a spiky crest.
+  {
+    id: 'zoomglider',
+    name: 'Zoomglider',
+    description:
+      'A big glider with glowing wings and a spiky crest. It finally lands where it meant to. Mostly.',
+    element: 'spark',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 85, attack: 92, defense: 65, speed: 124 }, // TUNE: ×1.18 Glidebolt
+    moves: ['thunder-glide', 'fizzy-pop', 'zoomies', 'static-glide'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#ffdf45', '#fff9db', '#f5a800', '#ffffff'],
+      parts: [
+        'happy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'bolt-ears',
+        'spark-crest',
+        'glow-wings',
+        'long-legs',
+        'bolt-chain',
+        'belly-patch',
+      ],
+      size: 1.53,
+      head: { body: 'orb', size: 0.8, forward: 0.58, up: 0.52 },
+      stance: 0.45,
       pose: 'hover',
       attackPart: 'wings',
     },
@@ -3048,7 +3235,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 70, attack: 85, defense: 60, speed: 90 }, // TUNE:
     moves: ['wiggle-wick', 'ember-boop', 'boo', 'toasty-tumble'],
-    evolutions: [],
+    evolutions: [{ into: 'blazewhisker', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'barrel',
       palette: ['#2f2840', '#fff1d6', '#ff9f1c', '#ffe066'],
@@ -3072,6 +3259,44 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
   },
+  // #495 grown-up (stage 4): Wickwhisker grows tufted ears and a crown of candle flames.
+  {
+    id: 'blazewhisker',
+    name: 'Blazewhisker',
+    description:
+      'A tall lantern lynx with tufted ears and a crown of candle flames. It lights the way on Halloween night.',
+    element: 'fire',
+    feeling: 'spooky',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 83, attack: 100, defense: 71, speed: 106 }, // TUNE: ×1.18 Wickwhisker
+    moves: ['wiggle-wick', 'flicker-pounce', 'boo', 'toasty-tumble'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#2a2339', '#fff1d6', '#ff9f1c', '#ffe066'],
+      parts: [
+        'spooky-eyes',
+        'brave-brows',
+        'fangs',
+        'tuft-ears',
+        'flame-crown',
+        'flame-mane',
+        'whisker-flames',
+        'long-legs',
+        'flame-tail',
+      ],
+      size: 1.48,
+      finish: 'sparkle',
+      ink: '#fff4dc',
+      glow: 'accent',
+      head: { body: 'orb', size: 0.74, forward: 0.62, up: 0.7 },
+      stance: 0.52,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
+  },
   {
     id: 'sparklewick',
     name: 'Sparklewick',
@@ -3082,7 +3307,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 72, attack: 87, defense: 61, speed: 92 }, // TUNE:
     moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble', 'sparkler-swirl'],
-    evolutions: [],
+    evolutions: [{ into: 'festiwick', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'tall',
       palette: ['#3d3550', '#fff1d6', '#ffb43c', '#ffe066'],
@@ -3101,6 +3326,44 @@ export const SPECIES: Species[] = [
       ink: '#fff4dc',
       glow: 'accent',
       stance: 0.15,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['joy', 'spooky'] },
+  },
+  // #495 grown-up (stage 4): Sparklewick grows confetti sprinkles and strong arms.
+  {
+    id: 'festiwick',
+    name: 'Festiwick',
+    description:
+      'A party candle cat covered in confetti sprinkles, with strong arms for hugging everyone at once.',
+    element: 'fire',
+    feeling: 'joy',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 85, attack: 103, defense: 72, speed: 109 }, // TUNE: ×1.18 Sparklewick
+    moves: ['firework-fling', 'wiggle-wick', 'toasty-tumble', 'sparkler-swirl'],
+    evolutions: [],
+    visual: {
+      body: 'tall',
+      palette: ['#382f4b', '#fff1d6', '#ffb43c', '#ffe066'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'pointy-ears',
+        'flame-crown',
+        'whisker-flames',
+        'sprinkles-yellow',
+        'strong-arms',
+        'hop-feet',
+        'curly-tail',
+      ],
+      size: 1.53,
+      finish: 'sparkle',
+      ink: '#fff4dc',
+      glow: 'accent',
+      stance: 0.3,
       pose: 'stand',
       attackPart: 'crown',
     },
