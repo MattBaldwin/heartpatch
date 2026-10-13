@@ -2520,12 +2520,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
   },
-  // #495 grown-up (stage 4): Glowgourd grows leafy wings and strong arms.
+  // #495 grown-up (stage 4): Glowgourd grows strong arms, bold brows and fangs.
   {
     id: 'grinnygourd',
     name: 'Grinnygourd',
     description:
-      "A giant jack-o'-lantern with leafy wings and the biggest grin in the patch. Still not spooky.",
+      "A giant jack-o'-lantern with strong arms, bold brows and two little fangs. Still not spooky.",
     element: 'leaf',
     feeling: 'silly',
     rarity: 'rare',
@@ -2543,7 +2543,6 @@ export const SPECIES: Species[] = [
         'fangs',
         'stem',
         'leaf-ears',
-        'leaf-wings',
         'strong-arms',
         'biped-legs',
         'vine-tail',
@@ -2579,12 +2578,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['spooky', 'silly'] },
   },
-  // #495 grown-up (stage 4): Squashboo's bat wings grow big, with two little horns.
+  // #495 grown-up (stage 4): Squashboo's bat wings grow big, with brows and little fangs.
   {
     id: 'boonkin',
     name: 'Boonkin',
     description:
-      'A pumpkin ghost with big bat wings and two little horns. Its boo is mostly a giggle.',
+      'A pumpkin ghost with big leafy bat wings and a brave little frown. Its boo is mostly a giggle.',
     element: 'leaf',
     feeling: 'spooky',
     rarity: 'rare',
@@ -2597,10 +2596,11 @@ export const SPECIES: Species[] = [
       palette: ['#ffaf5e', '#fff6e0', '#4f9a45', '#ffd23f'],
       parts: [
         'spooky-eyes',
+        'brave-brows',
         'boo-mouth',
+        'fangs',
         'blush-cheeks',
         'stem',
-        'cone-horns',
         'big-bat-wings',
         'wisp-chain',
       ],
@@ -2697,11 +2697,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
-  // #495 grown-up (stage 4): Brightboo grows a glowing halo of light.
+  // #495 grown-up (stage 4): Brightboo grows a crown of golden rays.
   {
     id: 'beaconboo',
     name: 'Beaconboo',
-    description: 'A great glowing ghost with a halo of light. Lost squishies follow it home.',
+    description:
+      'A great glowing ghost with a crown of golden rays. Lost squishies follow it home.',
     element: 'light',
     feeling: 'spooky',
     rarity: 'legendary',
@@ -2879,7 +2880,7 @@ export const SPECIES: Species[] = [
     id: 'loopadoodle',
     name: 'Loopadoodle',
     description:
-      'A big loopy bat with a fluffy collar and tufty ears. It flies upside down on purpose now.',
+      'A big loopy bat with a fluffy collar, big ears and little horns. It flies upside down on purpose now.',
     element: 'shadow',
     feeling: 'silly',
     rarity: 'epic',
@@ -2942,12 +2943,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy', 'silly'] },
   },
-  // #495 grown-up (stage 4): Hushwing grows a fluffy collar and a pillowy tail.
+  // #495 grown-up (stage 4): Hushwing grows a fluffy ruff to sit on and a fluffy tail.
   {
     id: 'dreamwing',
     name: 'Dreamwing',
-    description:
-      "A big cozy bat wrapped in a fluffy collar, with a tail like a pillow. Shh, it's napping.",
+    description: "A big cozy bat snuggled on a fluffy cloud ruff. Shh, it's napping.",
     element: 'shadow',
     feeling: 'sleepy',
     rarity: 'epic',
