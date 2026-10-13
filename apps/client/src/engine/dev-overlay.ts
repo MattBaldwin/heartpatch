@@ -1,4 +1,4 @@
-import { ThinEngine } from '@babylonjs/core/Engines/thinEngine';
+import { Engine } from '@babylonjs/core/Engines/engine';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
 import { batchUploads } from '../procedural/batch-uploads.js';
@@ -56,8 +56,8 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
     const { engine } = stage.renderer;
     if (gl?.engine !== engine) {
-      // `_gl` is Babylon-internal but typed; a WebGPU engine has no context to count.
-      gl = { engine, counts: engine instanceof ThinEngine ? countGl(engine._gl) : null };
+      // `_gl` is Babylon-internal but typed (WebGL's Engine); WebGPU has no context to count.
+      gl = { engine, counts: engine instanceof Engine ? countGl(engine._gl) : null };
     }
     const { scene } = stage;
     counts.textContent = formatResourceStats({
