@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, skipCinematic, TEST_PASSWORD, uniqueName } from './players.js';
-import { realTap, realTapAt } from './touch.js';
+import { REAL_TAP_HOLD_MS, realTap, realTapAt } from './touch.js';
 
 /**
  * The whole tutorial, tapped the way a finger does (touch.ts), with a reload
@@ -140,6 +140,7 @@ const TAP_MAX_MS = 400;
  * saying what was under the finger and what got picked.
  */
 async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
+  const presses: string[] = [];
   for (let attempt = 1; ; attempt += 1) {
     const hole = (await overlay(page))?.hole;
     expect(hole).toBeTruthy();
@@ -166,6 +167,7 @@ async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
       const [down, up] = (window as unknown as { __mapPress: number[] }).__mapPress;
       return down === undefined || up === undefined ? null : up - down;
     });
+    presses.push(press === null ? 'no press seen' : `${String(Math.round(press))} ms`);
     // Too long to be a tap: the map rightly ignored it, so press again (and
     // say so in the output, as evidence the slow-press case happens).
     if (press !== null && press > TAP_MAX_MS && attempt < 3) {
@@ -180,7 +182,8 @@ async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
     const picked = (await hook<{ selected: string | null }>(page, 'map'))?.selected ?? null;
     const ms = press === null ? 'no' : `a ${String(Math.round(press))} ms`;
     throw new Error(
-      `the spotlit tile didn't open after ${ms} press at (${String(Math.round(x))}, ${String(Math.round(y))}) on [${under.join(', ')}]; the map picked ${String(picked)}`,
+      `the spotlit tile didn't open after ${ms} press at (${String(Math.round(x))}, ${String(Math.round(y))}) on [${under.join(', ')}]; the map picked ${String(picked)}; ` +
+        `presses so far: ${presses.join(', ')} (held ${String(REAL_TAP_HOLD_MS)} ms each, a tap is up to ${String(TAP_MAX_MS)} ms)`,
     );
   }
 }
