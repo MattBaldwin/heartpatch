@@ -31,19 +31,25 @@ describe('planSim', () => {
   const plan = planSim(SMALL);
   const count = (bracket: Matchup['bracket']) =>
     plan.matchups.filter((m) => m.bracket === bracket).length;
-  const { base, kid, evolved } = speciesForms(serverData());
+  const { base, kid, evolved, grown } = speciesForms(serverData());
 
   it('plays every base form and every evolved form, secret ones too, in every stance', () => {
     expect(count('base')).toBe(pairCount(base.length) * SMALL.policies.length);
     expect(count('kid')).toBe(pairCount(kid.length) * SMALL.policies.length);
     expect(count('evolved')).toBe(pairCount(evolved.length) * SMALL.policies.length);
+    expect(count('grown')).toBe(pairCount(grown.length) * SMALL.policies.length);
     // #443: a kid evolves again, so it isn't measured against the teens.
     expect(kid.map((s) => s.id)).toContain('kindlebun');
     expect(evolved.map((s) => s.id)).not.toContain('kindlebun');
     expect(base.map((s) => s.id)).toContain('heartlet');
     expect(evolved.map((s) => s.id)).toContain('heartbloom');
+    // #495: a teen with a grown-up stays with the teens; its grown-up has its own bracket.
+    expect(evolved.map((s) => s.id)).toContain('hearthbun');
+    expect(grown.map((s) => s.id)).toContain('bonfirebun');
     // Every species is in exactly one bracket.
-    expect(base.length + kid.length + evolved.length).toBe(serverData().species.length);
+    expect(base.length + kid.length + evolved.length + grown.length).toBe(
+      serverData().species.length,
+    );
   });
 
   it('plays every element × feeling combo against every other', () => {

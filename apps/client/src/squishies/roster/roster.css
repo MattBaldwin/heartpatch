@@ -331,6 +331,22 @@
   flex: 1 1 auto;
 }
 
+/* The Keeper's house in a row's detail (#381): where it lives, Move out and its confirm. */
+.roster-house {
+  margin-top: 6px;
+}
+
+.roster-house-line {
+  margin: 0;
+}
+
+.roster-house-ask {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .roster-empty {
   padding: 18px 8px;
   text-align: center;

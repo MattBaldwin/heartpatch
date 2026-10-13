@@ -275,6 +275,25 @@ const roster = createRosterSheet({
     roster.close();
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map', { dressUp: true });
   },
+  // The Keeper's house (#381): a row's "Move into the house" opens the house's
+  // picker on it, from Home on that patch (the house steps in over Home).
+  canMoveIntoHouse: (mapId) => homeOpen() && home.debug?.mapId === mapId,
+  // Never over home's banner, the map's patch name or the account chip: a long detail scrolls in the sheet.
+  coveredTop: () => {
+    let bottom = 0;
+    for (const node of document.querySelectorAll<HTMLElement>(
+      '.home-top, .auth-chip, .map-hud-title',
+    )) {
+      const box = node.getBoundingClientRect();
+      if (node.closest('[hidden]') || box.height === 0) continue;
+      bottom = Math.max(bottom, box.bottom);
+    }
+    return bottom;
+  },
+  onMoveIntoHouse: (mapId, current, squishyId) => {
+    roster.close();
+    void house.open(mapId, current, { pick: squishyId });
+  },
 });
 const care = createCareSheet({
   root: document.body,
@@ -684,6 +703,7 @@ const house = createHouseScreen({
     const chip = document.querySelector<HTMLElement>('.auth-chip');
     return chip && !chip.hidden ? chip.getBoundingClientRect().bottom : 0;
   },
+  portraits,
   // Only while Home is still open on that patch when the reply lands.
   canOpen: (mapId) => homeOpen() && home.debug?.mapId === mapId,
   onOpen: () => {

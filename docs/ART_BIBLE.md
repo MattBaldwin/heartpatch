@@ -52,7 +52,7 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 
 Every line has four stages (#443). The kid is an in-between of the baby and its teens; the teens are the forms that shipped as "evolutions" before #443 (and branch, #32); the grown-up is the one new big step.
 
-- **[checked]** Each evolution step is a set share bigger than the form it grows from (`artRules.evolutionScale`): **×1.2–1.4** today, and **×1.08–1.4** once #443's first kid batch lands (a kid is a smaller step). The 1.4 top lets a line whose kid hasn't shipped yet still go baby → teen in one step. Each step also adds **at least one new sticking-out part**.
+- **[checked]** Each evolution step is a set share bigger than the form it grows from (`artRules.evolutionScale`): **×1.08–1.4** (a kid is a small step; a grown-up is about ×1.18 its teen). Each step also adds **at least one new sticking-out part**.
 - **[checked]** A form never shares body + dominant part + hue family with another line's form (§1.2).
 - Every form keeps its line's colour family and signature, so the family resemblance is obvious. Within a line, a grown-up's biggest part should differ from its teen's, so the last step changes the silhouette. (Review rules, not checked.)
 

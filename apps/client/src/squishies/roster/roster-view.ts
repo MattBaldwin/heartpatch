@@ -141,7 +141,7 @@ export interface RosterRow {
 }
 
 export interface RosterSources {
-  readonly home: HomeResponse;
+  readonly home: Pick<HomeResponse, 'squishies' | 'speciesDefs'>;
   /** Null while its read is missing: rows go without a mood. */
   readonly care: CareListResponse | null;
   /** Null while its read is missing: rows go without a status. */
