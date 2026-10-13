@@ -1843,7 +1843,7 @@ export const PARTS: Part[] = [
     shape: 'capsule',
     size: [0.15, 0.075, 0.075],
     color: 'detail',
-    layout: { kind: 'scatter', count: 12, aroundRange: 110, upRange: 40 },
+    layout: { kind: 'scatter', count: 12, aroundRange: 140, upRange: 40 },
     around: 180,
     up: 10,
     sink: 0.4,
