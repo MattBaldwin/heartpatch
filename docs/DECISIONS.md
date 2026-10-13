@@ -1607,26 +1607,35 @@ _Owner answers to the coordinator on 2026-10-12, plus coordinator calls. Each it
 _Owner answers to the coordinator on 2026-10-12 and 2026-10-13, plus coordinator calls. Each item is labelled "Owner" or "Coordinator call"._
 
 **Game rules**
-- **Grown-ups batches 1 and 2 are approved as is (#495).** Owner approved both batches.
-  - Batch 1 is the starter lines, merged in #503.
-  - Batch 2 is three Halloween lines, merged in #508: Glowgourd → Grinnygourd, Squashboo → Boonkin, Topsywing → Loopadoodle, Hushwing → Dreamwing, Brightboo → Beaconboo and Lullaboo → Snoozelight.
-  - Balance tuning after approval doesn't change any look, so it doesn't need a fresh approval. Each grown-up sits within about 4 points of its teen in the same simulator field.
-- **Clearing land stays homestead-only (#242).** Owner: only a joined homestead tile (`homestead === 'joined'`) can be cleared. The tile panel now says where a tile stands:
+- **Grown-ups batches 1 and 2 are approved as is (#495).** Owner: batch 1 (#503, the starter lines) and batch 2 (#508, three Halloween lines) ship as shown. Batch 2 is:
+  - Glowgourd → Grinnygourd
+  - Squashboo → Boonkin
+  - Topsywing → Loopadoodle
+  - Hushwing → Dreamwing
+  - Brightboo → Beaconboo
+  - Lullaboo → Snoozelight
+- **Balance tuning after a look approval needs no new approval (#495).** Coordinator call: changing a move's accuracy or chance, or a stat, leaves the look untouched. Each grown-up stays within about 4 points of its teen, measured in the same simulator run (teens against teens, grown-ups against grown-ups).
+- **Clearing land stays homestead-only (#242).** Owner: only a joined homestead tile (`homestead === 'joined'`) can be cleared. Owner: the tile panel should say where a tile stands. The headers are:
   - "Mountains · Homestead 🏡" / "Your homestead."
   - "· Homestead (napping zZ)"
-  - "Your land. Fully explored ✨, but it needs to touch home to become a homestead."
+  - "Your land, explored ✨. It must touch home to be a homestead."
   - On land that isn't a homestead, the Build sheet shows Clear land held back, with its reason.
   - The owner approved the look, and it merged in #504.
-- **A won-back homestead shows as one again without a reload (#242).**
-  - **Root cause:** the client's `tile.captured` handler cleared a tile's explored and homestead state. But a tile keeps its `joined_at` when it leaves a player. So when the player won it back still connected, the server sent no homestead event, and the tile looked like plain owned land until the next full map read.
-  - **Fix:** `tile.captured` now redraws the tile and then re-reads `/maps/:id/view`.
-  - The owner approved the look, and it merged in #507.
+- **A won-back homestead shows as one again without a reload (#242).** Coordinator call: root cause and fix, as below. The owner approved the look, and it merged in #507.
+  - **Root cause:** the client's `tile.captured` handler cleared a tile's explored and homestead state. A tile keeps its `joined_at` when it leaves a player. So when the player won it back still connected, the server sent no homestead event, and the tile looked like plain owned land until the next full map read.
+  - **Fix:** `tile.captured` now redraws the tile, then re-reads `/maps/:id/view`.
+
+**Performance and devices**
+- **Exploring frame-rate collapse is queued, not started (#501, p1).** Owner: work it after the current Phase 1 lanes finish. The lane measures first: CPU vs GPU, draw calls, and meshes created per second while exploring.
+- **The `/view` re-read runs on every capture, wild claims included (#507).** Coordinator call: a Hollow Man takeover makes a homestead wild first, and the kid then claims it back from wild. That is the commonest win-back, so skipping the re-read for wild claims would bring the bug back.
+  - The cheaper fix is to put the new owner's explored and homestead state in the `tile.captured` payload. That is a shared-contract change, held until #501 has numbers.
+  - The re-read is on #501's list of costs to measure.
 
 **Coordinator calls**
-- **Exploring frame-rate collapse is queued, not started (#501, p1).** Owner: work it after the current Phase 1 lanes finish. The lane measures first: CPU vs GPU, draw calls, and meshes created per second while exploring. One cost on its list is the `/view` re-read that #507 adds to every `tile.captured`.
-- **The `/view` re-read runs on every capture, wild claims included (#507).** A Hollow Man takeover makes a homestead wild first, and the kid then claims it back from wild. That is the commonest win-back, so skipping the re-read for wild claims would bring the bug back. The cheaper fix is to put the new owner's explored and homestead state in the `tile.captured` payload. That is a shared-contract change, held until #501 has numbers.
 - **Flaky tests (#429), round 6.**
-  - #502 gives the two slow shared simulator tests a 30 s per-test budget. They were `scripts/sim/sim.test.ts` "is reproducible" (1.8 s alone, 5.5 s under load) and a `progression.test.ts` Training Grounds test (13.8 s under load). Both hit vitest's 5 s default on CI.
-  - Two map-fill tests stay on the watch list.
-  - #505 fixes the house.spec:331 race in the test itself. A fixed 2 s hold on the build reply was overrun on slow CI. The game's build was confirmed to be atomic.
-- **A dev-only request body is added to shared (#504).** `DevHomesteadRequestSchema` is used by `POST /dev/homestead`. It is additive and changes no existing contract.
+  - #502 gives two slow shared simulator tests a 30 s per-test budget.
+    - `scripts/sim/sim.test.ts` "is reproducible" timed out on CI (1.8 s alone, 5.5 s under load).
+    - `progression.test.ts` "moves no target by more than a day with Training Grounds" took 13.8 s under local load and gets the same budget on the same evidence.
+  - Watch list: the map-fill tests "never takes land from kids who keep playing" and "keeps Gentle's cap".
+  - #505 fixes the house.spec:331 race in the test itself: a fixed 2 s hold on the build reply was overrun on slow CI. The app wasn't at fault, because the confirm panel updates its label and disabled state in one render.
+- **A dev-only request body is added to shared (#504).** `DevHomesteadRequestSchema` is used by `POST /maps/:id/dev/homestead`. It is additive and changes no existing contract.
