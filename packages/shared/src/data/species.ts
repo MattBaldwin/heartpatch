@@ -527,10 +527,11 @@ export const MOVES: Move[] = [
   {
     id: 'tidal-twirl',
     name: 'Tidal Twirl',
-    description: 'Spins into a big swirly wave. Whoosh!',
+    description: 'Spins into a big swirly wave. Whoosh! It might come out of it a little faster.',
     element: 'water',
     power: 85, // TUNE:
-    accuracy: 85, // TUNE:
+    accuracy: 95, // TUNE: 85 and no effect left Tsunoodle at 35% against the grown-ups
+    effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 }], // TUNE:
   },
   {
     id: 'raincloud-snore',
@@ -557,7 +558,7 @@ export const MOVES: Move[] = [
     element: 'fire',
     power: 80, // TUNE:
     accuracy: 90, // TUNE:
-    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 50 }], // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE: 50% made Emberslumber 70%+ against the grown-ups
   },
   {
     id: 'thistle-charge',
@@ -676,7 +677,7 @@ export const SPECIES: Species[] = [
     element: 'water',
     feeling: 'silly',
     rarity: 'rare',
-    baseStats: { hp: 94, attack: 83, defense: 77, speed: 89 }, // TUNE: ×1.18 Splashmallow
+    baseStats: { hp: 100, attack: 86, defense: 80, speed: 92 }, // TUNE: ×1.18 Splashmallow, plus 15 (sim: 38% against the grown-ups, 6 under its teen)
     moves: ['tidal-twirl', 'belly-flop', 'bubble-bath', 'splish-splash'],
     evolutions: [],
     visual: {
