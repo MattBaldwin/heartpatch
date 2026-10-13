@@ -166,8 +166,32 @@ describe('launch roster (issue #10)', () => {
       );
       const kidLevel = kidOf(base) ? base.evolutions[0]!.level : step.level - 8;
       expect(evo.level, grown.id).toBe(kidLevel + 20);
-      expect(statTotal(grown), grown.id).toBeGreaterThan(statTotal(teen));
-      expect(grown.visual.size ?? 1, grown.id).toBeGreaterThan(teen.visual.size ?? 1);
+      // About ×1.18 the teen's stats (a tuned grown-up may carry a few more) and size.
+      const statRatio = statTotal(grown) / statTotal(teen);
+      expect(statRatio, grown.id).toBeGreaterThanOrEqual(1.15);
+      expect(statRatio, grown.id).toBeLessThanOrEqual(1.25);
+      const sizeRatio = (grown.visual.size ?? 1) / (teen.visual.size ?? 1);
+      expect(sizeRatio, grown.id).toBeGreaterThanOrEqual(1.12);
+      expect(sizeRatio, grown.id).toBeLessThanOrEqual(1.25);
+      // Keeps three of its teen's moves and swaps its weakest plain hit (power,
+      // no effects; a utility move like Pollen Puff stays) for a signature move
+      // no other squishy knows.
+      const kept = grown.moves.filter((m) => teen.moves.includes(m));
+      const added = grown.moves.filter((m) => !teen.moves.includes(m));
+      expect(kept, grown.id).toHaveLength(3);
+      expect(added, grown.id).toHaveLength(1);
+      const dropped = teen.moves.find((m) => !grown.moves.includes(m))!;
+      const move = (id: string) => MOVES.find((m) => m.id === id)!;
+      const power = (id: string) => move(id).power;
+      const attacks = teen.moves
+        .filter((m) => power(m) > 0 && (move(m).effects ?? []).length === 0)
+        .map(power);
+      expect(power(dropped), `${grown.id} drops ${dropped}`).toBe(Math.min(...attacks));
+      const others = SPECIES.filter((s) => s.id !== grown.id && s.moves.includes(added[0]!));
+      expect(
+        others.map((s) => s.id),
+        added[0],
+      ).toEqual([]);
     }
     // #363's sibling ceiling holds for a line's two grown-ups too.
     for (const base of lines) {

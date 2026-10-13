@@ -226,7 +226,7 @@ const pct = (rate: number) => `${(rate * 100).toFixed(1)}%`;
 const flagMark = (r: ReportRow) =>
   r.flag === 'strong' ? '🔺 strong' : r.flag === 'weak' ? '🔻 weak' : '';
 
-const STAGE_NAMES: Readonly<Record<string, string>> = {
+const STAGE_NAMES: Readonly<Record<'base' | 'kid' | 'evolved' | 'grown', string>> = {
   base: 'base form',
   kid: 'kid form',
   evolved: 'evolved form',
@@ -237,7 +237,7 @@ const STAGE_NAMES: Readonly<Record<string, string>> = {
 export function describe(r: ReportRow): string {
   switch (r.section) {
     case 'species':
-      return `${STAGE_NAMES[r.group] ?? 'evolved form'} ${r.subject}`;
+      return `${STAGE_NAMES[r.group as keyof typeof STAGE_NAMES]} ${r.subject}`;
     case 'stance':
       return `stance ${r.subject} vs ${r.opponent}`;
     case 'pair':
