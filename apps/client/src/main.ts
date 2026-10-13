@@ -1530,7 +1530,12 @@ if (import.meta.env.DEV) {
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
     battleDev: () => battles.dev,
-    mapDev: () => ({ select: (q: number, r: number) => maps.focus({ q, r }) !== null }),
+    mapDev: () => ({
+      select: (q: number, r: number) => maps.focus({ q, r }) !== null,
+      replay: (event) => {
+        maps.replay(event);
+      },
+    }),
     keeper: () => keeper.debug,
     cinematic: () => cinematic.debug,
     catalog: () => catalog.debug,

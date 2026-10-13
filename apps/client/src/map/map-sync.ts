@@ -89,8 +89,8 @@ export class MapSync {
     const state = this.current;
     if (!state || this.resyncing || event.mapId !== state.id) return;
     const effect = state.apply(event);
-    if (effect === 'resync') this.resync();
-    else if (effect === 'redraw') this.options.onRedraw(state);
+    if (effect === 'redraw' || effect === 'refresh') this.options.onRedraw(state);
+    if (effect === 'resync' || effect === 'refresh') this.resync();
   }
 
   /** ws-client `onResync`: too much was missed to replay. */

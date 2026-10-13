@@ -1,3 +1,4 @@
+import type { WsEventMessage } from '@heartpatch/shared';
 import type { AudioDebug } from '../audio/audio.js';
 import type { BattleDebug, BattleDevControls } from '../battle/battle-screen.js';
 import type { HollowDebug } from '../hollow/hollow-screen.js';
@@ -58,7 +59,11 @@ declare global {
        * would, without hunting for it on a slow software-rendered canvas.
        * False when the tile isn't on the open map.
        */
-      mapDev?(): { select(q: number, r: number): boolean };
+      mapDev?(): {
+        select(q: number, r: number): boolean;
+        /** Plays one live event into the open map, as if the server sent it (#242). */
+        replay(event: WsEventMessage): void;
+      };
       /** The side trays over the map: shown, which is open, the hint, the handles' badges. */
       trays?(): TraysDebug;
       /** The recipe book: open, the pages on screen, unlocked and new pages (owner decision 2026-10-05). */

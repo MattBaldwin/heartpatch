@@ -287,14 +287,50 @@ describe('MapSync', () => {
   it('redraws from the copy when a live event fully describes a tile change (#15)', async () => {
     const { sync, redraws, calls } = await opened(5);
     const tile = testView(1).tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    const cooldownUntil = '2026-10-02T13:00:00.000Z';
     sync.event(
-      event('tile.captured', { userId: userId(1), fromUserId: null, q: tile.q, r: tile.r }, 6),
+      event(
+        'tile.attacked',
+        { attackerUserId: userId(1), defenderUserId: null, q: tile.q, r: tile.r, cooldownUntil },
+        6,
+      ),
     );
     expect(redraws).toHaveLength(1);
-    expect(redraws[0]!.tiles.find((t) => t.q === tile.q && t.r === tile.r)?.ownerUserId).toBe(
-      userId(1),
+    expect(redraws[0]!.tiles.find((t) => t.q === tile.q && t.r === tile.r)?.cooldownUntil).toBe(
+      cooldownUntil,
     );
     // No refetch: the event said everything.
     expect(calls).toEqual([]);
+  });
+
+  it('on a capture, redraws at once and reads the view again for the homestead (#242)', async () => {
+    const { sync, redraws, calls, fetches, answer } = await opened(5);
+    const tile = testView(1).tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    sync.event(
+      event('tile.captured', { userId: userId(1), fromUserId: null, q: tile.q, r: tile.r }, 6),
+    );
+    // The new owner shows straight away; their homestead isn't known yet.
+    expect(redraws).toHaveLength(1);
+    const now = redraws[0]!.tiles.find((t) => t.q === tile.q && t.r === tile.r);
+    expect(now).toMatchObject({ ownerUserId: userId(1), homestead: null });
+    expect(calls).toEqual(['unsubscribe']);
+    expect(fetches).toHaveLength(2);
+    // A homestead won back keeps its joined_at, so no homestead event comes:
+    // the fresh view brings it back.
+    const fresh = testView(1);
+    await answer({
+      ...fresh,
+      seq: 6,
+      tiles: fresh.tiles.map((t) =>
+        t.q === tile.q && t.r === tile.r
+          ? { ...t, ownerUserId: userId(1), explored: true, homestead: 'joined' as const }
+          : t,
+      ),
+    });
+    expect(redraws.at(-1)!.tiles.find((t) => t.q === tile.q && t.r === tile.r)).toMatchObject({
+      explored: true,
+      homestead: 'joined',
+    });
+    expect(calls).toEqual(['unsubscribe', `subscribe ${MAP_ID} 6`]);
   });
 });
