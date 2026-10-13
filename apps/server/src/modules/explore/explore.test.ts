@@ -816,6 +816,28 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(
       await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
     ).toEqual([]);
+    // Napping: joined once, cut off since. A refresh leaves it napping, and
+    // it won't clear until it's joined up again.
+    const nap = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+      terrain: 'mountains',
+      joined: 'napping',
+    });
+    expect(nap.statusCode, nap.body).toBe(201);
+    const napAt = nap.json<{ q: number; r: number }>();
+    expect(
+      await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
+    ).toEqual([]);
+    const later = MapViewSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/view`, kid)).json(),
+    );
+    expect(later.tiles.find((t) => t.q === napAt.q && t.r === napAt.r)).toMatchObject({
+      explored: true,
+      homestead: 'paused',
+    });
+    const napping = await call(server, 'POST', `/maps/${mapId}/clears`, kid, napAt);
+    expect(errorOf(napping).message).toBe(
+      'This homestead is napping zZ. Join it back up to home first!',
+    );
     // Asked for land that doesn't exist, it says so.
     const bad = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
       terrain: 'moon-cheese',

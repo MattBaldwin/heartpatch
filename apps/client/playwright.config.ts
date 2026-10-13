@@ -48,6 +48,7 @@ const E2E_GROUPS = [
   [
     'battle',
     'battle-ui',
+    'clear-land',
     'factory',
     'first-session',
     'map-hole',
@@ -61,7 +62,6 @@ const E2E_GROUPS = [
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391). Keep it light.
   [
     'cinematic',
-    'clear-land',
     'friendly',
     'inventory',
     'milestones',
@@ -80,6 +80,7 @@ const E2E_GROUPS = [
     'care-layout',
     'chat',
     'fences',
+    'homestead-colour',
     'lobby',
     'pwa',
     'taps',

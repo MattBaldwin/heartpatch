@@ -93,7 +93,7 @@ describe('MapState', () => {
     expect(state.apply(event('clearing.started', at))).toBe('resync');
     // The land changed hands: the clear is lost, and no tile.cleared follows.
     const captured = { q: tile.q, r: tile.r, userId: userId(2), fromUserId: userId(1) };
-    expect(state.apply(event('tile.captured', captured))).toBe('redraw');
+    expect(state.apply(event('tile.captured', captured))).toBe('refresh');
     expect(state.tileAt(hexKey(tile))?.clearing).toBeNull();
     const cleared = { ...at, terrain: 'clearing', from: tile.terrain };
     expect(state.apply(event('tile.cleared', cleared))).toBe('resync');
@@ -175,7 +175,7 @@ describe('MapState', () => {
     expect(state.tileAt(key)?.defenders).toBe(2);
 
     const captured = { userId: userId(1), fromUserId: null, ...at };
-    expect(state.apply(event('tile.captured', captured))).toBe('redraw');
+    expect(state.apply(event('tile.captured', captured))).toBe('refresh');
     // Someone's land now: its wild guardians went home with the hint.
     expect(state.tileAt(key)).toMatchObject({
       ownerUserId: userId(1),

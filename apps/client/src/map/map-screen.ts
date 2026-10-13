@@ -139,6 +139,12 @@ export interface MapScreen {
    */
   focus: (h: Hex) => GroundPoint | null;
   /**
+   * Dev hook only (e2e): plays one live event into the open map as if the
+   * server had sent it, e.g. a capture of land the server already counts as
+   * a homestead (#242). Ignored with no map open.
+   */
+  replay: (event: WsEventMessage) => void;
+  /**
    * A tile's box on screen now (CSS pixels, #419), or null with no map on
    * screen or the tile behind the camera. A tile panned past the edge gives
    * a box off screen: callers check.
@@ -470,6 +476,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       buildArea = next;
       scene3d?.showBuildArea(next?.view ?? null);
       options.invalidate();
+    },
+    replay: (event) => {
+      sync.event(event);
     },
     focus: (h) => {
       const state = sync.state;
