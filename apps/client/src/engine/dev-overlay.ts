@@ -1,6 +1,8 @@
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
-import { activeTriangles, formatRenderStats } from './render-stats.js';
+import { batchUploads } from '../procedural/batch-uploads.js';
+import { countGl, type CountedGl, type GlCounts } from './gl-counters.js';
+import { activeTriangles, formatRenderStats, formatResourceStats } from './render-stats.js';
 import type { RendererKind } from './renderer.js';
 import type { Stage } from './stage.js';
 
@@ -16,16 +18,26 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * triangles (#318, for checking a real older iPad). Imported dynamically
  * from main.ts in a dev build, or on the live site with `?fps=1` (#335,
  * `showsStats`), so nobody sees it unless they ask.
+ *
+ * A second line counts what the scene holds and the WebGL objects made and
+ * freed since it mounted (#501: a frame rate that sinks as a session goes on
+ * shows here as a number that keeps climbing), the squishy batch uploads,
+ * and the governor's render scale.
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
   badge.className = 'dev-status dev-stats';
   badge.dataset['testid'] = 'dev-stats';
   badge.textContent = 'renderer: …';
-  document.body.append(badge);
+  const counts = document.createElement('div');
+  counts.className = 'dev-status dev-stats-counts';
+  counts.dataset['testid'] = 'dev-stats-counts';
+  document.body.append(badge, counts);
 
   // One counter per scene: a renderer fallback or a remount makes a new one.
   let counted: { scene: Scene; instrumentation: SceneInstrumentation } | null = null;
+  // The context's own calls, counted once per engine (a fallback makes a new one).
+  let gl: { engine: object; counts: GlCounts | null } | null = null;
   setInterval(() => {
     const stage = getStage();
     if (!stage) return;
@@ -40,5 +52,21 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     const renderer = RENDERER_LABEL[stage.renderer.kind];
     const work = formatRenderStats(drawCalls, activeTriangles(stage.scene));
     badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
+    const { engine } = stage.renderer;
+    if (gl?.engine !== engine) {
+      // Babylon keeps its WebGL context on `_gl`; a WebGPU engine has none.
+      const context = (engine as unknown as { _gl?: CountedGl | null })._gl;
+      gl = { engine, counts: context ? countGl(context) : null };
+    }
+    const { scene } = stage;
+    counts.textContent = formatResourceStats({
+      meshes: scene.meshes.length,
+      materials: scene.materials.length,
+      textures: scene.textures.length,
+      animatables: scene.animatables.length,
+      gl: gl.counts,
+      batchUploads: batchUploads.count,
+      renderScale: stage.quality.snapshot.renderScale,
+    });
   }, 500);
 }
