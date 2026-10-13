@@ -79,3 +79,11 @@ body {
   bottom: calc(env(safe-area-inset-bottom) + 36px);
   font-variant-numeric: tabular-nums;
 }
+
+/* The `?fps=1` badge's counts (#501), above it: wraps on a narrow phone. */
+.dev-stats-counts {
+  bottom: calc(env(safe-area-inset-bottom) + 64px);
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  border-radius: 12px;
+}

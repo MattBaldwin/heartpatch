@@ -11,6 +11,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { KeeperConfig, KeeperData } from '@heartpatch/shared';
 import { CONTACT_SHADOW, FINISH_CODE, VINYL, type SquishMove, type SquishyLod } from '../config.js';
 import { createContactShadowMesh } from '../contact-shadow.js';
+import { batchUploads } from '../batch-uploads.js';
 import { eventAttribute, eventRunning, type SquishEvent } from '../motion.js';
 import { hollowManArrays } from '../hollow-man/hollow-man.js';
 import { partArrays } from '../part-shapes.js';
@@ -426,6 +427,7 @@ export class KeeperField {
       batch.mesh = mesh;
     }
     mesh.setEnabled(true);
+    batchUploads.count++;
 
     const matrices = new Float32Array(n * 16);
     const colors = new Float32Array(n * 4);

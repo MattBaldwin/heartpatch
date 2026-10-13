@@ -19,3 +19,49 @@ export function activeTriangles(scene: Scene): number {
 export function formatRenderStats(drawCalls: number, triangles: number): string {
   return `${String(drawCalls)} draws · ${String(Math.round(triangles / 1000))}k tris`;
 }
+
+/** What the badge's second line counts (#501): see `formatResourceStats`. */
+export interface ResourceStats {
+  readonly meshes: number;
+  readonly materials: number;
+  readonly textures: number;
+  readonly animatables: number;
+  /** WebGL objects since this engine's context was first counted, or null on WebGPU. */
+  readonly gl: {
+    readonly buffersMade: number;
+    readonly buffersFreed: number;
+    readonly texturesMade: number;
+    readonly texturesFreed: number;
+    readonly vertexArraysMade: number;
+    readonly vertexArraysFreed: number;
+    readonly programs: number;
+  } | null;
+  /** Squishy and Keeper batch uploads since the page opened. */
+  readonly batchUploads: number;
+  /** The governor's render scale (fraction of the DPR-capped resolution). */
+  readonly renderScale: number;
+}
+
+/**
+ * "48 mesh · 20 mat · 5 tex · 0 anim · buf +40/-12 · gltex +9/-2 · vao +30/-4 · 27 prog · 6 up · 1.00 scale":
+ * the badge's second line (#501), so a count that climbs while a scene only
+ * plays shows on a real device.
+ */
+export function formatResourceStats(s: ResourceStats): string {
+  const parts = [
+    `${String(s.meshes)} mesh`,
+    `${String(s.materials)} mat`,
+    `${String(s.textures)} tex`,
+    `${String(s.animatables)} anim`,
+  ];
+  if (s.gl) {
+    parts.push(
+      `buf +${String(s.gl.buffersMade)}/-${String(s.gl.buffersFreed)}`,
+      `gltex +${String(s.gl.texturesMade)}/-${String(s.gl.texturesFreed)}`,
+      `vao +${String(s.gl.vertexArraysMade)}/-${String(s.gl.vertexArraysFreed)}`,
+      `${String(s.gl.programs)} prog`,
+    );
+  }
+  parts.push(`${String(s.batchUploads)} up`, `${s.renderScale.toFixed(2)} scale`);
+  return parts.join(' · ');
+}

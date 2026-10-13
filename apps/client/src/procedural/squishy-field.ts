@@ -29,6 +29,7 @@ import {
   type SquishyDetail,
   type SquishyLod,
 } from './config.js';
+import { batchUploads } from './batch-uploads.js';
 import { createContactShadowMesh } from './contact-shadow.js';
 import { floaterArrays } from './floater-shapes.js';
 import { eventAttribute, eventRunning, type SquishEvent } from './motion.js';
@@ -845,6 +846,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       batch.mesh = mesh;
     }
     mesh.setEnabled(true);
+    batchUploads.count++;
 
     const matrices = new Float32Array(n * 16);
     const colors = new Float32Array(n * 4);

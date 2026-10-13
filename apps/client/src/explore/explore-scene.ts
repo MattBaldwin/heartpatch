@@ -169,6 +169,17 @@ export interface ExploreSceneStats {
   readonly sky: ExploreSkyStats;
   /** Triangles in the last frame drawn (Babylon's active indices ÷ 3). */
   readonly triangles: number;
+  /**
+   * Meshes, materials, textures and geometries made since the scene opened
+   * (#501). Walking and the ambient clock only move what's built, so these
+   * stay put while exploring; a rebuild per step would count up here.
+   */
+  readonly created: {
+    readonly meshes: number;
+    readonly materials: number;
+    readonly textures: number;
+    readonly geometries: number;
+  };
   /** The land kit's layers and tier (#335 art reset), or null on today's tile. */
   readonly land: LandStats | null;
   /** The lake's own layers (kelp, coral, fish, bubbles), or null off a lake. */
@@ -434,9 +445,16 @@ export class ExploreScene implements AmbientTarget {
   /** The high tier's swim extras (#399): kick bubbles, and the team bobbing while the Keeper treads water. */
   #highTier = false;
   #now = 0;
+  /** Objects made since the scene opened (`stats.created`, #501). */
+  readonly #created = { meshes: 0, materials: 0, textures: 0, geometries: 0 };
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
+    // Counted for the frame-rate guard (#501); they go with the scene.
+    scene.onNewMeshAddedObservable.add(() => this.#created.meshes++);
+    scene.onNewMaterialAddedObservable.add(() => this.#created.materials++);
+    scene.onNewTextureAddedObservable.add(() => this.#created.textures++);
+    scene.onNewGeometryAddedObservable.add(() => this.#created.geometries++);
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
     this.#highTier = bubblesAt(options.tier);
@@ -725,6 +743,7 @@ export class ExploreScene implements AmbientTarget {
       keeperHeight: this.#keeperHeight(),
       sky: this.#sky.stats,
       triangles: this.#triangles,
+      created: { ...this.#created },
       land: this.#land?.stats ?? null,
       water: this.#water?.stats ?? null,
       swim: this.#underwater

@@ -66,6 +66,7 @@ interface ExploreDebug {
     faded: number[];
     fadedCover: number[];
     triangles: number;
+    created: { meshes: number; materials: number; textures: number; geometries: number };
     land: { tier: string } | null;
   } | null;
 }
@@ -155,6 +156,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   expect(settled?.land).not.toBeNull();
   test.info().annotations.push({ type: 'triangles', description: String(settled?.triangles) });
   expect(settled?.triangles ?? 0).toBeLessThan(TRIANGLE_CEILING);
+  const builtOnArrival = settled?.created;
+  expect(builtOnArrival?.meshes ?? 0).toBeGreaterThan(0);
 
   // Walk to a spot searched by hand and search it the easy way. A common find
   // is a toast and the world keeps going; a rare one (a lore page, something
@@ -166,6 +169,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     first.keeper,
   );
   let searched = 0;
+  let guardSkipped: string | null = 'the first hand spot was already in reach';
   let toasted = false;
   for (const hands of handSpots.slice(0, 5)) {
     if (!(await walkTo(page, hands.index))) continue;
@@ -177,6 +181,22 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
         return Math.hypot(cam.x - s.keeper.x, cam.z - s.keeper.z);
       }, slow)
       .toBeLessThan(0.25);
+    const walked = (await exploreState(page))!;
+    const moved = walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z;
+    // A software renderer's governor may change tier while exploring, and the
+    // walk's first step applies it (the team's detail level rebuilds): that's
+    // a rebuild on purpose, so only a walk on one tier is judged.
+    const sameTier = walked.scene?.land?.tier === settled?.land?.tier;
+    if (searched === 0 && moved && !sameTier) guardSkipped = 'the tier changed during the walk';
+    if (searched === 0 && moved && sameTier) {
+      // The frame-rate guard (#501): walking draws every frame, so it must
+      // only move what's built. A mesh, material, texture or geometry made
+      // per step (a rebuilt fade, glints or ground) would count up here, as
+      // a frame over the draw-call budget would show.
+      expect(walked.scene?.created).toEqual(builtOnArrival);
+      expect(walked.scene?.drawCalls ?? 0).toBeLessThan(DRAW_CALL_CEILING);
+      guardSkipped = null;
+    }
     await slowExpect(action).toBeEnabled();
     await action.tap();
     // A light overlay, not a card: the chip, the easy way and "Not now".
@@ -223,6 +243,11 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     break;
   }
   expect(toasted).toBe(true);
+  if (guardSkipped !== null) {
+    test
+      .info()
+      .annotations.push({ type: 'skipped', description: `walk guard (#501): ${guardSkipped}` });
+  }
   const after = (await exploreState(page))!;
   expect(after.progress?.searched).toBe(searched);
   expect(after.scene?.done).toBe(searched);
