@@ -59,7 +59,7 @@ test('clears a joined mountain homestead, and says why an unjoined one waits', a
   // Not joined: the panel says so, and Build holds Clear land back with why.
   await selectTile(page, away.body);
   await slowExpect(panel.getByTestId('tile-panel-owner')).toHaveText(
-    'Your land. Fully explored ✨, but it needs to touch home to become a homestead.',
+    'Your land, explored ✨. It must touch home to be a homestead.',
   );
   await expect(panel.locator('#tile-panel-title')).toHaveText('Mountains');
   await expect(panel).toContainText("Once it's a homestead, a Pickaxe can clear it 🌱");

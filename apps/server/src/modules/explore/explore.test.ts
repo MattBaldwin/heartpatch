@@ -13,6 +13,7 @@ import {
   EXPLORE_RULES,
   searchSpots,
   ExploreTileResponseSchema,
+  hexDistance,
   hexKey,
   hexNeighbors,
   JoinMapResponseSchema,
@@ -809,6 +810,12 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     const near = await make(true);
     const cleared = await call(server, 'POST', `/maps/${mapId}/clears`, kid, near);
     expect(cleared.statusCode, cleared.body).toBe(201);
+    // Made in this order (the e2e's), the joined one never touches the other,
+    // so a refresh still leaves it unjoined (#242 review).
+    expect(hexDistance(away, near)).toBeGreaterThan(1);
+    expect(
+      await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
+    ).toEqual([]);
     // Asked for land that doesn't exist, it says so.
     const bad = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
       terrain: 'moon-cheese',

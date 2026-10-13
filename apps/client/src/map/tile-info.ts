@@ -108,13 +108,13 @@ export const HOMESTEAD_WORDS = {
     tile.homestead === 'joined'
       ? ' · Homestead 🏡'
       : tile.homestead === 'paused'
-        ? ' · Homestead (napping 💤)'
+        ? ' · Homestead (napping zZ)'
         : '',
   owner: (tile: Pick<PublicTile, 'homestead' | 'explored'>): string =>
     tile.homestead
       ? 'Your homestead.'
       : tile.explored
-        ? 'Your land. Fully explored ✨, but it needs to touch home to become a homestead.'
+        ? 'Your land, explored ✨. It must touch home to be a homestead.'
         : 'Your land.',
 } as const;
 

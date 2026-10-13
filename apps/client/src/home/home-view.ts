@@ -159,7 +159,8 @@ export const LAND_FIRE = GAME_DATA.buildings.find(
 
 /**
  * What the spot line adds when a tool clears this land (#242): clear it on a
- * homestead, or join it up first. Empty on land no tool clears.
+ * homestead, or join it up first. Empty on land no tool clears, and on a
+ * napping homestead.
  */
 export function clearHint(tile: {
   terrain?: string;
@@ -167,7 +168,8 @@ export function clearHint(tile: {
 }): string {
   const id = tile.terrain ? clearToolFor(tile.terrain, CLEARING_RULES) : null;
   const tool = id ? CLEARING_RULES.tools.find((t) => t.id === id)?.name : undefined;
-  if (!tool) return '';
+  // A napping homestead wakes up first; its header and panel say how.
+  if (!tool || tile.homestead === 'paused') return '';
   const a = /^[aeiou]/i.test(tool) ? 'an' : 'a';
   return tile.homestead === 'joined'
     ? ` Or clear it with ${a} ${tool} and build here 🌱`

@@ -452,7 +452,10 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(landTileOffer({ ...stone, homestead: null }, home)).toMatchObject({
       line: expect.stringMatching(/ Once it's a homestead, a Pickaxe can clear it 🌱$/) as string,
     });
-    // Land no tool clears in Phase 1 keeps the plain line.
+    // A napping homestead wakes up first: no hint. Nor on land no tool clears in Phase 1.
+    expect(landTileOffer({ ...stone, homestead: 'paused' }, home)).toMatchObject({
+      line: expect.stringMatching(/reach it!$/) as string,
+    });
     expect(
       landTileOffer({ ...stone, terrain: 'old-forest', homestead: 'joined' }, home),
     ).toMatchObject({ line: expect.stringMatching(/reach it!$/) as string });

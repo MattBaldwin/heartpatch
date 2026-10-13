@@ -113,13 +113,18 @@ export function createExploreRepo(db: Executor) {
         terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
       // Two steps out touches home, so it joins. Asked for one that hasn't
       // (#242), three steps out touches none of it, so it stays unjoined.
+      // Neither touches my other land outside home: a homestead next door
+      // would join an unjoined one at the next refresh, and a new homestead
+      // would join land of mine beside it (#242 review).
       const joined = ask.joined ?? true;
+      const mineOut = all.filter((t) => t.ownerUserId === userId && t.homeSlot === null);
       const near = seed
         ? all.filter(
             (t) =>
               t.ownerUserId === null &&
               t.homeSlot === null &&
-              hexDistance(t, seed) === (joined ? 2 : 3),
+              hexDistance(t, seed) === (joined ? 2 : 3) &&
+              !mineOut.some((m) => hexDistance(m, t) === 1),
           )
         : [];
       // A home deep in Old Forest or Pumpkin Fields can have nothing a tool

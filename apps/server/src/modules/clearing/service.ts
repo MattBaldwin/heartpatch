@@ -49,10 +49,10 @@ const MESSAGES = {
   noTile: "We couldn't find that spot.",
   notYours: 'You can only clear your own land.',
   home: 'Your home stays just as it is. Clear a homestead instead!',
-  notHomestead: 'Explore this land first, so it joins your home as a homestead!',
+  notHomestead: 'Explore this land and join it up to home first!',
   notJoined:
     'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',
-  napping: 'This homestead is napping. Join it back up to home first!',
+  napping: 'This homestead is napping zZ. Join it back up to home first!',
   cleared: "This land's already cleared. Ready to build!",
   cantClear: (terrain: string) => `${terrain} can't be cleared.`,
   needTool: (tool: string) =>

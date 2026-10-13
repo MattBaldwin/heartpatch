@@ -554,7 +554,7 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     await db.execute(
       `update tile_explore set joined_at = null, completed_at = null where tile_id = '${plot.id}'`,
     );
-    await refused(plot, 409, /Explore this land first/);
+    await refused(plot, 409, /Explore this land and join it up to home first/);
     await db.execute(
       `update tile_explore set joined_at = '${START}', completed_at = '${START}' where tile_id = '${plot.id}'`,
     );

@@ -92,13 +92,13 @@ describe('describeTile', () => {
       owner: 'Your homestead.',
     });
     expect(mine({ homestead: 'paused', explored: true })).toMatchObject({
-      title: 'Mountains · Homestead (napping 💤)',
+      title: 'Mountains · Homestead (napping zZ)',
       owner: 'Your homestead.',
     });
     // The owner's case: explored, but not touching home.
     expect(mine({ homestead: null, explored: true })).toMatchObject({
       title: 'Mountains',
-      owner: 'Your land. Fully explored ✨, but it needs to touch home to become a homestead.',
+      owner: 'Your land, explored ✨. It must touch home to be a homestead.',
     });
     expect(mine({ homestead: null, explored: false })).toMatchObject({
       title: 'Mountains',

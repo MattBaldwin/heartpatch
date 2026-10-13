@@ -79,9 +79,12 @@ describe('clearOffer (#242)', () => {
     // The owner's case: a fully explored mountain with a Stone pile, not joined.
     const mountain = { terrain: 'mountains', nodeResource: 'stone', homestead: null };
     expect(held({ ...mountain, explored: true })).toBe(CLEAR_TEXT.notHomestead);
-    expect(held({ ...mountain, explored: false })).toBe(CLEAR_TEXT.unexplored);
+    // Land not explored yet isn't offered at all (claimed land, the tutorial's too).
+    expect(held({ ...mountain, explored: false })).toBe('not offered');
     expect(held({ ...mountain, homestead: 'paused', explored: true })).toBe(CLEAR_TEXT.napping);
-    expect(clearOffer(tile(mountain), me, bag(), NOW)).toMatchObject({ tool: 'pickaxe' });
+    expect(clearOffer(tile({ ...mountain, explored: true }), me, bag(), NOW)).toMatchObject({
+      tool: 'pickaxe',
+    });
     // Its reason wins over the rest: joining up comes first.
     expect(held({ homestead: null, explored: true, workers: 1 })).toBe(CLEAR_TEXT.notHomestead);
     // So Build shows Clear land, held back, and nothing waiting on it.
