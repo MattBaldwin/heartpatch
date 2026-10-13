@@ -1535,12 +1535,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['joy', 'silly'] },
   },
-  // #495 grown-up (stage 4): Glidebolt's wings turn pale and shiny, with a spiky crest.
+  // #495 grown-up (stage 4): Glidebolt's wings grow wide, with a spiky crest.
   {
     id: 'zoomglider',
     name: 'Zoomglider',
     description:
-      'A big glider with pale, shiny wings and a spiky crest. It finally lands where it meant to. Mostly.',
+      'A big glider with wide orange wings and a spiky crest. It finally lands where it meant to. Mostly.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'rare',
@@ -1556,7 +1556,7 @@ export const SPECIES: Species[] = [
         'blush-cheeks',
         'bolt-ears',
         'spark-crest',
-        'glow-wings',
+        'big-wings',
         'long-legs',
         'bolt-chain',
         'belly-patch',
@@ -3337,7 +3337,7 @@ export const SPECIES: Species[] = [
     id: 'festiwick',
     name: 'Festiwick',
     description:
-      'A party candle cat sprinkled with confetti, with strong arms for hugging everyone at once.',
+      'A party candle sprinkled with confetti, with strong arms for hugging everyone at once.',
     element: 'fire',
     feeling: 'joy',
     rarity: 'epic',
