@@ -633,7 +633,9 @@ export const MOVES: Move[] = [
     accuracy: 95, // TUNE:
     effects: [{ type: 'heal', percent: 15 }], // TUNE:
   },
-]; /*
+];
+
+/*
  * Species, base form then its evolution. Stats, rarities and evolution
  * levels are all first guesses: // TUNE: every `baseStats` and `level`.
  */
@@ -1052,7 +1054,7 @@ export const SPECIES: Species[] = [
     feeling: 'cozy',
     rarity: 'rare',
     baseStats: { hp: 83, attack: 94, defense: 71, speed: 83 }, // TUNE: ×1.18 Hearthbun
-    moves: ['ember-boop', 'toasty-tumble', 'cozy-crackle', 'bonfire-hug'],
+    moves: ['bonfire-hug', 'toasty-tumble', 'cozy-crackle', 'pebble-plop'],
     evolutions: [],
     visual: {
       body: 'pear',
