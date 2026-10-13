@@ -2583,7 +2583,7 @@ export const SPECIES: Species[] = [
     id: 'boonkin',
     name: 'Boonkin',
     description:
-      'A pumpkin ghost with big leafy bat wings and a brave little frown. Its boo is mostly a giggle.',
+      'A pumpkin ghost with leafy bat wings and brave little brows. Its boo is mostly a giggle.',
     element: 'leaf',
     feeling: 'spooky',
     rarity: 'rare',
@@ -2768,7 +2768,7 @@ export const SPECIES: Species[] = [
   {
     id: 'snoozelight',
     name: 'Snoozelight',
-    description: 'A sleepy ghost with glowing wings, humming lullabies all night long.',
+    description: 'A cozy ghost with glowing wings, humming sleepy lullabies all night long.',
     element: 'light',
     feeling: 'cozy',
     rarity: 'legendary',
