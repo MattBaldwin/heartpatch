@@ -604,7 +604,7 @@ export const MOVES: Move[] = [
     description: 'Shines a beam bright enough to light the whole way home.',
     element: 'light',
     power: 90, // TUNE:
-    accuracy: 85, // TUNE:
+    accuracy: 90, // TUNE: 85 left Beaconboo 6 under its teen (sim, 18 grown-ups)
   },
   {
     id: 'lullaby-glow',
@@ -648,7 +648,7 @@ export const MOVES: Move[] = [
     description: 'Flings a fizzy little firework. Ooh, aah!',
     element: 'fire',
     power: 85, // TUNE:
-    accuracy: 85, // TUNE:
+    accuracy: 90, // TUNE: 85 left Festiwick 6 under its teen (sim, 18 grown-ups)
   },
   {
     id: 'static-roar',
@@ -656,7 +656,7 @@ export const MOVES: Move[] = [
     description: 'A big, crackly roar. The other side might get a bit dizzy.',
     element: 'spark',
     power: 85, // TUNE:
-    accuracy: 85, // TUNE:
+    accuracy: 90, // TUNE: 85 left Frizzlion 5 under its teen (sim, 18 grown-ups)
     effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
   },
   {
