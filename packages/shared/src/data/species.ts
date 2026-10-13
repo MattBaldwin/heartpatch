@@ -604,7 +604,7 @@ export const MOVES: Move[] = [
     description: 'Shines a beam bright enough to light the whole way home.',
     element: 'light',
     power: 90, // TUNE:
-    accuracy: 85, // TUNE:
+    accuracy: 90, // TUNE: 85 left Beaconboo 6 under its teen (sim, 18 grown-ups)
   },
   {
     id: 'lullaby-glow',
