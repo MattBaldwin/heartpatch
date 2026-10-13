@@ -93,7 +93,8 @@ describe('launch roster (issue #10)', () => {
     for (const base of [...bases, ...standalone]) {
       expect(base.evolutions.length, base.id).toBeGreaterThanOrEqual(1);
       const evolved = evolvedFormOf(base);
-      expect(evolved.evolutions, evolved.id).toEqual([]);
+      // A teen is final until its grown-up ships (#495), then it has just that one.
+      expect(evolved.evolutions.length, evolved.id).toBeLessThanOrEqual(1);
       expect([evolved.element, evolved.feeling, evolved.season], evolved.id).toEqual([
         base.element,
         base.feeling,
@@ -119,7 +120,7 @@ describe('launch roster (issue #10)', () => {
       const first = teenStepOf(base).evolutions[0]!;
       const evolved = evolvedFormOf(base);
       expect(evo.level, branch.id).toBe(first.level);
-      expect(branch.evolutions, branch.id).toEqual([]);
+      expect(branch.evolutions.length, branch.id).toBeLessThanOrEqual(1);
       expect([branch.element, branch.rarity, branch.season], branch.id).toEqual([
         base.element,
         evolved.rarity,
@@ -131,6 +132,76 @@ describe('launch roster (issue #10)', () => {
       const ratio = statTotal(branch) / statTotal(evolved);
       expect(ratio, branch.id).toBeGreaterThan(0.8);
       expect(ratio, branch.id).toBeLessThan(1.2);
+    }
+  });
+
+  // #495 (#443 §3, §5): each teen grows into one grown-up, 20 levels after its
+  // kid, one rarity up (capped at legendary), bigger and stronger, and final.
+  it('gives a grown-up its teen’s element, feeling and season, one rarity up', () => {
+    const lines = [...bases, ...standalone];
+    const grownUps = lines.flatMap((base) =>
+      teenStepOf(base).evolutions.flatMap((step) => {
+        const teen = byId.get(step.into)!;
+        return teen.evolutions.map((evo) => ({
+          base,
+          step,
+          teen,
+          evo,
+          grown: byId.get(evo.into)!,
+        }));
+      }),
+    );
+    expect(grownUps.length).toBeGreaterThan(0);
+    const legendary = RARITY_ORDER.indexOf('legendary');
+    for (const { base, step, teen, evo, grown } of grownUps) {
+      expect(teen.evolutions, teen.id).toHaveLength(1);
+      expect(grown.evolutions, grown.id).toEqual([]);
+      expect([grown.element, grown.feeling, grown.season], grown.id).toEqual([
+        teen.element,
+        teen.feeling,
+        teen.season,
+      ]);
+      expect(RARITY_ORDER.indexOf(grown.rarity), grown.id).toBe(
+        Math.min(RARITY_ORDER.indexOf(teen.rarity) + 1, legendary),
+      );
+      const kidLevel = kidOf(base) ? base.evolutions[0]!.level : step.level - 8;
+      expect(evo.level, grown.id).toBe(kidLevel + 20);
+      // About ×1.18 the teen's stats (a tuned grown-up may carry a few more) and size.
+      const statRatio = statTotal(grown) / statTotal(teen);
+      expect(statRatio, grown.id).toBeGreaterThanOrEqual(1.15);
+      expect(statRatio, grown.id).toBeLessThanOrEqual(1.25);
+      const sizeRatio = (grown.visual.size ?? 1) / (teen.visual.size ?? 1);
+      expect(sizeRatio, grown.id).toBeGreaterThanOrEqual(1.12);
+      expect(sizeRatio, grown.id).toBeLessThanOrEqual(1.25);
+      // Keeps three of its teen's moves and swaps its weakest plain hit (power,
+      // no effects; a utility move like Pollen Puff stays) for a signature move
+      // no other squishy knows.
+      const kept = grown.moves.filter((m) => teen.moves.includes(m));
+      const added = grown.moves.filter((m) => !teen.moves.includes(m));
+      expect(kept, grown.id).toHaveLength(3);
+      expect(added, grown.id).toHaveLength(1);
+      const dropped = teen.moves.find((m) => !grown.moves.includes(m))!;
+      const move = (id: string) => MOVES.find((m) => m.id === id)!;
+      const power = (id: string) => move(id).power;
+      const attacks = teen.moves
+        .filter((m) => power(m) > 0 && (move(m).effects ?? []).length === 0)
+        .map(power);
+      expect(power(dropped), `${grown.id} drops ${dropped}`).toBe(Math.min(...attacks));
+      const others = SPECIES.filter((s) => s.id !== grown.id && s.moves.includes(added[0]!));
+      expect(
+        others.map((s) => s.id),
+        added[0],
+      ).toEqual([]);
+    }
+    // #363's sibling ceiling holds for a line's two grown-ups too.
+    for (const base of lines) {
+      const pair = teenStepOf(base).evolutions.flatMap((step) =>
+        byId.get(step.into)!.evolutions.map((e) => byId.get(e.into)!),
+      );
+      if (pair.length < 2) continue;
+      const ratio = statTotal(pair[1]!) / statTotal(pair[0]!);
+      expect(ratio, pair[1]!.id).toBeGreaterThan(1 / 1.2);
+      expect(ratio, pair[1]!.id).toBeLessThan(1.2);
     }
   });
 
