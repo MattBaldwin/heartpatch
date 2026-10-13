@@ -431,6 +431,12 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   const landed = new Promise<void>((resolve) => {
     buildLanded = resolve;
   });
+  // The second build's reply waits for `releaseBuild`, so "Building…" stays in
+  // flight for as long as the checks on it take (a timer ran out on slow CI).
+  let releaseBuild: () => void = () => undefined;
+  const buildReleased = new Promise<void>((resolve) => {
+    releaseBuild = resolve;
+  });
   await page.route('**/api/v1/maps/*/house/build', async (route: Route) => {
     const request = route.request();
     posts.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
@@ -438,8 +444,8 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
       await route.continue();
       return;
     }
-    // Slow enough to try dismissing "Building…" while it's in flight.
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    // Held while the test tries dismissing "Building…".
+    await buildReleased;
     built = grown(levelOne!);
     await route.fulfill({ json: built });
     buildLanded();
@@ -488,6 +494,8 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   await expect(yes).toHaveText('Building…');
   await expect(yes).toHaveAttribute('aria-disabled', 'true');
   expect(await focused(page)).toBe('house-grow-yes');
+  // Now the build replies.
+  releaseBuild();
   await expect(note).toHaveText('Ta-da! The Playroom is ready. Who moves in?', slow);
   await expect(note).not.toHaveClass(/house-note-calm/);
   await expect.poll(() => focused(page), slow).toBe('house-note');
