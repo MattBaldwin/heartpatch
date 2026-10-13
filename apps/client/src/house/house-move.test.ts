@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../net/api.js';
 import { sampleHouse } from './house-fixtures.js';
-import { createResidentMover } from './house-move.js';
+import { shouldReread } from './house-gift-view.js';
+import { createResidentMover, houseBusy } from './house-move.js';
 
 const moved = sampleHouse(1).view;
 const offline = () => new ApiRequestError('OFFLINE', 'We can’t reach the patch right now.');
@@ -92,5 +93,22 @@ describe('moving a resident', () => {
     await expect(late.move('map-1', mochi, 'snug', () => wanted)).resolves.toEqual({
       kind: 'dropped',
     });
+  });
+});
+
+describe('reads wait while a house command is in flight', () => {
+  const idle = { building: false, opening: false, moving: false };
+
+  it('is busy while building, opening the gift or moving a resident', () => {
+    expect(houseBusy(idle)).toBe(false);
+    expect(houseBusy({ ...idle, building: true })).toBe(true);
+    expect(houseBusy({ ...idle, opening: true })).toBe(true);
+    expect(houseBusy({ ...idle, moving: true })).toBe(true);
+  });
+
+  it('a new day mid-move waits to re-read, so the old house never lands over the move', () => {
+    const newDay = { readDay: '2026-10-12', today: '2026-10-13' };
+    expect(shouldReread({ ...newDay, busy: houseBusy({ ...idle, moving: true }) })).toBe(false);
+    expect(shouldReread({ ...newDay, busy: houseBusy(idle) })).toBe(true);
   });
 });

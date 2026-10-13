@@ -34,6 +34,17 @@ export interface ResidentMover {
   readonly busy: boolean;
 }
 
+/**
+ * A house command is in flight (a build, opening the gift, a move): a
+ * re-read now could land after its reply and put the old house back, so
+ * reads wait (house-view-sync's rule, and the new-day re-read).
+ */
+export const houseBusy = (s: {
+  readonly building: boolean;
+  readonly opening: boolean;
+  readonly moving: boolean;
+}): boolean => s.building || s.opening || s.moving;
+
 export function createResidentMover(deps: HouseMoveDeps): ResidentMover {
   const command = createHouseCommand(deps);
   return {

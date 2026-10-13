@@ -160,6 +160,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
    * then the player scrolls freely.
    */
   function revealConfirm(): void {
+    stopRevealing();
     const yes = () => sheet.querySelector<HTMLElement>('[data-testid="roster-house-out-yes"]');
     revealRowEnd(yes());
     const row = yes()?.closest('.roster-row');
@@ -170,9 +171,16 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     watch.observe(row);
     watch.observe(sheet);
     watch.observe(list);
-    setTimeout(() => {
-      watch.disconnect();
-    }, REVEAL_SETTLE_MS);
+    revealing = { watch, timer: window.setTimeout(stopRevealing, REVEAL_SETTLE_MS) };
+  }
+
+  /** The one confirm watcher, while a card settles; a new Move out tap or closing stops it. */
+  let revealing: { watch: ResizeObserver; timer: number } | null = null;
+  function stopRevealing(): void {
+    if (!revealing) return;
+    revealing.watch.disconnect();
+    window.clearTimeout(revealing.timer);
+    revealing = null;
   }
   let working = false;
   let ticker: number | undefined;
@@ -863,6 +871,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   }
 
   function closeSheet(): void {
+    stopRevealing();
     sheet.classList.remove('roster-covered');
     askedAt = 0;
     ticket += 1;

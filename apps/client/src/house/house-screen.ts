@@ -84,7 +84,7 @@ import { careApi, type CareApi } from '../care/care-api.js';
 import type { Portraits } from '../procedural/portraits.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { mergeRoster, type RosterRow } from '../squishies/roster/roster-view.js';
-import { createResidentMover } from './house-move.js';
+import { createResidentMover, houseBusy } from './house-move.js';
 import {
   bedsPanel,
   faceEl,
@@ -1311,7 +1311,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function checkLook(): void {
     if (!isOpen || !scene3d) return;
     // A new patch day since the house was read: today's gift rolls on a read.
-    if (shouldReread({ readDay, today: localDayIn(zone, clock()), busy: building || opening }))
+    if (
+      shouldReread({
+        readDay,
+        today: localDayIn(zone, clock()),
+        busy: houseBusy({ building, opening, moving }),
+      })
+    )
       void refresh();
     const next = lookNow();
     if (look && sameHouseLook(next, look)) return;
