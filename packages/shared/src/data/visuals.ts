@@ -1836,6 +1836,19 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.06,
   },
+  // Confetti sprinkles over the body (sprinkles-yellow sits high, on a cupcake's top).
+  {
+    id: 'confetti-coat',
+    slot: 'spikes',
+    shape: 'capsule',
+    size: [0.15, 0.075, 0.075],
+    color: 'detail',
+    layout: { kind: 'scatter', count: 12, aroundRange: 150, upRange: 40 },
+    around: 0,
+    up: 15,
+    sink: 0.4,
+    jitter: 0.12,
+  },
 ];
 
 /**

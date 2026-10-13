@@ -1469,11 +1469,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
   },
-  // #495 grown-up (stage 4): Frizzbolt's frizz grows into a fluffy mane.
+  // #495 grown-up (stage 4): Frizzbolt's frizz grows into a fluffy ruff.
   {
     id: 'frizzlion',
     name: 'Frizzlion',
-    description: "Its frizz grew into a big fluffy lion's mane. Every roar makes the air crackle.",
+    description:
+      'Its frizz grew into a big fluffy ruff, like a little lion. Every roar makes the air crackle.',
     element: 'spark',
     feeling: 'silly',
     rarity: 'rare',
@@ -1534,12 +1535,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['joy', 'silly'] },
   },
-  // #495 grown-up (stage 4): Glidebolt's wings start to glow, with a spiky crest.
+  // #495 grown-up (stage 4): Glidebolt's wings turn pale and shiny, with a spiky crest.
   {
     id: 'zoomglider',
     name: 'Zoomglider',
     description:
-      'A big glider with glowing wings and a spiky crest. It finally lands where it meant to. Mostly.',
+      'A big glider with pale, shiny wings and a spiky crest. It finally lands where it meant to. Mostly.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'rare',
@@ -3259,12 +3260,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Wickwhisker grows tufted ears and a crown of candle flames.
+  // #495 grown-up (stage 4): Wickwhisker grows big lynx ears and a crown of candle flames.
   {
     id: 'blazewhisker',
     name: 'Blazewhisker',
     description:
-      'A tall lantern lynx with tufted ears and a crown of candle flames. It lights the way on Halloween night.',
+      'A tall lantern lynx with big ears and a crown of candle flames. It lights the way on Halloween night.',
     element: 'fire',
     feeling: 'spooky',
     rarity: 'epic',
@@ -3336,7 +3337,7 @@ export const SPECIES: Species[] = [
     id: 'festiwick',
     name: 'Festiwick',
     description:
-      'A party candle cat covered in confetti sprinkles, with strong arms for hugging everyone at once.',
+      'A party candle cat sprinkled with confetti, with strong arms for hugging everyone at once.',
     element: 'fire',
     feeling: 'joy',
     rarity: 'epic',
@@ -3351,10 +3352,9 @@ export const SPECIES: Species[] = [
         'happy-eyes',
         'smile',
         'blush-cheeks',
-        'pointy-ears',
         'flame-crown',
         'whisker-flames',
-        'sprinkles-yellow',
+        'confetti-coat',
         'strong-arms',
         'hop-feet',
         'curly-tail',
