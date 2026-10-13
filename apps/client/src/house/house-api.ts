@@ -3,6 +3,7 @@ import {
   type BuildHouseRequest,
   type ClaimHouseGiftRequest,
   type HouseView,
+  type MoveResidentRequest,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -27,6 +28,25 @@ export const houseApi = {
     }),
 
   /**
+   * `POST /maps/:mapId/house/residents` (#381 PR C): moves my squishy into a
+   * room of my house, into another room, or out (`roomId` null), and replies
+   * with the house. One `key` per tap: pass the same one to retry it safely
+   * (tech spec §5), like the wardrobe's and the Boutique's commands.
+   */
+  moveResident: (
+    mapId: string,
+    squishyId: string,
+    roomId: string | null,
+    key: string,
+  ): Promise<HouseView> =>
+    apiCallFor(`/maps/${mapId}/house/residents`, {
+      method: 'POST',
+      body: { squishyId, roomId } satisfies MoveResidentRequest,
+      schema: HouseViewSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /**
    * Opens the day's gift the house showed (#381 H2), and replies with the
    * house. One `key` per tap, the same one on the retry (tech spec §5).
    */
@@ -40,22 +60,3 @@ export const houseApi = {
 };
 
 export type HouseApi = typeof houseApi;
-
-/**
- * `POST /maps/:mapId/house/residents` (#381 PR C): moves my squishy into a
- * room of my house, into another room, or out (`roomId` null), and replies
- * with the house. One `key` per tap: pass the same one to retry it safely
- * (tech spec §5), like the wardrobe's and the Boutique's commands.
- */
-export const moveResident = (
-  mapId: string,
-  squishyId: string,
-  roomId: string | null,
-  key: string,
-): Promise<HouseView> =>
-  apiCallFor(`/maps/${mapId}/house/residents`, {
-    method: 'POST',
-    body: { squishyId, roomId },
-    schema: HouseViewSchema,
-    headers: { 'idempotency-key': key },
-  });

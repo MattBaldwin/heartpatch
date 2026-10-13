@@ -9,9 +9,12 @@ import {
   maxHouseLevel,
   nextHouseLevel,
   roomsAt,
+  type CareListResponse,
+  type CareSquishy,
   type HomeSquishy,
   type HouseView,
   type ProgressFacts,
+  type ResidentAway,
 } from '@heartpatch/shared';
 
 /*
@@ -204,5 +207,129 @@ export function withGrow(sample: HouseSample, grow: SampleGrow): HouseSample {
       },
       items,
     },
+  };
+}
+
+/** Moods for the samples' squishies, in turn, so the beds and the picker show a few. */
+const SAMPLE_MOODS = [
+  { contentment: 92, mood: 'glowing' },
+  { contentment: 64, mood: 'happy' },
+  { contentment: 46, mood: 'happy' },
+  { contentment: 30, mood: 'calm' },
+  { contentment: 12, mood: 'cuddly' },
+] as const;
+
+/** The care read the samples' squishies would come with (moods for the beds and the picker). */
+export function sampleCare(squishies: readonly HomeSquishy[]): CareListResponse {
+  return {
+    squishies: squishies.map((s, i): CareSquishy => {
+      const feel = SAMPLE_MOODS[i % SAMPLE_MOODS.length] ?? SAMPLE_MOODS[0];
+      return {
+        id: s.id,
+        speciesId: s.speciesId,
+        element: s.element,
+        feeling: s.feeling,
+        nickname: s.nickname,
+        level: s.level,
+        xp: 0,
+        xpIntoLevel: 0,
+        xpToNext: 50,
+        evolving: null,
+        stats: { hp: 10, attack: 10, defense: 10, speed: 10 },
+        contentment: feel.contentment,
+        mood: feel.mood,
+        moodDrift: null,
+        xpBonusPercent: 100,
+        habitatId: s.habitatId,
+        caredToday: 0,
+        fullCareLeft: 3,
+        nextCareAt: {},
+        newEvolution: null,
+        whisper: null,
+        accessory: s.accessory,
+        houseRoomId: s.houseRoomId,
+      };
+    }),
+    speciesDefs: [],
+    items: {},
+    coinsToday: 0,
+    now: NOW,
+  };
+}
+
+/** Squishies of mine that don't live in the house, for the move-in picker's samples. */
+const SAMPLE_OUTSIDERS: readonly { speciesId: string; nickname: string | null; level: number }[] = [
+  { speciesId: 'fuzzbolt', nickname: 'Mochi', level: 6 },
+  { speciesId: 'mossmuffin', nickname: null, level: 3 },
+  { speciesId: 'flurrypup', nickname: 'Biscuit', level: 11 },
+];
+
+/**
+ * A house with a bit of everything for the beds and the picker (C2b): the
+ * Snug with one resident home and one out gathering, the Playroom with one
+ * waiting at a trading post and one empty bed, and squishies outside (the
+ * first just moved out: back in 5 h). `away` instead fills the Snug with
+ * one on watch and one training, and the Playroom with one taken to the
+ * Hollow beside the empty bed.
+ */
+export function sampleMix(
+  variant: 'mix' | 'away' = 'mix',
+): HouseSample & { care: CareListResponse } {
+  const base = sampleHouse(2);
+  const [first, second, third] = base.squishies;
+  const [a, b, c]: [ResidentAway | null, ResidentAway, ResidentAway] =
+    variant === 'away' ? ['guarding', 'training', 'hollow'] : [null, 'gathering', 'in-trade'];
+  const resident = (s: HomeSquishy | undefined, away: ResidentAway | null) =>
+    s ? [{ squishyId: s.id, since: NOW, away }] : [];
+  const rooms = base.view.rooms.map((room) => ({
+    ...room,
+    residents:
+      room.id === 'snug'
+        ? [...resident(first, a), ...resident(second, b)]
+        : room.id === 'playroom'
+          ? resident(third, c)
+          : [],
+  }));
+  const JOBS = { guarding: 'guard', training: 'training', gathering: 'gatherer' } as const;
+  const jobOf = (away: ResidentAway | null) =>
+    away === 'guarding' || away === 'training' || away === 'gathering' ? JOBS[away] : null;
+  const kept = (
+    [
+      [first, a],
+      [second, b],
+      [third, c],
+    ] as const
+  ).flatMap(([s, away]) => (s ? [{ ...s, job: jobOf(away) ?? s.job }] : []));
+  const extra = SAMPLE_OUTSIDERS.flatMap((o, i): HomeSquishy[] => {
+    const species = GAME_DATA.species.find((s) => s.id === o.speciesId);
+    if (!species) return [];
+    return [
+      {
+        id: id(500 + i),
+        speciesId: o.speciesId,
+        element: species.element,
+        feeling: species.feeling,
+        nickname: o.nickname,
+        level: o.level,
+        habitatId: null,
+        trainingId: null,
+        job: 'resting',
+        accessory: null,
+        houseRoomId: null,
+      },
+    ];
+  });
+  // The one just moved out (a minute past the hour, so it reads "Back in 5 h").
+  const backIn = new Date(Date.parse(NOW) + 5 * 3_600_000 - 60_000).toISOString();
+  const all = [...kept, ...extra];
+  return {
+    view: {
+      ...base.view,
+      rooms,
+      cooldowns: extra[0] ? [{ squishyId: extra[0].id, moveBackInAt: backIn }] : [],
+    },
+    squishies: all,
+    speciesDefs: [],
+    care: sampleCare(all),
   };
 }

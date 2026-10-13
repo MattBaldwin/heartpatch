@@ -2,6 +2,7 @@ import {
   BuildHouseRequestSchema,
   ClaimHouseGiftRequestSchema,
   HouseViewSchema,
+  MoveResidentRequestSchema,
 } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sampleHouse, withGift, withGrow } from './house-fixtures.js';
@@ -41,11 +42,11 @@ describe('house api', () => {
   });
 
   it('moves a resident in or out with an Idempotency-Key, checked by the shared schema', async () => {
-    const { moveResident } = await import('./house-api.js');
+    const { houseApi } = await import('./house-api.js');
     const view = sampleHouse(1).view;
     apiCallFor.mockResolvedValue(view);
     const squishyId = '0190a000-0000-7000-8000-000000000001';
-    await expect(moveResident('map-1', squishyId, 'snug', 'key-1')).resolves.toBe(view);
+    await expect(houseApi.moveResident('map-1', squishyId, 'snug', 'key-1')).resolves.toBe(view);
     expect(apiCallFor).toHaveBeenCalledWith('/maps/map-1/house/residents', {
       method: 'POST',
       body: { squishyId, roomId: 'snug' },
@@ -53,13 +54,16 @@ describe('house api', () => {
       headers: { 'idempotency-key': 'key-1' },
     });
     // Moving out sends a null room, with the caller's key for that tap.
-    await moveResident('map-1', squishyId, null, 'key-2');
+    await houseApi.moveResident('map-1', squishyId, null, 'key-2');
     const [, options] = apiCallFor.mock.calls[1] as [
       string,
       { body: unknown; headers: Record<string, string> },
     ];
     expect(options.body).toEqual({ squishyId, roomId: null });
     expect(options.headers['idempotency-key']).toBe('key-2');
+    // Both bodies are what the server's strict schema takes.
+    expect(MoveResidentRequestSchema.safeParse({ squishyId, roomId: 'snug' }).success).toBe(true);
+    expect(MoveResidentRequestSchema.safeParse(options.body).success).toBe(true);
   });
 
   it('opens the day’s gift with its Idempotency-Key, the reply checked by the shared schema', async () => {

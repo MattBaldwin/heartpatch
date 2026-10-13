@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { expectRoomyLabels } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { closeRoster, openRoster } from './roster.js';
 import { grantItems } from './trading.js';
 import { trayButton } from './trays.js';
 
@@ -17,12 +18,14 @@ import { trayButton } from './trays.js';
 interface HouseDebug {
   mapId: string;
   open: boolean;
-  sheet: 'peek' | 'open' | 'grow' | 'confirm' | 'gift';
+  sheet: 'peek' | 'open' | 'grow' | 'confirm' | 'gift' | 'picker' | 'move-out';
   sparkles: number;
   gift: { shown: boolean; opening: boolean; opened: number };
   welcomed: boolean;
   flicker: { running: boolean; hz: number; ticks: number };
   building: boolean;
+  moving: boolean;
+  pickRoom: string | null;
   level: number;
   rooms: number;
   pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
@@ -517,5 +520,142 @@ test('grow the house: see what it needs, fill the bag, then build the Playroom',
   expect(posts[0]!.key).toMatch(/^[0-9a-f]{32}$/);
   expect(posts[1]!.key).toMatch(/^[0-9a-f]{32}$/);
   expect(posts[1]!.key).not.toBe(posts[0]!.key);
+  expect(errors).toEqual([]);
+});
+
+/** Taps a control in the just-opened sheet (the handle swallows the touch's own click for a moment). */
+async function tapInSheet(page: Page, testid: string, nth = 0): Promise<void> {
+  const before = (await houseState(page))?.sheet;
+  await expect(async () => {
+    await page.getByTestId(testid).nth(nth).tap();
+    expect((await houseState(page))?.sheet).not.toBe(before);
+  }).toPass(slow);
+}
+
+test('residents: move my squishy into the Snug, see it in the roster, then move it out', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000); // several scene builds; CI renders in software
+  const page = await newPlayer(browser, uniqueName('resident'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const moves: { key: string | undefined; body: unknown }[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/house/residents')) {
+      moves.push({ key: request.headers()['idempotency-key'], body: request.postDataJSON() });
+    }
+  });
+  await patchAndHome(page);
+  const shortcut = page.getByTestId('home-house-shortcut');
+  await slowExpect(shortcut).toBeVisible();
+  await shortcut.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+  expect((await houseState(page))?.scene?.residents).toBe(0);
+
+  // The open sheet: the Snug's two beds, both empty, then Grow the house.
+  const beds = page.getByTestId('house-bed');
+  await page.getByTestId('house-peek-handle').tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('open');
+  await expect(page.getByTestId('house-room-snug')).toHaveText('The Snug · 0 of 2 beds');
+  // One room: its bed line is the only heading (the peek line steps aside while open).
+  await expect(page.getByTestId('house-peek-line')).toBeHidden();
+  await expect(beds).toHaveCount(2);
+  await expect(beds.first()).toHaveAttribute('data-kind', 'empty');
+  await expect(beds.first()).toHaveText(/Move in/);
+  await expectRoomyLabels(page, '[data-testid="house-bed"], [data-testid="house-grow-open"]');
+
+  // An empty bed opens the picker: who moves in, with focus on its ✕.
+  await tapInSheet(page, 'house-bed');
+  expect(await houseState(page)).toMatchObject({ sheet: 'picker', pickRoom: 'snug' });
+  await expect(page.getByTestId('house-picker-title')).toHaveText('Who moves into the Snug?');
+  await expect(page.getByTestId('house-picker-line')).toHaveText('2 beds free');
+  await expect.poll(() => focused(page), slow).toBe('house-picker-close');
+  await expect(page.getByTestId('house-scrim')).toBeVisible();
+  const pick = page.getByTestId('house-pick');
+  await expect(pick).toHaveCount(1);
+  await expect(pick).toHaveAttribute('data-kind', 'in');
+  const squishyId = (await pick.getAttribute('data-squishy'))!;
+  const name = (await pick.locator('.house-pick-name').textContent())!;
+  await expectRoomyLabels(page, '[data-testid="house-pick"], [data-testid="house-picker-close"]');
+
+  // One tap moves it in: the ta-da line, the sheet back on the beds, and the
+  // squishy drawn in its room.
+  await pick.tap();
+  const note = page.getByTestId('house-note');
+  await expect(note).toHaveText(`${name} moved into the Snug! 🏠`, slow);
+  await expect(note).not.toHaveClass(/house-note-calm/);
+  expect((await houseState(page))?.sheet).toBe('open');
+  await expect.poll(async () => (await houseState(page))?.scene?.residents, slow).toBe(1);
+  await expect(page.getByTestId('house-room-snug')).toHaveText('The Snug · 1 of 2 beds');
+  await expect(beds.first()).toHaveAttribute('data-kind', 'home');
+  await expect(beds.first()).toHaveAttribute('data-squishy', squishyId);
+  await expect(beds.first()).toContainText(name);
+  expect(moves).toHaveLength(1);
+  expect(moves[0]!.body).toEqual({ squishyId, roomId: 'snug' });
+  expect(moves[0]!.key).toMatch(/^[0-9a-f]{32}$/);
+
+  // Home, and the roster shows it lives in the house.
+  await page.getByTestId('house-back').tap();
+  await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
+  await openRoster(page);
+  const row = page.locator(`[data-testid="roster-row"][data-squishy="${squishyId}"]`);
+  await expect(row.getByTestId('roster-resident')).toHaveText('🏠');
+  await row.getByTestId('roster-head').tap();
+  await expect(row.getByTestId('roster-house-line')).toHaveText('🏠 Lives in the Snug');
+  await expect(row.getByTestId('roster-house-out')).toBeVisible();
+  await closeRoster(page);
+
+  // Back inside: the resident's bed opens its detail, and Move out asks first.
+  await shortcut.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+  await expect.poll(async () => (await houseState(page))?.scene?.residents, slow).toBe(1);
+  await page.getByTestId('house-peek-handle').tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('open');
+  await expect(async () => {
+    await beds.first().tap();
+    await expect(page.getByTestId('house-bed-detail')).toBeVisible({ timeout: 1_000 });
+  }).toPass(slow);
+  await page.getByTestId('house-move-out').tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('move-out');
+  await expect(page.getByTestId('house-move-out-ask')).toHaveText(
+    'Move them out? They can move back in after a\u00A0day.',
+  );
+  await expect.poll(() => focused(page), slow).toBe('house-move-out-yes');
+  await page.getByTestId('house-move-out-yes').tap();
+  await expect(note).toHaveText(`${name} moved out. See you soon! 👋`, slow);
+  await expect.poll(async () => (await houseState(page))?.scene?.residents, slow).toBe(0);
+  expect((await houseState(page))?.sheet).toBe('open');
+  await expect(beds.first()).toHaveAttribute('data-kind', 'empty');
+  expect(moves[1]!.body).toEqual({ squishyId, roomId: null });
+  expect(moves[1]!.key).not.toBe(moves[0]!.key);
+
+  // The picker shows it can't come back yet; a tap on the dimmed row does nothing.
+  await beds.first().tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('picker');
+  await expect(pick).toHaveAttribute('data-kind', 'cooldown');
+  await expect(pick).toHaveAttribute('aria-disabled', 'true');
+  await expect(pick.getByTestId('house-pick-reason')).toHaveText(
+    'Can move back in 24\u00A0hours\u00A0🏠',
+  );
+  await pick.tap({ force: true });
+  await page.waitForTimeout(500);
+  expect(moves).toHaveLength(2);
+  expect((await houseState(page))?.sheet).toBe('picker');
+
+  // From the roster, "Move into the house" opens the picker on that squishy.
+  await page.getByTestId('house-picker-close').tap();
+  await page.getByTestId('house-back').tap();
+  await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
+  await openRoster(page);
+  await row.getByTestId('roster-head').tap();
+  await expect(row.getByTestId('roster-resident')).toHaveCount(0);
+  await row.getByTestId('roster-house-in').tap();
+  await expect.poll(async () => (await houseState(page))?.sheet, slow).toBe('picker');
+  expect((await houseState(page))?.pickRoom).toBe('snug');
+  await expect(page.getByTestId('roster')).toBeHidden();
+  await expect(pick).toHaveClass(/house-pick-focus/);
+  await expect(pick.getByTestId('house-pick-reason')).toHaveText(
+    'Can move back in 24\u00A0hours\u00A0🏠',
+  );
   expect(errors).toEqual([]);
 });
