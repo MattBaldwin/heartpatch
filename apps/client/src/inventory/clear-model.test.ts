@@ -73,13 +73,28 @@ describe('clearOffer (#242)', () => {
     expect(clearOffer(tile(), me, bag({}), NOW)).toMatchObject({ needTool: true, blocked: null });
   });
 
-  it("isn't offered off a joined homestead of mine, on cleared or unclearable land, or with something on it", () => {
+  it("holds the card back on my land that isn't a joined homestead, saying why (#242)", () => {
+    const held = (extra: Partial<PublicTile>) =>
+      clearOffer(tile(extra), me, bag(), NOW)?.blocked ?? 'not offered';
+    // The owner's case: a fully explored mountain with a Stone pile, not joined.
+    const mountain = { terrain: 'mountains', nodeResource: 'stone', homestead: null };
+    expect(held({ ...mountain, explored: true })).toBe(CLEAR_TEXT.notHomestead);
+    expect(held({ ...mountain, explored: false })).toBe(CLEAR_TEXT.unexplored);
+    expect(held({ ...mountain, homestead: 'paused', explored: true })).toBe(CLEAR_TEXT.napping);
+    expect(clearOffer(tile(mountain), me, bag(), NOW)).toMatchObject({ tool: 'pickaxe' });
+    // Its reason wins over the rest: joining up comes first.
+    expect(held({ homestead: null, explored: true, workers: 1 })).toBe(CLEAR_TEXT.notHomestead);
+    // So Build shows Clear land, held back, and nothing waiting on it.
+    const cards = clearCards(tile({ ...mountain, explored: true }), me, bag(), NOW);
+    expect(cards.map((c) => [c.id, c.blocked])).toEqual([[CLEAR_CARD_ID, CLEAR_TEXT.notHomestead]]);
+  });
+
+  it("isn't offered off land of mine, on home, cleared or unclearable land, or with something on it", () => {
     const off = (extra: Partial<PublicTile>) => clearOffer(tile(extra), me, bag(), NOW);
     expect(clearOffer(tile(), null, bag(), NOW)).toBeNull();
     expect(off({ ownerUserId: userId(2) })).toBeNull();
     expect(off({ homeSlot: 3 })).toBeNull();
-    expect(off({ homestead: null })).toBeNull();
-    expect(off({ homestead: 'paused' })).toBeNull();
+    expect(off({ homestead: null, terrain: 'old-forest' })).toBeNull();
     expect(off({ terrain: 'clearing' })).toBeNull();
     expect(off({ terrain: 'old-forest' })).toBeNull();
     expect(off({ terrain: 'lake' })).toBeNull();

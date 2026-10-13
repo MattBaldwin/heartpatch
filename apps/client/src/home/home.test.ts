@@ -443,6 +443,19 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       kind: 'node',
       line: '🔥 Fires go in the middle of a tile. This one has a Timber pile there, so a fire next door can reach it!',
     });
+    // Land a tool clears says so (#242): clear it on a homestead, or join it up first.
+    const stone = { ...tile, q: 4, nodeResource: 'stone', buildings: [], terrain: 'mountains' };
+    expect(landTileOffer({ ...stone, homestead: 'joined' }, home)).toEqual({
+      kind: 'node',
+      line: '🔥 Fires go in the middle of a tile. This one has a Stone pile there, so a fire next door can reach it! Or clear it with a Pickaxe and build here 🌱',
+    });
+    expect(landTileOffer({ ...stone, homestead: null }, home)).toMatchObject({
+      line: expect.stringMatching(/ Once it's a homestead, a Pickaxe can clear it 🌱$/) as string,
+    });
+    // Land no tool clears in Phase 1 keeps the plain line.
+    expect(
+      landTileOffer({ ...stone, terrain: 'old-forest', homestead: 'joined' }, home),
+    ).toMatchObject({ line: expect.stringMatching(/reach it!$/) as string });
     // No carved pumpkin, no lantern; with one in Halloween, its own build card and cost.
     expect(empty.kind === 'build' && empty.lantern).toBeNull();
     const carved = landTileOffer(

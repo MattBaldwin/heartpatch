@@ -4,6 +4,7 @@ import {
   clearToolFor,
   heartSeedOf,
   hexDistance,
+  type DevHomesteadRequest,
 } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
@@ -89,6 +90,7 @@ export function createExploreRepo(db: Executor) {
       mapId: string,
       userId: string,
       at: Date,
+      ask: DevHomesteadRequest = {},
     ): Promise<{ q: number; r: number } | null> => {
       const all = await db
         .select({
@@ -109,21 +111,30 @@ export function createExploreRepo(db: Executor) {
       // or cleared land (never a lake, Juniper's Gap or a trading post).
       const buildable = (terrain: string) =>
         terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
+      // Two steps out touches home, so it joins. Asked for one that hasn't
+      // (#242), three steps out touches none of it, so it stays unjoined.
+      const joined = ask.joined ?? true;
       const near = seed
         ? all.filter(
-            (t) => t.ownerUserId === null && t.homeSlot === null && hexDistance(t, seed) === 2,
+            (t) =>
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              hexDistance(t, seed) === (joined ? 2 : 3),
           )
         : [];
       // A home deep in Old Forest or Pumpkin Fields can have nothing a tool
       // clears two steps out (about 1 map in 30, #429): then one of those
-      // tiles is cleared here, as a finished clear would leave it.
-      const tile =
-        near.find((t) => buildable(t.terrain)) ?? near.find((t) => DEV_CLEARABLE.has(t.terrain));
+      // tiles is cleared here, as a finished clear would leave it. Asked for
+      // its land, any of that ring's land will do.
+      const tile = ask.terrain
+        ? near.find((t) => buildable(t.terrain) || DEV_CLEARABLE.has(t.terrain))
+        : (near.find((t) => buildable(t.terrain)) ??
+          near.find((t) => DEV_CLEARABLE.has(t.terrain)));
       if (!tile) return null;
-      const terrain = buildable(tile.terrain) ? tile.terrain : CLEARED_TERRAIN;
+      const terrain = ask.terrain ?? (buildable(tile.terrain) ? tile.terrain : CLEARED_TERRAIN);
       const claimed = await db
         .update(tiles)
-        .set({ ownerUserId: userId, nodeResource: null, terrain })
+        .set({ ownerUserId: userId, nodeResource: ask.nodeResource ?? null, terrain })
         .where(and(eq(tiles.id, tile.id), isNull(tiles.ownerUserId)))
         .returning({ id: tiles.id });
       // Someone took it meanwhile: nothing made.
@@ -139,7 +150,7 @@ export function createExploreRepo(db: Executor) {
           searched: 7,
           spotCount: 3,
           completedAt: at,
-          joinedAt: at,
+          joinedAt: joined ? at : null,
           updatedAt: at,
         })
         .onConflictDoNothing();

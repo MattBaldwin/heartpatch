@@ -61,6 +61,7 @@ const E2E_GROUPS = [
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391). Keep it light.
   [
     'cinematic',
+    'clear-land',
     'friendly',
     'inventory',
     'milestones',

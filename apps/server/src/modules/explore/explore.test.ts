@@ -769,6 +769,53 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(built.statusCode, built.body).toBe(201);
   });
 
+  it('dev: makes the land asked for, joined or not, and only a joined one clears (#242)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const make = async (joined: boolean) => {
+      const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+        terrain: 'mountains',
+        nodeResource: 'stone',
+        joined,
+      });
+      expect(made.statusCode, made.body).toBe(201);
+      return made.json<{ q: number; r: number }>();
+    };
+    // The owner's case: a fully explored mountain with a Stone pile that
+    // hasn't joined home. A refresh leaves it so: it touches none of home.
+    const away = await make(false);
+    expect(
+      await withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [kid.id], clock)),
+    ).toEqual([]);
+    const view = MapViewSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/view`, kid)).json(),
+    );
+    const at = (h: { q: number; r: number }) => view.tiles.find((t) => t.q === h.q && t.r === h.r);
+    expect(at(away)).toMatchObject({
+      terrain: 'mountains',
+      nodeResource: 'stone',
+      ownerUserId: kid.id,
+      explored: true,
+      homestead: null,
+    });
+    await give(mapId, kid, { pickaxe: 2 });
+    const refused = await call(server, 'POST', `/maps/${mapId}/clears`, kid, away);
+    expect(refused.statusCode).toBe(409);
+    expect(errorOf(refused).message).toBe(
+      'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',
+    );
+    // Joined, the same land clears with a Pickaxe.
+    const near = await make(true);
+    const cleared = await call(server, 'POST', `/maps/${mapId}/clears`, kid, near);
+    expect(cleared.statusCode, cleared.body).toBe(201);
+    // Asked for land that doesn't exist, it says so.
+    const bad = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+      terrain: 'moon-cheese',
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('counts each search towards the Seeker track (#199)', async () => {
     // Milestones judge membership at the event's game time (its database
     // time, shifted by the clock). Play on today's clock and have both

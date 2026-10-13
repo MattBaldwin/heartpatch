@@ -75,7 +75,7 @@ export function describeTile(
     // An open seat (#318): only a Keeper who joins can have it.
     else owner = 'A cozy home, saved for the next Keeper who joins! ✨';
   } else if (mine) {
-    owner = 'Your land.';
+    owner = HOMESTEAD_WORDS.owner(tile);
   } else if (ownerName !== null) {
     owner = `${ownerName}'s land.`;
   } else {
@@ -83,7 +83,9 @@ export function describeTile(
   }
 
   return {
-    title: (post ? tile.post?.name : undefined) ?? terrain?.name ?? 'Mystery land',
+    title:
+      (post ? tile.post?.name : undefined) ??
+      `${terrain?.name ?? 'Mystery land'}${mine && !home ? HOMESTEAD_WORDS.tag(tile) : ''}`,
     about: terrain?.description ?? 'Nobody knows much about this spot yet.',
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
@@ -95,6 +97,26 @@ export function describeTile(
     home,
   };
 }
+
+/**
+ * My land's homestead status, in the header (#242, owner request): joined
+ * and napping homesteads say so in the title, and explored land that hasn't
+ * joined says why, so "Fully explored" never reads as joined.
+ */
+export const HOMESTEAD_WORDS = {
+  tag: (tile: Pick<PublicTile, 'homestead'>): string =>
+    tile.homestead === 'joined'
+      ? ' · Homestead 🏡'
+      : tile.homestead === 'paused'
+        ? ' · Homestead (napping 💤)'
+        : '',
+  owner: (tile: Pick<PublicTile, 'homestead' | 'explored'>): string =>
+    tile.homestead
+      ? 'Your homestead.'
+      : tile.explored
+        ? 'Your land. Fully explored ✨, but it needs to touch home to become a homestead.'
+        : 'Your land.',
+} as const;
 
 /**
  * What a squishy gatherer picks on this tile, from the shared gather rule

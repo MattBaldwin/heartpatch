@@ -53,7 +53,6 @@ export const EXPLORE_TEXT = {
   notNow: 'Not now',
   yay: 'Yay!',
   searching: 'Searching…',
-  explored: '✨ Fully explored',
   /** The header chip with no tool in hand. */
   hands: 'Hands',
   /** The bag in the header, where finds land. */

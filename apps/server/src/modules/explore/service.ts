@@ -3,6 +3,7 @@ import {
   deriveSeed,
   EXPLORE_RULES,
   exploreLayout,
+  GAME_DATA,
   exploreNeeds,
   isExplorable,
   isFullyExplored,
@@ -11,6 +12,7 @@ import {
   searchedCount,
   searchSpots,
   withSearched,
+  type DevHomesteadRequest,
   type ExploreNotable,
   type ExploreTileResponse,
   type ItemCounts,
@@ -146,10 +148,23 @@ export function createExploreService(options: ExploreServiceOptions) {
 
   return {
     /** Dev only (`HP_DEV_SQUISHY_GRANTS`): a ready homestead next to home (#295, e2e). */
-    devHomestead: async (user: PublicUser, mapId: string): Promise<{ q: number; r: number }> => {
+    devHomestead: async (
+      user: PublicUser,
+      mapId: string,
+      ask: DevHomesteadRequest = {},
+    ): Promise<{ q: number; r: number }> => {
+      if (ask.terrain !== undefined && !GAME_DATA.terrains.some((t) => t.id === ask.terrain)) {
+        throw new AppError('BAD_REQUEST', `No terrain "${ask.terrain}".`);
+      }
+      if (
+        ask.nodeResource !== undefined &&
+        !GAME_DATA.resources.some((r) => r.id === ask.nodeResource)
+      ) {
+        throw new AppError('BAD_REQUEST', `No resource "${ask.nodeResource}".`);
+      }
       const made = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        return repo.devMakeHomestead(mapId, user.id, now());
+        return repo.devMakeHomestead(mapId, user.id, now(), ask);
       });
       if (!made) throw new AppError('CONFLICT', MESSAGES.noTile);
       published(mapId);

@@ -1362,7 +1362,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     } else if (t.homestead === 'paused') {
       nodes.push(el('p', { class: 'tile-action-note' }, `zZ ${EXPLORE_TEXT.pausedHome}`));
     }
-    if (t.explored) nodes.push(el('p', { class: 'tile-action-note' }, EXPLORE_TEXT.explored));
+    // "Fully explored" and whether it joined home are in the panel's header
+    // now (`HOMESTEAD_WORDS`, #242): alone down here it read as joined.
     const go = el(
       'button',
       {

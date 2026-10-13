@@ -71,6 +71,11 @@ export const CLEAR_TEXT = {
   clearing: (left: string) => `🌱 Clearing… ready in ${left}`,
   clearingDone: '🌱 Clearing… nearly done!',
   firstLine: 'Clear this land first 🌱',
+  // Clearing is for homesteads (#242, #295); the server says the same.
+  unexplored: 'Explore this land first, so it joins your home as a homestead!',
+  notHomestead:
+    'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',
+  napping: 'This homestead is napping zZ. Join it back up to home first!',
   cleared: 'Land cleared, ready to build! 🌱',
 } as const;
 
@@ -81,8 +86,10 @@ export function toolName(tool: string): string {
 
 /**
  * Can this tile be cleared by me? Null when the sheet shouldn't offer it:
- * not mine, home, already cleared, land no tool clears, not a joined
- * homestead, a building on it, or a clear already going here.
+ * not mine, home, already cleared, land no tool clears, a building on it,
+ * or a clear already going here. Land of mine that isn't a joined homestead
+ * yet gets the card held back with why, so Build never silently leaves it
+ * out (#242: an owner on explored land that hadn't joined saw no Clear land).
  */
 export function clearOffer(
   tile: Pick<
@@ -94,6 +101,7 @@ export function clearOffer(
     | 'terrain'
     | 'nodeResource'
     | 'homestead'
+    | 'explored'
     | 'buildings'
     | 'clearing'
     | 'workers'
@@ -104,7 +112,7 @@ export function clearOffer(
   now: number,
 ): ClearOffer | null {
   if (me === null || tile.ownerUserId !== me || tile.homeSlot !== null) return null;
-  if (tile.terrain === CLEARED_TERRAIN || tile.homestead !== 'joined') return null;
+  if (tile.terrain === CLEARED_TERRAIN) return null;
   // Something finished but not banked yet doesn't count: the server banks
   // it first (`settleLeftovers`).
   const going = <T extends { readyAt: string }>(list: readonly T[] = []) =>
@@ -117,14 +125,23 @@ export function clearOffer(
   if (!tool) return null;
   const drop = clearDrop(tile, GAME_DATA.resources, JOB_RULES, CLEARING_RULES);
   const needTool = (state.items[tool] ?? 0) < 1;
-  const blocked = going(state.gathers).some(here)
-    ? CLEAR_TEXT.gathering
-    : (tile.workers ?? 0) > 0 || tile.defenders > 0
-      ? CLEAR_TEXT.squishyBusy
-      : clears.length > 0
-        ? CLEAR_TEXT.already
-        : null;
+  const blocked =
+    homesteadReason(tile) ??
+    (going(state.gathers).some(here)
+      ? CLEAR_TEXT.gathering
+      : (tile.workers ?? 0) > 0 || tile.defenders > 0
+        ? CLEAR_TEXT.squishyBusy
+        : clears.length > 0
+          ? CLEAR_TEXT.already
+          : null);
   return { tool, drop, blocked, needTool };
+}
+
+/** Why my land can't be cleared until it's a joined homestead, or null when it is. */
+function homesteadReason(tile: Pick<PublicTile, 'homestead' | 'explored'>): string | null {
+  if (tile.homestead === 'joined') return null;
+  if (tile.homestead === 'paused') return CLEAR_TEXT.napping;
+  return tile.explored ? CLEAR_TEXT.notHomestead : CLEAR_TEXT.unexplored;
 }
 
 /**

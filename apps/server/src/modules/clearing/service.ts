@@ -50,6 +50,8 @@ const MESSAGES = {
   notYours: 'You can only clear your own land.',
   home: 'Your home stays just as it is. Clear a homestead instead!',
   notHomestead: 'Explore this land first, so it joins your home as a homestead!',
+  notJoined:
+    'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',
   napping: 'This homestead is napping. Join it back up to home first!',
   cleared: "This land's already cleared. Ready to build!",
   cantClear: (terrain: string) => `${terrain} can't be cleared.`,
@@ -299,9 +301,16 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
             const name = TERRAIN_NAMES.get(tile.terrain) ?? 'This land';
             throw new AppError('CONFLICT', MESSAGES.cantClear(name));
           }
-          const homestead = homesteadOf(await createExploreRepo(tx).findRow(user.id, tile.id));
+          const row = await createExploreRepo(tx).findRow(user.id, tile.id);
+          const homestead = homesteadOf(row);
           if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.napping);
-          if (homestead !== 'joined') throw new AppError('CONFLICT', MESSAGES.notHomestead);
+          // Explored but not touching home says so, not "explore it" (#242).
+          if (homestead !== 'joined') {
+            throw new AppError(
+              'CONFLICT',
+              row?.completedAt ? MESSAGES.notJoined : MESSAGES.notHomestead,
+            );
+          }
 
           const busy = await repo.tileBusy(tile.id, user.id);
           if (busy.buildings > 0) throw new AppError('CONFLICT', MESSAGES.built);
