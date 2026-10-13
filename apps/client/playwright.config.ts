@@ -63,6 +63,7 @@ const E2E_GROUPS = [
     'cinematic',
     'clear-land',
     'friendly',
+    'homestead-colour',
     'inventory',
     'milestones',
     'patch-line',

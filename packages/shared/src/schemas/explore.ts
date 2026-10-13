@@ -21,8 +21,11 @@ export const DevHomesteadRequestSchema = z.strictObject({
   terrain: ContentIdSchema.optional(),
   /** A resource spot in its middle (a resource id); otherwise none. */
   nodeResource: ContentIdSchema.optional(),
-  /** False: explored, but three steps from home, so it hasn't joined. */
-  joined: z.boolean().optional(),
+  /**
+   * False: explored, but three steps from home, so it hasn't joined.
+   * 'napping': the same, but a homestead once, cut off from home since.
+   */
+  joined: z.union([z.boolean(), z.literal('napping')]).optional(),
 });
 export type DevHomesteadRequest = z.infer<typeof DevHomesteadRequestSchema>;
 
