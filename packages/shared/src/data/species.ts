@@ -3332,12 +3332,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['joy', 'spooky'] },
   },
-  // #495 grown-up (stage 4): Sparklewick grows confetti sprinkles and strong arms.
+  // #495 grown-up (stage 4): Sparklewick grows strong arms and a taller flame crown.
   {
     id: 'festiwick',
     name: 'Festiwick',
     description:
-      'A party candle sprinkled with confetti, with strong arms for hugging everyone at once.',
+      'A party candle with a flame crown as tall as a party hat and strong arms for hugging everyone at once.',
     element: 'fire',
     feeling: 'joy',
     rarity: 'epic',
@@ -3354,7 +3354,6 @@ export const SPECIES: Species[] = [
         'blush-cheeks',
         'flame-crown',
         'whisker-flames',
-        'confetti-coat',
         'strong-arms',
         'hop-feet',
         'curly-tail',
