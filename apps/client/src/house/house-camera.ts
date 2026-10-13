@@ -187,7 +187,9 @@ export function fitHouse(
  * on a portrait phone it fits the focus room (the Keeper's) across, plus
  * `HOUSE_CAMERA.peek` of each neighbour so you can see there's more house,
  * the whole house's height and depth kept; the rest is a sideways drag
- * away (`panRange`). Elsewhere, and when no focus is given, the whole house.
+ * away (`panRange`). The focus room stays in the middle (B5a): where the
+ * house ends sooner on one side, the frame shows lawn there. Elsewhere, and
+ * when no focus is given, the whole house.
  */
 export function fitBox(
   bounds: HouseBounds,
@@ -195,11 +197,14 @@ export function fitBox(
   focus: HouseFocus | null,
 ): HouseBounds {
   if (!focus || !isPhone(vp)) return bounds;
-  return {
-    ...bounds,
-    minX: Math.max(bounds.minX, focus.minX - (focus.peek ?? HOUSE_CAMERA.peek)),
-    maxX: Math.min(bounds.maxX, focus.maxX + (focus.peek ?? HOUSE_CAMERA.peek)),
-  };
+  const peek = focus.peek ?? HOUSE_CAMERA.peek;
+  const minX = Math.max(bounds.minX, focus.minX - peek);
+  const maxX = Math.min(bounds.maxX, focus.maxX + peek);
+  if (minX <= bounds.minX && maxX >= bounds.maxX) return { ...bounds, minX, maxX };
+  // B5a: the focus room in the middle of the frame (it sat pushed to the
+  // side the house ends on): that side shows a little lawn instead.
+  const reach = Math.max(focus.minX - minX, maxX - focus.maxX);
+  return { ...bounds, minX: focus.minX - reach, maxX: focus.maxX + reach };
 }
 
 /**
@@ -314,7 +319,11 @@ export function panRange(
   focus: HouseFocus | null,
 ): { min: number; max: number } {
   const box = fitBox(bounds, vp, focus);
-  return { min: bounds.minX - box.minX, max: bounds.maxX - box.maxX };
+  // An end already in the frame (lawn past it, B5a) slides no further that way.
+  return {
+    min: Math.min(0, bounds.minX - box.minX),
+    max: Math.max(0, bounds.maxX - box.maxX),
+  };
 }
 
 /** The pose slid `dx` metres along x (a sideways drag). */

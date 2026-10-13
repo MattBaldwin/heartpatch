@@ -1012,7 +1012,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     touch.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
-    if (pointers.size === 1) panner.down(e.clientX);
+    panner.down(e.clientX, e.pointerId);
     if (pointers.size === 2) {
       skipGlide();
       walk = null;
@@ -1025,7 +1025,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     // One finger in the dollhouse slides it sideways (a tall phone shows one
     // room or two), gathered and applied once a frame in step().
-    if (pointers.size === 1 && zoom === 0 && !walk && panner.move(e.clientX)) {
+    if (pointers.size === 1 && zoom === 0 && !walk && panner.move(e.clientX, e.pointerId)) {
       skipGlide();
       draw();
     }
@@ -1040,12 +1040,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!pointers.delete(e.pointerId)) return;
     if (e.type === 'pointercancel') taps.pointerCancel(sample(e));
     else taps.pointerUp(sample(e));
-    if (pointers.size === 0) {
-      const last = panner.up();
-      if (last) {
-        showPan(last);
-        draw();
-      }
+    const last = panner.up(e.pointerId);
+    if (last) {
+      showPan(last);
+      draw();
     }
     if (pinch && pointers.size < 2) {
       pinch = null;

@@ -420,7 +420,11 @@ describe('house scene', () => {
         const faces = house.faceReport();
         const at = `level ${String(level)} floor ${String(floor)}`;
         expect(faces.cut, at).toBe(0);
-        expect(faces.visible, at).toBe(faces.total);
+        // Every face in the frame is seen (B5a: a closer phone frame leaves the
+        // next room's residents wholly off the edge, a sideways drag away).
+        const inFrame = faces.boxes.filter((b) => b.x0 >= 0 && b.x1 <= 1).length;
+        expect(inFrame, at).toBeGreaterThanOrEqual(2);
+        expect(faces.visible, at).toBe(inFrame);
         // The chevron pills keep off every resident's face (round 4: one sat on the cyan's eye).
         const pose = fitHouse(house.frameBounds, vp, undefined, focus);
         const guess = residentBoxes(pose, vp, house.residentSpots);

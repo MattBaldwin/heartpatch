@@ -143,9 +143,11 @@ export const snugRoom: RoomBuilder = (kit) => {
   const y = box.y0;
   const at = (u: number, v: number): [number, number] => [box.x0 + u, box.z0 + v];
 
-  // The hearth, angled 30° toward the dollhouse camera so the lit fire reads.
-  const [hx, hz] = at(0.62, d * 0.42);
-  const facing = (2 * Math.PI) / 3; // TUNE
+  // The hearth, angled 30° toward the dollhouse camera so the lit fire reads,
+  // forward of the left bed (B5a: at 0.42 of the depth its mantel stood over
+  // the bed in every dollhouse view).
+  const [hx, hz] = at(0.62, d * 0.33); // TUNE
+  const facing = (2 * Math.PI) / 3; // TUNE: B5a: 0.75π hid a face behind it at level 4
   const fire: Parts = hearth(scene, false, HOUSE_TIERS[kit.tier].rounds);
   kit.solid([placed(fire.solid, hx, y, hz, facing)]);
   kit.glow([placed(fire.glow, hx, y, hz, facing)]);
@@ -189,7 +191,8 @@ export const snugRoom: RoomBuilder = (kit) => {
   // the east wall its hotspot washed the wall and the table out (H2 render check).
   kit.light('lamp', tx - 0.35, y + 1.36, tz - 0.15); // TUNE
 
-  const [px, pz] = at(0.45, 0.45);
+  // The plant by the east wall, in front of the bed (B5a: the hearth came forward into its corner).
+  const [px, pz] = at(w - 0.42, d * 0.55); // TUNE
   kit.solid(plant(scene, px, pz, y));
   kit.shadow(px, pz, 0.9, 0.9);
   // The pink ball beside the plant, the open book at the rug's front edge.
@@ -202,8 +205,8 @@ export const snugRoom: RoomBuilder = (kit) => {
   return {
     // Behind the two on the rug, in the gap between them: clear of both at kid height.
     keeper: { x: box.x0 + w * 0.55, z: box.z0 + d * 0.7 },
-    // At the hearthstone's front corner, between the plant and the ball: in
-    // view from the dollhouse and kid height, clear of the two on the rug.
+    // At the hearthstone's front corner, by the ball: in view from the
+    // dollhouse, clear of the two on the rug and the Keeper.
     gift: { x: box.x0 + 1.0, z: box.z0 + 0.62 }, // TUNE
     residents: [at(w * 0.33, d * 0.4), at(w * 0.67, d * 0.36), at(w * 0.5, d * 0.22)].map(
       ([x, z]) => ({ x, z }),

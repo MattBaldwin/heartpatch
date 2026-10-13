@@ -157,14 +157,18 @@ export interface CastFootprint {
  * squishy's leg or ears): the first of the bed's foot, then spots on the way
  * from the foot to the room's middle, then the bed's sides, that is inside
  * the walls, off every bed, clear of the cast, not hidden behind any of them
- * from kid height, and not standing in front of a squishy. With none clear,
- * the spot that comes closest.
+ * from kid height, and not standing in front of a squishy. B5a: a spot
+ * that also keeps clear of the Keeper's whole body (not just its face) wins,
+ * by the bed or else at one of the room's `spare` spots. With none clear, the
+ * spot that comes closest.
  */
 export function besideBed(
   bed: BedSpot,
   beds: readonly BedSpot[],
   room: FloorRect,
   cast: readonly CastFootprint[] = [],
+  /** Spots the room keeps clear of its furniture (the Snug's by the hearth), tried when no spot by the bed clears everyone. */
+  spare: readonly { x: number; z: number }[] = [],
 ): { x: number; z: number } {
   const r = HOUSE_GIFT.size / 2;
   const side = BED_HALF.x + HOUSE_GIFT.besideBed + r;
@@ -189,26 +193,35 @@ export function besideBed(
     const far = Math.hypot(dx, dz);
     return { angle: Math.atan2(dx, dz), half: Math.atan(reach / Math.max(far, 0.01)), far };
   };
-  /** How clear a spot is: below 0 it touches, hides behind or covers someone. */
-  const clearance = (p: { x: number; z: number }): number => {
+  /**
+   * How clear a spot is: below 0 it touches, hides behind or covers someone.
+   * `keeper`: the box in front of the Keeper counts too (B5a: at kid height
+   * it hid the Keeper from the waist down), not only its face.
+   */
+  const clearance = (p: { x: number; z: number }, keeper: boolean): number => {
     const box = view(p, r);
     let least = Infinity;
     for (const c of cast) {
       least = Math.min(least, Math.hypot(p.x - c.x, p.z - c.z) - (c.r + r + 0.1));
       const them = view(c, c.r);
       const apart = Math.abs(box.angle - them.angle) - (box.half + them.half);
-      // In line of sight with it: hidden behind it, or (a squishy) covered by the box.
-      if (them.far < box.far || c.squishy) least = Math.min(least, apart * box.far);
+      // In line of sight with it: hidden behind it, or covered by the box.
+      if (them.far < box.far || c.squishy || keeper) least = Math.min(least, apart * box.far);
     }
     return least;
   };
-  const spots = [foot, ...toward, ...sides].filter(
-    (p) => inside(p) && !beds.some((b) => onBed(b, p, r + 0.05)),
-  );
-  const clear = spots.find((p) => clearance(p) >= 0);
+  const usable = (p: { x: number; z: number }) =>
+    inside(p) && !beds.some((b) => onBed(b, p, r + 0.05));
+  const spots = [foot, ...toward, ...sides].filter(usable);
+  // Clear of everyone's whole body first, by the bed or at a spare spot;
+  // else as before (the Keeper's face clear, its legs maybe not).
+  const clear =
+    spots.find((p) => clearance(p, true) >= 0) ??
+    spare.filter(usable).find((p) => clearance(p, true) >= 0) ??
+    spots.find((p) => clearance(p, false) >= 0);
   if (clear) return clear;
   const best = spots.reduce<{ p: { x: number; z: number }; c: number } | null>((acc, p) => {
-    const c = clearance(p);
+    const c = clearance(p, false);
     return acc === null || c > acc.c ? { p, c } : acc;
   }, null);
   if (best) return best.p;
