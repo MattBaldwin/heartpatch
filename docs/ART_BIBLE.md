@@ -147,29 +147,43 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 ### 1.10 Roster
 
-Every line, baby → teen, as shipped before #443 (the Teen column is stage 3, at ×1.25–1.35 the baby's size). The kids (stage 2) and grown-ups (stage 4) join this chapter with their #443 batches; the 8 wave-1 lines get their kid and teen there too.
+Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×1.15 the baby's size; it keeps the baby's face and adds a preview of its teen's parts. The Teen column is stage 3, at ×1.25–1.35 the baby's size. The grown-ups (stage 4) join this chapter with their Phase 2 batches (#495).
 
-| Line | Element · Feeling | Body plan | Baby | Teen | Pose · attack part |
+| Line | Element · Feeling | Body plan | Baby | Kid (stage 2) | Teen | Pose · attack part |
+|---|---|---|---|---|---|---|
+| Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole, wiggly tail | Rippletad: little hop feet and a fin crest | sea serpent: long swinging body, fin row, toothy grin | sit → slither · tail |
+| Pebblesnooze → Boulderdoze | Stone · Sleepy | boulder tortoise | pebble shell, stubby legs, head in a nightcap | Cobblenap: crag nubs on the shell, horn nubs under the cap | big boulder tortoise: crag nubs on the shell, horns, smirk | stand · crown → back |
+| Emberbun → Hearthbun | Fire · Cozy | biped with arms | fire bunny on little feet | Kindlebun: a three-flame crown, a fluffy tail | upright brawler: strong arms, flame mane and tail | stand → upright · arms |
+| Snoozicle → Drowsiberg | Frost · Sleepy | snowman → yeti | little snowman with stubby arms | Snoozeflake: an icicle crown | yeti: fur ruff, icicle crown, strong arms, fangs | sit → upright · arms |
+| Fuzzbolt → Frizzbolt | Spark · Silly | quadruped cat | big-headed kitten, lightning ears, zigzag tail | Zipkit: a spark crest, a taller stance | lynx: long legs, spark crest, fangs | stand · tail |
+| Fizzlepop → Zingaling | Spark · Joy | star sprite | hovering star with little wings | Twinklepop: a crest of sparks | bigger star: glowing wings, antennae | hover · wings → antennae |
+| Bubbletub → Bubbletide | Water · Cozy | finned swimmer | bubbly seal: side fins, tail fan | Bubblenub: a fin row, horn nubs | narwhal: horn, fin row, sharp eyes | sit → slither · tail → horn |
+| Thistlepip → Bristlebloom | Leaf · Brave | spiky ball → knight | burr ball on little feet | Bristlepip: leaf arms, standing up | cactus knight: thistle crown, back spines, leaf arms | sit → upright · spikes → arms |
+| Flurrypup → Blusterpup | Frost · Brave | quadruped pup | big-headed pup, stubby legs, floppy ears | Gustypup: pointy ears, first icicles, longer legs | frost wolf: long legs, icicle mane, spiked tail, fangs | stand · tail |
+| Glimmerock → Glittercrag | Stone · Joy | crystal golem | gem pebble with tiny arms and feet | Gemling: big strong arms | golem: huge body, tiny head, strong arms, crystal spines | stand → upright · arms |
+| Nookling → Snugglenook | Shadow · Cozy | long-eared hopper | bunny with a big head and big feet | Nibblenook: antler buds, a fluffy tail, standing up | jackalope: antlers, long ears, fluffy tail | sit → stand · legs |
+| Mossmuffin → Mossquilt | Leaf · Cozy | muffin → mushroom treant | walking muffin with a moss cap | Sproutcake: leaf arms | treant: mushroom-cap head, leaf arms, root legs, fern tail | stand → upright · crown → arms |
+| Dawndrop → Dazzledrop | Light · Joy | sun orb | hovering sun with a halo of rays | Sunnydrop: plume wings | sun with a crown of rays and glowing wings | hover · crown → mane |
+| Thunderpuff → Thunderplume | Spark · Brave | flier | storm-cloud chick | Stormchick: its first beak (no mouth, like its teens) | thunderbird: big wings, beak, crest, tail feathers | hover · wings |
+| Gourdon → Glowgourd | Leaf · Silly | walking pumpkin | pumpkin on little feet, vine tail | Pumpkip: little arms | glowing jack-o'-lantern brute: leaf arms, toothy grin | stand · tail → arms |
+| Glowboo → Brightboo | Light · Spooky | ghost | little ghost with stubby arms | Wispyboo: lilac nub wings, a wispy tail | big ghost: strong arms, wispy tail, brows and fangs | hover · arms |
+| Upsybat → Topsywing | Shadow · Silly | bat flier | round bat: big ears, little wings | Flitterbat: big tufted ears, a fluffy tail | bat with big wings, fangs, curly tail | hover · wings |
+| Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | Wickitten: whisker flames | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
+| Crunchkin → Maplecrunch | Leaf · Joy | squirrel → upright squirrel | baby squirrel in an acorn hat, bushy tail | Scamperkin: a stem on its acorn cap, a taller stance | upright squirrel: maple mane, strong arms, pointy ears, fangs | sit → upright · tail |
+| *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | *Heartbud: little arms* | fairy: glowing wings, leaf sprout, arms | hover · wings |
+
+**Wave-1 lines (#382, #443).** Each of the 8 wave-1 kinds grows into a kid and one teen; their branch teens come in Phase 2 (#495). Kids come at the launch level for the kind's rarity (16 / 18 / 22) and teens 8 levels later, one rarity up.
+
+| Line | Element · Feeling | Baby | Kid (stage 2) | Teen | Pose |
 |---|---|---|---|---|---|
-| Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole, wiggly tail | sea serpent: long swinging body, fin row, toothy grin | sit → slither · tail |
-| Pebblesnooze → Boulderdoze | Stone · Sleepy | boulder tortoise | pebble shell, stubby legs, head in a nightcap | big boulder tortoise: crag nubs on the shell, horns, smirk | stand · crown → back |
-| Emberbun → Hearthbun | Fire · Cozy | biped with arms | fire bunny on little feet | upright brawler: strong arms, flame mane and tail | stand → upright · arms |
-| Snoozicle → Drowsiberg | Frost · Sleepy | snowman → yeti | little snowman with stubby arms | yeti: fur ruff, icicle crown, strong arms, fangs | sit → upright · arms |
-| Fuzzbolt → Frizzbolt | Spark · Silly | quadruped cat | big-headed kitten, lightning ears, zigzag tail | lynx: long legs, spark crest, fangs | stand · tail |
-| Fizzlepop → Zingaling | Spark · Joy | star sprite | hovering star with little wings | bigger star: glowing wings, antennae | hover · wings → antennae |
-| Bubbletub → Bubbletide | Water · Cozy | finned swimmer | bubbly seal: side fins, tail fan | narwhal: horn, fin row, sharp eyes | sit → slither · tail → horn |
-| Thistlepip → Bristlebloom | Leaf · Brave | spiky ball → knight | burr ball on little feet | cactus knight: thistle crown, back spines, leaf arms | sit → upright · spikes → arms |
-| Flurrypup → Blusterpup | Frost · Brave | quadruped pup | big-headed pup, stubby legs, floppy ears | frost wolf: long legs, icicle mane, spiked tail, fangs | stand · tail |
-| Glimmerock → Glittercrag | Stone · Joy | crystal golem | gem pebble with tiny arms and feet | golem: huge body, tiny head, strong arms, crystal spines | stand → upright · arms |
-| Nookling → Snugglenook | Shadow · Cozy | long-eared hopper | bunny with a big head and big feet | jackalope: antlers, long ears, fluffy tail | sit → stand · legs |
-| Mossmuffin → Mossquilt | Leaf · Cozy | muffin → mushroom treant | walking muffin with a moss cap | treant: mushroom-cap head, leaf arms, root legs, fern tail | stand → upright · crown → arms |
-| Dawndrop → Dazzledrop | Light · Joy | sun orb | hovering sun with a halo of rays | sun with a crown of rays and glowing wings | hover · crown → mane |
-| Thunderpuff → Thunderplume | Spark · Brave | flier | storm-cloud chick | thunderbird: big wings, beak, crest, tail feathers | hover · wings |
-| Gourdon → Glowgourd | Leaf · Silly | walking pumpkin | pumpkin on little feet, vine tail | glowing jack-o'-lantern brute: leaf arms, toothy grin | stand · tail → arms |
-| Glowboo → Brightboo | Light · Spooky | ghost | little ghost with stubby arms | big ghost: strong arms, wispy tail, brows and fangs | hover · arms |
-| Upsybat → Topsywing | Shadow · Silly | bat flier | round bat: big ears, little wings | bat with big wings, fangs, curly tail | hover · wings |
-| Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
-| *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
+| Lilyhop → Lilyleap → Croakaroo | Water · Silly | frog on a lily-pad sit, eye bumps | a blue curl of pond water | bubble crown, strong arms, a pink tongue | sit |
+| Hailhop → Hailbounce → Hailhare | Frost · Joy | snow hare with an icicle crown | a fluffier tail, sits taller | blue icicle mane, long legs | sit → stand |
+| Chillypep → Pepperpip → Jalapow | Fire · Brave | chilli pepper with a stem | leaf tufts by its stem, little arms | a bushy leaf top, strong arms, long legs | stand |
+| Flakefluff → Snowtuft → Frostbold | Frost · Brave | tiered snowflake with an icicle crown | little arms | feet, strong arms, crystal back spines | stand |
+| Shellnap → Sipsnooze → Brewtle | Water · Sleepy | turtle in a teacup shell | a little green sprout | four big round feet, small side flippers | stand |
+| Gnomnom → Gnomnibble → Gnomguard | Stone · Cozy | garden gnome: nightcap, fluffy ruff | a green leaf behind its head | long arms, standing legs, flatter eyes | stand |
+| Moonmoth → Duskmoth → Lunamoth | Shadow · Spooky | moth orb with moon wings and antennae | a fluffy ruff around its middle | little arms, a soft tail, sparkle (epic) | hover |
+| Cometsnail → Sparksnail → Starblaze | Spark · Joy | shooting-star snail with a spark crest | little arms | long arms, sparkle (epic) | hover |
 
 **Branch forms (#32).** Every launch line has a second teen form at the same level (the wave-1 lines get theirs in Phase 2): the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. Built from the shared primitives; batch 4 adds the `frosting` body and the parts for Huddlenut and Sprinklemuff, and the secret Heartsong adds a `heart` body (an optional `cleft` shape), its parts and the first floater (§1.2).
 
