@@ -530,7 +530,7 @@ export const MOVES: Move[] = [
     description: 'Spins into a big swirly wave. Whoosh! It might come out of it a little faster.',
     element: 'water',
     power: 85, // TUNE:
-    accuracy: 95, // TUNE: 85 and no effect left Tsunoodle at 35% against the grown-ups
+    accuracy: 95, // TUNE: 85 and no effect left Tsunoodle at 35% (sim, with batches 1–2's 12 grown-ups)
     effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 }], // TUNE:
   },
   {
@@ -558,7 +558,7 @@ export const MOVES: Move[] = [
     element: 'fire',
     power: 80, // TUNE:
     accuracy: 90, // TUNE:
-    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE: 50% made Emberslumber 70%+ against the grown-ups
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE: 50% made Emberslumber 70%+ (sim, with batches 1–2's 12 grown-ups)
   },
   {
     id: 'thistle-charge',
@@ -613,7 +613,7 @@ export const MOVES: Move[] = [
     element: 'light',
     power: 75, // TUNE:
     accuracy: 95, // TUNE:
-    effects: [{ type: 'status', status: 'sleepy', chance: 10 }], // TUNE: 20% made Snoozelight 71% against the grown-ups
+    effects: [{ type: 'status', status: 'sleepy', chance: 10 }], // TUNE: 20% made Snoozelight 71% (sim, with batches 1–2's 12 grown-ups)
   },
   {
     id: 'loop-de-loop',
@@ -621,7 +621,7 @@ export const MOVES: Move[] = [
     description: 'Swoops round and round. The other side might get a bit dizzy.',
     element: 'shadow',
     power: 85, // TUNE:
-    accuracy: 95, // TUNE: 85 left Loopadoodle at 34% against the grown-ups
+    accuracy: 95, // TUNE: 85 left Loopadoodle at 34% (sim, with batches 1–2's 12 grown-ups)
     effects: [{ type: 'status', status: 'dizzy', chance: 20 }], // TUNE:
   },
   {
@@ -733,7 +733,7 @@ export const SPECIES: Species[] = [
     element: 'water',
     feeling: 'silly',
     rarity: 'rare',
-    baseStats: { hp: 100, attack: 86, defense: 80, speed: 92 }, // TUNE: ×1.18 Splashmallow, plus 15 (sim: 38% against the grown-ups, 6 under its teen)
+    baseStats: { hp: 100, attack: 86, defense: 80, speed: 92 }, // TUNE: ×1.18 Splashmallow, plus 15 (sim, with batches 1–2's 12 grown-ups: 38% before, 6 under its teen)
     moves: ['tidal-twirl', 'belly-flop', 'bubble-bath', 'splish-splash'],
     evolutions: [],
     visual: {
@@ -1118,7 +1118,7 @@ export const SPECIES: Species[] = [
     id: 'emberslumber',
     name: 'Emberslumber',
     description:
-      'A big cozy coal in a fluffy ruff, with a crown of golden flames. It glows brighter with every snore.',
+      'A big cozy coal in a fluffy ruff, with a golden flame tuft on top. It glows brighter with every snore.',
     element: 'fire',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -1731,7 +1731,7 @@ export const SPECIES: Species[] = [
     id: 'petalwhirl',
     name: 'Petalwhirl',
     description:
-      'A whirl of petals with round purple petals on top. Wherever it dances, flowers pop up.',
+      'A twirly flower sprite with round purple petals on top. Wherever it dances, flowers pop up.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
