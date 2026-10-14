@@ -49,7 +49,9 @@ const battleState = (page: Page) =>
   hook<{ status: string; scene: { squishies: number; shadowLook: number } | null }>(page, 'battle');
 
 test('night falls, the Hollow Man visits, and a rescue sets off', async ({ browser }) => {
-  test.setTimeout(240_000); // map and arena builds and a claim; CI renders in software
+  // Map and arena builds and a claim; CI renders in software. 240 s sat at
+  // the budget on main's governor too (3.9–4.0 min on iPad, #501/#514).
+  test.setTimeout(300_000);
   const page = await newPlayer(browser, uniqueName('hollow'));
   // The map's ambient life (swaying trees, drifting motes) keeps a fast
   // renderer drawing; reduced motion holds it still, so "the map stops
