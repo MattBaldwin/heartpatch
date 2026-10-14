@@ -28,6 +28,8 @@ const ctx = { config, devicePixelRatio: 2 };
 
 /** Relative GPU cost of each tier (bloom costs on high and medium). */
 const TIER_COST: Record<QualityTier, number> = { high: 1, medium: 0.75, low: 0.6 };
+/** Relative cost of the tier's resolution-independent effects (bloom passes, extras). */
+const EFFECTS_COST: Record<QualityTier, number> = { high: 1, medium: 0.5, low: 0.3 };
 
 /**
  * A simulated device: each frame takes the longest of the refresh cap, the
@@ -39,13 +41,16 @@ interface Device {
   cpuMs?: number;
   /** GPU time per frame at full resolution on the high tier. */
   gpuMs?: number;
+  /** GPU time per frame that doesn't scale with pixels (effects), on the high tier. */
+  effectsMs?: number;
   tierCost?: Record<QualityTier, number>;
 }
 
 function frameMs(s: GovernorState, d: Device): number {
   const cap = 1000 / (d.capFps ?? 60);
   const gpu = (d.gpuMs ?? 0) * s.renderScale ** 2 * (d.tierCost ?? TIER_COST)[s.tier];
-  return Math.max(cap, d.cpuMs ?? 0, gpu);
+  const effects = (d.effectsMs ?? 0) * EFFECTS_COST[s.tier];
+  return Math.max(cap, d.cpuMs ?? 0, gpu + effects);
 }
 
 /** Runs `ms` of frames on a device and returns the final state and the scales seen. */
@@ -89,6 +94,17 @@ describe('stepGovernor on simulated devices', () => {
   it('steps the tier down only when the floor still is not enough', () => {
     // 28 fps at full res; still ~45 fps at the high floor; fine on medium.
     const { state, fps } = simulate(start(), { gpuMs: 36 }, 30_000);
+    expect(state.tier).not.toBe('high');
+    expect(fps).toBeGreaterThanOrEqual(50);
+  });
+
+  it('drops a tier when its effects, not its pixels, hold the frame rate down (#501)', () => {
+    // 28 fps on high whatever the resolution (a team at the lake on an
+    // iPhone): a cut doesn't help, so it probes medium instead of holding at
+    // full resolution, and keeps it because that helps.
+    const device = { effectsMs: 36 };
+    expect(1000 / frameMs(start(), device)).toBeLessThan(29);
+    const { state, fps } = simulate(start(), device, 30_000);
     expect(state.tier).not.toBe('high');
     expect(fps).toBeGreaterThanOrEqual(50);
   });
