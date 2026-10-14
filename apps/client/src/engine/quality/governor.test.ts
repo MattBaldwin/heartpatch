@@ -270,10 +270,38 @@ describe('stepGovernor details', () => {
       s = windows(s, 12.5, 1);
     }
     expect(quality(s)).toEqual(quality(s0));
-    // A long frame that is not pause-long (a shader compile) is ignored too.
-    s = s0;
-    for (let i = 0; i < 10; i++) s = stepGovernor(s, config.maxFrameMs + 1, ctx);
+  });
+
+  it('counts a run of slow frames short of crawling, so 2–3 fps steps down (#501)', () => {
+    // 400 ms a frame at full resolution: every frame between maxFrameMs and
+    // crawlFrameMs, as on the owner's iPhone. They used to be ignored as
+    // pauses, so no window ever closed and quality never moved.
+    for (const gpuMs of [400, 500, 900]) {
+      const before = 1000 / frameMs(start(), { gpuMs });
+      const { state, fps } = simulate(start(), { gpuMs }, 120_000);
+      expect(state.tier, `${String(gpuMs)} ms`).toBe('low');
+      expect(state.renderScale, `${String(gpuMs)} ms`).toBeLessThan(1);
+      expect(fps, `${String(gpuMs)} ms`).toBeGreaterThan(before * 2);
+      expect(state.crawlFrames).toBe(0); // the normal path, not a crawl to low
+    }
+    // A CPU-bound phone this slow holds: lower quality wouldn't help it.
+    const { state } = simulate(start(), { cpuMs: 400, gpuMs: 8 }, 120_000);
+    expect(state).toMatchObject({ tier: 'high', renderScale: 1 });
+  });
+
+  it('one or two slow frames (a shader compile) among fast ones change nothing (#501)', () => {
+    const s0 = windows(ready(), 12.5, 4);
+    const quality = ({ tier, renderScale }: GovernorState) => ({ tier, renderScale });
+    let s = s0;
+    for (let hitch = 0; hitch < 5; hitch++) {
+      for (let i = 1; i < config.crawlFrames; i++) s = stepGovernor(s, 400, ctx);
+      s = windows(s, 12.5, 2);
+    }
     expect(quality(s)).toEqual(quality(s0));
+    expect(s.slowRun).toBe(0);
+    // A resume ends a run too, as it does a crawl.
+    s = stepGovernor(s, 400, ctx);
+    expect(resumeGovernor(s).slowRun).toBe(0);
   });
 
   it('treats one huge gap followed by normal frames as a pause: no step-down', () => {

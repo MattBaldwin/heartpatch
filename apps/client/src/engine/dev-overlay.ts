@@ -24,7 +24,8 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * freed since the badge first saw this engine (a lost context's rebuild
  * starts again from zero) (#501: a frame rate that sinks as a session goes on
  * shows here as a number that keeps climbing), the squishy batch uploads,
- * and the governor's render scale.
+ * the governor's render scale, and our JS per drawn frame (a low fps with
+ * low JS is the GPU or the browser, not our code).
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
@@ -46,6 +47,9 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     if (counted?.scene !== stage.scene) {
       counted?.instrumentation.dispose();
       counted = { scene: stage.scene, instrumentation: new SceneInstrumentation(stage.scene) };
+      // Our JS per drawn frame (#501): with the frame rate, it tells a stall
+      // in our code from one in the GPU or the browser.
+      counted.instrumentation.captureFrameTime = true;
     }
     const drawCalls = counted.instrumentation.drawCallsCounter.current;
     // Idle means nothing is drawn (render on demand), so there's no frame rate.
@@ -61,6 +65,7 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     }
     const { scene } = stage;
     counts.textContent = formatResourceStats({
+      jsMs: counted.instrumentation.frameTimeCounter.lastSecAverage,
       meshes: scene.meshes.length,
       materials: scene.materials.length,
       textures: scene.textures.length,

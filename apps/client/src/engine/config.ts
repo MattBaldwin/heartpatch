@@ -66,7 +66,12 @@ export interface ScalerConfig {
   maxRaiseAfterMs: number;
   /** A drop within this long after a raise counts as flapping. */
   flapWindowMs: number;
-  /** Frame gaps longer than this (tab hidden, debugger) are ignored by the frame-rate windows. */
+  /**
+   * Longest frame the frame-rate windows take on its own. A longer one
+   * (short of `crawlFrameMs`) is a hitch, but from the `crawlFrames`-th in a
+   * row they count at their real length, so a phone stuck at 2–3 fps still
+   * closes windows and steps down (#501).
+   */
   maxFrameMs: number;
   /**
    * A run of `crawlFrames` consecutive frames each longer than `crawlFrameMs`
