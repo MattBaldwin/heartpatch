@@ -28,6 +28,8 @@ const ctx = { config, devicePixelRatio: 2 };
 
 /** Relative GPU cost of each tier (bloom costs on high and medium). */
 const TIER_COST: Record<QualityTier, number> = { high: 1, medium: 0.75, low: 0.6 };
+/** Relative cost of the tier's resolution-independent effects (bloom passes, extras). */
+const EFFECTS_COST: Record<QualityTier, number> = { high: 1, medium: 0.5, low: 0.3 };
 
 /**
  * A simulated device: each frame takes the longest of the refresh cap, the
@@ -39,30 +41,39 @@ interface Device {
   cpuMs?: number;
   /** GPU time per frame at full resolution on the high tier. */
   gpuMs?: number;
+  /** GPU time per frame that doesn't scale with pixels (effects), on the high tier. */
+  effectsMs?: number;
   tierCost?: Record<QualityTier, number>;
 }
 
 function frameMs(s: GovernorState, d: Device): number {
   const cap = 1000 / (d.capFps ?? 60);
   const gpu = (d.gpuMs ?? 0) * s.renderScale ** 2 * (d.tierCost ?? TIER_COST)[s.tier];
-  return Math.max(cap, d.cpuMs ?? 0, gpu);
+  const effects = (d.effectsMs ?? 0) * EFFECTS_COST[s.tier];
+  return Math.max(cap, d.cpuMs ?? 0, gpu + effects);
 }
 
-/** Runs `ms` of frames on a device and returns the final state and the scales seen. */
+/** Runs `ms` of frames on a device and returns the final state and the scales and tiers seen. */
 function simulate(state: GovernorState, d: Device, ms: number) {
   let s = state;
   const scales: number[] = [];
+  const tiers: QualityTier[] = [];
   for (let t = 0; t < ms;) {
     const f = frameMs(s, d);
     s = stepGovernor(s, f, ctx);
     scales.push(s.renderScale);
+    tiers.push(s.tier);
     t += f;
   }
-  return { state: s, scales, fps: 1000 / frameMs(s, d) };
+  return { state: s, scales, tiers, fps: 1000 / frameMs(s, d) };
 }
 
+/** Times the tier stepped down from high (each a probe on a capped or CPU-bound device). */
+const tierProbes = (tiers: QualityTier[]) =>
+  tiers.filter((x, i) => x !== 'high' && (tiers[i - 1] ?? 'high') === 'high').length;
+
 const start = (tier: QualityTier = 'high') => initialGovernor(tier, config);
-const share = (xs: number[], pred: (x: number) => boolean) => xs.filter(pred).length / xs.length;
+const share = <T>(xs: T[], pred: (x: T) => boolean) => xs.filter(pred).length / xs.length;
 
 describe('stepGovernor on simulated devices', () => {
   it('leaves a device holding 60 fps alone', () => {
@@ -93,18 +104,35 @@ describe('stepGovernor on simulated devices', () => {
     expect(fps).toBeGreaterThanOrEqual(50);
   });
 
+  it('drops a tier when its effects, not its pixels, hold the frame rate down (#501)', () => {
+    // 28 fps on high whatever the resolution (a team at the lake on an
+    // iPhone): a cut doesn't help, so it probes medium instead of holding at
+    // full resolution, and keeps it because that helps.
+    const device = { effectsMs: 36 };
+    expect(1000 / frameMs(start(), device)).toBeLessThan(29);
+    const { state, fps } = simulate(start(), device, 30_000);
+    expect(state.tier).not.toBe('high');
+    expect(fps).toBeGreaterThanOrEqual(50);
+  });
+
   it('keeps full quality under a 30 fps cap (iOS Low Power Mode)', () => {
-    const { state, scales } = simulate(start(), { capFps: 30, gpuMs: 10 }, 120_000);
+    const { state, scales, tiers } = simulate(start(), { capFps: 30, gpuMs: 10 }, 120_000);
     expect(state.tier).toBe('high');
     expect(state.renderScale).toBe(1);
     // It may re-test the cap briefly now and then, but stays sharp nearly always.
     expect(share(scales, (x) => x === 1)).toBeGreaterThan(0.9);
+    // Each re-test below tierProbeBelowFps also probes a tier down and puts it
+    // back (#501): one reverted probe per re-test, on the cap's back-off.
+    expect(share(tiers, (x) => x === 'high')).toBeGreaterThan(0.95);
+    expect(tierProbes(tiers)).toBeLessThanOrEqual(4);
   });
 
   it('keeps full quality when the CPU, not the GPU, is the bottleneck', () => {
-    const { state, scales } = simulate(start(), { cpuMs: 24, gpuMs: 8 }, 120_000);
+    const { state, scales, tiers } = simulate(start(), { cpuMs: 24, gpuMs: 8 }, 120_000);
     expect(state.tier).toBe('high');
     expect(share(scales, (x) => x === 1)).toBeGreaterThan(0.9);
+    expect(share(tiers, (x) => x === 'high')).toBeGreaterThan(0.95);
+    expect(tierProbes(tiers)).toBeLessThanOrEqual(4);
   });
 
   it('recovers resolution and tier after a heavy spell (e.g. thermal dip)', () => {
@@ -195,6 +223,29 @@ describe('stepGovernor details', () => {
     s = windows(s, 20, 1); // still 50 fps: the cut didn't help
     expect(s.renderScale).toBe(1);
     expect(s.cap?.fps).toBeCloseTo(50);
+    // At or above tierProbeBelowFps it holds on its tier: no tier probe (#501).
+    expect(s.tier).toBe('high');
+    expect(s.tierProbe).toBeNull();
+  });
+
+  it('far below target, a cut that did not help probes a tier down, then reverts if that fails too (#501)', () => {
+    let s = windows(ready(), 25, 1); // 40 fps: cut, probe set
+    s = windows(s, 25, 1); // settle window
+    s = windows(s, 25, 1); // still 40 fps: pixels aren't the cost
+    expect(s).toMatchObject({ tier: 'medium', renderScale: 1, probe: null, cap: null });
+    expect(s.tierProbe).toEqual({ baselineFps: 40, tierBefore: 'high' });
+    s = windows(s, 25, 1); // settle window
+    s = windows(s, 25, 1); // still 40 fps on medium: put the tier back and hold
+    expect(s).toMatchObject({ tier: 'high', renderScale: 1, tierProbe: null });
+    expect(s.cap?.fps).toBeCloseTo(40);
+  });
+
+  it('on the cheapest tier, a cut that did not help holds as before (#501)', () => {
+    let s = windows(ready('low'), 25, 1);
+    s = windows(s, 25, 1);
+    s = windows(s, 25, 1);
+    expect(s).toMatchObject({ tier: 'low', renderScale: 1, tierProbe: null });
+    expect(s.cap?.fps).toBeCloseTo(40);
   });
 
   it('backs off resolution raises that immediately cause a drop', () => {
