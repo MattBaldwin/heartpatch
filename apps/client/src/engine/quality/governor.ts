@@ -121,12 +121,13 @@ export function stepGovernor(
   // say nothing about the frame rate, but a run of them is the frame rate
   // (#501: a phone stuck at 2–3 fps draws every frame in this band, and
   // ignoring them all left no window to close, so nothing ever stepped down).
-  // From the run's `crawlFrames`-th frame they count, clamped to maxFrameMs.
+  // From the run's `crawlFrames`-th frame they count at their real length, so
+  // a cut that helps but still leaves frames this slow reads as helping. A
+  // crawling frame between them leaves the run going: both say "slow".
   if (frameMs > config.maxFrameMs) {
     const slowRun = state.slowRun + 1;
     if (slowRun < config.crawlFrames) return { ...state, slowRun };
     state = { ...state, slowRun };
-    frameMs = config.maxFrameMs;
   } else if (state.slowRun > 0) {
     state = { ...state, slowRun: 0 };
   }

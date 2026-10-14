@@ -67,10 +67,10 @@ export interface ScalerConfig {
   /** A drop within this long after a raise counts as flapping. */
   flapWindowMs: number;
   /**
-   * Longest frame the frame-rate windows take at face value. A longer one
-   * (short of `crawlFrameMs`) is a hitch on its own, but from the
-   * `crawlFrames`-th in a row each counts as this long, so a phone stuck at
-   * 2–3 fps still closes windows and steps down (#501).
+   * Longest frame the frame-rate windows take on its own. A longer one
+   * (short of `crawlFrameMs`) is a hitch, but from the `crawlFrames`-th in a
+   * row they count at their real length, so a phone stuck at 2–3 fps still
+   * closes windows and steps down (#501).
    */
   maxFrameMs: number;
   /**

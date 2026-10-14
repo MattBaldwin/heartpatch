@@ -276,10 +276,17 @@ describe('stepGovernor details', () => {
     // 400 ms a frame at full resolution: every frame between maxFrameMs and
     // crawlFrameMs, as on the owner's iPhone. They used to be ignored as
     // pauses, so no window ever closed and quality never moved.
-    const device = { gpuMs: 400 };
-    const { state } = simulate(start(), device, 30_000);
-    expect(state.renderScale < 1 || state.tier !== 'high').toBe(true);
-    expect(state.crawlFrames).toBe(0); // the normal path, not a crawl to low
+    for (const gpuMs of [400, 500, 900]) {
+      const before = 1000 / frameMs(start(), { gpuMs });
+      const { state, fps } = simulate(start(), { gpuMs }, 120_000);
+      expect(state.tier, `${String(gpuMs)} ms`).toBe('low');
+      expect(state.renderScale, `${String(gpuMs)} ms`).toBeLessThan(1);
+      expect(fps, `${String(gpuMs)} ms`).toBeGreaterThan(before * 2);
+      expect(state.crawlFrames).toBe(0); // the normal path, not a crawl to low
+    }
+    // A CPU-bound phone this slow holds: lower quality wouldn't help it.
+    const { state } = simulate(start(), { cpuMs: 400, gpuMs: 8 }, 120_000);
+    expect(state).toMatchObject({ tier: 'high', renderScale: 1 });
   });
 
   it('one or two slow frames (a shader compile) among fast ones change nothing (#501)', () => {
