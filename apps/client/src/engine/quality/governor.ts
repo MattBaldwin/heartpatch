@@ -244,7 +244,7 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
     // tier's effects may be (#501: 28 fps on high with a team at the lake,
     // held at full resolution): put the pixels back and try the next tier
     // down. Its probe puts the tier back too if that doesn't help either, so
-    // a real cap (Low Power Mode's 30 fps) costs one reverted probe.
+    // a real cap (Low Power Mode's 30 fps) costs one reverted probe per re-test.
     const cheaper = lowerTier(s.tier);
     if (fps < config.tierProbeBelowFps && cheaper !== null) {
       return dropTier(

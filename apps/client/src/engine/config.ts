@@ -119,7 +119,7 @@ export const SCALER: Readonly<ScalerConfig> = {
   maxFrameMs: 250, // TUNE
   crawlFrameMs: 1000, // TUNE: a whole second per frame is never a shader compile hiccup
   crawlFrames: 3, // TUNE
-  tierProbeBelowFps: 45, // TUNE: far below 60; Low Power Mode's 30 costs one reverted probe
+  tierProbeBelowFps: 45, // TUNE: far below 60; Low Power Mode's 30 costs one reverted probe per cap re-test
   tierDropAfterMs: 3000, // TUNE
   tierDropBelowFps: 50, // TUNE
   graceMs: 2000, // TUNE
