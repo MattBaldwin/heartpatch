@@ -22,6 +22,8 @@ export function formatRenderStats(drawCalls: number, triangles: number): string 
 
 /** What the badge's second line counts (#501): see `formatResourceStats`. */
 export interface ResourceStats {
+  /** Our JS per drawn frame (scene.render), averaged over the last second, in ms. */
+  readonly jsMs: number;
   readonly meshes: number;
   readonly materials: number;
   readonly textures: number;
@@ -43,12 +45,13 @@ export interface ResourceStats {
 }
 
 /**
- * "48 mesh · 20 mat · 5 tex · 0 anim · buf +40/-12 · gltex +9/-2 · vao +30/-4 · 27 prog · 6 up · 1.00 scale":
+ * "js 4.2 ms · 48 mesh · 20 mat · 5 tex · 0 anim · buf +40/-12 · gltex +9/-2 · vao +30/-4 · 27 prog · 6 up · 1.00 scale":
  * the badge's second line (#501), so a count that climbs while a scene only
  * plays shows on a real device.
  */
 export function formatResourceStats(s: ResourceStats): string {
   const parts = [
+    `js ${s.jsMs.toFixed(1)} ms`,
     `${String(s.meshes)} mesh`,
     `${String(s.materials)} mat`,
     `${String(s.textures)} tex`,

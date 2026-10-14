@@ -66,6 +66,8 @@ export interface GovernorState {
   readonly sinceTierRaiseMs: number | null;
   /** Consecutive frames longer than `crawlFrameMs` so far (see `crawl`). */
   readonly crawlFrames: number;
+  /** Consecutive frames between `maxFrameMs` and `crawlFrameMs` so far (#501). */
+  readonly slowRun: number;
 }
 
 export interface GovernorContext {
@@ -94,6 +96,7 @@ export function initialGovernor(tier: QualityTier, config: ScalerConfig): Govern
     tierRaiseAfterMs: config.tierRaiseAfterMs,
     sinceTierRaiseMs: null,
     crawlFrames: 0,
+    slowRun: 0,
   };
 }
 
@@ -114,9 +117,19 @@ export function stepGovernor(
   if (frameMs > config.crawlFrameMs) return crawl(state, ctx);
   // Any shorter frame ends a run of crawling frames (they must be consecutive).
   if (state.crawlFrames > 0) state = { ...state, crawlFrames: 0 };
-  // A pause (hidden tab, debugger, one shader compile) says nothing about
-  // the frame rate.
-  if (frameMs > config.maxFrameMs) return state;
+  // A slow frame short of crawling: one or two (a shader compile, a hitch)
+  // say nothing about the frame rate, but a run of them is the frame rate
+  // (#501: a phone stuck at 2–3 fps draws every frame in this band, and
+  // ignoring them all left no window to close, so nothing ever stepped down).
+  // From the run's `crawlFrames`-th frame they count, clamped to maxFrameMs.
+  if (frameMs > config.maxFrameMs) {
+    const slowRun = state.slowRun + 1;
+    if (slowRun < config.crawlFrames) return { ...state, slowRun };
+    state = { ...state, slowRun };
+    frameMs = config.maxFrameMs;
+  } else if (state.slowRun > 0) {
+    state = { ...state, slowRun: 0 };
+  }
 
   const elapsedMs = state.elapsedMs + frameMs;
   if (elapsedMs < config.graceMs) return { ...state, elapsedMs };
@@ -143,7 +156,9 @@ export function stepGovernor(
  * `pageshow`; a normal frame ends a run as well.
  */
 export function resumeGovernor(state: GovernorState): GovernorState {
-  return state.crawlFrames === 0 ? state : { ...state, crawlFrames: 0 };
+  return state.crawlFrames === 0 && state.slowRun === 0
+    ? state
+    : { ...state, crawlFrames: 0, slowRun: 0 };
 }
 
 /**
