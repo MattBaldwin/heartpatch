@@ -73,7 +73,7 @@ const tierProbes = (tiers: QualityTier[]) =>
   tiers.filter((x, i) => x !== 'high' && (tiers[i - 1] ?? 'high') === 'high').length;
 
 const start = (tier: QualityTier = 'high') => initialGovernor(tier, config);
-const share = (xs: number[], pred: (x: number) => boolean) => xs.filter(pred).length / xs.length;
+const share = <T>(xs: T[], pred: (x: T) => boolean) => xs.filter(pred).length / xs.length;
 
 describe('stepGovernor on simulated devices', () => {
   it('leaves a device holding 60 fps alone', () => {
