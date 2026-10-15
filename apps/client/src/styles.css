@@ -80,7 +80,7 @@ body {
    action button at the bottom. Smaller than the pills; touches pass through. */
 .dev-stats,
 .dev-stats-counts {
-  top: calc(env(safe-area-inset-top) + 124px);
+  top: calc(env(safe-area-inset-top) + 148px);
   bottom: auto;
   left: 50%;
   transform: translateX(-50%);
@@ -92,7 +92,7 @@ body {
 
 /* Its counts, under it: wraps on a narrow phone. */
 .dev-stats-counts {
-  top: calc(env(safe-area-inset-top) + 146px);
+  top: calc(env(safe-area-inset-top) + 170px);
   box-sizing: border-box;
   width: max-content;
   max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));

@@ -141,7 +141,7 @@ describe('the hop follows the ground covered (#317)', () => {
     expect(Math.abs(after - before)).toBeLessThan(0.03);
   });
 
-  it('keeps followers out of step with each other', () => {
+  it('keeps hoppers with an offset out of step with each other', () => {
     const [a, b] = OFFSETS;
     const one = createHop(a);
     const two = createHop(b);
@@ -180,7 +180,7 @@ describe('the hop follows the ground covered (#317)', () => {
     expect(TELEPORT).toBeLessThan(EXPLORE_VIEW.keeperRadius * 3);
   });
 
-  it('starts every hopper on the ground, followers gliding a little before their first hop', () => {
+  it('starts every hopper on the ground, hoppers with an offset gliding a little before their first hop', () => {
     const dt = 1 / FPS;
     const step = EXPLORE_VIEW.walkSpeed * dt;
     for (const offset of [0, ...OFFSETS]) {
@@ -188,7 +188,7 @@ describe('the hop follows the ground covered (#317)', () => {
       stepHop(hop, step, dt, 1, false);
       const first = hopPose(hop, false, 1, { lift: 0, squash: 1 });
       // Never in the air on the first step: the Keeper crouches to take off,
-      // a follower glides at rest.
+      // a hopper with an offset glides at rest.
       expect(first.lift).toBe(0);
       expect(first.squash).toBeLessThanOrEqual(1);
       if (offset > 0) expect(first.squash).toBe(1);
@@ -202,7 +202,7 @@ describe('the hop follows the ground covered (#317)', () => {
     }
   });
 
-  it("doesn't settle a follower that stopped before its first hop", () => {
+  it("doesn't settle a hopper with an offset that stopped before its first hop", () => {
     const [offset] = OFFSETS;
     const hop = createHop(offset);
     stepHop(hop, 0.001, 1 / FPS, 1, false);
