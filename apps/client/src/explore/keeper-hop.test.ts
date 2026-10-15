@@ -13,6 +13,9 @@ import {
   type HopPose,
 } from './keeper-hop.js';
 
+/** Phase offsets (in hops) a hopper can start with: the hop's `offset` (#317). */
+const OFFSETS = [0.17, 0.41, 0.63, 0.86];
+
 const FPS = 60;
 
 /** Walks `seconds` at `push` (share of full speed), then stands still for `rest` seconds; returns every pose. */
@@ -139,7 +142,7 @@ describe('the hop follows the ground covered (#317)', () => {
   });
 
   it('keeps followers out of step with each other', () => {
-    const [a, b] = EXPLORE_HOP.followerOffset;
+    const [a, b] = OFFSETS;
     const one = createHop(a);
     const two = createHop(b);
     walk(one, { seconds: 1 });
@@ -180,7 +183,7 @@ describe('the hop follows the ground covered (#317)', () => {
   it('starts every hopper on the ground, followers gliding a little before their first hop', () => {
     const dt = 1 / FPS;
     const step = EXPLORE_VIEW.walkSpeed * dt;
-    for (const offset of [0, ...EXPLORE_HOP.followerOffset]) {
+    for (const offset of [0, ...OFFSETS]) {
       const hop = createHop(offset);
       stepHop(hop, step, dt, 1, false);
       const first = hopPose(hop, false, 1, { lift: 0, squash: 1 });
@@ -200,7 +203,7 @@ describe('the hop follows the ground covered (#317)', () => {
   });
 
   it("doesn't settle a follower that stopped before its first hop", () => {
-    const [offset] = EXPLORE_HOP.followerOffset;
+    const [offset] = OFFSETS;
     const hop = createHop(offset);
     stepHop(hop, 0.001, 1 / FPS, 1, false);
     stepHop(hop, 0, 1 / FPS, 0, false);

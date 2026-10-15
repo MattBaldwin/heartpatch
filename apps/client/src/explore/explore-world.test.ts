@@ -11,7 +11,6 @@ import { clampToTile, insideTile } from './explore-view.js';
 import {
   coverShare,
   glintNudge,
-  alongTrail,
   besideSpot,
   blocked,
   cameraGoal,
@@ -20,13 +19,11 @@ import {
   collidersOf,
   decorPlaces,
   cameraShot,
-  followLead,
   followStep,
   freePoint,
   fromCaveStage,
   gapTo,
   hidingSpots,
-  keepClear,
   lanternGlint,
   LIGHT_REACH,
   LIGHT_RING_SHARE,
@@ -557,108 +554,6 @@ describe("the tile's top", () => {
       }
     }
     expect(checked).toBeGreaterThan(500);
-  });
-});
-
-describe('following along the trail (#317)', () => {
-  const trail = [
-    { x: 0, z: -0.1 },
-    { x: 0.1, z: -0.1 },
-  ];
-  const along = (back: number) => {
-    const out = { x: 9, z: 9 };
-    alongTrail({ x: 0, z: 0 }, trail, back, out);
-    return out;
-  };
-
-  it('finds the point that far back along the path the Keeper walked', () => {
-    expect(along(0.05)).toEqual({ x: 0, z: -0.05 });
-    const corner = along(0.15);
-    expect(corner.x).toBeCloseTo(0.05);
-    expect(corner.z).toBeCloseTo(-0.1);
-  });
-
-  it("stops at the trail's end, and stays put with no trail", () => {
-    expect(along(1)).toEqual({ x: 0.1, z: -0.1 });
-    const out = { x: 9, z: 9 };
-    alongTrail({ x: 0.3, z: 0.2 }, [], 0.1, out);
-    expect(out).toEqual({ x: 0.3, z: 0.2 });
-  });
-
-  it('moves a follower smoothly as the Keeper walks, never jumping', () => {
-    const out = { x: 0, z: 0 };
-    let last: { x: number; z: number } | null = null;
-    for (let i = 0; i <= 20; i++) {
-      const at = { x: 0, z: i * 0.005 };
-      alongTrail(
-        at,
-        [
-          { x: 0, z: 0 },
-          { x: 0, z: -0.2 },
-        ],
-        0.09,
-        out,
-      );
-      if (last) expect(Math.hypot(out.x - last.x, out.z - last.z)).toBeLessThan(0.0051);
-      last = { ...out };
-    }
-  });
-});
-
-describe('the team never covers the Keeper (#323)', () => {
-  const pitch = EXPLORE_CAMERA.phone.pitch;
-  const tall = 0.06; // a squishy about 0.42 world units tall
-
-  it("keeps a follower on the camera's side low enough on screen", () => {
-    const lead = followLead(tall, pitch);
-    // The camera's line over the follower's top meets the ground at the
-    // Keeper's front edge, not past it.
-    const reach = lead - tall / Math.tan(pitch);
-    expect(reach).toBeCloseTo(EXPLORE_VIEW.keeperRadius);
-    // A steeper camera (the tablet) lets them come closer.
-    expect(followLead(tall, EXPLORE_CAMERA.tablet.pitch)).toBeLessThan(lead);
-  });
-
-  it('pushes a follower straight out of the way, and leaves one already clear', () => {
-    const k = { x: 0, z: 0 };
-    const near = { x: 0.03, z: -0.04 };
-    keepClear(k, near, 0.1);
-    expect(Math.hypot(near.x, near.z)).toBeCloseTo(0.1);
-    expect(near.x / near.z).toBeCloseTo(0.03 / -0.04);
-    const far = { x: 0.2, z: 0 };
-    keepClear(k, far, 0.1);
-    expect(far).toEqual({ x: 0.2, z: 0 });
-    // Right on top of the Keeper: away from the camera, behind it.
-    const on = { x: 0, z: 0 };
-    keepClear(k, on, 0.1);
-    expect(on).toEqual({ x: 0, z: 0.1 });
-  });
-
-  it('keeps every follower clear while the Keeper walks away and then turns back to the camera', () => {
-    const gap = EXPLORE_VIEW.followGap;
-    const lead = followLead(tall, pitch);
-    const backs = [0, 1, 2].map((i) => Math.max(lead, 1.5 * gap) + i * gap);
-    // The scene's trail: a new point once the Keeper is a gap from the last.
-    let trail = [0, 1, 2, 3].map((n) => ({ x: 0, z: (n + 1) * gap }));
-    const followers = backs.map(() => ({ x: 0, z: 0 }));
-    const walk = [
-      ...Array.from({ length: 60 }, () => 0.005), // away from the camera (+z)
-      ...Array.from({ length: 60 }, () => -0.005), // back towards it
-    ];
-    let at = { x: 0, z: 0 };
-    for (const dz of walk) {
-      at = { x: at.x, z: at.z + dz };
-      const head = trail[0]!;
-      if (Math.hypot(head.x - at.x, head.z - at.z) >= gap) trail = [at, ...trail].slice(0, 5);
-      followers.forEach((f, i) => {
-        alongTrail(at, trail, backs[i]!, f);
-        keepClear(at, f, lead);
-        // Never closer than `lead`, so one on the camera's side stays below the Keeper's feet.
-        expect(Math.hypot(f.x - at.x, f.z - at.z)).toBeGreaterThanOrEqual(lead - 1e-9);
-      });
-    }
-    // Walking towards the camera, the team ends up behind the Keeper.
-    for (const f of followers) expect(f.z).toBeGreaterThan(at.z);
   });
 });
 

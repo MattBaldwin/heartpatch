@@ -75,15 +75,28 @@ body {
   box-shadow: 0 8px 24px rgb(107 75 110 / 15%);
 }
 
-.dev-stats {
-  bottom: calc(env(safe-area-inset-bottom) + 36px);
+/* The `?fps=1` badge (#501): top-centre, under the HUD pills (map name,
+   explore title, battle and home headers), clear of the joystick and the
+   action button at the bottom. Smaller than the pills; touches pass through. */
+.dev-stats,
+.dev-stats-counts {
+  top: calc(env(safe-area-inset-top) + 124px);
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* The `?fps=1` badge's counts (#501), above it: wraps on a narrow phone. */
+/* Its counts, under it: wraps on a narrow phone. */
 .dev-stats-counts {
-  bottom: calc(env(safe-area-inset-bottom) + 64px);
+  top: calc(env(safe-area-inset-top) + 146px);
   box-sizing: border-box;
-  max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
-  border-radius: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  border-radius: 10px;
+  white-space: normal;
+  text-align: center;
 }
