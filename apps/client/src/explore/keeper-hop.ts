@@ -1,6 +1,6 @@
 import { EXPLORE_HOP, EXPLORE_VIEW } from './explore-config.js';
 
-// The hop as the Keeper and the team walk (#317, owner mockup 2026-10-09).
+// The hop as the Keeper walks (#317, owner mockup 2026-10-09).
 // Pure numbers: one hop per stride, so the hop rate follows the ground
 // covered, never the clock. Each hopper's state is one small object updated
 // in place, so stepping it every frame allocates nothing. The scene draws the
@@ -23,12 +23,12 @@ export interface Hop {
   moving: boolean;
   landing: boolean;
   /**
-   * Where this walk's first hop begins. A follower starts its walk `offset`
-   * hops before it, gliding on the ground, so it takes off from the ground
+   * Where this walk's first hop begins. A hopper with an `offset` starts its
+   * walk that many hops before it, gliding on the ground, so it takes off from the ground
    * out of step with the others.
    */
   from: number;
-  /** How many hops a follower glides before its first one, out of step with the rest. */
+  /** How many hops it glides before its first one (0 for the Keeper), out of step with others. */
   readonly offset: number;
 }
 
@@ -148,7 +148,7 @@ function touchDown(hop: Hop, reduce: boolean, phase: number): void {
 
 /**
  * The pose for this frame into `out` (no allocation). `lift` scales the hop
- * height (the followers hop a little lower for their size).
+ * height (1 for the Keeper).
  */
 export function hopPose(hop: Hop, reduce: boolean, lift: number, out: HopPose): HopPose {
   out.lift = 0;

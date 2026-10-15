@@ -1,8 +1,6 @@
 import {
   EXPLORE_RULES,
-  GAME_DATA,
   isExplorable,
-  visualRegistry,
   type ExploreTileResponse,
   type ItemCounts,
   type KeeperConfig,
@@ -10,7 +8,6 @@ import {
   type PublicTile,
   type PublicUser,
   type SearchSpotResponse,
-  type Species,
   type SpotInteraction,
   type ToolId,
   type WorldPoint,
@@ -197,7 +194,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const bagOf = options.bag ?? (async (mapId: string) => (await inventoryApi.get(mapId)).items);
   const reducedMotion =
     options.reducedMotion ?? (() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const registry = visualRegistry(GAME_DATA);
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -206,8 +202,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let generation = 0;
   let tile: ExploreTileResponse | null = null;
   let teamNames: Record<string, string> = {};
-  /** My team's squishies that follow the Keeper, in team order. */
-  let teamMembers: { id: string; speciesId: string; accessory: string | null }[] = [];
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
   let mapTileAtOpen: PublicTile | null = null;
@@ -1184,16 +1178,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const build = (scene: Scene): SceneContent => {
     if (!tile) throw new Error('no tile to explore');
     lastTier = options.tier();
-    const species = new Map<string, Species>(GAME_DATA.species.map((s) => [s.id, s]));
     const built = new ExploreScene(scene, tile, {
-      registry,
       lod: lodFor('closeUp', lastTier),
       keeper: options.keeper(),
       keeperWearing: options.keeperWearing?.() ?? [],
-      team: teamMembers.flatMap((m) => {
-        const kind = species.get(m.speciesId);
-        return kind ? [{ id: m.id, species: kind, accessory: m.accessory }] : [];
-      }),
       mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
       tier: lastTier,
@@ -1239,21 +1227,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     try {
       const [view, board] = await Promise.all([
         api.tile(id, at),
-        // The team only decorates the view: exploring works without it.
+        // The team's names for the find toast: exploring works without them.
         jobs.view(id).catch(() => null),
       ]);
       if (ask !== generation) return;
       fresh = view;
       teamNames = board?.names ?? {};
-      const team = board?.team ?? [];
-      teamMembers = (board?.squishies ?? [])
-        .filter((s) => team.includes(s.squishy.id))
-        .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
-        .map((s) => ({
-          id: s.squishy.id,
-          speciesId: s.squishy.speciesId,
-          accessory: s.squishy.accessory ?? null,
-        }));
     } catch (err) {
       if (ask === generation) options.onProblem(messageOf(err));
       return;

@@ -18,7 +18,7 @@ const slow = { timeout: 30_000 };
  * glass, butterflies and pollen, the spot props, glints, the Keeper's batches,
  * post-processing) and 31 on low (no motes). Each kind is one thin-instanced
  * draw however many grow; the headroom is for a busier tile (more prop kinds,
- * buildings, a full team, the tool in hand).
+ * buildings, the tool in hand).
  */
 const DRAW_CALL_CEILING = 46;
 /** The land kit's triangles on a settled meadow frame (#335): 278k–308k on high, with headroom for a busier tile. */
@@ -140,6 +140,25 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);
   await expect(page.getByTestId('explore-stick')).toBeVisible();
+  // The ?fps=1 badge (on in dev builds) sits clear of the controls (#501):
+  // the owner couldn't read it behind the joystick and the big button.
+  for (const badge of ['dev-stats', 'dev-stats-counts']) {
+    const b = await page.getByTestId(badge).boundingBox();
+    expect(b, badge).not.toBeNull();
+    for (const control of [
+      page.getByTestId('explore-stick'),
+      page.getByTestId('explore-action'),
+      page.locator('.explore-top'),
+    ]) {
+      const c = (await control.boundingBox())!;
+      const overlaps =
+        b!.x < c.x + c.width &&
+        c.x < b!.x + b!.width &&
+        b!.y < c.y + c.height &&
+        c.y < b!.y + b!.height;
+      expect(overlaps, `${badge} clear of ${String(control)}`).toBe(false);
+    }
+  }
   // Nothing in front yet: the big button says to find a glint.
   if (first.near === null) await expect(page.getByTestId('explore-action')).toBeDisabled();
 

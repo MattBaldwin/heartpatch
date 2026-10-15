@@ -22,9 +22,7 @@ import {
   type KeeperConfig,
   type PublicSearchSpot,
   type PublicTile,
-  type Species,
   type ToolId,
-  type VisualRegistry,
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
@@ -64,18 +62,14 @@ import {
   TOP_RINGS,
   vinyl,
 } from '../map/map-scene.js';
-import { accessoryItem } from '../procedural/accessory.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
-import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
-import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
-  EXPLORE_HOP,
   EXPLORE_SWIM,
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
@@ -89,7 +83,6 @@ import {
   shadowScale,
   stepHop,
   TELEPORT,
-  type Hop,
   type HopPose,
 } from './keeper-hop.js';
 import {
@@ -99,25 +92,21 @@ import {
   swimActive,
   swimPlacement,
   swimPose,
-  type Swim,
   type SwimPlacement,
   type SwimPose,
 } from './keeper-swim.js';
 import { SwimBubbles } from './swim-bubbles.js';
 import {
-  alongTrail,
   cameraGoal,
   cameraSettled,
   cameraShot,
   collidersOf,
   coverShare,
   decorPlaces,
-  followLead,
   followStep,
   freePoint,
   glintNudge,
   hidingSpots,
-  keepClear,
   tileSeed,
   tileSurface,
   spotRadius,
@@ -131,7 +120,7 @@ import {
 // of my tiles up close, its search spots drawn from the terrain's prop kit
 // (the rocks, trees and mounds *are* the spots, and glint until searched),
 // grass, pebbles and flowers grown from the tile's seed, its buildings, my
-// Keeper with the tool in hand, and my team trailing behind. A camera
+// Keeper with the tool in hand (the team waits at home: #501). A camera
 // follows the Keeper, close and tilted. Positions come from the server
 // (CLAUDE.md rule 1); the screen moves the Keeper and asks this scene to
 // draw it. Render on demand (tech spec §6): an idle tile draws nothing.
@@ -144,9 +133,6 @@ export interface ExploreSceneStats {
   readonly glints: number;
   readonly buildings: number;
   readonly keeper: boolean;
-  readonly followers: number;
-  /** Followers wearing an accessory (#373). */
-  readonly accessories: number;
   /** Prop draw calls (one per kind of spot on the tile). */
   readonly propMeshes: number;
   /** Decor thin instances by kind (one draw call each). */
@@ -198,17 +184,9 @@ export interface ExploreSceneStats {
 }
 
 export interface ExploreSceneOptions {
-  readonly registry: VisualRegistry;
   readonly lod: SquishyLod;
   readonly keeper: KeeperConfig | null;
   readonly keeperWearing?: readonly string[];
-  /** The squishies on my team that follow the Keeper, in team order. */
-  readonly team: readonly {
-    readonly id: string;
-    readonly species: Species;
-    /** The wardrobe accessory it wears (#373). */
-    readonly accessory?: string | null;
-  }[];
   /** The tile as the map knows it: its buildings. */
   readonly mapTile: PublicTile | null;
   /** The sky at the patch's time of day (#335). */
@@ -217,7 +195,7 @@ export interface ExploreSceneOptions {
   readonly tier: QualityTier;
   /** Dev captures (`?tier=` pinned): ambient life never switches itself off as too slow. */
   readonly pinned?: boolean;
-  /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
+  /** Reduce Motion: the Keeper bobs instead of hopping (#317). Default off. */
   readonly reducedMotion?: () => boolean;
   /** Draws one more frame (the fade and glints settle after a frame, #335). */
   readonly redraw?: () => void;
@@ -302,31 +280,7 @@ const SCREEN_FROM = new Vector3();
 const SCREEN_AT = new Vector3();
 const SCREEN_VIEWPORT = new Viewport(0, 0, 1, 1);
 
-/** A squishy following the Keeper along its trail, one gap behind the one before. */
-interface Follower {
-  readonly handle: SquishyHandle;
-  /** Tile-local, updated in place as it follows. */
-  readonly at: { x: number; z: number };
-  yaw: number;
-  readonly hop: Hop;
-  /** Its swim under a lake (#399), in place of the hop. */
-  readonly swim: Swim;
-  /** Ground covered since the last step, tile-local. */
-  walked: number;
-}
-
-/**
- * How far behind the Keeper the `i`th follower walks along its trail,
- * tile-local: the first one far enough back never to cover the Keeper
- * (`lead`, #323), and at least the 1.5 gaps the trail's points gave on
- * average before the team glided along it (#317); then a gap each.
- */
-function followBack(i: number, lead: number): number {
-  return Math.max(lead, 1.5 * EXPLORE_VIEW.followGap) + i * EXPLORE_VIEW.followGap;
-}
-
-// Scratch for the hop pose and the placements (no allocations while walking, #323).
-const POSE: HopPose = { lift: 0, squash: 1 };
+// Scratch for the placements (no allocations while walking, #323).
 /** Where the camera aims while swimming (#399), tile-local. */
 const SWIM_AIM = { x: 0, z: 0 };
 /** The swimmer's middle, tile-local, for the sand under its shadow (#399). */
@@ -381,15 +335,11 @@ export class ExploreScene implements AmbientTarget {
   readonly #colliders: Collider[];
   readonly #buildings: BuildingField;
   readonly #keepers: KeeperField;
-  readonly #squishies: SquishyField;
   readonly #instrumentation: SceneInstrumentation;
   readonly #beforeRender: Observer<Scene>;
   readonly #afterRender: Observer<Scene>;
   readonly #lookAt = new Vector3();
   #keeper: KeeperHandle | null = null;
-  readonly #followers: Follower[] = [];
-  /** Tile-local points the Keeper walked through, newest first (to start with, where the team waits). */
-  #trail: WorldPoint[] = [];
   /** The Keeper's hop (#317), its pose this frame, and the ground covered since the last step. */
   readonly #hop = createHop();
   readonly #pose: HopPose = { lift: 0, squash: 1 };
@@ -401,8 +351,6 @@ export class ExploreScene implements AmbientTarget {
   readonly #redraw: () => void;
   /** The side each spot's glint last slid to, so it doesn't flip while the Keeper walks past. */
   readonly #glintSide = new Map<number, number>();
-  /** The tallest follower, tile-local: how far back the team keeps (#323). */
-  #teamTall = 0;
   #tile: ExploreTileResponse;
   #at: WorldPoint = EXPLORE_VIEW.start;
   #yaw: number = EXPLORE_VIEW.startYaw;
@@ -442,7 +390,7 @@ export class ExploreScene implements AmbientTarget {
   /** The swimmer's soft shadow under its middle (#399), and its matrix. */
   #swimShadow: Mesh | null = null;
   readonly #swimShadowMatrix = new Float32Array(16);
-  /** The high tier's swim extras (#399): kick bubbles, and the team bobbing while the Keeper treads water. */
+  /** The high tier's swim extra (#399): kick bubbles. */
   #highTier = false;
   #now = 0;
   /** Objects made since the scene opened (`stats.created`, #501). */
@@ -458,7 +406,7 @@ export class ExploreScene implements AmbientTarget {
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
     this.#highTier = bubblesAt(options.tier);
-    // Underwater the Keeper and team swim instead of hopping (#399).
+    // Underwater the Keeper swims instead of hopping (#399).
     this.#reduced = options.reducedMotion ?? (() => false);
     this.#redraw = options.redraw ?? (() => {});
     this.#pinned = options.pinned ?? false;
@@ -614,11 +562,6 @@ export class ExploreScene implements AmbientTarget {
       lod: options.lod,
       shadows: !this.#underwater,
     });
-    this.#squishies = new SquishyField(scene, {
-      registry: options.registry,
-      lod: options.lod,
-      breathing: false,
-    });
     if (options.keeper) {
       this.#keeper = this.#keepers.add(
         options.keeper,
@@ -671,22 +614,6 @@ export class ExploreScene implements AmbientTarget {
         this.#swimShadow = shadow;
       }
     }
-    options.team.forEach((member, i) => {
-      const at = { x: 0, z: 0 };
-      const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
-      this.#squishies.setAccessory(handle, accessoryItem(member.accessory));
-      const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
-      const swim = createSwim(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
-      this.#followers.push({ handle, at, yaw: 0, hop, swim, walked: 0 });
-      const tall = (this.#squishies.heightOf(handle) * EXPLORE_VIEW.squishyScale) / this.#size;
-      this.#teamTall = Math.max(this.#teamTall, tall);
-    });
-    // The team waits in a line behind the Keeper: the start of its trail.
-    this.#trail = Array.from({ length: this.#trailPoints() }, (_, i) => this.#trailPoint(i + 1));
-    this.#follow(this.#at);
-    for (const f of this.#followers) {
-      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw));
-    }
 
     // The tools the Keeper can hold (#291): one small mesh each, one shown.
     this.#tools = {
@@ -730,8 +657,6 @@ export class ExploreScene implements AmbientTarget {
       glints: this.#tile.spots.filter((s) => !s.done).length,
       buildings: this.#buildings.stats.buildings,
       keeper: this.#keeper !== null,
-      followers: this.#followers.length,
-      accessories: this.#followers.filter((f) => this.#squishies.accessoryOf(f.handle)).length,
       propMeshes: this.#props.size,
       decor: { ...this.#decor },
       highlighted: this.#highlighted,
@@ -819,8 +744,8 @@ export class ExploreScene implements AmbientTarget {
   }
 
   /**
-   * Moves the Keeper (tile-local) and the team along its trail. `yaw` faces
-   * the way it walks; left out, it keeps its heading.
+   * Moves the Keeper (tile-local). `yaw` faces the way it walks; left out,
+   * it keeps its heading.
    */
   moveKeeper(at: WorldPoint, yaw?: number): void {
     // The ground covered drives the hop (#317); a jump to a new place doesn't.
@@ -830,13 +755,7 @@ export class ExploreScene implements AmbientTarget {
     if (yaw !== undefined) this.#yaw = yaw;
     this.#fade();
     this.#placeGlints();
-    const head = this.#trail[0];
-    const gap = EXPLORE_VIEW.followGap;
-    if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
-      this.#trail = [at, ...this.#trail].slice(0, this.#trailPoints());
-    }
-    this.#follow(at);
-    // While hopping, `step` places everyone this frame with the new pose.
+    // While hopping, `step` places the Keeper this frame with the new pose.
     if (!this.#posing) this.#place();
   }
 
@@ -855,10 +774,9 @@ export class ExploreScene implements AmbientTarget {
     if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, EXPLORE_TOOL.jiggle);
   }
 
-  /** A little hop for the Keeper and the team when a search finds something. */
+  /** A little hop for the Keeper when a search finds something. */
   cheer(now: number): void {
     if (this.#keeper) this.#keepers.play(this.#keeper, 'bounce', now);
-    for (const f of this.#followers) this.#squishies.play(f.handle, 'wobble', now);
   }
 
   /** Steps animations and the follow camera; true while anything still moves (keep drawing). */
@@ -886,14 +804,13 @@ export class ExploreScene implements AmbientTarget {
     this.#now = now;
     const hopping = this.#underwater ? this.#stepSwims(dt) : this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
-    const squishies = this.#squishies.update(now);
     if (!following && !swinging && !hopping) this.#lastStep = null;
-    return keeper || squishies || following || swinging || hopping;
+    return keeper || following || swinging || hopping;
   }
 
   /**
    * Hops along by the ground covered since the last step (#317) and places
-   * everyone; true while anyone still hops, lands or settles. The stick's
+   * the Keeper; true while it still hops, lands or settles. The stick's
    * push is the share of full walking speed this frame covered.
    */
   #stepHops(dt: number): boolean {
@@ -903,12 +820,7 @@ export class ExploreScene implements AmbientTarget {
     const push = dt > 0 ? walked / (EXPLORE_VIEW.walkSpeed * dt) : 0;
     this.#walked = 0;
     stepHop(this.#hop, walked, dt, push, reduced);
-    let hopping = hopActive(this.#hop);
-    for (const f of this.#followers) {
-      stepHop(f.hop, dt > 0 ? f.walked : 0, dt, push, reduced);
-      f.walked = 0;
-      hopping ||= hopActive(f.hop);
-    }
+    const hopping = hopActive(this.#hop);
     // One more placement (and frame) after the last hop lands, at rest.
     const drawing = hopping || this.#posing;
     if (drawing) this.#place();
@@ -918,7 +830,7 @@ export class ExploreScene implements AmbientTarget {
 
   /**
    * Swims along by the water covered since the last step (#399), like the
-   * hop: a kick puffs bubbles from the mask. True while anyone still swims,
+   * hop: a kick puffs bubbles from the mask. True while the Keeper still swims,
    * eases back to treading water, or a bubble rises.
    */
   #stepSwims(dt: number): boolean {
@@ -926,13 +838,8 @@ export class ExploreScene implements AmbientTarget {
     const push = dt > 0 ? walked / (EXPLORE_VIEW.walkSpeed * dt) : 0;
     this.#walked = 0;
     const kicked = stepSwim(this.#swim, walked, dt, push);
-    let swimming = swimActive(this.#swim);
-    for (const f of this.#followers) {
-      stepSwim(f.swim, dt > 0 ? f.walked : 0, dt, push);
-      f.walked = 0;
-      swimming ||= swimActive(f.swim);
-    }
-    // One more placement (and frame) after the swimmers settle, as the hop does.
+    const swimming = swimActive(this.#swim);
+    // One more placement (and frame) after the swim settles, as the hop does.
     const drawing = swimming || this.#posing;
     if (drawing) this.#place();
     if (kicked && this.#highTier && !this.#reduced() && this.#mask) {
@@ -943,42 +850,7 @@ export class ExploreScene implements AmbientTarget {
     return drawing || rising;
   }
 
-  /**
-   * The team glides along the trail, each one gap behind the one before,
-   * and never close enough to cover the Keeper (#323).
-   */
-  #follow(at: WorldPoint): void {
-    const lead = this.#lead();
-    for (let i = 0; i < this.#followers.length; i++) {
-      const f = this.#followers[i];
-      if (!f) continue;
-      const x = f.at.x;
-      const z = f.at.z;
-      alongTrail(at, this.#trail, followBack(i, lead), f.at);
-      keepClear(at, f.at, lead);
-      const moved = Math.hypot(f.at.x - x, f.at.z - z);
-      if (moved === 0) continue;
-      if (moved <= TELEPORT) f.walked += moved;
-      const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
-      f.yaw = faceYaw(ahead.x - f.at.x, ahead.z - f.at.z);
-    }
-  }
-
-  /** How close the team may come (#323), for the tallest follower at the top of its hop. */
-  #lead(): number {
-    const hop = EXPLORE_HOP.followerLift * EXPLORE_HOP.height.max * (1 + EXPLORE_HOP.stretch);
-    const lead = followLead(this.#teamTall * (1 + hop), this.#shot.pitch);
-    // Afloat, the team covers less of the Keeper, so it swims a little closer (#399).
-    return this.#underwater ? lead * EXPLORE_SWIM.followBack : lead;
-  }
-
-  /** Trail points to keep: enough for the last follower's distance back, plus one. */
-  #trailPoints(): number {
-    const back = followBack(this.#followers.length, this.#lead());
-    return Math.ceil(back / EXPLORE_VIEW.followGap) + 2;
-  }
-
-  /** Places the Keeper, its tool and the team with this frame's hop pose. */
+  /** Places the Keeper and its tool with this frame's hop pose. */
   #place(): void {
     if (this.#underwater) {
       this.#placeSwimmers();
@@ -988,14 +860,10 @@ export class ExploreScene implements AmbientTarget {
     hopPose(this.#hop, reduced, 1, this.#pose);
     if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
     this.#placeTool();
-    for (const f of this.#followers) {
-      hopPose(f.hop, reduced, EXPLORE_HOP.followerLift, POSE);
-      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
-    }
   }
 
-  /** Places the Keeper, its mask and tool, and (unless `team` is false) the team, swimming (#399). */
-  #placeSwimmers(team = true): void {
+  /** Places the Keeper, its mask and tool, swimming (#399). */
+  #placeSwimmers(): void {
     const still = this.#reduced();
     const time = this.#land?.clock.time ?? 0;
     swimPose(this.#swim, still, time, this.#swimPose);
@@ -1004,28 +872,6 @@ export class ExploreScene implements AmbientTarget {
       this.#placeSwimShadow();
     }
     this.#placeTool();
-    if (!team) return;
-    const { follower } = EXPLORE_SWIM;
-    for (const f of this.#followers) {
-      // A floaty drift: up and down and a soft jelly pulse by the water
-      // covered, a slow bob while the Keeper treads water.
-      const sw = f.swim;
-      const q = (sw.phase - Math.floor(sw.phase)) * Math.PI * 2;
-      const s = sw.stretch;
-      POSE.lift = follower.float;
-      POSE.squash = 1;
-      if (!still) {
-        const bob = Math.sin(
-          time * Math.PI * 2 * EXPLORE_SWIM.tread.rate + sw.offset * Math.PI * 2,
-        );
-        POSE.lift += follower.bob * (s * Math.sin(q) + (1 - s) * bob);
-        POSE.squash = 1 + follower.pulse * s * Math.sin(q + 1.2);
-      }
-      const place = this.#squishyPlacement(f.at, f.yaw, f.handle, POSE);
-      place.shadow = EXPLORE_SWIM.shadow.scale;
-      place.shadowAlpha = EXPLORE_SWIM.shadow.alpha;
-      this.#squishies.move(f.handle, place);
-    }
   }
 
   /**
@@ -1062,7 +908,6 @@ export class ExploreScene implements AmbientTarget {
 
   setLod(lod: SquishyLod): void {
     this.#keepers.setLod(lod);
-    this.#squishies.setLod(lod);
   }
 
   /** The quality tier changed: the land's grass share follows (#335), and the swim's extras (#399). */
@@ -1102,9 +947,8 @@ export class ExploreScene implements AmbientTarget {
     this.#ambientStart ??= now;
     land.clock.time = (now - this.#ambientStart) / 1000;
     if (this.#underwater) {
-      // Treading water bobs on the same clock as the kelp; the team bobs
-      // with it on the high tier only, so lower tiers re-place no more than before.
-      this.#placeSwimmers(this.#highTier);
+      // Treading water bobs on the same clock as the kelp.
+      this.#placeSwimmers();
     }
     return true;
   }
@@ -1224,7 +1068,7 @@ export class ExploreScene implements AmbientTarget {
     this.#water?.setSky(look);
   }
 
-  /** The ground and decor take the time of day's tint; spots, glints and the team don't. */
+  /** The ground and decor take the time of day's tint; spots and glints don't. */
   #tintGround(look: SkyLook): void {
     const tint = Color3.FromHexString(look.groundTint);
     for (const g of this.#ground) g.mat.albedoColor = g.base.multiply(tint);
@@ -1428,15 +1272,6 @@ export class ExploreScene implements AmbientTarget {
     return { x: p.x * this.#size, z: p.z * this.#size };
   }
 
-  #trailPoint(n: number): WorldPoint {
-    const point = this.#trail[n];
-    if (point) return point;
-    // Before the Keeper has walked: the team waits in a little line behind
-    // it, on the far side from the camera so the Keeper stands in front (#323).
-    const behind = n * EXPLORE_VIEW.followGap;
-    return { x: this.#at.x + (n % 2 === 0 ? 0.02 : -0.02), z: this.#at.z + behind };
-  }
-
   /**
    * On the ground at its tile-local point; the hop (#317) only lifts and
    * squashes what's drawn. Into the shared scratch (read straight away).
@@ -1465,23 +1300,6 @@ export class ExploreScene implements AmbientTarget {
       PLACE.lift = at.lift;
       PLACE.squash = sp.squash;
     }
-    return PLACE;
-  }
-
-  /** A follower's placement, into the shared scratch (read straight away by the field). */
-  #squishyPlacement(p: WorldPoint, yaw: number, handle?: SquishyHandle, pose?: HopPose) {
-    const scale = EXPLORE_VIEW.squishyScale;
-    const lift = pose?.lift ?? 0;
-    PLACE.x = p.x * this.#size;
-    PLACE.z = p.z * this.#size;
-    PLACE.y = this.#groundAt(p);
-    PLACE.yaw = yaw;
-    PLACE.scale = scale;
-    PLACE.lean = 0;
-    PLACE.lift = handle ? lift * handle.params.height * scale : 0;
-    PLACE.squash = pose?.squash ?? 1;
-    PLACE.shadow = shadowScale(lift);
-    PLACE.shadowAlpha = shadowAlpha(lift);
     return PLACE;
   }
 
