@@ -77,25 +77,35 @@ body {
 
 /* The `?fps=1` badge (#501): top-centre, under the HUD pills (map name,
    explore title, battle and home headers), clear of the joystick and the
-   action button at the bottom. Smaller than the pills; touches pass through. */
-.dev-stats,
-.dev-stats-counts {
+   action button at the bottom. Smaller than the pills; touches pass through.
+   Its lines stack in one column, so a wrapped line pushes the next one down. */
+.dev-stats-stack {
+  position: fixed;
   top: calc(env(safe-area-inset-top) + 148px);
-  bottom: auto;
   left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
   transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.dev-stats-stack > .dev-status {
+  position: static;
+  box-sizing: border-box;
+  max-width: 100%;
   padding: 2px 8px;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* Its counts, under it: wraps on a narrow phone. */
-.dev-stats-counts {
-  top: calc(env(safe-area-inset-top) + 170px);
-  box-sizing: border-box;
-  width: max-content;
-  max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+/* The counts and page lines: wrap on a narrow phone. */
+.dev-stats-stack > .dev-stats-counts,
+.dev-stats-stack > .dev-stats-page {
   border-radius: 10px;
   white-space: normal;
   text-align: center;

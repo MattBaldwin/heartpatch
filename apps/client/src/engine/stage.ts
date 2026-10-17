@@ -2,6 +2,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { MapCamera } from './camera/map-camera.js';
 import type { Bounds, GroundPoint } from './camera/camera-math.js';
 import { CAMERA, SETTLE_FRAMES, type CameraConfig, type QualityTier } from './config.js';
+import { bisectFlags, CAP30_MIN_FRAME_MS } from './bisect-flags.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import { setupLighting } from './lighting/lighting.js';
 import { RenderQuality } from './quality/render-quality.js';
@@ -78,7 +79,7 @@ export function mountStage(
   scene.activeCamera = mapCamera.camera;
   const quality = new RenderQuality(scene, mapCamera.camera, tier, pinTier);
 
-  const frames = new FrameScheduler(SETTLE_FRAMES);
+  const frames = new FrameScheduler(SETTLE_FRAMES, bisectFlags().cap30 ? CAP30_MIN_FRAME_MS : 0);
   const abort = new AbortController();
   // One resize path, run at the top of the next frame, so the resize and
   // the draw it needs share it (resizing after a draw clears the buffer

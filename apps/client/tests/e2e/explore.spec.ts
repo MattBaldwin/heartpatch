@@ -142,7 +142,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await expect(page.getByTestId('explore-stick')).toBeVisible();
   // The ?fps=1 badge (on in dev builds) sits clear of the controls (#501):
   // the owner couldn't read it behind the joystick and the big button.
-  for (const badge of ['dev-stats', 'dev-stats-counts']) {
+  for (const badge of ['dev-stats', 'dev-stats-counts', 'dev-stats-page']) {
     const b = await page.getByTestId(badge).boundingBox();
     expect(b, badge).not.toBeNull();
     for (const control of [

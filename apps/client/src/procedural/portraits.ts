@@ -6,6 +6,7 @@ import { CreateScreenshotUsingRenderTarget } from '@babylonjs/core/Misc/screensh
 import { Scene } from '@babylonjs/core/scene';
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { cameraFor } from '../close-up/close-up-view.js';
+import { bisectFlags } from '../engine/bisect-flags.js';
 import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
@@ -271,7 +272,8 @@ export function createPortraits(options: PortraitOptions): Portraits {
 
   async function draw(look: PortraitLook): Promise<string | null> {
     const engine = options.engine();
-    if (!engine || engine.isDisposed) return null;
+    // `?noportraits=1` (#501 bisect): no snapshot, as with no engine (the sheets show their placeholder).
+    if (!engine || engine.isDisposed || bisectFlags().noPortraits) return null;
     const { scene, field, camera, use } = stageFor(engine);
     const handle = field.add(look.species, look.instanceId, { x: 0, z: 0 });
     // Nothing between `stageFor` and here waits, so its scene can't be retired first.
