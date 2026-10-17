@@ -15,13 +15,18 @@ export class FrameScheduler {
   private lastDrawAt: number | null = null;
   private drewLast = false;
   private readonly settleFrames: number;
+  private readonly minFrameMs: number;
   /** Frames drawn so far (dev overlay and tests). */
   draws = 0;
 
-  /** @param settleFrames frames to draw after each invalidation */
-  constructor(settleFrames: number) {
+  /**
+   * @param settleFrames frames to draw after each invalidation
+   * @param minFrameMs no frame sooner than this after the last one (`?cap30=1`, #501); 0 is uncapped
+   */
+  constructor(settleFrames: number, minFrameMs = 0) {
     this.settleFrames = settleFrames;
     this.pending = settleFrames;
+    this.minFrameMs = minFrameMs;
   }
 
   /** Something changed that isn't tracked by `busy` (resize, quality, store update). */
@@ -49,6 +54,11 @@ export class FrameScheduler {
     if (!draw) {
       this.drewLast = false;
       return { draw, frameMs: null };
+    }
+    // Too soon under a cap: skip this one without spending the request, and
+    // without ending the run of drawn frames, so the next frame's time is real.
+    if (this.lastDrawAt !== null && now - this.lastDrawAt < this.minFrameMs) {
+      return { draw: false, frameMs: null };
     }
     this.pending = Math.max(0, this.pending - 1);
     const frameMs = this.drewLast && this.lastDrawAt !== null ? now - this.lastDrawAt : null;

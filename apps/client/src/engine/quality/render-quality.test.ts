@@ -4,6 +4,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as rareGlow from '../../procedural/rare-glow.js';
+import { NO_BISECT, setBisectFlags } from '../bisect-flags.js';
 import { TIER_SETTINGS } from '../config.js';
 import { createPostProcessing, RenderQuality } from './render-quality.js';
 
@@ -93,5 +94,36 @@ describe('RenderQuality', () => {
     for (let i = 0; i < 50; i++) expect(quality.sample(2000)).toBe(false);
     expect(quality.applyPending()).toBe(false);
     expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1, pinned: true });
+  });
+
+  describe('bisect flags (#501)', () => {
+    afterEach(() => {
+      setBisectFlags(NO_BISECT);
+    });
+
+    it('draws no post-process with ?nopost=1, still tone-mapping in the materials', () => {
+      setBisectFlags({ ...NO_BISECT, noPost: true });
+      const scene = new Scene(engine);
+      const camera = new TargetCamera('cam', Vector3.Zero(), scene);
+      const quality = new RenderQuality(scene, camera, 'high');
+      expect(camera._postProcesses.filter(Boolean)).toHaveLength(0);
+      expect(scene.imageProcessingConfiguration.toneMappingEnabled).toBe(true);
+      expect(quality.ready).toBe(true);
+      quality.dispose();
+    });
+
+    it('holds 30 fps as on target with ?cap30=1', () => {
+      setBisectFlags({ ...NO_BISECT, cap30: true });
+      const scene = new Scene(engine);
+      const quality = new RenderQuality(
+        scene,
+        new TargetCamera('cam', Vector3.Zero(), scene),
+        'high',
+      );
+      let asked = false;
+      for (let i = 0; i < 500 && !asked; i++) asked = quality.sample(1000 / 30);
+      expect(asked).toBe(false);
+      expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1 });
+    });
   });
 });

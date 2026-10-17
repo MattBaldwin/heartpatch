@@ -3,7 +3,14 @@ import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstr
 import type { Scene } from '@babylonjs/core/scene';
 import { batchUploads } from '../procedural/batch-uploads.js';
 import { countGl, type GlCounts } from './gl-counters.js';
-import { activeTriangles, formatRenderStats, formatResourceStats } from './render-stats.js';
+import { bisectFlags, bisectLabel } from './bisect-flags.js';
+import { readPageStats, RenderRate } from './page-stats.js';
+import {
+  activeTriangles,
+  formatPageStats,
+  formatRenderStats,
+  formatResourceStats,
+} from './render-stats.js';
 import type { RendererKind } from './renderer.js';
 import type { Stage } from './stage.js';
 
@@ -26,6 +33,11 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * shows here as a number that keeps climbing), the squishy batch uploads,
  * the governor's render scale, and our JS per drawn frame (a low fps with
  * low JS is the GPU or the browser, not our code).
+ *
+ * A third line looks page-wide (#501), at work the scene's own counts can't
+ * see: live engines, renders per second across all of them, every live
+ * render target and its size, canvases, DOM nodes, running CSS animations,
+ * and the bisect flags that are on (`bisect-flags.ts`).
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
@@ -35,7 +47,16 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
   const counts = document.createElement('div');
   counts.className = 'dev-status dev-stats-counts';
   counts.dataset['testid'] = 'dev-stats-counts';
-  document.body.append(badge, counts);
+  const page = document.createElement('div');
+  page.className = 'dev-status dev-stats-page';
+  page.dataset['testid'] = 'dev-stats-page';
+  const stack = document.createElement('div');
+  stack.className = 'dev-stats-stack';
+  stack.append(badge, counts, page);
+  document.body.append(stack);
+  // Renders across every engine, between two refreshes.
+  const renders = new RenderRate();
+  const flags = bisectLabel(bisectFlags());
 
   // One counter per scene: a renderer fallback or a remount makes a new one.
   let counted: { scene: Scene; instrumentation: SceneInstrumentation } | null = null;
@@ -74,5 +95,6 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
       batchUploads: batchUploads.count,
       renderScale: stage.quality.snapshot.renderScale,
     });
+    page.textContent = formatPageStats(readPageStats(renders, flags));
   }, 500);
 }

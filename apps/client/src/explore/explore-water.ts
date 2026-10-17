@@ -6,6 +6,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Scene } from '@babylonjs/core/scene';
 import type { WorldPoint } from '@heartpatch/shared';
+import { bisectFlags } from '../engine/bisect-flags.js';
 import type { QualityTier } from '../engine/config.js';
 import { DRIFT_MODE, type AmbientMode } from '../map/ambient-layout.js';
 import { linear } from '../map/map-props.js';
@@ -114,7 +115,8 @@ export class ExploreWater {
 
     // Caustic light rippling on the sand: one term on the ground's own material.
     const bed = land.groundMaterial;
-    if (bed) this.#caustics = attachCaustics(bed, land.clock, CAUSTICS);
+    // `?nowater=1` (#501 bisect): a plain lake bed, no caustics (and no haze, `setSky`).
+    if (bed && !bisectFlags().noWater) this.#caustics = attachCaustics(bed, land.clock, CAUSTICS);
 
     this.setSky(options.sky);
     this.#applyTier();
@@ -145,7 +147,9 @@ export class ExploreWater {
   setSky(look: SkyLook): void {
     // The ripples fade with the light: soft by day, faint by moonlight.
     this.#caustics?.setStrength(CAUSTICS.strength * look.light.sun ** 2);
-    if (look.fog) {
+    if (bisectFlags().noWater) {
+      this.#scene.fogMode = Scene.FOGMODE_NONE;
+    } else if (look.fog) {
       const scene = this.#scene;
       scene.fogMode = Scene.FOGMODE_LINEAR;
       // As the sky draws its colours (sRGB), so far things melt into the dome's horizon.
