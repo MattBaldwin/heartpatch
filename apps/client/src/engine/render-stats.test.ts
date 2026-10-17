@@ -47,6 +47,7 @@ describe('formatPageStats', () => {
       formatPageStats({
         engines: 1,
         framesPerSecond: 30.6,
+        snapshots: 4,
         targets: [
           { width: 590, height: 1278, samples: 1 },
           { width: 1179, height: 2556, samples: 1 },
@@ -59,7 +60,7 @@ describe('formatPageStats', () => {
         flags: 'nopost cap30',
       }),
     ).toBe(
-      'page · 1 engine · 31 fr/s · rt 4: 1179x2556, 590x1278 ×2, 256x256/4 · 1 canvas · 1834 dom · 3 css · nopost cap30',
+      'page · 1 engine · 31 fr/s · 4 snap · rt 4: 1179x2556, 590x1278 ×2, 256x256/4 · 1 canvas · 1834 dom · 3 css · nopost cap30',
     );
   });
 
@@ -69,6 +70,7 @@ describe('formatPageStats', () => {
       formatPageStats({
         engines: 2,
         framesPerSecond: 0,
+        snapshots: 0,
         targets,
         canvases: 2,
         domNodes: 9,
@@ -76,7 +78,7 @@ describe('formatPageStats', () => {
         flags: '',
       }),
     ).toBe(
-      'page · 2 engines · 0 fr/s · rt 6: 600x100, 500x100, 400x100, 300x100, +2 · 2 canvas · 9 dom · 0 css',
+      'page · 2 engines · 0 fr/s · 0 snap · rt 6: 600x100, 500x100, 400x100, 300x100, +2 · 2 canvas · 9 dom · 0 css',
     );
   });
 });

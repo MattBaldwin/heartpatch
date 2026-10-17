@@ -1,31 +1,54 @@
-import { describe, expect, it } from 'vitest';
-import { RenderRate, type Rendered } from './page-stats.js';
-
-const scene = (id: { n: number }): Rendered => ({ getRenderId: () => id.n });
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
+import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Scene } from '@babylonjs/core/scene';
+import { afterEach, describe, expect, it } from 'vitest';
+import { RenderRate } from './page-stats.js';
 
 describe('RenderRate (#501)', () => {
-  it('counts renders per second across scenes, from when each is first seen', () => {
-    const rate = new RenderRate();
-    const a = { n: 500 };
-    const b = { n: 0 };
-    const sa = scene(a);
-    const sb = scene(b);
-    expect(rate.sample([sa], 0)).toBe(0);
-    a.n += 30;
-    // b is new: its renders before now don't count.
-    b.n = 7;
-    expect(rate.sample([sa, sb], 500)).toBe(60);
-    a.n += 15;
-    b.n += 15;
-    expect(rate.sample([sa, sb], 1000)).toBe(60);
+  const engine = new NullEngine();
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
   });
 
-  it('drops a scene that went away without counting it again', () => {
+  function scene(): Scene {
+    const s = new Scene(engine);
+    s.activeCamera = new FreeCamera('cam', new Vector3(0, 0, -5), s);
+    return s;
+  }
+
+  function render(s: Scene, times: number): void {
+    for (let i = 0; i < times; i++) s.render();
+  }
+
+  it('counts each render once (a scene’s render id moves twice or more a frame)', () => {
     const rate = new RenderRate();
-    const a = { n: 0 };
-    const sa = scene(a);
-    rate.sample([sa], 0);
-    a.n = 10;
+    const a = scene();
+    render(a, 5); // before it was first seen: not counted
+    expect(rate.sample([a], 0)).toBe(0);
+    render(a, 10);
+    expect(a.getRenderId()).toBeGreaterThan(20);
+    expect(rate.sample([a], 1000)).toBe(10);
+  });
+
+  it('adds up scenes, counting a new one from when it is first seen', () => {
+    const rate = new RenderRate();
+    const a = scene();
+    rate.sample([a], 0);
+    render(a, 15);
+    const b = scene();
+    render(b, 7);
+    expect(rate.sample([a, b], 500)).toBe(30);
+    render(a, 15);
+    render(b, 15);
+    expect(rate.sample([a, b], 1000)).toBe(60);
+  });
+
+  it('drops a scene that went away', () => {
+    const rate = new RenderRate();
+    const a = scene();
+    rate.sample([a], 0);
+    render(a, 10);
     expect(rate.sample([], 1000)).toBe(0);
   });
 });

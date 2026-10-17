@@ -107,6 +107,12 @@ async function cropToSquishy(dataUrl: string, px: number): Promise<string> {
   return to.toDataURL('image/png');
 }
 
+/**
+ * Portrait snapshots since the page opened (#501): each renders the game's
+ * engine into a 4× MSAA texture and reads it back. Read by the `?fps=1` badge.
+ */
+export const portraitSnapshots = { count: 0 };
+
 /** A draw that hasn't finished by then is given up (it resolves to null). */
 const DRAW_TIMEOUT_MS = 8_000; // TUNE
 /**
@@ -309,6 +315,7 @@ export function createPortraits(options: PortraitOptions): Portraits {
       // Babylon sets this until it renders, and two at once would leave the
       // engine's render size wrong. No picture this time.
       if (engine.skipFrameRender) return null;
+      portraitSnapshots.count++;
       const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
       return await cropToSquishy(shot, px);
     } catch {

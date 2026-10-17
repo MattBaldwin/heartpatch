@@ -73,8 +73,10 @@ export function formatResourceStats(s: ResourceStats): string {
 export interface PageStats {
   /** Live Babylon engines (one is the game; any more draw where the badge can't see). */
   readonly engines: number;
-  /** Scene renders per second across every engine, portrait snapshots included. */
+  /** Scene renders per second across every engine (a snapshot renders outside this: `snapshots`). */
   readonly framesPerSecond: number;
+  /** Portrait snapshots since the page opened (each one renders the game's engine into a texture). */
+  readonly snapshots: number;
   /** Every live render target on every engine (post-process passes, snapshots, shadow maps). */
   readonly targets: readonly {
     readonly width: number;
@@ -93,7 +95,7 @@ export interface PageStats {
 const TARGET_GROUPS = 4;
 
 /**
- * "page · 1 engine · 31 fr/s · rt 3: 1179x2556, 590x1278 ×2 · 1 canvas · 1834 dom · 3 css · nopost":
+ * "page · 1 engine · 31 fr/s · 4 snap · rt 3: 1179x2556, 590x1278 ×2 · 1 canvas · 1834 dom · 3 css · nopost":
  * the badge's third line (#501), for work outside the scene the first two
  * lines measure. Sizes are grouped, biggest first; "/4" is 4× MSAA.
  */
@@ -114,6 +116,7 @@ export function formatPageStats(s: PageStats): string {
     'page',
     `${String(s.engines)} engine${s.engines === 1 ? '' : 's'}`,
     `${String(Math.round(s.framesPerSecond))} fr/s`,
+    `${String(s.snapshots)} snap`,
     `rt ${String(s.targets.length)}${shown.length > 0 ? `: ${shown.join(', ')}` : ''}`,
     `${String(s.canvases)} canvas`,
     `${String(s.domNodes)} dom`,
