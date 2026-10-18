@@ -1,6 +1,6 @@
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { merged } from '../map/map-props.js';
+import { kitMesh, merged } from './kit-mesh.js';
 import {
   buildCaveRock,
   buildCrystals,
@@ -22,12 +22,14 @@ import type { LandOptions } from './explore-land.js';
 
 /** A far mountain: a rounded cone of lavender stone with a snow cap. */
 function buildPeak(scene: Scene): Mesh {
-  return merged('trail-peaks', [
-    shaded(cylinder(scene, 9, 0.5, 10, 10, [0, 4.5, 0]), '#7d74a6', '#bcb3dc', 0, 9),
-    shaded(sphere(scene, 3.0, 6, [0, 8.2, 0], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 7, 9.8),
-    shaded(cylinder(scene, 6, 0.4, 7, 9, [4.6, 3, 1]), '#857cae', '#c4bce0', 0, 6),
-    shaded(sphere(scene, 2.0, 6, [4.6, 5.6, 1], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 4.8, 6.6),
-  ]);
+  return kitMesh(scene, 'trail-peaks', () =>
+    merged([
+      shaded(cylinder(9, 0.5, 10, 10, [0, 4.5, 0]), '#7d74a6', '#bcb3dc', 0, 9),
+      shaded(sphere(3.0, 6, [0, 8.2, 0], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 7, 9.8),
+      shaded(cylinder(6, 0.4, 7, 9, [4.6, 3, 1]), '#857cae', '#c4bce0', 0, 6),
+      shaded(sphere(2.0, 6, [4.6, 5.6, 1], [1, 1.1, 1]), '#e9e6f7', '#ffffff', 4.8, 6.6),
+    ]),
+  );
 }
 
 type Placer = (ctx: ExtrasContext) => Readonly<Record<string, readonly Growth[]>>;

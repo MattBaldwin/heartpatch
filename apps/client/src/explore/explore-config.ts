@@ -135,6 +135,15 @@ export const EXPLORE_CAMERA = {
 } as const;
 
 /**
+ * Compiling what shows later (the tools, faded spots, the night's motes) while
+ * the scene loads (#501 D1): the longest the stage waits on it before it
+ * settles anyway, ms. A phone compiles a program in 50–300 ms.
+ */
+export const EXPLORE_PREWARM = {
+  maxMs: 5000, // TUNE
+} as const;
+
+/**
  * Props between the camera and the Keeper fade (#291), so a tree never
  * hides it: a spot taller than the Keeper's middle, in front of it (towards
  * the camera) and within this much of its line, tile-local units.
