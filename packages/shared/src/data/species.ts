@@ -687,6 +687,61 @@ export const MOVES: Move[] = [
     accuracy: 95, // TUNE:
     effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 25 }], // TUNE:
   },
+  // Batch 4: the Pebblesnooze, Nookling and Crunchkin lines.
+  {
+    id: 'mountain-lullaby',
+    name: 'Mountain Lullaby',
+    description: 'Hums a deep, rumbly lullaby. The other side might get a bit sleepy.',
+    element: 'stone',
+    power: 65, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 10 }], // TUNE:
+  },
+  {
+    id: 'horn-quake',
+    name: 'Horn Quake',
+    description:
+      'Stomps and shakes the ground with its big horns. The other side might feel less sturdy.',
+    element: 'stone',
+    power: 75, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'stat', target: 'opponent', stat: 'defense', stages: -1, chance: 20 }], // TUNE:
+  },
+  {
+    id: 'antler-hug',
+    name: 'Antler Hug',
+    description: 'A big, soft, antlery hug. The other side might feel a bit less brave.',
+    element: 'shadow',
+    power: 60, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 15 }], // TUNE:
+  },
+  {
+    id: 'lantern-flurry',
+    name: 'Lantern Flurry',
+    description: 'A swirl of glowing lanterns. It might feel a bit stronger.',
+    element: 'shadow',
+    power: 75, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 20 }], // TUNE:
+  },
+  {
+    id: 'gale-glide',
+    name: 'Gale Glide',
+    description: 'Glides down on a gust of autumn wind and lands with a thump.',
+    element: 'leaf',
+    power: 95, // TUNE:
+    accuracy: 95, // TUNE:
+  },
+  {
+    id: 'big-stash-hug',
+    name: 'Big Stash Hug',
+    description: 'Squeezes in a hug that smells like acorns. It might feel a bit sturdier.',
+    element: 'leaf',
+    power: 60, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE:
+  },
 ];
 
 /*
@@ -942,7 +997,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 85, attack: 65, defense: 90, speed: 35 }, // TUNE:
     moves: ['pebble-plop', 'rumble-roll', 'rock-a-bye', 'sturdy-sit'],
-    evolutions: [],
+    evolutions: [{ into: 'mountsnooze', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'pebble',
       palette: ['#aaa296', '#e9e3d9', '#7a6cb8', '#837a6d'],
@@ -963,6 +1018,41 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
   },
+  // #495 grown-up (stage 4): Boulderdoze grows a snowy ruff, big arms and a ridge of spines, a whole sleepy mountain.
+  {
+    id: 'mountsnooze',
+    name: 'Mountsnooze',
+    description:
+      'A snoozy mountain with a snowy ruff and a ridge of spines. Birds nest in its nightcap.',
+    element: 'stone',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    baseStats: { hp: 99, attack: 75, defense: 103, speed: 40 }, // TUNE: ×1.15 Boulderdoze
+    moves: ['rumble-roll', 'rock-a-bye', 'sturdy-sit', 'mountain-lullaby'],
+    evolutions: [],
+    visual: {
+      body: 'pebble',
+      palette: ['#aaa296', '#e9e3d9', '#7a6cb8', '#837a6d'],
+      parts: [
+        'sleepy-eyes',
+        'smirk',
+        'round-ears',
+        'nightcap',
+        'cone-horns',
+        'crag-nubs',
+        'fur-ruff',
+        'strong-arms',
+        'stubby-legs',
+        'back-spines',
+      ],
+      size: 1.59,
+      head: { body: 'orb', size: 0.6, forward: 0.68, up: 0.12 },
+      stance: 0.22,
+      pose: 'stand',
+      attackPart: 'back',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
+  },
   {
     id: 'rumblehorn',
     name: 'Rumblehorn',
@@ -972,7 +1062,7 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 75, attack: 95, defense: 85, speed: 45 }, // TUNE:
     moves: ['pebble-plop', 'rumble-boop', 'sturdy-sit', 'rumble-roll'],
-    evolutions: [],
+    evolutions: [{ into: 'quakehorn', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bean',
       palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
@@ -987,6 +1077,41 @@ export const SPECIES: Species[] = [
         'biped-legs',
       ],
       size: 1.35,
+      head: { body: 'orb', size: 0.6, forward: 0.1, up: 0.82 },
+      stance: 0.3,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['brave', 'sleepy'] },
+  },
+  // #495 grown-up (stage 4): Rumblehorn grows side horns and a spiky tail to go with its big horn.
+  {
+    id: 'quakehorn',
+    name: 'Quakehorn',
+    description: 'A mighty horned rock. Its stomp makes the whole meadow wobble. Sorry, meadow.',
+    element: 'stone',
+    feeling: 'brave',
+    rarity: 'rare',
+    baseStats: { hp: 86, attack: 110, defense: 97, speed: 52 }, // TUNE: ×1.15 Rumblehorn
+    moves: ['rumble-boop', 'sturdy-sit', 'rumble-roll', 'horn-quake'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'fangs',
+        'round-ears',
+        'uni-horn',
+        'nub-horns',
+        'crag-nubs',
+        'strong-arms',
+        'biped-legs',
+        'spike-tail',
+      ],
+      size: 1.59,
       head: { body: 'orb', size: 0.6, forward: 0.1, up: 0.82 },
       stance: 0.3,
       pose: 'upright',
@@ -2242,7 +2367,7 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 85, attack: 70, defense: 75, speed: 75 }, // TUNE:
     moves: ['peekaboo', 'shadow-snuggle', 'mossy-nap', 'boo'],
-    evolutions: [],
+    evolutions: [{ into: 'cuddlestag', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bean',
       palette: ['#524e94', '#d9d6ff', '#ffc94d', '#ffd27a'],
@@ -2264,6 +2389,41 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
   },
+  // #495 grown-up (stage 4): Snugglenook grows a big cuddly ruff and a plume tail.
+  {
+    id: 'cuddlestag',
+    name: 'Cuddlestag',
+    description:
+      'A huge, soft shadow with a cuddly ruff and a big plume tail. Hugs last a very long time.',
+    element: 'shadow',
+    feeling: 'cozy',
+    rarity: 'epic',
+    baseStats: { hp: 97, attack: 80, defense: 86, speed: 88 }, // TUNE: ×1.15 Snugglenook
+    moves: ['shadow-snuggle', 'mossy-nap', 'boo', 'antler-hug'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#524e94', '#d9d6ff', '#ffc94d', '#ffd27a'],
+      parts: [
+        'sharp-eyes',
+        'smirk',
+        'blush-cheeks',
+        'long-ears',
+        'antlers',
+        'fur-ruff',
+        'stubby-arms',
+        'hop-feet',
+        'plume-tail',
+      ],
+      size: 1.47,
+      ink: '#fff4dc',
+      head: { body: 'orb', size: 0.72, forward: 0.1, up: 0.8 },
+      stance: 0.35,
+      pose: 'stand',
+      attackPart: 'legs',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
+  },
   {
     id: 'mothnook',
     name: 'Mothnook',
@@ -2273,7 +2433,7 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 72, attack: 83, defense: 61, speed: 94 }, // TUNE:
     moves: ['peekaboo', 'shadow-snuggle', 'boo', 'lantern-flutter'],
-    evolutions: [],
+    evolutions: [{ into: 'lanternmoth', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bean',
       palette: ['#5f5ba6', '#d9d6ff', '#ffd27a', '#ffd27a'],
@@ -2287,6 +2447,40 @@ export const SPECIES: Species[] = [
         'fluff-tail',
       ],
       size: 1.25,
+      ink: '#fff4dc',
+      head: { body: 'orb', size: 0.75, forward: 0.1, up: 0.8 },
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'cozy'] },
+  },
+  // #495 grown-up (stage 4): Mothnook gets a flame crown, golden moth wings and a wisp tail.
+  {
+    id: 'lanternmoth',
+    name: 'Lanternmoth',
+    description:
+      'A big glowy moth with a flame crown and golden wings. Night walks are never lonely.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'epic',
+    baseStats: { hp: 85, attack: 98, defense: 72, speed: 111 }, // TUNE: ×1.18 Mothnook
+    moves: ['shadow-snuggle', 'boo', 'lantern-flutter', 'lantern-flurry'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#5f5ba6', '#d9d6ff', '#ffd27a', '#ffd27a'],
+      parts: [
+        'spooky-eyes',
+        'cat-mouth',
+        'long-ears',
+        'zing-antennae',
+        'moth-wings',
+        'flame-crown',
+        'hop-feet',
+        'wisp-tail',
+      ],
+      size: 1.47,
       ink: '#fff4dc',
       head: { body: 'orb', size: 0.75, forward: 0.1, up: 0.8 },
       stance: 0.45,
@@ -3453,7 +3647,7 @@ export const SPECIES: Species[] = [
     season: 'thanksgiving',
     baseStats: { hp: 84, attack: 95, defense: 71, speed: 95 }, // TUNE:
     moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies', 'sunny-beam'],
-    evolutions: [],
+    evolutions: [{ into: 'maplegale', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'pear',
       palette: ['#e59a5c', '#fff1dc', '#c4562e', '#7cc96a'],
@@ -3478,6 +3672,44 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
+  // #495 grown-up (stage 4): Maplecrunch grows green gliding flaps and red wings to go with its mane.
+  {
+    id: 'maplegale',
+    name: 'Maplegale',
+    description:
+      'A gliding squirrel with a huge maple mane and leafy flaps. It rides the autumn wind.',
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'epic',
+    season: 'thanksgiving',
+    baseStats: { hp: 100, attack: 112, defense: 85, speed: 112 }, // TUNE: ×1.18 Maplecrunch
+    moves: ['leaf-pile-leap', 'zoomies', 'sunny-beam', 'gale-glide'],
+    evolutions: [],
+    visual: {
+      body: 'pear',
+      palette: ['#e59a5c', '#fff1dc', '#c4562e', '#7cc96a'],
+      parts: [
+        'happy-eyes',
+        'brave-brows',
+        'smirk',
+        'fangs',
+        'pointy-ears',
+        'acorn-cap',
+        'maple-mane',
+        'stuck-leaf',
+        'leaf-arms',
+        'plume-wings',
+        'biped-legs',
+        'bushy-tail',
+      ],
+      size: 1.53,
+      head: { body: 'orb', size: 0.74, forward: 0.12, up: 0.78 },
+      stance: 0.35,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
+  },
   {
     id: 'huddlenut',
     name: 'Huddlenut',
@@ -3488,7 +3720,7 @@ export const SPECIES: Species[] = [
     season: 'thanksgiving',
     baseStats: { hp: 89, attack: 65, defense: 80, speed: 49 }, // TUNE:
     moves: ['leafy-tickle', 'pollen-puff', 'leaf-pile-leap', 'acorn-stash'],
-    evolutions: [],
+    evolutions: [{ into: 'hoardacorn', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'blob',
       palette: ['#e6cf98', '#f6e6c4', '#c27a44', '#7a4a2a'],
@@ -3506,6 +3738,44 @@ export const SPECIES: Species[] = [
         'plume-tip',
       ],
       size: 1.3,
+      head: { body: 'orb', size: 0.88, forward: 0.1, up: 0.45 },
+      stance: 0.08,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['cozy', 'joy'] },
+  },
+  // #495 grown-up (stage 4): Huddlenut grows a leafy frill and a big bushy tail.
+  {
+    id: 'hoardacorn',
+    name: 'Hoardacorn',
+    description:
+      'A round, huge-cheeked acorn with a leafy frill and a big bushy tail. It shares snacks. Eventually.',
+    element: 'leaf',
+    feeling: 'cozy',
+    rarity: 'epic',
+    season: 'thanksgiving',
+    baseStats: { hp: 108, attack: 79, defense: 97, speed: 60 }, // TUNE: ×1.2 Huddlenut
+    moves: ['pollen-puff', 'leaf-pile-leap', 'acorn-stash', 'big-stash-hug'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#e6cf98', '#f6e6c4', '#c27a44', '#7a4a2a'],
+      parts: [
+        'oval-eyes',
+        'nut-smile',
+        'blush-cheeks',
+        'tuft-ears',
+        'acorn-cup',
+        'acorn-scales',
+        'acorn-stem',
+        'buck-teeth',
+        'maple-mane',
+        'stuck-leaf',
+        'round-paws',
+        'bushy-tail',
+      ],
+      size: 1.53,
       head: { body: 'orb', size: 0.88, forward: 0.1, up: 0.45 },
       stance: 0.08,
       pose: 'sit',
