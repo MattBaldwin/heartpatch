@@ -72,7 +72,9 @@ jobs:
   # Lint, types, unit and DB tests, build: everything but the browser.
   fast:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # 15 left ~40 s of slack (main's fast job ran 14m19s on Oct 18) and cancelled
+    # a green PR mid-test; 25 keeps a real hang bounded.
+    timeout-minutes: 25
     services:
       postgres:
         image: mirror.gcr.io/library/postgres:16 # Google's Docker Hub mirror of postgres:16 (floating 16.x tag): no anonymous pull rate limit
