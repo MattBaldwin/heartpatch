@@ -62,6 +62,12 @@ export interface InventoryRepo {
    */
   lockItems: (owner: ItemOwner, itemIds: readonly string[]) => Promise<ItemCounts>;
   /**
+   * `lockItems`, but first makes any missing row at quantity 0 (in id order,
+   * `ON CONFLICT DO NOTHING`), so every row is locked, not only those that
+   * exist: a later grant then only updates rows this transaction holds.
+   */
+  createAndLockItems: (owner: ItemOwner, itemIds: readonly string[]) => Promise<ItemCounts>;
+  /**
    * Adds to each item, creating rows as needed, and writes a ledger row per
    * item. Quantities must be positive.
    */
@@ -152,6 +158,18 @@ function queries(db: Executor): InventoryRepo {
           .orderBy(asc(inventories.itemId))
           .for('update'),
       );
+    },
+
+    createAndLockItems: async (owner, itemIds) => {
+      if (itemIds.length === 0) return {};
+      const ids = [...new Set(itemIds)].sort();
+      await db
+        .insert(inventories)
+        .values(ids.map((itemId) => ({ ...owner, itemId, quantity: 0 })))
+        .onConflictDoNothing({
+          target: [inventories.mapId, inventories.userId, inventories.itemId],
+        });
+      return queries(db).lockItems(owner, ids);
     },
 
     add: async (owner, items, change) => {

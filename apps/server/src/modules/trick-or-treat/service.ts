@@ -47,7 +47,8 @@ import { createTrickOrTreatRepo } from './repo.js';
  * owned-costume check holds; a piece held in an open trade offer doesn't
  * count as owned and can come up again, which is harmless), the new
  * costume's `clothing_owned` row (an insert, no lock), both players'
- * inventory rows (step 11, one `lockGrantRows`), then `maps` (13).
+ * inventory rows (step 11, one `lockGrantRows`, missing rows made at 0 first
+ * so the grants only update locked rows, #557), then `maps` (13).
  */
 
 // Kid-readable messages (style guide §6).
@@ -189,13 +190,21 @@ export function createTrickOrTreatService(
           createdAt: at,
         });
         if (!stored) throw new AppError('CONFLICT', MESSAGES.twice);
-        // 6. The treat and the thank-you: both bags' rows in one lock (step 11).
+        // 6. The treat and the thank-you: both bags' rows in one lock (step 11),
+        // made first when missing (#557): on a first visit neither bag may have
+        // a Heartdust row yet, and a host knocking back at once would insert
+        // the same two rows in the other order.
         const visitorItems: ItemCounts =
           prize.kind === 'heartdust' ? { heartdust: prize.count } : {};
-        await lockGrantRows(tx, mapId, [
-          { userId: user.id, items: visitorItems },
-          { userId: hostUserId, items: { heartdust: hostHeartdust } },
-        ]);
+        await lockGrantRows(
+          tx,
+          mapId,
+          [
+            { userId: user.id, items: visitorItems },
+            { userId: hostUserId, items: { heartdust: hostHeartdust } },
+          ],
+          { createMissing: true },
+        );
         if (prize.kind === 'heartdust') {
           await grantItems(
             tx,
