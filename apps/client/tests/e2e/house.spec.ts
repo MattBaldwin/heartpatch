@@ -237,14 +237,14 @@ test('a house with an upstairs shows one floor at a time, and walking in goes do
   const ground = (await houseState(page))!;
   expect(ground.scene).toMatchObject({ rooms: 3, floor: 0, floors: [0, 1], keeper: true });
 
-  // Upstairs: the Kitchen's floor comes back over the Snug, and the Keeper
-  // (under it) isn't drawn.
+  // Upstairs: the Kitchen's floor comes back over the Snug. The Keeper
+  // stays drawn (#381 W1: it walks between floors, so the cut keeps it).
   const floorButton = page.getByTestId('house-floor');
   await expect(floorButton).toHaveText('⬆️ Upstairs');
   await expectRoomyLabels(page, '[data-testid="house-floor"], [data-testid="house-walk"]');
   await floorButton.tap();
   await expect.poll(async () => (await houseState(page))?.scene?.floor, slow).toBe(1);
-  expect((await houseState(page))!.scene!.keeper).toBe(false);
+  expect((await houseState(page))!.scene!.keeper).toBe(true);
   await expect(floorButton).toHaveText('⬇️ Downstairs');
 
   // Walk in: kid height is in the Keeper's room, on the ground floor.

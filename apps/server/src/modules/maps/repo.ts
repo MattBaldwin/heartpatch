@@ -1,6 +1,7 @@
 import {
   TRADING_POST_TERRAIN,
   type DefenseStance,
+  type FeelingId,
   type MapRole,
   type PublicKeeper,
   type PublicTile,
@@ -636,6 +637,16 @@ function queries(db: Executor): MapsRepo {
               and ${squishyOnWatch()}
               and ${squishies.state} = 'active'
           )::int`.mapWith(Number),
+          // How those guards feel (#531), in post order. Only the feeling: a
+          // rival sees what to counter, never who is posted (CLAUDE.md rule 6).
+          defenderFeelings: sql<FeelingId[]>`array(
+            select ${squishies.feeling} from ${tileDefenders}
+            join ${squishies} on ${squishies.id} = ${tileDefenders.squishyId}
+            where ${tileDefenders.tileId} = ${tiles.id}
+              and ${squishyOnWatch()}
+              and ${squishies.state} = 'active'
+            order by ${tileDefenders.slot}
+          )`,
           // Squishy gatherers at work here (jobs' `squishyAtWork`), not in the Hollow.
           workers: sql<number>`(
             select count(*) from ${squishies}

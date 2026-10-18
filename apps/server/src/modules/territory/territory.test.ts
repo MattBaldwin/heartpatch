@@ -1890,6 +1890,57 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
   });
 
   describe('standing watch', () => {
+    it('shows posted guards’ feelings in post order, never who they are (#531)', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      const [a, b] = await edgeOf(mapId, kid);
+      await setOwner(a!.id, kid.id);
+      await setOwner(b!.id, kid.id);
+      const guards = [];
+      for (const feeling of ['sleepy', 'joy', 'brave']) {
+        const guard = await grant(server, kid, mapId, 3);
+        await db.execute(
+          `update squishies set feeling = '${feeling}' where id = '${uuid(guard.id)}'`,
+        );
+        guards.push(guard);
+      }
+      const [sleepy, joy, brave] = guards;
+      const post = (tile: { q: number; r: number }, squishyIds: string[]) =>
+        call(server, 'POST', `/maps/${mapId}/defenders`, kid, { q: tile.q, r: tile.r, squishyIds });
+      const seenAt = async (tile: { q: number; r: number }) =>
+        (await view(server, friend, mapId)).tiles.find((t) => t.q === tile.q && t.r === tile.r)!;
+
+      // Nobody posted: an empty list, so a rival's sheet keeps its plain count.
+      expect((await seenAt(a!)).defenderFeelings).toEqual([]);
+
+      // In the order the owner posted them, not the order they were granted.
+      expect((await post(a!, [joy!.id, brave!.id, sleepy!.id])).statusCode).toBe(200);
+      const tile = await seenAt(a!);
+      expect(tile.defenders).toBe(3);
+      expect(tile.defenderFeelings).toEqual(['joy', 'brave', 'sleepy']);
+
+      // Feelings only: no species, no squishy, no level, anywhere in the tile.
+      const text = JSON.stringify(tile);
+      for (const guard of guards) {
+        expect(text).not.toContain(guard.id);
+        expect(text).not.toContain(guard.speciesId);
+      }
+      expect(text).not.toMatch(/species|level|element/i);
+
+      // A guard taken to the Hollow stops standing watch, and stops being told.
+      await db.execute(`update squishies set state = 'hollowed' where id = '${uuid(brave!.id)}'`);
+      const taken = await seenAt(a!);
+      expect(taken.defenders).toBe(2);
+      expect(taken.defenderFeelings).toEqual(['joy', 'sleepy']);
+
+      // Other tiles are untouched, and neutral land keeps its guardian hint instead.
+      expect((await seenAt(b!)).defenderFeelings).toEqual([]);
+      const wild = (await edgeOf(mapId, kid)).find((t) => t.ownerUserId === null)!;
+      expect((await seenAt(wild)).defenderFeelings).toEqual([]);
+    });
+
     it('puts up to the max on a tile, moves a squishy between tiles, and shows only the count', async () => {
       const server = await start();
       const kid = await player();
