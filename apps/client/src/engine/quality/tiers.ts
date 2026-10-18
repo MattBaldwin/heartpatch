@@ -1,6 +1,7 @@
 import {
   DEFAULT_QUALITY_TIER,
   MIN_EFFECTIVE_PIXEL_RATIO,
+  PHONE_MAX_SHORT_SIDE,
   QUALITY_TIERS,
   TIER_SETTINGS,
   type QualityTier,
@@ -18,6 +19,22 @@ export function isQualityTier(value: unknown): value is QualityTier {
  */
 export function pickInitialTier(...overrides: (string | null | undefined)[]): QualityTier {
   return overrides.find(isQualityTier) ?? DEFAULT_QUALITY_TIER;
+}
+
+/**
+ * True on a phone's screen (`PHONE_MAX_SHORT_SIDE`). The screen, not the
+ * window, so turning the phone or a split-screen iPad never flips it. False
+ * with no screen to read (unit tests).
+ */
+export function isPhoneScreen(screen: Pick<Screen, 'width' | 'height'> | undefined): boolean {
+  if (!screen || !(screen.width > 0) || !(screen.height > 0)) return false;
+  return Math.min(screen.width, screen.height) < PHONE_MAX_SHORT_SIDE;
+}
+
+/** Whether `tier` draws bloom on this device (`TierSettings.phoneBloom`, #501). */
+export function tierBloom(tier: QualityTier, phone: boolean): boolean {
+  const t = TIER_SETTINGS[tier];
+  return t.bloom && (!phone || t.phoneBloom);
 }
 
 /** The next cheaper tier, or null when already on the cheapest. */

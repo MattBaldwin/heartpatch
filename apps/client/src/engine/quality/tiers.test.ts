@@ -3,10 +3,12 @@ import { DEFAULT_QUALITY_TIER } from '../config.js';
 import {
   crawlRenderScale,
   higherTier,
+  isPhoneScreen,
   isQualityTier,
   lowerTier,
   pickInitialTier,
   renderScaleFloor,
+  tierBloom,
 } from './tiers.js';
 
 describe('pickInitialTier', () => {
@@ -80,5 +82,32 @@ describe('crawlRenderScale', () => {
         expect(crawlRenderScale(dpr)).toBeLessThanOrEqual(renderScaleFloor(tier, dpr));
       }
     }
+  });
+});
+
+describe('isPhoneScreen (#501)', () => {
+  it('is an iPhone in either orientation', () => {
+    expect(isPhoneScreen({ width: 375, height: 667 })).toBe(true);
+    expect(isPhoneScreen({ width: 440, height: 956 })).toBe(true);
+    expect(isPhoneScreen({ width: 956, height: 440 })).toBe(true);
+  });
+
+  it('is not an iPad, a laptop or a missing screen', () => {
+    expect(isPhoneScreen({ width: 744, height: 1133 })).toBe(false); // iPad mini
+    expect(isPhoneScreen({ width: 834, height: 1194 })).toBe(false);
+    expect(isPhoneScreen({ width: 1440, height: 900 })).toBe(false);
+    expect(isPhoneScreen(undefined)).toBe(false);
+    expect(isPhoneScreen({ width: 0, height: 0 })).toBe(false);
+  });
+});
+
+describe('tierBloom (#501)', () => {
+  it('drops bloom on medium on a phone only', () => {
+    expect(tierBloom('high', true)).toBe(true);
+    expect(tierBloom('medium', true)).toBe(false);
+    expect(tierBloom('low', true)).toBe(false);
+    expect(tierBloom('high', false)).toBe(true);
+    expect(tierBloom('medium', false)).toBe(true);
+    expect(tierBloom('low', false)).toBe(false);
   });
 });

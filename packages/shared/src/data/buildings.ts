@@ -50,7 +50,7 @@ export const BUILDINGS: Building[] = [
     kind: 'habitat',
     name: 'Ember Den',
     description: 'A warm home. Fire and Cozy squishies grow faster here.',
-    maxPerHome: 2, // TUNE:
+    maxPerHome: 4, // TUNE: owner 2026-10-18 (#537); one building a tile still bounds the total
     placement: 'home',
     slot: 'ring',
     tags: { elements: ['fire'], feelings: ['cozy'] },
@@ -64,7 +64,7 @@ export const BUILDINGS: Building[] = [
     kind: 'habitat',
     name: 'Cozy Meadow',
     description: 'A sunny nap spot. Leaf, Cozy and Sleepy squishies grow faster here.',
-    maxPerHome: 2, // TUNE:
+    maxPerHome: 4, // TUNE: owner 2026-10-18 (#537); one building a tile still bounds the total
     placement: 'home',
     slot: 'ring',
     tags: { elements: ['leaf'], feelings: ['cozy', 'sleepy'] },

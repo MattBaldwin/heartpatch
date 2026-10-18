@@ -192,6 +192,27 @@ describe('public views', () => {
     ).toEqual({ night: '2026-10-31', taken: [{ userId: owner }] });
   });
 
+  it('tells a trick-or-treater their treat, the host who came, and nobody else (#515)', () => {
+    const visitor = '0190a8c4-0000-7000-8000-000000000002';
+    const host = '0190a8c4-0000-7000-8000-000000000003';
+    const visitId = '0190a8c4-0000-7000-8000-000000000004';
+    const prize = { kind: 'keeper-costume' as const, itemId: 'bat-buddy', count: 1 };
+    const visited = event('trick.visited', {
+      visitId,
+      visitorUserId: visitor,
+      hostUserId: host,
+      day: '2026-10-20',
+      lantern: true,
+      trick: false,
+      prize,
+      hostHeartdust: 1,
+    });
+    const told = { visitId, visitorUserId: visitor, hostUserId: host, day: '2026-10-20' };
+    expect(publicViewFor(PUBLIC_VIEWS, visited, { userId: visitor })).toEqual({ ...told, prize });
+    expect(publicViewFor(PUBLIC_VIEWS, visited, { userId: host })).toEqual(told);
+    expect(publicViewFor(PUBLIC_VIEWS, visited, me)).toBeNull();
+  });
+
   it('refuses a stored payload that breaks its internal schema', () => {
     expect(() =>
       publicViewFor(PUBLIC_VIEWS, event('member.left', { userId: 'nope', secret: 1 }), me),

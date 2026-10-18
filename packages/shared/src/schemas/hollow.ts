@@ -141,6 +141,19 @@ export const HollowStatusSchema = z.object({
     .object({ refund: ItemCountsSchema, at: z.iso.datetime() })
     .nullable()
     .optional(),
+  /**
+   * Trick-or-treaters at my home yesterday (#515, the patch's day): how many
+   * came and the thank-you Heartdust they left. Said once per device per day
+   * in the morning report. Null, or missing from an older server: nobody came.
+   */
+  trickOrTreat: z
+    .object({
+      day: LocalDateSchema,
+      visitors: z.number().int().min(1),
+      heartdust: z.number().int().min(0),
+    })
+    .nullable()
+    .optional(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });

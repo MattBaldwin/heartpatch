@@ -12,8 +12,14 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
-import { accessoryPieces, accessorySocket } from './accessory.js';
+import {
+  ART_RULES,
+  isSquishyCostume,
+  type Body,
+  type ClothingItem,
+  type VisualRegistry,
+} from '@heartpatch/shared';
+import { accessoryAnchors, accessoryPieces, accessorySocket } from './accessory.js';
 import { bodyArrays, bodyRingsFor, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
@@ -160,8 +166,11 @@ interface Squishy {
     /** How high it reaches above the ground point (placement scale 1). */
     readonly top: number;
   } | null;
-  /** Its own `crown` parts (a stem, a nightcap): put away while a crown accessory is on. */
-  readonly crownParts: { batch: Batch; instance: Instance }[];
+  /**
+   * Its own `crown` parts (a stem, a nightcap), put away while a crown
+   * accessory is on, and its `ears`, put away under a hood too (#515).
+   */
+  readonly tuckParts: { batch: Batch; instance: Instance; slot: 'crown' | 'ears' }[];
   /** Its eyes and mouth, with where each sits on a plain face (a `face` reshapes them). */
   readonly faceParts: { batch: Batch; instance: Instance; slot: 'eyes' | 'mouth'; base: Matrix }[];
   face: SquishyFace | null;
@@ -338,7 +347,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       event: null,
       instances: [],
       accessory: null,
-      crownParts: [],
+      tuckParts: [],
       faceParts: [],
       face: null,
       // A rescue guardian wears the shadow look alone.
@@ -412,24 +421,32 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       squishy.instances.splice(0, squishy.instances.length, ...kept);
       squishy.accessory = null;
     }
-    const anchor = handle.look === 'shadow' ? undefined : item?.visual.anchor;
+    const anchors = handle.look === 'shadow' || !item ? [] : accessoryAnchors(item);
     // A hat goes where the squishy's own crown part was (like hair under a
-    // hat), so the two never poke through each other. They keep moving with
-    // it (they stay in `instances`) and come back when the hat comes off.
-    const hatOn = anchor === 'crown';
-    for (const { batch, instance } of squishy.crownParts) {
+    // hat), and a hood tucks its ears away too, so they never poke through
+    // each other. They keep moving with it (they stay in `instances`) and
+    // come back when the hat comes off.
+    const hatOn = anchors.includes('crown');
+    const hoodOn = hatOn && item?.visual.hood === true;
+    for (const { batch, instance, slot } of squishy.tuckParts) {
+      const tucked = slot === 'crown' ? hatOn : hoodOn;
       const i = batch.instances.indexOf(instance);
-      if (hatOn && i >= 0) batch.instances.splice(i, 1);
-      else if (!hatOn && i < 0) batch.instances.push(instance);
+      if (tucked && i >= 0) batch.instances.splice(i, 1);
+      else if (!tucked && i < 0) batch.instances.push(instance);
       else continue;
       batch.dirty = true;
     }
-    if (!item || !anchor) return;
-    const socket = accessorySocket(handle.params, this.#registry.bodies, anchor);
-    if (!socket) return;
+    if (!item || anchors.length === 0) return;
+    const sockets = new Map(
+      anchors.map((a) => [a, accessorySocket(handle.params, this.#registry.bodies, a)]),
+    );
+    // Accessories are plain vinyl, like Keeper clothing; a squishy costume
+    // wears its rarity's finish, like a Keeper costume (#515). Any piece may
+    // glow (the glow bit sits above every finish).
+    const finish = isSquishyCostume(item) ? FINISH_CODE[ART_RULES.finishByRarity[item.rarity]] : 0;
     const instances: Instance[] = [];
     let top = 0;
-    for (const p of accessoryPieces(item, socket)) {
+    for (const p of accessoryPieces(item, (a) => sockets.get(a) ?? null)) {
       top = Math.max(top, p.at[1] + p.size[1] / 2);
       const batch = this.#batch(`part:${p.shape}`, (lod) => partArrays(p.shape, LOD[lod]), false);
       const local = Matrix.Compose(
@@ -437,14 +454,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         Quaternion.RotationYawPitchRoll(p.turn[1] * DEG, p.turn[0] * DEG, p.turn[2] * DEG),
         new Vector3(p.at[0], p.at[1], p.at[2]),
       );
-      // Plain vinyl, like Keeper clothing (only costumes wear a finish).
       const instance: Instance = {
         owner: squishy,
         local,
         matrix: local.multiply(squishy.world),
         color: linear(p.color),
         look: SQUISH_LOOK_CODE.normal,
-        finish: 0,
+        finish: finish + (p.glow ? FINISH_CODE.glow : 0),
       };
       batch.instances.push(instance);
       batch.dirty = true;
@@ -502,6 +518,14 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   /** The accessory a squishy wears, or null. */
   accessoryOf(handle: SquishyHandle): string | null {
     return this.#squishies.get(handle.id)?.accessory?.id ?? null;
+  }
+
+  /** How many of a squishy's own parts its accessory has tucked away (a topper, ears under a hood). */
+  tuckedOf(handle: SquishyHandle): number {
+    const squishy = this.#squishies.get(handle.id);
+    if (!squishy) return 0;
+    return squishy.tuckParts.filter(({ batch, instance }) => !batch.instances.includes(instance))
+      .length;
   }
 
   remove(handle: SquishyHandle): void {
@@ -798,7 +822,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       for (const p of part.placements) {
         const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
         const entry = attach(batch, local, color, finish, part.slot === 'eyes');
-        if (part.slot === 'crown') squishy.crownParts.push(entry);
+        if (part.slot === 'crown' || part.slot === 'ears') {
+          squishy.tuckParts.push({ ...entry, slot: part.slot });
+        }
         if (part.slot === 'eyes' || part.slot === 'mouth') {
           squishy.faceParts.push({ ...entry, slot: part.slot, base: local.clone() });
         }

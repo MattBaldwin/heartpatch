@@ -318,7 +318,7 @@ interface BookDebug {
 test('a home base with no room says why, and Recipe book opens the book and comes home (#537)', async ({
   browser,
 }) => {
-  test.setTimeout(150_000); // two home scene builds and the map between; CI renders in software
+  test.setTimeout(240_000); // two home scene builds (seven buildings) and the map between; CI renders in software
   const page = await newPlayer(browser, uniqueName('full'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -333,7 +333,8 @@ test('a home base with no room says why, and Recipe book opens the book and come
     .toBeGreaterThan(0);
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
-  // Every Ember Den and Cozy Meadow the home base holds (two each), on four ring tiles.
+  // Four Ember Dens and three Cozy Meadows (four each may stand, owner
+  // 2026-10-18): one on every home tile, so a meadow could go up but has no room.
   expect(
     (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 40, stone: 20 } }))
       .status,
@@ -343,30 +344,35 @@ test('a home base with no room says why, and Recipe book opens the book and come
     'GET',
     `/maps/${mapId}/home`,
   );
-  const ring = home.body.tiles.filter((t) => !t.heartSeed);
+  const tiles = [...home.body.tiles].sort((a, b) => Number(b.heartSeed) - Number(a.heartSeed));
+  expect(tiles).toHaveLength(7);
   for (const [i, buildingId] of [
     'ember-den',
     'ember-den',
+    'ember-den',
+    'ember-den',
+    'cozy-meadow',
     'cozy-meadow',
     'cozy-meadow',
   ].entries()) {
-    const tile = ring[i]!;
+    const tile = tiles[i]!;
     expect(await buildAt(page, mapId, { buildingId, q: tile.q, r: tile.r, spot: 1 })).toBeLessThan(
       300,
     );
   }
 
-  // Build: no den or meadow card, and the sheet says why (the owner saw no reason).
+  // Build: no den card, a meadow card with no room, and the sheet says why
+  // (the owner saw no reason).
   await (await trayButton(page, 'home-open')).tap();
   const slow = { timeout: 30_000 };
-  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(4);
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(7);
   const sheet = page.getByTestId('home');
   await sheet.getByTestId('home-build').tap();
   await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();
   await expect(sheet.locator('[data-build="ember-den"]')).toHaveCount(0);
-  await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(0);
+  await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(1);
   await expect(sheet.getByTestId('build-hint')).toHaveText(
-    'Every squishy home is built! Tap Not now, then tap one to upgrade ⬆️',
+    'Your home base is full! Tap Not now, then tap one to upgrade ⬆️',
   );
   const hint = (await sheet.getByTestId('build-hint').boundingBox())!;
   const view = page.viewportSize()!;
