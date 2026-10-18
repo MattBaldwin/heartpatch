@@ -108,6 +108,17 @@ import {
 import { DUSK_LOOK, type HouseLightLook } from './house-light-look.js';
 import { placed, roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
 import { paneMaterial, radialTexture, signMaterial } from './house-textures.js';
+import {
+  createHop,
+  hopActive,
+  hopPose,
+  shadowAlpha,
+  shadowScale,
+  stepHop,
+  type HopPose,
+} from '../explore/keeper-hop.js';
+import { EXPLORE_VIEW } from '../explore/explore-config.js';
+import { HOUSE_WALK, walkMap, type Footprint, type WalkMap, type WalkSpot } from './house-walk.js';
 
 /*
  * The Keeper's house interior (#381 plan §1c): a dollhouse on the shared
@@ -328,6 +339,19 @@ export class HouseScene {
   #houseLight: DirectionalLight | null = null;
   readonly #points: { kind: 'fire' | 'lamp'; light: PointLight }[] = [];
   #flicker = { fire: 1, lamp: 1 };
+  // ── MOCKUP (#381 Keeper walk) ──
+  readonly #furniture: Footprint[] = [];
+  #walkMap: WalkMap | null = null;
+  #keeperHandle: KeeperHandle | null = null;
+  #keeperBase: KeeperPlacement | null = null;
+  #walkAt: WalkSpot | null = null;
+  #walkYaw = 0;
+  readonly #walkHop = createHop();
+  readonly #walkPose: HopPose = { lift: 0, squash: 1 };
+  #walked = 0;
+  readonly #residentAt = new Map<string, SquishyPlacement>();
+  readonly #greeted = new Set<string>();
+  #walkCeiling = true;
   #look: HouseLightLook = DUSK_LOOK;
   #poolMaterial: StandardMaterial | null = null;
   #lawnMaterial: PBRMaterial | null = null;
@@ -561,7 +585,7 @@ export class HouseScene {
       least = least === null ? alpha : Math.min(least, alpha);
     }
     for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
-    for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
+    for (const c of this.#ceilings) c.mesh.setEnabled(this.#walkCeiling && c.room === focus?.id);
     const sign = this.#signAt;
     if (sign?.kidY != null) {
       const y = sign.room === focus?.id ? sign.kidY : sign.y;
@@ -671,7 +695,8 @@ export class HouseScene {
       }
     }
     for (const spot of this.#cast) {
-      const wanted = this.#cut.cast.has(spot.room);
+      // MOCKUP (#381 Keeper walk): the Keeper walks between floors, so the cut never takes it away.
+      const wanted = spot.kind === 'keeper' || this.#cut.cast.has(spot.room);
       if (wanted && !spot.drawn()) spot.add();
       else if (!wanted && spot.drawn()) spot.remove();
     }
@@ -890,6 +915,104 @@ export class HouseScene {
     };
     this.#contact.push(shadow);
     this.#giftShadow = shadow;
+  }
+
+  // ── MOCKUP (#381 Keeper walk): the Keeper walks about the house ──
+
+  /** The floor the Keeper can walk on, built once from the rooms and their furniture. */
+  get walkMap(): WalkMap {
+    this.#walkMap ??= walkMap(this.#boxes, this.#runs, this.#furniture);
+    return this.#walkMap;
+  }
+
+  get rooms(): readonly RoomBox[] {
+    return this.#boxes;
+  }
+
+  /** Where the Keeper stands now (its feet), and which way it faces. */
+  get keeperWalk(): { at: WalkSpot; yaw: number } | null {
+    return this.#walkAt ? { at: { ...this.#walkAt }, yaw: this.#walkYaw } : null;
+  }
+
+  /** The Keeper walked (or was put) here, facing `yaw`; `ds` metres covered for its hop. */
+  moveKeeper(at: WalkSpot, yaw: number, ds: number): void {
+    this.#walkAt = { ...at };
+    this.#walkYaw = yaw;
+    this.#walked += ds;
+    this.#placeKeeper();
+  }
+
+  /**
+   * One walk frame: the Keeper's hop by the ground covered, and the
+   * residents it comes near turn to it and bounce (once each, until it
+   * walks away). True while anything still moves.
+   */
+  stepWalk(dt: number, now: number, reduced: boolean): boolean {
+    // The explore hop counts tile-local ground: the house walks in metres.
+    const scale = HOUSE_WALK.speed / EXPLORE_VIEW.walkSpeed;
+    const walked = dt > 0 ? this.#walked / scale : 0;
+    const push = dt > 0 ? Math.min(1, this.#walked / (HOUSE_WALK.speed * dt)) : 0;
+    this.#walked = 0;
+    stepHop(this.#walkHop, walked, dt, push, reduced);
+    hopPose(this.#walkHop, reduced, 1, this.#walkPose);
+    this.#placeKeeper();
+    this.#greetNear(now);
+    return hopActive(this.#walkHop);
+  }
+
+  /** The room the camera follows the Keeper into: its front walls fade, its ceiling closes in. */
+  setWalkFocus(id: string, point: WalkSpot, ceiling: boolean): void {
+    this.#walkCeiling = ceiling;
+    const b = this.#boxes.find((x) => x.id === id);
+    if (!b) return;
+    this.#focus = {
+      id,
+      room: { minX: b.x0, maxX: b.x1, minY: b.y0, maxY: b.y1, minZ: b.z0, maxZ: b.z1 },
+      point: new Vector3(point.x, point.y + HOUSE_WALK.lookHeight, point.z),
+    };
+  }
+
+  #keeperPlace(): KeeperPlacement | null {
+    const base = this.#keeperBase;
+    const at = this.#walkAt;
+    if (!base || !at) return null;
+    const tall = (this.#keeperHandle?.params.height ?? 1.4) * HOUSE_CAST.keeperScale;
+    const pose = this.#walkPose;
+    return {
+      ...base,
+      x: at.x,
+      z: at.z,
+      y: at.y,
+      yaw: this.#walkYaw,
+      lift: pose.lift * tall,
+      squash: pose.squash,
+      shadow: shadowScale(pose.lift),
+      shadowAlpha: shadowAlpha(pose.lift),
+    };
+  }
+
+  #placeKeeper(): void {
+    const place = this.#keeperPlace();
+    if (this.#keeperHandle && place) this.#keepers.move(this.#keeperHandle, place);
+  }
+
+  #greetNear(now: number): void {
+    const at = this.#walkAt;
+    if (!at) return;
+    for (const [id, place] of this.#residentAt) {
+      const drawn = this.#handles.get(id);
+      if (!drawn) continue;
+      const d = Math.hypot(place.x - at.x, place.z - at.z);
+      const near = d < 1.6 && Math.abs((place.y ?? 0) - at.y) < 0.5; // TUNE
+      if (near && !this.#greeted.has(id)) {
+        this.#greeted.add(id);
+        drawn.field.move(drawn.handle, { ...place, yaw: faceYaw(at.x - place.x, at.z - place.z) });
+        drawn.field.play(drawn.handle, 'bounce', now);
+      } else if (!near && d > 2.4 && this.#greeted.has(id)) {
+        this.#greeted.delete(id);
+        drawn.field.move(drawn.handle, place);
+      }
+    }
   }
 
   get stats(): HouseSceneStats {
@@ -1115,12 +1238,28 @@ export class HouseScene {
       scene,
       box: parts.box,
       tier: this.#tier,
-      solid: (list) => parts.solid.push(...list),
+      solid: (list) => {
+        for (const m of list) {
+          m.computeWorldMatrix(true);
+          const { minimumWorld: lo, maximumWorld: hi } = m.getBoundingInfo().boundingBox;
+          this.#furniture.push({ x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z, y0: lo.y, y1: hi.y });
+        }
+        parts.solid.push(...list);
+      },
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {
         const own = this.#roomBeds.get(parts.box.id) ?? [];
         own.push({ x, z, yaw });
         this.#roomBeds.set(parts.box.id, own);
+        const [hx, hz] = Math.abs(Math.sin(yaw)) > 0.7 ? [0.55, 0.75] : [0.75, 0.55];
+        this.#furniture.push({
+          x0: x - hx,
+          x1: x + hx,
+          z0: z - hz,
+          z1: z + hz,
+          y0: parts.box.y0,
+          y1: parts.box.y0 + 0.6,
+        });
         this.#beds.push({
           matrix: Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)),
           floor,
@@ -1785,6 +1924,7 @@ export class HouseScene {
               const handle = field.add(member.species, resident.squishyId, placement);
               field.setAccessory(handle, accessoryItem(member.accessory));
               this.#handles.set(resident.squishyId, { field, handle });
+              this.#residentAt.set(resident.squishyId, placement);
               return () => {
                 field.remove(handle);
                 this.#handles.delete(resident.squishyId);
@@ -1816,13 +1956,22 @@ export class HouseScene {
       lean: HOUSE_CAST.keeperLean,
     };
     const items = keeperItems(options.keeperWearing ?? []);
+    this.#keeperBase = placement;
+    this.#walkAt = { x: spot.x, z: spot.z, y: box.y0 };
+    this.#walkYaw = placement.yaw ?? 0;
     this.#cast.push(
       this.#castSpot(
         keeperRoom.id,
         () => {
-          const handle: KeeperHandle = this.#keepers.add(config, placement, items);
+          const handle: KeeperHandle = this.#keepers.add(
+            config,
+            this.#keeperPlace() ?? placement,
+            items,
+          );
+          this.#keeperHandle = handle;
           return () => {
             this.#keepers.remove(handle);
+            this.#keeperHandle = null;
           };
         },
         'keeper',

@@ -101,7 +101,9 @@ declare global {
       care?(): CareDebug | null;
       /** The close-up view (#20): phase, detail, the squishy's screen spot, care sent and held, or null. */
       closeUp?(): CloseUpDebug | null;
-      house?(): HouseDebug | null;
+      /** MOCKUP (#381 Keeper walk). */
+    walkPut?(at: { x: number; z: number; y: number }, yaw: number): void;
+    house?(): HouseDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */

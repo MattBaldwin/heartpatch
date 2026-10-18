@@ -1218,3 +1218,36 @@
     max-width: 480px;
   }
 }
+
+/* MOCKUP (#381 Keeper walk): the joystick, bottom left in walk mode; it jumps to where a drag starts. */
+.house-stick {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 20px);
+  bottom: calc(env(safe-area-inset-bottom) + max(96px, var(--house-peek-clear, 0px)));
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 28%);
+  border: 3px solid rgb(255 255 255 / 70%);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  pointer-events: none;
+}
+
+.house-stick[style*='top'] {
+  bottom: auto;
+}
+
+.house-stick-knob {
+  position: absolute;
+  left: 30px;
+  top: 30px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(74 49 80 / 25%);
+}
+
+.house-stick-on {
+  background: rgb(255 255 255 / 40%);
+}

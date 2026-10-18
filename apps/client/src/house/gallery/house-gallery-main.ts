@@ -158,6 +158,12 @@ const house = createHouseScreen({
 });
 house.setUser({ id: '0190a000-0000-7000-8000-00000000aaaa', username: 'Mia' });
 
+// MOCKUP (#381 Keeper walk): the ?fps=1 badge, as main.ts shows it.
+if (params.get('fps') === '1') {
+  const { mountDevOverlay } = await import('../../engine/dev-overlay.js');
+  mountDevOverlay(() => stage);
+}
+
 window.__heartpatch = {
   renderer: () => stage?.renderer.kind ?? null,
   quality: () => stage?.quality.snapshot ?? null,
@@ -166,6 +172,8 @@ window.__heartpatch = {
   idle: () => stage?.idle ?? false,
   invalidate: () => stage?.invalidate(),
   house: () => house.debug,
+  // MOCKUP (#381 Keeper walk): put the Keeper on a spot for the shots.
+  walkPut: (at: { x: number; z: number; y: number }, yaw: number) => { house.walkPut(at, yaw); },
 };
 
 await boot(canvas, {
