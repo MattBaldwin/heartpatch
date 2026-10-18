@@ -348,6 +348,8 @@ export const HOUSE_WALK = {
   porchBack: HOUSE_KID.minStandBack,
   /** The camera keeps this far from furniture across the floor (the low tier's Kitchen table), metres. */
   nearClear: 0.45, // TUNE
+  /** ...if it stands at least this tall, metres (a toy on the floor stays out of its view). */
+  nearTall: 0.5, // TUNE
   /** How finely the camera is drawn in toward the Keeper to clear furniture, metres. */
   nearStep: 0.1, // TUNE
   /** Horizontal view angle, degrees; a tall phone's vertical one is capped at `maxFov`. */
@@ -357,6 +359,16 @@ export const HOUSE_WALK = {
   lag: 0.28, // TUNE
   /** Where a Keeper put into a room stands, as shares of its walkable width and depth. */
   start: [0.5, 0.5], // TUNE
+  /** A tap-walk is there within this, metres (#381 W2). */
+  arrive: 0.05, // TUNE
+  /** ...and gives up after getting no nearer for this long (a bed in the way), seconds. */
+  giveUp: 0.4, // TUNE
+  /** A tap this near the Keeper's middle in the dollhouse walks in with it, CSS px (a 44 pt target or more). */
+  tapRadius: 40, // TUNE
+  /** The follow camera counts as caught up within this (its eye and look summed), metres: nothing more to draw. */
+  settled: 0.004, // TUNE
+  /** The share of a resident's framing reach the follow camera keeps out from in front of the Keeper (its body). */
+  blockerShare: 0.85, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */

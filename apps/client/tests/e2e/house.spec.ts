@@ -30,6 +30,12 @@ interface HouseDebug {
   rooms: number;
   pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
   zoom: number;
+  walk: {
+    room: string | null;
+    at: { x: number; y: number; z: number };
+    stick: boolean;
+    walkingTo: boolean;
+  } | null;
   scene: {
     rooms: number;
     keeper: boolean;
@@ -112,7 +118,8 @@ test('enter the house from home, walk in and step out, and go back home', async 
   // One floor: no Upstairs switch.
   await expect(page.getByTestId('house-floor')).toBeHidden();
 
-  // Walk in: down to kid height; the front wall in the way fades, then is gone.
+  // Walk in (#381 W2): the camera glides down behind the Keeper; the front
+  // wall in the way fades, then is gone.
   const walk = page.getByTestId('house-walk');
   await expect(walk).toHaveText('👣 Walk in');
   await expectRoomyLabels(page, '[data-testid="house-walk"]');
@@ -125,8 +132,25 @@ test('enter the house from home, walk in and step out, and go back home', async 
   // (alpha 0, not drawn): no veil, no seams through the squishies.
   expect(inside.scene!.frontWallAlpha).toBe(0);
   await expect(walk).toHaveText('🚪 Step out');
+  expect(inside.walk).toMatchObject({ room: 'snug', stick: false, walkingTo: false });
 
-  // Step out: back up to the dollhouse, its front open again.
+  // A drag anywhere is the joystick: up walks the Keeper in, away from the camera.
+  const stick = page.getByTestId('house-stick');
+  await expect(stick).toBeVisible();
+  const from = inside.walk!.at;
+  const vw = page.viewportSize()!;
+  await page.mouse.move(vw.width * 0.5, vw.height * 0.5);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i += 1) await page.mouse.move(vw.width * 0.5, vw.height * 0.5 - i * 10);
+  await expect.poll(async () => (await houseState(page))?.walk?.stick, slow).toBe(true);
+  await expect
+    .poll(async () => (await houseState(page))!.walk!.at.z - from.z, slow)
+    .toBeGreaterThan(0.2);
+  await page.mouse.up();
+  await expect.poll(async () => (await houseState(page))?.walk?.stick, slow).toBe(false);
+  const walked = (await houseState(page))!.walk!.at;
+
+  // Step out: back up to the dollhouse, its front open again; the Keeper stays where it was left.
   await walk.tap();
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
   const out = (await houseState(page))!;
@@ -134,6 +158,15 @@ test('enter the house from home, walk in and step out, and go back home', async 
   expect(out.scene!.pitch).toBeGreaterThanOrEqual(40);
   expect(out.scene!.frontWallAlpha).toBeNull();
   await expect(walk).toHaveText('👣 Walk in');
+  await expect(stick).toBeHidden();
+  // Walk in again: the camera finds the Keeper where it was left.
+  await walk.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('kid');
+  const again = (await houseState(page))!.walk!.at;
+  expect(again.x).toBeCloseTo(walked.x, 3);
+  expect(again.z).toBeCloseTo(walked.z, 3);
+  await walk.tap();
+  await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
 
   await page.getByTestId('house-back').tap();
   await expect(page.getByTestId('house')).toBeHidden();

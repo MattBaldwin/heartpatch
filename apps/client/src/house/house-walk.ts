@@ -323,8 +323,10 @@ export function followTurn(yaw: number): number {
  * The follow camera, written into `out`: behind the Keeper, turned with it
  * (`followTurn`), never standing in another room. It's drawn in toward the
  * Keeper along its own heading until it's inside `room` (or on the porch
- * for a front room), under its ceiling and clear of furniture; squeezed
- * like that, it climbs and looks down at the Keeper instead of past it.
+ * for a front room), under its ceiling and clear of furniture, and until no
+ * resident in `around` stands between it and the Keeper (#381 W2: in the
+ * Playroom one hid it); squeezed like that, it climbs and looks down at the
+ * Keeper instead of past it.
  */
 export function followPose(
   out: FollowPose,
@@ -333,6 +335,7 @@ export function followPose(
   yaw: number,
   room: RoomBox,
   aspect: number,
+  around: readonly WalkBlocker[] = [],
 ): FollowPose {
   const W = HOUSE_WALK;
   const turn = followTurn(yaw);
@@ -349,9 +352,11 @@ export function followPose(
   // Clear of furniture standing up into the camera's way (the low tier's
   // Kitchen table filled the frame's corner).
   while (d > 0 && nearFurniture(map, at.x - dx * d, at.z - dz * d, at.y)) d -= W.nearStep;
+  // Drawn in (and so up) until the residents are out of the way.
+  while (d > 0 && hidden(at, dx, dz, d, eyeAt(at, d, room), around)) d -= W.nearStep;
   d = Math.max(0, d);
   const squeeze = 1 - d / W.back;
-  const eyeY = Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
+  const eyeY = eyeAt(at, d, room);
   out.eye.x = at.x - dx * d;
   out.eye.y = eyeY;
   out.eye.z = at.z - dz * d;
@@ -368,11 +373,71 @@ export function followPose(
   return out;
 }
 
-/** Furniture standing up from the Keeper's floor within `nearClear` of (x, z). */
+/** Something round the camera should keep from standing in front of the Keeper (a resident). */
+export interface WalkBlocker {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** How far it reaches from its middle, metres. */
+  readonly r: number;
+}
+
+/** The camera's eye height `d` behind the Keeper: higher the more it's squeezed, under the ceiling. */
+function eyeAt(at: WalkSpot, d: number, room: RoomBox): number {
+  const W = HOUSE_WALK;
+  const squeeze = 1 - Math.max(0, d) / W.back;
+  return Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
+}
+
+/**
+ * A blocker standing across the line from the camera (`d` back along the
+ * heading, at `eyeY`) to the Keeper's chest: the Keeper would be hidden.
+ */
+function hidden(
+  at: WalkSpot,
+  dx: number,
+  dz: number,
+  d: number,
+  eyeY: number,
+  around: readonly WalkBlocker[],
+): boolean {
+  const ex = at.x - dx * d;
+  const ez = at.z - dz * d;
+  const sx = at.x - ex;
+  const sy = at.y + HOUSE_WALK.lookHeight - eyeY;
+  const sz = at.z - ez;
+  const ss = sx * sx + sy * sy + sz * sz;
+  if (ss <= 0) return false;
+  const cy = at.y + HOUSE_WALK.lookHeight;
+  for (const b of around) {
+    // One the Keeper stands in (it walks through them, W4) hides it from everywhere: never mind it.
+    const kx = at.x - b.x;
+    const ky = cy - b.y;
+    const kz = at.z - b.z;
+    if (kx * kx + ky * ky + kz * kz < b.r * b.r) continue;
+    // Its nearest point on the line, short of the Keeper itself.
+    const t = Math.min(
+      1,
+      Math.max(0, ((b.x - ex) * sx + (b.y - eyeY) * sy + (b.z - ez) * sz) / ss),
+    );
+    if (t >= 1) continue;
+    const px = ex + sx * t - b.x;
+    const py = eyeY + sy * t - b.y;
+    const pz = ez + sz * t - b.z;
+    if (px * px + py * py + pz * pz < b.r * b.r) return true;
+  }
+  return false;
+}
+
+/**
+ * Furniture standing up from the Keeper's floor within `nearClear` of (x, z),
+ * tall enough to reach into the camera's view (#381 W2: a toy by the Snug's
+ * front drew it in and tipped it down 30°).
+ */
 function nearFurniture(map: WalkMap, x: number, z: number, y: number): boolean {
   const c = HOUSE_WALK.nearClear;
   for (const f of map.blocks) {
-    if (f.y1 < y + HOUSE_WALK.stepOver || f.y0 > y + HOUSE_WALK.eyeHeight) continue;
+    if (f.y1 < y + HOUSE_WALK.nearTall || f.y0 > y + HOUSE_WALK.eyeHeight) continue;
     if (near(x, z, f, c)) return true;
   }
   return false;

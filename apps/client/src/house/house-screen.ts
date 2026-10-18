@@ -43,12 +43,12 @@ import {
   clampZoom,
   entryGlide,
   glidePose,
-  kidPose,
   pinchedOut,
   pinchZoom,
   residentBoxes,
   project,
   roofAt,
+  screenToFloor,
   walkedIn,
   walkZoom,
   type HousePose,
@@ -61,8 +61,23 @@ import {
   HOUSE_GIFT,
   HOUSE_LOOK_EVERY_MS,
   HOUSE_SHEET,
+  HOUSE_WALK,
   HOUSE_WELCOME,
 } from './house-config.js';
+import type { RoomBox } from './house-layout.js';
+import {
+  copyPose,
+  createFollowPose,
+  easePose,
+  floorAt,
+  followPose,
+  roomAt,
+  slideStep,
+  startSpot,
+  type WalkBlocker,
+  type WalkSpot,
+} from './house-walk.js';
+import { keeperTapped, stepToward, stickToFloor, type FloorStep } from './house-walk-input.js';
 import { createOpenGate } from './house-open-gate.js';
 import {
   frameKey,
@@ -81,6 +96,9 @@ import {
   WELCOME_TEXT,
 } from './house-view.js';
 import { careApi, type CareApi } from '../care/care-api.js';
+import { EXPLORE_VIEW } from '../explore/explore-config.js';
+import { joystickVector } from '../explore/explore-view.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import type { Portraits } from '../procedural/portraits.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { mergeRoster, type RosterRow } from '../squishies/roster/roster-view.js';
@@ -184,6 +202,19 @@ export interface HouseDebug {
   /** `glide` while the roof lifts off, `walk` while Walk in or Step out moves, else `dollhouse` or `kid`. */
   readonly pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
   readonly zoom: number;
+  /**
+   * The Keeper's walk (#381 W2): where it stands and its room, which way it
+   * faces, the stick held or a tapped spot it's walking to, and the follow
+   * camera's eye.
+   */
+  readonly walk: {
+    readonly room: string | null;
+    readonly at: { readonly x: number; readonly y: number; readonly z: number };
+    readonly yaw: number;
+    readonly stick: boolean;
+    readonly walkingTo: boolean;
+    readonly eye: { readonly x: number; readonly y: number; readonly z: number } | null;
+  } | null;
   readonly scene: HouseSceneStats | null;
   /** Residents whose faces the camera sees, of those drawn. */
   readonly faces: { visible: number; total: number } | null;
@@ -214,6 +245,13 @@ export interface HouseDebug {
    * build's reply wins.
    */
   readonly reread: () => void;
+  /**
+   * Puts the Keeper in a room (where `startSpot` stands it), as a doorway
+   * it can't pass yet would (the Hall at level 4, W3). Dev hook only: e2e
+   * and the shots walk in other rooms. `on` picks the spot (else where
+   * `startSpot` stands it). False: no such room, or no floor free there.
+   */
+  readonly putKeeper: (roomId: string, on?: { x: number; z: number }) => boolean;
 }
 
 export interface HouseScreen {
@@ -276,14 +314,49 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     },
   });
   let glide: { shot: CinematicShot; start: number | null } | null = null;
-  /** Kid height in the focus room, for the screen as it is now. */
-  let kid: HousePose | null = null;
-  /** 0 the dollhouse, 1 kid height. */
+  /** 0 the dollhouse, 1 kid height: walked in, the camera following the Keeper. */
   let zoom = 0;
   /** The floor the dollhouse shows (kid height walks in on the ground floor). */
   let floor = 0;
   /** Walk in or Step out under way: from where, to where, since when (ms). */
   let walk: { from: number; goal: number; start: number | null } | null = null;
+  // ── The Keeper's walk (#381 W2) ──
+  // Walked in, the camera follows the Keeper (house-walk.ts `followPose`)
+  // and a drag anywhere is a joystick, or a tap on the floor walks there.
+  // Everything here is updated in place: a walk frame allocates nothing.
+  /** Where the Keeper stands (a copy of the scene's, moved by the walk), and which way it faces. */
+  const walkAt: WalkSpot = { x: 0, z: 0, y: 0 };
+  let walkYaw = Math.PI;
+  /** The Keeper's room; kept while it's in a doorway (no room). */
+  let walkRoom: RoomBox | null = null;
+  /** Where the follow camera wants to be, and where it is (easing after it). */
+  const walkGoal = createFollowPose();
+  const walkCam = createFollowPose();
+  /** The follow camera is set for this scene and screen (false: work it out afresh). */
+  let walkReady = false;
+  /** The last walk frame (ms), or null: the next one starts from rest. */
+  let walkLast: number | null = null;
+  /** The residents the camera keeps from standing in front of the Keeper, read as it walks in. */
+  let walkAround: readonly WalkBlocker[] = [];
+  /** A one-finger press while walked in: where it landed, and whether it moved past a tap. */
+  let press: { id: number; x: number; y: number; moved: boolean } | null = null;
+  /** The joystick: where the drag steers from, and the finger. */
+  let stick: { x0: number; y0: number; x: number; y: number } | null = null;
+  /** A tapped spot on the floor the Keeper walks to, the nearest it has got, and for how long no nearer. */
+  let walkTo: FloorStep | null = null;
+  let walkBest = Infinity;
+  let walkStall = 0;
+  /** Scratch for a walk frame's step. */
+  const push: FloorStep = { x: 0, z: 0 };
+  const stride: FloorStep = { x: 0, z: 0 };
+  /** Where the Keeper was left (a rebuild for a new tier or a new room puts it back there). */
+  const keptAt: WalkSpot = { x: 0, z: 0, y: 0 };
+  let keptYaw = 0;
+  let kept = false;
+  /** The last walk frame moved something (a finger resting on the stick draws nothing). */
+  let walkChanged = false;
+  /** Something asked for a frame (`draw`), not just the walk reading a held stick. */
+  let asked = false;
   let frame = 0;
   let sheet: HouseSheet = 'peek';
   /** The sheet's status line: the build's ta-da, or a kind word on a problem. */
@@ -398,6 +471,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     class: 'house-walk',
     'data-testid': 'house-walk',
   });
+  // The joystick (#381 W2), bottom left while walked in, as explore's: a drag
+  // anywhere steers from where it landed, one on the ring from its middle.
+  const stickBase = el('div', {
+    class: 'house-stick',
+    'aria-hidden': 'true',
+    'data-testid': 'house-stick',
+  });
+  const stickKnob = el('div', { class: 'house-stick-knob' });
+  stickBase.append(stickKnob);
   // B4 floor switch: shown when the house has more than one floor, in the dollhouse.
   const floorButton = el('button', {
     type: 'button',
@@ -461,6 +543,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     'div',
     { class: 'house', 'data-testid': 'house', role: 'dialog', 'aria-label': HOUSE_TEXT.yourHouse },
     touch,
+    stickBase,
     top,
     walkButton,
     floorButton,
@@ -523,10 +606,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   });
   // The button alternative to the pinch (style guide §3.3).
   walkButton.addEventListener('click', () => {
-    skipGlide();
-    walk = { from: zoom, goal: walkedIn(zoom) ? 0 : 1, start: null };
-    renderWalk();
-    draw();
+    walkInOut();
   });
 
   floorButton.addEventListener('click', () => {
@@ -550,6 +630,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     moreRight.hidden = !dollhouse || panner.pan >= panner.limits.max - 0.05;
     const floors = scene3d?.floors ?? [];
     floorButton.hidden = floors.length < 2 || !dollhouse;
+    // The joystick shows once walked in, the sheet folded (it's the bottom left's then).
+    stickBase.hidden = !walkingNow() || sheet !== 'peek';
     const up = floor === 0;
     if (floorButton.dataset['up'] === String(up)) return;
     floorButton.dataset['up'] = String(up);
@@ -584,6 +666,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     overlay.hidden = !isOpen;
     if (!isOpen || !view) return;
     top.style.top = `${String(Math.max(0, options.coveredTop?.() ?? 0))}px`;
+    // The `?fps=1` stats badge keeps below the Back button and the room pill (#381 W2, house.css).
+    document.documentElement.style.setProperty(
+      '--house-top-clear',
+      `${String(Math.round(top.getBoundingClientRect().bottom))}px`,
+    );
     pill.textContent = HOUSE_TEXT.pill(view.level);
     peekText.textContent = peekLine(view);
     const line = giftPeek(wrappedGift(view), (id) => names.get(id) ?? null);
@@ -598,6 +685,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (next === sheet || !isOpen) return;
     const from = sheet;
     sheet = next;
+    // A page over the house lets go of the walk.
+    if (next !== 'peek') dropWalkInput();
     note = '';
     movedRoom = null;
     focusNext = focusFor(from, next);
@@ -819,7 +908,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function giftOnScreen(): { x: number; y: number } | null {
     const at = scene3d?.giftPoint ?? null;
     if (!at || !base || glide) return null;
-    const pose = kid ? blend(base, kid, zoom) : base;
+    const pose = posed(base);
     const vp = viewport();
     if (vp.width <= 0 || vp.height <= 0) return null;
     const p = project(pose, vp.width / vp.height, at);
@@ -1210,7 +1299,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     sparkles += 1;
     // Over the new room as the camera sees it, above the folded sheet.
     const room = view?.rooms.find((r) => r.level === view?.level) ?? null;
-    const pose = base ? (kid ? blend(base, kid, zoom) : base) : null;
+    const pose = base ? posed(base) : null;
     sparkle(overlay, sparkleSpot(pose, room ? roomBox(room) : null, viewport()), false);
   }
 
@@ -1256,17 +1345,27 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       if (zoom === walk.goal) walk = null;
       renderWalk();
     }
-    return kid ? blend(base, kid, zoom) : base;
+    return posed(base);
+  }
+
+  /** The dollhouse pose `doll` blended toward the follow camera by the zoom (the dollhouse itself at 0). */
+  function posed(doll: HousePose): HousePose {
+    const s = scene3d;
+    if (zoom <= 0 || !s) return doll;
+    return blend(doll, followCam(s), zoom);
   }
 
   /** Puts the camera where it is now and draws; keeps drawing while the glide plays. */
   function draw(): void {
+    asked = true;
     if (frame !== 0) return;
     frame = requestAnimationFrame(step);
   }
 
   function step(now: number): void {
     frame = 0;
+    const wasAsked = asked;
+    asked = false;
     const s = scene3d;
     if (!s || !isOpen) return;
     // The governor stepped the tier: rebuild the house for it (lights, shadows, detail).
@@ -1274,16 +1373,27 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       options.showScene(build);
       return;
     }
-    // Kid height walks into the Keeper's room, on the ground floor.
-    if (floor !== 0 && (zoom > 0 || walk?.goal === 1)) {
-      floor = 0;
-      s.setFloor(0);
-      fit(s);
+    // Walking in shows the Keeper's floor, wherever it was left (W3 makes
+    // the cut follow it up and down the stairs).
+    if (zoom > 0 || walk?.goal === 1) {
+      const at = keeperFloor(s);
+      if (floor !== at) {
+        floor = at;
+        s.setFloor(at);
+        fit(s);
+      }
     }
     const slid = panner.step();
     if (slid) showPan(slid);
+    const walking = stepWalk(s, now);
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
+    // Stepped all the way out: the dollhouse frames the Keeper's first room again.
+    if (zoom <= 0 && !walk && !pinch && walkReady) {
+      walkReady = false;
+      s.setWalkFocus(null);
+      fit(s);
+    }
     renderFloor();
     // Welcome home's hop, once the roof is off.
     if (hopPending && !glide) {
@@ -1294,8 +1404,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       }
     }
     const moving = s.update(now);
-    options.invalidate();
+    walkChanged ||= Boolean(slid);
+    // Only a change draws: a finger resting on the stick, or pushing the
+    // Keeper into a wall, moves nothing.
+    if (wasAsked || glide || walk || moving || walkChanged) options.invalidate();
+    walkChanged = false;
     if (glide || walk || moving) draw();
+    else if (walking && frame === 0) frame = requestAnimationFrame(step);
   }
 
   /** The fire flickers on a slow timer on medium and high (never on low, nor with reduced motion). */
@@ -1370,12 +1485,15 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   }
   window.addEventListener('resize', refit);
 
-  /** The dollhouse and kid-height poses for the screen as it is now. */
+  /** The dollhouse pose for the screen as it is now (the follow camera is worked out afresh). */
   function fit(s: HouseScene): void {
     // B4: a tall phone fits the Keeper's room and drags sideways to the rest.
     showPan(panner.fit());
-    const room = s.focusRoom;
-    kid = room ? kidPose(room, viewport()) : null;
+    if (walkReady) {
+      // A turn or a resize mid-walk: the camera jumps to its new frame.
+      followGoal(s);
+      copyPose(walkCam, walkGoal);
+    }
   }
 
   /** The dollhouse where the drag has slid it, the chevrons clear of every resident's face. */
@@ -1393,6 +1511,234 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     draw();
   }
 
+  // ── The Keeper's walk (#381 W2) ───────────────────────────────────────
+
+  /** Walked all the way in and settled: the stick and floor taps walk the Keeper. */
+  const walkingNow = (): boolean => zoom >= 1 && !walk && !pinch && !glide;
+
+  /** The Keeper's room, or the one it was last in (a doorway is no room), or the first. */
+  function keeperRoom(s: HouseScene): RoomBox | null {
+    const map = s.walkMap;
+    walkRoom = roomAt(map, walkAt) ?? walkRoom ?? map.rooms[0] ?? null;
+    return walkRoom;
+  }
+
+  /** The floor the Keeper stands on (its room's). */
+  function keeperFloor(s: HouseScene): number {
+    if (!walkReady) syncKeeper(s);
+    return keeperRoom(s)?.floor ?? 0;
+  }
+
+  /** Takes the scene's Keeper as the walk's (it's where the scene put it, or where it was left). */
+  function syncKeeper(s: HouseScene): void {
+    const at = s.keeperSpot;
+    walkAt.x = at.x;
+    walkAt.z = at.z;
+    walkAt.y = at.y;
+    walkYaw = s.keeperYaw;
+    walkRoom = null;
+  }
+
+  /** Where the follow camera wants to be now, into `walkGoal`; the room's front walls fade toward the Keeper. */
+  function followGoal(s: HouseScene): void {
+    const room = keeperRoom(s);
+    if (!room) return;
+    const vp = viewport();
+    const aspect = vp.width / Math.max(1, vp.height);
+    followPose(walkGoal, s.walkMap, walkAt, walkYaw, room, aspect, walkAround);
+    s.setWalkFocus(room);
+  }
+
+  /**
+   * The follow camera, the pose Walk in (or a pinch) glides into: on the
+   * first ask after the dollhouse it's worked out where the Keeper stands,
+   * so the glide lands right behind it.
+   */
+  function followCam(s: HouseScene): HousePose {
+    if (!walkReady) {
+      syncKeeper(s);
+      // Read once per walk in: the residents stand by their beds. Their
+      // framing reach is generous (ears, spikes, room round them): the
+      // camera minds only their bodies.
+      walkAround = s.residentSpots.map((r) => ({ ...r, r: r.r * HOUSE_WALK.blockerShare }));
+      followGoal(s);
+      copyPose(walkCam, walkGoal);
+      walkReady = true;
+    }
+    return walkCam;
+  }
+
+  /**
+   * One walk frame: the stick or a tapped spot moves the Keeper (sliding
+   * along walls and round furniture), it hops as it goes, and the camera
+   * eases after it. True: keep drawing. Standing still, nothing runs.
+   */
+  function stepWalk(s: HouseScene, now: number): boolean {
+    if (!walkReady) {
+      walkLast = null;
+      return false;
+    }
+    // Only walked all the way in do the stick and taps walk; a hop under way still lands.
+    const input = walkingNow();
+    const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - (walkLast ?? now)) / 1000));
+    walkLast = now;
+    const map = s.walkMap;
+    const step = HOUSE_WALK.speed * dt;
+    let walking = false;
+    let moved = false;
+    let yaw = walkYaw;
+    if (input && stick) {
+      const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
+      push.x = v.x;
+      push.z = v.z;
+      if (push.x !== 0 || push.z !== 0) {
+        stickToFloor(stride, push, walkCam);
+        moved = slideStep(map, walkAt, stride.x * step, stride.z * step);
+        // Faces the way the stick points, even pressed against a wall.
+        yaw = faceYaw(stride.x, stride.z);
+      }
+      walking = true; // keep reading the stick while it's held
+    } else if (input && walkTo) {
+      if (stepToward(stride, walkAt, walkTo, step)) {
+        moved = slideStep(map, walkAt, stride.x, stride.z);
+        if (moved) yaw = faceYaw(stride.x, stride.z);
+      }
+      const left = Math.hypot(walkTo.x - walkAt.x, walkTo.z - walkAt.z);
+      // Sliding round a bed is progress; going nowhere for a moment is not.
+      if (left < walkBest - 1e-3) {
+        walkBest = left;
+        walkStall = 0;
+      } else {
+        walkStall += dt;
+      }
+      if (left <= HOUSE_WALK.arrive || walkStall > HOUSE_WALK.giveUp) walkTo = null;
+      else walking = true;
+    }
+    const turned = yaw !== walkYaw;
+    if (moved || turned) {
+      walkYaw = yaw;
+      s.moveKeeper(walkAt, yaw);
+      keep(walkAt, yaw);
+      followGoal(s);
+    }
+    easePose(walkCam, walkGoal, dt);
+    const easing =
+      Math.abs(walkCam.eye.x - walkGoal.eye.x) +
+        Math.abs(walkCam.eye.y - walkGoal.eye.y) +
+        Math.abs(walkCam.eye.z - walkGoal.eye.z) +
+        Math.abs(walkCam.target.x - walkGoal.target.x) +
+        Math.abs(walkCam.target.z - walkGoal.target.z) >
+      HOUSE_WALK.settled;
+    // Settled: land on the goal exactly, so the next frame has nothing to do.
+    if (!easing) copyPose(walkCam, walkGoal);
+    const hopping = s.stepWalk(dt, reducedMotion.matches);
+    walkChanged = moved || turned || easing || hopping;
+    const busy = walking || walkChanged;
+    if (!busy) walkLast = null;
+    return busy;
+  }
+
+  /** Remembers where the Keeper was left. */
+  function keep(at: Readonly<WalkSpot>, yaw: number): void {
+    keptAt.x = at.x;
+    keptAt.z = at.z;
+    keptAt.y = at.y;
+    keptYaw = yaw;
+    kept = true;
+  }
+
+  /** The knob follows the drag inside the joystick's ring. */
+  function showStick(): void {
+    stickBase.classList.toggle('house-stick-on', stick !== null);
+    if (!stick) {
+      stickKnob.style.transform = '';
+      return;
+    }
+    const r = EXPLORE_VIEW.joystick.radius;
+    const dx = stick.x - stick.x0;
+    const dy = stick.y - stick.y0;
+    const d = Math.hypot(dx, dy);
+    const k = d > r ? r / d : 1;
+    stickKnob.style.transform = `translate(${String(dx * k)}px, ${String(dy * k)}px)`;
+  }
+
+  /** Where a drag steers from: the joystick's middle if it landed on the ring, else where it landed. */
+  function stickOrigin(x: number, y: number): { x: number; y: number } {
+    const ring = stickBase.getBoundingClientRect();
+    const cx = ring.left + ring.width / 2;
+    const cy = ring.top + ring.height / 2;
+    const r = ring.width / 2;
+    return !stickBase.hidden && (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+      ? { x: cx, y: cy }
+      : { x, y };
+  }
+
+  /** Lets go of the stick and any tapped spot (a pinch, Step out, a page over the house). */
+  function dropWalkInput(): void {
+    press = null;
+    stick = null;
+    walkTo = null;
+    showStick();
+  }
+
+  /** Walk in, or Step out (the button, or a tap on the Keeper). */
+  function walkInOut(): void {
+    skipGlide();
+    dropWalkInput();
+    walk = { from: zoom, goal: walkedIn(zoom) ? 0 : 1, start: null };
+    renderWalk();
+    draw();
+  }
+
+  /** A tap on the Keeper in the dollhouse (CSS px from the screen's top left). */
+  function keeperHit(x: number, y: number): boolean {
+    const s = scene3d;
+    if (!s || !base || glide || zoom > 0 || walk || s.keeperHeight <= 0) return false;
+    const box = overlay.getBoundingClientRect();
+    const vp = { width: box.width, height: box.height };
+    return keeperTapped(base, vp, s.keeperSpot, s.keeperHeight, x - box.left, y - box.top);
+  }
+
+  /** A tap on the floor while walked in: the Keeper walks there (it stops at a wall or a bed). */
+  function tapFloor(x: number, y: number): boolean {
+    if (!walkingNow() || !walkReady) return false;
+    const box = overlay.getBoundingClientRect();
+    const vp = { width: box.width, height: box.height };
+    const at = screenToFloor(walkCam, x - box.left, y - box.top, vp, walkAt.y);
+    if (!at) return false;
+    walkTo = { x: at.x, z: at.z };
+    walkBest = Infinity;
+    walkStall = 0;
+    draw();
+    return true;
+  }
+
+  /** Dev hook: the Keeper put in a room (or on a spot in it), as the walk would leave it there. */
+  function putKeeper(roomId: string, on?: { x: number; z: number }): boolean {
+    const s = scene3d;
+    const room = s?.walkMap.rooms.find((r) => r.id === roomId);
+    const map = s?.walkMap;
+    const y = room && map && on ? floorAt(map, on.x, on.z, room.y0) : NaN;
+    const spot =
+      room && map
+        ? on
+          ? Number.isNaN(y)
+            ? null
+            : { x: on.x, z: on.z, y }
+          : startSpot(map, room)
+        : null;
+    if (!s || !spot) return false;
+    s.moveKeeper(spot, Math.PI);
+    keep(spot, Math.PI);
+    syncKeeper(s);
+    if (walkReady) {
+      followGoal(s);
+      copyPose(walkCam, walkGoal);
+    }
+    draw();
+    return true;
+  }
+
   // ── Gestures ──────────────────────────────────────────────────────────
   // The touch layer covers the canvas, so the stage's map camera never sees
   // a finger: one finger taps (skips the glide), two pinch the zoom.
@@ -1402,6 +1748,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     skipGlide();
     // A tap on the gift box opens its card (the peek bar's line does too).
     if (giftHit(x, y)) setSheet('gift');
+    // On the Keeper in the dollhouse: walk in with it (Walk in does too).
+    else if (keeperHit(x, y)) walkInOut();
+    // Walked in, on the floor: the Keeper walks there.
+    else if (!press?.moved) tapFloor(x, y);
   });
   const spread = () => {
     const [a, b] = [...pointers.values()];
@@ -1418,7 +1768,21 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
     panner.down(e.clientX, e.pointerId);
+    // Walked in, one finger walks: a press on the ring steers at once.
+    if (pointers.size === 1 && walkingNow()) {
+      press = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      const origin = stickOrigin(e.clientX, e.clientY);
+      if (origin.x !== e.clientX || origin.y !== e.clientY) {
+        press.moved = true;
+        stick = { x0: origin.x, y0: origin.y, x: e.clientX, y: e.clientY };
+        walkTo = null;
+        showStick();
+        draw();
+      }
+    }
     if (pointers.size === 2) {
+      // Two fingers pinch: the walk lets go.
+      dropWalkInput();
       skipGlide();
       walk = null;
       pinch = { spread: spread(), zoom };
@@ -1435,6 +1799,20 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       draw();
     }
     taps.pointerMove(sample(e));
+    // A drag past a tap's slop is the joystick, steering from where it landed.
+    if (press?.id === e.pointerId && pointers.size === 1) {
+      const dx = e.clientX - press.x;
+      const dy = e.clientY - press.y;
+      if (press.moved || dx * dx + dy * dy >= EXPLORE_VIEW.tapSlop ** 2) {
+        press.moved = true;
+        stick = stick
+          ? { x0: stick.x0, y0: stick.y0, x: e.clientX, y: e.clientY }
+          : { x0: press.x, y0: press.y, x: e.clientX, y: e.clientY };
+        walkTo = null;
+        showStick();
+        draw();
+      }
+    }
     if (pinch && pointers.size === 2) {
       zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
       renderWalk();
@@ -1443,8 +1821,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   });
   const lift = (e: PointerEvent) => {
     if (!pointers.delete(e.pointerId)) return;
+    // (A tap lands first: one that steered the stick isn't one.)
     if (e.type === 'pointercancel') taps.pointerCancel(sample(e));
     else taps.pointerUp(sample(e));
+    if (press?.id === e.pointerId) {
+      press = null;
+      stick = null;
+      showStick();
+    }
     const last = panner.up(e.pointerId);
     if (last) {
       showPan(last);
@@ -1467,6 +1851,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     (e) => {
       e.preventDefault();
       skipGlide();
+      dropWalkInput();
       walk = null;
       zoom -= e.deltaY / HOUSE_CAMERA.wheelPerZoom;
       if (pinchedOut(zoom)) {
@@ -1511,6 +1896,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       gift,
     });
     scene3d = built;
+    walkReady = false;
+    // The Keeper stays where it was left, if it can still stand there.
+    if (kept && !Number.isNaN(floorAt(built.walkMap, keptAt.x, keptAt.z, keptAt.y)))
+      built.moveKeeper(keptAt, keptYaw);
     startFlicker();
     built.setFloor(floor);
     fit(built);
@@ -1577,6 +1966,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     floor = 0;
     panner.reset();
     walk = null;
+    // A new visit: the Keeper starts by the hearth again.
+    kept = false;
+    walkReady = false;
+    walkRoom = null;
+    walkAround = [];
+    dropWalkInput();
     builtTier = null;
     sheet = 'peek';
     note = '';
@@ -1606,6 +2001,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     walk = null;
     pointers.clear();
     pinch = null;
+    dropWalkInput();
+    walkReady = false;
     scene3d = null;
     sheet = 'peek';
     note = '';
@@ -1688,6 +2085,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         rooms: view.rooms.length,
         pose: glide ? 'glide' : walk ? 'walk' : walkedIn(zoom) ? 'kid' : 'dollhouse',
         zoom,
+        walk:
+          scene3d && walkReady
+            ? {
+                room: walkRoom?.id ?? null,
+                at: { x: walkAt.x, y: walkAt.y, z: walkAt.z },
+                yaw: walkYaw,
+                stick: stick !== null,
+                walkingTo: walkTo !== null,
+                eye: zoom > 0 ? { ...walkCam.eye } : null,
+              }
+            : null,
         scene: scene3d?.stats ?? null,
         faces: scene3d?.faceReport() ?? null,
         sheet,
@@ -1697,7 +2105,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         pickRoom: sheet === 'picker' ? pickRoom : null,
         facesWaiting: facesWaiting(peek),
         residentBoxes: (() => {
-          const pose = base ? (kid ? blend(base, kid, zoom) : base) : null;
+          const pose = base ? posed(base) : null;
           const box = overlay.getBoundingClientRect();
           return pose && scene3d
             ? residentBoxes(pose, { width: box.width, height: box.height }, scene3d.residentSpots)
@@ -1715,6 +2123,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         reread: () => {
           void refresh();
         },
+        putKeeper,
       };
     },
   };

@@ -600,6 +600,22 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
+    it('shows the room’s ceiling only once the camera is under it (#381 W2: the glide in saw only its top)', () => {
+      const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+      const { scene, house } = buildHouse(1, 'low');
+      const ceiling = scene.getMeshByName('house-snug-ceiling')!;
+      const doll = fitHouse(house.bounds, vp);
+      const kid = kidPose(house.focusRoom!, vp);
+      // Past the zoom the inside comes in at, but still high over the roof line.
+      const above = blend(doll, kid, HOUSE_KID.frontFrom + 0.05);
+      expect(above.eye.y).toBeGreaterThan(house.focusRoom!.maxY);
+      house.setPose(above, HOUSE_KID.frontFrom + 0.05);
+      expect(ceiling.isEnabled()).toBe(false);
+      house.setPose(kid, 1);
+      expect(ceiling.isEnabled()).toBe(true);
+      scene.getEngine().dispose();
+    });
+
     it('lights every squishy by the fill, the hero field’s smoother swap included (render check: grey on low)', () => {
       const vp = { width: 390, height: 844, top: 80, bottom: 150 };
       const { scene, house } = buildHouse(1, 'low');

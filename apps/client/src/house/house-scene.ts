@@ -632,7 +632,10 @@ export class HouseScene {
       least = least === null ? alpha : Math.min(least, alpha);
     }
     for (const p of this.#porch) p.mesh.setEnabled(p.room === focus?.id);
-    for (const c of this.#ceilings) c.mesh.setEnabled(c.room === focus?.id);
+    // The ceiling only once the camera is under it: gliding in from above,
+    // its top filled the whole frame (#381 W2, the walk mockup's zoom 0.68).
+    const under = focus !== null && pose.eye.y < focus.room.maxY;
+    for (const c of this.#ceilings) c.mesh.setEnabled(under && c.room === focus.id);
     const sign = this.#signAt;
     if (sign?.kidY != null) {
       const y = sign.room === focus?.id ? sign.kidY : sign.y;
@@ -952,6 +955,11 @@ export class HouseScene {
   /** Where the Keeper stands now, its feet (read only: `moveKeeper` moves it). */
   get keeperSpot(): Readonly<WalkSpot> {
     return this.#walkAt;
+  }
+
+  /** How tall the Keeper stands, metres; 0 while none is drawn (a tap on it walks in, W2). */
+  get keeperHeight(): number {
+    return (this.#keeperHandle?.params.height ?? 0) * HOUSE_CAST.keeperScale;
   }
 
   /** Which way the Keeper faces (0 faces −z, toward the dollhouse camera). */

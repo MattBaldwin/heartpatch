@@ -428,6 +428,56 @@ describe('the follow camera (#381 W1)', () => {
     expect(p.eye.y).toBeGreaterThan(free.eye.y);
   });
 
+  describe('a resident between it and the Keeper (#381 W2, the Playroom case)', () => {
+    const map = mapAt(4);
+    const hall = room(map, 'heart-hall');
+    const at = { x: 4, z: 9, y: 0 };
+    /** The Keeper's chest seen from the eye, clear of a ball at `b`. */
+    const clearOf = (
+      p: ReturnType<typeof pose>,
+      b: { x: number; y: number; z: number; r: number },
+    ) => {
+      const s = { x: at.x - p.eye.x, y: at.y + HOUSE_WALK.lookHeight - p.eye.y, z: at.z - p.eye.z };
+      const ss = s.x * s.x + s.y * s.y + s.z * s.z;
+      const t = Math.min(
+        1,
+        Math.max(0, ((b.x - p.eye.x) * s.x + (b.y - p.eye.y) * s.y + (b.z - p.eye.z) * s.z) / ss),
+      );
+      return (
+        Math.hypot(p.eye.x + s.x * t - b.x, p.eye.y + s.y * t - b.y, p.eye.z + s.z * t - b.z) >= b.r
+      );
+    };
+
+    it('draws in and climbs until the Keeper shows over it', () => {
+      const resident = { x: 4, y: 0.6, z: 7.6, r: 0.6 };
+      const free = followPose(pose(), map, at, Math.PI, hall, 0.5);
+      expect(clearOf(free, resident)).toBe(false);
+      const p = followPose(pose(), map, at, Math.PI, hall, 0.5, [resident]);
+      expect(clearOf(p, resident)).toBe(true);
+      expect(p.eye.z).toBeGreaterThan(free.eye.z);
+      expect(p.eye.y).toBeGreaterThan(free.eye.y);
+    });
+
+    it('minds no resident beside or past the Keeper, nor one it stands in', () => {
+      const free = followPose(pose(), map, at, Math.PI, hall, 0.5);
+      const beside = { x: 5.5, y: 0.4, z: 8, r: 0.5 };
+      const past = { x: 4, y: 0.4, z: 10, r: 0.5 };
+      const on = { x: 4.1, y: 0.4, z: 9, r: 0.5 };
+      const p = followPose(pose(), map, at, Math.PI, hall, 0.5, [beside, past, on]);
+      expect(p.eye.z).toBeCloseTo(free.eye.z);
+      expect(p.eye.y).toBeCloseTo(free.eye.y);
+    });
+  });
+
+  it('minds no toy on the floor behind it, only furniture that reaches into its view (#381 W2)', () => {
+    const map = mapAt(1, [piece(2.86, 3.09, 0.3, 0.54, 0.17)]);
+    const snug = room(map, 'snug');
+    const at = { x: 2.64, z: 3.36, y: 0 };
+    const p = followPose(pose(), map, at, Math.PI, snug, 0.5);
+    expect(p.eye.z).toBeCloseTo(at.z - HOUSE_WALK.back);
+    expect(p.pitch).toBeLessThan(15 * DEG);
+  });
+
   it('keeps the same horizontal view on a wide screen, and caps a tall phone’s vertical one', () => {
     const map = mapAt(1);
     const snug = room(map, 'snug');

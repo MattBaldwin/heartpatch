@@ -18,6 +18,7 @@ import {
   roofAt,
   safeArea,
   blend,
+  screenToFloor,
   frontAlpha,
   kidPose,
   wallFade,
@@ -300,6 +301,40 @@ describe('walking in: kid height', () => {
       expect(at1.eye[k]).toBeCloseTo(kid.eye[k]);
     }
     expect(deg(at1.pitch)).toBeLessThan(15);
+  });
+
+  it('lands exactly on a kid pose turned to follow the Keeper (#381 W2)', () => {
+    // The follow camera looks in at an angle: the blend turns with it.
+    const turned = {
+      eye: { x: 1, y: 1.7, z: 1 },
+      target: { x: 2.2, y: 0.55, z: 4.2 },
+      fov: 1.2,
+      pitch: Math.asin(1.15 / Math.hypot(1.2, 1.15, 3.2)),
+    };
+    const at1 = blend(doll, turned, 1);
+    for (const k of ['x', 'y', 'z'] as const) {
+      expect(at1.eye[k]).toBeCloseTo(turned.eye[k]);
+      expect(at1.target[k]).toBeCloseTo(turned.target[k]);
+    }
+    // At 0 it is still the dollhouse, looking straight in.
+    const at0 = blend(doll, turned, 0);
+    for (const k of ['x', 'y', 'z'] as const) expect(at0.eye[k]).toBeCloseTo(doll.eye[k]);
+  });
+
+  it('finds the floor under a screen point, the inverse of project (#381 W2)', () => {
+    const vp = { width: 390, height: 844 };
+    const spot = { x: 2.1, y: 0, z: 3.3 };
+    for (const pose of [doll, kid]) {
+      const p = project(pose, vp.width / vp.height, spot);
+      const px = ((p.x + 1) / 2) * vp.width;
+      const py = ((1 - p.y) / 2) * vp.height;
+      const back = screenToFloor(pose, px, py, vp, 0);
+      expect(back?.x).toBeCloseTo(spot.x);
+      expect(back?.z).toBeCloseTo(spot.z);
+    }
+    // At or above the horizon there's no floor.
+    const level = { eye: { x: 0, y: 1, z: 0 }, target: { x: 0, y: 1, z: 5 }, fov: 1, pitch: 0 };
+    expect(screenToFloor(level, 195, 10, vp, 0)).toBeNull();
   });
 
   it('keeps looking down through most of the zoom, then eases to kid height over the last part', () => {
