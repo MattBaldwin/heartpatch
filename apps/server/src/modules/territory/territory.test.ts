@@ -1924,8 +1924,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // Feelings only: no species, no squishy, no level, anywhere in the tile.
       const text = JSON.stringify(tile);
       for (const guard of guards) {
-        expect(text).not.toContain(guard!.id);
-        expect(text).not.toContain(guard!.speciesId);
+        expect(text).not.toContain(guard.id);
+        expect(text).not.toContain(guard.speciesId);
       }
       expect(text).not.toMatch(/species|level|element/i);
 
