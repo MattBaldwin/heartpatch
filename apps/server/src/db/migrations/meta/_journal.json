@@ -330,6 +330,20 @@
       "when": 1791762712201,
       "tag": "0046_keeper_houses",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792338874827,
+      "tag": "0047_packed_crowded_tiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792338885776,
+      "tag": "0048_one_building_per_tile",
+      "breakpoints": true
     }
   ]
 }

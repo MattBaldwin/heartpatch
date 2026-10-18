@@ -3,6 +3,8 @@
 // container before switching images (tech spec §12).
 import { pino } from 'pino';
 import { loadConfig } from '../config.js';
+import { createClock } from '../lib/time.js';
+import { packBeforeOneBuildingPerTile } from '../modules/buildings/crowded-tiles.js';
 import { createDbClient } from './client.js';
 import { runMigrations } from './migrator.js';
 import { seed, seedTargetRefusal } from './seed.js';
@@ -30,7 +32,11 @@ if (refusal !== null) {
 const client = createDbClient(config.DATABASE_URL, { max: 1, quiet: true });
 try {
   if (command === 'migrate') {
-    await runMigrations(client.db);
+    // Tiles still crowded with 2+ buildings are packed up before migration
+    // B's unique index (#295).
+    await runMigrations(client.db, {
+      beforeOneBuildingPerTile: (db) => packBeforeOneBuildingPerTile(db, createClock(config), log),
+    });
     log.info('migrations applied');
   } else {
     const result = await seed(client.db);

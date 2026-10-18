@@ -8,7 +8,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
+import { withTransaction, type Database, type DbClient } from '../../db/client.js';
+import { ONE_BUILDING_PER_TILE } from '../../db/migrator.js';
 import {
   buildings,
   factoryQueues,
@@ -21,11 +22,12 @@ import {
   tiles,
   users,
 } from '../../db/schema.js';
+import { databaseBefore, type ScratchDatabase } from '../../../tests/before-migration.js';
 import { makeHomestead } from '../../../tests/homestead.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
-import { countCrowdedTiles, planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
+import { planOwnerTileUses, relayoutTileUses } from './tile-uses.js';
 
 /*
  * One building per tile (#295): the boot pass that tidies patches built
@@ -65,11 +67,17 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
   const clock = new Date(START);
   let counter = 0;
 
-  beforeAll(() => {
-    client = createDbClient(url!, { max: 10 });
+  let scratch: ScratchDatabase;
+
+  // Crowded tiles are what this pass tidies, and since migration B's unique
+  // index only a patch from before it can hold them: a scratch database
+  // migrated up to it.
+  beforeAll(async () => {
+    scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
+    client = scratch.client;
     db = client.db;
   });
-  afterAll(() => client.close());
+  afterAll(() => scratch.drop());
   afterEach(async () => {
     await app?.close();
     app = undefined;
@@ -214,9 +222,6 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     const den2 = await old(mapId, kid, 'ember-den', 'habitat', ring[1]!, 1, 3);
     const meadow2 = await old(mapId, kid, 'cozy-meadow', 'habitat', ring[1]!, 3, 1);
 
-    // Two crowded tiles before the pass, counted for the boot log (migration B).
-    expect(await countCrowdedTiles(db, [mapId])).toEqual({ multiplayer: 2, other: 0 });
-
     // The dry run sees the same plan and writes nothing.
     const dry = await planOwnerTileUses(db, { mapId, userId: kid.id });
     expect(dry.plan.move.map((m) => m.id).sort()).toEqual([meadow, meadow2].sort());
@@ -239,7 +244,6 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
     const perTile = new Map<string, number>();
     for (const r of after) perTile.set(r.tileId, (perTile.get(r.tileId) ?? 0) + 1);
     expect(Math.max(...perTile.values())).toBe(1);
-    expect(await countCrowdedTiles(db, [mapId])).toEqual({ multiplayer: 0, other: 0 });
     const events = await eventsOf(mapId);
     expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(2);
     const note = await noteOf(server, kid, mapId);
@@ -414,10 +418,8 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
       .returning({ id: tiles.id });
     await old(glade!.id, kid, 'ember-den', 'habitat', ring!.id, 1, 2);
     await old(glade!.id, kid, 'cozy-meadow', 'habitat', ring!.id, 2, 1);
-    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
     await pass(glade!.id);
     expect(await rowsOf(glade!.id)).toHaveLength(2);
-    expect(await countCrowdedTiles(db, [glade!.id])).toEqual({ multiplayer: 0, other: 1 });
   });
 
   it('runs alongside a settle and a placement for the same player without a deadlock', async () => {

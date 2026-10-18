@@ -1,0 +1,1 @@
+ALTER TABLE "buildings" ADD CONSTRAINT "buildings_tile_id_key" UNIQUE("tile_id");

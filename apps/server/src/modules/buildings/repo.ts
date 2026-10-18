@@ -19,6 +19,7 @@ import {
   buildings,
   maps,
   packedHomeFires,
+  packedCrowdedTiles,
   packedTrainingGrounds,
   squishies,
   tileClears,
@@ -204,11 +205,29 @@ export interface BuildingsRepo {
     tileIds: readonly string[],
   ) => Promise<string[]>;
   /**
-   * How many tiles hold two or more buildings (#295), on multiplayer maps
-   * and on the rest (the Tutorial Glade, which the tidy-up pass leaves
-   * alone). Counts only. `mapIds` limits it to those maps (tests).
+   * Players with a building on a tile holding two or more (#295, before
+   * migration B's unique index), on every kind of map, by map then player.
    */
-  crowdedTiles: (mapIds?: readonly string[]) => Promise<{ multiplayer: number; other: number }>;
+  crowdedOwners: () => Promise<{ mapId: string; userId: string }[]>;
+  /** Is migration B's unique key on `buildings.tile_id` in (#295)? */
+  hasOneBuildingPerTileKey: () => Promise<boolean>;
+  /** The tiles where this player has a building and the tile holds two or more, in id order. */
+  crowdedTilesOf: (mapId: string, userId: string) => Promise<string[]>;
+  /**
+   * Notes a player's buildings packed up off crowded tiles (#295): adds
+   * `refund` to what the note says came back. After the bag's rows, before `maps`.
+   */
+  notePackedCrowded: (
+    mapId: string,
+    userId: string,
+    refund: Record<string, number>,
+    at: Date,
+  ) => Promise<void>;
+  /** The player's crowded-tile note, or null. */
+  packedCrowded: (
+    mapId: string,
+    userId: string,
+  ) => Promise<{ refund: Record<string, number>; packedAt: Date } | null>;
   /**
    * Every building on a multiplayer map with its tile (for the tidy-up's
    * scan), and the players with a squishy gathering on a tile of theirs out
@@ -509,16 +528,67 @@ function queries(db: Executor): BuildingsRepo {
       return rows.map((r) => r.id);
     },
 
-    crowdedTiles: async (mapIds) => {
-      const rows = await db
-        .select({ kind: maps.kind })
+    crowdedOwners: async () => {
+      const crowded = db
+        .select({ tileId: buildings.tileId })
         .from(buildings)
-        .innerJoin(maps, eq(maps.id, buildings.mapId))
-        .where(mapIds ? inArray(buildings.mapId, [...mapIds]) : undefined)
-        .groupBy(buildings.tileId, maps.kind)
+        .groupBy(buildings.tileId)
         .having(sql`count(*) > 1`);
-      const multiplayer = rows.filter((r) => r.kind === 'multiplayer').length;
-      return { multiplayer, other: rows.length - multiplayer };
+      return db
+        .selectDistinct({ mapId: buildings.mapId, userId: buildings.ownerUserId })
+        .from(buildings)
+        .where(inArray(buildings.tileId, crowded))
+        .orderBy(asc(buildings.mapId), asc(buildings.ownerUserId));
+    },
+
+    hasOneBuildingPerTileKey: async () => {
+      const [row] = await db.execute<{ found: boolean }>(
+        sql`select to_regclass('public.buildings_tile_id_key') is not null as found`,
+      );
+      return row?.found === true;
+    },
+
+    crowdedTilesOf: async (mapId, userId) => {
+      const rows = await db
+        .select({ tileId: buildings.tileId })
+        .from(buildings)
+        .where(
+          inArray(
+            buildings.tileId,
+            db
+              .select({ tileId: buildings.tileId })
+              .from(buildings)
+              .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId))),
+          ),
+        )
+        .groupBy(buildings.tileId)
+        .having(sql`count(*) > 1`)
+        .orderBy(asc(buildings.tileId));
+      return rows.map((r) => r.tileId);
+    },
+
+    notePackedCrowded: async (mapId, userId, refund, at) => {
+      const [existing] = await db
+        .select({ refund: packedCrowdedTiles.refund })
+        .from(packedCrowdedTiles)
+        .where(and(eq(packedCrowdedTiles.mapId, mapId), eq(packedCrowdedTiles.userId, userId)));
+      const sum: Record<string, number> = { ...(existing?.refund ?? {}) };
+      for (const [id, n] of Object.entries(refund)) sum[id] = (sum[id] ?? 0) + n;
+      await db
+        .insert(packedCrowdedTiles)
+        .values({ mapId, userId, refund: sum, packedAt: at })
+        .onConflictDoUpdate({
+          target: [packedCrowdedTiles.mapId, packedCrowdedTiles.userId],
+          set: { refund: sum, packedAt: at },
+        });
+    },
+
+    packedCrowded: async (mapId, userId) => {
+      const [row] = await db
+        .select({ refund: packedCrowdedTiles.refund, packedAt: packedCrowdedTiles.packedAt })
+        .from(packedCrowdedTiles)
+        .where(and(eq(packedCrowdedTiles.mapId, mapId), eq(packedCrowdedTiles.userId, userId)));
+      return row ?? null;
     },
 
     scanTileUses: async () => {
