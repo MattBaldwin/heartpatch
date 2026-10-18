@@ -173,6 +173,8 @@ describe('MapState', () => {
       'redraw',
     );
     expect(state.tileAt(key)?.defenders).toBe(2);
+    // The event has no feelings, so a stale list is dropped rather than shown (#531).
+    expect(state.tileAt(key)?.defenderFeelings).toEqual([]);
 
     const captured = { userId: userId(1), fromUserId: null, ...at };
     expect(state.apply(event('tile.captured', captured))).toBe('refresh');

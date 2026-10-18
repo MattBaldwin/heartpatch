@@ -36,6 +36,8 @@ import {
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
+import { databaseBefore, type ScratchDatabase } from '../../../tests/before-migration.js';
+import { ONE_BUILDING_PER_TILE } from '../../db/migrator.js';
 import { homeRingWaiting } from '../buildings/home-ring.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
@@ -466,6 +468,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(Object.keys(view.tiles[0]!).sort()).toEqual(
         [
           'cooldownUntil',
+          'defenderFeelings',
           'defenders',
           'guardianHint',
           'buildings',
@@ -944,10 +947,9 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
 
     it('moves a building in the way to a side spot on its own tile, once, with an event', async () => {
       const { map, bare, build, view, nodeAt } = await olderMap();
-      // A fire in the middle of both bare ring tiles, a meadow beside one.
+      // A fire in the middle of one bare ring tile, a meadow in the other's.
       const [fire] = await build(bare[0]!.id, 0, 'hearthfire');
       const [meadow] = await build(bare[1]!.id, 0);
-      await build(bare[1]!.id, 1);
       const rows = () => createBuildingsRepo(db).listOnMap(map.id);
       const before = await rows();
       const safe = (list: typeof before) =>
@@ -968,10 +970,9 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         level: 1,
         fuelledThrough: '2099-01-01',
       });
-      // Spot 1 was taken on the meadow's tile, so it goes to spot 2.
       expect(after.find((r) => r.id === meadow!.id)).toMatchObject({
         tileId: bare[1]!.id,
-        spot: 2,
+        spot: 1,
       });
       expect(after).toHaveLength(before.length);
       // The fire still reaches as far: its light is measured from its tile.
@@ -987,12 +988,28 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect((await eventsOf(map.id)).filter((e) => e.type === 'building.moved')).toHaveLength(2);
     });
 
-    it('lets a node wait when every bare ring tile is full of buildings', async () => {
-      const { bare, build, view, nodeAt } = await olderMap();
-      for (const t of bare) for (let spot = 0; spot <= 6; spot++) await build(t.id, spot);
-      const v = await view();
-      for (const t of bare) expect(nodeAt(v, t)).toBeNull();
-      expect(homeRingWaiting().get(v.map.id)).toBe(2);
+    // Ring tiles full of buildings: only a patch from before one building per
+    // tile went into the database (#295, migration B) can hold them.
+    describe('on a patch from before migration B', () => {
+      let scratch: ScratchDatabase;
+      let full: Database;
+      beforeAll(async () => {
+        scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
+        full = db;
+        db = scratch.client.db;
+      });
+      afterAll(async () => {
+        db = full;
+        await scratch.drop();
+      });
+
+      it('lets a node wait when every bare ring tile is full of buildings', async () => {
+        const { bare, build, view, nodeAt } = await olderMap();
+        for (const t of bare) for (let spot = 0; spot <= 6; spot++) await build(t.id, spot);
+        const v = await view();
+        for (const t of bare) expect(nodeAt(v, t)).toBeNull();
+        expect(homeRingWaiting().get(v.map.id)).toBe(2);
+      });
     });
 
     it('reads the map, members, tiles and seq from one snapshot', async () => {

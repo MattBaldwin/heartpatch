@@ -85,3 +85,40 @@ describe('PublicTileSchema guardianHint', () => {
     expect(PublicTileSchema.safeParse(tile).success).toBe(false);
   });
 });
+
+describe('PublicTileSchema defenderFeelings (#531)', () => {
+  const tile = {
+    q: 1,
+    r: 0,
+    terrain: 'meadow',
+    ownerUserId: null,
+    nodeResource: null,
+    homeSlot: null,
+    gathering: null,
+    cooldownUntil: null,
+    defenders: 2,
+    guardianHint: null,
+    buildings: [],
+  };
+
+  it('is a list of real feelings, and optional so older servers parse', () => {
+    expect(PublicTileSchema.parse(tile).defenderFeelings).toBeUndefined();
+    const felt = ['sleepy', 'joy'];
+    expect(PublicTileSchema.parse({ ...tile, defenderFeelings: felt }).defenderFeelings).toEqual(
+      felt,
+    );
+    expect(PublicTileSchema.parse({ ...tile, defenderFeelings: [] }).defenderFeelings).toEqual([]);
+    expect(PublicTileSchema.safeParse({ ...tile, defenderFeelings: ['grumpy'] }).success).toBe(
+      false,
+    );
+  });
+
+  it('carries feelings only: a species or level in the list is refused', () => {
+    expect(PublicTileSchema.safeParse({ ...tile, defenderFeelings: ['puddlepuff'] }).success).toBe(
+      false,
+    );
+    expect(PublicTileSchema.safeParse({ ...tile, defenderFeelings: [{ level: 9 }] }).success).toBe(
+      false,
+    );
+  });
+});

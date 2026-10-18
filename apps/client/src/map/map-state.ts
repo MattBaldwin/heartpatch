@@ -182,7 +182,12 @@ export class MapState {
       case 'defenders.changed': {
         const parsed = GAME_EVENTS['defenders.changed'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
-        return this.patchTile(parsed.data, { defenders: parsed.data.count }) ? 'redraw' : 'none';
+        // Only the count rides the event, so the old feelings may no longer be
+        // who stands there (#531): clear them, and the sheet says the count
+        // until the next view brings them back.
+        return this.patchTile(parsed.data, { defenders: parsed.data.count, defenderFeelings: [] })
+          ? 'redraw'
+          : 'none';
       }
       case 'building.placed':
       case 'building.fueled':

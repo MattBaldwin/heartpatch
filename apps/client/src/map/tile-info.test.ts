@@ -1,7 +1,7 @@
 import { JOB_RULES, RESOURCES, workSource, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { MapState } from './map-state.js';
-import { describeTile, guardianLine, type TileInfo } from './tile-info.js';
+import { describeTile, guardianLine, watchFeelingsLine, type TileInfo } from './tile-info.js';
 import { testView, userId } from './test-view.js';
 
 const state = new MapState(testView(2));
@@ -231,5 +231,25 @@ describe('guardianLine (owner decision 10, #216)', () => {
     );
     expect(describeTile(tile({}), lookup, userId(1)).guardians).toBeNull();
     expect(describeTile(tile({ ownerUserId: userId(2) }), lookup, userId(1)).guardians).toBeNull();
+  });
+});
+
+describe('watchFeelingsLine (#531)', () => {
+  it('says how a rival’s posted guards feel, like wild land, with no toughness word', () => {
+    expect(watchFeelingsLine(['brave'])).toBe('Guarded by 1 Brave squishy');
+    expect(watchFeelingsLine(['sleepy', 'sleepy', 'sleepy'])).toBe('Guarded by 3 Sleepy squishies');
+    expect(watchFeelingsLine(['sleepy', 'joy', 'sleepy'])).toBe(
+      'Guarded by 3 squishies: 2 Sleepy, 1 Joy',
+    );
+  });
+
+  it('is null with no feelings, so the sheet keeps its “stand watch” count', () => {
+    expect(watchFeelingsLine(undefined)).toBeNull();
+    expect(watchFeelingsLine([])).toBeNull();
+  });
+
+  it('never uses an avoided word', () => {
+    const all = ['joy', 'cozy', 'brave', 'silly', 'sleepy', 'spooky'] as const;
+    expect(watchFeelingsLine([...all])).not.toMatch(AVOIDED);
   });
 });

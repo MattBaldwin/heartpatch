@@ -130,6 +130,17 @@ export const HollowStatusSchema = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * Tiles still crowded with 2+ buildings when one building per tile went
+   * into the database (#295, owner decision 2026-10-18): every building on
+   * them came down, and this is everything that came back. Said once per
+   * device, like `homeFirePacked`. Null, or missing from an older server:
+   * nothing came down.
+   */
+  crowdedTilesPacked: z
+    .object({ refund: ItemCountsSchema, at: z.iso.datetime() })
+    .nullable()
+    .optional(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });
