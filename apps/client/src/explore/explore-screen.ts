@@ -1,4 +1,5 @@
 import {
+  hexKey,
   EXPLORE_RULES,
   isExplorable,
   type ExploreTileResponse,
@@ -13,6 +14,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import { hollowedAt, hollowedPreview, type HollowedCluster, type HollowedShow } from '../hollowed/hollowed-preview.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { inventoryApi } from '../inventory/inventory-api.js';
@@ -116,6 +118,8 @@ export interface ExploreScreenOptions {
    * opens, before `onOpen` closes the map (#347).
    */
   mapTile: (at: { q: number; r: number }) => PublicTile | null;
+  /** PROTOTYPE (#306 plan): every tile of the open map, for the Hollowed stand-in. */
+  tiles?: () => readonly PublicTile[];
   /** Exploring is for patches: never on the Tutorial Glade. */
   isGlade: (mapId: string) => boolean;
   /** The explore view opened: the map, the bag and the lobby step out. */
@@ -144,6 +148,16 @@ export interface ExploreScreenOptions {
 }
 
 /** Where Sprout remembers it gave the renamed-tools tip (#335), per account. */
+/** PROTOTYPE (#306 plan): Hollowed words (STYLE_GUIDE: short, warm, a little spooky). */
+const HOLLOWED_TEXT = {
+  spooked: 'Boo! An echo spooked you back a step 👻',
+  cellarTitle: 'Hidden cellar 🔑',
+  cellarLine: 'Better finds down here… 🎁',
+  puzzleHint: 'A broken music box. Tap the notes in order!',
+  puzzleEasy: 'Hum it for me 🎶',
+  puzzleNote: 'Fix it to find a lore page or a special recipe.',
+} as const;
+
 const RENAMED_TIP_KEY = (userId: string) => `heartpatch.explore.renamed-tools.${userId}`;
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -253,6 +267,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let opening = false;
   let frame = 0;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+  /** PROTOTYPE (#306 plan): the Hollowed Community this visit shows, if any. */
+  let hollowed: {
+    cluster: HollowedCluster | null;
+    show: HollowedShow;
+    cellar: boolean;
+    burstAt?: number;
+  } | null = null;
+  let hollowedPlay: 'puzzle' | null = null;
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const back = el(
@@ -555,6 +577,15 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       }
     }
     // By value: a slide that pushes back to where it was isn't a move.
+    // PROTOTYPE (#306 plan): an echo's spook pushes the Keeper back a step.
+    const pushed = hollowed ? s.spook(next, now) : null;
+    if (pushed) {
+      next = slideMove(keeperAt, pushed, s.colliders);
+      walkTo = null;
+      const echo = s.echoAt;
+      if (echo) heading = yawToward(next, echo);
+      say(HOLLOWED_TEXT.spooked);
+    }
     const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
     const turned = heading !== undefined && heading !== yaw;
     if (moved || turned) {
@@ -849,12 +880,29 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     title.textContent = terrainName(t.terrain);
+    if (hollowed) {
+      const name = hollowed.cluster?.name ?? 'Hollowed';
+      title.textContent = hollowed.cellar ? HOLLOWED_TEXT.cellarTitle : `${name} 🕯️`;
+      title.classList.toggle('hollowed-long', !hollowed.cellar && name.length > 14);
+    }
     // Under a lake, Back brings the Keeper up for air (#335).
     back.setAttribute(
       'aria-label',
       isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
     progress.textContent = progressLine(t.progress);
+    if (hollowed) {
+      progress.replaceChildren();
+      if (hollowed.cellar) {
+        progress.append(HOLLOWED_TEXT.cellarLine, el('span', { class: 'hollowed-key' }, '🔑 1'));
+      } else {
+        const pct = t.progress.total > 0 ? Math.round((t.progress.searched / t.progress.total) * 100) : 0;
+        progress.append(
+          progressLine(t.progress),
+          el('span', { class: 'hollowed-joy' }, ` · joy ${String(pct)}% ✨`),
+        );
+      }
+    }
     const held = heldTool();
     if (held) lastHeld = held;
     scene3d?.hold(held);
@@ -868,9 +916,55 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     renderAction();
     renderNeed();
     renderPlay();
+    renderHollowedPlay();
     renderSheet();
     renderToast();
     renderDark();
+  }
+
+  /** PROTOTYPE (#306 plan): the memory puzzle, a broken music box. */
+  function renderHollowedPlay(): void {
+    if (hollowedPlay !== 'puzzle' || playing || card) return;
+    play.hidden = false;
+    play.dataset['kind'] = 'puzzle';
+    const notes = ['♪', '♫', '♪', '♬'];
+    const placed = [true, true, false, false];
+    const cracked = [false, false, false, true];
+    play.replaceChildren(
+      el(
+        'div',
+        { class: 'explore-chip explore-chip-puzzle', 'data-testid': 'explore-chip' },
+        el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, '🎵'),
+        el('span', { class: 'explore-chip-text' }, HOLLOWED_TEXT.puzzleHint),
+        el(
+          'span',
+          { class: 'explore-dots', 'aria-label': '2 of 4' },
+          ...placed.map((on) => el('span', { class: `explore-dot${on ? ' explore-dot-on' : ''}` })),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'hollowed-notes', role: 'group', 'aria-label': 'Notes' },
+        ...notes.map((n, i) =>
+          el(
+            'button',
+            {
+              type: 'button',
+              class: placed[i] ? 'placed' : cracked[i] ? 'cracked' : '',
+              'aria-label': `Note ${String(i + 1)}`,
+            },
+            n,
+          ),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'explore-play-row' },
+        el('button', { type: 'button', class: 'explore-easy' }, `${EXPLORE_TEXT.easy}: ${HOLLOWED_TEXT.puzzleEasy}`),
+        el('button', { type: 'button', class: 'explore-not-now' }, EXPLORE_TEXT.notNow),
+      ),
+      el('p', { class: 'explore-play-note' }, HOLLOWED_TEXT.puzzleNote),
+    );
   }
 
   /** The big button (board a): what's in front of the Keeper, or a nudge to find a glint. */
@@ -1190,9 +1284,27 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       redraw: () => {
         options.invalidate();
       },
+      ...(hollowed
+        ? {
+            hollowed: {
+              show: hollowed.show,
+              cellar: hollowed.cellar,
+              ...(hollowed.burstAt !== undefined ? { burstAt: hollowed.burstAt } : {}),
+            },
+          }
+        : {}),
     });
     // The start can land on a rock: step out before the Keeper is drawn.
     keeperAt = freePoint(keeperAt, built.colliders);
+    if (hollowed?.show === 'echo') {
+      const pushed = built.spook(keeperAt, performance.now());
+      if (pushed) {
+        keeperAt = freePoint(pushed, built.colliders);
+        const echo = built.echoAt;
+        if (echo) yaw = yawToward(keeperAt, echo);
+        say(HOLLOWED_TEXT.spooked);
+      }
+    }
     built.moveKeeper(keeperAt, yaw);
     scene3d = built;
     scene.onDisposeObservable.addOnce(() => {
@@ -1223,6 +1335,27 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   async function openTile(id: string, at: { q: number; r: number }): Promise<void> {
     const ask = generation;
     zone = options.timeZone?.(id) ?? null;
+    // PROTOTYPE (#306 plan): a Hollowed tile isn't mine, so the mockup opens
+    // one of my tiles in its place and dresses it as the community.
+    const preview = hollowedPreview();
+    const cluster = preview ? (hollowedAt(hexKey(at)) ?? null) : null;
+    hollowed = null;
+    hollowedPlay = null;
+    if (preview && (cluster || preview.show === 'cellar')) {
+      const cellar = preview.show === 'cellar';
+      hollowed = { cluster, show: preview.show, cellar };
+      if (cluster && user) {
+        const mapTile = options.mapTile(at);
+        const mine = (options.tiles?.() ?? []).filter(
+          (t) => t.ownerUserId === user?.id && isExplorable(t.terrain, EXPLORE_RULES),
+        );
+        // The Heart Seed's own meadow first, so the captures compare with a plain explore of it.
+        void mapTile;
+        const stand = mine.find((t) => t.homeSlot !== null && t.terrain === 'meadow') ?? mine[0];
+        if (stand) at = { q: stand.q, r: stand.r };
+      }
+      if (preview.show === 'puzzle') hollowedPlay = 'puzzle';
+    }
     let fresh: ExploreTileResponse;
     try {
       const [view, board] = await Promise.all([
@@ -1240,6 +1373,40 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     tile = fresh;
     keeperAt = EXPLORE_VIEW.start;
     yaw = EXPLORE_VIEW.startYaw;
+    if (hollowed) {
+      // The mockup's states: three spots already searched (sparks), or the
+      // Keeper beside the music box (puzzle). Local only; nothing is sent.
+      const low = new Set(['rock', 'flower-bed', 'hollow-log', 'mound']);
+      const hands = fresh.spots
+        .filter((s) => s.tool === null && !s.done)
+        .sort((a, b) => Number(low.has(b.kind)) - Number(low.has(a.kind)));
+      if (hollowed.cellar) {
+        // The cellar is fresh: every spot still to search.
+        tile = {
+          ...fresh,
+          spots: fresh.spots.map((s) => ({ ...s, done: false })),
+          progress: { ...fresh.progress, searched: 0 },
+        };
+      } else if (hollowed.show === 'sparks') {
+        const done = new Set(hands.slice(0, 3).map((s) => s.index));
+        tile = {
+          ...fresh,
+          spots: fresh.spots.map((s) => (done.has(s.index) ? { ...s, done: true } : s)),
+          progress: { ...fresh.progress, searched: fresh.progress.searched + done.size },
+        };
+        const last = hands[2] ?? hands[0];
+        // Behind the spot (the camera looks ahead, +z), so the burst is in view.
+        if (last) {
+          keeperAt = { x: last.x, z: last.z - 0.13 };
+          hollowed = { ...hollowed, burstAt: last.index };
+        }
+      } else if (hollowed.show === 'puzzle') {
+        const box = hands[0];
+        if (box) keeperAt = { x: box.x + 0.02, z: box.z - 0.1 };
+      } else if (hollowed.show === 'echo') {
+        keeperAt = { x: 0.12, z: -0.36 };
+      }
+    }
     walkTo = null;
     aimed = null;
     stick = null;
@@ -1411,6 +1578,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         scene: s?.stats ?? null,
+        hollowed: s?.hollowedStats ?? null,
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;

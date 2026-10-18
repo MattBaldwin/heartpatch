@@ -1,0 +1,169 @@
+/* PROTOTYPE (#306 plan): Hollowed Community flags, sheets and the puzzle. */
+
+.hollowed-flag-grey {
+  background: rgb(226 222 236 / 95%);
+  color: #4a3f5c;
+}
+
+/* The restore sheet and the rename card sit where explore's big-moment card does. */
+.hollowed-sheet {
+  text-align: center;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+/* The puzzle sits up clear of the stick and the big button, like the lantern's line. */
+.explore-play[data-kind='puzzle'] {
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 200px);
+  gap: 10px;
+}
+
+.explore-play[data-kind='puzzle'] .explore-play-note {
+  margin: 0;
+}
+
+.hollowed-sheet .explore-sheet-title {
+  font-size: 24px;
+}
+
+.hollowed-rows {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  border-radius: 18px;
+  background: #f7f0fa;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.hollowed-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.hollowed-row-done {
+  color: #2f6b3d;
+}
+
+.hollowed-row-have {
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.hollowed-meter {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.hollowed-meter span {
+  width: 36px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e8dcef;
+}
+
+.hollowed-meter .on {
+  background: #ffc94d;
+}
+
+.hollowed-note {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.hollowed-names {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.hollowed-name {
+  min-height: 48px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 3px solid #f6dceb;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 900;
+  color: #4a3150;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hollowed-name[aria-checked='true'] {
+  border-color: #b8487a;
+  background: #ffeef6;
+}
+
+.hollowed-sheet .hollowed-primary {
+  width: 100%;
+  min-height: 52px;
+  font-size: 18px;
+}
+
+.hollowed-sheet .hollowed-soft {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* The memory puzzle: four notes to put back in order. */
+.hollowed-notes {
+  display: flex;
+  gap: 10px;
+}
+
+.hollowed-notes button {
+  width: 58px;
+  height: 58px;
+  border: none;
+  border-radius: 16px;
+  background: #fffafc;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 900;
+  color: #4a3150;
+  touch-action: manipulation;
+}
+
+.hollowed-notes .placed {
+  background: #ffe9a8;
+  color: #7a4e00;
+}
+
+.hollowed-notes .cracked {
+  background: #e4dde9;
+  color: #8a7f98;
+}
+
+/* The explore header's joy line. */
+.explore-progress .hollowed-joy {
+  color: #b4532a;
+}
+
+/* The cellar key chip in the header. */
+.hollowed-key {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffe9a8;
+  font-size: 13px;
+  font-weight: 900;
+  color: #7a4e00;
+}
+
+/* A long village name in the explore header (the plan caps names at 16 characters). */
+.explore-title.hollowed-long {
+  font-size: 14px;
+  letter-spacing: -0.2px;
+}

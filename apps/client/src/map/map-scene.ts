@@ -67,6 +67,7 @@ import {
   WILD_MARKER,
 } from './map-config.js';
 import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
+import { hollowedGrey } from '../hollowed/hollowed-preview.js';
 import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
@@ -1027,10 +1028,13 @@ export class MapScene {
           group.far.thinInstanceSetMatrixAt(i, m, true);
         }
         changed = true;
-        const c =
+        let c =
           tile.homeSlot !== null
             ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
             : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
+        // PROTOTYPE (#306 plan): a Hollowed tile is drained past wild: grey,
+        // darker and cooler, per instance (no extra mesh or material).
+        if (hollowedGrey(key)) c = hollowedRgb(c);
         group.colors.set([...c.map(toLinear), 1], i * 4);
       }
       if (changed) {
@@ -1079,9 +1083,10 @@ export class MapScene {
         : node !== null && LAND_NODES.has(node)
           ? NODE_PROPS[node]
           : undefined;
-      const dressing = dressTile(tile, tile.terrain, HEX_SIZE, {
+      const hollowed = hollowedGrey(key);
+      const dressing = dressTile(tile, hollowed ? 'hollowed' : tile.terrain, HEX_SIZE, {
         halloween: this.halloween,
-        ...(middle !== undefined && { middle }),
+        ...(hollowed ? { middle: 'trading-post' as PropKind } : middle !== undefined && { middle }),
       });
       for (const prop of dressing) {
         let built = meshes.get(prop.kind);
@@ -1276,6 +1281,16 @@ export class MapScene {
  * A soft glow over a tile's middle (homesteads, #199): a bright ring
  * inside the owner's border, so the tile's colour and border still show.
  */
+/** PROTOTYPE (#306 plan): the drained look of a Hollowed tile (sRGB 0–1). TUNE. */
+function hollowedRgb(c: readonly number[]): [number, number, number] {
+  const l = (c[0] ?? 0) * 0.2126 + (c[1] ?? 0) * 0.7152 + (c[2] ?? 0) * 0.0722;
+  const tint = [0.56, 0.54, 0.64];
+  return [0, 1, 2].map((i) => {
+    const grey = (l + ((c[i] ?? 0) - l) * 0.08) * 0.74;
+    return grey + ((tint[i] ?? grey) * (0.35 + l) - grey) * 0.3;
+  }) as [number, number, number];
+}
+
 function buildTileGlow(
   scene: Scene,
   name: string,

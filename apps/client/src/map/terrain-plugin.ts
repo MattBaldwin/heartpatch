@@ -27,6 +27,9 @@ import { AMBIENT, MUTED } from './map-config.js';
  * aren't drawn (the tiles are still muted, that's CPU-side).
  */
 
+/** How many joy discs the shader reads at once (the newest searched spots; older ones merge). */
+export const JOY_DISCS = 8;
+
 export const AMBIENT_ATTRIBUTE = 'terrainAmbient';
 export const DRIFT_ATTRIBUTE = 'terrainDrift';
 
@@ -130,6 +133,26 @@ const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
   surfaceAlbedo = mix(surfaceAlbedo, tmC, vTerrainMute);
 }
 #endif
+#ifdef TERRAIN_DRAIN
+{
+  // Hollowed (#306 prototype): grey, a touch darker and cooler, so the land
+  // reads as drained, not foggy. Each joy disc brings the colour back with a
+  // soft edge; the strongest disc wins where they overlap.
+  float tdCover = 0.0;
+  vec4 tdJoy[${String(JOY_DISCS)}] = vec4[${String(JOY_DISCS)}](terrainJoy0, terrainJoy1, terrainJoy2, terrainJoy3, terrainJoy4, terrainJoy5, terrainJoy6, terrainJoy7);
+  for (int i = 0; i < ${String(JOY_DISCS)}; i++) {
+    if (float(i) >= terrainDrain.y) break;
+    vec4 tdJ = tdJoy[i];
+    float tdD = distance(vPositionW.xz, tdJ.xy);
+    tdCover = max(tdCover, tdJ.w * (1.0 - smoothstep(tdJ.z * 0.55, tdJ.z, tdD)));
+  }
+  float tdK = terrainDrain.x * (1.0 - tdCover);
+  float tdL = dot(surfaceAlbedo, vec3(0.2126, 0.7152, 0.0722));
+  vec3 tdC = mix(vec3(tdL), surfaceAlbedo, 0.08) * 0.72;
+  tdC = mix(tdC, vec3(0.52, 0.50, 0.62) * (0.35 + tdL), 0.3);
+  surfaceAlbedo = mix(surfaceAlbedo, tdC, tdK);
+}
+#endif
 `;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
@@ -148,6 +171,25 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
 export interface TerrainPluginOptions {
   /** The lake tiles: bob and glint. */
   readonly water?: boolean;
+  /** Hollowed Communities (#306 prototype): drain the colour, and the joy discs that bring it back. */
+  readonly drain?: HollowedDrain;
+}
+
+
+/**
+ * The Hollowed drain (#306 prototype): `amount` 0–1 greys everything the
+ * material draws, and each joy disc (x, z, radius, strength in world units)
+ * brings the colour back round a searched spot. One shared object per scene,
+ * read by every material it is attached to: no extra meshes (CLAUDE.md rule 8).
+ */
+export class HollowedDrain {
+  amount = 0;
+  count = 0;
+  readonly discs = new Float32Array(JOY_DISCS * 4);
+  setDisc(i: number, x: number, z: number, radius: number, strength: number): void {
+    this.discs.set([x, z, radius, strength], i * 4);
+    this.count = Math.max(this.count, i + 1);
+  }
 }
 
 /** Attaches the terrain plugin to `material` under GLSL; null under WebGPU (WGSL). */
@@ -161,9 +203,12 @@ export function attachTerrainPlugin(
     : null;
 }
 
+const EMPTY_DISCS = new Float32Array(JOY_DISCS * 4);
+
 export class TerrainPlugin extends MaterialPluginBase {
   private readonly clock: TerrainClock;
   private readonly water: boolean;
+  private readonly drain: HollowedDrain | null;
   private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
 
   constructor(material: Material, clock: TerrainClock, options: TerrainPluginOptions = {}) {
@@ -171,9 +216,11 @@ export class TerrainPlugin extends MaterialPluginBase {
       TERRAIN_SWAY: false,
       TERRAIN_WATER: false,
       TERRAIN_DRIFT: false,
+      TERRAIN_DRAIN: false,
     });
     this.clock = clock;
     this.water = options.water === true;
+    this.drain = options.drain ?? null;
     this._enable(true);
   }
 
@@ -189,6 +236,7 @@ export class TerrainPlugin extends MaterialPluginBase {
     defines['TERRAIN_SWAY'] = mesh.isVerticesDataPresent(AMBIENT_ATTRIBUTE);
     defines['TERRAIN_DRIFT'] = mesh.isVerticesDataPresent(DRIFT_ATTRIBUTE);
     defines['TERRAIN_WATER'] = this.water;
+    defines['TERRAIN_DRAIN'] = this.drain !== null;
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
@@ -207,10 +255,18 @@ export class TerrainPlugin extends MaterialPluginBase {
         { name: 'terrainMuteMix', size: 2, type: 'vec2' },
         { name: 'terrainWater', size: 2, type: 'vec2' },
         { name: 'terrainMute', size: 4, type: 'vec4' },
+        { name: 'terrainDrain', size: 2, type: 'vec2' },
+        { name: 'terrainJoy0', size: 4, type: 'vec4' },
+        { name: 'terrainJoy1', size: 4, type: 'vec4' },
+        { name: 'terrainJoy2', size: 4, type: 'vec4' },
+        { name: 'terrainJoy3', size: 4, type: 'vec4' },
+        { name: 'terrainJoy4', size: 4, type: 'vec4' },
+        { name: 'terrainJoy5', size: 4, type: 'vec4' },
+        { name: 'terrainJoy6', size: 4, type: 'vec4' },
+        { name: 'terrainJoy7', size: 4, type: 'vec4' },
       ],
       vertex: 'uniform float terrainTime;\nuniform vec2 terrainWater;',
-      fragment:
-        'uniform float terrainTime;\nuniform vec2 terrainMuteMix;\nuniform vec2 terrainWater;\nuniform vec4 terrainMute;',
+      fragment: `uniform float terrainTime;\nuniform vec2 terrainMuteMix;\nuniform vec2 terrainWater;\nuniform vec4 terrainMute;\nuniform vec2 terrainDrain;\n${Array.from({ length: JOY_DISCS }, (_, i) => `uniform vec4 terrainJoy${String(i)};`).join('\n')}`,
     };
   }
 
@@ -220,6 +276,13 @@ export class TerrainPlugin extends MaterialPluginBase {
     uniformBuffer.updateFloat2('terrainWater', AMBIENT.water.bob, AMBIENT.water.glint);
     const t = this.muteTint;
     uniformBuffer.updateFloat4('terrainMute', t.r, t.g, t.b, MUTED.saturation);
+    const d = this.drain;
+    uniformBuffer.updateFloat2('terrainDrain', d?.amount ?? 0, d?.count ?? 0);
+    for (let i = 0; i < JOY_DISCS; i++) {
+      const o = i * 4;
+      const j = d?.discs ?? EMPTY_DISCS;
+      uniformBuffer.updateFloat4(`terrainJoy${String(i)}`, j[o] ?? 0, j[o + 1] ?? 0, j[o + 2] ?? 0, j[o + 3] ?? 0);
+    }
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

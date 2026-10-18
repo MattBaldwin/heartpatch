@@ -20,6 +20,15 @@ import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
+import { createHollowedFlags } from './hollowed/hollowed-flags.js';
+import { mountHollowedSheets } from './hollowed/hollowed-sheets.js';
+import {
+  hollowedAt,
+  hollowedClusters,
+  hollowedPreview,
+  readHollowedPreview,
+  setHollowedPreview,
+} from './hollowed/hollowed-preview.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -72,6 +81,7 @@ import {
   GAME_DATA,
   hexKey,
   hexToWorld,
+  type PublicTile,
   visualRegistry,
   type Hex,
   type PublicUser,
@@ -102,6 +112,8 @@ setRareGlowOff(rareGlowOff(params));
 // `?nopost=1`, `?nowater=1`, `?nograss=1`, `?nosky=1`, `?noportraits=1`, `?cap30=1`: one cost
 // off each, for the owner's device bisect with `?fps=1` (#501). Before anything is built.
 setBisectFlags(readBisectFlags(params));
+// PROTOTYPE (#306 plan): `?hollowed=grey|restored&show=…` paints mockup Hollowed Communities.
+setHollowedPreview(import.meta.env.DEV ? readHollowedPreview(params) : null);
 // Dev only: `?slow=1` pads every frame and keeps drawing, so the perf report fires (#501).
 setSlowFrames(import.meta.env.DEV && params.get('slow') === '1');
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
@@ -482,6 +494,33 @@ const panToTile = (h: Hex): void => {
 };
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
+// PROTOTYPE (#306 plan).
+const hollowedFlags = createHollowedFlags(document.body, () => signedIn?.id ?? null);
+const hollowedSheets = mountHollowedSheets(document.body);
+/** PROTOTYPE (#306 plan): the tile panel's Explore and Restore on a Hollowed tile. */
+const hollowedActions = {
+  show: (container: HTMLElement, tile: PublicTile) => {
+    const c = hollowedPreview() ? hollowedAt(hexKey(tile)) : undefined;
+    if (!c) {
+      container.replaceChildren();
+      return;
+    }
+    if (c.joined) {
+      container.replaceChildren(el('p', { class: 'tile-action-note' }, `🏡 Part of ${c.restoredName}, joined to your land.`));
+      return;
+    }
+    if (c.reach.kind !== 'touching') {
+      container.replaceChildren(el('p', { class: 'tile-action-note' }, '🧭 Claim land toward it to explore!'));
+      return;
+    }
+    const go = el('button', { type: 'button', class: 'auth-button bag-action tile-action-pair', 'data-testid': 'hollowed-explore' }, '🔍 Explore');
+    go.addEventListener('click', () => void explore.open(tile));
+    const restore = el('button', { type: 'button', class: 'auth-button auth-button-soft bag-action tile-action-pair', 'data-testid': 'hollowed-restore-open' }, '🛠️ Restore');
+    restore.addEventListener('click', () => hollowedSheets.openRestore(c));
+    container.replaceChildren(go, restore, el('p', { class: 'tile-action-note' }, 'Open by day only. Too spooky after dark!'));
+  },
+  hide: () => hollowedSheets.close(),
+};
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
 // a journey opens the battle screen like a tile battle.
 // The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
@@ -750,6 +789,7 @@ const explore = createExploreScreen({
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
+  tiles: () => maps.view?.tiles ?? [],
   timeZone: () => maps.view?.map.timeZone ?? null,
   isGlade: (mapId) => mapId === glade,
   onOpen: (mapId) => {
@@ -860,6 +900,7 @@ const maps = createMapScreen({
     tileBuild.tileActions,
     home.tileActions,
     explore.tileActions,
+    hollowedActions,
     land.tileActions,
     fences.tileActions,
     territory.tileActions,
@@ -877,6 +918,14 @@ const maps = createMapScreen({
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // PROTOTYPE (#306 plan): the claim-and-rename moment over the restored village.
+    if (mapId !== null && hollowedPreview()?.show === 'rename') {
+      setTimeout(() => {
+        const view = maps.view;
+        const c = view ? hollowedClusters(view, signedIn?.id ?? null).find((x) => x.id === 'near') : null;
+        if (c) hollowedSheets.openRename(c);
+      }, 1200);
+    }
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
@@ -888,7 +937,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags],
+  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags, hollowedFlags],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -1561,6 +1610,38 @@ if (import.meta.env.DEV) {
     invalidate: () => stage?.invalidate(),
     frameCap: () => stage?.frameCap ?? null,
     map: () => maps.debug,
+    // PROTOTYPE (#306 plan): the mockup captures drive the preview from here.
+    hollowed: () => ({
+      clusters: () => {
+        const view = maps.view;
+        return view ? hollowedClusters(view, signedIn?.id ?? null) : [];
+      },
+      look: (which: 'near' | 'far' | 'both', distance: number) => {
+        const view = maps.view;
+        if (!view) return;
+        const cs = hollowedClusters(view, signedIn?.id ?? null);
+        const near = cs.find((c) => c.id === 'near');
+        const far = cs.find((c) => c.id === 'far');
+        const seed = view.tiles.find((t) => t.ownerUserId === signedIn?.id && t.homeSlot !== null);
+        const at =
+          which === 'both' && near && far
+            ? { q: (near.centre.q + far.centre.q) / 2, r: (near.centre.r + far.centre.r) / 2 }
+            : which === 'far' && far
+              ? far.centre
+              : (near?.centre ?? seed ?? { q: 0, r: 0 });
+        stage?.camera.panTo(hexToWorld(at, HEX_SIZE), true, 0, distance);
+        stage?.invalidate();
+      },
+      tileAt: (q: number, r: number) => maps.tileRect({ q, r }),
+      show: (show: 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | null) => {
+        const p = hollowedPreview();
+        if (p) p.show = show;
+      },
+      explore: (q: number, r: number) => void explore.open({ q, r }),
+      sheets: () => hollowedSheets.open,
+      closeSheets: () => hollowedSheets.close(),
+      flags: () => hollowedFlags.shown,
+    }),
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,
     tutorial: () => tutorial.debug,
@@ -1622,7 +1703,8 @@ await boot(canvas, {
   onError: showRendererError,
 }).catch(showRendererError);
 
-if (import.meta.env.DEV) {
+// `?fps=0` hides the dev badges for mockup captures (#306 plan).
+if (import.meta.env.DEV && params.get('fps') !== '0') {
   const badge = document.createElement('div');
   badge.className = 'dev-status';
   badge.dataset['testid'] = 'dev-status';

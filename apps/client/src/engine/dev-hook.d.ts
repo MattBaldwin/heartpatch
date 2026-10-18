@@ -105,6 +105,8 @@ declare global {
       tileBuild?(): TileBuildDebug;
       /** The night, the morning report, squishies in the Hollow and his visits (#21), or null. */
       hollow?(): HollowDebug | null;
+      /** PROTOTYPE (#306 plan): the Hollowed mockup's controls. */
+      hollowed?(): unknown;
       /** Land that misses you (owner decision 2026-10-06). */
       land?(): LandDebug | null;
       /** The raid report (#16): my defense style, raids, unseen, open or not; or null. */

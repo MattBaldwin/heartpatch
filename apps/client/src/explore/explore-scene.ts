@@ -50,6 +50,9 @@ import { buildSpotProp } from './land-kit.js';
 import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
 import { linear, merged, painted } from '../map/map-props.js';
+import { attachTerrainPlugin, HollowedDrain, TerrainClock } from '../map/terrain-plugin.js';
+import { HollowedExplore } from '../hollowed/hollowed-explore.js';
+import type { HollowedShow } from '../hollowed/hollowed-preview.js';
 import {
   buildProp,
   CORNER,
@@ -199,6 +202,8 @@ export interface ExploreSceneOptions {
   readonly reducedMotion?: () => boolean;
   /** Draws one more frame (the fade and glints settle after a frame, #335). */
   readonly redraw?: () => void;
+  /** PROTOTYPE (#306 plan): draw the tile as a Hollowed Community tile. */
+  readonly hollowed?: { readonly show: HollowedShow; readonly cellar: boolean; readonly burstAt?: number };
 }
 
 /** A search spot drawn from the land kit (#335): a biome's own take first, then the meadow's, the lake's, the trail's and the cave's. */
@@ -379,6 +384,9 @@ export class ExploreScene implements AmbientTarget {
   /** The ground and its decor, tinted by the time of day (#335: moonlit at night). */
   readonly #ground: { readonly mat: PBRMaterial; readonly base: Color3 }[] = [];
   #drawCalls = 0;
+  /** PROTOTYPE (#306 plan). */
+  readonly #hollowed: HollowedExplore | null = null;
+  readonly #drain: HollowedDrain | null = null;
   /** Under a lake (#335): the Keeper swims and wears the Snorkel's mask. */
   readonly #underwater: boolean;
   /** The Snorkel's mask on the Keeper's face, underwater. */
@@ -433,10 +441,12 @@ export class ExploreScene implements AmbientTarget {
     const extras = waterLook
       ? lakeExtras(waterLook, tileSeed(tile, 'water'))
       : BIOME_EXTRAS[tile.terrain];
+    if (options.hollowed) this.#drain = new HollowedDrain();
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
       this.#land = new ExploreLand(scene, {
+        ...(this.#drain ? { drain: this.#drain } : {}),
         look: landLook,
         seed: tileSeed(tile, 'land'),
         size,
@@ -490,7 +500,25 @@ export class ExploreScene implements AmbientTarget {
       fadedMaterial.clearCoat.isEnabled = false;
     }
     fadedMaterial.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    if (this.#drain) {
+      const clock = this.#land?.clock ?? new TerrainClock();
+      attachTerrainPlugin(propMaterial, clock, { drain: this.#drain });
+      attachTerrainPlugin(fadedMaterial, clock, { drain: this.#drain });
+    }
     this.#buildProps(tile, propMaterial, fadedMaterial);
+    if (this.#drain && options.hollowed) {
+      this.#hollowed = new HollowedExplore(scene, this.#drain, {
+        size: this.#size,
+        world: (p) => this.#world(p),
+        groundAt: (p) => this.#groundAt(p),
+        spots: tile.spots,
+        propMaterial,
+        lod: options.lod,
+        show: options.hollowed.show,
+        cellar: options.hollowed.cellar,
+        ...(options.hollowed.burstAt !== undefined ? { burstAt: options.hollowed.burstAt } : {}),
+      });
+    }
 
     this.#buildings = new BuildingField(scene);
     this.#buildings.set(
@@ -714,6 +742,14 @@ export class ExploreScene implements AmbientTarget {
 
   /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
+    if (this.#hollowed) {
+      const now = performance.now();
+      for (const s of tile.spots) {
+        if (s.done && !this.#tile.spots.find((o) => o.index === s.index)?.done) {
+          this.#hollowed.searched(s, now);
+        }
+      }
+    }
     this.#tile = tile;
     this.#glintNudge = [];
     this.#placeGlints();
@@ -785,7 +821,21 @@ export class ExploreScene implements AmbientTarget {
   }
 
   /** Steps animations and the follow camera; true while anything still moves (keep drawing). */
+  /** PROTOTYPE (#306 plan): the echo's spook, or null. */
+  spook(keeper: WorldPoint, now: number): WorldPoint | null {
+    return this.#hollowed?.spook(keeper, now) ?? null;
+  }
+
+  get hollowedStats(): { discs: number; sparks: number; echoes: number } | null {
+    return this.#hollowed?.stats ?? null;
+  }
+
+  get echoAt(): WorldPoint | null {
+    return this.#hollowed?.echoAt ?? null;
+  }
+
   step(now: number): boolean {
+    const hollowedLive = this.#hollowed?.step(now) ?? false;
     const dt =
       this.#lastStep === null
         ? 0
@@ -809,8 +859,8 @@ export class ExploreScene implements AmbientTarget {
     this.#now = now;
     const hopping = this.#underwater ? this.#stepSwims(dt) : this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
-    if (!following && !swinging && !hopping) this.#lastStep = null;
-    return keeper || following || swinging || hopping;
+    if (!following && !swinging && !hopping && !hollowedLive) this.#lastStep = null;
+    return keeper || following || swinging || hopping || hollowedLive;
   }
 
   /**

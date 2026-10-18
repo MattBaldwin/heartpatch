@@ -297,6 +297,14 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     tints: ['#ffffff', '#fff6e0', '#ffeef6'],
     jitter: { color: 0.02, height: 0 },
   },
+  // PROTOTYPE (#306 plan): a Hollowed Community's tiles. The post's hut
+  // stands in as the broken house (`middle`); stumps and stones round it.
+  hollowed: {
+    count: [2, 3],
+    items: [item('stump', 2, [1.2, 1.5]), item('stones', 2, [1.2, 1.5]), item('log', 1, [1, 1.2], { single: true })],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
   // Cleared land (#242): a stump, a log and a few stones left from clearing.
   clearing: {
     count: [3, 4],

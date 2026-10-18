@@ -22,6 +22,7 @@ import {
   attachTerrainPlugin,
   DRIFT_ATTRIBUTE,
   TerrainClock,
+  type HollowedDrain,
 } from '../map/terrain-plugin.js';
 import type { Collider } from './explore-world.js';
 import type { SkyLook } from './explore-sky-look.js';
@@ -99,6 +100,8 @@ export interface LandOptions {
    * each layer named in `layers` is drawn from its places with that mesh,
    * one thin-instanced draw call each, on the land's matte material.
    */
+  /** PROTOTYPE (#306 plan): the Hollowed drain the land's materials read. */
+  readonly drain?: HollowedDrain;
   readonly extras?: {
     readonly place: NonNullable<LayoutInput['extras']>;
     readonly layers: Readonly<
@@ -220,13 +223,15 @@ export class ExploreLand {
 
     // ── Growth: one material for the whole land, swaying on the terrain plugin ─
     const landMat = matte(scene, 'land-mat', 0.82);
+    const plugin = options.drain ? { drain: options.drain } : {};
     // GLSL only, like the map: under the opt-in WebGPU renderer nothing sways
     // or drifts, so ambient life stays off rather than hanging motes in the air.
-    this.animated = attachTerrainPlugin(landMat, this.clock) !== null;
+    this.animated = attachTerrainPlugin(landMat, this.clock, plugin) !== null;
     this.#tinted.push({ mat: landMat, base: landMat.albedoColor.clone() });
     const grassMat = matte(scene, 'land-grass-mat', 0.9);
     grassMat.backFaceCulling = false;
-    attachTerrainPlugin(grassMat, this.clock);
+    attachTerrainPlugin(grassMat, this.clock, plugin);
+    if (options.drain && this.#groundMat) attachTerrainPlugin(this.#groundMat, this.clock, plugin);
     this.#tinted.push({ mat: grassMat, base: grassMat.albedoColor.clone() });
 
     const L = this.layout;

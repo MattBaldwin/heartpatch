@@ -4,5 +4,7 @@
  * the owner can read a real device's frame rate on the live site (#335).
  */
 export function showsStats(dev: boolean, params: URLSearchParams): boolean {
+  // `?fps=0` hides it in a dev build too (mockup captures, #306 plan).
+  if (params.get('fps') === '0') return false;
   return dev || params.get('fps') === '1';
 }

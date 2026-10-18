@@ -36,6 +36,8 @@ import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
+import { TERRAINS } from '@heartpatch/shared';
+import { hollowedAt, hollowedClusters, hollowedPanel, previewView } from '../hollowed/hollowed-preview.js';
 import { wildMarkers } from './wild-markers.js';
 import './map.css';
 
@@ -208,7 +210,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let held: ReadonlyMap<HexKey, string> = new Map();
   /** The view as drawn: held land still its Keeper's (#277), only while it's wild. */
   const drawnView = (view: MapView): MapView =>
-    held.size === 0
+    previewView(
+      held.size === 0
       ? view
       : {
           ...view,
@@ -218,7 +221,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
               ? { ...t, ownerUserId: owner, guardianHint: null }
               : t;
           }),
-        };
+        },
+      user?.id ?? null,
+    );
   /** The wild hints for the map on screen (#209). */
   let wild: { mapId: string; tiles: readonly Hex[] } | null = null;
   const drawWild = (): void => {
@@ -315,15 +320,22 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     }
     selected = h;
     scene3d?.select(h);
-    panel.show(
-      describeTile(
-        tile,
-        (id) => state.member(id),
-        user?.id ?? null,
-        seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
-        isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
-      ),
+    const info = describeTile(
+      tile,
+      (id) => state.member(id),
+      user?.id ?? null,
+      seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
+      isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
     );
+    // PROTOTYPE (#306 plan): a Hollowed tile's panel.
+    hollowedClusters(state.view, user?.id ?? null);
+    const community = hollowedAt(hexKey(h));
+    if (community) {
+      const words = hollowedPanel(community, TERRAINS.find((t) => t.id === tile.terrain)?.name ?? 'Land');
+      panel.show({ ...info, ...words, post: { reach: words.reach }, guardians: null });
+    } else {
+      panel.show(info);
+    }
     options.tileActions?.show(panel.actions, tile, state.view);
     options.invalidate();
   };
