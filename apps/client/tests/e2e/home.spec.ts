@@ -372,7 +372,7 @@ test('a home base with no room says why, and Recipe book opens the book and come
   await expect(sheet.locator('[data-build="ember-den"]')).toHaveCount(0);
   await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(1);
   await expect(sheet.getByTestId('build-hint')).toHaveText(
-    'Your home base is full! Take down a building to make room 🏡',
+    'Your home base is full! Tap Not now, then tap one to upgrade ⬆️',
   );
   const hint = (await sheet.getByTestId('build-hint').boundingBox())!;
   const view = page.viewportSize()!;

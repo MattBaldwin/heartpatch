@@ -349,6 +349,12 @@ export const HOME_FULL = 'Your home base is full! Take down a building to make r
 export const HOME_ALL_BUILT =
   'Every squishy home is built! Tap Not now, then tap one to upgrade ⬆️';
 
+/**
+ * No free tile at home, but a home building can still grow (owner 2026-10-18,
+ * with the 4-per-home cap): point to upgrades before "take one down".
+ */
+export const HOME_FULL_GROW = 'Your home base is full! Tap Not now, then tap one to upgrade ⬆️';
+
 /** Every home building is up to its cap, each at its top level (#537). */
 export const HOME_ALL_TOP = 'Every squishy home is built and as big as it gets! 🏆';
 
@@ -558,11 +564,11 @@ export function homeBuildReason(
   const home = rows.filter((r) => r.building.placement === 'home' && inSeason(r.building, seasons));
   const full = (r: BuildRow) => r.option.kind === 'blocked' && r.option.note === HOME_FULL;
   if (home.length === 0 || !home.every((r) => r.option.kind === 'built' || full(r))) return null;
-  if (home.some(full)) return HOME_FULL;
   const ids = new Set(home.map((r) => r.building.id));
   const grows = atHome(everything).buildings.some(
     (b) => ids.has(b.buildingId) && upgradeOffer(everything, b) !== null,
   );
+  if (home.some(full)) return grows ? HOME_FULL_GROW : HOME_FULL;
   return grows ? HOME_ALL_BUILT : HOME_ALL_TOP;
 }
 
