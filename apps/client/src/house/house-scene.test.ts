@@ -921,10 +921,9 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
-    // Blocked on a room-layout call (reported to the coordinator): at level 4
-    // the Snug's back-right bed and the Playroom's back-left piece stand in
-    // front of both doorways into the Hall.
-    it.todo('walks from the Snug into the Heart Hall at level 4');
+    // W3 (doorway clearance): at level 4 the Snug's back-right bed and the
+    // Playroom's back-left piece stand in front of both doorways into the Hall.
+    it.todo('L4: the Hall is reachable from the Snug and the Playroom (W3: doorway clearance)');
 
     it('moves the Keeper as drawn, and puts it without a hop when it jumps', () => {
       const { scene, house } = buildHouse(1, 'low');
