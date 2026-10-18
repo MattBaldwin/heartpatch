@@ -35,7 +35,7 @@ export const HOUSE_PALETTE = {
   frame: '#fff6ec', // TUNE: window frames
   planks: ['#c98b5a', '#d2956a', '#bf7f52'], // TUNE: floor boards, three tones
   /** The gaps between boards: unlit dark wood, the boards' shadow (B5a render check: a lit board read pale mauve at a grazing angle). */
-  groove: '#b07a55', // TUNE: unlit, so it reads about (120, 60, 30) beside the boards' (240, 125, 65)
+  groove: '#6b4630', // TUNE: the cut-edge dark wood; lit with the boards, a gap reads about (125, 60, 30) beside them
   footing: '#8f8279', // TUNE: the stone footing under the house
   lawn: '#a9c58f', // TUNE: a pastel dusk lawn
   lawnLift: '#3a3424', // TUNE: emissive lift so the lawn stays pastel at dusk

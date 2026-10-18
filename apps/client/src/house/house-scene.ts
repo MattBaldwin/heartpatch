@@ -442,12 +442,9 @@ export class HouseScene {
       own.floor.push(...parts.floor);
       own.panes.push(...parts.panes);
     }
-    // The grooves under the boards: in their floor's unlit glow, or with the
-    // boards on a floor with no glow (no draw call of their own either way).
-    for (const { floor, mesh } of grooves) {
-      const own = this.#floorParts(floor);
-      (own.glow.length > 0 ? own.glow : own.floor).push(mesh);
-    }
+    // The grooves under the boards, with the boards (the porch's are the same
+    // board: one continuous line at kid height, B5a render check).
+    for (const { floor, mesh } of grooves) this.#floorParts(floor).floor.push(mesh);
     this.#buildGift(options.gift ?? null, view, plans, options.cast);
     this.#mergeFloors();
     this.#buildBeds();
@@ -1408,16 +1405,16 @@ export class HouseScene {
         HOUSE_KID.porch,
         0,
       );
-      // A board under the porch's boards: no lawn showing through the gaps
-      // (render check, B4), just under their tops in dark wood, so its gaps
-      // run on from the room's dark grooves (B5a render check: deep, their lit
-      // sides read as a pale line).
+      // The groove under the porch's boards, as the room's (no lawn showing
+      // through the gaps, B4; one continuous line with the room's, B5a).
       planks.push(
-        box(
+        floorGroove(
           this.#scene,
-          [run.to - run.from + 2 * past, 0.02, HOUSE_KID.porch],
-          [(run.from + run.to) / 2, -HOUSE_GRID.seamDepth - 0.01, z1 - HOUSE_KID.porch / 2],
-          HOUSE_PALETTE.cap,
+          run.from - past,
+          z1 - HOUSE_KID.porch,
+          run.to - run.from + 2 * past,
+          HOUSE_KID.porch,
+          0,
         ),
       );
       const porch = merged(`house-${id}-porch`, planks);

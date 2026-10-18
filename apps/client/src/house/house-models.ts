@@ -184,10 +184,11 @@ export function floorPlanks(
 }
 
 /**
- * The board under `floorPlanks`' gaps, just below their tops: drawn with the
- * unlit glow (its colour as is), so every gap reads as an even dark groove
- * (B5a: the gap straight ahead of kid height, seen down its length, was a
- * grey slit to the stone footing; a lit board there read pale at that angle).
+ * The board under `floorPlanks`' gaps, just below their tops, in dark wood,
+ * so every gap reads as an even dark groove (B5a: the gap straight ahead of
+ * kid height, seen down its length, was a grey slit to the stone footing;
+ * deep, the boards' lit sides read pale). The room's and the porch's are
+ * the same board, so the line runs on unbroken.
  */
 export function floorGroove(
   scene: Scene,

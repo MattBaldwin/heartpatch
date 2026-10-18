@@ -411,14 +411,10 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
-    it('lays an unlit dark groove just under the floor boards’ tops, so no gap reads as a slit (B5a)', () => {
+    it('lays a dark groove just under the floor boards’ tops, so no gap reads as a slit (B5a)', () => {
       const { scene } = buildHouse(1, 'low');
-      // In the glow (unlit, its colour as is), not the lit boards: no new draw call.
-      const lit = scene.getMeshByName('house-f0-floor')!.getVerticesData('position') ?? [];
-      for (let i = 1; i < lit.length; i += 3)
-        expect(Math.abs(lit[i]! + HOUSE_GRID.seamDepth)).toBeGreaterThan(0.001);
-      const floor = scene.getMeshByName('house-glow-f0')!;
-      expect(floor.material!.name).toBe('house-glow');
+      // With the boards (the porch's groove is the same board): no draw call of its own.
+      const floor = scene.getMeshByName('house-f0-floor')!;
       const pos = floor.getVerticesData('position') ?? [];
       // Boards' tops at 0; the board under them its top a seam's depth down, right across the room.
       const under: number[] = [];
