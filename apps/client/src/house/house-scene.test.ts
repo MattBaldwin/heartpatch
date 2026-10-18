@@ -13,7 +13,14 @@ import {
   residentBoxes,
   safeArea,
 } from './house-camera.js';
-import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_PALETTE, HOUSE_TIMES } from './house-config.js';
+import {
+  HOUSE_GIFT,
+  HOUSE_GRID,
+  HOUSE_KID,
+  HOUSE_PALETTE,
+  HOUSE_TIMES,
+  HOUSE_WALK,
+} from './house-config.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -21,9 +28,10 @@ import { fillTilt } from './house-scene.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
 import { houseLookAtMinute } from './house-light-look.js';
-import { yardPumpkins } from './house-models.js';
+import { BED_FRAME, yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
+import { floorAt, roomAt, slideStep, startSpot } from './house-walk.js';
 import { roomBox } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -307,10 +315,11 @@ describe('house scene', () => {
         const beds = scene.getMeshByName('house-beds') as Mesh;
         const allBeds = sampleHouse(level).view.rooms.reduce((n, r) => n + r.beds, 0);
         expect(beds.thinInstanceCount).toBe(allBeds);
-        // The Snug's two and the Keeper sit under the Kitchen's floor: not drawn.
+        // The Snug's two sit under the Kitchen's floor: not drawn. The Keeper
+        // stays (#381 W1): it walks between floors, so the cut never takes it.
         const all = sampleHouse(level).view.rooms.flatMap((r) => r.residents).length;
         expect(house.stats.residents).toBe(all - 2);
-        expect(house.stats.keeper).toBe(false);
+        expect(house.stats.keeper).toBe(true);
         // And back down: as before.
         house.setFloor(0);
         expect(enabled(scene, /^house-(f1-|glow-f1)/)).toEqual([]);
@@ -318,6 +327,19 @@ describe('house scene', () => {
         scene.getEngine().dispose();
       });
     }
+
+    it('keeps the Keeper through the cut wherever it walks: upstairs in the Kitchen, or down in the Snug', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      house.setRoof(1);
+      const kitchen = house.walkMap.rooms.find((r) => r.look === 'kitchen')!;
+      house.moveKeeper({ x: 2.4, z: 3.5, y: kitchen.y0 }, Math.PI);
+      for (const floor of [1, 0, 1]) {
+        house.setFloor(floor);
+        expect(house.stats.keeper, `floor ${String(floor)}`).toBe(true);
+      }
+      expect(house.keeperSpot).toEqual({ x: 2.4, z: 3.5, y: kitchen.y0 });
+      scene.getEngine().dispose();
+    });
 
     it('fades upstairs away with the roof in the entry glide', () => {
       const { scene, house } = buildHouse(4, 'low');
@@ -837,6 +859,140 @@ describe('house scene', () => {
       const empty = buildHouse(1, 'low', sampleHouse(1, false));
       expect(empty.house.hop(performance.now())).toBe(false);
       empty.scene.getEngine().dispose();
+    });
+  });
+
+  describe("the Keeper's walk (#381 W1)", () => {
+    /** Where the Keeper is drawn: the middle of its pieces' first instances. */
+    const drawnKeeper = (scene: Scene): Vector3 => {
+      scene.render();
+      const at = scene.meshes
+        .filter((m): m is Mesh => /^keeper-/.test(m.name) && 'thinInstanceCount' in m)
+        .filter((m) => m.thinInstanceCount > 0 && !/shadow/.test(m.name))
+        .map((m) => m.thinInstanceGetWorldMatrices()[0]!.getTranslation());
+      expect(at.length).toBeGreaterThan(0);
+      return at.reduce((a, b) => a.add(b), Vector3.Zero()).scale(1 / at.length);
+    };
+
+    it('builds the walkable floor from the rooms, with the beds and furniture as footprints', () => {
+      const { scene, house } = buildHouse(1, 'low');
+      const map = house.walkMap;
+      expect(house.walkMap).toBe(map);
+      const k = house.keeperSpot;
+      expect(floorAt(map, k.x, k.z, k.y)).toBe(0);
+      // The Snug's two beds (thin instances, not solids) block, as does the hearth.
+      const beds = map.blocks.filter(
+        (f) => f.y1 - f.y0 === BED_FRAME.height && f.x1 - f.x0 > 1 && f.z1 - f.z0 > 1,
+      );
+      expect(beds).toHaveLength(sampleHouse(1).view.rooms[0]!.beds);
+      expect(map.blocks.some((f) => f.y1 > 1.5)).toBe(true);
+      // Nothing room-wide or as low as a rug blocks.
+      for (const f of map.blocks) {
+        expect(f.y1 - f.y0).toBeGreaterThanOrEqual(HOUSE_WALK.stepOver);
+        expect((f.x1 - f.x0) * (f.z1 - f.z0)).toBeLessThanOrEqual(HOUSE_WALK.wideIgnore);
+      }
+      scene.getEngine().dispose();
+    });
+
+    it('walks the Heart Hall with its real furniture: round the tree, up the stairs, onto the gallery', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      const map = house.walkMap;
+      const hall = map.rooms.find((r) => r.look === 'heart-hall')!;
+      const ramp = map.ramps[0]!;
+      // The stairs' own piece is found, so the ramp isn't blocked by it.
+      expect(ramp.sides).not.toBeNull();
+      const start = startSpot(map, hall)!;
+      expect(roomAt(map, start)?.id).toBe(hall.id);
+      // Flood the floor from there in 0.1 m steps: the gallery is reached.
+      const seen = new Set<string>();
+      const queue = [{ ...start }];
+      let top = 0;
+      while (queue.length > 0 && seen.size < 20000) {
+        const p = queue.pop()!;
+        top = Math.max(top, p.y);
+        for (const [dx, dz] of [
+          [0.1, 0],
+          [-0.1, 0],
+          [0, 0.1],
+          [0, -0.1],
+        ] as const) {
+          const y = floorAt(map, p.x + dx, p.z + dz, p.y);
+          if (Number.isNaN(y)) continue;
+          const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          queue.push({ x: p.x + dx, z: p.z + dz, y });
+        }
+      }
+      expect(top).toBeCloseTo(HOUSE_GRID.storey);
+      scene.getEngine().dispose();
+    });
+
+    // W3 (doorway clearance): at level 4 the Snug's back-right bed and the
+    // Playroom's back-left piece stand in front of both doorways into the Hall.
+    it.todo('L4: the Hall is reachable from the Snug and the Playroom (W3: doorway clearance)');
+
+    it("walks round today's wrapped gift, and through where it stood once it's opened", () => {
+      const { scene, house } = buildHouse(2, 'low', withGift(sampleHouse(2)));
+      const gift = house.giftPoint!;
+      expect(gift).not.toBeNull();
+      const floor = (house.walkMap.rooms.find((r) => r.look === 'snug') ?? { y0: 0 }).y0;
+      expect(floorAt(house.walkMap, gift.x, gift.z, floor)).toBeNaN();
+      house.removeGift();
+      expect(floorAt(house.walkMap, gift.x, gift.z, floor)).toBe(floor);
+      scene.getEngine().dispose();
+    });
+
+    it('moves the Keeper as drawn, and puts it without a hop when it jumps', () => {
+      const { scene, house } = buildHouse(1, 'low');
+      const was = drawnKeeper(scene);
+      const k = { ...house.keeperSpot };
+      house.moveKeeper({ x: k.x - 1, z: k.z, y: k.y }, house.keeperYaw);
+      const now = drawnKeeper(scene);
+      expect(now.x - was.x).toBeCloseTo(-1, 1);
+      expect(now.z).toBeCloseTo(was.z, 1);
+      // A put is too far for one frame's walk: no hop after it.
+      expect(house.stepWalk(1 / 60, false)).toBe(false);
+      scene.getEngine().dispose();
+    });
+
+    it('hops while it walks and comes to rest after, then costs nothing standing still', () => {
+      const { scene, house } = buildHouse(1, 'low');
+      // Standing still: nothing to draw.
+      expect(house.stepWalk(1 / 60, false)).toBe(false);
+      const at = { ...house.keeperSpot };
+      const map = house.walkMap;
+      let hopping = false;
+      for (let i = 0; i < 30; i += 1) {
+        slideStep(map, at, -HOUSE_WALK.speed / 60, 0);
+        house.moveKeeper(at, Math.PI / 2);
+        hopping = house.stepWalk(1 / 60, false) || hopping;
+      }
+      expect(hopping).toBe(true);
+      let frames = 0;
+      while (house.stepWalk(1 / 60, false) && frames < 600) frames += 1;
+      expect(frames).toBeLessThan(600);
+      expect(house.stepWalk(1 / 60, false)).toBe(false);
+      scene.getEngine().dispose();
+    });
+
+    it("follows the Keeper's room with the focus, and goes back to its first room", () => {
+      const { scene, house } = buildHouse(4, 'low');
+      const first = house.focusRoom;
+      const hall = house.walkMap.rooms.find((r) => r.look === 'heart-hall')!;
+      house.moveKeeper(startSpot(house.walkMap, hall)!, Math.PI);
+      house.setWalkFocus(hall);
+      expect(house.focusRoom).toEqual({
+        minX: hall.x0,
+        maxX: hall.x1,
+        minY: hall.y0,
+        maxY: hall.y1,
+        minZ: hall.z0,
+        maxZ: hall.z1,
+      });
+      house.setWalkFocus(null);
+      expect(house.focusRoom).toBe(first);
+      scene.getEngine().dispose();
     });
   });
 });

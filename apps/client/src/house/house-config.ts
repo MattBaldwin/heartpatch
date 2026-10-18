@@ -303,6 +303,62 @@ export const HOUSE_KID = {
   porch: 5.4, // TUNE
 } as const;
 
+/**
+ * The Keeper walking about inside the house (#381 W1, the approved walk
+ * mockup): its pace and footprint, and the follow camera (house-walk.ts).
+ */
+export const HOUSE_WALK = {
+  /** Metres a second at full push. */
+  speed: 1.5, // TUNE
+  /** The Keeper's footprint, metres: it keeps this far from walls and furniture. */
+  radius: 0.28, // TUNE
+  /** Furniture lower than this is walked over (rugs, mats). */
+  stepOver: 0.15, // TUNE
+  /** A merged piece bigger than this across the floor (beams, bunting, the gallery) never blocks, m². */
+  wideIgnore: 6, // TUNE
+  /** How far a floor may be from the Keeper's height and still be stepped onto, metres. */
+  floorReach: 0.45, // TUNE
+  /** How far the stairs' height may be from the Keeper's and still be stepped onto, metres. */
+  rampReach: 0.6, // TUNE
+  /** The camera's eye above the Keeper's floor: kid height, a little over its head. */
+  eyeHeight: 1.7, // TUNE
+  /** How far behind the Keeper the camera stands, metres. */
+  back: 3.4, // TUNE
+  /** The camera never turns more than this from looking into the house, degrees. */
+  maxYaw: 28, // TUNE
+  /** It turns this share of the way to the Keeper's heading (up to `maxYaw`). */
+  turnShare: 0.5, // TUNE
+  /** Heading further round than this (toward the camera), it looks straight in, radians. */
+  turnAway: 1.9, // TUNE
+  /** It looks at about the Keeper's chest... */
+  lookHeight: 0.55, // TUNE
+  /** ...this far ahead of it, metres. */
+  lookAhead: 1.2, // TUNE
+  /** The camera's eye and what it looks at stay at least this far apart across the floor, metres. */
+  minSpan: 0.5, // TUNE
+  /** Squeezed right up to the Keeper, the camera climbs this much more, metres, and looks down. */
+  squeezeRise: 2.0, // TUNE
+  /** An inner room's camera stops this far inside its front wall, metres. */
+  frontMargin: 0.3, // TUNE
+  /** ...and this far from its side walls. */
+  sideMargin: 0.3, // TUNE
+  /** ...and this far under its ceiling. */
+  ceilingMargin: 0.3, // TUNE
+  /** A front room's camera may stand this far out on the porch, metres. */
+  porchBack: HOUSE_KID.minStandBack,
+  /** The camera keeps this far from furniture across the floor (the low tier's Kitchen table), metres. */
+  nearClear: 0.45, // TUNE
+  /** How finely the camera is drawn in toward the Keeper to clear furniture, metres. */
+  nearStep: 0.1, // TUNE
+  /** Horizontal view angle, degrees; a tall phone's vertical one is capped at `maxFov`. */
+  hfov: 74, // TUNE
+  maxFov: 80, // TUNE
+  /** Seconds for the camera to catch up (an exponential ease). */
+  lag: 0.28, // TUNE
+  /** Where a Keeper put into a room stands, as shares of its walkable width and depth. */
+  start: [0.5, 0.5], // TUNE
+} as const;
+
 /** The roof-off entry glide (a cinematic `Timeline` shot). */
 export const HOUSE_GLIDE = {
   seconds: 1.8, // TUNE
