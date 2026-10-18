@@ -81,6 +81,8 @@ describe('finding the tile whose fence broke (#527)', () => {
     const over = status([{ q: 3, r: 3, until: new Date(NOW - 1000).toISOString() }]);
     expect(brokenTileOf(over, ENDED)).toBeNull();
     expect(brokenTileOf(status(undefined), ENDED)).toBeNull();
+    // A battle with no end time can't be matched to a window.
+    expect(brokenTileOf(status([{ q: 1, r: 1, until: UNTIL }]), null)).toBeNull();
   });
 });
 

@@ -334,7 +334,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let shownLog = 0;
   let queue: PlaybackStep[] = [];
   let waiting = false;
-  let keepingGoing = false;
+  /** The card whose Keep going is on its way (#527), so another card's isn't held up. */
+  let keepingGoingFor: PlayerBattle | null = null;
   const sendDeps = {
     newKey: newIdempotencyKey,
     wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -673,8 +674,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   /** "Keep going!" on a broken fence's card (#527): the guard showdown opens right here. */
   const goOn = async (b: PlayerBattle): Promise<void> => {
-    if (keepingGoing) return;
-    keepingGoing = true;
+    if (keepingGoingFor === b) return;
+    keepingGoingFor = b;
     hud.setKeepGoingBusy(true);
     try {
       const outcome = await keepGoing(
@@ -691,8 +692,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (outcome.kind === 'battle') open(outcome.battle);
       else if (outcome.kind === 'say') hud.refuseKeepGoing(outcome.text, KEEP_GOING_TEXT.ok);
     } finally {
-      keepingGoing = false;
-      hud.setKeepGoingBusy(false);
+      if (keepingGoingFor === b) keepingGoingFor = null;
+      if (battle === b) hud.setKeepGoingBusy(false);
     }
   };
 

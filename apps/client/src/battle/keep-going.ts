@@ -47,13 +47,13 @@ const MINUTE_MS = 60 * 1000;
  * The tile whose broken fence this battle was. A battle doesn't say which tile
  * it was on, so it is the open "Keep going" window (`fenceBroken`) that ends
  * closest to when this battle ended plus the window, as the server counts it.
- * Null when no window is open.
+ * Null when no window is open, or the battle has no end time.
  */
 export function brokenTileOf(status: TerritoryStatus, endedAt: string | null): Hex | null {
+  if (endedAt === null) return null;
   const now = Date.parse(status.now);
   const open = (status.fenceBroken ?? []).filter((b) => Date.parse(b.until) > now);
-  const want =
-    endedAt === null ? Infinity : Date.parse(endedAt) + FENCE_RULES.keepGoingMinutes * MINUTE_MS;
+  const want = Date.parse(endedAt) + FENCE_RULES.keepGoingMinutes * MINUTE_MS;
   let best: Hex | null = null;
   let bestGap = Infinity;
   for (const b of open) {
