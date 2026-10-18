@@ -38,4 +38,18 @@ describe('@heartpatch/shared/server', () => {
       expect(name in publicEntry).toBe(false);
     }
   });
+
+  it("keeps trick-or-treat's prize table, its schema and the roll server-only (#515)", () => {
+    for (const name of [
+      'TRICK_OR_TREAT_PRIZES',
+      'TrickOrTreatPrizesSchema',
+      'checkTrickOrTreatPrizes',
+      'trickOrTreatCostumes',
+      'rollTrickOrTreat',
+      'trickOrTreatSeed',
+    ]) {
+      expect(name in serverEntry).toBe(true);
+      expect(name in publicEntry).toBe(false);
+    }
+  });
 });

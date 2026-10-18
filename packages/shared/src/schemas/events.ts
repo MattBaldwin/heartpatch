@@ -13,6 +13,7 @@ import { RaidOutcomeSchema } from './raids.js';
 import { TradeKindSchema, TradeLineSchema } from './trading.js';
 import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
+import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -748,6 +749,32 @@ export const GAME_EVENTS = {
       userId: z.uuid(),
       squishyId: z.uuid(),
       roomId: ContentIdSchema.nullable(),
+    }),
+  },
+  /**
+   * A Keeper trick-or-treated at a patch-mate's home (#515). The visitor hears
+   * the treat; the host hears who came, never what they got; nobody else
+   * hears it (`trickVisitedView`). `hostHeartdust` is the host's thank-you.
+   */
+  'trick.visited': {
+    internal: z.strictObject({
+      visitId: z.uuid(),
+      visitorUserId: z.uuid(),
+      hostUserId: z.uuid(),
+      /** The patch's local day of the visit. */
+      day: LocalDateSchema,
+      lantern: z.boolean(),
+      trick: z.boolean(),
+      prize: TrickOrTreatPrizeSchema,
+      hostHeartdust: z.number().int().min(0),
+    }),
+    public: z.object({
+      visitId: z.uuid(),
+      visitorUserId: z.uuid(),
+      hostUserId: z.uuid(),
+      day: LocalDateSchema,
+      /** Only in the visitor's view. */
+      prize: TrickOrTreatPrizeSchema.optional(),
     }),
   },
   /**

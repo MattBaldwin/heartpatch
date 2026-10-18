@@ -43,6 +43,20 @@ export async function migrateBefore(db: Database, tag: string): Promise<void> {
 }
 
 /**
+ * Applies every migration but `tag`: tests that seed what `tag` forbids and
+ * then run the app, which reads tables added after it (#515's
+ * `trick_or_treat_visits`). Never follow it with `runMigrations`: drizzle
+ * skips a migration older than the newest applied, so `tag` would never run.
+ */
+export async function migrateWithout(db: Database, tag: string): Promise<void> {
+  const cut = migrationMillis(tag);
+  await apply(
+    db,
+    readMigrationFiles({ migrationsFolder }).filter((m) => m.folderMillis !== cut),
+  );
+}
+
+/**
  * Applies every pending migration. Safe to re-run: applied ones are skipped.
  *
  * In two steps around migration B (#295): the migrations before it, then

@@ -34,8 +34,9 @@ export const CLOTHING_RARITIES = ClothingRaritySchema.options;
  * - `milestone`: a milestone's signature piece (#44); account-bound.
  * - `boutique`: bought with Patch Coins (#45); needs `boutiquePrice`.
  * - `present`: inside a Christmas present (Phase 3).
- * - `trick-or-treat`: a trick-or-treat prize (#515): the squishy costumes. The prize
- *   table is server-only (CLAUDE.md rule 6).
+ * - `trick-or-treat`: a treat from a patch-mate's home in the Halloween season
+ *   (#515): the #261 Halloween Keeper costumes and the squishy costumes, by
+ *   the server's prize table (`@heartpatch/shared/server`, CLAUDE.md rule 6).
  */
 export const ClothingSourceSchema = z.enum([
   'starter',

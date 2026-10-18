@@ -43,6 +43,8 @@ import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
 import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
+import { trickOrTreatRoutes } from './modules/trick-or-treat/routes.js';
+import { createTrickOrTreatService } from './modules/trick-or-treat/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
@@ -433,6 +435,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The trading post's Glimmer swap (#523).
         await api.register(
           glimmerSwapRoutes(createGlimmerSwapService({ db, clock }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Trick-or-treat at patch-mates' homes (#515).
+        await api.register(
+          trickOrTreatRoutes(createTrickOrTreatService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

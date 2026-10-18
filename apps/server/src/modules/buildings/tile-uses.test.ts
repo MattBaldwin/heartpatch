@@ -73,7 +73,7 @@ describe.skipIf(!url)('one building per tile: the tidy-up pass (#295, needs DATA
   // index only a patch from before it can hold them: a scratch database
   // migrated up to it.
   beforeAll(async () => {
-    scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
+    scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10, without: true });
     client = scratch.client;
     db = client.db;
   });
