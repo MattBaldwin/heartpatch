@@ -462,50 +462,53 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   expect(again.gl).not.toBeNull();
   expect(again.gl?.buffers ?? Infinity).toBeLessThanOrEqual(REBUILD_BUFFER_CEILING);
 
-  // A find with the Shovel: up to a mound, the Keeper takes the Shovel out,
-  // digs it the easy way, then the toast and its cheer. Every program those
-  // draw with was compiled while the scene loaded (#501 D1): one compiled
-  // mid-find is a 50–300 ms stall on a phone.
-  const mounds = (await exploreState(page))!.spots.filter((s) => s.tool === 'shovel');
-  if (mounds.length > 0) {
-    await expect.poll(async () => (await exploreState(page))?.scene?.warm, slow).toBe(true);
-    const warmed = (await exploreState(page))!.scene!;
-    const ids = mounds.map((s) => s.index);
-    let reached = false;
-    for (const mound of nearestFirst(mounds, (await exploreState(page))!.keeper).slice(0, 4)) {
-      if ((reached = await walkTo(page, mound.index, ids))) break;
+  try {
+    // A find with the Shovel: up to a mound, the Keeper takes the Shovel out,
+    // digs it the easy way, then the toast and its cheer. Every program those
+    // draw with was compiled while the scene loaded (#501 D1): one compiled
+    // mid-find is a 50–300 ms stall on a phone.
+    const mounds = (await exploreState(page))!.spots.filter((s) => s.tool === 'shovel');
+    if (mounds.length > 0) {
+      await expect.poll(async () => (await exploreState(page))?.scene?.warm, slow).toBe(true);
+      const warmed = (await exploreState(page))!.scene!;
+      const ids = mounds.map((s) => s.index);
+      let reached = false;
+      for (const mound of nearestFirst(mounds, (await exploreState(page))!.keeper).slice(0, 4)) {
+        if ((reached = await walkTo(page, mound.index, ids))) break;
+      }
+      expect(reached, 'walked up to a mound').toBe(true);
+      await expect.poll(async () => (await exploreState(page))?.scene?.held, slow).toBe('shovel');
+      await slowExpect(page.getByTestId('explore-action')).toBeEnabled();
+      await page.getByTestId('explore-action').tap();
+      const play = page.getByTestId('explore-play');
+      await slowExpect(play).toBeVisible();
+      // A scoop a tap, until it's dug.
+      for (let i = 0; i < 12 && (await play.isVisible()); i++) {
+        await page.getByTestId('explore-easy').tap();
+      }
+      // Found (a toast or a card), then a moment for its cheer.
+      await expect
+        .poll(async () => (await exploreState(page))?.scene?.done, slow)
+        .toBe(warmed.done + 1);
+      await page.waitForTimeout(2_000);
+      const found = (await exploreState(page))!.scene!;
+      test.info().annotations.push({
+        type: 'programs in a find',
+        description: String((found.gl?.programs ?? 0) - (warmed.gl?.programs ?? 0)),
+      });
+      expect(found.gl?.programs).toBe(warmed.gl?.programs);
+    } else {
+      test.info().annotations.push({
+        type: 'skipped',
+        description: 'programs in a find (#501): no mound on this tile',
+      });
     }
-    expect(reached, 'walked up to a mound').toBe(true);
-    await expect.poll(async () => (await exploreState(page))?.scene?.held, slow).toBe('shovel');
-    await slowExpect(page.getByTestId('explore-action')).toBeEnabled();
-    await page.getByTestId('explore-action').tap();
-    const play = page.getByTestId('explore-play');
-    await slowExpect(play).toBeVisible();
-    // A scoop a tap, until it's dug.
-    for (let i = 0; i < 12 && (await play.isVisible()); i++) {
-      await page.getByTestId('explore-easy').tap();
-    }
-    // Found (a toast or a card), then a moment for its cheer.
-    await expect
-      .poll(async () => (await exploreState(page))?.scene?.done, slow)
-      .toBe(warmed.done + 1);
-    await page.waitForTimeout(2_000);
-    const found = (await exploreState(page))!.scene!;
-    test.info().annotations.push({
-      type: 'programs in a find',
-      description: String((found.gl?.programs ?? 0) - (warmed.gl?.programs ?? 0)),
-    });
-    expect(found.gl?.programs).toBe(warmed.gl?.programs);
-  } else {
-    test.info().annotations.push({
-      type: 'skipped',
-      description: 'programs in a find (#501): no mound on this tile',
-    });
+    expect(errors).toEqual([]);
+  } finally {
+    // Pinned, its ambient life never stops for a slow renderer: close it, so it
+    // doesn't keep drawing under the next test.
+    await page.context().close();
   }
-  expect(errors).toEqual([]);
-  // Pinned, its ambient life never stops for a slow renderer: close it, so it
-  // doesn't keep drawing under the next test.
-  await page.context().close();
 });
 
 test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ browser }) => {

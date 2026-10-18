@@ -3,7 +3,6 @@ import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
-import { Engine } from '@babylonjs/core/Engines/engine';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
@@ -23,7 +22,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
-import { countGl, type GlCounts } from '../engine/gl-counters.js';
+import { countGl, type CountedGl, type GlCounts } from '../engine/gl-counters.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
 import { ExploreLand, type LandStats } from './explore-land.js';
 import { ExploreWater, lakeExtras, type WaterStats } from './explore-water.js';
@@ -426,8 +425,10 @@ export class ExploreScene implements AmbientTarget {
     scene.onNewMaterialAddedObservable.add(() => this.#created.materials++);
     scene.onNewTextureAddedObservable.add(() => this.#created.textures++);
     scene.onNewGeometryAddedObservable.add(() => this.#created.geometries++);
-    const engine = scene.getEngine();
-    const counts = import.meta.env.DEV && engine instanceof Engine ? countGl(engine._gl) : null;
+    // Duck-typed (WebGL has a context, WebGPU none): a value import of `Engine`
+    // would pull the WebGL engine into the first load (`renderer.ts` loads it on demand).
+    const gl = (scene.getEngine() as { _gl?: CountedGl | null })._gl;
+    const counts = import.meta.env.DEV && gl ? countGl(gl) : null;
     this.#gl = counts ? { counts, atOpen: { ...counts } } : null;
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
@@ -728,18 +729,24 @@ export class ExploreScene implements AmbientTarget {
         }
         if (scene.isDisposed) return;
       }
-    })().then(() => {
-      if (scene.isDisposed) return;
       // Back to no instances, unless the fade has taken a copy over meanwhile.
       // Only now: a compile still polling would take the uninstanced program.
       for (const { faded, spots } of this.#props.values()) {
         if (!spots.some((s) => this.#hiding.has(s.index))) setInstances(faded, []);
       }
       this.#warm = true;
-    });
+    })();
     // A compile that never finishes holds the stage no longer than `EXPLORE_PREWARM.maxMs`.
-    await Promise.race([compiled, new Promise((done) => setTimeout(done, EXPLORE_PREWARM.maxMs))]);
-    if (!scene.isDisposed) scene.removePendingData(pending);
+    let cap: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        compiled,
+        new Promise((done) => (cap = setTimeout(done, EXPLORE_PREWARM.maxMs))),
+      ]);
+    } finally {
+      clearTimeout(cap);
+      if (!scene.isDisposed) scene.removePendingData(pending);
+    }
   }
 
   get stats(): ExploreSceneStats {
@@ -1246,7 +1253,10 @@ export class ExploreScene implements AmbientTarget {
       faded.length = 0;
       for (const s of batch.spots) (hiding.has(s.index) ? faded : solid).push(s.matrix);
       setInstances(batch.mesh, solid, true);
-      setInstances(batch.faded, faded, true);
+      // While `#prewarm` compiles, a copy keeps the instances it was lent (hidden),
+      // so its program is still the instanced one.
+      if (faded.length === 0 && !this.#warm) batch.faded.setEnabled(false);
+      else setInstances(batch.faded, faded, true);
     }
   }
 

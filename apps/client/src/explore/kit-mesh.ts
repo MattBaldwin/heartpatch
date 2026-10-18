@@ -146,7 +146,9 @@ function upload(engine: AbstractEngine, name: string, part: Part): Kit {
   for (const [kind, key, size] of ATTRIBUTES) {
     const values = data[key];
     if (!values) continue;
-    attributes.push([kind, new Buffer(engine, Float32Array.from(values), false, size)]);
+    const floats = Float32Array.from(values);
+    const label = `${name}-${kind}`;
+    attributes.push([kind, new Buffer(engine, floats, false, size, false, false, false, 1, label)]);
   }
   const indices = data.indices ?? [];
   return {
