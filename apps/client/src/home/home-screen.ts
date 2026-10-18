@@ -44,6 +44,7 @@ import {
   buildingName,
   buildingNote,
   buildRows,
+  homeBuildReason,
   effectChips,
   costText,
   upgradeOffer,
@@ -119,7 +120,8 @@ export interface HomeScreenOptions {
   onSquishies?: (mapId: string) => void;
   /**
    * "📖 Recipe book" on a build row short of something you make (the
-   * Jack-o'-Lantern): leaves the home and opens the recipe book.
+   * Jack-o'-Lantern). Said just before the home closes: the book opens over
+   * the map once it's back, and shutting the book comes home again (#537).
    */
   onRecipeBook?: () => void;
   api?: HomeApi;
@@ -572,9 +574,12 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
    * (the first until a tap says otherwise).
    */
   const buildView = (current: HomeResponse) => {
-    const rows = buildRows(current).filter(
+    const all = buildRows(current);
+    const rows = all.filter(
       (r) => r.option.kind !== 'built' && r.option.kind !== 'land' && r.option.kind !== 'homestead',
     );
+    // Home buildings at their cap have no card: say why nothing more goes up (#537).
+    const reason = homeBuildReason(current, all);
     const cards: BuildCard[] = rows.map((r) => ({
       id: r.building.id,
       icon: r.icon,
@@ -597,7 +602,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       spots.find((s) => s.q === wanted?.q && s.r === wanted.r && s.spot === wanted.spot) ??
       spots[0] ??
       null;
-    return { cards, card, spots, spot };
+    return { cards, card, spots, spot, reason };
   };
 
   // ── Drawing ───────────────────────────────────────────────────────────
@@ -744,7 +749,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           bag: current.items,
           areas: view.spot ? 1 : 0,
           hint:
-            view.spots.length === 0 ? '' : mode.spot ? BUILD_TEXT.spotChosen : BUILD_TEXT.tapSpot,
+            view.reason ??
+            (view.spots.length === 0 ? '' : mode.spot ? BUILD_TEXT.spotChosen : BUILD_TEXT.tapSpot),
           allEdges: null,
           working,
           // The Hearthfire has no card here: it goes out on my land.
@@ -761,8 +767,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           },
           onRecipeBook: options.onRecipeBook
             ? () => {
-                close();
                 options.onRecipeBook?.();
+                close();
               }
             : undefined,
         });

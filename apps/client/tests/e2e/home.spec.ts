@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { draws, hook, idle } from './dev-hook.js';
+import { api, draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { closeRoster } from './roster.js';
 import { trayButton } from './trays.js';
@@ -284,6 +284,113 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await slowExpect(panel).toContainText('Cozy Meadow');
   await panel.getByTestId('tile-home').tap();
   await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
+
+  expect(errors).toEqual([]);
+});
+
+/** Builds through the server, as the Build sheet's Build! does (an idempotency key each). */
+async function buildAt(
+  page: Page,
+  mapId: string,
+  body: { buildingId: string; q: number; r: number; spot: number },
+): Promise<number> {
+  return page.evaluate(
+    async ({ mapId, body }) => {
+      const res = await fetch(`/api/v1/maps/${mapId}/buildings`, {
+        method: 'POST',
+        headers: {
+          'x-requested-with': 'heartpatch',
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify(body),
+      });
+      return res.status;
+    },
+    { mapId, body },
+  );
+}
+
+interface BookDebug {
+  open: boolean;
+}
+
+test('a home base with no room says why, and Recipe book opens the book and comes home (#537)', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000); // two home scene builds and the map between; CI renders in software
+  const page = await newPlayer(browser, uniqueName('full'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Full Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await expect
+    .poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+
+  // Every Ember Den and Cozy Meadow the home base holds (two each), on four ring tiles.
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 40, stone: 20 } }))
+      .status,
+  ).toBe(201);
+  const home = await api<{ tiles: { q: number; r: number; heartSeed: boolean }[] }>(
+    page,
+    'GET',
+    `/maps/${mapId}/home`,
+  );
+  const ring = home.body.tiles.filter((t) => !t.heartSeed);
+  for (const [i, buildingId] of [
+    'ember-den',
+    'ember-den',
+    'cozy-meadow',
+    'cozy-meadow',
+  ].entries()) {
+    const tile = ring[i]!;
+    expect(await buildAt(page, mapId, { buildingId, q: tile.q, r: tile.r, spot: 1 })).toBeLessThan(
+      300,
+    );
+  }
+
+  // Build: no den or meadow card, and the sheet says why (the owner saw no reason).
+  await (await trayButton(page, 'home-open')).tap();
+  const slow = { timeout: 30_000 };
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(4);
+  const sheet = page.getByTestId('home');
+  await sheet.getByTestId('home-build').tap();
+  await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();
+  await expect(sheet.locator('[data-build="ember-den"]')).toHaveCount(0);
+  await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(0);
+  await expect(sheet.getByTestId('build-hint')).toHaveText(
+    'No room for more squishy homes! Tap one to upgrade it ⬆️',
+  );
+  const hint = (await sheet.getByTestId('build-hint').boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(hint.x + hint.width).toBeLessThanOrEqual(view.width);
+  expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
+
+  // The lantern card: carve one first, in the recipe book. The book opens…
+  await sheet.locator('[data-build="jack-o-lantern-hearthfire"]').tap();
+  await expect(sheet.getByTestId('build-detail')).toContainText('Carve a');
+  await sheet.getByTestId('build-recipe').tap();
+  const book = page.getByTestId('recipe-book');
+  await slowExpect(book).toBeVisible();
+  expect((await hook<BookDebug>(page, 'recipeBook'))?.open).toBe(true);
+  // …and shutting it goes back home, not to the map. A "New page!" card may
+  // come first, now or once the book has asked the server; leave it for later.
+  const later = page.getByTestId('recipe-book-new-page').getByRole('button', { name: 'Later' });
+  await expect(async () => {
+    if (await later.isVisible()) await later.tap();
+    await book.getByTestId('recipe-book-close').tap({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(book).toBeHidden();
+  await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
+  await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
+  await slowExpect(page.getByTestId('map-hud')).toBeHidden();
 
   expect(errors).toEqual([]);
 });

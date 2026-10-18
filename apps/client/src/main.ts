@@ -612,6 +612,8 @@ document.body.append(homeSquishies, exploreSquishies);
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
+/** Home's Build sheet asked for the recipe book (#537): it opens once the map is back. */
+let bookFromHome = false;
 const home = createHomeScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -637,8 +639,9 @@ const home = createHomeScreen({
   loadWorkMoods: (mapId) => {
     jobs.loadView(mapId);
   },
+  // Home closes next; the book opens once the map is back (#537).
   onRecipeBook: () => {
-    recipeBook.open();
+    bookFromHome = true;
   },
   onOpen: (mapId) => {
     rosterMapId.home = mapId;
@@ -681,8 +684,14 @@ const home = createHomeScreen({
         void battles.setMap(mapId);
         home.setMap(mapId);
         explore.setMap(mapId);
+        // "📖 Recipe book" on home's Build sheet (#537): shutting the book goes home again.
+        if (bookFromHome) {
+          bookFromHome = false;
+          recipeBook.open(() => void home.open());
+        }
       })
       .catch((err: unknown) => {
+        bookFromHome = false;
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       });
     lobby.hide();

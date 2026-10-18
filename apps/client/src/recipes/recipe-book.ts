@@ -84,7 +84,12 @@ export interface RecipeBook {
   setUser: (user: PublicUser | null) => void;
   /** Asks the server which pages are open (after something new was collected). */
   check: () => Promise<void>;
-  open: () => void;
+  /**
+   * Opens the book on the map on screen. `back`: where shutting it (✕ or
+   * Escape) goes next, such as home's Build sheet (#537); any other way out
+   * (Find on map, Build it) forgets it.
+   */
+  open: (back?: () => void) => void;
   close: () => void;
   readonly isOpen: boolean;
   readonly debug: RecipeBookDebug | null;
@@ -211,7 +216,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     '×',
   );
   closeButton.addEventListener('click', () => {
-    closeBook();
+    shutBook();
   });
   const title = el('h2', { class: 'rbook-title', id: 'rbook-title' });
   const bookmark = el(
@@ -447,9 +452,12 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   /** Where focus goes back to when the book shuts (VoiceOver, keyboards). */
   let returnFocus: HTMLElement | null = null;
+  /** Where shutting the book goes next (#537), or null: stay on the map. */
+  let goBack: (() => void) | null = null;
 
-  function openBook(): void {
+  function openBook(back?: () => void): void {
     if (!mapId) return;
+    goBack = back ?? null;
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     book.hidden = false;
     searching = false;
@@ -466,6 +474,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   }
 
   function closeBook(): void {
+    goBack = null;
     const wasOpen = !book.hidden;
     book.hidden = true;
     searching = false;
@@ -473,6 +482,13 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     render('none');
     if (wasOpen && returnFocus?.isConnected && !returnFocus.closest('[inert]')) returnFocus.focus();
     returnFocus = null;
+  }
+
+  /** ✕ or Escape: shut, then back to where the book was opened from. */
+  function shutBook(): void {
+    const back = goBack;
+    closeBook();
+    back?.();
   }
 
   function goTo(key: string, dir: 1 | -1 | 0): void {
@@ -1037,7 +1053,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       if (searching) {
         searching = false;
         render('none');
-      } else closeBook();
+      } else shutBook();
     } else if (!searching && e.key === 'ArrowRight') turn(1);
     else if (!searching && e.key === 'ArrowLeft') turn(-1);
   });

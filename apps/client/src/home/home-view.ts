@@ -13,6 +13,7 @@ import {
   isBuildable,
   removeRefund,
   shortfall,
+  tileUseRefusal,
   upgradeCost,
   type Building,
   type BuildingEffect,
@@ -338,6 +339,15 @@ export const FIRES_ON_LAND =
 /** My one homestead building of a kind is up (the Crafting Factory, #295). */
 export const BUILT_ON_HOMESTEAD = 'Built! Tap it on its homestead to open it.';
 
+/** No free tile left at home (#537): one building per tile (#295), and every one is taken. */
+export const HOME_FULL = 'Your home base is full! Move or take down a building to make room 🏡';
+
+/** Every home building is up to its cap (#537), and one can still grow. */
+export const HOME_ALL_BUILT = 'No room for more squishy homes! Tap one to upgrade it ⬆️';
+
+/** Every home building is up to its cap, each at its top level (#537). */
+export const HOME_ALL_TOP = 'Every squishy home is built and as big as it gets! 🏆';
+
 /** Where homestead buildings go, on the build sheet (#277 Training Grounds, #295 the Crafting Factory). */
 export const ON_HOMESTEAD =
   'Goes on a homestead 🏡. Explore a tile next to home, then tap it on the map to build!';
@@ -501,6 +511,9 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
         } else if (!inSeason(building, seasons)) {
           const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
           option = { kind: 'blocked', note: `Only around ${season}.` };
+        } else if (freeHomeSpots(home, null, building.slot).length === 0) {
+          // Before what it costs: gathering more wouldn't make room (#537).
+          option = { kind: 'blocked', note: HOME_FULL };
         } else if (crafted) {
           const verb = CRAFT_VERBS[crafted] ?? 'Make';
           option = {
@@ -509,8 +522,6 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           };
         } else if (short.length > 0) {
           option = { kind: 'short' };
-        } else if (freeHomeSpots(home, null, building.slot).length === 0) {
-          option = { kind: 'blocked', note: 'No room left. Take something down first.' };
         }
         return {
           building,
@@ -527,6 +538,28 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
         };
       })
   );
+}
+
+/**
+ * Why nothing more goes up at home (#537), for the top of the Build sheet, or
+ * null while a home building could still go up (gathering or carving aside).
+ * Home buildings at their cap have no card, so without this line a kid sees
+ * a near-empty picker and no reason.
+ */
+export function homeBuildReason(
+  everything: HomeResponse,
+  rows: readonly BuildRow[] = buildRows(everything),
+): string | null {
+  const seasons = new Set(everything.seasons);
+  const home = rows.filter((r) => r.building.placement === 'home' && inSeason(r.building, seasons));
+  const full = (r: BuildRow) => r.option.kind === 'blocked' && r.option.note === HOME_FULL;
+  if (home.length === 0 || !home.every((r) => r.option.kind === 'built' || full(r))) return null;
+  if (home.some(full)) return HOME_FULL;
+  const ids = new Set(home.map((r) => r.building.id));
+  const grows = atHome(everything).buildings.some(
+    (b) => ids.has(b.buildingId) && upgradeOffer(everything, b) !== null,
+  );
+  return grows ? HOME_ALL_BUILT : HOME_ALL_TOP;
 }
 
 /** What upgrading one of my buildings would do (owner decision 2026-10-06). */
@@ -640,8 +673,10 @@ export interface HomeSpot {
 
 /**
  * Every free spot on my home base: the Heart Seed tile first, then the ring
- * in `q, r` order, spots in order. `except` is a building being moved (its
- * own spot counts as free); `slot` keeps only that kind of spot (#204).
+ * in `q, r` order, spots in order. One building per tile (#295, shared
+ * `tileUseRefusal`, as the server checks it): a tile with a building on it
+ * has no free spot (#537). `except` is a building being moved (its own tile
+ * counts as free); `slot` keeps only that kind of spot (#204).
  */
 export function freeHomeSpots(
   home: HomeResponse,
@@ -658,6 +693,16 @@ export function freeHomeSpots(
         .filter((b) => b.id !== except && b.q === tile.q && b.r === tile.r)
         .map((b) => b.spot),
     );
+    const use = { id: hexKey(tile), q: tile.q, r: tile.r, homeSlot: 0, homestead: null };
+    if (
+      tileUseRefusal(
+        { placement: 'home' },
+        { ...use, nodeResource: tile.nodeResource },
+        taken.size > 0,
+      )
+    ) {
+      continue;
+    }
     for (const spot of freeSpots(RULES, tile, taken, slot)) {
       spots.push({ q: tile.q, r: tile.r, spot });
     }
