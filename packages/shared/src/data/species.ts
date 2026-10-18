@@ -2389,12 +2389,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
   },
-  // #495 grown-up (stage 4): Snugglenook grows a big cuddly ruff and a plume tail.
+  // #495 grown-up (stage 4): Snugglenook gets small gold antlers, a big cuddly ruff and a plume tail.
   {
     id: 'cuddlestag',
     name: 'Cuddlestag',
     description:
-      'A huge, soft shadow with a cuddly ruff and a big plume tail. Hugs last a very long time.',
+      'A huge, soft shadow with gold antlers, a cuddly ruff and a big plume tail. Hugs last a very long time.',
     element: 'shadow',
     feeling: 'cozy',
     rarity: 'epic',
@@ -2408,7 +2408,7 @@ export const SPECIES: Species[] = [
         'sharp-eyes',
         'smirk',
         'blush-cheeks',
-        'long-ears',
+        'round-ears',
         'antlers',
         'fur-ruff',
         'stubby-arms',
@@ -3672,12 +3672,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Maplecrunch grows green gliding flaps and red wings to go with its mane.
+  // #495 grown-up (stage 4): Maplecrunch grows green gliding flaps and big red wings to go with its mane.
   {
     id: 'maplegale',
     name: 'Maplegale',
     description:
-      'A gliding squirrel with a huge maple mane and leafy flaps. It rides the autumn wind.',
+      'A gliding squirrel with a huge maple mane, red wings and leafy flaps. It rides the autumn wind.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
@@ -3698,7 +3698,7 @@ export const SPECIES: Species[] = [
         'maple-mane',
         'stuck-leaf',
         'leaf-arms',
-        'plume-wings',
+        'big-wings',
         'biped-legs',
         'bushy-tail',
       ],
@@ -3745,12 +3745,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['cozy', 'joy'] },
   },
-  // #495 grown-up (stage 4): Huddlenut grows a leafy frill and a big bushy tail.
+  // #495 grown-up (stage 4): Huddlenut grows a big fluffy ruff and a bushy tail.
   {
     id: 'hoardacorn',
     name: 'Hoardacorn',
     description:
-      'A round, huge-cheeked acorn with a leafy frill and a big bushy tail. It shares snacks. Eventually.',
+      'A round, huge-cheeked acorn with a big fluffy ruff and a bushy tail. It shares snacks. Eventually.',
     element: 'leaf',
     feeling: 'cozy',
     rarity: 'epic',
@@ -3770,7 +3770,7 @@ export const SPECIES: Species[] = [
         'acorn-scales',
         'acorn-stem',
         'buck-teeth',
-        'maple-mane',
+        'fur-ruff',
         'stuck-leaf',
         'round-paws',
         'bushy-tail',
