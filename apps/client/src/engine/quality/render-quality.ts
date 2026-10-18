@@ -1,32 +1,32 @@
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
-import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import type { Scene } from '@babylonjs/core/scene';
-import { LIGHTING, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
-import { hardwareScalingFor } from '../dpr.js';
+import { LIGHTING, QUALITY_TIERS, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
+import { cappedPixelRatio, hardwareScalingFor } from '../dpr.js';
 import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { PostChain } from './post-chain.js';
 import { setRareGlowForTier } from '../../procedural/rare-glow.js';
 import { bisectFlags, cappedScaler } from '../bisect-flags.js';
 
 /**
  * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
- * "Memory and heat"). With `hdr = false` Babylon applies image processing
- * (tone mapping, exposure, contrast) inside the materials, before the 8-bit
- * write, instead of as a post-process. Don't set the pipeline's
- * `imageProcessingEnabled` to false: that switches it off for the whole scene.
+ * "Memory and heat"), built once (`PostChain`). Tone mapping, exposure and
+ * contrast are applied inside the materials, before the 8-bit write, not as
+ * a post-process. `tier` is where the governor starts: the bloom kernels of
+ * it and every tier below are compiled up front.
  */
-export function createPostProcessing(scene: Scene, camera: Camera): DefaultRenderingPipeline {
+export function createPostProcessing(
+  scene: Scene,
+  camera: Camera,
+  tier: QualityTier = 'high',
+): PostChain {
   setupToneMapping(scene);
-  const pipeline = new DefaultRenderingPipeline('quality', false, scene, [camera]);
-  pipeline.samples = 1;
-  pipeline.fxaaEnabled = true;
-  pipeline.bloomThreshold = LIGHTING.bloomThreshold;
-  pipeline.bloomWeight = LIGHTING.bloomWeight;
-  pipeline.bloomScale = LIGHTING.bloomScale;
-  return pipeline;
+  const reachable = QUALITY_TIERS.slice(QUALITY_TIERS.indexOf(tier)).map((t) => TIER_SETTINGS[t]);
+  const kernels = [...new Set(reachable.filter((t) => t.bloom).map((t) => t.bloomKernel))];
+  return new PostChain(scene, camera, kernels, cappedPixelRatio(window.devicePixelRatio));
 }
 
-/** Tone mapping, exposure and contrast, applied inside the materials (with or without the pipeline). */
+/** Tone mapping, exposure and contrast, applied inside the materials (with or without the chain). */
 function setupToneMapping(scene: Scene): void {
   const ip = scene.imageProcessingConfiguration;
   ip.toneMappingEnabled = true;
@@ -53,7 +53,7 @@ export interface QualitySnapshot {
  */
 export class RenderQuality {
   /** None with `?nopost=1` (#501 bisect): no bloom or FXAA pass at all. */
-  private readonly pipeline: DefaultRenderingPipeline | null;
+  private readonly pipeline: PostChain | null;
   /** `?cap30=1` (#501 bisect): the governor reads 30 fps as on target. */
   private readonly config = bisectFlags().cap30 ? cappedScaler(SCALER, 30) : SCALER;
   private readonly scene: Scene;
@@ -63,7 +63,7 @@ export class RenderQuality {
   private appliedScale = 0;
   private readonly stop = new AbortController();
   /** Dev captures (`?tier=`): the tier and full resolution hold, whatever the frame rate. */
-  private readonly pinned: boolean;
+  private pinned: boolean;
 
   constructor(scene: Scene, camera: Camera, tier: QualityTier, pinned = false) {
     this.scene = scene;
@@ -71,7 +71,7 @@ export class RenderQuality {
     this.pinned = pinned;
     this.state = initialGovernor(tier, this.config);
     if (bisectFlags().noPost) setupToneMapping(scene);
-    this.pipeline = bisectFlags().noPost ? null : createPostProcessing(scene, camera);
+    this.pipeline = bisectFlags().noPost ? null : createPostProcessing(scene, camera, tier);
     this.apply();
     // A frame spanning a pause (tab hidden, app switch, device asleep) is a
     // gap, never a crawling frame (governor `crawl`), however many come
@@ -95,7 +95,23 @@ export class RenderQuality {
       config: this.config,
       devicePixelRatio: window.devicePixelRatio,
     });
+    return this.pending;
+  }
+
+  /** True while the governor's tier or scale isn't applied yet (`applyPending`). */
+  get pending(): boolean {
     return this.state.tier !== this.appliedTier || this.state.renderScale !== this.appliedScale;
+  }
+
+  /**
+   * Dev and tests only (the post-process budget e2e): switch the governor
+   * off and hold this tier and render scale, applied at the top of the next
+   * frame as a governor change would be. One-way: the governor stays off
+   * for this stage.
+   */
+  hold(tier: QualityTier, renderScale: number): void {
+    this.pinned = true;
+    this.state = { ...this.state, tier, renderScale };
   }
 
   /**
@@ -132,6 +148,7 @@ export class RenderQuality {
 
   /** Re-applies the pixel ratio, e.g. after the window moves to another screen. */
   refreshPixelRatio(): void {
+    this.pipeline?.setPixelRatio(cappedPixelRatio(window.devicePixelRatio));
     this.appliedScale = 0;
     this.apply();
   }
@@ -148,10 +165,8 @@ export class RenderQuality {
     if (tier !== this.appliedTier) {
       changed = true;
       const t = TIER_SETTINGS[tier];
-      if (this.pipeline) {
-        this.pipeline.bloomEnabled = t.bloom;
-        if (t.bloom) this.pipeline.bloomKernel = t.bloomKernel;
-      }
+      // Attaches or detaches bloom's passes: nothing is rebuilt (#501).
+      this.pipeline?.setBloom(t.bloom, t.bloomKernel);
       setRareGlowForTier(t.rareGlow);
       this.appliedTier = tier;
     }

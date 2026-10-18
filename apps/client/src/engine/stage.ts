@@ -112,9 +112,9 @@ export function mountStage(
   let loaded = false;
   /**
    * Back to "loading": draw every frame until all shaders and post-processes
-   * are ready again, then settle. Used when a quality change recompiles
-   * post-process effects asynchronously, so the frame left on screen while
-   * idle is never one drawn mid-compile. (A lost GPU context rebuilds the
+   * are ready again, then settle. Used after a quality change: bloom's
+   * passes, attached again, may still be compiling early on, and the frame
+   * left on screen while idle is never one drawn mid-compile. (A lost GPU context rebuilds the
    * whole stage instead; see boot.ts.)
    */
   const reload = (): void => {
@@ -128,8 +128,9 @@ export function mountStage(
     // the canvas size clears its buffer, so after a draw it would show a
     // blank frame (#260). First, so a resize in the same frame (which
     // re-applies the pixel ratio) can't take its tier change without the
-    // reload a recompiled post-process needs.
-    if (rescalePending) {
+    // reload a post-process change needs (bloom's passes going on or off).
+    // (`quality.pending` also covers a dev `hold`, made between frames.)
+    if (rescalePending || quality.pending) {
       rescalePending = false;
       if (quality.applyPending()) reload();
     }

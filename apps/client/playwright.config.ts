@@ -53,6 +53,7 @@ const E2E_GROUPS = [
     'first-session',
     'map-hole',
     'perf-report',
+    'quality-budget',
     'territory',
     'tutorial-flow',
     'whats-new',

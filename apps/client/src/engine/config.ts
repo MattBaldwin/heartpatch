@@ -58,8 +58,20 @@ export interface ScalerConfig {
   lowerBelowFps: number;
   /** A window at or above this counts towards raising resolution again. */
   raiseAtFps: number;
-  /** Smallest change in render scale per decision. */
+  /** Render-scale step for a raise. */
   step: number;
+  /**
+   * Smallest resolution cut. Each new render scale reallocates every
+   * post-process target, a stall on a struggling GPU, so a cut is one
+   * decisive step rather than many small ones (#501).
+   */
+  minCutStep: number;
+  /**
+   * Windows discarded after any change before the next decision: the first
+   * holds the change's own hitch (new targets, a canvas resize), the second
+   * lets the frame rate settle, so one slow spell makes one cut (#501).
+   */
+  settleWindows: number;
   /** Continuous good time needed before trying a higher resolution. */
   raiseAfterMs: number;
   /** Cap for the raise delay after repeated raise-then-drop flapping. */
@@ -104,6 +116,11 @@ export interface ScalerConfig {
   capHoldMs: number;
   /** Each confirmed re-test doubles the hold, up to this. */
   maxCapHoldMs: number;
+  /**
+   * After a tier probe that didn't help, no tier probe for this long: the
+   * tier isn't the cost, and probing it again only adds churn (#501).
+   */
+  tierProbeCooldownMs: number;
   /** Continuous full-resolution headroom before trying the next tier up. */
   tierRaiseAfterMs: number;
   /** Cap for the tier-raise delay after raise-then-drop flapping. */
@@ -118,6 +135,8 @@ export const SCALER: Readonly<ScalerConfig> = {
   lowerBelowFps: 55, // TUNE: react before the frame rate collapses
   raiseAtFps: 58, // TUNE: vsync caps at 60, so near-60 is "has headroom"
   step: 0.05, // TUNE
+  minCutStep: 0.1, // TUNE: 1.0 → 0.9 frees ~19% of pixels in one reallocation
+  settleWindows: 2, // TUNE
   raiseAfterMs: 3000, // TUNE
   maxRaiseAfterMs: 30_000, // TUNE
   flapWindowMs: 2000, // TUNE
@@ -128,10 +147,11 @@ export const SCALER: Readonly<ScalerConfig> = {
   tierDropAfterMs: 3000, // TUNE
   tierDropBelowFps: 50, // TUNE
   graceMs: 2000, // TUNE
-  cutGain: 1.04, // TUNE: one 5% scale step frees ~10% of pixels
+  cutGain: 1.04, // TUNE: the smallest cut (minCutStep) frees ~19% of pixels
   capTolerance: 0.08, // TUNE
   capHoldMs: 20_000, // TUNE
   maxCapHoldMs: 160_000, // TUNE
+  tierProbeCooldownMs: 120_000, // TUNE
   tierRaiseAfterMs: 10_000, // TUNE
   maxTierRaiseAfterMs: 120_000, // TUNE
   tierFlapWindowMs: 10_000, // TUNE

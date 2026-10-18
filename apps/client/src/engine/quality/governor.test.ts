@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
 import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { renderScaleFloor } from './tiers.js';
 
 const config: ScalerConfig = {
   ...SCALER,
@@ -9,6 +10,8 @@ const config: ScalerConfig = {
   lowerBelowFps: 55,
   raiseAtFps: 58,
   step: 0.05,
+  minCutStep: 0.1,
+  settleWindows: 2,
   raiseAfterMs: 3000,
   maxRaiseAfterMs: 12_000,
   flapWindowMs: 2000,
@@ -20,6 +23,7 @@ const config: ScalerConfig = {
   capTolerance: 0.08,
   capHoldMs: 20_000,
   maxCapHoldMs: 80_000,
+  tierProbeCooldownMs: 120_000,
   tierRaiseAfterMs: 10_000,
   maxTierRaiseAfterMs: 40_000,
   tierFlapWindowMs: 10_000,
@@ -192,6 +196,78 @@ describe('stepGovernor on simulated devices', () => {
     expect(s.tierRaiseAfterMs).toBeLessThanOrEqual(config.maxTierRaiseAfterMs);
   });
 
+  it('meets a slow spell with one cut, not a cascade of them (#501)', () => {
+    // 50 fps at full resolution, GPU-bound; every change reallocates the
+    // post-process targets, which stalls a busy GPU: frames take twice as
+    // long for 700 ms after it. Judged on the stall, each cut looks like it
+    // failed and calls for another change.
+    const run = (config: ScalerConfig) => {
+      const c = { config, devicePixelRatio: 2 };
+      let s = initialGovernor('high', config);
+      let changes = 0;
+      let cuts = 0;
+      let sinceChange = Infinity;
+      for (let t = 0; t < 30_000;) {
+        const gpuMs = 20 * s.renderScale ** 2 * (sinceChange < 700 ? 2 : 1);
+        const f = Math.max(1000 / 60, gpuMs);
+        const next = stepGovernor(s, f, c);
+        sinceChange += f;
+        if (next.renderScale !== s.renderScale || next.tier !== s.tier) {
+          changes++;
+          if (next.renderScale < s.renderScale) cuts++;
+          sinceChange = 0;
+        }
+        s = next;
+        t += f;
+      }
+      return { changes, cuts, state: s };
+    };
+    const calm = run(config);
+    expect(calm.cuts).toBe(1);
+    expect(calm.changes).toBeLessThanOrEqual(2); // the cut, and perhaps one raise back
+    expect(calm.state.tier).toBe('high');
+    // With 5% steps and one settle window it read its own stalls as load.
+    const before = run({ ...config, minCutStep: 0.05, settleWindows: 1 });
+    expect(before.changes).toBeGreaterThanOrEqual(6);
+  });
+
+  it('after a failed tier probe, probes no tier for tierProbeCooldownMs (#501)', () => {
+    // CPU-bound at 25 fps: neither pixels nor the tier are the cost. The
+    // first cut probes a tier, which fails; the cap re-tests in the next two
+    // minutes only re-check the resolution.
+    const d = { cpuMs: 40, gpuMs: 8 };
+    const first = simulate(start(), d, config.tierProbeCooldownMs - 5000);
+    expect(tierProbes(first.tiers)).toBe(1);
+    expect(first.state.tier).toBe('high');
+    // Once the cooldown is over, one probe per cooldown at most.
+    const { tiers } = simulate(start(), d, 5 * 60_000);
+    expect(tierProbes(tiers)).toBeLessThanOrEqual(
+      1 + Math.ceil((5 * 60_000) / config.tierProbeCooldownMs),
+    );
+  });
+
+  it('cap re-tests at the floor change nothing within the cooldown (#501)', () => {
+    // The owner's phone: on medium, at the floor, stalled at ~3 fps whatever
+    // the tier. One probe to low, which fails and reverts; then the re-tests
+    // only measure, with no resolution or tier change, until the cooldown ends.
+    const floor = renderScaleFloor('medium', 2);
+    const stalled = { cpuMs: 300, gpuMs: 8 };
+    const s0 = { ...start('medium'), renderScale: floor };
+    const { state, scales, tiers } = simulate(s0, stalled, config.tierProbeCooldownMs);
+    expect(new Set(scales)).toEqual(new Set([floor]));
+    const flips = tiers.filter((x, i) => i > 0 && x !== tiers[i - 1]).length;
+    expect(flips).toBe(2); // the probe to low and its revert, nothing more
+    expect(state.tier).toBe('medium');
+    // On the cheapest tier there is nothing to probe: nothing ever changes.
+    const low = simulate(
+      { ...start('low'), renderScale: renderScaleFloor('low', 2) },
+      stalled,
+      600_000,
+    );
+    expect(new Set(low.scales).size).toBe(1);
+    expect(new Set(low.tiers)).toEqual(new Set(['low']));
+  });
+
   it('never scales a 1x screen', () => {
     let s = start();
     for (let i = 0; i < 600; i++) s = stepGovernor(s, 1000 / 20, { config, devicePixelRatio: 1 });
@@ -208,18 +284,26 @@ describe('stepGovernor details', () => {
     for (let i = 0; i < (count * 500) / frame; i++) st = stepGovernor(st, frame, ctx);
     return st;
   };
+  /** The windows discarded after a change, at a frame time. */
+  const settle = (s: GovernorState, frame: 12.5 | 20 | 25) => {
+    expect(s.settleWindows).toBe(config.settleWindows);
+    const st = windows(s, frame, config.settleWindows);
+    expect(st.settleWindows).toBe(0);
+    return st;
+  };
 
-  it('cuts in proportion to the shortfall, at least one step, never below the floor', () => {
-    expect(windows(ready(), 20, 1).renderScale).toBeCloseTo(Math.sqrt(50 / 60), 2);
+  it('cuts in proportion to the shortfall, at least minCutStep, never below the floor', () => {
+    // 50 fps wants ~0.913: one decisive cut to 0.9 instead (#501).
+    expect(windows(ready(), 20, 1).renderScale).toBe(0.9);
     expect(windows(ready(), 25, 1).renderScale).toBeCloseTo(Math.sqrt(40 / 60), 2);
     expect(windows({ ...ready(), renderScale: 0.78 }, 25, 1).renderScale).toBe(0.75);
   });
 
   it('discards the window after a change, then judges the cut', () => {
     let s = windows(ready(), 20, 1); // cut, probe set
-    expect(s.settleWindows).toBe(1);
-    s = windows(s, 20, 1); // settle window: no decision
+    s = settle(s, 20); // settle windows: no decision
     expect(s.probe).not.toBeNull();
+    expect(s.renderScale).toBe(0.9);
     s = windows(s, 20, 1); // still 50 fps: the cut didn't help
     expect(s.renderScale).toBe(1);
     expect(s.cap?.fps).toBeCloseTo(50);
@@ -230,11 +314,11 @@ describe('stepGovernor details', () => {
 
   it('far below target, a cut that did not help probes a tier down, then reverts if that fails too (#501)', () => {
     let s = windows(ready(), 25, 1); // 40 fps: cut, probe set
-    s = windows(s, 25, 1); // settle window
+    s = settle(s, 25);
     s = windows(s, 25, 1); // still 40 fps: pixels aren't the cost
     expect(s).toMatchObject({ tier: 'medium', renderScale: 1, probe: null, cap: null });
     expect(s.tierProbe).toEqual({ baselineFps: 40, tierBefore: 'high' });
-    s = windows(s, 25, 1); // settle window
+    s = settle(s, 25);
     s = windows(s, 25, 1); // still 40 fps on medium: put the tier back and hold
     expect(s).toMatchObject({ tier: 'high', renderScale: 1, tierProbe: null });
     expect(s.cap?.fps).toBeCloseTo(40);
@@ -242,7 +326,7 @@ describe('stepGovernor details', () => {
 
   it('on the cheapest tier, a cut that did not help holds as before (#501)', () => {
     let s = windows(ready('low'), 25, 1);
-    s = windows(s, 25, 1);
+    s = settle(s, 25);
     s = windows(s, 25, 1);
     expect(s).toMatchObject({ tier: 'low', renderScale: 1, tierProbe: null });
     expect(s.cap?.fps).toBeCloseTo(40);
@@ -252,9 +336,12 @@ describe('stepGovernor details', () => {
     let s: GovernorState = { ...ready(), renderScale: 0.9 };
     s = windows(s, 12.5, 6); // 3 s of headroom → raise
     expect(s.renderScale).toBeCloseTo(0.95, 5);
-    s = windows(s, 12.5, 1); // settle
+    s = settle(s, 12.5);
     s = windows(s, 20, 1); // dropped right after the raise
     expect(s.raiseAfterMs).toBe(6000);
+    // A cut right after a raise is no bigger than the shortfall asks for:
+    // no whole minCutStep (0.85) below a size known to be close (#501).
+    expect(s.renderScale).toBeCloseTo(0.95 * Math.sqrt(50 / 60), 3);
   });
 
   it('ignores long gaps such as a hidden tab', () => {
@@ -341,7 +428,7 @@ describe('stepGovernor details', () => {
     expect(s.renderScale).toBe(0.5);
     expect(s.probe).toBeNull();
     expect(s.cap).toBeNull();
-    expect(s.settleWindows).toBe(1);
+    expect(s.settleWindows).toBe(config.settleWindows);
     // The first window after the change is judged on nothing it inherited.
     s = windows(s, 12.5, 2);
     expect(s.renderScale).toBe(0.5);

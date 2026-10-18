@@ -8,8 +8,10 @@ import { crawlRenderScale, higherTier, lowerTier, renderScaleFloor } from './tie
  * Every `windowMs` it looks at the average frame rate:
  * - **Too slow:** lower the render scale straight away, by roughly the amount
  *   the frame rate is short (GPU cost scales with pixel count, i.e. scale²),
- *   never below the tier's floor. That keeps 60 fps instead of letting it
- *   collapse, without ever going blurry.
+ *   never below the tier's floor, and by at least `minCutStep`: each new
+ *   scale reallocates the post-process targets, so a slow spell gets one
+ *   decisive cut instead of a stall per small one (#501). That keeps 60 fps
+ *   instead of letting it collapse, without ever going blurry.
  * - **Every cut and tier drop is a probe.** If the next window isn't faster,
  *   the GPU isn't (or is no longer) the bottleneck: the frame rate is capped
  *   (iOS Low Power Mode runs Safari at 30 fps) or the CPU is busy. Lowering
@@ -19,7 +21,9 @@ import { crawlRenderScale, higherTier, lowerTier, renderScaleFloor } from './tie
  * - **A cut that didn't help, far below target** (`tierProbeBelowFps`): the
  *   pixels aren't the cost, but the tier's effects may be. Put the pixels
  *   back and probe the next tier down first; only if that doesn't help
- *   either is it a cap (#501).
+ *   either is it a cap (#501). A tier probe that failed blocks tier probes
+ *   for `tierProbeCooldownMs`: until then a cap re-test at the floor changes
+ *   nothing, it only measures.
  * - **Pinned at the floor and still well below target** for a while, with the
  *   last cut having helped: step the quality tier down (softer bloom, then none).
  * - **At target for a while:** raise resolution a step at a time, then the
@@ -27,8 +31,9 @@ import { crawlRenderScale, higherTier, lowerTier, renderScaleFloor } from './tie
  *   at 60 fps, so headroom is invisible; if a raise makes us drop again
  *   straight away, wait twice as long before the next try.
  *
- * The first `graceMs` are ignored (shader compiles), and so is the first
- * window after any change (resizing render targets causes a hitch).
+ * The first `graceMs` are ignored (shader compiles), and so are the first
+ * `settleWindows` windows after any change (resizing render targets causes a
+ * hitch, and the frame rate takes a moment to settle after it).
  */
 export interface GovernorState {
   readonly tier: QualityTier;
@@ -58,6 +63,11 @@ export interface GovernorState {
   readonly cap: { readonly fps: number; readonly heldMs: number; readonly holdMs: number } | null;
   /** How long the next cap hold lasts before a re-test; doubles each time one is confirmed. */
   readonly capHoldMs: number;
+  /**
+   * No tier probe before `elapsedMs` reaches this: a failed tier probe puts
+   * it `tierProbeCooldownMs` ahead (#501).
+   */
+  readonly tierProbeAfterMs: number;
   /** Continuous time stuck at the floor and still too slow. */
   readonly slowAtFloorMs: number;
   /** Continuous time at target at full resolution (tier raises). */
@@ -91,6 +101,7 @@ export function initialGovernor(tier: QualityTier, config: ScalerConfig): Govern
     tierProbe: null,
     cap: null,
     capHoldMs: config.capHoldMs,
+    tierProbeAfterMs: 0,
     slowAtFloorMs: 0,
     tierGoodMs: 0,
     tierRaiseAfterMs: config.tierRaiseAfterMs,
@@ -186,7 +197,7 @@ function crawl(s: GovernorState, ctx: GovernorContext): GovernorState {
     tier,
     renderScale,
     crawlFrames: 0,
-    settleWindows: 1,
+    settleWindows: config.settleWindows,
     probe: null,
     tierProbe: null,
     cap: null,
@@ -209,7 +220,7 @@ function holdAtCap(
   return {
     ...s,
     ...undo,
-    settleWindows: changed ? 1 : 0,
+    settleWindows: changed ? config.settleWindows : 0,
     probe: null,
     tierProbe: null,
     cap: { fps, heldMs: 0, holdMs: s.capHoldMs },
@@ -239,7 +250,14 @@ function decide(s: GovernorState, fps: number, w: number, ctx: GovernorContext):
       const renderScale = roundScale(
         Math.max(renderScaleFloor(tierBefore, devicePixelRatio), s.renderScale),
       );
-      return holdAtCap(s, Math.max(fps, baselineFps), { renderScale, tier: tierBefore }, config);
+      // The tier isn't the cost either: don't probe it again for a while.
+      const failed = { ...s, tierProbeAfterMs: s.elapsedMs + config.tierProbeCooldownMs };
+      return holdAtCap(
+        failed,
+        Math.max(fps, baselineFps),
+        { renderScale, tier: tierBefore },
+        config,
+      );
     }
     s = { ...s, tierProbe: null };
   }
@@ -261,7 +279,7 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
     // held at full resolution): put the pixels back and try the next tier
     // down. Its probe puts the tier back too if that doesn't help either, so
     // a real cap (Low Power Mode's 30 fps) costs one reverted probe per re-test.
-    const cheaper = lowerTier(s.tier);
+    const cheaper = tierToProbe(s);
     if (fps < config.tierProbeBelowFps && cheaper !== null) {
       return dropTier(
         { ...s, probe: null, goodMs: 0, tierGoodMs: 0, renderScale: s.probe.scaleBefore },
@@ -283,13 +301,19 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
   const base = { ...s, probe: null, goodMs: 0, tierGoodMs: 0 };
 
   if (s.renderScale > floor) {
-    const wanted = s.renderScale * Math.sqrt(fps / config.targetFps);
-    const renderScale = roundScale(Math.max(floor, Math.min(wanted, s.renderScale - config.step)));
+    // One decisive cut, at least `minCutStep`: every new scale reallocates
+    // the post-process targets, so many small cuts cost a stall each (#501).
+    // Right after a raise the scale before it was close: the cut is at
+    // least one `step` (as before #501), not a whole `minCutStep`, so it
+    // never lands below what the shortfall asks for.
     const flapped = s.sinceRaiseMs !== null && s.sinceRaiseMs <= config.flapWindowMs;
+    const wanted = s.renderScale * Math.sqrt(fps / config.targetFps);
+    const minCut = flapped ? config.step : config.minCutStep;
+    const renderScale = roundScale(Math.max(floor, Math.min(wanted, s.renderScale - minCut)));
     return {
       ...base,
       renderScale,
-      settleWindows: 1,
+      settleWindows: config.settleWindows,
       probe: { baselineFps: fps, scaleBefore: s.renderScale },
       slowAtFloorMs: 0,
       sinceRaiseMs: null,
@@ -297,14 +321,21 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
     };
   }
 
-  // At the floor, and the last cut (if any) helped.
+  // At the floor, and the last cut (if any) helped. Nothing here changes
+  // the resolution, so a cap re-test at the floor only measures: the one
+  // change it can make is a tier probe, and not within the cooldown (#501).
   if (fps >= config.tierDropBelowFps) return { ...base, slowAtFloorMs: 0 };
   const slowAtFloorMs = s.slowAtFloorMs + w;
-  const cheaper = lowerTier(s.tier);
+  const cheaper = tierToProbe(s);
   if (slowAtFloorMs < config.tierDropAfterMs || cheaper === null) {
     return { ...base, slowAtFloorMs };
   }
   return dropTier(base, fps, cheaper, ctx);
+}
+
+/** The next tier down to probe, or null: on the cheapest, or a probe failed too recently. */
+function tierToProbe(s: GovernorState): QualityTier | null {
+  return s.elapsedMs < s.tierProbeAfterMs ? null : lowerTier(s.tier);
 }
 
 /** Steps down to `cheaper` as a probe: the next window tells whether it helped. */
@@ -320,7 +351,7 @@ function dropTier(
     ...s,
     tier: cheaper,
     renderScale: roundScale(Math.max(renderScaleFloor(cheaper, devicePixelRatio), s.renderScale)),
-    settleWindows: 1,
+    settleWindows: config.settleWindows,
     tierProbe: { baselineFps: fps, tierBefore: s.tier },
     slowAtFloorMs: 0,
     sinceTierRaiseMs: null,
@@ -339,7 +370,7 @@ function good(s: GovernorState, w: number, config: ScalerConfig): GovernorState 
     return {
       ...base,
       renderScale: roundScale(Math.min(1, s.renderScale + config.step)),
-      settleWindows: 1,
+      settleWindows: config.settleWindows,
       goodMs: 0,
       tierGoodMs: 0,
       sinceRaiseMs: 0,
@@ -354,7 +385,7 @@ function good(s: GovernorState, w: number, config: ScalerConfig): GovernorState 
   return {
     ...base,
     tier: better,
-    settleWindows: 1,
+    settleWindows: config.settleWindows,
     goodMs: 0,
     tierGoodMs: 0,
     sinceTierRaiseMs: 0,
