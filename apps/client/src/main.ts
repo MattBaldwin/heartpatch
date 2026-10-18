@@ -922,7 +922,10 @@ const maps = createMapScreen({
     const show = hollowedPreview()?.show;
     if (mapId !== null && show === 'homename') {
       setTimeout(() => {
-        hollowedSheets.openHomeName(signedIn?.username ?? 'Mia', (name) => {
+        // A friendly first name for the mock (e2e usernames are generated).
+        const who = signedIn?.username ?? '';
+        const friendly = /^[a-z]{3,10}$/i.test(who) ? who[0]!.toUpperCase() + who.slice(1) : 'Mia';
+        hollowedSheets.openHomeName(friendly, (name) => {
           setHomeName(name || null);
           const view = maps.view;
           if (view) hollowedFlags.update?.(view);
