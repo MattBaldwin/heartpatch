@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
-import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
+import {
+  cappedScaler,
+  initialGovernor,
+  resumeGovernor,
+  stepGovernor,
+  type GovernorState,
+} from './governor.js';
 import { renderScaleFloor } from './tiers.js';
 
 const config: ScalerConfig = {
@@ -476,5 +482,21 @@ describe('stepGovernor details', () => {
     const { state } = simulate(s, { gpuMs: 2 }, 120_000);
     expect(state.renderScale).toBe(1);
     expect(state.tier).toBe('high');
+  });
+});
+
+describe('cappedScaler (#501)', () => {
+  it('scales every frame-rate threshold to a 30 fps cap and nothing else', () => {
+    const capped = cappedScaler(SCALER, 30);
+    expect(capped).toMatchObject({
+      targetFps: 30,
+      lowerBelowFps: SCALER.lowerBelowFps / 2,
+      raiseAtFps: SCALER.raiseAtFps / 2,
+      tierProbeBelowFps: SCALER.tierProbeBelowFps / 2,
+      tierDropBelowFps: SCALER.tierDropBelowFps / 2,
+      windowMs: SCALER.windowMs,
+      maxFrameMs: SCALER.maxFrameMs,
+      cutGain: SCALER.cutGain,
+    });
   });
 });

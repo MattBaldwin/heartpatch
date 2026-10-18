@@ -4,7 +4,7 @@ import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type ClothingItem } from '@h
 import { boot } from '../../engine/boot.js';
 import { countGl } from '../../engine/gl-counters.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
-import { pickInitialTier } from '../../engine/quality/tiers.js';
+import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { el } from '../../ui/dom.js';
 import type { QualityTier } from '../../engine/config.js';
@@ -41,7 +41,9 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 
 const params = new URLSearchParams(window.location.search);
-const tier = pickInitialTier(params.get('quality'));
+/** `?tier=` pins a tier at full resolution with the governor off, as on the game page (#335). */
+const pinTier = isQualityTier(params.get('tier'));
+const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
 const registry = visualRegistry(GAME_DATA);
 const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
@@ -118,6 +120,7 @@ await boot(canvas, {
       },
       tier,
       camera,
+      pinTier,
     ),
   onStart: (s) => {
     stage = s;
@@ -213,6 +216,8 @@ window.__heartpatch = {
       // `_gl` is Babylon-internal but typed (WebGL's Engine); WebGPU has no context to count.
       // By kind, not `instanceof`: Vite's dev pre-bundling can load Engine twice.
       gl: () => (s.renderer.kind === 'webgl2' ? { ...countGl((engine as Engine)._gl) } : null),
+      // Babylon-internal but typed: every live render target, the badge's `rt` (#501).
+      targets: () => engine._renderTargetWrapperCache.length,
     };
   },
 };

@@ -24,7 +24,11 @@ type Hooks = {
   __heartpatch?: {
     quality(): { tier: Tier; renderScale: number; pixelRatio: number } | null;
     invalidate(): void;
-    qualityDev?(): { hold(tier: Tier, renderScale: number): void; gl(): GlCounts | null } | null;
+    qualityDev?(): {
+      hold(tier: Tier, renderScale: number): void;
+      gl(): GlCounts | null;
+      targets(): number;
+    } | null;
   };
 };
 
@@ -150,5 +154,25 @@ test('tier flips and resolution steps rebuild nothing (#501)', async ({ page }) 
   expect(bloomSteps.programs).toBe(0);
   expect(bloomSteps.textures).toBeLessThanOrEqual(2 * 5);
 
+  expect(errors).toEqual([]);
+});
+
+test('the medium tier draws FXAA alone on a phone; an iPad keeps bloom (#501)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000); // first load compiles shaders; CI renders in software
+  const errors = watchErrors(page);
+  // Pinned to medium at full resolution from the start, so no other tier's
+  // or size's targets were ever made.
+  await page.goto('/gallery.html?still&count=12&tier=medium');
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await waitForIdle(page);
+  const targets = await page.evaluate(
+    () => (window as Hooks).__heartpatch?.qualityDev?.()?.targets() ?? -1,
+  );
+  const phone = test.info().project.name.startsWith('iphone');
+  test.info().annotations.push({ type: 'render targets', description: String(targets) });
+  // FXAA's input is the one target; bloom adds its four passes' own.
+  expect(targets).toBe(phone ? 1 : 5);
   expect(errors).toEqual([]);
 });

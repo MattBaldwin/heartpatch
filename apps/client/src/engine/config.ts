@@ -19,6 +19,12 @@ export const DEFAULT_QUALITY_TIER: QualityTier = 'high';
  */
 export interface TierSettings {
   bloom: boolean;
+  /**
+   * Bloom on a phone screen too (`isPhoneScreen`). Off on medium: a phone
+   * that has stepped down from high should run cool, and on its small
+   * screen the glow is hard to see (#501, owner Oct 18). iPads keep `bloom`.
+   */
+  phoneBloom: boolean;
   /** Bloom blur kernel in render pixels; bigger is softer and costlier. */
   bloomKernel: number;
   /**
@@ -36,13 +42,25 @@ export interface TierSettings {
 
 export const TIER_SETTINGS: Readonly<Record<QualityTier, TierSettings>> = {
   // TUNE: high is the default on playtest devices; spend headroom here first.
-  high: { bloom: true, bloomKernel: 64, minRenderScale: 0.75, rareGlow: true },
+  high: { bloom: true, phoneBloom: true, bloomKernel: 64, minRenderScale: 0.75, rareGlow: true },
   // TUNE
-  medium: { bloom: true, bloomKernel: 32, minRenderScale: 0.75, rareGlow: true },
+  medium: {
+    bloom: true,
+    phoneBloom: false,
+    bloomKernel: 32,
+    minRenderScale: 0.75,
+    rareGlow: true,
+  },
   // TUNE
   // TUNE: rareGlow false here if the iPad 9th gen check shows the glow costs frames (#391).
-  low: { bloom: false, bloomKernel: 0, minRenderScale: 0.7, rareGlow: true },
+  low: { bloom: false, phoneBloom: false, bloomKernel: 0, minRenderScale: 0.7, rareGlow: true },
 };
+
+/**
+ * A screen whose short side is under this many CSS pixels is a phone's
+ * (`isPhoneScreen`): iPhones are 375–440, the smallest iPad (mini) 744.
+ */
+export const PHONE_MAX_SHORT_SIDE = 600; // TUNE
 
 /**
  * Never render below one pixel per CSS pixel, whatever the tier floor says:
@@ -159,6 +177,30 @@ export const SCALER: Readonly<ScalerConfig> = {
 
 /** Frames drawn after a change before the loop goes idle (render on demand). */
 export const SETTLE_FRAMES = 2; // TUNE
+
+/** A scene's frame-rate cap (`SceneContent.frameCap`, #501). */
+export interface FrameCap {
+  /** Frames a second; the governor reads this as on target (`cappedScaler`). */
+  readonly fps: number;
+  /**
+   * How far ahead of its slot a frame may draw. Slots are every `1000 / fps`
+   * ms on a fixed schedule (`FrameScheduler`), so a late frame never makes
+   * the next one early; this only has to sit between a 120 Hz callback just
+   * before a slot (8.3 ms) and none at all.
+   */
+  readonly earlyMs: number;
+}
+
+/**
+ * 30 drawn frames a second: explore (#501, owner Oct 18: it runs cool, the
+ * map keeps render on demand) and `?cap30=1`. A 60 Hz display draws every
+ * other frame, and a late drawn callback doesn't pull the next one early; a
+ * 120 Hz one every fourth unless a callback is more than 4 ms late. Any rate
+ * averages 30. Known gap (#501 follow-up): the slots keep the first frame's
+ * phase, so a first frame about `earlyMs` late, or a display a little off
+ * 60 Hz, can alternate 17 and 50 ms gaps for a while; still 30 on average.
+ */
+export const FRAME_CAP_30: FrameCap = { fps: 30, earlyMs: 4 }; // TUNE: earlyMs
 
 export const LIGHTING = {
   /** Edge length of each procedural sky cube face, in texels. */

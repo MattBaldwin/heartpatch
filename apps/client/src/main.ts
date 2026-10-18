@@ -1559,6 +1559,7 @@ if (import.meta.env.DEV) {
     draws: () => stage?.draws ?? 0,
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
+    frameCap: () => stage?.frameCap ?? null,
     map: () => maps.debug,
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,

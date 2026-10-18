@@ -57,7 +57,8 @@ async function createWebGPU(canvas: HTMLCanvasElement): Promise<Renderer> {
   const engine = new WebGPUEngine(canvas, {
     antialias: false, // no MSAA on the default framebuffer; FXAA runs as a post-process
     stencil: true,
-    powerPreference: 'high-performance',
+    // No powerPreference: a cozy game shouldn't ask for the hungriest GPU
+    // (#501). iOS mostly ignores it, but a Mac with two GPUs keeps the cooler one.
     // We replace the engine with WebGL2 on device loss instead of letting
     // Babylon re-create the WebGPU device (see onLost below).
     doNotHandleContextLost: true,
@@ -90,7 +91,7 @@ async function createWebGL(canvas: HTMLCanvasElement): Promise<Renderer> {
     false, // no MSAA on the default framebuffer; FXAA runs as a post-process
     {
       stencil: true,
-      powerPreference: 'high-performance',
+      powerPreference: 'default', // not 'high-performance', as for WebGPU above (#501)
       preserveDrawingBuffer: false,
       // Babylon's in-place restore leaves procedural textures pointing at the
       // dead context and reports shaders ready before they recompile. We
