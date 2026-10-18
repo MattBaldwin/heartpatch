@@ -50,6 +50,12 @@ export const TerritoryRulesSchema = z.strictObject({
       message: 'wildAfterDays must come after missesYouAfterDays, so there is a warning first',
       path: ['wildAfterDays'],
     }),
+  /**
+   * The guard level floor (#529): on a rival's tile, guards (posted or the
+   * land's own standing in) fight at least at the owner's Partner level plus
+   * `partnerBonus` (`watchFloor`). Their stored level never changes.
+   */
+  guardLevel: z.strictObject({ partnerBonus: z.number().int().min(0).max(10) }),
 });
 export type TerritoryRules = z.infer<typeof TerritoryRulesSchema>;
 

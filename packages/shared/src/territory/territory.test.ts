@@ -40,6 +40,15 @@ describe('territory rules', () => {
     );
   });
 
+  it('guardLevel.partnerBonus is a small whole number (#529)', () => {
+    const bonus = (partnerBonus: number) =>
+      checkTerritoryRules({ ...TERRITORY_RULES, guardLevel: { partnerBonus } }).join();
+    expect(bonus(0)).toBe('');
+    expect(bonus(-1)).toMatch(/guardLevel\.partnerBonus/);
+    expect(bonus(1.5)).toMatch(/guardLevel\.partnerBonus/);
+    expect(bonus(11)).toMatch(/guardLevel\.partnerBonus/);
+  });
+
   it('only lets a player battle for land next to theirs, never a home base', () => {
     expect(attackTargetProblem(at(2, -1), TILES, ME, 'gentle')).toBeNull();
     expect(attackTargetProblem(at(2, 0), TILES, ME, 'gentle')).toBeNull();

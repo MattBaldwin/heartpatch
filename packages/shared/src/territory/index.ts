@@ -98,3 +98,4 @@ export * from './tending.js';
 export * from './fences.js';
 export * from './reach.js';
 export * from './journeys.js';
+export * from './watch-level.js';
