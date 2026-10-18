@@ -15,6 +15,8 @@ import {
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { databaseBefore, type ScratchDatabase } from '../../../tests/before-migration.js';
+import { ONE_BUILDING_PER_TILE } from '../../db/migrator.js';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
@@ -375,86 +377,102 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     });
   });
 
-  it('packs up home fires with everything back, and moves misplaced buildings, once (#202, #204)', async () => {
-    const server = await start();
-    const kid = await player();
-    const mapId = await newMap(server, kid);
-    const { tiles } = await home(server, kid, mapId);
-    const [ring, ring2] = tiles.filter((t) => !t.heartSeed);
-    const tileId = async (t: { q: number; r: number }) =>
-      (await db.query.tiles.findFirst({
-        where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, t.q), eq(x.r, t.r)),
-      }))!.id;
-    // Built before today's rules: a habitat in a middle (its node's), a
-    // level-2 fire at home with two nights of fuel, and a Jack-o'-Lantern
-    // fire beside it on the same home tile (main allowed one of each per
-    // home, on any spot): migration 0027 adds no index they could break.
-    const old = (
-      buildingId: string,
-      kind: string,
-      tile: string,
-      spot: number,
-      extra: { level?: number; fuelledThrough?: string } = {},
-    ) =>
-      db
-        .insert(buildings)
-        .values({ mapId, ownerUserId: kid.id, tileId: tile, buildingId, kind, spot, ...extra })
-        .returning({ id: buildings.id })
-        .then(([row]) => row!.id);
-    const den = await old('ember-den', 'habitat', await tileId(ring!), 0);
-    const hearth = await old('hearthfire', 'hearthfire', await tileId(ring2!), 3, {
-      level: 2,
-      fuelledThrough: '2026-10-03',
+  // Two home fires on one tile: only a patch from before one building per
+  // tile went into the database (#295, migration B) can hold them.
+  describe('on a patch from before migration B', () => {
+    let scratch: ScratchDatabase;
+    let full: Database;
+    beforeAll(async () => {
+      scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
+      full = db;
+      db = scratch.client.db;
     });
-    const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(ring2!), 4);
+    afterAll(async () => {
+      db = full;
+      await scratch.drop();
+    });
 
-    const errors: unknown[] = [];
-    // It scans every patch in the database (other tests' too), so only this
-    // patch's rows and events are checked.
-    await Promise.all([
-      relayoutHomes(
+    it('packs up home fires with everything back, and moves misplaced buildings, once (#202, #204)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const { tiles } = await home(server, kid, mapId);
+      const [ring, ring2] = tiles.filter((t) => !t.heartSeed);
+      const tileId = async (t: { q: number; r: number }) =>
+        (await db.query.tiles.findFirst({
+          where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, t.q), eq(x.r, t.r)),
+        }))!.id;
+      // Built before today's rules: a habitat in a middle (its node's), a
+      // level-2 fire at home with two nights of fuel, and a Jack-o'-Lantern
+      // fire beside it on the same home tile (main allowed one of each per
+      // home, on any spot): migration 0027 adds no index they could break.
+      const old = (
+        buildingId: string,
+        kind: string,
+        tile: string,
+        spot: number,
+        extra: { level?: number; fuelledThrough?: string } = {},
+      ) =>
+        db
+          .insert(buildings)
+          .values({ mapId, ownerUserId: kid.id, tileId: tile, buildingId, kind, spot, ...extra })
+          .returning({ id: buildings.id })
+          .then(([row]) => row!.id);
+      const den = await old('ember-den', 'habitat', await tileId(ring!), 0);
+      const hearth = await old('hearthfire', 'hearthfire', await tileId(ring2!), 3, {
+        level: 2,
+        fuelledThrough: '2026-10-03',
+      });
+      const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(ring2!), 4);
+
+      const errors: unknown[] = [];
+      // It scans every patch in the database (other tests' too), so only this
+      // patch's rows and events are checked.
+      await Promise.all([
+        relayoutHomes(
+          db,
+          () => clock,
+          (_owner, err) => errors.push(err),
+        ),
+        relayoutHomes(
+          db,
+          () => clock,
+          (_owner, err) => errors.push(err),
+        ),
+      ]);
+      expect(errors).toEqual([]);
+      const rowOf = (id: string) =>
+        db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+      expect((await rowOf(den))?.spot).toBe(1);
+      expect(await rowOf(hearth)).toBeUndefined();
+      expect(await rowOf(lantern)).toBeUndefined();
+      // Everything back, whole: both levels' cost, its fuel, and the carved pumpkin.
+      const refund = { timber: 15, stone: 15, emberwood: 2, 'jack-o-lantern-hearthfire': 1 };
+      const bag = await db.query.inventories.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+      });
+      expect(Object.fromEntries(bag.map((b) => [b.itemId, b.quantity]))).toEqual(refund);
+      // The morning report's one-time note.
+      const status = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
+      expect(HollowResponseSchema.parse(status.json()).hollow.homeFirePacked).toEqual({
+        refund,
+        at: clock.toISOString(),
+      });
+      const events = await eventsOf(mapId);
+      const packed = events.filter((e) => e.type === 'building.removed');
+      expect(packed.map((e) => parseGameEventPayload('building.removed', e.payload).lost)).toEqual([
+        'packed',
+        'packed',
+      ]);
+      expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(1);
+      // Run again: nothing left to do here.
+      await relayoutHomes(
         db,
         () => clock,
-        (_owner, err) => errors.push(err),
-      ),
-      relayoutHomes(
-        db,
-        () => clock,
-        (_owner, err) => errors.push(err),
-      ),
-    ]);
-    expect(errors).toEqual([]);
-    const rowOf = (id: string) =>
-      db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) });
-    expect((await rowOf(den))?.spot).toBe(1);
-    expect(await rowOf(hearth)).toBeUndefined();
-    expect(await rowOf(lantern)).toBeUndefined();
-    // Everything back, whole: both levels' cost, its fuel, and the carved pumpkin.
-    const refund = { timber: 15, stone: 15, emberwood: 2, 'jack-o-lantern-hearthfire': 1 };
-    const bag = await db.query.inventories.findMany({
-      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+        () => undefined,
+      );
+      expect(await eventsOf(mapId)).toHaveLength(events.length);
     });
-    expect(Object.fromEntries(bag.map((b) => [b.itemId, b.quantity]))).toEqual(refund);
-    // The morning report's one-time note.
-    const status = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
-    expect(HollowResponseSchema.parse(status.json()).hollow.homeFirePacked).toEqual({
-      refund,
-      at: clock.toISOString(),
-    });
-    const events = await eventsOf(mapId);
-    const packed = events.filter((e) => e.type === 'building.removed');
-    expect(packed.map((e) => parseGameEventPayload('building.removed', e.payload).lost)).toEqual([
-      'packed',
-      'packed',
-    ]);
-    expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(1);
-    // Run again: nothing left to do here.
-    await relayoutHomes(
-      db,
-      () => clock,
-      () => undefined,
-    );
-    expect(await eventsOf(mapId)).toHaveLength(events.length);
   });
 
   it('packs up home Training Grounds with everything back, landing trainees first, once (#277)', async () => {
