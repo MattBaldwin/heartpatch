@@ -343,10 +343,10 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
 
   const panel = page.getByTestId('tile-panel');
   const note = page.getByTestId('territory-note');
-  /** The note is inside the screen and inside the panel's visible box (a pixel's rounding). */
-  const onScreen = async () => {
+  /** `line` is inside the screen and inside the panel's visible box (a pixel's rounding). */
+  const onScreen = async (line = note) => {
     const viewport = page.viewportSize()!;
-    const box = (await note.boundingBox())!;
+    const box = (await line.boundingBox())!;
     const frame = (await panel.boundingBox())!;
     expect(box.y).toBeGreaterThanOrEqual(Math.max(0, frame.y) - 1);
     expect(box.y + box.height).toBeLessThanOrEqual(
@@ -372,5 +372,35 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
     expect((await note.boundingBox())!.y).toBeLessThan(button.y);
     expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
   }
+
+  // Now the status knows: on the SE, a freshly tapped tile of theirs says why
+  // up front, in view with no scrolling, under the rustling and Meet it.
+  await page.route('**/maps/*/territory', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as { territory: { restingKeepers?: string[] } };
+    body.territory.restingKeepers = [rival];
+    await route.fulfill({ response: res, json: body });
+  });
+  await page.getByTestId('tile-challenge').tap();
+  await expect.poll(async () => (await territoryState(page))?.tileAction).toBe('keeper-resting');
+  await panel.getByRole('button', { name: 'Close' }).tap();
+  const spot = await findTile(page, 'keeper-resting');
+  // From another tile with the panel at its top (as a fresh tap leaves it), back to theirs.
+  const box = (await page.locator('#game').boundingBox())!;
+  await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
+  await expect
+    .poll(async () => (await territoryState(page))?.tileAction)
+    .not.toBe('keeper-resting');
+  await panel.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await tapCanvas(page, spot.x, spot.y);
+  await expect.poll(async () => (await territoryState(page))?.tileAction).toBe('keeper-resting');
+  const resting = page.getByTestId('territory-keeper-resting');
+  await expect(resting).toHaveText(
+    /^No more challenges for Someone today\. Try again in (\d+h( \d{2}m)?|\d+m|less than a minute) 🌙$/,
+  );
+  await expect(page.getByTestId('tile-challenge')).toHaveCount(0);
+  await onScreen(resting);
   await page.context().close();
 });

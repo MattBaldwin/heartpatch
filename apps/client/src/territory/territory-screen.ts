@@ -447,12 +447,12 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
   }
 
   /** Scrolls the tile panel to what a refused tap says, if anything (#526). */
-  function revealNote(): void {
+  function revealNote(block: ScrollLogicalPosition = 'center'): void {
     panel?.container
       .querySelector<HTMLElement>(
         '[data-testid="territory-note"], [data-testid="territory-keeper-resting"]',
       )
-      ?.scrollIntoView({ block: 'center' });
+      ?.scrollIntoView({ block });
   }
 
   /** Ticks once a second only while a countdown is on screen. */
@@ -505,6 +505,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         }
         panel = { container, tile, view };
         render();
+        // A capped Keeper's land says why up front (#526). A small phone's
+        // panel scrolls (map.css), and a wild squishy or a building above can
+        // push the reason past its edge: scroll just far enough to show it,
+        // and again once the panel has laid out. Only for a newly tapped
+        // tile, so a redraw never fights the player's own scrolling.
+        if (!same && shown?.kind === 'keeper-resting') {
+          revealNote('nearest');
+          requestAnimationFrame(() => {
+            revealNote('nearest');
+          });
+        }
       },
       hide: () => {
         panel?.container.replaceChildren();
