@@ -340,10 +340,14 @@ export const FIRES_ON_LAND =
 export const BUILT_ON_HOMESTEAD = 'Built! Tap it on its homestead to open it.';
 
 /** No free tile left at home (#537): one building per tile (#295), and every one is taken. */
-export const HOME_FULL = 'Your home base is full! Move or take down a building to make room 🏡';
+export const HOME_FULL = 'Your home base is full! Take down a building to make room 🏡';
 
-/** Every home building is up to its cap (#537), and one can still grow. */
-export const HOME_ALL_BUILT = 'No room for more squishy homes! Tap one to upgrade it ⬆️';
+/**
+ * Every home building is up to its cap (#537), and one can still grow. Taps on
+ * buildings wait while the Build sheet is up, so Not now comes first.
+ */
+export const HOME_ALL_BUILT =
+  'Every squishy home is built! Tap Not now, then tap one to upgrade ⬆️';
 
 /** Every home building is up to its cap, each at its top level (#537). */
 export const HOME_ALL_TOP = 'Every squishy home is built and as big as it gets! 🏆';

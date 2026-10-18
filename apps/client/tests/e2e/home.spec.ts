@@ -366,7 +366,7 @@ test('a home base with no room says why, and Recipe book opens the book and come
   await expect(sheet.locator('[data-build="ember-den"]')).toHaveCount(0);
   await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(0);
   await expect(sheet.getByTestId('build-hint')).toHaveText(
-    'No room for more squishy homes! Tap one to upgrade it ⬆️',
+    'Every squishy home is built! Tap Not now, then tap one to upgrade ⬆️',
   );
   const hint = (await sheet.getByTestId('build-hint').boundingBox())!;
   const view = page.viewportSize()!;
