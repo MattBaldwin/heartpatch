@@ -1289,6 +1289,16 @@ export class HouseScene {
         ),
       );
     }
+    // An inside wall's end at the open front shows its cut face to the
+    // dollhouse: dark wood like a cut top edge, not a grey plaster stub (B5a).
+    if (run.axis === 'z' && !run.exterior && this.#openFrontAt(run)) {
+      list.push(
+        ...place(
+          [box(scene, [0.04, height + 0.08, thick + 0.1], [-0.02, (height + 0.08) / 2, 0], HOUSE_PALETTE.cap)],
+          0,
+        ),
+      );
+    }
     if (height > 1.4) {
       const inside = run.exterior ? -out : 1;
       list.push(
@@ -1394,6 +1404,20 @@ export class HouseScene {
       this.#house.push(porch);
       this.#porch.push({ room: id, mesh: porch });
     }
+  }
+
+  /** Does this inside wall start at the open front (an outer front wall runs past its end on its floor)? */
+  #openFrontAt(run: WallRun): boolean {
+    return this.#runs.some(
+      (r) =>
+        r.axis === 'x' &&
+        r.front &&
+        r.exterior &&
+        r.floor === run.floor &&
+        Math.abs(r.at - run.from) < 0.01 &&
+        r.from <= run.at + 0.01 &&
+        r.to >= run.at - 0.01,
+    );
   }
 
   #floorParts(floor: number): FloorParts {

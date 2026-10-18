@@ -191,8 +191,9 @@ export const snugRoom: RoomBuilder = (kit) => {
   // the east wall its hotspot washed the wall and the table out (H2 render check).
   kit.light('lamp', tx - 0.35, y + 1.36, tz - 0.15); // TUNE
 
-  // The plant by the east wall, in front of the bed (B5a: the hearth came forward into its corner).
-  const [px, pz] = at(w - 0.42, d * 0.55); // TUNE
+  // The plant in the front-left corner, just in front of the hearth (B5a:
+  // tucked in a little as the hearth came forward; out of the kid frame).
+  const [px, pz] = at(0.4, 0.33); // TUNE
   kit.solid(plant(scene, px, pz, y));
   kit.shadow(px, pz, 0.9, 0.9);
   // The pink ball beside the plant, the open book at the rug's front edge.

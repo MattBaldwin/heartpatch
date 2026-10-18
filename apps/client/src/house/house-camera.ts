@@ -201,10 +201,16 @@ export function fitBox(
   const minX = Math.max(bounds.minX, focus.minX - peek);
   const maxX = Math.min(bounds.maxX, focus.maxX + peek);
   if (minX <= bounds.minX && maxX >= bounds.maxX) return { ...bounds, minX, maxX };
-  // B5a: the focus room in the middle of the frame (it sat pushed to the
-  // side the house ends on): that side shows a little lawn instead.
+  // B5a: the focus room toward the middle of the frame (it sat pushed to
+  // the side the house ends on): that side shows a little lawn instead, at
+  // most `HOUSE_CAMERA.lawn` of it, so a wide peek never shrinks the house.
   const reach = Math.max(focus.minX - minX, maxX - focus.maxX);
-  return { ...bounds, minX: focus.minX - reach, maxX: focus.maxX + reach };
+  const lawn = HOUSE_CAMERA.lawn;
+  return {
+    ...bounds,
+    minX: Math.min(minX, Math.max(focus.minX - reach, bounds.minX - lawn)),
+    maxX: Math.max(maxX, Math.min(focus.maxX + reach, bounds.maxX + lawn)),
+  };
 }
 
 /**

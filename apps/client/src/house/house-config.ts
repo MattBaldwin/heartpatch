@@ -240,6 +240,8 @@ export const HOUSE_CAMERA = {
    * neighbour, metres (the rest is a sideways drag away).
    */
   peek: 0.4, // TUNE: B5a: 1.1 (B4) left level 2's dollhouse a third of an iPhone's height (the edge rule widened it to 2.5); the Playroom's edge still in view
+  /** At most this much lawn past the house's near end keeps the focus room toward the frame's middle on a phone, metres (B5a). */
+  lawn: 0.5, // TUNE
   /** The "more this way" chevron pill (CSS px): its size, how far in from the edge, and the gap it keeps from a resident. */
   chevron: { width: 28, height: 44, inset: 4, gap: 8 }, // TUNE: house.css .house-more matches
   /** Room kept between a frame edge and a resident it would slice, normalised device units. */
@@ -386,11 +388,11 @@ export const HOUSE_GROWN = {
     rugEdge: '#f2c14e', // TUNE
     /** Where the first residents stand, as shares of the hall's width and depth. */
     residentBand: [
-      [0.66, 0.3],
-      [0.8, 0.22],
-      [0.8, 0.45],
-      [0.8, 0.68],
-    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
+      [0.66, 0.32],
+      [0.8, 0.3],
+      [0.8, 0.5],
+      [0.8, 0.7],
+    ], // TUNE: B5a: the front two back a little, so the Hall's cut-low front wall never slices a resident's bottom from the iPad;  all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres
@@ -509,7 +511,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.7, // TUNE
     sunSpecular: 0.3, // TUNE
     glow: 1,
-    lift: '#3c2c22', // TUNE: B5a
+    lift: '#6c594b', // TUNE: B5a: as day
     ceiling: '#2a1c12', // TUNE: B5a
     yard: 0.35, // TUNE: B5a: the lanterns fading out with the night
   },
@@ -529,7 +531,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 2.0, // TUNE: daylight fills the room (H2 render check: day on high read dimmer than dusk)
     sunSpecular: 0.12, // TUNE: no white glint along the rafters (H2 render check)
     glow: 0.9, // TUNE
-    lift: '#3a2e26', // TUNE: B5a: a touch, so day stays at or over dusk
+    lift: '#6c594b', // TUNE: B5a: high's walls read pinker than low's by day too; keeps day at or over dusk
     ceiling: '#000000', // TUNE: B5a: daylight lights it already
     yard: 0, // TUNE: B5a: no lantern pools at noon
   },
@@ -549,7 +551,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1,
     sunSpecular: 0.6,
     glow: 1,
-    lift: '#4a3222', // TUNE: B5a: the peach low has, away from the fire
+    lift: '#957965', // TUNE: B5a: most of the way to low's peach away from the fire (#987a71 → about #c49a85)
     ceiling: '#9e6e4b', // TUNE: B5a: warm, not muddy (house4 kid iPad read (154,89,60))
     yard: 1,
   },
@@ -569,7 +571,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.05, // TUNE
     sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,
-    lift: '#4a3024', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom
+    lift: '#957965', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom
     ceiling: '#9a6646', // TUNE: B5a
     yard: 1,
   },

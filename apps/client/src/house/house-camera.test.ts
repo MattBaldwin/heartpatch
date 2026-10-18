@@ -215,6 +215,10 @@ describe('fitHouse', () => {
       const range = panRange(two, vp, snugRoom);
       expect(range.min).toBe(0);
       expect(range.max).toBeCloseTo(two.maxX - box.maxX);
+      // A wide peek (the edge rule's) shows no more than `lawn` past the near end.
+      const wide = fitBox(two, vp, { ...snugRoom, peek: 2.3 });
+      expect(wide.minX).toBeCloseTo(two.minX - HOUSE_CAMERA.lawn);
+      expect(wide.maxX).toBeCloseTo(4.8 + 2.3);
       // A room in the middle of a wider house: both sides are house, nothing changes.
       const three = { ...two, maxX: 14.64 };
       const middle = { minX: 4.8, maxX: 9.6 };

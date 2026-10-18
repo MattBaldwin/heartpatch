@@ -15,7 +15,8 @@
 // LEVELS (default 1), POSES (dollhouse,kid,card), TIERS (high,low), DEVICES (iphone,ipad),
 // MINUTES (720,1200: noon and night, minutes after midnight; #381 H2) narrow the set;
 // a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
-// `card` is the dollhouse with today's gift card open, `welcome` with welcome home's line (#381 H2). GIFT=0 leaves the gift out
+// `card` is the dollhouse with today's gift card open, `welcome` with welcome home's line (#381 H2),
+// `picker` with the move-in picker open on the Playroom (C2b's framed room; B5a: the Snug's sign). GIFT=0 leaves the gift out
 // (by default a resident's wrapped gift waits by its bed).
 // ONLY=<regex> re-shoots matching files and merges them into captures.json.
 import { chromium } from '@playwright/test';
@@ -57,7 +58,7 @@ for (const level of levels)
   for (const pose of poses)
     for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
       // The gift card: once, at night (the card is DOM; the time of day is behind it).
-      for (const minute of pose === 'card' || pose === 'welcome' ? [minutes.at(-1)] : minutes)
+      for (const minute of ['card', 'welcome', 'picker'].includes(pose) ? [minutes.at(-1)] : minutes)
         for (const tier of tiers)
           for (const device of devices)
             jobs.push({
@@ -135,6 +136,7 @@ async function shoot(job) {
     minute: job.minute,
     ...(gift && { gift: '1' }),
     ...(job.pose === 'welcome' && { welcome: '1' }),
+    ...(job.pose === 'picker' && { picker: 'playroom' }),
   });
   await page.goto(`${BASE}/house.html?${q}`, { waitUntil: 'load' });
   await until(page, () => window.__heartpatch?.house?.()?.scene && window.__heartpatch.draws() > 0);
@@ -151,6 +153,10 @@ async function shoot(job) {
   if (job.pose === 'welcome') {
     // Welcome home: the first open of the day (the gallery keeps its line up).
     await until(page, () => window.__heartpatch.house()?.welcomed === true);
+  }
+  if (job.pose === 'picker') {
+    // The move-in picker on the Playroom: the house framed above the open sheet (C2b).
+    await until(page, () => window.__heartpatch.house()?.sheet === 'picker');
   }
   if (job.pose === 'card') {
     // Today's gift card, opened from the peek bar's gift line.
