@@ -198,7 +198,7 @@ describe('mountStage frame cap (#501)', () => {
     return s.draws - before;
   }
 
-  it('draws a capped scene at 30 frames a second however often it is asked', () => {
+  it('draws a capped scene at 30 frames a second on a 120 Hz display, asked every frame', () => {
     stage = mount(FRAME_CAP_30);
     oneSecond(stage); // loading
     expect(oneSecond(stage)).toBe(30);

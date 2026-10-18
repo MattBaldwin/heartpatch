@@ -189,7 +189,8 @@ export interface FrameCap {
 /**
  * 30 drawn frames a second: explore (#501, owner Oct 18: it runs cool, the
  * map keeps render on demand) and `?cap30=1`. The gap is below 1000/30 so a
- * 60 Hz display draws every other frame and a 120 Hz one every fourth.
+ * 60 Hz display draws every other frame and a 120 Hz one every fourth
+ * (a 144 Hz desktop draws 36; iOS Safari runs rAF at 60 or 120).
  */
 export const FRAME_CAP_30: FrameCap = { fps: 30, minFrameMs: 26 }; // TUNE: minFrameMs
 

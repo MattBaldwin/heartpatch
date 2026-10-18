@@ -234,9 +234,15 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       // And at no more than 30 drawn frames a second (#501). A software
       // renderer is far below that anyway; the cap itself is unit-tested
       // (stage.test.ts), this catches a walk that bypasses it.
-      const walkFps = ((walkEnd.draws - walkStart.draws) * 1000) / (walkEnd.at - walkStart.at);
-      test.info().annotations.push({ type: 'walkFps', description: walkFps.toFixed(1) });
-      expect(walkFps).toBeLessThanOrEqual(EXPLORE_MAX_FPS);
+      // Only over a second or more: a spot already in reach makes a window of
+      // a few ms, where one frame would read as 100+ fps.
+      const walkMs = walkEnd.at - walkStart.at;
+      const walkFps = ((walkEnd.draws - walkStart.draws) * 1000) / walkMs;
+      test.info().annotations.push({
+        type: 'walkFps',
+        description: `${walkFps.toFixed(1)} over ${walkMs.toFixed(0)} ms`,
+      });
+      if (walkMs >= 1000) expect(walkFps).toBeLessThanOrEqual(EXPLORE_MAX_FPS);
       guardSkipped = null;
     }
     await slowExpect(action).toBeEnabled();

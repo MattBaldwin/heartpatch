@@ -1,7 +1,14 @@
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import type { Scene } from '@babylonjs/core/scene';
-import { LIGHTING, QUALITY_TIERS, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
+import {
+  LIGHTING,
+  QUALITY_TIERS,
+  SCALER,
+  TIER_SETTINGS,
+  type QualityTier,
+  type ScalerConfig,
+} from '../config.js';
 import { cappedPixelRatio, hardwareScalingFor } from '../dpr.js';
 import {
   cappedScaler,
@@ -75,7 +82,7 @@ export class RenderQuality {
   /** None with `?nopost=1` (#501 bisect): no bloom or FXAA pass at all. */
   private readonly pipeline: PostChain | null;
   /** Under a frame cap (explore, `?cap30=1`; #501) the governor reads the cap as on target. */
-  private readonly config: typeof SCALER;
+  private readonly config: Readonly<ScalerConfig>;
   private readonly phone: boolean;
   private readonly scene: Scene;
   private readonly camera: Camera;

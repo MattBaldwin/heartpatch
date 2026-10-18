@@ -3,5 +3,5 @@ title: Cooler exploring
 area: land
 ---
 
-Exploring is smoother and keeps your device cooler.
+Exploring is gentler on your device, so it stays cooler.
 **Try it:** explore your land for a few minutes and walk all around.
