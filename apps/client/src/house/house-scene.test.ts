@@ -13,7 +13,14 @@ import {
   residentBoxes,
   safeArea,
 } from './house-camera.js';
-import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_PALETTE, HOUSE_TIMES } from './house-config.js';
+import {
+  HOUSE_GIFT,
+  HOUSE_GRID,
+  HOUSE_KID,
+  HOUSE_PALETTE,
+  HOUSE_TIMES,
+  HOUSE_WALK,
+} from './house-config.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -21,10 +28,10 @@ import { fillTilt } from './house-scene.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
 import { houseLookAtMinute } from './house-light-look.js';
-import { yardPumpkins } from './house-models.js';
+import { BED_FRAME, yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
-import { floorAt, HOUSE_WALK, roomAt, slideStep, startSpot } from './house-walk.js';
+import { floorAt, roomAt, slideStep, startSpot } from './house-walk.js';
 import { roomBox } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -875,7 +882,7 @@ describe('house scene', () => {
       expect(floorAt(map, k.x, k.z, k.y)).toBe(0);
       // The Snug's two beds (thin instances, not solids) block, as does the hearth.
       const beds = map.blocks.filter(
-        (f) => f.y1 - f.y0 === HOUSE_WALK.bed.height && f.x1 - f.x0 > 1 && f.z1 - f.z0 > 1,
+        (f) => f.y1 - f.y0 === BED_FRAME.height && f.x1 - f.x0 > 1 && f.z1 - f.z0 > 1,
       );
       expect(beds).toHaveLength(sampleHouse(1).view.rooms[0]!.beds);
       expect(map.blocks.some((f) => f.y1 > 1.5)).toBe(true);
@@ -924,6 +931,17 @@ describe('house scene', () => {
     // W3 (doorway clearance): at level 4 the Snug's back-right bed and the
     // Playroom's back-left piece stand in front of both doorways into the Hall.
     it.todo('L4: the Hall is reachable from the Snug and the Playroom (W3: doorway clearance)');
+
+    it("walks round today's wrapped gift, and through where it stood once it's opened", () => {
+      const { scene, house } = buildHouse(2, 'low', withGift(sampleHouse(2)));
+      const gift = house.giftPoint!;
+      expect(gift).not.toBeNull();
+      const floor = (house.walkMap.rooms.find((r) => r.look === 'snug') ?? { y0: 0 }).y0;
+      expect(floorAt(house.walkMap, gift.x, gift.z, floor)).toBeNaN();
+      house.removeGift();
+      expect(floorAt(house.walkMap, gift.x, gift.z, floor)).toBe(floor);
+      scene.getEngine().dispose();
+    });
 
     it('moves the Keeper as drawn, and puts it without a hop when it jumps', () => {
       const { scene, house } = buildHouse(1, 'low');

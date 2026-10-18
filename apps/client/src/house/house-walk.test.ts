@@ -1,6 +1,6 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { HOUSE_GRID, HOUSE_GROWN } from './house-config.js';
+import { HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
   cameraFront,
@@ -10,7 +10,6 @@ import {
   floorAt,
   followPose,
   followTurn,
-  HOUSE_WALK,
   roomAt,
   slideStep,
   startSpot,
@@ -265,7 +264,7 @@ describe('sliding (#381 W1)', () => {
     expect(slideStep(map, corner, 0, 0)).toBe(false);
   });
 
-  it('allocates nothing: the step moves the spot it was given', () => {
+  it('updates the spot it was given in place, returning only a yes or no', () => {
     const map = mapAt(4);
     const at = { x: 2, z: 2, y: 0 };
     const ref = at;
@@ -456,7 +455,7 @@ describe('the follow camera (#381 W1)', () => {
     expect(cam.eye.x).toBeCloseTo(goal.eye.x, 2);
   });
 
-  it('allocates nothing: it writes into the pose it was given', () => {
+  it('writes into the pose it was given, in place', () => {
     const map = mapAt(4);
     const hall = room(map, 'heart-hall');
     const out = pose();

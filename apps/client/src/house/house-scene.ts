@@ -60,6 +60,7 @@ import {
   HOUSE_GLIDE,
   HOUSE_GRID,
   HOUSE_KID,
+  HOUSE_WALK,
   HOUSE_LIGHT,
   HOUSE_OUTSIDE,
   HOUSE_PALETTE,
@@ -84,6 +85,7 @@ import {
 import {
   beamCeiling,
   bedBlanket,
+  BED_FRAME,
   bedFrame,
   box,
   floorGroove,
@@ -119,7 +121,7 @@ import {
   type HopPose,
 } from '../explore/keeper-hop.js';
 import { EXPLORE_VIEW } from '../explore/explore-config.js';
-import { HOUSE_WALK, walkMap, type Footprint, type WalkMap, type WalkSpot } from './house-walk.js';
+import { walkMap, type Footprint, type WalkMap, type WalkSpot } from './house-walk.js';
 
 /*
  * The Keeper's house interior (#381 plan §1c): a dollhouse on the shared
@@ -353,6 +355,8 @@ export class HouseScene {
   /** The gift's vertices: the last `count` of `mesh` (folded to a point once opened). */
   #giftRange: { mesh: Mesh; count: number } | null = null;
   #giftShadow: Placed | null = null;
+  /** The wrapped gift's footprint among the furniture, so opening it clears the way. */
+  #giftFoot: Footprint | null = null;
   /** Lights and looks the time of day changes (#381 H2). */
   #sun: DirectionalLight | null = null;
   #houseLight: DirectionalLight | null = null;
@@ -876,6 +880,12 @@ export class HouseScene {
    * No rebuild and no draw call changes.
    */
   removeGift(): void {
+    const foot = this.#giftFoot;
+    this.#giftFoot = null;
+    if (foot) {
+      this.#furniture.splice(this.#furniture.indexOf(foot), 1);
+      this.#walkMap = null;
+    }
     const range = this.#giftRange;
     this.#giftAt = null;
     this.#giftRange = null;
@@ -968,8 +978,10 @@ export class HouseScene {
    * lands or settles (keep drawing); a Keeper at rest isn't placed again.
    */
   stepWalk(dt: number, reduced: boolean): boolean {
-    const walked = dt > 0 ? this.#walked : 0;
-    const push = dt > 0 ? Math.min(1, walked / (HOUSE_WALK.speed * dt)) : 0;
+    // A frame with no time keeps its ground for the next.
+    if (dt <= 0) return this.#walkPosing;
+    const walked = this.#walked;
+    const push = Math.min(1, walked / (HOUSE_WALK.speed * dt));
     this.#walked = 0;
     // The hop's strides are the explore's, at its walking speed: scaled to the house's.
     stepHop(this.#walkHop, (walked * EXPLORE_VIEW.walkSpeed) / HOUSE_WALK.speed, dt, push, reduced);
@@ -1083,6 +1095,11 @@ export class HouseScene {
     }
     const mesh = placed(giftBox(this.#scene, this.#tierLook.rounds), spot.x, room.y0, spot.z, 0.45); // TUNE: a little turned, so two faces read
     this.#floorParts(room.floor).gift.push(mesh);
+    // The Keeper walks round it while it's wrapped (#381 W1).
+    mesh.computeWorldMatrix(true);
+    const { minimumWorld: lo, maximumWorld: hi } = mesh.getBoundingInfo().boundingBox;
+    this.#giftFoot = { x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z, y0: lo.y, y1: hi.y };
+    this.#furniture.push(this.#giftFoot);
     this.#giftAt = { x: spot.x, y: room.y0 + HOUSE_GIFT.size * 0.55, z: spot.z, floor: room.floor };
     const shadow: Placed = {
       matrix: Matrix.Scaling(0.62, 1, 0.62).multiply(
@@ -1334,17 +1351,16 @@ export class HouseScene {
         own.push({ x, z, yaw });
         this.#roomBeds.set(parts.box.id, own);
         // Beds are thin instances, not solids: their footprint from the bed's size, turned.
+        const { length, width, height } = BED_FRAME;
         const [hx, hz] =
-          Math.abs(Math.sin(yaw)) > 0.7
-            ? [HOUSE_WALK.bed.wide, HOUSE_WALK.bed.long]
-            : [HOUSE_WALK.bed.long, HOUSE_WALK.bed.wide];
+          Math.abs(Math.sin(yaw)) > 0.7 ? [width / 2, length / 2] : [length / 2, width / 2];
         this.#furniture.push({
           x0: x - hx,
           x1: x + hx,
           z0: z - hz,
           z1: z + hz,
           y0: parts.box.y0,
-          y1: parts.box.y0 + HOUSE_WALK.bed.height,
+          y1: parts.box.y0 + height,
         });
         this.#beds.push({
           matrix: Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)),

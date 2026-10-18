@@ -382,12 +382,16 @@ export function beamCeiling(
 // ── Furniture ───────────────────────────────────────────────────────
 
 /** A bed's frame, mattress, pillow and headboard (the blanket is its own part, coloured per bed). */
+/** A bed frame's size at yaw 0, metres: along x, along z, and its headboard's height. */
+export const BED_FRAME = { length: 1.5, width: 1.1, height: 0.6 } as const;
+
 export function bedFrame(scene: Scene, rounds = 10): Mesh[] {
+  const { length, width, height } = BED_FRAME;
   return [
-    box(scene, [1.5, 0.32, 1.1], [0, 0.16, 0], '#8a5a39'),
+    box(scene, [length, 0.32, width], [0, 0.16, 0], '#8a5a39'),
     box(scene, [1.42, 0.14, 1.02], [0, 0.38, 0], '#fff2e3'),
     ball(scene, 0.42, [0, 0.5, 0.33], '#ffffff', [1.6, 0.5, 0.9], rounds),
-    box(scene, [1.5, 0.6, 0.12], [0, 0.3, 0.49], '#8a5a39'),
+    box(scene, [length, height, 0.12], [0, height / 2, 0.49], '#8a5a39'),
   ];
 }
 
