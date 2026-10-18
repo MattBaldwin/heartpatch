@@ -26,6 +26,22 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 
 **Full send for Phase 1 (owner, 2026-10-11):** the 4-lane cap is lifted until Phase 1 ships (due Oct 31). The separate-folders rule in step 1 still holds. **Every PR gets a fresh lane session**; don't reuse a lane for its next PR.
 
+### Lane size and handoffs (owner, 2026-10-18)
+
+Lanes do **small changes** and hand off cleanly. A long-running lane gets expensive: every step re-reads its whole conversation, so cost grows with context even when the step is tiny. One house lane ran for a week across several PRs and cost about $770.
+
+- **One small PR per lane.** If an issue needs more than one PR, the supervisor splits it into parts (for example B5a, B5b) when briefing, and each part gets its own fresh lane.
+- **Context cap:** when a lane's context passes about **200k tokens** (`get_session`, `context_usage.used_tokens`), the supervisor tells it to finish its current PR and not start the next part.
+- **Handoff note (required when a lane stops with work left on the issue).** The lane posts it as a comment on the issue, titled `Lane handoff`. A comment outlives the session, so the next lane can read it after the old one is archived. It holds:
+  - the branch and head SHA
+  - what is done and merged (PR numbers)
+  - what the next part covers, as a short scope list
+  - the owner-approved mockups and captures (artifact links) and the owner decisions that apply
+  - open gotchas: failing or flaky checks, tooling quirks, things that looked wrong but aren't
+  - the files to start from
+- **The next lane's brief links that comment** under "Before writing code" and doesn't depend on the old session.
+- The supervisor archives the old lane only after the handoff comment is posted.
+
 ### Big features (owner, 2026-10-11)
 
 A feature is **big** when it is a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature. Additive optional schema fields, client-only art and UI, and data-only content are not big. The supervisor decides "big" when briefing and says so in the brief.
@@ -99,7 +115,7 @@ The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
 - Batch tool calls.
 - Don't re-read large files.
-- **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session (§2).
+- **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session, capped at about 200k tokens of context, with a handoff comment when work is left (§2, "Lane size and handoffs").
 - When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8).
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
@@ -123,6 +139,7 @@ check `get_check_runs` yourself before going idle; never wait silently on a gree
 ## Before writing code
 Read CLAUDE.md, the relevant GAME_DESIGN/TECH_SPEC sections, STYLE_GUIDE, DECISIONS (name the
 entries), apps/server/README.md. Read the issue. Copy these files on main: {CONCRETE FILES}.
+{IF CONTINUING: Read the `Lane handoff` comment on the issue first: {HANDOFF COMMENT LINK}.}
 
 ## Your lane
 - Owns: {OWNS}
@@ -142,6 +159,12 @@ pnpm test:e2e if client). DB tests: DATABASE_URL against local Postgres 16.
 Don't edit docs/DECISIONS.md; put new decisions under `## Decisions` in the PR body (the coordinator records them after merge).
 Title `#{N}: <summary>`, `Closes #{N}` (or `Part of #{N}` + what remains), deps with reasons,
 "How to test on iPhone" for client work, "Coordinator notes".
+
+## Size and handoff
+Keep this PR small: one part of the issue. If you find the work is bigger than one PR, finish a
+coherent part and report `#{N} blocked: needs split: <what's left>`. When you stop with work left on
+the issue, post a `Lane handoff` comment on the issue (COORDINATOR.md §2, "Lane size and handoffs"):
+branch + head SHA, done/merged, next part's scope, approved mockups and decisions, gotchas, start files.
 
 ## Review loop
 Reviewer subagent until APPROVE; fresh reviewer each round; at most 4 rounds, then report blocked.
