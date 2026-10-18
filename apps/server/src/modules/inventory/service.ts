@@ -123,12 +123,18 @@ export async function consumeItems(
  * Locks every inventory row these grants will touch, per owner (owner id
  * order) and in item-id order, before any grant: one grant at a time would
  * otherwise lock items in grant order, against everyone else's item-id order
- * (tech spec §7 step 11). Missing rows are made by the grant.
+ * (tech spec §7 step 11). Missing rows are made by the grant, unless
+ * `createMissing` is set: then they're made here at 0, in the same order, and
+ * locked too. Two transactions that each grant both of two players' new rows
+ * (two Keepers knocking on each other's doors, #557) need it: a lock on rows
+ * that don't exist yet holds nothing, so their grants' inserts would meet on
+ * the unique key in opposite order and deadlock.
  */
 export async function lockGrantRows(
   tx: Executor,
   mapId: string,
   grants: readonly { userId: string; items: ItemCounts }[],
+  options: { createMissing?: boolean } = {},
 ): Promise<void> {
   const byOwner = new Map<string, Set<string>>();
   for (const { userId, items } of grants) {
@@ -139,7 +145,9 @@ export async function lockGrantRows(
   const inventory = createInventoryRepo(tx);
   for (const userId of [...byOwner.keys()].sort()) {
     const ids = [...(byOwner.get(userId) ?? [])].sort();
-    if (ids.length > 0) await inventory.lockItems({ mapId, userId }, ids);
+    if (ids.length === 0) continue;
+    if (options.createMissing) await inventory.createAndLockItems({ mapId, userId }, ids);
+    else await inventory.lockItems({ mapId, userId }, ids);
   }
 }
 
