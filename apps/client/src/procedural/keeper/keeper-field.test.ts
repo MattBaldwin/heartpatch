@@ -120,6 +120,8 @@ describe('KeeperField cheers (#501 G)', () => {
     field.add(config, { x: 2, z: 0 });
     field.flush();
     const mesh = scene.meshes.find((m) => m.name.startsWith('keeper-')) as Mesh;
+    // Babylon has no public read of a user thin-instance buffer; the storage
+    // shows whether the same array is kept (rewritten in place).
     const eventBuffer = (): Float32Array | undefined =>
       mesh._userThinInstanceBuffersStorage.data['squishEvent'];
     const events = eventBuffer()!;

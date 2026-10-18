@@ -202,6 +202,7 @@ describe('PerfProbe', () => {
 
   it('posts a hitch row (and leaves the badge on the last slow run)', async () => {
     const { PerfProbe, lastReport } = await import('./perf-report.js');
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
     const probe = new PerfProbe({}, 'webgl2', quality, () => null);
     let now = 0;
     probe.frame(now, null, 2);
@@ -228,6 +229,7 @@ describe('PerfProbe', () => {
 
   it('posts no hitch within a minute of a slow report (the server allows two a minute)', async () => {
     const { PerfProbe } = await import('./perf-report.js');
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
     const probe = new PerfProbe({}, 'webgl2', quality, () => null);
     let now = 0;
     probe.frame(now, null, 2);
