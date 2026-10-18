@@ -174,6 +174,25 @@ export function nextLocalMidnight(at: Date, timeZone: string): Date {
 }
 
 /**
+ * The first instant of `at`'s calendar date in `timeZone`: its midnight, or
+ * whenever that date starts on a daylight-saving day that skips midnight.
+ * With `nextLocalMidnight`, the account's day as a range (the Glimmer swap's
+ * daily cap, #523).
+ */
+export function localDayStart(at: Date, timeZone: string): Date {
+  const today = localDate(at, timeZone);
+  // Every day starts within 26 hours before any of its instants.
+  let before = at.getTime() - 26 * 60 * MINUTE_MS;
+  let after = at.getTime();
+  while (after - before > 1) {
+    const mid = before + Math.floor((after - before) / 2);
+    if (localDate(new Date(mid), timeZone) === today) after = mid;
+    else before = mid;
+  }
+  return new Date(after);
+}
+
+/**
  * The instant the clock in `timeZone` first reads `local` (map-local wall
  * time), looked for within two days of `near` (#277: tonight's nightfall
  * and strike for the client's show). Exact to the minute; a time skipped by

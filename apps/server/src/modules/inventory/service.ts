@@ -80,7 +80,8 @@ function checkItems(items: ItemCounts): void {
  * Adds items to a player's bag, inside the caller's transaction, with a
  * ledger row per item (`reason`, and `refId` for what caused it). Unknown
  * item ids are refused (`VALIDATION_FAILED`). Call before the transaction's
- * game event (the event takes the `maps` row lock last).
+ * game event (the event takes the `maps` row lock last). `at` stamps the
+ * ledger row with the service's clock (the database's time when left out).
  */
 export async function grantItems(
   tx: Executor,
@@ -88,9 +89,10 @@ export async function grantItems(
   items: ItemCounts,
   reason: ItemChangeReason,
   refId: string | null = null,
+  at?: Date,
 ): Promise<void> {
   checkItems(items);
-  await createInventoryRepo(tx).add(owner, items, { reason, refId });
+  await createInventoryRepo(tx).add(owner, items, { reason, refId, ...(at ? { at } : {}) });
 }
 
 /**
@@ -105,6 +107,7 @@ export async function consumeItems(
   items: ItemCounts,
   reason: ItemChangeReason,
   refId: string | null = null,
+  at?: Date,
 ): Promise<void> {
   checkItems(items);
   const repo = createInventoryRepo(tx);
@@ -113,7 +116,7 @@ export async function consumeItems(
   if (Object.keys(short).length > 0) {
     throw new AppError('CONFLICT', needMoreText(short, GAME_DATA.resources));
   }
-  await repo.subtract(owner, items, { reason, refId });
+  await repo.subtract(owner, items, { reason, refId, ...(at ? { at } : {}) });
 }
 
 /**

@@ -15,7 +15,19 @@ export interface ItemChange {
   reason: ItemChangeReason;
   /** What caused it (a gather, a craft), if there is one. */
   refId: string | null;
+  /**
+   * When it happened, by the service's clock; the database's own time when
+   * left out. Counts read back by time (the Glimmer swap's daily cap, #523)
+   * pass it, so a test's or dev's clock and the rows agree.
+   */
+  at?: Date;
 }
+
+/** A ledger row's reason, ref and (when given) time. */
+const ledgerFields = ({ at, ...change }: ItemChange) => ({
+  ...change,
+  ...(at ? { createdAt: at } : {}),
+});
 
 export interface CraftRow {
   id: string;
@@ -161,9 +173,14 @@ function queries(db: Executor): InventoryRepo {
             updatedAt: sql`now()`,
           },
         });
-      await db
-        .insert(resourceLedger)
-        .values(rows.map((r) => ({ ...owner, itemId: r.itemId, delta: r.quantity, ...change })));
+      await db.insert(resourceLedger).values(
+        rows.map((r) => ({
+          ...owner,
+          itemId: r.itemId,
+          delta: r.quantity,
+          ...ledgerFields(change),
+        })),
+      );
     },
 
     subtract: async (owner, items, change) => {
@@ -175,11 +192,14 @@ function queries(db: Executor): InventoryRepo {
           .set({ quantity: sql`${inventories.quantity} - ${quantity}`, updatedAt: sql`now()` })
           .where(and(ownedBy(owner), eq(inventories.itemId, itemId)));
       }
-      await db
-        .insert(resourceLedger)
-        .values(
-          entries.map(([itemId, quantity]) => ({ ...owner, itemId, delta: -quantity, ...change })),
-        );
+      await db.insert(resourceLedger).values(
+        entries.map(([itemId, quantity]) => ({
+          ...owner,
+          itemId,
+          delta: -quantity,
+          ...ledgerFields(change),
+        })),
+      );
     },
 
     insertCraft: async (craft) => {

@@ -337,3 +337,57 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
   await lee.context().close();
   await sam.context().close();
 });
+
+test('swaps 10 Stone for 1 Glimmer at a post, up to the day’s cap (#523)', async ({ browser }) => {
+  test.setTimeout(240_000); // the map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('glimmer'));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // My land reaches a post before the patch opens (dev route), as in twoTraders.
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Glimmer Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await expect(lobby.getByTestId('lobby-invite-code')).toBeVisible();
+  const mine = await api<{ maps: { id: string; name: string }[] }>(page, 'GET', '/maps');
+  const mapId = mine.body.maps.find((m) => m.name === 'Glimmer Patch')!.id;
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
+  await grantItems(page, mapId, { stone: 34, greens: 4 });
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await visitPost(page);
+
+  await page.getByTestId('post-tab-swap').tap();
+  const today = page.getByTestId('post-swap-today');
+  await expect(today).toHaveText('Today: 0 of 3 💎');
+  // Not enough Greens: its button says what's needed and can't be tapped.
+  await expect(page.getByTestId('post-swap-greens')).toHaveText('Need 10');
+  await expect(page.getByTestId('post-swap-greens')).toBeDisabled();
+
+  // Pick, say yes, and the Glimmer is in the bag.
+  for (let i = 1; i <= 3; i += 1) {
+    await page.getByTestId('post-swap-stone').tap();
+    await expect(page.getByTestId('post-swap-confirm')).toContainText('Swap 10 Stone for 1 💎?');
+    await page.getByTestId('post-swap-yes').tap();
+    await expect(page.getByTestId('post-note')).toHaveText('Yay! 1 💎 Glimmer is in your bag!');
+    await expect(today).toHaveText(`Today: ${String(i)} of 3 💎`);
+  }
+  // At the cap: the day's done, and nothing more swaps.
+  await expect(page.getByTestId('post-swap-capped')).toContainText(
+    "That's all the Glimmer for today!",
+  );
+  await expect(page.getByTestId('post-swap-stone')).toBeDisabled();
+  const inventory = await api<{ items: Record<string, number> }>(
+    page,
+    'GET',
+    `/maps/${mapId}/inventory`,
+  );
+  expect(inventory.body.items).toMatchObject({ stone: 4, glimmer: 3 });
+  expect(findAvoidedWords((await page.getByTestId('post').textContent()) ?? '')).toEqual([]);
+
+  expect(errors).toEqual([]);
+  await page.context().close();
+});

@@ -41,6 +41,8 @@ import { hollowRoutes } from './modules/hollow/routes.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
 import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
+import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
+import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
@@ -421,6 +423,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             hooks: authHooks,
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // The trading post's Glimmer swap (#523).
+        await api.register(
+          glimmerSwapRoutes(createGlimmerSwapService({ db, clock }), {
+            hooks: authHooks,
+            idempotency,
           }),
         );
         // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and

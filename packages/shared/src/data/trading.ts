@@ -1,4 +1,4 @@
-import type { TradeRules, TradeValues } from '../schemas/data/trading.js';
+import type { GlimmerSwapRules, TradeRules, TradeValues } from '../schemas/data/trading.js';
 
 /** Trades and gifts at trading posts (#271). Checked by `checkTradeRules` in tests. */
 export const TRADE_RULES: TradeRules = {
@@ -63,4 +63,16 @@ export const TRADE_VALUES: TradeValues = {
   hearts: [40, 100, 200, 400], // TUNE:
   evenBand: 0.15, // TUNE: design doc §10
   lopsided: 2, // TUNE: #272
+};
+
+/**
+ * The trading post's Glimmer swap (#523; owner decision 2026-10-18). Checked
+ * by `checkGlimmerSwapRules` in tests. About 10 everyday resources for 1
+ * Glimmer, and about 3 a day, so the swap never replaces exploring.
+ */
+export const GLIMMER_SWAP: GlimmerSwapRules = {
+  accepts: ['timber', 'stone', 'greens', 'water', 'ice'], // TUNE: #523
+  give: 10, // TUNE: #523
+  get: 1, // TUNE: #523
+  dailyCap: 3, // TUNE: #523, Glimmer a day
 };

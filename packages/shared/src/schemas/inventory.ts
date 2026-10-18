@@ -58,6 +58,8 @@ export const ItemChangeReasonSchema = z.enum([
   'house-build',
   /** Opening the day's gift from a resident (#381 PR H), ledgered against the gift. */
   'house-gift',
+  /** The trading post's Glimmer swap (#523): the resources given and the Glimmer got. */
+  'post-swap',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
