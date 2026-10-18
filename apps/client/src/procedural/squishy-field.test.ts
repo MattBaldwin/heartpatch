@@ -832,3 +832,96 @@ describe('SquishyField rare finds glow (#391)', () => {
     expect(lit.f.stats.instances).toBe(plain.f.stats.instances);
   });
 });
+
+describe('SquishyField fade (#381 W2)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  function field(fades = true) {
+    const scene = new Scene(engine);
+    return {
+      scene,
+      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false, fades }),
+    };
+  }
+
+  /** Every instance's colour alpha on the body mesh. */
+  function alphas(scene: Scene): number[] {
+    const mesh = scene.meshes.find((m) => m.name.startsWith('squishy-body')) as Mesh;
+    // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
+    const data = mesh.getVertexBuffer('instanceColor')?.getData() as Float32Array;
+    return Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!);
+  }
+
+  /** The screen-door fade is compiled into the shader. */
+  const fading = (scene: Scene): boolean => {
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    return (
+      (material?.pluginManager?.getPlugin('Squish') as { fade?: boolean } | null)?.fade ?? false
+    );
+  };
+
+  it('fades one squishy in place: its own instances, no new meshes', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.add(species, 'b', { x: 1, z: 0 });
+    f.flush();
+    const meshes = f.stats.meshes;
+    f.setFade(a, 0.4);
+    f.flush();
+    expect(alphas(scene)[0]).toBeCloseTo(0.4);
+    expect(alphas(scene)[1]).toBe(1);
+    expect(f.fadeOf(a)).toBeCloseTo(0.4);
+    expect(f.stats.meshes).toBe(meshes);
+    f.setFade(a, 1);
+    f.flush();
+    expect(alphas(scene)).toEqual([1, 1]);
+  });
+
+  // The real check is a drawing-buffer readback in the dev gallery (no pixel
+  // under alpha 1 while a resident is faded); NullEngine compiles no shader.
+  it('keeps a faded squishy’s kept pixels opaque (the canvas never shows the page through it)', () => {
+    const { scene } = field(true);
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    const plugin = material?.pluginManager?.getPlugin('Squish') as {
+      getCustomCode: (kind: string) => Record<string, string> | null;
+    } | null;
+    const code = plugin?.getCustomCode('fragment') ?? {};
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('finalColor.a = 1.0;');
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('SQUISH_FADE');
+  });
+
+  it('keeps a squishy whole in a field that doesn’t fade (no see-through alpha without the dither)', () => {
+    // Under WebGPU the dither's shader isn't attached either: the same path.
+    const { scene, field: f } = field(false);
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.flush();
+    f.setFade(a, 0);
+    f.add(species, 'b', { x: 1, z: 0 }); // and through a rebuild
+    f.flush();
+    expect(f.fadeOf(a)).toBe(0);
+    expect(alphas(scene)).toEqual([1, 1]);
+  });
+
+  it('compiles the fade in only for a field that fades, from the start (no recompile mid-walk)', () => {
+    expect(fading(field(true).scene)).toBe(true);
+    expect(fading(field(false).scene)).toBe(false);
+  });
+
+  it('keeps the fade through a rebuild', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.setFade(a, 0);
+    f.add(species, 'b', { x: 1, z: 0 }); // a new instance rebuilds the buffers
+    f.flush();
+    expect(alphas(scene)[0]).toBe(0);
+  });
+});

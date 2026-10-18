@@ -110,6 +110,13 @@ export interface SquishyFieldOptions<L extends SquishyDetail = SquishyLod> {
    * the origin.
    */
   readonly parent?: TransformNode;
+  /**
+   * Its squishies can fade (`setFade`, #381 W2: the house's camera clears
+   * them out of its way). The fade's `discard` is compiled in from the start,
+   * so the first fade never recompiles mid-walk; off (the default), squishies
+   * keep the GPU's early rejection of hidden pixels.
+   */
+  readonly fades?: boolean;
 }
 
 export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
@@ -148,6 +155,8 @@ interface Squishy {
   ground: number;
   shadow: number;
   shadowAlpha: number;
+  /** How much of it shows, 0–1 (`setFade`: a screen-door fade, its shadow with it). */
+  fade: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
   /** The accessory it wears (#340), or null; its pieces are in `instances` too. */
@@ -182,6 +191,10 @@ interface Batch {
   moved: boolean;
   /** The last uploaded origin buffer, rewritten in place on a move. */
   origins: Float32Array | null;
+  /** The last uploaded colour buffer, its alphas rewritten in place on a fade. */
+  colors: Float32Array | null;
+  /** Only fades changed: push the colour buffer again. */
+  faded: boolean;
 }
 
 /** The eight corners of a mesh's own vertices' box (not the thin instances'), cached. */
@@ -248,6 +261,12 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #parent: TransformNode | null;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
+  /**
+   * A fade dithers its squishies away (`fades`, and the GLSL shader attached).
+   * Otherwise their colour alpha stays 1: PBR would write a lower one into the
+   * canvas, and the page would show through (WebGPU, review of #381 W2).
+   */
+  readonly #dithers: boolean;
   readonly #batches = new Map<string, Batch>();
   readonly #squishies = new Map<number, Squishy>();
   readonly #shadow: Mesh | null;
@@ -286,6 +305,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
+    this.#dithers = (options.fades ?? false) && this.#plugin !== null;
+    if (this.#plugin) this.#plugin.fade = this.#dithers;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
@@ -326,6 +347,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       ground: 0,
       shadow: 1,
       shadowAlpha: 1,
+      fade: 1,
       event: null,
       instances: [],
       accessory: null,
@@ -338,6 +360,35 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
     return handle;
+  }
+
+  /**
+   * How much of a squishy shows, 0 (gone) to 1 (the default): a screen-door
+   * fade (squish-plugin.ts `SQUISH_FADE`), so it costs no material, no blend
+   * and no draw call, and its contact shadow fades with it. Used to clear a
+   * squishy out of a close camera's way (#381 W2). Only a field made with
+   * `fades` dithers it; otherwise (or under WebGPU, without the shader) only
+   * the shadow fades and the squishy stays whole.
+   */
+  setFade(handle: SquishyHandle, fade: number): void {
+    const squishy = this.#squishies.get(handle.id);
+    const k = Math.min(1, Math.max(0, fade));
+    if (!squishy || squishy.fade === k) return;
+    squishy.fade = k;
+    this.#shadowDirty = true;
+    if (!this.#dithers) return;
+    for (const { batch, instance } of squishy.instances) {
+      if (batch.dirty || !batch.colors) continue; // the next upload writes it
+      const i = batch.instances.indexOf(instance);
+      if (i < 0) continue;
+      batch.colors[i * 4 + 3] = instance.color[3] * k;
+      batch.faded = true;
+    }
+  }
+
+  /** How much of a squishy shows (`setFade`). */
+  fadeOf(handle: SquishyHandle): number {
+    return this.#squishies.get(handle.id)?.fade ?? 1;
   }
 
   /**
@@ -616,7 +667,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   flush(): void {
     for (const batch of this.#batches.values()) {
       if (batch.dirty) this.#upload(batch);
-      else if (batch.moved) this.#uploadMoves(batch);
+      else {
+        if (batch.moved) this.#uploadMoves(batch);
+        if (batch.faded) {
+          batch.faded = false;
+          batch.mesh?.thinInstanceBufferUpdated('color');
+        }
+      }
     }
     if (this.#shadowDirty) this.#uploadShadows();
   }
@@ -655,6 +712,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         dirty: true,
         moved: false,
         origins: null,
+        colors: null,
+        faded: false,
       };
       this.#batches.set(key, batch);
     }
@@ -893,6 +952,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   #upload(batch: Batch): void {
     batch.dirty = false;
     batch.moved = false;
+    batch.faded = false;
     const n = batch.instances.length;
     if (n === 0) {
       batch.mesh?.setEnabled(false);
@@ -931,6 +991,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       inst.matrix.copyToArray(matrices, i * 16);
       colors.set(inst.color, i * 4);
       const { owner } = inst;
+      if (this.#dithers) colors[i * 4 + 3] = inst.color[3] * owner.fade;
       origins.set(owner.origin, i * 4);
       const { phase, rate, amplitude } = owner.handle.params.motion;
       motions.set([phase, rate, this.#breathing ? amplitude : 0, inst.look], i * 4);
@@ -938,12 +999,14 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       events[i * 4 + 3] = inst.finish;
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
-    mesh.thinInstanceSetBuffer('color', colors, 4, true);
+    // Not static where squishies fade: a fade rewrites its alphas in place (`setFade`).
+    mesh.thinInstanceSetBuffer('color', colors, 4, !this.#dithers);
     mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);
     if (batch.pickable) mesh.thinInstanceRefreshBoundingInfo();
     batch.origins = origins;
+    batch.colors = colors;
   }
 
   /** Rewrites a batch's matrices and origins in place after moves (no new buffers). */
@@ -991,7 +1054,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       colors[i * 4] = 1;
       colors[i * 4 + 1] = 1;
       colors[i * 4 + 2] = 1;
-      colors[i * 4 + 3] = s.shadowAlpha;
+      colors[i * 4 + 3] = s.shadowAlpha * s.fade;
       i++;
     }
     if (fresh) {

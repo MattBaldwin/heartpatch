@@ -325,6 +325,7 @@ export function followTurn(yaw: number): number {
  * Keeper along its own heading until it's inside `room` (or on the porch
  * for a front room), under its ceiling and clear of furniture; squeezed
  * like that, it climbs and looks down at the Keeper instead of past it.
+ * Residents in its way fade instead (`blockerFade`).
  */
 export function followPose(
   out: FollowPose,
@@ -368,11 +369,64 @@ export function followPose(
   return out;
 }
 
-/** Furniture standing up from the Keeper's floor within `nearClear` of (x, z). */
+/** A resident as the camera's fade sees it: its middle and its body's radius. */
+export interface WalkBlocker {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** How far it reaches from its middle, metres. */
+  readonly r: number;
+}
+
+const smoothstep = (a: number, b: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * How much of a resident shows from `eye` (#381 W2, the owner's render
+ * check): it fades out as the camera comes within about a metre of it
+ * (`HOUSE_WALK.fadeNear`), and as it stands across the line from the camera
+ * to the Keeper's chest at (kx, ky, kz), or round it (the Keeper walks
+ * through residents until W4). 1 shows it whole, 0 not at all.
+ */
+export function blockerFade(
+  eye: { readonly x: number; readonly y: number; readonly z: number },
+  kx: number,
+  ky: number,
+  kz: number,
+  b: WalkBlocker,
+): number {
+  const [nearGone, nearWhole] = HOUSE_WALK.fadeNear;
+  const near = smoothstep(
+    nearGone,
+    nearWhole,
+    Math.hypot(b.x - eye.x, b.y - eye.y, b.z - eye.z) - b.r,
+  );
+  const sx = kx - eye.x;
+  const sy = ky - eye.y;
+  const sz = kz - eye.z;
+  const ss = sx * sx + sy * sy + sz * sz;
+  if (ss <= 0) return near;
+  const t = Math.min(
+    1,
+    Math.max(0, ((b.x - eye.x) * sx + (b.y - eye.y) * sy + (b.z - eye.z) * sz) / ss),
+  );
+  // Past the Keeper it hides nothing.
+  if (t >= 1) return near;
+  const gap = Math.hypot(eye.x + sx * t - b.x, eye.y + sy * t - b.y, eye.z + sz * t - b.z);
+  return Math.min(near, smoothstep(b.r * HOUSE_WALK.fadeEdge, b.r, gap));
+}
+
+/**
+ * Furniture standing up from the Keeper's floor within `nearClear` of (x, z),
+ * tall enough to reach into the camera's view (#381 W2: a toy by the Snug's
+ * front drew it in and tipped it down 30°).
+ */
 function nearFurniture(map: WalkMap, x: number, z: number, y: number): boolean {
   const c = HOUSE_WALK.nearClear;
   for (const f of map.blocks) {
-    if (f.y1 < y + HOUSE_WALK.stepOver || f.y0 > y + HOUSE_WALK.eyeHeight) continue;
+    if (f.y1 < y + HOUSE_WALK.nearTall || f.y0 > y + HOUSE_WALK.eyeHeight) continue;
     if (near(x, z, f, c)) return true;
   }
   return false;
