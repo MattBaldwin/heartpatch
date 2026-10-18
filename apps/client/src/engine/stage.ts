@@ -107,27 +107,22 @@ export function mountStage(
   let loaded = false;
   /**
    * Back to "loading": draw every frame until all shaders and post-processes
-   * are ready again, then settle. Used when a quality change recompiles
-   * post-process effects asynchronously, so the frame left on screen while
-   * idle is never one drawn mid-compile. (A lost GPU context rebuilds the
+   * are ready again, then settle. Used after a quality change: bloom's
+   * passes, attached again, may still be compiling early on, and the frame
+   * left on screen while idle is never one drawn mid-compile. (A lost GPU context rebuilds the
    * whole stage instead; see boot.ts.)
    */
   const reload = (): void => {
     loaded = false;
     frames.invalidate();
   };
-  /** The governor asked for a new resolution or tier after the last draw. */
-  let rescalePending = false;
   engine.runRenderLoop(() => {
     // The governor's rescale, at the top of the frame like a resize: setting
     // the canvas size clears its buffer, so after a draw it would show a
     // blank frame (#260). First, so a resize in the same frame (which
     // re-applies the pixel ratio) can't take its tier change without the
-    // reload a recompiled post-process needs.
-    if (rescalePending) {
-      rescalePending = false;
-      if (quality.applyPending()) reload();
-    }
+    // reload a post-process change needs (bloom's passes going on or off).
+    if (quality.pending && quality.applyPending()) reload();
     if (resizePending) {
       resizePending = false;
       quality.refreshPixelRatio();
@@ -144,7 +139,7 @@ export function mountStage(
     const { draw, frameMs } = frames.next(performance.now(), busy);
     if (!draw) return;
     scene.render();
-    if (frameMs !== null && quality.sample(frameMs)) rescalePending = true;
+    if (frameMs !== null) quality.sample(frameMs);
   });
 
   return {

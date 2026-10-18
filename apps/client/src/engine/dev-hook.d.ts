@@ -34,6 +34,8 @@ import type { JourneyDebug } from '../trading/journey-screen.js';
 import type { PostFlags } from '../trading/post-flags.js';
 import type { PostDebug } from '../trading/post-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
+import type { QualityTier } from './config.js';
+import type { GlCounts } from './gl-counters.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
 declare global {
@@ -49,6 +51,16 @@ declare global {
       idle(): boolean;
       /** Draws a few frames, as any untracked change would. */
       invalidate(): void;
+      /**
+       * The post-process budget e2e (#501), on the squishy gallery only:
+       * `hold` switches the governor off at a tier and render scale (applied
+       * at the next frame); `gl` counts this context's WebGL objects and
+       * program links from the first call (null on WebGPU).
+       */
+      qualityDev?(): {
+        hold(tier: QualityTier, renderScale: number): void;
+        gl(): GlCounts | null;
+      } | null;
       /**
        * The open map as drawn (id, tile and tint counts, selection), or null.
        * Only the game page has it (not dev pages like the squishy gallery).

@@ -1,6 +1,8 @@
+import type { Engine } from '@babylonjs/core/Engines/engine';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type ClothingItem } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
+import { countGl } from '../../engine/gl-counters.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
@@ -200,6 +202,19 @@ window.__heartpatch = {
   draws: () => stage?.draws ?? 0,
   idle: () => stage?.idle ?? false,
   invalidate: () => stage?.invalidate(),
+  qualityDev: () => {
+    const s = stage;
+    if (!s) return null;
+    const { engine } = s.renderer;
+    return {
+      hold: (t, renderScale) => {
+        s.quality.hold(t, renderScale);
+      },
+      // `_gl` is Babylon-internal but typed (WebGL's Engine); WebGPU has no context to count.
+      // By kind, not `instanceof`: Vite's dev pre-bundling can load Engine twice.
+      gl: () => (s.renderer.kind === 'webgl2' ? { ...countGl((engine as Engine)._gl) } : null),
+    };
+  },
 };
 
 window.__heartpatchGallery = {

@@ -5,36 +5,105 @@ import { Scene } from '@babylonjs/core/scene';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as rareGlow from '../../procedural/rare-glow.js';
 import { NO_BISECT, setBisectFlags } from '../bisect-flags.js';
-import { TIER_SETTINGS } from '../config.js';
+import { LIGHTING, TIER_SETTINGS, type QualityTier } from '../config.js';
 import { createPostProcessing, RenderQuality } from './render-quality.js';
+
+/** Shader programs the engine has compiled (its effect cache; a cache hit compiles nothing). */
+const compiledEffects = (engine: NullEngine) =>
+  Object.keys((engine as unknown as { _compiledEffects: object })._compiledEffects).length;
 
 describe('createPostProcessing', () => {
   const engine = new NullEngine();
+  beforeEach(() => {
+    vi.stubGlobal('window', { devicePixelRatio: 2, addEventListener: vi.fn() });
+  });
   afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     for (const scene of [...engine.scenes]) scene.dispose();
   });
 
-  function setup() {
+  function setup(tier: QualityTier = 'high') {
     const scene = new Scene(engine);
     const camera = new TargetCamera('cam', Vector3.Zero(), scene);
-    const pipeline = createPostProcessing(scene, camera);
-    return { scene, camera, pipeline };
+    const chain = createPostProcessing(scene, camera, tier);
+    const passes = () => camera._postProcesses.filter((p) => p !== null).map((p) => p.name);
+    return { scene, camera, chain, passes };
   }
 
   it('tone-maps inside the materials, not as a post-process', () => {
-    const { scene } = setup();
+    const { scene, passes } = setup();
     const ip = scene.imageProcessingConfiguration;
     expect(ip.isEnabled).toBe(true);
     expect(ip.applyByPostProcess).toBe(false);
     expect(ip.toneMappingEnabled).toBe(true);
+    expect(passes()).not.toContain('imageProcessing');
   });
 
-  it('uses 8-bit targets with FXAA and no MSAA', () => {
-    const { pipeline, camera } = setup();
-    expect(pipeline.samples).toBe(1);
-    expect(pipeline.fxaaEnabled).toBe(true);
-    const names = camera._postProcesses.map((p) => p?.name);
-    expect(names).not.toContain('imageProcessing');
+  it('draws bloom, then FXAA, on 8-bit targets with no MSAA', () => {
+    const { camera, passes } = setup();
+    expect(passes()).toEqual([
+      'highlights',
+      'horizontal blur',
+      'vertical blur',
+      'bloomMerge',
+      'fxaa',
+    ]);
+    for (const p of camera._postProcesses) {
+      expect(p?.samples).toBe(1);
+      expect(p?.getEngine().isWebGPU).toBe(false);
+    }
+  });
+
+  it('switches bloom by attaching its passes, building and compiling nothing (#501)', () => {
+    const { camera, chain, passes } = setup();
+    const built = [...camera._postProcesses];
+    const compiled = compiledEffects(engine);
+    const postProcesses = engine.postProcesses.length;
+    // high → low → medium → high → low: every bloom kernel was compiled up front.
+    for (const [on, kernel] of [
+      [false, 0],
+      [true, TIER_SETTINGS.medium.bloomKernel],
+      [true, TIER_SETTINGS.high.bloomKernel],
+      [false, 0],
+    ] as const) {
+      chain.setBloom(on, kernel);
+      expect(passes()).toEqual(
+        on ? ['highlights', 'horizontal blur', 'vertical blur', 'bloomMerge', 'fxaa'] : ['fxaa'],
+      );
+    }
+    chain.setBloom(true, TIER_SETTINGS.high.bloomKernel);
+    expect(camera._postProcesses).toEqual(built); // the same passes, back in their places
+    expect(compiledEffects(engine)).toBe(compiled);
+    expect(engine.postProcesses.length).toBe(postProcesses);
+  });
+
+  it('clears once per frame, in whichever pass comes first', () => {
+    const { scene, camera, chain } = setup();
+    const fxaa = camera._postProcesses.at(-1);
+    expect(scene.autoClear).toBe(false);
+    expect(camera._postProcesses[0]?.autoClear).toBe(true);
+    expect(fxaa?.autoClear).toBe(false);
+    chain.setBloom(false, 0);
+    expect(fxaa?.autoClear).toBe(true);
+  });
+
+  it('follows the scene exposure into the highlights pass (battle moods)', () => {
+    const { scene, camera } = setup();
+    const highlights = camera._postProcesses[0] as unknown as { _exposure: number };
+    expect(highlights._exposure).toBe(LIGHTING.exposure);
+    scene.imageProcessingConfiguration.exposure = 1.4;
+    expect(highlights._exposure).toBe(1.4);
+  });
+
+  it('frees every pass on dispose, attached or not', () => {
+    const before = engine.postProcesses.length;
+    const { scene, camera, chain } = setup();
+    chain.setBloom(false, 0);
+    chain.dispose();
+    expect(engine.postProcesses.length).toBe(before);
+    expect(camera._postProcesses.filter(Boolean)).toHaveLength(0);
+    expect(scene.autoClear).toBe(true);
   });
 });
 
@@ -70,6 +139,39 @@ describe('RenderQuality', () => {
     expect(scaling).toHaveBeenCalledTimes(1);
     expect(quality.snapshot.renderScale).toBeLessThan(1);
     expect(quality.applyPending()).toBe(false);
+  });
+
+  it('changes tier without rebuilding or recompiling any post-process (#501)', () => {
+    const scene = new Scene(engine);
+    const camera = new TargetCamera('cam', Vector3.Zero(), scene);
+    const quality = new RenderQuality(scene, camera, 'high');
+    const compiled = compiledEffects(engine);
+    const built = [...camera._postProcesses];
+    for (const tier of ['low', 'medium', 'high', 'low'] as const) {
+      quality.hold(tier, 1);
+      expect(quality.pending).toBe(true);
+      expect(quality.applyPending()).toBe(true);
+      expect(quality.pending).toBe(false);
+      expect(camera._postProcesses.filter(Boolean)).toHaveLength(tier === 'low' ? 1 : 5);
+    }
+    quality.hold('high', 0.8);
+    quality.applyPending();
+    expect(camera._postProcesses).toEqual(built);
+    expect(compiledEffects(engine)).toBe(compiled);
+    quality.dispose();
+  });
+
+  it('hold switches the governor off (dev budget e2e)', () => {
+    const scene = new Scene(engine);
+    const quality = new RenderQuality(
+      scene,
+      new TargetCamera('cam', Vector3.Zero(), scene),
+      'high',
+    );
+    quality.hold('medium', 0.9);
+    quality.applyPending();
+    for (let i = 0; i < 50; i++) expect(quality.sample(2000)).toBe(false);
+    expect(quality.snapshot).toMatchObject({ tier: 'medium', renderScale: 0.9, pinned: true });
   });
 
   it('switches the rare glow with each tier’s setting (#391)', () => {
