@@ -349,6 +349,18 @@ export const HOMESTEAD_GLOW = {
   paused: { rgb: [0.74, 0.7, 0.86], fill: 0.55, edge: 0.95 },
 } as const; // TUNE
 
+/**
+ * The porch lantern (#515): a lit Jack-o'-Lantern beside a patch-mate's Heart
+ * Seed while they have one burning tonight, so trick-or-treaters see whose
+ * treats are extra good. Across the seed from their Keeper (`KEEPER_PLACES.map`).
+ */
+export const PORCH_LANTERN = {
+  /** Offset from the Heart Seed (world units). */
+  offset: { x: -0.55, z: -0.25 }, // TUNE: mirrors the Keeper's spot
+  /** Its size as a share of `HEX_SIZE`. */
+  scale: 0.7, // TUNE: about a home tile's fire (`MAP_BUILDING_SCALE`)
+} as const;
+
 /** The little gold sparkle on a fully explored tile (#199). */
 export const EXPLORED_MARK = {
   /** Offset from the tile's middle (world units): the corner across from the wild tuft. */

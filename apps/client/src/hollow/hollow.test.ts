@@ -14,6 +14,7 @@ import {
   HOLLOW_TEXT,
   reportText,
   tileUseLines,
+  trickOrTreatLines,
   unseenReports,
 } from './hollow-report.js';
 
@@ -279,5 +280,22 @@ describe('the one-building-a-tile tidy-up note (#295)', () => {
     ]);
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
     expect(tileUseLines({ moved: [], packed: [], stoppedGatherers: [] })).toEqual([]);
+  });
+});
+
+describe("the host's trick-or-treat note (#515)", () => {
+  it('counts the visitors and the thank-you Heartdust they left', () => {
+    const lines = trickOrTreatLines({ visitors: 3, heartdust: 3 });
+    expect(lines).toEqual([
+      { icon: '🎃', text: 'You had 3 trick-or-treaters!' },
+      { icon: '💗', text: 'They left you 3 Heartdust to say thanks.' },
+    ]);
+    for (const line of lines) expect(findAvoidedWords(line.text)).toEqual([]);
+  });
+
+  it('says one visitor plainly, and leaves out a thank-you of none', () => {
+    expect(trickOrTreatLines({ visitors: 1, heartdust: 0 })).toEqual([
+      { icon: '🎃', text: 'You had 1 trick-or-treater!' },
+    ]);
   });
 });

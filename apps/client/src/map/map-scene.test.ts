@@ -115,6 +115,33 @@ describe('MapScene', () => {
     expect(scene.meshes.length).toBe(before);
   });
 
+  it("glows a porch lantern by a lit patch-mate's Heart Seed from the lantern's own mesh (#515)", () => {
+    const { scene, map, instances } = build(testView(3));
+    const before = map.stats;
+    expect(before.porchLanterns).toBe(0);
+
+    map.setPorchLanterns(new Set([userId(2)]));
+    expect(map.stats.porchLanterns).toBe(1);
+    // Not one of the view's buildings, nor a fire that keeps land safe.
+    expect(map.stats.buildings).toBe(before.buildings);
+    expect(map.stats.litFires).toBe(before.litFires);
+    expect(instances('building-fire-pool')).toBe(before.litFires + 1);
+    const meshes = scene.meshes.length;
+
+    // A second lit home is one more instance of the same meshes.
+    map.setPorchLanterns(new Set([userId(2), userId(3)]));
+    expect(map.stats.porchLanterns).toBe(2);
+    expect(instances('building-fire-pool')).toBe(before.litFires + 2);
+    expect(scene.meshes.length).toBe(meshes);
+
+    // A redraw from a newer view keeps them; someone with no home gets none.
+    map.update(testView(3));
+    expect(map.stats.porchLanterns).toBe(2);
+    map.setPorchLanterns(new Set([userId(9)]));
+    expect(map.stats.porchLanterns).toBe(0);
+    expect(instances('building-fire-pool')).toBe(before.litFires);
+  });
+
   it('keeps the whole map to a few dozen meshes (draw calls)', () => {
     // About 30 before the terrain visual pass; its props, motes and backdrop
     // add one each per kind, however many tiles.

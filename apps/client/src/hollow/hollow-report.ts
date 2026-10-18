@@ -63,6 +63,10 @@ export const HOLLOW_TEXT = {
   movedOut: (name: string) => `Your ${name} moved out to a homestead 🏡.`,
   packedUp: (names: string) => `Your ${names} packed up, and everything came back:`,
   stopped: (names: string) => `${names} stopped gathering where a building stands now.`,
+  /** Trick-or-treaters came to my home yesterday (#515, owner answer 4). */
+  trickOrTreaters: (n: number) =>
+    n === 1 ? 'You had 1 trick-or-treater!' : `You had ${String(n)} trick-or-treaters!`,
+  trickOrTreatThanks: (n: number) => `They left you ${String(n)} Heartdust to say thanks.`,
   /** Peeks out beside the Adventure handle while a friend is in the Hollow. */
   news: 'A friend is in the Hollow!',
   mystery: 'a squishy friend',
@@ -182,4 +186,17 @@ export function tileUseLines(note: TileUseNoteLike): string[] {
     lines.push(HOLLOW_TEXT.stopped(joinNames(note.stoppedGatherers.map((g) => g.name))));
   }
   return lines.length > 0 ? [HOLLOW_TEXT.tidyUp, ...lines] : [];
+}
+
+/**
+ * The host's trick-or-treat note for the morning report (#515, the approved
+ * screen): how many came yesterday, and the thank-you Heartdust they left.
+ */
+export function trickOrTreatLines(note: { visitors: number; heartdust: number }): ReportLine[] {
+  return [
+    { icon: '🎃', text: HOLLOW_TEXT.trickOrTreaters(note.visitors) },
+    ...(note.heartdust > 0
+      ? [{ icon: '💗', text: HOLLOW_TEXT.trickOrTreatThanks(note.heartdust) }]
+      : []),
+  ];
 }

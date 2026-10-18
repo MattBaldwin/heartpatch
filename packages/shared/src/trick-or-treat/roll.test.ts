@@ -59,13 +59,7 @@ describe('rollTrickOrTreat (#515)', () => {
     expect(tricks).toBeGreaterThan(60);
     expect(tricks).toBeLessThan(140);
     const kinds = new Set(many.map((v) => v.prize.kind));
-    // No squishy costume is in the catalog until the costume-slot lane's land.
-    const squishy = CLOTHING.some(
-      (i) => i.slot === 'squishy' && i.sources.includes('trick-or-treat'),
-    );
-    expect(kinds).toEqual(
-      new Set(['heartdust', 'keeper-costume', ...(squishy ? ['squishy-costume'] : [])]),
-    );
+    expect(kinds).toEqual(new Set(['heartdust', 'keeper-costume', 'squishy-costume']));
   });
 
   it('gives more Heartdust and more costumes at a lit lantern home', () => {

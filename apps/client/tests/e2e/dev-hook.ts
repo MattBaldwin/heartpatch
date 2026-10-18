@@ -39,6 +39,7 @@ export type HookName =
   | 'roster'
   | 'posts'
   | 'journey'
+  | 'trickOrTreat'
   | 'post'
   | 'whatsNew'
   | 'patchLine'
