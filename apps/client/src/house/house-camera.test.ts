@@ -204,6 +204,31 @@ describe('fitHouse', () => {
       expect(moved).toBeCloseTo(-2, 0);
     });
 
+    it('keeps the focus room in the middle, lawn past a near end, and slides only toward the rest (B5a)', () => {
+      const box = fitBox(two, vp, snugRoom);
+      // The Snug's middle is the box's middle (the house ends 0.24 m past it on the left).
+      expect((box.minX + box.maxX) / 2).toBeCloseTo(2.4);
+      expect(box.minX).toBeLessThan(two.minX);
+      const pose = fitHouse(two, vp, undefined, snugRoom);
+      const xs = [0, 4.8].map((x) => project(pose, aspect, { x, y: 0, z: two.minZ }).x);
+      expect(xs[0]! + xs[1]!).toBeCloseTo(0, 1);
+      const range = panRange(two, vp, snugRoom);
+      expect(range.min).toBe(0);
+      expect(range.max).toBeCloseTo(two.maxX - box.maxX);
+      // A wide peek (the edge rule's) shows no more than `lawn` past the near end.
+      const wide = fitBox(two, vp, { ...snugRoom, peek: 2.3 });
+      expect(wide.minX).toBeCloseTo(two.minX - HOUSE_CAMERA.lawn);
+      expect(wide.maxX).toBeCloseTo(4.8 + 2.3);
+      // A room in the middle of a wider house: both sides are house, nothing changes.
+      const three = { ...two, maxX: 14.64 };
+      const middle = { minX: 4.8, maxX: 9.6 };
+      expect(fitBox(three, vp, middle)).toEqual({
+        ...three,
+        minX: 4.8 - HOUSE_CAMERA.peek,
+        maxX: 9.6 + HOUSE_CAMERA.peek,
+      });
+    });
+
     it('keeps the whole house on an iPad, and on a phone when the house is no wider than its room', () => {
       expect(fitBox(two, ipad, snugRoom)).toEqual(two);
       expect(panRange(two, ipad, snugRoom)).toEqual({ min: 0, max: 0 });

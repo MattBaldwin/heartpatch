@@ -117,7 +117,9 @@ export function playroomRoom(kit: RoomKit): RoomPlan {
 
   return {
     keeper: null,
-    residents: [spot(w * 0.34, d * 0.36), spot(w * 0.58, d * 0.44), spot(w * 0.4, d * 0.62)],
+    // B5a: toward the Snug's side, so a phone frame round the Snug holds all
+    // of them (render check: every resident in view) a little closer in than B4's.
+    residents: [spot(w * 0.22, d * 0.36), spot(w * 0.44, d * 0.46), spot(w * 0.26, d * 0.64)], // TUNE
   };
 }
 
@@ -226,6 +228,8 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
   for (const u of [w * 0.32, w * 0.88]) {
     const [lx, lz] = at(u, d * 0.42);
     put(kit, hangingLantern(scene, 1.6), lx, y + tall - 0.1, lz, 0);
+    // A warm pool under each (B5a: the hall read gloomy at night on high).
+    kit.pool(lx, lz, HOUSE_GROWN.hall.lanternPool);
   }
 
   // Beds in a row under the gallery, either side of the tree: room for 5 (the

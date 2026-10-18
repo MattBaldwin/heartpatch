@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TAP_MAX_MOVE_PX } from '../map/tap-detector.js';
-import { framedFocus, type FramedSpot } from './house-camera.js';
+import { framedFocus, panPerPixel, type FramedSpot } from './house-camera.js';
 import type { HouseBounds } from './house-layout.js';
 import { createHousePan } from './house-pan.js';
 
@@ -14,10 +14,10 @@ const spots: FramedSpot[] = [
   { x: 7.6, y: 0.4, z: 2.1, r: 0.45 },
 ];
 
-function panner() {
+function panner(bounds: () => HouseBounds = () => two) {
   const focus = vi.fn(framedFocus);
   const outside = vi.fn();
-  const measure = vi.fn(() => ({ vp, bounds: two, room: { minX: 0, maxX: 4.8 }, spots }));
+  const measure = vi.fn(() => ({ vp, bounds: bounds(), room: { minX: 0, maxX: 4.8 }, spots }));
   const pan = createHousePan({ measure, frameOutside: outside, framedFocus: focus });
   return { pan, focus, outside, measure };
 }
@@ -76,5 +76,60 @@ describe('house pan: the sideways drag on a tall phone (B4 review)', () => {
     pan.up();
     pan.reset();
     expect(pan.pan).toBe(0);
+  });
+
+  it('never jumps by the gap between two fingers after a pinch (B4 review)', () => {
+    const { pan } = panner();
+    const start = pan.fit();
+    // Finger A drags a little, finger B lands (a pinch that clamps back to the dollhouse).
+    pan.down(300, 1);
+    pan.move(280, 1);
+    pan.move(270, 1);
+    pan.step();
+    const before = pan.pan;
+    pan.down(100, 2);
+    // A lifts; B (200 px away) moves on its own.
+    pan.up(1);
+    expect(pan.move(105, 2)).toBe(false);
+    expect(pan.step()).toBeNull();
+    expect(pan.pan).toBe(before);
+    // B drags from where it is: the house follows B's travel only.
+    pan.move(105 + TAP_MAX_MOVE_PX + 1, 2);
+    pan.move(105 + TAP_MAX_MOVE_PX + 11, 2);
+    pan.step();
+    // 10 px of B's travel, not the 165 px from A's last spot.
+    expect(before - pan.pan).toBeCloseTo(10 * panPerPixel(start.base, vp), 6);
+    pan.up(2);
+    // Or B lifts first, and A, moved while B was down, starts over where it is.
+    pan.down(300, 3);
+    pan.down(100, 4);
+    pan.up(4);
+    const held = pan.pan;
+    expect(pan.move(40, 3)).toBe(false);
+    pan.step();
+    expect(pan.pan).toBe(held);
+  });
+
+  it('keeps a drag inside the new limits when a fit narrows them mid-drag', () => {
+    let bounds = two;
+    const { pan } = panner(() => bounds);
+    pan.fit();
+    pan.down(390, 1);
+    pan.move(370, 1);
+    pan.move(-3000, 1);
+    pan.step();
+    expect(pan.pan).toBe(pan.limits.max);
+    const wide = pan.limits.max;
+    // The floor switch (or a turn) refits to a narrower house while the finger is still down.
+    bounds = { ...two, maxX: 7.2 };
+    pan.fit();
+    expect(pan.limits.max).toBeLessThan(wide);
+    expect(pan.pan).toBeLessThanOrEqual(pan.limits.max);
+    expect(pan.pan).toBeGreaterThanOrEqual(pan.limits.min);
+    // Dragging on stays inside them too.
+    pan.move(-3500, 1);
+    pan.step();
+    expect(pan.pan).toBe(pan.limits.max);
+    pan.up(1);
   });
 });

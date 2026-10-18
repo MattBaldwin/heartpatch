@@ -14,6 +14,7 @@ import {
   HOUSE_GRID,
   HOUSE_GROWN,
   HOUSE_PALETTE,
+  HOUSE_PROPS,
 } from './house-config.js';
 import type { WallHole } from './house-layout.js';
 
@@ -180,6 +181,25 @@ export function floorPlanks(
       tones[i % 3] ?? '#c98b5a',
     ),
   );
+}
+
+/**
+ * The board under `floorPlanks`' gaps, just below their tops, in dark wood,
+ * so every gap reads as an even dark groove (B5a: the gap straight ahead of
+ * kid height, seen down its length, was a grey slit to the stone footing;
+ * deep, the boards' lit sides read pale). The room's and the porch's are
+ * the same board, so the line runs on unbroken.
+ */
+export function floorGroove(
+  scene: Scene,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+): Mesh {
+  const seam = HOUSE_GRID.seamDepth;
+  return box(scene, [w, 0.02, d], [x0 + w / 2, y - seam - 0.01, z0 + d / 2], HOUSE_PALETTE.groove);
 }
 
 /** A gable roof over a rectangle, eaves at `y`, outside colour; lifted off in the entry glide. */
@@ -378,8 +398,7 @@ export function bedBlanket(scene: Scene): Mesh[] {
 
 /** A hearth facing +z in local units: stone surround, mantel, firebox, log and a layered flame. */
 export function hearth(scene: Scene, wide: boolean, rounds = 10): Parts {
-  const w = wide ? 3.0 : 1.9;
-  const h = wide ? 2.5 : 1.7;
+  const { w, h } = hearthSize(wide);
   const log = tube(scene, 0.62, 0.17, 0.17, [0, 0.12, 0.4], '#6b4a30', 7);
   log.rotation.z = Math.PI / 2;
   const tongue = (d: number, at: Vec, stretch: number, lean: number, hex: string) => {
@@ -410,7 +429,8 @@ export function hearth(scene: Scene, wide: boolean, rounds = 10): Parts {
 }
 
 /** The hearth's size (for placing it and what stands round it). */
-export const hearthSize = (wide: boolean) => ({ w: wide ? 3.0 : 1.9, h: wide ? 2.5 : 1.7 });
+// TUNE: B5a: the Snug's 1.9 × 1.7 stood its mantel over the left bed from the dollhouse.
+export const hearthSize = (wide: boolean) => ({ w: wide ? 3.0 : 1.6, h: wide ? 2.5 : 1.5 });
 
 /** A table lamp standing on `y`, its shade glowing. */
 export function tableLamp(scene: Scene, x: number, z: number, y: number, shade: string): Parts {
@@ -468,7 +488,8 @@ export function mug(scene: Scene, x: number, y: number, z: number): Mesh[] {
 /** A potted plant. */
 export function plant(scene: Scene, x: number, z: number, y = 0): Mesh[] {
   return [
-    tube(scene, 0.36, 0.38, 0.28, [x, y + 0.18, z], '#d9a26b', 10),
+    // B5a: 10 sides read faceted at the rim on low; 18 is still a few dozen triangles.
+    tube(scene, 0.36, 0.38, 0.28, [x, y + 0.18, z], '#d9a26b', HOUSE_PROPS.potSides),
     ball(scene, 0.62, [x, y + 0.66, z], '#5fa85a', [1, 1.1, 1]),
     ball(scene, 0.44, [x + 0.22, y + 0.84, z + 0.1], '#7cc46f'),
     ball(scene, 0.4, [x - 0.2, y + 0.88, z - 0.1], '#6db863'),
@@ -514,11 +535,34 @@ export function giftBox(scene: Scene, rounds = 10): Mesh[] {
     // The ribbon, round both ways, just proud of the paper and the lid.
     box(scene, [s + 0.05, top + 0.01, band], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
     box(scene, [band, top + 0.01, s + 0.05], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
-    // The bow: two soft loops and a knot.
-    ball(scene, 0.15, [-0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
-    ball(scene, 0.15, [0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
-    ball(scene, 0.08, [0, top + 0.04, 0], HOUSE_GIFT.ribbon, [1, 1, 1], rounds),
+    // The bow (B5a: two balls read as oranges): two flat ribbon loops leaning
+    // out from a knot, and two short tails down over the lid.
+    ...[-1, 1].map((side) => bowLoop(scene, side, top, rounds)),
+    box(scene, [0.07, 0.05, 0.06], [0, top + 0.02, 0], HOUSE_GIFT.bow),
+    ...[-1, 1].map((side) =>
+      box(scene, [0.1, 0.012, 0.05], [side * 0.06, top + 0.004, -0.05], HOUSE_GIFT.bow, side * 0.5),
+    ),
   ];
+}
+
+/**
+ * One loop of the gift's bow: a flat ribbon ring standing up, facing the
+ * front, leaning out to `side` (-1 left, 1 right) from the knot at `top`.
+ */
+function bowLoop(scene: Scene, side: number, top: number, rounds: number): Mesh {
+  const b = HOUSE_GIFT.bowLoop;
+  const loop = CreateTorus(
+    'house-part',
+    { diameter: b.diameter, thickness: b.thickness, tessellation: Math.max(8, rounds) },
+    scene,
+  );
+  // A ring round local y, stood up to face -z; widened along its axis so it reads as a flat ribbon.
+  loop.scaling.set(1, b.width / b.thickness, 1);
+  loop.rotation.set(Math.PI / 2, 0, -side * b.lean);
+  const r = b.diameter / 2;
+  // Its middle one radius out from the knot, along its lean.
+  loop.position.set(side * r * Math.sin(b.lean), top + 0.02 + r * Math.cos(b.lean), 0);
+  return painted(loop, HOUSE_GIFT.bow);
 }
 
 /** A shelf with framed squishy doodles, facing -z in local units. */

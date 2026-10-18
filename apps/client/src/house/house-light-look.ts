@@ -66,6 +66,9 @@ export function houseLookAt(at: SkyAt): HouseLightLook {
     environment: lerp(a.environment, b.environment, t),
     sunSpecular: lerp(a.sunSpecular, b.sunSpecular, t),
     glow: lerp(a.glow, b.glow, t),
+    lift: mix(a.lift, b.lift, t),
+    ceiling: mix(a.ceiling, b.ceiling, t),
+    yard: lerp(a.yard, b.yard, t),
   };
 }
 
@@ -93,8 +96,9 @@ const lightness = (h: string): number => {
 
 /**
  * How bright the room's walls read under a look on a tier (a proxy, not a
- * render): on high and medium the image-based light and the fire and lamp
- * the scene lights (the sun mostly falls on the shell's back, not the room);
+ * render): on high and medium the image-based light, the fire and lamp
+ * the scene lights and the warm ambient lift (the sun mostly falls on the
+ * shell's back, not the room);
  * on low the ambient bounce and the one house light. The time-of-day test
  * holds day at or above dusk with it, so daylight never reads gloomier.
  */
@@ -108,6 +112,7 @@ export function interiorLight(look: HouseTimeLook, tier: QualityTier): number {
   return (
     HOUSE_INTERIOR.environment * HOUSE_LIGHT.environment.lit * look.environment +
     HOUSE_INTERIOR.fire * look.lamps +
-    HOUSE_INTERIOR.lamp * look.lamp
+    HOUSE_INTERIOR.lamp * look.lamp +
+    HOUSE_INTERIOR.lift * lightness(look.lift)
   );
 }

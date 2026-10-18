@@ -187,7 +187,9 @@ export function fitHouse(
  * on a portrait phone it fits the focus room (the Keeper's) across, plus
  * `HOUSE_CAMERA.peek` of each neighbour so you can see there's more house,
  * the whole house's height and depth kept; the rest is a sideways drag
- * away (`panRange`). Elsewhere, and when no focus is given, the whole house.
+ * away (`panRange`). The focus room stays in the middle (B5a): where the
+ * house ends sooner on one side, the frame shows lawn there. Elsewhere, and
+ * when no focus is given, the whole house.
  */
 export function fitBox(
   bounds: HouseBounds,
@@ -195,10 +197,19 @@ export function fitBox(
   focus: HouseFocus | null,
 ): HouseBounds {
   if (!focus || !isPhone(vp)) return bounds;
+  const peek = focus.peek ?? HOUSE_CAMERA.peek;
+  const minX = Math.max(bounds.minX, focus.minX - peek);
+  const maxX = Math.min(bounds.maxX, focus.maxX + peek);
+  if (minX <= bounds.minX && maxX >= bounds.maxX) return { ...bounds, minX, maxX };
+  // B5a: the focus room toward the middle of the frame (it sat pushed to
+  // the side the house ends on): that side shows a little lawn instead, at
+  // most `HOUSE_CAMERA.lawn` of it, so a wide peek never shrinks the house.
+  const reach = Math.max(focus.minX - minX, maxX - focus.maxX);
+  const lawn = HOUSE_CAMERA.lawn;
   return {
     ...bounds,
-    minX: Math.max(bounds.minX, focus.minX - (focus.peek ?? HOUSE_CAMERA.peek)),
-    maxX: Math.min(bounds.maxX, focus.maxX + (focus.peek ?? HOUSE_CAMERA.peek)),
+    minX: Math.min(minX, Math.max(focus.minX - reach, bounds.minX - lawn)),
+    maxX: Math.max(maxX, Math.min(focus.maxX + reach, bounds.maxX + lawn)),
   };
 }
 
@@ -223,8 +234,9 @@ export function framedFocus(
       const c = project(pose, aspect, p);
       if (c.depth <= 0) return false;
       const w = p.r / c.depth / t + HOUSE_CAMERA.edgeClear;
-      // The screen's own edges crop it (the safe area's are only a margin in).
-      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge);
+      // The screen's own edges crop it (the safe area's are only a margin in),
+      // or it's wholly off one side (B5a render check: every resident in view).
+      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge) || Math.abs(c.x) - w >= 1;
     });
   };
   // Every peek from a sliver to the whole house, nearest the usual first
@@ -314,7 +326,11 @@ export function panRange(
   focus: HouseFocus | null,
 ): { min: number; max: number } {
   const box = fitBox(bounds, vp, focus);
-  return { min: bounds.minX - box.minX, max: bounds.maxX - box.maxX };
+  // An end already in the frame (lawn past it, B5a) slides no further that way.
+  return {
+    min: Math.min(0, bounds.minX - box.minX),
+    max: Math.max(0, bounds.maxX - box.maxX),
+  };
 }
 
 /** The pose slid `dx` metres along x (a sideways drag). */

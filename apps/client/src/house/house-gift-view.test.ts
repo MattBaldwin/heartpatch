@@ -198,6 +198,41 @@ describe('the daily gift (#381 H2)', () => {
       expect(within(p)).toBe(true);
     });
 
+    it('stands clear of the Keeper’s whole body from kid height, at the room’s spare spot if need be (B5a)', () => {
+      // The Snug at level 2: by Emberbun's bed the box stood in front of the Keeper (waist down).
+      const reach = 0.59;
+      const cast = [
+        { x: 1.58, z: 1.92, r: reach, squishy: true },
+        { x: 3.22, z: 1.73, r: reach, squishy: true },
+        { x: 2.64, z: 3.36, r: 0.35, squishy: false },
+      ];
+      const eye = { x: 2.4, z: -2.9 };
+      const view = (q: { x: number; z: number }, reachOf: number) => {
+        const far = Math.hypot(q.x - eye.x, q.z - eye.z);
+        return { a: Math.atan2(q.x - eye.x, q.z - eye.z), h: Math.atan(reachOf / far), far };
+      };
+      const beds: BedSpot[] = [
+        { x: 0.62, z: 4.0, yaw: -Math.PI / 2 },
+        { x: 4.18, z: 4.0, yaw: Math.PI / 2 },
+      ];
+      const spare = { x: 1.0, z: 0.62 };
+      const keeper = view(cast[2]!, cast[2]!.r);
+      const covers = (p: { x: number; z: number }) => {
+        const box = view(p, r);
+        return Math.abs(box.a - keeper.a) < box.h + keeper.h;
+      };
+      // Without a spare spot it still stands in front of the Keeper (the old fallback)…
+      expect(covers(besideBed(beds[0]!, beds, room, cast))).toBe(true);
+      // …with one, it takes it, and it's clear of everyone.
+      const p = besideBed(beds[0]!, beds, room, cast, [spare]);
+      expect(p).toEqual(spare);
+      expect(covers(p)).toBe(false);
+      // A spot by the bed that clears everyone still comes first (an empty room: the foot).
+      const alone = besideBed(beds[0]!, beds, room, [], [spare]);
+      expect(alone).toEqual(besideBed(beds[0]!, beds, room));
+      expect(alone).not.toEqual(spare);
+    });
+
     it('finds a spot inside when its foot would leave the room', () => {
       // A bed facing the front wall up close: its foot is past the wall.
       const bed = { x: 2.4, z: 0.9, yaw: 0 };

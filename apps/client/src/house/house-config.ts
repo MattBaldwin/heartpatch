@@ -21,6 +21,8 @@ export const HOUSE_GRID = {
   plank: 0.4, // TUNE
   /** How far the floor reaches past the open front (a little lip). */
   frontLip: 0.35, // TUNE
+  /** How deep a gap between floor boards reads before the board under them, metres (B5a: no dark slit). */
+  seamDepth: 0.008, // TUNE: render check: at 0.03 the boards' lit sides in a gap read as a pale line down its length
 } as const;
 
 /** Colours of the shell (sRGB). */
@@ -32,6 +34,8 @@ export const HOUSE_PALETTE = {
   trim: '#8d5a3b', // TUNE: skirting
   frame: '#fff6ec', // TUNE: window frames
   planks: ['#c98b5a', '#d2956a', '#bf7f52'], // TUNE: floor boards, three tones
+  /** The gaps between boards: unlit dark wood, the boards' shadow (B5a render check: a lit board read pale mauve at a grazing angle). */
+  groove: '#6b4630', // TUNE: the cut-edge dark wood; lit with the boards, a gap reads about (125, 60, 30) beside them
   footing: '#8f8279', // TUNE: the stone footing under the house
   lawn: '#a9c58f', // TUNE: a pastel dusk lawn
   lawnLift: '#3a3424', // TUNE: emissive lift so the lawn stays pastel at dusk
@@ -46,6 +50,12 @@ export const HOUSE_PALETTE = {
     /** High and medium: the ceiling's own soft warm lift (the fire and the lamp leave it out, H2). */
     lift: '#6a4630', // TUNE
   },
+} as const;
+
+/** Small props' detail, every tier (B5a: faceted on low). */
+export const HOUSE_PROPS = {
+  /** Sides on the Snug's plant pot (its rim is close to the camera at kid height). */
+  potSides: 18, // TUNE: was 10
 } as const;
 
 /** Windows on exterior walls: one per wall run at least `minRun` cells long. */
@@ -161,7 +171,17 @@ export const HOUSE_LIGHT = {
    * a neutral light on squishies and the Keeper alone, while every warm
    * light leaves them out, so Puddlepuff's pale belly stays pale.
    */
-  fill: { color: '#ffffff', specular: 0.2 }, // TUNE: 0.35 left a hot spot on the Keeper's face (B4): neutral, so Puddlepuff's belly reads #e8f6ff (owner check #4)
+  fill: {
+    color: '#ffffff',
+    specular: 0.2, // TUNE: 0.35 left a hot spot on the Keeper's face (B4): neutral, so Puddlepuff's belly reads #e8f6ff (owner check #4)
+    /**
+     * Added to the camera's look direction for the fill's direction: up a
+     * little and from the right. The dollhouse looks down steeply, so there
+     * it comes in flatter (B5a: Puddlepuff's belly rim read grey, #b6b3bb, lit
+     * from straight above); kid height keeps B4's.
+     */
+    tilt: { doll: [0.15, -0.1, 0], kid: [0.15, -0.45, 0] }, // TUNE: B5a render check: 0.25 up put a white streak down Puddlepuff's crown
+  }, // TUNE
 } as const;
 
 /** Blanket colours, bed by bed (sRGB). */
@@ -221,7 +241,9 @@ export const HOUSE_CAMERA = {
    * A portrait phone fits the focus room across plus this much of each
    * neighbour, metres (the rest is a sideways drag away).
    */
-  peek: 1.1, // TUNE: B4: the Snug big enough to read its squishies, the Playroom's edge in view
+  peek: 0.4, // TUNE: B5a: the usual, nearest first; framedFocus widens it until no resident is cut or wholly off screen (render check), about 1.8 at level 2 (B4's 1.1 widened to 2.5)
+  /** At most this much lawn past the house's near end keeps the focus room toward the frame's middle on a phone, metres (B5a). */
+  lawn: 0.5, // TUNE
   /** The "more this way" chevron pill (CSS px): its size, how far in from the edge, and the gap it keeps from a resident. */
   chevron: { width: 28, height: 44, inset: 4, gap: 8 }, // TUNE: house.css .house-more matches
   /** Room kept between a frame edge and a resident it would slice, normalised device units. */
@@ -361,16 +383,18 @@ export const HOUSE_GROWN = {
     /** The crown's glow, its foot to its top (it's unlit, so the same pink on every tier). */
     crownGlow: ['#c48fa4', '#eebfd0'], // TUNE: the low tier's lit pink (#c7899e) at its middle
     lantern: '#ffd27a', // TUNE: hanging lanterns along the gallery
+    /** The warm pool of light on the floor under each hanging lantern, metres across its middle (B5a). */
+    lanternPool: 1.6, // TUNE
     sparkle: '#fff2b0', // TUNE: the tree's sparkles
     rug: '#e97a9b', // TUNE
     rugEdge: '#f2c14e', // TUNE
     /** Where the first residents stand, as shares of the hall's width and depth. */
     residentBand: [
-      [0.66, 0.3],
-      [0.8, 0.22],
-      [0.8, 0.45],
-      [0.8, 0.68],
-    ], // TUNE: all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
+      [0.66, 0.32],
+      [0.8, 0.3],
+      [0.8, 0.5],
+      [0.8, 0.7],
+    ], // TUNE: B5a: the front two back a little, so the Hall's cut-low front wall never slices a resident's bottom from the iPad;  all right of the Kitchen loft, which hides the left from the iPad's 48° pitch; B4 round 3: the first moved right, clear of the loft's side wall on a phone
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres
@@ -390,6 +414,15 @@ export const HOUSE_GIFT = {
   lid: '#ffa9c8', // TUNE: a shade lighter, so the lid reads
   ribbon: '#fff2b0', // TUNE: a pale gold ribbon
   bow: '#f2c14e', // TUNE: the bow, a little deeper
+  /** The bow's two ribbon loops, metres: across a loop, the ribbon's thickness and width, and how far each leans out (radians). */
+  bowLoop: { diameter: 0.14, thickness: 0.036, width: 0.08, lean: 0.75 }, // TUNE: B5a render check: 0.022 thick read as a wire handle
+  /**
+   * The Snug's spare spot, metres from its x0 and z0: by the east wall behind
+   * the side table, clear of the cast from kid height (B5a render check: by
+   * the hearth it sat on the hearthstone, and no spot off the stone there
+   * keeps out of the way of the two on the rug and the Keeper).
+   */
+  snugSpare: { x: 4.2, z: 1.7 }, // TUNE
   /** The gap between the bed's side and the box, metres. */
   besideBed: 0.3, // TUNE
   /** Kept this far inside the room's walls, metres. */
@@ -452,6 +485,17 @@ export interface HouseTimeLook {
   readonly sunSpecular: number;
   /** Lamp shades, flames and lanterns (their unlit glow), times their colour. */
   readonly glow: number;
+  /**
+   * High and medium: a warm ambient lift on the house's own materials, times
+   * their colour (so dark wood stays dark), for the rooms the fire doesn't
+   * reach (B5a: they read dim and mauve against low's peach). Never on the
+   * squishies or the Keeper. No light: the light caps stay as they are.
+   */
+  readonly lift: string;
+  /** High and medium: the beamed ceiling's own warm lift at kid height, times its colour (B5a: muddy at dusk and night). */
+  readonly ceiling: string;
+  /** The yard's lantern pools on the lawn, times their strength (B5a: none by day). */
+  readonly yard: number;
 }
 
 /**
@@ -476,6 +520,9 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.7, // TUNE
     sunSpecular: 0.3, // TUNE
     glow: 1,
+    lift: '#957965', // TUNE: B5a: as dusk, so dawn never reads gloomier than dusk
+    ceiling: '#2a1c12', // TUNE: B5a
+    yard: 0.35, // TUNE: B5a: the lanterns fading out with the night
   },
   day: {
     sky: ['#e3efe0', '#e3efe0', '#e6f7ff', '#bfe6fa', '#96d3f5', '#6fbff0'], // TUNE: SKY_LOOKS.day
@@ -493,6 +540,9 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 2.0, // TUNE: daylight fills the room (H2 render check: day on high read dimmer than dusk)
     sunSpecular: 0.12, // TUNE: no white glint along the rafters (H2 render check)
     glow: 0.9, // TUNE
+    lift: '#6c594b', // TUNE: B5a: high's walls read pinker than low's by day too; keeps day at or over dusk
+    ceiling: '#000000', // TUNE: B5a: daylight lights it already
+    yard: 0, // TUNE: B5a: no lantern pools at noon
   },
   dusk: {
     sky: ['#f0b49a', '#f0b49a', '#f3ae98', '#d99bb0', '#8d78b8', '#4e4a96'], // B4's dusk dome
@@ -510,6 +560,9 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1,
     sunSpecular: 0.6,
     glow: 1,
+    lift: '#957965', // TUNE: B5a: most of the way to low's peach away from the fire (#987a71 → about #c49a85)
+    ceiling: '#9e6e4b', // TUNE: B5a: warm, not muddy (house4 kid iPad read (154,89,60))
+    yard: 1,
   },
   night: {
     sky: ['#5a5f96', '#5a5f96', '#4d5596', '#3c4682', '#2c376f', '#1e2a5e'], // TUNE: SKY_LOOKS.night: a friendly blue, never black
@@ -527,6 +580,9 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.05, // TUNE
     sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,
+    lift: '#6c594b', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom; render check: #957965 left kid-height night at 92% of day
+    ceiling: '#5e3e2a', // TUNE: B5a: evening, under dusk's
+    yard: 1,
   },
 };
 
@@ -541,6 +597,8 @@ export const HOUSE_INTERIOR = {
   /** High and medium: the fire and the table lamp at full strength. */
   fire: 0.35, // TUNE
   lamp: 0.15, // TUNE
+  /** High and medium: the warm ambient lift, per unit of its lightness. */
+  lift: 1, // TUNE
   /** Low: the ambient bounce (its lightness) and the house light (its lightness times strength). */
   ambient: 1, // TUNE
   house: 0.35, // TUNE

@@ -13,13 +13,17 @@ import {
   residentBoxes,
   safeArea,
 } from './house-camera.js';
-import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_TIMES } from './house-config.js';
+import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_PALETTE, HOUSE_TIMES } from './house-config.js';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { fillTilt } from './house-scene.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { sampleHouse, sampleLevels, withGift } from './house-fixtures.js';
 import { houseLookAtMinute } from './house-light-look.js';
 import { yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
+import { roomBox } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
 vi.mock('../procedural/contact-shadow.js', () => ({
@@ -387,6 +391,43 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
+    it('caps an inside wall’s end at the open front in dark wood, not a plaster stub (B5a)', () => {
+      const { scene } = buildHouse(2, 'low');
+      const mesh = scene.getMeshByName('house-f0-solid')!;
+      const pos = mesh.getVerticesData('position') ?? [];
+      const colors = mesh.getVerticesData('color') ?? [];
+      const cap = Color3.FromHexString(HOUSE_PALETTE.cap).toLinearSpace();
+      const ys: number[] = [];
+      for (let i = 0; i < pos.length / 3; i++) {
+        const [x, y, z] = [pos[i * 3]!, pos[i * 3 + 1]!, pos[i * 3 + 2]!];
+        const dark =
+          Math.abs(colors[i * 4]! - cap.r) < 0.01 && Math.abs(colors[i * 4 + 1]! - cap.g) < 0.01;
+        // The partition between the Snug and the Playroom, just in front of its front end (z 0),
+        // past the top edge's own cap (which reaches 2 cm out).
+        if (dark && Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && z < -0.03 && z > -0.05) ys.push(y);
+      }
+      expect(Math.min(...ys)).toBeLessThan(0.05);
+      expect(Math.max(...ys)).toBeGreaterThan(HOUSE_GRID.storey);
+      scene.getEngine().dispose();
+    });
+
+    it('lays a dark groove just under the floor boards’ tops, so no gap reads as a slit (B5a)', () => {
+      const { scene } = buildHouse(1, 'low');
+      // With the boards (the porch's groove is the same board): no draw call of its own.
+      const floor = scene.getMeshByName('house-f0-floor')!;
+      const pos = floor.getVerticesData('position') ?? [];
+      // Boards' tops at 0; the board under them its top a seam's depth down, right across the room.
+      const under: number[] = [];
+      for (let i = 0; i < pos.length; i += 3) {
+        const y = pos[i + 1]!;
+        if (Math.abs(y + HOUSE_GRID.seamDepth) < 0.001) under.push(pos[i]!);
+      }
+      expect(under.length).toBeGreaterThan(0);
+      expect(Math.min(...under)).toBeLessThan(0.1);
+      expect(Math.max(...under)).toBeGreaterThan(4.7);
+      scene.getEngine().dispose();
+    });
+
     it('stands the Snug’s side wall back up at kid height, closing the room in (round 2: the crown showed past it)', () => {
       const { scene } = buildHouse(4, 'low');
       const ceiling = scene.getMeshByName('house-snug-ceiling')!;
@@ -420,6 +461,7 @@ describe('house scene', () => {
         const faces = house.faceReport();
         const at = `level ${String(level)} floor ${String(floor)}`;
         expect(faces.cut, at).toBe(0);
+        // Every resident in the frame and every face seen (B5a render check).
         expect(faces.visible, at).toBe(faces.total);
         // The chevron pills keep off every resident's face (round 4: one sat on the cyan's eye).
         const pose = fitHouse(house.frameBounds, vp, undefined, focus);
@@ -533,13 +575,24 @@ describe('house scene', () => {
       }
     });
 
-    it('puts it by the hearth when its giver isn’t drawn, clear of the cast', () => {
+    it('stands it at the Snug’s spare spot at level 2, off the hearthstone and clear of the cast (B5a render check)', () => {
+      // Its giver not drawn: the box goes to the Snug's spare spot (the same one
+      // besideBed falls back to when no spot by the bed clears the cast).
+      const sample = withGift(sampleHouse(2), { away: true });
+      const { scene, house } = buildHouse(2, 'high', sample);
+      const snug = roomBox(sample.view.rooms.find((r) => r.look === 'snug')!);
+      const at = house.giftPoint!;
+      expect(at.x).toBeCloseTo(snug.x0 + HOUSE_GIFT.snugSpare.x, 5);
+      expect(at.z).toBeCloseTo(snug.z0 + HOUSE_GIFT.snugSpare.z, 5);
+      scene.getEngine().dispose();
+    });
+
+    it('puts it at the Snug’s spare spot when its giver isn’t drawn, clear of the cast', () => {
       const sample = withGift(sampleHouse(1), { away: true });
       const { scene, house } = buildHouse(1, 'low', sample);
       const at = house.giftPoint!;
-      const snug = sample.view.rooms[0]!;
-      expect(at.x).toBeLessThan((snug.layout.w * HOUSE_GRID.cell) / 2);
-      expect(at.z).toBeLessThan((snug.layout.d * HOUSE_GRID.cell) / 2);
+      expect(at.x).toBeCloseTo(HOUSE_GIFT.snugSpare.x, 5);
+      expect(at.z).toBeCloseTo(HOUSE_GIFT.snugSpare.z, 5);
       for (const spot of house.residentSpots) expect(dist(at, spot)).toBeGreaterThan(0.6);
       scene.getEngine().dispose();
     });
@@ -613,6 +666,74 @@ describe('house scene', () => {
         expect(house.stats.lights).toBeLessThanOrEqual(tier === 'low' ? 2 : 4);
         scene.getEngine().dispose();
       }
+    });
+
+    it('lifts the rooms and the ceiling warm on high and medium, never the squishies, and fades the yard pools by day (B5a)', () => {
+      for (const tier of ['medium', 'high'] as const) {
+        const { scene, house } = buildHouse(2, tier);
+        const hex = (m: string) => (scene.getMaterialByName(m) as PBRMaterial).ambientColor;
+        const linear = (h: string) => Color3.FromHexString(h).toLinearSpace();
+        for (const minute of [12 * 60, 18 * 60, 23 * 60]) {
+          const look = houseLookAtMinute(minute);
+          house.setLook(look);
+          expect(hex('house-vinyl').equals(linear(look.lift)), `${tier} ${minute}`).toBe(true);
+          expect(hex('house-floor').equals(linear(look.lift))).toBe(true);
+          expect(hex('house-ceiling').equals(linear(look.ceiling))).toBe(true);
+          expect(hex('house-lawn').equals(Color3.Black())).toBe(true);
+          const cast = scene.materials.filter((m) => /^(squishy|keeper)-/.test(m.name));
+          expect(cast.length).toBeGreaterThan(0);
+          for (const m of cast)
+            if (m instanceof PBRMaterial)
+              expect(m.ambientColor.equals(Color3.Black()), m.name).toBe(true);
+          // The yard's two lantern pools (built first, with the outside): none
+          // by day, full at dusk and night; a room's always full.
+          const pools = scene.getMeshByName('house-pools') as Mesh;
+          // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
+          const data = pools._userThinInstanceBuffersStorage.data['instanceColor']!;
+          const colors = Array.from({ length: pools.thinInstanceCount }, (_, i) => data[i * 4]!);
+          // By day the yard's two aren't drawn at all (B5, ported); the rooms' stay.
+          const yard = look.yard > 0 ? 2 : 0;
+          expect(colors.length).toBeGreaterThan(yard);
+          expect(colors.slice(0, yard), `${tier} ${minute} yard`).toEqual(
+            Array(yard).fill(look.yard),
+          );
+          expect(colors.slice(yard).every((c) => c === 1)).toBe(true);
+        }
+        // The ceiling's lift is warm only once the lamps are lit.
+        expect(HOUSE_TIMES.day.ceiling).toBe('#000000');
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('brings the squishy fill in flatter in the dollhouse than at kid height (B5a: Puddlepuff’s belly)', () => {
+      expect(fillTilt(0).y).toBeGreaterThan(fillTilt(1).y);
+      expect(fillTilt(HOUSE_KID.pitchFrom).y).toBeCloseTo(fillTilt(0).y);
+      const { scene, house } = buildHouse(1, 'high');
+      const fill = scene.getLightByName('house-fill') as DirectionalLight;
+      const doll = fitHouse(house.bounds, { width: 820, height: 1180, top: 70, bottom: 150 });
+      house.setPose(doll, 0);
+      const dollY = fill.direction.y;
+      house.setPose(
+        kidPose(house.focusRoom!, { width: 820, height: 1180, top: 70, bottom: 150 }),
+        1,
+      );
+      // Still from above, so every face is lit; flatter than kid height's tilt
+      // would bring it in from this pose (render check: not so flat it streaks the crown).
+      const d = [
+        doll.target.x - doll.eye.x,
+        doll.target.y - doll.eye.y,
+        doll.target.z - doll.eye.z,
+      ];
+      const n = Math.hypot(d[0]!, d[1]!, d[2]!);
+      const yWith = (t: { x: number; y: number; z: number }) => {
+        const v = [d[0]! / n + t.x, d[1]! / n + t.y, d[2]! / n + t.z];
+        return v[1]! / Math.hypot(v[0]!, v[1]!, v[2]!);
+      };
+      expect(dollY).toBeLessThan(0);
+      expect(dollY).toBeGreaterThan(yWith(fillTilt(1)));
+      expect(dollY).toBeLessThan(yWith({ x: 0.15, y: 0.25, z: 0 }));
+      expect(fill.direction.y).toBeLessThan(0);
+      scene.getEngine().dispose();
     });
 
     it('builds in the look it’s given, and dims the lamps by day', () => {

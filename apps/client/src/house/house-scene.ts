@@ -86,6 +86,7 @@ import {
   bedBlanket,
   bedFrame,
   box,
+  floorGroove,
   floorPlanks,
   frontYard,
   gableRoof,
@@ -178,6 +179,22 @@ export interface HouseSceneStats {
   readonly light: { readonly phase: string; readonly lit: boolean };
 }
 
+/**
+ * What the fill adds to the camera's look direction at a zoom: the
+ * dollhouse's flatter tilt until kid height's comes in, with the pitch
+ * (B5a; `HOUSE_LIGHT.fill.tilt`).
+ */
+export function fillTilt(zoom: number): Vector3 {
+  const { doll, kid } = HOUSE_LIGHT.fill.tilt;
+  const c = Math.min(1, Math.max(0, (zoom - HOUSE_KID.pitchFrom) / (1 - HOUSE_KID.pitchFrom)));
+  const t = c * c * (3 - 2 * c);
+  return new Vector3(
+    doll[0] + (kid[0] - doll[0]) * t,
+    doll[1] + (kid[1] - doll[1]) * t,
+    doll[2] + (kid[2] - doll[2]) * t,
+  );
+}
+
 /** Squishies and the Keeper: their meshes take the neutral fill and no warm light. */
 const CAST = /^(squishy-|keeper-)(?!.*shadow)/;
 
@@ -228,6 +245,8 @@ interface FloorParts {
 interface Placed {
   readonly matrix: Matrix;
   readonly floor: number;
+  /** A pool on the lawn under a yard lantern: it fades by day (`HouseTimeLook.yard`, B5a). */
+  readonly yard?: boolean;
 }
 
 /** A resident or the Keeper as placed, so the floor cut can take it away and put it back. */
@@ -330,6 +349,8 @@ export class HouseScene {
   #flicker = { fire: 1, lamp: 1 };
   #look: HouseLightLook = DUSK_LOOK;
   #poolMaterial: StandardMaterial | null = null;
+  /** How strong the yard's lantern pools are drawn now (their instance colours). */
+  #yardShown: number | null = null;
   #lawnMaterial: PBRMaterial | null = null;
   #sky: Mesh | null = null;
   readonly #paneMeshes: Mesh[] = [];
@@ -402,6 +423,7 @@ export class HouseScene {
     this.#runs = runs;
     this.#buildOutside(this.bounds);
     const plans = new Map<string, RoomPlan>();
+    const grooves: { floor: number; mesh: Mesh }[] = [];
     for (const box of rooms) {
       const parts: RoomParts = { box, solid: [], glow: [], floor: [], panes: [] };
       const frontOpen = runs.some((r) => r.room === box.id && r.front && r.exterior);
@@ -410,12 +432,19 @@ export class HouseScene {
       if (box.y0 > 0) parts.floor.push(underside(scene, box, z0));
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
+      grooves.push({
+        floor: box.floor,
+        mesh: floorGroove(scene, box.x0, z0, box.x1 - box.x0, box.z1 - z0, box.y0),
+      });
       const own = this.#floorParts(box.floor);
       own.solid.push(...parts.solid);
       own.glow.push(...parts.glow);
       own.floor.push(...parts.floor);
       own.panes.push(...parts.panes);
     }
+    // The grooves under the boards, with the boards (the porch's are the same
+    // board: one continuous line at kid height, B5a render check).
+    for (const { floor, mesh } of grooves) this.#floorParts(floor).floor.push(mesh);
     this.#buildGift(options.gift ?? null, view, plans, options.cast);
     this.#mergeFloors();
     this.#buildBeds();
@@ -480,16 +509,15 @@ export class HouseScene {
     this.#fadeFronts(pose, zoom);
     // Hero detail only once they're big on screen: the dollhouse is near the low cap already.
     this.#hero?.setLod(zoom >= HOUSE_KID.frontFrom ? 'high' : this.#squishies.lod);
-    // The fill comes from just above the camera, so every face is lit.
+    // The fill comes from just above the camera, so every face is lit:
+    // flatter in the dollhouse, which looks down steeply (B5a), and only the
+    // fill's direction changes, never its colour or strength.
     const f = new Vector3(
       pose.target.x - pose.eye.x,
       pose.target.y - pose.eye.y,
       pose.target.z - pose.eye.z,
     );
-    this.#fill.direction = f
-      .normalize()
-      .add(new Vector3(0.15, -0.45, 0))
-      .normalize();
+    this.#fill.direction = f.normalize().add(fillTilt(zoom)).normalize();
     // The haze starts just past the house, however far the camera stands.
     const b = this.bounds;
     const centre = new Vector3((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
@@ -653,7 +681,8 @@ export class HouseScene {
       for (const { mesh, list, color } of this.#instanced) {
         const kept = list
           .map((p, i) => ({ p, i }))
-          .filter(({ p }) => all || shownAt(p.floor, floor));
+          // A yard pool with its lantern out by day isn't drawn at all (B5, ported).
+          .filter(({ p }) => (all || shownAt(p.floor, floor)) && !(p.yard && this.#look.yard <= 0));
         const data = new Float32Array(Math.max(1, kept.length) * 16);
         kept.forEach(({ p }, i) => {
           p.matrix.copyToArray(data, i * 16);
@@ -732,10 +761,16 @@ export class HouseScene {
     // High and medium: the image-based light carries the daylight the dimmer
     // lamps leave, on the house's own materials only: the squishies' and the
     // Keeper's stay exactly as they are (art bible: nothing changes them).
+    // B5a: and a warm ambient lift (times each surface's own colour) for the
+    // rooms the fire doesn't reach, the ceiling its own, warmer at dusk and night.
     if (this.#tierLook.shadowMap > 0) {
+      const lift = linear(look.lift);
+      const ceiling = linear(look.ceiling);
       for (const m of scene.materials) {
-        if (m instanceof PBRMaterial && m.name.startsWith('house-'))
-          m.environmentIntensity = look.environment;
+        if (!(m instanceof PBRMaterial) || !m.name.startsWith('house-')) continue;
+        m.environmentIntensity = look.environment;
+        m.ambientColor =
+          m.name === 'house-ceiling' ? ceiling : m.name === 'house-lawn' ? Color3.Black() : lift;
       }
     }
     if (this.#houseLight) {
@@ -746,6 +781,12 @@ export class HouseScene {
     if (this.#poolMaterial) {
       const low = this.#tierLook.shadowMap === 0;
       this.#poolMaterial.emissiveColor = linear('#ffae62').scale((low ? 0.55 : 0.32) * look.lamps); // TUNE
+    }
+    // The yard's lantern pools fade by day (their instance colours: no draw call, B5a).
+    if (this.#poolMaterial && this.#yardShown !== look.yard) {
+      this.#yardShown = look.yard;
+      this.#instancedFor = null;
+      this.#applyCut();
     }
     this.#glow.emissiveColor = Color3.White().scale(look.glow);
     const panes = paneMaterial(scene, look.pane);
@@ -872,7 +913,8 @@ export class HouseScene {
       room = this.#boxes.find((b) => b.id === placement.roomId);
       const beds = this.#roomBeds.get(placement.roomId) ?? [];
       const bed = beds[placement.bed] ?? beds.at(-1);
-      if (room && bed) spot = besideBed(bed, beds, room, footprints(room.id));
+      const spare = plans.get(placement.roomId)?.gift;
+      if (room && bed) spot = besideBed(bed, beds, room, footprints(room.id), spare ? [spare] : []);
     }
     if (!spot || !room) {
       room = this.#boxes.find((b) => b.id === keeperRoom?.id);
@@ -1033,6 +1075,9 @@ export class HouseScene {
       return;
     }
     scene.environmentIntensity = HOUSE_LIGHT.environment.lit;
+    // The ambient lift is each house material's own (setLook): the squishies'
+    // and the Keeper's ambient stays black, so nothing reaches them (B5a).
+    scene.ambientColor = Color3.White();
     if (!sun) return;
     const [x, y, z] = HOUSE_LIGHT.sun.direction;
     sun.direction = new Vector3(x, y, z).normalize();
@@ -1253,6 +1298,23 @@ export class HouseScene {
         ),
       );
     }
+    // An inside wall's end at the open front shows its cut face to the
+    // dollhouse: dark wood like a cut top edge, not a grey plaster stub (B5a).
+    if (run.axis === 'z' && !run.exterior && this.#openFrontAt(run)) {
+      list.push(
+        ...place(
+          [
+            box(
+              scene,
+              [0.04, height + 0.08, thick + 0.1],
+              [-0.02, (height + 0.08) / 2, 0],
+              HOUSE_PALETTE.cap,
+            ),
+          ],
+          0,
+        ),
+      );
+    }
     if (height > 1.4) {
       const inside = run.exterior ? -out : 1;
       list.push(
@@ -1343,13 +1405,16 @@ export class HouseScene {
         HOUSE_KID.porch,
         0,
       );
-      // A board under the porch's boards: no lawn showing through the gaps (render check, B4).
+      // The groove under the porch's boards, as the room's (no lawn showing
+      // through the gaps, B4; one continuous line with the room's, B5a).
       planks.push(
-        box(
+        floorGroove(
           this.#scene,
-          [run.to - run.from + 2 * past, 0.02, HOUSE_KID.porch],
-          [(run.from + run.to) / 2, -0.17, z1 - HOUSE_KID.porch / 2],
-          HOUSE_PALETTE.planks[2],
+          run.from - past,
+          z1 - HOUSE_KID.porch,
+          run.to - run.from + 2 * past,
+          HOUSE_KID.porch,
+          0,
         ),
       );
       const porch = merged(`house-${id}-porch`, planks);
@@ -1358,6 +1423,20 @@ export class HouseScene {
       this.#house.push(porch);
       this.#porch.push({ room: id, mesh: porch });
     }
+  }
+
+  /** Does this inside wall start at the open front (an outer front wall runs past its end on its floor)? */
+  #openFrontAt(run: WallRun): boolean {
+    return this.#runs.some(
+      (r) =>
+        r.axis === 'x' &&
+        r.front &&
+        r.exterior &&
+        r.floor === run.floor &&
+        Math.abs(r.at - run.from) < 0.01 &&
+        r.from <= run.at + 0.01 &&
+        r.to >= run.at - 0.01,
+    );
   }
 
   #floorParts(floor: number): FloorParts {
@@ -1507,7 +1586,17 @@ export class HouseScene {
       const quad = CreateGround('house-pools', { width: 1, height: 1 }, scene);
       quad.material = m;
       quad.alwaysSelectAsActiveMesh = true;
-      instance(quad, this.#pools);
+      quad.isPickable = false;
+      this.#house.push(quad);
+      // A yard pool's colour is the time of day's `yard` (additive: 0 is none), a room's full.
+      this.#instanced.push({
+        mesh: quad,
+        list: this.#pools,
+        color: (i) => {
+          const k = this.#pools[i]?.yard ? this.#look.yard : 1;
+          return [k, k, k, 1];
+        },
+      });
     }
   }
 
@@ -1700,6 +1789,7 @@ export class HouseScene {
       this.#pools.push({
         matrix: Matrix.Scaling(2, 1, 2).multiply(Matrix.Translation(x, -0.28, z)),
         floor: 0,
+        yard: true,
       });
     }
     const footing = box(
