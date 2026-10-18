@@ -720,11 +720,11 @@ describe('SquishyField fade (#381 W2)', () => {
     for (const scene of [...engine.scenes]) scene.dispose();
   });
 
-  function field() {
+  function field(fades = true) {
     const scene = new Scene(engine);
     return {
       scene,
-      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }),
+      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false, fades }),
     };
   }
 
@@ -744,34 +744,34 @@ describe('SquishyField fade (#381 W2)', () => {
     );
   };
 
-  it('fades one squishy in place: its own instances, no new meshes, the shader’s fade on while it lasts', () => {
+  it('fades one squishy in place: its own instances, no new meshes', () => {
     const { scene, field: f } = field();
     const a = f.add(species, 'a', { x: -1, z: 0 });
     f.add(species, 'b', { x: 1, z: 0 });
     f.flush();
     const meshes = f.stats.meshes;
-    expect(fading(scene)).toBe(false);
     f.setFade(a, 0.4);
     f.flush();
     expect(alphas(scene)[0]).toBeCloseTo(0.4);
     expect(alphas(scene)[1]).toBe(1);
     expect(f.fadeOf(a)).toBeCloseTo(0.4);
     expect(f.stats.meshes).toBe(meshes);
-    expect(fading(scene)).toBe(true);
     f.setFade(a, 1);
     f.flush();
     expect(alphas(scene)).toEqual([1, 1]);
-    expect(fading(scene)).toBe(false);
   });
 
-  it('keeps the fade through a rebuild, and lets go of it when a faded one is removed', () => {
+  it('compiles the fade in only for a field that fades, from the start (no recompile mid-walk)', () => {
+    expect(fading(field(true).scene)).toBe(true);
+    expect(fading(field(false).scene)).toBe(false);
+  });
+
+  it('keeps the fade through a rebuild', () => {
     const { scene, field: f } = field();
     const a = f.add(species, 'a', { x: -1, z: 0 });
     f.setFade(a, 0);
     f.add(species, 'b', { x: 1, z: 0 }); // a new instance rebuilds the buffers
     f.flush();
     expect(alphas(scene)[0]).toBe(0);
-    f.remove(a);
-    expect(fading(scene)).toBe(false);
   });
 });

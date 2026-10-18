@@ -386,6 +386,9 @@ export function panPerPixel(pose: HousePose, vp: Pick<HouseViewport, 'height'>):
  * enough back that the room's back wall fits across the frame. Tall frames
  * keep their vertical view angle capped (less floor, owner check #2) and so
  * stand further back. Only the room's box is taken, never what's in it.
+ *
+ * Walk in goes to the follow camera behind the Keeper now (#381 W2); this
+ * fixed pose stays as the scene tests' reference view of a room.
  */
 export function kidPose(room: HouseBounds, vp: HouseViewport): HousePose {
   const aspect = vp.width / Math.max(1, vp.height);

@@ -1266,6 +1266,19 @@
   transition: none;
 }
 
+/* A phone held sideways: a smaller ring, as explore's. */
+@media (max-height: 500px) {
+  .house-stick {
+    width: 104px;
+    height: 104px;
+  }
+
+  .house-stick-knob {
+    left: 29px;
+    top: 29px;
+  }
+}
+
 /* The `?fps=1` stats badge (the owner's device check) keeps below the Back
    button and the room pill while the house is open (#381 W2): the account
    chip can push the house's top bar down onto it. */

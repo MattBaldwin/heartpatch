@@ -513,6 +513,8 @@ export class HouseScene {
       registry: options.registry,
       lod: lodFor('closeUp', options.tier),
       breathing: false,
+      // Residents fade out of the walk camera's way (#381 W2).
+      fades: true,
     });
     this.#keepers = new KeeperField(scene, {
       data: KEEPER_DATA,
@@ -2102,6 +2104,8 @@ export class HouseScene {
           registry: options.registry,
           lod: this.#squishies.lod,
           breathing: false,
+          // Residents fade out of the walk camera's way (#381 W2).
+          fades: true,
         });
       }
     }

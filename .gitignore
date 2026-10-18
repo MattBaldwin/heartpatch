@@ -18,3 +18,7 @@ reports/
 
 # Written by `pnpm --filter @heartpatch/client changelog` in the deploy (#220).
 apps/client/public/changelog.json
+
+# House screen captures (apps/client/tooling/house-shots).
+.house-shots/
+.walk-shots/

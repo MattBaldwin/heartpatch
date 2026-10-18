@@ -104,6 +104,13 @@ export interface SquishyFieldOptions<L extends SquishyDetail = SquishyLod> {
    * the origin.
    */
   readonly parent?: TransformNode;
+  /**
+   * Its squishies can fade (`setFade`, #381 W2: the house's camera clears
+   * them out of its way). The fade's `discard` is compiled in from the start,
+   * so the first fade never recompiles mid-walk; off (the default), squishies
+   * keep the GPU's early rejection of hidden pixels.
+   */
+  readonly fades?: boolean;
 }
 
 export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
@@ -255,8 +262,6 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   /** Seconds on the squishy clock at the last `update` (floaters bob on it). */
   #time = 0;
   #shadowDirty = true;
-  /** Squishies faded below 1: the shader's fade is compiled in only while there are any. */
-  #fadeCount = 0;
   /** The shadows' last buffers, rewritten in place while the count holds. */
   #shadowMatrices: Float32Array | null = null;
   #shadowColors: Float32Array | null = null;
@@ -285,6 +290,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
+    if (this.#plugin) this.#plugin.fade = options.fades ?? false;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
@@ -344,14 +350,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
    * How much of a squishy shows, 0 (gone) to 1 (the default): a screen-door
    * fade (squish-plugin.ts `SQUISH_FADE`), so it costs no material, no blend
    * and no draw call, and its contact shadow fades with it. Used to clear a
-   * squishy out of a close camera's way (#381 W2). Under WebGPU, without the
-   * shader, it only fades the shadow.
+   * squishy out of a close camera's way (#381 W2). Only a field made with
+   * `fades` draws it; under WebGPU, without the shader, only the shadow fades.
    */
   setFade(handle: SquishyHandle, fade: number): void {
     const squishy = this.#squishies.get(handle.id);
     const k = Math.min(1, Math.max(0, fade));
     if (!squishy || squishy.fade === k) return;
-    const was = squishy.fade;
     squishy.fade = k;
     for (const { batch, instance } of squishy.instances) {
       if (batch.dirty || !batch.colors) continue; // the next upload writes it
@@ -361,8 +366,6 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       batch.faded = true;
     }
     this.#shadowDirty = true;
-    if (was < 1 !== k < 1) this.#fadeCount += k < 1 ? 1 : -1;
-    if (this.#plugin) this.#plugin.fade = this.#fadeCount > 0;
   }
 
   /** How much of a squishy shows (`setFade`). */
@@ -501,8 +504,6 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   remove(handle: SquishyHandle): void {
     const squishy = this.#squishies.get(handle.id);
     if (!squishy) return;
-    // A faded one going away no longer keeps the shader's fade in.
-    if (squishy.fade < 1) this.setFade(handle, 1);
     this.#detach(squishy);
     this.#squishies.delete(handle.id);
   }

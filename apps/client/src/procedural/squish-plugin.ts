@@ -278,9 +278,9 @@ export class SquishPlugin extends MaterialPluginBase {
   }
 
   /**
-   * Some instance is faded (`SquishyField.setFade`): the screen-door fade is
-   * compiled in. Off otherwise, so no squishy pays for a `discard` (it stops
-   * the GPU rejecting hidden pixels early) while nothing is fading.
+   * The screen-door fade is compiled in (`SquishyFieldOptions.fades`). Off
+   * by default: a `discard` stops the GPU rejecting hidden pixels early, so
+   * only a field whose squishies fade pays for it.
    */
   get fade(): boolean {
     return this.#fade;

@@ -206,6 +206,8 @@ export interface HouseDebug {
    * faces, the stick held or a tapped spot it's walking to, and the follow
    * camera's eye.
    */
+  /** The Keeper's middle on screen (CSS px), or null: none drawn, or behind the camera (a tap there walks in). */
+  readonly keeper: { readonly x: number; readonly y: number } | null;
   readonly walk: {
     readonly room: string | null;
     readonly at: { readonly x: number; readonly y: number; readonly z: number };
@@ -322,7 +324,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   // ── The Keeper's walk (#381 W2) ──
   // Walked in, the camera follows the Keeper (house-walk.ts `followPose`)
   // and a drag anywhere is a joystick, or a tap on the floor walks there.
-  // Everything here is updated in place: a walk frame allocates nothing.
+  // The Keeper's spot and the camera's poses are updated in place; a walk
+  // frame makes no more than the stick's small vector.
   /** Where the Keeper stands (a copy of the scene's, moved by the walk), and which way it faces. */
   const walkAt: WalkSpot = { x: 0, z: 0, y: 0 };
   let walkYaw = Math.PI;
@@ -1533,7 +1536,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     walkAt.z = at.z;
     walkAt.y = at.y;
     walkYaw = s.keeperYaw;
-    walkRoom = null;
   }
 
   /** Where the follow camera wants to be now, into `walkGoal`; the room's front walls fade toward the Keeper. */
@@ -1681,6 +1683,19 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     walk = { from: zoom, goal: walkedIn(zoom) ? 0 : 1, start: null };
     renderWalk();
     draw();
+  }
+
+  /** Where the Keeper's middle is on screen now (CSS px), or null. */
+  function keeperOnScreen(): { x: number; y: number } | null {
+    const s = scene3d;
+    if (!s || !base || s.keeperHeight <= 0) return null;
+    const box = overlay.getBoundingClientRect();
+    const w = Math.max(1, box.width);
+    const h = Math.max(1, box.height);
+    const at = s.keeperSpot;
+    const p = project(posed(base), w / h, { x: at.x, y: at.y + s.keeperHeight / 2, z: at.z });
+    if (!(p.depth > 0)) return null;
+    return { x: box.left + ((p.x + 1) / 2) * w, y: box.top + ((1 - p.y) / 2) * h };
   }
 
   /** A tap on the Keeper in the dollhouse (CSS px from the screen's top left). */
@@ -1890,6 +1905,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     });
     scene3d = built;
     walkReady = false;
+    // A new walk map: the last room is found afresh (a doorway keeps it between scenes otherwise).
+    walkRoom = null;
     // The Keeper stays where it was left, if it can still stand there.
     if (kept && !Number.isNaN(floorAt(built.walkMap, keptAt.x, keptAt.z, keptAt.y)))
       built.moveKeeper(keptAt, keptYaw);
@@ -2077,6 +2094,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         rooms: view.rooms.length,
         pose: glide ? 'glide' : walk ? 'walk' : walkedIn(zoom) ? 'kid' : 'dollhouse',
         zoom,
+        keeper: keeperOnScreen(),
         walk:
           scene3d && walkReady
             ? {
