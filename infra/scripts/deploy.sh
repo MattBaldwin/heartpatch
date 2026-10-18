@@ -150,7 +150,7 @@ fi
 log "running migrations with $tag"
 if ! compose run --rm --no-deps -T server node dist/db/cli.js migrate; then
   restore_config
-  fail "migrations failed; still running ${previous_tag:-nothing}. The migrator uses one transaction, so nothing was half-applied"
+  fail "migrations failed; still running ${previous_tag:-nothing}. Each migration step and each player's crowded-tile pack-up (#295) commits on its own, so nothing is half-written; re-running migrate picks up where it stopped"
 fi
 
 log "switching to $tag"

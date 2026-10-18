@@ -51,6 +51,12 @@ export const HOLLOW_TEXT = {
   ],
   /** My home Training Grounds packed up and moved out to homesteads (#277, owner decision 4). */
   packedGrounds: ['Your Training Grounds packed up and moved out!', 'Build one on a homestead 🏡.'],
+  /** Tiles still crowded packed up when one building a tile went into the database (#295). */
+  packedCrowded: [
+    'Some buildings were squeezed onto one tile,',
+    'so we packed them up and gave you everything back.',
+    'Build again! 🏡',
+  ],
   /** The tidy-up when one building a tile came in (#295). */
   tidyUp: 'Tidy-up time! Each tile holds one building now.',
   movedHome: (name: string) => `Your ${name} moved to a roomier home tile.`,

@@ -1087,12 +1087,23 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
          where map_id = '${mapId}' and user_id = '${kid.id}'`,
       );
       const id = await grounds(server, kid, mapId);
-      const tileId = (await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!
+      const plot = (await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!
         .tileId;
+      // The fire stands on a neighbouring tile of mine (one building a tile,
+      // #295) and reaches the homestead (radius 1).
+      const [next] = await db.execute<{ id: string }>(
+        `update tiles set owner_user_id = '${kid.id}'
+           where id = (select n.id from tiles n, tiles p
+             where p.id = '${plot}' and n.map_id = p.map_id
+               and n.owner_user_id is null and n.home_slot is null
+               and (abs(n.q - p.q) + abs(n.r - p.r) + abs(n.q + n.r - p.q - p.r)) = 2
+             order by n.id limit 1)
+         returning id`,
+      );
       await db.insert(buildings).values({
         mapId,
         ownerUserId: kid.id,
-        tileId,
+        tileId: next!.id,
         buildingId: 'hearthfire',
         kind: 'hearthfire',
         spot: 0,
