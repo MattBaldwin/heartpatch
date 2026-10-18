@@ -158,7 +158,8 @@ export function createExploreRepo(db: Executor) {
         .returning({ id: tiles.id });
       // Someone took it meanwhile: nothing made.
       if (claimed.length === 0) return null;
-      // A terrain with no spots (never asked for today) still gets a valid row.
+      // A terrain with no spots (none today; search refuses them) gets one, for
+      // `tile_explore_spot_count_range`.
       const spotCount =
         searchSpots(seed, { q: tile.q, r: tile.r, terrain }, EXPLORE_RULES)?.length || 1;
       const row = {

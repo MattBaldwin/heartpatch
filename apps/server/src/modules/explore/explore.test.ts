@@ -895,7 +895,8 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     const res = await search(server, kid, mapId, at, open!.index);
     expect(res.statusCode, res.body).toBe(200);
     const body = SearchSpotResponseSchema.parse(res.json());
-    expect(body.homestead).toBe(body.explored ? 'joined' : null);
+    // Seven spots with two searched: not finished, so not a homestead.
+    expect(body).toMatchObject({ explored: false, homestead: null });
   });
 
   it('counts each search towards the Seeker track (#199)', async () => {
