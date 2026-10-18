@@ -18,6 +18,8 @@ import { fenceToBreak } from '../territory/territory-action.js';
 export const KEEP_GOING_TEXT = {
   keepGoing: 'Keep going!',
   notNow: 'Not now',
+  // After a refusal the card has nothing left to try: one button closes it.
+  ok: 'OK',
   // The window ran out, or the land isn't the same Keeper's any more.
   passed: 'That chance is over. Tap the land on the map to start again!',
   // The owner built the gap up again, so it's a fresh fence battle (and a try).

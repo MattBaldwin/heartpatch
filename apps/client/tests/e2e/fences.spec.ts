@@ -207,13 +207,24 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
   await expect(keepGoing).toBeInViewport({ ratio: 1 });
   await expect(page.getByTestId('battle-done')).toBeInViewport({ ratio: 1 });
 
-  // No Keep going window is open on the server: the card says so, in view, and stays.
+  // No Keep going window is open on the server: the card says so, in view. Nothing is left to
+  // try, so Keep going goes and the other button is a single OK that closes the card.
   const note = page.getByTestId('battle-result-note');
   await realTap(keepGoing);
   await expect(note).toContainText('That chance is over');
   await expect(note).toBeInViewport({ ratio: 1 });
+  await expect(keepGoing).toHaveCount(0);
+  await expect(page.getByTestId('battle-done')).toHaveText('OK');
+  await expect(page.getByTestId('battle-done')).toBeInViewport({ ratio: 1 });
   expect(findAvoidedWords((await card.textContent()) ?? '')).toEqual([]);
+  await realTap(page.getByTestId('battle-done'));
+  await expect(card).toBeHidden();
+
+  // The fight is still there: back to a fresh card with Keep going.
+  await realTap(await trayButton(page, 'battle-dev-fight'));
   await expect(card).toBeVisible();
+  await expect(page.getByTestId('battle-keep-going')).toBeVisible();
+  await expect(page.getByTestId('battle-done')).toHaveText('Not now');
 
   // Now it is open, on a rival's tile with no fence left: Keep going sends the attack and the guards appear.
   let tile: { q: number; r: number } | null = null;
@@ -244,7 +255,7 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
   await page.route('**/api/v1/maps/*/attacks', (route) =>
     route.fulfill({ json: { battle: guards } }),
   );
-  await realTap(keepGoing);
+  await realTap(page.getByTestId('battle-keep-going'));
   const sent = await attack;
   expect(sent.postDataJSON()).toEqual(tile);
   expect(sent.headers()['idempotency-key']).toBeTruthy();

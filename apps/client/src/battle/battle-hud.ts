@@ -141,8 +141,12 @@ export interface BattleHud {
   setProblem: (text: string) => void;
   showResult: (info: ResultInfo) => void;
   hideResult: () => void;
-  /** A line on the result card, in view above its buttons ("" clears it), and whether Keep going is working on it (#527). */
-  setResultNote: (text: string) => void;
+  /**
+   * Keep going couldn't start (#527): the reason, in view above the buttons,
+   * the button that can't work gone, and the other one a single `ok` that closes.
+   */
+  refuseKeepGoing: (text: string, ok: string) => void;
+  /** Keep going is on its way: its button waits. */
   setKeepGoingBusy: (busy: boolean) => void;
   /** Where the fight may be drawn: under the pills, above the sheet (fractions of the height). */
   safe: () => SafeRegion;
@@ -319,6 +323,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // The result card's own line and Keep going button (#527), made with each card.
   let resultNote = el('p', {});
   let keepGoingButton: HTMLButtonElement | null = null;
+  let doneButton: HTMLButtonElement | null = null;
   const hud = el(
     'section',
     { class: 'battle-hud', 'data-testid': 'battle-hud', 'aria-label': 'Squishy showdown' },
@@ -695,6 +700,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         'data-testid': 'battle-result-note',
         hidden: '',
       });
+      doneButton = button(info.done, options.onDone, {
+        testId: 'battle-done',
+        soft: info.keepGoing !== undefined,
+      });
       keepGoingButton = info.keepGoing
         ? button(info.keepGoing.label, info.keepGoing.onKeepGoing, { testId: 'battle-keep-going' })
         : null;
@@ -726,12 +735,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         el(
           'div',
           { class: 'auth-actions' },
-          ...(keepGoingButton
-            ? [
-                keepGoingButton,
-                button(info.done, options.onDone, { testId: 'battle-done', soft: true }),
-              ]
-            : [button(info.done, options.onDone, { testId: 'battle-done' })]),
+          ...(keepGoingButton ? [keepGoingButton, doneButton] : [doneButton]),
         ),
       );
       result.hidden = false;
@@ -752,9 +756,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       undress = null;
       result.hidden = true;
     },
-    setResultNote: (text) => {
+    refuseKeepGoing: (text, ok) => {
       resultNote.textContent = text;
-      resultNote.hidden = text === '';
+      resultNote.hidden = false;
+      keepGoingButton?.remove();
+      keepGoingButton = null;
+      if (doneButton) {
+        doneButton.textContent = ok;
+        doneButton.classList.remove('battle-button-soft');
+      }
     },
     setKeepGoingBusy: (busy) => {
       if (keepGoingButton) keepGoingButton.disabled = busy;

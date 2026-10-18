@@ -676,7 +676,6 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (keepingGoing) return;
     keepingGoing = true;
     hud.setKeepGoingBusy(true);
-    hud.setResultNote('');
     try {
       const outcome = await keepGoing(
         options.keepGoingApi ?? {
@@ -690,7 +689,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         () => battle === b,
       );
       if (outcome.kind === 'battle') open(outcome.battle);
-      else if (outcome.kind === 'say') hud.setResultNote(outcome.text);
+      else if (outcome.kind === 'say') hud.refuseKeepGoing(outcome.text, KEEP_GOING_TEXT.ok);
     } finally {
       keepingGoing = false;
       hud.setKeepGoingBusy(false);
