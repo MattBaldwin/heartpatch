@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { scanPlayerFacingText } from '../../data/avoided-words.js';
-import { CLOTHING, CLOTHING_BY_ID, STARTER_CLOTHING } from '../../data/clothing.js';
+import {
+  CLOTHING,
+  CLOTHING_BY_ID,
+  SQUISHY_COSTUME_IDS,
+  STARTER_CLOTHING,
+} from '../../data/clothing.js';
 import { SEASONS } from '../../data/seasons.js';
 import {
   checkClothingData,
@@ -11,6 +16,7 @@ import {
   MAX_ITEM_PIECES,
   ClothingItemSchema,
   isKeeperClothing,
+  isSquishyCostume,
   SQUISHY_SLOT,
   sortWearing,
   wearingProblem,
@@ -185,6 +191,34 @@ describe('the clothing catalog', () => {
       'clothing["flower-crown"].boutiquePrice: Boutique items need a price, and only they have one',
       'clothing["starry-crown"].boutiquePrice: Boutique items need a price, and only they have one',
       'clothing["heart-clip"].visual: squishy accessories need an anchor, and only they have one',
+    ]);
+  });
+
+  it('has six squishy costumes, only from trick-or-treating (#515)', () => {
+    expect(SQUISHY_COSTUME_IDS).toHaveLength(6);
+    for (const id of SQUISHY_COSTUME_IDS) {
+      const item = byId(id);
+      expect(item.slot, id).toBe(SQUISHY_SLOT);
+      expect(item.season, id).toBe('halloween');
+      expect(item.sources, id).toEqual(['trick-or-treat']);
+      expect(item.boutiquePrice, id).toBeUndefined();
+    }
+    // Everyday accessories (the Tiny Witch Hat too) stay as they were.
+    expect(isSquishyCostume(byId('tiny-witch-hat'))).toBe(false);
+    expect(isSquishyCostume(byId('witch-hat'))).toBe(false);
+  });
+
+  it('keeps squishy anchors and hoods on squishy accessories (#515)', () => {
+    const items = copy();
+    const keeper = items.find((i) => i.id === 'witch-hat')!;
+    keeper.visual.hood = true;
+    keeper.visual.pieces[0]!.anchor = 'back';
+    const scarf = items.find((i) => i.id === 'snuggle-scarf')!;
+    scarf.visual.hood = true; // a neck piece is no hood
+    expect(checkClothingData(items, SEASON_IDS)).toEqual([
+      'clothing["witch-hat"].visual: only squishy accessories can be a `hood`',
+      'clothing["witch-hat"].visual: only squishy accessories place pieces on squishy anchors',
+      'clothing["snuggle-scarf"].visual: a `hood` goes on the head, so it needs a piece on the `crown`',
     ]);
   });
 
