@@ -66,6 +66,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTendingRepo } from '../territory/repo.js';
 import { rewildTiles } from '../territory/rewild.js';
+import { createTrickOrTreatRepo } from '../trick-or-treat/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
   createHollowRepo,
@@ -576,6 +577,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         packedTraining,
         tileUseNote,
         packedCrowded,
+        trickOrTreaters,
       ] = await Promise.all([
         store.nightsSince(mapId, since, rules.reportNights),
         store.hollowedOf(mapId, user.id),
@@ -588,6 +590,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         createBuildingsRepo(db).packedTraining(mapId, user.id),
         createBuildingsRepo(db).tileUseNote(mapId, user.id),
         createBuildingsRepo(db).packedCrowded(mapId, user.id),
+        // Yesterday's trick-or-treaters at my home (#515), for the morning note.
+        createTrickOrTreatRepo(db).visitorsOn(mapId, user.id, addDays(local.date, -1)),
       ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
@@ -710,6 +714,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         crowdedTilesPacked: packedCrowded
           ? { refund: packedCrowded.refund, at: packedCrowded.packedAt.toISOString() }
           : null,
+        trickOrTreat:
+          trickOrTreaters.visitors > 0
+            ? { day: addDays(local.date, -1), ...trickOrTreaters }
+            : null,
         now: at.toISOString(),
       };
     },

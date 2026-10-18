@@ -136,6 +136,22 @@ const celebratedView = definePublicView({
 });
 
 /**
+ * A trick-or-treat visit (#515): the visitor hears their treat, the host
+ * hears who came (never what they got), and nobody else hears it.
+ */
+const trickVisitedView = definePublicView({
+  schema: GAME_EVENTS['trick.visited'].public,
+  build: (event, recipient) => {
+    const payload = parseGameEventPayload('trick.visited', event.payload);
+    const { visitId, visitorUserId, hostUserId, day, prize } = payload;
+    if (recipient.userId === visitorUserId)
+      return { visitId, visitorUserId, hostUserId, day, prize };
+    if (recipient.userId === hostUserId) return { visitId, visitorUserId, hostUserId, day };
+    return null;
+  },
+});
+
+/**
  * The views live sync sends: one per type in the shared event registry
  * (`packages/shared/src/schemas/events.ts`), built from that type's `public`
  * schema. **Default deny:** a type that isn't registered has no entry and is
@@ -163,6 +179,8 @@ export const PUBLIC_VIEWS: PublicViews = {
   'mailbox.collected': ownerOnlyView('mailbox.collected'),
   // A Keeper's gift from a resident (#381 PR H) is theirs alone.
   'house.gift': ownerOnlyView('house.gift'),
+  // Trick-or-treat (#515): the visitor's treat is theirs; the host hears who came.
+  'trick.visited': trickVisitedView,
   // A live battle's turns and cheers (#29) are its two players' business;
   // everyone else sees `battle.started` and `battle.ended`.
   // "Battle me?" (#29): the two Keepers' business; others see the battle start.
