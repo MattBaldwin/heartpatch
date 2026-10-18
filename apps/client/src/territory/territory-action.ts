@@ -99,6 +99,15 @@ export function territoryAction(
 }
 
 /**
+ * Whether a challenge sheet tells the kid how strong the guards are (#529):
+ * only on a Keeper's land. Neutral land's guardians keep their own levels, so
+ * the line would be wrong there.
+ */
+export function showsGuardLevelNote(tile: PublicTile): boolean {
+  return tile.ownerUserId !== null;
+}
+
+/**
  * The fence segment a challenge on `tile` breaks first (#203), as the server
  * picks it: when the owner has fenced the tile all round, the weakest segment
  * between it and my land. Null when it isn't fenced.

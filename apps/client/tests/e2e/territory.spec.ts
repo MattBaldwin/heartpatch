@@ -361,6 +361,15 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
     if (size) await page.setViewportSize(size);
     await findTile(page, 'challenge');
     await expect(panel).toContainText("Someone's land. Win a showdown to make it yours!");
+    // The guards' strength line (#529) sits with the sheet's lines, above the
+    // button, and doesn't push the refusal below (checked right after the tap).
+    const guards = page.getByTestId('territory-guards-as-strong');
+    await expect(guards).toHaveText(
+      "Their guards are as strong as their Keeper's Partner, or stronger. Bring your best!",
+    );
+    expect((await guards.boundingBox())!.y).toBeLessThan(
+      (await page.getByTestId('tile-challenge').boundingBox())!.y,
+    );
     const before = tries;
     await page.getByTestId('tile-challenge').tap();
     await expect.poll(() => tries).toBe(before + 1);

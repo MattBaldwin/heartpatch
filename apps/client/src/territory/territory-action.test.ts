@@ -11,7 +11,13 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { fenceToBreak, shieldUntil, territoryAction, watchInTheDark } from './territory-action.js';
+import {
+  fenceToBreak,
+  shieldUntil,
+  showsGuardLevelNote,
+  territoryAction,
+  watchInTheDark,
+} from './territory-action.js';
 import { formatWait } from '../inventory/game-clock.js';
 import { TERRITORY_TEXT } from './territory-screen.js';
 
@@ -297,5 +303,22 @@ describe('territory words (style guide)', () => {
     ]) {
       expect(label.split(' ').length).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+describe('the guard strength line (#529)', () => {
+  it('shows on a Keeper’s tile, and never on neutral land', () => {
+    const rival = setup(() => ({ ownerUserId: RIVAL }));
+    expect(territoryAction(rival.tile, rival.view, ME, status(), NOW).kind).toBe('challenge');
+    expect(showsGuardLevelNote(rival.tile)).toBe(true);
+
+    const wild = setup();
+    expect(territoryAction(wild.tile, wild.view, ME, status(), NOW).kind).toBe('claim');
+    expect(showsGuardLevelNote(wild.tile)).toBe(false);
+  });
+
+  it('reads cozy, shows no numbers and uses no avoided words', () => {
+    expect(TERRITORY_TEXT.guardsAsStrong).not.toMatch(/\d/);
+    expect(findAvoidedWords(TERRITORY_TEXT.guardsAsStrong)).toEqual([]);
   });
 });
