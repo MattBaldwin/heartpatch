@@ -89,6 +89,21 @@ const mapState = (page: Page) =>
 /** Test scenes built since the page loaded (#501 G: a map↔explore switch builds none). */
 const testScenes = (page: Page) => hook<number>(page, 'testScenes');
 const quality = (page: Page) => hook<{ tier: string; renderScale: number }>(page, 'quality');
+/** How long the governor must hold still before a find for the find to be judged (#501 G). */
+const STEADY_MS = 3000;
+/**
+ * The governor's tier and scale if they held for `STEADY_MS`, else null:
+ * it's still finding its level, and a change across the find proves nothing.
+ */
+async function steadyQuality(page: Page): Promise<{ tier: string; renderScale: number } | null> {
+  const first = await quality(page);
+  for (let waited = 0; waited < STEADY_MS; waited += 250) {
+    await page.waitForTimeout(250);
+    const now = await quality(page);
+    if (now?.tier !== first?.tier || now?.renderScale !== first?.renderScale) return null;
+  }
+  return first;
+}
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -264,7 +279,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     // place, and the governor takes the burst of work as a hitch, not a slow GPU.
     const beforeFind = {
       uploads: (await exploreState(page))!.batchUploads,
-      quality: await quality(page),
+      quality: await steadyQuality(page),
     };
     await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
@@ -294,9 +309,19 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     const after = (await exploreState(page))!;
     expect(after.spots.find((s) => s.index === hands.index)?.done).toBe(true);
     expect(after.batchUploads, 'Keeper buffers made by the find').toBe(beforeFind.uploads);
-    const afterFind = await quality(page);
-    expect(afterFind?.tier).toBe(beforeFind.quality?.tier);
-    expect(afterFind?.renderScale).toBe(beforeFind.quality?.renderScale);
+    // Only judged when the governor had settled: a software renderer's can
+    // still be stepping between tiers on its own (CI's WebKit), which says
+    // nothing about the find.
+    if (beforeFind.quality) {
+      const afterFind = await quality(page);
+      expect(afterFind?.tier).toBe(beforeFind.quality.tier);
+      expect(afterFind?.renderScale).toBe(beforeFind.quality.renderScale);
+    } else {
+      test.info().annotations.push({
+        type: 'skipped',
+        description: 'quality across a find (#501 G): the governor was still moving before it',
+      });
+    }
     if (after.card === 'rare') {
       await slowExpect(sheet).toBeVisible();
       await sheet.getByTestId('explore-yay').tap();
