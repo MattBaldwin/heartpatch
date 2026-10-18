@@ -11,13 +11,17 @@ import { LIGHTING } from '../config.js';
 
 /**
  * Bloom then FXAA on one camera, built once per stage and never rebuilt
- * (#501). Babylon's `DefaultRenderingPipeline` disposes and recreates every
- * post-process, FXAA included, each time bloom is switched (`bloomEnabled`
- * calls `_buildPipeline`): new render targets and recompiled shaders on every
- * tier change, which on a struggling GPU made each of the governor's probes
- * a stall of its own. Here bloom's four passes are attached in front of FXAA
- * or detached from the camera (`attachPostProcess` / `detachPostProcess`),
- * keeping their compiled shaders and their targets for the next time.
+ * (#501). Babylon's `DefaultRenderingPipeline` rebuilds its chain each time
+ * bloom is switched (`bloomEnabled` calls `_buildPipeline`): a new FXAA pass
+ * with new targets every tier change, and its bloom kernel follows every
+ * render-scale step, recompiling the blur. On a struggling GPU each of the
+ * governor's probes was a stall of its own. Here bloom's four passes are
+ * attached in front of FXAA or detached from the camera (`attachPostProcess`
+ * / `detachPostProcess`), keeping their compiled shaders and their targets
+ * for the next time. FXAA's target needs a depth buffer only while FXAA
+ * draws first (bloom off), and Babylon frees a cached target after 100 frames
+ * unused, so a bloom flip long after the last one can still make that one
+ * full-size target; the governor's tier-probe cooldown keeps flips rare.
  *
  * Same output as the pipeline it replaces: 8-bit targets, no MSAA, tone
  * mapping inside the materials (tech spec §6 "Memory and heat"), bloom over

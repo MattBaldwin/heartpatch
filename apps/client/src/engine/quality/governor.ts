@@ -303,8 +303,9 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
   if (s.renderScale > floor) {
     // One decisive cut, at least `minCutStep`: every new scale reallocates
     // the post-process targets, so many small cuts cost a stall each (#501).
-    // Right after a raise, the scale before it was fine: back to that (a
-    // size seen a moment ago, whose targets are still cached), no lower.
+    // Right after a raise the scale before it was close: the cut is at
+    // least one `step` (as before #501), not a whole `minCutStep`, so it
+    // never lands below what the shortfall asks for.
     const flapped = s.sinceRaiseMs !== null && s.sinceRaiseMs <= config.flapWindowMs;
     const wanted = s.renderScale * Math.sqrt(fps / config.targetFps);
     const minCut = flapped ? config.step : config.minCutStep;
