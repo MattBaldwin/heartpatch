@@ -1,15 +1,16 @@
-import type {
-  GlimmerSwapView,
-  MapView,
-  TradeTip,
-  PublicUser,
-  TradeKind,
-  TradeLine,
-  TradeLineView,
-  TradeOfferView,
-  TradeShelf,
-  TradesView,
-  WsEventMessage,
+import {
+  GLIMMER_SWAP,
+  type GlimmerSwapView,
+  type MapView,
+  type TradeTip,
+  type PublicUser,
+  type TradeKind,
+  type TradeLine,
+  type TradeLineView,
+  type TradeOfferView,
+  type TradeShelf,
+  type TradesView,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
@@ -18,7 +19,6 @@ import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
-import { GLIMMER_SWAP } from '@heartpatch/shared';
 import {
   fitName,
   lineKey,
@@ -1230,7 +1230,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
     const banner = passOver()
       ? TRADE_TEXT.closed
-      : trades?.tradingEnabled === false
+      : // The Glimmer swap works with trading off: nobody else is involved (#523).
+        trades?.tradingEnabled === false && tab !== 'swap'
         ? TRADE_TEXT.tradingOff
         : '';
     status.textContent = note || banner;

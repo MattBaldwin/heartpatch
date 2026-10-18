@@ -5,7 +5,7 @@ import {
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
-/** The trading post's Glimmer swap (server: modules/trades, #523). */
+/** The trading post's Glimmer swap (server: modules/glimmer-swap, #523). */
 export const glimmerSwapApi = {
   /** Today's swaps and what's in my bag. */
   view: (mapId: string): Promise<GlimmerSwapView> =>

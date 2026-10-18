@@ -1,4 +1,5 @@
 import {
+  GAME_DATA,
   GLIMMER_SWAP,
   type GlimmerSwapRequest,
   type GlimmerSwapRules,
@@ -30,9 +31,19 @@ import { createGlimmerSwapRepo, SWAP_REASON } from './repo.js';
  * game event: nobody else sees a swap, and the bag's reply shows it.
  */
 
-// Kid-readable messages (style guide §6).
+const nameOf = (id: string) => GAME_DATA.resources.find((r) => r.id === id)?.name ?? id;
+
+// Kid-readable messages (style guide §6). `capped` is the client's
+// `SWAP_TEXT.capped` too: change both together.
 const MESSAGES = {
-  notTaken: "The post doesn't take that one. Try Timber, Stone, Greens, Water or Ice!",
+  notTaken: (accepts: readonly string[]) => {
+    const names = accepts.map(nameOf);
+    const list =
+      names.length > 1
+        ? `${names.slice(0, -1).join(', ')} or ${names.at(-1) ?? ''}`
+        : names.join('');
+    return `The post doesn't take that one. Try ${list}!`;
+  },
   capped: "That's all the Glimmer for today! Come back tomorrow. 🌙",
 } as const;
 
@@ -83,7 +94,7 @@ export function createGlimmerSwapService(options: GlimmerSwapServiceOptions): Gl
     swap: async (user, mapId, request) => {
       const { itemId } = request;
       if (!rules.accepts.includes(itemId))
-        throw new AppError('VALIDATION_FAILED', MESSAGES.notTaken);
+        throw new AppError('VALIDATION_FAILED', MESSAGES.notTaken(rules.accepts));
       await requireMember(db, user, mapId);
       return createGlimmerSwapRepo(db).transaction(async (repo, tx) => {
         const at = now();

@@ -236,6 +236,10 @@ describe.skipIf(!url)('the Glimmer swap (#523, needs DATABASE_URL)', () => {
     const ember = await swap(server, kid, mapId, { ...post, itemId: 'emberwood' });
     expect(ember.statusCode).toBe(400);
     expect(errorOf(ember).code).toBe('VALIDATION_FAILED');
+    // Named from the data, so a tuned list never goes stale.
+    expect(errorOf(ember).message).toBe(
+      "The post doesn't take that one. Try Timber, Stone, Greens, Water or Ice!",
+    );
     const glimmer = await swap(server, kid, mapId, { ...post, itemId: 'glimmer' });
     expect(glimmer.statusCode).toBe(400);
     const short = await swap(server, kid, mapId, { ...post, itemId: 'greens' });

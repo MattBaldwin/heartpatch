@@ -395,6 +395,15 @@ Lock order: the night's row, squishies, then `maps` (events).
 - **Events:** `trade.offered`, `trade.cancelled`, `trade.expired` (the two players only), `trade.answered` (others hear only "accepted"), `gift.collected` (members, never what), `mailbox.collected` (the player only).
 - **Lock order:** tech spec §7 "Trades (#271)".
 
+## The Glimmer swap
+
+The trading post's swap (issue #523; the owner-approved mockup) lives in `src/modules/glimmer-swap`. A few of one everyday resource for Glimmer, a few a day: the rate, the resources it takes and the daily cap are shared data (`GLIMMER_SWAP`). The day is the account's own (`users.time_zone`, like the Boutique) and counts every patch the player is in. No table of its own: the day's count is the account's `post-swap` Glimmer rows in `resource_ledger`, stamped with the service's clock.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/glimmer-swap` | → `{ swap: { swappedToday, resetsAt, have } }`: Glimmer swapped today, when the account's day ends, and my bag's accepted resources and Glimmer on this patch. `NOT_FOUND` for a non-member |
+| `POST /api/v1/maps/:mapId/glimmer-swap` | `{ q, r, itemId }` → `{ swap }`. One swap at the post at (q, r), in one transaction under the account's `users` lock. `VALIDATION_FAILED` for an item the post doesn't take; `NOT_FOUND` for a non-member or a tile that isn't a post; `FORBIDDEN` for a post I can't use (not connected, no visit pass); `CONFLICT` past the daily cap or when the bag is short (nothing changes). Works with trading off. Writes no game event. Send an `Idempotency-Key` |
+
 ## Friendly challenges
 
 `src/modules/challenges` (issue #29; the owner-approved mockup). "Battle me?" between two Keepers who both have the app open on a multiplayer patch (`wsHub.isOnline`). Nothing is at stake, so it works in every PvP mode; the owner can switch it off. The rules are `CHALLENGE_RULES` (`packages/shared/src/data/challenges.ts`, all `TUNE`). A yes starts a live battle through the battles service's `startFriendly` (see "Battles").

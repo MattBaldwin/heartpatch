@@ -28,6 +28,7 @@ export const SWAP_TEXT = {
   yes: 'Swap!',
   no: 'Not now',
   done: (rules: GlimmerSwapRules) => `Yay! ${String(rules.get)} 💎 Glimmer is in your bag!`,
+  // The server's cap message too (modules/glimmer-swap): change both together.
   capped: "That's all the Glimmer for today! Come back tomorrow. 🌙",
   resetsIn: (hours: number) =>
     hours <= 1 ? 'New swaps in less than an hour' : `New swaps in ${String(hours)} hours`,
