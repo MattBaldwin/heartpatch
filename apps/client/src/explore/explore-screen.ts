@@ -1079,7 +1079,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       darkLight.style.removeProperty('transform');
       darkLight.style.removeProperty('--light-r');
     }
-    if (!showGlint) glintMoved = '';
+    if (!showGlint && glintMoved !== '') {
+      // Hidden again until a drawn frame places it, never left where it was.
+      glintMoved = '';
+      glint.style.removeProperty('transform');
+    }
+    if (glintMoved === '') glint.style.visibility = 'hidden';
     if (shown) options.invalidate();
   }
 
@@ -1131,6 +1136,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (g && moved !== glintMoved) {
         glintMoved = moved;
         glint.style.transform = moved;
+        glint.style.removeProperty('visibility');
       }
     }
   }

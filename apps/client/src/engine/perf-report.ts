@@ -127,8 +127,10 @@ type Choice = PerfHitch['before'];
 /**
  * Hitches to report (#501 G): one drawn frame over `HITCH_MS`, then
  * `HITCH_FOLLOW_MS` of frames that average under it (a lone hitch, not a
- * slow run: that's `SlowTrigger`'s). At most one every `REPORT_EVERY_MS`.
- * Pure (time and the governor's state are passed in).
+ * slow run: that's `SlowTrigger`'s). Only when nothing at all was posted in
+ * the last `REPORT_EVERY_MS`, so with the slow report (which keeps its own
+ * once a minute, and goes first) a page posts at most two rows a minute,
+ * the server's limit. Pure (time and the governor's state are passed in).
  */
 export class HitchWatch {
   #pending: {
@@ -139,18 +141,20 @@ export class HitchWatch {
     followMs: number;
     followFrames: number;
   } | null = null;
-  #sentAt: number | null = null;
 
   /**
    * One drawn frame; returns a hitch to report once its follow-up is over,
-   * else null. `governor` is read only then and when a hitch starts.
+   * else null. `governor` is read only then and when a hitch starts;
+   * `lastPostAt` is when this page last posted any report (null: never).
    */
   frame(
     now: number,
     frameMs: number | null,
     renderMs: number,
     governor: () => Choice,
+    lastPostAt: number | null,
   ): PerfHitch | null {
+    const quiet = lastPostAt === null || now - lastPostAt >= REPORT_EVERY_MS;
     const pending = this.#pending;
     if (pending) {
       if (now - pending.at < HITCH_FOLLOW_MS) {
@@ -162,8 +166,8 @@ export class HitchWatch {
       }
       this.#pending = null;
       const { followMs, followFrames } = pending;
-      if (followFrames === 0 || followMs / followFrames > HITCH_MS) return null;
-      this.#sentAt = now;
+      // A slow report posted meanwhile goes first.
+      if (!quiet || followFrames === 0 || followMs / followFrames > HITCH_MS) return null;
       const { tier, renderScale } = governor();
       return {
         frameMs: round(pending.frameMs),
@@ -174,7 +178,7 @@ export class HitchWatch {
       };
     }
     if (frameMs === null || frameMs <= HITCH_MS || frameMs > PAUSE_MS) return null;
-    if (this.#sentAt !== null && now - this.#sentAt < REPORT_EVERY_MS) return null;
+    if (!quiet) return null;
     const { tier, renderScale } = governor();
     this.#pending = {
       at: now,
@@ -230,6 +234,8 @@ const page = {
   hitches: new HitchWatch(),
   decisions: new DecisionLog(),
   status: null as ReportStatus | null,
+  /** When this page last posted (or began waiting to post) any report: hitches wait a minute after it. */
+  lastPostAt: null as number | null,
   slow: false,
   /** The badge lines' reader once loaded, and its load (a chunk fetched as a slow run begins). */
   badge: null as BadgeReader | null,
@@ -282,6 +288,8 @@ export class PerfProbe {
   readonly #fences: FencePoller<WebGLSync> | null;
   readonly #frames = new FrameWindow();
   readonly #openedAt = performance.now();
+  /** The governor's tier and scale, read only when a hitch starts or ends. */
+  readonly #governor = (): Choice => this.#quality.snapshot;
   #disposed = false;
   #pollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -316,7 +324,7 @@ export class PerfProbe {
     const run = page.trigger.frame(now, frameMs);
     if (page.trigger.slowMs >= BADGE_START_MS) this.#watchBadge();
     if (run) void this.#report(run, now);
-    const hitch = page.hitches.frame(now, frameMs, renderMs, () => this.#quality.snapshot);
+    const hitch = page.hitches.frame(now, frameMs, renderMs, this.#governor, page.lastPostAt);
     if (hitch) void this.#send(now, { fps: this.#frames.fps ?? 0, slowMs: 0, hitch });
   }
 
@@ -363,6 +371,7 @@ export class PerfProbe {
   }
 
   async #report(run: SlowRun, now: number): Promise<void> {
+    page.lastPostAt = now;
     page.status = { at: now, fps: run.fps, gpuMs: null, result: 'sending' };
     // The badge lines' chunk is fetched as the run begins; wait for a slow one.
     if (!page.badge && page.badgeLoad) {
@@ -413,6 +422,7 @@ export class PerfProbe {
       renderer: this.#kind,
       ...(what.hitch && { hitch: what.hitch }),
     };
+    page.lastPostAt = now;
     const post = apiCall('/perf/report', { method: 'POST', body: report, schema: null });
     if (what.hitch) {
       await post.catch(() => {

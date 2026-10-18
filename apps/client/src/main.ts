@@ -813,6 +813,8 @@ const explore = createExploreScreen({
     // The map shows its own scene; until then explore's stays (#501 G). If
     // the map doesn't open, nothing else will, so the test scene shows.
     const swaps = sceneSwaps;
+    // A remount meanwhile (a lost context) builds the test scene, never the closed tile.
+    sceneBuilder = testScene;
     const noScene = (): void => {
       if (sceneSwaps === swaps) showScene(null);
     };

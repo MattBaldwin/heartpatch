@@ -62,10 +62,16 @@ describe('DecisionLog', () => {
 describe('HitchWatch (#501 G)', () => {
   const high = () => ({ tier: 'high' as const, renderScale: 1 });
   /** Drawn frames at 30 fps from `from` for `ms`; returns the last hitch reported, if any. */
-  function calm(watch: HitchWatch, from: number, ms: number, governor = high) {
+  function calm(
+    watch: HitchWatch,
+    from: number,
+    ms: number,
+    lastPostAt: number | null = null,
+    governor = high,
+  ) {
     let found = null;
     for (let t = from + 33; t <= from + ms; t += 33) {
-      found = watch.frame(t, 33, 2, governor) ?? found;
+      found = watch.frame(t, 33, 2, governor, lastPostAt) ?? found;
     }
     return found;
   }
@@ -73,9 +79,9 @@ describe('HitchWatch (#501 G)', () => {
   it('reports one frame over 100 ms among quick ones, with the governor choice after it', () => {
     const watch = new HitchWatch();
     expect(calm(watch, 0, 1000)).toBeNull();
-    expect(watch.frame(1200, 200, 140, high)).toBeNull();
+    expect(watch.frame(1200, 200, 140, high, null)).toBeNull();
     const cut = () => ({ tier: 'high' as const, renderScale: 0.9 });
-    const hitch = calm(watch, 1200, HITCH_FOLLOW_MS + 100, cut);
+    const hitch = calm(watch, 1200, HITCH_FOLLOW_MS + 100, null, cut);
     expect(hitch).toMatchObject({
       frameMs: 200,
       renderMs: 140,
@@ -85,19 +91,25 @@ describe('HitchWatch (#501 G)', () => {
     expect(hitch!.followMs).toBeGreaterThanOrEqual(HITCH_FOLLOW_MS);
   });
 
-  it('leaves a slow run to the slow report, and reports at most once a minute', () => {
+  it('leaves a slow run to the slow report', () => {
     const slow = new HitchWatch();
     let found = null;
-    for (let t = 150; t < 5000; t += 150) found = slow.frame(t, 150, 1, high) ?? found;
+    for (let t = 150; t < 5000; t += 150) found = slow.frame(t, 150, 1, high, null) ?? found;
     expect(found).toBeNull();
+  });
 
+  it('waits a minute after any report, and yields to one posted during its follow-up', () => {
     const watch = new HitchWatch();
-    watch.frame(1000, 200, 1, high);
-    expect(calm(watch, 1000, 2000)).not.toBeNull();
-    watch.frame(4000, 200, 1, high);
-    expect(calm(watch, 4000, 2000)).toBeNull();
-    watch.frame(1000 + REPORT_EVERY_MS + 2000, 200, 1, high);
-    expect(calm(watch, 1000 + REPORT_EVERY_MS + 2000, 2000)).not.toBeNull();
+    // A report 10 s ago (a slow run's, or the last hitch): no hitch yet.
+    watch.frame(10_000, 200, 1, high, 0);
+    expect(calm(watch, 10_000, 2000, 0)).toBeNull();
+    // A minute on, it reports.
+    watch.frame(REPORT_EVERY_MS + 1000, 200, 1, high, 0);
+    expect(calm(watch, REPORT_EVERY_MS + 1000, 2000, 0)).not.toBeNull();
+    // A slow report lands while a hitch waits on its follow-up: the slow one goes alone.
+    const at = 3 * REPORT_EVERY_MS;
+    watch.frame(at, 200, 1, high, null);
+    expect(calm(watch, at, 2000, at + 500)).toBeNull();
   });
 });
 
@@ -212,5 +224,24 @@ describe('PerfProbe', () => {
       after: { tier: 'medium', renderScale: 0.75 },
     });
     expect(lastReport()).toBeNull();
+  });
+
+  it('posts no hitch within a minute of a slow report (the server allows two a minute)', async () => {
+    const { PerfProbe } = await import('./perf-report.js');
+    const probe = new PerfProbe({}, 'webgl2', quality, () => null);
+    let now = 0;
+    probe.frame(now, null, 2);
+    const step = (ms: number) => {
+      now += ms;
+      probe.frame(now, ms, 1);
+    };
+    for (let i = 0; i < 30; i++) step(250); // a slow run: one report
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    for (let i = 0; i < 60; i++) step(33);
+    step(220);
+    for (let i = 0; i < 60; i++) step(33);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

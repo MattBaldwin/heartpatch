@@ -8,6 +8,9 @@
  * so its centre sits on the light, and scaled while the light's radius stays
  * within `redrawAt` of the radius painted. Only a bigger change, or a new
  * screen size, repaints it. Pure, so it's tested without a browser.
+ *
+ * It covers the screen while the light's centre is on it, which the follow
+ * camera keeps true (the light is round the Keeper's feet).
  */
 
 export const LANTERN_DARK = {

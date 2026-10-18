@@ -78,6 +78,13 @@ export interface GovernorState {
   readonly crawlFrames: number;
   /** Consecutive frames between `maxFrameMs` and `crawlFrameMs` so far (#501). */
   readonly slowRun: number;
+  /**
+   * This window already set aside a hitch (a run of frames over
+   * `maxFrameMs`): another run counts at its real length (#501 G), so slow
+   * frames broken up by quick ones (33/150/33/150, about 11 fps) still read
+   * as slow.
+   */
+  readonly windowHitch: boolean;
 }
 
 export interface GovernorContext {
@@ -108,6 +115,7 @@ export function initialGovernor(tier: QualityTier, config: ScalerConfig): Govern
     sinceTierRaiseMs: null,
     crawlFrames: 0,
     slowRun: 0,
+    windowHitch: false,
   };
 }
 
@@ -135,9 +143,14 @@ export function stepGovernor(
   // From the run's `crawlFrames`-th frame they count at their real length, so
   // a cut that helps but still leaves frames this slow reads as helping. A
   // crawling frame between them leaves the run going: both say "slow".
+  // Only one such hitch (one run) a window is set aside: a second run in
+  // the same window counts (#501 G), however the quick frames between broke it.
   if (frameMs > config.maxFrameMs) {
     const slowRun = state.slowRun + 1;
-    if (slowRun < config.crawlFrames) return { ...state, slowRun };
+    const sameHitch = state.slowRun > 0 || !state.windowHitch;
+    if (slowRun < config.crawlFrames && sameHitch) {
+      return { ...state, slowRun, windowHitch: true };
+    }
     state = { ...state, slowRun };
   } else if (state.slowRun > 0) {
     state = { ...state, slowRun: 0 };
@@ -156,7 +169,7 @@ export function stepGovernor(
   };
   if (windowMs < config.windowMs) return { ...next, windowMs, windowFrames };
 
-  const closed = { ...next, windowMs: 0, windowFrames: 0 };
+  const closed = { ...next, windowMs: 0, windowFrames: 0, windowHitch: false };
   if (state.settleWindows > 0) return { ...closed, settleWindows: state.settleWindows - 1 };
   return decide(closed, (windowFrames * 1000) / windowMs, windowMs, ctx);
 }
@@ -404,6 +417,7 @@ export function expectHitch(state: GovernorState, config: ScalerConfig): Governo
     ...state,
     windowMs: 0,
     windowFrames: 0,
+    windowHitch: false,
     settleWindows: Math.max(state.settleWindows, config.settleWindows),
   };
 }

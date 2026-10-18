@@ -532,6 +532,14 @@ describe('isolated hitches under a 30 fps cap (#501 G)', () => {
     expect(frames(before, [...calm(7), 200, ...calm(60)], old).renderScale).toBeLessThan(1);
   });
 
+  it('still steps down when slow frames come between quick ones (33/150/33/150)', () => {
+    for (const slowMs of [150, 120]) {
+      let s = steady();
+      for (let i = 0; i < 400; i++) s = stepGovernor(s, i % 2 ? slowMs : PERIOD, capped);
+      expect(s.tier !== 'high' || s.renderScale < 1 || s.cap !== null).toBe(true);
+    }
+  });
+
   it('still steps down when every frame is that slow', () => {
     const after = frames(steady(), Array<number>(30).fill(200));
     expect(after.renderScale).toBeLessThan(1);
