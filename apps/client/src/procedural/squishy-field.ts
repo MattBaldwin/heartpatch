@@ -261,8 +261,12 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #parent: TransformNode | null;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
-  /** Its squishies can fade (`SquishyFieldOptions.fades`). */
-  readonly #fades: boolean;
+  /**
+   * A fade dithers its squishies away (`fades`, and the GLSL shader attached).
+   * Otherwise their colour alpha stays 1: PBR would write a lower one into the
+   * canvas, and the page would show through (WebGPU, review of #381 W2).
+   */
+  readonly #dithers: boolean;
   readonly #batches = new Map<string, Batch>();
   readonly #squishies = new Map<number, Squishy>();
   readonly #shadow: Mesh | null;
@@ -301,8 +305,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
-    this.#fades = options.fades ?? false;
-    if (this.#plugin) this.#plugin.fade = this.#fades;
+    this.#dithers = (options.fades ?? false) && this.#plugin !== null;
+    if (this.#plugin) this.#plugin.fade = this.#dithers;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
@@ -363,13 +367,16 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
    * fade (squish-plugin.ts `SQUISH_FADE`), so it costs no material, no blend
    * and no draw call, and its contact shadow fades with it. Used to clear a
    * squishy out of a close camera's way (#381 W2). Only a field made with
-   * `fades` draws it; under WebGPU, without the shader, only the shadow fades.
+   * `fades` dithers it; otherwise (or under WebGPU, without the shader) only
+   * the shadow fades and the squishy stays whole.
    */
   setFade(handle: SquishyHandle, fade: number): void {
     const squishy = this.#squishies.get(handle.id);
     const k = Math.min(1, Math.max(0, fade));
     if (!squishy || squishy.fade === k) return;
     squishy.fade = k;
+    this.#shadowDirty = true;
+    if (!this.#dithers) return;
     for (const { batch, instance } of squishy.instances) {
       if (batch.dirty || !batch.colors) continue; // the next upload writes it
       const i = batch.instances.indexOf(instance);
@@ -377,7 +384,6 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       batch.colors[i * 4 + 3] = instance.color[3] * k;
       batch.faded = true;
     }
-    this.#shadowDirty = true;
   }
 
   /** How much of a squishy shows (`setFade`). */
@@ -985,7 +991,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       inst.matrix.copyToArray(matrices, i * 16);
       colors.set(inst.color, i * 4);
       const { owner } = inst;
-      colors[i * 4 + 3] = inst.color[3] * owner.fade;
+      if (this.#dithers) colors[i * 4 + 3] = inst.color[3] * owner.fade;
       origins.set(owner.origin, i * 4);
       const { phase, rate, amplitude } = owner.handle.params.motion;
       motions.set([phase, rate, this.#breathing ? amplitude : 0, inst.look], i * 4);
@@ -994,7 +1000,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
     // Not static where squishies fade: a fade rewrites its alphas in place (`setFade`).
-    mesh.thinInstanceSetBuffer('color', colors, 4, !this.#fades);
+    mesh.thinInstanceSetBuffer('color', colors, 4, !this.#dithers);
     mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);

@@ -1622,6 +1622,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         Math.abs(walkCam.eye.y - walkGoal.eye.y) +
         Math.abs(walkCam.eye.z - walkGoal.eye.z) +
         Math.abs(walkCam.target.x - walkGoal.target.x) +
+        Math.abs(walkCam.target.y - walkGoal.target.y) +
         Math.abs(walkCam.target.z - walkGoal.target.z) >
       HOUSE_WALK.settled;
     // Settled: land on the goal exactly, so the next frame has nothing to do.
@@ -1702,6 +1703,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function keeperHit(x: number, y: number): boolean {
     const s = scene3d;
     if (!s || !base || glide || zoom > 0 || walk || s.keeperHeight <= 0) return false;
+    // Upstairs shown, a ground-floor Keeper is cut away: nothing there to tap.
+    if (floor !== keeperFloor(s)) return false;
     const box = overlay.getBoundingClientRect();
     const vp = { width: box.width, height: box.height };
     return keeperTapped(base, vp, s.keeperSpot, s.keeperHeight, x - box.left, y - box.top);
@@ -2004,6 +2007,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function hide(): void {
     gate.cancel();
     isOpen = false;
+    document.documentElement.style.removeProperty('--house-top-clear');
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     glide = null;
