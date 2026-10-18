@@ -70,6 +70,8 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
   let trick: TrickOrTreatView | null = null;
   let readAt = 0;
   let reading = false;
+  /** Bumped by each knock's reply, so a read begun before it can't undo "Visited today". */
+  let knocks = 0;
   let working = false;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
   let toastText: string | null = null;
@@ -114,10 +116,11 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
     const id = mapId;
     if (!id || !user || reading) return;
     const at = generation;
+    const since = knocks;
     reading = true;
     try {
       const next = await api.view(id);
-      if (at === generation) apply(next);
+      if (at === generation && since === knocks) apply(next);
     } catch {
       // The next redraw or panel asks again.
     } finally {
@@ -153,6 +156,7 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
         () => at === generation,
       );
       if (!result || at !== generation) return;
+      knocks += 1;
       say(prizeToast(result.visit));
       apply(result.trickOrTreat);
       options.onTreat?.(result.visit);

@@ -133,6 +133,7 @@ declare global {
       posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen' | 'connected'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
       journey?(): JourneyDebug;
+      /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */
       trickOrTreat?(): TrickOrTreatDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
       post?(): PostDebug;

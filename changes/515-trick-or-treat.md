@@ -3,5 +3,5 @@ title: Trick or treat!
 area: land
 ---
 
-All through Halloween, tap a patch-mate's home and knock for a treat: Heartdust, a costume for your Keeper, or a costume for your squishies. Every home gives one treat a day, and a home with a glowing porch lantern gives extra-good ones! The next morning, you'll see who came trick-or-treating at your home, and the Heartdust they left to say thanks.
+All through Halloween, knock on a patch-mate's home for a treat: Heartdust, a Keeper costume or a squishy costume! Homes with a glowing porch lantern give extra-good ones, and next morning you'll see who knocked on yours.
 **Try it:** tap a friend's Heart Seed on your patch, then tap Trick or treat!

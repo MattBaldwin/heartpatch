@@ -506,7 +506,7 @@ const trickOrTreat = createTrickOrTreat({
     maps.setPorchLanterns(mapId, userIds);
   },
   onTreat: (visit) => {
-    if (visit.prize.kind === 'heartdust') inventory.clearSource.invalidate?.();
+    if (visit.prize.kind === 'heartdust') void inventory.refresh();
   },
 });
 const hollow = createHollowScreen({
