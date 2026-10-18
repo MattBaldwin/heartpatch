@@ -20,6 +20,12 @@ import './hollowed.css';
 
 const RING = { diameter: TILE_RADIUS * 1.84, thickness: 0.045, lift: 0.012, color: '#b9a6e6' };
 
+/** PROTOTYPE: the home's typed name, shown as a flag over my Heart Seed. */
+let homeName: string | null = null;
+export function setHomeName(name: string | null): void {
+  homeName = name;
+}
+
 export function createHollowedFlags(root: HTMLElement, me: () => string | null): MapLayer & { shown: number } {
   let scene: Scene | null = null;
   const flags = new Map<string, { c: HollowedCluster; node: HTMLElement; tile: PublicTile; lift: number }>();
@@ -55,6 +61,17 @@ export function createHollowedFlags(root: HTMLElement, me: () => string | null):
     const mine = me();
     const byKey = new Map(view.tiles.map((t) => [hexKey(t), t] as const));
     const owned = new Set(view.tiles.filter((t) => t.ownerUserId === mine).map(hexKey));
+    if (homeName && mine) {
+      const seed = view.tiles.find((t) => t.ownerUserId === mine && t.homeSlot !== null && t.terrain === 'meadow');
+      const seedTile = seed ?? view.tiles.find((t) => t.ownerUserId === mine && t.homeSlot !== null);
+      if (seedTile) {
+        const node = el('div', { class: 'post-flag post-flag-connected hollowed-flag', 'aria-hidden': 'true', 'data-testid': 'home-flag' }, `🏡 ${homeName}`);
+        node.hidden = true;
+        root.append(node);
+        const c = hollowedClusters(view, mine)[0];
+        if (c) flags.set('home', { c, node, tile: seedTile, lift: -0.15 });
+      }
+    }
     for (const c of hollowedClusters(view, mine)) {
       const tile = byKey.get(hexKey(c.centre));
       if (!tile) continue;

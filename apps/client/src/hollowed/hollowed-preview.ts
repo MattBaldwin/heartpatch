@@ -21,7 +21,7 @@ import { findHomeBases } from '../map/map-layout.js';
  */
 
 export type HollowedMode = 'grey' | 'restored';
-export type HollowedShow = 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | 'keymap' | null;
+export type HollowedShow = 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | 'keymap' | 'homename' | null;
 
 export interface HollowedPreview {
   readonly mode: HollowedMode;
@@ -44,7 +44,7 @@ export interface HollowedCluster {
   readonly keyTile: Hex | null;
 }
 
-const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore', 'keymap'];
+const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore', 'keymap', 'homename'];
 
 export function readHollowedPreview(params: URLSearchParams): HollowedPreview | null {
   const mode = params.get('hollowed');

@@ -13,15 +13,16 @@ export interface HollowedSheets {
   openRestore(c: HollowedCluster): void;
   openRename(c: HollowedCluster): void;
   openKeyMap(c: HollowedCluster): void;
+  openHomeName(keeperName: string, onNamed: (name: string) => void): void;
   close(): void;
-  readonly open: 'restore' | 'rename' | 'keymap' | null;
+  readonly open: 'restore' | 'rename' | 'keymap' | 'homename' | null;
 }
 
 /** The mockup's broken buildings on the doorstep tile and their pieces. TUNE. */
 const PIECES = [
   { what: '🪵 Timber', need: 6, have: 14 },
   { what: '🪨 Stone', need: 4, have: 9 },
-  { what: '💗 Heartdust', need: 2, have: 3 },
+  { what: '💗 Heartdust', need: 1, have: 3 },
 ];
 
 export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
@@ -33,7 +34,7 @@ export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
   });
   sheet.hidden = true;
   root.append(sheet);
-  let open: 'restore' | 'rename' | 'keymap' | null = null;
+  let open: 'restore' | 'rename' | 'keymap' | 'homename' | null = null;
 
   const close = () => {
     open = null;
@@ -131,6 +132,45 @@ export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
         el('button', { type: 'button', class: 'auth-button hollowed-primary', 'data-testid': 'hollowed-key-go' }, 'Show me on the map'),
       );
       sheet.querySelector('[data-testid="hollowed-key-go"]')?.addEventListener('click', close);
+      sheet.hidden = false;
+    },
+    openHomeName: (keeperName, onNamed) => {
+      open = 'homename';
+      // Owner decision 2026-10-18: any kid names their home from day one.
+      const ideas = [`${keeperName}'s Meadow`, 'Puddle Corner', 'Sunny Patch'];
+      const input = el('input', {
+        type: 'text',
+        class: 'hollowed-input',
+        id: 'hollowed-home-name',
+        maxlength: '16',
+        placeholder: 'Type a name…',
+        autocomplete: 'off',
+        'data-testid': 'hollowed-name-input',
+      }) as HTMLInputElement;
+      input.value = ideas[0] ?? '';
+      const chips = ideas.map((name) => {
+        const b = el('button', { type: 'button', class: 'hollowed-chip' }, name);
+        b.addEventListener('click', () => {
+          input.value = name;
+          input.focus();
+        });
+        return b;
+      });
+      const go = el('button', { type: 'button', class: 'auth-button hollowed-primary', 'data-testid': 'hollowed-name-it' }, 'Name it! 🏡');
+      go.addEventListener('click', () => {
+        onNamed(input.value.trim());
+        close();
+      });
+      sheet.replaceChildren(
+        el('p', { class: 'explore-card-progress' }, 'YOUR HOME'),
+        el('h3', { class: 'explore-sheet-title', id: 'hollowed-sheet-title' }, 'Name your home 🏡'),
+        el('p', { class: 'explore-card-line' }, 'Every Keeper\'s home has a name. What\'s yours called?'),
+        el('label', { class: 'hollowed-label', for: 'hollowed-home-name' }, 'Home name'),
+        input,
+        el('div', { class: 'hollowed-chips', role: 'group', 'aria-label': 'Name ideas' }, ...chips),
+        el('p', { class: 'hollowed-note' }, 'Tap an idea, or type your own. Up to 16 letters; you can rename it once a day.'),
+        go,
+      );
       sheet.hidden = false;
     },
     close,

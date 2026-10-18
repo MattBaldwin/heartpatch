@@ -20,7 +20,7 @@ import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
-import { createHollowedFlags } from './hollowed/hollowed-flags.js';
+import { createHollowedFlags, setHomeName } from './hollowed/hollowed-flags.js';
 import { mountHollowedSheets } from './hollowed/hollowed-sheets.js';
 import {
   hollowedAt,
@@ -920,6 +920,16 @@ const maps = createMapScreen({
     hudMapId = mapId;
     // PROTOTYPE (#306 plan): the claim-and-rename moment over the restored village.
     const show = hollowedPreview()?.show;
+    if (mapId !== null && show === 'homename') {
+      setTimeout(() => {
+        hollowedSheets.openHomeName(signedIn?.username ?? 'Mia', (name) => {
+          setHomeName(name || null);
+          const view = maps.view;
+          if (view) hollowedFlags.update?.(view);
+          stage?.invalidate();
+        });
+      }, 1200);
+    }
     if (mapId !== null && (show === 'rename' || show === 'keymap')) {
       setTimeout(() => {
         const view = maps.view;
@@ -1619,7 +1629,7 @@ if (import.meta.env.DEV) {
         const view = maps.view;
         return view ? hollowedClusters(view, signedIn?.id ?? null) : [];
       },
-      look: (which: 'near' | 'far' | 'both' | 'key', distance: number) => {
+      look: (which: 'near' | 'far' | 'both' | 'key' | 'home', distance: number) => {
         const view = maps.view;
         if (!view) return;
         const cs = hollowedClusters(view, signedIn?.id ?? null);
@@ -1627,7 +1637,9 @@ if (import.meta.env.DEV) {
         const far = cs.find((c) => c.id === 'far');
         const seed = view.tiles.find((t) => t.ownerUserId === signedIn?.id && t.homeSlot !== null);
         const at =
-          which === 'both' && near && far
+          which === 'home' && seed
+            ? { q: seed.q, r: seed.r }
+            : which === 'both' && near && far
             ? { q: (near.centre.q + far.centre.q) / 2, r: (near.centre.r + far.centre.r) / 2 }
             : which === 'key' && near?.keyTile
               ? { q: (near.centre.q + near.keyTile.q) / 2, r: (near.centre.r + near.keyTile.r) / 2 }

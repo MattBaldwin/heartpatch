@@ -11,7 +11,7 @@ const launchOptions = { executablePath: chromiumPath, args: ['--use-gl=angle', '
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: '**/shots-306.spec.ts',
+  testMatch: '**/shots-306*.spec.ts',
   timeout: 900_000,
   retries: 0,
   reporter: 'list',
