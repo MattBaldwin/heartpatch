@@ -15,7 +15,7 @@ import {
 } from './config.js';
 import type { SquishySpecies } from './params.js';
 import { decodeSquishCode, glowHueIndex } from './rare-glow.js';
-import { SquishyField } from './squishy-field.js';
+import { SquishyField, type SquishyHandle } from './squishy-field.js';
 
 const registry = visualRegistry(GAME_DATA);
 const species: SquishySpecies = {
@@ -226,10 +226,8 @@ describe('SquishyField squishy costumes (#515)', () => {
   const emberbun = GAME_DATA.species.find((s) => s.id === 'emberbun')!;
   const field = (scene = new Scene(engine)) =>
     new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
-  const count = (
-    h: { params: { parts: readonly { slot: string; placements: unknown[] }[] } },
-    slot: string,
-  ) => h.params.parts.filter((p) => p.slot === slot).reduce((n, p) => n + p.placements.length, 0);
+  const count = (h: SquishyHandle, slot: string) =>
+    h.params.parts.filter((p) => p.slot === slot).reduce((n, p) => n + p.placements.length, 0);
 
   it('puts every piece on, across its anchors, on the meshes already drawn', () => {
     const scene = new Scene(engine);
