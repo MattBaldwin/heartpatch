@@ -267,6 +267,19 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       return Object.fromEntries([...rows].map((r) => [r.state, Number(r.n)]));
     }
 
+    /**
+     * Parks a fresh consumer at the head of every map but `mapId`, so the boot
+     * catch-up wakes it there alone. Every server test file shares this
+     * database and adds tutorial maps, and a fresh consumer lags on all of
+     * them: its job for `mapId` used to queue behind dozens of theirs, which
+     * took 5 s locally and over 15 s on CI (#429).
+     */
+    async function lagOnlyOn(consumer: EventConsumer, mapId: string): Promise<void> {
+      await db.execute(
+        `insert into event_consumers (consumer, map_id, last_seq) select '${consumer.name}', id, event_seq from maps where id <> '${mapId}' on conflict do nothing`,
+      );
+    }
+
     async function queuePolicy(name: string): Promise<string | undefined> {
       const rows = await db.execute<{ policy: string }>(
         `select policy from pgboss.queue where name = '${name}'`,
@@ -327,9 +340,10 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         release = resolve;
       });
       const mapId = await newMap();
-      // Holds this map's first event only: the boot catch-up also runs the
-      // consumer over every earlier map in the database.
+      // Holds this map's first event only, and the boot catch-up wakes no
+      // other map (`lagOnlyOn`).
       const consumer = testConsumer({ holdAt: { mapId, seq: 1, until } });
+      await lagOnlyOn(consumer, mapId);
       jobs = await startJobs({
         connectionString: url!,
         db,
@@ -376,6 +390,7 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       await older.stop({ graceful: false });
       expect(await queuePolicy(queue)).toBe('stately');
       await addEvents(mapId, 2); // nothing running: these lag until a catch-up
+      await lagOnlyOn(consumer, mapId);
 
       // pg-boss keeps a queue's policy for good, so startJobs drops and
       // recreates it; the boot catch-up then wakes the lagging map anyway.
@@ -391,7 +406,8 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         `select count(*) as n from pgboss.job where name = '${queue}' and policy = 'stately'`,
       );
       expect(Number([...stale][0]!.n)).toBe(0);
-      await eventually(async () => (await position(consumer, mapId)) === 2);
+      await eventually(async () => (await jobStates(consumer, mapId))['completed'] === 1);
+      expect(await position(consumer, mapId)).toBe(2);
       expect(await applied(consumer, mapId)).toEqual([1, 2]);
     });
 
@@ -444,6 +460,7 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       expect(await createJobsRepo(db).laggingMaps(consumer.name, consumer.mapKinds)).toContain(
         mapId,
       );
+      await lagOnlyOn(consumer, mapId);
 
       // Booting runs a catch-up, which wakes the lagging consumer.
       jobs = await startJobs({
@@ -453,7 +470,10 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         logger,
         schedule: false,
       });
-      await eventually(async () => (await position(consumer, mapId)) === 3);
+      // The catch-up's one job for the map ran to the end: `runConsumer` stops
+      // only once it has caught up.
+      await eventually(async () => (await jobStates(consumer, mapId))['completed'] === 1);
+      expect(await position(consumer, mapId)).toBe(3);
       expect(await applied(consumer, mapId)).toEqual([1, 2, 3]);
       expect(await createJobsRepo(db).laggingMaps(consumer.name, consumer.mapKinds)).not.toContain(
         mapId,
