@@ -575,6 +575,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         packed,
         packedTraining,
         tileUseNote,
+        packedCrowded,
       ] = await Promise.all([
         store.nightsSince(mapId, since, rules.reportNights),
         store.hollowedOf(mapId, user.id),
@@ -586,6 +587,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         createBuildingsRepo(db).packedFires(mapId, user.id),
         createBuildingsRepo(db).packedTraining(mapId, user.id),
         createBuildingsRepo(db).tileUseNote(mapId, user.id),
+        createBuildingsRepo(db).packedCrowded(mapId, user.id),
       ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
@@ -704,6 +706,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
               stoppedGatherers: tileUseNote.stoppedGatherers,
               at: tileUseNote.notedAt.toISOString(),
             }
+          : null,
+        crowdedTilesPacked: packedCrowded
+          ? { refund: packedCrowded.refund, at: packedCrowded.packedAt.toISOString() }
           : null,
         now: at.toISOString(),
       };

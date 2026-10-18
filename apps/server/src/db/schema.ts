@@ -450,13 +450,13 @@ export const buildings = pgTable(
       columns: [t.mapId, t.ownerUserId],
       foreignColumns: [mapMembers.mapId, mapMembers.userId],
     }),
-    // One building per spot.
+    // One building per spot. Kept while `spot` stays (tech spec §4.5); the
+    // tile key below already implies it.
     unique('buildings_tile_id_spot_key').on(t.tileId, t.spot),
-    // One fire per tile (#202) needs no index of its own: fires stand only in
-    // a tile's middle (spot 0, `slot: 'centre'`), so `buildings_tile_id_spot_key`
-    // already allows one. (A unique index on fires per tile would fail on the
-    // home fires main allowed, two to a home tile, before the boot pass packs
-    // them up.)
+    // One building per tile (#295, migration B). Fences aren't buildings
+    // rows (`fence_segments`), so nothing on main shares a tile. The migrate
+    // step packs up tiles still crowded before this goes in (`packCrowdedTiles`).
+    unique('buildings_tile_id_key').on(t.tileId),
     index('buildings_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('buildings_level_positive', sql`${t.level} >= 1`),
     check('buildings_spot_range', sql`${t.spot} between 0 and 6`),
@@ -1395,6 +1395,27 @@ export const packedHomeFires = pgTable(
  */
 export const packedTrainingGrounds = pgTable(
   'packed_training_grounds',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    refund: jsonb('refund').$type<Record<string, number>>().notNull(),
+    packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
+);
+
+/**
+ * Tiles still crowded with 2+ buildings when the unique index on
+ * `buildings.tile_id` went in (#295, owner decision 2026-10-18): every
+ * building on such a tile came down with everything spent on it given back,
+ * for a one-time note in the morning report. One row per player per map,
+ * written by the migrate step's pre-index pass (`packCrowdedTiles`); like
+ * `packed_training_grounds`.
+ */
+export const packedCrowdedTiles = pgTable(
+  'packed_crowded_tiles',
   {
     mapId: uuid('map_id')
       .notNull()

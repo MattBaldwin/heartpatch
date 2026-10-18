@@ -154,6 +154,9 @@ const groundsKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.packed-grounds.${userId}.${mapId}`;
 /** The one-building-a-tile tidy-up note seen on this device (#295): its `at`. */
 const tidyKey = (userId: string, mapId: string) => `heartpatch.hollow.tidy.${userId}.${mapId}`;
+/** The crowded-tile pack-up note seen on this device (#295, migration B): its `at`. */
+const crowdedKey = (userId: string, mapId: string) =>
+  `heartpatch.hollow.packed-crowded.${userId}.${mapId}`;
 /** The last night whose show this device played to the end or skipped (#277). */
 const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
 /** The last night whose dark-land nudge was answered on this device (#277). */
@@ -397,6 +400,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   const firesNote = oneTimeNote((s) => s.homeFirePacked, packedKey);
   const groundsNote = oneTimeNote((s) => s.trainingGroundsPacked, groundsKey);
   const tidyNote = oneTimeNote((s) => s.tileUseNote ?? null, tidyKey);
+  const crowdedNote = oneTimeNote((s) => s.crowdedTilesPacked ?? null, crowdedKey);
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -708,10 +712,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const packedGrounds = groundsNote.note();
     const tidy = tidyNote.note();
     const tidyLines = tidy ? tileUseLines(tidy) : [];
+    const crowded = crowdedNote.note();
     renderChips();
     reportBox.hidden =
       !on ||
-      (report.length === 0 && !packed && !packedGrounds && tidyLines.length === 0) ||
+      (report.length === 0 && !packed && !packedGrounds && tidyLines.length === 0 && !crowded) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -730,6 +735,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           : []),
         ...tidyLines,
         ...(tidy && tidy.packed.length > 0 ? [describeItems(tidy.refund)] : []),
+        ...(crowded ? [...HOLLOW_TEXT.packedCrowded, describeItems(crowded.refund)] : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -893,6 +899,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     firesNote.markSeen();
     groundsNote.markSeen();
     tidyNote.markSeen();
+    crowdedNote.markSeen();
     report = [];
     render();
   }
