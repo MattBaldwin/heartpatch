@@ -1018,11 +1018,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Boulderdoze grows a snowy ruff and big hugging arms, a whole sleepy mountain.
+  // #495 grown-up (stage 4): Boulderdoze grows a snowy ruff, a whole sleepy mountain.
   {
     id: 'mountsnooze',
     name: 'Mountsnooze',
-    description: 'A snoozy mountain with a snowy ruff and big hugging arms. Birds nap on its back.',
+    description: 'A snoozy mountain with a snowy ruff. Birds nap on its back.',
     element: 'stone',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -2387,12 +2387,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
   },
-  // #495 grown-up (stage 4): Snugglenook gets gold antlers and a crown of gold spikes, a big cuddly ruff and a plume tail.
+  // #495 grown-up (stage 4): Snugglenook gets a crown of gold spikes, a big cuddly ruff and a plume tail.
   {
     id: 'cuddlestag',
     name: 'Cuddlestag',
     description:
-      'A huge, soft shadow with gold antlers and a crown of gold spikes, a cuddly ruff and a big plume tail. Hugs last a very long time.',
+      'A huge, soft shadow with a crown of gold spikes, a cuddly ruff and a big plume tail. Hugs last a very long time.',
     element: 'shadow',
     feeling: 'cozy',
     rarity: 'epic',
@@ -3671,12 +3671,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Maplecrunch grows two big red wings and green gliding flaps to go with its mane.
+  // #495 grown-up (stage 4): Maplecrunch grows big red wings and green gliding flaps to go with its mane.
   {
     id: 'maplegale',
     name: 'Maplegale',
     description:
-      'A gliding squirrel with a huge maple mane, red wings and leafy flaps. It rides the autumn wind.',
+      'A gliding squirrel with a huge maple mane, a big red wing and leafy flaps. It rides the autumn wind.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
