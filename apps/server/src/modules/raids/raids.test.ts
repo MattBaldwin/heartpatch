@@ -570,7 +570,7 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
         r: near2.r,
       });
       expect(capped.statusCode).toBe(409);
-      expect(errorOf(capped).message).toMatch(/enough fun for today/);
+      expect(errorOf(capped).message).toMatch(/already lost some land today/);
     });
   });
 });

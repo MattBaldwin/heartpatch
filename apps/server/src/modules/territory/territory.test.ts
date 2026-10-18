@@ -1084,7 +1084,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const capped = await attack(server, kid, mapId, near2);
       expect(capped.statusCode).toBe(409);
       expect(errorOf(capped).message).toMatch(
-        /enough fun for today\. It.s ready again at your patch.s midnight/,
+        /already lost some land today\. Try their land again tomorrow/,
       );
       expect((await status(server, kid, mapId)).attemptsLeft).toBe(left);
 
@@ -1325,7 +1325,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'gentle' });
       const capped = await attack(server, kid, mapId, rustle!);
       expect(capped.statusCode).toBe(409);
-      expect(errorOf(capped).message).toMatch(/enough fun for today/);
+      expect(errorOf(capped).message).toMatch(/already lost some land today/);
       expect(await status(server, kid, mapId)).toMatchObject({
         attemptsLeft: 1,
         restingKeepers: [rival.id],
@@ -1365,7 +1365,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attack(server, kid, mapId, near)).statusCode).toBe(201);
       const second = await attack(server, other, mapId, near2);
       expect(second.statusCode).toBe(409);
-      expect(errorOf(second).message).toMatch(/enough fun for today/);
+      expect(errorOf(second).message).toMatch(/already lost some land today/);
     });
 
     it('lets only one of two players claim the same tile at once (tile lock + cooldown)', async () => {

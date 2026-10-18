@@ -67,9 +67,9 @@ export const TERRITORY_TEXT = {
   resting: (wait: string) => `This land needs a rest. Try again in ${wait}.`,
   noTries: (wait: string) => `New tries in ${wait} 🌙`,
   pvpOff: 'Challenges are off on this patch.',
-  // The daily loss cap (#526), in the server's words, counting down to midnight.
+  // The daily loss cap (#526), as the server says it, counting down to the patch's midnight.
   keeperResting: (owner: string, wait: string) =>
-    `${owner}'s land has had enough fun for today. Ready again in ${wait} 🌙`,
+    `${owner} already lost some land today. Try again in ${wait} 🌙`,
   // The server's own words for a shielded Keeper (territory service), so a tap
   // here reads the same as a refused challenge would.
   rivalShielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',

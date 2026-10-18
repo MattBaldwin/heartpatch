@@ -146,7 +146,7 @@ describe('territoryAction', () => {
       'claim',
     );
     expect(TERRITORY_TEXT.keeperResting('Pip', formatWait(95 * 60_000))).toBe(
-      "Pip's land has had enough fun for today. Ready again in 1h 35m 🌙",
+      'Pip already lost some land today. Try again in 1h 35m 🌙',
     );
   });
 

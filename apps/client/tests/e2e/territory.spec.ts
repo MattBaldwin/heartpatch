@@ -326,8 +326,7 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
       json: {
         error: {
           code: 'CONFLICT',
-          message:
-            "This Keeper's land has had enough fun for today. It's ready again at your patch's midnight 🌙",
+          message: 'This Keeper already lost some land today. Try their land again tomorrow 🌙',
         },
       },
     });
@@ -365,7 +364,7 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
     const before = tries;
     await page.getByTestId('tile-challenge').tap();
     await expect.poll(() => tries).toBe(before + 1);
-    await expect(note).toHaveText(/enough fun for today/);
+    await expect(note).toHaveText(/already lost some land today/);
     await expect(note).toBeInViewport();
     await onScreen();
     // Still Challenge (the fresh status didn't know either), and the reason sits above it.
