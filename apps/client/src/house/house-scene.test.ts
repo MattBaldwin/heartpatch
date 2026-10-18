@@ -592,10 +592,15 @@ describe('house scene', () => {
         expect(house.stats.light).toEqual({ phase: 'dusk', lit: true });
         house.setLook(houseLookAtMinute(23 * 60));
         expect(house.stats.light).toEqual({ phase: 'night', lit: true });
+        const pools = scene.getMeshByName('house-pools') as Mesh;
+        const litPools = pools.thinInstanceCount;
         expect(scene.getMeshByName('house-f0-panes')!.material!.name).toBe('test-night-pane');
         expect(scene.clearColor.b).toBeGreaterThan(scene.clearColor.r);
         house.setLook(houseLookAtMinute(12 * 60));
         expect(house.stats.light).toEqual({ phase: 'day', lit: false });
+        // B5: the yard's lantern pools are out at noon; the rooms' own pools stay.
+        expect(pools.thinInstanceCount).toBeLessThan(litPools);
+        expect(pools.thinInstanceCount).toBeGreaterThan(0);
         expect(scene.getMeshByName('house-f0-panes')!.material!.name).toBe('test-day-pane');
         expect(scene.lights.length).toBe(lights);
         expect(scene.meshes.length).toBe(meshes);

@@ -514,10 +514,10 @@ export function giftBox(scene: Scene, rounds = 10): Mesh[] {
     // The ribbon, round both ways, just proud of the paper and the lid.
     box(scene, [s + 0.05, top + 0.01, band], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
     box(scene, [band, top + 0.01, s + 0.05], [0, (top + 0.01) / 2, 0], HOUSE_GIFT.ribbon),
-    // The bow: two soft loops and a knot.
-    ball(scene, 0.15, [-0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
-    ball(scene, 0.15, [0.075, top + 0.05, 0], HOUSE_GIFT.bow, [1, 0.62, 0.6], rounds),
-    ball(scene, 0.08, [0, top + 0.04, 0], HOUSE_GIFT.ribbon, [1, 1, 1], rounds),
+    // The bow: two flat loops that meet at a knot, so it reads as one bow (B5), not two balls.
+    ball(scene, 0.15, [-0.085, top + 0.035, 0], HOUSE_GIFT.bow, [1, 0.42, 0.55], rounds),
+    ball(scene, 0.15, [0.085, top + 0.035, 0], HOUSE_GIFT.bow, [1, 0.42, 0.55], rounds),
+    ball(scene, 0.07, [0, top + 0.05, 0], HOUSE_GIFT.ribbon, [1.2, 1, 1.1], rounds),
   ];
 }
 

@@ -11,7 +11,12 @@ import { CARE_TEXT } from '../../care/care-view.js';
 import { moodHeartsEl } from '../../care/mood-hearts.js';
 import { homeApi, type HomeApi } from '../../home/home-api.js';
 import { houseApi, type HouseApi } from '../../house/house-api.js';
-import { MOVE_BACK_IN_HOURS, residentRooms, roomNameOf } from '../../house/house-residents-view.js';
+import {
+  MOVE_BACK_IN_HOURS,
+  hoursUntil,
+  residentRooms,
+  roomNameOf,
+} from '../../house/house-residents-view.js';
 import { RESIDENT_TEXT } from '../../house/house-view.js';
 import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
 import { GameClock } from '../../inventory/game-clock.js';
@@ -142,6 +147,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
   /** The resident whose "Move out of the house" is asking to confirm (#381), or null. */
   let confirmOut: string | null = null;
+  /** When each squishy that moved out may move back in (from the house's last reply, B5). */
+  const moveBackAt = new Map<string, string>();
 
   /** Scrolls the sheet so the row holding `inside` shows to its bottom edge, with room under it. */
   function revealRowEnd(inside: HTMLElement | null): void {
@@ -312,6 +319,8 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       const res = await send((key) => houseCalls.moveResident(id, squishyId, null, key));
       if (!res) return;
       const rooms = residentRooms(res);
+      moveBackAt.clear();
+      for (const c of res.cooldowns) moveBackAt.set(c.squishyId, c.moveBackInAt);
       if (home) {
         home = {
           ...home,
@@ -491,6 +500,20 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     }
     const onMove = options.onMoveIntoHouse;
     if (!onMove || options.canMoveIntoHouse?.(id) === false) return null;
+    // Just moved out: say when it can come back, not a Move in the server would refuse (B5).
+    const backIn = moveBackAt.get(row.id);
+    const wait = backIn ? hoursUntil(backIn, clock.now()) : null;
+    if (wait !== null) {
+      return el(
+        'div',
+        { class: 'roster-house', 'data-testid': 'roster-house' },
+        el(
+          'p',
+          { class: 'jobs-small roster-house-line', 'data-testid': 'roster-house-wait' },
+          RESIDENT_TEXT.cantCooldown(wait),
+        ),
+      );
+    }
     const go = tapButton(
       RESIDENT_TEXT.rosterMoveIn,
       () => {

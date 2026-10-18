@@ -94,7 +94,9 @@ export const shouldReread = (o: {
   readonly readDay: string;
   readonly today: string;
   readonly busy: boolean;
-}): boolean => !o.busy && o.readDay !== '' && o.readDay !== o.today;
+  /** The device day a re-read was already asked for (B5): a skewed clock asks once, not every minute. */
+  readonly askedFor?: string;
+}): boolean => !o.busy && o.readDay !== '' && o.readDay !== o.today && o.askedFor !== o.today;
 
 /**
  * After opening a gift: read again when it was yesterday's (opened after

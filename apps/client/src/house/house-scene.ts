@@ -228,6 +228,8 @@ interface FloorParts {
 interface Placed {
   readonly matrix: Matrix;
   readonly floor: number;
+  /** Drawn only while the lamps are lit (the yard's lantern pools, B5): none at noon. */
+  readonly lit?: boolean;
 }
 
 /** A resident or the Keeper as placed, so the floor cut can take it away and put it back. */
@@ -647,13 +649,13 @@ export class HouseScene {
       mesh.visibility = shown ? 1 : 1 - this.#roofLift;
     }
     const all = lifting && this.#roofLift < 0.5;
-    const key = all ? 'all' : String(floor);
+    const key = `${all ? 'all' : String(floor)}${this.#look.lit ? '-lit' : ''}`;
     if (key !== this.#instancedFor) {
       this.#instancedFor = key;
       for (const { mesh, list, color } of this.#instanced) {
         const kept = list
           .map((p, i) => ({ p, i }))
-          .filter(({ p }) => all || shownAt(p.floor, floor));
+          .filter(({ p }) => (all || shownAt(p.floor, floor)) && (!p.lit || this.#look.lit));
         const data = new Float32Array(Math.max(1, kept.length) * 16);
         kept.forEach(({ p }, i) => {
           p.matrix.copyToArray(data, i * 16);
@@ -751,6 +753,8 @@ export class HouseScene {
     const panes = paneMaterial(scene, look.pane);
     for (const m of this.#paneMeshes) m.material = panes;
     this.#lightPoints();
+    // The yard's lantern pools come and go with the lamps (no pass, no draw call: thin instances).
+    this.#applyCut();
   }
 
   /** The fire and the lamp as the flicker has them now (shares of their steady light). */
@@ -1700,6 +1704,7 @@ export class HouseScene {
       this.#pools.push({
         matrix: Matrix.Scaling(2, 1, 2).multiply(Matrix.Translation(x, -0.28, z)),
         floor: 0,
+        lit: true,
       });
     }
     const footing = box(

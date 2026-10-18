@@ -123,6 +123,13 @@ describe('the daily gift (#381 H2)', () => {
       );
     });
 
+    it('asks once per device day, so a skewed clock doesn’t read every minute (B5)', () => {
+      const readDay = day('2026-10-13T04:30:00Z');
+      const today = day('2026-10-13T12:00:00Z');
+      expect(shouldReread({ readDay, today, busy: false, askedFor: today })).toBe(false);
+      expect(shouldReread({ readDay, today, busy: false, askedFor: '' })).toBe(true);
+    });
+
     it('reads again after opening yesterday’s gift just past midnight', () => {
       const today = day('2026-10-13T05:05:00Z'); // 00:05 on the 13th in Chicago
       const yesterdays = gift({ day: '2026-10-12' });
