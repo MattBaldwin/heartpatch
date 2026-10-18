@@ -845,6 +845,59 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('dev: a made homestead has every real spot searched, so a search there is refused, not a 500 (#511)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+      terrain: 'lake',
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const at = made.json<Tile>();
+    const seen = await view(server, kid, mapId, at);
+    expect(seen.homestead).toBe('joined');
+    expect(seen.progress).toEqual({ searched: seen.spots.length, total: seen.spots.length });
+    for (const s of seen.spots) {
+      const res = await search(server, kid, mapId, at, s.index);
+      expect(res.statusCode, res.body).toBe(409);
+      expect(errorOf(res).message).toBe('You already searched there!');
+    }
+    // Made again on a tile with a row left from before, the row is replaced.
+    await db.execute(
+      `update tile_explore set searched = 1, completed_at = null, joined_at = null where user_id = '${kid.id}'`,
+    );
+    await db.execute(
+      `update tiles set owner_user_id = null, terrain = '${CLEARED_TERRAIN}' where map_id = '${mapId}' and q = ${String(at.q)} and r = ${String(at.r)}`,
+    );
+    const again = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+      terrain: 'lake',
+    });
+    expect(again.json()).toEqual(at);
+    expect((await view(server, kid, mapId, at)).progress.searched).toBe(seen.spots.length);
+  });
+
+  it('a joined row short of spots drops its homestead on the next search instead of a 500 (#511)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid, {
+      terrain: 'lake',
+    });
+    const at = made.json<Tile>();
+    // What the dev route used to write: finished and joined, but only the
+    // first spot searched.
+    await db.execute(
+      `update tile_explore set searched = 1 where user_id = '${kid.id}' and completed_at is not null`,
+    );
+    await give(mapId, kid, { net: 5, shovel: 5 });
+    const open = (await view(server, kid, mapId, at)).spots.find((s) => !s.done);
+    expect(open).toBeDefined();
+    const res = await search(server, kid, mapId, at, open!.index);
+    expect(res.statusCode, res.body).toBe(200);
+    const body = SearchSpotResponseSchema.parse(res.json());
+    expect(body.homestead).toBe(body.explored ? 'joined' : null);
+  });
+
   it('counts each search towards the Seeker track (#199)', async () => {
     // Milestones judge membership at the event's game time (its database
     // time, shifted by the clock). Play on today's clock and have both

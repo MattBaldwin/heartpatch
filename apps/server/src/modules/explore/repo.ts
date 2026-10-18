@@ -2,9 +2,13 @@ import {
   CLEARED_TERRAIN,
   CLEARING_RULES,
   clearToolFor,
+  EXPLORE_RULES,
+  exploreLayout,
   heartSeedOf,
   hexDistance,
+  searchSpots,
   type DevHomesteadRequest,
+  type Seed,
 } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
@@ -88,12 +92,16 @@ export function createExploreRepo(db: Executor) {
      * steps out, not joined, and `'napping'` the same but cut off from home
      * after joining. `terrain` and `nodeResource` set its land and spot (none
      * by default). It never touches the player's other land outside home.
-     * Null when there's no such tile.
+     * Its row is every one of its real spots searched under today's layout
+     * (`seed` is the map's), replacing any row left from before, so a search
+     * there finds it finished as a real one would (#511). Null when there's
+     * no such tile.
      */
     devMakeHomestead: async (
       mapId: string,
       userId: string,
       at: Date,
+      seed: Seed,
       ask: DevHomesteadRequest = {},
     ): Promise<{ q: number; r: number } | null> => {
       const all = await db
@@ -110,7 +118,7 @@ export function createExploreRepo(db: Executor) {
         .orderBy(asc(tiles.id));
       // The Heart Seed: the middle of my seven home tiles (every one of them
       // carries my home slot, so "slot 0" alone could pick a ring tile, #429).
-      const seed = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
+      const heart = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
       // Land a building can go on once its spot is gone: what a tool clears,
       // or cleared land (never a lake, Juniper's Gap or a trading post).
       const buildable = (terrain: string) =>
@@ -124,12 +132,12 @@ export function createExploreRepo(db: Executor) {
       // A napping one is out there too: it joined once and was cut off since.
       const napping = ask.joined === 'napping';
       const mineOut = all.filter((t) => t.ownerUserId === userId && t.homeSlot === null);
-      const near = seed
+      const near = heart
         ? all.filter(
             (t) =>
               t.ownerUserId === null &&
               t.homeSlot === null &&
-              hexDistance(t, seed) === (touchesHome ? 2 : 3) &&
+              hexDistance(t, heart) === (touchesHome ? 2 : 3) &&
               !mineOut.some((m) => hexDistance(m, t) === 1),
           )
         : [];
@@ -150,22 +158,24 @@ export function createExploreRepo(db: Executor) {
         .returning({ id: tiles.id });
       // Someone took it meanwhile: nothing made.
       if (claimed.length === 0) return null;
+      // A terrain with no spots (never asked for today) still gets a valid row.
+      const spotCount =
+        searchSpots(seed, { q: tile.q, r: tile.r, terrain }, EXPLORE_RULES)?.length || 1;
+      const row = {
+        layout: exploreLayout(terrain, EXPLORE_RULES),
+        terrain,
+        searched: (1 << spotCount) - 1,
+        spotCount,
+        completedAt: at,
+        joinedAt: touchesHome || napping ? at : null,
+        pausedAt: napping ? at : null,
+        resumedAt: null,
+        updatedAt: at,
+      };
       await db
         .insert(tileExplore)
-        .values({
-          userId,
-          tileId: tile.id,
-          mapId,
-          layout: 1,
-          terrain,
-          searched: 7,
-          spotCount: 3,
-          completedAt: at,
-          joinedAt: touchesHome || napping ? at : null,
-          pausedAt: napping ? at : null,
-          updatedAt: at,
-        })
-        .onConflictDoNothing();
+        .values({ userId, tileId: tile.id, mapId, ...row })
+        .onConflictDoUpdate({ target: [tileExplore.userId, tileExplore.tileId], set: row });
       return { q: tile.q, r: tile.r };
     },
 

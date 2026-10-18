@@ -164,7 +164,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       }
       const made = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        return repo.devMakeHomestead(mapId, user.id, now(), ask);
+        return repo.devMakeHomestead(mapId, user.id, now(), await seedOf(tx, mapId), ask);
       });
       if (!made) throw new AppError('CONFLICT', MESSAGES.noTile);
       published(mapId);
@@ -258,6 +258,11 @@ export function createExploreService(options: ExploreServiceOptions) {
         const searched = withSearched(before, spot.index);
         const explored = isFullyExplored(searched, spots.length);
         const fresh = before === 0 && row.searched !== 0;
+        // Only a finished row is a homestead (`tile_explore_homestead_after_explored`):
+        // one that isn't finished after this search drops its homestead
+        // columns, so a row that's somehow joined but short of spots ends up
+        // half-searched, not a 500 (#511).
+        const unjoin = fresh || (!explored && row.joinedAt !== null);
         await repo.updateProgress(
           user.id,
           tile.id,
@@ -268,7 +273,7 @@ export function createExploreService(options: ExploreServiceOptions) {
             spotCount: spots.length,
             completedAt: explored ? at : null,
             // A row restarted on a new terrain or layout isn't explored, so it isn't a homestead.
-            ...(fresh ? { joinedAt: null, pausedAt: null, resumedAt: null } : {}),
+            ...(unjoin ? { joinedAt: null, pausedAt: null, resumedAt: null } : {}),
           },
           at,
         );
@@ -277,7 +282,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         // A row restarted under a new layout may have been a homestead: the
         // land joined through it is worked out again too.
         const homesteadEvents =
-          explored || fresh ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
+          explored || unjoin ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
 
         // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
         const foundLore = new Set(
