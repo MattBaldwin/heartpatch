@@ -1086,7 +1086,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const capped = await attack(server, kid, mapId, near2);
       expect(capped.statusCode).toBe(409);
       expect(errorOf(capped).message).toMatch(
-        /already lost some land today\. Try their land again tomorrow/,
+        /^No more challenges for this Keeper today\. Try wild land instead!$/,
       );
       expect((await status(server, kid, mapId)).attemptsLeft).toBe(left);
 
@@ -1328,7 +1328,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'gentle' });
       const capped = await attack(server, kid, mapId, rustle!);
       expect(capped.statusCode).toBe(409);
-      expect(errorOf(capped).message).toMatch(/already lost some land today/);
+      expect(errorOf(capped).message).toMatch(/No more challenges for this Keeper today/);
       expect(await status(server, kid, mapId)).toMatchObject({
         attemptsLeft: 1,
         restingKeepers: [rival.id],
@@ -1370,7 +1370,10 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await status(server, other, mapId)).restingKeepers).toEqual([rival.id]);
       const second = await attack(server, other, mapId, near2);
       expect(second.statusCode).toBe(409);
-      expect(errorOf(second).message).toMatch(/already lost some land today/);
+      expect(errorOf(second).message).toMatch(/No more challenges for this Keeper today/);
+      // Left alone past the abandon time, the challenge no longer holds the cap.
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.abandonMinutes + 1) * MINUTE_MS);
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([]);
     });
 
     it('lets only one of two players claim the same tile at once (tile lock + cooldown)', async () => {
@@ -1444,6 +1447,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const off = await attack(server, kid, mapId, near!);
       expect(off.statusCode).toBe(403);
       expect(errorOf(off).message).toMatch(/Challenges are off/);
+      // Off refuses every challenge before the loss cap: no Keeper is listed resting.
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([]);
       // Wild land is still fair game.
       const [wild] = await edgeOf(mapId, kid);
       expect((await attack(server, kid, mapId, wild!)).statusCode).toBe(201);

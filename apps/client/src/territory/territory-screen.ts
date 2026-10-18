@@ -69,7 +69,7 @@ export const TERRITORY_TEXT = {
   pvpOff: 'Challenges are off on this patch.',
   // The daily loss cap (#526), as the server says it, counting down to the patch's midnight.
   keeperResting: (owner: string, wait: string) =>
-    `${owner} already lost some land today. Try again in ${wait} 🌙`,
+    `No more challenges for ${owner} today. Try again in ${wait} 🌙`,
   // The server's own words for a shielded Keeper (territory service), so a tap
   // here reads the same as a refused challenge would.
   rivalShielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
