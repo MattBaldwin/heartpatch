@@ -109,6 +109,17 @@ import {
 import { DUSK_LOOK, type HouseLightLook } from './house-light-look.js';
 import { placed, roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
 import { paneMaterial, radialTexture, signMaterial } from './house-textures.js';
+import {
+  createHop,
+  hopActive,
+  hopPose,
+  shadowAlpha,
+  shadowScale,
+  stepHop,
+  type HopPose,
+} from '../explore/keeper-hop.js';
+import { EXPLORE_VIEW } from '../explore/explore-config.js';
+import { HOUSE_WALK, walkMap, type Footprint, type WalkMap, type WalkSpot } from './house-walk.js';
 
 /*
  * The Keeper's house interior (#381 plan §1c): a dollhouse on the shared
@@ -358,6 +369,34 @@ export class HouseScene {
   readonly #handles = new Map<string, { field: SquishyField; handle: SquishyHandle }>();
   /** The residents in the order they were placed (the Keeper's room first). */
   #order: string[] = [];
+  /** Every piece of furniture's box as built (#381 W1): the walk's footprints. */
+  readonly #furniture: Footprint[] = [];
+  #walkMap: WalkMap | null = null;
+  /** The Keeper as drawn, so the walk can move it, and where it stands: its feet and heading. */
+  #keeperHandle: KeeperHandle | null = null;
+  #keeperBase: KeeperPlacement | null = null;
+  readonly #walkAt: WalkSpot = { x: 0, z: 0, y: 0 };
+  #walkYaw = 0;
+  /** Metres walked since the last walk frame, for the hop. */
+  #walked = 0;
+  readonly #walkHop = createHop();
+  readonly #walkPose: HopPose = { lift: 0, squash: 1 };
+  /** The last walk frame placed the Keeper mid-hop: place it once more at rest. */
+  #walkPosing = false;
+  readonly #keeperPlacement = {
+    x: 0,
+    z: 0,
+    y: 0,
+    yaw: 0,
+    scale: 1,
+    lean: 0,
+    lift: 0,
+    squash: 1,
+    shadow: 1,
+    shadowAlpha: 1,
+  };
+  /** The room kid height walks into before any walk (the Keeper's room), to go back to. */
+  #homeFocus: { id: string; room: HouseBounds; point: Vector3 } | null = null;
 
   constructor(scene: Scene, view: HouseView, options: HouseSceneOptions) {
     this.#scene = scene;
@@ -707,7 +746,8 @@ export class HouseScene {
       }
     }
     for (const spot of this.#cast) {
-      const wanted = this.#cut.cast.has(spot.room);
+      // The Keeper walks between rooms and floors (#381 W1): the cut never takes it away.
+      const wanted = spot.kind === 'keeper' || this.#cut.cast.has(spot.room);
       if (wanted && !spot.drawn()) spot.add();
       else if (!wanted && spot.drawn()) spot.remove();
     }
@@ -883,6 +923,119 @@ export class HouseScene {
     const main = this.#squishies.update(now);
     const hero = this.#hero?.update(now) ?? false;
     return main || hero;
+  }
+
+  // ── The Keeper's walk (#381 W1) ─────────────────────────────────────
+  // The screen drives these (W2): it steps the Keeper with house-walk.ts,
+  // moves it here, steps its hop, and follows it with the camera. Nothing
+  // here runs unless the screen asks, so a Keeper standing still costs nothing.
+
+  /** The floor the Keeper can walk on (built the first time it's asked for). */
+  get walkMap(): WalkMap {
+    this.#walkMap ??= walkMap(this.#boxes, this.#runs, this.#furniture);
+    return this.#walkMap;
+  }
+
+  /** Where the Keeper stands now, its feet (read only: `moveKeeper` moves it). */
+  get keeperSpot(): Readonly<WalkSpot> {
+    return this.#walkAt;
+  }
+
+  /** Which way the Keeper faces (0 faces −z, toward the dollhouse camera). */
+  get keeperYaw(): number {
+    return this.#walkYaw;
+  }
+
+  /**
+   * The Keeper walked (or was put) to `at`, facing `yaw`. A move longer
+   * than a frame's walk is a put: it lands there without a hop.
+   */
+  moveKeeper(at: Readonly<WalkSpot>, yaw: number): void {
+    const now = this.#walkAt;
+    if (at.x === now.x && at.z === now.z && at.y === now.y && yaw === this.#walkYaw) return;
+    const ds = Math.hypot(at.x - now.x, at.z - now.z);
+    if (ds <= HOUSE_WALK.speed * EXPLORE_VIEW.maxFrameStep * 2) this.#walked += ds;
+    now.x = at.x;
+    now.z = at.z;
+    now.y = at.y;
+    this.#walkYaw = yaw;
+    this.#placeKeeper();
+  }
+
+  /**
+   * One walk frame, `dt` seconds: the Keeper hops by the ground it covered
+   * since the last (the explore hop, #317). True while it still hops,
+   * lands or settles (keep drawing); a Keeper at rest isn't placed again.
+   */
+  stepWalk(dt: number, reduced: boolean): boolean {
+    const walked = dt > 0 ? this.#walked : 0;
+    const push = dt > 0 ? Math.min(1, walked / (HOUSE_WALK.speed * dt)) : 0;
+    this.#walked = 0;
+    // The hop's strides are the explore's, at its walking speed: scaled to the house's.
+    stepHop(this.#walkHop, (walked * EXPLORE_VIEW.walkSpeed) / HOUSE_WALK.speed, dt, push, reduced);
+    const hopping = hopActive(this.#walkHop);
+    // One more placement after the last hop lands, at rest.
+    const drawing = hopping || this.#walkPosing;
+    if (drawing) {
+      hopPose(this.#walkHop, reduced, 1, this.#walkPose);
+      this.#placeKeeper();
+    }
+    this.#walkPosing = hopping;
+    return drawing;
+  }
+
+  /**
+   * The room the walk's camera is in (the Keeper's): its front walls fade
+   * toward the Keeper and its porch and ceiling show, as at kid height.
+   * Null goes back to the Keeper's starting room.
+   */
+  setWalkFocus(room: RoomBox | null): void {
+    if (!room) {
+      this.#focus = this.#homeFocus;
+    } else {
+      let focus = this.#focus;
+      if (!focus || focus === this.#homeFocus || focus.id !== room.id) {
+        focus = {
+          id: room.id,
+          room: {
+            minX: room.x0,
+            maxX: room.x1,
+            minY: room.y0,
+            maxY: room.y1,
+            minZ: room.z0,
+            maxZ: room.z1,
+          },
+          point: new Vector3(),
+        };
+        this.#focus = focus;
+      }
+      const at = this.#walkAt;
+      focus.point.set(at.x, at.y + HOUSE_WALK.lookHeight, at.z);
+    }
+    if (this.#pose) this.#fadeFronts(this.#pose, this.#zoom);
+  }
+
+  /** The Keeper's placement where it walks, with its hop (one object, updated in place). */
+  #keeperPlace(): KeeperPlacement {
+    const place = this.#keeperPlacement;
+    const base = this.#keeperBase;
+    const pose = this.#walkPose;
+    const tall = (this.#keeperHandle?.params.height ?? 0) * HOUSE_CAST.keeperScale;
+    place.x = this.#walkAt.x;
+    place.z = this.#walkAt.z;
+    place.y = this.#walkAt.y;
+    place.yaw = this.#walkYaw;
+    place.scale = base?.scale ?? HOUSE_CAST.keeperScale;
+    place.lean = base?.lean ?? HOUSE_CAST.keeperLean;
+    place.lift = pose.lift * tall;
+    place.squash = pose.squash;
+    place.shadow = shadowScale(pose.lift);
+    place.shadowAlpha = shadowAlpha(pose.lift);
+    return place;
+  }
+
+  #placeKeeper(): void {
+    if (this.#keeperHandle) this.#keepers.move(this.#keeperHandle, this.#keeperPlace());
   }
 
   /**
@@ -1166,12 +1319,33 @@ export class HouseScene {
       scene,
       box: parts.box,
       tier: this.#tier,
-      solid: (list) => parts.solid.push(...list),
+      solid: (list) => {
+        // Each piece's world box, before the floor merges them: the walk's footprints.
+        for (const m of list) {
+          m.computeWorldMatrix(true);
+          const { minimumWorld: lo, maximumWorld: hi } = m.getBoundingInfo().boundingBox;
+          this.#furniture.push({ x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z, y0: lo.y, y1: hi.y });
+        }
+        parts.solid.push(...list);
+      },
       glow: (list) => parts.glow.push(...list),
       bed: (x, z, yaw) => {
         const own = this.#roomBeds.get(parts.box.id) ?? [];
         own.push({ x, z, yaw });
         this.#roomBeds.set(parts.box.id, own);
+        // Beds are thin instances, not solids: their footprint from the bed's size, turned.
+        const [hx, hz] =
+          Math.abs(Math.sin(yaw)) > 0.7
+            ? [HOUSE_WALK.bed.wide, HOUSE_WALK.bed.long]
+            : [HOUSE_WALK.bed.long, HOUSE_WALK.bed.wide];
+        this.#furniture.push({
+          x0: x - hx,
+          x1: x + hx,
+          z0: z - hz,
+          z1: z + hz,
+          y0: parts.box.y0,
+          y1: parts.box.y0 + HOUSE_WALK.bed.height,
+        });
         this.#beds.push({
           matrix: Matrix.RotationY(yaw).multiply(Matrix.Translation(x, parts.box.y0, z)),
           floor,
@@ -1836,6 +2010,7 @@ export class HouseScene {
         room: { minX: k.x0, maxX: k.x1, minY: k.y0, maxY: k.y1, minZ: k.z0, maxZ: k.z1 },
         point: new Vector3((k.x0 + k.x1) / 2, k.y0 + HOUSE_KID.eyeHeight, (k.z0 + k.z1) / 2),
       };
+      this.#homeFocus = this.#focus;
     }
     // Low tier: the residents nearest the kid-height camera in that room
     // (`HOUSE_CAST.lowHeroes`) are the ones big on screen, so they alone are
@@ -1912,13 +2087,20 @@ export class HouseScene {
       lean: HOUSE_CAST.keeperLean,
     };
     const items = keeperItems(options.keeperWearing ?? []);
+    this.#keeperBase = placement;
+    this.#walkAt.x = spot.x;
+    this.#walkAt.z = spot.z;
+    this.#walkAt.y = box.y0;
+    this.#walkYaw = placement.yaw ?? 0;
     this.#cast.push(
       this.#castSpot(
         keeperRoom.id,
         () => {
-          const handle: KeeperHandle = this.#keepers.add(config, placement, items);
+          const handle: KeeperHandle = this.#keepers.add(config, this.#keeperPlace(), items);
+          this.#keeperHandle = handle;
           return () => {
             this.#keepers.remove(handle);
+            this.#keeperHandle = null;
           };
         },
         'keeper',
