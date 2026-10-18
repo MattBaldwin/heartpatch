@@ -339,6 +339,9 @@ describe('stepGovernor details', () => {
     s = settle(s, 12.5);
     s = windows(s, 20, 1); // dropped right after the raise
     expect(s.raiseAfterMs).toBe(6000);
+    // A cut right after a raise is no bigger than the shortfall asks for:
+    // no whole minCutStep (0.85) below a size known to be close (#501).
+    expect(s.renderScale).toBeCloseTo(0.95 * Math.sqrt(50 / 60), 3);
   });
 
   it('ignores long gaps such as a hidden tab', () => {

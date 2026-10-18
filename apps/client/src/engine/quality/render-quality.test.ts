@@ -1,4 +1,5 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
@@ -51,7 +52,9 @@ describe('createPostProcessing', () => {
     ]);
     for (const p of camera._postProcesses) {
       expect(p?.samples).toBe(1);
-      expect(p?.getEngine().isWebGPU).toBe(false);
+      expect((p as unknown as { _textureType: number })._textureType).toBe(
+        Constants.TEXTURETYPE_UNSIGNED_BYTE,
+      );
     }
   });
 

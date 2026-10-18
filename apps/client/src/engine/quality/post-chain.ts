@@ -82,6 +82,8 @@ export class PostChain {
     // The first pass clears its target (the scene's), as the pipeline did;
     // the rest each draw a full-screen quad over theirs.
     scene.autoClear = false;
+    // The chain owns the camera's post-process slots from 0: bloom's passes
+    // go back into slots 0–3 (`setBloom`), so nothing else may attach here.
     for (const pass of this.bloomPasses) camera.attachPostProcess(pass);
     camera.attachPostProcess(this.fxaa);
     this.updateClears();
