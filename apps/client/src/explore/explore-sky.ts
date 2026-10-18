@@ -3,15 +3,14 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import { bisectFlags } from '../engine/bisect-flags.js';
-import { linear, merged } from '../map/map-props.js';
+import { linear } from '../map/map-props.js';
 import { setInstances } from '../map/map-scene.js';
 import { EXPLORE_SKY, type SkyLook } from './explore-sky-look.js';
+import { disc, kitMesh, merged, uvSphere } from './kit-mesh.js';
 
 // The explore sky (#335): a vertex-coloured dome, the sun or moon, clouds
 // and stars, drawn in 3 or 4 draw calls (art bible appendix). The camera
@@ -85,6 +84,11 @@ export class ExploreSky {
     if (bisectFlags().noSky) this.#root.setEnabled(false);
     const material = unlit(scene, 'explore-sky-mat');
     material.backFaceCulling = false;
+    // The dome, sun and stars cull as before (kit meshes are always drawn; they thin-instance).
+    const own = (mesh: Mesh): Mesh => {
+      mesh.alwaysSelectAsActiveMesh = false;
+      return mesh;
+    };
     const keep = (mesh: Mesh): Mesh => {
       mesh.parent = this.#root;
       mesh.material = material;
@@ -94,20 +98,20 @@ export class ExploreSky {
     };
 
     this.#dome = keep(
-      CreateSphere(
-        'explore-sky-dome',
-        { diameter: r * 2, segments: 24, sideOrientation: Mesh.BACKSIDE },
-        scene,
+      own(
+        kitMesh(scene, 'explore-sky-dome', () =>
+          uvSphere({ diameter: r * 2, segments: 24, sideOrientation: Mesh.BACKSIDE }),
+        ),
       ),
     );
 
     const sunAt = EXPLORE_SKY.sun.at;
     const d = r * 0.9;
     this.#sun = keep(
-      CreateDisc(
-        'explore-sky-sun',
-        { radius: d * Math.tan(EXPLORE_SKY.sun.size * RAD), tessellation: 32 },
-        scene,
+      own(
+        kitMesh(scene, 'explore-sky-sun', () =>
+          disc({ radius: d * Math.tan(EXPLORE_SKY.sun.size * RAD), tessellation: 32 }),
+        ),
       ),
     );
     // Faces the camera: the disc's plane turned square to its direction.
@@ -123,18 +127,21 @@ export class ExploreSky {
       [-0.3, 0.28, 0.05, 0.6],
     ] as const;
     this.#cloud = keep(
-      merged(
-        'explore-sky-cloud',
-        parts.map(([x, y, z, s]) => {
-          const p = CreateSphere('c', { diameter: 2.2 * s, segments: 8 }, scene);
-          p.position.set(x * 2.2, y * 2.2, z * 2.2);
-          p.scaling.set(1, 0.72, 0.9);
-          return p;
-        }),
+      kitMesh(scene, 'explore-sky-cloud', () =>
+        merged(
+          parts.map(([x, y, z, s]) => {
+            const p = uvSphere({ diameter: 2.2 * s, segments: 8 });
+            p.position.set(x * 2.2, y * 2.2, z * 2.2);
+            p.scaling.set(1, 0.72, 0.9);
+            return p;
+          }),
+        ),
       ),
     );
 
-    this.#stars = keep(CreateSphere('explore-sky-stars', { diameter: 1, segments: 4 }, scene));
+    this.#stars = keep(
+      own(kitMesh(scene, 'explore-sky-stars', () => uvSphere({ diameter: 1, segments: 4 }))),
+    );
     recolour(this.#stars, '#fff3c4');
     const { count, right, from, to, size } = EXPLORE_SKY.stars;
     const at = r * 0.95;
