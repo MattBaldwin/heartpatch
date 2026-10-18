@@ -58,7 +58,9 @@ for (const level of levels)
   for (const pose of poses)
     for (const floor of pose === 'dollhouse' ? floorsAt(level) : [0])
       // The gift card: once, at night (the card is DOM; the time of day is behind it).
-      for (const minute of ['card', 'welcome', 'picker'].includes(pose) ? [minutes.at(-1)] : minutes)
+      for (const minute of ['card', 'welcome', 'picker'].includes(pose)
+        ? [minutes.at(-1)]
+        : minutes)
         for (const tier of tiers)
           for (const device of devices)
             jobs.push({
