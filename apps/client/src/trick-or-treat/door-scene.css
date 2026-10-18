@@ -25,6 +25,8 @@
 }
 
 .door-name {
+  position: relative;
+  z-index: 2;
   margin: 0;
   padding: var(--hp-pad-y) 20px;
   max-width: 100%;
