@@ -1018,12 +1018,11 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Boulderdoze grows a snowy ruff, big arms and a ridge of spines, a whole sleepy mountain.
+  // #495 grown-up (stage 4): Boulderdoze grows a snowy ruff and big hugging arms, a whole sleepy mountain.
   {
     id: 'mountsnooze',
     name: 'Mountsnooze',
-    description:
-      'A snoozy mountain with a snowy ruff and a ridge of spines. Birds nest in its nightcap.',
+    description: 'A snoozy mountain with a snowy ruff and big hugging arms. Birds nap on its back.',
     element: 'stone',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -1084,7 +1083,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone'], feelings: ['brave', 'sleepy'] },
   },
-  // #495 grown-up (stage 4): Rumblehorn grows side horns and a spiky tail to go with its big horn.
+  // #495 grown-up (stage 4): Rumblehorn grows two little fangs and a spiky tail to go with its big horn.
   {
     id: 'quakehorn',
     name: 'Quakehorn',
@@ -1105,7 +1104,6 @@ export const SPECIES: Species[] = [
         'fangs',
         'round-ears',
         'uni-horn',
-        'nub-horns',
         'crag-nubs',
         'strong-arms',
         'biped-legs',
@@ -2389,12 +2387,12 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
   },
-  // #495 grown-up (stage 4): Snugglenook gets small gold antlers, a big cuddly ruff and a plume tail.
+  // #495 grown-up (stage 4): Snugglenook gets gold antlers and a crown of gold spikes, a big cuddly ruff and a plume tail.
   {
     id: 'cuddlestag',
     name: 'Cuddlestag',
     description:
-      'A huge, soft shadow with gold antlers, a cuddly ruff and a big plume tail. Hugs last a very long time.',
+      'A huge, soft shadow with gold antlers and a crown of gold spikes, a cuddly ruff and a big plume tail. Hugs last a very long time.',
     element: 'shadow',
     feeling: 'cozy',
     rarity: 'epic',
@@ -2410,6 +2408,7 @@ export const SPECIES: Species[] = [
         'blush-cheeks',
         'round-ears',
         'antlers',
+        'sun-rays',
         'fur-ruff',
         'stubby-arms',
         'hop-feet',
@@ -3672,7 +3671,7 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Maplecrunch grows green gliding flaps and big red wings to go with its mane.
+  // #495 grown-up (stage 4): Maplecrunch grows two big red wings and green gliding flaps to go with its mane.
   {
     id: 'maplegale',
     name: 'Maplegale',
@@ -3687,7 +3686,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'pear',
-      palette: ['#e59a5c', '#fff1dc', '#c4562e', '#7cc96a'],
+      palette: ['#e59a5c', '#fff1dc', '#d4301c', '#7cc96a'],
       parts: [
         'happy-eyes',
         'brave-brows',
@@ -3698,7 +3697,7 @@ export const SPECIES: Species[] = [
         'maple-mane',
         'stuck-leaf',
         'leaf-arms',
-        'big-wings',
+        'moth-wings',
         'biped-legs',
         'bushy-tail',
       ],
