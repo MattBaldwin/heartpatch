@@ -928,7 +928,7 @@ const SQUISHY: ClothingItem[] = [
 const SQUISHY_COSTUMES: ClothingItem[] = [
   {
     id: 'candy-corn-scarf',
-    name: 'Candy-Corn Scarf',
+    name: 'Candy Corn Scarf',
     description: 'Stripy, snuggly, and only a tiny bit sticky.',
     slot: 'squishy',
     rarity: 'common',
@@ -1096,7 +1096,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
   {
     id: 'ghostie-sheet',
     name: 'Ghostie Sheet',
-    description: 'Boo! (It is a very friendly boo.)',
+    description: "Boo! (It's a very friendly boo.)",
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',
@@ -1162,7 +1162,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
   {
     id: 'little-witch',
     name: 'Little Witch',
-    description: 'A floppy hat, a twirly cape, and big magic energy.',
+    description: 'A floppy hat, a twirly cape and big magic energy.',
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',
