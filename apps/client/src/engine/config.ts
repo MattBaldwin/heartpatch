@@ -188,11 +188,12 @@ export interface FrameCap {
 
 /**
  * 30 drawn frames a second: explore (#501, owner Oct 18: it runs cool, the
- * map keeps render on demand) and `?cap30=1`. The gap is below 1000/30 so a
- * 60 Hz display draws every other frame and a 120 Hz one every fourth
- * (a 144 Hz desktop draws 36; iOS Safari runs rAF at 60 or 120).
+ * map keeps render on demand) and `?cap30=1`. The gap sits between three
+ * 120 Hz vsyncs (25 ms) and two 60 Hz ones (33.3 ms), with room for a late
+ * or early callback either side, so a 60 Hz display draws every other frame,
+ * a 120 Hz one every fourth, and a 144 Hz desktop every fifth (29 fps).
  */
-export const FRAME_CAP_30: FrameCap = { fps: 30, minFrameMs: 26 }; // TUNE: minFrameMs
+export const FRAME_CAP_30: FrameCap = { fps: 30, minFrameMs: 29 }; // TUNE: minFrameMs
 
 export const LIGHTING = {
   /** Edge length of each procedural sky cube face, in texels. */

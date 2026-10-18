@@ -187,14 +187,19 @@ describe('mountStage frame cap (#501)', () => {
     return s;
   }
 
-  /** Draws one second of a 120 Hz display, invalidating every frame like the joystick loop. */
-  function oneSecond(s: Stage): number {
+  /**
+   * Draws one second of a `hz` display, invalidating every frame like the
+   * joystick loop; each callback runs up to `jitterMs` late (a busy main thread).
+   */
+  function oneSecond(s: Stage, hz = 120, jitterMs = 0): number {
     const before = s.draws;
-    for (let i = 0; i < 120; i++) {
-      now += 1000 / 120;
+    const start = now;
+    for (let i = 1; i <= hz; i++) {
+      now = start + (i * 1000) / hz + (i % 3 === 0 ? jitterMs : 0);
       s.invalidate();
       frame();
     }
+    now = start + 1000;
     return s.draws - before;
   }
 
@@ -202,6 +207,16 @@ describe('mountStage frame cap (#501)', () => {
     stage = mount(FRAME_CAP_30);
     oneSecond(stage); // loading
     expect(oneSecond(stage)).toBe(30);
+  });
+
+  it('holds the cap on 60, 90 and 144 Hz displays, and with late callbacks', () => {
+    stage = mount(FRAME_CAP_30);
+    oneSecond(stage);
+    expect(oneSecond(stage, 60)).toBe(30);
+    expect(oneSecond(stage, 90)).toBe(30);
+    expect(oneSecond(stage, 144)).toBeLessThanOrEqual(30);
+    expect(oneSecond(stage, 120, 3)).toBe(30);
+    expect(oneSecond(stage, 60, 3)).toBe(30);
   });
 
   it('draws an uncapped scene at the display rate', () => {
