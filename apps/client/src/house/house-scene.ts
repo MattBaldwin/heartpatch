@@ -672,7 +672,8 @@ export class HouseScene {
       for (const { mesh, list, color } of this.#instanced) {
         const kept = list
           .map((p, i) => ({ p, i }))
-          .filter(({ p }) => all || shownAt(p.floor, floor));
+          // A yard pool with its lantern out by day isn't drawn at all (B5, ported).
+          .filter(({ p }) => (all || shownAt(p.floor, floor)) && !(p.yard && this.#look.yard <= 0));
         const data = new Float32Array(Math.max(1, kept.length) * 16);
         kept.forEach(({ p }, i) => {
           p.matrix.copyToArray(data, i * 16);
@@ -904,8 +905,7 @@ export class HouseScene {
       const beds = this.#roomBeds.get(placement.roomId) ?? [];
       const bed = beds[placement.bed] ?? beds.at(-1);
       const spare = plans.get(placement.roomId)?.gift;
-      if (room && bed)
-        spot = besideBed(bed, beds, room, footprints(room.id), spare ? [spare] : []);
+      if (room && bed) spot = besideBed(bed, beds, room, footprints(room.id), spare ? [spare] : []);
     }
     if (!spot || !room) {
       room = this.#boxes.find((b) => b.id === keeperRoom?.id);
@@ -1294,7 +1294,14 @@ export class HouseScene {
     if (run.axis === 'z' && !run.exterior && this.#openFrontAt(run)) {
       list.push(
         ...place(
-          [box(scene, [0.04, height + 0.08, thick + 0.1], [-0.02, (height + 0.08) / 2, 0], HOUSE_PALETTE.cap)],
+          [
+            box(
+              scene,
+              [0.04, height + 0.08, thick + 0.1],
+              [-0.02, (height + 0.08) / 2, 0],
+              HOUSE_PALETTE.cap,
+            ),
+          ],
           0,
         ),
       );

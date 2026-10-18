@@ -674,16 +674,21 @@ describe('house scene', () => {
           const cast = scene.materials.filter((m) => /^(squishy|keeper)-/.test(m.name));
           expect(cast.length).toBeGreaterThan(0);
           for (const m of cast)
-            if (m instanceof PBRMaterial) expect(m.ambientColor.equals(Color3.Black()), m.name).toBe(true);
+            if (m instanceof PBRMaterial)
+              expect(m.ambientColor.equals(Color3.Black()), m.name).toBe(true);
           // The yard's two lantern pools (built first, with the outside): none
           // by day, full at dusk and night; a room's always full.
           const pools = scene.getMeshByName('house-pools') as Mesh;
           // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
           const data = pools._userThinInstanceBuffersStorage.data['instanceColor']!;
           const colors = Array.from({ length: pools.thinInstanceCount }, (_, i) => data[i * 4]!);
-          expect(colors.length).toBeGreaterThan(2);
-          expect(colors.slice(0, 2), `${tier} ${minute} yard`).toEqual([look.yard, look.yard]);
-          expect(colors.slice(2).every((c) => c === 1)).toBe(true);
+          // By day the yard's two aren't drawn at all (B5, ported); the rooms' stay.
+          const yard = look.yard > 0 ? 2 : 0;
+          expect(colors.length).toBeGreaterThan(yard);
+          expect(colors.slice(0, yard), `${tier} ${minute} yard`).toEqual(
+            Array(yard).fill(look.yard),
+          );
+          expect(colors.slice(yard).every((c) => c === 1)).toBe(true);
         }
         // The ceiling's lift is warm only once the lamps are lit.
         expect(HOUSE_TIMES.day.ceiling).toBe('#000000');
@@ -699,7 +704,10 @@ describe('house scene', () => {
       const doll = fitHouse(house.bounds, { width: 820, height: 1180, top: 70, bottom: 150 });
       house.setPose(doll, 0);
       const dollY = fill.direction.y;
-      house.setPose(kidPose(house.focusRoom!, { width: 820, height: 1180, top: 70, bottom: 150 }), 1);
+      house.setPose(
+        kidPose(house.focusRoom!, { width: 820, height: 1180, top: 70, bottom: 150 }),
+        1,
+      );
       // Still from above, so every face is lit; flatter than the camera's own steep look down.
       expect(dollY).toBeLessThan(0);
       expect(dollY).toBeGreaterThan(Math.sin(-doll.pitch));

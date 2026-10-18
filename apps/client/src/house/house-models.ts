@@ -185,7 +185,7 @@ export function floorPlanks(
   // (B5a: the gap straight ahead of kid height, seen down its length, was a
   // dark slit to the stone footing at the bottom of every kid shot).
   const seam = HOUSE_GRID.seamDepth;
-  boards.push(box(scene, [w, 0.02, d], [x0 + w / 2, y - seam - 0.01, z0 + d / 2], tones[2] ?? '#bf7f52'));
+  boards.push(box(scene, [w, 0.02, d], [x0 + w / 2, y - seam - 0.01, z0 + d / 2], tones[2]));
   return boards;
 }
 
