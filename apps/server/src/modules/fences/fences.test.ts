@@ -574,6 +574,10 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       const refused = await attack(server, kid, mapId, near);
       expect(refused.statusCode).toBe(409);
       expect(errorOf(refused).message).toMatch(/fence breaker needs a rest/);
+      expect(await attacksOf(mapId)).toHaveLength(1);
+      expect((await status(server, kid, mapId)).attemptsLeft).toBe(
+        TERRITORY_RULES.attemptsPerDay - 1,
+      );
 
       // The breaker back at the front of the team: the server still rests it.
       await pick([team[0]!.id, team[1]!.id]);
@@ -592,8 +596,9 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       });
       await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
       const guardBattle = battleOf(await attack(server, kid, mapId, near));
-      // The app reloads mid-fight and taps Keep going again: the same guard
-      // battle comes back, with the breaker still resting.
+      // The app reloads mid-fight and taps Keep going again: the guard battle
+      // resumes (no new start), breaker still out. A fresh start after the
+      // fence battle is the re-pick test above.
       clock.setTime(clock.getTime() + MINUTE_MS);
       const again = await attack(server, kid, mapId, near);
       expect(again.statusCode, again.body).toBeLessThan(300);
