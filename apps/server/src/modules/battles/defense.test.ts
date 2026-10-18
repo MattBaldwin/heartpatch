@@ -373,6 +373,34 @@ describe.skipIf(!url)('live tile defense (#29-C, needs DATABASE_URL)', () => {
     expect(kitWs.messages.filter((m) => DEFENSE_TYPES.includes(m.type))).toEqual([]);
   });
 
+  it('a live defense plays the guards at the guard level floor (#529)', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near, guard } = await rivals(server);
+    // Sam's Partner is level 20; the level-12 guard fights at the floor.
+    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, sam, {
+      speciesId: 'puddlepuff',
+      level: 20,
+    });
+    const partner = SquishyResponseSchema.parse(granted.json()).squishy;
+    await db.execute(
+      `update map_members set starter_squishy_id = '${uuid(partner.id)}'
+       where map_id = '${uuid(mapId)}' and user_id = '${uuid(sam.id)}'`,
+    );
+    const floor = 20 + TERRITORY_RULES.guardLevel.partnerBonus;
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    const res = await answer(server, sam, prompt.challengeId, 'yes');
+    expect(res.statusCode, res.body).toBe(200);
+    const { battle } = AnswerChallengeResponseSchema.parse(res.json());
+    expect(battle?.view.sides.b.controller).toEqual({ type: 'player' });
+    expect(battle?.view.sides.b.squishies.map((s) => [s.id, s.level])).toEqual([[guard.id, floor]]);
+    const row = (await createBattlesRepo(db).findBattle(started.id))!;
+    expect(row.setup.b.squishies.map((s) => s.level)).toEqual([floor]);
+  });
+
   it('a defender who is away, or has no squishy on watch, is never asked: the defense style plays', async () => {
     const server = await start();
     const { lee, mapId, near } = await rivals(server);

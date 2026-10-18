@@ -15,8 +15,10 @@ import {
   MapViewSchema,
   parseGameEventPayload,
   RaidReportResponseSchema,
+  replayBattleRecord,
   SquishyResponseSchema,
   STARTERS,
+  statsAtLevel,
   TERRITORY_RULES,
   TerritoryResponseSchema,
   type MapDetail,
@@ -48,7 +50,12 @@ import { createBattlesService, HEART_CHARM, type TileBattleEnd } from '../battle
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
-import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
+import {
+  createTerritoryService,
+  createTileBattlePort,
+  defaultGuardianData,
+  tileGuardians,
+} from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -1424,6 +1431,180 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const battle = battleOf(await attack(server, kid, mapId, near));
       expect(battle.kind).toBe('rival-tile');
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+    });
+  });
+
+  describe('the guard level floor (#529)', () => {
+    const BONUS = TERRITORY_RULES.guardLevel.partnerBonus;
+    /** Makes a squishy the player's Partner on the patch (the tutorial pick). */
+    const setPartner = (mapId: string, userId: string, squishyId: string) =>
+      db.execute(
+        `update map_members set starter_squishy_id = '${uuid(squishyId)}'
+         where map_id = '${uuid(mapId)}' and user_id = '${uuid(userId)}'`,
+      );
+    const hollow = (squishyId: string) =>
+      db.execute(`update squishies set state = 'hollowed' where id = '${uuid(squishyId)}'`);
+    const levelOf = async (squishyId: string) =>
+      (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, squishyId) }))!.level;
+    const post = async (
+      server: FastifyInstance,
+      who: Player,
+      mapId: string,
+      h: Tile,
+      ids: string[],
+    ) => {
+      const res = await call(server, 'POST', `/maps/${mapId}/defenders`, who, {
+        q: h.q,
+        r: h.r,
+        squishyIds: ids,
+      });
+      expect(res.statusCode, res.body).toBe(200);
+    };
+    /** The tile's guardians this window at their own (tier-roll) levels. */
+    const rolled = async (mapId: string, h: Tile) => {
+      const map = (await db.query.maps.findFirst({ where: (t, { eq }) => eq(t.id, mapId) }))!;
+      return tileGuardians(map, h, clock).map(({ id, speciesId, level }) => ({
+        id,
+        speciesId,
+        level,
+      }));
+    };
+    const fielded = (b: PlayerBattle) =>
+      b.view.sides.b.squishies.map(({ id, speciesId, level }) => ({ id, speciesId, level }));
+
+    it('squishies on watch fight at least at their owner’s Partner level plus the bonus', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 12);
+      await setPartner(mapId, rival.id, partner.id);
+      await post(server, rival, mapId, near, [buddy.id]);
+
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'balanced' });
+      expect(fielded(battle)).toEqual([
+        { id: buddy.id, speciesId: buddy.speciesId, level: 12 + BONUS },
+      ]);
+      // Stats are worked out at the lifted level, not the stored one.
+      const species = SERVER_GAME_DATA.secretSpecies.find((sp) => sp.id === buddy.speciesId)!;
+      expect(battle.view.sides.b.squishies[0]!.stats).toEqual(
+        statsAtLevel(species.baseStats, 12 + BONUS, BATTLE_RULES),
+      );
+      // Only the battle is lifted: the squishy itself stays level 3.
+      expect(await levelOf(buddy.id)).toBe(3);
+      const row = (await createBattlesRepo(db).findBattle(battle.id))!;
+      expect(row.setup.b.squishies.map((s) => s.level)).toEqual([12 + BONUS]);
+    });
+
+    it('a guard stronger than the floor keeps its own level', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 12);
+      await setPartner(mapId, rival.id, partner.id);
+      const strong = await grant(server, rival, mapId, 30);
+      await post(server, rival, mapId, near, [strong.id, buddy.id]);
+
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(fielded(battle).map((s) => [s.id, s.level])).toEqual([
+        [strong.id, 30],
+        [buddy.id, 12 + BONUS],
+      ]);
+    });
+
+    it('the land’s guardians standing in on a rival tile are lifted too', async () => {
+      const server = await start();
+      const { kid, rival, mapId, near } = await rivals(server);
+      // Above every tier roll, so each guardian is lifted.
+      const partner = await grant(server, rival, mapId, 20);
+      await setPartner(mapId, rival.id, partner.id);
+      const guardians = await rolled(mapId, near);
+
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+      expect(fielded(battle)).toEqual(
+        guardians.map((g) => ({ ...g, level: Math.max(g.level, 20 + BONUS) })),
+      );
+      expect(fielded(battle).every((g) => g.level >= 20 + BONUS)).toBe(true);
+    });
+
+    it('a defender with no Partner: the strongest squishy sets the floor; with none, no floor', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near, near2 } = await rivals(server);
+      // No tutorial pick on this patch: the strongest active squishy (9) sets it.
+      const nine = await grant(server, rival, mapId, 9);
+      await post(server, rival, mapId, near, [buddy.id]);
+      const first = battleOf(await attack(server, kid, mapId, near));
+      expect(fielded(first).map((s) => s.level)).toEqual([9 + BONUS]);
+      await forfeit(server, kid, first);
+
+      // A squishy in the Hollow isn't counted for the fallback: with nobody
+      // active, the land's guardians stand in at their own levels.
+      await post(server, rival, mapId, near, []);
+      await hollow(nine.id);
+      await hollow(buddy.id);
+      const guardians = await rolled(mapId, near2);
+      const second = battleOf(await attack(server, kid, mapId, near2));
+      expect(second.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+      expect(fielded(second)).toEqual(guardians);
+    });
+
+    it('a Partner in the Hollow still sets the floor', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 14);
+      await setPartner(mapId, rival.id, partner.id);
+      await hollow(partner.id);
+      await post(server, rival, mapId, near, [buddy.id]);
+
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(fielded(battle).map((s) => s.level)).toEqual([14 + BONUS]);
+    });
+
+    it('neutral land’s guardians fight at the tier roll (no floor), and befriending is unchanged (#279)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      // A strong Partner of the kid's own changes nothing on wild land.
+      const hero = await grant(server, kid, mapId, 40);
+      await setPartner(mapId, kid.id, hero.id);
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
+        items: { [HEART_CHARM]: 1 },
+      });
+      expect(res.statusCode).toBe(201);
+      const [target] = await edgeOf(mapId, kid);
+      const guardians = await rolled(mapId, target!);
+
+      const battle = battleOf(await attack(server, kid, mapId, target!));
+      expect(battle.kind).toBe('tile');
+      expect(fielded(battle)).toEqual(guardians);
+      // A Heart Charm still works on them, at their own level.
+      const charm = await act(server, kid, battle, { type: 'capture' });
+      expect(charm.statusCode, charm.body).toBe(200);
+      expect(battleOf(charm).view.log).toContainEqual(
+        expect.objectContaining({ type: 'capture', side: 'b', slot: 0 }),
+      );
+    });
+
+    it('a lifted battle replays exactly from its record', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 12);
+      await setPartner(mapId, rival.id, partner.id);
+      await post(server, rival, mapId, near, [buddy.id]);
+
+      const done = await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      const battle = (await createBattlesRepo(db).findBattle(done.id))!;
+      // The floor is baked into the stored setup: nothing else to look up.
+      expect(battle.setup.b.squishies.map((s) => s.level)).toEqual([12 + BONUS]);
+      const content = createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA));
+      const replayed = replayBattleRecord(content, {
+        setup: { seed: battle.seed, sides: battle.setup },
+        actions: battle.actions,
+        contentHash: battle.contentHash,
+        result: battle.result!,
+        log: battle.log!,
+      });
+      expect(replayed).toEqual(battle.state);
+      expect(replayed.sides.b.squishies[0]!.level).toBe(12 + BONUS);
     });
   });
 

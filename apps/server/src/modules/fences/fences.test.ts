@@ -553,6 +553,56 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       );
     });
 
+    it('the fence breaker sits out Keep going even when re-picked first in the team', async () => {
+      const server = await start();
+      const { kid, mapId, near, team } = await fencedRival(server, {
+        team: [
+          { level: 40, speciesId: EMBER },
+          { level: 30, speciesId: EMBER },
+        ],
+      });
+      const fenceBattle = battleOf(await attack(server, kid, mapId, near));
+      expect(fenceBattle.view.sides.a.squishies.map((s) => s.id)).toEqual([team[0]!.id]);
+      await playOut(server, kid, fenceBattle);
+
+      const pick = async (ids: string[]) => {
+        const res = await call(server, 'POST', `/maps/${mapId}/team`, kid, { squishyIds: ids });
+        expect(res.statusCode, res.body).toBe(200);
+      };
+      // The breaker alone: nobody fresh, so no guard battle (and no try used).
+      await pick([team[0]!.id]);
+      const refused = await attack(server, kid, mapId, near);
+      expect(refused.statusCode).toBe(409);
+      expect(errorOf(refused).message).toMatch(/fence breaker needs a rest/);
+
+      // The breaker back at the front of the team: the server still rests it.
+      await pick([team[0]!.id, team[1]!.id]);
+      const guardBattle = battleOf(await attack(server, kid, mapId, near));
+      expect(guardBattle.view.sides.a.squishies.map((s) => s.id)).toEqual([team[1]!.id]);
+      expect(await attacksOf(mapId)).toMatchObject([{ part: 'fence' }, { part: 'guard' }]);
+    });
+
+    it('Keep going after a reload still leaves the breaker out (a second attack call, same window)', async () => {
+      const server = await start();
+      const { kid, mapId, near, team } = await fencedRival(server, {
+        team: [
+          { level: 40, speciesId: EMBER },
+          { level: 30, speciesId: EMBER },
+        ],
+      });
+      await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      const guardBattle = battleOf(await attack(server, kid, mapId, near));
+      // The app reloads mid-fight and taps Keep going again: the same guard
+      // battle comes back, with the breaker still resting.
+      clock.setTime(clock.getTime() + MINUTE_MS);
+      const again = await attack(server, kid, mapId, near);
+      expect(again.statusCode, again.body).toBeLessThan(300);
+      const resumed = battleOf(again);
+      expect(resumed.id).toBe(guardBattle.id);
+      expect(resumed.view.sides.a.squishies.map((s) => s.id)).toEqual([team[1]!.id]);
+      expect(await attacksOf(mapId)).toHaveLength(2);
+    });
+
     it('no Keep going once the land went wild meanwhile: it is a fresh claim', async () => {
       const server = await start();
       const { kid, mapId, near } = await fencedRival(server, {
