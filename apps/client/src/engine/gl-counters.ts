@@ -4,7 +4,8 @@
  * from when the badge first saw it (a lost context's rebuild starts again). Something that piles up while a scene only plays (a
  * buffer per find, a texture per celebration) shows as a gap between made
  * and freed that keeps widening. Wrapped on the context itself, and only
- * once the badge is mounted, so nobody else pays.
+ * once the badge is mounted or a perf report's slow run has lasted 3 s
+ * (`perf-report.ts`), so a smooth session pays nothing.
  */
 export interface GlCounts {
   buffersMade: number;

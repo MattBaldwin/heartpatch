@@ -105,7 +105,8 @@ body {
 
 /* The counts and page lines: wrap on a narrow phone. */
 .dev-stats-stack > .dev-stats-counts,
-.dev-stats-stack > .dev-stats-page {
+.dev-stats-stack > .dev-stats-page,
+.dev-stats-stack > .dev-stats-report {
   border-radius: 10px;
   white-space: normal;
   text-align: center;
