@@ -21,6 +21,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { batchUploads } from '../procedural/batch-uploads.js';
 import { lodFor } from '../procedural/motion.js';
 import { AmbientDriver } from '../map/ambient-driver.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
@@ -30,6 +31,7 @@ import { iconNode } from '../ui/line-icons.js';
 import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
+import { placeDark, type DarkPaint } from './lantern-dark.js';
 import {
   actionFor,
   afterSearch,
@@ -109,6 +111,11 @@ export interface ExploreScreenOptions {
   pinned?: () => boolean;
   /** Draws one frame (`Stage.requestFrame`): ambient life (#335) paces itself with this. */
   requestFrame?: () => void;
+  /**
+   * A burst of work is about to land (`RenderQuality.expectHitch`): the
+   * governor ignores the frames around a find instead of cutting (#501 G).
+   */
+  expectHitch?: () => void;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
   /**
@@ -120,7 +127,11 @@ export interface ExploreScreenOptions {
   isGlade: (mapId: string) => boolean;
   /** The explore view opened: the map, the bag and the lobby step out. */
   onOpen: (mapId: string) => void;
-  /** Back to the map. */
+  /**
+   * Back to the map, which shows its own scene: the explore scene stays on
+   * screen until it does, so the switch builds no test scene in between
+   * (#501 G). If no scene comes, call `showScene(null)`.
+   */
   onClosed: (mapId: string) => void;
   /** It couldn't open (offline): say why where the player is looking. */
   onProblem: (message: string) => void;
@@ -166,6 +177,12 @@ export interface ExploreDebug {
   /** The tool the spot in front needs and the bag has none of (the hint shows), or null. */
   readonly hint: ToolId | null;
   readonly scene: ExploreSceneStats | null;
+  /**
+   * Batch uploads since the page opened (`batchUploads`): each makes fresh
+   * instance buffers. Explore has no squishies, so here it's the Keeper's:
+   * a find's cheer makes none (#501 G).
+   */
+  readonly batchUploads: number;
   /** Screen point (CSS pixels) of each spot, to tap in tests. */
   spotOnScreen: (index: number) => { x: number; y: number } | null;
   /** Screen point (CSS pixels) of a tile-local point on the ground, to tap in tests. */
@@ -300,6 +317,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const ground = el('div', { class: 'explore-ground', 'data-testid': 'explore-ground' });
   // The lantern's dark (board g): a circle of light round the Keeper.
   const dark = el('div', { class: 'explore-dark', 'aria-hidden': 'true' });
+  // Painted once, moved by a composited transform (`placeLantern`, #501 G).
+  const darkLight = el('div', { class: 'explore-dark-light' });
+  darkLight.style.setProperty('--light-warm', `${String(Math.round(LIGHT_RING_SHARE * 100))}%`);
+  dark.append(darkLight);
   dark.hidden = true;
   const glint = el(
     'button',
@@ -687,6 +708,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!id || !t || working) return;
     const at = generation;
     working = true;
+    // The frames round a find (the tool's last swing, the scene update, the
+    // cheer, the card or the flying finds) aren't the GPU's pace (#501 G).
+    options.expectHitch?.();
     say(EXPLORE_TEXT.searching);
     render();
     wake();
@@ -703,6 +727,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
       tile = afterSearch(tile, found);
       bag = found.items;
+      options.expectHitch?.();
       scene3d?.update(tile);
       scene3d?.cheer(performance.now());
       say('');
@@ -1026,55 +1051,87 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  /** What the lantern's dark last drew, so a still frame redoes nothing. */
-  let darkDrawn = '';
+  /** The lantern dark's gradient as painted, or null before (or since) it shows. */
+  let darkPaint: DarkPaint | null = null;
+  /** The light and glint transforms last written, so a still frame writes nothing. */
+  let darkMoved = '';
+  let glintMoved = '';
 
-  /** The lantern's dark and its warm circle of light round the Keeper (board g). */
+  /**
+   * Shows or hides the lantern's dark and the glint, on a state change. Where
+   * they sit is `placeDark`'s, on the stage's drawn frames only (#501 G), so
+   * this asks for one when either shows.
+   */
   function renderDark(): void {
-    const p = playing;
-    const s = p?.state;
+    const s = playing?.state;
     const on = s?.kind === 'light' && !(s.revealed && s.light === null) && card === null;
-    dark.hidden = !on;
     // The glint shows once the light has found it, as "Grab it" wakes up.
     const showGlint = s?.kind === 'light' && s.revealed && card === null;
+    const shown = (on && dark.hidden) || (showGlint && glint.hidden);
+    dark.hidden = !on;
     glint.hidden = !showGlint;
-    if (!p || !s || s.kind !== 'light' || !scene3d) {
-      darkDrawn = '';
-      return;
+    if (!on && darkPaint !== null) {
+      // Next time it shows fully dark until a drawn frame places the light.
+      darkPaint = null;
+      darkMoved = '';
+      darkLight.style.removeProperty('width');
+      darkLight.style.removeProperty('height');
+      darkLight.style.removeProperty('transform');
+      darkLight.style.removeProperty('--light-r');
     }
-    // The reveal ring on the ground round the Keeper's feet, and the Keeper
-    // itself: the drawn light holds both (lightCircle).
-    const feet = scene3d.screenOf(keeperAt, 0);
-    const head = scene3d.screenOf(keeperAt, scene3d.keeperTall);
-    const ring: { x: number; y: number }[] = [];
-    for (const [dx, dz] of RING_STEPS) {
-      const q = scene3d.screenOf(
-        { x: keeperAt.x + dx * LIGHT_REACH, z: keeperAt.z + dz * LIGHT_REACH },
-        0,
-      );
-      if (q) ring.push(q);
+    if (!showGlint) glintMoved = '';
+    if (shown) options.invalidate();
+  }
+
+  /**
+   * After each drawn frame: the light round the Keeper and the glint follow
+   * the picture just drawn, by composited transforms (no repaint per frame,
+   * #501 G). The reveal ring on the ground round the Keeper's feet, and the
+   * Keeper itself: the drawn light holds both (lightCircle).
+   */
+  function placeLantern(): void {
+    const p = playing;
+    const s = p?.state;
+    if (!p || s?.kind !== 'light' || !scene3d || (dark.hidden && glint.hidden)) return;
+    if (!dark.hidden) {
+      const feet = scene3d.screenOf(keeperAt, 0);
+      const head = scene3d.screenOf(keeperAt, scene3d.keeperTall);
+      const ring: { x: number; y: number }[] = [];
+      for (const [dx, dz] of RING_STEPS) {
+        const q = scene3d.screenOf(
+          { x: keeperAt.x + dx * LIGHT_REACH, z: keeperAt.z + dz * LIGHT_REACH },
+          0,
+        );
+        if (q) ring.push(q);
+      }
+      const light = feet && head ? lightCircle(ring, feet, head) : null;
+      if (light) {
+        const placed = placeDark(
+          darkPaint,
+          { ...light, r: Math.max(40, light.r) },
+          { width: window.innerWidth, height: window.innerHeight },
+        );
+        if (placed.repaint) {
+          darkPaint = placed.paint;
+          darkLight.style.width = `${String(placed.paint.width)}px`;
+          darkLight.style.height = `${String(placed.paint.height)}px`;
+          darkLight.style.setProperty('--light-r', `${String(placed.paint.radius)}px`);
+        }
+        if (placed.transform !== darkMoved) {
+          darkMoved = placed.transform;
+          darkLight.style.transform = placed.transform;
+        }
+      }
     }
-    const g = showGlint ? scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1) : null;
-    const light = feet && head ? lightCircle(ring, feet, head) : null;
-    const key = [on, showGlint, light?.x, light?.y, light?.r, g?.x, g?.y]
-      .map((v) => (typeof v === 'number' ? String(Math.round(v)) : String(v)))
-      .join();
-    if (key === darkDrawn) return;
-    darkDrawn = key;
-    if (on && light) {
-      const r = Math.round(Math.max(40, light.r));
-      const x = Math.round(light.x);
-      const y = Math.round(light.y);
-      // Warm to the reveal ring (LIGHT_RING_SHARE), then the falloff into the dark.
-      const warm = Math.round(LIGHT_RING_SHARE * 100);
-      dark.style.setProperty(
-        '--light',
-        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 70%) 0%, rgb(205 176 138 / 66%) ${String(warm)}%, rgb(36 28 46 / 95%) 100%)`,
-      );
-    }
-    if (g) {
-      glint.style.left = `${String(g.x)}px`;
-      glint.style.top = `${String(g.y)}px`;
+    if (!glint.hidden) {
+      const g = scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1);
+      const moved = g
+        ? `translate3d(${String(Math.round(g.x))}px, ${String(Math.round(g.y))}px, 0) translate(-50%, -50%)`
+        : '';
+      if (g && moved !== glintMoved) {
+        glintMoved = moved;
+        glint.style.transform = moved;
+      }
     }
   }
 
@@ -1195,6 +1252,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     keeperAt = freePoint(keeperAt, built.colliders);
     built.moveKeeper(keeperAt, yaw);
     scene3d = built;
+    // The lantern's light and glint move with the frames the stage draws (#501 G).
+    scene.onAfterRenderObservable.add(placeLantern);
     scene.onDisposeObservable.addOnce(() => {
       if (scene3d === built) scene3d = null;
     });
@@ -1319,8 +1378,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const id = mapId;
     if (!isOpen) return;
     hide();
-    options.showScene(null);
     if (id) options.onClosed(id);
+    else options.showScene(null);
   }
 
   // ── Tile panel ────────────────────────────────────────────────────────
@@ -1411,6 +1470,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         scene: s?.stats ?? null,
+        batchUploads: batchUploads.count,
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;

@@ -115,8 +115,14 @@ const pinTier = isQualityTier(pinnedTier);
 /** The quality tier, carried from stage to stage so the governor's last step down isn't lost. */
 let tier = pickInitialTier(pinnedTier, params.get('quality'));
 let stage: Stage | null = null;
+/** Test scenes built so far (the dev hook: a map↔explore switch builds none, #501 G). */
+let testScenesBuilt = 0;
+const testScene: SceneBuilder = (scene) => {
+  testScenesBuilt++;
+  return buildTestScene(scene);
+};
 /** What the stage draws: the open map, or the test scene. */
-let sceneBuilder: SceneBuilder = buildTestScene;
+let sceneBuilder: SceneBuilder = testScene;
 /** What boot() holds on to: always whichever stage is on screen now (showScene swaps it). */
 const currentStage = {
   dispose: () => {
@@ -161,13 +167,43 @@ function mounted(next: Stage): Stage {
   return next;
 }
 
+/** A `showScene(null)` waiting for its microtask. */
+let blankPending = false;
+/** What the stage on screen was built with. */
+let shownBuilder: SceneBuilder | null = null;
+/** Scene swaps so far (explore hands the screen back to the map, which shows its own). */
+let sceneSwaps = 0;
+
 /**
  * Swaps the scene on the running renderer (tech spec §6: one engine, scenes
  * swapped). Before the renderer starts, or after it failed, this only picks
  * what the next mount draws.
+ *
+ * `null` (a screen leaving) shows the test scene, a microtask later: a
+ * screen opening in the same task (the map hides as explore opens) takes
+ * its place before it's built, so a switch builds nothing it throws away
+ * (#501 G: about 97 buffers and a few program links each time). The test
+ * scene already on screen isn't rebuilt.
  */
 function showScene(build: SceneBuilder | null): void {
-  sceneBuilder = build ?? buildTestScene;
+  if (build !== null) {
+    blankPending = false;
+    swapScene(build);
+    return;
+  }
+  sceneBuilder = testScene;
+  if (blankPending) return;
+  blankPending = true;
+  queueMicrotask(() => {
+    if (!blankPending) return;
+    blankPending = false;
+    if (stage && shownBuilder === testScene) return;
+    swapScene(testScene);
+  });
+}
+function swapScene(build: SceneBuilder): void {
+  sceneBuilder = build;
+  sceneSwaps++;
   if (!stage) return;
   const { renderer } = stage;
   const target = renderer.engine.getRenderingCanvas();
@@ -175,6 +211,7 @@ function showScene(build: SceneBuilder | null): void {
   if (!target) return;
   try {
     stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
+    shownBuilder = sceneBuilder;
   } catch (err) {
     showRendererError(err);
   }
@@ -745,6 +782,7 @@ const explore = createExploreScreen({
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
+  expectHitch: () => stage?.quality.expectHitch(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   pinned: () => pinTier,
   keeper: () => keeper.current,
@@ -772,9 +810,16 @@ const explore = createExploreScreen({
   onClosed: (mapId) => {
     exploreSquishies.hidden = true;
     roster.close();
+    // The map shows its own scene; until then explore's stays (#501 G). If
+    // the map doesn't open, nothing else will, so the test scene shows.
+    const swaps = sceneSwaps;
+    const noScene = (): void => {
+      if (sceneSwaps === swaps) showScene(null);
+    };
     maps
       .open(mapId)
       .then(() => {
+        noScene();
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
@@ -788,6 +833,7 @@ const explore = createExploreScreen({
         milestones.check();
       })
       .catch((err: unknown) => {
+        noScene();
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       });
     lobby.hide();
@@ -1560,6 +1606,7 @@ if (import.meta.env.DEV) {
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
     frameCap: () => stage?.frameCap ?? null,
+    testScenes: () => testScenesBuilt,
     map: () => maps.debug,
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,
@@ -1617,6 +1664,7 @@ await boot(canvas, {
   freshCanvas,
   mount: (renderer, target) => {
     stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
+    shownBuilder = sceneBuilder;
     return currentStage;
   },
   onError: showRendererError,

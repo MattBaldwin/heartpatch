@@ -42,7 +42,8 @@ export type HookName =
   | 'post'
   | 'whatsNew'
   | 'patchLine'
-  | 'frameCap';
+  | 'frameCap'
+  | 'testScenes';
 
 type HookWindow = { __heartpatch?: Partial<Record<string, () => unknown>> };
 

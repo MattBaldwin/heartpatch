@@ -104,6 +104,12 @@ export interface ScalerConfig {
    */
   maxFrameMs: number;
   /**
+   * Under a frame cap (`cappedScaler`), `maxFrameMs` is this many frame
+   * periods (100 ms at 30 fps), so one hitch among capped frames (a find's
+   * burst of work) is ignored instead of cutting the resolution (#501 G).
+   */
+  cappedHitchFrames: number;
+  /**
    * A run of `crawlFrames` consecutive frames each longer than `crawlFrameMs`
    * is no pause: the renderer itself is crawling (a very weak GPU, software
    * WebGL), too slow for any window to ever close. Quality goes to the
@@ -159,6 +165,7 @@ export const SCALER: Readonly<ScalerConfig> = {
   maxRaiseAfterMs: 30_000, // TUNE
   flapWindowMs: 2000, // TUNE
   maxFrameMs: 250, // TUNE
+  cappedHitchFrames: 3, // TUNE: a 30 fps loop ignores a lone frame over 100 ms
   crawlFrameMs: 1000, // TUNE: a whole second per frame is never a shader compile hiccup
   crawlFrames: 3, // TUNE
   tierProbeBelowFps: 45, // TUNE: far below 60; Low Power Mode's 30 costs one reverted probe per cap re-test

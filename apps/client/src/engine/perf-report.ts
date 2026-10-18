@@ -2,6 +2,7 @@ import {
   cleanBadgeLine,
   PERF_MAX_MS,
   type PerfDecision,
+  type PerfHitch,
   type PerfReport,
 } from '@heartpatch/shared';
 import { apiCall, ApiRequestError } from '../net/api.js';
@@ -10,7 +11,7 @@ import { bisectFlags, bisectLabel } from './bisect-flags.js';
 import { FencePoller, webglFenceOps, type FenceGl } from './gpu-fence.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 import type { RendererKind } from './renderer.js';
-import { SlowTrigger, type SlowRun } from './slow-trigger.js';
+import { PAUSE_MS, REPORT_EVERY_MS, SlowTrigger, type SlowRun } from './slow-trigger.js';
 import type { Stage } from './stage.js';
 
 /**
@@ -22,6 +23,11 @@ import type { Stage } from './stage.js';
  * decisions, the badge lines, how long the page and the scene have been open,
  * whether the page is visible, and which bisect flags are on. The owner just
  * plays; we read the server log. The `?fps=1` badge shows the last report.
+ *
+ * One drawn frame over `HITCH_MS` among quick ones (#501 G: a find made
+ * one, and the governor's cut after it made the next) posts a row too, also
+ * at most once a minute, once `HITCH_FOLLOW_MS` later: it carries the frame,
+ * its `scene.render` time, and the governor's tier and scale before and after.
  *
  * One `PerfProbe` per stage; the trigger, the decision log and the last
  * report are page-wide, so a scene swap can't reset the once-a-minute limit.
@@ -111,6 +117,82 @@ export class DecisionLog {
   }
 }
 
+/** A drawn frame longer than this is a hitch (#501 G). */
+export const HITCH_MS = 100; // TUNE
+/** A hitch is reported this long after it, with the governor's choice by then. */
+export const HITCH_FOLLOW_MS = 1500; // TUNE: the 500 ms window it lands in, then two settle windows
+
+type Choice = PerfHitch['before'];
+
+/**
+ * Hitches to report (#501 G): one drawn frame over `HITCH_MS`, then
+ * `HITCH_FOLLOW_MS` of frames that average under it (a lone hitch, not a
+ * slow run: that's `SlowTrigger`'s). At most one every `REPORT_EVERY_MS`.
+ * Pure (time and the governor's state are passed in).
+ */
+export class HitchWatch {
+  #pending: {
+    at: number;
+    frameMs: number;
+    renderMs: number;
+    before: Choice;
+    followMs: number;
+    followFrames: number;
+  } | null = null;
+  #sentAt: number | null = null;
+
+  /**
+   * One drawn frame; returns a hitch to report once its follow-up is over,
+   * else null. `governor` is read only then and when a hitch starts.
+   */
+  frame(
+    now: number,
+    frameMs: number | null,
+    renderMs: number,
+    governor: () => Choice,
+  ): PerfHitch | null {
+    const pending = this.#pending;
+    if (pending) {
+      if (now - pending.at < HITCH_FOLLOW_MS) {
+        if (frameMs !== null) {
+          pending.followMs += frameMs;
+          pending.followFrames++;
+        }
+        return null;
+      }
+      this.#pending = null;
+      const { followMs, followFrames } = pending;
+      if (followFrames === 0 || followMs / followFrames > HITCH_MS) return null;
+      this.#sentAt = now;
+      const { tier, renderScale } = governor();
+      return {
+        frameMs: round(pending.frameMs),
+        renderMs: round(pending.renderMs),
+        followMs: round(now - pending.at),
+        before: pending.before,
+        after: { tier, renderScale },
+      };
+    }
+    if (frameMs === null || frameMs <= HITCH_MS || frameMs > PAUSE_MS) return null;
+    if (this.#sentAt !== null && now - this.#sentAt < REPORT_EVERY_MS) return null;
+    const { tier, renderScale } = governor();
+    this.#pending = {
+      at: now,
+      frameMs,
+      renderMs,
+      before: { tier, renderScale },
+      followMs: 0,
+      followFrames: 0,
+    };
+    return null;
+  }
+
+  /** A new stage: a hitch waiting on its follow-up belongs to the old one. */
+  reset(): void {
+    this.#pending = null;
+  }
+}
+
 /** The last report, for the badge. */
 export interface ReportStatus {
   /** performance.now() when it fired. */
@@ -145,6 +227,7 @@ export const SLOW_FRAME_MS = 150;
 
 const page = {
   trigger: new SlowTrigger(),
+  hitches: new HitchWatch(),
   decisions: new DecisionLog(),
   status: null as ReportStatus | null,
   slow: false,
@@ -214,6 +297,7 @@ export class PerfProbe {
     const gl = fenceGl(engine, kind);
     this.#fences = gl ? new FencePoller(webglFenceOps(gl)) : null;
     page.trigger.reset();
+    page.hitches.reset();
     page.decisions.remount();
     page.decisions.note(this.#openedAt, quality.snapshot, null);
   }
@@ -232,6 +316,8 @@ export class PerfProbe {
     const run = page.trigger.frame(now, frameMs);
     if (page.trigger.slowMs >= BADGE_START_MS) this.#watchBadge();
     if (run) void this.#report(run, now);
+    const hitch = page.hitches.frame(now, frameMs, renderMs, () => this.#quality.snapshot);
+    if (hitch) void this.#send(now, { fps: this.#frames.fps ?? 0, slowMs: 0, hitch });
   }
 
   /** The governor just sampled a frame and wants a change (logged if its tier or scale moved). */
@@ -282,14 +368,25 @@ export class PerfProbe {
     if (!page.badge && page.badgeLoad) {
       await Promise.race([page.badgeLoad, new Promise((done) => setTimeout(done, BADGE_WAIT_MS))]);
     }
+    await this.#send(now, { fps: run.fps, slowMs: run.ms });
+  }
+
+  /**
+   * Posts a row: a slow run's (the badge shows how it went) or a hitch's
+   * (the server log only; the badge keeps the last slow run's).
+   */
+  async #send(
+    now: number,
+    what: { fps: number; slowMs: number; hitch?: PerfHitch },
+  ): Promise<void> {
     const gpu = this.#fences?.latency ?? null;
     const stage = this.#stage();
     const snapshot = this.#quality.snapshot;
     const flags = bisectLabel(bisectFlags()).split(' ').filter(Boolean);
     if (page.slow) flags.push('slow');
     const report: PerfReport = {
-      fps: round(run.fps),
-      slowMs: round(run.ms),
+      fps: round(Math.min(what.fps, 1000)),
+      slowMs: round(what.slowMs),
       frames: this.#frames.split,
       gpu: gpu && {
         lastMs: round(gpu.lastMs),
@@ -314,10 +411,18 @@ export class PerfProbe {
       visibility: document.visibilityState === 'hidden' ? 'hidden' : 'visible',
       flags,
       renderer: this.#kind,
+      ...(what.hitch && { hitch: what.hitch }),
     };
+    const post = apiCall('/perf/report', { method: 'POST', body: report, schema: null });
+    if (what.hitch) {
+      await post.catch(() => {
+        // Logged out or offline: a hitch row is only for the server log.
+      });
+      return;
+    }
     const fired = { at: now, fps: report.fps, gpuMs: gpu?.avgMs ?? null };
     page.status = { ...fired, result: 'sending' };
-    await apiCall('/perf/report', { method: 'POST', body: report, schema: null }).then(
+    await post.then(
       () => {
         page.status = { ...fired, result: 'sent' };
       },

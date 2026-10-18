@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
 import {
   cappedScaler,
+  expectHitch,
   initialGovernor,
   resumeGovernor,
   stepGovernor,
@@ -495,8 +496,56 @@ describe('cappedScaler (#501)', () => {
       tierProbeBelowFps: SCALER.tierProbeBelowFps / 2,
       tierDropBelowFps: SCALER.tierDropBelowFps / 2,
       windowMs: SCALER.windowMs,
-      maxFrameMs: SCALER.maxFrameMs,
       cutGain: SCALER.cutGain,
     });
+  });
+
+  it('takes no frame over three periods on its own (100 ms at 30 fps), never more than uncapped', () => {
+    expect(cappedScaler(SCALER, 30).maxFrameMs).toBeCloseTo(100);
+    expect(cappedScaler(SCALER, 2).maxFrameMs).toBe(SCALER.maxFrameMs);
+  });
+});
+
+describe('isolated hitches under a 30 fps cap (#501 G)', () => {
+  const capped = { config: cappedScaler(SCALER, 30), devicePixelRatio: 3 };
+  const PERIOD = 1000 / 30;
+  /** Past the grace time and settled, drawing a steady 30. */
+  function steady(): GovernorState {
+    let s = initialGovernor('high', capped.config);
+    for (let t = 0; t < 4000; t += PERIOD) s = stepGovernor(s, PERIOD, capped);
+    return s;
+  }
+  function frames(s: GovernorState, list: number[], ctx = capped): GovernorState {
+    for (const ms of list) s = stepGovernor(s, ms, ctx);
+    return s;
+  }
+  const calm = (n: number) => Array<number>(n).fill(PERIOD);
+
+  it('one 200 ms frame among 33 ms frames changes neither the render scale nor the tier', () => {
+    const before = steady();
+    const after = frames(before, [...calm(7), 200, ...calm(60)]);
+    expect(after.renderScale).toBe(before.renderScale);
+    expect(after.tier).toBe(before.tier);
+    expect(after.settleWindows).toBe(0);
+    // Before part G the 250 ms limit counted it, the window read 20 fps, and it cut.
+    const old = { ...capped, config: { ...capped.config, maxFrameMs: SCALER.maxFrameMs } };
+    expect(frames(before, [...calm(7), 200, ...calm(60)], old).renderScale).toBeLessThan(1);
+  });
+
+  it('still steps down when every frame is that slow', () => {
+    const after = frames(steady(), Array<number>(30).fill(200));
+    expect(after.renderScale).toBeLessThan(1);
+  });
+
+  it('expectHitch throws the find away: a shorter hitch around it changes nothing', () => {
+    const before = steady();
+    // 80 ms is under the limit, so it counts; a window round it reads under 27.5 fps.
+    const hitch = [...calm(3), 80, 80, ...calm(60)];
+    expect(frames(before, hitch).renderScale).toBeLessThan(1);
+    const expected = expectHitch(before, capped.config);
+    expect(expected.windowFrames).toBe(0);
+    const after = frames(expected, hitch);
+    expect(after.renderScale).toBe(before.renderScale);
+    expect(after.tier).toBe(before.tier);
   });
 });

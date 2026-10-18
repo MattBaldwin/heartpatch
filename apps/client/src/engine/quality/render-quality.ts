@@ -12,6 +12,7 @@ import {
 import { cappedPixelRatio, hardwareScalingFor } from '../dpr.js';
 import {
   cappedScaler,
+  expectHitch,
   initialGovernor,
   resumeGovernor,
   stepGovernor,
@@ -135,6 +136,15 @@ export class RenderQuality {
       devicePixelRatio: window.devicePixelRatio,
     });
     return this.pending;
+  }
+
+  /**
+   * A burst of work is about to land (a find, #501 G): the governor throws
+   * away the frames around it instead of reading them as a slow GPU.
+   */
+  expectHitch(): void {
+    if (this.pinned) return;
+    this.state = expectHitch(this.state, this.config);
   }
 
   /** True while the governor's tier or scale isn't applied yet (`applyPending`). */

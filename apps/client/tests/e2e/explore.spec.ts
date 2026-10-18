@@ -51,6 +51,7 @@ interface ExploreDebug {
   card: 'rare' | null;
   toast: string | null;
   hint: string | null;
+  batchUploads: number;
   scene: {
     spots: number;
     done: number;
@@ -85,6 +86,9 @@ const frameClock = (page: Page) =>
 const EXPLORE_MAX_FPS = 31;
 const mapState = (page: Page) =>
   hook<{ tiles: number; selected: string | null; buildings: number }>(page, 'map');
+/** Test scenes built since the page loaded (#501 G: a map↔explore switch builds none). */
+const testScenes = (page: Page) => hook<number>(page, 'testScenes');
+const quality = (page: Page) => hook<{ tier: string; renderScale: number }>(page, 'quality');
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -117,11 +121,15 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   }).toPass(slow);
   // The map draws on demand, uncapped (#501).
   expect(await frameCap(page)).toBeNull();
+  const testScenesOnMap = await testScenes(page);
+  expect(testScenesOnMap).not.toBeNull();
   await explore.tap();
 
   await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
   const first = (await exploreState(page))!;
   expect(first.open).toBe(true);
+  // The map handed the screen straight to explore: no test scene built and thrown away (#501 G).
+  expect(await testScenes(page)).toBe(testScenesOnMap);
   expect(first.spots.length).toBeGreaterThan(0);
   await slowExpect(page.getByTestId('map-hud')).toBeHidden();
   await expect(page.getByTestId('explore-progress')).toHaveText(
@@ -252,6 +260,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await expect(page.getByTestId('explore-chip')).toBeVisible();
     await expect(page.getByTestId('explore-not-now')).toBeVisible();
     await expect(sheet).toBeHidden();
+    // Across the find (#501 G): the Keeper's cheer rewrites its buffers in
+    // place, and the governor takes the burst of work as a hitch, not a slow GPU.
+    const beforeFind = {
+      uploads: (await exploreState(page))!.batchUploads,
+      quality: await quality(page),
+    };
     await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
     type Seen = { toast: string | null; card: string | null; shown: boolean };
@@ -275,8 +289,14 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       }, slow)
       .toBe(true);
     searched += 1;
+    // Past the cheer and the governor's next windows (it reads frames in 500 ms windows).
+    await page.waitForTimeout(2000);
     const after = (await exploreState(page))!;
     expect(after.spots.find((s) => s.index === hands.index)?.done).toBe(true);
+    expect(after.batchUploads, 'Keeper buffers made by the find').toBe(beforeFind.uploads);
+    const afterFind = await quality(page);
+    expect(afterFind?.tier).toBe(beforeFind.quality?.tier);
+    expect(afterFind?.renderScale).toBe(beforeFind.quality?.renderScale);
     if (after.card === 'rare') {
       await slowExpect(sheet).toBeVisible();
       await sheet.getByTestId('explore-yay').tap();
@@ -371,6 +391,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   expect((await exploreState(page))?.open).toBe(false);
   // The map's stage is back on demand, uncapped (#501).
   await expect.poll(() => frameCap(page), slow).toBeNull();
+  // Explore's scene stayed up until the map's was ready: still no test scene (#501 G).
+  expect(await testScenes(page)).toBe(testScenesOnMap);
   expect(errors).toEqual([]);
 });
 
