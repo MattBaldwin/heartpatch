@@ -708,9 +708,9 @@ export const MOVES: Move[] = [
     effects: [{ type: 'stat', target: 'opponent', stat: 'defense', stages: -1, chance: 20 }], // TUNE:
   },
   {
-    id: 'antler-hug',
-    name: 'Antler Hug',
-    description: 'A big, soft, antlery hug. The other side might feel a bit less brave.',
+    id: 'spiky-snuggle',
+    name: 'Spiky Snuggle',
+    description: 'A big, soft, prickly-but-gentle hug. The other side might feel a bit less brave.',
     element: 'shadow',
     power: 60, // TUNE:
     accuracy: 90, // TUNE:
@@ -2397,7 +2397,7 @@ export const SPECIES: Species[] = [
     feeling: 'cozy',
     rarity: 'epic',
     baseStats: { hp: 97, attack: 80, defense: 86, speed: 88 }, // TUNE: ×1.15 Snugglenook
-    moves: ['shadow-snuggle', 'mossy-nap', 'boo', 'antler-hug'],
+    moves: ['shadow-snuggle', 'mossy-nap', 'boo', 'spiky-snuggle'],
     evolutions: [],
     visual: {
       body: 'bean',
