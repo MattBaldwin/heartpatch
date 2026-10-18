@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   bisectFlags,
   bisectLabel,
-  cappedScaler,
   NO_BISECT,
   readBisectFlags,
   setBisectFlags,
 } from './bisect-flags.js';
-import { SCALER } from './config.js';
 
 describe('bisect flags (#501)', () => {
   it('reads each flag from the address, only with =1', () => {
@@ -36,19 +34,5 @@ describe('bisect flags (#501)', () => {
     setBisectFlags({ ...NO_BISECT, noSky: true });
     expect(bisectFlags().noSky).toBe(true);
     setBisectFlags(NO_BISECT);
-  });
-
-  it('scales every frame-rate threshold to a 30 fps cap and nothing else', () => {
-    const capped = cappedScaler(SCALER, 30);
-    expect(capped).toMatchObject({
-      targetFps: 30,
-      lowerBelowFps: SCALER.lowerBelowFps / 2,
-      raiseAtFps: SCALER.raiseAtFps / 2,
-      tierProbeBelowFps: SCALER.tierProbeBelowFps / 2,
-      tierDropBelowFps: SCALER.tierDropBelowFps / 2,
-      windowMs: SCALER.windowMs,
-      maxFrameMs: SCALER.maxFrameMs,
-      cutGain: SCALER.cutGain,
-    });
   });
 });

@@ -6,6 +6,7 @@ import {
   TERRAINS,
   workSource,
   type GuardianDifficulty,
+  type FeelingId,
   type GuardianHint,
   type MapMember,
   type PostReach,
@@ -146,29 +147,46 @@ const DIFFICULTY_WORDS: Readonly<Record<GuardianDifficulty, string>> = {
 const FEELING_NAMES = new Map(FEELINGS.map((f) => [f.id, f.name]));
 
 /**
- * Who guards wild land, in words (#216): how many, how they feel, and how
- * tough. "Guarded by 1 Brave squishy • easy", "Guarded by 3 Sleepy squishies •
- * tough", "Guarded by 3 squishies: 2 Sleepy, 1 Joy • very tough" (repeats
- * counted, in team order). An older server sends no feelings: "Guarded by 2
- * squishies • tough". The server never says which species.
+ * How many squishies and how they feel, in words: "1 Brave squishy", "3 Sleepy
+ * squishies", "3 squishies: 2 Sleepy, 1 Joy" (repeats counted, in team order).
+ * With no feelings (an older server) just "2 squishies". Wild land's hint and a
+ * rival's posted guards (#531) both say it this way.
  */
-export function guardianLine(hint: GuardianHint | null): string | null {
-  if (hint === null) return null;
-  const tough = DIFFICULTY_WORDS[hint.difficulty];
+function whoLine(count: number, feelings: readonly FeelingId[]): string {
   const many = (n: number) => (n === 1 ? 'squishy' : 'squishies');
   const counts = new Map<string, number>();
-  for (const id of hint.feelings) {
+  for (const id of feelings) {
     const name = FEELING_NAMES.get(id) ?? id;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  const n = String(hint.count);
+  const n = String(count);
   const [only] = counts.keys();
-  let who: string;
-  if (counts.size === 0) who = `${n} ${many(hint.count)}`;
-  else if (counts.size === 1 && only !== undefined) who = `${n} ${only} ${many(hint.count)}`;
-  else {
-    const kinds = [...counts].map(([name, k]) => `${String(k)} ${name}`).join(', ');
-    who = `${n} squishies: ${kinds}`;
-  }
-  return `Guarded by ${who} • ${tough}`;
+  if (counts.size === 0) return `${n} ${many(count)}`;
+  if (counts.size === 1 && only !== undefined) return `${n} ${only} ${many(count)}`;
+  const kinds = [...counts].map(([name, k]) => `${String(k)} ${name}`).join(', ');
+  return `${n} squishies: ${kinds}`;
+}
+
+/**
+ * Who guards wild land, in words (#216): how many, how they feel, and how
+ * tough. "Guarded by 1 Brave squishy • easy", "Guarded by 3 Sleepy squishies •
+ * tough", "Guarded by 3 squishies: 2 Sleepy, 1 Joy • very tough". An older
+ * server sends no feelings: "Guarded by 2 squishies • tough". The server never
+ * says which species.
+ */
+export function guardianLine(hint: GuardianHint | null): string | null {
+  if (hint === null) return null;
+  return `Guarded by ${whoLine(hint.count, hint.feelings)} • ${DIFFICULTY_WORDS[hint.difficulty]}`;
+}
+
+/**
+ * Who a rival's posted guards are, in feelings only (#531): "Guarded by 3
+ * squishies: 2 Sleepy, 1 Joy". No toughness word: they fight at their Keeper's
+ * Partner level, which the challenge sheet says on its own. Null when the
+ * server sent no feelings (older server, or nobody posted), so the sheet keeps
+ * its "stand watch" count.
+ */
+export function watchFeelingsLine(feelings: readonly FeelingId[] | undefined): string | null {
+  if (!feelings || feelings.length === 0) return null;
+  return `Guarded by ${whoLine(feelings.length, feelings)}`;
 }

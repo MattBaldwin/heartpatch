@@ -1,4 +1,4 @@
-import { BODIES, PartShapeSchema, SPECIES } from '@heartpatch/shared';
+import { BODIES, PartShapeSchema, SPECIES, SQUISHY_COSTUME_IDS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { draws, idle } from './dev-hook.js';
 
@@ -179,6 +179,24 @@ test('the first 12 roster species (9 body kinds) stay within 16 draw calls', asy
   const map = await openGallery(page, '?still&count=12');
   expect(map.squishies).toBe(12);
   expect(map.meshes).toBeLessThanOrEqual(16);
+});
+
+test('squishy costumes add pieces, never draw calls (#515)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const bare = await openGallery(page, '?still&count=12');
+  // Every costume in turn: hats, collars, capes, wings and a sheet on 12 squishies.
+  const dressed = await openGallery(
+    page,
+    `?still&count=12&accessory=${SQUISHY_COSTUME_IDS.join(',')}`,
+  );
+  expect(dressed.squishies).toBe(12);
+  // Their pieces are thin instances in the part batches already on screen.
+  expect(dressed.meshes).toBe(bare.meshes);
+  const expected = await page.evaluate(() =>
+    (window as Hooks).__heartpatchGallery!.expectedInstances(),
+  );
+  expect(dressed.instances).toBe(expected);
+  expect(dressed.instances).toBeGreaterThan(bare.instances);
 });
 
 test('tapping a squishy jiggles it, then the still scene goes idle again', async ({ page }) => {

@@ -72,6 +72,17 @@ interface ExploreDebug {
 }
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
+const frameCap = (page: Page) => hook<{ fps: number }>(page, 'frameCap');
+
+/** Frames drawn so far and the page's clock, to read a drawn frame rate between two readings. */
+const frameClock = (page: Page) =>
+  page.evaluate(() => ({
+    draws: (window as { __heartpatch?: { draws(): number } }).__heartpatch?.draws() ?? 0,
+    at: performance.now(),
+  }));
+
+/** Explore draws at most 30 frames a second (#501, owner Oct 18), with a frame of slack for the clock. */
+const EXPLORE_MAX_FPS = 31;
 const mapState = (page: Page) =>
   hook<{ tiles: number; selected: string | null; buildings: number }>(page, 'map');
 
@@ -104,6 +115,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);
+  // The map draws on demand, uncapped (#501).
+  expect(await frameCap(page)).toBeNull();
   await explore.tap();
 
   await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
@@ -177,6 +190,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   expect(settled?.triangles ?? 0).toBeLessThan(TRIANGLE_CEILING);
   const builtOnArrival = settled?.created;
   expect(builtOnArrival?.meshes ?? 0).toBeGreaterThan(0);
+  // Explore runs cool (#501): its stage is capped at 30 frames a second.
+  expect(await frameCap(page)).toMatchObject({ fps: 30 });
 
   // Walk to a spot searched by hand and search it the easy way. A common find
   // is a toast and the world keeps going; a rare one (a lore page, something
@@ -191,7 +206,9 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   let guardSkipped: string | null = 'the first hand spot was already in reach';
   let toasted = false;
   for (const hands of handSpots.slice(0, 5)) {
+    const walkStart = await frameClock(page);
     if (!(await walkTo(page, hands.index))) continue;
+    const walkEnd = await frameClock(page);
     // The camera follows the Keeper: it settles looking just ahead of it.
     await expect
       .poll(async () => {
@@ -214,6 +231,18 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       // a frame over the draw-call budget would show.
       expect(walked.scene?.created).toEqual(builtOnArrival);
       expect(walked.scene?.drawCalls ?? 0).toBeLessThan(DRAW_CALL_CEILING);
+      // And at no more than 30 drawn frames a second (#501). A software
+      // renderer is far below that anyway; the cap itself is unit-tested
+      // (stage.test.ts), this catches a walk that bypasses it.
+      // Only over a second or more: a spot already in reach makes a window of
+      // a few ms, where one frame would read as 100+ fps.
+      const walkMs = walkEnd.at - walkStart.at;
+      const walkFps = ((walkEnd.draws - walkStart.draws) * 1000) / walkMs;
+      test.info().annotations.push({
+        type: 'walkFps',
+        description: `${walkFps.toFixed(1)} over ${walkMs.toFixed(0)} ms`,
+      });
+      if (walkMs >= 1000) expect(walkFps).toBeLessThanOrEqual(EXPLORE_MAX_FPS);
       guardSkipped = null;
     }
     await slowExpect(action).toBeEnabled();
@@ -340,6 +369,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await page.getByTestId('explore-back').tap();
   await slowExpect(page.getByTestId('map-hud')).toBeVisible();
   expect((await exploreState(page))?.open).toBe(false);
+  // The map's stage is back on demand, uncapped (#501).
+  await expect.poll(() => frameCap(page), slow).toBeNull();
   expect(errors).toEqual([]);
 });
 

@@ -92,21 +92,17 @@ describe('rollTrickOrTreat (#515)', () => {
   });
 
   it('gives a squishy costume from the catalog, or Heartdust while there are none', () => {
-    const cap: ClothingItem = {
-      ...CLOTHING.find((i) => i.id === 'pumpkin-cap')!,
-      id: 'test-squishy-costume',
-      sources: ['trick-or-treat'],
-    };
+    const squishy = (i: ClothingItem) =>
+      i.slot === 'squishy' && i.sources.includes('trick-or-treat');
     const roll = (catalog: readonly ClothingItem[]) =>
       rollTrickOrTreat(base, only('squishy-costume'), catalog).prize;
-    expect(roll([...CLOTHING, cap])).toEqual({
-      kind: 'squishy-costume',
-      itemId: 'test-squishy-costume',
+    const got = roll(CLOTHING);
+    expect(got.kind).toBe('squishy-costume');
+    expect(CLOTHING.filter(squishy).map((i) => i.id)).toContain(got.itemId);
+    expect(roll(CLOTHING.filter((i) => !squishy(i)))).toEqual({
+      kind: 'heartdust',
+      itemId: 'heartdust',
       count: 1,
     });
-    const none = CLOTHING.filter(
-      (i) => !(i.slot === 'squishy' && i.sources.includes('trick-or-treat')),
-    );
-    expect(roll(none)).toEqual({ kind: 'heartdust', itemId: 'heartdust', count: 1 });
   });
 });

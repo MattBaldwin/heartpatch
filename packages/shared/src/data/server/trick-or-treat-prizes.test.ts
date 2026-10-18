@@ -18,6 +18,8 @@ describe('trick-or-treat data (#515)', () => {
   it('offers the #261 Halloween costumes, but never the Mythic Hollow Man', () => {
     const keeper = trickOrTreatCostumes(CLOTHING, 'keeper-costume').map((i) => i.id);
     expect(keeper).toHaveLength(9);
+    // And the six squishy costumes (#552).
+    expect(trickOrTreatCostumes(CLOTHING, 'squishy-costume')).toHaveLength(6);
     expect(keeper).toContain('bat-buddy');
     expect(keeper).not.toContain('hollow-man-costume');
     for (const id of keeper) expect(CLOTHING.find((i) => i.id === id)?.slot).toBe('costume');
@@ -32,8 +34,9 @@ describe('trick-or-treat data (#515)', () => {
       'lantern.heartdust: min is more than max',
       'lantern.heartdust: less than a plain home gives',
       'lantern: fewer costumes than a plain home',
-      'rarityWeights: "rare" is 0, so moonbroom-witch never comes up',
-      'rarityWeights: "rare" is 0, so bat-buddy never comes up',
+      ...CLOTHING.filter((i) => i.rarity === 'rare' && i.sources.includes('trick-or-treat')).map(
+        (i) => `rarityWeights: "rare" is 0, so ${i.id} never comes up`,
+      ),
     ]);
   });
 

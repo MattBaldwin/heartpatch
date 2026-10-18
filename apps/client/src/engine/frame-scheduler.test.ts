@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FRAME_CAP_30 } from './config.js';
 import { FrameScheduler } from './frame-scheduler.js';
 
 /** Runs loop iterations 16 ms apart; `busy(i)` says whether iteration i animates. */
@@ -99,9 +100,10 @@ describe('FrameScheduler', () => {
     expect(run(s, 4, () => false, 1000).filter((f) => f.draw)).toHaveLength(2);
   });
 
-  it('under a cap (`?cap30=1`) draws every other 60 Hz frame and reports their real gap', () => {
-    const s = new FrameScheduler(2, 26);
-    const frames = run(s, 9, () => true);
+  it('under a cap draws every other 60 Hz frame and reports their real gap', () => {
+    const s = new FrameScheduler(2, FRAME_CAP_30);
+    const vsync = 1000 / 60;
+    const frames = Array.from({ length: 9 }, (_, i) => s.next(i * vsync, true));
     expect(frames.map((f) => f.draw)).toEqual([
       true,
       false,
@@ -113,16 +115,37 @@ describe('FrameScheduler', () => {
       false,
       true,
     ]);
-    expect(frames.filter((f) => f.draw).map((f) => f.frameMs)).toEqual([null, 32, 32, 32, 32]);
+    const gaps = frames.filter((f) => f.draw).map((f) => f.frameMs);
+    expect(gaps[0]).toBeNull();
+    for (const gap of gaps.slice(1)) expect(gap).toBeCloseTo(2 * vsync);
     expect(s.idle).toBe(false);
   });
 
   it('keeps a request that came too soon under a cap for the next allowed frame', () => {
-    const s = new FrameScheduler(1, 26);
+    const s = new FrameScheduler(1, FRAME_CAP_30);
     run(s, 1, () => false);
     s.requestFrame();
     expect(s.next(16, false).draw).toBe(false);
     expect(s.next(32, false).draw).toBe(true);
     expect(s.next(48, false).draw).toBe(false);
+  });
+
+  it('keeps its 30 fps slots when a drawn frame runs late (60 Hz)', () => {
+    const s = new FrameScheduler(1, FRAME_CAP_30);
+    const vsync = 1000 / 60;
+    // Every drawn callback runs 7 ms late; the ones between run on time.
+    const drawn = Array.from({ length: 60 }, (_, i) => {
+      s.requestFrame();
+      return s.next(i * vsync + (i % 2 === 0 ? 7 : 0), true).draw;
+    });
+    expect(drawn.filter(Boolean)).toHaveLength(30);
+  });
+
+  it('starts a fresh schedule after an idle stretch', () => {
+    const s = new FrameScheduler(1, FRAME_CAP_30);
+    expect(s.next(0, true).draw).toBe(true);
+    expect(s.next(1000, true).draw).toBe(true);
+    expect(s.next(1016, true).draw).toBe(false);
+    expect(s.next(1033, true).draw).toBe(true);
   });
 });

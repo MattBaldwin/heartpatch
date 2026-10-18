@@ -29,6 +29,7 @@ import {
   HOME_ALL_BUILT,
   HOME_ALL_TOP,
   HOME_FULL,
+  HOME_FULL_GROW,
   homeBuildReason,
   landFires,
   BUILT_ON_HOMESTEAD,
@@ -628,7 +629,7 @@ function homeFilled(
   n = 7,
   extra: Partial<HomeResponse> = {},
 ) {
-  const tiles = homeWith().tiles;
+  const tiles = extra.tiles ?? homeWith().tiles;
   return homeWith({
     buildings: tiles
       .slice(0, n)
@@ -645,10 +646,36 @@ const sheetCards = (home: HomeResponse) =>
 
 describe('a home base with no room left (#537)', () => {
   const den = { buildingId: 'ember-den' };
+  // Four Ember Dens and four Cozy Meadows (each `maxPerHome: 4`, owner
+  // 2026-10-18) need eight tiles: one more than a real home base's seven.
+  // A real home can't reach this state; it guards the all-built lines for a
+  // future cap or home-size change.
+  const roomy = {
+    tiles: [...homeWith().tiles, { q: 2, r: -1, heartSeed: false, nodeResource: null }],
+  };
 
-  it('reproduces the owner sheet: with every den and meadow built, only the lantern card is left', () => {
-    // Two Ember Dens and two Cozy Meadows (each `maxPerHome: 2`).
-    const home = homeFilled((i) => (i < 2 ? den : {}), 4, { items: {} });
+  it('holds four of each den and meadow (owner 2026-10-18)', () => {
+    for (const id of ['ember-den', 'cozy-meadow']) {
+      expect(GAME_DATA.buildings.find((b) => b.id === id)?.maxPerHome).toBe(4);
+    }
+  });
+
+  it('says full once four dens and three meadows fill the seven home tiles', () => {
+    const home = homeFilled((i) => (i < 4 ? den : {}), 7, { items: {} });
+    const rows = new Map(buildRows(home).map((r) => [r.building.id, r.option]));
+    expect(rows.get('ember-den')).toMatchObject({ kind: 'built' });
+    expect(rows.get('cozy-meadow')).toEqual({ kind: 'blocked', note: HOME_FULL });
+    // A den can still grow, so the sheet points to upgrades (owner 2026-10-18).
+    expect(homeBuildReason(home)).toBe(HOME_FULL_GROW);
+  });
+
+  it('says take one down only once the full home is all at its top level', () => {
+    const home = homeFilled((i) => ({ ...(i < 4 ? den : {}), level: 2 }), 7, { items: {} });
+    expect(homeBuildReason(home)).toBe(HOME_FULL);
+  });
+
+  it('with every den and meadow built, only the lantern card is left', () => {
+    const home = homeFilled((i) => (i < 4 ? den : {}), 8, { ...roomy, items: {} });
     expect(sheetCards(home)).toEqual(['jack-o-lantern-hearthfire']);
     const rows = new Map(buildRows(home).map((r) => [r.building.id, r.option.kind]));
     expect(rows.get('ember-den')).toBe('built');
@@ -658,7 +685,7 @@ describe('a home base with no room left (#537)', () => {
   });
 
   it('says they are as big as they get once every one is at its top level', () => {
-    const home = homeFilled((i) => ({ ...(i < 2 ? den : {}), level: 2 }), 4);
+    const home = homeFilled((i) => ({ ...(i < 4 ? den : {}), level: 2 }), 8, roomy);
     expect(homeBuildReason(home)).toBe(HOME_ALL_TOP);
   });
 
@@ -670,7 +697,7 @@ describe('a home base with no room left (#537)', () => {
     expect(freeHomeSpots(home)).toEqual([]);
     const row = buildRows(home).find((r) => r.building.id === 'ember-den')!;
     expect(row.option).toEqual({ kind: 'blocked', note: HOME_FULL });
-    expect(homeBuildReason(home)).toBe(HOME_FULL);
+    expect(homeBuildReason(home)).toBe(HOME_FULL_GROW);
   });
 
   it('says full before short: gathering more would not make room', () => {
@@ -690,7 +717,7 @@ describe('a home base with no room left (#537)', () => {
   });
 
   it('reads kindly (style guide §9)', () => {
-    for (const line of [HOME_FULL, HOME_ALL_BUILT, HOME_ALL_TOP]) {
+    for (const line of [HOME_FULL, HOME_FULL_GROW, HOME_ALL_BUILT, HOME_ALL_TOP]) {
       expect(findAvoidedWords(line)).toEqual([]);
       expect(line.split(' ').length).toBeLessThanOrEqual(15);
     }

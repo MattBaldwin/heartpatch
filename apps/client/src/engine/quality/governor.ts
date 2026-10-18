@@ -391,3 +391,20 @@ function good(s: GovernorState, w: number, config: ScalerConfig): GovernorState 
     sinceTierRaiseMs: 0,
   };
 }
+
+/**
+ * The governor's settings for a loop capped at `fps` (`FrameCap`): every
+ * frame-rate threshold scaled to the cap, so the cap reads as on target, not
+ * as a GPU that can't keep up (no cuts, no tier probes).
+ */
+export function cappedScaler(config: ScalerConfig, fps: number): ScalerConfig {
+  const k = fps / config.targetFps;
+  return {
+    ...config,
+    targetFps: fps,
+    lowerBelowFps: config.lowerBelowFps * k,
+    raiseAtFps: config.raiseAtFps * k,
+    tierProbeBelowFps: config.tierProbeBelowFps * k,
+    tierDropBelowFps: config.tierDropBelowFps * k,
+  };
+}

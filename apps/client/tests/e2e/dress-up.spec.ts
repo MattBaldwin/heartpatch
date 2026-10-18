@@ -57,10 +57,12 @@ test('puts an accessory on a squishy up close and sees it on them', async ({ bro
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
-  // A Boutique piece, as if bought (the starter Tiny Bow everyone owns too).
-  expect((await api(page, 'POST', '/dev/wardrobe/items', { items: ['tiny-crown'] })).status).toBe(
-    201,
-  );
+  // A Boutique piece, as if bought, and a trick-or-treat costume (#515), as
+  // if given at a door (the starter Tiny Bow everyone owns too).
+  expect(
+    (await api(page, 'POST', '/dev/wardrobe/items', { items: ['tiny-crown', 'vampire-cape'] }))
+      .status,
+  ).toBe(201);
   const map = (await mapId(page))!;
 
   await openFromHome(page);
@@ -72,7 +74,7 @@ test('puts an accessory on a squishy up close and sees it on them', async ({ bro
   await expect.poll(async () => (await state(page))?.dressing).toBe(true);
   const list = page.getByTestId('close-up-dress-list');
   // Nothing first, then what I own, in catalog order; never Keeper clothing.
-  await slowExpect(list.locator('[data-accessory]')).toHaveCount(3);
+  await slowExpect(list.locator('[data-accessory]')).toHaveCount(4);
   await expect(list.locator('[data-accessory]').first()).toHaveAttribute('data-accessory', 'none');
   await expect(list.locator('[data-accessory="none"]')).toHaveAttribute('aria-pressed', 'true');
 
@@ -105,8 +107,13 @@ test('puts an accessory on a squishy up close and sees it on them', async ({ bro
   await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');
   expect((await state(page))?.accessory).toBe('tiny-bow');
 
-  // Nothing takes it off.
+  // A costume goes on in the accessory's one slot (#515), and the server keeps it.
   await card.getByTestId('close-up-dress-open').tap();
+  await list.locator('[data-accessory="vampire-cape"]').tap();
+  await expect.poll(async () => (await state(page))?.accessory).toBe('vampire-cape');
+  await expect.poll(() => worn(page, map, id), slow).toBe('vampire-cape');
+
+  // Nothing takes it off.
   await list.locator('[data-accessory="none"]').tap();
   await expect.poll(async () => (await state(page))?.accessory).toBeNull();
   await expect.poll(() => worn(page, map, id), slow).toBeNull();

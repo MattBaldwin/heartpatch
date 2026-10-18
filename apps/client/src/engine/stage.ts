@@ -1,8 +1,15 @@
 import { Scene } from '@babylonjs/core/scene';
 import { MapCamera } from './camera/map-camera.js';
 import type { Bounds, GroundPoint } from './camera/camera-math.js';
-import { CAMERA, SETTLE_FRAMES, type CameraConfig, type QualityTier } from './config.js';
-import { bisectFlags, CAP30_MIN_FRAME_MS } from './bisect-flags.js';
+import {
+  CAMERA,
+  FRAME_CAP_30,
+  SETTLE_FRAMES,
+  type CameraConfig,
+  type FrameCap,
+  type QualityTier,
+} from './config.js';
+import { bisectFlags } from './bisect-flags.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import { PerfProbe, SLOW_FRAME_MS, slowFrames } from './perf-report.js';
 import { setupLighting } from './lighting/lighting.js';
@@ -16,6 +23,12 @@ export interface SceneContent {
   readonly start?: GroundPoint;
   /** How far out the camera may zoom, if not `CAMERA.maxDistance` (a bigger map, #318). */
   readonly maxDistance?: number;
+  /**
+   * The most frames a second this scene draws, walking or idle (explore:
+   * `FRAME_CAP_30`, #501). None: render on demand at the display's rate.
+   * `?cap30=1` caps every scene.
+   */
+  readonly frameCap?: FrameCap;
 }
 
 /** Fills a fresh scene with content; lighting and camera are set up for it. */
@@ -27,6 +40,8 @@ export interface Stage {
   readonly scene: Scene;
   readonly camera: MapCamera;
   readonly quality: RenderQuality;
+  /** The most frames a second this stage draws (`SceneContent.frameCap`), or null: on demand. */
+  readonly frameCap: FrameCap | null;
   /**
    * Draw a few frames. The loop only draws on its own while the camera moves,
    * Babylon animations (`scene.animatables`) run, or the scene is loading.
@@ -70,6 +85,7 @@ export function mountStage(
     throw err;
   }
   const { bounds, start, maxDistance } = content;
+  const frameCap = content.frameCap ?? (bisectFlags().cap30 ? FRAME_CAP_30 : null);
   const mapCamera = new MapCamera(
     scene,
     canvas,
@@ -78,9 +94,12 @@ export function mountStage(
     start,
   );
   scene.activeCamera = mapCamera.camera;
-  const quality = new RenderQuality(scene, mapCamera.camera, tier, pinTier);
+  const quality = new RenderQuality(scene, mapCamera.camera, tier, {
+    pinned: pinTier,
+    capFps: frameCap?.fps ?? null,
+  });
 
-  const frames = new FrameScheduler(SETTLE_FRAMES, bisectFlags().cap30 ? CAP30_MIN_FRAME_MS : 0);
+  const frames = new FrameScheduler(SETTLE_FRAMES, frameCap);
   // The on-device perf report (#501): frame timing and GPU fences; reads the stage once built.
   let stage: Stage | null = null;
   const probe = new PerfProbe(engine, renderer.kind, quality, () => stage);
@@ -173,6 +192,7 @@ export function mountStage(
     scene,
     camera: mapCamera,
     quality,
+    frameCap,
     invalidate: () => {
       frames.invalidate();
     },

@@ -1,5 +1,7 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NO_BISECT, setBisectFlags } from './bisect-flags.js';
+import { FRAME_CAP_30, type FrameCap } from './config.js';
 import type { Renderer } from './renderer.js';
 import { mountStage, type Stage } from './stage.js';
 
@@ -53,7 +55,7 @@ describe('mountStage frame order', () => {
     vi.restoreAllMocks();
   });
 
-  function mount(): Stage {
+  function mount(frameCap?: FrameCap): Stage {
     const canvas = {
       addEventListener: vi.fn(),
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }),
@@ -69,7 +71,10 @@ describe('mountStage frame order', () => {
     const s = mountStage(
       renderer,
       canvas,
-      () => ({ bounds: { minX: -5, maxX: 5, minZ: -5, maxZ: 5 } }),
+      () => ({
+        bounds: { minX: -5, maxX: 5, minZ: -5, maxZ: 5 },
+        ...(frameCap && { frameCap }),
+      }),
       'high',
     );
     vi.spyOn(s.scene, 'render').mockImplementation(() => {
@@ -124,5 +129,118 @@ describe('mountStage frame order', () => {
     expect(order.indexOf('rescale')).toBe(0);
     expect(order.indexOf('rescale')).toBeLessThan(order.indexOf('resize'));
     expect(order.indexOf('resize')).toBeLessThan(order.lastIndexOf('render'));
+  });
+});
+
+describe('mountStage frame cap (#501)', () => {
+  let engine: NullEngine;
+  let frame: () => void;
+  let stage: Stage | null = null;
+  let now = 0;
+
+  beforeEach(() => {
+    vi.stubGlobal('window', {
+      devicePixelRatio: 2,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    engine = new NullEngine();
+    vi.spyOn(engine, 'runRenderLoop').mockImplementation((loop) => {
+      frame = loop;
+    });
+    now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+  });
+
+  afterEach(() => {
+    stage?.dispose();
+    stage = null;
+    engine.dispose();
+    setBisectFlags(NO_BISECT);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function mount(frameCap?: FrameCap): Stage {
+    const canvas = {
+      addEventListener: vi.fn(),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }),
+      clientWidth: 390,
+      clientHeight: 844,
+      dataset: {},
+    } as unknown as HTMLCanvasElement;
+    const s = mountStage(
+      { engine, kind: 'webgl2', onLost: vi.fn() },
+      canvas,
+      () => ({ bounds: { minX: -5, maxX: 5, minZ: -5, maxZ: 5 }, ...(frameCap && { frameCap }) }),
+      'high',
+    );
+    vi.spyOn(s.scene, 'render').mockImplementation(() => undefined);
+    return s;
+  }
+
+  /**
+   * Draws one second of a `hz` display, invalidating every frame like the
+   * joystick loop; each callback runs up to `jitterMs` late (a busy main thread).
+   */
+  function oneSecond(s: Stage, hz = 120, jitterMs = 0): number {
+    const before = s.draws;
+    const start = now;
+    for (let i = 1; i <= hz; i++) {
+      now = start + (i * 1000) / hz + (i % 3 === 0 ? jitterMs : 0);
+      s.invalidate();
+      frame();
+    }
+    now = start + 1000;
+    return s.draws - before;
+  }
+
+  it('draws a capped scene at 30 frames a second on a 120 Hz display, asked every frame', () => {
+    stage = mount(FRAME_CAP_30);
+    oneSecond(stage); // loading
+    expect(oneSecond(stage)).toBe(30);
+  });
+
+  it('holds the cap on 60, 90 and 144 Hz displays, and with late callbacks', () => {
+    stage = mount(FRAME_CAP_30);
+    const s = stage;
+    oneSecond(s);
+    // A second to settle on each new rate: one slot can straddle the switch.
+    const settled = (hz: number, jitterMs = 0) => {
+      oneSecond(s, hz, jitterMs);
+      return oneSecond(s, hz, jitterMs);
+    };
+    expect(settled(60)).toBe(30);
+    expect(settled(90)).toBe(30);
+    expect(settled(144)).toBe(30);
+    expect(settled(120, 3)).toBe(30);
+    expect(settled(60, 10)).toBe(30);
+  });
+
+  it('draws an uncapped scene at the display rate', () => {
+    stage = mount();
+    oneSecond(stage);
+    expect(oneSecond(stage)).toBe(120);
+  });
+
+  it('caps every scene with ?cap30=1', () => {
+    setBisectFlags({ ...NO_BISECT, cap30: true });
+    stage = mount();
+    oneSecond(stage);
+    expect(oneSecond(stage)).toBe(30);
+  });
+
+  it('keeps the governor at full quality at the cap', () => {
+    stage = mount(FRAME_CAP_30);
+    for (let i = 0; i < 20; i++) oneSecond(stage);
+    expect(stage.quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1 });
   });
 });
