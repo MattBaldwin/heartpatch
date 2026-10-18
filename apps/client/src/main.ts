@@ -502,6 +502,7 @@ const journeys = createJourneyScreen({
 // reads again.
 const trickOrTreat = createTrickOrTreat({
   root: document.body,
+  isGlade: (mapId) => mapId === glade,
   light: (mapId, userIds) => {
     maps.setPorchLanterns(mapId, userIds);
   },

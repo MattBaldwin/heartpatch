@@ -93,3 +93,20 @@ export function litHosts(trick: TrickOrTreatView | null): Set<string> {
   if (!trick?.open) return new Set();
   return new Set(trick.hosts.filter((h) => h.lit).map((h) => h.userId));
 }
+
+/** A redraw re-reads the doors at most this often (lanterns light and go out). */
+export const REFRESH_MS = 60_000; // TUNE: the server allows 60 reads a minute
+
+/**
+ * Whether a redraw should read the doors again. Never within `REFRESH_MS` of
+ * the last try, whether it worked or not, and out of season not before the
+ * patch's day ends (the season starts and ends on a day).
+ */
+export function readDue(
+  last: { at: number | null; trick: TrickOrTreatView | null },
+  now: number,
+): boolean {
+  if (last.at === null) return true;
+  if (last.trick && !last.trick.open && now < Date.parse(last.trick.resetsAt)) return false;
+  return now - last.at >= REFRESH_MS;
+}

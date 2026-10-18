@@ -710,7 +710,9 @@ export class MapScene {
   /**
    * Trick-or-treat (#515): these Keepers have a lit Jack-o'-Lantern tonight,
    * so a little one glows on their Heart Seed's porch. It's one more thin
-   * instance of the lit lantern and its light pool: no new meshes.
+   * instance of the level-1 lit lantern and its light pool: no new
+   * materials, and no new meshes while a level-1 lantern is on the map (else
+   * that one model, built once and shared by every porch).
    */
   setPorchLanterns(userIds: ReadonlySet<string>): void {
     if (userIds.size === this.porches.size && [...userIds].every((id) => this.porches.has(id))) {

@@ -12,7 +12,14 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { trickOrTreatApi, type TrickOrTreatApi } from './trick-or-treat-api.js';
-import { doorLines, doorOf, litHosts, prizeToast, TRICK_TEXT } from './trick-or-treat-text.js';
+import {
+  doorLines,
+  doorOf,
+  litHosts,
+  prizeToast,
+  readDue,
+  TRICK_TEXT,
+} from './trick-or-treat-text.js';
 import './trick-or-treat.css';
 
 // Trick-or-treat on the map (#515 part B, the approved plan's map screens).
@@ -24,11 +31,11 @@ import './trick-or-treat.css';
 
 /** How long the treat's toast stays. */
 const TOAST_MS = 5000; // TUNE: long enough to read a costume's name
-/** A redraw re-reads the doors at most this often (lanterns light and go out). */
-const REFRESH_MS = 60_000; // TUNE: the server allows 60 reads a minute
 
 export interface TrickOrTreatOptions {
   root: HTMLElement;
+  /** The Tutorial Glade has no patch-mates to visit: nothing is read or shown there. */
+  isGlade?: (mapId: string) => boolean;
   /** Draws the porch lanterns for map `mapId` (`MapScreen.setPorchLanterns`). */
   light: (mapId: string, userIds: ReadonlySet<string>) => void;
   /** A treat landed: Heartdust is in the bag, or a costume in the Wardrobe. */
@@ -68,7 +75,8 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
   let trick: TrickOrTreatView | null = null;
-  let readAt = 0;
+  /** When the doors were last asked for (a failed read counts), or null: never on this map. */
+  let readAt: number | null = null;
   let reading = false;
   /** Bumped by each knock's reply, so a read begun before it can't undo "Visited today". */
   let knocks = 0;
@@ -101,7 +109,6 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
   /** Takes a fresh read of the doors: lanterns, the panel, and a wake-up at the day's end. */
   function apply(next: TrickOrTreatView): void {
     trick = next;
-    readAt = now();
     if (mapId) options.light(mapId, litHosts(next));
     // At the patch's midnight every door opens again.
     clearTimeout(midnight);
@@ -118,6 +125,7 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
     const at = generation;
     const since = knocks;
     reading = true;
+    readAt = now();
     try {
       const next = await api.view(id);
       if (at === generation && since === knocks) apply(next);
@@ -133,14 +141,13 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       generation += 1;
       mapId = id;
       trick = null;
-      readAt = 0;
+      readAt = null;
       working = false;
       reading = false;
       clearTimeout(midnight);
-      void read();
-    } else if (now() - readAt > REFRESH_MS) {
-      void read();
     }
+    if (options.isGlade?.(id)) return;
+    if (readDue({ at: readAt, trick }, now())) void read();
   }
 
   async function knock(hostUserId: string): Promise<void> {
@@ -212,7 +219,7 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       generation += 1;
       mapId = null;
       trick = null;
-      readAt = 0;
+      readAt = null;
       working = false;
       reading = false;
       clearTimeout(midnight);

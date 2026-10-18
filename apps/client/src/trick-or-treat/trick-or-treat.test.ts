@@ -1,7 +1,15 @@
 import { findAvoidedWords, type TrickOrTreatView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { userId } from '../map/test-view.js';
-import { doorLines, doorOf, litHosts, prizeToast, TRICK_TEXT } from './trick-or-treat-text.js';
+import {
+  doorLines,
+  doorOf,
+  litHosts,
+  prizeToast,
+  readDue,
+  REFRESH_MS,
+  TRICK_TEXT,
+} from './trick-or-treat-text.js';
 
 const ME = userId(1);
 const view = (over: Partial<TrickOrTreatView> = {}): TrickOrTreatView => ({
@@ -111,5 +119,24 @@ describe('litHosts (#515)', () => {
     expect(litHosts(view())).toEqual(new Set([userId(3), userId(4)]));
     expect(litHosts(view({ open: false }))).toEqual(new Set());
     expect(litHosts(null)).toEqual(new Set());
+  });
+});
+
+describe('readDue (#515)', () => {
+  const at = Date.parse('2026-10-18T20:00:00.000Z');
+
+  it('reads a new map at once, then at most once a minute, a failed read included', () => {
+    expect(readDue({ at: null, trick: null }, at)).toBe(true);
+    // The last try failed (no doors heard): still not again for a minute.
+    expect(readDue({ at, trick: null }, at + 1000)).toBe(false);
+    expect(readDue({ at, trick: null }, at + REFRESH_MS)).toBe(true);
+    expect(readDue({ at, trick: view() }, at + REFRESH_MS - 1)).toBe(false);
+    expect(readDue({ at, trick: view() }, at + REFRESH_MS)).toBe(true);
+  });
+
+  it("out of season, waits for the patch's next day", () => {
+    const closed = view({ open: false, resetsAt: '2026-10-19T07:00:00.000Z' });
+    expect(readDue({ at, trick: closed }, at + 5 * REFRESH_MS)).toBe(false);
+    expect(readDue({ at, trick: closed }, Date.parse(closed.resetsAt))).toBe(true);
   });
 });
