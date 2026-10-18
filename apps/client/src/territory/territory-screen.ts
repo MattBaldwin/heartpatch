@@ -370,16 +370,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'no-tries':
         children.push(triesLine(action.triesResetAt, TERRITORY_TEXT.noTries));
         break;
-      case 'keeper-resting':
-        children.push(
-          countdownLine(
-            action.triesResetAt,
-            (wait) => TERRITORY_TEXT.keeperResting(owner ?? TERRITORY_TEXT.someone, wait),
-            () => void refresh(),
-            'territory-keeper-resting',
-          ),
+      case 'keeper-resting': {
+        const reason = countdownLine(
+          action.triesResetAt,
+          (wait) => TERRITORY_TEXT.keeperResting(owner ?? TERRITORY_TEXT.someone, wait),
+          () => void refresh(),
+          'territory-keeper-resting',
         );
+        reason.classList.add('territory-reason');
+        children.push(reason);
         break;
+      }
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
         break;

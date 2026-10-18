@@ -60,3 +60,10 @@
   color: #7a2d55;
   font-weight: 700;
 }
+
+/* Scrolled into the tile panel's view (#526): a little room below, so the
+   line never sits a fraction of a pixel past the panel's edge. */
+.territory-note,
+.territory-reason {
+  scroll-margin-block: 8px;
+}
