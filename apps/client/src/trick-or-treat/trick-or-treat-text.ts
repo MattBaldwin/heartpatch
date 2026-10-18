@@ -24,7 +24,8 @@ export const TRICK_TEXT = {
   trick: '👻 Boo! Just a silly trick!',
   heartdust: (n: number) => `💗 Treat! ${String(n)} Heartdust for you!`,
   keeperCostume: (name: string) => `🎃 Treat! ${aOrAn(name)} ${name} costume for you!`,
-  squishyCostume: (name: string) => `🎃 Treat! ${aOrAn(name)} ${name} for your squishies!`,
+  /** Said as a costume, so a plural name ("Little Bat Wings") reads right. */
+  squishyCostume: (name: string) => `🎃 Treat! ${name}, a costume for your squishies!`,
   /** A costume whose name this build doesn't know yet (a newer server). */
   someCostume: '🎃 Treat! A new costume! Find it in your Wardrobe.',
 } as const;

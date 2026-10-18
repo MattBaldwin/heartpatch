@@ -77,7 +77,8 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
   let trick: TrickOrTreatView | null = null;
   /** When the doors were last asked for (a failed read counts), or null: never on this map. */
   let readAt: number | null = null;
-  let reading = false;
+  /** The generation a read is going for, or null: one read at a time per map and player. */
+  let reading: number | null = null;
   /** Bumped by each knock's reply, so a read begun before it can't undo "Visited today". */
   let knocks = 0;
   let working = false;
@@ -121,10 +122,10 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
 
   async function read(): Promise<void> {
     const id = mapId;
-    if (!id || !user || reading) return;
+    if (!id || !user || reading === generation) return;
     const at = generation;
     const since = knocks;
-    reading = true;
+    reading = at;
     readAt = now();
     try {
       const next = await api.view(id);
@@ -132,7 +133,7 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
     } catch {
       // The next redraw or panel asks again.
     } finally {
-      reading = false;
+      if (reading === at) reading = null;
     }
   }
 
@@ -143,7 +144,6 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       trick = null;
       readAt = null;
       working = false;
-      reading = false;
       clearTimeout(midnight);
     }
     if (options.isGlade?.(id)) return;
@@ -221,8 +221,11 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       trick = null;
       readAt = null;
       working = false;
-      reading = false;
       clearTimeout(midnight);
+      // Signed out (or someone else): the last treat's toast goes too.
+      clearTimeout(toastTimer);
+      toast.hidden = true;
+      toastText = null;
       renderPanel();
     },
     tileActions: {

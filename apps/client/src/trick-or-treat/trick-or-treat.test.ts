@@ -1,4 +1,4 @@
-import { findAvoidedWords, type TrickOrTreatView } from '@heartpatch/shared';
+import { CLOTHING, findAvoidedWords, type TrickOrTreatView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { userId } from '../map/test-view.js';
 import {
@@ -77,7 +77,27 @@ describe('prizeToast (#515, until the door scene)', () => {
         trick: false,
         prize: { kind: 'squishy-costume', itemId: 'vampire-cape', count: 1 },
       }),
-    ).toBe('🎃 Treat! A Vampire Cape for your squishies!');
+    ).toBe('🎃 Treat! Vampire Cape, a costume for your squishies!');
+    expect(
+      prizeToast({
+        trick: false,
+        prize: { kind: 'squishy-costume', itemId: 'little-bat-wings', count: 1 },
+      }),
+    ).toBe('🎃 Treat! Little Bat Wings, a costume for your squishies!');
+  });
+
+  it('names every costume a treat can be, as a costume', () => {
+    const prizes = CLOTHING.filter((c) => c.sources.includes('trick-or-treat'));
+    expect(prizes.some((c) => c.slot === 'squishy')).toBe(true);
+    for (const c of prizes) {
+      const kind = c.slot === 'squishy' ? 'squishy-costume' : 'keeper-costume';
+      const text = prizeToast({ trick: false, prize: { kind, itemId: c.id, count: 1 } });
+      expect(text).toContain(c.name);
+      expect(text).toMatch(/costume for (you|your squishies)!$/);
+      // An article only ever sits before the name when "costume" follows it (Keeper costumes).
+      if (kind === 'squishy-costume') expect(text).not.toMatch(/Treat! An? /);
+      expect(findAvoidedWords(text)).toEqual([]);
+    }
   });
 
   it('plays the silly trick first, then the treat anyway', () => {
