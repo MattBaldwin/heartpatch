@@ -18,6 +18,8 @@ interface TrickDebug {
   open: boolean | null;
   hosts: { userId: string; lit: boolean; visited: boolean }[];
   toast: string | null;
+  door: string | null;
+  card: string | null;
 }
 
 interface ViewBody {
@@ -104,16 +106,106 @@ test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the hos
     .toEqual([{ userId: hostId, lit: false, visited: false }]);
   const hostDust = await heartdust(host, mapId);
 
-  // Tap the host's Heart Seed: their home has treats tonight.
+  // The server rolls a rare silly trick (1 in 8) and a costume only now and
+  // then, so stand them in for the first two knocks (the doors it says are the
+  // real ones, still unvisited) to check the beats and the card's buttons. The
+  // third knock, below, is the real one.
+  const doors = (
+    await api<{ trickOrTreat: unknown }>(guest, 'GET', `/maps/${mapId}/trick-or-treat`)
+  ).body.trickOrTreat;
+  let rolls: unknown[] = [
+    { kind: 'keeper-costume', itemId: 'bat-buddy', count: 1, trick: true },
+    { kind: 'squishy-costume', itemId: 'little-bat-wings', count: 1, trick: false },
+  ];
+  await guest.route(`**/api/v1/maps/${mapId}/trick-or-treat`, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const roll = rolls.shift() as
+      { kind: string; itemId: string; count: number; trick: boolean } | undefined;
+    if (!roll) return route.continue();
+    await route.fulfill({
+      json: {
+        visit: {
+          visitId: '00000000-0000-4000-8000-000000000001',
+          hostUserId: hostId,
+          lantern: false,
+          trick: roll.trick,
+          prize: { kind: roll.kind, itemId: roll.itemId, count: roll.count },
+        },
+        trickOrTreat: doors,
+      },
+    });
+  });
+
   await selectTile(guest, await heartSeedOf(guest, mapId, hostId));
   const panel = guest.getByTestId('tile-panel');
   const knock = panel.getByTestId('trick-or-treat');
+  const door = guest.getByTestId('door-scene');
+  const card = guest.getByTestId('treat-card');
+  const doorNow = async () => (await hook<TrickDebug>(guest, 'trickOrTreat'))?.door;
+
+  // 1) A silly trick first, then a Keeper costume anyway: "Wear it!" puts it on.
+  await knock.tap();
+  await expect(door).toBeVisible();
+  await expect(guest.getByTestId('door-title')).toHaveText('Knock, knock! 🎃');
+  expect(await doorNow()).toBe('knock');
+  await guest.getByTestId('door-knock').tap();
+  await expect.poll(doorNow, { timeout: 15_000 }).toBe('trick');
+  await expect(guest.getByTestId('door-title')).toHaveText('Boo! 👻');
+  await expect.poll(doorNow, { timeout: 15_000 }).toBe('anyway');
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(door).toBeHidden();
+  await expect(guest.getByTestId('treat-title')).toHaveText('Bat Buddy');
+  const worn = guest.waitForRequest(
+    (req) =>
+      req.url().endsWith('/api/v1/wardrobe/wear') &&
+      req.method() === 'POST' &&
+      (req.postData() ?? '').includes('bat-buddy'),
+    { timeout: 15_000 },
+  );
+  await guest.getByTestId('treat-primary').tap();
+  await worn;
+  await expect(guest.getByTestId('treat-detail')).toContainText('wearing it');
+  await guest.getByTestId('treat-later').tap();
+  await expect(card).toBeHidden();
+  expect((await hook<TrickDebug>(guest, 'trickOrTreat'))?.card).toBeNull();
+
+  // 2) A squishy costume, no trick: "Dress up!" opens the squishy picker on the Partner.
+  await expect(knock).toHaveText('🎃 Trick or treat!');
+  await knock.tap();
+  await guest.getByTestId('door-knock').tap();
+  await expect.poll(doorNow, { timeout: 15_000 }).toBe('open');
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(guest.getByTestId('treat-title')).toHaveText('Little Bat Wings');
+  await guest.getByTestId('treat-primary').tap();
+  await expect(card).toBeHidden();
+  await expect(guest.getByTestId('close-up-dress-list')).toBeVisible({ timeout: 30_000 });
+  await guest.getByTestId('close-up-dress-done').tap();
+  await guest.getByTestId('close-up-back').tap();
+  rolls = [];
+  await guest.unroute(`**/api/v1/maps/${mapId}/trick-or-treat`);
+
+  // Tap the host's Heart Seed: their home has treats tonight.
+  await selectTile(guest, await heartSeedOf(guest, mapId, hostId));
   await expect(knock).toHaveText('🎃 Trick or treat!');
   await expect(panel.getByTestId('trick-line')).toHaveText(/This home has treats tonight!/);
   await knock.tap();
 
-  // A treat, said in a toast until the door scene; the door is done for today.
-  await expect(guest.getByTestId('trick-toast')).toContainText('Treat!');
+  // The porch: "Knock, knock!" waits for the kid's own tap. Then the door
+  // opens (a rare silly trick first) and the prize card says what the treat
+  // was: Heartdust says "Yay!", a costume says "Later" (or "Wear it!").
+  await expect(door).toBeVisible();
+  await guest.getByTestId('door-knock').tap();
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(door).toBeHidden();
+  await expect(guest.getByTestId('treat-title')).not.toBeEmpty();
+  expect((await hook<TrickDebug>(guest, 'trickOrTreat'))?.card).not.toBeNull();
+  const later = guest.getByTestId('treat-later');
+  if (await later.isVisible()) await later.tap();
+  else await guest.getByTestId('treat-primary').tap();
+  await expect(card).toBeHidden();
+  expect((await hook<TrickDebug>(guest, 'trickOrTreat'))?.card).toBeNull();
+
+  // The door is done for today.
   await expect(knock).toHaveText('✅ Visited today');
   await expect(knock).toBeDisabled();
   await expect(panel.getByTestId('trick-line')).toHaveText([
