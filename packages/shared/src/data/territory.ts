@@ -20,4 +20,7 @@ export const TERRITORY_RULES: TerritoryRules = {
     wildPerNight: { off: 3, on: 3, gentle: 2 }, // TUNE: sim, see the map-fill report
     keepRadius: 2, // TUNE: guess; the home ring plus the ring right outside it
   },
+  // A rival's guards fight at least at their Keeper's Partner level plus
+  // this (#529; `pnpm sim:tiles` reports the win rates).
+  guardLevel: { partnerBonus: 3 }, // TUNE: #529 sim, owner-approved Oct 18
 };
