@@ -106,7 +106,8 @@ export class RenderQuality {
   /**
    * Dev and tests only (the post-process budget e2e): switch the governor
    * off and hold this tier and render scale, applied at the top of the next
-   * frame as a governor change would be.
+   * frame as a governor change would be. One-way: the governor stays off
+   * for this stage.
    */
   hold(tier: QualityTier, renderScale: number): void {
     this.pinned = true;

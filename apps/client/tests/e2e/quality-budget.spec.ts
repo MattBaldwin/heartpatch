@@ -5,7 +5,7 @@ import { draws, idle } from './dev-hook.js';
  * The quality governor's GPU budget (#501, PR B): once a stage has loaded,
  * a tier change links no shader program and makes no more than a couple of
  * textures (bloom's passes are attached or detached, never rebuilt), and
- * neither does a resolution step beyond one target per new size. Counted on
+ * neither does a resolution step beyond one target per pass per new size. Counted on
  * the WebGL context itself (`engine/gl-counters.ts`) on the squishy gallery,
  * a stage with no server behind it.
  */
@@ -122,6 +122,20 @@ test('tier flips and resolution steps rebuild nothing (#501)', async ({ page }) 
   test.info().annotations.push({ type: 'scale steps', description: JSON.stringify(steps) });
   expect(steps.programs).toBe(0);
   expect(steps.textures).toBeLessThanOrEqual(2);
+
+  // The same steps with bloom on (a governor's first answer to a slow spell
+  // is a cut at its tier): the blur kernel follows the pixel ratio, not the
+  // scale, so nothing recompiles; each new size needs bloom's four targets
+  // and FXAA's, the one seen a moment ago none.
+  await hold(page, 'high', 1);
+  const beforeBloomSteps = await gl(page);
+  for (const scale of [0.9, 0.8, 0.9]) await hold(page, 'high', scale);
+  const bloomSteps = since(beforeBloomSteps, await gl(page));
+  test
+    .info()
+    .annotations.push({ type: 'bloom scale steps', description: JSON.stringify(bloomSteps) });
+  expect(bloomSteps.programs).toBe(0);
+  expect(bloomSteps.textures).toBeLessThanOrEqual(2 * 5);
 
   expect(errors).toEqual([]);
 });

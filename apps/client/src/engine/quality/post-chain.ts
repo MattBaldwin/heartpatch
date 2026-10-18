@@ -63,6 +63,7 @@ export class PostChain {
     // Babylon keeps each compiled effect in the engine's cache, so the
     // blur shaders for the other kernels stay ready once built.
     for (const kernel of rest) this.setBloomKernel(kernel);
+    this.setBloomKernel(first); // back on the starting tier's, a cache hit
     const ip = scene.imageProcessingConfiguration;
     this.bloom._downscale._exposure = ip.exposure;
     this.exposure = ip.onUpdateParameters.add(() => {
