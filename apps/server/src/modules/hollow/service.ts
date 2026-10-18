@@ -55,7 +55,6 @@ import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
-import { createTrickOrTreatRepo } from '../trick-or-treat/repo.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { addNightWatchLean } from '../care/evolution.js';
@@ -67,6 +66,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTendingRepo } from '../territory/repo.js';
 import { rewildTiles } from '../territory/rewild.js';
+import { createTrickOrTreatRepo } from '../trick-or-treat/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
   createHollowRepo,

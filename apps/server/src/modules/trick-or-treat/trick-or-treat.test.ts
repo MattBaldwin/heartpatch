@@ -53,6 +53,21 @@ const KEEPER_ONLY: TrickOrTreatPrizes = {
   },
 };
 
+/** Only Heartdust, a different amount at a lit home: the table shows in the count. */
+const DUST_ONLY: TrickOrTreatPrizes = {
+  ...TRICK_OR_TREAT_PRIZES,
+  plain: {
+    heartdust: { weight: 1, min: 1, max: 1 },
+    keeperCostume: { weight: 0 },
+    squishyCostume: { weight: 0 },
+  },
+  lantern: {
+    heartdust: { weight: 1, min: 3, max: 3 },
+    keeperCostume: { weight: 0 },
+    squishyCostume: { weight: 0 },
+  },
+};
+
 describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
   let client: DbClient;
   let db: Database;
@@ -273,6 +288,24 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
     expect(await events(mapId)).toHaveLength(1);
   });
 
+  it("lets two Keepers knock on each other's doors at once", async () => {
+    const server = await start();
+    const [host, visitor] = [await player(), await player()];
+    const mapId = await patch(server, host, visitor);
+    for (let round = 0; round < 3; round += 1) {
+      const both = await Promise.all([
+        knock(server, visitor, mapId, host),
+        knock(server, host, mapId, visitor),
+      ]);
+      expect(
+        both.map((r) => r.statusCode),
+        both.map((r) => r.body).join(' | '),
+      ).toEqual([200, 200]);
+      clock.setTime(clock.getTime() + DAY_MS);
+    }
+    expect(await visits(mapId)).toHaveLength(6);
+  });
+
   it('replays a retried knock (Idempotency-Key) without a second treat', async () => {
     const server = await start();
     const [host, visitor] = [await player(), await player()];
@@ -321,15 +354,21 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
     expect((await view(server, visitor, mapId)).hosts).toEqual([
       { userId: host.id, lit: true, visited: false },
     ]);
-    const res = await knock(server, visitor, mapId, host);
-    const { visit } = TrickOrTreatVisitResponseSchema.parse(res.json());
-    expect(visit.lantern).toBe(true);
-    if (visit.prize.kind === 'heartdust') {
-      expect(visit.prize.count).toBeGreaterThanOrEqual(TRICK_OR_TREAT_PRIZES.lantern.heartdust.min);
-    }
+    // Only Heartdust comes up here, so the table shows in the count.
+    const service = createTrickOrTreatService({ db, clock: () => clock, prizes: DUST_ONLY });
+    const lit = await service.visit(visitor, mapId, { hostUserId: host.id });
+    expect(lit.visit).toMatchObject({
+      lantern: true,
+      prize: { kind: 'heartdust', count: DUST_ONLY.lantern.heartdust.min },
+    });
     // Out of fuel: the lantern isn't lit, and the treats are plain again.
     clock.setTime(Date.parse('2026-10-27T16:00:00Z'));
     expect((await view(server, visitor, mapId)).hosts[0]?.lit).toBe(false);
+    const plain = await service.visit(visitor, mapId, { hostUserId: host.id });
+    expect(plain.visit).toMatchObject({
+      lantern: false,
+      prize: { kind: 'heartdust', count: DUST_ONLY.plain.heartdust.min },
+    });
   });
 
   it('gives only costumes the visitor lacks, then Heartdust once they own them all', async () => {

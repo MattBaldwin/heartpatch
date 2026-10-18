@@ -131,6 +131,8 @@ export function createTrickOrTreatService(
     visit: async (user, mapId, request) => {
       const { hostUserId } = request;
       if (hostUserId === user.id) throw new AppError('VALIDATION_FAILED', MESSAGES.ownHome);
+      // A plain check first, so a non-member opens no transaction; it's
+      // checked again under the member lock below.
       await requireMember(db, user, mapId, ['multiplayer']);
       const result = await createTrickOrTreatRepo(db).transaction(async (repo, tx) => {
         const at = now();
@@ -204,6 +206,7 @@ export function createTrickOrTreatService(
             at,
           );
         } else {
+          // One piece per (source, visit): the visit id is new, so it always stores.
           await grantClothing(tx, {
             userId: user.id,
             itemId: prize.itemId,

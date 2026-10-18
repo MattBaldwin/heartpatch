@@ -14,8 +14,9 @@ export type NewVisit = typeof trickOrTreatVisits.$inferInsert;
 export interface TrickOrTreatRepo {
   transaction: <T>(fn: (repo: TrickOrTreatTxRepo, tx: Transaction) => Promise<T>) => Promise<T>;
   /**
-   * Row-locks the account's `users` row (tech spec §7 step 4): one knock at a
-   * time per account, on every patch, so the owned-costume check holds.
+   * Row-locks the account's `users` row (tech spec §7 step 4, `FOR NO KEY
+   * UPDATE`): one knock at a time per account, on every patch, so the
+   * owned-costume check holds.
    */
   lockAccount: (userId: string) => Promise<void>;
   /** Other active members of the patch with a home there: the doors I can knock on. */
@@ -50,7 +51,15 @@ export function createTrickOrTreatRepo(db: Executor): TrickOrTreatRepo {
     transaction: (fn) => withTransaction(db, (tx) => fn(createTxRepo(tx), tx)),
 
     lockAccount: async (userId) => {
-      await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+      // NO KEY UPDATE, not UPDATE: it still serialises one knock per account,
+      // but lets a patch-mate's knock key-share this row (their visit's
+      // `host_user_id`, my bag's rows) so two Keepers knocking on each
+      // other's doors at once don't deadlock.
+      await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for('no key update');
     },
 
     hostsOf: async (mapId, visitorUserId) => {
