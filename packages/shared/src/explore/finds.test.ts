@@ -94,7 +94,7 @@ describe('Glimmer from exploring (#523)', () => {
       const table = exploreFindTable(EXPLORE_FINDS, k.kind, terrain);
       if (!table) throw new Error(k.kind);
       const tableWeight = table.finds.reduce((s, f) => s + f.weight, 0);
-      const glimmer = table.finds.reduce((s, f) => s + f.weight * (f.items?.glimmer ?? 0), 0);
+      const glimmer = table.finds.reduce((s, f) => s + f.weight * (f.items?.['glimmer'] ?? 0), 0);
       return sum + (k.weight / kitWeight) * (glimmer / tableWeight);
     }, 0);
   }
@@ -106,7 +106,7 @@ describe('Glimmer from exploring (#523)', () => {
         if (kind === 'rock') continue;
         const table = exploreFindTable(EXPLORE_FINDS, kind, terrain);
         expect(
-          table?.finds.some((f) => (f.items?.glimmer ?? 0) > 0),
+          table?.finds.some((f) => (f.items?.['glimmer'] ?? 0) > 0),
           kind,
         ).toBe(true);
       }
