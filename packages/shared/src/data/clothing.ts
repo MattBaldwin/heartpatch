@@ -1114,7 +1114,6 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
           turn: [-30, 0, -20],
           color: '#e9ecff',
         },
-        { shape: 'ellipsoid', at: [0, -0.42, 0.16], size: [1.34, 0.1, 1.24], color: '#b9b3e6' },
         {
           shape: 'ellipsoid',
           at: [-0.17, 0.22, -0.38],
