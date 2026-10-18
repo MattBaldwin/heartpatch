@@ -28,13 +28,26 @@ type Hooks = {
   };
 };
 
+/**
+ * The perf report (#501 PR A) posts when a software renderer stays slow; the
+ * gallery has nobody logged in, so the server turns it away. Not this test's.
+ */
+const PERF_REPORT = '/api/v1/perf/report';
+
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => {
     // Babylon's own warnings count too (a post-process attached twice only logs).
     const babylonWarning = msg.type() === 'warning' && msg.text().startsWith('BJS -');
-    if (msg.type() === 'error' || babylonWarning) errors.push(msg.text());
+    // A failed request logs only its status here; the response check below names it.
+    const failedLoad = msg.text().startsWith('Failed to load resource');
+    if ((msg.type() === 'error' && !failedLoad) || babylonWarning) errors.push(msg.text());
+  });
+  page.on('response', (res) => {
+    if (res.status() >= 400 && !res.url().includes(PERF_REPORT)) {
+      errors.push(`${String(res.status())} ${res.url()}`);
+    }
   });
   return errors;
 }
