@@ -194,8 +194,11 @@ export interface FrameCap {
 /**
  * 30 drawn frames a second: explore (#501, owner Oct 18: it runs cool, the
  * map keeps render on demand) and `?cap30=1`. A 60 Hz display draws every
- * other frame however late its callbacks run, a 120 Hz one every fourth
- * unless a callback is more than 4 ms late, and any rate averages 30.
+ * other frame, and a late drawn callback doesn't pull the next one early; a
+ * 120 Hz one every fourth unless a callback is more than 4 ms late. Any rate
+ * averages 30. Known gap (#501 follow-up): the slots keep the first frame's
+ * phase, so a first frame about `earlyMs` late, or a display a little off
+ * 60 Hz, can alternate 17 and 50 ms gaps for a while; still 30 on average.
  */
 export const FRAME_CAP_30: FrameCap = { fps: 30, earlyMs: 4 }; // TUNE: earlyMs
 

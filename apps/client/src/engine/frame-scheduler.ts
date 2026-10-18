@@ -12,6 +12,8 @@
  * slots every `1000 / fps` ms on a fixed schedule, not timed from the last
  * draw: a callback that runs late doesn't pull the next frame early, so a
  * 60 Hz display holds every other frame and any display averages the cap.
+ * Right after a draw that ran late (within one slot) the next gap can be
+ * short once; the governor, on `cappedScaler`, reads that as on target.
  *
  * Pure (time is passed in) so it is unit-tested without a GPU.
  */
