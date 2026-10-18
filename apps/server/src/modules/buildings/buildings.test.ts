@@ -417,11 +417,22 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       });
       expect(errorOf(other).message).toBe('Only one building fits on a tile! Try another one.');
       await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain2, spot: 2 });
-      const third = tiles.filter((t) => !t.heartSeed)[2]!;
+      // Four a home (owner decision 2026-10-18, #537): two more, then a fifth is refused.
+      const ring = tiles.filter((t) => !t.heartSeed);
+      expect(ring).toHaveLength(6);
+      for (const tile of ring.slice(2, 4)) {
+        await placed(server, kid, mapId, {
+          buildingId: 'cozy-meadow',
+          q: tile.q,
+          r: tile.r,
+          spot: 1,
+        });
+      }
+      const fifth = ring[4]!;
       const tooMany = await place(server, kid, mapId, {
         buildingId: 'cozy-meadow',
-        q: third.q,
-        r: third.r,
+        q: fifth.q,
+        r: fifth.r,
         spot: 3,
       });
       expect(tooMany.statusCode).toBe(409);
