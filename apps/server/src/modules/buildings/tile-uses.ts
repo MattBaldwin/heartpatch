@@ -22,9 +22,10 @@ import {
   createBuildingsRepo,
   type BuildingRow,
   type BuildingsRepo,
+  type BuildingsTxRepo,
   type TileUseNoteContent,
 } from './repo.js';
-import { createMapsRepo } from '../maps/repo.js';
+import { createMapsRepo, type MapRow } from '../maps/repo.js';
 
 /*
  * One building per tile (#295, owner decisions 2026-10-11): patches built
@@ -195,18 +196,6 @@ export async function relayoutTileUses(
   return { players, moved, packed, stopped };
 }
 
-/**
- * Tiles still holding two or more buildings (#295), counts only: logged after
- * the boot pass, so a deploy log can show it's safe to add the unique index
- * on `buildings.tile_id` (migration B).
- */
-export function countCrowdedTiles(
-  db: Executor,
-  mapIds?: readonly string[],
-): Promise<{ multiplayer: number; other: number }> {
-  return createBuildingsRepo(db).crowdedTiles(mapIds);
-}
-
 /** Adds `items` into `into`. */
 function addInto(into: ItemCounts, items: ItemCounts): void {
   for (const [id, n] of Object.entries(items)) into[id] = (into[id] ?? 0) + n;
@@ -230,183 +219,200 @@ async function tidyOne(
     // Planned again under the locks: a command may have changed things since the scan.
     const uses = await planOwnerTileUses(tx, owner, new Set(locked.map((t) => t.id)));
     if (!tidies(uses)) return none;
-    const { plan, rows, gatherers } = uses;
-    const local = mapLocalTime(at, map.timeZone);
-    const byId = new Map(rows.map((r) => [r.id, r]));
-    const tileById = new Map(uses.tiles.map((t) => [t.id, t]));
-
-    // Step 8: the buildings that move or pack, then a packing Factory's batches.
-    const changing = [...plan.move.map((m) => m.id), ...plan.pack].sort();
-    for (const id of changing) await repo.lockBuilding(id);
-    const packing = plan.pack.flatMap((id) => {
-      const row = byId.get(id);
-      return row ? [row] : [];
-    });
-    const factory = createFactoryRepo(tx);
-    const batches = [];
-    for (const row of packing.filter((r) => r.kind === 'factory')) {
-      for (const batch of await factory.lockRunningIn(row.id)) {
-        batches.push(stopPlan(batch, at, 'taken-down'));
-      }
-    }
-
-    // Step 10: every squishy this touches, one id-ordered lock: trainees of
-    // Training Grounds that move or pack, residents of habitats that pack,
-    // and gatherers that stop.
-    const mine = await repo.listSquishies(owner.mapId, owner.userId);
-    const movingIds = new Set(plan.move.map((m) => m.id));
-    const packingIds = new Set(plan.pack);
-    const trainees = (ids: ReadonlySet<string>) =>
-      mine.filter((s) => s.trainingBuildingId !== null && ids.has(s.trainingBuildingId));
-    const movedTrainees = trainees(movingIds).map((s) => s.id);
-    const packedTrainees = trainees(packingIds).map((s) => s.id);
-    const residents = mine
-      .filter((s) => s.habitatBuildingId !== null && packingIds.has(s.habitatBuildingId))
-      .map((s) => s.id);
-    await jobs.lockSquishies(
-      [...new Set([...movedTrainees, ...packedTrainees, ...residents, ...gatherers])].sort(),
-    );
-
-    // Step 11: the bag's rows once, the gatherers' banked work with the refund.
-    const refund: ItemCounts = {};
-    const packedEvents: NewGameEvent<'building.removed'>[] = [];
-    for (const row of packing) {
-      const back = packUpRefund(row, local);
-      addInto(refund, back);
-      packedEvents.push({
-        mapId: owner.mapId,
-        type: 'building.removed',
-        actorUserId: null,
-        payload: {
-          userId: owner.userId,
-          buildingRowId: row.id,
-          buildingId: row.buildingId,
-          q: row.q,
-          r: row.r,
-          refund: back,
-          movedOut: [
-            ...residents.filter(
-              (id) => mine.find((s) => s.id === id)?.habitatBuildingId === row.id,
-            ),
-            ...packedTrainees.filter(
-              (id) => mine.find((s) => s.id === id)?.trainingBuildingId === row.id,
-            ),
-          ].sort(),
-          lost: 'packed',
-        },
-      });
-    }
-    const alsoLock = [{ userId: owner.userId, items: refund }, ...planGrants(batches)];
-    let workEvents: NewGameEvent[] = [];
-    if (gatherers.length > 0) {
-      workEvents = await leaveWork(tx, map, gatherers, 'resting', at, alsoLock);
-    } else {
-      await lockGrantRows(tx, owner.mapId, alsoLock);
-    }
-    // Each packed building's refund is ledgered against that building.
-    for (const row of packing) {
-      const back = packUpRefund(row, local);
-      if (Object.keys(back).length > 0) {
-        await grantItems(
-          tx,
-          { mapId: owner.mapId, userId: owner.userId },
-          back,
-          'build-refund',
-          row.id,
-        );
-      }
-    }
-    const stoppedBatches = await applyBatchPlans(tx, batches, at);
-
-    // Trainees land what they earned: a packing Training Grounds' stop, a
-    // moving one's carry on from where they are now.
-    const training = [
-      ...(packedTrainees.length > 0
-        ? (await landTraining(tx, map, packedTrainees, at, true)).events
-        : []),
-      ...(movedTrainees.length > 0
-        ? (await landTraining(tx, map, movedTrainees, at, false)).events
-        : []),
-    ];
-
-    // The moves: the same row on a new tile, keeping its id, level,
-    // residents, trainees, fuel and batches. A free spot of its slot (the
-    // tile is empty, so one is always free).
-    const seed = heartSeedOf(uses.tiles.filter((t) => t.homeSlot !== null));
-    const movedEvents: NewGameEvent<'building.moved'>[] = [];
-    const movedNote: {
-      buildingId: string;
-      from: { q: number; r: number };
-      to: { q: number; r: number };
-    }[] = [];
-    for (const { id, toTileId } of plan.move) {
-      const row = byId.get(id);
-      const tile = tileById.get(toTileId);
-      const building = row ? BUILDING_DATA.get(row.buildingId) : undefined;
-      if (!row || !tile || !building) continue;
-      const features = {
-        heartSeed: seed !== null && tile.q === seed.q && tile.r === seed.r,
-        nodeResource: tile.nodeResource,
-      };
-      const spot = freeSpots(HOME_BASE_RULES, features, new Set(), building.slot)[0] ?? 0;
-      await repo.moveBuilding(row.id, { tileId: tile.id, spot });
-      movedNote.push({
-        buildingId: row.buildingId,
-        from: { q: row.q, r: row.r },
-        to: { q: tile.q, r: tile.r },
-      });
-      movedEvents.push({
-        mapId: owner.mapId,
-        type: 'building.moved',
-        actorUserId: null,
-        payload: {
-          userId: owner.userId,
-          from: { q: row.q, r: row.r, spot: row.spot },
-          building: {
-            ...toPublicBuilding({ ...row, tileId: tile.id, spot }, local),
-            q: tile.q,
-            r: tile.r,
-          },
-        },
-      });
-    }
-    // The packed ones go, once their residents and trainees are off them.
-    for (const row of packing) {
-      if (row.kind === 'habitat') await repo.moveOutAll(row.id);
-      await repo.deleteBuilding(row.id);
-    }
-
-    // The note, merged with any earlier one (a later rule change may tidy again).
-    const names = new Map(mine.map((s) => [s.id, squishyName(s)]));
-    await noteTileUses(repo, owner, at, {
-      moved: movedNote,
-      packed: packing.map((r) => ({ buildingId: r.buildingId, q: r.q, r: r.r })),
-      refund: (() => {
-        const all = { ...refund };
-        for (const p of batches) {
-          addInto(all, p.bank);
-          addInto(all, p.refund);
-        }
-        return all;
-      })(),
-      stoppedGatherers: gatherers.map((id) => ({
-        squishyId: id,
-        name: names.get(id) ?? 'Your squishy',
-      })),
-    });
-
-    // Not published live: it runs at boot, like `relayoutHomes`.
-    for (const event of [
-      ...workEvents,
-      ...packedEvents,
-      ...movedEvents,
-      ...training,
-      ...stoppedBatches.events,
-    ]) {
-      await repo.appendEvent(event);
-    }
-    return { moved: plan.move.length, packed: plan.pack.length, stopped: gatherers.length };
+    return applyTileUses(repo, tx, map, at, uses, (note) => noteTileUses(repo, owner, at, note));
   });
+}
+
+/**
+ * Carries out one player's plan inside the caller's transaction, which
+ * holds the tiles it touches (step 6): the buildings (step 8), a packing
+ * Factory's batches (step 8), the squishies (step 10), the bag's rows (step
+ * 11), trainees' XP, `note`, then the events (`maps`). Shared by the tidy-up
+ * pass and the crowded-tile pack-up before migration B (`crowded-tiles.ts`).
+ */
+export async function applyTileUses(
+  repo: BuildingsTxRepo,
+  tx: Executor,
+  map: MapRow,
+  at: Date,
+  uses: OwnerTileUses,
+  note: (content: TileUseNoteContent) => Promise<void>,
+): Promise<Omit<TileUsesTidied, 'players'>> {
+  const { owner, plan, rows, gatherers } = uses;
+  const jobs = createSquishyJobsRepo(tx);
+  const local = mapLocalTime(at, map.timeZone);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const tileById = new Map(uses.tiles.map((t) => [t.id, t]));
+
+  // Step 8: the buildings that move or pack, then a packing Factory's batches.
+  const changing = [...plan.move.map((m) => m.id), ...plan.pack].sort();
+  for (const id of changing) await repo.lockBuilding(id);
+  const packing = plan.pack.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
+  });
+  const factory = createFactoryRepo(tx);
+  const batches = [];
+  for (const row of packing.filter((r) => r.kind === 'factory')) {
+    for (const batch of await factory.lockRunningIn(row.id)) {
+      batches.push(stopPlan(batch, at, 'taken-down'));
+    }
+  }
+
+  // Step 10: every squishy this touches, one id-ordered lock: trainees of
+  // Training Grounds that move or pack, residents of habitats that pack,
+  // and gatherers that stop.
+  const mine = await repo.listSquishies(owner.mapId, owner.userId);
+  const movingIds = new Set(plan.move.map((m) => m.id));
+  const packingIds = new Set(plan.pack);
+  const trainees = (ids: ReadonlySet<string>) =>
+    mine.filter((s) => s.trainingBuildingId !== null && ids.has(s.trainingBuildingId));
+  const movedTrainees = trainees(movingIds).map((s) => s.id);
+  const packedTrainees = trainees(packingIds).map((s) => s.id);
+  const residents = mine
+    .filter((s) => s.habitatBuildingId !== null && packingIds.has(s.habitatBuildingId))
+    .map((s) => s.id);
+  await jobs.lockSquishies(
+    [...new Set([...movedTrainees, ...packedTrainees, ...residents, ...gatherers])].sort(),
+  );
+
+  // Step 11: the bag's rows once, the gatherers' banked work with the refund.
+  const refund: ItemCounts = {};
+  const packedEvents: NewGameEvent<'building.removed'>[] = [];
+  for (const row of packing) {
+    const back = packUpRefund(row, local);
+    addInto(refund, back);
+    packedEvents.push({
+      mapId: owner.mapId,
+      type: 'building.removed',
+      actorUserId: null,
+      payload: {
+        userId: owner.userId,
+        buildingRowId: row.id,
+        buildingId: row.buildingId,
+        q: row.q,
+        r: row.r,
+        refund: back,
+        movedOut: [
+          ...residents.filter((id) => mine.find((s) => s.id === id)?.habitatBuildingId === row.id),
+          ...packedTrainees.filter(
+            (id) => mine.find((s) => s.id === id)?.trainingBuildingId === row.id,
+          ),
+        ].sort(),
+        lost: 'packed',
+      },
+    });
+  }
+  const alsoLock = [{ userId: owner.userId, items: refund }, ...planGrants(batches)];
+  let workEvents: NewGameEvent[] = [];
+  if (gatherers.length > 0) {
+    workEvents = await leaveWork(tx, map, gatherers, 'resting', at, alsoLock);
+  } else {
+    await lockGrantRows(tx, owner.mapId, alsoLock);
+  }
+  // Each packed building's refund is ledgered against that building.
+  for (const row of packing) {
+    const back = packUpRefund(row, local);
+    if (Object.keys(back).length > 0) {
+      await grantItems(
+        tx,
+        { mapId: owner.mapId, userId: owner.userId },
+        back,
+        'build-refund',
+        row.id,
+      );
+    }
+  }
+  const stoppedBatches = await applyBatchPlans(tx, batches, at);
+
+  // Trainees land what they earned: a packing Training Grounds' stop, a
+  // moving one's carry on from where they are now.
+  const training = [
+    ...(packedTrainees.length > 0
+      ? (await landTraining(tx, map, packedTrainees, at, true)).events
+      : []),
+    ...(movedTrainees.length > 0
+      ? (await landTraining(tx, map, movedTrainees, at, false)).events
+      : []),
+  ];
+
+  // The moves: the same row on a new tile, keeping its id, level,
+  // residents, trainees, fuel and batches. A free spot of its slot (the
+  // tile is empty, so one is always free).
+  const seed = heartSeedOf(uses.tiles.filter((t) => t.homeSlot !== null));
+  const movedEvents: NewGameEvent<'building.moved'>[] = [];
+  const movedNote: {
+    buildingId: string;
+    from: { q: number; r: number };
+    to: { q: number; r: number };
+  }[] = [];
+  for (const { id, toTileId } of plan.move) {
+    const row = byId.get(id);
+    const tile = tileById.get(toTileId);
+    const building = row ? BUILDING_DATA.get(row.buildingId) : undefined;
+    if (!row || !tile || !building) continue;
+    const features = {
+      heartSeed: seed !== null && tile.q === seed.q && tile.r === seed.r,
+      nodeResource: tile.nodeResource,
+    };
+    const spot = freeSpots(HOME_BASE_RULES, features, new Set(), building.slot)[0] ?? 0;
+    await repo.moveBuilding(row.id, { tileId: tile.id, spot });
+    movedNote.push({
+      buildingId: row.buildingId,
+      from: { q: row.q, r: row.r },
+      to: { q: tile.q, r: tile.r },
+    });
+    movedEvents.push({
+      mapId: owner.mapId,
+      type: 'building.moved',
+      actorUserId: null,
+      payload: {
+        userId: owner.userId,
+        from: { q: row.q, r: row.r, spot: row.spot },
+        building: {
+          ...toPublicBuilding({ ...row, tileId: tile.id, spot }, local),
+          q: tile.q,
+          r: tile.r,
+        },
+      },
+    });
+  }
+  // The packed ones go, once their residents and trainees are off them.
+  for (const row of packing) {
+    if (row.kind === 'habitat') await repo.moveOutAll(row.id);
+    await repo.deleteBuilding(row.id);
+  }
+
+  // The note: everything that came back to this player.
+  const names = new Map(mine.map((s) => [s.id, squishyName(s)]));
+  await note({
+    moved: movedNote,
+    packed: packing.map((r) => ({ buildingId: r.buildingId, q: r.q, r: r.r })),
+    refund: (() => {
+      const all = { ...refund };
+      for (const p of batches.filter((b) => b.row.userId === owner.userId)) {
+        addInto(all, p.bank);
+        addInto(all, p.refund);
+      }
+      return all;
+    })(),
+    stoppedGatherers: gatherers.map((id) => ({
+      squishyId: id,
+      name: names.get(id) ?? 'Your squishy',
+    })),
+  });
+
+  // Not published live: it runs at boot, like `relayoutHomes`.
+  for (const event of [
+    ...workEvents,
+    ...packedEvents,
+    ...movedEvents,
+    ...training,
+    ...stoppedBatches.events,
+  ]) {
+    await repo.appendEvent(event);
+  }
+  return { moved: plan.move.length, packed: plan.pack.length, stopped: gatherers.length };
 }
 
 /** Writes (or adds to) the player's tidy-up note. After the bag's rows, before `maps`. */
