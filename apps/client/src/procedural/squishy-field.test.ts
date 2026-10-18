@@ -4,7 +4,13 @@ import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
-import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type Floater } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  GAME_DATA,
+  visualRegistry,
+  type ClothingItem,
+  type Floater,
+} from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   FINISH_CODE,
@@ -292,6 +298,39 @@ describe('SquishyField squishy costumes (#515)', () => {
     // The epic Tiny Crown is an everyday accessory: plain vinyl.
     f.setAccessory(h, item('tiny-crown'));
     expect(sparkly()).toBe(bare);
+  });
+
+  it('lights a glowing piece from inside, on top of its finish', () => {
+    const scene = new Scene(engine);
+    const f = field(scene);
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const cape = item('vampire-cape');
+    const glowing: ClothingItem = {
+      ...cape,
+      id: 'glowing-cape',
+      visual: {
+        ...cape.visual,
+        pieces: cape.visual.pieces.map((p, i) => (i === 0 ? { ...p, glow: true } : p)),
+      },
+    };
+    const count = (code: number) => {
+      f.flush();
+      return scene.meshes
+        .filter((mesh) => mesh.isEnabled())
+        .flatMap((mesh) => {
+          const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+            Float32Array | undefined;
+          return data ? Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!) : [];
+        })
+        .filter((c) => c === code).length;
+    };
+    const bare = {
+      sparkle: count(FINISH_CODE.sparkle),
+      lit: count(FINISH_CODE.sparkle + FINISH_CODE.glow),
+    };
+    f.setAccessory(h, glowing);
+    expect(count(FINISH_CODE.sparkle + FINISH_CODE.glow)).toBe(bare.lit + 1);
+    expect(count(FINISH_CODE.sparkle)).toBe(bare.sparkle + cape.visual.pieces.length - 1);
   });
 });
 

@@ -28,6 +28,7 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { rollFoundDrop } from './drops.js';
+import { grantClothing } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -538,6 +539,56 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect(theirs.care[bun.id]).toBeNull();
       expect(theirs.home[bun.id]).toBeNull();
       expect(theirs.jobs[bun.id]).toBeNull();
+    });
+    it('dresses a squishy in a trick-or-treat costume, given once per visit (#515)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pip = await squishyOn(server, kid, mapId);
+      // The trick-or-treat visit grants its prize in its own transaction.
+      const visitId = '00000000-0000-7000-8000-000000000515';
+      const give = () =>
+        withTransaction(db, (tx) =>
+          grantClothing(tx, {
+            userId: kid.id,
+            itemId: 'vampire-cape',
+            source: 'trick-or-treat',
+            refId: visitId,
+            mapId,
+            at: clock,
+          }),
+        );
+      expect(await give()).toBe(true);
+      // A retried visit gives nothing more.
+      expect(await give()).toBe(false);
+      const pieces = await piecesOf(kid.id);
+      expect(pieces.map((p) => [p.itemId, p.source, p.refId])).toEqual([
+        ['vampire-cape', 'trick-or-treat', visitId],
+      ]);
+      // Another door is another visit: a second cape.
+      const nextVisit = '00000000-0000-7000-8000-000000000516';
+      expect(
+        await withTransaction(db, (tx) =>
+          grantClothing(tx, {
+            userId: kid.id,
+            itemId: 'vampire-cape',
+            source: 'trick-or-treat',
+            refId: nextVisit,
+            mapId,
+            at: clock,
+          }),
+        ),
+      ).toBe(true);
+      expect(await piecesOf(kid.id)).toHaveLength(2);
+
+      // It goes on in the accessory's one slot, and every read draws it.
+      const path = `/maps/${mapId}/squishies/${pip.id}/accessory`;
+      const on = await call(server, 'POST', path, kid, { itemId: 'vampire-cape' });
+      expect(on.statusCode, on.body).toBe(200);
+      expect(await wornOn(server, kid, mapId)).toEqual(everywhere({ [pip.id]: 'vampire-cape' }));
+      // A bow takes its place: one thing worn at a time.
+      expect((await call(server, 'POST', path, kid, { itemId: 'tiny-bow' })).statusCode).toBe(200);
+      expect((await wornOn(server, kid, mapId)).care[pip.id]).toBe('tiny-bow');
     });
   });
 

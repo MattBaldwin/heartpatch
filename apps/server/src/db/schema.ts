@@ -1701,8 +1701,9 @@ export const tradeLedger = pgTable(
  * one row per piece, so a trade can later move a single piece. Starter items
  * aren't stored: every account owns them. `source` says how it arrived
  * (`gather`, `capture`, `rescue`, `dev-grant`; later `tutorial`, `milestone`,
- * `boutique`, `trade`) and `ref_id` what caused it (a gather's id). One piece
- * per source event, so a retried grant can't add a second.
+ * `boutique`, `trade`, `trick-or-treat`) and `ref_id` what caused it (a
+ * gather's id, a trick-or-treat visit's). One piece per source event, so a
+ * retried grant can't add a second.
  */
 export const clothingOwned = pgTable(
   'clothing_owned',
