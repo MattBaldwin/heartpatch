@@ -4,6 +4,7 @@ import { readBisectFlags, setBisectFlags } from './engine/bisect-flags.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { showsStats } from './engine/stats-flag.js';
+import { setSlowFrames } from './engine/perf-report.js';
 import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
@@ -101,6 +102,8 @@ setRareGlowOff(rareGlowOff(params));
 // `?nopost=1`, `?nowater=1`, `?nograss=1`, `?nosky=1`, `?noportraits=1`, `?cap30=1`: one cost
 // off each, for the owner's device bisect with `?fps=1` (#501). Before anything is built.
 setBisectFlags(readBisectFlags(params));
+// Dev only: `?slow=1` pads every frame and keeps drawing, so the perf report fires (#501).
+setSlowFrames(import.meta.env.DEV && params.get('slow') === '1');
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
 /**
  * Dev only: `?tier=` pins a tier for honest review captures (#335). The

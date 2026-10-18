@@ -115,6 +115,7 @@ export * from './schemas/wardrobe.js';
 export * from './schemas/coins.js';
 export * from './schemas/milestones.js';
 export * from './schemas/cinematic.js';
+export * from './schemas/perf-report.js';
 export * from './schemas/squishies.js';
 export * from './schemas/jobs.js';
 export * from './schemas/inventory.js';

@@ -72,6 +72,8 @@ import { hashSessionToken } from './modules/auth/secrets.js';
 import { createAuthService } from './modules/auth/service.js';
 import { cinematicRoutes } from './modules/cinematic/routes.js';
 import { createCinematicService } from './modules/cinematic/service.js';
+import { perfRoutes } from './modules/perf/routes.js';
+import { createPerfService } from './modules/perf/service.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { keepersRoutes } from './modules/keepers/routes.js';
 import { createKeepersService } from './modules/keepers/service.js';
@@ -219,6 +221,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The opening cinematic (#46): plays once after the Keeper pick.
         const cinematic = createCinematicService({ db, clock });
         await api.register(cinematicRoutes(cinematic, { hooks: authHooks }));
+
+        // The on-device perf report (#501): a slow device logs one row a minute at most.
+        await api.register(perfRoutes(createPerfService(), { hooks: authHooks }));
 
         // Trades, gifts and the mailbox (#271); leaving a patch calls off the leaver's offers.
         const trades = createTradesService({
