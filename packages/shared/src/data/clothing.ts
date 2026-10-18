@@ -929,7 +929,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
   {
     id: 'candy-corn-scarf',
     name: 'Candy Corn Scarf',
-    description: 'Stripy, snuggly, and only a tiny bit sticky.',
+    description: 'Stripy, snuggly and only a tiny bit sticky.',
     slot: 'squishy',
     rarity: 'common',
     season: 'halloween',
