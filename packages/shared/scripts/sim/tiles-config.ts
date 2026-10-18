@@ -23,6 +23,12 @@ export interface TilePrep {
   readonly potions: boolean;
   /** Levels the team is below the challenger's Partner. */
   readonly levelsUnder: number;
+  /**
+   * The kid plays its counters: when a guard it hasn't met steps out, or its
+   * fighter is tuckered out, it sends in the fighter it picked for that guard
+   * (if that one can still fight). Otherwise the stand-in AI decides.
+   */
+  readonly swapsToCounter: boolean;
 }
 
 /** Who stands watch on the tile. */
@@ -59,7 +65,7 @@ export interface TileSimConfig {
   readonly games: number;
 }
 
-const prepared = { counter: 'full', potions: true, levelsUnder: 0 } as const;
+const prepared = { counter: 'full', potions: true, levelsUnder: 0, swapsToCounter: true } as const;
 
 export const TILE_SIM_CONFIG: TileSimConfig = {
   rootSeed: 'heartpatch-tiles-sim-v1',
@@ -71,8 +77,8 @@ export const TILE_SIM_CONFIG: TileSimConfig = {
   preps: [
     { key: 'prepared', ...prepared },
     { key: 'feeling-only', ...prepared, counter: 'feeling' },
-    { key: 'potions-only', ...prepared, counter: 'none' },
-    { key: 'unprepared', counter: 'none', potions: false, levelsUnder: 0 },
+    { key: 'potions-only', ...prepared, counter: 'none', swapsToCounter: false },
+    { key: 'unprepared', counter: 'none', potions: false, levelsUnder: 0, swapsToCounter: false },
     { key: '3-under', ...prepared, levelsUnder: 3 },
   ],
   // TUNE: the plan's defenses: two or three spare squishies, or a strength-3

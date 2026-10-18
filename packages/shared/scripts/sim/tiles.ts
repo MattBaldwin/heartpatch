@@ -1,7 +1,7 @@
 import { chooseAiChoice, chooseAiReplacement } from '../../src/battle/ai.js';
 import { createBattleContent, type BattleContent } from '../../src/battle/content.js';
 import { applyBattleAction, startBattle } from '../../src/battle/engine.js';
-import { activeSquishy, type BattleState } from '../../src/battle/state.js';
+import { activeSquishy, benchOf, type BattleState } from '../../src/battle/state.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GAME_DATA } from '../../src/data/index.js';
 import { stancePolicy } from '../../src/data/raids.js';
@@ -70,7 +70,7 @@ function guardsOf(
 ): BattleSquishySetup[] {
   const { guards } = defense;
   if (guards.kind === 'land') {
-    return resolveGuardians(
+    const team = resolveGuardians(
       {
         seed: deriveSeed(seed, 'guardians'),
         terrain: guards.terrain,
@@ -79,6 +79,8 @@ function guardsOf(
       },
       { rules: GUARDIAN_RULES, species: roster.species, seasons: GAME_DATA.seasons },
     );
+    if (team.length === 0) throw new Error(`no guardians guard ${guards.terrain}`);
+    return team;
   }
   const rng = Rng.fromSeed(deriveSeed(seed, 'posted'));
   return guards.below.map((below, i) => ({
@@ -116,15 +118,38 @@ function fightersOf(
   });
 }
 
-/** The kid's choice: the stand-in's pick, with a potion sipped along once it's due (#403). */
+/**
+ * The fighter picked to counter the guard that's out (fighter i was picked
+ * against guard i), if the kid plays its counters and that fighter is on the
+ * bench and can still fight. Null otherwise.
+ */
+function counterSlot(state: BattleState, prep: TilePrep): number | null {
+  if (!prep.swapsToCounter) return null;
+  const slot = state.sides.b.active;
+  return benchOf(state, 'a').some((b) => b.slot === slot) ? slot : null;
+}
+
+/**
+ * The kid's choice: the stand-in's pick, with a potion sipped along once it's
+ * due (#403). A kid who plays its counters swaps one in when a guard it
+ * hasn't met yet steps out (`met` is updated).
+ */
 function kidChoice(
   content: BattleContent,
   state: BattleState,
   config: TileSimConfig,
   prep: TilePrep,
+  met: Set<string>,
   rng: Rng,
 ): BattleChoice {
+  // The kid always picks first, so every prep meets the same rolls.
   const pick = chooseAiChoice(content, state, 'a', config.kidPolicy, rng);
+  const guard = activeSquishy(state, 'b').id;
+  if (!met.has(guard)) {
+    met.add(guard);
+    const slot = counterSlot(state, prep);
+    if (slot !== null) return { type: 'swap', slot };
+  }
   // A sip rides along with a move; a swap waits for the next turn.
   if (!prep.potions || pick.type !== 'move') return pick;
   const used = state.sides.a.itemsUsed;
@@ -161,6 +186,7 @@ function playOne(
     Rng.fromSeed(deriveSeed(seed, 'team', prep.counter)),
   );
   const kidRng = Rng.fromSeed(deriveSeed(seed, 'kid'));
+  const met = new Set<string>();
   let state = startBattle(content, {
     seed,
     sides: {
@@ -182,9 +208,12 @@ function playOne(
         ? {
             type: 'replace',
             side: 'a',
-            slot: chooseAiReplacement(content, state, 'a', config.kidPolicy, kidRng),
+            // The AI picks first either way, so every prep meets the same rolls.
+            slot: ((ai) => counterSlot(state, prep) ?? ai)(
+              chooseAiReplacement(content, state, 'a', config.kidPolicy, kidRng),
+            ),
           }
-        : { type: 'turn', choices: { a: kidChoice(content, state, config, prep, kidRng) } },
+        : { type: 'turn', choices: { a: kidChoice(content, state, config, prep, met, kidRng) } },
     );
   }
   return state.phase.result.winner === 'a';
@@ -298,7 +327,7 @@ export function renderTileReport(
   const lines = [
     '# Tiles sim (#529)',
     '',
-    `Content hash \`${result.contentHash}\`. ${floor}. A challenger's team of ${String(config.teamSize)} public base forms at the defender's Partner level (${config.partnerLevels.join(', ')}), played by the \`${config.kidPolicy}\` policy, against a rival tile's guards; a fenced tile's breaker sits out, so one fewer fights. Posted guards play the stance; the land's guardians always play \`guardian\`. ${String(config.games * config.partnerLevels.length)} battles per cell. Challenger win rate (draws count as not winning).`,
+    `Content hash \`${result.contentHash}\`. ${floor}. A challenger's team of ${String(config.teamSize)} public base forms at the defender's Partner level (${config.partnerLevels.join(', ')}), played by the \`${config.kidPolicy}\` policy, against a rival tile's guards; a fenced tile's breaker sits out, so one fewer fights. Counter-picking preps also play their counters: the fighter picked for a guard goes in when that guard steps out. Posted guards play the stance; the land's guardians always play \`guardian\`. ${String(config.games * config.partnerLevels.length)} battles per cell. Challenger win rate (draws count as not winning).`,
     '',
   ];
   for (const stance of config.stances) {
