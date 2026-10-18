@@ -23,6 +23,7 @@ import {
   watchInTheDark,
   type TerritoryAction,
 } from './territory-action.js';
+import { watchFeelingsLine } from '../map/tile-info.js';
 import './territory.css';
 
 // Territory in the tile panel (#15, design doc §11): "Claim" wild land next
@@ -310,6 +311,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
     render();
   }
 
+  /**
+   * Who stands watch on a rival's tile (#531): how they feel, in the same
+   * line as their count; "N squishies stand watch here" when the server sent
+   * no feelings.
+   */
+  function guardsWho(tile: PublicTile): HTMLElement[] {
+    const feelings = watchFeelingsLine(tile.defenderFeelings);
+    if (feelings !== null) return [line(feelings, 'territory-guards-who')];
+    return tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : [];
+  }
+
   function render(): void {
     shown = null;
     countdown = null;
@@ -324,9 +336,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
     const owner = view.members.find((m) => m.user.id === tile.ownerUserId)?.user.username;
     switch (action.kind) {
       case 'none':
-        if (tile.ownerUserId !== user?.id && tile.defenders > 0) {
-          children.push(line(TERRITORY_TEXT.onWatchThere(tile.defenders)));
-        }
+        if (tile.ownerUserId !== user?.id) children.push(...guardsWho(tile));
         break;
       case 'claim':
         children.push(
@@ -351,7 +361,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
                 line(TERRITORY_TEXT.whoGoesFirst),
               ]
             : [line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone))]),
-          ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
+          ...guardsWho(tile),
           ...(showsGuardLevelNote(tile)
             ? [line(TERRITORY_TEXT.guardsAsStrong, 'territory-guards-as-strong')]
             : []),
@@ -396,16 +406,11 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         children.push(line(TERRITORY_TEXT.pvpOff));
         break;
       case 'shielded':
-        children.push(
-          ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
-          line(TERRITORY_TEXT.rivalShielded, 'territory-shielded'),
-        );
+        children.push(...guardsWho(tile), line(TERRITORY_TEXT.rivalShielded, 'territory-shielded'));
         break;
       case 'too-far':
         children.push(
-          ...(tile.ownerUserId !== null && tile.defenders > 0
-            ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))]
-            : []),
+          ...(tile.ownerUserId !== null ? guardsWho(tile) : []),
           line(TERRITORY_TEXT.tooFar, 'territory-too-far'),
         );
         break;

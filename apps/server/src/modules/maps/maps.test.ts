@@ -466,6 +466,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(Object.keys(view.tiles[0]!).sort()).toEqual(
         [
           'cooldownUntil',
+          'defenderFeelings',
           'defenders',
           'guardianHint',
           'buildings',
