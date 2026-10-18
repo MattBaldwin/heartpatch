@@ -34,6 +34,7 @@ describe('the result card line', () => {
     expect(fenceResult('theirs', 'forfeit', false)).toBe(FENCE_RESULTS.stopped);
     expect(fenceResult('mine', 'turn-limit', true)).toBe(FENCE_RESULTS.replayHeld);
     expect(fenceResult('theirs', 'tuckered-out', true)).toBe(FENCE_RESULTS.replayBroke);
+    expect(FENCE_RESULTS.broke.subtitle).toBe('Now beat the guard to make it yours!');
     for (const card of Object.values(FENCE_RESULTS)) {
       expect(findAvoidedWords(`${card.title} ${card.subtitle}`)).toEqual([]);
     }

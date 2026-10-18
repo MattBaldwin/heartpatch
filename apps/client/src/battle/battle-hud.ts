@@ -118,6 +118,11 @@ export interface ResultInfo {
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
+  /**
+   * A broken fence's card (#527): a primary button that starts the guard
+   * showdown, with `done` as the secondary "Not now".
+   */
+  keepGoing?: { label: string; onKeepGoing: () => void };
   /** A rare friend or a first of its kind: the card celebrates (#391). */
   cheer?: { readonly info: BefriendCheer; readonly reducedMotion: boolean };
 }
@@ -136,6 +141,9 @@ export interface BattleHud {
   setProblem: (text: string) => void;
   showResult: (info: ResultInfo) => void;
   hideResult: () => void;
+  /** A line on the result card, in view above its buttons ("" clears it), and whether Keep going is working on it (#527). */
+  setResultNote: (text: string) => void;
+  setKeepGoingBusy: (busy: boolean) => void;
   /** Where the fight may be drawn: under the pills, above the sheet (fractions of the height). */
   safe: () => SafeRegion;
   /** The bottom sheet's top edge on the page, CSS px (#391's banner sits above it). */
@@ -308,6 +316,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // A rare friend's hearts (#391), under the card.
   const hearts = el('div', { class: 'battle-hearts', 'aria-hidden': 'true' });
   let undress: (() => void) | null = null;
+  // The result card's own line and Keep going button (#527), made with each card.
+  let resultNote = el('p', {});
+  let keepGoingButton: HTMLButtonElement | null = null;
   const hud = el(
     'section',
     { class: 'battle-hud', 'data-testid': 'battle-hud', 'aria-label': 'Squishy showdown' },
@@ -678,6 +689,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     showResult: (info) => {
       undress?.();
       undress = null;
+      resultNote = el('p', {
+        class: 'battle-hint',
+        role: 'status',
+        'data-testid': 'battle-result-note',
+        hidden: '',
+      });
+      keepGoingButton = info.keepGoing
+        ? button(info.keepGoing.label, info.keepGoing.onKeepGoing, { testId: 'battle-keep-going' })
+        : null;
       result.replaceChildren(
         el('h1', { class: 'auth-title', id: 'battle-result-title' }, info.title),
         el('p', { class: 'auth-subtitle' }, info.subtitle),
@@ -702,10 +722,16 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
           : []),
+        resultNote,
         el(
           'div',
           { class: 'auth-actions' },
-          button(info.done, options.onDone, { testId: 'battle-done' }),
+          ...(keepGoingButton
+            ? [
+                keepGoingButton,
+                button(info.done, options.onDone, { testId: 'battle-done', soft: true }),
+              ]
+            : [button(info.done, options.onDone, { testId: 'battle-done' })]),
         ),
       );
       result.hidden = false;
@@ -725,6 +751,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       undress?.();
       undress = null;
       result.hidden = true;
+    },
+    setResultNote: (text) => {
+      resultNote.textContent = text;
+      resultNote.hidden = text === '';
+    },
+    setKeepGoingBusy: (busy) => {
+      if (keepGoingButton) keepGoingButton.disabled = busy;
     },
     safe: () => {
       if (safe) return safe;

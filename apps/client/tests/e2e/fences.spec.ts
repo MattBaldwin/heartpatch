@@ -3,6 +3,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { claimLand, findTile } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
 
 /**
  * Fences on an iPhone (issue #203, #371): a new player claims land next to
@@ -148,3 +150,121 @@ test('builds a fence on every open edge, upgrades one, and takes one down', asyn
 
   expect(errors).toEqual([]);
 });
+
+/**
+ * Keep going from the result card (#527). A real challenge needs a rival with a
+ * fenced tile next to my land (and a second player past the 48 h shield), so
+ * the server's answers are staged here: a dev fight that has ended with the
+ * fence broken, the territory status that opens the Keep going window, and a
+ * rival's tile in the map view. What this checks is the card: the button, the
+ * word on it when the server says no, and the guard battle that opens at once.
+ */
+test('Keep going on the fence-broke card starts the guard battle', async ({ browser }) => {
+  test.setTimeout(300_000); // a map build and a battle; CI renders in software
+  const page = await newPlayer(browser, uniqueName('keepgo'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Keep Going Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+
+  // The dev fight, finished as a fence battle my squishy won; the original stands in for the guards.
+  let guards: unknown = null;
+  await page.route('**/api/v1/maps/*/dev/battles', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as { battle: StagedBattle };
+    guards = structuredClone(body.battle);
+    const { battle } = body;
+    const theirs = battle.mySide === 'a' ? 'b' : 'a';
+    battle.status = 'finished';
+    battle.endedAt = new Date().toISOString();
+    battle.view.sides[theirs].squishies[0]!.fence = 'hedge';
+    battle.view.phase = {
+      type: 'over',
+      result: {
+        winner: battle.mySide,
+        reason: 'tuckered-out',
+        contentHash: battle.view.contentHash,
+        turns: battle.view.turn,
+        xp: [],
+      },
+    };
+    await route.fulfill({ response: res, json: body });
+  });
+  await realTap(await trayButton(page, 'battle-dev-fight'));
+  const card = page.getByTestId('battle-result');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Crack! The fence fell down!');
+  await expect(card).toContainText('Now beat the guard to make it yours!');
+  await expect(card).not.toContainText('Tap Keep going on the land');
+  const keepGoing = page.getByTestId('battle-keep-going');
+  await expect(keepGoing).toHaveText('Keep going!');
+  await expect(page.getByTestId('battle-done')).toHaveText('Not now');
+  await expect(keepGoing).toBeInViewport({ ratio: 1 });
+  await expect(page.getByTestId('battle-done')).toBeInViewport({ ratio: 1 });
+
+  // No Keep going window is open on the server: the card says so, in view, and stays.
+  const note = page.getByTestId('battle-result-note');
+  await realTap(keepGoing);
+  await expect(note).toContainText('That chance is over');
+  await expect(note).toBeInViewport({ ratio: 1 });
+  expect(findAvoidedWords((await card.textContent()) ?? '')).toEqual([]);
+  await expect(card).toBeVisible();
+
+  // Now it is open, on a rival's tile with no fence left: Keep going sends the attack and the guards appear.
+  let tile: { q: number; r: number } | null = null;
+  await page.route('**/api/v1/maps/*/view', async (route) => {
+    const res = await route.fetch();
+    const view = (await res.json()) as MapView;
+    const wild = view.tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    wild.ownerUserId = '00000000-0000-4000-8000-000000000999';
+    wild.fences = [];
+    tile = { q: wild.q, r: wild.r };
+    await route.fulfill({ response: res, json: view });
+  });
+  await page.route('**/api/v1/maps/*/territory', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as {
+      territory: { fenceBroken?: { q: number; r: number; until: string }[] };
+    };
+    // The view answers alongside; wait for the tile it picked.
+    await expect.poll(() => tile).not.toBeNull();
+    body.territory.fenceBroken = [
+      { ...tile!, until: new Date(Date.now() + 9 * 60_000).toISOString() },
+    ];
+    await route.fulfill({ response: res, json: body });
+  });
+  const attack = page.waitForRequest(
+    (req) => req.url().includes('/attacks') && req.method() === 'POST',
+  );
+  await page.route('**/api/v1/maps/*/attacks', (route) =>
+    route.fulfill({ json: { battle: guards } }),
+  );
+  await realTap(keepGoing);
+  const sent = await attack;
+  expect(sent.postDataJSON()).toEqual(tile);
+  expect(sent.headers()['idempotency-key']).toBeTruthy();
+  await expect(card).toBeHidden();
+  await expect(page.getByTestId('battle-hud')).toBeVisible();
+  await expect(page.getByTestId('battle-controls')).toBeVisible();
+  await expect(page.getByTestId('battle-keep-going')).toBeHidden();
+
+  expect(errors).toEqual([]);
+});
+
+/** The slice of a staged `PlayerBattle` the test rewrites. */
+interface StagedBattle {
+  status: string;
+  endedAt: string | null;
+  mySide: 'a' | 'b';
+  view: {
+    contentHash: string;
+    turn: number;
+    phase: unknown;
+    sides: Record<'a' | 'b', { squishies: { fence?: string }[] }>;
+  };
+}
