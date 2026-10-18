@@ -399,3 +399,49 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   expect((await exploreState(page))?.scene?.buildings).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ browser }) => {
+  test.setTimeout(180_000); // one scene build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('swim'));
+  // A new patch has no lake at home: explore its Heart Seed tile as one, so
+  // the client builds the underwater scene for it (only the look changes).
+  await page.route('**/maps/*/explore?*', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as { terrain: string };
+    body.terrain = 'lake';
+    await route.fulfill({ response: res, json: body });
+  });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Puddle Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  await expect(async () => {
+    if ((await mapState(page))?.selected == null) {
+      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(explore).toBeVisible({ timeout: 5_000 });
+  }).toPass(slow);
+  await explore.tap();
+
+  await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+  expect((await exploreState(page))?.scene?.sky.underwater).toBe(true);
+  await keeperStill(page);
+  const from = (await exploreState(page))!.keeper;
+  // Somewhere on the lakebed a little way off, clear of the spots.
+  const to = { x: from.x + 0.12, z: from.z + 0.12 };
+  const tap = await waypoint(page, to);
+  expect(tap, 'a tappable point on the lakebed').not.toBeNull();
+  await realTapAt(page, tap!.x, tap!.y);
+  await expect
+    .poll(async () => {
+      const k = (await exploreState(page))!.keeper;
+      return Math.hypot(k.x - from.x, k.z - from.z);
+    }, slow)
+    .toBeGreaterThan(0.03);
+  await page.getByTestId('explore-back').tap();
+});
