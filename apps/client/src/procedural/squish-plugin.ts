@@ -140,6 +140,36 @@ const VERTEX_WORLDPOS = /* glsl */ `
 #endif
 `;
 
+/**
+ * The screen-door fade (#381 W2): an instance's colour alpha below 1 drops
+ * that share of its pixels in a 4×4 ordered (Bayer) pattern, so it fades with
+ * no blending, no sorting and no extra draw. B4 = 4·B2(p mod 2) + B2(p / 2),
+ * with B2(x, y) = (2x + 3y) mod 4.
+ */
+const FRAGMENT_FADE = /* glsl */ `
+#if defined(SQUISH_FADE) && defined(INSTANCESCOLOR) && defined(INSTANCES)
+if (vColor.a < 0.999) {
+  vec2 fdP = mod(floor(gl_FragCoord.xy), 4.0);
+  vec2 fdLo = mod(fdP, 2.0);
+  vec2 fdHi = floor(fdP / 2.0);
+  float fdB = 4.0 * mod(2.0 * fdLo.x + 3.0 * fdLo.y, 4.0) + mod(2.0 * fdHi.x + 3.0 * fdHi.y, 4.0);
+  if (vColor.a <= (fdB + 0.5) / 16.0) discard;
+}
+#endif
+`;
+
+/**
+ * The fade keeps the pixels it keeps whole: PBR multiplies the instance
+ * alpha into the fragment's, and on the opaque squishy material that would
+ * write a see-through alpha into the canvas, which the page then shows
+ * through (a pale ghost, review of #381 W2).
+ */
+const FRAGMENT_FADE_OPAQUE = /* glsl */ `
+#if defined(SQUISH_FADE) && defined(INSTANCESCOLOR) && defined(INSTANCES)
+finalColor.a = 1.0;
+#endif
+`;
+
 const FRAGMENT_RIM = /* glsl */ `
 #ifdef SQUISH_RIM
 {
@@ -252,10 +282,26 @@ if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {
 export class SquishPlugin extends MaterialPluginBase {
   /** Seconds on the squishy clock; every move's start time uses the same clock. */
   time = 0;
+  #fade = false;
 
   constructor(material: PBRMaterial) {
-    super(material, 'Squish', 200, { SQUISH: false, SQUISH_RIM: false });
+    super(material, 'Squish', 200, { SQUISH: false, SQUISH_RIM: false, SQUISH_FADE: false });
     this._enable(true);
+  }
+
+  /**
+   * The screen-door fade is compiled in (`SquishyFieldOptions.fades`). Off
+   * by default: a `discard` stops the GPU rejecting hidden pixels early, so
+   * only a field whose squishies fade pays for it.
+   */
+  get fade(): boolean {
+    return this.#fade;
+  }
+
+  set fade(on: boolean) {
+    if (on === this.#fade) return;
+    this.#fade = on;
+    this.markAllDefinesAsDirty();
   }
 
   override getClassName(): string {
@@ -270,6 +316,7 @@ export class SquishPlugin extends MaterialPluginBase {
     const squish = mesh.isVerticesDataPresent(SQUISH_ATTRIBUTES[0]);
     defines['SQUISH'] = squish;
     defines['SQUISH_RIM'] = true;
+    defines['SQUISH_FADE'] = squish && this.#fade;
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
@@ -310,7 +357,9 @@ export class SquishPlugin extends MaterialPluginBase {
     if (shaderType === 'fragment') {
       return {
         CUSTOM_FRAGMENT_DEFINITIONS: FRAGMENT_DEFINITIONS,
+        CUSTOM_FRAGMENT_MAIN_BEGIN: FRAGMENT_FADE,
         CUSTOM_FRAGMENT_BEFORE_FOG: FRAGMENT_RIM,
+        CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: FRAGMENT_FADE_OPAQUE,
       };
     }
     return null;

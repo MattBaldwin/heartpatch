@@ -404,6 +404,18 @@ The trading post's swap (issue #523; the owner-approved mockup) lives in `src/mo
 | `GET /api/v1/maps/:mapId/glimmer-swap` | → `{ swap: { swappedToday, resetsAt, have } }`: Glimmer swapped today, when the account's day ends, and my bag's accepted resources and Glimmer on this patch. `NOT_FOUND` for a non-member |
 | `POST /api/v1/maps/:mapId/glimmer-swap` | `{ q, r, itemId }` → `{ swap }`. One swap at the post at (q, r), in one transaction under the account's `users` lock. `VALIDATION_FAILED` for an item the post doesn't take; `NOT_FOUND` for a non-member or a tile that isn't a post; `FORBIDDEN` for a post I can't use (not connected, no visit pass); `CONFLICT` past the daily cap or when the bag is short (nothing changes). Works with trading off. Writes no game event. Send an `Idempotency-Key` |
 
+## Trick-or-treat
+
+`src/modules/trick-or-treat` (issue #515; the owner-approved mockup and plan). In the Halloween season (the map's local date), a Keeper knocks on a patch-mate's Heart Seed home for a treat: Heartdust, a Keeper costume or a squishy costume. Once per home per patch day (`trick_or_treat_visits`' unique key); the host needn't be online and PvP mode doesn't matter. A host with a lit Jack-o'-Lantern Hearthfire tonight gives from the better table. The rules are shared data (`TRICK_OR_TREAT`); the prize table and the seeded roll are server-only (`TRICK_OR_TREAT_PRIZES`, `rollTrickOrTreat`). Costumes are the catalog's items with the `trick-or-treat` source, so new ones join by their catalog entry.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/trick-or-treat` | → `{ trickOrTreat: { open, day, resetsAt, hosts } }`: whether it's on today, the patch day and when it ends, and each patch-mate's home (`lit`, `visited`). `NOT_FOUND` for a non-member |
+| `POST /api/v1/maps/:mapId/trick-or-treat` | `{ hostUserId }` → `{ visit, trickOrTreat }`. One transaction: the visit, the treat (Heartdust `trick-or-treat`, or a costume piece with source `trick-or-treat`), the host's thank-you Heartdust (`trick-or-treat-thanks`) and `trick.visited`. `VALIDATION_FAILED` for my own home; `NOT_FOUND` for a non-member or a home not on the patch; `CONFLICT` out of season or for a second knock that day. Send an `Idempotency-Key` |
+
+- **The host's morning note:** `HollowStatus.trickOrTreat` counts yesterday's visitors and the Heartdust they left.
+- **Lock order:** tech spec §7 "Trick-or-treat (#515)".
+
 ## Friendly challenges
 
 `src/modules/challenges` (issue #29; the owner-approved mockup). "Battle me?" between two Keepers who both have the app open on a multiplayer patch (`wsHub.isOnline`). Nothing is at stake, so it works in every PvP mode; the owner can switch it off. The rules are `CHALLENGE_RULES` (`packages/shared/src/data/challenges.ts`, all `TUNE`). A yes starts a live battle through the battles service's `startFriendly` (see "Battles").

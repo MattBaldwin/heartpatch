@@ -39,10 +39,13 @@ export type HookName =
   | 'roster'
   | 'posts'
   | 'journey'
+  | 'trickOrTreat'
   | 'post'
   | 'whatsNew'
   | 'patchLine'
-  | 'frameCap';
+  | 'frameCap'
+  | 'testScenes'
+  | 'hitchesExpected';
 
 type HookWindow = { __heartpatch?: Partial<Record<string, () => unknown>> };
 

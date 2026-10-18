@@ -117,8 +117,12 @@ interface Batch {
   dirty: boolean;
   /** Only placements changed (a walk or a hop, #323): rewrite matrices and origins in place. */
   moved: boolean;
+  /** Only cheers changed (#501 G): rewrite the event buffer in place. */
+  evented: boolean;
   /** The last uploaded origin buffer, rewritten in place on a move. */
   origins: Float32Array | null;
+  /** The last uploaded event buffer, rewritten in place on a cheer. */
+  events: Float32Array | null;
 }
 
 const DEG = Math.PI / 180;
@@ -235,7 +239,8 @@ export class KeeperField {
     const keeper = this.#keepers.get(handle.id);
     if (!keeper) return;
     keeper.event = { move, start: this.#clock(now), strength };
-    for (const { batch } of keeper.instances) batch.dirty = true;
+    // Only the event attribute changes: rewritten in place, no new buffers (#501 G).
+    for (const { batch } of keeper.instances) batch.evented = true;
   }
 
   /** Advances the Keeper clock; true while a cheer plays (keep drawing), else false. */
@@ -296,8 +301,12 @@ export class KeeperField {
   /** Uploads changed instance buffers. Runs before every render; call it to force one. */
   flush(): void {
     for (const batch of this.#batches.values()) {
-      if (batch.dirty) this.#upload(batch);
-      else if (batch.moved) this.#uploadMoves(batch);
+      if (batch.dirty) {
+        this.#upload(batch);
+        continue;
+      }
+      if (batch.moved) this.#uploadMoves(batch);
+      if (batch.evented) this.#uploadEvents(batch);
     }
     if (this.#shadowDirty) this.#uploadShadows();
   }
@@ -332,7 +341,9 @@ export class KeeperField {
         mesh: null,
         dirty: true,
         moved: false,
+        evented: false,
         origins: null,
+        events: null,
       };
       this.#batches.set(shape, batch);
     }
@@ -401,6 +412,7 @@ export class KeeperField {
   #upload(batch: Batch): void {
     batch.dirty = false;
     batch.moved = false;
+    batch.evented = false;
     const n = batch.instances.length;
     if (n === 0) {
       batch.mesh?.setEnabled(false);
@@ -447,6 +459,7 @@ export class KeeperField {
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);
     batch.origins = origins;
+    batch.events = events;
   }
 
   /** Rewrites a batch's matrices and origins in place after moves (no new buffers). */
@@ -461,6 +474,18 @@ export class KeeperField {
     });
     mesh.thinInstanceBufferUpdated('matrix');
     mesh.thinInstanceBufferUpdated('squishOrigin');
+  }
+
+  /** Rewrites a batch's cheers in place (no new buffers, #501 G: a find's cheer made ~30). */
+  #uploadEvents(batch: Batch): void {
+    batch.evented = false;
+    const { mesh, events } = batch;
+    if (!mesh || !events) return;
+    batch.instances.forEach((inst, i) => {
+      events.set(eventAttribute(inst.owner.event), i * 4);
+      events[i * 4 + 3] = inst.finish;
+    });
+    mesh.thinInstanceBufferUpdated('squishEvent');
   }
 
   #uploadShadows(): void {

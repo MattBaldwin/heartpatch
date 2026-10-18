@@ -4,7 +4,13 @@ import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
-import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type Floater } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  GAME_DATA,
+  visualRegistry,
+  type ClothingItem,
+  type Floater,
+} from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   FINISH_CODE,
@@ -15,7 +21,7 @@ import {
 } from './config.js';
 import type { SquishySpecies } from './params.js';
 import { decodeSquishCode, glowHueIndex } from './rare-glow.js';
-import { SquishyField } from './squishy-field.js';
+import { SquishyField, type SquishyHandle } from './squishy-field.js';
 
 const registry = visualRegistry(GAME_DATA);
 const species: SquishySpecies = {
@@ -206,6 +212,125 @@ describe('SquishyField accessories (#340)', () => {
     f.setAccessory(h, item('tiny-crown'));
     expect(f.accessoryOf(h)).toBeNull();
     expect(f.stats).toEqual(bare);
+  });
+});
+
+describe('SquishyField squishy costumes (#515)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  const item = (id: string) => CLOTHING_BY_ID.get(id)!;
+  // Long ears and a flame tuft on top of its head.
+  const emberbun = GAME_DATA.species.find((s) => s.id === 'emberbun')!;
+  const field = (scene = new Scene(engine)) =>
+    new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+  const count = (h: SquishyHandle, slot: string) =>
+    h.params.parts.filter((p) => p.slot === slot).reduce((n, p) => n + p.placements.length, 0);
+
+  it('puts every piece on, across its anchors, on the meshes already drawn', () => {
+    const scene = new Scene(engine);
+    const f = field(scene);
+    const h = f.add(emberbun, 'e', { x: 0, z: 0 });
+    const bare = f.stats;
+    const shapes = new Set(scene.meshes.map((m) => m.name));
+    const cape = item('vampire-cape');
+    f.setAccessory(h, cape);
+    expect(f.accessoryOf(h)).toBe('vampire-cape');
+    expect(f.stats.instances).toBe(bare.instances + cape.visual.pieces.length);
+    // A new mesh (draw call) only for a primitive no part on screen uses yet.
+    const added = scene.meshes.filter((m) => !shapes.has(m.name)).map((m) => m.name);
+    for (const name of added) expect(name).toMatch(/^part:/);
+    expect(f.stats.meshes - bare.meshes).toBe(added.length);
+    f.setAccessory(h, null);
+    expect(f.stats.instances).toBe(bare.instances);
+  });
+
+  it('tucks the ears and topper under a hood, but only the topper under a hat', () => {
+    const f = field();
+    const h = f.add(emberbun, 'e', { x: 0, z: 0 });
+    const bare = f.stats.instances;
+    const ears = count(h, 'ears');
+    const crown = count(h, 'crown');
+    expect(ears).toBeGreaterThan(0);
+    expect(crown).toBeGreaterThan(0);
+    const sheet = item('ghostie-sheet');
+    expect(sheet.visual.hood).toBe(true);
+    f.setAccessory(h, sheet);
+    expect(f.stats.instances).toBe(bare - ears - crown + sheet.visual.pieces.length);
+    const witch = item('little-witch');
+    f.setAccessory(h, witch);
+    expect(f.stats.instances).toBe(bare - crown + witch.visual.pieces.length);
+    // Wings sit on the back: the ears and topper come back.
+    const wings = item('little-bat-wings');
+    f.setAccessory(h, wings);
+    expect(f.stats.instances).toBe(bare + wings.visual.pieces.length);
+    f.setAccessory(h, null);
+    expect(f.stats.instances).toBe(bare);
+  });
+
+  it('gives a costume its rarity finish and leaves accessories plain vinyl', () => {
+    const scene = new Scene(engine);
+    const f = field(scene);
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const finishes = () => {
+      f.flush();
+      return scene.meshes.flatMap((mesh) => {
+        const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+          Float32Array | undefined;
+        // An empty batch is switched off rather than emptied.
+        if (!data || !mesh.isEnabled()) return [];
+        return Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!);
+      });
+    };
+    const sparkly = () => finishes().filter((c) => c === FINISH_CODE.sparkle).length;
+    const bare = sparkly();
+    // Epic sparkles (ART_RULES.finishByRarity), like an epic Keeper costume.
+    f.setAccessory(h, item('vampire-cape'));
+    expect(sparkly()).toBe(bare + item('vampire-cape').visual.pieces.length);
+    // The epic Tiny Crown is an everyday accessory: plain vinyl.
+    f.setAccessory(h, item('tiny-crown'));
+    expect(sparkly()).toBe(bare);
+  });
+
+  it('lights a glowing piece from inside, on top of its finish', () => {
+    const scene = new Scene(engine);
+    const f = field(scene);
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const cape = item('vampire-cape');
+    const glowing: ClothingItem = {
+      ...cape,
+      id: 'glowing-cape',
+      visual: {
+        ...cape.visual,
+        pieces: cape.visual.pieces.map((p, i) => (i === 0 ? { ...p, glow: true } : p)),
+      },
+    };
+    const count = (code: number) => {
+      f.flush();
+      return scene.meshes
+        .filter((mesh) => mesh.isEnabled())
+        .flatMap((mesh) => {
+          const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+            Float32Array | undefined;
+          return data ? Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!) : [];
+        })
+        .filter((c) => c === code).length;
+    };
+    const bare = {
+      sparkle: count(FINISH_CODE.sparkle),
+      lit: count(FINISH_CODE.sparkle + FINISH_CODE.glow),
+    };
+    f.setAccessory(h, glowing);
+    expect(count(FINISH_CODE.sparkle + FINISH_CODE.glow)).toBe(bare.lit + 1);
+    expect(count(FINISH_CODE.sparkle)).toBe(bare.sparkle + cape.visual.pieces.length - 1);
   });
 });
 
@@ -705,5 +830,98 @@ describe('SquishyField rare finds glow (#391)', () => {
     lit.f.flush();
     expect(lit.f.stats.meshes).toBe(plain.f.stats.meshes);
     expect(lit.f.stats.instances).toBe(plain.f.stats.instances);
+  });
+});
+
+describe('SquishyField fade (#381 W2)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  function field(fades = true) {
+    const scene = new Scene(engine);
+    return {
+      scene,
+      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false, fades }),
+    };
+  }
+
+  /** Every instance's colour alpha on the body mesh. */
+  function alphas(scene: Scene): number[] {
+    const mesh = scene.meshes.find((m) => m.name.startsWith('squishy-body')) as Mesh;
+    // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
+    const data = mesh.getVertexBuffer('instanceColor')?.getData() as Float32Array;
+    return Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!);
+  }
+
+  /** The screen-door fade is compiled into the shader. */
+  const fading = (scene: Scene): boolean => {
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    return (
+      (material?.pluginManager?.getPlugin('Squish') as { fade?: boolean } | null)?.fade ?? false
+    );
+  };
+
+  it('fades one squishy in place: its own instances, no new meshes', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.add(species, 'b', { x: 1, z: 0 });
+    f.flush();
+    const meshes = f.stats.meshes;
+    f.setFade(a, 0.4);
+    f.flush();
+    expect(alphas(scene)[0]).toBeCloseTo(0.4);
+    expect(alphas(scene)[1]).toBe(1);
+    expect(f.fadeOf(a)).toBeCloseTo(0.4);
+    expect(f.stats.meshes).toBe(meshes);
+    f.setFade(a, 1);
+    f.flush();
+    expect(alphas(scene)).toEqual([1, 1]);
+  });
+
+  // The real check is a drawing-buffer readback in the dev gallery (no pixel
+  // under alpha 1 while a resident is faded); NullEngine compiles no shader.
+  it('keeps a faded squishy’s kept pixels opaque (the canvas never shows the page through it)', () => {
+    const { scene } = field(true);
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    const plugin = material?.pluginManager?.getPlugin('Squish') as {
+      getCustomCode: (kind: string) => Record<string, string> | null;
+    } | null;
+    const code = plugin?.getCustomCode('fragment') ?? {};
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('finalColor.a = 1.0;');
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('SQUISH_FADE');
+  });
+
+  it('keeps a squishy whole in a field that doesn’t fade (no see-through alpha without the dither)', () => {
+    // Under WebGPU the dither's shader isn't attached either: the same path.
+    const { scene, field: f } = field(false);
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.flush();
+    f.setFade(a, 0);
+    f.add(species, 'b', { x: 1, z: 0 }); // and through a rebuild
+    f.flush();
+    expect(f.fadeOf(a)).toBe(0);
+    expect(alphas(scene)).toEqual([1, 1]);
+  });
+
+  it('compiles the fade in only for a field that fades, from the start (no recompile mid-walk)', () => {
+    expect(fading(field(true).scene)).toBe(true);
+    expect(fading(field(false).scene)).toBe(false);
+  });
+
+  it('keeps the fade through a rebuild', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.setFade(a, 0);
+    f.add(species, 'b', { x: 1, z: 0 }); // a new instance rebuilds the buffers
+    f.flush();
+    expect(alphas(scene)[0]).toBe(0);
   });
 });

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 // The on-device perf report (#501 PR A): one row a client posts when its
-// drawn frames stay under 10 fps for 5 s, at most once a minute. The server
+// drawn frames stay under 10 fps for 5 s, at most once a minute, or (#501 G)
+// after one drawn frame over 100 ms among quick ones, also at most once a
+// minute, with what the governor did next. The server
 // only logs it (`perf-report`), with the session's user id. Every field is a
 // number, a short label or a badge line of counts: no names, no free text.
 
@@ -44,6 +46,22 @@ export const PerfDecisionSchema = z.strictObject({
 });
 export type PerfDecision = z.infer<typeof PerfDecisionSchema>;
 
+/** The governor's tier and render scale at a moment. */
+const GovernorChoice = z.strictObject({ tier: Tier, renderScale: z.number().min(0).max(1) });
+
+/** One drawn frame over 100 ms among quick ones (#501 G) and the governor's choice after it. */
+export const PerfHitchSchema = z.strictObject({
+  /** The frame's length: the gap since the drawn frame before it. */
+  frameMs: Ms,
+  /** Our `scene.render` in that frame. */
+  renderMs: Ms,
+  /** How long after it `after` was read; the frames in between averaged under 100 ms. */
+  followMs: Ms,
+  before: GovernorChoice,
+  after: GovernorChoice,
+});
+export type PerfHitch = z.infer<typeof PerfHitchSchema>;
+
 /** `POST /api/v1/perf/report` (logged-in members; 204). */
 export const PerfReportSchema = z.strictObject({
   /** Drawn fps over the slow run that fired the report. */
@@ -81,6 +99,8 @@ export const PerfReportSchema = z.strictObject({
   visibility: z.enum(['visible', 'hidden']),
   flags: z.array(Flag).max(16),
   renderer: z.enum(['webgpu', 'webgl2', 'webgl1']),
+  /** A hitch report (#501 G): `fps` is then the recent frames', and `slowMs` 0. */
+  hitch: PerfHitchSchema.optional(),
 });
 export type PerfReport = z.infer<typeof PerfReportSchema>;
 

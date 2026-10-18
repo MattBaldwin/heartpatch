@@ -18,6 +18,7 @@ import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
 import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
+import { createTrickOrTreat } from './trick-or-treat/trick-or-treat-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -115,8 +116,14 @@ const pinTier = isQualityTier(pinnedTier);
 /** The quality tier, carried from stage to stage so the governor's last step down isn't lost. */
 let tier = pickInitialTier(pinnedTier, params.get('quality'));
 let stage: Stage | null = null;
+/** Test scenes built so far (the dev hook: a map↔explore switch builds none, #501 G). */
+let testScenesBuilt = 0;
+const testScene: SceneBuilder = (scene) => {
+  testScenesBuilt++;
+  return buildTestScene(scene);
+};
 /** What the stage draws: the open map, or the test scene. */
-let sceneBuilder: SceneBuilder = buildTestScene;
+let sceneBuilder: SceneBuilder = testScene;
 /** What boot() holds on to: always whichever stage is on screen now (showScene swaps it). */
 const currentStage = {
   dispose: () => {
@@ -161,13 +168,43 @@ function mounted(next: Stage): Stage {
   return next;
 }
 
+/** A `showScene(null)` waiting for its microtask. */
+let blankPending = false;
+/** What the stage on screen was built with. */
+let shownBuilder: SceneBuilder | null = null;
+/** Scene swaps so far (explore hands the screen back to the map, which shows its own). */
+let sceneSwaps = 0;
+
 /**
  * Swaps the scene on the running renderer (tech spec §6: one engine, scenes
  * swapped). Before the renderer starts, or after it failed, this only picks
  * what the next mount draws.
+ *
+ * `null` (a screen leaving) shows the test scene, a microtask later: a
+ * screen opening in the same task (the map hides as explore opens) takes
+ * its place before it's built, so a switch builds nothing it throws away
+ * (#501 G: about 97 buffers and a few program links each time). The test
+ * scene already on screen isn't rebuilt.
  */
 function showScene(build: SceneBuilder | null): void {
-  sceneBuilder = build ?? buildTestScene;
+  if (build !== null) {
+    blankPending = false;
+    swapScene(build);
+    return;
+  }
+  sceneBuilder = testScene;
+  if (blankPending) return;
+  blankPending = true;
+  queueMicrotask(() => {
+    if (!blankPending) return;
+    blankPending = false;
+    if (stage && shownBuilder === testScene) return;
+    swapScene(testScene);
+  });
+}
+function swapScene(build: SceneBuilder): void {
+  sceneBuilder = build;
+  sceneSwaps++;
   if (!stage) return;
   const { renderer } = stage;
   const target = renderer.engine.getRenderingCanvas();
@@ -175,6 +212,7 @@ function showScene(build: SceneBuilder | null): void {
   if (!target) return;
   try {
     stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
+    shownBuilder = sceneBuilder;
   } catch (err) {
     showRendererError(err);
   }
@@ -496,6 +534,19 @@ const journeys = createJourneyScreen({
     postScreen.open(post, view);
   },
 });
+// Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
+// button, and a lit home a porch lantern. A treat may be Heartdust: the bag
+// reads again.
+const trickOrTreat = createTrickOrTreat({
+  root: document.body,
+  isGlade: (mapId) => mapId === glade,
+  light: (mapId, userIds) => {
+    maps.setPorchLanterns(mapId, userIds);
+  },
+  onTreat: (visit) => {
+    if (visit.prize.kind === 'heartdust') void inventory.refresh();
+  },
+});
 const hollow = createHollowScreen({
   root: document.body,
   entryRoot: trays.slot('adventure'),
@@ -745,6 +796,7 @@ const explore = createExploreScreen({
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
+  expectHitch: () => stage?.quality.expectHitch(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   pinned: () => pinTier,
   keeper: () => keeper.current,
@@ -772,9 +824,18 @@ const explore = createExploreScreen({
   onClosed: (mapId) => {
     exploreSquishies.hidden = true;
     roster.close();
+    // The map shows its own scene; until then explore's stays (#501 G). If
+    // the map doesn't open, nothing else will, so the test scene shows.
+    const swaps = sceneSwaps;
+    // A remount meanwhile (a lost context) builds the test scene, never the closed tile.
+    sceneBuilder = testScene;
+    const noScene = (): void => {
+      if (sceneSwaps === swaps) showScene(null);
+    };
     maps
       .open(mapId)
       .then(() => {
+        noScene();
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
@@ -788,6 +849,7 @@ const explore = createExploreScreen({
         milestones.check();
       })
       .catch((err: unknown) => {
+        noScene();
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       });
     lobby.hide();
@@ -865,6 +927,8 @@ const maps = createMapScreen({
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
+    // On a patch-mate's home in the Halloween season (#515).
+    trickOrTreat.tileActions,
     // A tile's panel came up or went away: the night's cards step back or return.
     {
       show: () => {
@@ -888,7 +952,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags],
+  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags, trickOrTreat.layer],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -905,6 +969,7 @@ const maps = createMapScreen({
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
+    trickOrTreat.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
     // A patch-mate's Legendary friend (#391).
@@ -1523,6 +1588,7 @@ mountAuth(document.body, {
     recipeBook.setUser(user);
     territory.setUser(user);
     journeys.setUser(user);
+    trickOrTreat.setUser(user);
     postScreen.setUser(user);
     hollow.setUser(user);
     land.setUser(user);
@@ -1560,6 +1626,8 @@ if (import.meta.env.DEV) {
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
     frameCap: () => stage?.frameCap ?? null,
+    testScenes: () => testScenesBuilt,
+    hitchesExpected: () => stage?.quality.hitchesExpected ?? 0,
     map: () => maps.debug,
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,
@@ -1569,6 +1637,11 @@ if (import.meta.env.DEV) {
     battleDev: () => battles.dev,
     mapDev: () => ({
       select: (q: number, r: number) => maps.focus({ q, r }) !== null,
+      show: (q: number, r: number) => {
+        const point = maps.focus({ q, r });
+        if (point) stage?.camera.panTo(point, true, 0.2);
+        return point !== null;
+      },
       replay: (event) => {
         maps.replay(event);
       },
@@ -1594,6 +1667,7 @@ if (import.meta.env.DEV) {
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,
+    trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
     posts: () => ({
       shown: postFlags.shown,
@@ -1617,6 +1691,7 @@ await boot(canvas, {
   freshCanvas,
   mount: (renderer, target) => {
     stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
+    shownBuilder = sceneBuilder;
     return currentStage;
   },
   onError: showRendererError,

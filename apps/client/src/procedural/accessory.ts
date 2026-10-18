@@ -20,6 +20,13 @@ import { hexToRgb, type Rgb, type SquishyParams, type Vec3 } from './params.js';
  * - **neck:** a ring sized to the body's width there: low on the head for a
  *   squishy with one (where it meets the torso), else just under the face, so
  *   a scarf wraps the squishy wherever its face sits.
+ * - **back:** on the torso's back, up between the shoulders, in the torso's
+ *   sizes (wings, a cape; #515). +z points away from the face.
+ * - **body:** the torso's ground point, in the torso's sizes (a sheet's hem
+ *   round its middle; #515).
+ *
+ * A squishy costume (#515) puts each piece on its own anchor (`piece.anchor`,
+ * else the item's), so one costume can be a hat, a collar and a cape.
  */
 
 export interface AccessorySocket {
@@ -37,6 +44,8 @@ export interface AccessoryPiece {
   /** Degrees: pitch (x), yaw (y), roll (z). */
   readonly turn: Vec3;
   readonly color: Rgb;
+  /** Lit from inside, like a glowing Keeper costume piece. */
+  readonly glow: boolean;
 }
 
 /** The neck ring sits this far (radians up the body) under the lowest face part. */
@@ -45,6 +54,10 @@ const NECK_BELOW_FACE = 0.3; // TUNE: judge in the gallery (`?accessory=snuggle-
 const NECK_LOWEST = 0.32; // TUNE
 /** On a separate head, the neck ring sits this far up it (radians; −π/2 is its bottom). */
 const NECK_ON_HEAD = -0.55; // TUNE
+/** How far up the torso's back (radians; 0 is its widest ring) wings and capes hang from. */
+const BACK_UP = 0.75; // TUNE: judge in the gallery (`?accessory=little-bat-wings`)
+/** …and never lower than this share of the torso's height (a heart's back dips by its cleft). */
+const BACK_LOWEST = 0.78; // TUNE
 /** Where the face sits when a species has no eyes or mouth. */
 const FACE_UP = 0.15;
 /**
@@ -112,6 +125,15 @@ export function accessorySocket(
   bodies: ReadonlyMap<string, Body>,
   anchor: SquishyAnchor,
 ): AccessorySocket | null {
+  if (anchor === 'back' || anchor === 'body') {
+    const torso = bodies.get(params.body.id);
+    if (!torso) return null;
+    const scale = params.body.scale;
+    const size: Vec3 = [torso.width * scale[0], torso.height * scale[1], torso.depth * scale[2]];
+    if (anchor === 'body') return { at: [0, params.lift, 0], size };
+    const back = scaledPoint(torso, scale, Math.PI, BACK_UP);
+    return { at: [0, params.lift + Math.max(back[1], BACK_LOWEST * size[1]), back[2]], size };
+  }
   const host = faceHost(params, bodies);
   if (!host) return null;
   const { body, scale, at, onHead } = host;
@@ -140,14 +162,35 @@ export function accessoryItem(id: string | null | undefined): ClothingItem | nul
   return item?.slot === SQUISHY_SLOT ? item : null;
 }
 
-/** An accessory's pieces on `socket`, from the squishy's ground point. */
-export function accessoryPieces(item: ClothingItem, socket: AccessorySocket): AccessoryPiece[] {
-  const { at, size } = socket;
-  return item.visual.pieces.map((p) => ({
-    shape: p.shape,
-    at: [at[0] + p.at[0] * size[0], at[1] + p.at[1] * size[1], at[2] + p.at[2] * size[2]],
-    size: [p.size[0] * size[0], p.size[1] * size[1], p.size[2] * size[2]],
-    turn: p.turn ?? NO_TURN,
-    color: hexToRgb(p.color),
-  }));
+/** Every anchor an accessory's pieces sit on: its own, and any a piece names (#515). */
+export function accessoryAnchors(item: ClothingItem): SquishyAnchor[] {
+  const own = item.visual.anchor;
+  const all = item.visual.pieces.map((p) => p.anchor ?? own);
+  return [...new Set(all.filter((a): a is SquishyAnchor => a !== undefined))];
+}
+
+/**
+ * An accessory's pieces, each on its anchor's socket (`socketOf`), from the
+ * squishy's ground point. A piece whose socket is null is left out.
+ */
+export function accessoryPieces(
+  item: ClothingItem,
+  socketOf: (anchor: SquishyAnchor) => AccessorySocket | null,
+): AccessoryPiece[] {
+  return item.visual.pieces.flatMap((p) => {
+    const anchor = p.anchor ?? item.visual.anchor;
+    const socket = anchor ? socketOf(anchor) : null;
+    if (!socket) return [];
+    const { at, size } = socket;
+    return [
+      {
+        shape: p.shape,
+        at: [at[0] + p.at[0] * size[0], at[1] + p.at[1] * size[1], at[2] + p.at[2] * size[2]],
+        size: [p.size[0] * size[0], p.size[1] * size[1], p.size[2] * size[2]],
+        turn: p.turn ?? NO_TURN,
+        color: hexToRgb(p.color),
+        glow: p.glow === true,
+      },
+    ];
+  });
 }

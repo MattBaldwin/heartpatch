@@ -8,7 +8,7 @@ declare global {
     __heartpatchGallery?: {
       /** Field stats once the scene has drawn, else null. */
       stats(): SquishyFieldStats | null;
-      /** Thin instances the shown squishies' own params call for (body, head, parts, shadow). */
+      /** Thin instances the shown squishies' own params call for (body, head, parts, shadow, accessory). */
       expectedInstances(): number;
       /** Look ids shown, one per squishy, in grid order. */
       shown(): string[];

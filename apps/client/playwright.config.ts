@@ -55,6 +55,7 @@ const E2E_GROUPS = [
     'perf-report',
     'quality-budget',
     'territory',
+    'trick-or-treat',
     'tutorial-flow',
     'whats-new',
   ],

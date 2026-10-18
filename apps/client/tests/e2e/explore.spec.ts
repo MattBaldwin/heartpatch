@@ -64,6 +64,8 @@ interface ExploreDebug {
   card: 'rare' | null;
   toast: string | null;
   hint: string | null;
+  batchUploads: number;
+  tierChanges: number;
   scene: {
     spots: number;
     done: number;
@@ -100,6 +102,10 @@ const frameClock = (page: Page) =>
 const EXPLORE_MAX_FPS = 31;
 const mapState = (page: Page) =>
   hook<{ tiles: number; selected: string | null; buildings: number }>(page, 'map');
+/** Test scenes built since the page loaded (#501 G: a map↔explore switch builds none). */
+const testScenes = (page: Page) => hook<number>(page, 'testScenes');
+const quality = (page: Page) => hook<{ tier: string; renderScale: number }>(page, 'quality');
+const hitchesExpected = (page: Page) => hook<number>(page, 'hitchesExpected');
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -132,11 +138,15 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   }).toPass(slow);
   // The map draws on demand, uncapped (#501).
   expect(await frameCap(page)).toBeNull();
+  const testScenesOnMap = await testScenes(page);
+  expect(testScenesOnMap).not.toBeNull();
   await explore.tap();
 
   await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
   const first = (await exploreState(page))!;
   expect(first.open).toBe(true);
+  // The map handed the screen straight to explore: no test scene built and thrown away (#501 G).
+  expect(await testScenes(page)).toBe(testScenesOnMap);
   expect(first.spots.length).toBeGreaterThan(0);
   await slowExpect(page.getByTestId('map-hud')).toBeHidden();
   await expect(page.getByTestId('explore-progress')).toHaveText(
@@ -204,6 +214,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   test.info().annotations.push({ type: 'triangles', description: String(settled?.triangles) });
   expect(settled?.triangles ?? 0).toBeLessThan(TRIANGLE_CEILING);
   const builtOnArrival = settled?.created;
+  const tierChangesOnArrival = (await exploreState(page))?.tierChanges;
   expect(builtOnArrival?.meshes ?? 0).toBeGreaterThan(0);
   expect(builtOnArrival?.meshes ?? 0).toBeLessThanOrEqual(BUILD_MESH_CEILING);
   // Explore runs cool (#501): its stage is capped at 30 frames a second.
@@ -237,8 +248,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     const moved = walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z;
     // A software renderer's governor may change tier while exploring, and the
     // walk's first step applies it (the team's detail level rebuilds): that's
-    // a rebuild on purpose, so only a walk on one tier is judged.
-    const sameTier = walked.scene?.land?.tier === settled?.land?.tier;
+    // a rebuild on purpose, so only a walk on one tier is judged. A tier
+    // probe that failed goes down and straight back: the tier ends where it
+    // started, but the Keeper rebuilt twice (#501 G), so that's a change too.
+    const sameTier =
+      walked.scene?.land?.tier === settled?.land?.tier &&
+      walked.tierChanges === tierChangesOnArrival;
     if (searched === 0 && moved && !sameTier) guardSkipped = 'the tier changed during the walk';
     if (searched === 0 && moved && sameTier) {
       // The frame-rate guard (#501): walking draws every frame, so it must
@@ -268,6 +283,14 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await expect(page.getByTestId('explore-chip')).toBeVisible();
     await expect(page.getByTestId('explore-not-now')).toBeVisible();
     await expect(sheet).toBeHidden();
+    // Across the find (#501 G): the Keeper's cheer rewrites its buffers in
+    // place, and the governor takes the burst of work as a hitch, not a slow GPU.
+    const beforeFind = {
+      uploads: (await exploreState(page))!.batchUploads,
+      tierChanges: (await exploreState(page))!.tierChanges,
+      quality: await quality(page),
+      hitches: await hitchesExpected(page),
+    };
     await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
     type Seen = { toast: string | null; card: string | null; shown: boolean };
@@ -291,8 +314,30 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       }, slow)
       .toBe(true);
     searched += 1;
+    // Past the cheer and the governor's next windows (it reads frames in 500 ms windows).
+    await page.waitForTimeout(2000);
     const after = (await exploreState(page))!;
     expect(after.spots.find((s) => s.index === hands.index)?.done).toBe(true);
+    // A tier change meanwhile rebuilds the Keeper on purpose (CI's WebKit governor probes tiers).
+    if (after.tierChanges === beforeFind.tierChanges) {
+      expect(after.batchUploads, 'Keeper buffers made by the find').toBe(beforeFind.uploads);
+    } else {
+      test.info().annotations.push({
+        type: 'skipped',
+        description: 'Keeper buffers across a find (#501 G): the tier changed meanwhile',
+      });
+    }
+    // The find told the governor to expect a hitch, as it starts and as the
+    // reply lands, so it ignores the frames round it (#501 G). That it then
+    // changes nothing is the governor's unit tests' to prove: here a
+    // software renderer's governor raises and probes tiers on its own
+    // timers, find or no find, so the tier before and after is only noted.
+    expect(await hitchesExpected(page)).toBeGreaterThanOrEqual((beforeFind.hitches ?? 0) + 2);
+    const afterFind = await quality(page);
+    test.info().annotations.push({
+      type: 'qualityAcrossFind',
+      description: `${String(beforeFind.quality?.tier)} ${String(beforeFind.quality?.renderScale)} → ${String(afterFind?.tier)} ${String(afterFind?.renderScale)}`,
+    });
     if (after.card === 'rare') {
       await slowExpect(sheet).toBeVisible();
       await sheet.getByTestId('explore-yay').tap();
@@ -387,6 +432,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   expect((await exploreState(page))?.open).toBe(false);
   // The map's stage is back on demand, uncapped (#501).
   await expect.poll(() => frameCap(page), slow).toBeNull();
+  // Explore's scene stayed up until the map's was ready: still no test scene (#501 G).
+  expect(await testScenes(page)).toBe(testScenesOnMap);
   expect(errors).toEqual([]);
 });
 

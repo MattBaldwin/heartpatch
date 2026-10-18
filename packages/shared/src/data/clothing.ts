@@ -1,4 +1,4 @@
-import type { ClothingItem } from '../schemas/data/clothing.js';
+import { isSquishyCostume, type ClothingItem } from '../schemas/data/clothing.js';
 
 /**
  * The clothing catalog (design doc §23; issue #43): Keeper clothing and
@@ -917,6 +917,353 @@ const SQUISHY: ClothingItem[] = [
   },
 ];
 
+// ── Squishy costumes (#515): Halloween trick-or-treat prizes ─────────────
+// Still one per squishy: a costume takes the accessory's place (owner, #515).
+// Each piece can sit on its own anchor: a hat on the `crown`, a collar on the
+// `neck`, wings and capes on the `back` (the torso's, between the shoulders,
+// +z away from the face). Only trick-or-treating gives them (source
+// `trick-or-treat`), and they wear their rarity's finish like Keeper costumes.
+// TUNE: shapes and colours are first guesses to judge in the gallery
+// (`/gallery.html?accessory=…`).
+const SQUISHY_COSTUMES: ClothingItem[] = [
+  {
+    id: 'candy-corn-scarf',
+    name: 'Candy Corn Scarf',
+    description: 'Stripy, snuggly and only a tiny bit sticky.',
+    slot: 'squishy',
+    rarity: 'common',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'neck',
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.08, 0], size: [1.18, 0.17, 1.18], color: '#ffd23f' },
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.13, 0.15, 1.13], color: '#ff8a3c' },
+        { shape: 'ellipsoid', at: [0, 0.1, 0], size: [1.04, 0.11, 1.04], color: '#fff6e0' },
+        {
+          shape: 'ellipsoid',
+          at: [0.22, -0.02, -0.56],
+          size: [0.27, 0.25, 0.17],
+          color: '#fff6e0',
+        },
+        {
+          shape: 'capsule',
+          at: [0.17, -0.22, -0.56],
+          size: [0.16, 0.3, 0.08],
+          turn: [0, 0, 12],
+          color: '#ffd23f',
+        },
+        {
+          shape: 'capsule',
+          at: [0.3, -0.2, -0.54],
+          size: [0.15, 0.26, 0.08],
+          turn: [0, 0, -18],
+          color: '#ff8a3c',
+        },
+      ],
+    },
+  },
+  {
+    id: 'little-bat-wings',
+    name: 'Little Bat Wings',
+    description: 'Tiny wings for big night-time zooms.',
+    slot: 'squishy',
+    rarity: 'uncommon',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'back',
+      pieces: [
+        {
+          shape: 'teardrop',
+          at: [-0.68, 0.31, 0.15],
+          size: [0.2, 0.93, 0.08],
+          turn: [0, 0, 64.592],
+          color: '#4a3560',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.456, -0.026, 0.15],
+          size: [0.567, 0.54, 0.07],
+          color: '#4a3560',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.696, 0.122, 0.15],
+          size: [0.483, 0.46, 0.07],
+          color: '#4a3560',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.92, 0.28, 0.15],
+          size: [0.357, 0.34, 0.07],
+          color: '#4a3560',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.68, 0.31, 0.15],
+          size: [0.2, 0.93, 0.08],
+          turn: [0, 0, -64.592],
+          color: '#4a3560',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.456, -0.026, 0.15],
+          size: [0.567, 0.54, 0.07],
+          color: '#4a3560',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.696, 0.122, 0.15],
+          size: [0.483, 0.46, 0.07],
+          color: '#4a3560',
+        },
+        { shape: 'ellipsoid', at: [0.92, 0.28, 0.15], size: [0.357, 0.34, 0.07], color: '#4a3560' },
+        {
+          shape: 'ellipsoid',
+          at: [-0.664, 0.132, 0.11],
+          size: [0.52, 0.26, 0.05],
+          turn: [0, 0, -25.408],
+          color: '#a58bd0',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.664, 0.132, 0.11],
+          size: [0.52, 0.26, 0.05],
+          turn: [0, 0, 25.408],
+          color: '#a58bd0',
+        },
+      ],
+    },
+  },
+  {
+    id: 'pumpkin-patch-hood',
+    name: 'Pumpkin Patch Hood',
+    description: 'A plump pumpkin hood with a leafy collar.',
+    slot: 'squishy',
+    rarity: 'uncommon',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'crown',
+      pieces: [
+        { shape: 'ellipsoid', at: [-0.24, 0.02, 0.06], size: [0.55, 0.6, 0.9], color: '#ff8a3c' },
+        { shape: 'ellipsoid', at: [0.24, 0.02, 0.06], size: [0.55, 0.6, 0.9], color: '#ff8a3c' },
+        { shape: 'ellipsoid', at: [0, 0.05, 0.06], size: [0.6, 0.66, 0.96], color: '#ff9a4c' },
+        {
+          shape: 'capsule',
+          at: [0, 0.4, 0.06],
+          size: [0.13, 0.26, 0.13],
+          turn: [0, 0, 12],
+          color: '#6a8a4a',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.17, 0.4, 0.06],
+          size: [0.22, 0.32, 0.07],
+          turn: [0, 0, -62],
+          color: '#7cc96a',
+        },
+        {
+          anchor: 'neck',
+          shape: 'ellipsoid',
+          at: [0, 0, 0],
+          size: [1.1, 0.12, 1.1],
+          color: '#6aae5a',
+        },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [-0.3, -0.06, -0.42],
+          size: [0.24, 0.32, 0.07],
+          turn: [-20, 0, 150],
+          color: '#7cc96a',
+        },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [0.3, -0.06, -0.42],
+          size: [0.24, 0.32, 0.07],
+          turn: [-20, 0, -150],
+          color: '#7cc96a',
+        },
+      ],
+    },
+  },
+  {
+    id: 'ghostie-sheet',
+    name: 'Ghostie Sheet',
+    description: "Boo! (It's a very friendly boo.)",
+    slot: 'squishy',
+    rarity: 'rare',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'crown',
+      hood: true,
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.06, 0.16], size: [1.3, 0.92, 1.2], color: '#e9ecff' },
+        {
+          shape: 'teardrop',
+          at: [0.05, 0.44, 0.26],
+          size: [0.34, 0.42, 0.34],
+          turn: [-30, 0, -20],
+          color: '#e9ecff',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.17, 0.22, -0.38],
+          size: [0.15, 0.24, 0.08],
+          color: '#3b2a3f',
+        },
+        { shape: 'ellipsoid', at: [0.17, 0.22, -0.38], size: [0.15, 0.24, 0.08], color: '#3b2a3f' },
+        {
+          anchor: 'body',
+          shape: 'teardrop',
+          at: [0, 0.5, 0.4],
+          size: [1.36, 0.96, 0.28],
+          color: '#e9ecff',
+        },
+        {
+          anchor: 'body',
+          shape: 'ellipsoid',
+          at: [-0.4, 0.1, 0.36],
+          size: [0.36, 0.24, 0.26],
+          color: '#b9b3e6',
+        },
+        {
+          anchor: 'body',
+          shape: 'ellipsoid',
+          at: [-0.14, 0.1, 0.48],
+          size: [0.36, 0.24, 0.26],
+          color: '#b9b3e6',
+        },
+        {
+          anchor: 'body',
+          shape: 'ellipsoid',
+          at: [0.14, 0.1, 0.48],
+          size: [0.36, 0.24, 0.26],
+          color: '#b9b3e6',
+        },
+        {
+          anchor: 'body',
+          shape: 'ellipsoid',
+          at: [0.4, 0.1, 0.36],
+          size: [0.36, 0.24, 0.26],
+          color: '#b9b3e6',
+        },
+      ],
+    },
+  },
+  {
+    id: 'little-witch',
+    name: 'Little Witch',
+    description: 'A floppy hat, a twirly cape and big magic energy.',
+    slot: 'squishy',
+    rarity: 'rare',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'crown',
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0, 0], size: [1.1, 0.1, 1.1], color: '#5b3f78' },
+        { shape: 'cone', at: [0, 0.33, 0.02], size: [0.56, 0.62, 0.56], color: '#5b3f78' },
+        { shape: 'capsule', at: [0, 0.07, 0], size: [0.6, 0.11, 0.6], color: '#ff9a3c' },
+        { shape: 'capsule', at: [0, 0.07, -0.3], size: [0.15, 0.13, 0.04], color: '#ffd84d' },
+        {
+          shape: 'cone',
+          at: [0.13, 0.66, 0.04],
+          size: [0.22, 0.3, 0.22],
+          turn: [0, 0, -55],
+          color: '#5b3f78',
+        },
+        {
+          anchor: 'neck',
+          shape: 'ellipsoid',
+          at: [0, 0, -0.52],
+          size: [0.16, 0.16, 0.08],
+          color: '#ffd84d',
+        },
+        {
+          anchor: 'back',
+          shape: 'teardrop',
+          at: [0, -0.34, 0.06],
+          size: [1.2, 1.06, 0.1],
+          color: '#5b3f78',
+        },
+      ],
+    },
+  },
+  {
+    id: 'vampire-cape',
+    name: 'Vampire Cape',
+    description: 'A swishy cape with a very tall collar. Bleh!',
+    slot: 'squishy',
+    rarity: 'epic',
+    season: 'halloween',
+    sources: ['trick-or-treat'],
+    tradable: true,
+    visual: {
+      anchor: 'back',
+      pieces: [
+        { shape: 'teardrop', at: [0, -0.36, 0.08], size: [1.3, 1.12, 0.12], color: '#2e2140' },
+        { shape: 'teardrop', at: [0, -0.38, 0.02], size: [1.12, 0.96, 0.06], color: '#c23a5a' },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [-0.42, 0.22, 0.12],
+          size: [0.5, 0.72, 0.08],
+          turn: [-10, -20, 32],
+          color: '#2e2140',
+        },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [0.42, 0.22, 0.12],
+          size: [0.5, 0.72, 0.08],
+          turn: [-10, 20, -32],
+          color: '#2e2140',
+        },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [-0.4, 0.2, 0.09],
+          size: [0.36, 0.54, 0.06],
+          turn: [-10, -20, 32],
+          color: '#c23a5a',
+        },
+        {
+          anchor: 'neck',
+          shape: 'teardrop',
+          at: [0.4, 0.2, 0.09],
+          size: [0.36, 0.54, 0.06],
+          turn: [-10, 20, -32],
+          color: '#c23a5a',
+        },
+        {
+          anchor: 'neck',
+          shape: 'ellipsoid',
+          at: [0, 0, 0],
+          size: [1.1, 0.16, 1.1],
+          color: '#2e2140',
+        },
+        {
+          anchor: 'neck',
+          shape: 'ellipsoid',
+          at: [0, 0, -0.55],
+          size: [0.18, 0.18, 0.1],
+          color: '#e0405f',
+        },
+      ],
+    },
+  },
+];
+
 // ── Milestone pieces (design doc §24, #44): signature, account-bound ──────
 // Earned only from Keeper milestones (`data/milestones.ts`), never found,
 // sold or traded, so wearing one shows what you did. The found Cozy Apron
@@ -1257,7 +1604,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'legendary',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 320, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1435,7 +1782,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 260, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1615,7 +1962,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 260, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1770,7 +2117,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 210, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1905,7 +2252,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 210, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2028,7 +2375,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 160, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2169,7 +2516,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 160, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2321,7 +2668,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 120, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2462,7 +2809,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 120, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2531,6 +2878,7 @@ export const CLOTHING: ClothingItem[] = [
   ...HALLOWEEN_COSTUMES,
   ...MILESTONE,
   ...SQUISHY,
+  ...SQUISHY_COSTUMES,
 ];
 
 /** The catalog by id. */
@@ -2542,3 +2890,8 @@ export const CLOTHING_BY_ID: ReadonlyMap<string, ClothingItem> = new Map(
 export const STARTER_CLOTHING: readonly string[] = CLOTHING.filter((item) =>
   item.sources.includes('starter'),
 ).map((item) => item.id);
+
+/** The squishy costumes (#515), for the trick-or-treat prize table to name. */
+export const SQUISHY_COSTUME_IDS: readonly string[] = CLOTHING.filter(isSquishyCostume).map(
+  (item) => item.id,
+);

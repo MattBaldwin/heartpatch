@@ -12,8 +12,14 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
-import { accessoryPieces, accessorySocket } from './accessory.js';
+import {
+  ART_RULES,
+  isSquishyCostume,
+  type Body,
+  type ClothingItem,
+  type VisualRegistry,
+} from '@heartpatch/shared';
+import { accessoryAnchors, accessoryPieces, accessorySocket } from './accessory.js';
 import { bodyArrays, bodyRingsFor, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
@@ -104,6 +110,13 @@ export interface SquishyFieldOptions<L extends SquishyDetail = SquishyLod> {
    * the origin.
    */
   readonly parent?: TransformNode;
+  /**
+   * Its squishies can fade (`setFade`, #381 W2: the house's camera clears
+   * them out of its way). The fade's `discard` is compiled in from the start,
+   * so the first fade never recompiles mid-walk; off (the default), squishies
+   * keep the GPU's early rejection of hidden pixels.
+   */
+  readonly fades?: boolean;
 }
 
 export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
@@ -142,6 +155,8 @@ interface Squishy {
   ground: number;
   shadow: number;
   shadowAlpha: number;
+  /** How much of it shows, 0–1 (`setFade`: a screen-door fade, its shadow with it). */
+  fade: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
   /** The accessory it wears (#340), or null; its pieces are in `instances` too. */
@@ -151,8 +166,11 @@ interface Squishy {
     /** How high it reaches above the ground point (placement scale 1). */
     readonly top: number;
   } | null;
-  /** Its own `crown` parts (a stem, a nightcap): put away while a crown accessory is on. */
-  readonly crownParts: { batch: Batch; instance: Instance }[];
+  /**
+   * Its own `crown` parts (a stem, a nightcap), put away while a crown
+   * accessory is on, and its `ears`, put away under a hood too (#515).
+   */
+  readonly tuckParts: { batch: Batch; instance: Instance; slot: 'crown' | 'ears' }[];
   /** Its eyes and mouth, with where each sits on a plain face (a `face` reshapes them). */
   readonly faceParts: { batch: Batch; instance: Instance; slot: 'eyes' | 'mouth'; base: Matrix }[];
   face: SquishyFace | null;
@@ -173,6 +191,10 @@ interface Batch {
   moved: boolean;
   /** The last uploaded origin buffer, rewritten in place on a move. */
   origins: Float32Array | null;
+  /** The last uploaded colour buffer, its alphas rewritten in place on a fade. */
+  colors: Float32Array | null;
+  /** Only fades changed: push the colour buffer again. */
+  faded: boolean;
 }
 
 /** The eight corners of a mesh's own vertices' box (not the thin instances'), cached. */
@@ -239,6 +261,12 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #parent: TransformNode | null;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
+  /**
+   * A fade dithers its squishies away (`fades`, and the GLSL shader attached).
+   * Otherwise their colour alpha stays 1: PBR would write a lower one into the
+   * canvas, and the page would show through (WebGPU, review of #381 W2).
+   */
+  readonly #dithers: boolean;
   readonly #batches = new Map<string, Batch>();
   readonly #squishies = new Map<number, Squishy>();
   readonly #shadow: Mesh | null;
@@ -277,6 +305,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
+    this.#dithers = (options.fades ?? false) && this.#plugin !== null;
+    if (this.#plugin) this.#plugin.fade = this.#dithers;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
@@ -317,10 +347,11 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       ground: 0,
       shadow: 1,
       shadowAlpha: 1,
+      fade: 1,
       event: null,
       instances: [],
       accessory: null,
-      crownParts: [],
+      tuckParts: [],
       faceParts: [],
       face: null,
       // A rescue guardian wears the shadow look alone.
@@ -329,6 +360,35 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
     return handle;
+  }
+
+  /**
+   * How much of a squishy shows, 0 (gone) to 1 (the default): a screen-door
+   * fade (squish-plugin.ts `SQUISH_FADE`), so it costs no material, no blend
+   * and no draw call, and its contact shadow fades with it. Used to clear a
+   * squishy out of a close camera's way (#381 W2). Only a field made with
+   * `fades` dithers it; otherwise (or under WebGPU, without the shader) only
+   * the shadow fades and the squishy stays whole.
+   */
+  setFade(handle: SquishyHandle, fade: number): void {
+    const squishy = this.#squishies.get(handle.id);
+    const k = Math.min(1, Math.max(0, fade));
+    if (!squishy || squishy.fade === k) return;
+    squishy.fade = k;
+    this.#shadowDirty = true;
+    if (!this.#dithers) return;
+    for (const { batch, instance } of squishy.instances) {
+      if (batch.dirty || !batch.colors) continue; // the next upload writes it
+      const i = batch.instances.indexOf(instance);
+      if (i < 0) continue;
+      batch.colors[i * 4 + 3] = instance.color[3] * k;
+      batch.faded = true;
+    }
+  }
+
+  /** How much of a squishy shows (`setFade`). */
+  fadeOf(handle: SquishyHandle): number {
+    return this.#squishies.get(handle.id)?.fade ?? 1;
   }
 
   /**
@@ -367,24 +427,32 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       squishy.instances.splice(0, squishy.instances.length, ...kept);
       squishy.accessory = null;
     }
-    const anchor = handle.look === 'shadow' ? undefined : item?.visual.anchor;
+    const anchors = handle.look === 'shadow' || !item ? [] : accessoryAnchors(item);
     // A hat goes where the squishy's own crown part was (like hair under a
-    // hat), so the two never poke through each other. They keep moving with
-    // it (they stay in `instances`) and come back when the hat comes off.
-    const hatOn = anchor === 'crown';
-    for (const { batch, instance } of squishy.crownParts) {
+    // hat), and a hood tucks its ears away too, so they never poke through
+    // each other. They keep moving with it (they stay in `instances`) and
+    // come back when the hat comes off.
+    const hatOn = anchors.includes('crown');
+    const hoodOn = hatOn && item?.visual.hood === true;
+    for (const { batch, instance, slot } of squishy.tuckParts) {
+      const tucked = slot === 'crown' ? hatOn : hoodOn;
       const i = batch.instances.indexOf(instance);
-      if (hatOn && i >= 0) batch.instances.splice(i, 1);
-      else if (!hatOn && i < 0) batch.instances.push(instance);
+      if (tucked && i >= 0) batch.instances.splice(i, 1);
+      else if (!tucked && i < 0) batch.instances.push(instance);
       else continue;
       batch.dirty = true;
     }
-    if (!item || !anchor) return;
-    const socket = accessorySocket(handle.params, this.#registry.bodies, anchor);
-    if (!socket) return;
+    if (!item || anchors.length === 0) return;
+    const sockets = new Map(
+      anchors.map((a) => [a, accessorySocket(handle.params, this.#registry.bodies, a)]),
+    );
+    // Accessories are plain vinyl, like Keeper clothing; a squishy costume
+    // wears its rarity's finish, like a Keeper costume (#515). Any piece may
+    // glow (the glow bit sits above every finish).
+    const finish = isSquishyCostume(item) ? FINISH_CODE[ART_RULES.finishByRarity[item.rarity]] : 0;
     const instances: Instance[] = [];
     let top = 0;
-    for (const p of accessoryPieces(item, socket)) {
+    for (const p of accessoryPieces(item, (a) => sockets.get(a) ?? null)) {
       top = Math.max(top, p.at[1] + p.size[1] / 2);
       const batch = this.#batch(`part:${p.shape}`, (lod) => partArrays(p.shape, LOD[lod]), false);
       const local = Matrix.Compose(
@@ -392,14 +460,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         Quaternion.RotationYawPitchRoll(p.turn[1] * DEG, p.turn[0] * DEG, p.turn[2] * DEG),
         new Vector3(p.at[0], p.at[1], p.at[2]),
       );
-      // Plain vinyl, like Keeper clothing (only costumes wear a finish).
       const instance: Instance = {
         owner: squishy,
         local,
         matrix: local.multiply(squishy.world),
         color: linear(p.color),
         look: SQUISH_LOOK_CODE.normal,
-        finish: 0,
+        finish: finish + (p.glow ? FINISH_CODE.glow : 0),
       };
       batch.instances.push(instance);
       batch.dirty = true;
@@ -457,6 +524,14 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   /** The accessory a squishy wears, or null. */
   accessoryOf(handle: SquishyHandle): string | null {
     return this.#squishies.get(handle.id)?.accessory?.id ?? null;
+  }
+
+  /** How many of a squishy's own parts its accessory has tucked away (a topper, ears under a hood). */
+  tuckedOf(handle: SquishyHandle): number {
+    const squishy = this.#squishies.get(handle.id);
+    if (!squishy) return 0;
+    return squishy.tuckParts.filter(({ batch, instance }) => !batch.instances.includes(instance))
+      .length;
   }
 
   remove(handle: SquishyHandle): void {
@@ -592,7 +667,13 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   flush(): void {
     for (const batch of this.#batches.values()) {
       if (batch.dirty) this.#upload(batch);
-      else if (batch.moved) this.#uploadMoves(batch);
+      else {
+        if (batch.moved) this.#uploadMoves(batch);
+        if (batch.faded) {
+          batch.faded = false;
+          batch.mesh?.thinInstanceBufferUpdated('color');
+        }
+      }
     }
     if (this.#shadowDirty) this.#uploadShadows();
   }
@@ -631,6 +712,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         dirty: true,
         moved: false,
         origins: null,
+        colors: null,
+        faded: false,
       };
       this.#batches.set(key, batch);
     }
@@ -745,7 +828,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       for (const p of part.placements) {
         const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
         const entry = attach(batch, local, color, finish, part.slot === 'eyes');
-        if (part.slot === 'crown') squishy.crownParts.push(entry);
+        if (part.slot === 'crown' || part.slot === 'ears') {
+          squishy.tuckParts.push({ ...entry, slot: part.slot });
+        }
         if (part.slot === 'eyes' || part.slot === 'mouth') {
           squishy.faceParts.push({ ...entry, slot: part.slot, base: local.clone() });
         }
@@ -867,6 +952,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   #upload(batch: Batch): void {
     batch.dirty = false;
     batch.moved = false;
+    batch.faded = false;
     const n = batch.instances.length;
     if (n === 0) {
       batch.mesh?.setEnabled(false);
@@ -905,6 +991,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       inst.matrix.copyToArray(matrices, i * 16);
       colors.set(inst.color, i * 4);
       const { owner } = inst;
+      if (this.#dithers) colors[i * 4 + 3] = inst.color[3] * owner.fade;
       origins.set(owner.origin, i * 4);
       const { phase, rate, amplitude } = owner.handle.params.motion;
       motions.set([phase, rate, this.#breathing ? amplitude : 0, inst.look], i * 4);
@@ -912,12 +999,14 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       events[i * 4 + 3] = inst.finish;
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
-    mesh.thinInstanceSetBuffer('color', colors, 4, true);
+    // Not static where squishies fade: a fade rewrites its alphas in place (`setFade`).
+    mesh.thinInstanceSetBuffer('color', colors, 4, !this.#dithers);
     mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);
     if (batch.pickable) mesh.thinInstanceRefreshBoundingInfo();
     batch.origins = origins;
+    batch.colors = colors;
   }
 
   /** Rewrites a batch's matrices and origins in place after moves (no new buffers). */
@@ -965,7 +1054,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       colors[i * 4] = 1;
       colors[i * 4 + 1] = 1;
       colors[i * 4 + 2] = 1;
-      colors[i * 4 + 3] = s.shadowAlpha;
+      colors[i * 4 + 3] = s.shadowAlpha * s.fade;
       i++;
     }
     if (fresh) {

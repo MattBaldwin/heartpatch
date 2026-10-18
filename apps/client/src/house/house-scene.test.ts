@@ -31,7 +31,14 @@ import { houseLookAtMinute } from './house-light-look.js';
 import { BED_FRAME, yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
-import { floorAt, roomAt, slideStep, startSpot } from './house-walk.js';
+import {
+  createFollowPose,
+  floorAt,
+  followPose,
+  roomAt,
+  slideStep,
+  startSpot,
+} from './house-walk.js';
 import { roomBox } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
@@ -597,6 +604,64 @@ describe('house scene', () => {
       expect(scene.getMeshByName('house-snug-ceiling')!.isEnabled()).toBe(true);
       house.setPose(fitHouse(house.bounds, vp), 0);
       expect(sign.position.y).toBeLessThan(HOUSE_GRID.cut + 0.6);
+      scene.getEngine().dispose();
+    });
+
+    it('shows the room’s ceiling only once the camera is under it (#381 W2: the glide in saw only its top)', () => {
+      const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+      const { scene, house } = buildHouse(1, 'low');
+      const ceiling = scene.getMeshByName('house-snug-ceiling')!;
+      const doll = fitHouse(house.bounds, vp);
+      const kid = kidPose(house.focusRoom!, vp);
+      // Past the zoom the inside comes in at, but still high over the roof line.
+      const above = blend(doll, kid, HOUSE_KID.frontFrom + 0.05);
+      expect(above.eye.y).toBeGreaterThan(house.focusRoom!.maxY);
+      house.setPose(above, HOUSE_KID.frontFrom + 0.05);
+      expect(ceiling.isEnabled()).toBe(false);
+      house.setPose(kid, 1);
+      expect(ceiling.isEnabled()).toBe(true);
+      scene.getEngine().dispose();
+    });
+
+    it('fades the residents close in front of the Keeper’s camera, and none in the dollhouse (#381 W2)', () => {
+      const vp = { width: 390, height: 844, top: 80, bottom: 150 };
+      const { scene, house } = buildHouse(4, 'low');
+      const doll = fitHouse(house.bounds, vp);
+      house.setPose(doll, 0);
+      expect(house.residentFades.every((a) => a === 1)).toBe(true);
+      // The follow camera on the Snug's porch: the two by the rug fill the frame's foot.
+      const map = house.walkMap;
+      const snug = map.rooms.find((r) => r.id === 'snug')!;
+      const pose = followPose(
+        createFollowPose(),
+        map,
+        { ...house.keeperSpot },
+        Math.PI,
+        snug,
+        393 / 852,
+      );
+      house.setPose(pose, 1);
+      const inside = house.residentFades;
+      expect(inside.filter((a) => a < 0.25).length).toBeGreaterThanOrEqual(2);
+      expect(inside.filter((a) => a === 1).length).toBeGreaterThan(0);
+      // Back out: every one whole again.
+      house.setPose(doll, 0);
+      expect(house.residentFades.every((a) => a === 1)).toBe(true);
+      scene.getEngine().dispose();
+    });
+
+    it('keeps the sign on the low wall until its header shows (#381 W2: it floated mid-glide)', () => {
+      const vp = { width: 820, height: 1180, top: 70, bottom: 90 };
+      const { scene, house } = buildHouse(4, 'low');
+      const sign = scene.getMeshByName('house-sign')!;
+      const doll = fitHouse(house.bounds, vp);
+      const kid = kidPose(house.focusRoom!, vp);
+      const above = blend(doll, kid, HOUSE_KID.frontFrom + 0.05);
+      expect(above.eye.y).toBeGreaterThan(house.focusRoom!.maxY);
+      house.setPose(above, HOUSE_KID.frontFrom + 0.05);
+      expect(sign.position.y).toBeLessThan(HOUSE_GRID.cut + 0.6);
+      house.setPose(kid, 1);
+      expect(sign.position.y).toBeGreaterThan(HOUSE_GRID.storey - HOUSE_KID.header);
       scene.getEngine().dispose();
     });
 

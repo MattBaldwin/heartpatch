@@ -32,7 +32,9 @@ import '../../styles.css';
  * its giver is out, so by the hearth), and Open it! opens it, no server;
  * `?minute=1200` pins the time of day (minutes after midnight: 720 noon,
  * 1080 dusk, 1200 night; the device's clock if left out); `?welcome=1`
- * shows welcome home on every load and keeps its line up; plus `?renderer=webgpu`.
+ * shows welcome home on every load and keeps its line up; `?fps=1` shows the
+ * stats badge as the main page does (#381 W2: clear of the room pill); plus
+ * `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The house gallery is dev-only');
@@ -157,6 +159,11 @@ const house = createHouseScreen({
   ...(params.get('still') === '1' && { reducedMotion: { matches: true } }),
 });
 house.setUser({ id: '0190a000-0000-7000-8000-00000000aaaa', username: 'Mia' });
+
+if (params.get('fps') === '1') {
+  const { mountDevOverlay } = await import('../../engine/dev-overlay.js');
+  mountDevOverlay(() => stage);
+}
 
 window.__heartpatch = {
   renderer: () => stage?.renderer.kind ?? null,

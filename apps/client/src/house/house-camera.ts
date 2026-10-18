@@ -95,6 +95,33 @@ export function project(
   return { x: dot(d, right) / depth / (t * aspect), y: dot(d, up) / depth / t, depth };
 }
 
+/**
+ * Where a screen point (CSS px) lands on the floor at height `y`: the
+ * inverse of `project` (#381 W2, a tap on the floor walks there). Null when
+ * that point looks at or above the horizon.
+ */
+export function screenToFloor(
+  pose: HousePose,
+  px: number,
+  py: number,
+  vp: Pick<HouseViewport, 'width' | 'height'>,
+  y: number,
+): { x: number; z: number } | null {
+  const f = sub(pose.target, pose.eye);
+  const len = Math.hypot(f.x, f.y, f.z) || 1;
+  const fwd = scale(f, 1 / len);
+  const pitch = Math.asin(Math.max(-1, Math.min(1, -fwd.y)));
+  const { right, up } = cameraBasis(pitch, Math.atan2(fwd.x, fwd.z));
+  const height = Math.max(1, vp.height);
+  const t = Math.tan(pose.fov / 2);
+  const nx = ((2 * px) / Math.max(1, vp.width) - 1) * t * (vp.width / height);
+  const ny = (1 - (2 * py) / height) * t;
+  const d = add(fwd, add(scale(right, nx), scale(up, ny)));
+  if (d.y >= -1e-4) return null;
+  const k = (y - pose.eye.y) / d.y;
+  return { x: pose.eye.x + d.x * k, z: pose.eye.z + d.z * k };
+}
+
 /** The safe area in normalised device coordinates: inside the HUD, less the margin. */
 export function safeArea(vp: HouseViewport): {
   left: number;
@@ -359,6 +386,9 @@ export function panPerPixel(pose: HousePose, vp: Pick<HouseViewport, 'height'>):
  * enough back that the room's back wall fits across the frame. Tall frames
  * keep their vertical view angle capped (less floor, owner check #2) and so
  * stand further back. Only the room's box is taken, never what's in it.
+ *
+ * Walk in goes to the follow camera behind the Keeper now (#381 W2); this
+ * fixed pose stays as the scene tests' reference view of a room.
  */
 export function kidPose(room: HouseBounds, vp: HouseViewport): HousePose {
   const aspect = vp.width / Math.max(1, vp.height);
@@ -391,8 +421,9 @@ const smooth = (t: number): number => {
  * The camera between the dollhouse (zoom 0) and kid height (zoom 1): the
  * focus slides into the room and the distance shrinks as you pinch, while
  * the pitch holds the dollhouse's look down until the last part of the
- * zoom (`pitchFrom`), then eases down to kid height. At 1 it is exactly the
- * kid pose.
+ * zoom (`pitchFrom`), then eases down to kid height. The heading turns with
+ * the focus, so a kid pose turned to follow the Keeper (#381 W2) is met
+ * too. At 1 it is exactly the kid pose.
  */
 export function blend(doll: HousePose, kid: HousePose, zoom: number): HousePose {
   const z = clampZoom(zoom);
@@ -416,9 +447,14 @@ export function blend(doll: HousePose, kid: HousePose, zoom: number): HousePose 
   const late = smooth((z - HOUSE_KID.pitchFrom) / (1 - HOUSE_KID.pitchFrom));
   const pitch = doll.pitch + (kid.pitch - doll.pitch) * late;
   const fov = doll.fov + (kid.fov - doll.fov) * ez;
-  const { forward } = cameraBasis(pitch, 0);
+  const yaw = headingOf(doll) + (headingOf(kid) - headingOf(doll)) * ez;
+  const { forward } = cameraBasis(pitch, yaw);
   return { eye: sub(target, scale(forward, distance)), target, fov, pitch };
 }
+
+/** Which way a pose looks across the floor, radians from +z (the dollhouse's is 0). */
+const headingOf = (pose: HousePose): number =>
+  Math.atan2(pose.target.x - pose.eye.x, pose.target.z - pose.eye.z);
 
 /** A wall as `wallFade` sees it: a vertical rectangle on a grid line. */
 export interface FadeWall {

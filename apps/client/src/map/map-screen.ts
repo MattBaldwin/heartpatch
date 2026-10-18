@@ -183,6 +183,12 @@ export interface MapScreen {
    * rustling tuft. A reply for another map is ignored.
    */
   setWild: (mapId: string, tiles: readonly Hex[]) => void;
+  /**
+   * Trick-or-treat (#515): patch-mates on map `mapId` with a lit
+   * Jack-o'-Lantern tonight get a porch lantern by their Heart Seed. A reply
+   * for another map is ignored.
+   */
+  setPorchLanterns: (mapId: string, userIds: ReadonlySet<string>) => void;
   readonly debug: MapDebug | null;
 }
 
@@ -226,6 +232,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     if (!scene3d || !state) return;
     const tiles = wild?.mapId === state.id ? wild.tiles : [];
     scene3d.setWild(wildMarkers(tiles, (key) => state.tileAt(key)));
+  };
+  /** The porch lanterns for the map on screen (#515). */
+  let porches: { mapId: string; userIds: ReadonlySet<string> } | null = null;
+  const drawPorches = (): void => {
+    const state = sync.state;
+    if (!scene3d || !state) return;
+    scene3d.setPorchLanterns(porches?.mapId === state.id ? porches.userIds : new Set());
   };
 
   const hudName = el('span', { class: 'map-hud-name' });
@@ -388,6 +401,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     built.setLandFade(landFade);
     scene3d = built;
     drawWild();
+    drawPorches();
     ambient.start();
     // Another screen (a battle, a close-up) swapped the stage: stop asking for
     // frames until the map is built again.
@@ -516,10 +530,16 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       drawWild();
       options.invalidate();
     },
+    setPorchLanterns: (mapId, userIds) => {
+      porches = { mapId, userIds: new Set(userIds) };
+      drawPorches();
+      options.invalidate();
+    },
     setUser: (next) => {
       if (next?.id === user?.id) return;
       user = next;
       wild = null;
+      porches = null;
       if (sync.state) close();
       ws?.close();
       ws = null;
