@@ -1476,7 +1476,7 @@ export const SPECIES: Species[] = [
   {
     id: 'thundermop',
     name: 'Thundermop',
-    description: 'A giant mop of crackly static fur. Brushing it is not recommended.',
+    description: 'A giant coat of crackly static spikes. Brushing it is not recommended.',
     element: 'spark',
     feeling: 'silly',
     rarity: 'rare',
@@ -1539,8 +1539,7 @@ export const SPECIES: Species[] = [
   {
     id: 'thunderkite',
     name: 'Thunderkite',
-    description:
-      'A fluffy kite of a squishy with wide wings and a stormy crest. It rides the breeze.',
+    description: 'A kite of a squishy with wide wings and a stormy crest. It rides the breeze.',
     element: 'spark',
     feeling: 'joy',
     rarity: 'rare',
@@ -3260,17 +3259,17 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
   },
-  // #495 grown-up (stage 4): Wickwhisker adds a crown of candle flames and a row of flames down its back.
+  // #495 grown-up (stage 4): Wickwhisker adds a crown of candle flames and a row of spikes down its back.
   {
     id: 'chandelion',
     name: 'Chandelion',
     description:
-      'A big cat with a crown of candle flames and a row of little flames down its back. It purrs like a campfire.',
+      'A big cat with a crown of candle flames and a row of fiery spikes down its back. It purrs like a campfire.',
     element: 'fire',
     feeling: 'spooky',
     rarity: 'epic',
     season: 'halloween',
-    baseStats: { hp: 83, attack: 96, defense: 71, speed: 102 }, // TUNE: ×1.15 Wickwhisker (sim: 53% at ×1.18, 11 over its teen)
+    baseStats: { hp: 83, attack: 96, defense: 71, speed: 102 }, // TUNE: about ×1.15 Wickwhisker in total (sim: 53% at ×1.18, 11 over its teen)
     moves: ['wiggle-wick', 'boo', 'toasty-tumble', 'whisker-flare'],
     evolutions: [],
     visual: {
