@@ -180,20 +180,24 @@ export const SETTLE_FRAMES = 2; // TUNE
 
 /** A scene's frame-rate cap (`SceneContent.frameCap`, #501). */
 export interface FrameCap {
-  /** The governor's target: it reads this frame rate as on target (`cappedScaler`). */
+  /** Frames a second; the governor reads this as on target (`cappedScaler`). */
   readonly fps: number;
-  /** The render loop draws no frame sooner than this after the last one. */
-  readonly minFrameMs: number;
+  /**
+   * How far ahead of its slot a frame may draw. Slots are every `1000 / fps`
+   * ms on a fixed schedule (`FrameScheduler`), so a late frame never makes
+   * the next one early; this only has to sit between a 120 Hz callback just
+   * before a slot (8.3 ms) and none at all.
+   */
+  readonly earlyMs: number;
 }
 
 /**
  * 30 drawn frames a second: explore (#501, owner Oct 18: it runs cool, the
- * map keeps render on demand) and `?cap30=1`. The gap sits between three
- * 120 Hz vsyncs (25 ms) and two 60 Hz ones (33.3 ms), with room for a late
- * or early callback either side, so a 60 Hz display draws every other frame,
- * a 120 Hz one every fourth, and a 144 Hz desktop every fifth (29 fps).
+ * map keeps render on demand) and `?cap30=1`. A 60 Hz display draws every
+ * other frame however late its callbacks run, a 120 Hz one every fourth
+ * unless a callback is more than 4 ms late, and any rate averages 30.
  */
-export const FRAME_CAP_30: FrameCap = { fps: 30, minFrameMs: 29 }; // TUNE: minFrameMs
+export const FRAME_CAP_30: FrameCap = { fps: 30, earlyMs: 4 }; // TUNE: earlyMs
 
 export const LIGHTING = {
   /** Edge length of each procedural sky cube face, in texels. */

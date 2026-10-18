@@ -211,12 +211,18 @@ describe('mountStage frame cap (#501)', () => {
 
   it('holds the cap on 60, 90 and 144 Hz displays, and with late callbacks', () => {
     stage = mount(FRAME_CAP_30);
-    oneSecond(stage);
-    expect(oneSecond(stage, 60)).toBe(30);
-    expect(oneSecond(stage, 90)).toBe(30);
-    expect(oneSecond(stage, 144)).toBeLessThanOrEqual(30);
-    expect(oneSecond(stage, 120, 3)).toBe(30);
-    expect(oneSecond(stage, 60, 3)).toBe(30);
+    const s = stage;
+    oneSecond(s);
+    // A second to settle on each new rate: one slot can straddle the switch.
+    const settled = (hz: number, jitterMs = 0) => {
+      oneSecond(s, hz, jitterMs);
+      return oneSecond(s, hz, jitterMs);
+    };
+    expect(settled(60)).toBe(30);
+    expect(settled(90)).toBe(30);
+    expect(settled(144)).toBe(30);
+    expect(settled(120, 3)).toBe(30);
+    expect(settled(60, 10)).toBe(30);
   });
 
   it('draws an uncapped scene at the display rate', () => {

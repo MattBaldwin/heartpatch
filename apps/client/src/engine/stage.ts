@@ -99,7 +99,7 @@ export function mountStage(
     capFps: frameCap?.fps ?? null,
   });
 
-  const frames = new FrameScheduler(SETTLE_FRAMES, frameCap?.minFrameMs ?? 0);
+  const frames = new FrameScheduler(SETTLE_FRAMES, frameCap);
   // The on-device perf report (#501): frame timing and GPU fences; reads the stage once built.
   let stage: Stage | null = null;
   const probe = new PerfProbe(engine, renderer.kind, quality, () => stage);
