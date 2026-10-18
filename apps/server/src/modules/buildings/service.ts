@@ -6,6 +6,7 @@ import {
   fuelCost,
   fuelSpace,
   GAME_DATA,
+  heartSeedOf,
   HOME_BASE_RULES,
   hearthfireState,
   inSeason,
@@ -180,14 +181,6 @@ export interface BuildingsServiceOptions {
   publish?: (mapId: string) => Promise<void>;
   /** The Keeper's house switch (`HP_HOUSE`, #381); off when left out. */
   house?: HouseSwitch;
-}
-
-/** The Heart Seed: the middle of a home base (the mean of its seven tiles). */
-function heartSeedOf(home: readonly HomeTileRow[]): { q: number; r: number } | null {
-  if (home.length === 0) return null;
-  const q = home.reduce((sum, t) => sum + t.q, 0) / home.length;
-  const r = home.reduce((sum, t) => sum + t.r, 0) / home.length;
-  return { q, r };
 }
 
 const isSeed = (tile: HomeTileRow, seed: { q: number; r: number } | null) =>

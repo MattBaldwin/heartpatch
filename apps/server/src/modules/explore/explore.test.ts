@@ -845,6 +845,33 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('dev: a row left from before takes the full state, not half of it', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const made = async () => {
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
+      expect(res.statusCode, res.body).toBe(201);
+      return res.json<{ q: number; r: number }>();
+    };
+    const first = await made();
+    // Lost, with a half-searched row left behind: the route takes it again.
+    const tile = await db.query.tiles.findFirst({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.q, first.q), eq(t.r, first.r)),
+    });
+    await db.execute(`update tiles set owner_user_id = null where id = '${tile!.id}'`);
+    await db.execute(
+      `update tile_explore set searched = 1, completed_at = null, joined_at = null where tile_id = '${tile!.id}'`,
+    );
+    expect(await made()).toEqual(first);
+    const row = await db.query.tileExplore.findFirst({
+      where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.tileId, tile!.id)),
+    });
+    expect(row).toMatchObject({ searched: 7, pausedAt: null });
+    expect(row?.completedAt).not.toBeNull();
+    expect(row?.joinedAt).not.toBeNull();
+  });
+
   it('counts each search towards the Seeker track (#199)', async () => {
     // Milestones judge membership at the event's game time (its database
     // time, shifted by the clock). Play on today's clock and have both

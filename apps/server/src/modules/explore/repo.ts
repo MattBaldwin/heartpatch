@@ -150,22 +150,24 @@ export function createExploreRepo(db: Executor) {
         .returning({ id: tiles.id });
       // Someone took it meanwhile: nothing made.
       if (claimed.length === 0) return null;
+      // A row this player already had here (half searched, an old terrain)
+      // takes the same state, so the tile is always what was asked for.
+      const row = {
+        mapId,
+        layout: 1,
+        terrain,
+        searched: 7,
+        spotCount: 3,
+        completedAt: at,
+        joinedAt: touchesHome || napping ? at : null,
+        pausedAt: napping ? at : null,
+        resumedAt: null,
+        updatedAt: at,
+      };
       await db
         .insert(tileExplore)
-        .values({
-          userId,
-          tileId: tile.id,
-          mapId,
-          layout: 1,
-          terrain,
-          searched: 7,
-          spotCount: 3,
-          completedAt: at,
-          joinedAt: touchesHome || napping ? at : null,
-          pausedAt: napping ? at : null,
-          updatedAt: at,
-        })
-        .onConflictDoNothing();
+        .values({ userId, tileId: tile.id, ...row })
+        .onConflictDoUpdate({ target: [tileExplore.userId, tileExplore.tileId], set: row });
       return { q: tile.q, r: tile.r };
     },
 
