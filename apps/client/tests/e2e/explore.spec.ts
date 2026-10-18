@@ -436,12 +436,19 @@ test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ 
   const to = { x: from.x + 0.12, z: from.z + 0.12 };
   const tap = await waypoint(page, to);
   expect(tap, 'a tappable point on the lakebed').not.toBeNull();
-  await realTapAt(page, tap!.x, tap!.y);
-  await expect
-    .poll(async () => {
-      const k = (await exploreState(page))!.keeper;
-      return Math.hypot(k.x - from.x, k.z - from.z);
-    }, slow)
-    .toBeGreaterThan(0.03);
+  // WebKit in CI can drop the first tap while the scene settles: tap again
+  // until the Keeper sets off (any later tap aims at the same spot).
+  await expect(async () => {
+    await realTapAt(page, tap!.x, tap!.y);
+    await expect
+      .poll(
+        async () => {
+          const k = (await exploreState(page))!.keeper;
+          return Math.hypot(k.x - from.x, k.z - from.z);
+        },
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0.03);
+  }).toPass({ timeout: 60_000 });
   await page.getByTestId('explore-back').tap();
 });
