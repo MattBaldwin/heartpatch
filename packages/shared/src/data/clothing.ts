@@ -921,8 +921,8 @@ const SQUISHY: ClothingItem[] = [
 // Still one per squishy: a costume takes the accessory's place (owner, #515).
 // Each piece can sit on its own anchor: a hat on the `crown`, a collar on the
 // `neck`, wings and capes on the `back` (the torso's, between the shoulders,
-// +z away from the face). Only trick-or-treating gives them (`treat`), and
-// they wear their rarity's finish like Keeper costumes.
+// +z away from the face). Only trick-or-treating gives them (source
+// `trick-or-treat`), and they wear their rarity's finish like Keeper costumes.
 // TUNE: shapes and colours are first guesses to judge in the gallery
 // (`/gallery.html?accessory=…`).
 const SQUISHY_COSTUMES: ClothingItem[] = [
@@ -933,7 +933,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'common',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'neck',
@@ -971,7 +971,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'back',
@@ -1045,7 +1045,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -1100,7 +1100,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -1166,7 +1166,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -1206,7 +1206,7 @@ const SQUISHY_COSTUMES: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['treat'],
+    sources: ['trick-or-treat'],
     tradable: true,
     visual: {
       anchor: 'back',

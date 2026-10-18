@@ -34,7 +34,7 @@ export const CLOTHING_RARITIES = ClothingRaritySchema.options;
  * - `milestone`: a milestone's signature piece (#44); account-bound.
  * - `boutique`: bought with Patch Coins (#45); needs `boutiquePrice`.
  * - `present`: inside a Christmas present (Phase 3).
- * - `treat`: a trick-or-treat prize (#515): the squishy costumes. The prize
+ * - `trick-or-treat`: a trick-or-treat prize (#515): the squishy costumes. The prize
  *   table is server-only (CLAUDE.md rule 6).
  */
 export const ClothingSourceSchema = z.enum([
@@ -44,7 +44,7 @@ export const ClothingSourceSchema = z.enum([
   'milestone',
   'boutique',
   'present',
-  'treat',
+  'trick-or-treat',
 ]);
 export type ClothingSource = z.infer<typeof ClothingSourceSchema>;
 
@@ -199,7 +199,7 @@ export type ClothingItem = z.infer<typeof ClothingItemSchema>;
  * plain vinyl.
  */
 export function isSquishyCostume(item: ClothingItem): boolean {
-  return item.slot === SQUISHY_SLOT && item.sources.includes('treat');
+  return item.slot === SQUISHY_SLOT && item.sources.includes('trick-or-treat');
 }
 
 /** A Keeper item: one of the eight wardrobe slots. */

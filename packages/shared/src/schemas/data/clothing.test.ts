@@ -200,7 +200,7 @@ describe('the clothing catalog', () => {
       const item = byId(id);
       expect(item.slot, id).toBe(SQUISHY_SLOT);
       expect(item.season, id).toBe('halloween');
-      expect(item.sources, id).toEqual(['treat']);
+      expect(item.sources, id).toEqual(['trick-or-treat']);
       expect(item.boutiquePrice, id).toBeUndefined();
     }
     // Everyday accessories (the Tiny Witch Hat too) stay as they were.
