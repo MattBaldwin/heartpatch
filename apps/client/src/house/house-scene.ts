@@ -1408,13 +1408,16 @@ export class HouseScene {
         HOUSE_KID.porch,
         0,
       );
-      // A board under the porch's boards: no lawn showing through the gaps (render check, B4).
+      // A board under the porch's boards: no lawn showing through the gaps
+      // (render check, B4), just under their tops in dark wood, so its gaps
+      // run on from the room's dark grooves (B5a render check: deep, their lit
+      // sides read as a pale line).
       planks.push(
         box(
           this.#scene,
           [run.to - run.from + 2 * past, 0.02, HOUSE_KID.porch],
-          [(run.from + run.to) / 2, -0.17, z1 - HOUSE_KID.porch / 2],
-          HOUSE_PALETTE.planks[2],
+          [(run.from + run.to) / 2, -HOUSE_GRID.seamDepth - 0.01, z1 - HOUSE_KID.porch / 2],
+          HOUSE_PALETTE.cap,
         ),
       );
       const porch = merged(`house-${id}-porch`, planks);

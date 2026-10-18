@@ -22,7 +22,7 @@ export const HOUSE_GRID = {
   /** How far the floor reaches past the open front (a little lip). */
   frontLip: 0.35, // TUNE
   /** How deep a gap between floor boards reads before the board under them, metres (B5a: no dark slit). */
-  seamDepth: 0.03, // TUNE
+  seamDepth: 0.008, // TUNE: render check: at 0.03 the boards' lit sides in a gap read as a pale line down its length
 } as const;
 
 /** Colours of the shell (sRGB). */
@@ -35,7 +35,7 @@ export const HOUSE_PALETTE = {
   frame: '#fff6ec', // TUNE: window frames
   planks: ['#c98b5a', '#d2956a', '#bf7f52'], // TUNE: floor boards, three tones
   /** The gaps between boards: unlit dark wood, the boards' shadow (B5a render check: a lit board read pale mauve at a grazing angle). */
-  groove: '#5a3524', // TUNE
+  groove: '#b07a55', // TUNE: unlit, so it reads about (120, 60, 30) beside the boards' (240, 125, 65)
   footing: '#8f8279', // TUNE: the stone footing under the house
   lawn: '#a9c58f', // TUNE: a pastel dusk lawn
   lawnLift: '#3a3424', // TUNE: emissive lift so the lawn stays pastel at dusk
@@ -416,8 +416,13 @@ export const HOUSE_GIFT = {
   bow: '#f2c14e', // TUNE: the bow, a little deeper
   /** The bow's two ribbon loops, metres: across a loop, the ribbon's thickness and width, and how far each leans out (radians). */
   bowLoop: { diameter: 0.14, thickness: 0.036, width: 0.08, lean: 0.75 }, // TUNE: B5a render check: 0.022 thick read as a wire handle
-  /** The Snug's spare spot (its room's own corner, metres from x0 and z0): off the hearthstone, by the ball (B5a render check: 1.0, 0.62 sat on the slab). */
-  snugSpare: { x: 1.45, z: 0.56 }, // TUNE
+  /**
+   * The Snug's spare spot, metres from its x0 and z0: by the east wall behind
+   * the side table, clear of the cast from kid height (B5a render check: by
+   * the hearth it sat on the hearthstone, and no spot off the stone there
+   * keeps out of the way of the two on the rug and the Keeper).
+   */
+  snugSpare: { x: 4.2, z: 1.7 }, // TUNE
   /** The gap between the bed's side and the box, metres. */
   besideBed: 0.3, // TUNE
   /** Kept this far inside the room's walls, metres. */
@@ -575,8 +580,8 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.05, // TUNE
     sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,
-    lift: '#7d6555', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom; render check: #957965 left kid-height night at 92% of day
-    ceiling: '#7e5439', // TUNE: B5a: evening, under dusk's
+    lift: '#6c594b', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom; render check: #957965 left kid-height night at 92% of day
+    ceiling: '#5e3e2a', // TUNE: B5a: evening, under dusk's
     yard: 1,
   },
 };

@@ -579,7 +579,7 @@ describe('house scene', () => {
       }
     });
 
-    it('stands it at the Snug’s spare spot at level 2, off the hearthstone (B5a render check)', () => {
+    it('stands it at the Snug’s spare spot at level 2, off the hearthstone and clear of the cast (B5a render check)', () => {
       // Its giver not drawn: the box goes to the Snug's spare spot (the same one
       // besideBed falls back to when no spot by the bed clears the cast).
       const sample = withGift(sampleHouse(2), { away: true });
@@ -591,13 +591,12 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
-    it('puts it by the hearth when its giver isn’t drawn, clear of the cast', () => {
+    it('puts it at the Snug’s spare spot when its giver isn’t drawn, clear of the cast', () => {
       const sample = withGift(sampleHouse(1), { away: true });
       const { scene, house } = buildHouse(1, 'low', sample);
       const at = house.giftPoint!;
-      const snug = sample.view.rooms[0]!;
-      expect(at.x).toBeLessThan((snug.layout.w * HOUSE_GRID.cell) / 2);
-      expect(at.z).toBeLessThan((snug.layout.d * HOUSE_GRID.cell) / 2);
+      expect(at.x).toBeCloseTo(HOUSE_GIFT.snugSpare.x, 5);
+      expect(at.z).toBeCloseTo(HOUSE_GIFT.snugSpare.z, 5);
       for (const spot of house.residentSpots) expect(dist(at, spot)).toBeGreaterThan(0.6);
       scene.getEngine().dispose();
     });
