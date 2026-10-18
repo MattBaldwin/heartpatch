@@ -679,7 +679,7 @@ describe('house scene', () => {
           // by day, full at dusk and night; a room's always full.
           const pools = scene.getMeshByName('house-pools') as Mesh;
           // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
-          const data = pools._userThinInstanceBuffersStorage.data.instanceColor!;
+          const data = pools._userThinInstanceBuffersStorage.data['instanceColor']!;
           const colors = Array.from({ length: pools.thinInstanceCount }, (_, i) => data[i * 4]!);
           expect(colors.length).toBeGreaterThan(2);
           expect(colors.slice(0, 2), `${tier} ${minute} yard`).toEqual([look.yard, look.yard]);

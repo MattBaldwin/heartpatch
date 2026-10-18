@@ -119,7 +119,7 @@ export const HOUSE_TIERS: Readonly<Record<QualityTier, HouseTierLook>> = {
     clearCoat: false,
     trees: 12,
     fill: 3.2,
-    treeSegments: 8, // TUNE: B5a: 6 read faceted against the sky; a dozen trees, about 3.5k triangles more
+    treeSegments: 6,
     rounds: 7,
   },
 };
@@ -511,7 +511,7 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.7, // TUNE
     sunSpecular: 0.3, // TUNE
     glow: 1,
-    lift: '#6c594b', // TUNE: B5a: as day
+    lift: '#957965', // TUNE: B5a: as dusk, so dawn never reads gloomier than dusk
     ceiling: '#2a1c12', // TUNE: B5a
     yard: 0.35, // TUNE: B5a: the lanterns fading out with the night
   },
