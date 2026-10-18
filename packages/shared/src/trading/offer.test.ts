@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../data/index.js';
-import { TRADE_RULES } from '../data/trading.js';
+import { GLIMMER_SWAP, TRADE_RULES } from '../data/trading.js';
 import { checkGameData } from '../schemas/data/game-data.js';
 import { isTradableResource } from '../schemas/data/resources.js';
-import { checkTradeRules } from '../schemas/data/trading.js';
+import { checkGlimmerSwapRules, checkTradeRules } from '../schemas/data/trading.js';
 import type { TradeLine } from '../schemas/trading.js';
 import { offerProblem, sideProblem, type OfferSide, type OfferSquishy } from './offer.js';
 
@@ -118,5 +118,28 @@ describe('offerProblem (owner decisions Q1 and Q2 on #30)', () => {
     expect(offerProblem({ ...offer, want: [pet('pip')] }, side(), theirs, TRADE_RULES)).toBe(
       'not-theirs',
     );
+  });
+});
+
+describe('GLIMMER_SWAP (#523)', () => {
+  it('passes its checks', () => {
+    expect(checkGlimmerSwapRules(GLIMMER_SWAP, GAME_DATA.resources)).toEqual([]);
+  });
+
+  it('refuses Glimmer, unknown, crafted and seasonal items, repeats and part swaps', () => {
+    const broken = {
+      accepts: ['glimmer', 'gold', 'heart-charm', 'pumpkins', 'stone', 'stone'],
+      give: 10,
+      get: 2,
+      dailyCap: 3,
+    };
+    expect(checkGlimmerSwapRules(broken, GAME_DATA.resources)).toEqual([
+      "accepts: Glimmer can't be swapped for Glimmer",
+      'accepts: unknown item "gold"',
+      'accepts: "heart-charm" isn\'t an everyday gathered resource',
+      'accepts: "pumpkins" isn\'t an everyday gathered resource',
+      'accepts: a repeat',
+      'dailyCap: must be whole swaps',
+    ]);
   });
 });
