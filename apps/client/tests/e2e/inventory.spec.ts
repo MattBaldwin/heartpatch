@@ -512,7 +512,14 @@ test('the "what landed" banner shows whole chips at the smallest width (#419)', 
       effect instanceof KeyframeEffect ? effect.getKeyframes().at(-1)?.['transform'] : null;
     const flyerY = Number(/translate\([^,]+, ([-\d.]+)px\)/.exec(String(last))?.[1]);
     const flyerMid = flyerY + (flyer?.offsetHeight ?? 0) / 2;
-    await new Promise((done) => window.setTimeout(done, 1500));
+    // Measured once the slide is over, however long a slow runner takes to
+    // play it (#549): the banner's own animations only, as its time-left line
+    // (a child) runs on until the banner hides.
+    await Promise.all(
+      node()
+        .getAnimations()
+        .map((a) => a.finished),
+    );
     const slot = node().querySelector('.away-chip')!.getBoundingClientRect();
     const landsOff = Math.abs(flyerMid - (slot.top + slot.height / 2));
     hint.remove();
