@@ -18,6 +18,19 @@ describe('guard level floor (#529)', () => {
     expect(lifted[0]).not.toBe(team[0]);
   });
 
+  it('a lifted squishy drops stats meant for its own level, a stronger one keeps them', () => {
+    const stats = { hp: 30, attack: 10, defense: 10, speed: 10 };
+    const [lifted, kept] = atWatchLevel(
+      [
+        { id: 'small', level: 5, stats },
+        { id: 'big', level: 30, stats },
+      ],
+      12,
+    );
+    expect(lifted).toEqual({ id: 'small', level: 12 });
+    expect(kept).toEqual({ id: 'big', level: 30, stats });
+  });
+
   it('no Partner level, no floor', () => {
     expect(watchFloor(null, rules)).toBeNull();
     const team = [{ id: 'g', level: 7 }];

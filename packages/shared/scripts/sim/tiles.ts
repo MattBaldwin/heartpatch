@@ -24,7 +24,9 @@ import type { TileDefense, TilePrep, TileSimConfig } from './tiles-config.js';
  * standing in play `guardian`, as on the server (`defendingSide`). Guards are
  * lifted to the floor with the real `watchFloor` and `atWatchLevel`. Real
  * engine, real data, seeded: the same data and config always give the same
- * report. Public base forms only, the squishies a Phase 1 kid has.
+ * report. Public base forms only, the squishies a Phase 1 kid has, each with
+ * its species' element and feeling (on the server a posted guard carries its
+ * own, which is its species' unless something changed it).
  */
 
 const BRAVE_BREW = 'brave-brew';
@@ -188,6 +190,11 @@ function playOne(
   return state.phase.result.winner === 'a';
 }
 
+const guardsKey = ({ guards }: TileDefense) =>
+  guards.kind === 'land'
+    ? `land:${guards.terrain}:${String(guards.strength)}`
+    : `posted:${guards.below.join(',')}`;
+
 export function runTileSim(config: TileSimConfig): { rows: TileSimRow[]; contentHash: string } {
   const roster = rosterOf();
   const rows: TileSimRow[] = [];
@@ -198,9 +205,10 @@ export function runTileSim(config: TileSimConfig): { rows: TileSimRow[]; content
         for (const partnerLevel of config.partnerLevels) {
           const tally = { wins: 0, battles: 0 };
           for (let i = 0; i < config.games; i++) {
-            // Every stance and prep meets the same guards and rolls, so they
-            // differ only by the stance or the prep.
-            const seed = deriveSeed(config.rootSeed, defense.key, partnerLevel, i);
+            // Every stance and prep meets the same guards and rolls, and an
+            // open and a fenced tile the same guards, so cells differ only by
+            // the stance, the prep or the fence.
+            const seed = deriveSeed(config.rootSeed, guardsKey(defense), partnerLevel, i);
             const won = playOne(roster, config, stance, prep, defense, partnerLevel, seed);
             tally.wins += won ? 1 : 0;
             tally.battles += 1;

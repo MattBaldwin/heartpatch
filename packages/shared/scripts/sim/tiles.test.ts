@@ -19,19 +19,18 @@ describe('tiles sim (#529)', () => {
     expect(overall.every((r) => r.battles === TILE_SIM_CONFIG.partnerLevels.length)).toBe(true);
   });
 
-  it('the floor never makes a tile easier, and no floor is the same as before #529', () => {
+  it('a big floor makes tiles harder, and no floor says so in the report', () => {
     const config = {
       ...tiny,
       partnerLevels: [10],
-      preps: TILE_SIM_CONFIG.preps.filter((p) => p.key === 'unprepared'),
+      preps: TILE_SIM_CONFIG.preps.filter((p) => p.key === 'prepared'),
       games: 4,
     };
     const wins = (partnerBonus: number | null) =>
       runTileSim({ ...config, partnerBonus }).rows.reduce((sum, r) => sum + r.wins, 0);
-    expect(wins(5)).toBeLessThanOrEqual(wins(null));
-    expect(renderTileReport(runTileSim({ ...config, partnerBonus: null }), config)).toContain(
-      'No guard level floor',
-    );
+    expect(wins(10)).toBeLessThan(wins(null));
+    const before = { ...config, partnerBonus: null };
+    expect(renderTileReport(runTileSim(before), before)).toContain('No guard level floor');
   });
 
   it('flags a cell that moves more than the threshold under another stance', () => {

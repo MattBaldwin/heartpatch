@@ -93,6 +93,8 @@ export const TILE_SIM_CONFIG: TileSimConfig = {
       fenced: true,
     },
   ],
-  landDate: '2026-06-15', // out of season, so only the everyday tables guard
+  // Out of season, so only the everyday tables guard: meadow has no seasonal
+  // table, so Halloween would roll the same guardians anyway.
+  landDate: '2026-06-15',
   games: 100, // TUNE: 300 per cell over three Partner levels, like the plan
 };

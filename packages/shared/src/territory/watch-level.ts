@@ -24,12 +24,20 @@ export function watchFloor(
 
 /**
  * Copies of the team, each at `max(its level, floor)`, capped at 100. A null
- * floor leaves every level as it is.
+ * floor leaves every level as it is. A lifted squishy loses any `stats` it
+ * came with (they were for its own level), so the engine works them out at
+ * the new level (`BattleSquishySetupSchema.stats`).
  */
 export function atWatchLevel<T extends { readonly level: number }>(
   team: readonly T[],
   floor: number | null,
 ): T[] {
   if (floor === null) return team.map((s) => ({ ...s }));
-  return team.map((s) => ({ ...s, level: Math.min(MAX_BATTLE_LEVEL, Math.max(s.level, floor)) }));
+  return team.map((s) => {
+    const level = Math.min(MAX_BATTLE_LEVEL, Math.max(s.level, floor));
+    if (level === s.level) return { ...s };
+    const lifted: T & { stats?: unknown } = { ...s, level };
+    delete lifted.stats;
+    return lifted;
+  });
 }
