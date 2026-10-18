@@ -73,7 +73,11 @@ import {
 import { keeperReaction } from './keeper-reaction.js';
 import { cheerFor } from './befriend-cheer.js';
 import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
-import { fenceResult, resultLine } from './result-line.js';
+import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
+import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
+import { mapApi } from '../map/map-api.js';
+import { territoryApi } from '../territory/territory-api.js';
+import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
 import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
 import { mountLiveBar, type LiveBar } from './live-bar.js';
 import {
@@ -112,6 +116,8 @@ export interface BattleScreenOptions {
   /** The battle screen closed: the caller shows the map again. */
   onClosed: (mapId: string) => void;
   api?: typeof battleApi;
+  /** What "Keep going!" on a broken fence's card calls (#527); the real API by default. */
+  keepGoingApi?: KeepGoingApi;
   /** The battle clock (tests pass a manual one). */
   clock?: BattleClock;
   /** Dev builds show the dev grant buttons (server `HP_DEV_SQUISHY_GRANTS`). */
@@ -328,6 +334,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let shownLog = 0;
   let queue: PlaybackStep[] = [];
   let waiting = false;
+  /** The card whose Keep going is on its way (#527), so another card's isn't held up. */
+  let keepingGoingFor: PlayerBattle | null = null;
+  const sendDeps = {
+    newKey: newIdempotencyKey,
+    wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    retryAfterMs: COMMAND_RETRY_MS,
+  };
   let frame = 0;
   /** Breathing's pace, judged afresh each time the battle screen opens (a slow device stops it, #397). */
   let breath = new BreathPacer(BREATHING_FRAME_MS);
@@ -659,6 +672,31 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
   };
 
+  /** "Keep going!" on a broken fence's card (#527): the guard showdown opens right here. */
+  const goOn = async (b: PlayerBattle): Promise<void> => {
+    if (keepingGoingFor === b) return;
+    keepingGoingFor = b;
+    hud.setKeepGoingBusy(true);
+    try {
+      const outcome = await keepGoing(
+        options.keepGoingApi ?? {
+          status: territoryApi.status,
+          view: mapApi.view,
+          attack: territoryApi.attack,
+        },
+        sendDeps,
+        b,
+        user?.id ?? null,
+        () => battle === b,
+      );
+      if (outcome.kind === 'battle') open(outcome.battle);
+      else if (outcome.kind === 'say') hud.refuseKeepGoing(outcome.text, KEEP_GOING_TEXT.ok);
+    } finally {
+      if (keepingGoingFor === b) keepingGoingFor = null;
+      if (battle === b) hud.setKeepGoingBusy(false);
+    }
+  };
+
   const showResult = (b: PlayerBattle): void => {
     const names = content;
     if (!names) return;
@@ -681,6 +719,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       const fenceXp = (b.rewards?.xp ?? []).filter((award) => award.xp > 0);
       hud.showResult({
         ...card,
+        ...(card === FENCE_RESULTS.broke && b.status === 'finished'
+          ? { keepGoing: { label: KEEP_GOING_TEXT.keepGoing, onKeepGoing: () => void goOn(b) } }
+          : {}),
         xp:
           fenceXp.length > 0
             ? fenceXp.map((award) => {
@@ -692,7 +733,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               })
             : [MESSAGES.noXp],
         evolving: [],
-        done: MESSAGES.done,
+        done: card === FENCE_RESULTS.broke ? KEEP_GOING_TEXT.notNow : MESSAGES.done,
       });
       return;
     }

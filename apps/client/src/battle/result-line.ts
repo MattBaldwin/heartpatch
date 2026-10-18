@@ -30,7 +30,7 @@ export function resultLine(
 export const FENCE_RESULTS = {
   broke: {
     title: 'Crack! The fence fell down!',
-    subtitle: 'Now beat the guard to make it yours. Tap Keep going on the land!',
+    subtitle: 'Now beat the guard to make it yours!',
   },
   held: {
     title: 'The fence held!',
