@@ -1,4 +1,3 @@
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Material } from '@babylonjs/core/Materials/material';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
@@ -7,12 +6,9 @@ import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
-import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
-import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
-import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import {
@@ -26,6 +22,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
+import { countGl, type CountedGl, type GlCounts } from '../engine/gl-counters.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
 import { ExploreLand, type LandStats } from './explore-land.js';
 import { ExploreWater, lakeExtras, type WaterStats } from './explore-water.js';
@@ -47,9 +44,20 @@ import {
 import { loftRoundedHex } from '../map/hex-mesh.js';
 import { buildLakeSpotProp } from './lake-kit.js';
 import { buildSpotProp } from './land-kit.js';
+import {
+  box,
+  cylinderPart,
+  disc,
+  kitMesh,
+  merged,
+  painted,
+  Part,
+  torus,
+  uvSphere,
+} from './kit-mesh.js';
 import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
-import { linear, merged, painted } from '../map/map-props.js';
+import { linear } from '../map/map-props.js';
 import {
   buildProp,
   CORNER,
@@ -70,6 +78,7 @@ import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
+  EXPLORE_PREWARM,
   EXPLORE_SWIM,
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
@@ -166,6 +175,16 @@ export interface ExploreSceneStats {
     readonly textures: number;
     readonly geometries: number;
   };
+  /**
+   * WebGL buffers made and shader programs linked since the scene opened
+   * (#501 D1). The kit's shapes come from the page's cache, so a second build
+   * makes only the tile's own buffers; once `warm`, playing (a find, a tool
+   * in hand, a fade) links no program. Dev builds only (the `?fps=1` badge
+   * counts them there anyway); null otherwise.
+   */
+  readonly gl: { readonly buffers: number; readonly programs: number } | null;
+  /** Every program a mesh shown later needs is compiled (`#prewarm`). */
+  readonly warm: boolean;
   /** The land kit's layers and tier (#335 art reset), or null on today's tile. */
   readonly land: LandStats | null;
   /** The lake's own layers (kelp, coral, fish, bubbles), or null off a lake. */
@@ -395,6 +414,9 @@ export class ExploreScene implements AmbientTarget {
   #now = 0;
   /** Objects made since the scene opened (`stats.created`, #501). */
   readonly #created = { meshes: 0, materials: 0, textures: 0, geometries: 0 };
+  /** The context's counts and their reading when the scene opened (`stats.gl`, dev only). */
+  readonly #gl: { readonly counts: GlCounts; readonly atOpen: GlCounts } | null;
+  #warm = false;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
@@ -403,6 +425,11 @@ export class ExploreScene implements AmbientTarget {
     scene.onNewMaterialAddedObservable.add(() => this.#created.materials++);
     scene.onNewTextureAddedObservable.add(() => this.#created.textures++);
     scene.onNewGeometryAddedObservable.add(() => this.#created.geometries++);
+    // Duck-typed (WebGL has a context, WebGPU none): a value import of `Engine`
+    // would pull the WebGL engine into the first load (`renderer.ts` loads it on demand).
+    const gl = (scene.getEngine() as { _gl?: CountedGl | null })._gl;
+    const counts = import.meta.env.DEV && gl ? countGl(gl) : null;
+    this.#gl = counts ? { counts, atOpen: { ...counts } } : null;
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
     this.#highTier = bubblesAt(options.tier);
@@ -545,9 +572,12 @@ export class ExploreScene implements AmbientTarget {
     this.#glints = buildGlint(scene);
     this.#glints.material = overlayMaterial(scene, 'explore-glint-mat');
     // The soft halo under the spot in front of the Keeper.
-    this.#halo = CreateDisc('explore-halo', { radius: 1, tessellation: 32 }, scene);
-    this.#halo.rotation.x = Math.PI / 2;
-    this.#halo.bakeCurrentTransformIntoVertices();
+    this.#halo = kitMesh(scene, 'explore-halo', () => {
+      const halo = disc({ radius: 1, tessellation: 32 });
+      halo.rotation.x = Math.PI / 2;
+      return halo.bakeCurrentTransformIntoVertices();
+    });
+    this.#halo.alwaysSelectAsActiveMesh = false;
     const haloMat = overlayMaterial(scene, 'explore-halo-mat');
     haloMat.emissiveColor = linear('#fffbe0');
     haloMat.alpha = EXPLORE_VIEW.halo.alpha;
@@ -571,7 +601,7 @@ export class ExploreScene implements AmbientTarget {
       if (this.#underwater) {
         // The Snorkel worn on the face (#335): a mask and its orange tube,
         // in head-width units.
-        const part = (m: Mesh, x: number, y: number, z: number, hex: string) => {
+        const part = (m: Part, x: number, y: number, z: number, hex: string) => {
           m.position.set(x, y, z);
           return painted(m, hex);
         };
@@ -582,22 +612,24 @@ export class ExploreScene implements AmbientTarget {
           k: [number, number, number],
           hex: string,
         ) => {
-          const m = CreateSphere('m', { diameter: d, segments: 8 }, scene);
+          const m = uvSphere({ diameter: d, segments: 8 });
           m.scaling.set(...k);
           return part(m, at[0], at[1], at[2], hex);
         };
-        const mask = merged('explore-mask', [
-          blob(0.9, [0, 0, 0], [1, 0.55, 0.3], '#3aa0d8'),
-          blob(0.72, [0, 0, -0.06], [1, 0.48, 0.3], '#d9f7ff'),
-          part(
-            CreateCylinder('m', { height: 0.7, diameter: 0.1, tessellation: 10 }, scene),
-            0.52,
-            0.34,
-            0.06,
-            '#ff8a4a',
-          ),
-          blob(0.16, [0.52, 0.7, 0.06], [1, 1, 1], '#ff6a3a'),
-        ]);
+        const mask = kitMesh(scene, 'explore-mask', () =>
+          merged([
+            blob(0.9, [0, 0, 0], [1, 0.55, 0.3], '#3aa0d8'),
+            blob(0.72, [0, 0, -0.06], [1, 0.48, 0.3], '#d9f7ff'),
+            part(
+              cylinderPart({ height: 0.7, diameter: 0.1, tessellation: 10 }),
+              0.52,
+              0.34,
+              0.06,
+              '#ff8a4a',
+            ),
+            blob(0.16, [0.52, 0.7, 0.06], [1, 1, 1], '#ff6a3a'),
+          ]),
+        );
         mask.material = propMaterial;
         mask.isPickable = false;
         this.#mask = mask;
@@ -653,6 +685,68 @@ export class ExploreScene implements AmbientTarget {
       frameCap: FRAME_CAP_30,
     };
     this.update(tile);
+    void this.#prewarm(scene);
+  }
+
+  /**
+   * Compiles every program a mesh shown later will need (#501 D1, the
+   * glint-find stutter): the tools, the faded spots, the halo, the night's
+   * motes. The stage settles once the scene is ready, and Babylon's check
+   * skips disabled meshes, so each of these used to compile (50–300 ms on a
+   * phone) the first time it showed, in the middle of a find. Held as the
+   * scene's pending data, so the stage keeps loading until they're done.
+   */
+  async #prewarm(scene: Scene): Promise<void> {
+    const pending = {};
+    scene.addPendingData(pending);
+    const later = scene.meshes.filter(
+      (m) => m.material !== null && !m.isEnabled() && m.getTotalVertices() > 0,
+    );
+    // Each as it will be drawn, for the same program: the halo sits scaled
+    // (r, 1, r) under a spot (non-uniform scaling is its own program), and a
+    // faded copy draws thin-instanced, so it compiles with its solid's places
+    // (with none it would take the uninstanced program), still hidden.
+    this.#halo.scaling.set(2, 1, 2);
+    this.#halo.computeWorldMatrix(true);
+    for (const { faded, spots } of this.#props.values()) {
+      if (faded.isEnabled()) continue;
+      setInstances(
+        faded,
+        spots.map((s) => s.matrix),
+        true,
+      );
+      faded.setEnabled(false);
+    }
+    // Drawn as Babylon draws them: a thin-instanced mesh takes the instanced
+    // program (`Mesh.render` passes `hasThinInstances`). One at a time, so a
+    // tap still gets through between compiles.
+    const compiled = (async () => {
+      for (const m of later) {
+        try {
+          await m.material?.forceCompilationAsync(m, { useInstances: m.hasThinInstances });
+        } catch {
+          // A program that won't compile shows as it did before: compiled on first draw.
+        }
+        if (scene.isDisposed) return;
+      }
+      // Back to no instances, unless the fade has taken a copy over meanwhile.
+      // Only now: a compile still polling would take the uninstanced program.
+      for (const { faded, spots } of this.#props.values()) {
+        if (!spots.some((s) => this.#hiding.has(s.index))) setInstances(faded, []);
+      }
+      this.#warm = true;
+    })();
+    // A compile that never finishes holds the stage no longer than `EXPLORE_PREWARM.maxMs`.
+    let cap: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        compiled,
+        new Promise((done) => (cap = setTimeout(done, EXPLORE_PREWARM.maxMs))),
+      ]);
+    } finally {
+      clearTimeout(cap);
+      if (!scene.isDisposed) scene.removePendingData(pending);
+    }
   }
 
   get stats(): ExploreSceneStats {
@@ -674,6 +768,13 @@ export class ExploreScene implements AmbientTarget {
       sky: this.#sky.stats,
       triangles: this.#triangles,
       created: { ...this.#created },
+      gl: this.#gl
+        ? {
+            buffers: this.#gl.counts.buffersMade - this.#gl.atOpen.buffersMade,
+            programs: this.#gl.counts.programs - this.#gl.atOpen.programs,
+          }
+        : null,
+      warm: this.#warm,
       land: this.#land?.stats ?? null,
       water: this.#water?.stats ?? null,
       swim: this.#underwater
@@ -1152,7 +1253,10 @@ export class ExploreScene implements AmbientTarget {
       faded.length = 0;
       for (const s of batch.spots) (hiding.has(s.index) ? faded : solid).push(s.matrix);
       setInstances(batch.mesh, solid, true);
-      setInstances(batch.faded, faded, true);
+      // While `#prewarm` compiles, a copy keeps the instances it was lent (hidden),
+      // so its program is still the instanced one.
+      if (faded.length === 0 && !this.#warm) batch.faded.setEnabled(false);
+      else setInstances(batch.faded, faded, true);
     }
   }
 
@@ -1398,13 +1502,11 @@ export class ExploreScene implements AmbientTarget {
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () =>
-            kitSpot(this.#scene, spot.kind, tile.terrain)?.mesh ??
-            buildProp(this.#scene, 'rock').mesh,
+          () => kitSpot(this.#scene, spot.kind, tile.terrain)?.mesh ?? mapProp(this.#scene, 'rock'),
         );
       } else {
         builders.set(kind, () =>
-          isShape(prop) ? buildShape(this.#scene, prop) : buildProp(this.#scene, prop).mesh,
+          isShape(prop) ? buildShape(this.#scene, prop) : mapProp(this.#scene, prop),
         );
       }
       const at = this.#world(spot);
@@ -1421,7 +1523,7 @@ export class ExploreScene implements AmbientTarget {
       this.#heights.set(spot.kind, this.#glintLift(spot.kind) / this.#size);
     }
     for (const [kind, spots] of byKind) {
-      const build = builders.get(kind) ?? (() => buildProp(this.#scene, 'rock').mesh);
+      const build = builders.get(kind) ?? (() => mapProp(this.#scene, 'rock'));
       const mesh = solids.get(kind) ?? build();
       mesh.material = material;
       // Its own mesh (a clone would share the thin instances): one more draw
@@ -1440,6 +1542,21 @@ export class ExploreScene implements AmbientTarget {
   }
 }
 
+/**
+ * A map prop at spot size, drawn from the kit's page cache (#501 D1): the
+ * map's own builder runs once a page and its shape is kept, not rebuilt.
+ */
+function mapProp(scene: Scene, kind: PropKind): Mesh {
+  const mesh = kitMesh(scene, `map-prop-${kind}`, () => {
+    const built = buildProp(scene, kind).mesh;
+    const part = new Part(VertexData.ExtractFromMesh(built, true, true));
+    built.dispose();
+    return part;
+  });
+  mesh.name = kind;
+  return mesh;
+}
+
 /** A spot's own turn, hashed from the tile and spot (stable, no RNG state). */
 function spinOf(tile: { q: number; r: number }, index: number): number {
   let h = 2166136261;
@@ -1447,15 +1564,11 @@ function spinOf(tile: { q: number; r: number }, index: number): number {
   return ((h >>> 0) / 4294967296) * Math.PI * 2;
 }
 
-/** Paints a mesh one colour with an alpha (for the glint's soft glow). */
-function tinted(mesh: Mesh, hex: string, alpha: number): Mesh {
-  painted(mesh, hex);
-  const colors = mesh.getVerticesData(VertexBuffer.ColorKind);
-  if (colors) {
-    for (let i = 3; i < colors.length; i += 4) colors[i] = alpha;
-    mesh.setVerticesData(VertexBuffer.ColorKind, colors);
-  }
-  return mesh;
+/** Paints a part one colour with an alpha (for the glint's soft glow). */
+function tinted(part: Part, hex: string, alpha: number): Part {
+  const colors = painted(part, hex).data.colors;
+  for (let i = 3; colors && i < colors.length; i += 4) colors[i] = alpha;
+  return part;
 }
 
 /**
@@ -1463,39 +1576,47 @@ function tinted(mesh: Mesh, hex: string, alpha: number): Mesh {
  * 1 across, stood up and tipped to face the follow camera (which never turns).
  */
 function buildGlint(scene: Scene): Mesh {
+  const mesh = kitMesh(scene, 'explore-glints', glint);
+  mesh.hasVertexAlpha = true;
+  return mesh;
+}
+
+function glint(): Part {
   const diamond = (sx: number, sy: number, z: number, hex: string, alpha: number) => {
-    const m = CreateDisc('explore-glint-part', { radius: 0.5, tessellation: 4 }, scene);
+    const m = disc({ radius: 0.5, tessellation: 4 });
     m.scaling.set(sx, sy, 1);
     m.position.z = z;
     return tinted(m, hex, alpha);
   };
-  const glow = CreateDisc('explore-glint-part', { radius: 0.5, tessellation: 20 }, scene);
-  const mesh = merged('explore-glints', [
+  const glow = disc({ radius: 0.5, tessellation: 20 });
+  const part = merged([
     tinted(glow, '#fffbe0', 0.45),
     diamond(0.34, 1, -0.01, '#ffe7a0', 1),
     diamond(1, 0.34, -0.01, '#ffe7a0', 1),
     diamond(0.2, 0.62, -0.02, '#fffdf0', 1),
     diamond(0.62, 0.2, -0.02, '#fffdf0', 1),
   ]);
-  mesh.rotation.x = EXPLORE_CAMERA.glintTilt;
-  mesh.bakeCurrentTransformIntoVertices();
-  mesh.hasVertexAlpha = true;
-  return mesh;
+  part.rotation.x = EXPLORE_CAMERA.glintTilt;
+  return part.bakeCurrentTransformIntoVertices();
 }
 
 /** The decor kinds (#291), vinyl-toy style, about knee-high on the Keeper or less. TUNE */
 function buildDecor(scene: Scene, kind: DecorKind): Mesh {
+  return kitMesh(scene, `explore-${kind}`, () => decor(kind));
+}
+
+function decor(kind: DecorKind): Part {
   switch (kind) {
     case 'tufts': {
       const blade = (h: number, lean: number, turn: number, hex: string) => {
-        const m = CreateSphere('explore-tuft-blade', { diameter: 1, segments: 4 }, scene);
+        const m = uvSphere({ diameter: 1, segments: 4 });
         m.scaling.set(0.06, h, 0.03);
         m.position.y = h / 2;
         m.bakeCurrentTransformIntoVertices();
         m.rotation.set(0, turn, lean);
         return painted(m, hex);
       };
-      return merged('explore-tufts', [
+      return merged([
         blade(0.22, 0, 0, '#8cc472'),
         blade(0.17, 0.5, 0.4, '#7ab562'),
         blade(0.17, -0.5, -0.4, '#7ab562'),
@@ -1504,12 +1625,12 @@ function buildDecor(scene: Scene, kind: DecorKind): Mesh {
     }
     case 'pebbles': {
       const pebble = (d: number, x: number, z: number, hex: string) => {
-        const m = CreateSphere('explore-pebble', { diameter: d, segments: 5 }, scene);
+        const m = uvSphere({ diameter: d, segments: 5 });
         m.scaling.set(1.2, 0.55, 1);
         m.position.set(x, d * 0.2, z);
         return painted(m, hex);
       };
-      return merged('explore-pebbles', [
+      return merged([
         pebble(0.12, 0, 0, '#cbbfae'),
         pebble(0.08, 0.1, 0.05, '#bdb1a2'),
         pebble(0.06, -0.06, 0.09, '#d8cec0'),
@@ -1517,18 +1638,14 @@ function buildDecor(scene: Scene, kind: DecorKind): Mesh {
     }
     case 'flowers': {
       const flower = (x: number, z: number, h: number, hex: string) => {
-        const stem = CreateCylinder(
-          'explore-flower-stem',
-          { height: h, diameter: 0.018, tessellation: 5 },
-          scene,
-        );
+        const stem = cylinderPart({ height: h, diameter: 0.018, tessellation: 5 });
         stem.position.set(x, h / 2, z);
-        const bloom = CreateSphere('explore-flower-bloom', { diameter: 0.09, segments: 5 }, scene);
+        const bloom = uvSphere({ diameter: 0.09, segments: 5 });
         bloom.scaling.y = 0.7;
         bloom.position.set(x, h, z);
         return [painted(stem, '#6aa84f'), painted(bloom, hex)];
       };
-      return merged('explore-flowers', [
+      return merged([
         ...flower(0, 0, 0.16, '#ff8fab'),
         ...flower(0.08, 0.05, 0.12, '#ffd166'),
         ...flower(-0.06, 0.07, 0.13, '#b8a6ff'),
@@ -1543,149 +1660,79 @@ function buildDecor(scene: Scene, kind: DecorKind): Mesh {
  * (−z is the way the Keeper faces).
  */
 function buildTool(scene: Scene, tool: ToolId): Mesh {
+  return kitMesh(scene, TOOL_MESHES[tool], () => toolShape(tool));
+}
+
+/** Each tool's mesh name (the net and rope were renamed in place, #335). */
+const TOOL_MESHES: Readonly<Record<ToolId, string>> = {
+  shovel: 'explore-shovel',
+  net: 'explore-snorkel',
+  rope: 'explore-walking-stick',
+  lantern: 'explore-lantern',
+};
+
+function toolShape(tool: ToolId): Part {
   const stick = (length: number, hex: string) => {
-    const m = CreateCylinder(
-      `explore-${tool}-part`,
-      { height: length, diameter: 0.045, tessellation: 8 },
-      scene,
-    );
+    const m = cylinderPart({ height: length, diameter: 0.045, tessellation: 8 });
     m.position.y = 0.12 - length / 2;
     return painted(m, hex);
   };
-  const at = (m: Mesh, x: number, y: number, z: number, rx = 0) => {
+  const at = (m: Part, x: number, y: number, z: number, rx = 0) => {
     m.position.set(x, y, z);
     m.rotation.x = rx;
     return m;
   };
-  let mesh: Mesh;
+  let part: Part;
   switch (tool) {
     case 'shovel':
-      mesh = merged('explore-shovel', [
+      part = merged([
         stick(0.7, '#a77a52'),
-        painted(
-          at(
-            CreateBox(`explore-${tool}-part`, { width: 0.18, height: 0.22, depth: 0.03 }, scene),
-            0,
-            -0.66,
-            0,
-          ),
-          '#c9ced8',
-        ),
-        painted(
-          at(CreateSphere(`explore-${tool}-part`, { diameter: 0.08 }, scene), 0, 0.14, 0),
-          '#a77a52',
-        ),
+        painted(at(box({ width: 0.18, height: 0.22, depth: 0.03 }), 0, -0.66, 0), '#c9ced8'),
+        painted(at(uvSphere({ diameter: 0.08 }), 0, 0.14, 0), '#a77a52'),
       ]);
       break;
     case 'net':
       // The Snorkel (#335, renamed in place): a mask and an orange tube.
-      mesh = merged('explore-snorkel', [
+      part = merged([
+        painted(at(box({ width: 0.22, height: 0.12, depth: 0.06 }), 0, -0.1, 0), '#9fe3ff'),
         painted(
-          at(
-            CreateBox(`explore-${tool}-part`, { width: 0.22, height: 0.12, depth: 0.06 }, scene),
-            0,
-            -0.1,
-            0,
-          ),
-          '#9fe3ff',
-        ),
-        painted(
-          at(
-            CreateTorus(
-              `explore-${tool}-part`,
-              { diameter: 0.24, thickness: 0.03, tessellation: 18 },
-              scene,
-            ),
-            0,
-            -0.1,
-            0,
-            Math.PI / 2,
-          ),
+          at(torus({ diameter: 0.24, thickness: 0.03, tessellation: 18 }), 0, -0.1, 0, Math.PI / 2),
           '#3aa0d8',
         ),
         painted(
-          at(
-            CreateCylinder(
-              `explore-${tool}-part`,
-              { height: 0.32, diameter: 0.04, tessellation: 8 },
-              scene,
-            ),
-            0.14,
-            0.02,
-            0,
-          ),
+          at(cylinderPart({ height: 0.32, diameter: 0.04, tessellation: 8 }), 0.14, 0.02, 0),
           '#ff8a4a',
         ),
       ]);
       break;
     case 'rope':
       // The Walking Stick (#335, renamed in place): a long stick with a knob.
-      mesh = merged('explore-walking-stick', [
+      part = merged([
         stick(0.9, '#9a6a3c'),
-        painted(
-          at(CreateSphere(`explore-${tool}-part`, { diameter: 0.09 }, scene), 0, 0.14, 0),
-          '#c88a4f',
-        ),
+        painted(at(uvSphere({ diameter: 0.09 }), 0, 0.14, 0), '#c88a4f'),
       ]);
       break;
     case 'lantern':
-      mesh = merged('explore-lantern', [
+      part = merged([
         painted(
-          at(
-            CreateTorus(
-              `explore-${tool}-part`,
-              { diameter: 0.1, thickness: 0.018, tessellation: 12 },
-              scene,
-            ),
-            0,
-            0,
-            0,
-            Math.PI / 2,
-          ),
+          at(torus({ diameter: 0.1, thickness: 0.018, tessellation: 12 }), 0, 0, 0, Math.PI / 2),
           '#8b93a3',
         ),
         painted(
-          at(
-            CreateCylinder(
-              `explore-${tool}-part`,
-              { height: 0.04, diameter: 0.16, tessellation: 12 },
-              scene,
-            ),
-            0,
-            -0.07,
-            0,
-          ),
+          at(cylinderPart({ height: 0.04, diameter: 0.16, tessellation: 12 }), 0, -0.07, 0),
           '#7a2d55',
         ),
+        painted(at(uvSphere({ diameter: 0.15, segments: 8 }), 0, -0.16, 0), '#ffe3a3'),
         painted(
-          at(
-            CreateSphere(`explore-${tool}-part`, { diameter: 0.15, segments: 8 }, scene),
-            0,
-            -0.16,
-            0,
-          ),
-          '#ffe3a3',
-        ),
-        painted(
-          at(
-            CreateCylinder(
-              `explore-${tool}-part`,
-              { height: 0.04, diameter: 0.16, tessellation: 12 },
-              scene,
-            ),
-            0,
-            -0.25,
-            0,
-          ),
+          at(cylinderPart({ height: 0.04, diameter: 0.16, tessellation: 12 }), 0, -0.25, 0),
           '#7a2d55',
         ),
       ]);
       break;
   }
   // Tipped forward a little, the way a tool is carried.
-  mesh.rotation.x = -0.25;
-  mesh.bakeCurrentTransformIntoVertices();
-  return mesh;
+  part.rotation.x = -0.25;
+  return part.bakeCurrentTransformIntoVertices();
 }
 
 /**
@@ -1693,14 +1740,14 @@ function buildTool(scene: Scene, tool: ToolId): Mesh {
  * across) and vinyl-toy style: soft, rounded, a little chunky.
  */
 function buildShape(scene: Scene, shape: ExploreShape): Mesh {
-  const sphere = (d: number) => CreateSphere(`${shape}-part`, { diameter: d, segments: 10 }, scene);
+  return kitMesh(scene, `explore-${shape}`, () => shapePart(shape));
+}
+
+function shapePart(shape: ExploreShape): Part {
+  const sphere = (d: number) => uvSphere({ diameter: d, segments: 10 });
   const cylinder = (h: number, top: number, bottom: number) =>
-    CreateCylinder(
-      `${shape}-part`,
-      { height: h, diameterTop: top, diameterBottom: bottom, tessellation: 16 },
-      scene,
-    );
-  const at = (m: Mesh, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Mesh => {
+    cylinderPart({ height: h, diameterTop: top, diameterBottom: bottom, tessellation: 16 });
+  const at = (m: Part, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Part => {
     m.position.set(x, y, z);
     m.scaling.set(sx, sy, sz);
     return m;
@@ -1708,43 +1755,27 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
   switch (shape) {
     case 'mound':
       // Soft earth with a little sprout on top: "dig here".
-      return merged(`explore-${shape}`, [
+      return merged([
         painted(at(sphere(0.3), 0, 0, 0, 1.1, 0.45, 1), '#b88a5e'),
         painted(at(sphere(0.12), 0.05, 0.06, -0.03, 1, 0.6, 1), '#a57850'),
         painted(at(cylinder(0.08, 0.01, 0.02), -0.03, 0.12, 0.02), '#7ac27a'),
       ]);
     case 'pond':
-      return merged(`explore-${shape}`, [
+      return merged([
         painted(at(cylinder(0.02, 0.38, 0.38), 0, 0.005, 0), '#7cc6f0'),
         painted(at(cylinder(0.015, 0.44, 0.44), 0, 0, 0), '#cfe9c4'),
         painted(at(cylinder(0.01, 0.09, 0.09), 0.08, 0.02, -0.05), '#6fbf73'),
       ]);
     case 'ledge':
       // A chunky cliff step with a flat top to climb to.
-      return merged(`explore-${shape}`, [
-        painted(
-          at(
-            CreateBox(`${shape}-part`, { width: 0.32, height: 0.22, depth: 0.2 }, scene),
-            0,
-            0.11,
-            0,
-          ),
-          '#c9b79a',
-        ),
-        painted(
-          at(
-            CreateBox(`${shape}-part`, { width: 0.22, height: 0.12, depth: 0.16 }, scene),
-            0.04,
-            0.28,
-            0.02,
-          ),
-          '#d8c8ab',
-        ),
+      return merged([
+        painted(at(box({ width: 0.32, height: 0.22, depth: 0.2 }), 0, 0.11, 0), '#c9b79a'),
+        painted(at(box({ width: 0.22, height: 0.12, depth: 0.16 }), 0.04, 0.28, 0.02), '#d8c8ab'),
         painted(at(sphere(0.08), -0.1, 0.24, -0.05, 1, 0.6, 1), '#9fd6a0'),
       ]);
     case 'cave':
       // A rounded hill with a dark doorway facing the camera.
-      return merged(`explore-${shape}`, [
+      return merged([
         painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#bfb3cf'),
         painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#3a2f4a'),
       ]);
