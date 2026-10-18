@@ -940,7 +940,10 @@ export class HouseScene {
   // moves it here, steps its hop, and follows it with the camera. Nothing
   // here runs unless the screen asks, so a Keeper standing still costs nothing.
 
-  /** The floor the Keeper can walk on (built the first time it's asked for). */
+  /**
+   * The floor the Keeper can walk on: built the first time it's asked for,
+   * and again after the gift is opened. Read it each frame; don't keep it.
+   */
   get walkMap(): WalkMap {
     this.#walkMap ??= walkMap(this.#boxes, this.#runs, this.#furniture);
     return this.#walkMap;

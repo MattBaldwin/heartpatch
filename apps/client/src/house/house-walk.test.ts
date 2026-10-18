@@ -399,9 +399,11 @@ describe('the follow camera (#381 W1)', () => {
   it('stays under the ceiling of a one-storey room', () => {
     const map = mapAt(4);
     const kitchen = room(map, 'kitchen');
-    // Upstairs in the Kitchen, right at its front: squeezed hard, it would climb into the roof.
-    const at = { x: 2.4, z: kitchen.z0 + inset, y: kitchen.y0 };
-    const p = followPose(pose(), map, at, Math.PI, kitchen, 0.5);
+    // Upstairs in the Kitchen, pressed against its side wall heading west: the
+    // side wall squeezes the camera in, and climbing it would go into the roof.
+    const at = { x: kitchen.x1 - inset, z: 3, y: kitchen.y0 };
+    const p = followPose(pose(), map, at, Math.PI / 2, kitchen, 0.5);
+    expect(p.eye.y).toBeGreaterThan(at.y + HOUSE_WALK.eyeHeight);
     expect(p.eye.y).toBeLessThanOrEqual(kitchen.y1 - HOUSE_WALK.ceilingMargin + 1e-6);
   });
 
