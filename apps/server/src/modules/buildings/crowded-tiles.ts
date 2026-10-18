@@ -18,10 +18,17 @@ import { applyTileUses, type TileUseOwner } from './tile-uses.js';
  *
  * The migrate command runs this (`cli.ts`, through `runMigrations`) after
  * the migrations before migration B and before it, so the index never meets
- * a crowded tile; the boot pass runs after migrate and can't be relied on. It does nothing once
- * the index exists (no tile can be crowded then) or no tile is crowded, so
- * it's safe on an empty, clean or already-migrated database. Every kind of
- * map, the Tutorial Glade too: the index holds on all of them.
+ * a crowded tile; the boot pass runs after migrate and can't be relied on.
+ * It does nothing once the index exists (no tile can be crowded then) or no
+ * tile is crowded, so it's safe on an empty, clean or already-migrated
+ * database. Every kind of map, the Tutorial Glade too: the index holds on
+ * all of them. It reads today's schema while the database is at 0047, so a
+ * crowded dump from before later column changes fails here, loudly, before
+ * the index.
+ *
+ * Each player packs only their own buildings. Two owners never share a tile
+ * on main (land changing hands takes its buildings down), so a crowded tile
+ * is one player's.
  *
  * One transaction per player, in the tidy-up pass's lock order: the
  * crowded tiles they build on (step 6, one id-ordered `FOR NO KEY UPDATE`),

@@ -285,6 +285,21 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
         startedAt: new Date(clock.getTime() - 270_000),
       })
       .returning({ id: factoryQueues.id });
+    // A patch-mate's batch in the same Factory, not started yet: it comes
+    // back to them, and stays out of my note.
+    const friend = await player();
+    await db.insert(mapMembers).values({ mapId, userId: friend.id, role: 'member' });
+    await db.insert(factoryQueues).values({
+      mapId,
+      userId: friend.id,
+      buildingId: factory,
+      recipeId: 'heart-charm',
+      total: 2,
+      itemSeconds: 60,
+      output: { 'heart-charm': 1 },
+      inputs: { timber: 2, treats: 1 },
+      startedAt: new Date(clock.getTime() + HOUR_MS),
+    });
 
     // Clean tiles: a lone habitat of mine, and a neighbour's lone one on
     // another patch. Neither is touched.
@@ -333,6 +348,7 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     const everything = add(buildRefund, batchBack);
     expect(await bagOf(mapId, kid)).toEqual(everything);
     expect(await bagOf(otherMap, neighbour)).toEqual({});
+    expect(await bagOf(mapId, friend)).toEqual({ timber: 4, treats: 2 });
 
     // The ledger reconciles: each building's refund against that building.
     const ledger = await db.query.resourceLedger.findMany({
@@ -397,6 +413,47 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     expect(await bagOf(mapId, kid)).toEqual(everything);
   });
 
+  it('stops before the index when a player fails, and a re-run finishes the job', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    const ring = await ringTileIds(server, kid, mapId);
+    for (const [buildingId, spot] of [
+      ['ember-den', 1],
+      ['cozy-meadow', 2],
+    ] as const) {
+      await old(mapId, kid, { buildingId, kind: 'habitat', tileId: ring[0]!, spot });
+    }
+    // The player's transaction throws (its clock, read inside it).
+    await expect(
+      runMigrations(db, {
+        beforeOneBuildingPerTile: (d) =>
+          packBeforeOneBuildingPerTile(
+            d,
+            () => {
+              throw new Error('boom');
+            },
+            log,
+          ),
+      }),
+    ).rejects.toThrow('crowded-tile pack-up failed for 1 player(s)');
+    expect(await indexed()).toBe(false);
+    expect(await rowsOf(mapId)).toHaveLength(2);
+    expect(await bagOf(mapId, kid)).toEqual({});
+    expect(logged).toEqual([
+      {
+        level: 'error',
+        msg: 'crowded-tile pack-up failed for a player',
+        obj: expect.objectContaining({ mapId, userId: kid.id }) as object,
+      },
+    ]);
+
+    await migrate();
+    expect(await indexed()).toBe(true);
+    expect(await rowsOf(mapId)).toEqual([]);
+    expect(await bagOf(mapId, kid)).toEqual(add(cost('ember-den', 1), cost('cozy-meadow', 1)));
+  });
+
   it('packs a crowded Tutorial Glade tile too: the index holds on every map', async () => {
     const kid = await player();
     const [glade] = await db
@@ -422,7 +479,7 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
 });
 
 describe.skipIf(!url)('migration B on a clean database (#295, needs DATABASE_URL)', () => {
-  it('adds the index with nothing to pack, on an empty database and one with clean tiles', async () => {
+  it('adds the index with nothing to pack on an empty database', async () => {
     const scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE);
     try {
       const db = scratch.client.db;
