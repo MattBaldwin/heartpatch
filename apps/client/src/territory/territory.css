@@ -50,3 +50,13 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+/* What a tap said (a refused Challenge, #526): drawn above the button, so it
+   stands out from the panel's other lines. */
+.territory-note {
+  padding: 0.5rem 0.75rem;
+  border-radius: 14px;
+  background: #ffe9f3;
+  color: #7a2d55;
+  font-weight: 700;
+}

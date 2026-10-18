@@ -555,13 +555,23 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     const repo = createTerritoryRepo(tx);
     const at = now();
     const window = fenceRules.keepGoingMinutes * MINUTE_MS;
-    const [used, joinedAt, defenders, owned, broken] = await Promise.all([
-      repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
+    const today = localDate(at, map.timeZone);
+    const [used, joinedAt, defenders, owned, broken, losses] = await Promise.all([
+      repo.attemptsOn(map.id, user.id, today, map.timeZone),
       repo.joinedAt(map.id, user.id),
       repo.myDefenders(map.id, user.id),
       repo.mySquishies(map.id, user.id),
       repo.myBrokenFences(map.id, user.id, new Date(at.getTime() - window)),
+      repo.lossCounts(
+        map.id,
+        today,
+        map.timeZone,
+        new Date(at.getTime() - rules.abandonMinutes * MINUTE_MS),
+      ),
     ]);
+    // The daily loss cap (`prepare`'s check), so the tile panel says so up
+    // front instead of offering a Challenge the server would refuse (#526).
+    const cap = dailyLossCap(rules, map.pvpMode);
     // A squishy in a trade (#271) waits at the post: no guard to pick, and one
     // heading my way stays a surprise (its species too) until I pick it up.
     const squishies = owned.filter((s) => s.state !== 'in-trade');
@@ -588,6 +598,10 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           ? [{ q: b.q, r: b.r, until: new Date(b.endedAt.getTime() + window).toISOString() }]
           : [],
       ),
+      restingKeepers:
+        cap === 0
+          ? []
+          : losses.filter((l) => l.userId !== user.id && l.n >= cap).map((l) => l.userId),
       now: at.toISOString(),
     };
   };

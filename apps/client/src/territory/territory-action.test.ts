@@ -128,6 +128,28 @@ describe('territoryAction', () => {
     expect(territoryAction(tile, off, ME, status(), NOW).kind).toBe('pvp-off');
   });
 
+  it('says a Keeper who lost all the land they can today is resting, before any Challenge (#526)', () => {
+    const { view, tile } = setup(() => ({ ownerUserId: RIVAL }));
+    const capped = status({ attemptsLeft: 1, restingKeepers: [RIVAL] });
+    expect(territoryAction(tile, view, ME, capped, NOW)).toEqual({
+      kind: 'keeper-resting',
+      triesResetAt: '2026-10-06T06:00:00.000Z',
+    });
+    // A broken fence's Keep going doesn't get round it either (the server checks the cap too).
+    const until = new Date(NOW + 10 * 60_000).toISOString();
+    const broke = { ...capped, fenceBroken: [{ q: tile.q, r: tile.r, until }] };
+    expect(territoryAction(tile, view, ME, broke, NOW).kind).toBe('keeper-resting');
+    // Another Keeper's land, and wild land, are still open.
+    const other = { ...tile, ownerUserId: userId(3) };
+    expect(territoryAction(other, view, ME, capped, NOW).kind).toBe('challenge');
+    expect(territoryAction({ ...tile, ownerUserId: null }, view, ME, capped, NOW).kind).toBe(
+      'claim',
+    );
+    expect(TERRITORY_TEXT.keeperResting('Pip', formatWait(95 * 60_000))).toBe(
+      "Pip's land has had enough fun for today. Ready again in 1h 35m 🌙",
+    );
+  });
+
   it('shows a resting tile, and no tries once they’re used up', () => {
     const resting = setup(() => ({ cooldownUntil: new Date(NOW + 60_000).toISOString() }));
     expect(territoryAction(resting.tile, resting.view, ME, status(), NOW).kind).toBe('resting');

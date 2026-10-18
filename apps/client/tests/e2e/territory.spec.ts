@@ -287,3 +287,91 @@ test('says when tries come back once they are used up (#201)', async ({ browser 
   expect(findAvoidedWords((await page.getByTestId('tile-panel').textContent()) ?? '')).toEqual([]);
   await page.context().close();
 });
+
+test('shows a refused Challenge’s reason on screen, even under a tall panel (#526)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000); // a map build, then a smaller screen; CI renders in software
+  const page = await newPlayer(browser, uniqueName('refused'));
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  // A neighbour's land is two Keepers and a past shield away, which a test
+  // patch can't make: the server's view hands the wild land round my home
+  // to a Keeper (the panel calls them "Someone"), each with a wild squishy
+  // rustling on it, like the owner's tile. The server's own refusal rule is
+  // territory.test.ts's; here it says no as it does when the status the
+  // panel holds is out of date (a showdown elsewhere just used the cap).
+  const rival = '0190a8c4-0000-7000-8000-000000005260';
+  let theirs: { q: number; r: number }[] = [];
+  await page.route('**/maps/*/view', async (route) => {
+    const res = await route.fetch();
+    const view = (await res.json()) as MapView;
+    const near = view.tiles.filter(
+      (t) => attackTargetProblem(t, view.tiles, me, view.map.pvpMode) === null,
+    );
+    theirs = near.map(({ q, r }) => ({ q, r }));
+    const keys = new Set(theirs.map((h) => `${String(h.q)},${String(h.r)}`));
+    for (const tile of view.tiles) {
+      if (keys.has(`${String(tile.q)},${String(tile.r)}`)) tile.ownerUserId = rival;
+    }
+    await route.fulfill({ response: res, json: view });
+  });
+  await page.route('**/maps/*/wild', (route) =>
+    route.fulfill({ json: { wild: { tiles: theirs } } }),
+  );
+  let tries = 0;
+  await page.route('**/maps/*/attacks', (route) => {
+    tries += 1;
+    return route.fulfill({
+      status: 409,
+      json: {
+        error: {
+          code: 'CONFLICT',
+          message:
+            "This Keeper's land has had enough fun for today. It's ready again at your patch's midnight 🌙",
+        },
+      },
+    });
+  });
+
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Refused Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(() => territoryState(page), { timeout: 30_000 }).not.toBeNull();
+
+  const panel = page.getByTestId('tile-panel');
+  const note = page.getByTestId('territory-note');
+  /** The note is inside the screen and inside the panel's visible box (a pixel's rounding). */
+  const onScreen = async () => {
+    const viewport = page.viewportSize()!;
+    const box = (await note.boundingBox())!;
+    const frame = (await panel.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(Math.max(0, frame.y) - 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(
+      Math.min(viewport.height, frame.y + frame.height) + 1,
+    );
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  };
+
+  // The iPhone 15, then a small iPhone (SE: 375 × 667).
+  for (const size of [null, { width: 375, height: 667 }]) {
+    if (size) await page.setViewportSize(size);
+    await findTile(page, 'challenge');
+    await expect(panel).toContainText("Someone's land. Win a showdown to make it yours!");
+    const before = tries;
+    await page.getByTestId('tile-challenge').tap();
+    await expect.poll(() => tries).toBe(before + 1);
+    await expect(note).toHaveText(/enough fun for today/);
+    await expect(note).toBeInViewport();
+    await onScreen();
+    // Still Challenge (the fresh status didn't know either), and the reason sits above it.
+    const button = (await page.getByTestId('tile-challenge').boundingBox())!;
+    expect((await note.boundingBox())!.y).toBeLessThan(button.y);
+    expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
+  }
+  await page.context().close();
+});

@@ -67,6 +67,13 @@ export const TerritoryStatusSchema = z.object({
   fenceBroken: z
     .array(z.object({ q: HexSchema.shape.q, r: HexSchema.shape.r, until: z.iso.datetime() }))
     .optional(),
+  /**
+   * Keepers whose land can't be challenged again today (#526): they've lost
+   * as many tiles today as the patch's PvP mode allows (counting challenges
+   * still going). Ready again at `triesResetAt`. Optional only so older
+   * fixtures parse; the server always sends it.
+   */
+  restingKeepers: z.array(z.uuid()).optional(),
   /** The server's clock: cooldowns count down against it. */
   now: z.iso.datetime(),
 });

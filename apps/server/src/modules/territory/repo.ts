@@ -126,6 +126,18 @@ export interface TerritoryRepo {
   lossesOn: (mapId: string, userId: string, date: string, timeZone: string) => Promise<number>;
   /** Challenges against the player still going (acted on after `since`). */
   challengesGoing: (mapId: string, userId: string, since: Date) => Promise<number>;
+  /**
+   * Each defender's tiles lost on `date` (map-local) plus challenges against
+   * them still going (acted on after `since`): what `lossesOn` and
+   * `challengesGoing` add up to, for every defender at once. Defenders with
+   * none are left out.
+   */
+  lossCounts: (
+    mapId: string,
+    date: string,
+    timeZone: string,
+    since: Date,
+  ) => Promise<{ userId: string; n: number }[]>;
   /** The latest cooldown on the tile, or null if it's never been battled for. */
   cooldownUntil: (tileId: string) => Promise<Date | null>;
 
@@ -361,6 +373,28 @@ function queries(db: Executor): TerritoryRepo {
           gt(tileAttacks.lastActionAt, since),
         ),
       ),
+
+    lossCounts: async (mapId, date, timeZone, since) => {
+      const rows = await db
+        .select({ userId: tileAttacks.defenderUserId, n: count() })
+        .from(tileAttacks)
+        .where(
+          and(
+            eq(tileAttacks.mapId, mapId),
+            isNotNull(tileAttacks.defenderUserId),
+            or(
+              and(
+                eq(tileAttacks.outcome, 'captured'),
+                isNotNull(tileAttacks.endedAt),
+                sql`${localDateOf(tileAttacks.endedAt, timeZone)} = ${date}::date`,
+              ),
+              and(eq(tileAttacks.outcome, 'active'), gt(tileAttacks.lastActionAt, since)),
+            ),
+          ),
+        )
+        .groupBy(tileAttacks.defenderUserId);
+      return rows.flatMap((row) => (row.userId === null ? [] : [{ userId: row.userId, n: row.n }]));
+    },
 
     cooldownUntil: async (tileId) => {
       const [row] = await db

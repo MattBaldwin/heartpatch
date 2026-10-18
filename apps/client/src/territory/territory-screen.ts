@@ -67,6 +67,9 @@ export const TERRITORY_TEXT = {
   resting: (wait: string) => `This land needs a rest. Try again in ${wait}.`,
   noTries: (wait: string) => `New tries in ${wait} 🌙`,
   pvpOff: 'Challenges are off on this patch.',
+  // The daily loss cap (#526), in the server's words, counting down to midnight.
+  keeperResting: (owner: string, wait: string) =>
+    `${owner}'s land has had enough fun for today. Ready again in ${wait} 🌙`,
   // The server's own words for a shielded Keeper (territory service), so a tap
   // here reads the same as a refused challenge would.
   rivalShielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
@@ -168,7 +171,10 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       }
     } finally {
       working = false;
-      if (stillHere()) render();
+      if (stillHere()) {
+        render();
+        revealNote();
+      }
     }
   }
 
@@ -364,6 +370,16 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'no-tries':
         children.push(triesLine(action.triesResetAt, TERRITORY_TEXT.noTries));
         break;
+      case 'keeper-resting':
+        children.push(
+          countdownLine(
+            action.triesResetAt,
+            (wait) => TERRITORY_TEXT.keeperResting(owner ?? TERRITORY_TEXT.someone, wait),
+            () => void refresh(),
+            'territory-keeper-resting',
+          ),
+        );
+        break;
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
         break;
@@ -416,9 +432,27 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         }
         break;
     }
-    if (note && action.kind !== 'none') children.push(line(note, 'territory-note'));
+    // A refused Challenge that turned out to be the loss cap already says so.
+    if (note && action.kind !== 'none' && action.kind !== 'keeper-resting') {
+      // Right above the button that was tapped, so a refusal shows where the
+      // player is looking, never under it below the panel's fold (#526).
+      const at = children.findIndex((c) => c instanceof HTMLButtonElement);
+      const noteLine = line(note, 'territory-note');
+      noteLine.classList.add('territory-note');
+      noteLine.setAttribute('role', 'status');
+      children.splice(at === -1 ? children.length : at, 0, noteLine);
+    }
     container.replaceChildren(...children);
     syncTicker();
+  }
+
+  /** Scrolls the tile panel to what a refused tap says, if anything (#526). */
+  function revealNote(): void {
+    panel?.container
+      .querySelector<HTMLElement>(
+        '[data-testid="territory-note"], [data-testid="territory-keeper-resting"]',
+      )
+      ?.scrollIntoView?.({ block: 'center' });
   }
 
   /** Ticks once a second only while a countdown is on screen. */
