@@ -18,6 +18,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  max,
   ne,
   notExists,
   or,
@@ -159,6 +160,13 @@ export interface TerritoryRepo {
   setLostFireRefund: (attackId: string, refund: Record<string, number>) => Promise<void>;
 
   setOwner: (tileId: string, userId: string) => Promise<void>;
+  /**
+   * The level a rival's guards fight at, at least, before the bonus (#529):
+   * the member's Partner (`starter_squishy_id`, in any state, so one in the
+   * Hollow still counts), else their strongest active squishy on the map,
+   * else null (no floor). Read under the defender's member lock.
+   */
+  defenderFloorLevel: (mapId: string, userId: string) => Promise<number | null>;
   /** The owner's squishies on watch on the tile, by slot (active ones only). */
   listDefenders: (tileId: string, ownerUserId: string) => Promise<DefenderRow[]>;
   /** Sends everyone on watch on the tile home; returns their ids. */
@@ -469,6 +477,26 @@ function queries(db: Executor): TerritoryRepo {
 
     setOwner: async (tileId, userId) => {
       await db.update(tiles).set({ ownerUserId: userId }).where(eq(tiles.id, tileId));
+    },
+
+    defenderFloorLevel: async (mapId, userId) => {
+      const [partner] = await db
+        .select({ level: squishies.level })
+        .from(mapMembers)
+        .innerJoin(squishies, eq(squishies.id, mapMembers.starterSquishyId))
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+      if (partner) return partner.level;
+      const [strongest] = await db
+        .select({ level: max(squishies.level) })
+        .from(squishies)
+        .where(
+          and(
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+            eq(squishies.state, 'active'),
+          ),
+        );
+      return strongest?.level ?? null;
     },
 
     listDefenders: async (tileId, ownerUserId) => {

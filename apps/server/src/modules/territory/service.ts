@@ -1,4 +1,5 @@
 import {
+  atWatchLevel,
   attackTargetProblem,
   challengeRewardPercent,
   dailyLossCap,
@@ -31,6 +32,7 @@ import {
   type TerritoryStatus,
   befriendedOf,
   otherSide,
+  watchFloor,
 } from '@heartpatch/shared';
 import {
   GUARDIAN_RULES,
@@ -211,27 +213,36 @@ export function tileGuardians(
  * squishies on watch when there are any, else the tile's own guardians. The
  * server's AI always plays it, so the owner never has to be online (design
  * doc §3, §6 "offline defense"): squishies on watch follow the owner's
- * defense stance (#16), guardians the `guardian` policy. The policy is stored
- * in the battle's setup, so a replay needs no lookup.
+ * defense stance (#16), guardians the `guardian` policy. On a rival's tile
+ * both fight at least at `floor` (#529, `watchFloor`); neutral land passes
+ * none. The policy and the lifted levels are stored in the battle's setup, so
+ * a replay needs no lookup.
  */
 export function defendingSide(
   defenders: readonly DefenderRow[],
   guardians: readonly BattleSquishySetup[],
   stance: DefenseStance = RAID_RULES.defaultStance,
+  floor: number | null = null,
 ): BattleSideSetup {
   if (defenders.length > 0) {
     return {
       controller: { type: 'ai', policy: stancePolicy(stance) },
-      squishies: defenders.map(({ id, speciesId, level, element, feeling }) => ({
-        id,
-        speciesId,
-        level,
-        element,
-        feeling,
-      })),
+      squishies: atWatchLevel(
+        defenders.map(({ id, speciesId, level, element, feeling }) => ({
+          id,
+          speciesId,
+          level,
+          element,
+          feeling,
+        })),
+        floor,
+      ),
     };
   }
-  return { controller: { type: 'ai', policy: 'guardian' }, squishies: [...guardians] };
+  return {
+    controller: { type: 'ai', policy: 'guardian' },
+    squishies: atWatchLevel(guardians, floor),
+  };
 }
 
 /**
@@ -409,6 +420,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
 
       let rewardPercent = 100;
       let defenders: DefenderRow[] = [];
+      let floor: number | null = null;
       if (defenderId !== null) {
         if (!defender) throw new AppError('CONFLICT', MESSAGES.movedOn);
         if (defender.joinedAt.getTime() + rules.newPlayerShieldHours * HOUR_MS > at.getTime()) {
@@ -432,6 +444,10 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           landCount(tiles, defenderId),
         );
         defenders = await repo.listDefenders(tile.id, defenderId);
+        // The guard level floor (#529): a rival's guards, or the land's
+        // guardians standing in, fight at least at their Partner's level plus
+        // the bonus. Baked into the setup, so a replay needs no lookup.
+        floor = watchFloor(await repo.defenderFloorLevel(map.id, defenderId), rules.guardLevel);
       }
 
       // The defender's stance, read under their member lock (#16).
@@ -443,6 +459,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         defenders,
         guardians.filter((guardian) => !gone.has(guardian.id)),
         defender?.defenseStance,
+        floor,
       );
       if (side.squishies.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyGuards);
       const kind = tileBattleKindFor(tile);
