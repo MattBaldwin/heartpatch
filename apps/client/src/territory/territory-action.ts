@@ -32,6 +32,11 @@ export type TerritoryAction =
       readonly triesResetAt: string;
       readonly fence: PublicFence | null;
     }
+  /**
+   * Someone's land, but its Keeper has lost all the tiles the patch allows
+   * today (the daily loss cap, #526): no Challenge until tries refill.
+   */
+  | { readonly kind: 'keeper-resting'; readonly triesResetAt: string }
   /** I just broke this tile's fence (#203): "Keep going!" beats the guard, no new try. */
   | { readonly kind: 'keep-going'; readonly until: string }
   /** Battled for recently: it rests until then. */
@@ -70,6 +75,10 @@ export function territoryAction(
   const shield = shieldUntil(tile, view, now);
   if (shield !== null) return { kind: 'shielded', until: shield };
   if (problem === 'too-far') return { kind: 'too-far' };
+  // The server's daily loss cap, which no try or broken fence gets round.
+  if (tile.ownerUserId !== null && status.restingKeepers?.includes(tile.ownerUserId)) {
+    return { kind: 'keeper-resting', triesResetAt: status.triesResetAt };
+  }
   // The guard battle after I broke the fence finishes that challenge: the
   // tile's rest and my tries don't stop it (the server's `brokenFenceFor`).
   // Not once the owner has fenced it up again.

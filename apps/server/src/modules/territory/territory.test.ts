@@ -21,6 +21,7 @@ import {
   statsAtLevel,
   TERRITORY_RULES,
   TerritoryResponseSchema,
+  WildHintsResponseSchema,
   type MapDetail,
   type PlayerBattle,
   type PlayerBattleAction,
@@ -1085,18 +1086,21 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         returnedSquishyIds: [buddy.id],
       });
 
-      // Gentle (the default): one lost tile a day per player. Refused, no attempt used.
+      // Gentle (the default): one lost tile a day per player. Refused, no attempt used,
+      // and the status said so first (#526: one rule for both).
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([rival.id]);
       const left = (await status(server, kid, mapId)).attemptsLeft;
       const capped = await attack(server, kid, mapId, near2);
       expect(capped.statusCode).toBe(409);
       expect(errorOf(capped).message).toMatch(
-        /enough fun for today\. It.s ready again at your patch.s midnight/,
+        /^No more challenges for this Keeper today\. Try wild land instead!$/,
       );
       expect((await status(server, kid, mapId)).attemptsLeft).toBe(left);
 
       // On: up to three a day.
       const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
       expect(mode.statusCode).toBe(200);
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([]);
       expect((await attack(server, kid, mapId, near2)).statusCode).toBe(201);
     });
 
@@ -1275,9 +1279,82 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attacksOf(mapId)).at(-1)).toMatchObject({ lostFireRefund: refund });
     });
 
+    it('challenges a neighbour’s tile with a wild squishy rustling on it, until their Gentle cap is used (#526)', async () => {
+      const server = await start();
+      const { kid, rival, mapId, near, near2 } = await rivals(server);
+      // A tile with a wild squishy on it right now ("Something's rustling here!"),
+      // made the rival's, with a tile of the kid's next to it.
+      const wild = async () =>
+        WildHintsResponseSchema.parse(
+          (await call(server, 'GET', `/maps/${mapId}/wild`, kid)).json(),
+        ).wild.tiles;
+      const all = await tilesOf(mapId);
+      const taken = new Set([near, near2].map(hexKey));
+      const free = (t: Tile) =>
+        t.ownerUserId === null && t.homeSlot === null && !taken.has(hexKey(t));
+      const rustle = (await wild())
+        .map((h) => all.find((t) => t.q === h.q && t.r === h.r)!)
+        .find(
+          (t) =>
+            free(t) &&
+            t.terrain !== 'trading-post' &&
+            hexNeighbors(t).some((n) => {
+              const next = all.find((x) => x.q === n.q && x.r === n.r);
+              return next !== undefined && free(next) && next.terrain !== 'trading-post';
+            }),
+        );
+      expect(rustle).toBeDefined();
+      const step = hexNeighbors(rustle!)
+        .map((n) => all.find((x) => x.q === n.q && x.r === n.r))
+        .find((t) => t !== undefined && free(t) && t.terrain !== 'trading-post')!;
+      await setOwner(rustle!.id, rival.id);
+      await setOwner(step.id, kid.id);
+      expect(await wild()).toContainEqual({ q: rustle!.q, r: rustle!.r });
+
+      // Three tries on wild land, then one on the rival's other land, won: one try left.
+      const claims = (await edgeOf(mapId, kid)).filter((t) => t.terrain !== 'trading-post');
+      for (const tile of claims.slice(0, 3)) {
+        const res = await attack(server, kid, mapId, tile);
+        expect(res.statusCode, res.body).toBe(201);
+        await forfeit(server, kid, battleOf(res));
+      }
+      // Under On, so the win below doesn't use the rival's one Gentle loss yet.
+      const on = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
+      expect(on.statusCode).toBe(200);
+      const first = await attack(server, kid, mapId, near);
+      expect(first.statusCode, first.body).toBe(201);
+      await playOut(server, kid, battleOf(first));
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+      expect(await status(server, kid, mapId)).toMatchObject({
+        attemptsLeft: 1,
+        restingKeepers: [],
+      });
+
+      // Gentle again (the owner's patch): the rival has lost their one tile
+      // today, so the challenge is refused, and the status says so up front.
+      await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'gentle' });
+      const capped = await attack(server, kid, mapId, rustle!);
+      expect(capped.statusCode).toBe(409);
+      expect(errorOf(capped).message).toMatch(/No more challenges for this Keeper today/);
+      expect(await status(server, kid, mapId)).toMatchObject({
+        attemptsLeft: 1,
+        restingKeepers: [rival.id],
+      });
+      // The rival's own status never lists themself.
+      expect((await status(server, rival, mapId)).restingKeepers).toEqual([]);
+
+      // The wild squishy there never stood in the way: under On, the same tap starts the showdown.
+      await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([]);
+      const res = await attack(server, kid, mapId, rustle!);
+      expect(res.statusCode, res.body).toBe(201);
+      expect(battleOf(res).kind).toBe('rival-tile');
+      expect((await status(server, kid, mapId)).attemptsLeft).toBe(0);
+    });
+
     it('counts a challenge still going toward the daily loss cap', async () => {
       const server = await start();
-      const { kid, mapId, near, near2 } = await rivals(server);
+      const { kid, rival, mapId, near, near2 } = await rivals(server);
       const other = await player();
       // A third player next to the rival's land too.
       const res = await call(server, 'GET', `/maps/${mapId}`, kid);
@@ -1295,10 +1372,15 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       )!;
       await setOwner(nextToNear2.id, other.id);
       // The kid's challenge is going, so the rival's one loss for today is spoken for.
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([]);
       expect((await attack(server, kid, mapId, near)).statusCode).toBe(201);
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([rival.id]);
       const second = await attack(server, other, mapId, near2);
       expect(second.statusCode).toBe(409);
-      expect(errorOf(second).message).toMatch(/enough fun for today/);
+      expect(errorOf(second).message).toMatch(/No more challenges for this Keeper today/);
+      // Left alone past the abandon time, the challenge no longer holds the cap.
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.abandonMinutes + 1) * MINUTE_MS);
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([]);
     });
 
     it('lets only one of two players claim the same tile at once (tile lock + cooldown)', async () => {
@@ -1372,6 +1454,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const off = await attack(server, kid, mapId, near!);
       expect(off.statusCode).toBe(403);
       expect(errorOf(off).message).toMatch(/Challenges are off/);
+      // Off refuses every challenge before the loss cap: no Keeper is listed resting.
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([]);
       // Wild land is still fair game.
       const [wild] = await edgeOf(mapId, kid);
       expect((await attack(server, kid, mapId, wild!)).statusCode).toBe(201);

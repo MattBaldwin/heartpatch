@@ -143,8 +143,8 @@ const MESSAGES = {
   // claim sheet counts down to it ("New tries in 3h 20m 🌙").
   noAttempts: "You've used all your tries for today. New tries come at your patch's midnight 🌙",
   shielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
-  lossCap:
-    "This Keeper's land has had enough fun for today. It's ready again at your patch's midnight 🌙",
+  // Plain words (#526), true whether they lost land or a showdown is still going.
+  lossCap: 'No more challenges for this Keeper today. Try wild land instead!',
   nobodyGuards: 'Nobody is guarding this spot right now. Try again later!',
   notYours: 'You can only guard your own land.',
   homeWatch: 'Home bases are safe already. Pick land outside your home!',
@@ -366,6 +366,26 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     return ids;
   };
 
+  /**
+   * The per-defender daily loss cap (design doc §11): tiles lost today plus
+   * challenges still going, so two at once can't both slip under it. One rule
+   * for the attack check (under the defender's member lock) and the status's
+   * `restingKeepers` (#526), so the tile panel never offers what's refused.
+   */
+  const lossCapOf = async (tx: Executor, map: MapRow, at: Date) => {
+    const counts = await createTerritoryRepo(tx).lossCounts(
+      map.id,
+      localDate(at, map.timeZone),
+      map.timeZone,
+      new Date(at.getTime() - rules.abandonMinutes * MINUTE_MS),
+    );
+    const cap = dailyLossCap(rules, map.pvpMode);
+    const lost = new Map(counts.map((c) => [c.userId, c.n]));
+    const reached = (userId: string) => (lost.get(userId) ?? 0) >= cap;
+    // Off (cap 0) refuses every challenge before the cap: nobody to list.
+    return { reached, keepers: cap === 0 ? [] : [...lost.keys()].filter(reached) };
+  };
+
   /** Raid rules, checked in the battle's start transaction (see `PrepareTileBattle`). */
   const prepare =
     (user: PublicUser, target: AttackTileRequest): PrepareTileBattle =>
@@ -426,15 +446,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         if (defender.joinedAt.getTime() + rules.newPlayerShieldHours * HOUR_MS > at.getTime()) {
           throw new AppError('FORBIDDEN', MESSAGES.shielded);
         }
-        // Losses today plus challenges still going, so two at once can't
-        // both slip under the cap (the member lock serializes the count).
-        const lost = await repo.lossesOn(map.id, defenderId, today, map.timeZone);
-        const going = await repo.challengesGoing(
-          map.id,
-          defenderId,
-          new Date(at.getTime() - rules.abandonMinutes * MINUTE_MS),
-        );
-        if (lost + going >= dailyLossCap(rules, map.pvpMode)) {
+        // The member lock serializes the count (`lossCapOf`).
+        if ((await lossCapOf(tx, map, at)).reached(defenderId)) {
           throw new AppError('CONFLICT', MESSAGES.lossCap);
         }
         rewardPercent = challengeRewardPercent(
@@ -572,12 +585,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     const repo = createTerritoryRepo(tx);
     const at = now();
     const window = fenceRules.keepGoingMinutes * MINUTE_MS;
-    const [used, joinedAt, defenders, owned, broken] = await Promise.all([
+    const [used, joinedAt, defenders, owned, broken, lossCap] = await Promise.all([
       repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
       repo.joinedAt(map.id, user.id),
       repo.myDefenders(map.id, user.id),
       repo.mySquishies(map.id, user.id),
       repo.myBrokenFences(map.id, user.id, new Date(at.getTime() - window)),
+      lossCapOf(tx, map, at),
     ]);
     // A squishy in a trade (#271) waits at the post: no guard to pick, and one
     // heading my way stays a surprise (its species too) until I pick it up.
@@ -605,6 +619,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           ? [{ q: b.q, r: b.r, until: new Date(b.endedAt.getTime() + window).toISOString() }]
           : [],
       ),
+      restingKeepers: lossCap.keepers.filter((id) => id !== user.id),
       now: at.toISOString(),
     };
   };

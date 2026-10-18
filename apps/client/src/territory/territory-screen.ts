@@ -67,6 +67,9 @@ export const TERRITORY_TEXT = {
   resting: (wait: string) => `This land needs a rest. Try again in ${wait}.`,
   noTries: (wait: string) => `New tries in ${wait} 🌙`,
   pvpOff: 'Challenges are off on this patch.',
+  // The daily loss cap (#526), as the server says it, counting down to the patch's midnight.
+  keeperResting: (owner: string, wait: string) =>
+    `No more challenges for ${owner} today. Try again in ${wait} 🌙`,
   // The server's own words for a shielded Keeper (territory service), so a tap
   // here reads the same as a refused challenge would.
   rivalShielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
@@ -168,7 +171,10 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       }
     } finally {
       working = false;
-      if (stillHere()) render();
+      if (stillHere()) {
+        render();
+        revealNote();
+      }
     }
   }
 
@@ -364,6 +370,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'no-tries':
         children.push(triesLine(action.triesResetAt, TERRITORY_TEXT.noTries));
         break;
+      case 'keeper-resting': {
+        const reason = countdownLine(
+          action.triesResetAt,
+          (wait) => TERRITORY_TEXT.keeperResting(owner ?? TERRITORY_TEXT.someone, wait),
+          () => void refresh(),
+          'territory-keeper-resting',
+        );
+        reason.classList.add('territory-reason');
+        children.push(reason);
+        break;
+      }
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
         break;
@@ -416,9 +433,27 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         }
         break;
     }
-    if (note && action.kind !== 'none') children.push(line(note, 'territory-note'));
+    // A refused Challenge that turned out to be the loss cap already says so.
+    if (note && action.kind !== 'none' && action.kind !== 'keeper-resting') {
+      // Right above the button that was tapped, so a refusal shows where the
+      // player is looking, never under it below the panel's fold (#526).
+      const at = children.findIndex((c) => c instanceof HTMLButtonElement);
+      const noteLine = line(note, 'territory-note');
+      noteLine.classList.add('territory-note');
+      noteLine.setAttribute('role', 'status');
+      children.splice(at === -1 ? children.length : at, 0, noteLine);
+    }
     container.replaceChildren(...children);
     syncTicker();
+  }
+
+  /** Scrolls the tile panel to what a refused tap says, if anything (#526). */
+  function revealNote(block: ScrollLogicalPosition = 'center'): void {
+    panel?.container
+      .querySelector<HTMLElement>(
+        '[data-testid="territory-note"], [data-testid="territory-keeper-resting"]',
+      )
+      ?.scrollIntoView({ block });
   }
 
   /** Ticks once a second only while a countdown is on screen. */
@@ -471,6 +506,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         }
         panel = { container, tile, view };
         render();
+        // A capped Keeper's land says why up front (#526). A small phone's
+        // panel scrolls (map.css), and a wild squishy or a building above can
+        // push the reason past its edge: scroll just far enough to show it,
+        // and again once the panel has laid out. Only for a newly tapped
+        // tile, so a redraw never fights the player's own scrolling.
+        if (!same && shown?.kind === 'keeper-resting') {
+          revealNote('nearest');
+          requestAnimationFrame(() => {
+            revealNote('nearest');
+          });
+        }
       },
       hide: () => {
         panel?.container.replaceChildren();
