@@ -26,6 +26,10 @@ import {
   HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
+  HOME_ALL_BUILT,
+  HOME_ALL_TOP,
+  HOME_FULL,
+  homeBuildReason,
   landFires,
   BUILT_ON_HOMESTEAD,
   factoryTileOffer,
@@ -297,14 +301,20 @@ describe('build menu', () => {
   });
 
   it('finds free spots: Heart Seed tile first, never a middle with a seed or node', () => {
+    const empty = freeHomeSpots(homeWith());
+    expect(empty[0]).toEqual({ q: 0, r: 0, spot: 1 });
+    expect(empty.some((s) => s.q === 0 && s.r === 0 && s.spot === 0)).toBe(false);
+    expect(empty.some((s) => s.q === 1 && s.r === 0 && s.spot === 0)).toBe(false); // Timber
+    // 6 (Heart Seed) + 6 (node tile) + 5 × 7
+    expect(empty).toHaveLength(6 + 6 + 35);
+  });
+
+  it('keeps one building per home tile, as the server does (#295, #537)', () => {
     const spots = freeHomeSpots(homeWith({ buildings: [fire({ spot: 1 })] }));
-    expect(spots[0]).toEqual({ q: 0, r: 0, spot: 2 });
-    expect(spots.some((s) => s.q === 0 && s.r === 0 && s.spot === 0)).toBe(false);
-    expect(spots.some((s) => s.q === 1 && s.r === 0 && s.spot === 0)).toBe(false); // Timber
-    expect(spots.some((s) => s.q === 0 && s.r === 0 && s.spot === 1)).toBe(false); // taken
-    // 6 + 6 (node tile) + 5 × 7 − 1 taken
-    expect(spots).toHaveLength(6 + 6 + 35 - 1);
-    // A building being moved: its own spot counts as free.
+    // The Heart Seed's tile is taken whole: the first free spot is on the ring.
+    expect(spots.some((s) => s.q === 0 && s.r === 0)).toBe(false);
+    expect(spots).toHaveLength(6 + 35);
+    // A building being moved: its own tile counts as free.
     const moving = freeHomeSpots(homeWith({ buildings: [fire({ spot: 1 })] }), ID(1));
     expect(moving[0]).toEqual({ q: 0, r: 0, spot: 1 });
   });
@@ -609,5 +619,80 @@ describe('what each building does (#207)', () => {
     expect(effectChips(LAND_FIRE!)).toEqual(['🛡️ Safe 1 tile around', '🪵 Needs fuel each night']);
     expect(effectChips(LAND_FIRE!, 2)[0]).toBe('🛡️ Safe 1 tile around');
     expect(effectChips(LAND_FIRE!, 3)[0]).toBe('🛡️ Safe 2 tiles around');
+  });
+});
+
+/** One building on each of the first `n` home tiles (Heart Seed, then the ring), as `make` says. */
+function homeFilled(
+  make: (i: number) => Partial<MyBuilding>,
+  n = 7,
+  extra: Partial<HomeResponse> = {},
+) {
+  const tiles = homeWith().tiles;
+  return homeWith({
+    buildings: tiles
+      .slice(0, n)
+      .map((t, i) => meadow({ id: ID(10 + i), q: t.q, r: t.r, spot: 1, ...make(i) })),
+    ...extra,
+  });
+}
+
+/** The cards home's Build sheet shows (home-screen.ts `buildView`). */
+const sheetCards = (home: HomeResponse) =>
+  buildRows(home)
+    .filter((r) => !['built', 'land', 'homestead'].includes(r.option.kind))
+    .map((r) => r.building.id);
+
+describe('a home base with no room left (#537)', () => {
+  const den = { buildingId: 'ember-den' };
+
+  it('reproduces the owner sheet: with every den and meadow built, only the lantern card is left', () => {
+    // Two Ember Dens and two Cozy Meadows (each `maxPerHome: 2`).
+    const home = homeFilled((i) => (i < 2 ? den : {}), 4, { items: {} });
+    expect(sheetCards(home)).toEqual(['jack-o-lantern-hearthfire']);
+    const rows = new Map(buildRows(home).map((r) => [r.building.id, r.option.kind]));
+    expect(rows.get('ember-den')).toBe('built');
+    expect(rows.get('cozy-meadow')).toBe('built');
+    // The sheet now says why.
+    expect(homeBuildReason(home)).toBe(HOME_ALL_BUILT);
+  });
+
+  it('says they are as big as they get once every one is at its top level', () => {
+    const home = homeFilled((i) => ({ ...(i < 2 ? den : {}), level: 2 }), 4);
+    expect(homeBuildReason(home)).toBe(HOME_ALL_TOP);
+  });
+
+  it('says the home base is full when every tile holds a building', () => {
+    // One Ember Den and six older fires still at home: a den could go up, but no tile is free.
+    const home = homeFilled((i) =>
+      i === 0 ? den : { buildingId: 'hearthfire', kind: 'hearthfire', capacity: null },
+    );
+    expect(freeHomeSpots(home)).toEqual([]);
+    const row = buildRows(home).find((r) => r.building.id === 'ember-den')!;
+    expect(row.option).toEqual({ kind: 'blocked', note: HOME_FULL });
+    expect(homeBuildReason(home)).toBe(HOME_FULL);
+  });
+
+  it('says full before short: gathering more would not make room', () => {
+    const home = homeFilled(() => ({ buildingId: 'hearthfire', kind: 'hearthfire' }), 7, {
+      items: {},
+    });
+    const row = buildRows(home).find((r) => r.building.id === 'cozy-meadow')!;
+    expect(row.option).toEqual({ kind: 'blocked', note: HOME_FULL });
+  });
+
+  it('gives no reason while a home building can still go up', () => {
+    expect(homeBuildReason(homeWith())).toBeNull();
+    // Short of stuff is the chips' job, not a reason line.
+    expect(homeBuildReason(homeWith({ items: {} }))).toBeNull();
+    // One tile left: still room.
+    expect(homeBuildReason(homeFilled(() => ({ buildingId: 'hearthfire' }), 6))).toBeNull();
+  });
+
+  it('reads kindly (style guide §9)', () => {
+    for (const line of [HOME_FULL, HOME_ALL_BUILT, HOME_ALL_TOP]) {
+      expect(findAvoidedWords(line)).toEqual([]);
+      expect(line.split(' ').length).toBeLessThanOrEqual(15);
+    }
   });
 });
