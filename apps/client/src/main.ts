@@ -919,11 +919,14 @@ const maps = createMapScreen({
   onHudChange: (mapId) => {
     hudMapId = mapId;
     // PROTOTYPE (#306 plan): the claim-and-rename moment over the restored village.
-    if (mapId !== null && hollowedPreview()?.show === 'rename') {
+    const show = hollowedPreview()?.show;
+    if (mapId !== null && (show === 'rename' || show === 'keymap')) {
       setTimeout(() => {
         const view = maps.view;
         const c = view ? hollowedClusters(view, signedIn?.id ?? null).find((x) => x.id === 'near') : null;
-        if (c) hollowedSheets.openRename(c);
+        if (!c) return;
+        if (show === 'rename') hollowedSheets.openRename(c);
+        else hollowedSheets.openKeyMap(c);
       }, 1200);
     }
     // The map is up: a new build's What's new may pop up now (#220).
@@ -1616,7 +1619,7 @@ if (import.meta.env.DEV) {
         const view = maps.view;
         return view ? hollowedClusters(view, signedIn?.id ?? null) : [];
       },
-      look: (which: 'near' | 'far' | 'both', distance: number) => {
+      look: (which: 'near' | 'far' | 'both' | 'key', distance: number) => {
         const view = maps.view;
         if (!view) return;
         const cs = hollowedClusters(view, signedIn?.id ?? null);
@@ -1626,16 +1629,27 @@ if (import.meta.env.DEV) {
         const at =
           which === 'both' && near && far
             ? { q: (near.centre.q + far.centre.q) / 2, r: (near.centre.r + far.centre.r) / 2 }
-            : which === 'far' && far
-              ? far.centre
-              : (near?.centre ?? seed ?? { q: 0, r: 0 });
+            : which === 'key' && near?.keyTile
+              ? { q: (near.centre.q + near.keyTile.q) / 2, r: (near.centre.r + near.keyTile.r) / 2 }
+              : which === 'far' && far
+                ? far.centre
+                : (near?.centre ?? seed ?? { q: 0, r: 0 });
         stage?.camera.panTo(hexToWorld(at, HEX_SIZE), true, 0, distance);
         stage?.invalidate();
       },
       tileAt: (q: number, r: number) => maps.tileRect({ q, r }),
-      show: (show: 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | null) => {
+      show: (show: 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | 'keymap' | null) => {
         const p = hollowedPreview();
         if (p) p.show = show;
+      },
+      openKeyMap: () => {
+        const view = maps.view;
+        const c = view ? hollowedClusters(view, signedIn?.id ?? null).find((x) => x.id === 'near') : null;
+        if (c) hollowedSheets.openKeyMap(c);
+      },
+      refresh: () => {
+        const view = maps.view;
+        if (view) hollowedFlags.update?.(view);
       },
       explore: (q: number, r: number) => void explore.open({ q, r }),
       sheets: () => hollowedSheets.open,

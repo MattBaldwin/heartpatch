@@ -81,7 +81,7 @@ async function reopen(page: Page, query: string): Promise<void> {
 }
 
 /** Pans the map (instantly) and waits for a drawn frame, so tile rects are fresh. */
-async function look(page: Page, which: 'near' | 'far' | 'both', distance: number): Promise<void> {
+async function look(page: Page, which: 'near' | 'far' | 'both' | 'key', distance: number): Promise<void> {
   const before = await draws(page);
   await call(page, 'look', which, distance);
   await expect.poll(() => draws(page), slow).toBeGreaterThan(before);
@@ -235,7 +235,25 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await call(page, 'closeSheets');
   await settle(page, 1200);
   await shot(page, 'map-restored', { map: await mapState(page) });
-  await tapTile(page, nearTiles);
+  // The village's own Heart Seed (owner decision, Q3), then an ordinary village tile.
+  await tapTile(page, [near.centre]);
+  await settle(page, 800);
+  await shot(page, 'panel-seed');
+  await page.getByRole('button', { name: 'Close', exact: true }).first().tap().catch(() => {});
+  await settle(page, 400);
+  await tapTile(page, nearTiles.slice(1));
   await settle(page, 800);
   await shot(page, 'panel-restored');
+  await page.getByRole('button', { name: 'Close', exact: true }).first().tap().catch(() => {});
+  // The key map (owner decision, Q5): the card, then the flag on the key tile.
+  console.log('STEP keymap');
+  await call(page, 'show', 'keymap');
+  await call(page, 'refresh');
+  await call(page, 'openKeyMap');
+  await expect(page.getByTestId('hollowed-sheet')).toBeVisible(slow);
+  await settle(page, 1200);
+  await shot(page, 'keymap-card');
+  await call(page, 'closeSheets');
+  await look(page, 'key', 5);
+  await shot(page, 'keymap-map');
 });

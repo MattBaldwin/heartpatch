@@ -12,8 +12,9 @@ import './hollowed.css';
 export interface HollowedSheets {
   openRestore(c: HollowedCluster): void;
   openRename(c: HollowedCluster): void;
+  openKeyMap(c: HollowedCluster): void;
   close(): void;
-  readonly open: 'restore' | 'rename' | null;
+  readonly open: 'restore' | 'rename' | 'keymap' | null;
 }
 
 /** The mockup's broken buildings on the doorstep tile and their pieces. TUNE. */
@@ -32,7 +33,7 @@ export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
   });
   sheet.hidden = true;
   root.append(sheet);
-  let open: 'restore' | 'rename' | null = null;
+  let open: 'restore' | 'rename' | 'keymap' | null = null;
 
   const close = () => {
     open = null;
@@ -81,26 +82,55 @@ export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
     },
     openRename: (c) => {
       open = 'rename';
+      // Owner decision 2026-10-18: kids type the name (server text filter); the
+      // three generated names are tap-to-fill suggestions.
       const names = [c.restoredName, 'Bramblewick Meadow', 'Lanternlight Glen'];
-      let picked = 0;
-      const options = names.map((name, i) =>
-        el('button', { type: 'button', class: 'hollowed-name', role: 'radio', 'aria-checked': i === picked ? 'true' : 'false' }, name),
-      );
-      options.forEach((b, i) =>
+      const input = el('input', {
+        type: 'text',
+        class: 'hollowed-input',
+        id: 'hollowed-name',
+        maxlength: '24',
+        placeholder: 'Type a name…',
+        autocomplete: 'off',
+        'data-testid': 'hollowed-name-input',
+      }) as HTMLInputElement;
+      input.value = c.restoredName;
+      const chips = names.map((name) => {
+        const b = el('button', { type: 'button', class: 'hollowed-chip' }, name);
         b.addEventListener('click', () => {
-          picked = i;
-          options.forEach((o, j) => o.setAttribute('aria-checked', j === picked ? 'true' : 'false'));
-        }),
-      );
+          input.value = name;
+          input.focus();
+        });
+        return b;
+      });
       sheet.replaceChildren(
         el('p', { class: 'explore-card-progress' }, `${c.name.toUpperCase()} · 5 of 5 restored ✨`),
         el('h3', { class: 'explore-sheet-title', id: 'hollowed-sheet-title' }, 'The joy is back! 🌈'),
-        el('p', { class: 'explore-card-line' }, 'You brought this whole village back to life. Pick its new name:'),
-        el('div', { class: 'hollowed-names', role: 'radiogroup' }, ...options),
-        el('button', { type: 'button', class: 'auth-button auth-button-soft hollowed-soft' }, '🎲 Other names'),
+        el('p', { class: 'explore-card-line' }, 'You brought this village back to life. What will you call it?'),
+        el('label', { class: 'hollowed-label', for: 'hollowed-name' }, 'Its new name'),
+        input,
+        el('div', { class: 'hollowed-chips', role: 'group', 'aria-label': 'Name ideas' }, ...chips),
+        el('p', { class: 'hollowed-note' }, 'Tap an idea, or type your own. Names are checked to keep the patch kind.'),
         el('button', { type: 'button', class: 'auth-button hollowed-primary', 'data-testid': 'hollowed-name-it' }, 'Name it! ✨'),
       );
       sheet.querySelector('[data-testid="hollowed-name-it"]')?.addEventListener('click', close);
+      sheet.hidden = false;
+    },
+    openKeyMap: (c) => {
+      open = 'keymap';
+      sheet.replaceChildren(
+        el('p', { class: 'explore-card-progress' }, `${c.restoredName.toUpperCase()} · RESTORED`),
+        el('h3', { class: 'explore-sheet-title', id: 'hollowed-sheet-title' }, 'A map to the key! 🗺️'),
+        el(
+          'p',
+          { class: 'explore-card-line' },
+          'The village squishies hid the cellar key from the Hollow Man. The map shows the tile where they tucked it away.',
+        ),
+        el('div', { class: 'hollowed-map' }, el('span', { class: 'hollowed-map-x' }, '✕'), el('span', { class: 'hollowed-map-home' }, '🏡')),
+        el('p', { class: 'hollowed-note' }, 'Find the squishies there and they will hand it over. Then the cellar is yours to open 🔑'),
+        el('button', { type: 'button', class: 'auth-button hollowed-primary', 'data-testid': 'hollowed-key-go' }, 'Show me on the map'),
+      );
+      sheet.querySelector('[data-testid="hollowed-key-go"]')?.addEventListener('click', close);
       sheet.hidden = false;
     },
     close,

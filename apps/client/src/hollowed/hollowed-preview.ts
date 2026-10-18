@@ -21,7 +21,7 @@ import { findHomeBases } from '../map/map-layout.js';
  */
 
 export type HollowedMode = 'grey' | 'restored';
-export type HollowedShow = 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | null;
+export type HollowedShow = 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | 'keymap' | null;
 
 export interface HollowedPreview {
   readonly mode: HollowedMode;
@@ -40,9 +40,11 @@ export interface HollowedCluster {
   readonly reach: { readonly kind: 'touching' } | { readonly kind: 'away'; readonly distance: number };
   /** Drawn restored and joined to my land (`restored` mode). */
   readonly joined: boolean;
+  /** Owner decision (Q5): the cellar key is hidden on a tile outside the village; the key map points here. */
+  readonly keyTile: Hex | null;
 }
 
-const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore'];
+const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore', 'keymap'];
 
 export function readHollowedPreview(params: URLSearchParams): HollowedPreview | null {
   const mode = params.get('hollowed');
@@ -137,7 +139,15 @@ function compute(view: MapView, me: string | null): HollowedCluster[] {
   let nearTiles: Hex[] = [];
   if (nearStart) {
     nearTiles = grow(nearStart, NEAR.size, tiles, seed);
+    // The key tile: wild, 2 steps from the village's edge, furthest from home.
+    const inVillage = new Set(nearTiles.map(hexKey));
+    const keyTile =
+      view.tiles
+        .filter((t) => wild(t) && !inVillage.has(hexKey(t)))
+        .filter((t) => Math.min(...nearTiles.map((v) => hexDistance(v, t))) === 2)
+        .sort((a, b) => hexDistance(b, seed) - hexDistance(a, seed) || a.q - b.q || a.r - b.r)[0] ?? null;
     clusters.push({
+      keyTile: keyTile ? { q: keyTile.q, r: keyTile.r } : null,
       id: 'near',
       name: NEAR.name,
       restoredName: NEAR.restoredName,
@@ -156,6 +166,7 @@ function compute(view: MapView, me: string | null): HollowedCluster[] {
   if (farStart) {
     const farTiles = grow(farStart, FAR.size, tiles, seed);
     clusters.push({
+      keyTile: null,
       id: 'far',
       name: FAR.name,
       restoredName: FAR.restoredName,
@@ -223,17 +234,26 @@ export function hollowedFlagLabel(c: HollowedCluster): string {
 }
 
 /** The tile panel's lines for a Hollowed tile. */
-export function hollowedPanel(c: HollowedCluster, terrainName: string): {
+export function hollowedPanel(c: HollowedCluster, terrainName: string, at?: Hex): {
   title: string;
   owner: string;
   about: string;
   reach: string;
 } {
+  if (c.joined && at && at.q === c.centre.q && at.r === c.centre.r) {
+    // Owner decision (Q3): the won village gets its own Heart Seed on its centre tile.
+    return {
+      title: `${c.restoredName} · Heart Seed 🌱`,
+      owner: 'Your second home. Always safe at night, and nobody can ever take it!',
+      about: 'A Heart Seed planted in the village square. The land around it is yours, linked to home.',
+      reach: '🏡 Linked to your home, but its own little community.',
+    };
+  }
   if (c.joined) {
     return {
       title: `${terrainName} · ${c.restoredName} 🏡`,
       owner: 'Your land. Part of a village you brought back!',
-      about: 'A second community, joined to your home. It needs fire light at night like any land.',
+      about: 'Part of your second community. Outside the village square it needs fire light at night, like any land.',
       reach: '🔗 Joined to your land.',
     };
   }

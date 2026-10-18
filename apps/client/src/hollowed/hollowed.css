@@ -195,3 +195,124 @@
     font-size: 12px;
   }
 }
+
+/* The typed name (owner decision 2026-10-18) and its tap-to-fill ideas. */
+.hollowed-label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7a6680;
+  text-align: left;
+}
+
+.hollowed-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 50px;
+  margin: 0 0 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 3px solid #b8487a;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 900;
+  color: #4a3150;
+  text-align: center;
+}
+
+.hollowed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.hollowed-chip {
+  min-height: 40px;
+  padding: 6px var(--hp-pad-x);
+  border: none;
+  border-radius: 999px;
+  background: #f6dceb;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The key map: a little parchment with an X and home. */
+.hollowed-map {
+  position: relative;
+  height: 110px;
+  margin: 4px 0 12px;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(60deg, transparent 0 22px, rgb(122 45 85 / 10%) 22px 23px),
+    repeating-linear-gradient(-60deg, transparent 0 22px, rgb(122 45 85 / 10%) 22px 23px),
+    #fff1cf;
+}
+
+.hollowed-map-x {
+  position: absolute;
+  right: 22%;
+  top: 22px;
+  font-size: 34px;
+  font-weight: 900;
+  color: #b4532a;
+}
+
+.hollowed-map-home {
+  position: absolute;
+  left: 18%;
+  bottom: 14px;
+  font-size: 28px;
+}
+
+/* Short phones (the SE): both sheets fit without scrolling. */
+@media (max-height: 700px) {
+  .hollowed-sheet {
+    padding: 14px 14px;
+    bottom: calc(env(safe-area-inset-bottom) + 12px);
+  }
+  .hollowed-sheet .explore-sheet-title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  .hollowed-sheet .explore-card-line {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  .hollowed-rows {
+    padding: 8px 10px;
+    gap: 3px;
+    font-size: 14px;
+  }
+  .hollowed-meter {
+    margin: 0 0 6px;
+  }
+  .hollowed-note {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .hollowed-sheet .hollowed-primary {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  .hollowed-sheet .hollowed-soft {
+    min-height: 40px;
+    margin-bottom: 6px;
+  }
+  .hollowed-input {
+    min-height: 44px;
+    font-size: 17px;
+  }
+  .hollowed-map {
+    height: 80px;
+  }
+}

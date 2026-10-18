@@ -313,11 +313,14 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   const panel = mountTilePanel(options.root, deselect);
 
   const showTile = (state: MapState, h: Hex): void => {
-    const tile = state.tileAt(hexKey(h));
-    if (!tile) {
+    const real = state.tileAt(hexKey(h));
+    if (!real) {
       deselect();
       return;
     }
+    // PROTOTYPE (#306 plan): every feature reads the previewed tile and view.
+    const shownView = previewView(state.view, user?.id ?? null);
+    const tile = shownView.tiles.find((t) => t.q === real.q && t.r === real.r) ?? real;
     selected = h;
     scene3d?.select(h);
     const info = describeTile(
@@ -331,12 +334,12 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     hollowedClusters(state.view, user?.id ?? null);
     const community = hollowedAt(hexKey(h));
     if (community) {
-      const words = hollowedPanel(community, TERRAINS.find((t) => t.id === tile.terrain)?.name ?? 'Land');
+      const words = hollowedPanel(community, TERRAINS.find((t) => t.id === tile.terrain)?.name ?? 'Land', h);
       panel.show({ ...info, ...words, post: { reach: words.reach }, guardians: null });
     } else {
       panel.show(info);
     }
-    options.tileActions?.show(panel.actions, tile, state.view);
+    options.tileActions?.show(panel.actions, tile, shownView);
     options.invalidate();
   };
 
