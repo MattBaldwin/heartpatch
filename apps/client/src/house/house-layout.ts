@@ -176,15 +176,33 @@ const edgeKey = (e: Pick<Edge, 'kind' | 'line' | 'step'>) =>
   `${e.kind}:${String(e.line)}:${String(e.step)}`;
 
 /**
+ * The grid edge a room's one doorway goes in (W3): the edge at the middle
+ * of its `door` side on its first floor, the west or front one of the two
+ * when the middle falls on a grid line. A side shared with two rooms (the
+ * Heart Hall's front, behind the Snug and the Playroom) still gets one
+ * doorway, so the house is one doorway per room, as the data says.
+ */
+function doorEdge(room: RoomInput): string {
+  const { gx, gy, w, d, door } = room.layout;
+  const along = (start: number, n: number) => start + Math.floor((n - 1) / 2);
+  if (door === 'south' || door === 'north')
+    return edgeKey({ kind: 'h', line: door === 'south' ? gy : gy + d, step: along(gx, w) });
+  return edgeKey({ kind: 'v', line: door === 'west' ? gx : gx + w, step: along(gy, d) });
+}
+
+/**
  * Every wall run of the house, floor by floor: consecutive grid edges with
- * the same rooms on both sides join into one run. Doors go where a room's
- * `door` says (in the middle of that side), windows on long enough outside
- * runs at the back and on the right (the left keeps the hearth's wall).
+ * the same rooms on both sides join into one run. Each room's doorway goes
+ * where its `door` says (the run at the middle of that side; never an
+ * outside one above the ground floor, which would open onto thin air),
+ * windows on long enough outside runs at the back and on the right (the
+ * left keeps the hearth's wall).
  */
 export function wallRuns(rooms: readonly RoomInput[]): WallRun[] {
   if (rooms.length === 0) return [];
   const top = Math.max(...rooms.map((r) => r.layout.floor + r.layout.storeys));
   const boxes = new Map(rooms.map((r) => [r.id, roomBox(r)]));
+  const doorEdges = new Map(rooms.map((r) => [r.id, doorEdge(r)]));
   const runs: WallRun[] = [];
   for (let floor = 0; floor < top; floor += 1) {
     const edges = edgesOn(cellsOn(rooms, floor));
@@ -223,6 +241,7 @@ export function wallRuns(rooms: readonly RoomInput[]): WallRun[] {
             aboveFloor,
             boxes.get(first.room),
             boxes.get(first.other ?? ''),
+            doorEdges,
           ),
         );
       }
@@ -242,6 +261,7 @@ function makeRun(
   aboveFloor: ReadonlyMap<string, number>,
   box: RoomBox | undefined,
   otherBox: RoomBox | undefined,
+  doorEdges: ReadonlyMap<string, string>,
 ): WallRun {
   const axis = first.kind === 'h' ? 'x' : 'z';
   const from = first.step * cell;
@@ -254,7 +274,13 @@ function makeRun(
     first.side === 'south' ? 'north' : first.side === 'east' ? 'west' : first.side;
   const doorSpan = (b: RoomBox): [number, number] => (axis === 'x' ? [b.x0, b.x1] : [b.z0, b.z1]);
   const doorOn = (b: RoomBox | undefined, side: HouseDoor) =>
-    b !== undefined && b.door === side && floor === b.floor ? doorSpan(b) : null;
+    b !== undefined &&
+    b.door === side &&
+    floor === b.floor &&
+    !(exterior && floor > 0) &&
+    run.some((e) => edgeKey(e) === doorEdges.get(b.id))
+      ? doorSpan(b)
+      : null;
   const span = doorOn(box, first.side) ?? (exterior ? null : doorOn(otherBox, facing));
   if (span) {
     const mid = Math.min(

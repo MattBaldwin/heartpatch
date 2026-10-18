@@ -3,7 +3,8 @@ import { Scene } from '@babylonjs/core/scene';
 import { HOUSE_DATA, roomsAt, type HouseRoomLook } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { HOUSE_GRID } from './house-config.js';
-import { roomBox, type RoomBox } from './house-layout.js';
+import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
+import { doorLanes, inLane } from './house-walk.js';
 import type { QualityTier } from '../engine/config.js';
 // The grown builders load before house-rooms.ts on purpose: registration
 // must work in either order of the import cycle (function declarations).
@@ -32,6 +33,7 @@ function kit(scene: Scene, look: HouseRoomLook, beds?: number, tier: QualityTier
     scene,
     box,
     tier,
+    lanes: [],
     solid: (parts) => {
       made.solid += parts.length;
       for (const p of parts) {
@@ -191,5 +193,36 @@ describe('the grown rooms', () => {
       scene.getEngine().dispose();
     }
     scene = new Scene(new NullEngine());
+  });
+
+  describe('doorway lanes (#381 W3)', () => {
+    const lanesOf = (look: HouseRoomLook) => {
+      const rooms = roomsAt(HOUSE_DATA, HOUSE_DATA.levels.length);
+      const id = rooms.find((r) => r.look === look)!.id;
+      return doorLanes(wallRuns(rooms)).filter((l) => l.room === id);
+    };
+
+    it('stands the Kitchen counter under the shelves when the loft doorway takes the back wall', () => {
+      scene = new Scene(new NullEngine());
+      const { k, made, box } = kit(scene, 'kitchen');
+      const lanes = lanesOf('kitchen');
+      expect(lanes.length).toBeGreaterThan(0);
+      kitchenRoom({ ...k, lanes });
+      const blocking = made.pieces.filter((p) => p.y0 < box.y0 + 0.3 && p.y1 - p.y0 > 0.15);
+      expect(blocking.filter((p) => inLane(lanes, p, box.y0))).toEqual([]);
+      // The counter (0.9 m tall, 2 m long) runs along the west wall.
+      const counter = blocking.find((p) => p.z1 - p.z0 > 1.8 && p.x1 - p.x0 < 0.8);
+      expect(counter).toBeDefined();
+      expect(counter!.x0).toBeLessThan(box.x0 + HOUSE_GRID.wall);
+    });
+
+    it('keeps it along the back wall with no doorway there (level 3)', () => {
+      scene = new Scene(new NullEngine());
+      const { k, made, box } = kit(scene, 'kitchen');
+      kitchenRoom(k);
+      const counter = made.pieces.find((p) => p.x1 - p.x0 > 1.8 && p.z1 - p.z0 < 0.8);
+      expect(counter).toBeDefined();
+      expect(counter!.z1).toBeGreaterThan(box.z1 - 0.4);
+    });
   });
 });

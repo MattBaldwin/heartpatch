@@ -1,18 +1,23 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
+import { HOUSE_DOORS, HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
   blockerFade,
   cameraFront,
   copyPose,
   createFollowPose,
+  doorLanes,
   easePose,
   floorAt,
   followPose,
   followTurn,
+  inLane,
+  loftWalk,
+  nearestFree,
   roomAt,
   slideStep,
+  standingFloor,
   startSpot,
   walkMap,
   type Footprint,
@@ -507,5 +512,118 @@ describe('residents fading out of the camera’s way (#381 W2)', () => {
 
   it('fades one the Keeper is walking through', () => {
     expect(fade({ x: 0.1, y: 0.5, z: 3.95, r: 0.5 })).toBeLessThan(0.5);
+  });
+});
+
+/** Every spot reachable from `from` in 0.1 m steps (up and down stairs too). */
+function reach(map: WalkMap, from: WalkSpot): WalkSpot[] {
+  const seen = new Map<string, WalkSpot>();
+  const queue = [{ ...from }];
+  while (queue.length > 0 && seen.size < 40000) {
+    const p = queue.pop()!;
+    for (const [dx, dz] of [
+      [0.1, 0],
+      [-0.1, 0],
+      [0, 0.1],
+      [0, -0.1],
+    ] as const) {
+      const y = floorAt(map, p.x + dx, p.z + dz, p.y);
+      if (Number.isNaN(y)) continue;
+      const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
+      if (seen.has(key)) continue;
+      const q = { x: p.x + dx, z: p.z + dz, y };
+      seen.set(key, q);
+      queue.push(q);
+    }
+  }
+  return [...seen.values()];
+}
+
+describe('doorways and the floors between (#381 W3)', () => {
+  it('keeps a lane the Keeper fits through in front of every inside doorway, one each side', () => {
+    const rooms = roomsAt(HOUSE_DATA, 4);
+    const runs = wallRuns(rooms);
+    const lanes = doorLanes(runs);
+    const doors = runs.filter((r) => !r.exterior).flatMap((r) => r.doors);
+    expect(lanes).toHaveLength(doors.length * 2);
+    const { depth, side } = HOUSE_WALK.doorLane;
+    for (const l of lanes) {
+      const [across, deep] =
+        l.axis === 'x' ? [l.x1 - l.x0, l.z1 - l.z0] : [l.z1 - l.z0, l.x1 - l.x0];
+      expect(across).toBeCloseTo(HOUSE_DOORS.width + 2 * side);
+      expect(deep).toBeCloseTo(depth);
+      expect(deep).toBeGreaterThan(2 * radius);
+      // In its own room, off the wall.
+      const box = roomBox(rooms.find((r) => r.id === l.room)!);
+      expect(l.x0).toBeGreaterThanOrEqual(box.x0 - side - 1e-6);
+      expect(l.x1).toBeLessThanOrEqual(box.x1 + side + 1e-6);
+      expect(l.z0).toBeGreaterThanOrEqual(box.z0 - side - 1e-6);
+      expect(l.z1).toBeLessThanOrEqual(box.z1 + side + 1e-6);
+    }
+    // The Kitchen loft's doorway has a lane on the Hall's side, a storey up.
+    expect(lanes.some((l) => l.room === 'heart-hall' && l.y === HOUSE_GRID.storey)).toBe(true);
+    const snugLane = lanes.find((l) => l.room === 'snug' && l.axis === 'x')!;
+    expect(
+      inLane(lanes, { x0: snugLane.x0 - 0.1, x1: snugLane.x0 + 0.01, z0: 4, z1: 4.2 }, 0),
+    ).toBe(true);
+    expect(
+      inLane(lanes, { x0: snugLane.x0 - 0.1, x1: snugLane.x0 + 0.01, z0: 4, z1: 4.2 }, 3),
+    ).toBe(false);
+  });
+
+  it('lays a walkway from the gallery down the west wall to a landing at the loft doorway', () => {
+    const rooms = roomsAt(HOUSE_DATA, 4);
+    const lanes = doorLanes(wallRuns(rooms));
+    const hall = roomBox(rooms.find((r) => r.look === 'heart-hall')!);
+    const { decks, floors } = loftWalk(hall, lanes);
+    expect(decks).toHaveLength(2);
+    expect(floors).toHaveLength(2);
+    const up = hall.y0 + HOUSE_GRID.storey;
+    expect(decks.every((d) => d.y === up && d.rails.length > 0 && d.posts.length > 0)).toBe(true);
+    // The walkway against the west wall reaches the gallery; the landing covers the lane.
+    const [walkway, landing] = decks;
+    expect(walkway!.x0).toBeCloseTo(hall.x0 + HOUSE_GRID.wall / 2);
+    expect(walkway!.z1).toBeCloseTo(hall.z1 - HOUSE_GRID.wall / 2 - HOUSE_GROWN.hall.galleryDepth);
+    const lane = lanes.find((l) => l.room === hall.id && l.y === up)!;
+    expect(landing!.x1).toBeGreaterThan(lane.x1);
+    expect(landing!.z1 - landing!.z0).toBeGreaterThanOrEqual(lane.z1 - lane.z0);
+    // Nothing without a doorway upstairs (the Hall alone), nor in another room.
+    expect(loftWalk(hall, []).decks).toHaveLength(0);
+    const snug = roomBox(rooms.find((r) => r.look === 'snug')!);
+    expect(loftWalk(snug, lanes).decks).toHaveLength(0);
+  });
+
+  it('walks from the Hall up the stairs, along the gallery and the walkway, into the Kitchen loft', () => {
+    const map = mapAt(4);
+    const hall = room(map, 'heart-hall');
+    const kitchen = room(map, 'kitchen');
+    const seen = reach(map, startSpot(map, hall)!);
+    const inKitchen = seen.filter((p) => roomAt(map, p)?.id === kitchen.id);
+    expect(inKitchen.length).toBeGreaterThan(100);
+    expect(inKitchen.every((p) => p.y === kitchen.y0)).toBe(true);
+    // And every other room on the way.
+    for (const b of map.rooms)
+      expect(
+        seen.some((p) => roomAt(map, p)?.id === b.id),
+        b.id,
+      ).toBe(true);
+  });
+
+  it('says which floor the Keeper stands on by its height, switching half way up the stairs', () => {
+    const { storey } = HOUSE_GRID;
+    expect(standingFloor(0)).toBe(0);
+    expect(standingFloor(storey * HOUSE_WALK.floorSwitch - 0.01)).toBe(0);
+    expect(standingFloor(storey * HOUSE_WALK.floorSwitch)).toBe(1);
+    expect(standingFloor(storey)).toBe(1);
+    expect(standingFloor(-0.1)).toBe(0);
+  });
+
+  it('finds the free floor nearest a spot a bed stands on', () => {
+    const map = mapAt(1, [piece(2, 3, 2, 3)]);
+    const rect = map.rects[0]!;
+    const at = nearestFree(map, rect, 2.5, 2.5, 0.05)!;
+    expect(Number.isNaN(floorAt(map, at.x, at.z, 0))).toBe(false);
+    expect(Math.hypot(at.x - 2.5, at.z - 2.5)).toBeLessThan(0.5 + radius + 0.06);
+    expect(nearestFree(map, rect, 1, 1)).toEqual({ x: 1, z: 1, y: 0 });
   });
 });

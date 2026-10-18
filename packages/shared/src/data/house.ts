@@ -68,7 +68,9 @@ export const HOUSE_DATA: HouseData = {
         description: 'Up the stairs, where the cocoa is always warm.',
         beds: 2, // TUNE:
         look: 'kitchen',
-        layout: { floor: 1, gx: 0, gy: 0, w: 3, d: 3, storeys: 1, door: 'east' },
+        // W3: its doorway opens onto the Heart Hall's landing at level 4 (an
+        // east one opened onto the Playroom's roof, out of reach).
+        layout: { floor: 1, gx: 0, gy: 0, w: 3, d: 3, storeys: 1, door: 'north' },
       },
       exterior: 'loft',
     },

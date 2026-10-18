@@ -73,6 +73,7 @@ import {
   followPose,
   roomAt,
   slideStep,
+  standingFloor,
   startSpot,
   type WalkSpot,
 } from './house-walk.js';
@@ -1373,19 +1374,24 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       options.showScene(build);
       return;
     }
-    // Walking in shows the Keeper's floor, wherever it was left (W3 makes
-    // the cut follow it up and down the stairs).
+    const slid = panner.step();
+    if (slid) showPan(slid);
+    const walking = stepWalk(s, now);
+    // Walking in shows the Keeper's floor, wherever it was left, and the cut
+    // follows it up and down the stairs (W3).
+    let cut = false;
     if (zoom > 0 || walk?.goal === 1) {
       const at = keeperFloor(s);
       if (floor !== at) {
         floor = at;
         s.setFloor(at);
-        fit(s);
+        cut = true;
+        // Walked in, only the dollhouse pose under it is framed afresh (for
+        // Step out): the follow camera doesn't jump.
+        if (walkReady && zoom >= 1) showPan(panner.fit());
+        else fit(s);
       }
     }
-    const slid = panner.step();
-    if (slid) showPan(slid);
-    const walking = stepWalk(s, now);
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
     // Stepped all the way out: the dollhouse frames the Keeper's first room again.
@@ -1404,7 +1410,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       }
     }
     const moving = s.update(now);
-    walkChanged ||= Boolean(slid);
+    walkChanged ||= Boolean(slid) || cut;
     // Only a change draws: a finger resting on the stick, or pushing the
     // Keeper into a wall, moves nothing.
     if (wasAsked || glide || walk || moving || walkChanged) options.invalidate();
@@ -1523,10 +1529,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     return walkRoom;
   }
 
-  /** The floor the Keeper stands on (its room's). */
+  /** The floor the Keeper stands on, by its height: the Hall's gallery is upstairs. */
   function keeperFloor(s: HouseScene): number {
     if (!walkReady) syncKeeper(s);
-    return keeperRoom(s)?.floor ?? 0;
+    return standingFloor(walkAt.y);
   }
 
   /** Takes the scene's Keeper as the walk's (it's where the scene put it, or where it was left). */

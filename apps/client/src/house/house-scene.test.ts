@@ -412,7 +412,8 @@ describe('house scene', () => {
       let top = 0;
       for (let i = 0; i < pos.length; i += 3) {
         const [x, y, z] = [pos[i]!, pos[i + 1]!, pos[i + 2]!];
-        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && z > 0.5 && z < 4.5) top = Math.max(top, y);
+        // Its ends too (W3: with no doorway in it, it's one box, corners only at its ends).
+        if (Math.abs(x - 3 * HOUSE_GRID.cell) < 0.2 && z > -0.05 && z < 4.5) top = Math.max(top, y);
       }
       expect(top).toBeGreaterThan(HOUSE_GRID.storey); // there's a low wall
       expect(top).toBeLessThan(HOUSE_GRID.storey + HOUSE_GRID.cut + 0.2);
@@ -993,9 +994,75 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
-    // W3 (doorway clearance): at level 4 the Snug's back-right bed and the
-    // Playroom's back-left piece stand in front of both doorways into the Hall.
-    it.todo('L4: the Hall is reachable from the Snug and the Playroom (W3: doorway clearance)');
+    it('keeps every doorway’s lane clear of furniture, at every level and tier (W3)', () => {
+      for (const tier of ['low', 'medium', 'high'] as const) {
+        for (const level of [1, 2, 3, 4]) {
+          const { scene, house } = buildHouse(level, tier);
+          const map = house.walkMap;
+          for (const lane of map.lanes) {
+            const blocked = map.blocks.filter(
+              (f) =>
+                Math.abs(f.y0 - lane.y) < 0.3 &&
+                f.x0 < lane.x1 &&
+                f.x1 > lane.x0 &&
+                f.z0 < lane.z1 &&
+                f.z1 > lane.z0,
+            );
+            expect(blocked, `${tier} L${String(level)} ${lane.room}`).toEqual([]);
+          }
+          scene.getEngine().dispose();
+        }
+      }
+    });
+
+    it('walks from the Keeper’s first spot into every room, the Kitchen loft too (W3)', () => {
+      for (const tier of ['low', 'high'] as const) {
+        const { scene, house } = buildHouse(4, tier);
+        const map = house.walkMap;
+        const k = house.keeperSpot;
+        // It starts on free floor (the Snug's second bed moved to the back wall at level 4).
+        expect(floorAt(map, k.x, k.z, k.y)).toBe(k.y);
+        const seen = new Set<string>();
+        const rooms = new Set<string>();
+        const queue = [{ ...k }];
+        while (queue.length > 0 && seen.size < 40000) {
+          const p = queue.pop()!;
+          const r = roomAt(map, p);
+          if (r) rooms.add(r.id);
+          for (const [dx, dz] of [
+            [0.1, 0],
+            [-0.1, 0],
+            [0, 0.1],
+            [0, -0.1],
+          ] as const) {
+            const y = floorAt(map, p.x + dx, p.z + dz, p.y);
+            if (Number.isNaN(y)) continue;
+            const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            queue.push({ x: p.x + dx, z: p.z + dz, y });
+          }
+        }
+        expect([...rooms].sort(), tier).toEqual(map.rooms.map((r) => r.id).sort());
+        scene.getEngine().dispose();
+      }
+    });
+
+    it('builds the loft walkway as floor: only its posts stand in the Keeper’s way below (W3)', () => {
+      const { scene, house } = buildHouse(4, 'low');
+      const map = house.walkMap;
+      const hall = map.rooms.find((r) => r.look === 'heart-hall')!;
+      const up = hall.y0 + HOUSE_GRID.storey;
+      // On the walkway, a storey up by the west wall.
+      const x = hall.x0 + 0.7;
+      const z = (hall.z0 + hall.z1) / 2;
+      expect(floorAt(map, x, z, up)).toBe(up);
+      // Under it the Hall's floor is clear, but for the posts holding it up.
+      expect(floorAt(map, x, z, hall.y0)).toBe(hall.y0);
+      const posts = map.blocks.filter((f) => f.y1 - f.y0 > up - 0.2 && f.x1 - f.x0 < 0.4);
+      expect(posts.length).toBeGreaterThanOrEqual(2);
+      scene.getEngine().dispose();
+    });
 
     it("walks round today's wrapped gift, and through where it stood once it's opened", () => {
       const { scene, house } = buildHouse(2, 'low', withGift(sampleHouse(2)));
