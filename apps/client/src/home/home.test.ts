@@ -647,6 +647,8 @@ describe('a home base with no room left (#537)', () => {
   const den = { buildingId: 'ember-den' };
   // Four Ember Dens and four Cozy Meadows (each `maxPerHome: 4`, owner
   // 2026-10-18) need eight tiles: one more than a real home base's seven.
+  // A real home can't reach this state; it guards the all-built lines for a
+  // future cap or home-size change.
   const roomy = {
     tiles: [...homeWith().tiles, { q: 2, r: -1, heartSeed: false, nodeResource: null }],
   };
