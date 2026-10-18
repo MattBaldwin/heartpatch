@@ -8,6 +8,7 @@ import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
+import { bisectFlags } from '../engine/bisect-flags.js';
 import { linear, merged } from '../map/map-props.js';
 import { setInstances } from '../map/map-scene.js';
 import { EXPLORE_SKY, type SkyLook } from './explore-sky-look.js';
@@ -80,6 +81,8 @@ export class ExploreSky {
     this.#look = look;
     const r = EXPLORE_SKY.radius;
     this.#root = new TransformNode('explore-sky', scene);
+    // `?nosky=1` (#501 bisect): nothing of the sky draws; the clear colour stays its horizon.
+    if (bisectFlags().noSky) this.#root.setEnabled(false);
     const material = unlit(scene, 'explore-sky-mat');
     material.backFaceCulling = false;
     const keep = (mesh: Mesh): Mesh => {

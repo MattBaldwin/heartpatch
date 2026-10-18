@@ -6,6 +6,7 @@ import { LIGHTING, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js'
 import { hardwareScalingFor } from '../dpr.js';
 import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
 import { setRareGlowForTier } from '../../procedural/rare-glow.js';
+import { bisectFlags, cappedScaler } from '../bisect-flags.js';
 
 /**
  * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
@@ -15,13 +16,7 @@ import { setRareGlowForTier } from '../../procedural/rare-glow.js';
  * `imageProcessingEnabled` to false: that switches it off for the whole scene.
  */
 export function createPostProcessing(scene: Scene, camera: Camera): DefaultRenderingPipeline {
-  const ip = scene.imageProcessingConfiguration;
-  ip.toneMappingEnabled = true;
-  // Khronos PBR Neutral keeps pastel colours true instead of ACES' contrasty look.
-  ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL;
-  ip.exposure = LIGHTING.exposure;
-  ip.contrast = LIGHTING.contrast;
-
+  setupToneMapping(scene);
   const pipeline = new DefaultRenderingPipeline('quality', false, scene, [camera]);
   pipeline.samples = 1;
   pipeline.fxaaEnabled = true;
@@ -29,6 +24,16 @@ export function createPostProcessing(scene: Scene, camera: Camera): DefaultRende
   pipeline.bloomWeight = LIGHTING.bloomWeight;
   pipeline.bloomScale = LIGHTING.bloomScale;
   return pipeline;
+}
+
+/** Tone mapping, exposure and contrast, applied inside the materials (with or without the pipeline). */
+function setupToneMapping(scene: Scene): void {
+  const ip = scene.imageProcessingConfiguration;
+  ip.toneMappingEnabled = true;
+  // Khronos PBR Neutral keeps pastel colours true instead of ACES' contrasty look.
+  ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL;
+  ip.exposure = LIGHTING.exposure;
+  ip.contrast = LIGHTING.contrast;
 }
 
 export interface QualitySnapshot {
@@ -47,7 +52,10 @@ export interface QualitySnapshot {
  * pauses while idle). Call `dispose` when the scene goes away.
  */
 export class RenderQuality {
-  private readonly pipeline: DefaultRenderingPipeline;
+  /** None with `?nopost=1` (#501 bisect): no bloom or FXAA pass at all. */
+  private readonly pipeline: DefaultRenderingPipeline | null;
+  /** `?cap30=1` (#501 bisect): the governor reads 30 fps as on target. */
+  private readonly config = bisectFlags().cap30 ? cappedScaler(SCALER, 30) : SCALER;
   private readonly scene: Scene;
   private readonly camera: Camera;
   private state: GovernorState;
@@ -61,8 +69,9 @@ export class RenderQuality {
     this.scene = scene;
     this.camera = camera;
     this.pinned = pinned;
-    this.state = initialGovernor(tier, SCALER);
-    this.pipeline = createPostProcessing(scene, camera);
+    this.state = initialGovernor(tier, this.config);
+    if (bisectFlags().noPost) setupToneMapping(scene);
+    this.pipeline = bisectFlags().noPost ? null : createPostProcessing(scene, camera);
     this.apply();
     // A frame spanning a pause (tab hidden, app switch, device asleep) is a
     // gap, never a crawling frame (governor `crawl`), however many come
@@ -83,7 +92,7 @@ export class RenderQuality {
   sample(frameMs: number): boolean {
     if (this.pinned) return false;
     this.state = stepGovernor(this.state, frameMs, {
-      config: SCALER,
+      config: this.config,
       devicePixelRatio: window.devicePixelRatio,
     });
     return this.state.tier !== this.appliedTier || this.state.renderScale !== this.appliedScale;
@@ -129,7 +138,7 @@ export class RenderQuality {
 
   dispose(): void {
     this.stop.abort();
-    this.pipeline.dispose();
+    this.pipeline?.dispose();
   }
 
   /** Pushes the governor's state into Babylon; true if anything changed. */
@@ -139,8 +148,10 @@ export class RenderQuality {
     if (tier !== this.appliedTier) {
       changed = true;
       const t = TIER_SETTINGS[tier];
-      this.pipeline.bloomEnabled = t.bloom;
-      if (t.bloom) this.pipeline.bloomKernel = t.bloomKernel;
+      if (this.pipeline) {
+        this.pipeline.bloomEnabled = t.bloom;
+        if (t.bloom) this.pipeline.bloomKernel = t.bloomKernel;
+      }
       setRareGlowForTier(t.rareGlow);
       this.appliedTier = tier;
     }

@@ -530,7 +530,7 @@ export const MOVES: Move[] = [
     description: 'Spins into a big swirly wave. Whoosh! It might come out of it a little faster.',
     element: 'water',
     power: 85, // TUNE:
-    accuracy: 95, // TUNE: 85 and no effect left Tsunoodle at 35% against the grown-ups
+    accuracy: 95, // TUNE: 85 and no effect left Tsunoodle at 35% (sim, with batches 1–2's 12 grown-ups)
     effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 }], // TUNE:
   },
   {
@@ -558,7 +558,7 @@ export const MOVES: Move[] = [
     element: 'fire',
     power: 80, // TUNE:
     accuracy: 90, // TUNE:
-    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE: 50% made Emberslumber 70%+ against the grown-ups
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }], // TUNE: 50% made Emberslumber 70%+ (sim, with batches 1–2's 12 grown-ups)
   },
   {
     id: 'thistle-charge',
@@ -577,6 +577,61 @@ export const MOVES: Move[] = [
     power: 85, // TUNE:
     accuracy: 85, // TUNE:
     effects: [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 }], // TUNE:
+  },
+  // Batch 2: the Halloween lines.
+  {
+    id: 'gourd-giggle',
+    name: 'Gourd Giggle',
+    description:
+      'Giggles so hard it rolls right over. The other side might get a bit dizzy watching.',
+    element: 'leaf',
+    power: 85, // TUNE:
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
+  },
+  {
+    id: 'spooky-squash',
+    name: 'Spooky Squash',
+    description: 'A big, spooky squash-y boo. It can make the other side a little less bold.',
+    element: 'leaf',
+    power: 80, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 30 }], // TUNE:
+  },
+  {
+    id: 'beacon-beam',
+    name: 'Beacon Beam',
+    description: 'Shines a beam bright enough to light the whole way home.',
+    element: 'light',
+    power: 90, // TUNE:
+    accuracy: 90, // TUNE: 85 left Beaconboo 6 under its teen (sim, 18 grown-ups)
+  },
+  {
+    id: 'lullaby-glow',
+    name: 'Lullaby Glow',
+    description: 'Glows soft and hums a lullaby. The other side might nod off.',
+    element: 'light',
+    power: 75, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 10 }], // TUNE: 20% made Snoozelight 71% (sim, with batches 1–2's 12 grown-ups)
+  },
+  {
+    id: 'loop-de-loop',
+    name: 'Loop-de-Loop',
+    description: 'Swoops round and round. The other side might get a bit dizzy.',
+    element: 'shadow',
+    power: 85, // TUNE:
+    accuracy: 95, // TUNE: 85 left Loopadoodle at 34% (sim, with batches 1–2's 12 grown-ups)
+    effects: [{ type: 'status', status: 'dizzy', chance: 20 }], // TUNE:
+  },
+  {
+    id: 'midnight-tuck',
+    name: 'Midnight Tuck',
+    description: 'Swoops in, then tucks itself in and feels a bit better.',
+    element: 'shadow',
+    power: 75, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'heal', percent: 15 }], // TUNE:
   },
 ];
 
@@ -678,7 +733,7 @@ export const SPECIES: Species[] = [
     element: 'water',
     feeling: 'silly',
     rarity: 'rare',
-    baseStats: { hp: 100, attack: 86, defense: 80, speed: 92 }, // TUNE: ×1.18 Splashmallow, plus 15 (sim: 38% against the grown-ups, 6 under its teen)
+    baseStats: { hp: 100, attack: 86, defense: 80, speed: 92 }, // TUNE: ×1.18 Splashmallow, plus 15 (sim, with batches 1–2's 12 grown-ups: 38% before, 6 under its teen)
     moves: ['tidal-twirl', 'belly-flop', 'bubble-bath', 'splish-splash'],
     evolutions: [],
     visual: {
@@ -1063,7 +1118,7 @@ export const SPECIES: Species[] = [
     id: 'emberslumber',
     name: 'Emberslumber',
     description:
-      'A big cozy coal in a fluffy ruff, with a crown of golden flames. It glows brighter with every snore.',
+      'A big cozy coal in a fluffy ruff, with a golden flame tuft on top. It glows brighter with every snore.',
     element: 'fire',
     feeling: 'sleepy',
     rarity: 'rare',
@@ -1676,7 +1731,7 @@ export const SPECIES: Species[] = [
     id: 'petalwhirl',
     name: 'Petalwhirl',
     description:
-      'A whirl of petals with round purple petals on top. Wherever it dances, flowers pop up.',
+      'A twirly flower sprite with round purple petals on top. Wherever it dances, flowers pop up.',
     element: 'leaf',
     feeling: 'joy',
     rarity: 'epic',
@@ -2443,7 +2498,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 85, attack: 80, defense: 75, speed: 60 }, // TUNE: was attack 70, speed 55; #28's sim flagged it weak (33%)
     moves: ['pumpkin-roll', 'leafy-tickle', 'boo', 'ember-boop'],
-    evolutions: [],
+    evolutions: [{ into: 'grinnygourd', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'pumpkin',
       palette: ['#ff8a1f', '#ffe066', '#3f8a35', '#ffd23f'],
@@ -2465,6 +2520,41 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
   },
+  // #495 grown-up (stage 4): Glowgourd grows strong arms, bold brows and fangs.
+  {
+    id: 'grinnygourd',
+    name: 'Grinnygourd',
+    description:
+      "A giant jack-o'-lantern with strong arms, bold brows and two little fangs. Still not spooky.",
+    element: 'leaf',
+    feeling: 'silly',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 100, attack: 94, defense: 89, speed: 71 }, // TUNE: ×1.18 Glowgourd
+    moves: ['pumpkin-roll', 'leafy-tickle', 'boo', 'gourd-giggle'],
+    evolutions: [],
+    visual: {
+      body: 'pumpkin',
+      palette: ['#ff8a1f', '#ffe066', '#3f8a35', '#ffd23f'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'open-mouth',
+        'fangs',
+        'stem',
+        'leaf-ears',
+        'strong-arms',
+        'biped-legs',
+        'vine-tail',
+      ],
+      size: 1.53,
+      glow: 'body',
+      stance: 0.5,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
+  },
   {
     id: 'squashboo',
     name: 'Squashboo',
@@ -2475,7 +2565,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 85, attack: 85, defense: 75, speed: 80 }, // TUNE:
     moves: ['pumpkin-roll', 'peekaboo', 'boo', 'lantern-grin'],
-    evolutions: [],
+    evolutions: [{ into: 'boonkin', level: 36 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'pumpkin',
       palette: ['#ffb871', '#fff6e0', '#4f9a45', '#ffd23f'],
@@ -2483,6 +2573,40 @@ export const SPECIES: Species[] = [
       size: 1.3,
       glow: 'body',
       stance: 0.4,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['spooky', 'silly'] },
+  },
+  // #495 grown-up (stage 4): Squashboo's bat wings grow big, with brows and little fangs.
+  {
+    id: 'boonkin',
+    name: 'Boonkin',
+    description:
+      'A pumpkin ghost with leafy bat wings and brave little brows. Its boo is mostly a giggle.',
+    element: 'leaf',
+    feeling: 'spooky',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 100, attack: 100, defense: 89, speed: 94 }, // TUNE: ×1.18 Squashboo
+    moves: ['pumpkin-roll', 'spooky-squash', 'boo', 'lantern-grin'],
+    evolutions: [],
+    visual: {
+      body: 'pumpkin',
+      palette: ['#ffaf5e', '#fff6e0', '#4f9a45', '#ffd23f'],
+      parts: [
+        'spooky-eyes',
+        'brave-brows',
+        'boo-mouth',
+        'fangs',
+        'blush-cheeks',
+        'stem',
+        'big-bat-wings',
+        'wisp-chain',
+      ],
+      size: 1.53,
+      glow: 'body',
+      stance: 0.5,
       pose: 'hover',
       attackPart: 'tail',
     },
@@ -2551,7 +2675,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 85, attack: 90, defense: 85, speed: 90 }, // TUNE:
     moves: ['night-light', 'boo', 'peekaboo', 'dazzle-dance'],
-    evolutions: [],
+    evolutions: [{ into: 'beaconboo', level: 42 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'ghost',
       palette: ['#fff6e0', '#fff1a8', '#b8a2ff', '#ffe066'],
@@ -2573,6 +2697,41 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
+  // #495 grown-up (stage 4): Brightboo grows a crown of golden rays.
+  {
+    id: 'beaconboo',
+    name: 'Beaconboo',
+    description:
+      'A great glowing ghost with a crown of golden rays. Lost squishies follow it home.',
+    element: 'light',
+    feeling: 'spooky',
+    rarity: 'legendary',
+    season: 'halloween',
+    baseStats: { hp: 100, attack: 106, defense: 100, speed: 106 }, // TUNE: ×1.18 Brightboo
+    moves: ['night-light', 'boo', 'beacon-beam', 'dazzle-dance'],
+    evolutions: [],
+    visual: {
+      body: 'ghost',
+      palette: ['#fff6e0', '#fff1a8', '#ffd84d', '#ffe066'],
+      parts: [
+        'spooky-eyes',
+        'brave-brows',
+        'fangs',
+        'sun-crown',
+        'strong-arms',
+        'wisp-chain',
+        'nub-wings',
+        'freckles',
+      ],
+      size: 1.53,
+      finish: 'iridescent',
+      glow: 'body',
+      stance: 0.5,
+      pose: 'hover',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
+  },
   {
     id: 'lullaboo',
     name: 'Lullaboo',
@@ -2583,7 +2742,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 95, attack: 75, defense: 85, speed: 70 }, // TUNE:
     moves: ['night-light', 'sunny-beam', 'boo', 'night-light-hug'],
-    evolutions: [],
+    evolutions: [{ into: 'snoozelight', level: 42 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'ghost',
       palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
@@ -2600,6 +2759,40 @@ export const SPECIES: Species[] = [
       finish: 'sparkle',
       glow: 'body',
       stance: 0.35,
+      pose: 'hover',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'spooky'] },
+  },
+  // #495 grown-up (stage 4): Lullaboo grows glowing wings.
+  {
+    id: 'snoozelight',
+    name: 'Snoozelight',
+    description: 'A cozy ghost with glowing wings, humming sleepy lullabies all night long.',
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'legendary',
+    season: 'halloween',
+    baseStats: { hp: 112, attack: 89, defense: 100, speed: 83 }, // TUNE: ×1.18 Lullaboo
+    moves: ['night-light', 'lullaby-glow', 'boo', 'night-light-hug'],
+    evolutions: [],
+    visual: {
+      body: 'ghost',
+      palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'nightcap',
+        'glow-wings',
+        'stubby-arms',
+        'wisp-tail',
+        'freckles',
+      ],
+      size: 1.53,
+      finish: 'iridescent',
+      glow: 'body',
+      stance: 0.45,
       pose: 'hover',
       attackPart: 'arms',
     },
@@ -2668,7 +2861,7 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 75, attack: 85, defense: 65, speed: 100 }, // TUNE:
     moves: ['upside-flop', 'peekaboo', 'zip-zap', 'shadow-snuggle'],
-    evolutions: [],
+    evolutions: [{ into: 'loopadoodle', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'bean',
       palette: ['#3f3070', '#eadcff', '#8f6fd0', '#ff9ad5'],
@@ -2677,6 +2870,42 @@ export const SPECIES: Species[] = [
       ink: '#fff4dc',
       head: { body: 'orb', size: 0.68, forward: 0.15, up: 0.75 },
       stance: 0.5,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['silly', 'spooky'] },
+  },
+  // #495 grown-up (stage 4): Topsywing grows a fluffy collar, tufty ears and little horns.
+  {
+    id: 'loopadoodle',
+    name: 'Loopadoodle',
+    description:
+      'A big loopy bat with a fluffy collar, big ears and little horns. It flies upside down on purpose now.',
+    element: 'shadow',
+    feeling: 'silly',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 89, attack: 100, defense: 77, speed: 118 }, // TUNE: ×1.18 Topsywing
+    moves: ['upside-flop', 'peekaboo', 'loop-de-loop', 'shadow-snuggle'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#3a2b68', '#eadcff', '#8f6fd0', '#ff9ad5'],
+      parts: [
+        'sharp-eyes',
+        'open-mouth',
+        'fangs',
+        'tuft-ears',
+        'cone-horns',
+        'fur-ruff',
+        'big-bat-wings',
+        'curly-tail',
+      ],
+      size: 1.48,
+      finish: 'sparkle',
+      ink: '#fff4dc',
+      head: { body: 'orb', size: 0.6, forward: 0.15, up: 0.8 },
+      stance: 0.55,
       pose: 'hover',
       attackPart: 'wings',
     },
@@ -2693,7 +2922,7 @@ export const SPECIES: Species[] = [
     // A smaller budget than Topsywing: its 40% Upside Snooze heal pays for it.
     baseStats: { hp: 84, attack: 67, defense: 75, speed: 62 }, // TUNE:
     moves: ['peekaboo', 'upside-flop', 'shadow-snuggle', 'upside-snooze'],
-    evolutions: [],
+    evolutions: [{ into: 'dreamwing', level: 38 }], // TUNE: kid level + 20 (#443 §3)
     visual: {
       body: 'mochi',
       palette: ['#4a3a7a', '#eadcff', '#9b7fd4', '#ff9ad5'],
@@ -2709,6 +2938,40 @@ export const SPECIES: Species[] = [
       size: 1.25,
       ink: '#fff4dc',
       stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy', 'silly'] },
+  },
+  // #495 grown-up (stage 4): Hushwing grows a fluffy ruff to sit on and a fluffy tail.
+  {
+    id: 'dreamwing',
+    name: 'Dreamwing',
+    description: "A big cozy bat snuggled on a fluffy cloud ruff. Shh, it's napping.",
+    element: 'shadow',
+    feeling: 'sleepy',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 99, attack: 79, defense: 89, speed: 73 }, // TUNE: ×1.18 Hushwing
+    moves: ['midnight-tuck', 'upside-flop', 'shadow-snuggle', 'upside-snooze'],
+    evolutions: [],
+    visual: {
+      body: 'mochi',
+      palette: ['#45366f', '#eadcff', '#9b7fd4', '#ff9ad5'],
+      parts: [
+        'sleepy-eyes',
+        'smirk',
+        'blush-cheeks',
+        'round-ears',
+        'nightcap',
+        'fur-ruff',
+        'big-bat-wings',
+        'fluff-tail',
+      ],
+      size: 1.48,
+      finish: 'sparkle',
+      ink: '#fff4dc',
+      stance: 0.5,
       pose: 'hover',
       attackPart: 'wings',
     },

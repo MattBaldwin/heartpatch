@@ -142,6 +142,15 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
     /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx · \d+ draws · \d+k tris$/,
     { timeout: 15_000 },
   );
+  // Its counts line (#501): our JS per frame, the scene, WebGL objects made and freed, uploads, render scale.
+  await expect(page.locator('[data-testid="dev-stats-counts"]')).toHaveText(
+    /^js \d+\.\d ms · \d+ mesh · \d+ mat · \d+ tex · \d+ anim · buf \+\d+\/-\d+ · gltex \+\d+\/-\d+ · vao \+\d+\/-\d+ · \d+ prog · \d+ up · \d\.\d\d scale$/,
+  );
+  // Its page line (#501): engines, renders per second, portrait snapshots, render targets, canvases, DOM, CSS animations.
+  // One engine, one canvas: anything more draws where the scene's own counts can't see.
+  await expect(page.locator('[data-testid="dev-stats-page"]')).toHaveText(
+    /^page · 1 engine · \d+ fr\/s · \d+ snap · rt \d+(: [^·]+)? · 1 canvas · \d+ dom · \d+ css$/,
+  );
   expect(errors).toEqual([]);
 });
 

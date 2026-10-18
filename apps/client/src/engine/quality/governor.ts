@@ -16,6 +16,10 @@ import { crawlRenderScale, higherTier, lowerTier, renderScaleFloor } from './tie
  *   quality further would only cost sharpness, so undo that step and hold at
  *   that frame rate until it changes. The hold is re-tested now and then, less
  *   often each time the cap is confirmed.
+ * - **A cut that didn't help, far below target** (`tierProbeBelowFps`): the
+ *   pixels aren't the cost, but the tier's effects may be. Put the pixels
+ *   back and probe the next tier down first; only if that doesn't help
+ *   either is it a cap (#501).
  * - **Pinned at the floor and still well below target** for a while, with the
  *   last cut having helped: step the quality tier down (softer bloom, then none).
  * - **At target for a while:** raise resolution a step at a time, then the
@@ -62,6 +66,8 @@ export interface GovernorState {
   readonly sinceTierRaiseMs: number | null;
   /** Consecutive frames longer than `crawlFrameMs` so far (see `crawl`). */
   readonly crawlFrames: number;
+  /** Consecutive frames between `maxFrameMs` and `crawlFrameMs` so far (#501). */
+  readonly slowRun: number;
 }
 
 export interface GovernorContext {
@@ -90,6 +96,7 @@ export function initialGovernor(tier: QualityTier, config: ScalerConfig): Govern
     tierRaiseAfterMs: config.tierRaiseAfterMs,
     sinceTierRaiseMs: null,
     crawlFrames: 0,
+    slowRun: 0,
   };
 }
 
@@ -110,9 +117,20 @@ export function stepGovernor(
   if (frameMs > config.crawlFrameMs) return crawl(state, ctx);
   // Any shorter frame ends a run of crawling frames (they must be consecutive).
   if (state.crawlFrames > 0) state = { ...state, crawlFrames: 0 };
-  // A pause (hidden tab, debugger, one shader compile) says nothing about
-  // the frame rate.
-  if (frameMs > config.maxFrameMs) return state;
+  // A slow frame short of crawling: one or two (a shader compile, a hitch)
+  // say nothing about the frame rate, but a run of them is the frame rate
+  // (#501: a phone stuck at 2–3 fps draws every frame in this band, and
+  // ignoring them all left no window to close, so nothing ever stepped down).
+  // From the run's `crawlFrames`-th frame they count at their real length, so
+  // a cut that helps but still leaves frames this slow reads as helping. A
+  // crawling frame between them leaves the run going: both say "slow".
+  if (frameMs > config.maxFrameMs) {
+    const slowRun = state.slowRun + 1;
+    if (slowRun < config.crawlFrames) return { ...state, slowRun };
+    state = { ...state, slowRun };
+  } else if (state.slowRun > 0) {
+    state = { ...state, slowRun: 0 };
+  }
 
   const elapsedMs = state.elapsedMs + frameMs;
   if (elapsedMs < config.graceMs) return { ...state, elapsedMs };
@@ -139,7 +157,9 @@ export function stepGovernor(
  * `pageshow`; a normal frame ends a run as well.
  */
 export function resumeGovernor(state: GovernorState): GovernorState {
-  return state.crawlFrames === 0 ? state : { ...state, crawlFrames: 0 };
+  return state.crawlFrames === 0 && state.slowRun === 0
+    ? state
+    : { ...state, crawlFrames: 0, slowRun: 0 };
 }
 
 /**
@@ -236,7 +256,21 @@ function decide(s: GovernorState, fps: number, w: number, ctx: GovernorContext):
 function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): GovernorState {
   const { config, devicePixelRatio } = ctx;
   if (s.probe && fps < s.probe.baselineFps * config.cutGain) {
-    // That cut didn't help: capped or CPU-bound. Put the pixels back and hold.
+    // That cut didn't help: pixels aren't the cost. Far below target, the
+    // tier's effects may be (#501: 28 fps on high with a team at the lake,
+    // held at full resolution): put the pixels back and try the next tier
+    // down. Its probe puts the tier back too if that doesn't help either, so
+    // a real cap (Low Power Mode's 30 fps) costs one reverted probe per re-test.
+    const cheaper = lowerTier(s.tier);
+    if (fps < config.tierProbeBelowFps && cheaper !== null) {
+      return dropTier(
+        { ...s, probe: null, goodMs: 0, tierGoodMs: 0, renderScale: s.probe.scaleBefore },
+        Math.max(fps, s.probe.baselineFps),
+        cheaper,
+        ctx,
+      );
+    }
+    // Capped or CPU-bound: put the pixels back and hold.
     return holdAtCap(
       s,
       Math.max(fps, s.probe.baselineFps),
@@ -270,9 +304,20 @@ function slow(s: GovernorState, fps: number, w: number, ctx: GovernorContext): G
   if (slowAtFloorMs < config.tierDropAfterMs || cheaper === null) {
     return { ...base, slowAtFloorMs };
   }
+  return dropTier(base, fps, cheaper, ctx);
+}
+
+/** Steps down to `cheaper` as a probe: the next window tells whether it helped. */
+function dropTier(
+  s: GovernorState,
+  fps: number,
+  cheaper: QualityTier,
+  ctx: GovernorContext,
+): GovernorState {
+  const { config, devicePixelRatio } = ctx;
   const flapped = s.sinceTierRaiseMs !== null && s.sinceTierRaiseMs <= config.tierFlapWindowMs;
   return {
-    ...base,
+    ...s,
     tier: cheaper,
     renderScale: roundScale(Math.max(renderScaleFloor(cheaper, devicePixelRatio), s.renderScale)),
     settleWindows: 1,

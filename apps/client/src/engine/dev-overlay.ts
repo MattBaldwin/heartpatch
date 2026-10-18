@@ -1,6 +1,16 @@
+import { Engine } from '@babylonjs/core/Engines/engine';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
-import { activeTriangles, formatRenderStats } from './render-stats.js';
+import { batchUploads } from '../procedural/batch-uploads.js';
+import { countGl, type GlCounts } from './gl-counters.js';
+import { bisectFlags, bisectLabel } from './bisect-flags.js';
+import { readPageStats, RenderRate } from './page-stats.js';
+import {
+  activeTriangles,
+  formatPageStats,
+  formatRenderStats,
+  formatResourceStats,
+} from './render-stats.js';
 import type { RendererKind } from './renderer.js';
 import type { Stage } from './stage.js';
 
@@ -16,22 +26,51 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * triangles (#318, for checking a real older iPad). Imported dynamically
  * from main.ts in a dev build, or on the live site with `?fps=1` (#335,
  * `showsStats`), so nobody sees it unless they ask.
+ *
+ * A second line counts what the scene holds and the WebGL objects made and
+ * freed since the badge first saw this engine (a lost context's rebuild
+ * starts again from zero) (#501: a frame rate that sinks as a session goes on
+ * shows here as a number that keeps climbing), the squishy batch uploads,
+ * the governor's render scale, and our JS per drawn frame (a low fps with
+ * low JS is the GPU or the browser, not our code).
+ *
+ * A third line looks page-wide (#501), at work the scene's own counts can't
+ * see: live engines, renders per second across all of them, every live
+ * render target and its size, canvases, DOM nodes, running CSS animations,
+ * and the bisect flags that are on (`bisect-flags.ts`).
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
   badge.className = 'dev-status dev-stats';
   badge.dataset['testid'] = 'dev-stats';
   badge.textContent = 'renderer: …';
-  document.body.append(badge);
+  const counts = document.createElement('div');
+  counts.className = 'dev-status dev-stats-counts';
+  counts.dataset['testid'] = 'dev-stats-counts';
+  const page = document.createElement('div');
+  page.className = 'dev-status dev-stats-page';
+  page.dataset['testid'] = 'dev-stats-page';
+  const stack = document.createElement('div');
+  stack.className = 'dev-stats-stack';
+  stack.append(badge, counts, page);
+  document.body.append(stack);
+  // Renders across every engine, between two refreshes.
+  const renders = new RenderRate();
+  const flags = bisectLabel(bisectFlags());
 
   // One counter per scene: a renderer fallback or a remount makes a new one.
   let counted: { scene: Scene; instrumentation: SceneInstrumentation } | null = null;
+  // The context's own calls, counted once per engine (a fallback makes a new one).
+  let gl: { engine: object; counts: GlCounts | null } | null = null;
   setInterval(() => {
     const stage = getStage();
     if (!stage) return;
     if (counted?.scene !== stage.scene) {
       counted?.instrumentation.dispose();
       counted = { scene: stage.scene, instrumentation: new SceneInstrumentation(stage.scene) };
+      // Our JS per drawn frame (#501): with the frame rate, it tells a stall
+      // in our code from one in the GPU or the browser.
+      counted.instrumentation.captureFrameTime = true;
     }
     const drawCalls = counted.instrumentation.drawCallsCounter.current;
     // Idle means nothing is drawn (render on demand), so there's no frame rate.
@@ -40,5 +79,22 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     const renderer = RENDERER_LABEL[stage.renderer.kind];
     const work = formatRenderStats(drawCalls, activeTriangles(stage.scene));
     badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
+    const { engine } = stage.renderer;
+    if (gl?.engine !== engine) {
+      // `_gl` is Babylon-internal but typed (WebGL's Engine); WebGPU has no context to count.
+      gl = { engine, counts: engine instanceof Engine ? countGl(engine._gl) : null };
+    }
+    const { scene } = stage;
+    counts.textContent = formatResourceStats({
+      jsMs: counted.instrumentation.frameTimeCounter.lastSecAverage,
+      meshes: scene.meshes.length,
+      materials: scene.materials.length,
+      textures: scene.textures.length,
+      animatables: scene.animatables.length,
+      gl: gl.counts,
+      batchUploads: batchUploads.count,
+      renderScale: stage.quality.snapshot.renderScale,
+    });
+    page.textContent = formatPageStats(readPageStats(renders, flags));
   }, 500);
 }

@@ -23,8 +23,11 @@ import {
  * - `resync`: the change touches tiles and members in ways only the server
  *   knows (a member joining gets a home base, a leaver's land goes wild), so
  *   refetch the map view rather than guess.
+ * - `refresh`: both. What the event says is patched in, so redraw at once,
+ *   and the rest only the server knows, so refetch too (a capture: the new
+ *   owner's homestead and exploring, #242).
  */
-export type LiveEventEffect = 'none' | 'redraw' | 'resync';
+export type LiveEventEffect = 'none' | 'redraw' | 'resync' | 'refresh';
 
 export class MapState {
   private current: MapView;
@@ -135,14 +138,16 @@ export class MapState {
           guardianHint: null,
           // The old owner's gatherer there stopped (squishy jobs).
           workers: 0,
-          // Explored and homestead belong to the owner (#199): the new
-          // owner's homestead events follow, and a refresh fills the rest.
+          // Explored and homestead belong to the owner (#199). The new
+          // owner's own may already be on file: a homestead won back keeps
+          // its joined_at, so no homestead event follows (#242). Blank them
+          // for now and read the view again for the truth.
           explored: false,
           homestead: null,
           // The old owner's clear there is lost (#242).
           clearing: null,
         });
-        return changed ? 'redraw' : 'none';
+        return changed ? 'refresh' : 'none';
       }
       case 'tile.explored': {
         // Its owner searched every spot (#199): the map shows a sparkle.

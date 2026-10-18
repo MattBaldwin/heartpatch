@@ -98,4 +98,31 @@ describe('FrameScheduler', () => {
     s.invalidate();
     expect(run(s, 4, () => false, 1000).filter((f) => f.draw)).toHaveLength(2);
   });
+
+  it('under a cap (`?cap30=1`) draws every other 60 Hz frame and reports their real gap', () => {
+    const s = new FrameScheduler(2, 26);
+    const frames = run(s, 9, () => true);
+    expect(frames.map((f) => f.draw)).toEqual([
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+    ]);
+    expect(frames.filter((f) => f.draw).map((f) => f.frameMs)).toEqual([null, 32, 32, 32, 32]);
+    expect(s.idle).toBe(false);
+  });
+
+  it('keeps a request that came too soon under a cap for the next allowed frame', () => {
+    const s = new FrameScheduler(1, 26);
+    run(s, 1, () => false);
+    s.requestFrame();
+    expect(s.next(16, false).draw).toBe(false);
+    expect(s.next(32, false).draw).toBe(true);
+    expect(s.next(48, false).draw).toBe(false);
+  });
 });

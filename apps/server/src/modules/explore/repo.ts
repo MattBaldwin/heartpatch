@@ -81,10 +81,14 @@ const rowColumns = {
 export function createExploreRepo(db: Executor) {
   return {
     /**
-     * Dev only (`HP_DEV_SQUISHY_GRANTS`, e2e and phone testing): the first
-     * free neutral tile two steps from the player's Heart Seed becomes theirs,
-     * fully explored, joined to home and with no resource spot, so a
-     * homestead building can go up at once (#295). Null when there's none.
+     * Dev only (`HP_DEV_SQUISHY_GRANTS`, e2e and phone testing): a free neutral
+     * tile near the player's home becomes theirs, fully explored (#295, #242).
+     * By default it's two steps from the Heart Seed and joined to home, so a
+     * homestead building can go up at once; `joined: false` puts it three
+     * steps out, not joined, and `'napping'` the same but cut off from home
+     * after joining. `terrain` and `nodeResource` set its land and spot (none
+     * by default). It never touches the player's other land outside home.
+     * Null when there's no such tile.
      */
     devMakeHomestead: async (
       mapId: string,
@@ -116,14 +120,16 @@ export function createExploreRepo(db: Executor) {
       // Neither touches my other land outside home: a homestead next door
       // would join an unjoined one at the next refresh, and a new homestead
       // would join land of mine beside it (#242 review).
-      const joined = ask.joined ?? true;
+      const touchesHome = ask.joined === true || ask.joined === undefined;
+      // A napping one is out there too: it joined once and was cut off since.
+      const napping = ask.joined === 'napping';
       const mineOut = all.filter((t) => t.ownerUserId === userId && t.homeSlot === null);
       const near = seed
         ? all.filter(
             (t) =>
               t.ownerUserId === null &&
               t.homeSlot === null &&
-              hexDistance(t, seed) === (joined ? 2 : 3) &&
+              hexDistance(t, seed) === (touchesHome ? 2 : 3) &&
               !mineOut.some((m) => hexDistance(m, t) === 1),
           )
         : [];
@@ -155,7 +161,8 @@ export function createExploreRepo(db: Executor) {
           searched: 7,
           spotCount: 3,
           completedAt: at,
-          joinedAt: joined ? at : null,
+          joinedAt: touchesHome || napping ? at : null,
+          pausedAt: napping ? at : null,
           updatedAt: at,
         })
         .onConflictDoNothing();

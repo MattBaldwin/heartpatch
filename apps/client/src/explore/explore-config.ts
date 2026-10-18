@@ -10,9 +10,8 @@ export const EXPLORE_VIEW = {
    * the Keeper (about 1.2 tall), so walking it feels like a little world.
    */
   hexSize: 7, // TUNE
-  /** The Keeper and the squishies that follow it. */
+  /** The Keeper. */
   keeperScale: 0.75, // TUNE
-  squishyScale: 0.5, // TUNE
   /** Building scale (a fire on the land, #202). */
   buildingScale: 1.6, // TUNE
   /** Search-spot props, as a share of the tile's size (map props are drawn for a 0.65 tile). */
@@ -56,8 +55,6 @@ export const EXPLORE_VIEW = {
    * rim's corner is about 0.92 out on a 0.95 tile).
    */
   cornerReach: 0.92, // TUNE
-  /** Followers trail the Keeper by this much, one behind another. */
-  followGap: 0.06, // TUNE
   /** The joystick: how far the knob travels, CSS pixels, and its dead zone. */
   joystick: { radius: 46, deadZone: 0.18 }, // TUNE
   /** A press that moves less than this is a tap (walk there), CSS pixels. */
@@ -196,7 +193,7 @@ export const EXPLORE_TOOL = {
 } as const;
 
 /**
- * The Keeper and the team hop as they walk (#317, owner mockup 2026-10-09):
+ * The Keeper hops as it walks (#317, owner mockup 2026-10-09):
  * one hop per stride, so the hop rate follows the ground covered. Distances
  * are tile-local, like `walkSpeed`; heights are a share of the hopper's own
  * height. "Effort" blends small hops (a gentle push) into big ones (full
@@ -227,10 +224,6 @@ export const EXPLORE_HOP = {
   shadowMin: 0.7, // TUNE
   /** …and fades by this share of its opacity (#323), so the hop reads clearly. */
   shadowFade: 0.45, // TUNE
-  /** Squishies hop this share as high (of their own height) as the Keeper. */
-  followerLift: 0.8, // TUNE
-  /** Extra phase for each follower in turn (in hops), so nobody lands together. */
-  followerOffset: [0.17, 0.41, 0.63, 0.86], // TUNE
   /** Reduce Motion: a bob this share of the height, one per stride, nothing squashes. */
   bob: 0.025, // TUNE
   /** A move longer than this many full-speed frames is a jump to a new place, not a step. */
@@ -331,10 +324,6 @@ export const EXPLORE_SWIM = {
   tread: { bob: 0.04, rate: 0.45 }, // TUNE
   /** The soft shadow under a swimmer's middle: width (times its contact shadow) and opacity. */
   shadow: { scale: 1.1, alpha: 0.75 }, // TUNE
-  /** Squishies following underwater: float, and a drifting glide by the water they cover. */
-  follower: { float: 0.5, bob: 0.1, pulse: 0.08 }, // TUNE
-  /** The team trails this share as far back underwater (it floats, so it covers less of the Keeper). */
-  followBack: 0.75, // TUNE
   /**
    * Bubbles puffed from the mask on each kick (never on letting go): how
    * many, the pool, how long each lives (ms), how far it rises and its size

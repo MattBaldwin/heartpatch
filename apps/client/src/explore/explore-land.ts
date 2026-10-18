@@ -13,6 +13,7 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Scene } from '@babylonjs/core/scene';
 import type { WorldPoint } from '@heartpatch/shared';
+import { bisectFlags } from '../engine/bisect-flags.js';
 import type { QualityTier } from '../engine/config.js';
 import { DRIFT_MODE, type AmbientMode } from '../map/ambient-layout.js';
 import { linear } from '../map/map-props.js';
@@ -229,7 +230,8 @@ export class ExploreLand {
     this.#tinted.push({ mat: grassMat, base: grassMat.albedoColor.clone() });
 
     const L = this.layout;
-    this.#grow('tufts', buildTuft(scene), L.tufts, grassMat, {
+    // `?nograss=1` (#501 bisect): no tufts at all.
+    this.#grow('tufts', buildTuft(scene), bisectFlags().noGrass ? [] : L.tufts, grassMat, {
       sway: LAND_SWAY.tufts,
       thins: true,
     });

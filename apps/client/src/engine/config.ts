@@ -66,7 +66,12 @@ export interface ScalerConfig {
   maxRaiseAfterMs: number;
   /** A drop within this long after a raise counts as flapping. */
   flapWindowMs: number;
-  /** Frame gaps longer than this (tab hidden, debugger) are ignored by the frame-rate windows. */
+  /**
+   * Longest frame the frame-rate windows take on its own. A longer one
+   * (short of `crawlFrameMs`) is a hitch, but from the `crawlFrames`-th in a
+   * row they count at their real length, so a phone stuck at 2–3 fps still
+   * closes windows and steps down (#501).
+   */
   maxFrameMs: number;
   /**
    * A run of `crawlFrames` consecutive frames each longer than `crawlFrameMs`
@@ -76,6 +81,11 @@ export interface ScalerConfig {
    */
   crawlFrameMs: number;
   crawlFrames: number;
+  /**
+   * A resolution cut that doesn't help below this frame rate probes a tier
+   * down (its effects may be the cost) before holding at a cap (#501).
+   */
+  tierProbeBelowFps: number;
   /** Step a tier down after this long pinned at the floor and still slow. */
   tierDropAfterMs: number;
   /** "Still slow" for the tier governor. */
@@ -114,6 +124,7 @@ export const SCALER: Readonly<ScalerConfig> = {
   maxFrameMs: 250, // TUNE
   crawlFrameMs: 1000, // TUNE: a whole second per frame is never a shader compile hiccup
   crawlFrames: 3, // TUNE
+  tierProbeBelowFps: 45, // TUNE: far below 60; Low Power Mode's 30 costs one reverted probe per cap re-test
   tierDropAfterMs: 3000, // TUNE
   tierDropBelowFps: 50, // TUNE
   graceMs: 2000, // TUNE

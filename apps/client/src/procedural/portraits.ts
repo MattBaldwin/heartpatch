@@ -6,6 +6,7 @@ import { CreateScreenshotUsingRenderTarget } from '@babylonjs/core/Misc/screensh
 import { Scene } from '@babylonjs/core/scene';
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { cameraFor } from '../close-up/close-up-view.js';
+import { bisectFlags } from '../engine/bisect-flags.js';
 import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
@@ -105,6 +106,12 @@ async function cropToSquishy(dataUrl: string, px: number): Promise<string> {
   toCtx.drawImage(from, cx - side / 2, cy - side / 2, side, side, 0, 0, px, px);
   return to.toDataURL('image/png');
 }
+
+/**
+ * Portrait snapshots since the page opened (#501): each renders the game's
+ * engine into a 4× MSAA texture and reads it back. Read by the `?fps=1` badge.
+ */
+export const portraitSnapshots = { count: 0 };
 
 /** A draw that hasn't finished by then is given up (it resolves to null). */
 const DRAW_TIMEOUT_MS = 8_000; // TUNE
@@ -271,7 +278,8 @@ export function createPortraits(options: PortraitOptions): Portraits {
 
   async function draw(look: PortraitLook): Promise<string | null> {
     const engine = options.engine();
-    if (!engine || engine.isDisposed) return null;
+    // `?noportraits=1` (#501 bisect): no snapshot, as with no engine (the sheets show their placeholder).
+    if (!engine || engine.isDisposed || bisectFlags().noPortraits) return null;
     const { scene, field, camera, use } = stageFor(engine);
     const handle = field.add(look.species, look.instanceId, { x: 0, z: 0 });
     // Nothing between `stageFor` and here waits, so its scene can't be retired first.
@@ -307,6 +315,7 @@ export function createPortraits(options: PortraitOptions): Portraits {
       // Babylon sets this until it renders, and two at once would leave the
       // engine's render size wrong. No picture this time.
       if (engine.skipFrameRender) return null;
+      portraitSnapshots.count++;
       const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
       return await cropToSquishy(shot, px);
     } catch {

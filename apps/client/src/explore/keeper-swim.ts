@@ -1,8 +1,8 @@
 import type { QualityTier } from '../engine/config.js';
 import { EXPLORE_SWIM } from './explore-config.js';
 
-// Swimming under a lake (#399, "Glide and kick"): the Keeper and the team
-// swim instead of hopping. Like the hop (#317), the stroke follows the water
+// Swimming under a lake (#399, "Glide and kick"): the Keeper swims instead
+// of hopping. Like the hop (#317), the stroke follows the water
 // covered, never the clock, so a gentle push swims slowly and a full push
 // kicks fast. Each swimmer's state is one small object updated in place, and
 // the pose is written into a caller's object, so stepping allocates nothing.
@@ -17,7 +17,7 @@ export interface Swim {
   /** Kicks started (whole strokes passed): a new one puffs bubbles. */
   kicks: number;
   moving: boolean;
-  /** Extra phase, in strokes, so the team never kicks together. */
+  /** Extra phase, in strokes (0 for the Keeper), so swimmers never kick together. */
   readonly offset: number;
 }
 
