@@ -158,6 +158,18 @@ if (vColor.a < 0.999) {
 #endif
 `;
 
+/**
+ * The fade keeps the pixels it keeps whole: PBR multiplies the instance
+ * alpha into the fragment's, and on the opaque squishy material that would
+ * write a see-through alpha into the canvas, which the page then shows
+ * through (a pale ghost, review of #381 W2).
+ */
+const FRAGMENT_FADE_OPAQUE = /* glsl */ `
+#if defined(SQUISH_FADE) && defined(INSTANCESCOLOR) && defined(INSTANCES)
+finalColor.a = 1.0;
+#endif
+`;
+
 const FRAGMENT_RIM = /* glsl */ `
 #ifdef SQUISH_RIM
 {
@@ -347,6 +359,7 @@ export class SquishPlugin extends MaterialPluginBase {
         CUSTOM_FRAGMENT_DEFINITIONS: FRAGMENT_DEFINITIONS,
         CUSTOM_FRAGMENT_MAIN_BEGIN: FRAGMENT_FADE,
         CUSTOM_FRAGMENT_BEFORE_FOG: FRAGMENT_RIM,
+        CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: FRAGMENT_FADE_OPAQUE,
       };
     }
     return null;

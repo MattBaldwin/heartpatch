@@ -761,6 +761,17 @@ describe('SquishyField fade (#381 W2)', () => {
     expect(alphas(scene)).toEqual([1, 1]);
   });
 
+  it('keeps a faded squishy’s kept pixels opaque (the canvas never shows the page through it)', () => {
+    const { scene } = field(true);
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    const plugin = material?.pluginManager?.getPlugin('Squish') as {
+      getCustomCode: (kind: string) => Record<string, string> | null;
+    } | null;
+    const code = plugin?.getCustomCode('fragment') ?? {};
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('finalColor.a = 1.0;');
+    expect(code['CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR']).toContain('SQUISH_FADE');
+  });
+
   it('compiles the fade in only for a field that fades, from the start (no recompile mid-walk)', () => {
     expect(fading(field(true).scene)).toBe(true);
     expect(fading(field(false).scene)).toBe(false);

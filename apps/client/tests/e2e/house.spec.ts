@@ -151,7 +151,15 @@ test('enter the house from home, walk in and step out, and go back home', async 
     .toBeGreaterThan(0.2);
   await page.mouse.up();
   await expect.poll(async () => (await houseState(page))?.walk?.stick, slow).toBe(false);
-  // A drag is never also a tap on the floor.
+  // A drag is never also a tap on the floor, even one the tap recogniser
+  // still takes for a tap (8 px each way: under its slop per axis, past the
+  // stick's 10 px across).
+  expect((await houseState(page))!.walk!.walkingTo).toBe(false);
+  await page.mouse.move(vw.width * 0.5, vw.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(vw.width * 0.5 + 8, vw.height * 0.6 + 8, { steps: 2 });
+  await page.mouse.up();
+  await expect.poll(async () => (await houseState(page))?.walk?.stick, slow).toBe(false);
   expect((await houseState(page))!.walk!.walkingTo).toBe(false);
 
   // A tap on the floor, to the Keeper's right: it walks over there and stops.

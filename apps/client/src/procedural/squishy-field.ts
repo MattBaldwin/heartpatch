@@ -252,6 +252,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #parent: TransformNode | null;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
+  /** Its squishies can fade (`SquishyFieldOptions.fades`). */
+  readonly #fades: boolean;
   readonly #batches = new Map<string, Batch>();
   readonly #squishies = new Map<number, Squishy>();
   readonly #shadow: Mesh | null;
@@ -290,7 +292,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
-    if (this.#plugin) this.#plugin.fade = options.fades ?? false;
+    this.#fades = options.fades ?? false;
+    if (this.#plugin) this.#plugin.fade = this.#fades;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
     if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
@@ -964,8 +967,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       events[i * 4 + 3] = inst.finish;
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
-    // Not static: a fade rewrites its alphas in place (`setFade`).
-    mesh.thinInstanceSetBuffer('color', colors, 4, false);
+    // Not static where squishies fade: a fade rewrites its alphas in place (`setFade`).
+    mesh.thinInstanceSetBuffer('color', colors, 4, !this.#fades);
     mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);

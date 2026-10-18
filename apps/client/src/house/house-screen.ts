@@ -201,13 +201,13 @@ export interface HouseDebug {
   /** `glide` while the roof lifts off, `walk` while Walk in or Step out moves, else `dollhouse` or `kid`. */
   readonly pose: 'glide' | 'walk' | 'dollhouse' | 'kid';
   readonly zoom: number;
+  /** The Keeper's middle on screen (CSS px), or null: none drawn, or behind the camera (a tap there walks in). */
+  readonly keeper: { readonly x: number; readonly y: number } | null;
   /**
    * The Keeper's walk (#381 W2): where it stands and its room, which way it
    * faces, the stick held or a tapped spot it's walking to, and the follow
    * camera's eye.
    */
-  /** The Keeper's middle on screen (CSS px), or null: none drawn, or behind the camera (a tap there walks in). */
-  readonly keeper: { readonly x: number; readonly y: number } | null;
   readonly walk: {
     readonly room: string | null;
     readonly at: { readonly x: number; readonly y: number; readonly z: number };

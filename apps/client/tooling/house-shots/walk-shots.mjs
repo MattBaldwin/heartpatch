@@ -110,7 +110,7 @@ async function open(device, { slow = 0, fps = false } = {}) {
 
 /**
  * Where the shots put the Keeper (dev hook). The Playroom spot stands it
- * behind a resident (the Playroom case: the camera rises over it).
+ * behind a resident (the Playroom case: the resident fades).
  */
 const SPOTS = {
   'heart-hall': null,
