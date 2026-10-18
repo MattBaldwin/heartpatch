@@ -565,6 +565,21 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect(pieces.map((p) => [p.itemId, p.source, p.refId])).toEqual([
         ['vampire-cape', 'trick-or-treat', visitId],
       ]);
+      // Another door is another visit: a second cape.
+      const nextVisit = '00000000-0000-7000-8000-000000000516';
+      expect(
+        await withTransaction(db, (tx) =>
+          grantClothing(tx, {
+            userId: kid.id,
+            itemId: 'vampire-cape',
+            source: 'trick-or-treat',
+            refId: nextVisit,
+            mapId,
+            at: clock,
+          }),
+        ),
+      ).toBe(true);
+      expect(await piecesOf(kid.id)).toHaveLength(2);
 
       // It goes on in the accessory's one slot, and every read draws it.
       const path = `/maps/${mapId}/squishies/${pip.id}/accessory`;
