@@ -137,8 +137,10 @@ async function exploreStats(page: Page) {
 }
 
 async function leaveExplore(page: Page): Promise<void> {
+  console.log('STEP leave explore');
   await page.getByTestId('explore-back').tap();
   await waitMap(page);
+  console.log('STEP map back');
 }
 
 test('Hollowed Communities mockup captures', async ({ browser }) => {
@@ -188,13 +190,16 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await settle(page, 600);
   await shot(page, 'restore-sheet');
   await page.getByTestId('hollowed-not-now').tap();
+  await expect(page.getByTestId('hollowed-sheet')).toBeHidden();
+  // Close the panel so nothing sits over the map while explore opens.
+  await page.getByRole('button', { name: 'Close', exact: true }).first().tap().catch(() => {});
 
   // Explore: grey, then sparks, an echo and the puzzle.
+  // Explore opens straight from the dev hook (what the panel's Explore does), so no map tap is needed.
   const openExplore = async (show: string | null) => {
+    console.log(`STEP explore ${String(show)}`);
     await call(page, 'show', show);
-    await look(page, 'near', 5);
-    await tapTile(page, nearTiles);
-    await page.getByTestId('hollowed-explore').tap();
+    await call(page, 'explore', near.centre.q, near.centre.r);
     await waitExplore(page);
   };
   await openExplore(null);
@@ -211,6 +216,7 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await leaveExplore(page);
 
   // The hidden cellar: the cave kit on a hills homestead, lantern-lit.
+  console.log('STEP cellar');
   const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`, { terrain: 'hills' });
   expect(made.status).toBe(201);
   await call(page, 'show', 'cellar');
@@ -220,6 +226,7 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await leaveExplore(page);
 
   // Restored: the claim-and-rename moment, then the village joined to my land.
+  console.log('STEP restored');
   await reopen(page, 'hollowed=restored&show=rename&fps=0&tier=high');
   await look(page, 'near', 5);
   await expect(page.getByTestId('hollowed-sheet')).toBeVisible(slow);
