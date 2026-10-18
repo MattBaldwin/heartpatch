@@ -106,7 +106,11 @@ export interface FollowPose {
   readonly target: { x: number; y: number; z: number };
   fov: number;
   pitch: number;
-  /** Turned round to follow a Keeper heading back toward the front (a storey up, W3). */
+  /**
+   * Turned round to follow a Keeper heading back toward the front (a storey
+   * up, W3). `followPose` reads it back from the goal it writes, for its
+   * band; copies (the eased camera) carry it but nothing reads it there.
+   */
   reverse: boolean;
 }
 

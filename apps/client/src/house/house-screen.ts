@@ -77,7 +77,15 @@ import {
   startSpot,
   type WalkSpot,
 } from './house-walk.js';
-import { keeperTapped, stepToward, stickToFloor, type FloorStep } from './house-walk-input.js';
+import {
+  createStickLatch,
+  keeperTapped,
+  releaseStick,
+  stepToward,
+  stickFrame,
+  stickToFloor,
+  type FloorStep,
+} from './house-walk-input.js';
 import { createOpenGate } from './house-open-gate.js';
 import {
   frameKey,
@@ -341,13 +349,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Where the follow camera wants to be, and where it is (easing after it). */
   const walkGoal = createFollowPose();
   const walkCam = createFollowPose();
-  /**
-   * The camera as the stick was taken (W3): the stick steers from it until
-   * it's let go. Read against the live camera, a camera that turns round to
-   * follow (a storey up) turned "down" into "up" mid-hold.
-   */
-  const stickCam = createFollowPose();
-  let stickHeld = false;
+  /** The camera the held stick steers from (W3: `stickFrame`). */
+  const stickLatch = createStickLatch();
   /** The follow camera is set for this scene and screen (false: work it out afresh). */
   let walkReady = false;
   /** The last walk frame (ms), or null: the next one starts from rest. */
@@ -1575,6 +1578,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function followCam(s: HouseScene): HousePose {
     if (!walkReady) {
       syncKeeper(s);
+      // A fresh walk in: not turned round from a visit or a scene before.
+      walkGoal.reverse = false;
       followGoal(s);
       copyPose(walkCam, walkGoal);
       walkReady = true;
@@ -1588,6 +1593,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
    * eases after it. True: keep drawing. Standing still, nothing runs.
    */
   function stepWalk(s: HouseScene, now: number): boolean {
+    if (!stick) releaseStick(stickLatch);
     if (!walkReady) {
       walkLast = null;
       return false;
@@ -1601,17 +1607,12 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     let walking = false;
     let moved = false;
     let yaw = walkYaw;
-    if (!stick) stickHeld = false;
     if (input && stick) {
       const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
       push.x = v.x;
       push.z = v.z;
       if (push.x !== 0 || push.z !== 0) {
-        if (!stickHeld) {
-          copyPose(stickCam, walkCam);
-          stickHeld = true;
-        }
-        stickToFloor(stride, push, stickCam);
+        stickToFloor(stride, push, stickFrame(stickLatch, true, walkCam));
         moved = slideStep(map, walkAt, stride.x * step, stride.z * step);
         // Faces the way the stick points, even pressed against a wall.
         yaw = faceYaw(stride.x, stride.z);
@@ -1697,6 +1698,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function dropWalkInput(): void {
     press = null;
     stick = null;
+    releaseStick(stickLatch);
     walkTo = null;
     showStick();
   }
@@ -1866,6 +1868,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (press?.id === e.pointerId) {
       press = null;
       stick = null;
+      releaseStick(stickLatch);
       showStick();
     }
     const last = panner.up(e.pointerId);

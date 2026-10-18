@@ -1,7 +1,7 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HOUSE_DOORS, HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
-import { stickToFloor, type FloorStep } from './house-walk-input.js';
+import { createStickLatch, stickFrame, stickToFloor, type FloorStep } from './house-walk-input.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
@@ -680,20 +680,20 @@ describe('doorways and the floors between (#381 W3)', () => {
   describe('holding the stick a storey up (W3 review: no flip-flop with the turning camera)', () => {
     /**
      * Holds the stick at `push` for `seconds` as the screen does: the stick
-     * steers from the camera as it was taken; the camera eases after the Keeper.
+     * steers from `stickFrame`; the camera eases after the Keeper.
      */
     function hold(map: WalkMap, hall: RoomBox, at: WalkSpot, push: FloorStep, seconds: number) {
       let yaw = Math.PI;
       const goal = createFollowPose();
       const cam = createFollowPose();
       copyPose(cam, followPose(goal, map, at, yaw, hall, 393 / 852));
-      const taken = copyPose(createFollowPose(), cam);
+      const latch = createStickLatch();
       const stride = { x: 0, z: 0 };
       const dt = 1 / 60;
       const zs: number[] = [];
       const flips: boolean[] = [];
       for (let i = 0; i < seconds * 60; i += 1) {
-        stickToFloor(stride, push, taken);
+        stickToFloor(stride, push, stickFrame(latch, true, cam));
         slideStep(map, at, stride.x * HOUSE_WALK.speed * dt, stride.z * HOUSE_WALK.speed * dt);
         yaw = faceYaw(stride.x, stride.z);
         followPose(goal, map, at, yaw, hall, 393 / 852);
