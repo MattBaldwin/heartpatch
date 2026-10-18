@@ -1,19 +1,23 @@
-import type {
-  MapView,
-  TradeTip,
-  PublicUser,
-  TradeKind,
-  TradeLine,
-  TradeLineView,
-  TradeOfferView,
-  TradeShelf,
-  TradesView,
-  WsEventMessage,
+import {
+  GLIMMER_SWAP,
+  type GlimmerSwapView,
+  type MapView,
+  type TradeTip,
+  type PublicUser,
+  type TradeKind,
+  type TradeLine,
+  type TradeLineView,
+  type TradeOfferView,
+  type TradeShelf,
+  type TradesView,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { slotIcon } from '../map/map-legend.js';
 import { el, messageOf } from '../ui/dom.js';
+import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
+import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
   fitName,
@@ -62,6 +66,7 @@ type Side = 'mine' | 'theirs';
 export interface PostScreenOptions {
   root: HTMLElement;
   api?: TradeApi;
+  swapApi?: GlimmerSwapApi;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
 }
@@ -90,6 +95,8 @@ export interface PostDebug {
   readonly meter: { tip: TradeTip; lopsided: boolean; give: number; get: number };
   readonly filters: Readonly<Record<Side, ShelfFilter>>;
   readonly sorts: Readonly<Record<Side, ShelfSort>>;
+  /** The Glimmer swap (#523): today's swaps and the resource waiting on its confirm. */
+  readonly swap: { readonly today: number; readonly picked: string | null } | null;
 }
 
 export interface PostScreen {
@@ -105,6 +112,7 @@ export interface PostScreen {
 
 export function createPostScreen(options: PostScreenOptions): PostScreen {
   const api = options.api ?? tradeApi;
+  const swapApi = options.swapApi ?? glimmerSwapApi;
   const now = options.now ?? (() => Date.now());
 
   let user: PublicUser | null = null;
@@ -112,6 +120,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let mapView: MapView | null = null;
   let tab: PostTab = 'trade';
   let trades: TradesView | null = null;
+  /** Today's Glimmer swaps and my bag (#523), loaded when the Swap tab opens. */
+  let swap: GlimmerSwapView | null = null;
+  /** The resource waiting on "Swap 10 Stone for 1 💎?". */
+  let swapPick: string | null = null;
   const shelves = new Map<string, TradeShelf>();
   let mate: string | null = null;
   let give: TradeLine[] = [];
@@ -202,6 +214,47 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       note = messageOf(err);
     }
     render();
+  }
+
+  async function loadSwap(): Promise<void> {
+    const at = generation;
+    if (!mapView) return;
+    try {
+      const view = await swapApi.view(mapView.map.id);
+      if (at === generation) swap = view;
+    } catch (err) {
+      if (at === generation) note = messageOf(err);
+    }
+    if (at === generation) render();
+  }
+
+  /** One Glimmer swap at this post: one transaction on the server, keyed so a retry never swaps twice. */
+  async function swapCommand(itemId: string): Promise<void> {
+    if (working || !post) return;
+    const gen = generation;
+    const stillHere = () => gen === generation;
+    working = true;
+    note = '';
+    render();
+    try {
+      const view = await sendCommand(
+        sendDeps,
+        (key) => swapApi.swap(mapId(), { ...at(), itemId }, key),
+        stillHere,
+      );
+      if (view && stillHere()) {
+        swap = view;
+        note = SWAP_TEXT.done(GLIMMER_SWAP);
+      }
+    } catch (err) {
+      if (stillHere()) note = messageOf(err);
+    } finally {
+      working = false;
+      if (stillHere()) {
+        swapPick = null;
+        render();
+      }
+    }
   }
 
   /** Everything again: after a command, or when a live event says something changed. */
@@ -938,6 +991,106 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     ];
   }
 
+  /** A tab's "🔁 Trade" as its picture and its word. */
+  function tabLabel(text: string): (Node | string)[] {
+    const space = text.indexOf(' ');
+    if (space < 0) return [text];
+    return [
+      el('span', { class: 'post-tab-icon', 'aria-hidden': 'true' }, text.slice(0, space)),
+      el('span', {}, text.slice(space + 1)),
+    ];
+  }
+
+  /** The Glimmer swap (#523): pick a resource, say yes, get Glimmer, a few a day. */
+  function swapTab(): Node[] {
+    if (!swap) return [el('p', { class: 'post-tiny' }, '…')];
+    const view = swap;
+    const rules = GLIMMER_SWAP;
+    const capped = swapsLeft(view, rules) < rules.get;
+    const head = el(
+      'div',
+      { class: 'post-swap-head' },
+      el('b', { class: 'post-small' }, SWAP_TEXT.intro(rules)),
+      el(
+        'span',
+        { class: 'post-swap-today', 'data-testid': 'post-swap-today' },
+        SWAP_TEXT.today(view, rules),
+      ),
+    );
+    const parts: Node[] = [head];
+    if (capped) {
+      parts.push(
+        el(
+          'div',
+          { class: 'post-card post-card-cream', 'data-testid': 'post-swap-capped' },
+          el('b', {}, SWAP_TEXT.capped),
+          el('span', { class: 'post-small' }, SWAP_TEXT.resetsIn(hoursToReset(view, now()))),
+        ),
+      );
+    }
+    if (swapPick !== null && !capped) {
+      const itemId = swapPick;
+      parts.push(
+        el(
+          'div',
+          { class: 'post-card post-swap-confirm', 'data-testid': 'post-swap-confirm' },
+          el('b', {}, SWAP_TEXT.confirm(itemId, rules)),
+          el(
+            'div',
+            { class: 'post-row' },
+            button(SWAP_TEXT.no, 'post-swap-no', 'secondary', () => {
+              swapPick = null;
+              render();
+            }),
+            button(
+              SWAP_TEXT.yes,
+              'post-swap-yes',
+              'primary',
+              () => {
+                void swapCommand(itemId);
+              },
+              passOver(),
+            ),
+          ),
+        ),
+      );
+    }
+    parts.push(
+      el(
+        'div',
+        { class: 'post-swap-list', 'data-testid': 'post-swap-cards' },
+        ...swapCards(view, rules).map((card) =>
+          el(
+            'div',
+            {
+              class: `post-card post-row post-swap-card${card.itemId === swapPick ? ' picked' : ''}`,
+              'data-item': card.itemId,
+            },
+            el('span', { class: 'post-icon', 'aria-hidden': 'true' }, card.icon),
+            el(
+              'div',
+              { class: 'post-grow' },
+              el('b', { class: 'post-fit' }, card.name),
+              el('div', { class: 'post-small' }, SWAP_TEXT.have(card.have)),
+            ),
+            button(
+              card.have >= rules.give || capped ? SWAP_TEXT.swap : SWAP_TEXT.need(rules.give),
+              `post-swap-${card.itemId}`,
+              'gold',
+              () => {
+                swapPick = card.itemId;
+                note = '';
+                render();
+              },
+              !card.canSwap || passOver(),
+            ),
+          ),
+        ),
+      ),
+    );
+    return parts;
+  }
+
   function mailboxTab(view: TradesView): Node[] {
     const entries = waiting(view);
     const cards = entries.map((entry) => {
@@ -1047,7 +1200,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             'aria-selected': on ? 'true' : 'false',
             'data-testid': `post-tab-${t}`,
           },
-          TRADE_TEXT.tabs[t],
+          // Picture over word, so four tabs fit a 320 px phone (#523).
+          ...tabLabel(TRADE_TEXT.tabs[t]),
           ...(badges[t] > 0
             ? [
                 el(
@@ -1061,6 +1215,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         b.addEventListener('click', () => {
           if (tab === t) return;
           tab = t;
+          swapPick = null;
+          if (t === 'swap') void loadSwap();
           give = [];
           want = [];
           noteId = null;
@@ -1074,7 +1230,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
     const banner = passOver()
       ? TRADE_TEXT.closed
-      : trades?.tradingEnabled === false
+      : // The Glimmer swap works with trading off: nobody else is involved (#523).
+        trades?.tradingEnabled === false && tab !== 'swap'
         ? TRADE_TEXT.tradingOff
         : '';
     status.textContent = note || banner;
@@ -1089,7 +1246,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ? tradeTab(trades, my)
         : tab === 'gift'
           ? giftTab(trades, my)
-          : mailboxTab(trades);
+          : tab === 'mailbox'
+            ? mailboxTab(trades)
+            : swapTab();
     body.replaceChildren(...parts);
     fitNames(body);
   }
@@ -1153,6 +1312,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     sorts = { mine: 'name', theirs: 'name' };
     menu = null;
     composing = false;
+    swap = null;
+    swapPick = null;
   }
 
   function close(): void {
@@ -1217,6 +1378,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         })(),
         filters: { ...filters },
         sorts: { ...sorts },
+        swap: swap ? { today: swap.swappedToday, picked: swapPick } : null,
       };
     },
   };

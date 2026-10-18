@@ -88,3 +88,47 @@ export function checkTradeValues(
   }
   return problems;
 }
+
+/**
+ * The trading post's Glimmer swap (#523; owner decision 2026-10-18): a few
+ * everyday resources for 1 Glimmer, a few times a day. Public: the swap tab
+ * shows the rate and the cap, and the server enforces both.
+ */
+export const GlimmerSwapRulesSchema = z.strictObject({
+  /** The resources the post takes. */
+  accepts: z.array(ContentIdSchema).min(1),
+  /** How many of one accepted resource a swap takes. */
+  give: positiveInt,
+  /** Glimmer a swap gives. */
+  get: positiveInt,
+  /** Most Glimmer one player swaps for a day (the account's own day). */
+  dailyCap: positiveInt,
+});
+export type GlimmerSwapRules = z.infer<typeof GlimmerSwapRulesSchema>;
+
+/**
+ * Validates the swap's rules against the game's items and returns readable
+ * problems, or `[]`: it takes only known, tradable, gathered resources, never Glimmer itself, and the cap is whole swaps.
+ */
+export function checkGlimmerSwapRules(
+  input: unknown,
+  resources: readonly Pick<Resource, 'id' | 'tradable' | 'kind'>[],
+): string[] {
+  const result = GlimmerSwapRulesSchema.safeParse(input);
+  if (!result.success) return formatDataIssues(input, result.error);
+  const rules = result.data;
+  const problems: string[] = [];
+  const byId = new Map(resources.map((r) => [r.id, r]));
+  for (const id of rules.accepts) {
+    const resource = byId.get(id);
+    if (!resource) problems.push(`accepts: unknown item "${id}"`);
+    else if (id === 'glimmer') problems.push("accepts: Glimmer can't be swapped for Glimmer");
+    else if (!isTradableResource(resource) || resource.kind !== 'gathered') {
+      problems.push(`accepts: "${id}" isn't an everyday gathered resource`);
+    }
+  }
+  if (new Set(rules.accepts).size !== rules.accepts.length) problems.push('accepts: a repeat');
+  if (rules.dailyCap % rules.get !== 0) problems.push('dailyCap: must be whole swaps');
+  if (!byId.has('glimmer')) problems.push('glimmer: not an item');
+  return problems;
+}

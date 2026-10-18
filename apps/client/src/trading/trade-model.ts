@@ -25,8 +25,9 @@ import { itemIcon } from '../inventory/item-icons.js';
 // checks everything again (CLAUDE.md rule 1): this only shapes the request
 // and says what's waiting. Copy follows docs/STYLE_GUIDE.md.
 
-export type PostTab = 'trade' | 'gift' | 'mailbox';
-export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox'];
+export type PostTab = 'trade' | 'gift' | 'mailbox' | 'swap';
+/** The Glimmer swap (#523) comes last: the post's own counter, not a patch-mate. */
+export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap'];
 
 const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
@@ -48,10 +49,12 @@ const SLOT_ICONS: Readonly<Record<string, string>> = {
 export const NOTE_IDS = ['want-to-trade', 'thank-you', 'so-cute', 'hi', 'heart', 'sparkles'];
 
 export const TRADE_TEXT = {
-  tabs: { trade: '🔁 Trade', gift: '🎁 Gift', mailbox: '📬 Mailbox' } satisfies Record<
-    PostTab,
-    string
-  >,
+  tabs: {
+    trade: '🔁 Trade',
+    gift: '🎁 Gift',
+    mailbox: '📬 Mailbox',
+    swap: '💎 Swap',
+  } satisfies Record<PostTab, string>,
   connected: '🔗 Connected',
   open: (ms: number) => `⏳ Open ${String(Math.max(1, Math.ceil(ms / 60_000)))} min`,
   closed: 'Your visit is over. Win the journey again to come back!',
@@ -298,8 +301,13 @@ export const waiting = (view: TradesView): MailboxEntry[] =>
 
 /** The tabs' little number badges. */
 export function tabBadges(view: TradesView | null, me: string): Record<PostTab, number> {
-  if (!view) return { trade: 0, gift: 0, mailbox: 0 };
-  return { trade: offersToMe(view, me).length, gift: 0, mailbox: waiting(view).length };
+  if (!view) return { trade: 0, gift: 0, mailbox: 0, swap: 0 };
+  return {
+    trade: offersToMe(view, me).length,
+    gift: 0,
+    mailbox: waiting(view).length,
+    swap: 0,
+  };
 }
 
 /** A mailbox entry's title. */

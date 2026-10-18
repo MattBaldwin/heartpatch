@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
+import { ItemCountsSchema } from './inventory.js';
 
 /*
  * Trades and gifts at trading posts (#271; owner decisions on #30). Requests
@@ -156,3 +157,27 @@ export type TradeShelf = z.infer<typeof TradeShelfSchema>;
 
 export const TradeShelfResponseSchema = z.object({ shelf: TradeShelfSchema });
 export type TradeShelfResponse = z.infer<typeof TradeShelfResponseSchema>;
+
+/**
+ * `GET /maps/:mapId/glimmer-swap` (#523): how much Glimmer I've swapped on my
+ * own day, when that day ends, and how many of each accepted resource (and
+ * Glimmer) are in my bag on this patch. The rate and cap are shared data
+ * (`GLIMMER_SWAP`).
+ */
+export const GlimmerSwapViewSchema = z.object({
+  swappedToday: z.number().int().min(0),
+  resetsAt: z.iso.datetime(),
+  have: ItemCountsSchema,
+});
+export type GlimmerSwapView = z.infer<typeof GlimmerSwapViewSchema>;
+
+export const GlimmerSwapResponseSchema = z.object({ swap: GlimmerSwapViewSchema });
+export type GlimmerSwapResponse = z.infer<typeof GlimmerSwapResponseSchema>;
+
+/** `POST /maps/:mapId/glimmer-swap`: one swap of `itemId` at the post at (q, r). */
+export const GlimmerSwapRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  itemId: ContentIdSchema,
+});
+export type GlimmerSwapRequest = z.infer<typeof GlimmerSwapRequestSchema>;

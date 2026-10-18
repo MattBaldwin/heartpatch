@@ -5,6 +5,7 @@ import {
   localDate,
   localDateHour,
   mapLocalTime,
+  localDayStart,
   nextLocalMidnight,
   spawnWindowId,
 } from './time.js';
@@ -193,6 +194,30 @@ describe('nextLocalMidnight', () => {
     const morning = new Date('2026-11-01T06:00:00Z');
     expect(nextLocalMidnight(morning, 'America/Chicago').toISOString()).toBe(
       '2026-11-02T06:00:00.000Z',
+    );
+  });
+});
+
+describe('localDayStart', () => {
+  it("is the zone's own midnight that started the day", () => {
+    const at = new Date('2026-10-31T23:30:00Z');
+    expect(localDayStart(at, 'UTC').toISOString()).toBe('2026-10-31T00:00:00.000Z');
+    // 6:30 PM on Oct 31 in Chicago (CDT, UTC−5): the day began at 05:00 UTC.
+    expect(localDayStart(at, 'America/Chicago').toISOString()).toBe('2026-10-31T05:00:00.000Z');
+  });
+
+  it('is midnight itself at midnight', () => {
+    const midnight = new Date('2026-11-01T00:00:00Z');
+    expect(localDayStart(midnight, 'UTC').toISOString()).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('spans a 25-hour day when the clocks go back', () => {
+    // Nov 1 2026 in Chicago: CDT until 2 AM, then CST (UTC−6).
+    const evening = new Date('2026-11-02T03:00:00Z');
+    const start = localDayStart(evening, 'America/Chicago');
+    expect(start.toISOString()).toBe('2026-11-01T05:00:00.000Z');
+    expect(nextLocalMidnight(evening, 'America/Chicago').getTime() - start.getTime()).toBe(
+      25 * 60 * 60 * 1000,
     );
   });
 });
