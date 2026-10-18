@@ -452,7 +452,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       .querySelector<HTMLElement>(
         '[data-testid="territory-note"], [data-testid="territory-keeper-resting"]',
       )
-      ?.scrollIntoView?.({ block: 'center' });
+      ?.scrollIntoView({ block: 'center' });
   }
 
   /** Ticks once a second only while a countdown is on screen. */
