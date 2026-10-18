@@ -38,7 +38,7 @@ describe('SlowTrigger', () => {
     const trigger = new SlowTrigger();
     let { now } = play(trigger, 0, 4000, 200); // 4 slow seconds
     ({ now } = play(trigger, now, 1000, 16)); // one smooth one
-    expect(trigger.slowing).toBe(false);
+    expect(trigger.slowMs).toBe(0);
     const { fired } = play(trigger, now, 4800, 200);
     expect(fired).toEqual([]);
     expect(play(trigger, now + 4800, 400, 200).fired).toHaveLength(1);
@@ -47,9 +47,9 @@ describe('SlowTrigger', () => {
   it('starts over after an idle stretch (no real frame time)', () => {
     const trigger = new SlowTrigger();
     const { now } = play(trigger, 0, 4000, 200);
-    expect(trigger.slowing).toBe(true);
+    expect(trigger.slowMs).toBe(4000);
     expect(trigger.frame(now + 5000, null)).toBeNull();
-    expect(trigger.slowing).toBe(false);
+    expect(trigger.slowMs).toBe(0);
     expect(play(trigger, now + 5000, 4000, 200).fired).toEqual([]);
   });
 
@@ -57,7 +57,7 @@ describe('SlowTrigger', () => {
     const trigger = new SlowTrigger();
     expect(trigger.frame(60_000, 60_000)).toBeNull();
     expect(trigger.frame(60_000 + PAUSE_MS + 1, PAUSE_MS + 1)).toBeNull();
-    expect(trigger.slowing).toBe(false);
+    expect(trigger.slowMs).toBe(0);
   });
 
   it('fires at most once a minute while it stays slow, then again', () => {

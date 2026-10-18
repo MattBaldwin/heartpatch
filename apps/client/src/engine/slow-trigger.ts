@@ -64,9 +64,9 @@ export class SlowTrigger {
     return run;
   }
 
-  /** True while the frames so far are part of a slow run (the badge reader starts here). */
-  get slowing(): boolean {
-    return this.#runMs > 0;
+  /** How long the current slow run has lasted so far (whole buckets), in ms. */
+  get slowMs(): number {
+    return this.#runMs;
   }
 
   /** Starts over (a new scene, an idle stretch, a pause); the once-a-minute limit stays. */

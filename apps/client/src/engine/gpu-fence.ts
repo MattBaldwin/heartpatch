@@ -15,8 +15,8 @@
 export interface FenceOps<F> {
   /** A new fence after the commands queued so far, or null if the context can't make one. */
   create(): F | null;
-  /** True once the GPU has passed it; never waits. */
-  passed(fence: F): boolean;
+  /** Whether the GPU has passed it; never waits. `lost`: it never will (the context was lost). */
+  check(fence: F): 'passed' | 'pending' | 'lost';
   delete(fence: F): void;
 }
 
@@ -65,7 +65,13 @@ export class FencePoller<F> {
   poll(now: number): void {
     for (;;) {
       const oldest = this.#pending[0];
-      if (!oldest || !this.#ops.passed(oldest.fence)) break;
+      if (!oldest) break;
+      const status = this.#ops.check(oldest.fence);
+      if (status === 'lost') {
+        this.dispose(); // none of them will pass; nothing to time
+        break;
+      }
+      if (status === 'pending') break;
       this.#pending.shift();
       this.#ops.delete(oldest.fence);
       this.#record(now - oldest.at);
@@ -114,6 +120,7 @@ export interface FenceGl {
   readonly SYNC_GPU_COMMANDS_COMPLETE: number;
   readonly ALREADY_SIGNALED: number;
   readonly CONDITION_SATISFIED: number;
+  readonly WAIT_FAILED: number;
   fenceSync(condition: number, flags: number): WebGLSync | null;
   clientWaitSync(sync: WebGLSync, flags: number, timeout: number): number;
   deleteSync(sync: WebGLSync | null): void;
@@ -127,9 +134,10 @@ export interface FenceGl {
 export function webglFenceOps(gl: FenceGl): FenceOps<WebGLSync> {
   return {
     create: () => gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0),
-    passed: (sync) => {
+    check: (sync) => {
       const status = gl.clientWaitSync(sync, 0, 0);
-      return status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED;
+      if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) return 'passed';
+      return status === gl.WAIT_FAILED ? 'lost' : 'pending';
     },
     delete: (sync) => {
       gl.deleteSync(sync);

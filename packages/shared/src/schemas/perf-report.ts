@@ -5,12 +5,10 @@ import { z } from 'zod';
 // only logs it (`perf-report`), with the session's user id. Every field is a
 // number, a short label or a badge line of counts: no names, no free text.
 
-/** A duration in ms: never negative, at most a week (a page left open). */
-const Ms = z
-  .number()
-
-  .min(0)
-  .max(7 * 24 * 60 * 60 * 1000);
+/** Longest duration a report carries, in ms (the client clamps to it: a page left open for weeks). */
+export const PERF_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+/** A duration in ms: never negative, at most `PERF_MAX_MS`. */
+const Ms = z.number().min(0).max(PERF_MAX_MS);
 /** Frames per second. */
 const Fps = z.number().min(0).max(1000);
 const Count = z.int().min(0).max(1_000_000_000);

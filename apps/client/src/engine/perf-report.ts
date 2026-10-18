@@ -1,4 +1,9 @@
-import { cleanBadgeLine, type PerfDecision, type PerfReport } from '@heartpatch/shared';
+import {
+  cleanBadgeLine,
+  PERF_MAX_MS,
+  type PerfDecision,
+  type PerfReport,
+} from '@heartpatch/shared';
 import { apiCall, ApiRequestError } from '../net/api.js';
 import type { BadgeReader } from './badge-lines.js';
 import { bisectFlags, bisectLabel } from './bisect-flags.js';
@@ -123,6 +128,13 @@ export interface ReportStatus {
 export const FENCE_POLL_MS = 20; // TUNE
 
 /**
+ * How far into a slow run the badge counts start (a scene instrumentation and
+ * the GL wrappers, for the rest of the page's life). Late enough that a
+ * one-off hitch, like shaders compiling as a scene opens, doesn't start them.
+ */
+const BADGE_START_MS = 3000; // TUNE
+
+/**
  * How long a report waits for the badge lines' chunk before going without
  * them. Roomy: a phone at 1 fps fetches and runs it between frames.
  */
@@ -171,7 +183,9 @@ export function formatReportStatus(status: ReportStatus | null, now: number): st
 /** The context's fence calls, if it's WebGL2 (WebGPU and WebGL1 report no GPU latency). */
 function fenceGl(engine: object, kind: RendererKind): FenceGl | null {
   if (kind !== 'webgl2' || typeof WebGL2RenderingContext === 'undefined') return null;
-  // `_gl` is Babylon-internal (WebGL's Engine); a WebGPU engine has none.
+  // `_gl` is Babylon-internal (WebGL's Engine); a WebGPU engine has none. Read
+  // structurally, not with `instanceof Engine`, so the stage doesn't import the
+  // WebGL engine that renderer.ts loads on demand.
   const gl = (engine as { _gl?: unknown })._gl;
   return gl instanceof WebGL2RenderingContext ? gl : null;
 }
@@ -216,7 +230,7 @@ export class PerfProbe {
     }
     this.#frames.push(frameMs, renderMs);
     const run = page.trigger.frame(now, frameMs);
-    if (page.trigger.slowing) this.#watchBadge();
+    if (page.trigger.slowMs >= BADGE_START_MS) this.#watchBadge();
     if (run) void this.#report(run, now);
   }
 
@@ -294,9 +308,9 @@ export class PerfProbe {
       // Not from a stage that went away while the chunk loaded.
       badge:
         page.badge && stage && !this.#disposed ? page.badge.read(stage).map(cleanBadgeLine) : [],
-      badgeCountingMs: round(page.badge?.countingMs ?? 0),
-      sincePageLoadMs: round(now),
-      sinceSceneOpenMs: round(now - this.#openedAt),
+      badgeCountingMs: round(Math.min(page.badge?.countingMs ?? 0, PERF_MAX_MS)),
+      sincePageLoadMs: round(Math.min(now, PERF_MAX_MS)),
+      sinceSceneOpenMs: round(Math.min(now - this.#openedAt, PERF_MAX_MS)),
       visibility: document.visibilityState === 'hidden' ? 'hidden' : 'visible',
       flags,
       renderer: this.#kind,

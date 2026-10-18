@@ -22,7 +22,7 @@ function fakeGpu(): FenceOps<number> & {
       this.made++;
       return next++;
     },
-    passed: (fence) => fence <= passedUpTo,
+    check: (fence) => (fence <= passedUpTo ? 'passed' : 'pending'),
     delete(fence) {
       this.freed.push(fence);
     },
@@ -72,7 +72,7 @@ describe('FencePoller', () => {
         let n = 0;
         return () => n++;
       })(),
-      passed: (f) => f === 1,
+      check: (f) => (f === 1 ? 'passed' : 'pending'),
       delete: () => {},
     };
     const poller = new FencePoller(ops);
@@ -131,12 +131,30 @@ describe('FencePoller', () => {
   it('carries on without fences when the context makes none', () => {
     const poller = new FencePoller<number>({
       create: () => null,
-      passed: () => true,
+      check: () => 'passed',
       delete: () => {},
     });
     poller.frame(0);
     poller.frame(16);
     expect(poller.latency).toBeNull();
+  });
+
+  it('drops every fence in flight when the context is lost, without timing them', () => {
+    const freed: number[] = [];
+    let lost = false;
+    let n = 0;
+    const poller = new FencePoller<number>({
+      create: () => n++,
+      check: () => (lost ? 'lost' : 'pending'),
+      delete: (f) => void freed.push(f),
+    });
+    poller.frame(0);
+    poller.frame(16);
+    lost = true;
+    poller.poll(40);
+    expect(poller.pending).toBe(0);
+    expect(poller.latency).toBeNull();
+    expect(freed).toEqual([0, 1]);
   });
 
   it('frees every fence in flight on dispose', () => {
@@ -158,6 +176,7 @@ describe('webglFenceOps', () => {
       SYNC_GPU_COMMANDS_COMPLETE: 0x9117,
       ALREADY_SIGNALED: 0x911a,
       CONDITION_SATISFIED: 0x911c,
+      WAIT_FAILED: 0x911d,
       fenceSync: (...args: unknown[]) => (calls.push(['fenceSync', ...args]), sync),
       clientWaitSync: (...args: unknown[]) => (calls.push(['clientWaitSync', ...args]), status),
       deleteSync: (...args: unknown[]) => void calls.push(['deleteSync', ...args]),
@@ -168,7 +187,7 @@ describe('webglFenceOps', () => {
     const fake = gl(0x911b); // TIMEOUT_EXPIRED
     const ops = webglFenceOps(fake);
     expect(ops.create()).toBe(sync);
-    expect(ops.passed(sync)).toBe(false);
+    expect(ops.check(sync)).toBe('pending');
     ops.delete(sync);
     expect(fake.calls).toEqual([
       ['fenceSync', 0x9117, 0],
@@ -177,9 +196,9 @@ describe('webglFenceOps', () => {
     ]);
   });
 
-  it('reads already-signaled and condition-satisfied as passed', () => {
-    expect(webglFenceOps(gl(0x911a)).passed(sync)).toBe(true);
-    expect(webglFenceOps(gl(0x911c)).passed(sync)).toBe(true);
-    expect(webglFenceOps(gl(0x911d)).passed(sync)).toBe(false); // WAIT_FAILED
+  it('reads signaled as passed and a failed wait as lost', () => {
+    expect(webglFenceOps(gl(0x911a)).check(sync)).toBe('passed');
+    expect(webglFenceOps(gl(0x911c)).check(sync)).toBe('passed');
+    expect(webglFenceOps(gl(0x911d)).check(sync)).toBe('lost'); // WAIT_FAILED: context lost
   });
 });

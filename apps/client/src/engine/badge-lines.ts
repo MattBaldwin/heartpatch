@@ -24,8 +24,8 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * The `?fps=1` badge's three lines (see `dev-overlay.ts`), read from a stage.
  * The badge and the perf report (#501 PR A) share one reader (`badgeReader`),
  * so they show the same counts. It starts counting (a scene instrumentation,
- * the GL wrappers) the first time it's read, so a page that never shows the
- * badge or sends a report pays nothing.
+ * the GL wrappers) the first time it's watched, so a page that never shows
+ * the badge or slows down for 3 s pays nothing.
  */
 export class BadgeReader {
   /** Renders across every engine, between two reads. */

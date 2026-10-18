@@ -685,7 +685,7 @@ Each line is pino JSON; `perfReport` says where the slow frames went:
 - `gpu`: GPU latency from WebGL2 fences: from the end of a frame's `scene.render` to the first check that saw the GPU finish it (checked every frame, and every 20 ms between slow frames). Near `gapMs`, with `pending` climbing, the GPU is the wait; well under `gapMs`, the GPU finished early and the browser is slow to hand us the next frame. `null` on WebGPU or before a fence passed.
 - `governor`: its tier and render scale now and its last 10 changes (`atMs` since page load, with the fps then).
 - `badge`: the `?fps=1` badge's three lines; GL objects made and freed count from `badgeCountingMs` before the report.
-- `sincePageLoadMs`, `sinceSceneOpenMs` (heat builds with time), `visibility`, `flags` (the `?no…` switches that were on), `renderer`.
+- `sincePageLoadMs`, `sinceSceneOpenMs` (heat builds with time; a row with `sinceSceneOpenMs` under about 10 s is a slow scene build on a slower device, not the collapse), `visibility`, `flags` (the `?no…` switches that were on), `renderer`.
 
 ## Workspace source condition
 
