@@ -157,6 +157,7 @@ function toPublicTile(
     clearing: tile.clearing,
     cooldownUntil: tile.cooldownUntil,
     defenders: tile.defenders,
+    defenderFeelings: tile.defenderFeelings ?? [],
     workers: tile.workers,
     guardianHint,
     buildings,

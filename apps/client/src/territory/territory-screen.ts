@@ -317,7 +317,10 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
    * no feelings.
    */
   function guardsWho(tile: PublicTile): HTMLElement[] {
-    const feelings = watchFeelingsLine(tile.defenderFeelings);
+    // Only when it tells the same count (a live change or a guard taken to the
+    // Hollow can leave the list behind): never a line about the wrong guards.
+    const told = tile.defenderFeelings?.length === tile.defenders;
+    const feelings = told ? watchFeelingsLine(tile.defenderFeelings) : null;
     if (feelings !== null) return [line(feelings, 'territory-guards-who')];
     return tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : [];
   }
