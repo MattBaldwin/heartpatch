@@ -66,6 +66,10 @@ declare global {
       } | null;
       /** The stage's frame cap (explore, `?cap30=1`; #501), or null when it draws on demand. */
       frameCap?(): FrameCap | null;
+      /** Test scenes built since the page loaded (a map↔explore switch builds none, #501 G). */
+      testScenes?(): number;
+      /** `RenderQuality.expectHitch` calls on this stage (a find makes two, #501 G). */
+      hitchesExpected?(): number;
       /**
        * The open map as drawn (id, tile and tint counts, selection), or null.
        * Only the game page has it (not dev pages like the squishy gallery).

@@ -1,9 +1,9 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { defaultKeeperConfig, KEEPER_DATA } from '@heartpatch/shared';
 import { keeperItems } from './keeper-items.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { KeeperField } from './keeper-field.js';
 
 describe('KeeperField hop placement (#317)', () => {
@@ -96,5 +96,55 @@ describe('KeeperField costume models', () => {
     field.flush();
     field.dispose();
     expect(scene.meshes.some((m) => m.name.startsWith('keeper-model-'))).toBe(false);
+  });
+});
+
+describe('KeeperField cheers (#501 G)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('rewrites the event buffer in place: a cheer makes no new buffers', () => {
+    const scene = new Scene(engine);
+    const field = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
+    const config = defaultKeeperConfig(KEEPER_DATA.bases[0]!);
+    const keeper = field.add(config, { x: 0, z: 0 });
+    field.add(config, { x: 2, z: 0 });
+    field.flush();
+    const mesh = scene.meshes.find((m) => m.name.startsWith('keeper-')) as Mesh;
+    // Babylon has no public read of a user thin-instance buffer; the storage
+    // shows whether the same array is kept (rewritten in place).
+    const eventBuffer = (): Float32Array | undefined =>
+      mesh._userThinInstanceBuffersStorage.data['squishEvent'];
+    const events = eventBuffer()!;
+    const finishes = events.filter((_, i) => i % 4 === 3);
+
+    const setBuffer = vi.spyOn(Mesh.prototype, 'thinInstanceSetBuffer');
+    const made = [
+      vi.spyOn(engine, 'createVertexBuffer'),
+      vi.spyOn(engine, 'createDynamicVertexBuffer'),
+    ];
+    const updated = vi.spyOn(Mesh.prototype, 'thinInstanceBufferUpdated');
+    field.play(keeper, 'bounce', 1000);
+    field.flush();
+    field.play(keeper, 'jiggle', 1500);
+    field.flush();
+
+    expect(setBuffer).not.toHaveBeenCalled();
+    for (const spy of made) expect(spy).not.toHaveBeenCalled();
+    expect(updated.mock.calls.every(([kind]) => kind === 'squishEvent')).toBe(true);
+    expect(updated).toHaveBeenCalled();
+    // Same buffer, now carrying the cheer; finishes are kept.
+    expect(eventBuffer()).toBe(events);
+    expect(events.some((v, i) => i % 4 === 1 && v !== 0)).toBe(true);
+    expect(events.filter((_, i) => i % 4 === 3)).toEqual(finishes);
   });
 });

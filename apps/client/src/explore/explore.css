@@ -25,13 +25,33 @@
   -webkit-touch-callout: none;
 }
 
-/* The lantern's dark: a circle of light follows the Keeper (board g). */
+/* The lantern's dark: a circle of light follows the Keeper (board g). The
+   light is a layer bigger than the screen, painted once and moved by a
+   composited transform, never a repaint per frame (#501 G, lantern-dark.ts). */
 .explore-dark {
   position: fixed;
   inset: 0;
   z-index: 4;
-  background: var(--light, rgb(28 20 40 / 94%));
+  overflow: hidden;
+  contain: strict;
   pointer-events: none;
+}
+
+.explore-dark-light {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Fully dark until the first drawn frame places the light. */
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle var(--light-r, 0) at 50% 50%,
+    rgb(255 227 163 / 70%) 0%,
+    rgb(205 176 138 / 66%) var(--light-warm, 80%),
+    rgb(36 28 46 / 95%) 100%
+  );
+  transform-origin: 50% 50%;
+  will-change: transform;
 }
 
 .explore-glint {
@@ -43,7 +63,11 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgb(255 251 224 / 90%), rgb(255 251 224 / 0%) 70%);
   font-size: 30px;
+  /* Placed by a composited transform on drawn frames (#501 G). */
+  top: 0;
+  left: 0;
   transform: translate(-50%, -50%);
+  will-change: transform;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */

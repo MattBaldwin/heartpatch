@@ -6,7 +6,10 @@ import {
   FRAME_WINDOW,
   FrameWindow,
   formatReportStatus,
+  HITCH_FOLLOW_MS,
+  HitchWatch,
 } from './perf-report.js';
+import { REPORT_EVERY_MS } from './slow-trigger.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
 describe('FrameWindow', () => {
@@ -53,6 +56,60 @@ describe('DecisionLog', () => {
     log.remount();
     log.note(5, at('low', 0.5), null);
     expect(log.entries).toEqual([]);
+  });
+});
+
+describe('HitchWatch (#501 G)', () => {
+  const high = () => ({ tier: 'high' as const, renderScale: 1 });
+  /** Drawn frames at 30 fps from `from` for `ms`; returns the last hitch reported, if any. */
+  function calm(
+    watch: HitchWatch,
+    from: number,
+    ms: number,
+    lastPostAt: number | null = null,
+    governor = high,
+  ) {
+    let found = null;
+    for (let t = from + 33; t <= from + ms; t += 33) {
+      found = watch.frame(t, 33, 2, governor, lastPostAt) ?? found;
+    }
+    return found;
+  }
+
+  it('reports one frame over 100 ms among quick ones, with the governor choice after it', () => {
+    const watch = new HitchWatch();
+    expect(calm(watch, 0, 1000)).toBeNull();
+    expect(watch.frame(1200, 200, 140, high, null)).toBeNull();
+    const cut = () => ({ tier: 'high' as const, renderScale: 0.9 });
+    const hitch = calm(watch, 1200, HITCH_FOLLOW_MS + 100, null, cut);
+    expect(hitch).toMatchObject({
+      frameMs: 200,
+      renderMs: 140,
+      before: { tier: 'high', renderScale: 1 },
+      after: { tier: 'high', renderScale: 0.9 },
+    });
+    expect(hitch!.followMs).toBeGreaterThanOrEqual(HITCH_FOLLOW_MS);
+  });
+
+  it('leaves a slow run to the slow report', () => {
+    const slow = new HitchWatch();
+    let found = null;
+    for (let t = 150; t < 5000; t += 150) found = slow.frame(t, 150, 1, high, null) ?? found;
+    expect(found).toBeNull();
+  });
+
+  it('waits a minute after any report, and yields to one posted during its follow-up', () => {
+    const watch = new HitchWatch();
+    // A report 10 s ago (a slow run's, or the last hitch): no hitch yet.
+    watch.frame(10_000, 200, 1, high, 0);
+    expect(calm(watch, 10_000, 2000, 0)).toBeNull();
+    // A minute on, it reports.
+    watch.frame(REPORT_EVERY_MS + 1000, 200, 1, high, 0);
+    expect(calm(watch, REPORT_EVERY_MS + 1000, 2000, 0)).not.toBeNull();
+    // A slow report lands while a hitch waits on its follow-up: the slow one goes alone.
+    const at = 3 * REPORT_EVERY_MS;
+    watch.frame(at, 200, 1, high, null);
+    expect(calm(watch, at, 2000, at + 500)).toBeNull();
   });
 });
 
@@ -126,6 +183,7 @@ describe('PerfProbe', () => {
   it('carries the governor decisions it saw', async () => {
     const { PerfProbe } = await import('./perf-report.js');
     const live = { snapshot: { ...quality.snapshot } };
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
     const probe = new PerfProbe({}, 'webgl2', live, () => null);
     let now = 0;
     for (let i = 0; i < 30; i++) {
@@ -141,5 +199,52 @@ describe('PerfProbe', () => {
     expect(report.governor.decisions).toEqual([
       { atMs: 2200, tier: 'medium', renderScale: 0.6, fps: 5 },
     ]);
+  });
+
+  it('posts a hitch row (and leaves the badge on the last slow run)', async () => {
+    const { PerfProbe, lastReport } = await import('./perf-report.js');
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
+    const probe = new PerfProbe({}, 'webgl2', quality, () => null);
+    let now = 0;
+    probe.frame(now, null, 2);
+    const step = (ms: number, render = 2) => {
+      now += ms;
+      probe.frame(now, ms, render);
+    };
+    for (let i = 0; i < 30; i++) step(33);
+    step(220, 180);
+    for (let i = 0; i < 60; i++) step(33);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [, init] = fetch.mock.calls[0] as [string, RequestInit];
+    const report = PerfReportSchema.parse(JSON.parse(init.body as string));
+    expect(report.slowMs).toBe(0);
+    expect(report.fps).toBeGreaterThan(20);
+    expect(report.hitch).toMatchObject({
+      frameMs: 220,
+      renderMs: 180,
+      before: { tier: 'medium', renderScale: 0.75 },
+      after: { tier: 'medium', renderScale: 0.75 },
+    });
+    expect(lastReport()).toBeNull();
+  });
+
+  it('posts no hitch within a minute of a slow report (the server allows two a minute)', async () => {
+    const { PerfProbe } = await import('./perf-report.js');
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
+    const probe = new PerfProbe({}, 'webgl2', quality, () => null);
+    let now = 0;
+    probe.frame(now, null, 2);
+    const step = (ms: number) => {
+      now += ms;
+      probe.frame(now, ms, 1);
+    };
+    for (let i = 0; i < 30; i++) step(250); // a slow run: one report
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    for (let i = 0; i < 60; i++) step(33);
+    step(220);
+    for (let i = 0; i < 60; i++) step(33);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
