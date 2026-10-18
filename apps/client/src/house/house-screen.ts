@@ -204,6 +204,8 @@ export interface HouseDebug {
   readonly zoom: number;
   /** The Keeper's middle on screen (CSS px), or null: none drawn, or behind the camera (a tap there walks in). */
   readonly keeper: { readonly x: number; readonly y: number } | null;
+  /** The floor the cut shows (W3: walked in, the Keeper's, up and down the stairs). */
+  readonly floor: number;
   /**
    * The Keeper's walk (#381 W2): where it stands and its room, which way it
    * faces, the stick held or a tapped spot it's walking to, and the follow
@@ -248,12 +250,12 @@ export interface HouseDebug {
    */
   readonly reread: () => void;
   /**
-   * Puts the Keeper in a room (where `startSpot` stands it), as a doorway
-   * it can't pass yet would (the Hall at level 4, W3). Dev hook only: e2e
-   * and the shots walk in other rooms. `on` picks the spot (else where
-   * `startSpot` stands it). False: no such room, or no floor free there.
+   * Puts the Keeper in a room (where `startSpot` stands it). Dev hook only:
+   * e2e and the shots walk in other rooms. `on` picks the spot (else where
+   * `startSpot` stands it), `on.y` a floor above the room's own (the Hall's
+   * gallery and walkway, W3). False: no such room, or no floor free there.
    */
-  readonly putKeeper: (roomId: string, on?: { x: number; z: number }) => boolean;
+  readonly putKeeper: (roomId: string, on?: { x: number; z: number; y?: number }) => boolean;
 }
 
 export interface HouseScreen {
@@ -1731,11 +1733,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   }
 
   /** Dev hook: the Keeper put in a room (or on a spot in it), as the walk would leave it there. */
-  function putKeeper(roomId: string, on?: { x: number; z: number }): boolean {
+  function putKeeper(roomId: string, on?: { x: number; z: number; y?: number }): boolean {
     const s = scene3d;
     const room = s?.walkMap.rooms.find((r) => r.id === roomId);
     const map = s?.walkMap;
-    const y = room && map && on ? floorAt(map, on.x, on.z, room.y0) : NaN;
+    const y = room && map && on ? floorAt(map, on.x, on.z, on.y ?? room.y0) : NaN;
     const spot =
       room && map
         ? on
@@ -2105,6 +2107,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         pose: glide ? 'glide' : walk ? 'walk' : walkedIn(zoom) ? 'kid' : 'dollhouse',
         zoom,
         keeper: keeperOnScreen(),
+        floor,
         walk:
           scene3d && walkReady
             ? {

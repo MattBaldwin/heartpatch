@@ -13,8 +13,12 @@
 // times mean nothing. No dev badge unless FPS=1 (then the badge shot shows
 // it clear of the room pill).
 //
-// DEVICES (iphone,se,ipad), SHOTS (dollhouse,glide,hall,playroom,stick,out,badge), TIER (high),
-// MINUTE (1080) narrow the set.
+// W3 adds: the dollhouse upstairs; the Snug toward its doorway into the
+// Hall; the Keeper half way up the stairs, on the walkway down to the
+// Kitchen loft, and in the Kitchen looking at its doorway.
+//
+// DEVICES (iphone,se,ipad), SHOTS (dollhouse,glide,hall,playroom,stick,out,badge,
+// upstairs,snug-door,stairs,walkway,kitchen), TIER (high), MINUTE (1080) narrow the set.
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,7 +32,20 @@ const DEVICES = {
 };
 const only = (key, all) => (process.env[key] ? process.env[key].split(',') : all);
 const devices = only('DEVICES', Object.keys(DEVICES));
-const shots = only('SHOTS', ['dollhouse', 'glide', 'hall', 'playroom', 'stick', 'out', 'badge']);
+const shots = only('SHOTS', [
+  'dollhouse',
+  'glide',
+  'hall',
+  'playroom',
+  'stick',
+  'out',
+  'badge',
+  'upstairs',
+  'snug-door',
+  'stairs',
+  'walkway',
+  'kitchen',
+]);
 const tier = process.env.TIER ?? 'high';
 const minute = process.env.MINUTE ?? '1080';
 /** The grown house (the Hall, the Playroom, the Kitchen loft) unless LEVEL says otherwise. */
@@ -117,12 +134,24 @@ const SPOTS = {
   playroom: { x: 6.9, z: 3.3 },
 };
 
+/**
+ * The W3 shots' spots (shot → room and spot, a storey up with `y`): the
+ * Snug's middle facing its back-right doorway into the Hall; half way up the
+ * stairs; on the walkway by the west wall; in the Kitchen loft.
+ */
+const W3_SPOTS = {
+  'snug-door': ['snug', { x: 3.0, z: 2.6 }],
+  stairs: ['heart-hall', { x: 8.98, z: 7.6, y: 1.5 }],
+  walkway: ['heart-hall', { x: 0.7, z: 6.9, y: 3 }],
+  kitchen: ['kitchen', { x: 2.4, z: 3.0, y: 3 }],
+};
+
 /** Walks in with the button (the real control), settled at the follow camera. */
-async function walkIn(page, room) {
+async function walkIn(page, room, spot = SPOTS[room]) {
   if (room) {
     const ok = await page.evaluate(
       ([r, on]) => window.__heartpatch.house().putKeeper(r, on ?? undefined),
-      [room, SPOTS[room]],
+      [room, spot],
     );
     if (!ok) throw new Error(`can't put the Keeper in ${room}`);
   }
@@ -191,6 +220,17 @@ async function shoot(shot, device) {
   const { ctx, page, d } = await open(device, { fps: shot === 'badge' });
   if (shot === 'dollhouse' || shot === 'badge') {
     await save(page, name);
+  } else if (shot === 'upstairs') {
+    await page.getByTestId('house-floor').tap();
+    await frames(page, 4);
+    await save(page, name);
+  } else if (W3_SPOTS[shot]) {
+    const [room, spot] = W3_SPOTS[shot];
+    await walkIn(page, room, spot);
+    await save(page, name, {
+      floor: (await house(page)).floor,
+      room: (await house(page)).walk?.room,
+    });
   } else if (shot === 'hall' || shot === 'playroom') {
     await walkIn(page, shot === 'hall' ? 'heart-hall' : 'playroom');
     await save(page, name);
