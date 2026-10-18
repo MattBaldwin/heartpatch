@@ -122,13 +122,14 @@ export const RESIDENT_TEXT = {
   /**
    * The same on a bed chip: short, and one unbreakable piece (no-break
    * spaces throughout), so every chip keeps one line and the same height.
+   * The emoji leads, as the mood chips' do ("😊 Happy"), B5.
    */
   awayShort: {
-    gathering: 'Gathering\u00A0🧺',
-    guarding: 'On\u00A0watch\u00A0🛡️',
-    training: 'Training\u00A0🎯',
-    hollow: 'Hollow\u00A0🌙',
-    'in-trade': 'Trading\u00A0📬',
+    gathering: '🧺\u00A0Gathering',
+    guarding: '🛡️\u00A0On\u00A0watch',
+    training: '🎯\u00A0Training',
+    hollow: '🌙\u00A0Hollow',
+    'in-trade': '📬\u00A0Trading',
   } satisfies Record<ResidentAway, string>,
   /** The next step under a resident taken to the Hollow (style guide §3.5), as the map says it. */
   hollowNext: 'Find the Hollow 🌙 on the map to bring\u00A0them\u00A0home!',

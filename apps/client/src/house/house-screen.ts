@@ -328,6 +328,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let zone: string | null = null;
   /** The patch day the shown house was read on (a new day re-reads it: today's gift). */
   let readDay = '';
+  /** The device day we last re-read for: a device clock a day off the server's asks once (B5). */
+  let rereadFor = '';
   /** The light now (#381 H2): picked as the scene builds and once a minute after. */
   let look: HouseLightLook | null = null;
   let lookTimer: ReturnType<typeof setInterval> | null = null;
@@ -453,7 +455,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   });
   scrim.addEventListener('click', () => {
     // While building, opening or moving, the page stays put ("Building…" can't be dismissed).
-    if (!building && !opening && !moving) setSheet('peek');
+    if (!houseBusy({ building, opening, moving })) setSheet('peek');
   });
   const overlay = el(
     'div',
@@ -1311,14 +1313,18 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function checkLook(): void {
     if (!isOpen || !scene3d) return;
     // A new patch day since the house was read: today's gift rolls on a read.
+    const today = localDayIn(zone, clock());
     if (
       shouldReread({
         readDay,
-        today: localDayIn(zone, clock()),
+        today,
         busy: houseBusy({ building, opening, moving }),
+        askedFor: rereadFor,
       })
-    )
+    ) {
+      rereadFor = today;
       void refresh();
+    }
     const next = lookNow();
     if (look && sameHouseLook(next, look)) return;
     look = next;
@@ -1475,7 +1481,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   window.addEventListener('keydown', (e) => {
     if (!isOpen || e.key !== 'Escape') return;
     // While building, opening or moving, the page stays put ("Building…" can't be dismissed).
-    if ((building || opening || moving) && sheet !== 'peek') return;
+    if (houseBusy({ building, opening, moving }) && sheet !== 'peek') return;
     // Escape steps back one sheet at a time, then leaves the house.
     if (sheet === 'gift') setSheet('peek');
     else if (sheet === 'confirm') setSheet('grow');
@@ -1566,6 +1572,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     mapId = id;
     view = fresh;
     readDay = localDayIn(zone, new Date(fresh.now));
+    rereadFor = '';
     zoom = 0;
     floor = 0;
     panner.reset();

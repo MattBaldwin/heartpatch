@@ -175,6 +175,27 @@ interface Batch {
   origins: Float32Array | null;
 }
 
+/** The eight corners of a mesh's own vertices' box (not the thin instances'), cached. */
+const BASE_BOXES = new WeakMap<Mesh, Vector3[]>();
+function baseBox(mesh: Mesh): Vector3[] | null {
+  const cached = BASE_BOXES.get(mesh);
+  if (cached) return cached;
+  const pos = mesh.getVerticesData('position');
+  if (!pos || pos.length < 3) return null;
+  const lo = new Vector3(Infinity, Infinity, Infinity);
+  const hi = new Vector3(-Infinity, -Infinity, -Infinity);
+  for (let i = 0; i + 2 < pos.length; i += 3) {
+    const at = new Vector3(pos[i] ?? 0, pos[i + 1] ?? 0, pos[i + 2] ?? 0);
+    lo.minimizeInPlace(at);
+    hi.maximizeInPlace(at);
+  }
+  const box: Vector3[] = [];
+  for (const x of [lo.x, hi.x])
+    for (const y of [lo.y, hi.y]) for (const z of [lo.z, hi.z]) box.push(new Vector3(x, y, z));
+  BASE_BOXES.set(mesh, box);
+  return box;
+}
+
 // Scratch for placing squishies and their shadows (no allocations while walking, #323).
 const PLACE_SCALE = new Vector3();
 const PLACE_TURN = new Quaternion();
@@ -505,6 +526,33 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   centre(handle: SquishyHandle): Vector3 | null {
     const s = this.#squishies.get(handle.id);
     return s ? new Vector3(s.origin[0], s.origin[1] + s.origin[3] / 2, s.origin[2]) : null;
+  }
+
+  /**
+   * How far a squishy reaches from its middle, world units: the farthest
+   * corner of its drawn pieces' boxes (body, ears, spikes, accessory), so a
+   * wide one is measured as it is, not by its height. Null if unknown or
+   * not drawn yet.
+   */
+  reachOf(handle: SquishyHandle): number | null {
+    const s = this.#squishies.get(handle.id);
+    const mid = this.centre(handle);
+    if (!s || !mid) return null;
+    this.flush(); // the meshes are built on a flush
+    const pieces = [...s.instances.map((e) => e.instance), ...(s.accessory?.instances ?? [])];
+    const corner = new Vector3();
+    let far = 0;
+    for (const piece of pieces) {
+      if (piece.floater) continue;
+      const batch = [...this.#batches.values()].find((b) => b.instances.includes(piece));
+      const box = batch?.mesh ? baseBox(batch.mesh) : null;
+      if (!box) continue;
+      for (const v of box) {
+        Vector3.TransformCoordinatesToRef(v, piece.matrix, corner);
+        far = Math.max(far, Vector3.Distance(corner, mid));
+      }
+    }
+    return far > 0 ? far : null;
   }
 
   get handles(): SquishyHandle[] {

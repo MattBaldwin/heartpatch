@@ -124,6 +124,18 @@ describe('SquishyField shadow look (owner decision 7)', () => {
     const m = body().thinInstanceGetWorldMatrices()[0]!;
     expect([m.m[12], m.m[14]]).toEqual([expect.closeTo(-1), expect.closeTo(3)]);
   });
+
+  it('measures how far a squishy reaches as drawn, before any flush, and follows its scale (B5b)', () => {
+    const { field: f } = field();
+    const small = f.add(species, 'small', { x: 0, z: 0 });
+    const big = f.add(species, 'big', { x: 4, z: 0, scale: 2 });
+    // Meshes are built lazily: asking is enough.
+    const a = f.reachOf(small)!;
+    const b = f.reachOf(big)!;
+    expect(a).toBeGreaterThan(0.3);
+    expect(b).toBeGreaterThan(a * 1.8);
+    expect(f.reachOf({ ...small, id: -1 })).toBeNull();
+  });
 });
 
 describe('SquishyField accessories (#340)', () => {

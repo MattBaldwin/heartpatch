@@ -28,6 +28,11 @@
   display: none;
 }
 
+/* B5b: the map's two bottom tray handles stood a little taller than the sheet and peeked round its top corners (SE, iPad); the sheet covers them anyway, so they step aside while it's open. */
+body:has(.roster-sheet:not([hidden])) .tray-handle {
+  visibility: hidden;
+}
+
 /* Under a care sheet opened from a row: out of sight, back when it closes. */
 .roster-covered {
   visibility: hidden;

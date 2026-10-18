@@ -15,6 +15,7 @@ import {
 } from './house-camera.js';
 import { HOUSE_GIFT, HOUSE_GRID, HOUSE_KID, HOUSE_PALETTE, HOUSE_TIMES } from './house-config.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { fillTilt } from './house-scene.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
@@ -441,6 +442,74 @@ describe('house scene', () => {
       expect(wall).toBeGreaterThan(0);
       scene.getEngine().dispose();
     });
+
+    /**
+     * Where each drawn piece of every resident lands on the screen, CSS px
+     * (B5b): from the thin instances' own matrices and vertices, so it
+     * doesn't trust the framing's reach estimate (a wide squishy outran it).
+     */
+    const pieceSpans = (
+      scene: Scene,
+      pose: ReturnType<typeof fitHouse>,
+      vp: { width: number; height: number },
+    ) => {
+      const spans: { name: string; x0: number; x1: number }[] = [];
+      for (const mesh of scene.meshes) {
+        if (!mesh.name.startsWith('squishy-') || !mesh.isEnabled()) continue;
+        const pos = mesh.getVerticesData('position') ?? [];
+        const lo = [Infinity, Infinity, Infinity];
+        const hi = [-Infinity, -Infinity, -Infinity];
+        pos.forEach((v, i) => {
+          lo[i % 3] = Math.min(lo[i % 3]!, v);
+          hi[i % 3] = Math.max(hi[i % 3]!, v);
+        });
+        const aspect = vp.width / vp.height;
+        for (const m of (mesh as Mesh).thinInstanceGetWorldMatrices()) {
+          const xs: number[] = [];
+          for (const x of [lo[0]!, hi[0]!])
+            for (const y of [lo[1]!, hi[1]!])
+              for (const z of [lo[2]!, hi[2]!]) {
+                const w = Vector3.TransformCoordinates(new Vector3(x, y, z), m);
+                xs.push(((project(pose, aspect, w).x + 1) / 2) * vp.width);
+              }
+          spans.push({ name: mesh.name, x0: Math.min(...xs), x1: Math.max(...xs) });
+        }
+      }
+      return spans;
+    };
+
+    it('frames every phone so no resident is cut at a screen edge at any level (B5b: the cyan at level 2)', () => {
+      const bands = { top: 60, bottom: 193, sheet: 129 };
+      const phones = [
+        { name: 'iPhone', width: 390, height: 844, ...bands },
+        { name: 'SE', width: 375, height: 667, ...bands },
+        { name: 'iPad', width: 820, height: 1180, top: 70, bottom: 150, sheet: 100 },
+      ];
+      for (const device of phones) {
+        const vp = { ...device };
+        for (const [level, floor] of [
+          [2, 0],
+          [3, 0],
+          [3, 1],
+          [4, 0],
+          [4, 1],
+        ] as const) {
+          const { scene, house } = buildHouse(level, 'high', sampleHouse(level), vp);
+          house.setRoof(1);
+          house.setFloor(floor);
+          const focus = framedFocus(house.frameBounds, vp, house.focusRoom, house.residentSpots);
+          const pose = fitHouse(house.frameBounds, vp, undefined, focus);
+          house.setPose(pose, 0);
+          scene.render();
+          for (const m of scene.meshes) m.computeWorldMatrix(true);
+          const cut = pieceSpans(scene, pose, vp).filter(
+            (b) => (b.x0 < 0 && b.x1 > 0) || (b.x0 < vp.width && b.x1 > vp.width),
+          );
+          expect(cut, `${device.name} level ${String(level)} floor ${String(floor)}`).toEqual([]);
+          scene.getEngine().dispose();
+        }
+      }
+    }, 60_000);
 
     it('frames a phone so no resident is cut by the screen’s edge, every face seen (round 3)', () => {
       const vp = { width: 390, height: 844, top: 70, bottom: 148, sheet: 68 };

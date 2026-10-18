@@ -88,13 +88,15 @@ export function giftPlacement(
 /**
  * Re-read the house (#381 H2 review): the server rolls today's gift only
  * on a read, so a screen left open past the patch's midnight reads again,
- * unless a build or an open is in flight (its reply comes first).
+ * unless a build, an open or a move is in flight (its reply comes first).
  */
 export const shouldReread = (o: {
   readonly readDay: string;
   readonly today: string;
   readonly busy: boolean;
-}): boolean => !o.busy && o.readDay !== '' && o.readDay !== o.today;
+  /** The device day a re-read was already asked for (B5): a skewed clock asks once, not every minute. */
+  readonly askedFor?: string;
+}): boolean => !o.busy && o.readDay !== '' && o.readDay !== o.today && o.askedFor !== o.today;
 
 /**
  * After opening a gift: read again when it was yesterday's (opened after
