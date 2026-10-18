@@ -83,3 +83,36 @@ describe('rollExploreFind', () => {
     }
   });
 });
+
+describe('Glimmer from exploring (#523)', () => {
+  /** Glimmer a search spot gives on average on a terrain, from its kit's weights. */
+  function glimmerPerSpot(terrain: string): number {
+    const kit = EXPLORE_RULES.terrains.find((t) => t.terrain === terrain);
+    if (!kit) throw new Error(terrain);
+    const kitWeight = kit.kinds.reduce((sum, k) => sum + k.weight, 0);
+    return kit.kinds.reduce((sum, k) => {
+      const table = exploreFindTable(EXPLORE_FINDS, k.kind, terrain);
+      if (!table) throw new Error(k.kind);
+      const tableWeight = table.finds.reduce((s, f) => s + f.weight, 0);
+      const glimmer = table.finds.reduce((s, f) => s + f.weight * (f.items?.['glimmer'] ?? 0), 0);
+      return sum + (k.weight / kitWeight) * (glimmer / tableWeight);
+    }, 0);
+  }
+
+  it('turns up from every mountain and hills spot but the hills rock, and stays a treat', () => {
+    for (const terrain of ['mountains', 'hills']) {
+      const kit = EXPLORE_RULES.terrains.find((t) => t.terrain === terrain);
+      for (const { kind } of kit?.kinds ?? []) {
+        if (kind === 'rock') continue;
+        const table = exploreFindTable(EXPLORE_FINDS, kind, terrain);
+        expect(
+          table?.finds.some((f) => (f.items?.['glimmer'] ?? 0) > 0),
+          kind,
+        ).toBe(true);
+      }
+    }
+    // TUNE: about 1 in 10 mountain spots and 1 in 4–5 hills spots (#523).
+    expect(glimmerPerSpot('mountains')).toBeCloseTo(0.099, 3);
+    expect(glimmerPerSpot('hills')).toBeCloseTo(0.225, 3);
+  });
+});
