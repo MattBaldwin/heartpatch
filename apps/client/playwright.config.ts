@@ -52,6 +52,7 @@ const E2E_GROUPS = [
     'factory',
     'first-session',
     'map-hole',
+    'perf-report',
     'territory',
     'tutorial-flow',
     'whats-new',

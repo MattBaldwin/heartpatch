@@ -4,6 +4,7 @@ import type { Bounds, GroundPoint } from './camera/camera-math.js';
 import { CAMERA, SETTLE_FRAMES, type CameraConfig, type QualityTier } from './config.js';
 import { bisectFlags, CAP30_MIN_FRAME_MS } from './bisect-flags.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import { PerfProbe, SLOW_FRAME_MS, slowFrames } from './perf-report.js';
 import { setupLighting } from './lighting/lighting.js';
 import { RenderQuality } from './quality/render-quality.js';
 import type { Renderer } from './renderer.js';
@@ -80,6 +81,10 @@ export function mountStage(
   const quality = new RenderQuality(scene, mapCamera.camera, tier, pinTier);
 
   const frames = new FrameScheduler(SETTLE_FRAMES, bisectFlags().cap30 ? CAP30_MIN_FRAME_MS : 0);
+  // The on-device perf report (#501): frame timing and GPU fences; reads the stage once built.
+  let stage: Stage | null = null;
+  const probe = new PerfProbe(engine, renderer.kind, quality, () => stage);
+  const slow = slowFrames();
   const abort = new AbortController();
   // One resize path, run at the top of the next frame, so the resize and
   // the draw it needs share it (resizing after a draw clears the buffer
@@ -141,13 +146,28 @@ export function mountStage(
       frames.invalidate();
     }
     const busy = !loaded || mapCamera.wantsFrame || scene.animatables.length > 0;
-    const { draw, frameMs } = frames.next(performance.now(), busy);
+    const now = performance.now();
+    const { draw, frameMs } = frames.next(now, busy);
     if (!draw) return;
+    const renderStart = performance.now();
     scene.render();
-    if (frameMs !== null && quality.sample(frameMs)) rescalePending = true;
+    const renderMs = performance.now() - renderStart;
+    if (slow) {
+      // `?slow=1` (dev): a stalled GPU's shape, slow frames with little of our JS (the e2e
+      // check that a perf report fires). Keeps drawing, like the joystick loop.
+      while (performance.now() - renderStart < SLOW_FRAME_MS) {
+        // spin
+      }
+      frames.requestFrame();
+    }
+    probe.frame(now, frameMs, renderMs);
+    if (frameMs !== null && quality.sample(frameMs)) {
+      rescalePending = true;
+      probe.decided(now);
+    }
   });
 
-  return {
+  stage = {
     renderer,
     scene,
     camera: mapCamera,
@@ -167,9 +187,11 @@ export function mountStage(
     dispose() {
       abort.abort();
       engine.stopRenderLoop();
+      probe.dispose();
       quality.dispose();
       mapCamera.dispose();
       scene.dispose();
     },
   };
+  return stage;
 }

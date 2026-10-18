@@ -663,6 +663,30 @@ The opening story (design doc §25; issue #46; DECISIONS "The opening cinematic 
 
 Both need a session. Only `seen` is rate limited (`modules/cinematic/limits.ts`): 120 per IP and 30 per player per 10 minutes (`// TUNE:` guesses; a family shares one IP). The client marks it once, when the story ends watched or skipped.
 
+## Perf reports
+
+When a player's drawn frames stay under 10 fps for 5 s, the client posts one row (issue #501; `apps/client/src/engine/perf-report.ts`), at most once a minute. `src/modules/perf` only logs it: no table, no flag, any logged-in player on the live site.
+
+| Endpoint | Does |
+|---|---|
+| `POST /api/v1/perf/report` | `PerfReport` (shared `schemas/perf-report.ts`, strict, 8 KB body limit) → 204, and one `perf-report` log line with `userId` and `perfReport` |
+
+Rate limited (`modules/perf/limits.ts`): 2 per player and 20 per IP a minute. The row is numbers and badge counts only, never a username.
+
+**Reading the rows** on the server (in the compose folder, `docs/DEPLOY.md`):
+
+```sh
+docker compose logs server | grep perf-report
+```
+
+Each line is pino JSON; `perfReport` says where the slow frames went:
+
+- `frames.gapMs` vs `frames.renderMs`: the time between drawn frames vs our `scene.render`. A big gap with a small render time is the GPU or the browser, not our JS.
+- `gpu`: GPU latency from WebGL2 fences: from the end of a frame's `scene.render` to the first check that saw the GPU finish it (checked every frame, and every 20 ms between slow frames). Near `gapMs`, with `pending` climbing, the GPU is the wait; well under `gapMs`, the GPU finished early and the browser is slow to hand us the next frame. `null` on WebGPU or before a fence passed.
+- `governor`: its tier and render scale now and its last 10 changes (`atMs` since page load, with the fps then).
+- `badge`: the `?fps=1` badge's three lines; GL objects made and freed count from `badgeCountingMs` before the report.
+- `sincePageLoadMs`, `sinceSceneOpenMs` (heat builds with time), `visibility`, `flags` (the `?no…` switches that were on), `renderer`.
+
 ## Workspace source condition
 
 `@heartpatch/shared` resolves to its TypeScript source under the `@heartpatch/source` export condition, and to `dist/` otherwise.

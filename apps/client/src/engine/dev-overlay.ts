@@ -1,24 +1,6 @@
-import { Engine } from '@babylonjs/core/Engines/engine';
-import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
-import type { Scene } from '@babylonjs/core/scene';
-import { batchUploads } from '../procedural/batch-uploads.js';
-import { countGl, type GlCounts } from './gl-counters.js';
-import { bisectFlags, bisectLabel } from './bisect-flags.js';
-import { readPageStats, RenderRate } from './page-stats.js';
-import {
-  activeTriangles,
-  formatPageStats,
-  formatRenderStats,
-  formatResourceStats,
-} from './render-stats.js';
-import type { RendererKind } from './renderer.js';
+import { badgeReader } from './badge-lines.js';
+import { formatReportStatus, lastReport } from './perf-report.js';
 import type { Stage } from './stage.js';
-
-const RENDERER_LABEL: Record<RendererKind, string> = {
-  webgpu: 'WebGPU',
-  webgl2: 'WebGL2',
-  webgl1: 'WebGL1',
-};
 
 /**
  * Dev-only stats badge: frame rate, renderer, quality tier, the render pixel
@@ -38,6 +20,10 @@ const RENDERER_LABEL: Record<RendererKind, string> = {
  * see: live engines, renders per second across all of them, every live
  * render target and its size, canvases, DOM nodes, running CSS animations,
  * and the bisect flags that are on (`bisect-flags.ts`).
+ *
+ * A fourth line shows the last on-device perf report (#501, `perf-report.ts`):
+ * whether it was sent, its frame rate and the GPU's latency. The lines are
+ * read by `BadgeReader` (`badge-lines.ts`), which the report shares.
  */
 export function mountDevOverlay(getStage: () => Stage | null): void {
   const badge = document.createElement('div');
@@ -52,49 +38,16 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
   page.dataset['testid'] = 'dev-stats-page';
   const stack = document.createElement('div');
   stack.className = 'dev-stats-stack';
-  stack.append(badge, counts, page);
+  const report = document.createElement('div');
+  report.className = 'dev-status dev-stats-report';
+  report.dataset['testid'] = 'dev-stats-report';
+  stack.append(badge, counts, page, report);
   document.body.append(stack);
-  // Renders across every engine, between two refreshes.
-  const renders = new RenderRate();
-  const flags = bisectLabel(bisectFlags());
-
-  // One counter per scene: a renderer fallback or a remount makes a new one.
-  let counted: { scene: Scene; instrumentation: SceneInstrumentation } | null = null;
-  // The context's own calls, counted once per engine (a fallback makes a new one).
-  let gl: { engine: object; counts: GlCounts | null } | null = null;
+  const reader = badgeReader();
   setInterval(() => {
+    report.textContent = formatReportStatus(lastReport(), performance.now());
     const stage = getStage();
     if (!stage) return;
-    if (counted?.scene !== stage.scene) {
-      counted?.instrumentation.dispose();
-      counted = { scene: stage.scene, instrumentation: new SceneInstrumentation(stage.scene) };
-      // Our JS per drawn frame (#501): with the frame rate, it tells a stall
-      // in our code from one in the GPU or the browser.
-      counted.instrumentation.captureFrameTime = true;
-    }
-    const drawCalls = counted.instrumentation.drawCallsCounter.current;
-    // Idle means nothing is drawn (render on demand), so there's no frame rate.
-    const rate = stage.idle ? 'idle' : `${Math.round(stage.renderer.engine.getFps())} fps`;
-    const { tier, pinned, pixelRatio } = stage.quality.snapshot;
-    const renderer = RENDERER_LABEL[stage.renderer.kind];
-    const work = formatRenderStats(drawCalls, activeTriangles(stage.scene));
-    badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
-    const { engine } = stage.renderer;
-    if (gl?.engine !== engine) {
-      // `_gl` is Babylon-internal but typed (WebGL's Engine); WebGPU has no context to count.
-      gl = { engine, counts: engine instanceof Engine ? countGl(engine._gl) : null };
-    }
-    const { scene } = stage;
-    counts.textContent = formatResourceStats({
-      jsMs: counted.instrumentation.frameTimeCounter.lastSecAverage,
-      meshes: scene.meshes.length,
-      materials: scene.materials.length,
-      textures: scene.textures.length,
-      animatables: scene.animatables.length,
-      gl: gl.counts,
-      batchUploads: batchUploads.count,
-      renderScale: stage.quality.snapshot.renderScale,
-    });
-    page.textContent = formatPageStats(readPageStats(renders, flags));
+    [badge.textContent, counts.textContent, page.textContent] = reader.read(stage);
   }, 500);
 }
