@@ -31,6 +31,7 @@ import type { RecipeBookDebug } from '../recipes/recipe-book.js';
 import type { JobsDebug } from '../squishies/jobs/index.js';
 import type { RosterDebug } from '../squishies/roster/roster-sheet.js';
 import type { JourneyDebug } from '../trading/journey-screen.js';
+import type { TrickOrTreatDebug } from '../trick-or-treat/trick-or-treat-screen.js';
 import type { PostFlags } from '../trading/post-flags.js';
 import type { PostDebug } from '../trading/post-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
@@ -77,6 +78,8 @@ declare global {
        */
       mapDev?(): {
         select(q: number, r: number): boolean;
+        /** Selects a tile and glides the camera there at once (captures, #515). */
+        show(q: number, r: number): boolean;
         /** Plays one live event into the open map, as if the server sent it (#242). */
         replay(event: WsEventMessage): void;
       };
@@ -130,6 +133,8 @@ declare global {
       posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen' | 'connected'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
       journey?(): JourneyDebug;
+      /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */
+      trickOrTreat?(): TrickOrTreatDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
       post?(): PostDebug;
       starter?(): StarterDebug | null;

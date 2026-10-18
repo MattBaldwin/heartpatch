@@ -1,0 +1,49 @@
+/* Trick-or-treat on the map (#515 part B, the approved map screens). */
+
+.trick-toast[hidden] {
+  display: none;
+}
+
+/* The treat's toast: where the land's toast sits (land.css), under the
+   map's name and the gathering chip, so it never covers a tap. */
+.trick-toast {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 164px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--hp-pad-y) 20px;
+  border-radius: 22px;
+  background: #4a2c43;
+  color: #fff;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* The lantern's promise, or "You got a treat here today!": the panel's green note, a little bigger. */
+.tile-panel .trick-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 16px;
+}
+
+.trick-line-icon {
+  flex: none;
+}
+
+/* Visited today: soft, and solid so the night chip never shows through it
+   (`.auth-button:disabled` fades a button). */
+.tile-panel .trick-knock.trick-visited:disabled {
+  opacity: 1;
+  background: #f6dceb;
+  color: #7a2d55;
+}

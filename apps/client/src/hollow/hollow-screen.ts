@@ -29,6 +29,7 @@ import {
   HOLLOW_TEXT,
   reportText,
   tileUseLines,
+  trickOrTreatLines,
   unseenReports,
 } from './hollow-report.js';
 import { placeOf } from './dark-land.js';
@@ -157,6 +158,9 @@ const tidyKey = (userId: string, mapId: string) => `heartpatch.hollow.tidy.${use
 /** The crowded-tile pack-up note seen on this device (#295, migration B): its `at`. */
 const crowdedKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.packed-crowded.${userId}.${mapId}`;
+/** The trick-or-treat note seen on this device (#515): its day. */
+const trickKey = (userId: string, mapId: string) =>
+  `heartpatch.hollow.trick-or-treat.${userId}.${mapId}`;
 /** The last night whose show this device played to the end or skipped (#277). */
 const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
 /** The last night whose dark-land nudge was answered on this device (#277). */
@@ -401,6 +405,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   const groundsNote = oneTimeNote((s) => s.trainingGroundsPacked, groundsKey);
   const tidyNote = oneTimeNote((s) => s.tileUseNote ?? null, tidyKey);
   const crowdedNote = oneTimeNote((s) => s.crowdedTilesPacked ?? null, crowdedKey);
+  // Once per device per day: the note's day is its mark.
+  const trickNote = oneTimeNote(
+    (s) => (s.trickOrTreat ? { ...s.trickOrTreat, at: s.trickOrTreat.day } : null),
+    trickKey,
+  );
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -713,10 +722,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const tidy = tidyNote.note();
     const tidyLines = tidy ? tileUseLines(tidy) : [];
     const crowded = crowdedNote.note();
+    const treated = trickNote.note();
     renderChips();
     reportBox.hidden =
       !on ||
-      (report.length === 0 && !packed && !packedGrounds && tidyLines.length === 0 && !crowded) ||
+      (report.length === 0 &&
+        !packed &&
+        !packedGrounds &&
+        tidyLines.length === 0 &&
+        !crowded &&
+        !treated) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -736,6 +751,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ...tidyLines,
         ...(tidy && tidy.packed.length > 0 ? [describeItems(tidy.refund)] : []),
         ...(crowded ? [...HOLLOW_TEXT.packedCrowded, describeItems(crowded.refund)] : []),
+        ...(treated ? trickOrTreatLines(treated) : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -900,6 +916,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     groundsNote.markSeen();
     tidyNote.markSeen();
     crowdedNote.markSeen();
+    trickNote.markSeen();
     report = [];
     render();
   }

@@ -23,6 +23,7 @@ import {
   type HexKey,
   type MapView,
   KEEPER_DATA,
+  TRICK_OR_TREAT,
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
@@ -34,7 +35,7 @@ import {
   SAFE_GLOW,
 } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
-import { BuildingField } from '../procedural/buildings/building-field.js';
+import { BuildingField, type BuildingPlacement } from '../procedural/buildings/building-field.js';
 import { BorderField } from './border-field.js';
 import { BuildAreaField, type BuildAreaView } from './build-area.js';
 import { buildAreaAt, type BuildAreaHit } from './build-area-layout.js';
@@ -49,6 +50,7 @@ import { MapAmbient, type AmbientStats } from './map-ambient.js';
 import {
   CRYSTAL_GLOW,
   EXPLORED_MARK,
+  PORCH_LANTERN,
   FALLBACK_LOOK,
   HALLOWEEN,
   HEX_SIZE,
@@ -136,6 +138,8 @@ export interface MapSceneStats {
   /** Buildings on home bases (#18), and the Hearthfires among them drawn lit. */
   readonly buildings: number;
   readonly litFires: number;
+  /** Lit porch lanterns by patch-mates' Heart Seeds (#515), not counted above. */
+  readonly porchLanterns: number;
   /** Fence segments on hex edges (#203). */
   readonly fences: number;
   /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
@@ -361,6 +365,11 @@ export class MapScene {
   private readonly keepers: KeeperField;
   /** Fires and habitats on home bases (#18), at map scale. */
   private readonly buildings: BuildingField;
+  /** The view's buildings as last placed (`update`), before any porch lanterns. */
+  private placed: BuildingPlacement[] = [];
+  /** Patch-mates whose porch lantern is lit (#515, `setPorchLanterns`). */
+  private porches: ReadonlySet<string> = new Set();
+  private porchCount = 0;
   /** Fence segments along tile edges (#203). */
   private readonly fences: FenceField;
   /** What the Build sheet lights on a tile (#371). */
@@ -562,8 +571,10 @@ export class MapScene {
       borderTriangles: this.borders.stats.triangles,
       openHomeTiles: this.borders.stats.openHomeTiles,
       keepers: this.keepers.handles.length,
-      buildings: this.buildings.stats.buildings,
-      litFires: this.buildings.stats.lit,
+      // A porch lantern isn't one of the view's buildings, nor a fire.
+      buildings: this.buildings.stats.buildings - this.porchCount,
+      litFires: this.buildings.stats.lit - this.porchCount,
+      porchLanterns: this.porchCount,
       fences: this.fences.count,
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
@@ -696,6 +707,43 @@ export class MapScene {
     this.applyAmbient();
   }
 
+  /**
+   * Trick-or-treat (#515): these Keepers have a lit Jack-o'-Lantern tonight,
+   * so a little one glows on their Heart Seed's porch. It's one more thin
+   * instance of the level-1 lit lantern and its light pool: no new
+   * materials, and no new meshes while a level-1 lantern is on the map (else
+   * that one model, built once and shared by every porch).
+   */
+  setPorchLanterns(userIds: ReadonlySet<string>): void {
+    if (userIds.size === this.porches.size && [...userIds].every((id) => this.porches.has(id))) {
+      return;
+    }
+    this.porches = new Set(userIds);
+    this.drawBuildings();
+  }
+
+  /** The view's buildings plus a porch lantern by each lit Heart Seed. */
+  private drawBuildings(): void {
+    const porches: BuildingPlacement[] = [];
+    if (this.porches.size > 0) {
+      for (const home of findHomeBases([...this.tiles.values()])) {
+        const owner = home.seed.ownerUserId;
+        if (owner === null || !this.porches.has(owner)) continue;
+        const p = hexToWorld(home.seed, HEX_SIZE);
+        porches.push({
+          buildingId: TRICK_OR_TREAT.lanternBuildingId,
+          lit: true,
+          x: p.x + PORCH_LANTERN.offset.x,
+          z: p.z + PORCH_LANTERN.offset.z,
+          y: topOf(home.seed) + DOME * 0.5,
+          scale: HEX_SIZE * PORCH_LANTERN.scale,
+        });
+      }
+    }
+    this.buildings.set([...this.placed, ...porches]);
+    this.porchCount = porches.length;
+  }
+
   /** Where the camera starts: this player's Heart Seed, else the map centre. */
   homeOf(view: MapView, userId: string | null): GroundPoint {
     const slot = view.members.find((m) => m.user.id === userId)?.homeSlot ?? null;
@@ -745,23 +793,22 @@ export class MapScene {
       );
     }
     // Fires and habitats (#18), and the warm glow over tiles a lit fire keeps safe.
-    this.buildings.set(
-      mapBuildings(view, HEX_SIZE).map(({ tile, building, at }) => ({
-        buildingId: building.buildingId,
-        level: building.level,
-        lit: building.lit,
-        x: at.x,
-        z: at.z,
-        y: topOf(tile) + DOME * 0.5,
-        scale:
-          HEX_SIZE *
-          (tile.homeSlot !== null
-            ? MAP_BUILDING_SCALE
-            : building.kind === 'hearthfire'
-              ? MAP_OUTER_FIRE_SCALE
-              : MAP_OUTER_BUILDING_SCALE),
-      })),
-    );
+    this.placed = mapBuildings(view, HEX_SIZE).map(({ tile, building, at }) => ({
+      buildingId: building.buildingId,
+      level: building.level,
+      lit: building.lit,
+      x: at.x,
+      z: at.z,
+      y: topOf(tile) + DOME * 0.5,
+      scale:
+        HEX_SIZE *
+        (tile.homeSlot !== null
+          ? MAP_BUILDING_SCALE
+          : building.kind === 'hearthfire'
+            ? MAP_OUTER_FIRE_SCALE
+            : MAP_OUTER_BUILDING_SCALE),
+    }));
+    this.drawBuildings();
     // Fence segments on the edges (#203): a border reads as one fence line.
     this.fences.set(
       fencePlacements(view, HEX_SIZE).map(({ tile, fence, x, z, yaw }) => ({

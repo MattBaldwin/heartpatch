@@ -18,6 +18,7 @@ import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
 import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
+import { createTrickOrTreat } from './trick-or-treat/trick-or-treat-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -496,6 +497,19 @@ const journeys = createJourneyScreen({
     postScreen.open(post, view);
   },
 });
+// Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
+// button, and a lit home a porch lantern. A treat may be Heartdust: the bag
+// reads again.
+const trickOrTreat = createTrickOrTreat({
+  root: document.body,
+  isGlade: (mapId) => mapId === glade,
+  light: (mapId, userIds) => {
+    maps.setPorchLanterns(mapId, userIds);
+  },
+  onTreat: (visit) => {
+    if (visit.prize.kind === 'heartdust') void inventory.refresh();
+  },
+});
 const hollow = createHollowScreen({
   root: document.body,
   entryRoot: trays.slot('adventure'),
@@ -865,6 +879,8 @@ const maps = createMapScreen({
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
+    // On a patch-mate's home in the Halloween season (#515).
+    trickOrTreat.tileActions,
     // A tile's panel came up or went away: the night's cards step back or return.
     {
       show: () => {
@@ -888,7 +904,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags],
+  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags, trickOrTreat.layer],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -905,6 +921,7 @@ const maps = createMapScreen({
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
+    trickOrTreat.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
     // A patch-mate's Legendary friend (#391).
@@ -1523,6 +1540,7 @@ mountAuth(document.body, {
     recipeBook.setUser(user);
     territory.setUser(user);
     journeys.setUser(user);
+    trickOrTreat.setUser(user);
     postScreen.setUser(user);
     hollow.setUser(user);
     land.setUser(user);
@@ -1569,6 +1587,11 @@ if (import.meta.env.DEV) {
     battleDev: () => battles.dev,
     mapDev: () => ({
       select: (q: number, r: number) => maps.focus({ q, r }) !== null,
+      show: (q: number, r: number) => {
+        const point = maps.focus({ q, r });
+        if (point) stage?.camera.panTo(point, true, 0.2);
+        return point !== null;
+      },
       replay: (event) => {
         maps.replay(event);
       },
@@ -1594,6 +1617,7 @@ if (import.meta.env.DEV) {
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,
+    trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
     posts: () => ({
       shown: postFlags.shown,
