@@ -34,6 +34,8 @@ export const CLOTHING_RARITIES = ClothingRaritySchema.options;
  * - `milestone`: a milestone's signature piece (#44); account-bound.
  * - `boutique`: bought with Patch Coins (#45); needs `boutiquePrice`.
  * - `present`: inside a Christmas present (Phase 3).
+ * - `treat`: a trick-or-treat prize (#515): the squishy costumes. The prize
+ *   table is server-only (CLAUDE.md rule 6).
  */
 export const ClothingSourceSchema = z.enum([
   'starter',
@@ -42,6 +44,7 @@ export const ClothingSourceSchema = z.enum([
   'milestone',
   'boutique',
   'present',
+  'treat',
 ]);
 export type ClothingSource = z.infer<typeof ClothingSourceSchema>;
 
@@ -91,10 +94,24 @@ export const CostumeAnchorSchema = z.enum([
 ]);
 export type CostumeAnchor = z.infer<typeof CostumeAnchorSchema>;
 
+/**
+ * Where a squishy accessory sits: on top of the head, round the neck, on the
+ * back (between the shoulders: wings, capes; #515), or the whole torso
+ * (`body`, from its ground point, in its sizes: a sheet's hem; #515).
+ */
+export const SquishyAnchorSchema = z.enum(['crown', 'neck', 'back', 'body']);
+export type SquishyAnchor = z.infer<typeof SquishyAnchorSchema>;
+
 export const ClothingPieceSchema = z.strictObject({
   shape: PartShapeSchema,
   /** Costumes only: the socket this piece sits on (default: the whole-body costume box). */
   on: CostumeAnchorSchema.optional(),
+  /**
+   * Squishy accessories only: the socket this piece sits on, when it isn't
+   * the item's own `anchor` (a squishy costume's cape on the `back`, its
+   * collar on the `neck`; #515).
+   */
+  anchor: SquishyAnchorSchema.optional(),
   /** Lit from inside (eyes, glowing wing spots), like a glowing squishy. */
   glow: z.literal(true).optional(),
   /** Centre, from the socket's anchor, in socket sizes (+x is the viewer's right, +y up, −z the front). */
@@ -106,10 +123,6 @@ export const ClothingPieceSchema = z.strictObject({
   color: HexColorSchema,
 });
 export type ClothingPiece = z.infer<typeof ClothingPieceSchema>;
-
-/** Where a squishy accessory sits: on top of the head, or round the neck. */
-export const SquishyAnchorSchema = z.enum(['crown', 'neck']);
-export type SquishyAnchor = z.infer<typeof SquishyAnchorSchema>;
 
 /**
  * A costume that draws a ready-made figure instead of pieces, by name, so
@@ -136,6 +149,12 @@ export const ClothingVisualSchema = z.strictObject({
   pieces: z.array(ClothingPieceSchema).max(MAX_COSTUME_PIECES),
   /** Squishy accessories only. */
   anchor: SquishyAnchorSchema.optional(),
+  /**
+   * Squishy accessories only: a hood (#515). Like a hat, it tucks the
+   * squishy's own crown parts away while worn, and its ears too, so they
+   * never poke through the sheet.
+   */
+  hood: z.literal(true).optional(),
   /**
    * Costumes only: hides the Keeper's own body, head, hands, hair and starter
    * outfit while worn (default: false), so the costume is the whole figure.
@@ -172,6 +191,16 @@ export const ClothingItemSchema = z.strictObject({
   visual: ClothingVisualSchema,
 });
 export type ClothingItem = z.infer<typeof ClothingItemSchema>;
+
+/**
+ * A squishy costume (#515): a squishy accessory that is a trick-or-treat
+ * prize. It sits in the accessory's one slot (owner, #515) and, like a
+ * Keeper costume, wears its rarity's finish; everyday accessories stay
+ * plain vinyl.
+ */
+export function isSquishyCostume(item: ClothingItem): boolean {
+  return item.slot === SQUISHY_SLOT && item.sources.includes('treat');
+}
 
 /** A Keeper item: one of the eight wardrobe slots. */
 export type KeeperClothing = ClothingItem & { readonly slot: WardrobeSlot };
@@ -219,6 +248,19 @@ export function checkClothingData(input: unknown, seasons: readonly string[]): s
       }
       if ((item.visual.anchor !== undefined) !== (item.slot === SQUISHY_SLOT)) {
         report(at('visual'), 'squishy accessories need an anchor, and only they have one');
+      }
+      if (item.slot !== SQUISHY_SLOT) {
+        if (item.visual.hood !== undefined) {
+          report(at('visual'), 'only squishy accessories can be a `hood`');
+        }
+        if (item.visual.pieces.some((p) => p.anchor !== undefined)) {
+          report(at('visual'), 'only squishy accessories place pieces on squishy anchors');
+        }
+      } else if (
+        item.visual.hood &&
+        !item.visual.pieces.some((p) => (p.anchor ?? item.visual.anchor) === 'crown')
+      ) {
+        report(at('visual'), 'a `hood` goes on the head, so it needs a piece on the `crown`');
       }
       if (item.visual.pieces.length === 0 && item.visual.model === undefined) {
         report(at('visual'), 'an item needs at least one piece, unless it is a `model`');
