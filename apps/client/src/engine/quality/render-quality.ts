@@ -3,26 +3,37 @@ import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imagePro
 import type { Scene } from '@babylonjs/core/scene';
 import { LIGHTING, QUALITY_TIERS, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
 import { cappedPixelRatio, hardwareScalingFor } from '../dpr.js';
-import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
+import {
+  cappedScaler,
+  initialGovernor,
+  resumeGovernor,
+  stepGovernor,
+  type GovernorState,
+} from './governor.js';
 import { PostChain } from './post-chain.js';
+import { isPhoneScreen, tierBloom } from './tiers.js';
 import { setRareGlowForTier } from '../../procedural/rare-glow.js';
-import { bisectFlags, cappedScaler } from '../bisect-flags.js';
+import { bisectFlags } from '../bisect-flags.js';
 
 /**
  * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
  * "Memory and heat"), built once (`PostChain`). Tone mapping, exposure and
  * contrast are applied inside the materials, before the 8-bit write, not as
  * a post-process. `tier` is where the governor starts: the bloom kernels of
- * it and every tier below are compiled up front.
+ * it and every tier below that draws bloom on this device (`phone`) are
+ * compiled up front.
  */
 export function createPostProcessing(
   scene: Scene,
   camera: Camera,
   tier: QualityTier = 'high',
+  phone = false,
 ): PostChain {
   setupToneMapping(scene);
-  const reachable = QUALITY_TIERS.slice(QUALITY_TIERS.indexOf(tier)).map((t) => TIER_SETTINGS[t]);
-  const kernels = [...new Set(reachable.filter((t) => t.bloom).map((t) => t.bloomKernel))];
+  const reachable = QUALITY_TIERS.slice(QUALITY_TIERS.indexOf(tier)).filter((t) =>
+    tierBloom(t, phone),
+  );
+  const kernels = [...new Set(reachable.map((t) => TIER_SETTINGS[t].bloomKernel))];
   return new PostChain(scene, camera, kernels, cappedPixelRatio(window.devicePixelRatio));
 }
 
@@ -45,6 +56,15 @@ export interface QualitySnapshot {
   readonly pixelRatio: number;
 }
 
+export interface RenderQualityOptions {
+  /** Dev captures (`?tier=`): hold the tier at full resolution, with the governor off. */
+  readonly pinned?: boolean;
+  /** The stage's frame cap (`FrameCap.fps`), which the governor reads as on target. */
+  readonly capFps?: number | null;
+  /** A phone's screen (no bloom on medium, #501); read from `window.screen` by default. */
+  readonly phone?: boolean;
+}
+
 /**
  * Post-processing (FXAA, gentle bloom, in-material tone mapping) and the
  * dynamic resolution governor for one scene + camera. The stage feeds it
@@ -54,8 +74,9 @@ export interface QualitySnapshot {
 export class RenderQuality {
   /** None with `?nopost=1` (#501 bisect): no bloom or FXAA pass at all. */
   private readonly pipeline: PostChain | null;
-  /** `?cap30=1` (#501 bisect): the governor reads 30 fps as on target. */
-  private readonly config = bisectFlags().cap30 ? cappedScaler(SCALER, 30) : SCALER;
+  /** Under a frame cap (explore, `?cap30=1`; #501) the governor reads the cap as on target. */
+  private readonly config: typeof SCALER;
+  private readonly phone: boolean;
   private readonly scene: Scene;
   private readonly camera: Camera;
   private state: GovernorState;
@@ -65,13 +86,24 @@ export class RenderQuality {
   /** Dev captures (`?tier=`): the tier and full resolution hold, whatever the frame rate. */
   private pinned: boolean;
 
-  constructor(scene: Scene, camera: Camera, tier: QualityTier, pinned = false) {
+  constructor(
+    scene: Scene,
+    camera: Camera,
+    tier: QualityTier,
+    {
+      pinned = false,
+      capFps = null,
+      phone = isPhoneScreen(window.screen),
+    }: RenderQualityOptions = {},
+  ) {
     this.scene = scene;
     this.camera = camera;
     this.pinned = pinned;
+    this.phone = phone;
+    this.config = capFps === null ? SCALER : cappedScaler(SCALER, capFps);
     this.state = initialGovernor(tier, this.config);
     if (bisectFlags().noPost) setupToneMapping(scene);
-    this.pipeline = bisectFlags().noPost ? null : createPostProcessing(scene, camera, tier);
+    this.pipeline = bisectFlags().noPost ? null : createPostProcessing(scene, camera, tier, phone);
     this.apply();
     // A frame spanning a pause (tab hidden, app switch, device asleep) is a
     // gap, never a crawling frame (governor `crawl`), however many come
@@ -166,7 +198,7 @@ export class RenderQuality {
       changed = true;
       const t = TIER_SETTINGS[tier];
       // Attaches or detaches bloom's passes: nothing is rebuilt (#501).
-      this.pipeline?.setBloom(t.bloom, t.bloomKernel);
+      this.pipeline?.setBloom(tierBloom(tier, this.phone), t.bloomKernel);
       setRareGlowForTier(t.rareGlow);
       this.appliedTier = tier;
     }

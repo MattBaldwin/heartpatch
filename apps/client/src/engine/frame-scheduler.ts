@@ -21,7 +21,7 @@ export class FrameScheduler {
 
   /**
    * @param settleFrames frames to draw after each invalidation
-   * @param minFrameMs no frame sooner than this after the last one (`?cap30=1`, #501); 0 is uncapped
+   * @param minFrameMs no frame sooner than this after the last one (`FrameCap`: explore and `?cap30=1`, #501); 0 is uncapped
    */
   constructor(settleFrames: number, minFrameMs = 0) {
     this.settleFrames = settleFrames;

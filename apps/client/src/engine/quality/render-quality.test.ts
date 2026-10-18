@@ -193,12 +193,53 @@ describe('RenderQuality', () => {
       scene,
       new TargetCamera('cam', Vector3.Zero(), scene),
       'high',
-      true,
+      { pinned: true },
     );
     // A software renderer: seconds a frame, which would crawl straight to low.
     for (let i = 0; i < 50; i++) expect(quality.sample(2000)).toBe(false);
     expect(quality.applyPending()).toBe(false);
     expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1, pinned: true });
+  });
+
+  describe('phones (#501)', () => {
+    const passes = (camera: TargetCamera) => camera._postProcesses.filter(Boolean).length;
+
+    it('draws FXAA alone on medium on a phone; an iPad keeps bloom', () => {
+      for (const [phone, expected] of [
+        [true, 1],
+        [false, 5],
+      ] as const) {
+        const scene = new Scene(engine);
+        const camera = new TargetCamera('cam', Vector3.Zero(), scene);
+        const quality = new RenderQuality(scene, camera, 'medium', { phone });
+        expect(passes(camera), phone ? 'phone' : 'iPad').toBe(expected);
+        quality.dispose();
+      }
+    });
+
+    it('keeps bloom on high on a phone, and drops it at the step to medium', () => {
+      const scene = new Scene(engine);
+      const camera = new TargetCamera('cam', Vector3.Zero(), scene);
+      const quality = new RenderQuality(scene, camera, 'high', { phone: true });
+      expect(passes(camera)).toBe(5);
+      quality.hold('medium', 1);
+      quality.applyPending();
+      expect(passes(camera)).toBe(1);
+      quality.dispose();
+    });
+
+    it('reads a phone from the screen by default', () => {
+      vi.stubGlobal('window', {
+        devicePixelRatio: 3,
+        addEventListener: vi.fn(),
+        screen: { width: 393, height: 852 },
+      });
+      const scene = new Scene(engine);
+      const camera = new TargetCamera('cam', Vector3.Zero(), scene);
+      const quality = new RenderQuality(scene, camera, 'medium');
+      expect(passes(camera)).toBe(1);
+      quality.dispose();
+    });
   });
 
   describe('bisect flags (#501)', () => {
@@ -216,19 +257,46 @@ describe('RenderQuality', () => {
       expect(quality.ready).toBe(true);
       quality.dispose();
     });
+  });
 
-    it('holds 30 fps as on target with ?cap30=1', () => {
-      setBisectFlags({ ...NO_BISECT, cap30: true });
+  describe('frame cap (#501)', () => {
+    const sampleAt = (quality: RenderQuality, fps: number): boolean => {
+      let asked = false;
+      for (let i = 0; i < 500 && !asked; i++) asked = quality.sample(1000 / fps);
+      return asked;
+    };
+
+    it('holds the cap as on target', () => {
+      const scene = new Scene(engine);
+      const quality = new RenderQuality(
+        scene,
+        new TargetCamera('cam', Vector3.Zero(), scene),
+        'high',
+        { capFps: 30 },
+      );
+      expect(sampleAt(quality, 30)).toBe(false);
+      expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1 });
+    });
+
+    it('still steps down when a capped scene falls well below its cap', () => {
+      const scene = new Scene(engine);
+      const quality = new RenderQuality(
+        scene,
+        new TargetCamera('cam', Vector3.Zero(), scene),
+        'high',
+        { capFps: 30 },
+      );
+      expect(sampleAt(quality, 15)).toBe(true);
+    });
+
+    it('reads 30 fps as slow without a cap', () => {
       const scene = new Scene(engine);
       const quality = new RenderQuality(
         scene,
         new TargetCamera('cam', Vector3.Zero(), scene),
         'high',
       );
-      let asked = false;
-      for (let i = 0; i < 500 && !asked; i++) asked = quality.sample(1000 / 30);
-      expect(asked).toBe(false);
-      expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1 });
+      expect(sampleAt(quality, 30)).toBe(true);
     });
   });
 });

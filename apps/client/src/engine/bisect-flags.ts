@@ -1,5 +1,3 @@
-import type { ScalerConfig } from './config.js';
-
 /**
  * Device bisect switches (#501): each one turns a single cost off, so the
  * owner can run the same lake once per flag with `?fps=1` and see which one
@@ -17,7 +15,7 @@ export interface BisectFlags {
   readonly noSky: boolean;
   /** `?noportraits=1`: no squishy portraits drawn (the sheets show their placeholder). */
   readonly noPortraits: boolean;
-  /** `?cap30=1`: the render loop draws at most 30 frames a second. */
+  /** `?cap30=1`: the render loop draws at most 30 frames a second, on every scene (`FRAME_CAP_30`). */
   readonly cap30: boolean;
 }
 
@@ -64,24 +62,4 @@ export function bisectLabel(flags: BisectFlags): string {
     .filter((key) => flags[key])
     .map((key) => PARAMS[key])
     .join(' ');
-}
-
-/** `?cap30=1`: the render loop's fastest frame. Below 1000/30 so a 60 Hz display draws every other frame. */
-export const CAP30_MIN_FRAME_MS = 26; // TUNE
-
-/**
- * The governor's settings for a loop capped at `fps`: every frame-rate
- * threshold scaled to the cap, so 30 fps reads as on target, not as a GPU
- * that can't keep up (no cuts, no tier probes).
- */
-export function cappedScaler(config: ScalerConfig, fps: number): ScalerConfig {
-  const k = fps / config.targetFps;
-  return {
-    ...config,
-    targetFps: fps,
-    lowerBelowFps: config.lowerBelowFps * k,
-    raiseAtFps: config.raiseAtFps * k,
-    tierProbeBelowFps: config.tierProbeBelowFps * k,
-    tierDropBelowFps: config.tierDropBelowFps * k,
-  };
 }

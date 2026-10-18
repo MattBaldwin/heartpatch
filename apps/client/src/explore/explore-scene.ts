@@ -31,7 +31,7 @@ import { ExploreLand, type LandStats } from './explore-land.js';
 import { ExploreWater, lakeExtras, type WaterStats } from './explore-water.js';
 import { LAKE_LOOKS, WATER_LOOKS_BY_TERRAIN } from './lake-config.js';
 import { LAND_LOOKS } from './land-config.js';
-import type { QualityTier } from '../engine/config.js';
+import { FRAME_CAP_30, type QualityTier } from '../engine/config.js';
 import { AmbientJudge, ambientMode, type AmbientMode } from '../map/ambient-layout.js';
 import type { AmbientTarget } from '../map/ambient-driver.js';
 import { isUnderwater, type SkyLook } from './explore-sky-look.js';
@@ -646,7 +646,12 @@ export class ExploreScene implements AmbientTarget {
     });
 
     this.#tintGround(options.sky);
-    this.content = { bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, start: { x: 0, z: 0 } };
+    this.content = {
+      bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
+      start: { x: 0, z: 0 },
+      // Explore runs cool: 30 drawn frames a second, walking or idle (#501, owner Oct 18).
+      frameCap: FRAME_CAP_30,
+    };
     this.update(tile);
   }
 
