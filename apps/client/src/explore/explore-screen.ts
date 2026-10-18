@@ -183,6 +183,11 @@ export interface ExploreDebug {
    * a find's cheer makes none (#501 G).
    */
   readonly batchUploads: number;
+  /**
+   * Tier changes the scene applied since the page opened (each rebuilds the
+   * Keeper at its detail level): a probe that reverts makes two (#501 G).
+   */
+  readonly tierChanges: number;
   /** Screen point (CSS pixels) of each spot, to tap in tests. */
   spotOnScreen: (index: number) => { x: number; y: number } | null;
   /** Screen point (CSS pixels) of a tile-local point on the ground, to tap in tests. */
@@ -516,6 +521,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     wake();
   }
 
+  /** Tier changes applied to the scene (`ExploreDebug.tierChanges`). */
+  let tierChanges = 0;
+
   /** Draws every frame while the Keeper walks or something plays, then stops. */
   let lastFrame = 0;
   function wake(): void {
@@ -532,6 +540,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const tier = options.tier();
     if (tier !== lastTier) {
       lastTier = tier;
+      tierChanges++;
       s.setLod(lodFor('closeUp', tier));
       s.setTier(tier);
     }
@@ -1477,6 +1486,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
+        tierChanges,
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;

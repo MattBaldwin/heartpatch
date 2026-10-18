@@ -183,6 +183,7 @@ describe('PerfProbe', () => {
   it('carries the governor decisions it saw', async () => {
     const { PerfProbe } = await import('./perf-report.js');
     const live = { snapshot: { ...quality.snapshot } };
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0); // the scene opens at 0, like the frames
     const probe = new PerfProbe({}, 'webgl2', live, () => null);
     let now = 0;
     for (let i = 0; i < 30; i++) {

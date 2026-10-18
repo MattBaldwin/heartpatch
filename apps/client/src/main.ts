@@ -1609,6 +1609,7 @@ if (import.meta.env.DEV) {
     invalidate: () => stage?.invalidate(),
     frameCap: () => stage?.frameCap ?? null,
     testScenes: () => testScenesBuilt,
+    hitchesExpected: () => stage?.quality.hitchesExpected ?? 0,
     map: () => maps.debug,
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,

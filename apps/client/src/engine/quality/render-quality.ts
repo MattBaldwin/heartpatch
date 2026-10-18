@@ -143,9 +143,13 @@ export class RenderQuality {
    * away the frames around it instead of reading them as a slow GPU.
    */
   expectHitch(): void {
+    this.hitchesExpected++;
     if (this.pinned) return;
     this.state = expectHitch(this.state, this.config);
   }
+
+  /** `expectHitch` calls so far (dev hook: a find makes two, #501 G). */
+  hitchesExpected = 0;
 
   /** True while the governor's tier or scale isn't applied yet (`applyPending`). */
   get pending(): boolean {
