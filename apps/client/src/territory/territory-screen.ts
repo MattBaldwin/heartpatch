@@ -17,7 +17,12 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { territoryApi, type TerritoryApi } from './territory-api.js';
 import { crackedBy, fenceCard } from '../fences/fence-model.js';
-import { territoryAction, watchInTheDark, type TerritoryAction } from './territory-action.js';
+import {
+  showsGuardLevelNote,
+  territoryAction,
+  watchInTheDark,
+  type TerritoryAction,
+} from './territory-action.js';
 import './territory.css';
 
 // Territory in the tile panel (#15, design doc §11): "Claim" wild land next
@@ -59,6 +64,9 @@ export const TERRITORY_TEXT = {
   claimNote: 'Wild land! Win a showdown with its guardians to make it yours.',
   challengeNote: (owner: string) => `${owner}'s land. Win a showdown to make it yours!`,
   someone: 'Someone',
+  // No numbers: the bump over the Partner's level is tunable (#529).
+  guardsAsStrong:
+    "Their guards are as strong as their Keeper's Partner, or stronger. Bring your best!",
   onWatchThere: (n: number) =>
     n === 1 ? '1 squishy stands watch here.' : `${String(n)} squishies stand watch here.`,
   // Relative times, never clock times: the patch's midnight isn't every player's (#201).
@@ -344,6 +352,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
               ]
             : [line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone))]),
           ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
+          ...(showsGuardLevelNote(tile)
+            ? [line(TERRITORY_TEXT.guardsAsStrong, 'territory-guards-as-strong')]
+            : []),
           triesLine(action.triesResetAt, (wait) =>
             TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait),
           ),
