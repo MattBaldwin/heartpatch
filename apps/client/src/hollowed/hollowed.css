@@ -167,3 +167,31 @@
   font-size: 14px;
   letter-spacing: -0.2px;
 }
+
+/* A short phone (the SE): the puzzle sits lower and smaller, clear of the header. */
+@media (max-height: 700px) {
+  .explore-play[data-kind='puzzle'] {
+    bottom: calc(max(env(safe-area-inset-bottom), 8px) + 150px);
+    gap: 6px;
+  }
+  .explore-play[data-kind='puzzle'] .explore-chip {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .explore-play[data-kind='puzzle'] .explore-chip-text {
+    font-size: 14px;
+  }
+  .hollowed-notes button {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+  .explore-play[data-kind='puzzle'] .explore-easy,
+  .explore-play[data-kind='puzzle'] .explore-not-now {
+    min-height: 40px;
+    font-size: 14px;
+  }
+  .explore-play[data-kind='puzzle'] .explore-play-note {
+    font-size: 12px;
+  }
+}

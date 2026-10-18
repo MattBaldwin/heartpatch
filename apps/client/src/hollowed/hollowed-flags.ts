@@ -37,7 +37,7 @@ export function createHollowedFlags(root: HTMLElement, me: () => string | null):
       // Kept inside the screen's sides, like a post's flag.
       const half = Math.max(60, f.node.offsetWidth / 2);
       const x = Math.min(window.innerWidth - half - 8, Math.max(half + 8, rect.x + rect.width / 2));
-      const y = Math.max(64, rect.y + rect.height * 0.1);
+      const y = Math.max(116, rect.y + rect.height * 0.1);
       f.node.style.transform = `translate(${String(Math.round(x))}px, ${String(Math.round(y))}px) translate(-50%, -100%)`;
     }
   };
