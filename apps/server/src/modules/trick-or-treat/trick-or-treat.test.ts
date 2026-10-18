@@ -13,10 +13,12 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import { buildings, clothingOwned, keepers, sessions, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { grantItems } from '../inventory/service.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { createTrickOrTreatService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -304,6 +306,34 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
       clock.setTime(clock.getTime() + DAY_MS);
     }
     expect(await visits(mapId)).toHaveLength(6);
+  });
+
+  it("makes both bags' new rows in user order before granting, so a knock back never deadlocks (#557)", async () => {
+    const server = await start();
+    const [a, b] = [await player(), await player()];
+    const mapId = await patch(server, a, b);
+    const [low, high] = a.id < b.id ? [a, b] : [b, a];
+    const service = createTrickOrTreatService({ db, clock: () => clock, prizes: DUST_ONLY });
+    // A rival transaction in user order (as a knock back takes them): it makes
+    // the lower Keeper's new Heartdust row and holds it while the higher Keeper
+    // knocks. Granting the visitor's row first would hold the higher row while
+    // waiting on ours, and our next insert would deadlock.
+    let knocked: ReturnType<typeof service.visit> | undefined;
+    await withTransaction(db, async (tx) => {
+      const pid = await backendPid(tx);
+      await grantItems(tx, { mapId, userId: low.id }, { heartdust: 1 }, 'trick-or-treat');
+      knocked = service.visit(high, mapId, { hostUserId: low.id });
+      await waitUntilBlockedBy(db, pid);
+      await tx.execute("set local lock_timeout = '2s'");
+      await grantItems(tx, { mapId, userId: high.id }, { heartdust: 1 }, 'trick-or-treat');
+    });
+    const visit = await knocked!;
+    expect(visit.visit.prize).toEqual({ kind: 'heartdust', itemId: 'heartdust', count: 1 });
+    const bag = await db.query.inventories.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+    expect(Object.fromEntries(bag.map((r) => [r.userId, r.quantity]))).toEqual({
+      [high.id]: 2,
+      [low.id]: 1 + THANKS,
+    });
   });
 
   it('replays a retried knock (Idempotency-Key) without a second treat', async () => {
