@@ -1257,7 +1257,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'legendary',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 320, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1435,7 +1435,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 260, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1615,7 +1615,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 260, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1770,7 +1770,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 210, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -1905,7 +1905,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 210, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2028,7 +2028,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 160, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2169,7 +2169,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 160, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2321,7 +2321,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 120, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {
@@ -2462,7 +2462,7 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
     slot: 'costume',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found', 'boutique'],
+    sources: ['found', 'boutique', 'trick-or-treat'],
     boutiquePrice: 120, // TUNE: the costume rack (#261)
     tradable: true,
     visual: {

@@ -34,6 +34,8 @@ export const CLOTHING_RARITIES = ClothingRaritySchema.options;
  * - `milestone`: a milestone's signature piece (#44); account-bound.
  * - `boutique`: bought with Patch Coins (#45); needs `boutiquePrice`.
  * - `present`: inside a Christmas present (Phase 3).
+ * - `trick-or-treat`: a treat from a patch-mate's home in the Halloween season
+ *   (#515), by the server's prize table (`@heartpatch/shared/server`).
  */
 export const ClothingSourceSchema = z.enum([
   'starter',
@@ -42,6 +44,7 @@ export const ClothingSourceSchema = z.enum([
   'milestone',
   'boutique',
   'present',
+  'trick-or-treat',
 ]);
 export type ClothingSource = z.infer<typeof ClothingSourceSchema>;
 

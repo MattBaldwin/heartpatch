@@ -2256,3 +2256,50 @@ export const houseGifts = pgTable(
     check('house_gifts_count_positive', sql`${t.count} >= 1`),
   ],
 );
+
+/**
+ * Trick-or-treat visits (#515): one per visitor per host home per patch day
+ * (the unique key is the once-a-day rule, written in the visit's own
+ * transaction), with what the visitor got and the host's thank-you. The
+ * host's morning note counts yesterday's rows by (map, host, day).
+ */
+export const trickOrTreatVisits = pgTable(
+  'trick_or_treat_visits',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    visitorUserId: uuid('visitor_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hostUserId: uuid('host_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // The patch's local day of the visit.
+    day: date('day', { mode: 'string' }).notNull(),
+    // The host had a lit Jack-o'-Lantern Hearthfire: the better table.
+    lantern: boolean('lantern').notNull(),
+    // A silly trick played first (looks only).
+    trick: boolean('trick').notNull(),
+    // `heartdust`, `keeper-costume` or `squishy-costume`.
+    prizeKind: text('prize_kind').notNull(),
+    prizeItemId: text('prize_item_id').notNull(),
+    prizeCount: smallint('prize_count').notNull(),
+    // The host's thank-you Heartdust.
+    hostHeartdust: smallint('host_heartdust').notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+  },
+  (t) => [
+    unique('trick_or_treat_visits_once_a_day_key').on(
+      t.mapId,
+      t.visitorUserId,
+      t.hostUserId,
+      t.day,
+    ),
+    index('trick_or_treat_visits_host_idx').on(t.mapId, t.hostUserId, t.day),
+    check('trick_or_treat_visits_not_self', sql`${t.visitorUserId} <> ${t.hostUserId}`),
+    check('trick_or_treat_visits_prize_count_positive', sql`${t.prizeCount} >= 1`),
+    check('trick_or_treat_visits_host_heartdust_non_negative', sql`${t.hostHeartdust} >= 0`),
+  ],
+);
