@@ -293,6 +293,33 @@ describe('SquishyField squishy costumes (#515)', () => {
     f.setAccessory(h, item('tiny-crown'));
     expect(sparkly()).toBe(bare);
   });
+
+  it('lights a glowing piece from inside, on top of its finish', () => {
+    const scene = new Scene(engine);
+    const f = field(scene);
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const cape = item('vampire-cape');
+    const glowing = {
+      ...cape,
+      id: 'glowing-cape',
+      visual: {
+        ...cape.visual,
+        pieces: cape.visual.pieces.map((p, i) => (i === 0 ? { ...p, glow: true as const } : p)),
+      },
+    };
+    f.setAccessory(h, glowing);
+    f.flush();
+    const codes = scene.meshes.flatMap((mesh) => {
+      const data = (mesh as Mesh).getVertexBuffer('squishEvent')?.getData() as
+        Float32Array | undefined;
+      if (!data || !mesh.isEnabled()) return [];
+      return Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!);
+    });
+    expect(codes.filter((c) => c === FINISH_CODE.sparkle + FINISH_CODE.glow)).toHaveLength(1);
+    expect(codes.filter((c) => c === FINISH_CODE.sparkle)).toHaveLength(
+      cape.visual.pieces.length - 1,
+    );
+  });
 });
 
 describe('SquishyField floaters', () => {

@@ -44,6 +44,8 @@ export interface AccessoryPiece {
   /** Degrees: pitch (x), yaw (y), roll (z). */
   readonly turn: Vec3;
   readonly color: Rgb;
+  /** Lit from inside, like a glowing Keeper costume piece. */
+  readonly glow: boolean;
 }
 
 /** The neck ring sits this far (radians up the body) under the lowest face part. */
@@ -187,6 +189,7 @@ export function accessoryPieces(
         size: [p.size[0] * size[0], p.size[1] * size[1], p.size[2] * size[2]],
         turn: p.turn ?? NO_TURN,
         color: hexToRgb(p.color),
+        glow: p.glow === true,
       },
     ];
   });

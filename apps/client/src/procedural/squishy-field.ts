@@ -396,7 +396,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       anchors.map((a) => [a, accessorySocket(handle.params, this.#registry.bodies, a)]),
     );
     // Accessories are plain vinyl, like Keeper clothing; a squishy costume
-    // wears its rarity's finish, like a Keeper costume (#515).
+    // wears its rarity's finish, like a Keeper costume (#515). Any piece may
+    // glow (the glow bit sits above every finish).
     const finish = isSquishyCostume(item) ? FINISH_CODE[ART_RULES.finishByRarity[item.rarity]] : 0;
     const instances: Instance[] = [];
     let top = 0;
@@ -414,7 +415,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         matrix: local.multiply(squishy.world),
         color: linear(p.color),
         look: SQUISH_LOOK_CODE.normal,
-        finish,
+        finish: finish + (p.glow ? FINISH_CODE.glow : 0),
       };
       batch.instances.push(instance);
       batch.dirty = true;
