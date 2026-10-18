@@ -121,7 +121,14 @@ import {
   type HopPose,
 } from '../explore/keeper-hop.js';
 import { EXPLORE_VIEW } from '../explore/explore-config.js';
-import { walkMap, type Footprint, type WalkMap, type WalkSpot } from './house-walk.js';
+import {
+  blockerFade,
+  walkMap,
+  type Footprint,
+  type WalkBlocker,
+  type WalkMap,
+  type WalkSpot,
+} from './house-walk.js';
 
 /*
  * The Keeper's house interior (#381 plan §1c): a dollhouse on the shared
@@ -371,6 +378,10 @@ export class HouseScene {
   readonly #paneMeshes: Mesh[] = [];
   /** Residents drawn now, by squishy id, so one can hop (welcome home). */
   readonly #handles = new Map<string, { field: SquishyField; handle: SquishyHandle }>();
+  /** The residents the camera fades out of its way (#381 W2): read once, until the cast changes. */
+  #fadeSpots: (WalkBlocker & { field: SquishyField; handle: SquishyHandle })[] | null = null;
+  /** Some resident is faded now (the dollhouse puts them back whole). */
+  #fading = false;
   /** The residents in the order they were placed (the Keeper's room first). */
   #order: string[] = [];
   /** Every piece of furniture's box as built (#381 W1): the walk's footprints. */
@@ -550,6 +561,7 @@ export class HouseScene {
     this.#pose = pose;
     this.#zoom = zoom;
     this.#fadeFronts(pose, zoom);
+    this.#fadeCast(pose, zoom);
     // Hero detail only once they're big on screen: the dollhouse is near the low cap already.
     this.#hero?.setLod(zoom >= HOUSE_KID.frontFrom ? 'high' : this.#squishies.lod);
     // The fill comes from just above the camera, so every face is lit:
@@ -643,6 +655,38 @@ export class HouseScene {
       for (const m of this.#signParts) m.position.y = y;
     }
     this.#frontAlpha = least;
+  }
+
+  /**
+   * Inside (past `frontFrom`), a resident within about a metre of the camera,
+   * or standing between it and the Keeper, fades out of the way (#381 W2,
+   * the owner's render check): a screen-door fade on its own instances
+   * (`SquishyField.setFade`), no new material or draw call. The dollhouse
+   * shows them all whole. Allocates nothing once the residents are read.
+   */
+  #fadeCast(pose: HousePose, zoom: number): void {
+    const inside = zoom >= HOUSE_KID.frontFrom;
+    if (!inside && !this.#fading) return;
+    const spots = (this.#fadeSpots ??= [...this.#handles.values()].flatMap(({ field, handle }) => {
+      const c = field.centre(handle);
+      if (!c) return [];
+      const tall = field.heightOf(handle) * HOUSE_CAST.squishyScale;
+      const reach = Math.max(tall * HOUSE_CAST.reach, field.reachOf(handle) ?? 0);
+      return [{ field, handle, x: c.x, y: c.y, z: c.z, r: reach * HOUSE_WALK.blockerShare }];
+    }));
+    const at = this.#walkAt;
+    let any = false;
+    for (const s of spots) {
+      const fade = inside ? blockerFade(pose.eye, at.x, at.y + HOUSE_WALK.lookHeight, at.z, s) : 1;
+      s.field.setFade(s.handle, fade);
+      any ||= fade < 1;
+    }
+    this.#fading = any;
+  }
+
+  /** How much of each drawn resident shows (`#fadeCast`), for tests and the dev hook. */
+  get residentFades(): number[] {
+    return [...this.#handles.values()].map(({ field, handle }) => field.fadeOf(handle));
   }
 
   /** The room kid height walks into, as a box (the camera takes only that). */
@@ -2084,9 +2128,11 @@ export class HouseScene {
               const handle = field.add(member.species, resident.squishyId, placement);
               field.setAccessory(handle, accessoryItem(member.accessory));
               this.#handles.set(resident.squishyId, { field, handle });
+              this.#fadeSpots = null;
               return () => {
                 field.remove(handle);
                 this.#handles.delete(resident.squishyId);
+                this.#fadeSpots = null;
               };
             },
             'resident',

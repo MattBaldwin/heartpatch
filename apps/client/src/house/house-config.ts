@@ -367,8 +367,15 @@ export const HOUSE_WALK = {
   tapRadius: 40, // TUNE
   /** The follow camera counts as caught up within this (its eye and look summed), metres: nothing more to draw. */
   settled: 0.004, // TUNE
-  /** The share of a resident's framing reach the follow camera keeps out from in front of the Keeper (its body). */
+  /** A resident's body, as a share of its framing reach (which counts ears, spikes and room round it). */
   blockerShare: 0.85, // TUNE
+  /**
+   * A resident this close to the camera (metres from its body's edge) is
+   * gone, and whole again by the second (the owner's render check: about 1 m).
+   */
+  fadeNear: [1.2, 1.8], // TUNE
+  /** One across the line to the Keeper fades from its body's edge in to this share of its radius. */
+  fadeEdge: 0.6, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */

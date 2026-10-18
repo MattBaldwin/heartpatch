@@ -707,3 +707,71 @@ describe('SquishyField rare finds glow (#391)', () => {
     expect(lit.f.stats.instances).toBe(plain.f.stats.instances);
   });
 });
+
+describe('SquishyField fade (#381 W2)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  function field() {
+    const scene = new Scene(engine);
+    return {
+      scene,
+      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }),
+    };
+  }
+
+  /** Every instance's colour alpha on the body mesh. */
+  function alphas(scene: Scene): number[] {
+    const mesh = scene.meshes.find((m) => m.name.startsWith('squishy-body')) as Mesh;
+    // Babylon keeps a thin instance's `color` buffer as `instanceColor`.
+    const data = mesh.getVertexBuffer('instanceColor')?.getData() as Float32Array;
+    return Array.from({ length: data.length / 4 }, (_, i) => data[i * 4 + 3]!);
+  }
+
+  /** The screen-door fade is compiled into the shader. */
+  const fading = (scene: Scene): boolean => {
+    const material = scene.materials.find((m) => m.name === 'squishy-vinyl');
+    return (
+      (material?.pluginManager?.getPlugin('Squish') as { fade?: boolean } | null)?.fade ?? false
+    );
+  };
+
+  it('fades one squishy in place: its own instances, no new meshes, the shader’s fade on while it lasts', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.add(species, 'b', { x: 1, z: 0 });
+    f.flush();
+    const meshes = f.stats.meshes;
+    expect(fading(scene)).toBe(false);
+    f.setFade(a, 0.4);
+    f.flush();
+    expect(alphas(scene)[0]).toBeCloseTo(0.4);
+    expect(alphas(scene)[1]).toBe(1);
+    expect(f.fadeOf(a)).toBeCloseTo(0.4);
+    expect(f.stats.meshes).toBe(meshes);
+    expect(fading(scene)).toBe(true);
+    f.setFade(a, 1);
+    f.flush();
+    expect(alphas(scene)).toEqual([1, 1]);
+    expect(fading(scene)).toBe(false);
+  });
+
+  it('keeps the fade through a rebuild, and lets go of it when a faded one is removed', () => {
+    const { scene, field: f } = field();
+    const a = f.add(species, 'a', { x: -1, z: 0 });
+    f.setFade(a, 0);
+    f.add(species, 'b', { x: 1, z: 0 }); // a new instance rebuilds the buffers
+    f.flush();
+    expect(alphas(scene)[0]).toBe(0);
+    f.remove(a);
+    expect(fading(scene)).toBe(false);
+  });
+});

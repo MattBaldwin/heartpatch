@@ -323,10 +323,9 @@ export function followTurn(yaw: number): number {
  * The follow camera, written into `out`: behind the Keeper, turned with it
  * (`followTurn`), never standing in another room. It's drawn in toward the
  * Keeper along its own heading until it's inside `room` (or on the porch
- * for a front room), under its ceiling and clear of furniture, and until no
- * resident in `around` stands between it and the Keeper (#381 W2: in the
- * Playroom one hid it); squeezed like that, it climbs and looks down at the
- * Keeper instead of past it.
+ * for a front room), under its ceiling and clear of furniture; squeezed
+ * like that, it climbs and looks down at the Keeper instead of past it.
+ * Residents in its way fade instead (`blockerFade`).
  */
 export function followPose(
   out: FollowPose,
@@ -335,7 +334,6 @@ export function followPose(
   yaw: number,
   room: RoomBox,
   aspect: number,
-  around: readonly WalkBlocker[] = [],
 ): FollowPose {
   const W = HOUSE_WALK;
   const turn = followTurn(yaw);
@@ -352,11 +350,9 @@ export function followPose(
   // Clear of furniture standing up into the camera's way (the low tier's
   // Kitchen table filled the frame's corner).
   while (d > 0 && nearFurniture(map, at.x - dx * d, at.z - dz * d, at.y)) d -= W.nearStep;
-  // Drawn in (and so up) until the residents are out of the way.
-  while (d > 0 && hidden(at, dx, dz, d, eyeAt(at, d, room), around)) d -= W.nearStep;
   d = Math.max(0, d);
   const squeeze = 1 - d / W.back;
-  const eyeY = eyeAt(at, d, room);
+  const eyeY = Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
   out.eye.x = at.x - dx * d;
   out.eye.y = eyeY;
   out.eye.z = at.z - dz * d;
@@ -373,7 +369,7 @@ export function followPose(
   return out;
 }
 
-/** Something round the camera should keep from standing in front of the Keeper (a resident). */
+/** A resident as the camera's fade sees it: its middle and its body's radius. */
 export interface WalkBlocker {
   readonly x: number;
   readonly y: number;
@@ -382,51 +378,44 @@ export interface WalkBlocker {
   readonly r: number;
 }
 
-/** The camera's eye height `d` behind the Keeper: higher the more it's squeezed, under the ceiling. */
-function eyeAt(at: WalkSpot, d: number, room: RoomBox): number {
-  const W = HOUSE_WALK;
-  const squeeze = 1 - Math.max(0, d) / W.back;
-  return Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
-}
+const smoothstep = (a: number, b: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 /**
- * A blocker standing across the line from the camera (`d` back along the
- * heading, at `eyeY`) to the Keeper's chest: the Keeper would be hidden.
+ * How much of a resident shows from `eye` (#381 W2, the owner's render
+ * check): it fades out as the camera comes within about a metre of it
+ * (`HOUSE_WALK.fadeNear`), and as it stands across the line from the camera
+ * to the Keeper's chest at (kx, ky, kz), or round it (the Keeper walks
+ * through residents until W4). 1 shows it whole, 0 not at all.
  */
-function hidden(
-  at: WalkSpot,
-  dx: number,
-  dz: number,
-  d: number,
-  eyeY: number,
-  around: readonly WalkBlocker[],
-): boolean {
-  const ex = at.x - dx * d;
-  const ez = at.z - dz * d;
-  const sx = at.x - ex;
-  const sy = at.y + HOUSE_WALK.lookHeight - eyeY;
-  const sz = at.z - ez;
+export function blockerFade(
+  eye: { readonly x: number; readonly y: number; readonly z: number },
+  kx: number,
+  ky: number,
+  kz: number,
+  b: WalkBlocker,
+): number {
+  const [nearGone, nearWhole] = HOUSE_WALK.fadeNear;
+  const near = smoothstep(
+    nearGone,
+    nearWhole,
+    Math.hypot(b.x - eye.x, b.y - eye.y, b.z - eye.z) - b.r,
+  );
+  const sx = kx - eye.x;
+  const sy = ky - eye.y;
+  const sz = kz - eye.z;
   const ss = sx * sx + sy * sy + sz * sz;
-  if (ss <= 0) return false;
-  const cy = at.y + HOUSE_WALK.lookHeight;
-  for (const b of around) {
-    // One the Keeper stands in (it walks through them, W4) hides it from everywhere: never mind it.
-    const kx = at.x - b.x;
-    const ky = cy - b.y;
-    const kz = at.z - b.z;
-    if (kx * kx + ky * ky + kz * kz < b.r * b.r) continue;
-    // Its nearest point on the line, short of the Keeper itself.
-    const t = Math.min(
-      1,
-      Math.max(0, ((b.x - ex) * sx + (b.y - eyeY) * sy + (b.z - ez) * sz) / ss),
-    );
-    if (t >= 1) continue;
-    const px = ex + sx * t - b.x;
-    const py = eyeY + sy * t - b.y;
-    const pz = ez + sz * t - b.z;
-    if (px * px + py * py + pz * pz < b.r * b.r) return true;
-  }
-  return false;
+  if (ss <= 0) return near;
+  const t = Math.min(
+    1,
+    Math.max(0, ((b.x - eye.x) * sx + (b.y - eye.y) * sy + (b.z - eye.z) * sz) / ss),
+  );
+  // Past the Keeper it hides nothing.
+  if (t >= 1) return near;
+  const gap = Math.hypot(eye.x + sx * t - b.x, eye.y + sy * t - b.y, eye.z + sz * t - b.z);
+  return Math.min(near, smoothstep(b.r * HOUSE_WALK.fadeEdge, b.r, gap));
 }
 
 /**

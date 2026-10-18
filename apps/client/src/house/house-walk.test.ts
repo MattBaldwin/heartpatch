@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
+  blockerFade,
   cameraFront,
   copyPose,
   createFollowPose,
@@ -428,47 +429,6 @@ describe('the follow camera (#381 W1)', () => {
     expect(p.eye.y).toBeGreaterThan(free.eye.y);
   });
 
-  describe('a resident between it and the Keeper (#381 W2, the Playroom case)', () => {
-    const map = mapAt(4);
-    const hall = room(map, 'heart-hall');
-    const at = { x: 4, z: 9, y: 0 };
-    /** The Keeper's chest seen from the eye, clear of a ball at `b`. */
-    const clearOf = (
-      p: ReturnType<typeof pose>,
-      b: { x: number; y: number; z: number; r: number },
-    ) => {
-      const s = { x: at.x - p.eye.x, y: at.y + HOUSE_WALK.lookHeight - p.eye.y, z: at.z - p.eye.z };
-      const ss = s.x * s.x + s.y * s.y + s.z * s.z;
-      const t = Math.min(
-        1,
-        Math.max(0, ((b.x - p.eye.x) * s.x + (b.y - p.eye.y) * s.y + (b.z - p.eye.z) * s.z) / ss),
-      );
-      return (
-        Math.hypot(p.eye.x + s.x * t - b.x, p.eye.y + s.y * t - b.y, p.eye.z + s.z * t - b.z) >= b.r
-      );
-    };
-
-    it('draws in and climbs until the Keeper shows over it', () => {
-      const resident = { x: 4, y: 0.6, z: 7.6, r: 0.6 };
-      const free = followPose(pose(), map, at, Math.PI, hall, 0.5);
-      expect(clearOf(free, resident)).toBe(false);
-      const p = followPose(pose(), map, at, Math.PI, hall, 0.5, [resident]);
-      expect(clearOf(p, resident)).toBe(true);
-      expect(p.eye.z).toBeGreaterThan(free.eye.z);
-      expect(p.eye.y).toBeGreaterThan(free.eye.y);
-    });
-
-    it('minds no resident beside or past the Keeper, nor one it stands in', () => {
-      const free = followPose(pose(), map, at, Math.PI, hall, 0.5);
-      const beside = { x: 5.5, y: 0.4, z: 8, r: 0.5 };
-      const past = { x: 4, y: 0.4, z: 10, r: 0.5 };
-      const on = { x: 4.1, y: 0.4, z: 9, r: 0.5 };
-      const p = followPose(pose(), map, at, Math.PI, hall, 0.5, [beside, past, on]);
-      expect(p.eye.z).toBeCloseTo(free.eye.z);
-      expect(p.eye.y).toBeCloseTo(free.eye.y);
-    });
-  });
-
   it('minds no toy on the floor behind it, only furniture that reaches into its view (#381 W2)', () => {
     const map = mapAt(1, [piece(2.86, 3.09, 0.3, 0.54, 0.17)]);
     const snug = room(map, 'snug');
@@ -515,5 +475,37 @@ describe('the follow camera (#381 W1)', () => {
     expect(followPose(out, map, { x: 4, z: 9, y: 0 }, 2, hall, 0.5)).toBe(out);
     expect(out.eye).toBe(eye);
     expect(out.target).toBe(target);
+  });
+});
+
+describe('residents fading out of the camera’s way (#381 W2)', () => {
+  const eye = { x: 0, y: 1.7, z: 0 };
+  const keeper = { x: 0, y: 0.55, z: 4 };
+  const fade = (b: { x: number; y: number; z: number; r: number }) =>
+    blockerFade(eye, keeper.x, keeper.y, keeper.z, b);
+  const [gone, whole] = HOUSE_WALK.fadeNear;
+
+  it('fades one close to the camera: gone within about a metre, whole a little further', () => {
+    const r = 0.4;
+    // Beside the camera, nowhere near the line to the Keeper.
+    expect(fade({ x: -(gone + r) + 0.1, y: 1.7, z: 0, r })).toBe(0);
+    expect(fade({ x: -(whole + r) - 0.3, y: 1.7, z: 0, r })).toBe(1);
+    const between = fade({ x: -(gone + whole) / 2 - r, y: 1.7, z: 0, r });
+    expect(between).toBeGreaterThan(0);
+    expect(between).toBeLessThan(1);
+  });
+
+  it('fades one standing across the line to the Keeper, far from the camera too', () => {
+    expect(fade({ x: 0, y: 1, z: 2.5, r: 0.5 })).toBe(0);
+    // Off to the side it stays whole.
+    expect(fade({ x: 2, y: 0.5, z: 3, r: 0.5 })).toBe(1);
+  });
+
+  it('never fades one behind the Keeper', () => {
+    expect(fade({ x: 0, y: 0.5, z: 6, r: 0.5 })).toBe(1);
+  });
+
+  it('fades one the Keeper is walking through', () => {
+    expect(fade({ x: 0.1, y: 0.5, z: 3.95, r: 0.5 })).toBeLessThan(0.5);
   });
 });

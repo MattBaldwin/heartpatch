@@ -74,7 +74,6 @@ import {
   roomAt,
   slideStep,
   startSpot,
-  type WalkBlocker,
   type WalkSpot,
 } from './house-walk.js';
 import { keeperTapped, stepToward, stickToFloor, type FloorStep } from './house-walk-input.js';
@@ -336,8 +335,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   let walkReady = false;
   /** The last walk frame (ms), or null: the next one starts from rest. */
   let walkLast: number | null = null;
-  /** The residents the camera keeps from standing in front of the Keeper, read as it walks in. */
-  let walkAround: readonly WalkBlocker[] = [];
   /** A one-finger press while walked in: where it landed, and whether it moved past a tap. */
   let press: { id: number; x: number; y: number; moved: boolean } | null = null;
   /** The joystick: where the drag steers from, and the finger. */
@@ -1545,7 +1542,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (!room) return;
     const vp = viewport();
     const aspect = vp.width / Math.max(1, vp.height);
-    followPose(walkGoal, s.walkMap, walkAt, walkYaw, room, aspect, walkAround);
+    followPose(walkGoal, s.walkMap, walkAt, walkYaw, room, aspect);
     s.setWalkFocus(room);
   }
 
@@ -1557,10 +1554,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function followCam(s: HouseScene): HousePose {
     if (!walkReady) {
       syncKeeper(s);
-      // Read once per walk in: the residents stand by their beds. Their
-      // framing reach is generous (ears, spikes, room round them): the
-      // camera minds only their bodies.
-      walkAround = s.residentSpots.map((r) => ({ ...r, r: r.r * HOUSE_WALK.blockerShare }));
       followGoal(s);
       copyPose(walkCam, walkGoal);
       walkReady = true;
@@ -1970,7 +1963,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     kept = false;
     walkReady = false;
     walkRoom = null;
-    walkAround = [];
     dropWalkInput();
     builtTier = null;
     sheet = 'peek';
