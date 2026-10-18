@@ -34,6 +34,8 @@ export const HOUSE_PALETTE = {
   trim: '#8d5a3b', // TUNE: skirting
   frame: '#fff6ec', // TUNE: window frames
   planks: ['#c98b5a', '#d2956a', '#bf7f52'], // TUNE: floor boards, three tones
+  /** The gaps between boards: unlit dark wood, the boards' shadow (B5a render check: a lit board read pale mauve at a grazing angle). */
+  groove: '#5a3524', // TUNE
   footing: '#8f8279', // TUNE: the stone footing under the house
   lawn: '#a9c58f', // TUNE: a pastel dusk lawn
   lawnLift: '#3a3424', // TUNE: emissive lift so the lawn stays pastel at dusk
@@ -178,7 +180,7 @@ export const HOUSE_LIGHT = {
      * it comes in flatter (B5a: Puddlepuff's belly rim read grey, #b6b3bb, lit
      * from straight above); kid height keeps B4's.
      */
-    tilt: { doll: [0.15, 0.25, 0], kid: [0.15, -0.45, 0] },
+    tilt: { doll: [0.15, -0.1, 0], kid: [0.15, -0.45, 0] }, // TUNE: B5a render check: 0.25 up put a white streak down Puddlepuff's crown
   }, // TUNE
 } as const;
 
@@ -239,7 +241,7 @@ export const HOUSE_CAMERA = {
    * A portrait phone fits the focus room across plus this much of each
    * neighbour, metres (the rest is a sideways drag away).
    */
-  peek: 0.4, // TUNE: B5a: 1.1 (B4) left level 2's dollhouse a third of an iPhone's height (the edge rule widened it to 2.5); the Playroom's edge still in view
+  peek: 0.4, // TUNE: B5a: the usual, nearest first; framedFocus widens it until no resident is cut or wholly off screen (render check), about 1.8 at level 2 (B4's 1.1 widened to 2.5)
   /** At most this much lawn past the house's near end keeps the focus room toward the frame's middle on a phone, metres (B5a). */
   lawn: 0.5, // TUNE
   /** The "more this way" chevron pill (CSS px): its size, how far in from the edge, and the gap it keeps from a resident. */
@@ -413,7 +415,9 @@ export const HOUSE_GIFT = {
   ribbon: '#fff2b0', // TUNE: a pale gold ribbon
   bow: '#f2c14e', // TUNE: the bow, a little deeper
   /** The bow's two ribbon loops, metres: across a loop, the ribbon's thickness and width, and how far each leans out (radians). */
-  bowLoop: { diameter: 0.13, thickness: 0.022, width: 0.06, lean: 0.75 }, // TUNE: B5a
+  bowLoop: { diameter: 0.14, thickness: 0.036, width: 0.08, lean: 0.75 }, // TUNE: B5a render check: 0.022 thick read as a wire handle
+  /** The Snug's spare spot (its room's own corner, metres from x0 and z0): off the hearthstone, by the ball (B5a render check: 1.0, 0.62 sat on the slab). */
+  snugSpare: { x: 1.45, z: 0.56 }, // TUNE
   /** The gap between the bed's side and the box, metres. */
   besideBed: 0.3, // TUNE
   /** Kept this far inside the room's walls, metres. */
@@ -571,8 +575,8 @@ export const HOUSE_TIMES: Readonly<Record<SkyPhase, HouseTimeLook>> = {
     environment: 1.05, // TUNE
     sunSpecular: 0.12, // TUNE: no lavender glint along the rafters
     glow: 1,
-    lift: '#957965', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom
-    ceiling: '#9a6646', // TUNE: B5a
+    lift: '#7d6555', // TUNE: B5a: the Heart Hall and the right-hand rooms out of the gloom; render check: #957965 left kid-height night at 92% of day
+    ceiling: '#7e5439', // TUNE: B5a: evening, under dusk's
     yard: 1,
   },
 };

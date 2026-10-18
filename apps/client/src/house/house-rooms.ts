@@ -12,7 +12,7 @@ import {
   toys,
   type Parts,
 } from './house-models.js';
-import { HOUSE_GRID, HOUSE_TIERS } from './house-config.js';
+import { HOUSE_GIFT, HOUSE_GRID, HOUSE_TIERS } from './house-config.js';
 import type { QualityTier } from '../engine/config.js';
 import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
 import type { RoomBox } from './house-layout.js';
@@ -208,7 +208,7 @@ export const snugRoom: RoomBuilder = (kit) => {
     keeper: { x: box.x0 + w * 0.55, z: box.z0 + d * 0.7 },
     // At the hearthstone's front corner, by the ball: in view from the
     // dollhouse, clear of the two on the rug and the Keeper.
-    gift: { x: box.x0 + 1.0, z: box.z0 + 0.62 }, // TUNE
+    gift: { x: box.x0 + HOUSE_GIFT.snugSpare.x, z: box.z0 + HOUSE_GIFT.snugSpare.z },
     residents: [at(w * 0.33, d * 0.4), at(w * 0.67, d * 0.36), at(w * 0.5, d * 0.22)].map(
       ([x, z]) => ({ x, z }),
     ),

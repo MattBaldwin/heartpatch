@@ -23,6 +23,7 @@ import { houseLookAtMinute } from './house-light-look.js';
 import { yardPumpkins } from './house-models.js';
 import { registerRoom, roomBuilder, type RoomKit } from './house-rooms.js';
 import { buildHouse } from './house-test-scene.js';
+import { roomBox } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
 vi.mock('../procedural/contact-shadow.js', () => ({
@@ -410,10 +411,14 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
-    it('lays a board just under the floor boards’ tops, so no gap reads as a dark slit (B5a)', () => {
+    it('lays an unlit dark groove just under the floor boards’ tops, so no gap reads as a slit (B5a)', () => {
       const { scene } = buildHouse(1, 'low');
-      const floor = scene.getMeshByName('house-f0-floor')!;
-      floor.computeWorldMatrix(true);
+      // In the glow (unlit, its colour as is), not the lit boards: no new draw call.
+      const lit = scene.getMeshByName('house-f0-floor')!.getVerticesData('position') ?? [];
+      for (let i = 1; i < lit.length; i += 3)
+        expect(Math.abs(lit[i]! + HOUSE_GRID.seamDepth)).toBeGreaterThan(0.001);
+      const floor = scene.getMeshByName('house-glow-f0')!;
+      expect(floor.material!.name).toBe('house-glow');
       const pos = floor.getVerticesData('position') ?? [];
       // Boards' tops at 0; the board under them its top a seam's depth down, right across the room.
       const under: number[] = [];
@@ -460,11 +465,8 @@ describe('house scene', () => {
         const faces = house.faceReport();
         const at = `level ${String(level)} floor ${String(floor)}`;
         expect(faces.cut, at).toBe(0);
-        // Every face in the frame is seen (B5a: a closer phone frame leaves the
-        // next room's residents wholly off the edge, a sideways drag away).
-        const inFrame = faces.boxes.filter((b) => b.x0 >= 0 && b.x1 <= 1).length;
-        expect(inFrame, at).toBeGreaterThanOrEqual(2);
-        expect(faces.visible, at).toBe(inFrame);
+        // Every resident in the frame and every face seen (B5a render check).
+        expect(faces.visible, at).toBe(faces.total);
         // The chevron pills keep off every resident's face (round 4: one sat on the cyan's eye).
         const pose = fitHouse(house.frameBounds, vp, undefined, focus);
         const guess = residentBoxes(pose, vp, house.residentSpots);
@@ -575,6 +577,18 @@ describe('house scene', () => {
         expect(house.stats.gift).toBe(true);
         scene.getEngine().dispose();
       }
+    });
+
+    it('stands it at the Snug’s spare spot at level 2, off the hearthstone (B5a render check)', () => {
+      // Its giver not drawn: the box goes to the Snug's spare spot (the same one
+      // besideBed falls back to when no spot by the bed clears the cast).
+      const sample = withGift(sampleHouse(2), { away: true });
+      const { scene, house } = buildHouse(2, 'high', sample);
+      const snug = roomBox(sample.view.rooms.find((r) => r.look === 'snug')!);
+      const at = house.giftPoint!;
+      expect(at.x).toBeCloseTo(snug.x0 + HOUSE_GIFT.snugSpare.x, 5);
+      expect(at.z).toBeCloseTo(snug.z0 + HOUSE_GIFT.snugSpare.z, 5);
+      scene.getEngine().dispose();
     });
 
     it('puts it by the hearth when its giver isn’t drawn, clear of the cast', () => {
@@ -708,9 +722,21 @@ describe('house scene', () => {
         kidPose(house.focusRoom!, { width: 820, height: 1180, top: 70, bottom: 150 }),
         1,
       );
-      // Still from above, so every face is lit; flatter than the camera's own steep look down.
+      // Still from above, so every face is lit; flatter than kid height's tilt
+      // would bring it in from this pose (render check: not so flat it streaks the crown).
+      const d = [
+        doll.target.x - doll.eye.x,
+        doll.target.y - doll.eye.y,
+        doll.target.z - doll.eye.z,
+      ];
+      const n = Math.hypot(d[0]!, d[1]!, d[2]!);
+      const yWith = (t: { x: number; y: number; z: number }) => {
+        const v = [d[0]! / n + t.x, d[1]! / n + t.y, d[2]! / n + t.z];
+        return v[1]! / Math.hypot(v[0]!, v[1]!, v[2]!);
+      };
       expect(dollY).toBeLessThan(0);
-      expect(dollY).toBeGreaterThan(Math.sin(-doll.pitch));
+      expect(dollY).toBeGreaterThan(yWith(fillTilt(1)));
+      expect(dollY).toBeLessThan(yWith({ x: 0.15, y: 0.25, z: 0 }));
       expect(fill.direction.y).toBeLessThan(0);
       scene.getEngine().dispose();
     });

@@ -173,7 +173,7 @@ export function floorPlanks(
 ): Mesh[] {
   const tones = HOUSE_PALETTE.planks;
   const n = Math.max(1, Math.round(w / HOUSE_GRID.plank));
-  const boards = Array.from({ length: n }, (_, i) =>
+  return Array.from({ length: n }, (_, i) =>
     box(
       scene,
       [w / n - 0.02, 0.16, d],
@@ -181,12 +181,24 @@ export function floorPlanks(
       tones[i % 3] ?? '#c98b5a',
     ),
   );
-  // A board just under the boards' tops, so a gap reads as a soft warm line
-  // (B5a: the gap straight ahead of kid height, seen down its length, was a
-  // dark slit to the stone footing at the bottom of every kid shot).
+}
+
+/**
+ * The board under `floorPlanks`' gaps, just below their tops: drawn with the
+ * unlit glow (its colour as is), so every gap reads as an even dark groove
+ * (B5a: the gap straight ahead of kid height, seen down its length, was a
+ * grey slit to the stone footing; a lit board there read pale at that angle).
+ */
+export function floorGroove(
+  scene: Scene,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+): Mesh {
   const seam = HOUSE_GRID.seamDepth;
-  boards.push(box(scene, [w, 0.02, d], [x0 + w / 2, y - seam - 0.01, z0 + d / 2], tones[2]));
-  return boards;
+  return box(scene, [w, 0.02, d], [x0 + w / 2, y - seam - 0.01, z0 + d / 2], HOUSE_PALETTE.groove);
 }
 
 /** A gable roof over a rectangle, eaves at `y`, outside colour; lifted off in the entry glide. */

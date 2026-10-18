@@ -86,6 +86,7 @@ import {
   bedBlanket,
   bedFrame,
   box,
+  floorGroove,
   floorPlanks,
   frontYard,
   gableRoof,
@@ -422,6 +423,7 @@ export class HouseScene {
     this.#runs = runs;
     this.#buildOutside(this.bounds);
     const plans = new Map<string, RoomPlan>();
+    const grooves: { floor: number; mesh: Mesh }[] = [];
     for (const box of rooms) {
       const parts: RoomParts = { box, solid: [], glow: [], floor: [], panes: [] };
       const frontOpen = runs.some((r) => r.room === box.id && r.front && r.exterior);
@@ -430,11 +432,21 @@ export class HouseScene {
       if (box.y0 > 0) parts.floor.push(underside(scene, box, z0));
       for (const run of runs.filter((r) => r.room === box.id)) this.#wall(parts, run);
       plans.set(box.id, roomBuilder(box.look)(this.#kit(parts)));
+      grooves.push({
+        floor: box.floor,
+        mesh: floorGroove(scene, box.x0, z0, box.x1 - box.x0, box.z1 - z0, box.y0),
+      });
       const own = this.#floorParts(box.floor);
       own.solid.push(...parts.solid);
       own.glow.push(...parts.glow);
       own.floor.push(...parts.floor);
       own.panes.push(...parts.panes);
+    }
+    // The grooves under the boards: in their floor's unlit glow, or with the
+    // boards on a floor with no glow (no draw call of their own either way).
+    for (const { floor, mesh } of grooves) {
+      const own = this.#floorParts(floor);
+      (own.glow.length > 0 ? own.glow : own.floor).push(mesh);
     }
     this.#buildGift(options.gift ?? null, view, plans, options.cast);
     this.#mergeFloors();

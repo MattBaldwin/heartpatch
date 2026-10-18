@@ -117,9 +117,9 @@ export function playroomRoom(kit: RoomKit): RoomPlan {
 
   return {
     keeper: null,
-    // B5a: right of the room's middle, so a phone's frame round the Snug ends
-    // between the rooms' residents (closer in) rather than through one.
-    residents: [spot(w * 0.46, d * 0.34), spot(w * 0.64, d * 0.44), spot(w * 0.52, d * 0.62)], // TUNE
+    // B5a: toward the Snug's side, so a phone frame round the Snug holds all
+    // of them (render check: every resident in view) a little closer in than B4's.
+    residents: [spot(w * 0.22, d * 0.36), spot(w * 0.44, d * 0.46), spot(w * 0.26, d * 0.64)], // TUNE
   };
 }
 

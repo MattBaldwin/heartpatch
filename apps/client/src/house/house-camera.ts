@@ -234,8 +234,9 @@ export function framedFocus(
       const c = project(pose, aspect, p);
       if (c.depth <= 0) return false;
       const w = p.r / c.depth / t + HOUSE_CAMERA.edgeClear;
-      // The screen's own edges crop it (the safe area's are only a margin in).
-      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge);
+      // The screen's own edges crop it (the safe area's are only a margin in),
+      // or it's wholly off one side (B5a render check: every resident in view).
+      return [-1, 1].some((edge) => c.x - w < edge && c.x + w > edge) || Math.abs(c.x) - w >= 1;
     });
   };
   // Every peek from a sliver to the whole house, nearest the usual first
