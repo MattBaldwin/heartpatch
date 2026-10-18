@@ -1,6 +1,8 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HOUSE_DOORS, HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
+import { stickToFloor, type FloorStep } from './house-walk-input.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
   blockerFade,
@@ -672,6 +674,80 @@ describe('doorways and the floors between (#381 W3)', () => {
       const at = startSpot(map, hall)!;
       const pose = followPose(createFollowPose(), map, at, 0, hall, 393 / 852);
       expect(pose.eye.z).toBeLessThan(at.z);
+    });
+  });
+
+  describe('holding the stick a storey up (W3 review: no flip-flop with the turning camera)', () => {
+    /**
+     * Holds the stick at `push` for `seconds` as the screen does: the stick
+     * steers from the camera as it was taken; the camera eases after the Keeper.
+     */
+    function hold(map: WalkMap, hall: RoomBox, at: WalkSpot, push: FloorStep, seconds: number) {
+      let yaw = Math.PI;
+      const goal = createFollowPose();
+      const cam = createFollowPose();
+      copyPose(cam, followPose(goal, map, at, yaw, hall, 393 / 852));
+      const taken = copyPose(createFollowPose(), cam);
+      const stride = { x: 0, z: 0 };
+      const dt = 1 / 60;
+      const zs: number[] = [];
+      const flips: boolean[] = [];
+      for (let i = 0; i < seconds * 60; i += 1) {
+        stickToFloor(stride, push, taken);
+        slideStep(map, at, stride.x * HOUSE_WALK.speed * dt, stride.z * HOUSE_WALK.speed * dt);
+        yaw = faceYaw(stride.x, stride.z);
+        followPose(goal, map, at, yaw, hall, 393 / 852);
+        easePose(cam, goal, dt);
+        zs.push(at.z);
+        flips.push(goal.reverse);
+      }
+      return { zs, flips };
+    }
+
+    it('walks on toward the front along the walkway, the camera turned round once and staying so', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 2.6, y: hall.y0 + HOUSE_GRID.storey };
+      const { zs, flips } = hold(map, hall, at, { x: 0, z: -1 }, 4);
+      // Never back the way it came, and on to the walkway's front end.
+      for (let i = 1; i < zs.length; i += 1) expect(zs[i]!).toBeLessThanOrEqual(zs[i - 1]! + 1e-9);
+      expect(zs.at(-1)!).toBeLessThan(hall.z0 + 0.6);
+      const changes = flips.filter((f, i) => i > 0 && f !== flips[i - 1]).length;
+      expect(changes).toBeLessThanOrEqual(1);
+      expect(flips.at(-1)).toBe(true);
+    });
+
+    it('walks on down the stairs from the gallery', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const ramp = map.ramps[0]!;
+      const at = { x: (ramp.x0 + ramp.x1) / 2, z: ramp.z1 - 0.1, y: ramp.y1 };
+      at.y = floorAt(map, at.x, at.z, at.y);
+      expect(at.y).toBeGreaterThan(ramp.y1 - 0.1);
+      const { zs } = hold(map, hall, at, { x: 0, z: -1 }, 5);
+      for (let i = 1; i < zs.length; i += 1) expect(zs[i]!).toBeLessThanOrEqual(zs[i - 1]! + 1e-9);
+      expect(at.y).toBeCloseTo(hall.y0, 1);
+    });
+
+    it('doesn’t turn round and back on a heading wobbling round the turn-away line', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 2.6, y: hall.y0 + HOUSE_GRID.storey };
+      const pose = createFollowPose();
+      // Heading is yaw − π: just past turn-away, then a little inside it.
+      followPose(pose, map, at, Math.PI + HOUSE_WALK.turnAway + 0.05, hall, 1);
+      expect(pose.reverse).toBe(true);
+      followPose(pose, map, at, Math.PI + HOUSE_WALK.turnAway - 0.1, hall, 1);
+      expect(pose.reverse).toBe(true);
+      followPose(
+        pose,
+        map,
+        at,
+        Math.PI + HOUSE_WALK.turnAway - HOUSE_WALK.reverseBand - 0.05,
+        hall,
+        1,
+      );
+      expect(pose.reverse).toBe(false);
     });
   });
 });

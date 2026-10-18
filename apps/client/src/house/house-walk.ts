@@ -106,10 +106,18 @@ export interface FollowPose {
   readonly target: { x: number; y: number; z: number };
   fov: number;
   pitch: number;
+  /** Turned round to follow a Keeper heading back toward the front (a storey up, W3). */
+  reverse: boolean;
 }
 
 export function createFollowPose(): FollowPose {
-  return { eye: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 1 }, fov: 1, pitch: 0 };
+  return {
+    eye: { x: 0, y: 0, z: 0 },
+    target: { x: 0, y: 0, z: 1 },
+    fov: 1,
+    pitch: 0,
+    reverse: false,
+  };
 }
 
 const inside = (
@@ -260,11 +268,14 @@ export function loftWalk(
  */
 export function standingFloor(y: number, was = -1): number {
   const { floorSwitch, floorBand } = HOUSE_WALK;
-  const at = (k: number) => Math.max(0, Math.floor(y / HOUSE_GRID.storey + 1 - k + 1e-6));
-  const up = at(floorSwitch + floorBand);
-  const down = at(floorSwitch - floorBand);
-  return was >= up && was <= down ? was : at(floorSwitch);
+  const up = floorAbove(y, floorSwitch + floorBand);
+  const down = floorAbove(y, floorSwitch - floorBand);
+  return was >= up && was <= down ? was : floorAbove(y, floorSwitch);
 }
+
+/** The floor at height `y` when a floor starts `share` of a storey above its level. */
+const floorAbove = (y: number, share: number): number =>
+  Math.max(0, Math.floor(y / HOUSE_GRID.storey + 1 - share + 1e-6));
 
 /**
  * The walkable floor: each room's floor rect inset by half the wall and the
@@ -531,9 +542,16 @@ export function followPose(
   // the landing, #381 W3: the owner's render check), it looks along the
   // way the Keeper walks, even back toward the front, from behind it and at
   // kid height: there's no front wall to squeeze against, only the room.
-  const upper = at.y >= room.y0 + HOUSE_GRID.storey - W.floorReach;
+  // `out` remembers whether it had turned round: it turns round past
+  // `turnAway` and back only `reverseBand` short of it, and stays turned
+  // round down the stairs until the floor cut would switch (no 180° flip
+  // on every wobble of the heading or the step).
+  const was = out.reverse;
+  const up = room.y0 + (was ? HOUSE_GRID.storey * W.floorSwitch : HOUSE_GRID.storey - W.floorReach);
+  const upper = room.storeys > 1 && at.y >= up;
   const heading = Math.atan2(Math.sin(yaw - Math.PI), Math.cos(yaw - Math.PI));
-  const reverse = upper && Math.abs(heading) > W.turnAway;
+  const reverse = upper && Math.abs(heading) > (was ? W.turnAway - W.reverseBand : W.turnAway);
+  out.reverse = reverse;
   const turn = followTurn(reverse ? yaw - Math.PI : yaw);
   const sign = reverse ? -1 : 1;
   const dx = Math.sin(turn) * sign;
@@ -643,6 +661,7 @@ export function easePose(pose: FollowPose, goal: FollowPose, dt: number): Follow
   pose.target.z += (goal.target.z - pose.target.z) * k;
   pose.fov += (goal.fov - pose.fov) * k;
   pose.pitch += (goal.pitch - pose.pitch) * k;
+  pose.reverse = goal.reverse;
   return pose;
 }
 
@@ -656,5 +675,6 @@ export function copyPose(to: FollowPose, from: FollowPose): FollowPose {
   to.target.z = from.target.z;
   to.fov = from.fov;
   to.pitch = from.pitch;
+  to.reverse = from.reverse;
   return to;
 }

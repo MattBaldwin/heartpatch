@@ -341,6 +341,13 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Where the follow camera wants to be, and where it is (easing after it). */
   const walkGoal = createFollowPose();
   const walkCam = createFollowPose();
+  /**
+   * The camera as the stick was taken (W3): the stick steers from it until
+   * it's let go. Read against the live camera, a camera that turns round to
+   * follow (a storey up) turned "down" into "up" mid-hold.
+   */
+  const stickCam = createFollowPose();
+  let stickHeld = false;
   /** The follow camera is set for this scene and screen (false: work it out afresh). */
   let walkReady = false;
   /** The last walk frame (ms), or null: the next one starts from rest. */
@@ -1594,12 +1601,17 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     let walking = false;
     let moved = false;
     let yaw = walkYaw;
+    if (!stick) stickHeld = false;
     if (input && stick) {
       const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
       push.x = v.x;
       push.z = v.z;
       if (push.x !== 0 || push.z !== 0) {
-        stickToFloor(stride, push, walkCam);
+        if (!stickHeld) {
+          copyPose(stickCam, walkCam);
+          stickHeld = true;
+        }
+        stickToFloor(stride, push, stickCam);
         moved = slideStep(map, walkAt, stride.x * step, stride.z * step);
         // Faces the way the stick points, even pressed against a wall.
         yaw = faceYaw(stride.x, stride.z);

@@ -388,6 +388,8 @@ export const HOUSE_WALK = {
   floorSwitch: 0.5, // TUNE
   /** ...and back down only this share of a storey below that (and up only this far above it). */
   floorBand: 0.05, // TUNE
+  /** A storey up, the turned-round camera turns back only this far inside `turnAway`, radians. */
+  reverseBand: 0.35, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */
