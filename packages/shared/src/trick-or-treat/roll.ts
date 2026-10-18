@@ -4,7 +4,7 @@ import {
   trickOrTreatCostumes,
   type TrickOrTreatPrizes,
 } from '../schemas/data/trick-or-treat-prizes.js';
-import type { TrickOrTreatPrizeKind } from '../schemas/trick-or-treat.js';
+import type { TrickOrTreatPrize, TrickOrTreatPrizeKind } from '../schemas/trick-or-treat.js';
 
 /*
  * Rolling a trick-or-treat visit (#515). Server-only: it reads the secret
@@ -30,14 +30,6 @@ export interface TrickOrTreatInput extends TrickOrTreatSeedInput {
   lantern: boolean;
   /** Clothing the visitor owns already (item ids): costumes they have never come up. */
   owned: ReadonlySet<string>;
-}
-
-/** A visit's treat. */
-export interface TrickOrTreatPrize {
-  kind: TrickOrTreatPrizeKind;
-  /** `heartdust`, or the costume's clothing id. */
-  itemId: string;
-  count: number;
 }
 
 export interface TrickOrTreatRoll {

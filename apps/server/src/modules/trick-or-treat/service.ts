@@ -42,16 +42,19 @@ import { createTrickOrTreatRepo } from './repo.js';
  * the day (so a retry rolls the same treat), and one transaction records the
  * visit (its unique key is the once-a-day rule), grants the treat and the
  * thank-you, and appends `trick.visited`. Lock order (tech spec §7): the
- * visitor's member row (step 2: one visit at a time per Keeper, so the
- * owned-costume check holds), the new costume's `clothing_owned` row (an
- * insert, no lock), both players' inventory rows (step 11, one
- * `lockGrantRows`), then `maps` (13).
+ * visitor's member row (step 2), their account's `users` row (step 4: one
+ * knock at a time on every patch, since clothing is the account's, so the
+ * owned-costume check holds; a piece held in an open trade offer doesn't
+ * count as owned and can come up again, which is harmless), the new
+ * costume's `clothing_owned` row (an insert, no lock), both players'
+ * inventory rows (step 11, one `lockGrantRows`), then `maps` (13).
  */
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
   ownHome: "That's your own home! Knock on a friend's door. 🎃",
   noHome: "That home isn't on this patch.",
+  noPatch: "We couldn't find that patch.",
   closed: 'Trick-or-treat is for Halloween. See you next October! 🎃',
   twice: 'You already got a treat here today. Come back tomorrow! 🎃',
 } as const;
@@ -132,12 +135,17 @@ export function createTrickOrTreatService(
       const result = await createTrickOrTreatRepo(db).transaction(async (repo, tx) => {
         const at = now();
         const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
-        // 1. My member row (step 2): one visit at a time per Keeper.
-        await createMapsRepo(tx).lockMember(mapId, user.id);
+        // 1. My member row (step 2): gone if I left the patch meanwhile.
+        if (!(await createMapsRepo(tx).lockMember(mapId, user.id))) {
+          throw new AppError('NOT_FOUND', MESSAGES.noPatch);
+        }
+        // 2. My account's `users` row (step 4): one knock at a time on every
+        // patch, so the costumes I own can't change under the roll.
+        await repo.lockAccount(user.id);
         if (!seasonsOn(at, map.timeZone).includes(rules.season)) {
           throw new AppError('CONFLICT', MESSAGES.closed);
         }
-        // 2. A patch-mate with a home here (plain reads).
+        // 3. A patch-mate with a home here (plain reads).
         if (!(await repo.hostsOf(mapId, user.id)).includes(hostUserId)) {
           throw new AppError('NOT_FOUND', MESSAGES.noHome);
         }
@@ -148,7 +156,7 @@ export function createTrickOrTreatService(
           createTerritoryRepo(tx).mapSeed(mapId),
         ]);
         const lantern = lit.has(hostUserId);
-        // 3. The treat: seeded, so the same visit always rolls the same.
+        // 4. The treat: seeded, so the same visit always rolls the same.
         const { trick, prize } = rollTrickOrTreat(
           {
             mapSeed: mapSeed ?? deriveSeed('hand-authored-map', mapId),
@@ -161,7 +169,7 @@ export function createTrickOrTreatService(
           prizes,
           catalog,
         );
-        // 4. The visit row: its unique key is the once-a-day rule.
+        // 5. The visit row: its unique key is the once-a-day rule.
         const visitId = uuidv7();
         const hostHeartdust = rules.hostThanks;
         const stored = await repo.insertVisit({
@@ -179,7 +187,7 @@ export function createTrickOrTreatService(
           createdAt: at,
         });
         if (!stored) throw new AppError('CONFLICT', MESSAGES.twice);
-        // 5. The treat and the thank-you: both bags' rows in one lock (step 11).
+        // 6. The treat and the thank-you: both bags' rows in one lock (step 11).
         const visitorItems: ItemCounts =
           prize.kind === 'heartdust' ? { heartdust: prize.count } : {};
         await lockGrantRows(tx, mapId, [
@@ -213,7 +221,7 @@ export function createTrickOrTreatService(
           visitId,
           at,
         );
-        // 6. The event, last (`maps`, step 13).
+        // 7. The event, last (`maps`, step 13).
         await repo.appendEvent({
           mapId,
           type: 'trick.visited',

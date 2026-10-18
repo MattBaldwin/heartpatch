@@ -10,6 +10,6 @@ export const TRICK_OR_TREAT_RATE_LIMITS = {
   },
   visit: {
     perIp: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess
-    perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess; at most 5 homes a day
+    perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess; one knock per patch-mate's home a day
   },
 } as const satisfies RateLimitTable;

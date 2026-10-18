@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
-import { mapMembers, trickOrTreatVisits } from '../../db/schema.js';
+import { mapMembers, trickOrTreatVisits, users } from '../../db/schema.js';
 
 /** A visit as stored (`trick_or_treat_visits`). */
 export type VisitRow = typeof trickOrTreatVisits.$inferSelect;
@@ -13,6 +13,11 @@ export type NewVisit = typeof trickOrTreatVisits.$inferInsert;
  */
 export interface TrickOrTreatRepo {
   transaction: <T>(fn: (repo: TrickOrTreatTxRepo, tx: Transaction) => Promise<T>) => Promise<T>;
+  /**
+   * Row-locks the account's `users` row (tech spec §7 step 4): one knock at a
+   * time per account, on every patch, so the owned-costume check holds.
+   */
+  lockAccount: (userId: string) => Promise<void>;
   /** Other active members of the patch with a home there: the doors I can knock on. */
   hostsOf: (mapId: string, visitorUserId: string) => Promise<string[]>;
   /** The homes I've visited on this patch day. */
@@ -43,6 +48,10 @@ function createTxRepo(tx: Transaction): TrickOrTreatTxRepo {
 export function createTrickOrTreatRepo(db: Executor): TrickOrTreatRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createTxRepo(tx), tx)),
+
+    lockAccount: async (userId) => {
+      await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+    },
 
     hostsOf: async (mapId, visitorUserId) => {
       const rows = await db

@@ -259,6 +259,20 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
     expect((await visits(mapId)).map((v) => v.day).sort()).toEqual(['2026-10-20', '2026-10-21']);
   });
 
+  it('lets one of two knocks at once through, and refuses the other', async () => {
+    const server = await start();
+    const [host, visitor] = [await player(), await player()];
+    const mapId = await patch(server, host, visitor);
+    const both = await Promise.all([
+      knock(server, visitor, mapId, host),
+      knock(server, visitor, mapId, host),
+    ]);
+    expect(both.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    expect(await visits(mapId)).toHaveLength(1);
+    expect(await ledger(mapId, 'trick-or-treat-thanks')).toHaveLength(1);
+    expect(await events(mapId)).toHaveLength(1);
+  });
+
   it('replays a retried knock (Idempotency-Key) without a second treat', async () => {
     const server = await start();
     const [host, visitor] = [await player(), await player()];
