@@ -616,6 +616,16 @@ describe('doorways and the floors between (#381 W3)', () => {
     expect(standingFloor(storey * HOUSE_WALK.floorSwitch)).toBe(1);
     expect(standingFloor(storey)).toBe(1);
     expect(standingFloor(-0.1)).toBe(0);
+    // Nudged back and forth across the line it stays where it was, inside the band.
+    const { floorSwitch, floorBand } = HOUSE_WALK;
+    const nearLine = storey * floorSwitch + 0.02;
+    expect(standingFloor(nearLine, 0)).toBe(0);
+    expect(standingFloor(storey * floorSwitch - 0.02, 1)).toBe(1);
+    expect(standingFloor(storey * (floorSwitch + floorBand) + 0.01, 0)).toBe(1);
+    expect(standingFloor(storey * (floorSwitch - floorBand) - 0.01, 1)).toBe(0);
+    // Far from the line, where it was doesn't matter (the dollhouse showing upstairs).
+    expect(standingFloor(0, 1)).toBe(0);
+    expect(standingFloor(storey, 0)).toBe(1);
   });
 
   it('finds the free floor nearest a spot a bed stands on', () => {
@@ -625,5 +635,43 @@ describe('doorways and the floors between (#381 W3)', () => {
     expect(Number.isNaN(floorAt(map, at.x, at.z, 0))).toBe(false);
     expect(Math.hypot(at.x - 2.5, at.z - 2.5)).toBeLessThan(0.5 + radius + 0.06);
     expect(nearestFree(map, rect, 1, 1)).toEqual({ x: 1, z: 1, y: 0 });
+  });
+
+  describe('the follow camera a storey up (the owner’s W3 check)', () => {
+    const hallUp = () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      // On the walkway by the west wall, near its front end.
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 1.6, y: hall.y0 + HOUSE_GRID.storey };
+      expect(floorAt(map, at.x, at.z, at.y)).toBe(at.y);
+      return { map, hall, at };
+    };
+
+    it('looks along the walkway toward the front from behind the Keeper, at kid height', () => {
+      const { map, hall, at } = hallUp();
+      // Heading straight out (−z), toward the Kitchen loft.
+      const pose = followPose(createFollowPose(), map, at, 0, hall, 393 / 852);
+      expect(pose.eye.z).toBeGreaterThan(at.z + 1);
+      expect(pose.target.z).toBeLessThan(at.z);
+      expect(pose.eye.y).toBeCloseTo(at.y + HOUSE_WALK.eyeHeight);
+      expect(pose.eye.z).toBeLessThanOrEqual(hall.z1);
+    });
+
+    it('never climbs and looks steeply down, even pressed near the Hall’s front wall', () => {
+      const { map, hall, at } = hallUp();
+      const pose = followPose(createFollowPose(), map, at, Math.PI, hall, 393 / 852);
+      expect(pose.eye.z).toBeLessThan(at.z);
+      expect(pose.eye.z).toBeGreaterThanOrEqual(cameraFront(map, hall) - 1e-6);
+      expect(pose.eye.y).toBeCloseTo(at.y + HOUSE_WALK.eyeHeight);
+      expect(pose.pitch).toBeLessThan(45 * DEG);
+    });
+
+    it('still keeps looking in on the ground floor when the Keeper heads out', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = startSpot(map, hall)!;
+      const pose = followPose(createFollowPose(), map, at, 0, hall, 393 / 852);
+      expect(pose.eye.z).toBeLessThan(at.z);
+    });
   });
 });

@@ -9,6 +9,7 @@ import type { QualityTier } from '../engine/config.js';
 // The grown builders load before house-rooms.ts on purpose: registration
 // must work in either order of the import cycle (function declarations).
 import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
+import { gallery } from './house-models.js';
 import { roomBuilder, type FloorSpot, type RoomKit } from './house-rooms.js';
 
 /** A kit that records what a builder asks for, for the room with `look` at the top level. */
@@ -224,5 +225,40 @@ describe('the grown rooms', () => {
       expect(counter).toBeDefined();
       expect(counter!.z1).toBeGreaterThan(box.z1 - 0.4);
     });
+  });
+
+  it('opens the gallery’s rail where the stairs come up and the walkway joins (W3)', () => {
+    scene = new Scene(new NullEngine());
+    const open: [number, number][] = [
+      [-4, -3],
+      [3.5, 4.5],
+    ];
+    const parts = gallery(scene, 9.36, 1.3, 3, open);
+    for (const m of parts) m.computeWorldMatrix(true);
+    // The rail: everything standing on the deck's front edge.
+    const rail = parts.filter((m) => {
+      const b = m.getBoundingInfo().boundingBox;
+      return b.maximumWorld.y > 0.05 && b.maximumWorld.z < -0.5;
+    });
+    expect(rail.length).toBeGreaterThan(4);
+    for (const m of rail) {
+      const b = m.getBoundingInfo().boundingBox;
+      for (const [a, c] of open) {
+        const inside = b.minimumWorld.x < c - 1e-6 && b.maximumWorld.x > a + 1e-6;
+        expect(
+          inside,
+          `rail piece at ${String(b.minimumWorld.x)}…${String(b.maximumWorld.x)}`,
+        ).toBe(false);
+      }
+    }
+    // With no gaps it runs the whole width.
+    const whole = gallery(scene, 9.36, 1.3, 3).filter((m) => {
+      m.computeWorldMatrix(true);
+      const b = m.getBoundingInfo().boundingBox;
+      return (
+        b.maximumWorld.y > 0.8 && b.maximumWorld.z < -0.5 && b.maximumWorld.x - b.minimumWorld.x > 9
+      );
+    });
+    expect(whole.length).toBeGreaterThan(0);
   });
 });

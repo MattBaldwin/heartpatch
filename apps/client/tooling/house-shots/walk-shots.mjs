@@ -18,7 +18,7 @@
 // Kitchen loft, and in the Kitchen looking at its doorway.
 //
 // DEVICES (iphone,se,ipad), SHOTS (dollhouse,glide,hall,playroom,stick,out,badge,
-// upstairs,snug-door,stairs,walkway,kitchen), TIER (high), MINUTE (1080) narrow the set.
+// upstairs,snug-door,stairs,walkway,walkway-out,kitchen), TIER (high), MINUTE (1080) narrow the set.
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -44,6 +44,7 @@ const shots = only('SHOTS', [
   'snug-door',
   'stairs',
   'walkway',
+  'walkway-out',
   'kitchen',
 ]);
 const tier = process.env.TIER ?? 'high';
@@ -143,6 +144,7 @@ const W3_SPOTS = {
   'snug-door': ['snug', { x: 3.0, z: 2.6 }],
   stairs: ['heart-hall', { x: 8.98, z: 7.6, y: 1.5 }],
   walkway: ['heart-hall', { x: 0.7, z: 6.9, y: 3 }],
+  'walkway-out': ['heart-hall', { x: 0.7, z: 7.4, y: 3, yaw: 0 }],
   kitchen: ['kitchen', { x: 2.4, z: 3.0, y: 3 }],
 };
 

@@ -216,14 +216,9 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
   if (box.storeys > 1) {
     const inner = w - HOUSE_GRID.wall;
     const [gx, gz] = at(w / 2, d - HOUSE_GRID.wall / 2 - deck / 2);
-    kit.solid([placed(gallery(scene, inner, deck, upper), gx, y + upper, gz, 0)]);
-    // The walkway down the west wall to an upstairs doorway (the Kitchen
-    // loft's), as the walk's `loftWalk` lays it out.
-    for (const walkway of loftWalk(box, kit.lanes).decks) {
-      const parts = hallDeck(scene, walkway, y);
-      kit.solid(parts.deck, true);
-      kit.solid(parts.posts);
-    }
+    // Its front rail opens where the Keeper walks on and off it (W3): the
+    // stairs' top and the walkway, as the walk lays them out.
+    const openings: [number, number][] = [];
     // Stairs up the east wall to the gallery's front edge (a Hall tuned too
     // shallow for a walkable flight goes without).
     const front = d - HOUSE_GRID.wall / 2 - deck;
@@ -232,7 +227,18 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
       const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, front - run);
       kit.solid([placed(stairs(scene, g.stairWidth, upper, run, g.steps), sx, y, sz, 0)]);
       kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
+      openings.push([sx - g.stairWidth / 2 - gx, sx + g.stairWidth / 2 - gx]);
     }
+    // The walkway down the west wall to an upstairs doorway (the Kitchen
+    // loft's), as the walk's `loftWalk` lays it out.
+    for (const walkway of loftWalk(box, kit.lanes).decks) {
+      const parts = hallDeck(scene, walkway, y);
+      kit.solid(parts.deck, true);
+      kit.solid(parts.posts);
+      if (walkway.z1 > box.z1 - HOUSE_GRID.wall / 2 - deck - 0.01)
+        openings.push([walkway.x0 - gx, walkway.x1 - gx]);
+    }
+    kit.solid([placed(gallery(scene, inner, deck, upper, openings), gx, y + upper, gz, 0)]);
   }
 
   // The tree stands right of the middle: at w / 2 the Kitchen loft's wall hid its trunk.

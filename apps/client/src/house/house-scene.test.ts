@@ -35,11 +35,12 @@ import {
   createFollowPose,
   floorAt,
   followPose,
+  nearestFree,
   roomAt,
   slideStep,
   startSpot,
 } from './house-walk.js';
-import { roomBox } from './house-layout.js';
+import { roomBox, wallRuns } from './house-layout.js';
 
 // NullEngine has no 2D canvas: plain stand-ins for the painted textures.
 vi.mock('../procedural/contact-shadow.js', () => ({
@@ -1015,36 +1016,49 @@ describe('house scene', () => {
       }
     });
 
-    it('walks from the Keeper’s first spot into every room, the Kitchen loft too (W3)', () => {
+    it('walks from the front door into every room at every level, the Kitchen loft too (W3)', () => {
       for (const tier of ['low', 'high'] as const) {
-        const { scene, house } = buildHouse(4, tier);
-        const map = house.walkMap;
-        const k = house.keeperSpot;
-        // It starts on free floor (the Snug's second bed moved to the back wall at level 4).
-        expect(floorAt(map, k.x, k.z, k.y)).toBe(k.y);
-        const seen = new Set<string>();
-        const rooms = new Set<string>();
-        const queue = [{ ...k }];
-        while (queue.length > 0 && seen.size < 40000) {
-          const p = queue.pop()!;
-          const r = roomAt(map, p);
-          if (r) rooms.add(r.id);
-          for (const [dx, dz] of [
-            [0.1, 0],
-            [-0.1, 0],
-            [0, 0.1],
-            [0, -0.1],
-          ] as const) {
-            const y = floorAt(map, p.x + dx, p.z + dz, p.y);
-            if (Number.isNaN(y)) continue;
-            const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            queue.push({ x: p.x + dx, z: p.z + dz, y });
+        for (const level of [1, 2, 3, 4]) {
+          const { scene, house } = buildHouse(level, tier);
+          const map = house.walkMap;
+          const k = house.keeperSpot;
+          // The Keeper starts on free floor (the Snug's second bed is on the back wall at level 4).
+          expect(floorAt(map, k.x, k.z, k.y)).toBe(k.y);
+          // Just inside the front door.
+          const runs = wallRuns(sampleHouse(level).view.rooms);
+          const front = runs.find((r) => r.exterior && r.front && r.doors.length > 0)!;
+          const rect = map.rects.find((r) => r.room === front.room && r.y === front.y0)!;
+          const start = nearestFree(map, rect, front.from + front.doors[0]!.u, rect.z0, 0.05)!;
+          expect(start).not.toBeNull();
+          const seen = new Set<string>();
+          const rooms = new Set<string>();
+          const queue = [{ ...start }];
+          while (queue.length > 0 && seen.size < 40000) {
+            const p = queue.pop()!;
+            const r = roomAt(map, p);
+            if (r) rooms.add(r.id);
+            for (const [dx, dz] of [
+              [0.1, 0],
+              [-0.1, 0],
+              [0, 0.1],
+              [0, -0.1],
+            ] as const) {
+              const y = floorAt(map, p.x + dx, p.z + dz, p.y);
+              if (Number.isNaN(y)) continue;
+              const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              queue.push({ x: p.x + dx, z: p.z + dz, y });
+            }
           }
+          // The Kitchen loft has no way up before the Hall's stairs (level 4).
+          const want = map.rooms
+            .filter((r) => level >= 4 || r.floor === 0)
+            .map((r) => r.id)
+            .sort();
+          expect([...rooms].sort(), `${tier} L${String(level)}`).toEqual(want);
+          scene.getEngine().dispose();
         }
-        expect([...rooms].sort(), tier).toEqual(map.rooms.map((r) => r.id).sort());
-        scene.getEngine().dispose();
       }
     });
 

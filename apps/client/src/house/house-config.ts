@@ -386,6 +386,8 @@ export const HOUSE_WALK = {
   laneGap: 0.05, // TUNE
   /** The floor cut follows the Keeper up a floor once its feet are this share of a storey up it (on the stairs). */
   floorSwitch: 0.5, // TUNE
+  /** ...and back down only this share of a storey below that (and up only this far above it). */
+  floorBand: 0.05, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */

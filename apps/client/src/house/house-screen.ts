@@ -253,9 +253,13 @@ export interface HouseDebug {
    * Puts the Keeper in a room (where `startSpot` stands it). Dev hook only:
    * e2e and the shots walk in other rooms. `on` picks the spot (else where
    * `startSpot` stands it), `on.y` a floor above the room's own (the Hall's
-   * gallery and walkway, W3). False: no such room, or no floor free there.
+   * gallery and walkway, W3), `on.yaw` which way it faces (else straight in).
+   * False: no such room, or no floor free there.
    */
-  readonly putKeeper: (roomId: string, on?: { x: number; z: number; y?: number }) => boolean;
+  readonly putKeeper: (
+    roomId: string,
+    on?: { x: number; z: number; y?: number; yaw?: number },
+  ) => boolean;
 }
 
 export interface HouseScreen {
@@ -1388,9 +1392,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         floor = at;
         s.setFloor(at);
         cut = true;
-        // Walked in, only the dollhouse pose under it is framed afresh (for
-        // Step out): the follow camera doesn't jump.
-        if (walkReady && zoom >= 1) showPan(panner.fit());
+        // Walked in (or pinching), only the dollhouse pose under it is framed
+        // afresh (for Step out): the follow camera doesn't jump.
+        if (walkReady) showPan(panner.fit());
         else fit(s);
       }
     }
@@ -1534,7 +1538,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** The floor the Keeper stands on, by its height: the Hall's gallery is upstairs. */
   function keeperFloor(s: HouseScene): number {
     if (!walkReady) syncKeeper(s);
-    return standingFloor(walkAt.y);
+    return standingFloor(walkAt.y, floor);
   }
 
   /** Takes the scene's Keeper as the walk's (it's where the scene put it, or where it was left). */
@@ -1733,7 +1737,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   }
 
   /** Dev hook: the Keeper put in a room (or on a spot in it), as the walk would leave it there. */
-  function putKeeper(roomId: string, on?: { x: number; z: number; y?: number }): boolean {
+  function putKeeper(
+    roomId: string,
+    on?: { x: number; z: number; y?: number; yaw?: number },
+  ): boolean {
     const s = scene3d;
     const room = s?.walkMap.rooms.find((r) => r.id === roomId);
     const map = s?.walkMap;
@@ -1747,8 +1754,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
           : startSpot(map, room)
         : null;
     if (!s || !spot) return false;
-    s.moveKeeper(spot, Math.PI);
-    keep(spot, Math.PI);
+    const yaw = on?.yaw ?? Math.PI;
+    s.moveKeeper(spot, yaw);
+    keep(spot, yaw);
     syncKeeper(s);
     if (walkReady) {
       followGoal(s);

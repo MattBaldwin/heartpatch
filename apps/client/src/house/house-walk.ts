@@ -252,9 +252,18 @@ export function loftWalk(
   return { decks, floors };
 }
 
-/** The floor the Keeper stands on, by its feet's height (the stairs switch at `HOUSE_WALK.floorSwitch`). */
-export function standingFloor(y: number): number {
-  return Math.max(0, Math.floor(y / HOUSE_GRID.storey + 1 - HOUSE_WALK.floorSwitch + 1e-6));
+/**
+ * The floor the Keeper stands on, by its feet's height: on the stairs it
+ * goes up a floor past `HOUSE_WALK.floorSwitch` of a storey and back down
+ * below it, with `floorBand` either side where it stays on `was` (no flip
+ * on every nudge across the line).
+ */
+export function standingFloor(y: number, was = -1): number {
+  const { floorSwitch, floorBand } = HOUSE_WALK;
+  const at = (k: number) => Math.max(0, Math.floor(y / HOUSE_GRID.storey + 1 - k + 1e-6));
+  const up = at(floorSwitch + floorBand);
+  const down = at(floorSwitch - floorBand);
+  return was >= up && was <= down ? was : at(floorSwitch);
 }
 
 /**
@@ -505,7 +514,9 @@ export function followTurn(yaw: number): number {
  * Keeper along its own heading until it's inside `room` (or on the porch
  * for a front room), under its ceiling and clear of furniture; squeezed
  * like that, it climbs and looks down at the Keeper instead of past it.
- * Residents in its way fade instead (`blockerFade`).
+ * A storey up in the Hall it never climbs, and turns round to follow a
+ * Keeper heading back toward the front (W3). Residents in its way fade
+ * instead (`blockerFade`).
  */
 export function followPose(
   out: FollowPose,
@@ -516,13 +527,22 @@ export function followPose(
   aspect: number,
 ): FollowPose {
   const W = HOUSE_WALK;
-  const turn = followTurn(yaw);
-  const dx = Math.sin(turn);
-  const dz = Math.cos(turn);
-  // The furthest back the room allows along that heading: its front (dz > 0
-  // always, as |turn| ≤ maxYaw) and its side walls.
+  // A storey up in a two-storey room (the Hall's gallery, the walkway and
+  // the landing, #381 W3: the owner's render check), it looks along the
+  // way the Keeper walks, even back toward the front, from behind it and at
+  // kid height: there's no front wall to squeeze against, only the room.
+  const upper = at.y >= room.y0 + HOUSE_GRID.storey - W.floorReach;
+  const heading = Math.atan2(Math.sin(yaw - Math.PI), Math.cos(yaw - Math.PI));
+  const reverse = upper && Math.abs(heading) > W.turnAway;
+  const turn = followTurn(reverse ? yaw - Math.PI : yaw);
+  const sign = reverse ? -1 : 1;
+  const dx = Math.sin(turn) * sign;
+  const dz = Math.cos(turn) * sign;
+  // The furthest back the room allows along that heading: its front (or its
+  // back, looking out) and its side walls.
   let d: number = W.back;
-  d = Math.min(d, Math.max(0, (at.z - cameraFront(map, room)) / dz));
+  if (dz > 0) d = Math.min(d, Math.max(0, (at.z - cameraFront(map, room)) / dz));
+  else d = Math.min(d, Math.max(0, (room.z1 - W.frontMargin - at.z) / -dz));
   const xMin = room.x0 + W.sideMargin;
   const xMax = room.x1 - W.sideMargin;
   if (dx > 1e-6) d = Math.min(d, Math.max(0, (at.x - xMin) / dx));
@@ -531,7 +551,7 @@ export function followPose(
   // Kitchen table filled the frame's corner).
   while (d > 0 && nearFurniture(map, at.x - dx * d, at.z - dz * d, at.y)) d -= W.nearStep;
   d = Math.max(0, d);
-  const squeeze = 1 - d / W.back;
+  const squeeze = upper ? 0 : 1 - d / W.back;
   const eyeY = Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
   out.eye.x = at.x - dx * d;
   out.eye.y = eyeY;

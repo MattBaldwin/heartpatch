@@ -1030,20 +1030,44 @@ export function kitchenShelves(scene: Scene, w: number): Mesh[] {
  * the second storey), with a railing of posts and gold caps along its front
  * and two posts holding it up from `below` metres down.
  */
-export function gallery(scene: Scene, w: number, depth: number, below: number): Mesh[] {
+export function gallery(
+  scene: Scene,
+  w: number,
+  depth: number,
+  below: number,
+  /**
+   * Gaps in the front rail, local x spans (W3: where the stairs come up and
+   * the walkway joins, so the Keeper walks through no fence).
+   */
+  openings: readonly (readonly [number, number])[] = [],
+): Mesh[] {
   const c = G.hall;
   const front = -depth / 2;
-  const parts = [
-    box(scene, [w, 0.18, depth], [0, -0.09, 0], c.deck),
-    box(scene, [w, 0.22, 0.08], [0, -0.13, front - 0.02], c.rail),
-    box(scene, [w, 0.08, 0.1], [0, 0.86, front + 0.06], c.rail),
-    box(scene, [w, 0.03, 0.12], [0, 0.915, front + 0.06], c.gold),
-  ];
-  const posts = Math.max(2, Math.round(w / 1.0));
-  const span = w - 0.1; // the end posts stand just clear of the side walls
-  for (let i = 0; i <= posts; i++) {
-    const x = -span / 2 + (span * i) / posts;
-    parts.push(box(scene, [0.07, 0.82, 0.07], [x, 0.41, front + 0.06], c.rail));
+  const parts = [box(scene, [w, 0.18, depth], [0, -0.09, 0], c.deck)];
+  // The rail in runs between the gaps; the end posts stand just clear of the side walls.
+  let from = -w / 2 + 0.05;
+  const runs: [number, number][] = [];
+  for (const [a, b] of [...openings].sort((p, q) => p[0] - q[0])) {
+    if (a > from + 0.05) runs.push([from, a]);
+    from = Math.max(from, b);
+  }
+  if (w / 2 - 0.05 > from + 0.05) runs.push([from, w / 2 - 0.05]);
+  for (const [a, b] of runs) {
+    const rw = b - a;
+    const mid = (a + b) / 2;
+    parts.push(
+      box(scene, [rw, 0.22, 0.08], [mid, -0.13, front - 0.02], c.rail),
+      box(scene, [rw, 0.08, 0.1], [mid, 0.86, front + 0.06], c.rail),
+      box(scene, [rw, 0.03, 0.12], [mid, 0.915, front + 0.06], c.gold),
+    );
+    const posts = Math.max(1, Math.round(rw / 1.0));
+    // Each run's end posts stand inside it, clear of a gap.
+    const pa = a + 0.035;
+    const ps = rw - 0.07;
+    for (let i = 0; i <= posts; i++)
+      parts.push(
+        box(scene, [0.07, 0.82, 0.07], [pa + (ps * i) / posts, 0.41, front + 0.06], c.rail),
+      );
   }
   // Posts at the front edge, just in front of the beds below, clear of the stairs.
   for (const x of [-w * 0.3, w * 0.3])
