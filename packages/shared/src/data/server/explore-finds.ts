@@ -110,6 +110,7 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
     finds: [
       { weight: 5, items: { stone: 1 } },
       { weight: 2, items: { stone: 2 } },
+      { weight: 1, items: { glimmer: 1 } }, // TUNE: #523, more Glimmer on the mountain trail
       { weight: 2 },
       { weight: 1, items: { heartdust: 1 } },
     ],
@@ -120,6 +121,7 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
     finds: [
       { weight: 3, items: { greens: 1 } },
       { weight: 2, items: { emberwood: 1 } },
+      { weight: 1, items: { glimmer: 1 } }, // TUNE: #523, more Glimmer in the hills cave
       { weight: 2 },
       { weight: 1, items: { heartdust: 1 } },
     ],
