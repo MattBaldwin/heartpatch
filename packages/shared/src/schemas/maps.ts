@@ -300,6 +300,14 @@ export const PublicTileSchema = z.object({
   /** How many of the owner's squishies stand watch here (#15). Never which ones. */
   defenders: z.number().int().min(0),
   /**
+   * How each of those squishies feels (#531), in post order, so a challenger
+   * can pick counters like they do for wild land's `guardianHint.feelings`.
+   * Feelings only: never which species, level, element or squishy. One per
+   * defender, or empty on a tile nobody guards. Optional only so older
+   * fixtures and servers parse; the server always sends it.
+   */
+  defenderFeelings: z.array(FeelingIdSchema).optional(),
+  /**
    * How many of the owner's squishies are gathering here (squishy jobs,
    * owner decisions 2026-10-04): 0 or 1. Never which ones. Optional only so
    * older fixtures parse; the server always sends it.

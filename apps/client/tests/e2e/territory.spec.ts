@@ -311,7 +311,12 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
     theirs = near.map(({ q, r }) => ({ q, r }));
     const keys = new Set(theirs.map((h) => `${String(h.q)},${String(h.r)}`));
     for (const tile of view.tiles) {
-      if (keys.has(`${String(tile.q)},${String(tile.r)}`)) tile.ownerUserId = rival;
+      if (keys.has(`${String(tile.q)},${String(tile.r)}`)) {
+        tile.ownerUserId = rival;
+        // Three guards posted, as the server's view tells it (#531): feelings only.
+        tile.defenders = 3;
+        tile.defenderFeelings = ['sleepy', 'sleepy', 'joy'];
+      }
     }
     await route.fulfill({ response: res, json: view });
   });
@@ -368,6 +373,13 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
       "Their guards are as strong as their Keeper's Partner, or stronger. Bring your best!",
     );
     expect((await guards.boundingBox())!.y).toBeLessThan(
+      (await page.getByTestId('tile-challenge').boundingBox())!.y,
+    );
+    // Their feelings replace the "stand watch" count (#531), above the button, never a species.
+    const who = page.getByTestId('territory-guards-who');
+    await expect(who).toHaveText('Guarded by 3 squishies: 2 Sleepy, 1 Joy');
+    await expect(panel).not.toContainText('stand watch');
+    expect((await who.boundingBox())!.y).toBeLessThan(
       (await page.getByTestId('tile-challenge').boundingBox())!.y,
     );
     const before = tries;
