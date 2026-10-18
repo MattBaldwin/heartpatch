@@ -12,7 +12,7 @@
 // calls and triangles are counted from the WebGL calls themselves (shadow,
 // scene and post passes) and hold on a device. No dev badges in the shots.
 //
-// LEVELS (default 1), POSES (dollhouse,kid,card), TIERS (high,low), DEVICES (iphone,ipad),
+// LEVELS (default 1), POSES (dollhouse,kid,card), TIERS (high,low), DEVICES (iphone,ipad; `se` is the 375x667 iPhone SE, asked for by name),
 // MINUTES (720,1200: noon and night, minutes after midnight; #381 H2) narrow the set;
 // a house of two floors shoots its dollhouse once per floor (the floor cut, B4: `-f1` is upstairs);
 // `card` is the dollhouse with today's gift card open, `welcome` with welcome home's line (#381 H2),
@@ -28,6 +28,7 @@ const BASE = process.env.BASE ?? 'http://localhost:5173';
 const DEVICES = {
   iphone: { width: 390, height: 844, dpr: 3 },
   ipad: { width: 820, height: 1180, dpr: 2 },
+  se: { width: 375, height: 667, dpr: 2 },
 };
 /** The low tier's caps (house-config.ts HOUSE_BUDGET): every capture is checked against them. */
 const LOW_BUDGET = { drawCalls: 60, triangles: 90_000, lights: 2 };

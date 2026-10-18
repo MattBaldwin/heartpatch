@@ -29,7 +29,7 @@ export interface BedChip {
   readonly person: RosterRow | null;
   /** The resident's name, or "+ Move in". */
   readonly name: string;
-  /** Its mood ("😊 Happy"), where it is instead ("Gathering 🧺"), or "" on an empty bed. */
+  /** Its mood ("😊 Happy"), where it is instead ("🧺 Gathering"), or "" on an empty bed. */
   readonly line: string;
   /** The longer words for its detail ("Out gathering 🧺", the mood's sentence), or "". */
   readonly about: string;

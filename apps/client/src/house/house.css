@@ -128,7 +128,7 @@
   transform: scale(0.97);
 }
 
-/* More house past a side the phone crops (B4): a small soft chevron pill. */
+/* More house past a side the phone crops (B4): a soft chevron hint on the edge. B5: no button-like pill, just a fade. */
 .house-more {
   position: absolute;
   top: 50%; /* the screen sets it clear of the residents (chevronBox) */
@@ -138,20 +138,22 @@
   width: 28px;
   height: 44px;
   border-radius: 999px;
-  background: rgb(255 250 252 / 72%);
-  box-shadow: 0 2px 8px rgb(74 49 80 / 14%);
+  background: rgb(255 250 252 / 38%);
   color: #7a2d55;
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgb(255 250 252 / 90%);
   pointer-events: none;
 }
 
 .house-more-left {
   left: calc(env(safe-area-inset-left) + 4px);
+  background: linear-gradient(90deg, rgb(255 250 252 / 55%), rgb(255 250 252 / 0%));
 }
 
 .house-more-right {
   right: calc(env(safe-area-inset-right) + 4px);
+  background: linear-gradient(270deg, rgb(255 250 252 / 55%), rgb(255 250 252 / 0%));
 }
 
 /* The bottom sheet, collapsed to its handle and the room's name. */
@@ -1201,6 +1203,19 @@
 
   .house-bed-line {
     font-size: 12px;
+  }
+
+  /* B5b, iPhone SE: "Can move back in 24 hours 🏠" wrapped inside its pill; a smaller picture and gap give it the width. */
+  .house-pick {
+    gap: 8px;
+  }
+
+  .house-pick .house-face {
+    --face: 48px;
+  }
+
+  .house-pick-reason {
+    font-size: 13px;
   }
 }
 

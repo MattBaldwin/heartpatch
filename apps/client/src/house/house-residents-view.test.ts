@@ -31,12 +31,12 @@ describe('the beds (plan §10.2)', () => {
     expect(a!.free).toBe(0);
     expect(a!.chips.map((c) => [c.kind, c.line])).toEqual([
       ['home', '🌟 Glowing'],
-      ['gathering', 'Gathering\u00A0🧺'],
+      ['gathering', '🧺\u00A0Gathering'],
     ]);
     expect(a!.chips[0]!.name).toBe(people.get(snug.residents[0]!.squishyId)!.name);
     expect(b!.title).toBe('The Playroom · 1 of 2 beds');
     expect(b!.chips.map((c) => [c.kind, c.name, c.line])).toEqual([
-      ['in-trade', expect.any(String), 'Trading\u00A0📬'],
+      ['in-trade', expect.any(String), '📬\u00A0Trading'],
       ['empty', 'Move in', ''],
     ]);
     expect(b!.chips[1]).toMatchObject({ roomId: 'playroom', squishyId: null, person: null });
@@ -55,11 +55,11 @@ describe('the beds (plan §10.2)', () => {
     };
     const [beds] = roomBeds({ rooms: [room] }, new Map());
     expect(beds!.chips.map((c) => c.line)).toEqual([
-      'Gathering\u00A0🧺',
-      'On\u00A0watch\u00A0🛡️',
-      'Training\u00A0🎯',
-      'Hollow\u00A0🌙',
-      'Trading\u00A0📬',
+      '🧺\u00A0Gathering',
+      '🛡️\u00A0On\u00A0watch',
+      '🎯\u00A0Training',
+      '🌙\u00A0Hollow',
+      '📬\u00A0Trading',
       '',
     ]);
     expect(beds!.chips.map((c) => c.kind)).toEqual([...kinds, 'empty']);

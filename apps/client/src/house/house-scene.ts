@@ -609,21 +609,28 @@ export class HouseScene {
    */
   get residentSpots(): FramedSpot[] {
     // From the fields themselves: each squishy's own middle and height, as drawn.
-    return this.#drawnSquishies().map(({ centre, height }) => ({
+    return this.#drawnSquishies().map(({ centre, reach }) => ({
       x: centre.x,
       y: centre.y,
       z: centre.z,
-      r: height * HOUSE_CAST.reach,
+      r: reach,
     }));
   }
 
-  /** Every resident drawn now, its middle and its height (world metres). */
-  #drawnSquishies(): { centre: Vector3; height: number }[] {
+  /**
+   * Every resident drawn now: its middle, its height and how far it reaches
+   * (world metres). The reach is what it measures as drawn (a wide one, ears
+   * and spikes included), never less than the usual for its height.
+   */
+  #drawnSquishies(): { centre: Vector3; height: number; reach: number }[] {
     const fields = [this.#squishies, ...(this.#hero ? [this.#hero] : [])];
     return fields.flatMap((f) =>
       f.handles.flatMap((h) => {
         const centre = f.centre(h);
-        return centre ? [{ centre, height: f.heightOf(h) * HOUSE_CAST.squishyScale }] : [];
+        if (!centre) return [];
+        const height = f.heightOf(h) * HOUSE_CAST.squishyScale;
+        const drawn = f.reachOf(h) ?? 0; // world metres, scale included
+        return [{ centre, height, reach: Math.max(height * HOUSE_CAST.reach, drawn) }];
       }),
     );
   }
@@ -995,8 +1002,7 @@ export class HouseScene {
     let visible = 0;
     let cut = 0;
     const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
-    for (const { centre, height } of drawn) {
-      const reach = height * HOUSE_CAST.reach;
+    for (const { centre, height, reach } of drawn) {
       // Partly off the screen's sides or ends (render check: a frame edge sliced one).
       const sides = [right.scale(reach), right.scale(-reach), Vector3.Up().scale(reach)].map((d) =>
         screen(centre.add(d)),
