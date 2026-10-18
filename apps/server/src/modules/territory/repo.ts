@@ -122,15 +122,10 @@ export interface TerritoryRepo {
 
   /** Tile battles the player started on `date` (map-local), not counting no-contests. */
   attemptsOn: (mapId: string, userId: string, date: string, timeZone: string) => Promise<number>;
-  /** Tiles the player lost to challenges on `date` (map-local). */
-  lossesOn: (mapId: string, userId: string, date: string, timeZone: string) => Promise<number>;
-  /** Challenges against the player still going (acted on after `since`). */
-  challengesGoing: (mapId: string, userId: string, since: Date) => Promise<number>;
   /**
-   * Each defender's tiles lost on `date` (map-local) plus challenges against
-   * them still going (acted on after `since`): what `lossesOn` and
-   * `challengesGoing` add up to, for every defender at once. Defenders with
-   * none are left out.
+   * Each defender's tiles lost to challenges on `date` (map-local) plus
+   * challenges against them still going (acted on after `since`), for every
+   * defender at once. Defenders with none are left out.
    */
   lossCounts: (
     mapId: string,
@@ -350,27 +345,6 @@ function queries(db: Executor): TerritoryRepo {
           // The guard battle after a broken fence is the same challenge (#203).
           isNull(tileAttacks.followsAttackId),
           sql`${localDateOf(tileAttacks.startedAt, timeZone)} = ${date}::date`,
-        ),
-      ),
-
-    lossesOn: (mapId, userId, date, timeZone) =>
-      countOf(
-        and(
-          eq(tileAttacks.mapId, mapId),
-          eq(tileAttacks.defenderUserId, userId),
-          eq(tileAttacks.outcome, 'captured'),
-          isNotNull(tileAttacks.endedAt),
-          sql`${localDateOf(tileAttacks.endedAt, timeZone)} = ${date}::date`,
-        ),
-      ),
-
-    challengesGoing: (mapId, userId, since) =>
-      countOf(
-        and(
-          eq(tileAttacks.mapId, mapId),
-          eq(tileAttacks.defenderUserId, userId),
-          eq(tileAttacks.outcome, 'active'),
-          gt(tileAttacks.lastActionAt, since),
         ),
       ),
 

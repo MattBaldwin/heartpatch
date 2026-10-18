@@ -1079,7 +1079,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         returnedSquishyIds: [buddy.id],
       });
 
-      // Gentle (the default): one lost tile a day per player. Refused, no attempt used.
+      // Gentle (the default): one lost tile a day per player. Refused, no attempt used,
+      // and the status said so first (#526: one rule for both).
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([rival.id]);
       const left = (await status(server, kid, mapId)).attemptsLeft;
       const capped = await attack(server, kid, mapId, near2);
       expect(capped.statusCode).toBe(409);
@@ -1091,6 +1093,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // On: up to three a day.
       const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
       expect(mode.statusCode).toBe(200);
+      expect((await status(server, kid, mapId)).restingKeepers).toEqual([]);
       expect((await attack(server, kid, mapId, near2)).statusCode).toBe(201);
     });
 
@@ -1344,7 +1347,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
 
     it('counts a challenge still going toward the daily loss cap', async () => {
       const server = await start();
-      const { kid, mapId, near, near2 } = await rivals(server);
+      const { kid, rival, mapId, near, near2 } = await rivals(server);
       const other = await player();
       // A third player next to the rival's land too.
       const res = await call(server, 'GET', `/maps/${mapId}`, kid);
@@ -1362,7 +1365,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       )!;
       await setOwner(nextToNear2.id, other.id);
       // The kid's challenge is going, so the rival's one loss for today is spoken for.
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([]);
       expect((await attack(server, kid, mapId, near)).statusCode).toBe(201);
+      expect((await status(server, other, mapId)).restingKeepers).toEqual([rival.id]);
       const second = await attack(server, other, mapId, near2);
       expect(second.statusCode).toBe(409);
       expect(errorOf(second).message).toMatch(/already lost some land today/);
