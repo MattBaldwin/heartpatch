@@ -63,14 +63,20 @@ async function frames(page, n) {
   );
 }
 
-/** Slows the page's frame clock: SwiftShader takes ~0.5 s a frame, so the glide would be two frames. */
+/**
+ * Slows the page's frame clock: SwiftShader takes ~0.5 s a frame, so the
+ * glide would be two frames. `window.__clockRate` = 0 holds it still for a shot.
+ */
 function slowClock(k) {
   const raf = window.requestAnimationFrame.bind(window);
-  let t0 = null;
+  window.__clockRate = k;
+  let last = null;
+  let at = 0;
   window.requestAnimationFrame = (cb) =>
     raf((t) => {
-      t0 ??= t;
-      cb(t0 + (t - t0) * k);
+      at += (t - (last ?? t)) * window.__clockRate;
+      last = t;
+      cb(at);
     });
 }
 
@@ -173,6 +179,11 @@ async function shoot(shot, device) {
     // Mid-glide, where the camera passes the front wall.
     const want = Number(process.env.GLIDE_ZOOM ?? 0.7);
     await until(page, (z) => (window.__heartpatch.house()?.zoom ?? 0) >= z, want, 120_000);
+    // Hold the clock there, and draw that moment.
+    await page.evaluate(() => {
+      window.__clockRate = 0;
+    });
+    await frames(page, 2);
     await save(page, name);
     await ctx.close();
     return;

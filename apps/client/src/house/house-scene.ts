@@ -638,7 +638,8 @@ export class HouseScene {
     for (const c of this.#ceilings) c.mesh.setEnabled(under && c.room === focus.id);
     const sign = this.#signAt;
     if (sign?.kidY != null) {
-      const y = sign.room === focus?.id ? sign.kidY : sign.y;
+      // It hangs on the header, which comes with the ceiling.
+      const y = under && sign.room === focus.id ? sign.kidY : sign.y;
       for (const m of this.#signParts) m.position.y = y;
     }
     this.#frontAlpha = least;

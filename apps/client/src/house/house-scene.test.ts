@@ -616,6 +616,21 @@ describe('house scene', () => {
       scene.getEngine().dispose();
     });
 
+    it('keeps the sign on the low wall until its header shows (#381 W2: it floated mid-glide)', () => {
+      const vp = { width: 820, height: 1180, top: 70, bottom: 90 };
+      const { scene, house } = buildHouse(4, 'low');
+      const sign = scene.getMeshByName('house-sign')!;
+      const doll = fitHouse(house.bounds, vp);
+      const kid = kidPose(house.focusRoom!, vp);
+      const above = blend(doll, kid, HOUSE_KID.frontFrom + 0.05);
+      expect(above.eye.y).toBeGreaterThan(house.focusRoom!.maxY);
+      house.setPose(above, HOUSE_KID.frontFrom + 0.05);
+      expect(sign.position.y).toBeLessThan(HOUSE_GRID.cut + 0.6);
+      house.setPose(kid, 1);
+      expect(sign.position.y).toBeGreaterThan(HOUSE_GRID.storey - HOUSE_KID.header);
+      scene.getEngine().dispose();
+    });
+
     it('lights every squishy by the fill, the hero field’s smoother swap included (render check: grey on low)', () => {
       const vp = { width: 390, height: 844, top: 80, bottom: 150 };
       const { scene, house } = buildHouse(1, 'low');
