@@ -41,5 +41,6 @@ export const COMMUNITY_RULES: CommunityRules = {
   heartdustPerPiece: 1,
   joyResource: 'heartdust',
   heartdustFindMultiplier: 3, // TUNE: Hollowed searches find Heartdust 3× as often
+  echoesPerTile: 1, // TUNE: plan v3, one echo a patch tile (the far Hollow has two)
   restoredSuffixes: ['Glen', 'Meadow', 'Hearth', 'Rise'],
 };

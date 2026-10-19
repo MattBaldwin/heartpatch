@@ -84,6 +84,18 @@ export const exploreRoutes =
               ),
             ),
       );
+      app.post(
+        '/maps/:mapId/dev/hollowed-reach',
+        {
+          // Replies with that village's square.
+          schema: { params: MapIdParamsSchema, response: { 201: HexSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request, reply) =>
+          reply
+            .code(201)
+            .send(await service.devHollowedReach(requireUser(request), request.params.mapId)),
+      );
     }
 
     done();

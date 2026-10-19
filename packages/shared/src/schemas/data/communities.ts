@@ -90,6 +90,8 @@ export const CommunityRulesSchema = z.strictObject({
   joyResource: ContentIdSchema,
   /** How much more often a Hollowed search finds Heartdust than an ordinary one. */
   heartdustFindMultiplier: z.number().int().min(1),
+  /** Hollow echoes drifting on each unrestored village tile while exploring (2a): client feel only. */
+  echoesPerTile: z.number().int().min(0).max(3),
   /** Restored-name endings for PR 3's suggestions ("Bramble Glen"). */
   restoredSuffixes: z.array(z.string().min(1).max(6)).min(1),
 });

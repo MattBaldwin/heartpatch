@@ -16,6 +16,8 @@ export interface SpawnTileRow {
   r: number;
   terrain: string;
   ownerUserId: string | null;
+  /** Its Hollowed Community (#306), or null. */
+  communityId: string | null;
 }
 
 export interface SeenRow {
@@ -82,7 +84,13 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
 
     listTiles: (mapId) =>
       db
-        .select({ q: tiles.q, r: tiles.r, terrain: tiles.terrain, ownerUserId: tiles.ownerUserId })
+        .select({
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          communityId: tiles.communityId,
+        })
         .from(tiles)
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r)),

@@ -1,4 +1,5 @@
 import {
+  addDays,
   isLocalBefore,
   spawnWindowAt,
   type LocalDate,
@@ -208,4 +209,17 @@ export function instantOfLocal(local: MapLocalTime, timeZone: string, near: Date
     else after = mid;
   }
   return new Date(Math.floor(after / MINUTE_MS) * MINUTE_MS);
+}
+
+/**
+ * The latest instant at or before `at` when the clock in `timeZone` read
+ * `minute` (minutes past midnight, map-local): this morning's start once
+ * it's past, else yesterday's (#306 2a: a grey village's spots refill each
+ * morning).
+ */
+export function latestLocalMinute(at: Date, timeZone: string, minute: number): Date {
+  const { date } = mapLocalTime(at, timeZone);
+  const today = instantOfLocal({ date, minute }, timeZone, at);
+  if (today.getTime() <= at.getTime()) return today;
+  return instantOfLocal({ date: addDays(date, -1), minute }, timeZone, at);
 }

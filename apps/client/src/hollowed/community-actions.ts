@@ -5,7 +5,7 @@ import { COMMUNITY_TEXT, communityOf, communityPanel } from './community-model.j
 import './hollowed.css';
 
 // A Hollowed village tile's block in the tile panel (#306): what the village
-// is, how my land reaches it, and Explore and Restore. PR 1 draws both
+// is, how my land reaches it, and Explore and Restore. PR 1 drew both
 // buttons waiting; later PRs hook them up through `wire` (2a: exploring,
 // 3: restoring), and the panel's rule for when they open stays the one here.
 
@@ -39,7 +39,14 @@ export function createCommunityActions(): CommunityActions {
       container.replaceChildren();
       return;
     }
-    const words = communityPanel(c, tile.terrain, night, wired.explore !== null);
+    const words = communityPanel(
+      c,
+      tile.terrain,
+      night,
+      wired.explore !== null,
+      undefined,
+      wired.restore !== null,
+    );
     const lines = [
       // Someone's land: the panel's head says whose, so the progress goes here.
       ...(tile.ownerUserId !== null ? [words.restored] : []),

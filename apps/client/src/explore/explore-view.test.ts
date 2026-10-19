@@ -227,6 +227,26 @@ describe('a search changes the tile on screen', () => {
     expect(next.progress).toEqual({ searched: 3, total: 10 });
   });
 
+  it('carries a grey village tile’s joy from the search (#306 2a)', () => {
+    const tile: ExploreTileResponse = {
+      q: 1,
+      r: 2,
+      terrain: 'meadow',
+      spots: [spot(1, 0, 0), spot(2, 0.3, 0)],
+      needs: [],
+      progress: { searched: 0, total: 2 },
+      homestead: null,
+      tools: { shovel: 0, net: 0, rope: 0, lantern: 0 },
+      community: { id: 'c1', name: 'Bramble Hollow', joy: 0, echoes: [{ x: 0, z: 0.3 }] },
+    };
+    const next = afterSearch(tile, found({ progress: { searched: 1, total: 2 }, joy: 50 }));
+    expect(next.community).toEqual({ ...tile.community, joy: 50 });
+    // My own land has no village to carry.
+    const mine: ExploreTileResponse = { ...tile };
+    delete mine.community;
+    expect(afterSearch(mine, found({})).community).toBeUndefined();
+  });
+
   it('knows which tool a spot is missing', () => {
     expect(missingTool({ tool: null }, {})).toBeNull();
     expect(missingTool({ tool: 'net' }, { net: 0 })).toBe('net');

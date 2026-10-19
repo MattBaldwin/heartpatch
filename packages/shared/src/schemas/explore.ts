@@ -50,6 +50,22 @@ export type PublicSearchSpot = z.infer<typeof PublicSearchSpotSchema>;
 /** A tile's homestead state for its owner: part of home, cut off, or neither. */
 export const HomesteadStateSchema = z.enum(['joined', 'paused']).nullable();
 
+/**
+ * A grey village tile's explore extras (#306 2a), on `ExploreTileResponse`
+ * when the tile is an unrestored Hollowed village tile. Its spots refill
+ * each morning (map time), so `joy` is today's colour.
+ */
+export const HollowedExploreSchema = z.object({
+  /** The village (`MapView.communities[].id`) and its name for the header. */
+  id: z.uuid(),
+  name: z.string(),
+  /** How much colour today's searches brought back, 0–100 (`exploreJoy`). */
+  joy: z.number().int().min(0).max(100),
+  /** Where each Hollow echo drifts, tile-local (`hexToWorld` at size 1, like the spots). */
+  echoes: z.array(z.object({ x: z.number(), z: z.number() })),
+});
+export type HollowedExplore = z.infer<typeof HollowedExploreSchema>;
+
 /** How far along a tile is: "7 of 12 found 🔍". */
 export const ExploreProgressSchema = z.object({
   searched: z.number().int().min(0),
@@ -68,6 +84,8 @@ export const ExploreTileResponseSchema = z.object({
   homestead: HomesteadStateSchema,
   /** Uses left of each tool in my bag (a tool is counted in uses). */
   tools: z.record(ToolIdSchema, z.number().int().min(0)),
+  /** A grey village tile (#306 2a); absent on my own land. */
+  community: HollowedExploreSchema.optional(),
 });
 export type ExploreTileResponse = z.infer<typeof ExploreTileResponseSchema>;
 
@@ -99,5 +117,7 @@ export const SearchSpotResponseSchema = z.object({
   homestead: HomesteadStateSchema,
   /** The bag after the search. */
   items: ItemCountsSchema,
+  /** On a grey village tile (#306 2a): its joy after this search, 0–100. */
+  joy: z.number().int().min(0).max(100).optional(),
 });
 export type SearchSpotResponse = z.infer<typeof SearchSpotResponseSchema>;

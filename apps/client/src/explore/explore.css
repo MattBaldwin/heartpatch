@@ -138,6 +138,63 @@ body:has(.explore:not([hidden])) .auth-chip {
   text-overflow: ellipsis;
 }
 
+/*
+ * A narrow phone (iPhone SE, 375 px): the header's pieces sit a little
+ * closer, so "12 of 12 found 🔍" fits whole beside the tool and the bag.
+ */
+@media (max-width: 380px) {
+  .explore-top {
+    gap: 6px;
+  }
+
+  .explore-names {
+    padding: 6px 10px;
+  }
+
+  /* With a tool's uses beside it, the progress may still need a second line: never cut off. */
+  .explore-progress {
+    white-space: normal;
+  }
+}
+
+/* A grey village's name (#306 2a): up to 16 letters, so it may wrap to a second line on a narrow phone. */
+.explore-title-village {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
+/* A grey village tile's joy (#306 2a): fills gold as today's searches bring the colour back. */
+.explore-joy {
+  display: block;
+  height: 5px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: rgb(122 95 128 / 18%);
+  overflow: hidden;
+}
+
+.explore-joy[hidden] {
+  display: none;
+}
+
+.explore-joy-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd36b, #ff9fb2);
+  transform: scaleX(var(--joy, 0));
+  transform-origin: left center;
+  transition: transform 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-joy-fill {
+    transition: none;
+  }
+}
+
 /* The tool in hand, short: its icon and the uses left ("🪔 20"). */
 .explore-tool {
   flex: none;
