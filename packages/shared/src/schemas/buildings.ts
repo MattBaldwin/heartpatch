@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
+import { NAMING_RULES } from '../data/naming.js';
 import { ContentIdSchema } from './data/common.js';
+import { BuildableKindSchema } from './data/home-base.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { SpeciesSchema } from './data/species.js';
 import { HomeHouseSchema } from './house.js';
@@ -102,6 +104,41 @@ export const HomeSquishySchema = z.object({
 export type HomeSquishy = z.infer<typeof HomeSquishySchema>;
 
 /**
+ * A home's name (#306 PR 0): trimmed, runs of spaces made one, up to
+ * `NAMING_RULES.maxLength` letters, numbers, spaces and a little friendly
+ * punctuation (no emoji), like a squishy's nickname. The server also runs
+ * the text filter (CLAUDE.md rule 9).
+ */
+export const HomeNameSchema = z
+  .string()
+  .transform((name) => name.trim().replace(/\s+/g, ' '))
+  .pipe(
+    z
+      .string()
+      .min(1, 'Type a name first!')
+      .max(NAMING_RULES.maxLength, `Names can be up to ${String(NAMING_RULES.maxLength)} letters.`)
+      .regex(
+        /^[\p{L}\p{N} '’!&.,-]+$/u,
+        'Names can use letters, numbers, spaces and a little punctuation.',
+      ),
+  );
+
+/**
+ * Naming my home (#306 PR 0), as `namingGate` works it out: my home's name,
+ * whether naming is unlocked, each buildable kind and whether I've built
+ * one, squishies caught toward `need`, and whether I may (re)name it now.
+ */
+export const HomeNamingSchema = z.object({
+  name: z.string().nullable(),
+  unlocked: z.boolean(),
+  kinds: z.array(z.object({ kind: BuildableKindSchema, built: z.boolean() })),
+  caught: z.number().int().min(0),
+  need: z.number().int().min(1),
+  renameOpen: z.boolean(),
+});
+export type HomeNaming = z.infer<typeof HomeNamingSchema>;
+
+/**
  * `GET /maps/:mapId/home`, and the reply to every home command: my home
  * tiles, buildings and squishies, my bag (to show costs), the seasons on
  * today, tonight's map-local date and the server's clock.
@@ -125,6 +162,8 @@ export const HomeResponseSchema = z.object({
    * this player (`HP_HOUSE`) and by older servers, so the client draws none.
    */
   house: HomeHouseSchema.optional(),
+  /** Naming my home (#306 PR 0); older servers send none. */
+  naming: HomeNamingSchema.optional(),
 });
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 

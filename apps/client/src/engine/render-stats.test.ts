@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatPageStats, formatRenderStats, formatResourceStats } from './render-stats.js';
+import {
+  formatAmbientStatus,
+  formatPageStats,
+  formatRenderStats,
+  formatResourceStats,
+} from './render-stats.js';
 
 describe('formatRenderStats', () => {
   it('shows draw calls and thousands of triangles', () => {
@@ -80,5 +85,12 @@ describe('formatPageStats', () => {
     ).toBe(
       'page · 2 engines · 0 fr/s · 0 snap · rt 6: 600x100, 500x100, 400x100, 300x100, +2 · 2 canvas · 9 dom · 0 css',
     );
+  });
+});
+
+describe('formatAmbientStatus', () => {
+  it('shows the mode, and when the judge called the device slow (#501 H)', () => {
+    expect(formatAmbientStatus({ mode: 'live', slow: false })).toBe('ambient live');
+    expect(formatAmbientStatus({ mode: 'off', slow: true })).toBe('ambient off (slow)');
   });
 });

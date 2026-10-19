@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
-import { PublicBuildingSchema } from './buildings.js';
+import { HomeNameSchema, PublicBuildingSchema } from './buildings.js';
 import { CommunityViewSchema } from './communities.js';
 import { PublicFenceSchema } from './fences.js';
 import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
@@ -140,8 +140,14 @@ export const MapMemberSchema = z.object({
   keeper: PublicKeeperSchema.nullable(),
   /** The milestone title they wear on their profile card (#44), or null. */
   title: DisplayNameSchema.nullable(),
+  /** Their home's name (#306 PR 0), shown on its map flag; null until named. */
+  homeName: z.string().nullable().optional(),
 });
 export type MapMember = z.infer<typeof MapMemberSchema>;
+
+/** `POST /maps/:mapId/home/name` (#306 PR 0): name my home. Replies with the `HomeResponse`. */
+export const HomeNameRequestSchema = z.object({ name: HomeNameSchema });
+export type HomeNameRequest = z.infer<typeof HomeNameRequestSchema>;
 
 /** A pending request, as the owner sees it. */
 export const PendingJoinRequestSchema = z.object({

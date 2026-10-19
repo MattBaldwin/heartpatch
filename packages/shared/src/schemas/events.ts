@@ -171,6 +171,11 @@ export const GAME_EVENTS = {
       heartSeed: HexSchema,
     }),
   },
+  /** A member named their home (#306 PR 0): its flag on the map shows it. */
+  'member.named': {
+    internal: z.strictObject({ userId: z.uuid(), name: z.string() }),
+    public: z.object({ userId: z.uuid(), name: z.string() }),
+  },
   /** A member left on their own. */
   'member.left': { internal: DepartedSchema, public: DepartedPublicSchema },
   /** The owner removed a member. */

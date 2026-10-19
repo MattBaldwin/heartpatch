@@ -7,7 +7,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type DbClient } from './client.js';
 import { migrationsFolder, runMigrations } from './migrator.js';
-import { battles, buildings, mapMembers, users } from './schema.js';
+import { battles, buildings, users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -58,7 +58,8 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
     const rows = await client!.db.execute(
       `select json_build_object(
          'tiles', (select json_agg(to_jsonb(t) - 'community_id' order by t.id) from tiles t),
-         'members', (select json_agg(m order by m.user_id) from map_members m),
+         'members', (select json_agg(to_jsonb(m) - array['home_name', 'home_named_at_level',
+           'caught_count', 'kinds_built'] order by m.user_id) from map_members m),
          'buildings', (select json_agg(b order by b.id) from buildings b),
          'attacks', (select json_agg(to_jsonb(a) - array['part', 'follows_attack_id',
            'fence_segment_id', 'fence_building_id', 'fence_hp_before', 'fence_max_hp',
@@ -87,8 +88,11 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
     await db.execute(
       sql`insert into maps (id, kind, name, time_zone) values (${mapId}, 'multiplayer', 'Old Patch', 'UTC')`,
     );
-    await db.insert(mapMembers).values({ mapId, userId: maple, role: 'owner', homeSlot: 0 });
-    await db.insert(mapMembers).values({ mapId, userId: pip, role: 'member', homeSlot: 1 });
+    // Raw SQL: `map_members` gained columns after 0031 (#306).
+    await db.execute(
+      sql`insert into map_members (map_id, user_id, role, home_slot)
+        values (${mapId}, ${maple}, 'owner', 0), (${mapId}, ${pip}, 'member', 1)`,
+    );
     const tile = async (
       q: number,
       r: number,

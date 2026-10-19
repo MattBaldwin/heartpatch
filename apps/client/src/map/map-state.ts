@@ -120,6 +120,20 @@ export class MapState {
         this.byUser.set(next.user.id, next);
         return 'redraw';
       }
+      case 'member.named': {
+        // A member named their home (#306 PR 0): its flag over their Heart Seed shows it.
+        const parsed = GAME_EVENTS['member.named'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const member = this.byUser.get(parsed.data.userId);
+        if (!member) return 'none';
+        const next = { ...member, homeName: parsed.data.name };
+        this.current = {
+          ...this.current,
+          members: this.current.members.map((m) => (m === member ? next : m)),
+        };
+        this.byUser.set(next.user.id, next);
+        return 'redraw';
+      }
       case 'tile.attacked': {
         // A battle for the tile started (#15): it rests until `cooldownUntil`.
         const parsed = GAME_EVENTS['tile.attacked'].public.safeParse(event.data);

@@ -41,8 +41,6 @@ export class SwimBubbles {
     mat.specularColor = Color3.Black();
     mat.emissiveColor = linear('#f4fdff').scale(WATER_MOTION.glow * 1.3);
     mesh.material = mat;
-    // Compiled now, so the first kick doesn't wait on the shader.
-    mat.forceCompilation(mesh);
     mesh.isPickable = false;
     mesh.alwaysSelectAsActiveMesh = true;
     this.#matrices = new Float32Array(pool * 16);
@@ -51,6 +49,8 @@ export class SwimBubbles {
     for (let i = 0; i < pool; i++) this.#state[i * 4 + 3] = -1;
     mesh.thinInstanceSetBuffer('matrix', this.#matrices, 16, false);
     mesh.thinInstanceCount = pool;
+    // Hidden and thin-instanced, so the scene's prewarm (#501 D1) compiles its
+    // instanced program while loading: the first kick doesn't wait on it.
     mesh.setEnabled(false);
     this.#mesh = mesh;
   }

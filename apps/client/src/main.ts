@@ -728,6 +728,8 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
+  // The name card's ideas come from my home ring's land (#306).
+  mapView: () => maps.view,
   loadWorkMoods: (mapId) => {
     jobs.loadView(mapId);
   },
@@ -1732,6 +1734,8 @@ if (import.meta.env.DEV) {
       rings: postFlags.rings,
       onScreen: postFlags.onScreen,
       connected: postFlags.connected,
+      homes: postFlags.homes,
+      boxes: postFlags.boxes,
     }),
     starter: () => starters.debug,
     lore: () => lorebook.debug,
@@ -1773,5 +1777,8 @@ if (import.meta.env.DEV) {
 // The stats badge: dev builds, or `?fps=1` on the live site (#335, the owner's device check).
 if (showsStats(import.meta.env.DEV, params)) {
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
-  mountDevOverlay(() => stage);
+  mountDevOverlay(
+    () => stage,
+    () => explore.ambient,
+  );
 }

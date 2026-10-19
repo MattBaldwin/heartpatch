@@ -85,6 +85,14 @@ export interface LockedMemberRow {
   starterSquishyId: string | null;
 }
 
+/** What naming my home reads off the member row (#306). */
+export interface MemberNamingRow {
+  homeName: string | null;
+  homeNamedAtLevel: number | null;
+  caughtCount: number;
+  kindsBuilt: string[];
+}
+
 export interface MapSummaryRow {
   id: string;
   name: string;
@@ -113,6 +121,8 @@ export interface MemberRow {
   keeper: PublicKeeper | null;
   /** The milestone title they wear (#44), by name; null for none. */
   title: string | null;
+  /** Their home's name (#306); null until named. */
+  homeName: string | null;
 }
 
 /** A home tile for topping up its ring's nodes (`listHomeRingTiles`). */
@@ -285,6 +295,25 @@ export interface MapsRepo {
    * one at a time.
    */
   lockMember: (mapId: string, userId: string) => Promise<LockedMemberRow | null>;
+  /**
+   * `lockMember` for naming my home (#306): the same lock (step 2), with the
+   * name and the naming counters. Null if they aren't an active member.
+   */
+  lockMemberNaming: (mapId: string, userId: string) => Promise<MemberNamingRow | null>;
+  /** The name and naming counters of an active member, a plain read (the home view). */
+  memberNaming: (mapId: string, userId: string) => Promise<MemberNamingRow | null>;
+  /** Names their home at this Heart Seed level. Run under `lockMemberNaming`. */
+  setHomeName: (mapId: string, userId: string, name: string, level: number) => Promise<void>;
+  /**
+   * One more squishy befriended in battle on the patch (the `home-naming`
+   * consumer, #306). One `UPDATE`, so it takes the member row's lock (step 2).
+   */
+  countCaught: (mapId: string, userId: string) => Promise<void>;
+  /**
+   * Adds a buildable kind to the kinds they've built, once (a set; the
+   * `home-naming` consumer, #306). One `UPDATE`, like `countCaught`.
+   */
+  addKindBuilt: (mapId: string, userId: string, kind: string) => Promise<void>;
   /** Home slots held by active members. Run after `lockSeats` for an exact answer. */
   activeHomeSlots: (mapId: string) => Promise<{ count: number; slots: Set<number> }>;
   /** Active members, owner first, then by join time. */
@@ -365,6 +394,14 @@ export const activeMember = (mapId: string | AnyPgColumn, userId?: string | AnyP
     userId === undefined ? undefined : eq(mapMembers.userId, userId),
     eq(mapMembers.status, 'active'),
   );
+
+/** The member row's naming columns (#306). */
+const namingColumns = {
+  homeName: mapMembers.homeName,
+  homeNamedAtLevel: mapMembers.homeNamedAtLevel,
+  caughtCount: mapMembers.caughtCount,
+  kindsBuilt: mapMembers.kindsBuilt,
+};
 
 const owners = alias(mapMembers, 'owners');
 const ownerUsers = alias(users, 'owner_users');
@@ -765,6 +802,50 @@ function queries(db: Executor): MapsRepo {
       return row ?? null;
     },
 
+    lockMemberNaming: async (mapId, userId) => {
+      const [row] = await db
+        .select(namingColumns)
+        .from(mapMembers)
+        .where(activeMember(mapId, userId))
+        .for('no key update');
+      return row ?? null;
+    },
+
+    memberNaming: async (mapId, userId) => {
+      const [row] = await db
+        .select(namingColumns)
+        .from(mapMembers)
+        .where(activeMember(mapId, userId));
+      return row ?? null;
+    },
+
+    setHomeName: async (mapId, userId, name, level) => {
+      await db
+        .update(mapMembers)
+        .set({ homeName: name, homeNamedAtLevel: level })
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+    },
+
+    countCaught: async (mapId, userId) => {
+      await db
+        .update(mapMembers)
+        .set({ caughtCount: sql`${mapMembers.caughtCount} + 1` })
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+    },
+
+    addKindBuilt: async (mapId, userId, kind) => {
+      await db
+        .update(mapMembers)
+        .set({ kindsBuilt: sql`array_append(${mapMembers.kindsBuilt}, ${kind}::text)` })
+        .where(
+          and(
+            eq(mapMembers.mapId, mapId),
+            eq(mapMembers.userId, userId),
+            sql`not (${kind}::text = any(${mapMembers.kindsBuilt}))`,
+          ),
+        );
+    },
+
     activeHomeSlots: async (mapId) => {
       const rows = await db
         .select({ homeSlot: mapMembers.homeSlot })
@@ -782,6 +863,7 @@ function queries(db: Executor): MapsRepo {
           role: mapMembers.role,
           homeSlot: mapMembers.homeSlot,
           joinedAt: mapMembers.joinedAt,
+          homeName: mapMembers.homeName,
           // Drizzle makes a left-joined object null when every column is null.
           keeper: keeperColumns,
           // The milestone title on their profile card (#44).

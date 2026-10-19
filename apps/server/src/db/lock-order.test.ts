@@ -8,7 +8,9 @@ import {
   hexDistance,
   hexKey,
   hexNeighbors,
+  HOME_BASE_RULES,
   HOUSE_DATA,
+  NAMING_RULES,
   STARTERS,
   type BattleAction,
   type PlayerBattleAction,
@@ -22,6 +24,7 @@ import { createExploreRepo } from '../modules/explore/repo.js';
 import { createFactoryRepo } from '../modules/factory/repo.js';
 import { createFencesRepo } from '../modules/fences/repo.js';
 import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
+import { createHomeNamingConsumer } from '../modules/buildings/home-name-consumer.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
 import { createCareService } from '../modules/care/service.js';
 import { createCoinsRepo } from '../modules/coins/repo.js';
@@ -966,6 +969,62 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .from(houseGifts)
       .where(and(eq(houseGifts.mapId, mapId), eq(houseGifts.userId, kid.id)));
     expect(rows).toHaveLength(1);
+  });
+
+  /** A patch whose Keeper may name their home (#306): every kind built, enough caught. */
+  async function namingSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    await db
+      .update(mapMembers)
+      .set({
+        caughtCount: NAMING_RULES.caughtToName,
+        kindsBuilt: [...HOME_BASE_RULES.buildableKinds],
+      })
+      .where(and(eq(mapMembers.mapId, map.id), eq(mapMembers.userId, kid.id)));
+    const name = () => createBuildingsService({ db }).name(kid, map.id, { name: 'Lock Hollow' });
+    return { kid, mapId: map.id, name };
+  }
+
+  it('takes the member row before `maps` (buildings `name`, #306 step 2 then 13)', async () => {
+    const { kid, mapId, name } = await namingSetup('namer');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      name,
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect((await createMapsRepo(db).memberNaming(mapId, kid.id))?.homeName).toBe('Lock Hollow');
+  });
+
+  it('takes the consumer position before the member row (home-naming consumer, #306 step 1 then 2)', async () => {
+    const { kid, mapId } = await namingSetup('namecount');
+    await withTransaction(db, (tx) =>
+      appendGameEvent(tx, {
+        mapId,
+        type: 'squishy.captured',
+        actorUserId: kid.id,
+        payload: {
+          battleId: randomUUID(),
+          userId: kid.id,
+          squishyId: randomUUID(),
+          speciesId: STARTERS.speciesIds[0]!,
+          level: 1,
+        },
+      }),
+    );
+    const consumer = createHomeNamingConsumer();
+    await holdThen(
+      (tx) => createJobsRepo(tx).lockPosition(consumer.name, mapId),
+      () => runConsumer(db, consumer, mapId),
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+    );
+    expect((await createMapsRepo(db).memberNaming(mapId, kid.id))?.caughtCount).toBe(
+      NAMING_RULES.caughtToName + 1,
+    );
   });
 
   it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {

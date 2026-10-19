@@ -135,8 +135,11 @@ declare global {
       jobs?(): JobsDebug;
       /** The Squishies roster (#375): open, rows shown, sort, filter, the open row. */
       roster?(): RosterDebug;
-      /** Trading posts on the map (#269): flags on screen, gold rings, and the posts my land reaches. */
-      posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen' | 'connected'>;
+      /**
+       * Trading posts on the map (#269): flags on screen, gold rings, and the posts my land reaches;
+       * named homes' flags and every flag's box (#306), to check none overlap.
+       */
+      posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen' | 'connected' | 'homes' | 'boxes'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
       journey?(): JourneyDebug;
       /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */

@@ -3,6 +3,7 @@ import { loadServerConfig } from './config.js';
 import { createDbClient, dbReadinessCheck } from './db/client.js';
 import { startJobs } from './jobs/boss.js';
 import { createClock } from './lib/time.js';
+import { createHomeNamingConsumer } from './modules/buildings/home-name-consumer.js';
 import { createHollowConsumer } from './modules/hollow/consumer.js';
 import { createLoreConsumer } from './modules/lore/consumer.js';
 import { createMilestonesConsumer } from './modules/milestones/consumer.js';
@@ -48,6 +49,7 @@ const jobs = await startJobs({
     createHollowConsumer(hollow),
     createLoreConsumer({ clock }),
     createMilestonesConsumer({ clock }),
+    createHomeNamingConsumer(),
   ],
   // The Hollow Man (#21): night falls on each map at 19:00 map time (#277).
   // Then the dark land he won back goes wild, then untended land does, up

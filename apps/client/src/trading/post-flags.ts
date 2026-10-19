@@ -4,6 +4,7 @@ import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { hexKey, hexToWorld, type HexKey, type MapView, type PublicTile } from '@heartpatch/shared';
+import { homeFlags } from '../home/home-name-view.js';
 import { HEX_SIZE } from '../map/map-config.js';
 import { findHomeBases } from '../map/map-layout.js';
 import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js';
@@ -12,7 +13,7 @@ import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import type { Rect } from '../ui/geometry.js';
 import './trading.css';
-import { flagSpot, keeperCover, type FlagRoom } from './flag-spot.js';
+import { flagBox, flagSpot, keeperCover, keeperTile, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -22,12 +23,21 @@ import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 // (`tileScreenRectOf`), like the gatherer badges; they move only when a frame
 // is drawn and touch the DOM only when they moved. The rings are a few static
 // meshes, so they cost nothing between frames.
+//
+// Named homes (#306 PR 0) fly a flag too, "🏡 Puddle Corner" over each
+// member's Heart Seed. Every flag keeps clear of the others as well as of
+// what's over the map: posts are placed first, then homes, and each one
+// placed is a cover for the rest, so two flags never overlap.
 
 export interface PostFlags extends MapLayer {
   /** Flags on screen now (the dev hook). */
   readonly shown: number;
   /** Posts with a gold ring (the dev hook). */
   readonly rings: number;
+  /** Home flags on screen now (#306, the dev hook): their words and boxes in CSS pixels. */
+  readonly homes: readonly { label: string; box: Rect }[];
+  /** Every flag on screen now (posts and homes, #306): its box, to check none overlap. */
+  readonly boxes: readonly Rect[];
   /** Each post on screen: its name and its tile's middle in CSS pixels (the dev hook, for taps). */
   readonly onScreen: readonly { name: string; x: number; y: number }[];
   /**
@@ -39,14 +49,28 @@ export interface PostFlags extends MapLayer {
 }
 
 interface Flag {
-  post: PostFlag;
+  /** The post it names; null on a home's flag (#306). */
+  post: PostFlag | null;
+  /** The tile it flies over: the post's, or the home's Heart Seed. */
+  tile: PublicTile;
   node: HTMLElement;
   /** Where and what it last showed, so an unchanged flag writes nothing. */
   at: string;
   label: string;
   /** Its size when last shown (a hidden flag measures 0); null until then or after its words change. */
   size: { width: number; height: number } | null;
+  /** Where it showed after the last placing (null: hidden), a cover for the flags after it. */
+  box: Rect | null;
 }
+
+/** Room left between two flags (#306), so pills never touch. TUNE. */
+const FLAG_GAP_PX = 4;
+const roomy = (box: Rect): Rect => ({
+  x: box.x - FLAG_GAP_PX,
+  y: box.y - FLAG_GAP_PX,
+  width: box.width + FLAG_GAP_PX * 2,
+  height: box.height + FLAG_GAP_PX * 2,
+});
 
 /** A flag's size before it has been laid out. */
 const FLAG_MIN_WIDTH_PX = 80;
@@ -93,7 +117,9 @@ const RING = { diameter: TILE_RADIUS * 1.84, thickness: 0.045, lift: 0.012, colo
 
 export function createPostFlags(root: HTMLElement, me: () => string | null): PostFlags {
   let scene: Scene | null = null;
-  const flags = new Map<HexKey, Flag>();
+  const flags = new Map<HexKey, Flag & { post: PostFlag }>();
+  /** Named homes' flags (#306), by member; placed after the posts'. */
+  const homes = new Map<string, Flag>();
   const rings = new Map<HexKey, Mesh>();
   /** My Heart Seed's tile, where my Keeper stands; null with no land here. */
   let seed: PublicTile | null = null;
@@ -103,11 +129,12 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     if (flag.node.offsetWidth > 0) {
       flag.size = { width: flag.node.offsetWidth, height: flag.node.offsetHeight };
     }
-    const spot = flagSpot(
-      scene ? tileScreenRectOf(scene, flag.post.tile) : null,
-      flag.size ?? { width: FLAG_MIN_WIDTH_PX, height: FLAG_MIN_HEIGHT_PX },
-      room,
-    );
+    const size = flag.size ?? { width: FLAG_MIN_WIDTH_PX, height: FLAG_MIN_HEIGHT_PX };
+    const rect = scene ? tileScreenRectOf(scene, flag.tile) : null;
+    // My own home's flag flies over my Keeper, who stands on its Heart Seed (#306).
+    const mine = rect && flag.post === null && seed && hexKey(seed) === hexKey(flag.tile);
+    const spot = flagSpot(mine ? keeperTile(rect) : rect, size, room);
+    flag.box = spot ? flagBox(spot, size) : null;
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === flag.at) return;
     flag.at = at;
@@ -122,10 +149,16 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     }
   };
   const measure = () => flagRoom(scene && seed ? tileScreenRectOf(scene, seed) : null);
+  /** Places every flag, posts first, each one placed a cover for the next (#306: none overlap). */
   const placeAll = () => {
-    if (flags.size === 0) return;
+    if (flags.size === 0 && homes.size === 0) return;
     const room = measure();
-    for (const flag of flags.values()) place(flag, room);
+    const covers = [...room.covers];
+    const next = { ...room, covers };
+    for (const flag of [...flags.values(), ...homes.values()]) {
+      place(flag, next);
+      if (flag.box) covers.push(roomy(flag.box));
+    }
   };
   // A sheet opening or shutting over an idle map draws no frame, so watch
   // for it and look again once on the next frame, like the tutorial's own
@@ -171,13 +204,20 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
 
   /** Matches flags and rings to the view's posts and how I reach them now. */
   const draw = (view: MapView) => {
-    let room: FlagRoom | null = null;
+    let changed = false;
     const mine = me();
     seed =
       mine === null
         ? null
         : (findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === mine)?.seed ?? null);
     const wanted = new Map(postFlags(view, mine).map((p) => [hexKey(p.tile), p] as const));
+    const named = new Map(homeFlags(view).map((h) => [h.userId, h] as const));
+    for (const [id, flag] of homes) {
+      if (!named.has(id)) {
+        flag.node.remove();
+        homes.delete(id);
+      }
+    }
     for (const [key, flag] of flags) {
       if (!wanted.has(key)) {
         flag.node.remove();
@@ -199,6 +239,7 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       const flag = flags.get(key);
       if (flag) {
         flag.post = post;
+        flag.tile = post.tile;
         if (flag.label !== label) {
           flag.node.textContent = label;
           flag.size = null;
@@ -218,15 +259,48 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       );
       node.hidden = true;
       root.append(node);
-      const added: Flag = { post, node, at: '', label, size: null };
+      const added = { post, tile: post.tile, node, at: '', label, size: null, box: null };
       flags.set(key, added);
-      place(added, (room ??= measure()));
+      changed = true;
     }
+    for (const [id, home] of named) {
+      const flag = homes.get(id);
+      if (flag) {
+        flag.tile = home.tile;
+        if (flag.label !== home.label) {
+          flag.node.textContent = home.label;
+          flag.size = null;
+          flag.label = home.label;
+          changed = true;
+        }
+        continue;
+      }
+      const node = el(
+        'div',
+        { class: 'post-flag home-flag', 'aria-hidden': 'true', 'data-testid': 'home-flag' },
+        home.label,
+      );
+      node.hidden = true;
+      root.append(node);
+      homes.set(id, {
+        post: null,
+        tile: home.tile,
+        node,
+        at: '',
+        label: home.label,
+        size: null,
+        box: null,
+      });
+      changed = true;
+    }
+    // New or reworded flags: place everything again, so they keep clear of each other.
+    if (changed) placeAll();
   };
 
   const clear = () => {
-    for (const flag of flags.values()) flag.node.remove();
+    for (const flag of [...flags.values(), ...homes.values()]) flag.node.remove();
     flags.clear();
+    homes.clear();
     seed = null;
     // The rings go with their scene; just forget them.
     rings.clear();
@@ -256,6 +330,16 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     },
     get shown() {
       return [...flags.values()].filter((f) => !f.node.hidden).length;
+    },
+    get homes() {
+      return [...homes.values()].flatMap((f) =>
+        f.box && !f.node.hidden ? [{ label: f.label, box: f.box }] : [],
+      );
+    },
+    get boxes() {
+      return [...flags.values(), ...homes.values()].flatMap((f) =>
+        f.box && !f.node.hidden ? [f.box] : [],
+      );
     },
     get rings() {
       return rings.size;
