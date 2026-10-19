@@ -162,6 +162,13 @@ process.env['HP_HOUSE'] ??= 'on';
 // tests only.
 process.env['HP_DEV_LIVE_TURN_SECONDS'] ??= '20';
 process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
+// The game clock starts on a fixed day inside the 2026 Halloween window
+// (Oct 1 to Nov 9; packages/shared seasons), so the seasonal specs
+// (trick-or-treat, recipe-book's Pumpkin Treats, the bag's Heart Charms) pass
+// all year, not only while today is in season (#561). The server inherits it,
+// and pinMapTime below reads its lead to keep map time in daylight. Dev and
+// tests only.
+process.env['HP_DEV_NOW'] ??= '2026-10-20T15:00:00Z';
 // Map time is the game clock in the patch's time zone, which the client takes
 // from the device: pin the browser's zone so specs never meet dusk (#326).
 const timezoneId = pinMapTime();

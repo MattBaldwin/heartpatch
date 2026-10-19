@@ -9,8 +9,8 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * "Visited today". The host's morning report counts yesterday's visitors, so
  * the spec stands in yesterday's count in the host's Hollow reply (the visit
  * it records is today's) and checks the real thank-you Heartdust landed.
- * Halloween is on: the dev server runs on today's date, inside the 2026
- * window (as recipe-book.spec.ts).
+ * Halloween is on: playwright.config.ts starts the game clock on a day inside
+ * the 2026 window (`HP_DEV_NOW`, #561).
  */
 
 interface TrickDebug {
