@@ -113,6 +113,8 @@ export * from './hex/index.js';
 export * from './mapgen/index.js';
 export * from './schemas/ws.js';
 export * from './schemas/maps.js';
+export * from './schemas/patch-stats.js';
+export * from './patch-stats/index.js';
 export * from './schemas/communities.js';
 export * from './schemas/signup-codes.js';
 export * from './schemas/admin.js';

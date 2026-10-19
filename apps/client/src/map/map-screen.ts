@@ -28,6 +28,7 @@ import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween, seasonsOn } from './map-dressing.js';
 import { mountMapLegend } from './map-legend.js';
+import { createPatchStatsScreen } from './patch-stats-screen.js';
 import type { BuildAreaView } from './build-area.js';
 import type { BuildAreaHit } from './build-area-layout.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
@@ -276,6 +277,20 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   legendButton.addEventListener('click', () => {
     setLegend(!legend.open);
   });
+  // Who's winning what (#573): from the legend card, so the top bar stays as
+  // it is. First in the card, clear of the side trays' handles on a small phone.
+  const stats = createPatchStatsScreen({ root: options.root });
+  const statsButton = el(
+    'button',
+    { type: 'button', class: 'map-legend-stats', 'data-testid': 'map-legend-stats' },
+    '👑 Patch stats',
+  );
+  statsButton.addEventListener('click', () => {
+    const state = sync.state;
+    setLegend(false);
+    if (state) stats.show(state.id, user?.id ?? null);
+  });
+  legend.card.prepend(statsButton);
   // Once for the app's life: the map screen is made once (main.ts).
   document.addEventListener(
     'pointerdown',
@@ -462,6 +477,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     panel.hide();
     options.tileActions?.hide();
     setLegend(false);
+    stats.close();
     hud.hidden = true;
     options.onHudChange?.(null);
     options.showScene(null);

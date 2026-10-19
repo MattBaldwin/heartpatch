@@ -7,6 +7,7 @@ import {
   INVITE_CODE_LENGTH,
   isTradingPost,
   MAP_MAX_PLAYERS,
+  patchStats,
   tradingPostLabels,
   type TradingPostLabel,
   type CreateMapRequest,
@@ -16,6 +17,7 @@ import {
   type MapDetail,
   type MapMember,
   type MapView,
+  type PatchStats,
   type MemberPasswordResetResponse,
   type MyJoinRequest,
   type MyMapsResponse,
@@ -58,6 +60,8 @@ export interface MapsService {
   get: (user: PublicUser, mapId: string) => Promise<MapDetail>;
   /** Everything a member needs to draw the map. */
   view: (user: PublicUser, mapId: string) => Promise<MapView>;
+  /** Who's winning what (#573): worked out on read from the view and the members' counts. */
+  stats: (user: PublicUser, mapId: string) => Promise<PatchStats>;
   /** A fresh invite code; the old one stops working. Owner only. */
   regenerateInvite: (user: PublicUser, mapId: string) => Promise<Invite>;
   revokeInvite: (user: PublicUser, mapId: string) => Promise<void>;
@@ -376,7 +380,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       });
     });
 
-  return {
+  const service: MapsService = {
     myMaps: async (user) => {
       const [maps, requests] = await Promise.all([
         store.listMyMaps(user.id),
@@ -719,5 +723,15 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         recoveryCode: credentials.recoveryCode,
       };
     },
+
+    stats: async (user, mapId) => {
+      // The same view the member draws, so the stats match the map.
+      const view = await service.view(user, mapId);
+      // A moment after the view's snapshot: fine for a stats sheet, and a
+      // befriend in between shows up on the next open.
+      const counts = await store.befriendCounts(mapId);
+      return patchStats(view, new Map(counts.map((c) => [c.userId, c])));
+    },
   };
+  return service;
 }

@@ -1,0 +1,250 @@
+/* Patch stats (#573). Cards and buttons come from ../ui/auth/auth.css; this
+   file lays out the sheet. Over the map like the catalog (z 4); 44pt+
+   targets, safe areas. Only the middle scrolls, so × and Close stay put. */
+
+.patch-stats {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
+  background: rgb(253 232 240 / 70%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.patch-stats[hidden] {
+  display: none;
+}
+
+.patch-stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 100%;
+  width: min(100%, 560px);
+}
+
+.patch-stats-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.patch-stats-head .patch-stats-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+}
+
+/* The round × (like the catalog's): 44pt, the glyph well inside its edge. */
+.patch-stats-close-top {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.patch-stats-scroll {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+
+.patch-stats-actions {
+  flex: none;
+  margin-top: 0;
+}
+
+.patch-stats-totals,
+.patch-stats-list,
+.patch-stats-lines,
+.patch-stats-crowns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The patch's totals: always two by two, so they never wrap 3 + 1. */
+.patch-stats-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.patch-stats-totals:empty,
+.patch-stats-status:empty {
+  display: none;
+}
+
+.patch-stats-total {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: center;
+  align-items: center;
+  column-gap: 6px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fbeaf2;
+}
+
+.patch-stats-total .patch-stats-emoji {
+  grid-row: span 2;
+  font-size: 22px;
+}
+
+.patch-stats-total .patch-stats-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.patch-stats-total .patch-stats-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.patch-stats-status,
+.patch-stats-footer {
+  margin: 0;
+  text-align: center;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.patch-stats-list {
+  display: grid;
+  gap: 10px;
+}
+
+.patch-stats-keeper {
+  display: grid;
+  gap: 8px;
+  padding: 12px var(--hp-pad-x);
+  border-radius: 18px;
+  background: #fffafc;
+  box-shadow: 0 2px 8px rgb(74 49 80 / 12%);
+}
+
+.patch-stats-mine {
+  box-shadow:
+    0 0 0 2px #e7a3c4,
+    0 2px 8px rgb(74 49 80 / 12%);
+}
+
+.patch-stats-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.patch-stats-name {
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patch-stats-crowns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.patch-stats-crown,
+.patch-stats-cheer {
+  padding: 4px var(--hp-pad-x);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.patch-stats-crown {
+  background: #fff1c2;
+  color: #7a5200;
+}
+
+.patch-stats-cheer {
+  background: #eef6ea;
+  color: #4b6b3e;
+}
+
+/* Six small numbers: three across on a phone, six on a wide screen. */
+.patch-stats-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+}
+
+.patch-stats-line {
+  display: grid;
+  justify-items: center;
+  padding: 6px 4px;
+  border-radius: 12px;
+  background: #f8f0f6;
+  text-align: center;
+}
+
+.patch-stats-line .patch-stats-emoji {
+  font-size: 18px;
+}
+
+.patch-stats-line .patch-stats-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.patch-stats-line .patch-stats-value {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.patch-stats-buildings {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4a6a;
+}
+
+/* The legend card's way in (#573): a full-width pill above the Keepers. */
+.map-legend-stats {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 999px;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
