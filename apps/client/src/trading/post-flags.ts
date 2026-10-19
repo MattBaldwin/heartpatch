@@ -60,9 +60,10 @@ const TOP_BAR =
   '.tray-top-left, .tray-top-right, .auth-chip-toggle, body:not(.hp-trays-on) .auth-chip';
 /**
  * Everything over the map: the corner buttons (an open Keeper menu too), the
- * patch name pill, the tray handles (#426) and every open sheet or panel.
+ * patch name pill, the tray handles (#426), the night's chips (#306) and
+ * every open sheet or panel.
  */
-const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, ${SHEET_SELECTOR}`;
+const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, .night-chip, ${SHEET_SELECTOR}`;
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
@@ -72,7 +73,7 @@ const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-h
  * trays' layout, and sheets differ per screen. Shut ones (hidden, inert, a
  * closed tray) don't count: the tutorial's own test for an open sheet.
  */
-function flagRoom(keeper: Rect | null): FlagRoom {
+export function flagRoom(keeper: Rect | null): FlagRoom {
   let top = 0;
   for (const node of document.querySelectorAll(TOP_BAR)) {
     const box = boxOf(node)?.box;

@@ -1,6 +1,14 @@
 import type { MapMember } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
-import { BORDER, PLAYER_COLORS, type BorderLine, type KeeperIcon } from './map-config.js';
+import { COMMUNITY_TEXT } from '../hollowed/community-model.js';
+import {
+  BORDER,
+  PLAYER_COLORS,
+  FALLBACK_LOOK,
+  type BorderLine,
+  type KeeperIcon,
+} from './map-config.js';
+import { drainRgb, hexRgb, muteRgb } from './map-dressing.js';
 
 // The map's legend (#278): whose land is whose. The map's name pill shows
 // each Keeper's icon; tapping it opens a card with every Keeper's colour,
@@ -44,6 +52,40 @@ export function legendLabel(entry: LegendEntry): string {
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
+
+/** `#rrggbb` from sRGB 0–1. */
+const toHex = (c: readonly number[]): string =>
+  `#${c.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('')}`;
+
+/**
+ * The legend's swatch for a Hollowed village (#306): a meadow drawn as the
+ * map draws a village tile (wild, then drained), so the two match.
+ */
+export function hollowedSwatch(): string {
+  return toHex(drainRgb(muteRgb(hexRgb(FALLBACK_LOOK.color))));
+}
+
+/** The village row: a grey swatch with the doorstep's lavender rim. */
+function villageRow(): HTMLElement {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '20');
+  svg.setAttribute('height', '20');
+  svg.setAttribute('aria-hidden', 'true');
+  const hex = document.createElementNS(SVG, 'path');
+  hex.setAttribute('d', 'M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z');
+  hex.setAttribute('fill', hollowedSwatch());
+  hex.setAttribute('stroke', BORDER.hollowed.color);
+  hex.setAttribute('stroke-width', '2.5');
+  hex.setAttribute('stroke-linejoin', 'round');
+  svg.append(hex);
+  return el(
+    'li',
+    { class: 'map-legend-row map-legend-village', 'data-testid': 'map-legend-village' },
+    svg,
+    el('span', { class: 'map-legend-name' }, COMMUNITY_TEXT.legend),
+  );
+}
 
 /** Icon paths on a 24 × 24 grid, the same shapes as the badges on the land. */
 const ICON_PATHS: Readonly<Record<KeeperIcon, string>> = {
@@ -133,8 +175,8 @@ export interface MapLegend {
   readonly icons: HTMLElement;
   /** The card that opens under the name. */
   readonly card: HTMLElement;
-  /** Draws the legend for the map's members now. */
-  show: (members: readonly MapMember[], userId: string | null) => void;
+  /** Draws the legend for the map's members now, and the Hollowed villages' row when it has any (#306). */
+  show: (members: readonly MapMember[], userId: string | null, villages?: boolean) => void;
   setOpen: (open: boolean) => void;
   readonly open: boolean;
 }
@@ -154,9 +196,9 @@ export function mountMapLegend(): MapLegend {
   return {
     icons,
     card,
-    show: (members, userId) => {
+    show: (members, userId, villages = false) => {
       const entries = legendEntries(members, userId);
-      const key = JSON.stringify(entries);
+      const key = JSON.stringify([entries, villages]);
       if (key === shown) return;
       shown = key;
       icons.replaceChildren(...entries.map((e) => icon(e, 14)));
@@ -170,6 +212,7 @@ export function mountMapLegend(): MapLegend {
             lineSample(e),
           ),
         ),
+        ...(villages ? [villageRow()] : []),
       );
     },
     setOpen: (open) => {

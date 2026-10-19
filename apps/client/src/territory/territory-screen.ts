@@ -414,7 +414,8 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'too-far':
         children.push(
           ...(tile.ownerUserId !== null ? guardsWho(tile) : []),
-          line(TERRITORY_TEXT.tooFar, 'territory-too-far'),
+          // A Hollowed village's own block says how to reach it (#306).
+          ...(tile.communityId ? [] : [line(TERRITORY_TEXT.tooFar, 'territory-too-far')]),
         );
         break;
       case 'watch':

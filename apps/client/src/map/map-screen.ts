@@ -22,6 +22,7 @@ import {
 } from '../net/ws-client.js';
 import type { GroundPoint } from '../engine/camera/camera-math.js';
 import { el } from '../ui/dom.js';
+import { greyTiles, hollowedTileInfo } from '../hollowed/community-model.js';
 import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
@@ -31,6 +32,7 @@ import type { BuildAreaView } from './build-area.js';
 import type { BuildAreaHit } from './build-area-layout.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
+import type { TileInfo } from './tile-info.js';
 import { MapSync } from './map-sync.js';
 import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
@@ -264,8 +266,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     legend.setOpen(open);
     legendButton.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
   };
-  const showLegend = (members: MapView['members']): void => {
-    legend.show(members, user?.id ?? null);
+  const showLegend = (view: MapView): void => {
+    // The grey villages' swatch (#306) while the map has any.
+    legend.show(view.members, user?.id ?? null, greyTiles(view).size > 0);
     // Nobody's land to tell apart: no icons, and nothing to open.
     legendButton.hidden = legend.icons.childElementCount === 0;
   };
@@ -328,7 +331,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     }
     selected = h;
     scene3d?.select(h);
-    panel.show(
+    // A Hollowed village's tile says so in its head (#306).
+    const show = (info: TileInfo): void => {
+      panel.show(hollowedTileInfo(info, tile, state.view));
+    };
+    show(
       describeTile(
         tile,
         (id) => state.member(id),
@@ -366,7 +373,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       if (backgrounded) return;
       const drawn = drawnView(state.view);
       scene3d?.update(drawn);
-      showLegend(state.view.members);
+      showLegend(state.view);
       drawWild();
       for (const layer of options.layers ?? []) layer.update?.(drawn);
       if (selected) showTile(state, selected);
@@ -479,7 +486,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
-      showLegend(state.view.members);
+      showLegend(state.view);
       hud.hidden = false;
       options.onHudChange?.(state.id);
       setStatus(liveSocket().status);

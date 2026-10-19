@@ -1,4 +1,5 @@
 import {
+  communityReach,
   defaultKeeperConfig,
   hexDistance,
   hexKey,
@@ -7,6 +8,7 @@ import {
   KEEPER_BASES,
   generateMap,
   tradingPostLabels,
+  type CommunityView,
   type MapMember,
   type MapView,
   type PublicTile,
@@ -23,6 +25,11 @@ export const MAP_ID = '0190a8c4-0000-7000-8000-00000000000a';
 
 export function userId(n: number): string {
   return `0190a8c4-0000-7000-8000-${String(n).padStart(12, '0')}`;
+}
+
+/** The test map's `n`th Hollowed village's id (#306). */
+export function communityId(n: number): string {
+  return `0190a8c4-0000-7000-8000-c${String(n).padStart(11, '0')}`;
 }
 
 export function member(n: number, homeSlot: number): MapMember {
@@ -43,6 +50,12 @@ export function testView(players = 1, seed = 'map-render-test', seats = SEATS): 
   const members = Array.from({ length: players }, (_, i) => member(i + 1, i));
   // Trading posts (#269) named as the server names them.
   const posts = tradingPostLabels(generated.tiles, GAME_DATA.mapGen.tradingPosts);
+  // Hollowed villages (#306) as the server marks them: nothing restored yet.
+  // (Never the cellar key: the server keeps it.)
+  const villageOf = new Map<string, string>();
+  generated.communities.forEach((c, i) => {
+    for (const t of c.tiles) villageOf.set(hexKey(t), communityId(i + 1));
+  });
   const tiles: PublicTile[] = generated.tiles
     .map((t) => ({
       q: t.q,
@@ -57,8 +70,20 @@ export function testView(players = 1, seed = 'map-render-test', seats = SEATS): 
       guardianHint: null,
       buildings: [],
       post: posts.get(`${String(t.q)},${String(t.r)}`) ?? null,
+      communityId: villageOf.get(hexKey(t)) ?? null,
     }))
     .sort((a, b) => a.q - b.q || a.r - b.r);
+  // Reach as keeper1 sees it (the shared rule the server uses).
+  const communities: CommunityView[] = generated.communities.map((c, i) => ({
+    id: communityId(i + 1),
+    name: c.name,
+    kind: c.kind,
+    square: { q: c.square.q, r: c.square.r },
+    tiles: c.tiles.map((t) => ({ q: t.q, r: t.r })),
+    restored: 0,
+    ownerUserId: null,
+    ...(players > 0 ? communityReach(c.tiles, tiles, userId(1)) : { reach: null, distance: null }),
+  }));
   return {
     map: {
       id: MAP_ID,
@@ -69,6 +94,7 @@ export function testView(players = 1, seed = 'map-render-test', seats = SEATS): 
     },
     members,
     tiles,
+    communities,
     seq: players,
   };
 }

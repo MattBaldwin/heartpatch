@@ -75,11 +75,14 @@ export class MapState {
       // come from the map view, so refetch it (once a night at most). Trading
       // posts came to this older patch (#269): new terrain and names, from the view.
       // A tile finished clearing (#242): new terrain, its spot gone, from the view too.
+      // Hollowed villages came to this older patch (#306): their progress and
+      // my reach come with the view.
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
       case 'tile.rewilded':
       case 'post.placed':
+      case 'community.placed':
       case 'tile.cleared':
         return 'resync';
       case 'clearing.started': {

@@ -1,8 +1,9 @@
 import { GAME_DATA, hexToWorld, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { HEX_SIZE, TERRAIN_DRESSING, TERRAIN_LOOKS } from './map-config.js';
+import { HEX_SIZE, HOLLOWED_SQUARE, TERRAIN_DRESSING, TERRAIN_LOOKS } from './map-config.js';
 import {
   dressingOf,
+  drainRgb,
   dressTile,
   hexRgb,
   isHalloween,
@@ -257,5 +258,43 @@ describe('Halloween by the map’s local date', () => {
   it("falls back to the device's zone for a zone it doesn't know", () => {
     expect(() => isHalloween('Not/AZone', new Date())).not.toThrow();
     expect(localDateIn('Not/AZone', new Date('2026-06-15T12:00:00Z'))).toMatch(/^2026-06-1[456]$/);
+  });
+});
+
+describe('Hollowed villages are drained past wild land (#306)', () => {
+  const spread = (c: readonly number[]) => Math.max(...c) - Math.min(...c);
+  const sum = (c: readonly number[]) => c.reduce((n, v) => n + v, 0);
+
+  it('draws every terrain darker and greyer than its wild look, and a touch cool', () => {
+    for (const [id, look] of Object.entries(TERRAIN_LOOKS)) {
+      const wild = muteRgb(hexRgb(look.color));
+      const grey = drainRgb(wild);
+      expect(sum(grey), id).toBeLessThan(sum(wild) * 0.85);
+      expect(spread(grey), id).toBeLessThan(spread(wild));
+      // Blue over green: cool lilac, never a warm or green grey.
+      expect(grey[2], id).toBeGreaterThan(grey[1]);
+      for (const v of grey) {
+        expect(v).toBeGreaterThan(0.2);
+        expect(v).toBeLessThan(1);
+      }
+    }
+  });
+
+  it('dresses every kind’s square from props the map already draws', () => {
+    const known = new Set(
+      Object.values(TERRAIN_DRESSING).flatMap((d) => d.items.map((i) => i.kind)),
+    );
+    for (const [kind, middle] of Object.entries(HOLLOWED_SQUARE)) {
+      const dressing = TERRAIN_DRESSING[`hollowed-${kind}`];
+      expect(dressing, kind).toBeTruthy();
+      expect(['trading-post', 'well']).toContain(middle);
+      for (const item of dressing?.items ?? []) expect(known.has(item.kind)).toBe(true);
+      const props = dressTile({ q: 3, r: -1 }, `hollowed-${kind}`, HEX_SIZE, {
+        halloween: false,
+        middle,
+      });
+      expect(props[0]?.kind).toBe(middle);
+      expect(props.length).toBeGreaterThanOrEqual(3);
+    }
   });
 });
