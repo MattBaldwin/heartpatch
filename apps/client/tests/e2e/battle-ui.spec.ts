@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, draws, hook } from './dev-hook.js';
+import { api, draws, hook, idle } from './dev-hook.js';
 import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
@@ -49,6 +49,21 @@ async function settled(page: Page): Promise<BattleDebug> {
     .poll(() => battleState(page), { timeout: 30_000 })
     .toMatchObject({ pending: 0, waiting: false });
   return (await battleState(page))!;
+}
+
+/** Waits until nothing is drawn for `quietMs` and the loop reports idle (see smoke.spec.ts). */
+async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const before = await draws(page);
+        await page.waitForTimeout(quietMs);
+        const isIdle = await idle(page);
+        return isIdle && (await draws(page)) === before;
+      },
+      { timeout: 30_000, intervals: [0] },
+    )
+    .toBe(true);
 }
 
 /** The controls the sheet shows and the pills: words never touch an edge, nothing hangs off screen. */
@@ -108,6 +123,11 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await expect
     .poll(async () => (await battleState(page))?.breathing, { timeout: 30_000 })
     .toBe('stopped');
+  // The same slow frames that stop breathing feed the resolution governor,
+  // which can step the tier or scale on the last of them; that change is
+  // applied, and drawn (a reload and its settle frames, the arena's new
+  // detail level), after the verdict. Let those finish, then count.
+  await waitForIdle(page);
   const drawn = await draws(page);
   await page.waitForTimeout(2_000); // a breathing arena would draw at least once
   expect(await draws(page)).toBe(drawn);
