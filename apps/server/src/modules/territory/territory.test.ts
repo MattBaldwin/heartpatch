@@ -98,6 +98,7 @@ interface Tile {
   terrain: string;
   homeSlot: number | null;
   guardianStrength: number | null;
+  communityId: string | null;
 }
 
 describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
@@ -485,6 +486,29 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(errorOf(res).message).toMatch(/Trading posts belong to everyone/);
       expect(await attacksOf(mapId)).toEqual([]);
       expect((await tileAt(mapId, post)).ownerUserId).toBeNull();
+    });
+
+    it('never lets anyone claim a Hollowed village tile, even right next to their land (#306)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      const all = await tilesOf(mapId);
+      const grey = all.find((t) => t.communityId !== null)!;
+      const beside = all.find(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          t.communityId === null &&
+          t.terrain !== 'trading-post' &&
+          hexNeighbors(grey).some((n) => n.q === t.q && n.r === t.r),
+      )!;
+      await setOwner(beside.id, kid.id);
+      const res = await attack(server, kid, mapId, grey);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res).message).toMatch(/won by restoring them/);
+      expect(await attacksOf(mapId)).toEqual([]);
+      expect((await tileAt(mapId, grey)).ownerUserId).toBeNull();
     });
 
     it('shows every member the patch’s trading posts, one per seat, named, with no guardians (#269, #318)', async () => {

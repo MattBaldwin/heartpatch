@@ -64,6 +64,14 @@ describe('territory rules', () => {
     expect(attackTargetProblem({ ...post, terrain: 'meadow' }, TILES, ME, 'on')).toBeNull();
   });
 
+  it('never lets anyone battle for a Hollowed village tile (#306): it is won by restoring', () => {
+    const grey = { ...tile(2, -1), communityId: '00000000-0000-4000-8000-000000000306' };
+    expect(attackTargetProblem(grey, TILES, ME, 'on')).toBe('hollowed');
+    // Someone's restored village tile too: no challenge until PR 4's rules.
+    expect(attackTargetProblem({ ...grey, ownerUserId: RIVAL }, TILES, ME, 'on')).toBe('hollowed');
+    expect(attackTargetProblem({ ...grey, communityId: null }, TILES, ME, 'on')).toBeNull();
+  });
+
   it('blocks challenges, not claims, when PvP is Off', () => {
     expect(attackTargetProblem(at(2, 0), TILES, ME, 'off')).toBe('pvp-off');
     expect(attackTargetProblem(at(2, -1), TILES, ME, 'off')).toBeNull();

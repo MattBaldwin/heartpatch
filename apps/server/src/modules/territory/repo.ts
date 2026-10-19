@@ -47,6 +47,8 @@ export interface TerritoryTileRow {
   ownerUserId: string | null;
   homeSlot: number | null;
   guardianStrength: number | null;
+  /** The Hollowed Community this tile belongs to (#306), or null. */
+  communityId: string | null;
 }
 
 export type TileAttackOutcome = (typeof tileAttacks.$inferSelect)['outcome'];
@@ -217,6 +219,7 @@ const tileColumns = {
   ownerUserId: tiles.ownerUserId,
   homeSlot: tiles.homeSlot,
   guardianStrength: tiles.guardianStrength,
+  communityId: tiles.communityId,
 };
 
 const attackColumns = {

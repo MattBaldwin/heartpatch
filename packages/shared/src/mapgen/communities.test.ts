@@ -88,7 +88,7 @@ const nearestOf = (homes: readonly Hex[], villages: readonly { square: Hex }[]) 
 
 describe('communityCount (#306)', () => {
   it('is one per 2 seats, rounded up, and at least 2', () => {
-    expect([2, 3, 4, 5, 6].map((n) => communityCount(n, rules))).toEqual([2, 2, 2, 3, 3]);
+    expect([2, 3, 4, 5, 6].map((n) => communityCount(n, rules))).toEqual([2, 3, 2, 3, 3]);
   });
 });
 
@@ -126,9 +126,9 @@ describe('villages at mapgen (#306)', () => {
     // How many maps' homes have their nearest village equally near, or one
     // step apart. 2 and 6 seats almost always do. 4 seats share 2 villages
     // between homes 10 steps apart, so only the midpoint tiles fit and a post
-    // or lake there pushes one home further. 3 seats' homes are 11–13 apart,
-    // too far to share at 5 steps: one home always waits a little longer
-    // (the wider windows). A deliberate change to the rule changes these.
+    // or lake there pushes one home further. 3 seats get one village each
+    // (owner decision 2026-10-19), since their homes are too far apart to
+    // share. A deliberate change to the rule changes these.
     const fair = new Map<number, number>();
     for (const { n, maps: all } of maps) {
       for (const map of all) {
@@ -140,10 +140,11 @@ describe('villages at mapgen (#306)', () => {
           expect(d).toBeGreaterThanOrEqual(rules.minFromSeed);
           expect(d).toBeLessThanOrEqual(2 * rules.maxFromSeed);
         }
-        if (n !== 3) expect(spread).toBeLessThanOrEqual(3);
+        expect(spread).toBeLessThanOrEqual(3);
       }
     }
     expect(fair.get(2)).toBe(SEEDS.length);
+    expect(fair.get(3)).toBeGreaterThanOrEqual(55);
     expect(fair.get(4)).toBeGreaterThanOrEqual(45);
     expect(fair.get(6)).toBeGreaterThanOrEqual(55);
   }, 30_000);

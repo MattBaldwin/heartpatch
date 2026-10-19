@@ -24,7 +24,7 @@ export const COMMUNITY_TEXT = {
   restored: (name: string, restored: number, total: number) =>
     `${name}. ${String(restored)} of ${String(total)} tiles restored.`,
   about: 'Grey, quiet and a little spooky. Rare squishies love quiet places…',
-  kind: (emoji: string, kind: string, perk: string) => `${emoji} ${kind}: ${perk}`,
+  kind: (emoji: string, kind: string, perk: string) => `${emoji} ${kind}: restore it for ${perk}.`,
   touching: '🔗 Your land touches it. Explore by day, restore with Heartdust!',
   away: (n: number) => `🧭 ${tiles(n)} from your land. Claim land toward it to explore!`,
   noLand: '🧭 Claim land toward it to explore!',

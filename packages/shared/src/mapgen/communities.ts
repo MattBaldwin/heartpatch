@@ -61,8 +61,13 @@ export interface PlacedCommunity {
   readonly keyTile: Hex;
 }
 
-/** How many villages a map of `seats` gets: one per `seatsPerCommunity`, rounded up, at least `minPerMap`. */
+/**
+ * How many villages a map of `seats` gets: its `countBySeats` entry, else one
+ * per `seatsPerCommunity`, rounded up, at least `minPerMap`.
+ */
 export function communityCount(seats: number, rules: CommunityPlacementRules): number {
+  const fixed = rules.countBySeats[String(seats)];
+  if (fixed !== undefined) return fixed;
   return Math.max(rules.minPerMap, Math.ceil(seats / rules.seatsPerCommunity));
 }
 

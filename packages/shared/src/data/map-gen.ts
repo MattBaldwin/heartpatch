@@ -47,6 +47,9 @@ export const MAP_GEN: MapGenSettings = {
   communities: {
     seatsPerCommunity: 2, // TUNE: "about one per 2 members"
     minPerMap: 2,
+    // Owner decision 2026-10-19: one each on a 3-seat patch, whose homes are
+    // too far apart to share 2 fairly.
+    countBySeats: { '3': 3 },
     size: { min: 4, max: 7 }, // TUNE: the seed plus 3–6 neighbours, never past the ring
     minFromSeed: 3, // TUNE: the rings sit one tile apart
     maxFromSeed: 5, // TUNE:

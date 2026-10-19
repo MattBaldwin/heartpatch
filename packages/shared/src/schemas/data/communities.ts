@@ -27,6 +27,8 @@ export const CommunityPlacementRulesSchema = z
     seatsPerCommunity: z.number().int().min(1),
     /** ...but never fewer than this on a map. */
     minPerMap: z.number().int().min(1),
+    /** Seat counts that get their own number instead (seats → villages). */
+    countBySeats: z.record(z.string().regex(/^[0-9]+$/), z.number().int().min(1)),
     /** A village is its seed tile plus this many of its neighbours (seed included: 4–7 tiles). */
     size: z
       .strictObject({ min: z.number().int().min(2), max: z.number().int().max(7) })
@@ -66,7 +68,7 @@ export const CommunityKindSchema = z.strictObject({
   /** The village square's building ("Lantern Tower"). */
   name: z.string().min(1).max(24),
   emoji: z.string().min(1),
-  /** What finishing it earns, one kid-readable line. */
+  /** What restoring it earns, finishing "restore it for …" (no full stop). */
   perk: z.string().min(1).max(80),
 });
 export type CommunityKind = z.infer<typeof CommunityKindSchema>;

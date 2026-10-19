@@ -67,9 +67,10 @@ export function territoryAction(
     return { kind: 'watch', squishyIds: post?.squishyIds ?? [] };
   }
   if (problem === 'pvp-off') return { kind: 'pvp-off' };
-  // A home base can never be taken, nor a trading post (#269): the tile's
-  // info says so already.
-  if (problem === 'home' || problem === 'trading-post') return { kind: 'none' };
+  // A home base can never be taken, nor a trading post (#269), nor a grey
+  // village's tile (#306, won by restoring it): the tile's info says so already.
+  if (problem === 'home' || problem === 'trading-post' || problem === 'hollowed')
+    return { kind: 'none' };
   // A new Keeper's shield is the rule the server checks (territory service),
   // from the same public facts: when they joined, and the shield's length.
   const shield = shieldUntil(tile, view, now);

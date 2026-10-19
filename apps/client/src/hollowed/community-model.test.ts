@@ -59,7 +59,7 @@ describe('communityPanel', () => {
     // The reach line first, so it shows without scrolling on an iPhone SE.
     expect(panel.lines).toEqual([
       '🔗 Your land touches it! Exploring and restoring open soon 🕯️',
-      '🛠️ Workshop: One more Factory batch.',
+      '🛠️ Workshop: restore it for one more Factory batch.',
       'Grey, quiet and a little spooky. Rare squishies love quiet places…',
     ]);
     expect(panel.open).toBe(true);
@@ -97,7 +97,7 @@ describe('communityPanel', () => {
 
   it('names every kind with its emoji and perk', () => {
     for (const kind of COMMUNITY_RULES.kinds) {
-      expect(kindLine(kind.id)).toBe(`${kind.emoji} ${kind.name}: ${kind.perk}`);
+      expect(kindLine(kind.id)).toBe(`${kind.emoji} ${kind.name}: restore it for ${kind.perk}.`);
     }
   });
 
