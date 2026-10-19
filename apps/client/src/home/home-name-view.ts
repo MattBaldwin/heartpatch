@@ -28,6 +28,13 @@ export const HOME_NAME_TEXT = {
   locked: '🔒',
   unlocked: '🏡',
   grew: '🌱 Your Heart Seed grew! New name?',
+  // The locked row's progress, in words a kid reads at a glance.
+  rowBuildings: (built: number, all: number) => `${String(built)} of ${String(all)} buildings`,
+  rowSquishies: (caught: number, need: number) => `${String(caught)} of ${String(need)} squishies`,
+  // The nudge when naming is ready: a badge on the peek bar's handle, and a line on the Heart Seed's tile.
+  handleNudge: '✨ Name your home!',
+  handleNudgeLabel: 'Name your home is ready. Show more to find it.',
+  seedLine: '✨ Name your home! Open Home, then More.',
   // The locked card.
   lockedKicker: 'YOUR HOME · LOCKED 🔒',
   lockedTitle: 'Name your home 🔒',
@@ -75,21 +82,39 @@ export function seedTitle(name: string): string {
 
 /**
  * The home sheet's "Name your home" row: locked with the progress
- * ("Name your home 🔒 · 3/5 · 7/10"), ready ("Name your home 🏡"), or the
+ * ("Name your home 🔒 · 3 of 5 buildings · 7 of 10 squishies"), ready ("Name your home 🏡"), or the
  * name itself once named. Every number comes from the server's gate.
  */
 export function nameRowLabel(naming: HomeNaming): string {
-  if (naming.name !== null) return homeFlagLabel(naming.name);
+  const { title, detail } = nameRowParts(naming);
+  return detail === null ? title : `${title} · ${detail}`;
+}
+
+/** The row's words in two lines: the title, and (locked only) the progress under it. */
+export function nameRowParts(naming: HomeNaming): { title: string; detail: string | null } {
+  if (naming.name !== null) return { title: homeFlagLabel(naming.name), detail: null };
   if (!naming.unlocked) {
     const built = naming.kinds.filter((k) => k.built).length;
-    return `${HOME_NAME_TEXT.row} ${HOME_NAME_TEXT.locked} · ${String(built)}/${String(naming.kinds.length)} · ${String(naming.caught)}/${String(naming.need)}`;
+    return {
+      title: `${HOME_NAME_TEXT.row} ${HOME_NAME_TEXT.locked}`,
+      detail: `${HOME_NAME_TEXT.rowBuildings(built, naming.kinds.length)} · ${HOME_NAME_TEXT.rowSquishies(naming.caught, naming.need)}`,
+    };
   }
-  return `${HOME_NAME_TEXT.row} ${HOME_NAME_TEXT.unlocked}`;
+  return { title: `${HOME_NAME_TEXT.row} ${HOME_NAME_TEXT.unlocked}`, detail: null };
 }
 
 /** The row's badge: a named home whose Heart Seed grew may take a new name. */
 export function nameRowBadge(naming: HomeNaming): string | null {
   return naming.name !== null && naming.renameOpen ? HOME_NAME_TEXT.grew : null;
+}
+
+/**
+ * Whether to nudge the player toward the row (the peek bar's badge, the Heart
+ * Seed tile's line): naming is open and nothing has been picked yet, or a
+ * grown Heart Seed has opened a rename.
+ */
+export function nameReady(naming: HomeNaming | undefined): boolean {
+  return naming !== undefined && naming.unlocked && (naming.name === null || naming.renameOpen);
 }
 
 /** Which card the row opens. */
@@ -199,4 +224,9 @@ export function seedName(view: MapView, tile: PublicTile): string | null {
   );
   if (!flag) return null;
   return view.members.find((m) => m.user.id === flag.userId)?.homeName ?? null;
+}
+
+/** Whether `tile` is a Heart Seed (the middle of a home ring) in `view`. */
+export function isSeedTile(view: MapView, tile: PublicTile): boolean {
+  return findHomeBases(view.tiles).some((h) => h.seed.q === tile.q && h.seed.r === tile.r);
 }
