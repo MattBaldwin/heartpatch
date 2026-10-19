@@ -21,6 +21,7 @@ import {
   mapMembers,
   maps,
   outfits,
+  speciesSeen,
   squishies,
   tileAttacks,
   tileClears,
@@ -318,6 +319,14 @@ export interface MapsRepo {
   activeHomeSlots: (mapId: string) => Promise<{ count: number; slots: Set<number> }>;
   /** Active members, owner first, then by join time. */
   listMembers: (mapId: string) => Promise<MemberRow[]>;
+  /**
+   * Each active member's befriends on this patch (#573): squishies
+   * (`caught_count`) and different species (catalog rows with a
+   * `first_caught_at`). Counts only, never which species (rule 6).
+   */
+  befriendCounts: (
+    mapId: string,
+  ) => Promise<{ userId: string; befriended: number; species: number }[]>;
   owner: (mapId: string) => Promise<UserRef | null>;
   /**
    * A Tutorial Glade's player (its owner, whatever their membership's
@@ -855,6 +864,21 @@ function queries(db: Executor): MapsRepo {
       for (const row of rows) if (row.homeSlot !== null) slots.add(row.homeSlot);
       return { count: rows.length, slots };
     },
+
+    befriendCounts: (mapId) =>
+      db
+        .select({
+          userId: mapMembers.userId,
+          befriended: mapMembers.caughtCount,
+          // Aliased: in a select list Drizzle leaves columns unqualified.
+          species: sql<number>`(
+            select count(*)::int from ${speciesSeen} as s
+            where s.map_id = ${mapMembers}.map_id and s.user_id = ${mapMembers}.user_id
+              and s.first_caught_at is not null
+          )`,
+        })
+        .from(mapMembers)
+        .where(activeMember(mapId)),
 
     listMembers: async (mapId) => {
       const rows = await db

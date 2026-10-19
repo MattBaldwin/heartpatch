@@ -12,6 +12,7 @@ import {
   MemberPasswordResetResponseSchema,
   MyMapsResponseSchema,
   normalizeInviteCode,
+  PatchStatsSchema,
   parseGameEventPayload,
   PvpModeResponseSchema,
   SessionResponseSchema,
@@ -19,6 +20,7 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -31,6 +33,7 @@ import {
   mapMembers,
   maps,
   sessions,
+  speciesSeen,
   users,
 } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -1247,6 +1250,77 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       await vi.waitFor(() => {
         expect(published).toEqual([1, 2, 3, 4].map((seq) => ({ mapId: map.id, seq })));
       });
+    });
+  });
+
+  describe('patch stats (#573)', () => {
+    it("adds up each Keeper's land and befriends, and crowns the leaders, sharing ties", async () => {
+      const server = await start();
+      const { owner, map, members } = await mapWith(server, 1);
+      const kid = members[0]!;
+      const at = new Date();
+      // The owner befriended two species (one secret) and only met a third;
+      // the kid befriended as many squishies, all one species.
+      await db.insert(speciesSeen).values([
+        {
+          mapId: map.id,
+          userId: owner.id,
+          speciesId: 'heartbloom',
+          firstSeenAt: at,
+          firstCaughtAt: at,
+        },
+        {
+          mapId: map.id,
+          userId: owner.id,
+          speciesId: 'puddlepuff',
+          firstSeenAt: at,
+          firstCaughtAt: at,
+        },
+        { mapId: map.id, userId: owner.id, speciesId: 'pebblesnooze', firstSeenAt: at },
+        {
+          mapId: map.id,
+          userId: kid.id,
+          speciesId: 'puddlepuff',
+          firstSeenAt: at,
+          firstCaughtAt: at,
+        },
+      ]);
+      await db.update(mapMembers).set({ caughtCount: 3 }).where(eq(mapMembers.mapId, map.id));
+
+      const res = await call(server, 'GET', `/maps/${map.id}/stats`, kid);
+      expect(res.statusCode).toBe(200);
+      const stats = PatchStatsSchema.parse(res.json());
+      const view = MapViewSchema.parse(
+        (await call(server, 'GET', `/maps/${map.id}/view`, kid)).json(),
+      );
+      const owned = (id: string) => view.tiles.filter((t) => t.ownerUserId === id).length;
+
+      expect(stats.keepers.map((k) => k.user.id)).toEqual([owner.id, kid.id]);
+      const [ada, bo] = stats.keepers;
+      expect(ada).toMatchObject({
+        tiles: owned(owner.id),
+        befriended: 3,
+        species: 2,
+        villages: null,
+      });
+      expect(bo).toMatchObject({ tiles: owned(kid.id), befriended: 3, species: 1, villages: null });
+      // Two fresh homes: the land and befriend crowns are shared; collector is the owner's.
+      expect(ada!.crowns).toEqual(['land', 'befriended', 'collector']);
+      expect(bo!.crowns).toEqual(['land', 'befriended']);
+      expect(stats.totals.claimed).toBe(owned(owner.id) + owned(kid.id));
+      expect(stats.totals.wild).toBeGreaterThan(0);
+      expect(stats.totals.villages).toBeNull();
+      // A count only: never which species anyone has (rule 6).
+      expect(res.body).not.toMatch(/heartbloom|puddlepuff|pebblesnooze/);
+    });
+
+    it('is for members only', async () => {
+      const server = await start();
+      const { map } = await mapWith(server, 0);
+      expect((await call(server, 'GET', `/maps/${map.id}/stats`, null)).statusCode).toBe(401);
+      expect((await call(server, 'GET', `/maps/${map.id}/stats`, await player())).statusCode).toBe(
+        404,
+      );
     });
   });
 

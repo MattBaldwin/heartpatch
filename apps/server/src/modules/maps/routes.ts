@@ -10,6 +10,7 @@ import {
   MemberParamsSchema,
   MemberPasswordResetResponseSchema,
   MyMapsResponseSchema,
+  PatchStatsSchema,
   PvpModeResponseSchema,
   SetPvpModeRequestSchema,
 } from '@heartpatch/shared';
@@ -98,6 +99,16 @@ export const mapsRoutes =
         preHandler: requireAuth,
       },
       (request) => service.view(requireUser(request), request.params.mapId),
+    );
+
+    // Who's winning what (#573): read-only, worked out on read.
+    app.get(
+      '/maps/:mapId/stats',
+      {
+        schema: { params: MapIdParamsSchema, response: { 200: PatchStatsSchema } },
+        preHandler: requireAuth,
+      },
+      (request) => service.stats(requireUser(request), request.params.mapId),
     );
 
     app.post(
