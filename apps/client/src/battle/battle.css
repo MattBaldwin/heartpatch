@@ -817,6 +817,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 .battle-move-name {
+  /* Not tighter than the glyphs: the roomy-labels check measures their box. */
+  line-height: 1.25;
   font-size: 15px;
   font-weight: 800;
   overflow-wrap: anywhere;
@@ -873,7 +875,6 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 /* The moves come first: a quieter caption on a tall phone, none on a short one. */
 .battle-sheet[data-mode='choose'] > .battle-caption {
-  padding-block: 0;
   font-size: 15px;
 }
 
