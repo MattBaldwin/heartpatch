@@ -1,5 +1,6 @@
 import { badgeReader } from './badge-lines.js';
 import { formatReportStatus, lastReport } from './perf-report.js';
+import { formatAmbientStatus } from './render-stats.js';
 import type { Stage } from './stage.js';
 
 /**
@@ -24,8 +25,15 @@ import type { Stage } from './stage.js';
  * A fourth line shows the last on-device perf report (#501, `perf-report.ts`):
  * whether it was sent, its frame rate and the GPU's latency. The lines are
  * read by `BadgeReader` (`badge-lines.ts`), which the report shares.
+ *
+ * While a scene with ambient life is open (`getAmbient`), the second line
+ * (it wraps) ends with its mode, and "(slow)" once the judge switched it off
+ * (#501 H).
  */
-export function mountDevOverlay(getStage: () => Stage | null): void {
+export function mountDevOverlay(
+  getStage: () => Stage | null,
+  getAmbient: () => { readonly mode: string; readonly slow: boolean } | null = () => null,
+): void {
   const badge = document.createElement('div');
   badge.className = 'dev-status dev-stats';
   badge.dataset['testid'] = 'dev-stats';
@@ -48,6 +56,10 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     report.textContent = formatReportStatus(lastReport(), performance.now());
     const stage = getStage();
     if (!stage) return;
-    [badge.textContent, counts.textContent, page.textContent] = reader.read(stage);
+    const [first, second, third] = reader.read(stage);
+    const ambient = getAmbient();
+    badge.textContent = first;
+    counts.textContent = ambient ? `${second} · ${formatAmbientStatus(ambient)}` : second;
+    page.textContent = third;
   }, 500);
 }

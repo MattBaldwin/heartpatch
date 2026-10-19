@@ -24,6 +24,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { batchUploads } from '../procedural/batch-uploads.js';
 import { lodFor } from '../procedural/motion.js';
 import { AmbientDriver } from '../map/ambient-driver.js';
+import type { AmbientStatus } from '../map/ambient-layout.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -203,6 +204,8 @@ export interface ExploreScreen {
   /** The tile panel's "Explore" on my land. */
   readonly tileActions: TileActions;
   readonly debug: ExploreDebug | null;
+  /** Ambient life on the open tile (the `?fps=1` badge, #501 H), or null while closed. */
+  readonly ambient: AmbientStatus | null;
 }
 
 interface RareCard {
@@ -575,7 +578,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       } else {
         walkStall += dt;
       }
-      if (arrived || !moved || walkStall > EXPLORE_VIEW.walkGiveUp) {
+      // A tick with no time to walk (the first after a tap, while ambient life
+      // keeps frames coming: its frame began before the tap) isn't stuck.
+      if (arrived || (!moved && step > 0) || walkStall > EXPLORE_VIEW.walkGiveUp) {
         walkTo = null;
         // Walked up to a tapped spot: turn to it.
         const spot = tile?.spots.find((x) => x.index === aimed);
@@ -707,6 +712,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     wake();
   }
 
+  /** A find's burst of work is about to land: the governor and ambient life's judge let it pass. */
+  function expectHitch(): void {
+    options.expectHitch?.();
+    scene3d?.expectHitch();
+  }
+
   async function search(
     spot: PublicSearchSpot,
     interaction: SpotInteraction,
@@ -718,8 +729,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const at = generation;
     working = true;
     // The frames round a find (the tool's last swing, the scene update, the
-    // cheer, the card or the flying finds) aren't the GPU's pace (#501 G).
-    options.expectHitch?.();
+    // cheer, the card or the flying finds) aren't the GPU's pace (#501 G),
+    // nor the device's for ambient life (#501 H).
+    expectHitch();
     say(EXPLORE_TEXT.searching);
     render();
     wake();
@@ -736,7 +748,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
       tile = afterSearch(tile, found);
       bag = found.items;
-      options.expectHitch?.();
+      expectHitch();
       scene3d?.update(tile);
       scene3d?.cheer(performance.now());
       say('');
@@ -1460,6 +1472,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         panel?.container.replaceChildren();
         panel = null;
       },
+    },
+    get ambient() {
+      return isOpen && scene3d ? scene3d.ambientStatus : null;
     },
     get debug() {
       if (!mapId) return null;

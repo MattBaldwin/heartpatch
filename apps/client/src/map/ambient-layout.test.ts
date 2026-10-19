@@ -124,6 +124,32 @@ describe('AmbientJudge', () => {
     }
     expect(judge.slow).toBe(false);
   });
+
+  it('excuses a find: one long gap and a run of slow frames round it (#501 H)', () => {
+    const find = (excused: boolean): boolean => {
+      const judge = new AmbientJudge();
+      let t = feed(judge, 33, Math.ceil(AMBIENT.graceMs / 33) + 1);
+      if (excused) judge.ignoreUntil(t + AMBIENT.hitchMs);
+      // The scene update and the card: one 300 ms stall, then the cheer and
+      // the flying finds at 80 ms a frame.
+      t = feed(judge, 300, 1, t);
+      t = feed(judge, 80, AMBIENT.judgeFrames, t);
+      feed(judge, 33, 200, t);
+      return judge.slow;
+    };
+    // Without the excuse that's slow (what froze the lake); with it, not.
+    expect(find(false)).toBe(true);
+    expect(find(true)).toBe(false);
+  });
+
+  it('still catches a device that stays slow after a find', () => {
+    const judge = new AmbientJudge();
+    let t = feed(judge, 33, Math.ceil(AMBIENT.graceMs / 33) + 1);
+    judge.ignoreUntil(t + AMBIENT.hitchMs);
+    t = feed(judge, 300, Math.ceil(AMBIENT.hitchMs / 300), t);
+    feed(judge, 300, AMBIENT.judgeFrames, t);
+    expect(judge.slow).toBe(true);
+  });
 });
 
 describe('BreathPacer', () => {
