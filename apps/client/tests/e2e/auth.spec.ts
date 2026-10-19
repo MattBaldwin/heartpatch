@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { savedCode, submitSignUp, TEST_PASSWORD } from './players.js';
+import { savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
 
-test('signs up, logs out and logs back in', async ({ page }, testInfo) => {
-  const username = `e2e_${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
+test('signs up, logs out and logs back in', async ({ page }) => {
+  const username = uniqueName('auth');
   const password = TEST_PASSWORD;
 
   await page.goto('/');
@@ -51,9 +51,9 @@ test('signs up, logs out and logs back in', async ({ page }, testInfo) => {
 
 test('"Not you?" forgets the names, and "Forgot your name?" explains the ways back (#197)', async ({
   page,
-}, testInfo) => {
+}) => {
   test.setTimeout(90_000); // a reload rebuilds the scene; CI renders in software
-  const username = `nb_${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
+  const username = uniqueName('nb');
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
