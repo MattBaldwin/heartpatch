@@ -8,14 +8,13 @@ const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
-}, testInfo) => {
+}) => {
   // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
   // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
   // CI), and a group's first tests also pay for the first shader compiles.
   test.setTimeout(120_000);
-  const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
-  const ownerName = `own_${suffix}`;
-  const friendName = `pal_${suffix}`;
+  const ownerName = uniqueName('own');
+  const friendName = uniqueName('pal');
 
   // The owner makes a patch and gets a code.
   const owner = await newPlayer(browser, ownerName);
@@ -135,12 +134,11 @@ test('a reload lands back on the patch the player was on (#160)', async ({ brows
 
 test('a new family signs up with a patch invite and lands in the join queue (#195)', async ({
   browser,
-}, testInfo) => {
+}) => {
   // Two signups, each through the Keeper picker's 3D preview (#42); CI renders in software.
   test.setTimeout(90_000);
-  const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
-  const ownerName = `host_${suffix}`;
-  const kidName = `newfam_${suffix}`;
+  const ownerName = uniqueName('host');
+  const kidName = uniqueName('newfam');
 
   const owner = await newPlayer(browser, ownerName);
   const ownerLobby = owner.getByTestId('lobby');
