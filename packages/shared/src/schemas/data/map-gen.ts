@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CommunityPlacementRulesSchema } from './communities.js';
 import { ContentIdSchema } from './common.js';
 
 /**
@@ -82,6 +83,8 @@ export const MapGenSettingsSchema = z
     patchSize: z.number().int().positive(),
     guardianStrength: GuardianStrengthSchema,
     tradingPosts: TradingPostRulesSchema,
+    /** Hollowed Communities (#306): where the grey villages go. */
+    communities: CommunityPlacementRulesSchema,
   })
   .refine(
     (m) =>
