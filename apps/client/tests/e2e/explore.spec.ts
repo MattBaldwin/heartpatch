@@ -8,6 +8,8 @@ import { realTapAt } from './touch.js';
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
 const slow = { timeout: 30_000 };
+/** WebKit's page error for an in-flight API fetch a navigation aborts (as in hollow.spec.ts). */
+const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
 
 /**
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
@@ -572,12 +574,20 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   test.setTimeout(420_000); // one scene build on medium, a swim and a find; CI renders in software
   const page = await newPlayer(browser, uniqueName('swim'));
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // Only an API fetch the lobby's navigation below aborts is let through (on
+  // CI: "…/api/v1/coins due to access control checks."), and only while it
+  // loads; every other page error stays fatal.
+  let reloading = false;
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
   // Medium, pinned (dev `?tier=`, governor off): the lake's fish and bubbles
   // swim there (low draws no ambient life), and the tier can't move under the
   // find. Pinned, the scene's judge never runs (a software renderer would
   // always be "slow"), so whether a find trips it is the unit tests' to prove
   // (ambient-layout.test.ts); here the find must tell the judge, twice.
+  reloading = true;
   await page.goto('/?tier=medium');
   // A new patch has no lake at home: explore its Heart Seed tile as one, so
   // the client builds the underwater scene for it (only the look changes),
@@ -602,6 +612,7 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  reloading = false;
   // Every tool, so the server's own spot (whatever it needs) can be searched.
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
@@ -634,11 +645,16 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     const tap = await waypoint(page, to);
     expect(tap, 'a tappable point on the lakebed').not.toBeNull();
     await realTapAt(page, tap!.x, tap!.y);
+    // CI's software renderer can swim this few frames a second: it was still
+    // on its way (0.019) when 30 s ran out on the iPad, so wait longer here.
     await expect
-      .poll(async () => {
-        const k = (await exploreState(page))!.keeper;
-        return Math.hypot(k.x - from.x, k.z - from.z);
-      }, slow)
+      .poll(
+        async () => {
+          const k = (await exploreState(page))!.keeper;
+          return Math.hypot(k.x - from.x, k.z - from.z);
+        },
+        { timeout: 90_000 },
+      )
       .toBeGreaterThan(0.03);
     await keeperStill(page);
 

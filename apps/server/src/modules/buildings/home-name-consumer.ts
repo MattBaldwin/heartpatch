@@ -16,7 +16,11 @@ const BUILDABLE = new Set<string>(HOME_BASE_RULES.buildableKinds);
  *   gifts, trades, rescues and hatches don't) adds one to `caught_count`;
  * - `building.placed` of a buildable kind (`HOME_BASE_RULES.buildableKinds`)
  *   and `fence.built` add the kind to `kinds_built`, once (a set: taking a
- *   building down later keeps it).
+ *   building down later keeps it);
+ * - `member.left` and `member.removed` start them over, as `archiveMember`
+ *   already did in the leave: they're appended in that transaction, after
+ *   every event of the old home and before any of a rejoin, so a count this
+ *   consumer reaches late never carries over to a fresh home base.
  *
  * Counted here rather than in the battle, build and fence transactions:
  * those hold tiles, buildings and squishies (steps 6–10) and would then
@@ -50,6 +54,12 @@ export function createHomeNamingConsumer(): EventConsumer {
         case 'fence.built': {
           const { userId } = parseGameEventPayload('fence.built', event.payload);
           if (BUILDABLE.has('fence')) await repo.addKindBuilt(event.mapId, userId, 'fence');
+          return;
+        }
+        case 'member.left':
+        case 'member.removed': {
+          const { userId } = parseGameEventPayload(event.type, event.payload);
+          await repo.resetNaming(event.mapId, userId);
           return;
         }
         default:

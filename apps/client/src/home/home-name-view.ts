@@ -39,21 +39,21 @@ export const HOME_NAME_TEXT = {
   lockedKicker: 'YOUR HOME · LOCKED 🔒',
   lockedTitle: 'Name your home 🔒',
   lockedLine: (need: number) =>
-    `Build one of each and catch ${String(need)} squishies to name your home!`,
+    `Build one of each and befriend ${String(need)} squishies to name your home!`,
   kindsLine: (built: number, all: number) =>
     `Buildings: ${String(built)} of ${String(all)} kinds built`,
   caughtLine: (caught: number, need: number) =>
-    `Squishies caught: ${String(caught)} of ${String(need)}`,
+    `Squishies befriended: ${String(caught)} of ${String(need)}`,
   caughtLabel: (caught: number, need: number) =>
-    `${String(caught)} of ${String(need)} squishies caught`,
+    `${String(caught)} of ${String(need)} squishies befriended`,
   caughtNote:
-    "Caught means won in a battle. Your starter and gifts don't count, but they still love you.",
+    "Befriended means a squishy said yes after a battle. Your starter and gifts don't count, but they still love you.",
   keepGoing: 'Keep going! 💪',
   // The unlocked card.
   unlockedKicker: 'YOUR HOME · UNLOCKED ✨',
   unlockedTitle: 'Name your home 🏡',
   unlockedLine: (need: number) =>
-    `One of each built and ${String(need)} squishies caught. What's your home called?`,
+    `One of each built and ${String(need)} squishies befriended. What's your home called?`,
   grewLine: 'Your Heart Seed grew! Want a new name?',
   label: 'Home name',
   placeholder: 'Type a name…',
