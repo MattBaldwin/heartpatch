@@ -43,7 +43,12 @@ export function flagSpot(
     return null;
   }
   const half = flag.width / 2;
-  const x = Math.round(Math.min(Math.max(tile.x + tile.width / 2, half), room.width - half));
+  const x = Math.round(
+    Math.min(
+      Math.max(tile.x + tile.width / 2, half + FLAG_EDGE_PX),
+      room.width - half - FLAG_EDGE_PX,
+    ),
+  );
   const over = Math.round(Math.max(tile.y, room.top + flag.height));
   const under = Math.round(tile.y + tile.height + flag.height);
   const clear = (y: number) => {
@@ -54,6 +59,8 @@ export function flagSpot(
   return clear(under) ? { x, y: under } : null;
 }
 
+/** Room kept between a flag and the screen's side (#306), so a pill never sits flush. TUNE. */
+export const FLAG_EDGE_PX = 8;
 /** Room kept between two flags (#306), so pills never touch. TUNE. */
 export const FLAG_GAP_PX = 4;
 /** How many rows up or down, and half-widths sideways, a crowded flag may move from its tile. TUNE. */
@@ -83,8 +90,8 @@ export function freeFlagSpot(
     for (let side = -STACK.sideways; side <= STACK.sideways; side++) {
       // Whole pixels, and never a half-pixel past either side.
       const x = Math.min(
-        Math.max(Math.round(base.x + side * half), Math.ceil(half)),
-        Math.floor(room.width - half),
+        Math.max(Math.round(base.x + side * half), Math.ceil(half + FLAG_EDGE_PX)),
+        Math.floor(room.width - half - FLAG_EDGE_PX),
       );
       // A row up or down before a long slide sideways.
       const cost = row * 2 + Math.abs(side) * 1.5;

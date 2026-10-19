@@ -19,8 +19,9 @@ describe('flagSpot', () => {
   });
 
   it('keeps to the screen sideways', () => {
-    expect(flagSpot(tile(-10, 300), flag, room)?.x).toBe(60);
-    expect(flagSpot(tile(370, 300), flag, room)?.x).toBe(333);
+    // With FLAG_EDGE_PX between the pill and the screen's side.
+    expect(flagSpot(tile(-10, 300), flag, room)?.x).toBe(68);
+    expect(flagSpot(tile(370, 300), flag, room)?.x).toBe(325);
   });
 
   it('never goes up into the top bar (#310)', () => {

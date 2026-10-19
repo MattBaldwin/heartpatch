@@ -56,25 +56,28 @@ describe('communityPanel', () => {
     const panel = communityPanel(village(), 'old-forest', false);
     expect(panel.title).toBe('Old Forest · Hollowed 🕯️');
     expect(panel.restored).toBe('Bramble Hollow. 1 of 5 tiles restored.');
+    // The reach line first, so it shows without scrolling on an iPhone SE.
     expect(panel.lines).toEqual([
+      '🔗 Your land touches it! Exploring and restoring open soon 🕯️',
+      '🛠️ Workshop: One more Factory batch.',
       'Grey, quiet and a little spooky. Rare squishies love quiet places…',
-      '🛠️ Workshop village: One more Factory batch slot.',
-      '🔗 Your land touches it. Explore by day, restore with Heartdust!',
     ]);
     expect(panel.open).toBe(true);
-    // Nothing hooked up yet (PR 1): it says they're coming.
-    expect(panel.note).toBe('Exploring and restoring open soon! 🕯️');
-    expect(communityPanel(village(), 'old-forest', false, true).note).toBeNull();
+    expect(panel.note).toBeNull();
+    // Once a later PR hooks the buttons up, the line says what to do.
+    expect(communityPanel(village(), 'old-forest', false, true).lines[0]).toBe(
+      '🔗 Your land touches it. Explore by day, restore with Heartdust!',
+    );
   });
 
   it('says how to get there when it is away', () => {
     const far = communityPanel(village({ reach: 'away', distance: 4 }), 'meadow', false);
-    expect(far.lines.at(-1)).toBe('🧭 4 tiles from your land. Claim land toward it to explore!');
+    expect(far.lines[0]).toBe('🧭 4 tiles from your land. Claim land toward it to explore!');
     expect(far.open).toBe(false);
     expect(far.note).toBeNull();
     const near = communityPanel(village({ reach: 'away', distance: 1 }), 'meadow', false);
-    expect(near.lines.at(-1)).toBe('🧭 1 tile from your land. Claim land toward it to explore!');
-    expect(communityPanel(village({ reach: null }), 'meadow', false).lines.at(-1)).toBe(
+    expect(near.lines[0]).toBe('🧭 1 tile from your land. Claim land toward it to explore!');
+    expect(communityPanel(village({ reach: null }), 'meadow', false).lines[0]).toBe(
       COMMUNITY_TEXT.noLand,
     );
   });
@@ -86,7 +89,7 @@ describe('communityPanel', () => {
         'hills',
         true,
       );
-      expect(panel.lines.at(-1)).toBe('Open by day only. Too spooky after dark!');
+      expect(panel.lines[0]).toBe('Open by day only. Too spooky after dark!');
       expect(panel.open).toBe(false);
       expect(panel.note).toBeNull();
     }
@@ -94,7 +97,7 @@ describe('communityPanel', () => {
 
   it('names every kind with its emoji and perk', () => {
     for (const kind of COMMUNITY_RULES.kinds) {
-      expect(kindLine(kind.id)).toBe(`${kind.emoji} ${kind.name} village: ${kind.perk}`);
+      expect(kindLine(kind.id)).toBe(`${kind.emoji} ${kind.name}: ${kind.perk}`);
     }
   });
 

@@ -74,7 +74,7 @@ export function createCommunityActions(): CommunityActions {
           el(
             'p',
             {
-              class: `tile-action-note community-line${i === lines.length - 1 ? ' community-reach' : ''}`,
+              class: `tile-action-note community-line${i === 0 ? ' community-reach' : ''}`,
             },
             text,
           ),

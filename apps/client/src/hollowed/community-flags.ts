@@ -29,8 +29,8 @@ export interface CommunityFlags extends MapLayer {
 
 interface Flag {
   community: CommunityView;
-  /** The village square, the flag's anchor. */
-  tile: PublicTile;
+  /** The village's tiles: the flag stands over them all, so it never hides the village. */
+  tiles: PublicTile[];
   node: HTMLElement;
   label: string;
   /** Where it last showed ('hidden' when it didn't), so an unchanged flag writes nothing. */
@@ -77,7 +77,7 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       }
     }
     const spots = placeFlags(
-      list.map((f) => ({ tile: tileScreenRectOf(target, f.tile), size: f.size ?? FLAG_MIN })),
+      list.map((f) => ({ tile: villageRect(target, f.tiles), size: f.size ?? FLAG_MIN })),
       measure(target),
     );
     let fresh = false;
@@ -144,14 +144,14 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
     }
     let changed = false;
     for (const [id, community] of wanted) {
-      const tile = byKey.get(hexKey(community.square));
-      if (!tile) continue;
+      const tiles = community.tiles.flatMap((h) => byKey.get(hexKey(h)) ?? []);
+      if (tiles.length === 0) continue;
       const label = communityFlagLabel(community);
       const touching = community.reach === 'touching';
       const flag = flags.get(id);
       if (flag) {
         flag.community = community;
-        flag.tile = tile;
+        flag.tiles = tiles;
         flag.node.classList.toggle('community-flag-touching', touching);
         if (flag.label !== label) {
           flag.label = label;
@@ -172,7 +172,7 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       );
       node.hidden = true;
       root.append(node);
-      flags.set(id, { community, tile, node, label, at: '', size: null, box: null });
+      flags.set(id, { community, tiles, node, label, at: '', size: null, box: null });
       changed = true;
     }
     if (changed) placeAll();
@@ -214,4 +214,26 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       );
     },
   };
+}
+
+/** The screen box around every on-screen tile of a village; null when none is on screen. */
+function villageRect(target: Scene, tiles: readonly PublicTile[]): Rect | null {
+  let box: Rect | null = null;
+  for (const t of tiles) {
+    const r = tileScreenRectOf(target, t);
+    if (r === null) continue;
+    if (box === null) {
+      box = r;
+      continue;
+    }
+    const x = Math.min(box.x, r.x);
+    const y = Math.min(box.y, r.y);
+    box = {
+      x,
+      y,
+      width: Math.max(box.x + box.width, r.x + r.width) - x,
+      height: Math.max(box.y + box.height, r.y + r.height) - y,
+    };
+  }
+  return box;
 }

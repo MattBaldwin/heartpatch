@@ -24,12 +24,13 @@ export const COMMUNITY_TEXT = {
   restored: (name: string, restored: number, total: number) =>
     `${name}. ${String(restored)} of ${String(total)} tiles restored.`,
   about: 'Grey, quiet and a little spooky. Rare squishies love quiet places…',
-  kind: (emoji: string, kind: string, perk: string) => `${emoji} ${kind} village: ${perk}`,
+  kind: (emoji: string, kind: string, perk: string) => `${emoji} ${kind}: ${perk}`,
   touching: '🔗 Your land touches it. Explore by day, restore with Heartdust!',
   away: (n: number) => `🧭 ${tiles(n)} from your land. Claim land toward it to explore!`,
   noLand: '🧭 Claim land toward it to explore!',
   night: 'Open by day only. Too spooky after dark!',
-  soon: 'Exploring and restoring open soon! 🕯️',
+  /** The touching line until later PRs wire Explore and Restore in. */
+  soon: '🔗 Your land touches it! Exploring and restoring open soon 🕯️',
   explore: 'Explore 🔍',
   restore: 'Restore 🛠️',
   /** The map legend's row for the grey tiles. */
@@ -101,11 +102,11 @@ export interface CommunityPanel {
   readonly title: string;
   /** "Bramble Hollow. 1 of 5 tiles restored." */
   readonly restored: string;
-  /** The spooky line, the kind's line and the reach line (which also says why the buttons wait). */
+  /** The reach line first (it says why the buttons wait), then the kind's line and the spooky line. */
   readonly lines: readonly string[];
   /** Exploring is open now: my land touches it, by day. Restoring follows the same rule. */
   readonly open: boolean;
-  /** "Open soon" while it's open but nothing is wired in yet (PR 1). */
+  /** A line under the buttons; none today (the reach line says why they wait). */
   readonly note: string | null;
 }
 
@@ -125,7 +126,9 @@ export function communityPanel(
   const reach = night
     ? COMMUNITY_TEXT.night
     : c.reach === 'touching'
-      ? COMMUNITY_TEXT.touching
+      ? wired
+        ? COMMUNITY_TEXT.touching
+        : COMMUNITY_TEXT.soon
       : c.reach === 'away' && c.distance !== null
         ? COMMUNITY_TEXT.away(c.distance)
         : COMMUNITY_TEXT.noLand;
@@ -133,9 +136,9 @@ export function communityPanel(
   return {
     title: `${name}${COMMUNITY_TEXT.tag}`,
     restored: COMMUNITY_TEXT.restored(c.name, c.restored, c.tiles.length),
-    lines: [COMMUNITY_TEXT.about, kindLine(c.kind, rules), reach].filter((l) => l !== ''),
+    lines: [reach, kindLine(c.kind, rules), COMMUNITY_TEXT.about].filter((l) => l !== ''),
     open,
-    note: open && !wired ? COMMUNITY_TEXT.soon : null,
+    note: null,
   };
 }
 
