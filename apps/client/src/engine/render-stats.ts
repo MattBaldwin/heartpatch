@@ -125,3 +125,11 @@ export function formatPageStats(s: PageStats): string {
   if (s.flags) parts.push(s.flags);
   return parts.join(' · ');
 }
+
+/**
+ * Ambient life on the badge's first line (#501 H): its mode, and "slow" once
+ * the judge has switched it off for the visit (a still lake reads as frozen).
+ */
+export function formatAmbientStatus(s: { readonly mode: string; readonly slow: boolean }): string {
+  return `ambient ${s.mode}${s.slow ? ' (slow)' : ''}`;
+}

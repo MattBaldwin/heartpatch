@@ -29,11 +29,17 @@ import { ExploreWater, lakeExtras, type WaterStats } from './explore-water.js';
 import { LAKE_LOOKS, WATER_LOOKS_BY_TERRAIN } from './lake-config.js';
 import { LAND_LOOKS } from './land-config.js';
 import { FRAME_CAP_30, type QualityTier } from '../engine/config.js';
-import { AmbientJudge, ambientMode, type AmbientMode } from '../map/ambient-layout.js';
+import {
+  AmbientJudge,
+  ambientMode,
+  type AmbientMode,
+  type AmbientStatus,
+} from '../map/ambient-layout.js';
 import type { AmbientTarget } from '../map/ambient-driver.js';
 import { isUnderwater, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
+  AMBIENT,
   FALLBACK_LOOK,
   HEX_SIZE,
   ISLAND,
@@ -189,6 +195,11 @@ export interface ExploreSceneStats {
   readonly land: LandStats | null;
   /** The lake's own layers (kelp, coral, fish, bubbles), or null off a lake. */
   readonly water: WaterStats | null;
+  /**
+   * Ambient life (#335): how it runs now, and whether the judge called this
+   * device too slow for it (sticky for the visit; a find doesn't count, #501 H).
+   */
+  readonly ambient: AmbientStatus;
   /**
    * The Keeper's swim under a lake (#399), or null on land: its forward
    * pitch (radians; positive leans into the heading), strokes taken, and
@@ -777,6 +788,7 @@ export class ExploreScene implements AmbientTarget {
       warm: this.#warm,
       land: this.#land?.stats ?? null,
       water: this.#water?.stats ?? null,
+      ambient: this.ambientStatus,
       swim: this.#underwater
         ? {
             pitch: this.#swimPose.pitch,
@@ -1038,6 +1050,19 @@ export class ExploreScene implements AmbientTarget {
 
   get ambientMode(): AmbientMode {
     return this.#ambient;
+  }
+
+  /** Ambient life's mode and the judge's verdict (dev hook and the `?fps=1` badge). */
+  get ambientStatus(): AmbientStatus {
+    return { mode: this.#ambient, slow: this.#judge.slow };
+  }
+
+  /**
+   * A burst of work is about to land (a find, #501 H): the frames round it
+   * aren't judged, so the lake's fish, bubbles and kelp don't stop for good.
+   */
+  expectHitch(): void {
+    this.#judge.ignoreUntil(performance.now() + AMBIENT.hitchMs);
   }
 
   tick(now: number): boolean {

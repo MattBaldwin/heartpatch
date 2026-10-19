@@ -161,6 +161,13 @@ export function motesFor(
  */
 export type AmbientMode = 'live' | 'still' | 'off';
 
+/** Ambient life now and the judge's verdict, for the dev hook and the `?fps=1` badge (#501 H). */
+export interface AmbientStatus {
+  readonly mode: AmbientMode;
+  /** The judge called this device too slow (ambient stays off for the visit). */
+  readonly slow: boolean;
+}
+
 export function ambientMode(state: {
   tier: QualityTier;
   reducedMotion: boolean;
@@ -183,8 +190,9 @@ export function moteShare(tier: QualityTier): number {
  * keeps its frame budget for the player's own taps and drags. A majority, not
  * an average: one hitch (a shader compiling) never switches it off, and a
  * renderer that takes a second a frame is caught within a few frames. The
- * first `graceMs` (shader compiles, uploads) don't count, and `skip` drops
- * the gap over a hidden page (no frames at all).
+ * first `graceMs` (shader compiles, uploads) don't count, `skip` drops the
+ * gap over a hidden page (no frames at all), and `ignoreUntil` excuses a
+ * burst of work the game knows about (a find, #501 H).
  */
 export class AmbientJudge {
   private slowFrames = 0;
@@ -192,6 +200,7 @@ export class AmbientJudge {
   private start: number | null = null;
   private last: number | null = null;
   private slowNow = false;
+  private excusedUntil = -Infinity;
 
   /** Records one ambient frame at `now` (ms); true once the device is judged slow. */
   record(now: number): boolean {
@@ -199,7 +208,9 @@ export class AmbientJudge {
     this.start ??= now;
     const last = this.last;
     this.last = now;
-    if (last === null || now - this.start < AMBIENT.graceMs) return false;
+    if (last === null || now - this.start < AMBIENT.graceMs || now < this.excusedUntil) {
+      return false;
+    }
     this.frames += 1;
     if (now - last > AMBIENT.maxFrameGapMs) this.slowFrames += 1;
     if (this.slowFrames * 2 > AMBIENT.judgeFrames) this.slowNow = true;
@@ -213,6 +224,19 @@ export class AmbientJudge {
   /** The page was hidden: the next frame starts a new gap, not one spanning the time away. */
   skip(): void {
     this.last = null;
+  }
+
+  /**
+   * A burst of work lands now (a find: the scene update, the cheer, the card
+   * or the flying finds; #501 H): frames before `until` (ms, the clock
+   * `record` gets) aren't judged, and the window judged so far starts again.
+   * A device that stays slow after it is still caught.
+   */
+  ignoreUntil(until: number): void {
+    this.excusedUntil = Math.max(this.excusedUntil, until);
+    this.last = null;
+    this.frames = 0;
+    this.slowFrames = 0;
   }
 
   get slow(): boolean {

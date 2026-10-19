@@ -425,6 +425,12 @@ export const AMBIENT = {
   judgeFrames: 10, // TUNE
   /** Not judged in the first moments after the map opens (shader compiles, uploads). */
   graceMs: 2000, // TUNE
+  /**
+   * Not judged for this long after a find starts and after it lands (#501 H:
+   * the scene update, the cheer, the card or the flying finds, about
+   * `EXPLORE_FIND.flyMs` plus their stagger).
+   */
+  hitchMs: 1500, // TUNE
   /** How often the quality tier is looked at again (it has no change event), ms. */
   checkMs: 500, // TUNE
   /**
