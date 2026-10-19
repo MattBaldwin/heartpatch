@@ -83,7 +83,12 @@ export function patchStats(view: MapView, counts: ReadonlyMap<string, MemberCoun
       homesteads: mine.filter((t) => (t.homestead ?? null) !== null).length,
       buildings: [...built]
         .map(([buildingId, count]) => ({ buildingId, count }))
-        .sort((a, b) => b.count - a.count || a.buildingId.localeCompare(b.buildingId)),
+        // Code points, not localeCompare: the same order on every engine.
+        .sort(
+          (a, b) =>
+            b.count - a.count ||
+            (a.buildingId < b.buildingId ? -1 : a.buildingId > b.buildingId ? 1 : 0),
+        ),
       lit: litBy(mine, known).size,
       befriended: counts.get(id)?.befriended ?? 0,
       species: counts.get(id)?.species ?? 0,

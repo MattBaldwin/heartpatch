@@ -727,6 +727,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     stats: async (user, mapId) => {
       // The same view the member draws, so the stats match the map.
       const view = await service.view(user, mapId);
+      // A moment after the view's snapshot: fine for a stats sheet, and a
+      // befriend in between shows up on the next open.
       const counts = await store.befriendCounts(mapId);
       return patchStats(view, new Map(counts.map((c) => [c.userId, c])));
     },

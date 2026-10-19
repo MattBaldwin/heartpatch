@@ -20,7 +20,6 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
-import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -46,7 +45,7 @@ import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
-import { createMapsRepo } from './repo.js';
+import { activeMember, createMapsRepo } from './repo.js';
 import { createMapsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -1285,7 +1284,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           firstCaughtAt: at,
         },
       ]);
-      await db.update(mapMembers).set({ caughtCount: 3 }).where(eq(mapMembers.mapId, map.id));
+      await db.update(mapMembers).set({ caughtCount: 3 }).where(activeMember(map.id));
 
       const res = await call(server, 'GET', `/maps/${map.id}/stats`, kid);
       expect(res.statusCode).toBe(200);

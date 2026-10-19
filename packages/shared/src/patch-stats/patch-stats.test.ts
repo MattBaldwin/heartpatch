@@ -18,16 +18,19 @@ const member = (id: string, name: string, homeSlot: number): MapMember => ({
 });
 
 let n = 0;
-const building = (buildingId: string, lit: boolean | null = null, radius: number | null = null) =>
-  ({
-    id: `00000000-0000-4000-9000-${String((n += 1)).padStart(12, '0')}`,
-    buildingId,
-    kind: buildingId === 'hearthfire' ? 'hearthfire' : 'habitat',
-    level: 1,
-    spot: 0,
-    lit,
-    safeRadius: radius,
-  }) as PublicBuilding;
+const building = (
+  buildingId: string,
+  lit: boolean | null = null,
+  radius: number | null = null,
+): PublicBuilding => ({
+  id: `00000000-0000-4000-9000-${String((n += 1)).padStart(12, '0')}`,
+  buildingId,
+  kind: buildingId === 'hearthfire' ? 'hearthfire' : 'habitat',
+  level: 1,
+  spot: 0,
+  lit,
+  safeRadius: radius,
+});
 
 const tile = (q: number, r: number, extra: Partial<PublicTile> = {}): PublicTile => ({
   q,

@@ -14,7 +14,7 @@ export interface PatchStatsScreen {
   show: (mapId: string, userId: string | null) => void;
   close: () => void;
   readonly isOpen: boolean;
-  /** The page on screen, for the dev hook; null while loading or shut. */
+  /** The page on screen; null while loading or shut. */
   readonly page: StatsPage | null;
 }
 
