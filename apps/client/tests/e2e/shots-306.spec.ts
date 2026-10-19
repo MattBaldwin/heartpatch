@@ -252,12 +252,6 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await dismissHint(page);
   await settle(page, 1200);
   await shot(page, 'map-restored', { map: await mapState(page) });
-  // Owner decision 2026-10-19: the village seed and its 6 neighbours are the winner's home ring.
-  await look(page, 'near', 3.2);
-  await settle(page, 800);
-  await shot(page, 'map-ring', { map: await mapState(page) });
-  await look(page, 'near', 5);
-  await settle(page, 400);
   // The village's own Heart Seed (owner decision, Q3), then an ordinary village tile.
   await tapTile(page, [near.centre]);
   await settle(page, 800);
