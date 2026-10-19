@@ -1,7 +1,9 @@
 export * from './home-ring.js';
 export * from './extra-nodes.js';
 export * from './trading-posts.js';
+export * from './communities.js';
 import { extraNodes } from './extra-nodes.js';
+import { placeCommunities, type PlacedCommunity } from './communities.js';
 import { placeTradingPosts } from './trading-posts.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
@@ -50,6 +52,12 @@ export interface GeneratedMap {
   readonly homes: readonly Hex[];
   /** The Hollow's entrance: the centre tile of Juniper's Gap. */
   readonly hollowEntrance: Hex;
+  /**
+   * The map's Hollowed Communities (#306), in their squares' (q, r) order.
+   * They change no tile: a village is wild land the server marks as one.
+   * Their cellar keys are secret (CLAUDE.md rule 6).
+   */
+  readonly communities: readonly PlacedCommunity[];
 }
 
 /** The game data the generator reads. */
@@ -153,14 +161,29 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     throw new RangeError(`no fair trading-post layout for ${options.playerCount} players`);
   }
   const postKeys = new Set(posts.map(hexKey));
-  return {
-    ...map,
-    tiles: map.tiles.map((t) =>
-      postKeys.has(hexKey(t))
-        ? { ...t, terrain: TRADING_POST_TERRAIN, nodeResource: null, guardianStrength: null }
-        : t,
-    ),
+  const tiles = map.tiles.map((t) =>
+    postKeys.has(hexKey(t))
+      ? { ...t, terrain: TRADING_POST_TERRAIN, nodeResource: null, guardianStrength: null }
+      : t,
+  );
+  // Hollowed Communities (#306): the very last pass, on the final tiles,
+  // with its own seed. Villages change no terrain, node or guardian, so
+  // every tile stays as it was. A lake-heavy side (about 1 map in 1000)
+  // gets the boot pass's relaxed distance before giving up.
+  const villageInput = {
+    tiles,
+    homes: map.homes,
+    gapTerrain: data.mapGen.gapTerrain,
+    rules: data.mapGen.communities,
+    seed: options.seed,
   };
+  const communities =
+    placeCommunities(villageInput) ??
+    placeCommunities({ ...villageInput, maxFromSeed: data.mapGen.communities.relaxedMaxFromSeed });
+  if (communities === null) {
+    throw new RangeError(`no fair village layout for ${options.playerCount} players`);
+  }
+  return { ...map, tiles, communities };
 }
 
 /**
@@ -171,7 +194,7 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
 export function generateMapBeforePosts(
   data: MapGenData,
   options: GenerateMapOptions,
-): GeneratedMap {
+): Omit<GeneratedMap, 'communities'> {
   const { seed, playerCount } = options;
   const { mapGen } = data;
   const layout = mapLayout(data, playerCount);

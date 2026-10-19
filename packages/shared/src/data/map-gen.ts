@@ -50,7 +50,7 @@ export const MAP_GEN: MapGenSettings = {
     size: { min: 4, max: 7 }, // TUNE: the seed plus 3–6 neighbours, never past the ring
     minFromSeed: 3, // TUNE: the rings sit one tile apart
     maxFromSeed: 5, // TUNE:
-    relaxedMaxFromSeed: 6, // TUNE: older patches only, before giving up
+    relaxedMaxFromSeed: 6, // TUNE: older patches (and a rare lake-heavy new map), before giving up
     ringsApart: 2, // TUNE:
     ringFromPost: 2, // TUNE:
     excludedTerrains: ['lake'],

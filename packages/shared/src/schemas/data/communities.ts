@@ -34,7 +34,7 @@ export const CommunityPlacementRulesSchema = z
     /** Village seed to the nearest Heart Seed, in steps. 3 keeps the two rings one tile apart. */
     minFromSeed: z.number().int().min(3),
     maxFromSeed: z.number().int().min(3),
-    /** Older patches only: the boot pass relaxes `maxFromSeed` to this before giving up. */
+    /** The boot pass (and the rare lake-heavy new map) relaxes `maxFromSeed` to this before giving up. */
     relaxedMaxFromSeed: z.number().int().min(3),
     /** Steps between two village rings (ring tile to ring tile). */
     ringsApart: z.number().int().min(1),

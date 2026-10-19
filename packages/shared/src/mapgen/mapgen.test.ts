@@ -59,14 +59,29 @@ describe('generateMap: determinism', () => {
     // maps. That's fine for maps not created yet (tiles are persisted), so
     // update the hash on purpose. Changed once on purpose by #269's trading
     // posts; the passes before them are pinned just below, unchanged.
+    // Changed on purpose by #306's communities; tiles unchanged (next test).
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
-      '58d1d50f837ac7ed09788b3db5492ff2',
+      'fd8b802eaf738c6da608cdac3051e803',
     );
     expect(
       hashString(
         JSON.stringify(generateMapBeforePosts(GAME_DATA, { seed: 'pinned-seed', playerCount: 4 })),
       ),
     ).toBe('6b17966c98f2a81970687e78ad3b2d9b');
+  });
+
+  it('keeps every tile as it was before the villages (#306)', () => {
+    // Villages change no terrain, node or guardian: these are the tiles'
+    // hashes from before #306, for every layout.
+    const pinned = [2, 3, 4, 6].map((n) =>
+      hashString(JSON.stringify(generate('pinned-seed', n).tiles)),
+    );
+    expect(pinned).toEqual([
+      'd01bd7d74741ca2ce5e9f8b38c927e82',
+      '166ae3b301f59b0a2e81d3512316b3a2',
+      '9474a2fea8abd6f80568a1f2407a3874',
+      '438e32d22ddd06ee05c3e4a1ac1142c4',
+    ]);
   });
 
   it('keeps the main pass as it was before the extra nodes (#238)', () => {
@@ -80,7 +95,7 @@ describe('generateMap: determinism', () => {
 });
 
 /** The map's tiles with the extra pass's nodes (#238) taken off again. */
-function withoutExtras(map: GeneratedMap): GeneratedMap['tiles'] {
+function withoutExtras(map: Pick<GeneratedMap, 'tiles'>): GeneratedMap['tiles'] {
   const extraIds = new Set(
     GAME_DATA.terrains.flatMap((t) => (t.extraNodes ?? []).map((e) => `${t.id}:${e.resource}`)),
   );
