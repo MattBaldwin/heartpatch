@@ -140,6 +140,12 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
   const memberRow = async (mapId: string, who: Player) =>
     (await db.select().from(mapMembers).where(member(mapId, who)))[0]!;
 
+  /** The member row in any status (`memberRow` reads active members only). */
+  const anyMemberRow = (mapId: string, who: Player) =>
+    db.query.mapMembers.findFirst({
+      where: (t, { and: both, eq: is }) => both(is(t.mapId, mapId), is(t.userId, who.id)),
+    });
+
   const eventsOf = (mapId: string) =>
     db.query.gameEvents.findMany({
       where: (t, { eq: is }) => is(t.mapId, mapId),
@@ -276,10 +282,7 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       expect((await name(server, kid, mapId, 'Pumpkin Hollow')).statusCode).toBe(200);
 
       await createMapsRepo(db).archiveMember(mapId, kid.id);
-      const archived = await db.query.mapMembers.findFirst({
-        where: (t, { and: both, eq: is }) => both(is(t.mapId, mapId), is(t.userId, kid.id)),
-      });
-      expect(archived).toMatchObject({
+      expect(await anyMemberRow(mapId, kid)).toMatchObject({
         status: 'removed',
         homeName: null,
         homeNamedAtLevel: null,
@@ -386,6 +389,31 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
           built: ['fence', 'habitat', 'training-grounds'].includes(kind),
         })),
       });
+    });
+
+    it('starts over at member.left, after counts it reached late', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await runConsumer(db, consumer, mapId);
+
+      // The kid befriends and builds, then leaves before the consumer catches up.
+      await append(mapId, [
+        captured(mapId, kid),
+        placedEvent(mapId, kid, 'cozy-meadow', 'habitat'),
+        fenceEvent(mapId, kid),
+      ]);
+      await createMapsRepo(db).archiveMember(mapId, kid.id);
+      await append(mapId, [
+        {
+          mapId,
+          type: 'member.left',
+          actorUserId: kid.id,
+          payload: { userId: kid.id, releasedTiles: 7 },
+        },
+      ]);
+      await runConsumer(db, consumer, mapId);
+      expect(await anyMemberRow(mapId, kid)).toMatchObject({ caughtCount: 0, kindsBuilt: [] });
     });
 
     it('skips building ids it does not know', async () => {

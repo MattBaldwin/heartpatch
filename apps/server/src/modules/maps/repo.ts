@@ -318,6 +318,13 @@ export interface MapsRepo {
    * `home-naming` consumer, #306). One `UPDATE`, like `countCaught`.
    */
   addKindBuilt: (mapId: string, userId: string, kind: string) => Promise<void>;
+  /**
+   * Starts their home's name and naming progress over (they left: a returning
+   * player gets a fresh home base, owner 2026-10-19). `archiveMember` does it
+   * at once; the `home-naming` consumer does it again at `member.left` or
+   * `member.removed`, so counts from events it reaches late never carry over.
+   */
+  resetNaming: (mapId: string, userId: string) => Promise<void>;
   /** Home slots held by active members. Run after `lockSeats` for an exact answer. */
   activeHomeSlots: (mapId: string) => Promise<{ count: number; slots: Set<number> }>;
   /** Active members, owner first, then by join time. */
@@ -422,6 +429,14 @@ const pendingRequestCount = sql<number>`(
   from ${joinRequests} as r
   where r.map_id = ${maps.id} and r.status = 'pending'
 )`;
+
+/** A home's name and naming progress, started over (`archiveMember`, `resetNaming`). */
+const NAMING_RESET = {
+  homeName: null,
+  homeNamedAtLevel: null,
+  caughtCount: 0,
+  kindsBuilt: [] as string[],
+};
 
 export function createMapsRepo(db: Executor): MapsRepo {
   return queries(db);
@@ -781,13 +796,7 @@ function queries(db: Executor): MapsRepo {
     archiveMember: async (mapId, userId) => {
       await db
         .update(mapMembers)
-        .set({
-          status: 'removed',
-          homeName: null,
-          homeNamedAtLevel: null,
-          caughtCount: 0,
-          kindsBuilt: [],
-        })
+        .set({ status: 'removed', ...NAMING_RESET })
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
     },
 
@@ -833,6 +842,13 @@ function queries(db: Executor): MapsRepo {
       await db
         .update(mapMembers)
         .set({ homeName: name, homeNamedAtLevel: level })
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+    },
+
+    resetNaming: async (mapId, userId) => {
+      await db
+        .update(mapMembers)
+        .set(NAMING_RESET)
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
     },
 

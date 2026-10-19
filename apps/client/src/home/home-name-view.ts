@@ -40,7 +40,7 @@ export const HOME_NAME_TEXT = {
   caughtLabel: (caught: number, need: number) =>
     `${String(caught)} of ${String(need)} squishies befriended`,
   caughtNote:
-    "Befriended means won over in a battle. Your starter and gifts don't count, but they still love you.",
+    "Befriended means a squishy said yes after a battle. Your starter and gifts don't count, but they still love you.",
   keepGoing: 'Keep going! 💪',
   // The unlocked card.
   unlockedKicker: 'YOUR HOME · UNLOCKED ✨',
