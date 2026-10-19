@@ -161,18 +161,21 @@ export function placeCommunities(input: CommunityPlacementInput): PlacedCommunit
 
   const candidates: Candidate[] = [];
   for (const t of tiles) {
+    if (!isFree(t)) continue;
     const toHomes = homes.map((h) => hexDistance(h, t));
     const nearest = Math.min(...toHomes);
-    if (nearest < rules.minFromSeed || nearest > maxFromSeed || !isFree(t)) continue;
+    if (nearest < rules.minFromSeed || nearest > maxFromSeed) continue;
     if (posts.some((p) => hexDistance(p, t) <= rules.ringFromPost)) continue;
     if (existing.some((c) => hexDistance(c.square, t) < squareApart)) continue;
+    // The square, then its neighbours (`hexSpiral` order), looked up once.
     const ring = hexSpiral(t, 1);
-    if (ring.some((h) => blocked(byKey.get(hexKey(h))) || existingKeys.has(hexKey(h)))) continue;
+    const keys = ring.map(hexKey);
+    if (keys.some((key) => blocked(byKey.get(key)) || existingKeys.has(key))) continue;
     // Free neighbours, nearest the square's nearest home first, so the
     // village touches that kid's land first.
     const home = homes[toHomes.indexOf(nearest)] as Hex;
-    const free = hexRing(t, 1)
-      .filter((h) => isFree(byKey.get(hexKey(h)) as CommunityPlacementTile))
+    const free = ring
+      .filter((_, i) => i > 0 && isFree(byKey.get(keys[i] as HexKey) as CommunityPlacementTile))
       .sort((a, b) => hexDistance(home, a) - hexDistance(home, b) || byQr(a, b));
     if (free.length < rules.size.min - 1 || !hasKeySpot(t)) continue;
     candidates.push({ q: t.q, r: t.r, free, toHomes });
@@ -228,19 +231,28 @@ function fairLayout(
 ): Candidate[] | null {
   const olds = existing.map((c) => c.square);
   const oldNearest = homes.map((h) => Math.min(...olds.map((s) => hexDistance(h, s))));
+  const toOld = new Map(
+    candidates.map((c) => [c, Math.min(...olds.map((s) => hexDistance(c, s)))]),
+  );
+  // Sets of homes are bitmasks (bit i: home slot i; seats stay far under 31).
+  const everyHome = (1 << homes.length) - 1;
+  const homesWithin = (toHomes: readonly number[], steps: number): number =>
+    toHomes.reduce((set, s, i) => (s <= steps ? set | (1 << i) : set), 0);
   for (const [d, slack] of fairWindows(minFromSeed, maxFromSeed)) {
     // An older village nearer a home than d rules d out; no new one may be.
     if (oldNearest.some((n) => n < d)) continue;
     const usable = candidates.filter((c) => c.toHomes.every((s) => s >= d));
-    const covers = (c: Candidate, home: number) => (c.toHomes[home] as number) <= d + slack;
+    // Worked out once per window, not at every step of the search: the
+    // homes each square covers, and each home's squares in (q, r) order.
+    const reach = new Map(usable.map((c) => [c, homesWithin(c.toHomes, d + slack)]));
+    const coverers = homes.map((_, i) => usable.filter((c) => (reach.get(c) as number) & (1 << i)));
     let bestApart = -1;
     // Keyed by the layout's squares, so a set found in two orders counts once.
     let best = new Map<string, Candidate[]>();
     const picked: Candidate[] = [];
-    const covered = homes.map((_, i) => (oldNearest[i] as number) <= d + slack);
+    let covered = homesWithin(oldNearest, d + slack);
     const visit = (gap: number): void => {
-      const home = covered.indexOf(false);
-      if (home === -1) {
+      if (covered === everyHome) {
         const layout = fillRest(usable, olds, picked, count, apart);
         if (layout === null) return;
         const spread = Math.min(gap, spreadOf([...olds, ...layout]));
@@ -254,20 +266,23 @@ function fairLayout(
         return;
       }
       if (picked.length === count) return;
-      for (const c of usable) {
-        if (!covers(c, home)) continue;
-        let next = gap;
-        for (const p of [...olds, ...picked]) next = Math.min(next, hexDistance(c, p));
+      let home = 0; // the lowest uncovered home
+      while (covered & (1 << home)) home++;
+      const last = picked.length + 1 === count;
+      for (const c of coverers[home] as Candidate[]) {
+        const covers = reach.get(c) as number;
+        // The last pick must cover every home left, or it's a dead end.
+        if (last && (covered | covers) !== everyHome) continue;
+        let next = Math.min(gap, toOld.get(c) as number);
+        for (const p of picked) next = Math.min(next, hexDistance(c, p));
         // Spread only shrinks as villages are added, so a worse branch can't win.
         if (next < apart || next < bestApart) continue;
-        const was = [...covered];
-        homes.forEach((_, i) => {
-          if (covers(c, i)) covered[i] = true;
-        });
+        const was = covered;
+        covered |= covers;
         picked.push(c);
         visit(next);
         picked.pop();
-        was.forEach((v, i) => (covered[i] = v));
+        covered = was;
       }
     };
     visit(Infinity);
@@ -394,6 +409,9 @@ function dress(
   const placed: PlacedCommunity[] = [];
   for (const [i, v] of villages.entries()) {
     const fits = spots.filter((t) => {
+      // Every village tile is a step from the square at most, so a spot
+      // further than that can't fit: skip it without measuring them all.
+      if (hexDistance(v.square, t) > rules.keyFromVillage.max + 1) return false;
       if (keys.has(hexKey(t))) return false;
       const steps = Math.min(...v.tiles.map((h) => hexDistance(h, t)));
       return steps >= rules.keyFromVillage.min && steps <= rules.keyFromVillage.max;
