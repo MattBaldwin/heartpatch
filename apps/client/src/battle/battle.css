@@ -775,7 +775,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   gap: 3px;
   min-width: 0;
   min-height: 58px;
-  padding: var(--hp-pad-y) 10px;
+  /* Roomy: engines size a glyph's box a pixel apart, and the style guide wants 8px of air. */
+  padding: 10px;
   text-align: left;
   line-height: 1.15;
   background: var(--move-bg, #ffc9d7);
@@ -885,6 +886,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   .battle-move {
     gap: 1px;
     min-height: 0;
+    padding: var(--hp-pad-y) 10px calc(var(--hp-pad-y) + 1px);
     line-height: 1.1;
   }
 
@@ -940,5 +942,5 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .battle-sheet:has(> .battle-live:not([hidden]))
   > .battle-controls[data-view='pick']
   .battle-button.battle-move {
-  padding: var(--hp-pad-y) 8px;
+  padding: var(--hp-pad-y) 8px calc(var(--hp-pad-y) + 1px);
 }
