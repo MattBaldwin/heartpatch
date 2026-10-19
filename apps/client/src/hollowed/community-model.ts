@@ -50,6 +50,8 @@ export const COMMUNITY_TEXT = {
   /** A restored tile of a village still being restored. */
   tileRestored: '✨ This spot is restored! Restore the rest to win the village.',
   nameIt: 'Name it ✨',
+  /** A won village's perk until PR 3b wakes it up: "🛠️ Workshop: wakes up soon ✨". */
+  perkSoon: (emoji: string, kind: string) => `${emoji} ${kind}: wakes up soon ✨`,
 } as const;
 
 /** "3 tiles" / "1 tile". */
@@ -118,6 +120,15 @@ export function communityFlagLabel(
 export function kindLine(kind: CommunityKindId, rules: CommunityRules = COMMUNITY_RULES): string {
   const found = rules.kinds.find((k) => k.id === kind);
   return found ? COMMUNITY_TEXT.kind(found.emoji, found.name, found.perk) : '';
+}
+
+/** A won village's perk line while the perks are still asleep (PR 3b). */
+export function perkSoonLine(
+  kind: CommunityKindId,
+  rules: CommunityRules = COMMUNITY_RULES,
+): string {
+  const found = rules.kinds.find((k) => k.id === kind);
+  return found ? COMMUNITY_TEXT.perkSoon(found.emoji, found.name) : '';
 }
 
 /** What a Hollowed tile's panel says and offers (#306). */

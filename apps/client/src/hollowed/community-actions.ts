@@ -1,7 +1,7 @@
 import type { CommunityView, MapView, PublicTile } from '@heartpatch/shared';
 import type { TileActions } from '../map/map-screen.js';
 import { el } from '../ui/dom.js';
-import { COMMUNITY_TEXT, communityOf, communityPanel } from './community-model.js';
+import { COMMUNITY_TEXT, communityOf, communityPanel, perkSoonLine } from './community-model.js';
 import './hollowed.css';
 
 // A Hollowed village tile's block in the tile panel (#306): what the village
@@ -42,11 +42,21 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       return;
     }
     if (c.ownerUserId !== null) {
-      // Won: its winner may name it on the square, until they have.
-      const name = wired.name;
+      // Won: the square says what its perk will do (PR 3b wakes it up),
+      // and its winner may name it there, until they have.
       const square = tile.q === c.square.q && tile.r === c.square.r;
-      if (!name || c.ownerUserId !== me() || c.named !== false || !square) {
+      if (!square) {
         container.replaceChildren();
+        return;
+      }
+      const perk = el(
+        'div',
+        { class: 'community-block', 'data-testid': 'community-perk' },
+        el('p', { class: 'tile-action-note community-line' }, perkSoonLine(c.kind)),
+      );
+      const name = wired.name;
+      if (!name || c.ownerUserId !== me() || c.named !== false) {
+        container.replaceChildren(perk);
         return;
       }
       const b = el(
@@ -57,7 +67,7 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       b.addEventListener('click', () => {
         name(c, tile, view);
       });
-      container.replaceChildren(b);
+      container.replaceChildren(perk, b);
       return;
     }
     // A tile restored on its own: in colour again, and someone's land.

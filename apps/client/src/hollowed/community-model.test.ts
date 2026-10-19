@@ -17,6 +17,7 @@ import {
   greyTiles,
   hollowedTileInfo,
   kindLine,
+  perkSoonLine,
   villageSeeds,
   villageSquares,
 } from './community-model.js';
@@ -250,6 +251,10 @@ describe('a won village (#306 PR 3)', () => {
     const homes = findHomeBases(won.tiles).filter((h) => h.seed.ownerUserId === userId(1));
     expect(homes).toHaveLength(1);
     expect(hexKey(homes[0]!.seed)).not.toBe(hexKey(first.square));
+  });
+
+  it('says its perk wakes up soon, until PR 3b', () => {
+    expect(perkSoonLine('workshop')).toBe('🛠️ Workshop: wakes up soon ✨');
   });
 
   it('draws a tile restored on its own in colour again', () => {
