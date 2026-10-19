@@ -330,7 +330,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .select(communityColumns)
         .from(communities)
         .where(and(eq(communities.id, communityId), eq(communities.mapId, mapId)));
-      return row ?? null;
+      return row ? { ...row, kind: row.kind as CommunityKindId } : null;
     },
 
     listCommunityTiles: async (communityId, lock = false) => {
@@ -395,7 +395,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .from(communities)
         .where(eq(communities.id, communityId))
         .for('update');
-      return row ?? null;
+      return row ? { ...row, kind: row.kind as CommunityKindId } : null;
     },
 
     addPiece: async ({ tileId, userId, paid, at }) => {
@@ -562,7 +562,7 @@ const communityColumns = {
   name: communities.name,
   restoredName: communities.restoredName,
   namedAtLevel: communities.namedAtLevel,
-  kind: sql<CommunityKindId>`${communities.kind}`,
+  kind: communities.kind,
   ownerUserId: communities.ownerUserId,
   seedTileId: communities.seedTileId,
 };

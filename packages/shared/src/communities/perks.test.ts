@@ -42,13 +42,17 @@ describe('village perks (#306 PR 3b)', () => {
     expect(morningGiftOf('old-well', COMMUNITY_RULES)).toEqual({ water: 2, greens: 2 });
     expect(morningGiftOf('bakery', COMMUNITY_RULES)).toEqual({ treats: 3 });
     expect(morningGiftOf('lantern-tower', COMMUNITY_RULES)).toBeNull();
+    // A kind the rules don't list does nothing, rather than throwing.
+    const stale = { kinds: COMMUNITY_RULES.kinds.filter((k) => k.id !== 'bakery') };
+    expect(morningGiftOf('bakery', stale)).toBeNull();
+    expect(villageLights([village('bakery', 'kid')], stale)).toEqual([]);
   });
 
   it("raises a Watchtower winner's guard level floor by 2, theirs only", () => {
     const won = [village('watchtower', 'kid'), village('lantern-tower', 'kid')];
     expect(extraGuardLevels(won, 'kid', COMMUNITY_RULES)).toBe(2);
     expect(extraGuardLevels(won, 'rival', COMMUNITY_RULES)).toBe(0);
-    expect(villageKind('watchtower', COMMUNITY_RULES).does).toBe(
+    expect(villageKind('watchtower', COMMUNITY_RULES)?.does).toBe(
       'your guards fight 2 levels stronger',
     );
   });

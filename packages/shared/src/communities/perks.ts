@@ -18,14 +18,15 @@ export interface PerkVillage {
   readonly square: Hex;
 }
 
-/** A kind's data. Throws for a kind the rules don't list (the schema makes that impossible). */
+/**
+ * A kind's data, or null for a kind the rules don't list (a stale or renamed
+ * row): that village does nothing rather than stopping the night for the map.
+ */
 export function villageKind(
   kind: CommunityKindId,
   rules: Pick<CommunityRules, 'kinds'>,
-): CommunityKind {
-  const found = rules.kinds.find((k) => k.id === kind);
-  if (!found) throw new Error(`unknown village kind ${kind}`);
-  return found;
+): CommunityKind | null {
+  return rules.kinds.find((k) => k.id === kind) ?? null;
 }
 
 /**
@@ -38,8 +39,8 @@ export function villageLights(
   rules: Pick<CommunityRules, 'kinds'>,
 ): SafeFire[] {
   return villages.flatMap((v) => {
-    const { effect } = villageKind(v.kind, rules);
-    return v.ownerUserId !== null && effect.type === 'light'
+    const effect = villageKind(v.kind, rules)?.effect;
+    return v.ownerUserId !== null && effect?.type === 'light'
       ? [{ at: v.square, radius: effect.radius }]
       : [];
   });
@@ -54,8 +55,8 @@ export function extraFactoryBatches(
   let extra = 0;
   for (const v of villages) {
     if (v.ownerUserId !== userId) continue;
-    const { effect } = villageKind(v.kind, rules);
-    if (effect.type === 'factory-batches') extra += effect.extra;
+    const effect = villageKind(v.kind, rules)?.effect;
+    if (effect?.type === 'factory-batches') extra += effect.extra;
   }
   return extra;
 }
@@ -73,8 +74,8 @@ export function extraGuardLevels(
   let extra = 0;
   for (const v of villages) {
     if (v.ownerUserId !== userId) continue;
-    const { effect } = villageKind(v.kind, rules);
-    if (effect.type === 'guard-levels') extra += effect.levels;
+    const effect = villageKind(v.kind, rules)?.effect;
+    if (effect?.type === 'guard-levels') extra += effect.levels;
   }
   return extra;
 }
@@ -84,6 +85,6 @@ export function morningGiftOf(
   kind: CommunityKindId,
   rules: Pick<CommunityRules, 'kinds'>,
 ): Record<string, number> | null {
-  const { effect } = villageKind(kind, rules);
-  return effect.type === 'morning-gift' ? effect.items : null;
+  const effect = villageKind(kind, rules)?.effect;
+  return effect?.type === 'morning-gift' ? effect.items : null;
 }

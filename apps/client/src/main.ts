@@ -76,7 +76,7 @@ import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
-import { el } from './ui/dom.js';
+import { el, messageOf } from './ui/dom.js';
 import {
   GAME_DATA,
   hexKey,
@@ -951,15 +951,15 @@ communityActions.wire('name', (community) => {
   restoreSheet.openName(community);
 });
 // A won Old Well's or Bakery's morning gift (#306 PR 3b), collected on its square.
-communityActions.wire('gift', async (community) => {
+communityActions.wireGift(async (community) => {
   const mapId = maps.view?.map.id;
-  if (!mapId) return null;
+  if (!mapId) return { ok: false, text: messageOf(null) };
   try {
     const { gift } = await restoreApi.gift(mapId, community.id, newIdempotencyKey());
     void inventory.refresh();
-    return COMMUNITY_TEXT.giftGot(giftLine(gift));
+    return { ok: true, text: COMMUNITY_TEXT.giftGot(giftLine(gift)) };
   } catch (err) {
-    return err instanceof Error ? err.message : 'Oops, something went wobbly.';
+    return { ok: false, text: messageOf(err) };
   }
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
