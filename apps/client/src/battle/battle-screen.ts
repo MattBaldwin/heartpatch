@@ -43,6 +43,7 @@ import {
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
+import { describeMove, MOVE_KINDS } from './move-info.js';
 import {
   activeOf,
   BattleContent,
@@ -621,6 +622,22 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     });
   };
 
+  /** The move buttons: name, kind, numbers and the matchup against who is out now (#565). */
+  const moveButtons = (b: PlayerBattle, names: BattleContent) => {
+    const me = activeOf(b, b.mySide);
+    const them = activeOf(b, otherSide(b.mySide));
+    return me.moves.map((id) => {
+      const move = names.moves.get(id);
+      return {
+        id,
+        name: names.moveName(id),
+        info: move
+          ? describeMove(move, me, them)
+          : { kind: 'status' as const, look: MOVE_KINDS.status, line: 'A mystery move', number: null, edge: null, more: [] },
+      };
+    });
+  };
+
   const controlsFor = (b: PlayerBattle): ControlMode => {
     const names = content;
     if (!names || b.status !== 'active' || replaying) return { type: 'hidden' };
@@ -636,7 +653,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (b.view.phase.type === 'turn') {
         return {
           type: 'choose',
-          moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
+          moves: moveButtons(b, names),
           bench,
           capture: null,
           items: null,
@@ -648,7 +665,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       case 'turn':
         return {
           type: 'choose',
-          moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
+          moves: moveButtons(b, names),
           bench,
           capture: CAPTURABLE_BATTLE_KINDS.has(b.kind) ? { charms } : null,
           items: {
