@@ -34,7 +34,7 @@ import { rarityDot } from '../ui/rarity/rarity.js';
 import { HOME_SHEET, MOOD_CUES, WANDER } from './home-config.js';
 import { mapSafeTiles } from './home-layout.js';
 import { homeApi, type HomeApi } from './home-api.js';
-import { afterHandle } from './home-peek.js';
+import { afterHandle, isStrayClick } from './home-peek.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import { createMoodMarks, type MoodMarkLayout } from './mood-marks.js';
 import type { WorkMood } from '../squishies/jobs/jobs-view.js';
@@ -371,6 +371,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   handle.append(handleWord);
   let pressY: number | null = null;
   let releasedAt = -Infinity;
+  /** Where the handle was let go, until the click that tap makes has come (or not). */
+  let strayClick: { x: number; y: number } | null = null;
   handle.addEventListener('pointerdown', (e) => {
     pressY = e.clientY;
     try {
@@ -384,6 +386,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     const dy = e.clientY - pressY;
     pressY = null;
     releasedAt = performance.now();
+    strayClick = { x: e.clientX, y: e.clientY };
     setSheet(afterHandle(sheetOpen, dy, HOME_SHEET.swipePx));
   });
   handle.addEventListener('pointercancel', () => {
@@ -399,6 +402,24 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     handle,
     note,
     body,
+  );
+  // A tap on the handle opens or folds the sheet on release, and the rows
+  // move. On iPad Safari the tap's click comes after that, where the finger
+  // was, so it would press whatever row moved under it (Jobs & team, #306):
+  // that one click is swallowed too, before it reaches the row. A tap
+  // anywhere else, however quick, still counts.
+  sheet.addEventListener(
+    'click',
+    (e) => {
+      const at = strayClick;
+      strayClick = null;
+      const click = { x: e.clientX, y: e.clientY };
+      if (!isStrayClick(at, click, performance.now() - releasedAt, HOME_SHEET)) return;
+      if (e.target instanceof Node && handle.contains(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
   );
   const overlay = el('div', { class: 'home' }, top, sheet);
   overlay.hidden = true;

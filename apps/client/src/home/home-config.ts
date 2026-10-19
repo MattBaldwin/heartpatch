@@ -40,9 +40,10 @@ export const HOME_VIEW = {
 
 /**
  * The home sheet's handle (#412): how far a finger moves before it's a swipe,
- * not a tap (CSS px), and how long after a release its click is swallowed.
+ * not a tap (CSS px), how long after a release its click is swallowed, and
+ * how near the release that click lands (CSS px) to be the tap's own (#306).
  */
-export const HOME_SHEET = { swipePx: 24, clickAfterMs: 600 } as const; // TUNE
+export const HOME_SHEET = { swipePx: 24, clickAfterMs: 600, strayClickPx: 12 } as const; // TUNE
 
 /** Spots inside a tile: sub-hex size as a fraction of the tile's hex size. */
 export const SPOT_SIZE = 0.3; // TUNE: ring spots sit about half-way to the tile edge
