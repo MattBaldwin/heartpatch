@@ -142,16 +142,19 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   await playerWithFriend(page);
   // Each care reply keeps its action resting for a minute (the server's own
   // debounce is 10 s, covered by its tests), so "still resting" below doesn't
-  // depend on how fast this runner is.
+  // depend on how fast this runner is. The minute counts from the reply's
+  // `now`: the game clock, which playwright.config.ts `HP_DEV_NOW` sets apart
+  // from this runner's (#561).
   const resting = new Map<string, string>();
   await page.route('**/api/v1/maps/*/squishies/*/care', async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
       result?: { action: string; squishyId: string };
       squishies: { id: string; nextCareAt: Record<string, string> }[];
+      now: string;
     };
     const done = body.result;
-    if (done) resting.set(done.action, new Date(Date.now() + 60_000).toISOString());
+    if (done) resting.set(done.action, new Date(Date.parse(body.now) + 60_000).toISOString());
     const cared = done ? body.squishies.find((s) => s.id === done.squishyId) : undefined;
     if (cared) Object.assign(cared.nextCareAt, Object.fromEntries(resting));
     await route.fulfill({ response, json: body });

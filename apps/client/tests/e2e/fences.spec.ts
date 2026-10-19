@@ -181,7 +181,8 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
     const { battle } = body;
     const theirs = battle.mySide === 'a' ? 'b' : 'a';
     battle.status = 'finished';
-    battle.endedAt = new Date().toISOString();
+    // On the game clock (playwright.config.ts `HP_DEV_NOW`), not this runner's (#561).
+    battle.endedAt = battle.startedAt;
     battle.view.sides[theirs].squishies[0]!.fence = 'hedge';
     battle.view.phase = {
       type: 'over',
@@ -242,13 +243,13 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
   await page.route('**/api/v1/maps/*/territory', async (route) => {
     const res = await route.fetch();
     const body = (await res.json()) as {
-      territory: { fenceBroken?: { q: number; r: number; until: string }[] };
+      territory: { fenceBroken?: { q: number; r: number; until: string }[]; now: string };
     };
     // The view answers alongside; wait for the tile it picked.
     await expect.poll(() => tile).not.toBeNull();
-    body.territory.fenceBroken = [
-      { ...tile!, until: new Date(Date.now() + 9 * 60_000).toISOString() },
-    ];
+    // Open for 9 more minutes on the server's clock, which the client counts against (#561).
+    const until = new Date(Date.parse(body.territory.now) + 9 * 60_000).toISOString();
+    body.territory.fenceBroken = [{ ...tile!, until }];
     await route.fulfill({ response: res, json: body });
   });
   const attack = page.waitForRequest(
@@ -272,6 +273,7 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
 /** The slice of a staged `PlayerBattle` the test rewrites. */
 interface StagedBattle {
   status: string;
+  startedAt: string;
   endedAt: string | null;
   mySide: 'a' | 'b';
   view: {

@@ -168,7 +168,14 @@ process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
 // all year, not only while today is in season (#561). The server inherits it,
 // and pinMapTime below reads its lead to keep map time in daylight. Dev and
 // tests only.
-process.env['HP_DEV_NOW'] ??= '2026-10-20T15:00:00Z';
+// It keeps today's real UTC time of day, so the game clock is a whole number
+// of days off the device's (less the few seconds the server takes to start):
+// some client screens read map time from the device clock (the explore sky
+// and a grey village's nightfall, explore-sky-look.ts `localMinuteIn`), and
+// that way they agree with the server's map time and with pinMapTime's zone.
+// Set once here in the main process; workers inherit it. An explicit
+// HP_DEV_NOW still wins (a reused local server: see .env.example).
+process.env['HP_DEV_NOW'] ??= `2026-10-20T${new Date().toISOString().slice(11)}`;
 // Map time is the game clock in the patch's time zone, which the client takes
 // from the device: pin the browser's zone so specs never meet dusk (#326).
 const timezoneId = pinMapTime();
