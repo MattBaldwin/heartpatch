@@ -2,6 +2,8 @@ import {
   ApiErrorSchema,
   COMMUNITY_RULES,
   CommunityViewSchema,
+  hexKey,
+  hexNeighbors,
   HomeResponseSchema,
   JoinMapResponseSchema,
   MAP_GEN,
@@ -422,8 +424,17 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const mapId = await patch(server, me);
     const reached = await reachVillage(server, me, mapId);
     const { communityId, square } = reached;
-    // Two grounds tiles for sure: village tiles past the first two become plain land.
-    const spare = reached.village.filter((v) => v.tileId !== square.id).slice(2);
+    // Two grounds tiles for sure: village tiles past the first two become plain land,
+    // never one my land touches (the only way in).
+    const mine = new Set(
+      (await tilesOf(mapId)).filter((t) => t.ownerUserId === me.id).map((t) => hexKey(t)),
+    );
+    const touching = (t: Tile) => hexNeighbors(t).some((n) => mine.has(hexKey(n)));
+    const spare = reached.village
+      .filter((v) => v.tileId !== square.id)
+      .sort((a, b) => Number(touching(b.tile)) - Number(touching(a.tile)))
+      .slice(2)
+      .filter((v) => !touching(v.tile));
     for (const v of spare) {
       await db.execute(`delete from community_tiles where tile_id = '${v.tileId}'`);
       await db.execute(`update tiles set community_id = null where id = '${v.tileId}'`);
@@ -462,9 +473,12 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     });
 
     await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, { communityId });
-    for (const v of village) {
+    // A tile my land touches first: the rest are reached through it.
+    const order = [...village].sort((a, b) => Number(touching(b.tile)) - Number(touching(a.tile)));
+    for (const v of order) {
       const res = await restore(server, me, mapId, communityId, v.tile, v.piecesNeeded - 1);
       expect(res.statusCode, res.body).toBe(200);
+      expect(RestoreTileResponseSchema.parse(res.json()).problem, res.body).not.toBe('away');
     }
     const after = await tilesOf(mapId);
     expect(after.find((t) => t.id === guarded.id)).toMatchObject({
