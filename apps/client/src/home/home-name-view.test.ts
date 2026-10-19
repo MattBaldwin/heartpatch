@@ -55,9 +55,11 @@ describe('the nudge toward naming (#306)', () => {
 
   it('knows a Heart Seed from the rest of its ring', () => {
     const view = testView();
-    const seed = findHomeBases(view.tiles)[0]?.seed;
-    expect(seed && isSeedTile(view, seed)).toBe(true);
-    const ring = view.tiles.find((t) => t.homeSlot === seed?.homeSlot && t.q !== seed?.q);
+    const seed = findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === userId(1))?.seed;
+    if (!seed) throw new Error('no home');
+    expect(isSeedTile(view, seed)).toBe(true);
+    const ring = view.tiles.find((t) => t.homeSlot === seed.homeSlot && t.q !== seed.q);
+    expect(ring).toBeDefined();
     expect(ring && isSeedTile(view, ring)).toBe(false);
   });
 });
