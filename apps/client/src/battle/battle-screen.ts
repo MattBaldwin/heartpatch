@@ -633,7 +633,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         name: names.moveName(id),
         info: move
           ? describeMove(move, me, them)
-          : { kind: 'status' as const, look: MOVE_KINDS.status, line: 'A mystery move', number: null, edge: null, more: [] },
+          : {
+              kind: 'status' as const,
+              look: MOVE_KINDS.status,
+              line: 'A mystery move',
+              number: null,
+              edge: null,
+              more: [],
+            },
       };
     });
   };

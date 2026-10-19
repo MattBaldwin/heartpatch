@@ -55,7 +55,9 @@ export interface MoveInfo {
 
 const stagesWord = (stages: number): string => (Math.abs(stages) >= 2 ? 'way ' : '');
 const list = (words: string[]): string =>
-  words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1) ?? ''}` : (words[0] ?? '');
+  words.length > 1
+    ? `${words.slice(0, -1).join(', ')} and ${words.at(-1) ?? ''}`
+    : (words[0] ?? '');
 
 /** "Your oomph goes up", "Their zip goes way down". */
 function statLine(effects: Extract<MoveEffect, { type: 'stat' }>[]): string {
@@ -163,7 +165,8 @@ export function describeMove(
     if (sentence !== `${line}.`) more.push(sentence);
   }
   const status = (move.effects ?? []).find((e) => e.type === 'status');
-  const look = kind === 'status' && status?.type === 'status' ? STATUS_LOOKS[status.status] : MOVE_KINDS[kind];
+  const look =
+    kind === 'status' && status?.type === 'status' ? STATUS_LOOKS[status.status] : MOVE_KINDS[kind];
   return { kind, look, line, number, edge: moveEdge(move, me, them), more };
 }
 
