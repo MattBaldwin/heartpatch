@@ -404,6 +404,8 @@ export class ExploreScene implements AmbientTarget {
   #ambient: AmbientMode = 'off';
   #ambientStart: number | null = null;
   readonly #judge = new AmbientJudge();
+  /** `expectHitch` calls (`ambientStatus`). */
+  #hitches = 0;
   readonly #pinned: boolean;
   #triangles = 0;
   /** The ground and its decor, tinted by the time of day (#335: moonlit at night). */
@@ -1054,7 +1056,7 @@ export class ExploreScene implements AmbientTarget {
 
   /** Ambient life's mode and the judge's verdict (dev hook and the `?fps=1` badge). */
   get ambientStatus(): AmbientStatus {
-    return { mode: this.#ambient, slow: this.#judge.slow };
+    return { mode: this.#ambient, slow: this.#judge.slow, hitches: this.#hitches };
   }
 
   /**
@@ -1062,6 +1064,7 @@ export class ExploreScene implements AmbientTarget {
    * aren't judged, so the lake's fish, bubbles and kelp don't stop for good.
    */
   expectHitch(): void {
+    this.#hitches++;
     this.#judge.ignoreUntil(performance.now() + AMBIENT.hitchMs);
   }
 

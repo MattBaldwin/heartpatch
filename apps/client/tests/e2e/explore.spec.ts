@@ -92,7 +92,7 @@ interface ExploreDebug {
     warm: boolean;
     land: { tier: string } | null;
     water: { layers: Record<string, number> } | null;
-    ambient: { mode: string; slow: boolean };
+    ambient: { mode: string; slow: boolean; hitches: number };
   } | null;
 }
 
@@ -569,12 +569,15 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
 test('a tap on the lakebed swims the Keeper there, and a find leaves the lake alive (#510, #501 H)', async ({
   browser,
 }) => {
-  test.setTimeout(300_000); // one scene build, a swim and a find; CI renders in software
+  test.setTimeout(420_000); // one scene build on medium, a swim and a find; CI renders in software
   const page = await newPlayer(browser, uniqueName('swim'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   // Medium, pinned (dev `?tier=`, governor off): the lake's fish and bubbles
-  // swim there (low draws no ambient life), and the tier can't move under the find.
+  // swim there (low draws no ambient life), and the tier can't move under the
+  // find. Pinned, the scene's judge never runs (a software renderer would
+  // always be "slow"), so whether a find trips it is the unit tests' to prove
+  // (ambient-layout.test.ts); here the find must tell the judge, twice.
   await page.goto('/?tier=medium');
   // A new patch has no lake at home: explore its Heart Seed tile as one, so
   // the client builds the underwater scene for it (only the look changes),
@@ -644,7 +647,7 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     // card and the cheer. Nothing compiles or uploads mid-find, and the
     // water's life keeps going after it.
     const live = (await exploreState(page))!.scene!;
-    expect(live.ambient).toEqual({ mode: 'live', slow: false });
+    expect(live.ambient).toMatchObject({ mode: 'live', slow: false });
     expect(live.water?.layers['fish'] ?? 0).toBeGreaterThan(0);
     expect(live.water?.layers['bubbles'] ?? 0).toBeGreaterThan(0);
     const spots = (await exploreState(page))!.spots.filter((s) => !s.done);
@@ -676,10 +679,11 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     expect((found.gl?.buffers ?? 0) - (before.gl?.buffers ?? 0)).toBeLessThanOrEqual(
       FIND_BUFFER_CEILING,
     );
-    // The find told the governor and the scene's judge (two calls, #501 G),
-    // and the water still swims: fish, bubbles and the ambient clock.
+    // The find told the governor (#501 G) and the scene's judge (#501 H), at
+    // its start and as it landed, and the water still swims.
     expect(await hitchesExpected(page)).toBeGreaterThanOrEqual(hitches + 2);
-    expect(found.ambient).toEqual({ mode: 'live', slow: false });
+    expect(found.ambient.hitches).toBeGreaterThanOrEqual(before.ambient.hitches + 2);
+    expect(found.ambient).toMatchObject({ mode: 'live', slow: false });
     expect(found.water?.layers['fish'] ?? 0).toBeGreaterThan(0);
     expect(found.water?.layers['bubbles'] ?? 0).toBeGreaterThan(0);
     const sheet = page.getByTestId('explore-sheet');

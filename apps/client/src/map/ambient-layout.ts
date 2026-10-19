@@ -166,6 +166,8 @@ export interface AmbientStatus {
   readonly mode: AmbientMode;
   /** The judge called this device too slow (ambient stays off for the visit). */
   readonly slow: boolean;
+  /** Bursts of work it was told to let pass (`expectHitch`; a find makes two). */
+  readonly hitches: number;
 }
 
 export function ambientMode(state: {

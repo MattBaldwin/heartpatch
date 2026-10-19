@@ -26,8 +26,9 @@ import type { Stage } from './stage.js';
  * whether it was sent, its frame rate and the GPU's latency. The lines are
  * read by `BadgeReader` (`badge-lines.ts`), which the report shares.
  *
- * While a scene with ambient life is open (`getAmbient`), the first line ends
- * with its mode, and "(slow)" once the judge switched it off (#501 H).
+ * While a scene with ambient life is open (`getAmbient`), the second line
+ * (it wraps) ends with its mode, and "(slow)" once the judge switched it off
+ * (#501 H).
  */
 export function mountDevOverlay(
   getStage: () => Stage | null,
@@ -57,8 +58,8 @@ export function mountDevOverlay(
     if (!stage) return;
     const [first, second, third] = reader.read(stage);
     const ambient = getAmbient();
-    badge.textContent = ambient ? `${first} · ${formatAmbientStatus(ambient)}` : first;
-    counts.textContent = second;
+    badge.textContent = first;
+    counts.textContent = ambient ? `${second} · ${formatAmbientStatus(ambient)}` : second;
     page.textContent = third;
   }, 500);
 }
