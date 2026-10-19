@@ -6,6 +6,7 @@ import { dressResult, type BefriendCheer } from './befriend-cheer.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
+import { EDGE_WORDS, moveLabel, type MoveInfo } from './move-info.js';
 import {
   CHIP_LOOKS,
   itemButtonLabel,
@@ -43,7 +44,8 @@ export type ControlMode =
   /** The player picks a move or swaps. */
   | {
       type: 'choose';
-      moves: { id: string; name: string }[];
+      /** Each move with what its button says about it (#565, `describeMove`). */
+      moves: { id: string; name: string; info: MoveInfo }[];
       bench: { slot: number; name: string }[];
       /**
        * A wild squishy: the "Use Heart Charm" button (befriend, style guide §9),
@@ -464,6 +466,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     );
   };
 
+  /** The "ⓘ More" view of the move buttons (#565): each one adds its own words and chances. */
+  let moreMoves = false;
+
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
     // Back from the potion picker: the caption returns.
@@ -478,23 +483,69 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       case 'choose': {
         const sipped = mode.sipped ?? null;
         const moves = el('div', { class: 'battle-moves' });
+        moves.classList.toggle('battle-moves-more', moreMoves);
         for (const move of mode.moves) {
-          moves.append(
-            button(
-              move.name,
-              () => {
-                // A sipped potion goes out with the move (a free sip, #403).
-                act(
-                  sipped === null
-                    ? { type: 'move', move: move.id }
-                    : { type: 'move', move: move.id, item: sipped },
-                );
-              },
-              { testId: 'battle-move' },
+          const { info } = move;
+          const node = el(
+            'button',
+            {
+              type: 'button',
+              class: `battle-button battle-move battle-move-${info.kind}`,
+              'data-testid': 'battle-move',
+              'data-kind': info.kind,
+              'aria-label': moveLabel(move.name, info),
+            },
+            el('span', { class: 'battle-move-name' }, move.name),
+            el(
+              'span',
+              { class: 'battle-move-chips' },
+              // Icon, word and colour together: the kind never rests on colour alone.
+              el(
+                'span',
+                { class: 'battle-move-kind' },
+                el('span', { 'aria-hidden': 'true' }, info.look.icon),
+                info.look.label,
+                ...(info.number ? [el('span', { class: 'battle-move-number' }, info.number)] : []),
+              ),
+              ...(info.edge
+                ? [
+                    el(
+                      'span',
+                      { class: `battle-move-edge battle-move-edge-${info.edge}` },
+                      el('span', { 'aria-hidden': 'true' }, EDGE_WORDS[info.edge].icon),
+                      // A live battle's narrow grid keeps the arrow and drops the word (battle.css).
+                      el('span', { class: 'battle-move-edge-word' }, EDGE_WORDS[info.edge].label),
+                    ),
+                  ]
+                : []),
             ),
+            el('span', { class: 'battle-move-line' }, info.line),
+            el('span', { class: 'battle-move-more' }, ...info.more.map((t) => el('span', {}, t))),
           );
+          node.addEventListener('click', () => {
+            // A sipped potion goes out with the move (a free sip, #403).
+            act(
+              sipped === null
+                ? { type: 'move', move: move.id }
+                : { type: 'move', move: move.id, item: sipped },
+            );
+          });
+          moves.append(node);
         }
         const row = el('div', { class: 'battle-row' });
+        const moreButton = button(
+          'ⓘ',
+          () => {
+            moreMoves = !moreMoves;
+            setControls(mode);
+            // The controls were rebuilt: keep a keyboard or VoiceOver player's place.
+            controls.querySelector<HTMLElement>('[data-testid="battle-moves-more"]')?.focus();
+          },
+          { soft: true, small: true, testId: 'battle-moves-more' },
+        );
+        moreButton.setAttribute('aria-label', 'More about these moves');
+        moreButton.setAttribute('aria-pressed', String(moreMoves));
+        row.append(moreButton);
         let hint: HTMLElement | null = null;
         if (mode.capture && sipped === null) {
           // Always there in a wild battle, so a player learns befriending
