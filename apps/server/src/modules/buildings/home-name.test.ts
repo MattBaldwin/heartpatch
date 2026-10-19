@@ -7,7 +7,6 @@ import {
   TutorialResponseSchema,
   type HomeResponse,
 } from '@heartpatch/shared';
-import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { uuidv7 } from 'uuidv7';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -21,6 +20,7 @@ import { createJobsRepo } from '../../jobs/repo.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { activeMember } from '../maps/repo.js';
 import { createHomeNamingConsumer } from './home-name-consumer.js';
 
 const url = inject('testDatabaseUrl');
@@ -80,9 +80,11 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       .returning({ id: users.id });
     await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     const { token, tokenHash } = newSessionToken();
-    await db
-      .insert(sessions)
-      .values({ userId: user!.id, tokenHash, expiresAt: new Date(Date.parse(START) + 365 * DAY_MS) });
+    await db.insert(sessions).values({
+      userId: user!.id,
+      tokenHash,
+      expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
+    });
     return { id: user!.id, token };
   }
 
@@ -119,8 +121,8 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
   const name = (server: FastifyInstance, who: Player, mapId: string, homeName: string) =>
     call(server, 'POST', `/maps/${mapId}/home/name`, who, { name: homeName });
 
-  const member = (mapId: string, who: Player) =>
-    and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, who.id));
+  // `activeMember` from the maps repo: only repos import drizzle-orm (lint rule).
+  const member = (mapId: string, who: Player) => activeMember(mapId, who.id);
 
   /** Sets the naming counters by hand (the consumer's tests cover counting). */
   const setFacts = (
@@ -318,7 +320,16 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
         actorUserId: who.id,
         payload: {
           userId: who.id,
-          fence: { id: uuidv7(), edge: 0, buildingId: 'hedge', level: 1, hp: 5, maxHp: 5, q: 0, r: 0 },
+          fence: {
+            id: uuidv7(),
+            edge: 0,
+            buildingId: 'hedge',
+            level: 1,
+            hp: 5,
+            maxHp: 5,
+            q: 0,
+            r: 0,
+          },
           cost: { timber: 1 },
         },
       }) as const;

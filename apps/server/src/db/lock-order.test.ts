@@ -981,7 +981,10 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
     await db
       .update(mapMembers)
-      .set({ caughtCount: NAMING_RULES.caughtToName, kindsBuilt: [...HOME_BASE_RULES.buildableKinds] })
+      .set({
+        caughtCount: NAMING_RULES.caughtToName,
+        kindsBuilt: [...HOME_BASE_RULES.buildableKinds],
+      })
       .where(and(eq(mapMembers.mapId, map.id), eq(mapMembers.userId, kid.id)));
     const name = () => createBuildingsService({ db }).name(kid, map.id, { name: 'Lock Hollow' });
     return { kid, mapId: map.id, name };
