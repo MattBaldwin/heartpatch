@@ -68,6 +68,8 @@ import {
   type ReachTile,
 } from './home-view.js';
 import { homeTileLines } from './home-tile-info.js';
+import { createHomeNameSheet } from './home-name-sheet.js';
+import { HOME_NAME_TEXT, nameCard, nameIdeas, nameRowBadge, nameRowLabel, ringTerrains } from './home-name-view.js';
 import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
 import './home.css';
 
@@ -125,6 +127,8 @@ export interface HomeScreenOptions {
    */
   onRecipeBook?: () => void;
   api?: HomeApi;
+  /** The map on screen (#306): its home ring's land gives the name card its ideas. */
+  mapView?: () => MapView | null;
   /** The Crafting Factory's tile card (#294, on a homestead since #295). */
   factory?: {
     /** Where Sprout's one-time tip is remembered (null: nowhere). */
@@ -143,7 +147,9 @@ type Mode =
   | { readonly kind: 'moving'; readonly id: string }
   | { readonly kind: 'selected'; readonly id: string }
   | { readonly kind: 'upgrade'; readonly id: string }
-  | { readonly kind: 'confirm-remove'; readonly id: string };
+  | { readonly kind: 'confirm-remove'; readonly id: string }
+  /** The "Name your home" card (#306 PR 0). */
+  | { readonly kind: 'name' };
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface HomeDebug {
@@ -297,6 +303,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let moods: { mapId: string; moods: ReadonlyMap<string, WorkMood> } | null = null;
   let lastTier: QualityTier | null = null;
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
+  /** The name card's refusal (the server's words, or the name rules'), shown in the card. */
+  let nameError: string | null = null;
+  const nameSheet = createHomeNameSheet();
 
   // ── Sprout's Factory tip (#294) ───────────────────────────────────────
   const tipStorage =
@@ -451,6 +460,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       send: <T>(command: (key: string) => Promise<T>) => Promise<T | null>,
     ) => Promise<HomeResponse | null>,
     done: (next: HomeResponse) => { mode: Mode; say: string },
+    /** Where a refusal shows (default: the sheet's note). */
+    failed: (message: string) => void = say,
   ): Promise<void> {
     const id = mapId;
     if (!id || working) return;
@@ -468,7 +479,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       say(after.say);
     } catch (err) {
       if (at === generation) {
-        say(messageOf(err));
+        failed(messageOf(err));
         if (err instanceof ApiRequestError && err.code === 'CONFLICT') await refresh();
       }
     } finally {
@@ -551,6 +562,52 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       () => ({ mode: { kind: 'idle' }, say: HOME_TEXT.removed(back) }),
     );
+  };
+
+  /** "Name it!" (#306 PR 0): a refusal (locked, not grown yet, the filter) shows in the card. */
+  const nameHome = (name: string) => {
+    nameError = null;
+    return act(
+      (id, send) => send((key) => api.name(id, name, key)),
+      (next) => ({
+        mode: { kind: 'idle' },
+        say: HOME_NAME_TEXT.named(next.naming?.name ?? name),
+      }),
+      (message) => {
+        nameError = message;
+      },
+    );
+  };
+
+  /** Opens the name card, its field holding my name (or the first idea). */
+  const openName = (current: HomeResponse) => {
+    nameError = null;
+    nameSheet.reset(current.naming?.name ?? ideasFor()[0] ?? '');
+    setMode({ kind: 'name' });
+  };
+
+  const ideasFor = () =>
+    nameIdeas(user?.username ?? null, ringTerrains(options.mapView?.() ?? null, user?.id ?? null));
+
+  /**
+   * The home sheet's "Name your home" row (#306 PR 0), above the Build row
+   * of the opened sheet (the peek bar never grows a row, #381): only with a
+   * gate from the server.
+   */
+  const nameRow = (current: HomeResponse): Node[] => {
+    const naming = current.naming;
+    if (!naming) return [];
+    const b = button(
+      nameRowLabel(naming),
+      () => {
+        openName(current);
+      },
+      { 'data-testid': 'home-name-row', class: 'home-name-row' },
+      true,
+    );
+    const badge = nameRowBadge(naming);
+    if (badge) b.append(el('span', { class: 'home-name-badge' }, badge));
+    return [el('div', { class: 'home-row' }, b)];
   };
 
   const house = (squishyId: string, habitatId: string | null, name: string, where: string) =>
@@ -660,6 +717,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     const current = home;
     const peek = mode.kind === 'idle' && !sheetOpen;
     handle.hidden = mode.kind !== 'idle';
+    sheet.classList.toggle('home-sheet-name', mode.kind === 'name');
     status.textContent = HOME_SAFE_LINE;
     renderFuelAll(current);
     const row = (...children: Node[]) => el('div', { class: 'home-row' }, ...children);
@@ -737,6 +795,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           // Your squishies live in the Squishies roster (#375): 🐾 at the top,
           // or the peek bar's Squishies.
           ...(jobs ? [row(jobs)] : []),
+          ...nameRow(current),
           actions,
         );
         break;
@@ -773,6 +832,30 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             : undefined,
         });
         if (homeSheet.element.parentElement !== body) body.replaceChildren(homeSheet.element);
+        break;
+      }
+      case 'name': {
+        const naming = current.naming;
+        if (!naming) {
+          mode = { kind: 'idle' };
+          render();
+          return;
+        }
+        nameSheet.update({
+          naming,
+          ideas: nameCard(naming) === 'name' ? ideasFor() : [],
+          working,
+          error: nameError,
+          onName: (name) => void nameHome(name),
+          onInvalid: (message) => {
+            nameError = message;
+            render();
+          },
+          onClose: () => {
+            setMode({ kind: 'idle' });
+          },
+        });
+        if (nameSheet.element.parentElement !== body) body.replaceChildren(nameSheet.element);
         break;
       }
       case 'moving': {

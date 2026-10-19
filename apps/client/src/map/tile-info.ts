@@ -14,6 +14,7 @@ import {
   type Resource,
 } from '@heartpatch/shared';
 import { itemIcon } from '../inventory/item-icons.js';
+import { seedTitle } from '../home/home-name-view.js';
 import { postReachLine } from '../trading/post-model.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
@@ -54,6 +55,8 @@ export function describeTile(
   seasons: readonly string[] = [],
   /** How this player reaches the tile, when it's a trading post (shared `postReach`). */
   reach: PostReach | null = null,
+  /** The home's name when this is a named home's Heart Seed (#306 PR 0, `seedName`). */
+  homeName: string | null = null,
 ): TileInfo {
   const terrain = TERRAINS.find((t) => t.id === tile.terrain);
   const found = RESOURCES.find((r) => r.id === tile.nodeResource);
@@ -86,6 +89,7 @@ export function describeTile(
   return {
     title:
       (post ? tile.post?.name : undefined) ??
+      (homeName !== null ? seedTitle(homeName) : undefined) ??
       `${terrain?.name ?? 'Mystery land'}${mine && !home ? HOMESTEAD_WORDS.tag(tile) : ''}`,
     about: terrain?.description ?? 'Nobody knows much about this spot yet.',
     owner,

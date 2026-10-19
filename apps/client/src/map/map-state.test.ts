@@ -115,6 +115,18 @@ describe('MapState', () => {
     );
   });
 
+  it("shows a member's home name live when they name it (#306)", () => {
+    const state = new MapState(testView(2));
+    const named = { userId: userId(2), name: 'Puddle Corner' };
+    expect(state.apply(event('member.named', named))).toBe('redraw');
+    expect(state.member(userId(2))?.homeName).toBe('Puddle Corner');
+    expect(state.view.members[1]?.homeName).toBe('Puddle Corner');
+    expect(state.member(userId(1))?.homeName).toBeUndefined();
+    // Someone this copy doesn't have: nothing to draw. Malformed: refetch.
+    expect(state.apply(event('member.named', { userId: userId(9), name: 'Nook' }))).toBe('none');
+    expect(state.apply(event('member.named', { userId: userId(2) }))).toBe('resync');
+  });
+
   it('follows squishy gatherers from tile to tile, and drops them on capture', () => {
     const state = new MapState(testView(2));
     const a = { q: 1, r: 0 };

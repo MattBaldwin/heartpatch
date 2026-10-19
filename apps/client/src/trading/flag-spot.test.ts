@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flagSpot, keeperCover } from './flag-spot.js';
+import { flagBox, flagSpot, keeperCover } from './flag-spot.js';
 
 const flag = { width: 120, height: 26 };
 // An iPhone in portrait; the corner buttons end 60px down.
@@ -111,5 +111,25 @@ describe('keeperCover', () => {
     expect(flagSpot(tile(190, 280), flag, { ...room, covers })).toBeNull();
     // Well above home: clear, over its tile.
     expect(flagSpot(tile(190, 200), flag, { ...room, covers })).toEqual({ x: 210, y: 200 });
+  });
+});
+
+describe('flags keep clear of each other (#306)', () => {
+  it("covers exactly the flag's box at its spot", () => {
+    expect(flagBox({ x: 200, y: 300 }, flag)).toEqual({ x: 140, y: 274, width: 120, height: 26 });
+  });
+
+  it('puts a second flag on the same spot under its tile, or hides it, never on top', () => {
+    const first = flagSpot(tile(180, 300), flag, room);
+    if (!first) throw new Error('no spot');
+    const covers = [flagBox(first, flag)];
+    const second = flagSpot(tile(190, 305), flag, { ...room, covers });
+    expect(second).toEqual({ x: 210, y: 361 });
+    if (!second) throw new Error('no spot');
+    const third = flagSpot(tile(185, 302), flag, {
+      ...room,
+      covers: [...covers, flagBox(second, flag)],
+    });
+    expect(third).toBeNull();
   });
 });

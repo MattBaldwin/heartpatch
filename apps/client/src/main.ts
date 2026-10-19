@@ -721,6 +721,8 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
+  // The name card's ideas come from my home ring's land (#306).
+  mapView: () => maps.view,
   loadWorkMoods: (mapId) => {
     jobs.loadView(mapId);
   },
@@ -1706,6 +1708,8 @@ if (import.meta.env.DEV) {
       rings: postFlags.rings,
       onScreen: postFlags.onScreen,
       connected: postFlags.connected,
+      homes: postFlags.homes,
+      boxes: postFlags.boxes,
     }),
     starter: () => starters.debug,
     lore: () => lorebook.debug,

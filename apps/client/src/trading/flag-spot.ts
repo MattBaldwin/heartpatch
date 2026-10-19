@@ -71,3 +71,11 @@ export function keeperCover(seed: Rect): Rect {
     height: seed.height + up,
   };
 }
+
+/** The box a flag covers once placed at `spot` (its bottom middle), a cover for the flags after it (#306). */
+export function flagBox(
+  spot: { x: number; y: number },
+  flag: { width: number; height: number },
+): Rect {
+  return { x: spot.x - flag.width / 2, y: spot.y - flag.height, width: flag.width, height: flag.height };
+}
