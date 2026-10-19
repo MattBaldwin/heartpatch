@@ -1,6 +1,6 @@
 import { HomeNameSchema, NAMING_RULES, type HomeNaming } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
-import { HOME_NAME_TEXT as T, KIND_NAMES, nameCard } from './home-name-view.js';
+import { HOME_NAME_TEXT as T, homeFlagLabel, KIND_NAMES, nameCard } from './home-name-view.js';
 
 // The "Name your home" card (#306 PR 0, owner-approved handoff): locked, it
 // shows how far along the gate is (one of each kind built, squishies
@@ -104,7 +104,7 @@ export function createHomeNameSheet(): HomeNameSheet {
       }
       if (card === 'named') {
         element.replaceChildren(
-          ...head(T.namedKicker, `🏡 ${naming.name ?? ''}`, T.namedLine),
+          ...head(T.namedKicker, homeFlagLabel(naming.name ?? ''), T.namedLine),
           button(T.back, 'home-name-back', false, props.onClose),
         );
         return;
