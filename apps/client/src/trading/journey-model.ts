@@ -38,6 +38,18 @@ export const JOURNEY_TEXT = {
   somePost: 'the trading post',
 } as const;
 
+/**
+ * Ms left on a visit pass that runs to `until` (the server's `visitUntil`), at
+ * `now` on the game clock; null with no pass or once it's over. `until` is
+ * server time, so `now` must be too: a phone whose clock is off (or a dev
+ * server set to Halloween) would count a device-clock pass wrong (#561).
+ */
+export function passLeft(until: string | null, now: number): number | null {
+  if (until === null) return null;
+  const left = Date.parse(until) - now;
+  return left > 0 ? left : null;
+}
+
 /** Lanterns in the preview's meter: more lit means a tougher trip (the mockup's six). */
 export const LANTERNS = 6;
 

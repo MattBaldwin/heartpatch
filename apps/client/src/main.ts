@@ -530,8 +530,11 @@ const communityActions = createCommunityActions();
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
 // a journey opens the battle screen like a tile battle.
 // The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
-const postScreen = createPostScreen({ root: document.body });
+// A visit pass ends on the server's clock, so both count it down on the bag's
+// game clock, not the device's (#561), as the recipe book does.
+const postScreen = createPostScreen({ root: document.body, now: () => inventory.gameNow() });
 const journeys = createJourneyScreen({
+  now: () => inventory.gameNow(),
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
