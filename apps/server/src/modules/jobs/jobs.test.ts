@@ -217,9 +217,15 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     return { ...far!, ownerUserId: who.id, terrain, nodeResource: null };
   }
 
+  /**
+   * A `resource` node in the player's home ring. Only home-base tiles count: a
+   * homestead (`makeHomestead`) is theirs too and can roll the same node, and
+   * picking it would stack a second building on that tile (#295's
+   * one-building-per-tile index).
+   */
   async function homeNode(server: FastifyInstance, who: Player, mapId: string, resource: string) {
     const tile = (await tilesOf(server, who, mapId)).find(
-      (t) => t.ownerUserId === who.id && t.nodeResource === resource,
+      (t) => t.ownerUserId === who.id && t.homeSlot !== null && t.nodeResource === resource,
     );
     expect(tile).toBeDefined();
     return tile!;
