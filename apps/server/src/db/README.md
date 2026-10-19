@@ -187,6 +187,10 @@ Family signup codes (migration 0026, #195).
 | `home_slot` | smallint, null | Which home base (`tiles.home_slot`) is theirs. Unique per map among active members. A removed member keeps the old value but holds no slot |
 | `joined_at` | timestamptz | |
 | `defense_stance` | enum `defense_stance`, default `'balanced'` | How their squishies on watch play when challenged (#16): `aggressive` \| `defensive` \| `balanced` (UI: Bold, Careful, Balanced). Read under the member lock in a challenge's start transaction |
+| `home_name` | text, null | Their home's name (migration 0050, #306), shown on its map flag. Written only by `POST /maps/:mapId/home/name`, through the text filter |
+| `home_named_at_level` | smallint, null | The Heart Seed level the name was last set at; a rename opens once the Heart Seed grows past it |
+| `caught_count` | integer, default 0 | Squishies befriended in battle on this patch (`squishy.captured`), counted by the `home-naming` consumer. Back-filled by 0050 |
+| `kinds_built` | text[], default `'{}'` | Buildable kinds built here at least once (`building.placed`, `fence.built`), a set kept by the `home-naming` consumer; taking one down keeps it. Back-filled by 0050 from events and what stands |
 
 The players-per-map limit (up to 6; older patches keep 4, #318) is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
