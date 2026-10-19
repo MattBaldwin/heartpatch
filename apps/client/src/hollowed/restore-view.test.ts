@@ -42,9 +42,9 @@ const sheet = (over: Partial<RestoreTileResponse> = {}): RestoreTileResponse => 
 
 describe('restoreSheetWords (#306 PR 3)', () => {
   it('shows the plan’s sheet from the server’s reply', () => {
-    const words = restoreSheetWords(sheet(), 'meadow', members);
-    expect(words.kicker).toBe('BRAMBLE HOLLOW · 1 of 5 tiles restored');
-    expect(words.title).toBe('Restore this Meadow 🛠️');
+    const words = restoreSheetWords(sheet(), members);
+    expect(words.kicker).toBe('BRAMBLE HOLLOW · 1/5 restored');
+    expect(words.title).toBe('Restore this spot 🛠️');
     expect(words.pieces).toBe('Pieces put back: 2 of 4');
     expect(words.helpers).toEqual(['Mia put back 2 pieces']);
     expect(words.costs.map((c) => c.label)).toEqual([
@@ -60,7 +60,6 @@ describe('restoreSheetWords (#306 PR 3)', () => {
   it('names the square’s building, from the village’s kind', () => {
     const words = restoreSheetWords(
       sheet({ tile: { q: 4, r: -2, piecesDone: 0, piecesNeeded: 4, restoredBy: null } }),
-      'meadow',
       members,
     );
     expect(words.title).toBe('Restore the Old Well ⛲');
@@ -69,19 +68,17 @@ describe('restoreSheetWords (#306 PR 3)', () => {
   it('says when the next piece is the one that claims the tile', () => {
     const words = restoreSheetWords(
       sheet({ tile: { q: 3, r: -2, piecesDone: 3, piecesNeeded: 4, restoredBy: null } }),
-      'meadow',
       members,
     );
     expect(words.note).toBe(RESTORE_TEXT.lastPiece);
   });
 
   it('says why the button waits: the server’s reason first, then what I’m short of', () => {
-    expect(restoreSheetWords(sheet({ problem: 'night' }), 'meadow', members).blocked).toBe(
+    expect(restoreSheetWords(sheet({ problem: 'night' }), members).blocked).toBe(
       RESTORE_TEXT.problem.night,
     );
     const short = restoreSheetWords(
       sheet({ have: { timber: 4, stone: 9, heartdust: 0 } }),
-      'meadow',
       members,
     );
     expect(short.blocked).toBe('You need 2 more Timber and 1 more Heartdust first!');

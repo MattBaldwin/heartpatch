@@ -165,6 +165,7 @@ describe('MapScene', () => {
       materials: scene.materials.length,
       enabled: enabled(),
       seeds: instances('heart-seed'),
+      homeTiles: instances('tiles-home'),
       grey: map.stats.hollowedTiles,
     };
     const ring = new Set([village.square, ...hexNeighbors(village.square)].map(hexKey));
@@ -177,9 +178,11 @@ describe('MapScene', () => {
       ),
       communities: [{ ...village, ownerUserId: userId(1), named: false }, ...rest],
     });
-    // Its own Heart Seed is one more instance of the seed mesh; the ring is
-    // recoloured and lifted in the instance data of meshes already built.
+    // Its own Heart Seed is one more instance of the seed mesh; the ring
+    // moves into the home tile mesh (instance data of meshes already built).
     expect(instances('heart-seed')).toBe(before.seeds + 1);
+    // The ring's new home tiles join the home tile mesh, as instances.
+    expect(instances('tiles-home')).toBe(before.homeTiles + ring.size);
     expect(map.stats.hollowedTiles).toBe(before.grey - village.tiles.length);
     expect(scene.meshes.length).toBe(before.meshes);
     expect(scene.materials.length).toBe(before.materials);

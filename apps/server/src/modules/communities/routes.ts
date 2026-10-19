@@ -3,6 +3,7 @@ import {
   CommunityParamsSchema,
   CommunityTileQuerySchema,
   CommunityViewSchema,
+  DevVillageAlmostRequestSchema,
   MapIdParamsSchema,
   RestorePieceRequestSchema,
   RestoreTileResponseSchema,
@@ -98,11 +99,23 @@ export const communityRoutes =
       app.post(
         '/maps/:mapId/dev/village-almost',
         {
-          schema: { params: MapIdParamsSchema, response: { 201: CommunityViewSchema } },
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevVillageAlmostRequestSchema.nullish(),
+            response: { 201: CommunityViewSchema },
+          },
           preHandler: [requireAuth, rateLimit('communities')],
         },
         async (request, reply) =>
-          reply.code(201).send(await service.devAlmost(requireUser(request), request.params.mapId)),
+          reply
+            .code(201)
+            .send(
+              await service.devAlmost(
+                requireUser(request),
+                request.params.mapId,
+                request.body?.communityId,
+              ),
+            ),
       );
     }
 

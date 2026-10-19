@@ -269,7 +269,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     });
     expect(ledger).toHaveLength(1);
     expect(ledger[0]).toMatchObject({ userId: me.id, pieces: 1, paid: cost });
-    expect(await eventsOf(mapId, 'community.pieceRestored')).toHaveLength(1);
+    expect(await eventsOf(mapId, 'community.mended')).toHaveLength(1);
 
     // The same tap again (it said 0 done): nothing more is paid or put back.
     const retry = await restore(server, me, mapId, communityId, square, 0);
@@ -289,7 +289,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     expect(errorOf(res).message).toMatch(/^You need .* first!$/);
     expect(await bagOf(mapId, me)).toEqual(before);
     expect((await sheetOf(server, me, mapId, communityId, square)).tile.piecesDone).toBe(0);
-    expect(await eventsOf(mapId, 'community.pieceRestored')).toHaveLength(0);
+    expect(await eventsOf(mapId, 'community.mended')).toHaveLength(0);
   });
 
   it('claims the tile with its last piece, and wins the village and its ring with the last tile', async () => {
@@ -316,7 +316,9 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
       await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${theirs.id}'`);
     }
 
-    const almost = await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me);
+    const almost = await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, {
+      communityId,
+    });
     expect(almost.statusCode, almost.body).toBe(201);
     const ordered = [...village].sort((a, b) =>
       a.tile.id === square.id ? 1 : b.tile.id === square.id ? -1 : 0,
@@ -330,7 +332,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
       expect(last.outcome).toBe(i === ordered.length - 1 ? 'village' : 'tile');
       expect(last.tile.restoredBy).toBe(me.id);
     }
-    expect(await eventsOf(mapId, 'community.tileRestored')).toHaveLength(village.length);
+    expect(await eventsOf(mapId, 'tile.restored')).toHaveLength(village.length);
     const [won] = await eventsOf(mapId, 'community.restored');
     expect(won?.payload).toMatchObject({
       communityId,
@@ -433,7 +435,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
       spot: 0,
     });
 
-    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me);
+    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, { communityId });
     for (const v of village) {
       const res = await restore(server, me, mapId, communityId, v.tile, v.piecesNeeded - 1);
       expect(res.statusCode, res.body).toBe(200);
@@ -460,7 +462,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const rival = await player();
     const mapId = await patch(server, me, [rival]);
     const { communityId, village } = await reachVillage(server, me, mapId);
-    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me);
+    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, { communityId });
     for (const v of village)
       await restore(server, me, mapId, communityId, v.tile, v.piecesNeeded - 1);
 
@@ -491,7 +493,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const me = await player();
     const mapId = await patch(server, owner, [me]);
     const { communityId, village } = await reachVillage(server, me, mapId);
-    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me);
+    await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, { communityId });
     for (const v of village)
       await restore(server, me, mapId, communityId, v.tile, v.piecesNeeded - 1);
     await call(server, 'POST', `/maps/${mapId}/communities/${communityId}/name`, me, {

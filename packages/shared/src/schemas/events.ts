@@ -509,7 +509,7 @@ export const GAME_EVENTS = {
    * Someone put a piece back on a grey village tile (#306 PR 3): the
    * village's progress for everyone. Public, like the land it becomes.
    */
-  'community.pieceRestored': {
+  'community.mended': {
     internal: z.strictObject({
       communityId: z.uuid(),
       userId: z.uuid(),
@@ -526,7 +526,7 @@ export const GAME_EVENTS = {
     }),
   },
   /** That piece was the tile's last: it's restored, and its restorer claimed it (#306 PR 3). */
-  'community.tileRestored': {
+  'tile.restored': {
     internal: z.strictObject({ communityId: z.uuid(), userId: z.uuid(), ...coords }),
     public: z.object({ communityId: z.uuid(), userId: z.uuid(), ...coords }),
   },

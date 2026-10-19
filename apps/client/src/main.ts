@@ -519,6 +519,9 @@ const darkLand = createDarkLand(
 const stillPans = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** How close the camera moves in on a tile being built on, so its edges are easy to tap. TUNE: */
 const BUILD_ZOOM = 12;
+/** How far up and how close a won village's ring shows above its card (#306 PR 3). TUNE: */
+const RING_RAISE = 0.3;
+const RING_ZOOM = 16;
 const panToTile = (h: Hex): void => {
   stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
 };
@@ -920,11 +923,18 @@ const restoreSheet = createRestoreSheet({
   root: document.body,
   mapId: () => maps.view?.map.id ?? null,
   members: () => maps.view?.members ?? [],
-  terrainAt: (at) =>
-    maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r)?.terrain ?? 'meadow',
   expectHitch: () => stage?.quality.expectHitch(),
   onOpen: () => {
     maps.deselect();
+  },
+  // Above the sheet along the bottom; a won ring a little wider, so all of it shows.
+  reveal: (at, wide) => {
+    stage?.camera.panTo(
+      hexToWorld(at, HEX_SIZE),
+      stillPans.matches,
+      wide ? RING_RAISE : 0.34,
+      wide ? RING_ZOOM : BUILD_ZOOM,
+    );
   },
 });
 communityActions.wire('restore', (community, tile) => {

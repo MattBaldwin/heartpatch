@@ -115,7 +115,7 @@ export interface RestoreService {
    * touches gets every unrestored tile to one piece short, and my bag what
    * those last pieces cost. Replies with the village, or NOT_FOUND.
    */
-  devAlmost: (user: PublicUser, mapId: string) => Promise<CommunityView>;
+  devAlmost: (user: PublicUser, mapId: string, communityId?: string) => Promise<CommunityView>;
 }
 
 /** Adds `items` into `into`. */
@@ -352,7 +352,7 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
         const events: NewGameEvent[] = [
           {
             mapId,
-            type: 'community.pieceRestored',
+            type: 'community.mended',
             actorUserId: user.id,
             payload: {
               communityId,
@@ -368,7 +368,7 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           await repo.markRestored(tile.tileId, user.id, at);
           events.push({
             mapId,
-            type: 'community.tileRestored',
+            type: 'tile.restored',
             actorUserId: user.id,
             payload: { communityId, userId: user.id, q: tile.q, r: tile.r },
           });
@@ -433,12 +433,15 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
       return result;
     },
 
-    devAlmost: async (user, mapId) =>
+    devAlmost: async (user, mapId, communityId) =>
       communitiesTransaction(db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const tiles = await createTerritoryRepo(tx).listTiles(mapId);
         const village = (await communitiesView(tx, { mapId, userId: user.id, tiles })).find(
-          (c) => c.ownerUserId === null && c.reach === 'touching',
+          (c) =>
+            c.ownerUserId === null &&
+            c.reach === 'touching' &&
+            (communityId === undefined || c.id === communityId),
         );
         if (!village) throw new AppError('NOT_FOUND', MESSAGES.noTile);
         const left = (await repo.listCommunityTiles(village.id)).filter(

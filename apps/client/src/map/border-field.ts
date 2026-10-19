@@ -108,9 +108,13 @@ export class BorderField {
     const moved = villageKey !== this.villagesDrawn || host !== this.villageHost;
     for (const slot of new Set([...bySlot.keys(), ...this.drawn.keys()])) {
       const land = bySlot.get(slot) ?? [];
-      // Which tiles they hold is all that changes a border in play: a tile's
-      // terrain and home slot (its height and badge) are fixed for a map.
-      const key = land.map(hexKey).sort().join(';');
+      // Which tiles they hold changes a border in play, and so does land
+      // turning home (a won village's ring, #306 PR 3: its height and badge).
+      // A tile's terrain is fixed for a map.
+      const key = land
+        .map((t) => `${hexKey(t)}${t.homeSlot !== null ? 'h' : ''}`)
+        .sort()
+        .join(';');
       const carries = moved && (slot === host || slot === this.villageHost);
       if ((this.drawn.get(slot) ?? '') === key && !carries) continue;
       this.drawn.set(slot, key);

@@ -79,8 +79,8 @@ export class MapState {
       // my reach come with the view. A piece went back on a village tile, a
       // tile was restored and claimed, a village was won and its ring planted,
       // or it was named (PR 3): the view has the progress, the land and the ring.
-      case 'community.pieceRestored':
-      case 'community.tileRestored':
+      case 'community.mended':
+      case 'tile.restored':
       case 'community.restored':
       case 'community.named':
       case 'member.joined':

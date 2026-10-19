@@ -34,17 +34,17 @@ export interface RestoreSheetOptions {
   api?: RestoreApi;
   mapId: () => string | null;
   members: () => readonly MapMember[];
-  /** The terrain of a map tile (the sheet's title). */
-  terrainAt: (at: Hex) => string;
   /** A burst of work is about to land: the render governor lets it pass (#501 G). */
   expectHitch: () => void;
   /** The sheet opened: the map's tile panel steps aside. */
   onOpen?: () => void;
+  /** Glides the camera so a tile sits above the sheet (the restore sheet's tile, the won ring). */
+  reveal?: (at: Hex, wide: boolean) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface RestoreSheetDebug {
-  readonly card: 'restore' | 'name' | null;
+  readonly card: 'restore' | 'won' | 'name' | null;
   readonly piecesDone: number | null;
   readonly blocked: string | null;
   readonly said: string | null;
@@ -76,8 +76,8 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
   let reply: RestoreTileResponse | null = null;
   let said: string | null = null;
   let blocked: string | null = null;
-  /** The village the naming card names, and its error line. */
-  let naming: { community: CommunityView; error: string | null; party: boolean } | null = null;
+  /** The village the won and naming cards are about, and the naming card's error line. */
+  let naming: { community: CommunityView; error: string | null } | null = null;
   const input = el('input', {
     type: 'text',
     class: 'hollowed-input',
@@ -126,7 +126,7 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
   const renderRestore = (): void => {
     const r = reply;
     if (!r) return;
-    const words = restoreSheetWords(r, options.terrainAt(r.tile), options.members());
+    const words = restoreSheetWords(r, options.members());
     blocked = words.blocked;
     const go = button(working ? T.working : T.restore, 'restore-piece', false, () => {
       void restore();
@@ -219,21 +219,42 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       }
       void name(parsed.data);
     });
-    const sparkles = el(
-      'div',
-      {
-        class: `milestone-sparkles${n.party ? ' milestone-sparkles-on' : ''}`,
-        'aria-hidden': 'true',
-      },
-      ...['✨', '🌈', '⭐', '💖', '✨', '🌱'].map((s) => el('span', {}, s)),
-    );
     sheet.replaceChildren(
-      sparkles,
       el('p', { class: 'hollowed-kicker' }, T.wonKicker(c.name, c.tiles.length)),
       el('h3', { class: 'hollowed-title', id: 'hollowed-sheet-title' }, T.wonTitle),
       el('p', { class: 'hollowed-line' }, T.wonLine),
-      el('p', { class: 'hollowed-seed', 'data-testid': 'village-seed-line' }, T.wonSeed),
       form,
+    );
+  };
+
+  /**
+   * The full-restore moment: a short card under the ring, so the village's
+   * new Heart Seed and its ring show above it, with the milestone card's
+   * sparkles (CSS only). "Name it" opens the naming card.
+   */
+  const renderWon = (): void => {
+    const n = naming;
+    if (!n) return;
+    const c = n.community;
+    sheet.replaceChildren(
+      el(
+        'div',
+        { class: 'milestone-sparkles milestone-sparkles-on', 'aria-hidden': 'true' },
+        ...['✨', '🌈', '⭐', '💖', '✨', '🌱'].map((s) => el('span', {}, s)),
+      ),
+      el('p', { class: 'hollowed-kicker' }, T.wonKicker(c.name, c.tiles.length)),
+      el('h3', { class: 'hollowed-title', id: 'hollowed-sheet-title' }, T.wonTitle),
+      el('p', { class: 'hollowed-seed', 'data-testid': 'village-seed-line' }, T.wonSeed),
+      el(
+        'div',
+        { class: 'hollowed-actions' },
+        button(T.nameIt, 'village-won-name', false, () => {
+          card = 'name';
+          renderName();
+          input.focus();
+        }),
+        button(T.later, 'village-won-later', true, close),
+      ),
     );
   };
 
@@ -270,13 +291,15 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       working = false;
       if (next.outcome === 'village') {
         // The map recolours the ring, lifts it home and plants the seed as
-        // the live event lands: let that burst pass, then the party.
+        // the live event lands: let that burst pass, then the party, with
+        // the camera on the ring above the card.
         options.expectHitch();
         input.value = villageNameIdeas(next.community)[0] ?? next.community.name;
-        naming = { community: next.community, error: null, party: true };
-        card = 'name';
+        naming = { community: next.community, error: null };
+        card = 'won';
         reply = null;
-        renderName();
+        renderWon();
+        options.reveal?.(next.community.square, true);
         return;
       }
       if (next.outcome === 'tile') options.expectHitch();
@@ -328,6 +351,7 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       card = 'restore';
       sheet.replaceChildren(el('p', { class: 'hollowed-line' }, T.working));
       show();
+      options.reveal?.(at, false);
       void api
         .sheet(mapId, community.id, at)
         .then((next) => {
@@ -347,9 +371,10 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       close();
       card = 'name';
       input.value = villageNameIdeas(community)[0] ?? community.name;
-      naming = { community, error: null, party: false };
+      naming = { community, error: null };
       renderName();
       show();
+      options.reveal?.(community.square, true);
     },
     close,
     get debug() {

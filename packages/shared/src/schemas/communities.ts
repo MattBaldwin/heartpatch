@@ -92,6 +92,9 @@ export const RestoreTileResponseSchema = z.object({
 });
 export type RestoreTileResponse = z.infer<typeof RestoreTileResponseSchema>;
 
+/** Dev only: which village to bring to its last pieces (else the first my land touches). */
+export const DevVillageAlmostRequestSchema = z.object({ communityId: z.uuid().optional() });
+
 /** Name a won village (#306 PR 3): the same name rules as a home. */
 export const CommunityNameRequestSchema = z.object({ name: HomeNameSchema });
 export type CommunityNameRequest = z.infer<typeof CommunityNameRequestSchema>;

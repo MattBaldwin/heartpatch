@@ -5,7 +5,6 @@ import {
   needMoreText,
   restoredNameIdeas,
   shortfall,
-  TERRAINS,
   type CommunityRules,
   type CommunityView,
   type MapMember,
@@ -21,17 +20,17 @@ import { itemIcon } from '../inventory/item-icons.js';
 
 export const RESTORE_TEXT = {
   kicker: (name: string, restored: number, total: number) =>
-    `${name.toUpperCase()} · ${String(restored)} of ${String(total)} tiles restored`,
+    `${name.toUpperCase()} · ${String(restored)}/${String(total)} restored`,
   /** The square holds the kind's building; every other tile, its own little ruin. */
   squareTitle: (kind: string, emoji: string) => `Restore the ${kind} ${emoji}`,
-  tileTitle: (terrain: string) => `Restore this ${terrain} 🛠️`,
+  tileTitle: 'Restore this spot 🛠️',
   pieces: (done: number, needed: number) => `Pieces put back: ${String(done)} of ${String(needed)}`,
   helper: (who: string, n: number) =>
     `${who} put back ${String(n)} ${n === 1 ? 'piece' : 'pieces'}`,
   someone: 'A friend',
   cost: (item: string, n: number) => `${itemIcon(item)} ${nameOf(item)} × ${String(n)}`,
   have: (n: number) => `you have ${String(n)}`,
-  note: 'Helpers get a thank-you gift 🎁 Whoever adds the last piece claims this tile!',
+  note: 'Helpers get a thank-you 🎁 The last piece claims the tile!',
   lastPiece: 'The last piece! Whoever adds it claims this tile ✨',
   restore: 'Restore a piece 🛠️',
   working: 'Fixing it up… 🛠️',
@@ -51,6 +50,7 @@ export const RESTORE_TEXT = {
   wonTitle: 'The joy is back! 🌈',
   wonLine: 'You brought this village back to life. What will you call it?',
   wonSeed: '🌱 A new Heart Seed! It and the tiles around it are yours for keeps.',
+  later: 'Later',
   label: 'Its new name',
   placeholder: 'Type a name…',
   ideas: 'Name ideas',
@@ -91,23 +91,19 @@ export interface RestoreSheetWords {
 
 export function restoreSheetWords(
   sheet: RestoreTileResponse,
-  terrain: string,
   members: readonly MapMember[],
   rules: CommunityRules = COMMUNITY_RULES,
 ): RestoreSheetWords {
   const { community: c, tile } = sheet;
   const square = tile.q === c.square.q && tile.r === c.square.r;
   const kind = rules.kinds.find((k) => k.id === c.kind);
-  const terrainName = TERRAINS.find((t) => t.id === terrain)?.name ?? 'spot';
   const short = shortfall(sheet.have, sheet.cost);
   const nameOfUser = (id: string) =>
     members.find((m) => m.user.id === id)?.user.username ?? RESTORE_TEXT.someone;
   return {
     kicker: RESTORE_TEXT.kicker(c.name, c.restored, c.tiles.length),
     title:
-      square && kind
-        ? RESTORE_TEXT.squareTitle(kind.name, kind.emoji)
-        : RESTORE_TEXT.tileTitle(terrainName),
+      square && kind ? RESTORE_TEXT.squareTitle(kind.name, kind.emoji) : RESTORE_TEXT.tileTitle,
     pieces: RESTORE_TEXT.pieces(tile.piecesDone, tile.piecesNeeded),
     done: tile.piecesDone,
     needed: tile.piecesNeeded,

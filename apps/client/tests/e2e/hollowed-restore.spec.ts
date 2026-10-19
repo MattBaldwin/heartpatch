@@ -107,8 +107,9 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
       continue;
     }
 
-    // The win: the naming card, and the map redraws the ring as mine.
-    await slowExpect(page.getByTestId('village-name-it')).toBeVisible();
+    // The win: the joy-is-back card, and the map redraws the ring as mine.
+    await slowExpect(page.getByTestId('village-won-name')).toBeVisible();
+    await expect(page.getByTestId('village-seed-line')).toBeVisible();
     expect(await hitchesExpected(page)).toBeGreaterThan(before.hitches);
     await expect
       .poll(
@@ -119,7 +120,8 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
       .not.toBeNull();
     // A redraw of instance data on meshes already built: no shader program linked.
     if (before.programs !== null) expect(await programs(page)).toBe(before.programs);
-    // The card fits: its button is on screen without scrolling off.
+    // "Name it" opens the naming card, whose button fits on screen.
+    await page.getByTestId('village-won-name').tap();
     const box = await page.getByTestId('village-name-it').boundingBox();
     const height = page.viewportSize()!.height;
     expect(box && box.y + box.height <= height).toBe(true);
