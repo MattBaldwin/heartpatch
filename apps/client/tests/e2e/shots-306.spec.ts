@@ -77,8 +77,9 @@ async function reopen(page: Page, query: string): Promise<void> {
   }
   await waitMap(page);
   // Sprout's one-time tray hint would sit in every capture.
+  // On a short phone it can sit under an opening card and never settle: a quick, forced tap, or skip it.
   const gotIt = page.getByRole('button', { name: 'Got it!' });
-  if (await gotIt.isVisible()) await gotIt.tap();
+  if (await gotIt.isVisible()) await gotIt.tap({ timeout: 5_000, force: true }).catch(() => {});
   await settle(page, 500);
 }
 
