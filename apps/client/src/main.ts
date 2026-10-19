@@ -1751,5 +1751,8 @@ if (import.meta.env.DEV) {
 // The stats badge: dev builds, or `?fps=1` on the live site (#335, the owner's device check).
 if (showsStats(import.meta.env.DEV, params)) {
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
-  mountDevOverlay(() => stage);
+  mountDevOverlay(
+    () => stage,
+    () => explore.ambient,
+  );
 }

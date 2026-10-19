@@ -763,3 +763,184 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   font-size: 22px;
   line-height: 1;
 }
+
+/* ── Move buttons that say what they do (#565) ──────────────────────
+   Name, then a kind chip (icon + word + tint, never colour alone), the
+   number worth a glance, a strong/weak mark, and one plain line. */
+
+.battle-move {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  min-height: 58px;
+  /* Roomy: engines size a glyph's box a pixel apart, and the style guide wants 8px of air. */
+  padding: 10px;
+  text-align: left;
+  line-height: 1.15;
+  background: var(--move-bg, #ffc9d7);
+  box-shadow: 0 3px 0 var(--move-edge, #f2a4bb);
+}
+
+.battle-move:active {
+  box-shadow: 0 1px 0 var(--move-edge, #f2a4bb);
+}
+
+.battle-move-boop {
+  --move-bg: #ffc9d7;
+  --move-edge: #f2a4bb;
+}
+
+.battle-move-heal {
+  --move-bg: #c9f2df;
+  --move-edge: #94d8b8;
+}
+
+.battle-move-shield {
+  --move-bg: #cde6ff;
+  --move-edge: #9cc7f2;
+}
+
+.battle-move-boost {
+  --move-bg: #ffe9a8;
+  --move-edge: #f0cf6a;
+}
+
+.battle-move-weaken {
+  --move-bg: #e6d6ff;
+  --move-edge: #c6aeee;
+}
+
+.battle-move-status {
+  --move-bg: #d9e0ff;
+  --move-edge: #b3bdf0;
+}
+
+.battle-move-name {
+  /* Not tighter than the glyphs: the roomy-labels check measures their box. */
+  line-height: 1.25;
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.battle-move-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.battle-move-chips > span {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.battle-move-edge-strong {
+  color: #1f6b43;
+}
+
+.battle-move-edge-weak {
+  color: #8a4a12;
+}
+
+.battle-move-line {
+  font-size: 12.5px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.battle-move-more {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.battle-moves-more .battle-move-more {
+  display: flex;
+}
+
+.battle-move-number {
+  padding-left: 4px;
+  border-left: 2px solid rgb(90 58 93 / 25%);
+}
+
+/* The moves come first: a quieter caption on a tall phone, none on a short one. */
+.battle-sheet[data-mode='choose'] > .battle-caption {
+  font-size: 15px;
+}
+
+/* An iPhone (SE 667 px to Pro 852 px): the buttons shrink so the four moves,
+   ⓘ, Heart Charm and Swap fit inside the 35% sheet. On the shortest, the
+   intro line steps aside and Run away may scroll, as it did before. */
+@media (max-height: 880px) {
+  .battle-move {
+    gap: 1px;
+    min-height: 0;
+    padding: var(--hp-pad-y) 10px calc(var(--hp-pad-y) + 1px);
+    line-height: 1.1;
+  }
+
+  .battle-move-name {
+    font-size: 14px;
+  }
+
+  .battle-move-chips {
+    flex-wrap: nowrap;
+    gap: 3px;
+  }
+
+  .battle-move-chips > span {
+    padding: 0 5px;
+    font-size: 11px;
+  }
+
+  .battle-move-line {
+    font-size: 11.5px;
+  }
+}
+
+@media (max-height: 700px) {
+  .battle-sheet[data-mode='choose'] > .battle-caption {
+    display: none;
+  }
+
+  /* ⓘ is a fourth button on the Heart Charm row: a tighter gap keeps Swap on it at 375 px. */
+  .battle-sheet[data-mode='choose'] .battle-row {
+    gap: 4px;
+  }
+}
+
+/* A live battle's three-column pick is narrow: name, kind chip with its
+   power, and the strong/weak arrow. The line is in the button's spoken label. */
+.battle-sheet:has(> .battle-live:not([hidden])) .battle-move-line,
+.battle-sheet:has(> .battle-live:not([hidden])) .battle-move-edge-word,
+.battle-sheet:has(> .battle-live:not([hidden])) [data-testid='battle-moves-more'] {
+  display: none;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden])) .battle-move-chips {
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden])) .battle-move-chips > span {
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+/* The live pick's compact buttons keep the same air around their text. */
+.battle-sheet:has(> .battle-live:not([hidden]))
+  > .battle-controls[data-view='pick']
+  .battle-button.battle-move {
+  padding: var(--hp-pad-y) 8px calc(var(--hp-pad-y) + 1px);
+}

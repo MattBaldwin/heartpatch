@@ -36,6 +36,12 @@ const BUILD_MESH_CEILING = 60;
  * 110; the first build also uploads the kit, and each build made about 2.4k).
  */
 const REBUILD_BUFFER_CEILING = 200;
+/**
+ * A find makes next to no WebGL buffers (#501 H): the toast, card and flying
+ * finds are page elements and the cheer moves the Keeper's batches in place.
+ * Headroom for a stage target the browser remakes.
+ */
+const FIND_BUFFER_CEILING = 20;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
@@ -85,6 +91,8 @@ interface ExploreDebug {
     gl: { buffers: number; programs: number } | null;
     warm: boolean;
     land: { tier: string } | null;
+    water: { layers: Record<string, number> } | null;
+    ambient: { mode: string; slow: boolean; hitches: number };
   } | null;
 }
 
@@ -558,15 +566,33 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   }
 });
 
-test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ browser }) => {
-  test.setTimeout(180_000); // one scene build; CI renders in software
+test('a tap on the lakebed swims the Keeper there, and a find leaves the lake alive (#510, #501 H)', async ({
+  browser,
+}) => {
+  test.setTimeout(420_000); // one scene build on medium, a swim and a find; CI renders in software
   const page = await newPlayer(browser, uniqueName('swim'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // Medium, pinned (dev `?tier=`, governor off): the lake's fish and bubbles
+  // swim there (low draws no ambient life), and the tier can't move under the
+  // find. Pinned, the scene's judge never runs (a software renderer would
+  // always be "slow"), so whether a find trips it is the unit tests' to prove
+  // (ambient-layout.test.ts); here the find must tell the judge, twice.
+  await page.goto('/?tier=medium');
   // A new patch has no lake at home: explore its Heart Seed tile as one, so
-  // the client builds the underwater scene for it (only the look changes).
+  // the client builds the underwater scene for it (only the look changes),
+  // with bubble springs and reed beds for its spots, searched with the Snorkel.
   await page.route('**/maps/*/explore?*', async (route) => {
     const res = await route.fetch();
-    const body = (await res.json()) as { terrain: string };
+    const body = (await res.json()) as {
+      terrain: string;
+      spots: { kind: string; tool: string | null }[];
+    };
     body.terrain = 'lake';
+    body.spots.forEach((s, i) => {
+      s.kind = i % 2 === 0 ? 'pond' : 'reeds';
+      s.tool = 'net';
+    });
     await route.fulfill({ response: res, json: body });
   });
   const lobby = page.getByTestId('lobby');
@@ -576,6 +602,12 @@ test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ 
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // Every tool, so the server's own spot (whatever it needs) can be searched.
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { shovel: 1, net: 1, rope: 1, lantern: 1 },
+  });
+  expect(granted.status).toBe(201);
   const box = (await page.locator('#game').boundingBox())!;
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
@@ -586,26 +618,81 @@ test('a tap on the lakebed swims the Keeper there, as on land (#510)', async ({ 
   }).toPass(slow);
   await explore.tap();
 
-  await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
-  expect((await exploreState(page))?.scene?.sky.underwater).toBe(true);
-  // A lake builds without throwaway meshes too (#501 D1).
-  expect((await exploreState(page))?.scene?.created.meshes ?? 0).toBeLessThanOrEqual(
-    BUILD_MESH_CEILING,
-  );
-  // Taps once it has loaded, the programs it shows later compiled too (#501 D1).
-  await expect.poll(async () => (await exploreState(page))?.scene?.warm, slow).toBe(true);
-  await keeperStill(page);
-  const from = (await exploreState(page))!.keeper;
-  // Somewhere on the lakebed a little way off, clear of the spots.
-  const to = { x: from.x + 0.12, z: from.z + 0.12 };
-  const tap = await waypoint(page, to);
-  expect(tap, 'a tappable point on the lakebed').not.toBeNull();
-  await realTapAt(page, tap!.x, tap!.y);
-  await expect
-    .poll(async () => {
-      const k = (await exploreState(page))!.keeper;
-      return Math.hypot(k.x - from.x, k.z - from.z);
-    }, slow)
-    .toBeGreaterThan(0.03);
-  await page.getByTestId('explore-back').tap();
+  try {
+    await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+    expect((await exploreState(page))?.scene?.sky.underwater).toBe(true);
+    // A lake builds without throwaway meshes too (#501 D1).
+    expect((await exploreState(page))?.scene?.created.meshes ?? 0).toBeLessThanOrEqual(
+      BUILD_MESH_CEILING,
+    );
+    // Taps once it has loaded, the programs it shows later compiled too (#501 D1).
+    await expect.poll(async () => (await exploreState(page))?.scene?.warm, slow).toBe(true);
+    await keeperStill(page);
+    const from = (await exploreState(page))!.keeper;
+    // Somewhere on the lakebed a little way off, clear of the spots.
+    const to = { x: from.x + 0.12, z: from.z + 0.12 };
+    const tap = await waypoint(page, to);
+    expect(tap, 'a tappable point on the lakebed').not.toBeNull();
+    await realTapAt(page, tap!.x, tap!.y);
+    await expect
+      .poll(async () => {
+        const k = (await exploreState(page))!.keeper;
+        return Math.hypot(k.x - from.x, k.z - from.z);
+      }, slow)
+      .toBeGreaterThan(0.03);
+    await keeperStill(page);
+
+    // A find on the lake (#501 H, the owner's "glint, tap, celebrate, frozen"):
+    // up to a bubble spring or a reed bed, the easy way, then the toast or
+    // card and the cheer. Nothing compiles or uploads mid-find, and the
+    // water's life keeps going after it.
+    const live = (await exploreState(page))!.scene!;
+    expect(live.ambient).toMatchObject({ mode: 'live', slow: false });
+    expect(live.water?.layers['fish'] ?? 0).toBeGreaterThan(0);
+    expect(live.water?.layers['bubbles'] ?? 0).toBeGreaterThan(0);
+    const spots = (await exploreState(page))!.spots.filter((s) => !s.done);
+    const ids = spots.map((s) => s.index);
+    let reached = false;
+    for (const spot of nearestFirst(spots, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if ((reached = await walkTo(page, spot.index, ids))) break;
+    }
+    expect(reached, 'swam up to a spring or a reed bed').toBe(true);
+    await slowExpect(page.getByTestId('explore-action')).toBeEnabled();
+    const before = (await exploreState(page))!.scene!;
+    const hitches = (await hitchesExpected(page)) ?? 0;
+    await page.getByTestId('explore-action').tap();
+    const play = page.getByTestId('explore-play');
+    await slowExpect(play).toBeVisible();
+    for (let i = 0; i < 12 && (await play.isVisible()); i++) {
+      await page.getByTestId('explore-easy').tap();
+    }
+    await expect
+      .poll(async () => (await exploreState(page))?.scene?.done, slow)
+      .toBe(before.done + 1);
+    await page.waitForTimeout(2_000);
+    const found = (await exploreState(page))!.scene!;
+    test.info().annotations.push({
+      type: 'lake find: programs, buffers',
+      description: `${String((found.gl?.programs ?? 0) - (before.gl?.programs ?? 0))}, ${String((found.gl?.buffers ?? 0) - (before.gl?.buffers ?? 0))}`,
+    });
+    expect(found.gl?.programs).toBe(before.gl?.programs);
+    expect((found.gl?.buffers ?? 0) - (before.gl?.buffers ?? 0)).toBeLessThanOrEqual(
+      FIND_BUFFER_CEILING,
+    );
+    // The find told the governor (#501 G) and the scene's judge (#501 H), at
+    // its start and as it landed, and the water still swims.
+    expect(await hitchesExpected(page)).toBeGreaterThanOrEqual(hitches + 2);
+    expect(found.ambient.hitches).toBeGreaterThanOrEqual(before.ambient.hitches + 2);
+    expect(found.ambient).toMatchObject({ mode: 'live', slow: false });
+    expect(found.water?.layers['fish'] ?? 0).toBeGreaterThan(0);
+    expect(found.water?.layers['bubbles'] ?? 0).toBeGreaterThan(0);
+    const sheet = page.getByTestId('explore-sheet');
+    if (await sheet.isVisible()) await sheet.getByTestId('explore-yay').tap();
+    expect(errors).toEqual([]);
+    await page.getByTestId('explore-back').tap();
+  } finally {
+    // Pinned, its ambient life never stops for a slow renderer: close it, so it
+    // doesn't keep drawing under the next test.
+    await page.context().close();
+  }
 });
