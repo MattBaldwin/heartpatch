@@ -34,6 +34,7 @@ import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
 import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
+import { seedName } from '../home/home-name-view.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
 import { wildMarkers } from './wild-markers.js';
@@ -335,6 +336,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         user?.id ?? null,
         seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
         isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
+        seedName(state.view, tile),
       ),
     );
     options.tileActions?.show(panel.actions, tile, state.view);

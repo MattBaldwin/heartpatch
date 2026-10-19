@@ -23,6 +23,12 @@
   background: rgb(255 241 201 / 95%);
 }
 
+/* A named home over its Heart Seed (#306 PR 0): soft pink, like the seed. */
+.home-flag {
+  padding-inline: var(--hp-pad-x);
+  background: rgb(255 228 240 / 95%);
+}
+
 .post-flag[hidden] {
   display: none;
 }

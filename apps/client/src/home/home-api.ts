@@ -69,6 +69,15 @@ export const homeApi = {
       headers: { 'idempotency-key': key },
     }),
 
+  /** Names my home (#306 PR 0): the server checks the gate and runs the text filter. */
+  name: (mapId: string, name: string, key: string): Promise<HomeResponse> =>
+    apiCallFor(`/maps/${mapId}/home/name`, {
+      method: 'POST',
+      body: { name },
+      schema: HomeResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
   house: (
     mapId: string,
     squishyId: string,

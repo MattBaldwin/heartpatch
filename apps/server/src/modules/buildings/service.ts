@@ -2,6 +2,7 @@ import {
   addFuel,
   buildCost,
   buildingPageKey,
+  EMPTY_PROGRESS_FACTS,
   fitsSlot,
   fuelCost,
   fuelSpace,
@@ -12,6 +13,8 @@ import {
   inSeason,
   isBuildable,
   isReservedSpot,
+  NAMING_RULES,
+  namingGate,
   tileUseRefusal,
   jobOf,
   planFuelAll,
@@ -20,6 +23,8 @@ import {
   upgradeCost,
   type Building,
   type FuelAllResponse,
+  type HomeNameRequest,
+  type HomeNaming,
   type HomeResponse,
   type ItemCounts,
   type MapLocalTime,
@@ -37,6 +42,7 @@ import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
+import { assertAllowedText } from '../../lib/filter.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { foldHabitatLean } from '../care/evolution.js';
 import { createInventoryRepo } from '../inventory/repo.js';
@@ -56,7 +62,7 @@ import { applyBatchPlans, planGrants, stopPlan, type BatchPlan } from '../factor
 import { createHouseRepo } from '../house/repo.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
-import type { MapRow } from '../maps/repo.js';
+import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
@@ -132,7 +138,26 @@ const MESSAGES = {
   clearFirst: 'Clear this land first 🌱. Then you can build here!',
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
+  namingLocked: `Build one of each and catch ${String(NAMING_RULES.caughtToName)} squishies first!`,
+  seedFirst: 'Your Heart Seed needs to grow first 🌱',
+  noPatch: "We couldn't find that patch.",
 } as const;
+
+/**
+ * The Heart Seed's level for naming (#306): 1 for everyone until #221 grows
+ * it. Not `gatherProgressFacts` (ten queries) on the hot home read.
+ */
+const heartSeedLevel = (): number => EMPTY_PROGRESS_FACTS.heartSeedLevel;
+
+/** Naming my home as the home view shows it (#306 PR 0). */
+const namingOf = (row: MemberNamingRow): HomeNaming => ({
+  name: row.homeName,
+  ...namingGate(
+    { ...row, heartSeedLevel: heartSeedLevel() },
+    NAMING_RULES,
+    HOME_BASE_RULES.buildableKinds,
+  ),
+});
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
 const squishyName = (s: { nickname: string | null; speciesId: string }): string =>
@@ -163,6 +188,11 @@ export interface BuildingsService {
   fuelAll: (user: PublicUser, mapId: string) => Promise<FuelAllResponse>;
   /** Raises one of my buildings a level, paying the next level's cost. */
   upgrade: (user: PublicUser, mapId: string, buildingRowId: string) => Promise<HomeResponse>;
+  /**
+   * Names my home (#306 PR 0), once naming is unlocked, and again after each
+   * Heart Seed upgrade. Patches only, never the Tutorial Glade.
+   */
+  name: (user: PublicUser, mapId: string, request: HomeNameRequest) => Promise<HomeResponse>;
   /** Moves one of my squishies into a habitat, or out (null). */
   house: (
     user: PublicUser,
@@ -241,11 +271,13 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     const { timeZone } = map;
     const houseShown = map.kind === 'multiplayer' && houseOpenFor(house, user);
     const local = mapLocalTime(at, timeZone);
-    const [tiles, buildings, squishies, items] = await Promise.all([
+    const [tiles, buildings, squishies, items, naming] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
       repo.listOwned(mapId, userId),
       repo.listSquishies(mapId, userId),
       createInventoryRepo(tx).list({ mapId, userId }),
+      // Naming my home (#306): patches only, so the Glade's home stays as it was.
+      map.kind === 'multiplayer' ? createMapsRepo(tx).memberNaming(mapId, userId) : null,
     ]);
     const seed = heartSeedOf(tiles);
     const active = squishies.filter((s) => s.state === 'active');
@@ -306,6 +338,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             house: { level: (await createHouseRepo(tx).level(mapId, userId)) ?? HOUSE_START_LEVEL },
           }
         : {}),
+      ...(naming ? { naming: namingOf(naming) } : {}),
     };
   }
 
@@ -761,6 +794,34 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         },
         await tileOf(mapId, user.id, buildingRowId),
       ),
+
+    name: async (user, mapId, { name }) => {
+      // The text filter before any lock (CLAUDE.md rule 9): VALIDATION_FAILED.
+      assertAllowedText(name, 'name');
+      const at = now();
+      // Its own transaction, not `command`'s (no home tiles to lock). Lock
+      // order (tech spec §7): the member row (step 2, one naming at a time
+      // per player), then `maps` for `member.named`.
+      const result = await store.transaction(async (repo, tx) => {
+        const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
+        const row = await createMapsRepo(tx).lockMemberNaming(mapId, user.id);
+        if (!row) throw new AppError('NOT_FOUND', MESSAGES.noPatch);
+        const level = heartSeedLevel();
+        const gate = namingOf(row);
+        if (!gate.unlocked) throw new AppError('FORBIDDEN', MESSAGES.namingLocked);
+        if (!gate.renameOpen) throw new AppError('FORBIDDEN', MESSAGES.seedFirst);
+        await createMapsRepo(tx).setHomeName(mapId, user.id, name, level);
+        await repo.appendEvent({
+          mapId,
+          type: 'member.named',
+          actorUserId: user.id,
+          payload: { userId: user.id, name },
+        });
+        return homeView(repo, tx, mapId, user, at, map);
+      });
+      published(mapId);
+      return result;
+    },
 
     house: (user, mapId, squishyId, habitatRowId) =>
       command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {

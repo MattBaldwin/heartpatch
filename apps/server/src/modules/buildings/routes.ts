@@ -2,6 +2,7 @@ import {
   BuildingParamsSchema,
   FuelAllResponseSchema,
   FuelBuildingRequestSchema,
+  HomeNameRequestSchema,
   HomeResponseSchema,
   HouseSquishyRequestSchema,
   MapIdParamsSchema,
@@ -127,6 +128,20 @@ export const buildingsRoutes =
       },
       async (request) =>
         service.upgrade(requireUser(request), request.params.mapId, request.params.buildingId),
+    );
+
+    // Naming my home (#306 PR 0).
+    app.post(
+      '/maps/:mapId/home/name',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: HomeNameRequestSchema,
+          response: { 200: HomeResponseSchema },
+        },
+        ...commandHooks,
+      },
+      async (request) => service.name(requireUser(request), request.params.mapId, request.body),
     );
 
     app.post(

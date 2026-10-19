@@ -359,6 +359,22 @@ export const mapMembers = pgTable(
     // `set null` would reopen the pick, so a future "release a squishy"
     // must decide what happens to a starter first.
     starterSquishyId: uuid('starter_squishy_id').references((): AnyPgColumn => squishies.id),
+    // Their home's name (#306), shown on its map flag; null until named. Only
+    // `POST /home/name` writes it, through the text filter.
+    homeName: text('home_name'),
+    // The Heart Seed level the name was last set at; null until named. A
+    // rename opens once the Heart Seed grows past it.
+    homeNamedAtLevel: smallint('home_named_at_level'),
+    // Squishies befriended in battle on this patch (`squishy.captured`),
+    // counted by the `home-naming` event consumer (#306). Never goes down.
+    caughtCount: integer('caught_count').notNull().default(0),
+    // Buildable kinds built here at least once (`building.placed`,
+    // `fence.built`), a set kept by the `home-naming` consumer; taking one
+    // down keeps its kind.
+    kindsBuilt: text('kinds_built')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId] }),

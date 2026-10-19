@@ -60,6 +60,19 @@ const TEST_KEEPER = {
   extras: [],
 };
 const ZONE = 'America/Denver';
+
+/*
+ * Columns migrations after B add to tables the app writes on every patch
+ * (#306's naming columns on `map_members`, migration 0050). Each test adds
+ * them to its database from before B so the app can make its patches, and
+ * the migrate step drops them first, for their migration to add for real.
+ */
+const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: string])[] = [
+  ['map_members', 'home_name', 'text'],
+  ['map_members', 'home_named_at_level', 'smallint'],
+  ['map_members', 'caught_count', 'integer default 0 not null'],
+  ['map_members', 'kinds_built', "text[] default '{}'::text[] not null"],
+];
 const START = '2026-10-02T12:00:00Z';
 
 interface Player {
@@ -90,9 +103,16 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     error: (obj: object, msg: string) => logged.push({ level: 'error', msg, obj }),
   };
 
+  let laterColumns = false;
+
   beforeEach(async () => {
     scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
     db = scratch.client.db;
+    // The app makes patches here, so it needs the columns it writes.
+    for (const [table, column, type] of LATER_COLUMNS) {
+      await db.execute(`alter table "${table}" add column "${column}" ${type}`);
+    }
+    laterColumns = true;
   });
   afterEach(async () => {
     await app?.close();
@@ -102,11 +122,22 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     logged.length = 0;
   });
 
+  /** Drops `LATER_COLUMNS` once, for their own migrations to add for real. */
+  const dropLaterColumns = async () => {
+    if (!laterColumns) return;
+    for (const [table, column] of LATER_COLUMNS) {
+      await db.execute(`alter table "${table}" drop column "${column}"`);
+    }
+    laterColumns = false;
+  };
+
   /** The migrate step, as `pnpm db:migrate` runs it. */
-  const migrate = () =>
-    runMigrations(db, {
+  const migrate = async () => {
+    await dropLaterColumns();
+    await runMigrations(db, {
       beforeOneBuildingPerTile: (d) => packBeforeOneBuildingPerTile(d, () => clock, log),
     });
+  };
 
   async function start(): Promise<FastifyInstance> {
     const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
@@ -425,6 +456,7 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
       await old(mapId, kid, { buildingId, kind: 'habitat', tileId: ring[0]!, spot });
     }
     // The player's transaction throws (its clock, read inside it).
+    await dropLaterColumns();
     await expect(
       runMigrations(db, {
         beforeOneBuildingPerTile: (d) =>

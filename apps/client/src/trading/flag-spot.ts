@@ -71,3 +71,27 @@ export function keeperCover(seed: Rect): Rect {
     height: seed.height + up,
   };
 }
+
+/** The box a flag covers once placed at `spot` (its bottom middle), a cover for the flags after it (#306). */
+export function flagBox(
+  spot: { x: number; y: number },
+  flag: { width: number; height: number },
+): Rect {
+  return {
+    x: spot.x - flag.width / 2,
+    y: spot.y - flag.height,
+    width: flag.width,
+    height: flag.height,
+  };
+}
+
+/**
+ * Where my own home's flag anchors (#306): my Heart Seed's tile stretched up
+ * over my Keeper, who stands on it, so the flag flies above their head (or
+ * hangs under the seed) instead of hiding behind the Keeper's cover.
+ */
+export function keeperTile(seed: Rect): Rect {
+  // Floored, so the flag's rounded spot never dips a fraction into the Keeper's cover.
+  const y = Math.floor(seed.y - seed.height * KEEPER_REACH.up);
+  return { x: seed.x, y, width: seed.width, height: seed.y + seed.height - y };
+}

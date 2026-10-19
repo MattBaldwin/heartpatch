@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flagSpot, keeperCover } from './flag-spot.js';
+import { flagBox, flagSpot, keeperCover, keeperTile } from './flag-spot.js';
 
 const flag = { width: 120, height: 26 };
 // An iPhone in portrait; the corner buttons end 60px down.
@@ -111,5 +111,52 @@ describe('keeperCover', () => {
     expect(flagSpot(tile(190, 280), flag, { ...room, covers })).toBeNull();
     // Well above home: clear, over its tile.
     expect(flagSpot(tile(190, 200), flag, { ...room, covers })).toEqual({ x: 210, y: 200 });
+  });
+});
+
+describe('my own home flag (#306)', () => {
+  it("stretches my Heart Seed's tile up over my Keeper's head", () => {
+    const seed = { x: 100, y: 200, width: 40, height: 30 };
+    expect(keeperTile(seed)).toEqual({ x: 100, y: 170, width: 40, height: 60 });
+  });
+
+  it('flies above my Keeper, clear of their cover, centred on the seed', () => {
+    const seed = { x: 180, y: 300, width: 40, height: 30 };
+    const covers = [keeperCover(seed)];
+    const spot = flagSpot(keeperTile(seed), flag, { ...room, covers });
+    expect(spot).toEqual({ x: 200, y: 270 });
+    // A fractional seed (as the camera draws it) still clears my Keeper's cover.
+    const odd = { x: 161.04, y: 308.3, width: 52.92, height: 38.7 };
+    const at = flagSpot(
+      keeperTile(odd),
+      { width: 135, height: 24 },
+      {
+        ...room,
+        covers: [keeperCover(odd)],
+      },
+    );
+    expect(at?.y).toBe(269);
+    // Over the plain seed tile it would sit on my Keeper, so it hangs under instead.
+    expect(flagSpot(seed, flag, { ...room, covers })).toEqual({ x: 200, y: 356 });
+  });
+});
+
+describe('flags keep clear of each other (#306)', () => {
+  it("covers exactly the flag's box at its spot", () => {
+    expect(flagBox({ x: 200, y: 300 }, flag)).toEqual({ x: 140, y: 274, width: 120, height: 26 });
+  });
+
+  it('puts a second flag on the same spot under its tile, or hides it, never on top', () => {
+    const first = flagSpot(tile(180, 300), flag, room);
+    if (!first) throw new Error('no spot');
+    const covers = [flagBox(first, flag)];
+    const second = flagSpot(tile(190, 305), flag, { ...room, covers });
+    expect(second).toEqual({ x: 210, y: 361 });
+    if (!second) throw new Error('no spot');
+    const third = flagSpot(tile(185, 302), flag, {
+      ...room,
+      covers: [...covers, flagBox(second, flag)],
+    });
+    expect(third).toBeNull();
   });
 });
