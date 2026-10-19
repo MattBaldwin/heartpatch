@@ -4,13 +4,21 @@ import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateScreenshotUsingRenderTarget } from '@babylonjs/core/Misc/screenshotTools';
 import { Scene } from '@babylonjs/core/scene';
-import type { Species, VisualRegistry } from '@heartpatch/shared';
+import {
+  KEEPER_DATA,
+  type KeeperConfig,
+  type Species,
+  type VisualRegistry,
+} from '@heartpatch/shared';
 import { cameraFor } from '../close-up/close-up-view.js';
 import { bisectFlags } from '../engine/bisect-flags.js';
 import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
 import type { SquishyDetail } from './config.js';
+import { KeeperField } from './keeper/keeper-field.js';
+import { keeperItems } from './keeper/keeper-items.js';
+import { keeperHash, keeperParams } from './keeper/keeper-params.js';
 import { SquishyField } from './squishy-field.js';
 
 // Squishy portraits for DOM screens (#375: the Squishies roster and the care sheet): the real 3D squishy, drawn once on
@@ -30,17 +38,38 @@ const POSE = { pitch: 0.22, yaw: -0.35, lookAt: 0.6 }; // TUNE: a little above t
 /** Camera distance per unit of the squishy's larger side, so every kind fills the frame. */
 const FIT = 2.9; // TUNE: room for ears and toppers; `cropToSquishy` trims the rest
 const FOV = 0.62; // TUNE: radians
+/** A Keeper's pose: face to face, a touch above, leaning back so the face reads under a hat or hair. */
+const KEEPER_POSE = { pitch: 0.18, yaw: -0.2, lookAt: 0.55, lean: 0.18 }; // TUNE
+/** Camera distance per unit of the Keeper's height. */
+const KEEPER_FIT = 2.5; // TUNE: room for hair, hats and wings; the crop trims the rest
 
 export interface PortraitLook {
   readonly species: Species;
   /** The instance id: two squishies of one kind differ a little, as on the map. */
   readonly instanceId: string;
   readonly accessory: string | null;
+  /** The picture's side in CSS px, where a screen wants it bigger than a roster row (#515). */
+  readonly size?: number;
+}
+
+/** A Keeper, dressed in what they wear (#515: the trick-or-treat door and its prize card). */
+export interface KeeperPortraitLook {
+  readonly config: KeeperConfig;
+  /** Clothing ids, as the Wardrobe stores them (squishy accessories are skipped). */
+  readonly wearing: readonly string[];
+  /** The picture's side in CSS px. */
+  readonly size: number;
 }
 
 export interface Portraits {
   /** The picture's URL when it's ready (cached), or null with no engine. */
   get(look: PortraitLook): Promise<string | null>;
+}
+
+/** Keeper pictures (#515), on the same renderer, queue and cache. */
+export interface KeeperPortraits {
+  /** A Keeper's picture (cached by look), or null with no engine. */
+  keeper(look: KeeperPortraitLook): Promise<string | null>;
 }
 
 export interface PortraitOptions {
@@ -228,7 +257,7 @@ export function inUse(dispose: () => void): InUse {
   };
 }
 
-export function createPortraits(options: PortraitOptions): Portraits {
+export function createPortraits(options: PortraitOptions): Portraits & KeeperPortraits {
   const cache = new Map<string, Promise<string | null>>();
   /** One render at a time, each after the last, so the map never stalls for long. */
   let queue: Promise<unknown> = Promise.resolve();
@@ -242,10 +271,55 @@ export function createPortraits(options: PortraitOptions): Portraits {
     use: InUse;
   } | null = null;
 
+  /** The Keepers' own small scene (#515), made the first time one is asked for. */
+  let keeperStage: {
+    engine: AbstractEngine;
+    scene: Scene;
+    field: KeeperField;
+    camera: TargetCamera;
+    use: InUse;
+  } | null = null;
+
   /** No new draws on the current scene: it goes once its draws are done. */
   function retireStage(): void {
     stage?.use.retire();
     stage = null;
+  }
+
+  function retireKeeperStage(): void {
+    keeperStage?.use.retire();
+    keeperStage = null;
+  }
+
+  function keeperStageFor(engine: AbstractEngine): NonNullable<typeof keeperStage> {
+    if (
+      keeperStage?.engine === engine &&
+      !keeperStage.use.retired &&
+      !keeperStage.scene.isDisposed
+    ) {
+      return keeperStage;
+    }
+    retireKeeperStage();
+    const scene = new Scene(engine, { virtual: true });
+    scene.clearColor = new Color4(0, 0, 0, 0);
+    setupLighting(scene);
+    // Keepers stay on the two shared levels: a `hero` squishy detail draws them high.
+    const lod = options.lod() === 'low' ? 'low' : 'high';
+    const field = new KeeperField(scene, { data: KEEPER_DATA, lod, shadows: false });
+    const camera = new TargetCamera('keeper-portrait-camera', Vector3.Zero(), scene);
+    camera.fov = FOV;
+    camera.minZ = 0.1;
+    scene.activeCamera = camera;
+    keeperStage = {
+      engine,
+      scene,
+      field,
+      camera,
+      use: inUse(() => {
+        scene.dispose();
+      }),
+    };
+    return keeperStage;
   }
 
   function stageFor(engine: AbstractEngine): NonNullable<typeof stage> {
@@ -305,7 +379,7 @@ export function createPortraits(options: PortraitOptions): Portraits {
       ) {
         return null;
       }
-      const css = window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX;
+      const css = look.size ?? (window.innerWidth >= 700 ? PORTRAIT_CSS_PX : PHONE_CSS_PX);
       // The game's own pixel-ratio cap (CLAUDE.md rule 8): at 2× and up to
       // the crop's scale it stays crisp on a 3× iPhone.
       const px = Math.round(css * MAX_DPR);
@@ -328,9 +402,79 @@ export function createPortraits(options: PortraitOptions): Portraits {
     }
   }
 
+  async function drawKeeper(look: KeeperPortraitLook): Promise<string | null> {
+    const engine = options.engine();
+    if (!engine || engine.isDisposed || bisectFlags().noPortraits) return null;
+    const { scene, field, camera, use } = keeperStageFor(engine);
+    const handle = field.add(
+      look.config,
+      { x: 0, z: 0, lean: KEEPER_POSE.lean },
+      keeperItems(look.wearing),
+    );
+    const done = use.begin();
+    try {
+      const height = handle.params.height;
+      const { position, target } = cameraFor(
+        { ...KEEPER_POSE, distance: KEEPER_FIT * height },
+        height,
+      );
+      camera.position.set(position.x, position.y, position.z);
+      camera.setTarget(new Vector3(target.x, target.y, target.z));
+      field.flush();
+      if (
+        !(await withTimeout(
+          scene.whenReadyAsync().then(() => true),
+          READY_TIMEOUT_MS,
+        ))
+      ) {
+        return null;
+      }
+      const px = Math.round(look.size * MAX_DPR);
+      if (engine.skipFrameRender) return null;
+      portraitSnapshots.count++;
+      const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
+      return await cropToSquishy(shot, px);
+    } catch {
+      return null;
+    } finally {
+      field.remove(handle);
+      options.invalidate();
+      done();
+    }
+  }
+
+  /** Runs `work` after the last picture, so one snapshot is on the engine at a time. */
+  function enqueue(work: () => Promise<string | null>): {
+    entry: Promise<string | null>;
+  } {
+    const run = queue.then(() => {
+      const started = work();
+      return { started, shown: withTimeout(started, DRAW_TIMEOUT_MS) };
+    });
+    const entry = run.then((r) => r.shown);
+    queue = run.then((r) => withTimeout(r.started, QUEUE_CAP_MS)).catch(() => null);
+    return { entry };
+  }
+
   return {
+    keeper(look) {
+      const key = `keeper|${keeperHash(keeperParams(look.config, KEEPER_DATA, keeperItems(look.wearing)))}|${String(look.size)}`;
+      let entry = cache.get(key);
+      if (!entry) {
+        entry = enqueue(() => drawKeeper(look)).entry;
+        cache.set(key, entry);
+        // No picture: forget it so the next look tries again, on a fresh scene.
+        const mine = entry;
+        void entry.then((url) => {
+          if (url !== null) return;
+          if (cache.get(key) === mine) cache.delete(key);
+          retireKeeperStage();
+        });
+      }
+      return entry;
+    },
     get(look) {
-      const key = `${look.species.id}|${look.instanceId}|${look.accessory ?? ''}`;
+      const key = `${look.species.id}|${look.instanceId}|${look.accessory ?? ''}|${String(look.size ?? '')}`;
       let entry = cache.get(key);
       if (!entry) {
         // Each picture is given up on after a while (a slow device, a lost GPU

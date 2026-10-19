@@ -16,6 +16,7 @@ import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
+import { careApi } from './care/care-api.js';
 import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
 import { createTrickOrTreat } from './trick-or-treat/trick-or-treat-screen.js';
@@ -537,6 +538,16 @@ const journeys = createJourneyScreen({
 // Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
 // button, and a lit home a porch lantern. A treat may be Heartdust: the bag
 // reads again.
+/** My Partner on a patch, for the trick-or-treat door: the oldest of my squishies, its first one. */
+const partnerLook = async (mapId: string) => {
+  const { squishies, speciesDefs } = await careApi.list(mapId);
+  const first = squishies[0];
+  if (!first) return null;
+  const species =
+    speciesDefs.find((s) => s.id === first.speciesId) ??
+    GAME_DATA.species.find((s) => s.id === first.speciesId);
+  return species ? { species, instanceId: first.id, accessory: first.accessory } : null;
+};
 const trickOrTreat = createTrickOrTreat({
   root: document.body,
   isGlade: (mapId) => mapId === glade,
@@ -545,6 +556,26 @@ const trickOrTreat = createTrickOrTreat({
   },
   onTreat: (visit) => {
     if (visit.prize.kind === 'heartdust') void inventory.refresh();
+  },
+  // The porch shows my real Keeper and Partner, and a costume's card shows it worn.
+  portraits,
+  keeper: () => (keeper.current ? { config: keeper.current, wearing: wardrobe.wearing } : null),
+  partner: partnerLook,
+  heartdust: () => inventory.debug?.items['heartdust'] ?? null,
+  wear: (itemId) => {
+    void wardrobe.wearNow(itemId);
+  },
+  // "Dress up!" opens the squishy picker on my Partner, as the roster's Dress up does.
+  dressUp: (mapId) => {
+    void partnerLook(mapId).then((p) => {
+      if (p) void closeUp.open(mapId, p.instanceId, 'map', { dressUp: true });
+    });
+  },
+  cue: (name) => {
+    audio.cue(name);
+  },
+  onChange: () => {
+    hollow.otherReportChanged();
   },
 });
 const hollow = createHollowScreen({
@@ -1118,6 +1149,7 @@ const milestones = createMilestoneCelebration({
     whatsNewOpen ||
     (care.debug?.celebrating ?? false) ||
     (wardrobe.debug?.open ?? false) ||
+    trickOrTreat.isOpen ||
     lobby.formOpen,
   onChange: () => {
     hollow.otherReportChanged();

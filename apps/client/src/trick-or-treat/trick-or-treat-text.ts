@@ -13,6 +13,8 @@ import {
 export const TRICK_TEXT = {
   knock: '🎃 Trick or treat!',
   knocking: '🎃 Knock, knock…',
+  /** A patch-mate whose name isn't on hand. */
+  someone: 'a friend',
   visited: '✅ Visited today',
   /** Every home gives treats. */
   open: 'This home has treats tonight!',

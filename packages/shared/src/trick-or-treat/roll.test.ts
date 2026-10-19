@@ -99,4 +99,40 @@ describe('rollTrickOrTreat (#515)', () => {
       count: 1,
     });
   });
+
+  it('rolls a rarer costume less often: the epic Vampire Cape against the commons', () => {
+    const squishy = (i: ClothingItem) =>
+      i.slot === 'squishy' && i.sources.includes('trick-or-treat');
+    const catalog = CLOTHING.filter(squishy);
+    const cape = catalog.find((i) => i.id === 'vampire-cape');
+    expect(cape?.rarity).toBe('epic');
+    const commons = catalog.filter((i) => i.rarity === 'common');
+    expect(commons.length).toBeGreaterThan(0);
+    const rolls = visits(2000, {}, only('squishy-costume')).map((v) => v.prize.itemId);
+    const count = (id: string) => rolls.filter((r) => r === id).length;
+    const capes = count('vampire-cape');
+    expect(capes).toBeGreaterThan(0);
+    for (const common of commons) expect(capes).toBeLessThan(count(common.id));
+  });
+
+  it('never gives a Keeper costume from a squishy roll, or the other way round', () => {
+    const squishyIds = new Set(
+      CLOTHING.filter((i) => i.slot === 'squishy' && i.sources.includes('trick-or-treat')).map(
+        (i) => i.id,
+      ),
+    );
+    const keeperIds = new Set(
+      CLOTHING.filter((i) => i.slot === 'costume' && i.sources.includes('trick-or-treat')).map(
+        (i) => i.id,
+      ),
+    );
+    for (const v of visits(300, {}, only('squishy-costume'))) {
+      expect(squishyIds.has(v.prize.itemId)).toBe(true);
+      expect(keeperIds.has(v.prize.itemId)).toBe(false);
+    }
+    for (const v of visits(300, {}, only('keeper-costume'))) {
+      expect(keeperIds.has(v.prize.itemId)).toBe(true);
+      expect(squishyIds.has(v.prize.itemId)).toBe(false);
+    }
+  });
 });

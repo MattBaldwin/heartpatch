@@ -3,9 +3,12 @@ import {
   CLOTHING,
   HollowResponseSchema,
   MapResponseSchema,
+  SetAccessoryResponseSchema,
+  SquishyResponseSchema,
   TRICK_OR_TREAT,
   TrickOrTreatResponseSchema,
   TrickOrTreatVisitResponseSchema,
+  WardrobeResponseSchema,
   type PublicUser,
 } from '@heartpatch/shared';
 import { TRICK_OR_TREAT_PRIZES, type TrickOrTreatPrizes } from '@heartpatch/shared/server';
@@ -56,6 +59,16 @@ const KEEPER_ONLY: TrickOrTreatPrizes = {
 };
 
 /** Only Heartdust, a different amount at a lit home: the table shows in the count. */
+/** A prize table where only squishy costumes come up. */
+const SQUISHY_ONLY: TrickOrTreatPrizes = {
+  ...TRICK_OR_TREAT_PRIZES,
+  plain: {
+    heartdust: { ...TRICK_OR_TREAT_PRIZES.plain.heartdust, weight: 0 },
+    keeperCostume: { weight: 0 },
+    squishyCostume: { weight: 1 },
+  },
+};
+
 const DUST_ONLY: TrickOrTreatPrizes = {
   ...TRICK_OR_TREAT_PRIZES,
   plain: {
@@ -89,7 +102,11 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
   });
 
   async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: url!,
+      HP_DEV_SQUISHY_GRANTS: 'true',
+    });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
   }
@@ -426,6 +443,48 @@ describe.skipIf(!url)('trick-or-treat (#515, needs DATABASE_URL)', () => {
       kind: 'heartdust',
       itemId: 'heartdust',
       count: TRICK_OR_TREAT_PRIZES.plain.heartdust.min,
+    });
+  });
+
+  it('lands a squishy costume in the Wardrobe, where the visitor can dress a squishy in it', async () => {
+    const server = await start();
+    const [host, visitor] = [await player(), await player()];
+    const mapId = await patch(server, host, visitor);
+    const service = createTrickOrTreatService({ db, clock: () => clock, prizes: SQUISHY_ONLY });
+
+    const { visit } = await service.visit(visitor, mapId, { hostUserId: host.id });
+    expect(visit.prize.kind).toBe('squishy-costume');
+    const itemId = visit.prize.itemId;
+    const costume = CLOTHING.find((i) => i.id === itemId);
+    expect(costume).toMatchObject({ slot: 'squishy' });
+
+    // Stored once, with the visit as its reference.
+    const owned = await db.query.clothingOwned.findMany({
+      where: (t, { and, eq }) => and(eq(t.userId, visitor.id), eq(t.itemId, itemId)),
+    });
+    expect(owned).toHaveLength(1);
+    expect(owned[0]).toMatchObject({
+      source: 'trick-or-treat',
+      refId: visit.visitId,
+      mapId,
+    });
+
+    // It shows in GET /wardrobe.
+    const wardrobe = await call(server, 'GET', '/wardrobe', visitor);
+    expect(wardrobe.statusCode).toBe(200);
+    const listed = WardrobeResponseSchema.parse(wardrobe.json()).wardrobe.owned;
+    expect(listed.find((o) => o.itemId === itemId)).toEqual({ itemId, count: 1 });
+
+    // And it goes on the visitor's squishy (it shares the accessory slot).
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, visitor, {});
+    expect(made.statusCode).toBe(201);
+    const squishy = SquishyResponseSchema.parse(made.json()).squishy;
+    const path = `/maps/${mapId}/squishies/${squishy.id}/accessory`;
+    const dressed = await call(server, 'POST', path, visitor, { itemId });
+    expect(dressed.statusCode, dressed.body).toBe(200);
+    expect(SetAccessoryResponseSchema.parse(dressed.json())).toEqual({
+      squishyId: squishy.id,
+      accessory: itemId,
     });
   });
 
