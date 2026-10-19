@@ -69,7 +69,14 @@ import {
 } from './home-view.js';
 import { homeTileLines } from './home-tile-info.js';
 import { createHomeNameSheet } from './home-name-sheet.js';
-import { HOME_NAME_TEXT, nameCard, nameIdeas, nameRowBadge, nameRowLabel, ringTerrains } from './home-name-view.js';
+import {
+  HOME_NAME_TEXT,
+  nameCard,
+  nameIdeas,
+  nameRowBadge,
+  nameRowLabel,
+  ringTerrains,
+} from './home-name-view.js';
 import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
 import './home.css';
 
@@ -305,6 +312,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
   /** The name card's refusal (the server's words, or the name rules'), shown in the card. */
   let nameError: string | null = null;
+  /** My home ring's terrains, read from the map as home opens (the name card's ideas). */
+  let ringLand: string[] = [];
   const nameSheet = createHomeNameSheet();
 
   // ── Sprout's Factory tip (#294) ───────────────────────────────────────
@@ -586,8 +595,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     setMode({ kind: 'name' });
   };
 
-  const ideasFor = () =>
-    nameIdeas(user?.username ?? null, ringTerrains(options.mapView?.() ?? null, user?.id ?? null));
+  const ideasFor = () => {
+    const live = ringTerrains(options.mapView?.() ?? null, user?.id ?? null);
+    return nameIdeas(user?.username ?? null, live.length > 0 ? live : ringLand);
+  };
 
   /**
    * The home sheet's "Name your home" row (#306 PR 0), above the Build row
@@ -1368,6 +1379,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   async function open(): Promise<void> {
     const id = mapId;
     if (!id || isOpen) return;
+    // The map's view goes once home's scene takes over, so read my ring's land now (#306).
+    ringLand = ringTerrains(options.mapView?.() ?? null, user?.id ?? null);
     const at = generation;
     try {
       const fresh = await api.get(id);

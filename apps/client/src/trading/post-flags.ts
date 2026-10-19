@@ -3,13 +3,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import {
-  hexKey,
-  hexToWorld,
-  type HexKey,
-  type MapView,
-  type PublicTile,
-} from '@heartpatch/shared';
+import { hexKey, hexToWorld, type HexKey, type MapView, type PublicTile } from '@heartpatch/shared';
 import { homeFlags } from '../home/home-name-view.js';
 import { HEX_SIZE } from '../map/map-config.js';
 import { findHomeBases } from '../map/map-layout.js';
@@ -19,7 +13,7 @@ import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import type { Rect } from '../ui/geometry.js';
 import './trading.css';
-import { flagBox, flagSpot, keeperCover, type FlagRoom } from './flag-spot.js';
+import { flagBox, flagSpot, keeperCover, keeperTile, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -136,7 +130,10 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       flag.size = { width: flag.node.offsetWidth, height: flag.node.offsetHeight };
     }
     const size = flag.size ?? { width: FLAG_MIN_WIDTH_PX, height: FLAG_MIN_HEIGHT_PX };
-    const spot = flagSpot(scene ? tileScreenRectOf(scene, flag.tile) : null, size, room);
+    const rect = scene ? tileScreenRectOf(scene, flag.tile) : null;
+    // My own home's flag flies over my Keeper, who stands on its Heart Seed (#306).
+    const mine = rect && flag.post === null && seed && hexKey(seed) === hexKey(flag.tile);
+    const spot = flagSpot(mine ? keeperTile(rect) : rect, size, room);
     flag.box = spot ? flagBox(spot, size) : null;
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === flag.at) return;

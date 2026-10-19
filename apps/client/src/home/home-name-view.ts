@@ -185,7 +185,9 @@ export function homeFlags(view: MapView): HomeFlag[] {
   }
   return view.members.flatMap((m) => {
     const tile = seeds.get(m.user.id);
-    return m.homeName && tile ? [{ userId: m.user.id, label: homeFlagLabel(m.homeName), tile }] : [];
+    return m.homeName && tile
+      ? [{ userId: m.user.id, label: homeFlagLabel(m.homeName), tile }]
+      : [];
   });
 }
 
