@@ -1,4 +1,11 @@
-import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Browser,
+  type Locator,
+  type Page,
+  type Request,
+} from '@playwright/test';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -62,6 +69,7 @@ export async function newPlayer(
     ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}),
   });
   const page = await context.newPage();
+  const inFlight = apiInFlight(page);
   await slowCpu(page);
   await signUp(page, name, code, options);
   await pickKeeper(page);
@@ -69,7 +77,24 @@ export async function newPlayer(
   await expect(
     page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
   ).toBeVisible({ timeout: 15_000 });
+  // Hand the page over only once the lobby's API calls (coins, helpers, …)
+  // have answered: a spec that navigates next would cut them off, and WebKit
+  // reports each as a page error ("…/api/v1/coins due to access control
+  // checks."), though the app catches it.
+  await expect.poll(() => inFlight.size, { timeout: 15_000 }).toBe(0);
   return page;
+}
+
+/** The page's API requests still waiting for an answer, kept up to date as they come and go. */
+function apiInFlight(page: Page): ReadonlySet<Request> {
+  const waiting = new Set<Request>();
+  page.on('request', (r) => {
+    if (r.url().includes('/api/v1/')) waiting.add(r);
+  });
+  const done = (r: Request) => waiting.delete(r);
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  return waiting;
 }
 
 /**
