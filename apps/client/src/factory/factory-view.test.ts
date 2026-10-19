@@ -78,6 +78,8 @@ describe('the Factory panel words (#294)', () => {
     expect(nextLevelRoom(view([], 1))).toEqual({ level: 2, slots: 3 });
     expect(nextLevelRoom(view([], 2, 3))).toEqual({ level: 3, slots: 4 });
     expect(nextLevelRoom(view([], 3, 4))).toBeNull();
+    // A won Workshop's batch (#306 PR 3b) carries over to the next level.
+    expect(nextLevelRoom(view([], 1, 3))).toEqual({ level: 2, slots: 4 });
   });
 
   it('lists only open recipe pages, and says why one cannot be picked', () => {

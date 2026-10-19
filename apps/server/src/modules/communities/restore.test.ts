@@ -11,7 +11,9 @@ import {
   MapViewSchema,
   pieceCost,
   restoredNameIdeas,
+  InventoryResponseSchema,
   RestoreTileResponseSchema,
+  VillageGiftResponseSchema,
   villageRing,
   type MapDetail,
   type PublicUser,
@@ -27,6 +29,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems } from '../inventory/service.js';
+import { villageLightsOn } from './service.js';
 
 /*
  * Restoring, claiming, naming and planting a grey village (#306 PR 3): a
@@ -558,5 +561,97 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
       where: (t, { eq }) => eq(t.communityId, communityId),
     });
     expect(rows.every((r) => r.restoredAt !== null)).toBe(true);
+  });
+  describe('village perks (#306 PR 3b)', () => {
+    /** Me, a patch, and a village I've won, made of `kind`. */
+    async function wonVillage(kind: string, others: Player[] = []) {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me, others);
+      const { communityId, square, village } = await reachVillage(server, me, mapId);
+      await db.execute(`update communities set kind = '${kind}' where id = '${communityId}'`);
+      await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, { communityId });
+      for (const v of village) {
+        const res = await restore(server, me, mapId, communityId, v.tile, v.piecesNeeded - 1);
+        expect(res.statusCode, res.body).toBe(200);
+      }
+      return { server, me, mapId, communityId, square };
+    }
+    const viewOf = async (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      MapViewSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/view`, who)).json(),
+      ).communities?.find((c) => c.id === id);
+
+    it("gives a won Bakery's gift to its winner once a morning", async () => {
+      const rival = await player();
+      const { server, me, mapId, communityId } = await wonVillage('bakery', [rival]);
+      expect((await viewOf(server, me, mapId, communityId))?.gift).toEqual({
+        items: { treats: 3 },
+        ready: true,
+      });
+      // Only the winner sees it, or gets it.
+      expect((await viewOf(server, rival, mapId, communityId))?.gift).toBeUndefined();
+      const path = `/maps/${mapId}/communities/${communityId}/gift`;
+      expect((await call(server, 'POST', path, rival)).statusCode).toBe(403);
+
+      const before = (await bagOf(mapId, me))['treats'] ?? 0;
+      const got = await call(server, 'POST', path, me);
+      expect(got.statusCode, got.body).toBe(200);
+      const body = VillageGiftResponseSchema.parse(got.json());
+      expect(body.gift).toEqual({ treats: 3 });
+      expect(body.community.gift).toEqual({ items: { treats: 3 }, ready: false });
+      expect((await bagOf(mapId, me))['treats']).toBe(before + 3);
+
+      // Once a morning: again today is refused, and pays nothing.
+      const again = await call(server, 'POST', path, me);
+      expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toBe('You got today’s gift! Come back tomorrow morning 🌅');
+      expect((await bagOf(mapId, me))['treats']).toBe(before + 3);
+
+      // The next morning it's back.
+      clock.setTime(clock.getTime() + DAY_MS);
+      expect((await viewOf(server, me, mapId, communityId))?.gift?.ready).toBe(true);
+      expect((await call(server, 'POST', path, me)).statusCode).toBe(200);
+      expect((await bagOf(mapId, me))['treats']).toBe(before + 6);
+    });
+
+    it('refuses a gift from a village kind that has none', async () => {
+      const { server, me, mapId, communityId } = await wonVillage('workshop');
+      expect((await viewOf(server, me, mapId, communityId))?.gift).toBeUndefined();
+      const res = await call(server, 'POST', `/maps/${mapId}/communities/${communityId}/gift`, me);
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("adds a won Workshop's batch to its winner's Factory", async () => {
+      const { server, me, mapId } = await wonVillage('workshop');
+      const land = (await tilesOf(mapId)).find(
+        (t) => t.ownerUserId === me.id && t.homeSlot === null,
+      )!;
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: me.id,
+        tileId: land.id,
+        buildingId: 'crafting-factory',
+        kind: 'factory',
+        spot: 0,
+      });
+      const res = await call(server, 'GET', `/maps/${mapId}/inventory`, me);
+      expect(res.statusCode, res.body).toBe(200);
+      // A level 1 Factory runs 2 batches; the Workshop makes it 3.
+      expect(InventoryResponseSchema.parse(res.json()).factory?.slots).toBe(3);
+    });
+
+    it('lights a won Lantern Tower every night, and nothing before it is won', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const { communityId } = await reachVillage(server, me, mapId);
+      await db.execute(`update communities set kind = 'lantern-tower' where id = '${communityId}'`);
+      expect(await villageLightsOn(db, mapId)).toEqual([]);
+      const won = await wonVillage('lantern-tower');
+      expect(await villageLightsOn(db, won.mapId)).toEqual([
+        { at: { q: won.square.q, r: won.square.r }, radius: 2 },
+      ]);
+    });
   });
 });

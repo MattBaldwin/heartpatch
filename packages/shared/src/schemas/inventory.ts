@@ -68,6 +68,8 @@ export const ItemChangeReasonSchema = z.enum([
   'restore',
   /** A helper's thank-you for a piece that didn't claim its tile (#306 PR 3), against the same row. */
   'restore-gift',
+  /** A won village's morning gift (#306 PR 3b: the Old Well, the Bakery), against the community. */
+  'village-gift',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

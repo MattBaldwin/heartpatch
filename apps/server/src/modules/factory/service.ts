@@ -22,6 +22,7 @@ import {
   type StartFactoryQueueRequest,
   type StopFactoryQueueResponse,
 } from '@heartpatch/shared';
+import { workshopBatchesOf } from '../communities/service.js';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -284,7 +285,9 @@ export function createFactoryService(options: FactoryServiceOptions): FactorySer
         // Finished batches land first and free their spots.
         const plans = (await repo.lockRunning(owner)).map((row) => settlePlan(row, at));
         const going = plans.filter((p) => p.end === null).length;
-        if (going >= factoryQueues(BUILDINGS.get(factory.buildingId), factory.level)) {
+        // A won Workshop adds a batch (#306 PR 3b), read with the Factory held.
+        const extra = await workshopBatchesOf(tx, mapId, user.id);
+        if (going >= factoryQueues(BUILDINGS.get(factory.buildingId), factory.level) + extra) {
           throw new AppError('CONFLICT', MESSAGES.full);
         }
         await lockGrantRows(tx, mapId, [

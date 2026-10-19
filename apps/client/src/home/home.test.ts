@@ -156,6 +156,31 @@ describe('home layout', () => {
     }
   });
 
+  it("glows around a won Lantern Tower every night, and not before it's won (#306 PR 3b)", () => {
+    const { view } = viewWith([meadow()]);
+    const base = mapSafeTiles(view);
+    const far = view.tiles.find((t) => t.homeSlot === null && !base.has(hexKey(t)))!;
+    const village = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Bramble Glen',
+      kind: 'lantern-tower' as const,
+      square: { q: far.q, r: far.r },
+      tiles: [{ q: far.q, r: far.r }],
+      restored: 1,
+      ownerUserId: null,
+      reach: null,
+      distance: null,
+    };
+    expect(mapSafeTiles({ ...view, communities: [village] }).has(hexKey(far))).toBe(false);
+    const lit = mapSafeTiles({ ...view, communities: [{ ...village, ownerUserId: userId(2) }] });
+    expect(lit.has(hexKey(far))).toBe(true);
+    for (const key of lit) {
+      if (base.has(key)) continue;
+      const [q, r] = key.split(',').map(Number);
+      expect(hexDistance({ q: q!, r: r! }, far)).toBeLessThanOrEqual(2);
+    }
+  });
+
   it('lists every building on the map with where it stands', () => {
     const { view } = viewWith([fire(), meadow()]);
     expect(mapBuildings(view, 0.65).map((b) => b.building.buildingId)).toEqual([

@@ -1,9 +1,11 @@
 import {
   CommunityViewSchema,
   RestoreTileResponseSchema,
+  VillageGiftResponseSchema,
   type CommunityView,
   type Hex,
   type RestoreTileResponse,
+  type VillageGiftResponse,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -33,6 +35,14 @@ export const restoreApi = {
       method: 'POST',
       body: { name },
       schema: CommunityViewSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** This morning's gift from a won Old Well or Bakery (PR 3b). */
+  gift: (mapId: string, communityId: string, key: string): Promise<VillageGiftResponse> =>
+    apiCallFor(`/maps/${mapId}/communities/${communityId}/gift`, {
+      method: 'POST',
+      schema: VillageGiftResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

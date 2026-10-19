@@ -37,6 +37,12 @@
   color: #7a5a9a;
 }
 
+/* A morning gift just collected (PR 3b): what went into the bag. */
+.tile-panel .community-said {
+  font-weight: 800;
+  color: #b8487a;
+}
+
 /* Explore and Restore wait (the reach line says why): plainly not tappable. */
 .tile-panel .community-action:disabled {
   background: #e6e1ec;

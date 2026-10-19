@@ -79,10 +79,12 @@ export class MapState {
       // my reach come with the view. A piece went back on a village tile, a
       // tile was restored and claimed, a village was won and its ring planted,
       // or it was named (PR 3): the view has the progress, the land and the ring.
+      // Its Keeper collected its morning gift (PR 3b): the view says it's taken.
       case 'community.mended':
       case 'tile.restored':
       case 'community.restored':
       case 'community.named':
+      case 'community.gift':
       case 'member.joined':
       case 'member.left':
       case 'member.removed':

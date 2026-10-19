@@ -1,35 +1,48 @@
 import type { CommunityView, MapView, PublicTile } from '@heartpatch/shared';
 import type { TileActions } from '../map/map-screen.js';
 import { el } from '../ui/dom.js';
-import { COMMUNITY_TEXT, communityOf, communityPanel, perkSoonLine } from './community-model.js';
+import { COMMUNITY_TEXT, communityOf, communityPanel, perkLine } from './community-model.js';
 import './hollowed.css';
 
 // A Hollowed village tile's block in the tile panel (#306): what the village
 // is, how my land reaches it, and Explore and Restore. PR 1 drew both
 // buttons waiting; later PRs hook them up through `wire` (2a: exploring,
 // 3: restoring), and the panel's rule for when they open stays the one here.
-// A won village's square offers its winner "Name it" until they have (PR 3).
+// A won village's square offers its winner "Name it" until they have (PR 3),
+// says what its perk does, and hands over a gift kind's morning gift (PR 3b).
 
-/** What a later PR does when its button is tapped on a village tile. */
-export type CommunityAction = (community: CommunityView, tile: PublicTile, view: MapView) => void;
+/**
+ * What a later PR does when its button is tapped on a village tile. A gift's
+ * action resolves to what to say on the square (PR 3b: "Thank you! +3 🥧 Treats 🎁").
+ */
+export type CommunityAction = (
+  community: CommunityView,
+  tile: PublicTile,
+  view: MapView,
+) => unknown;
 
 export interface CommunityActions extends TileActions {
   /** It's night on the map (the Hollow's night): villages close, and the open panel says so. */
   setNight: (night: boolean) => void;
   /** Hooks a button up (later PRs); null unhooks it. */
-  wire: (button: 'explore' | 'restore' | 'name', action: CommunityAction | null) => void;
+  wire: (button: Wired, action: CommunityAction | null) => void;
   /** The block on screen (the dev hook): its village and whether its buttons are open. */
   readonly debug: { community: string; explore: boolean; restore: boolean } | null;
 }
 
+type Wired = 'explore' | 'restore' | 'name' | 'gift';
+
 export function createCommunityActions(me: () => string | null = () => null): CommunityActions {
   let night = false;
-  const wired: Record<'explore' | 'restore' | 'name', CommunityAction | null> = {
+  const wired: Record<Wired, CommunityAction | null> = {
     explore: null,
     restore: null,
     name: null,
+    gift: null,
   };
   let shown: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
+  /** What the last gift said, on its village's square until another tile shows. */
+  let said: { community: string; text: string } | null = null;
   let debug: CommunityActions['debug'] = null;
 
   const render = (): void => {
@@ -42,8 +55,8 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       return;
     }
     if (c.ownerUserId !== null) {
-      // Won: the square says what its perk will do (PR 3b wakes it up),
-      // and its winner may name it there, until they have.
+      // Won: the square says what its perk does (PR 3b); its winner collects
+      // a gift kind's morning gift there, and names it, until they have.
       const square = tile.q === c.square.q && tile.r === c.square.r;
       if (!square) {
         container.replaceChildren();
@@ -52,22 +65,55 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       const perk = el(
         'div',
         { class: 'community-block', 'data-testid': 'community-perk' },
-        el('p', { class: 'tile-action-note community-line' }, perkSoonLine(c.kind)),
+        el('p', { class: 'tile-action-note community-line' }, perkLine(c.kind)),
       );
-      const name = wired.name;
-      if (!name || c.ownerUserId !== me() || c.named !== false) {
-        container.replaceChildren(perk);
-        return;
-      }
-      const b = el(
-        'button',
-        { type: 'button', class: 'auth-button bag-action', 'data-testid': 'community-name' },
-        COMMUNITY_TEXT.nameIt,
-      );
-      b.addEventListener('click', () => {
-        name(c, tile, view);
-      });
-      container.replaceChildren(perk, b);
+      const mine = c.ownerUserId === me();
+      const button = (which: 'gift' | 'name', label: string) => {
+        const b = el(
+          'button',
+          { type: 'button', class: 'auth-button bag-action', 'data-testid': `community-${which}` },
+          label,
+        );
+        b.addEventListener('click', () => {
+          b.disabled = true;
+          void Promise.resolve(wired[which]?.(c, tile, view)).then((text) => {
+            b.disabled = false;
+            if (typeof text !== 'string') return;
+            said = { community: c.id, text };
+            render();
+          });
+        });
+        return b;
+      };
+      const thanks =
+        said?.community === c.id
+          ? [
+              el(
+                'p',
+                { class: 'tile-action-note community-said', 'data-testid': 'community-said' },
+                said.text,
+              ),
+            ]
+          : [];
+      const gift =
+        !mine || !c.gift || !wired.gift
+          ? []
+          : c.gift.ready
+            ? [...thanks, button('gift', COMMUNITY_TEXT.giftReady)]
+            : [
+                ...thanks,
+                el(
+                  'p',
+                  {
+                    class: 'tile-action-note community-line',
+                    'data-testid': 'community-gift-taken',
+                  },
+                  COMMUNITY_TEXT.giftTaken,
+                ),
+              ];
+      const name =
+        mine && wired.name && c.named === false ? [button('name', COMMUNITY_TEXT.nameIt)] : [];
+      container.replaceChildren(perk, ...gift, ...name);
       return;
     }
     // A tile restored on its own: in colour again, and someone's land.
@@ -140,6 +186,7 @@ export function createCommunityActions(me: () => string | null = () => null): Co
 
   return {
     show: (container, tile, view) => {
+      if (shown && (shown.tile.q !== tile.q || shown.tile.r !== tile.r)) said = null;
       shown = { container, tile, view };
       render();
     },

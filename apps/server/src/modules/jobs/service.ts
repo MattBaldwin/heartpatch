@@ -27,6 +27,7 @@ import {
   type WorkSource,
   type WorkStatus,
 } from '@heartpatch/shared';
+import { villageLightsOn } from '../communities/service.js';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -325,15 +326,17 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     map: JobMap,
     at: Date,
   ): Promise<Set<HexKey>> => {
-    const [fires, homeTiles] = await Promise.all([
+    const [fires, homeTiles, lights] = await Promise.all([
       createBuildingsRepo(tx).listOnMap(map.id),
       repo.homeTiles(map.id),
+      villageLightsOn(tx, map.id),
     ]);
     const night = tonightOf(mapLocalTime(at, map.timeZone), HOME_BASE_RULES);
     return litSafeTiles(
       fires.filter((b) => b.kind === 'hearthfire'),
       homeTiles,
       { date: night, minute: 0 },
+      lights,
     );
   };
 

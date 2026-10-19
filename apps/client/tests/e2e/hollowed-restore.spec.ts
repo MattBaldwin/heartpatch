@@ -68,7 +68,10 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
   const mapId = maps.body.maps.find((m) => m.name === 'Rekindle Patch')!.id;
   // My land reaches my nearest village, and every tile there is one piece short (dev only).
   expect((await api(page, 'POST', `/maps/${mapId}/dev/hollowed-reach`)).status).toBe(201);
-  const almost = await api<{ id: string }>(page, 'POST', `/maps/${mapId}/dev/village-almost`);
+  // A Bakery, so its square hands over a morning gift once won (PR 3b).
+  const almost = await api<{ id: string }>(page, 'POST', `/maps/${mapId}/dev/village-almost`, {
+    kind: 'bakery',
+  });
   expect(almost.status, JSON.stringify(almost.body)).toBe(201);
   const view = await api<MapView>(page, 'GET', `/maps/${mapId}/view`);
   const village = view.body.communities!.find((c) => c.id === almost.body.id)!;
@@ -138,5 +141,17 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
   await expect
     .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
     .toContain(`🏡 ${name}`);
+
+  // Its square says what the Bakery does, and hands over this morning's Treats once (PR 3b).
+  const perk = page.getByTestId('community-perk');
+  await expect(async () => {
+    expect(await show(page, village.square)).toBe(true);
+    await expect(perk).toHaveText('🥧 Bakery: Treats every morning', { timeout: 5_000 });
+  }).toPass(slow);
+  await page.getByTestId('community-gift').tap();
+  await slowExpect(page.getByTestId('community-said')).toContainText('+3');
+  await slowExpect(page.getByTestId('community-gift-taken')).toHaveText(
+    'Today’s gift is in your bag! More tomorrow morning 🌅',
+  );
   expect(errors).toEqual([]);
 });

@@ -9,6 +9,7 @@ import {
   type HexKey,
   type MapLocalTime,
   type PublicBuilding,
+  type SafeFire,
 } from '@heartpatch/shared';
 import { mapLocalTime } from '../../lib/time.js';
 import type { BuildingRow } from './repo.js';
@@ -55,12 +56,14 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
  * Tiles safe on the night of `local`: every home base on the map, always
  * (the Heart Seed keeps it safe, owner decision 2026-10-07), plus each lit
  * fire's tile and radius out on captured land (shared `safeTiles`).
- * `homeTiles` is every home tile on the map, every player's.
+ * `homeTiles` is every home tile on the map, every player's; `lights` are
+ * lit every night without fuel (a won Lantern Tower, #306 PR 3b).
  */
 export function litSafeTiles(
   fires: readonly BuildingRow[],
   homeTiles: readonly { q: number; r: number }[],
   local: MapLocalTime,
+  lights: readonly SafeFire[] = [],
 ): Set<HexKey> {
   const lit = fires.flatMap((row) => {
     const radius = safeRadiusOf(row);
@@ -68,5 +71,5 @@ export function litSafeTiles(
     if (!hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).lit) return [];
     return [{ at: { q: row.q, r: row.r }, radius }];
   });
-  return safeTiles(lit, homeTiles);
+  return safeTiles([...lit, ...lights], homeTiles);
 }

@@ -1,6 +1,7 @@
 import {
   COMMUNITY_RULES,
   hexKey,
+  perkLive,
   TERRAINS,
   type CommunityKindId,
   type CommunityRules,
@@ -50,8 +51,14 @@ export const COMMUNITY_TEXT = {
   /** A restored tile of a village still being restored. */
   tileRestored: '✨ This spot is restored! Restore the rest to win the village.',
   nameIt: 'Name it ✨',
-  /** A won village's perk until PR 3b wakes it up: "🛠️ Workshop: wakes up soon ✨". */
+  /** A won village's perk that isn't built yet: "🗼 Watchtower: wakes up soon ✨". */
   perkSoon: (emoji: string, kind: string) => `${emoji} ${kind}: wakes up soon ✨`,
+  /** A won village's perk at work (PR 3b): "🛠️ Workshop: one more Factory batch". */
+  perkLive: (emoji: string, kind: string, perk: string) => `${emoji} ${kind}: ${perk}`,
+  /** Its winner's morning gift on the square (the Old Well, the Bakery). */
+  giftReady: 'Collect today’s gift 🎁',
+  giftTaken: 'Today’s gift is in your bag! More tomorrow morning 🌅',
+  giftGot: (items: string) => `Thank you! ${items} 🎁`,
 } as const;
 
 /** "3 tiles" / "1 tile". */
@@ -122,13 +129,16 @@ export function kindLine(kind: CommunityKindId, rules: CommunityRules = COMMUNIT
   return found ? COMMUNITY_TEXT.kind(found.emoji, found.name, found.perk) : '';
 }
 
-/** A won village's perk line while the perks are still asleep (PR 3b). */
-export function perkSoonLine(
-  kind: CommunityKindId,
-  rules: CommunityRules = COMMUNITY_RULES,
-): string {
+/**
+ * A won village's perk line on its square (PR 3b): what it does, or that it
+ * wakes up soon while its perk isn't built yet.
+ */
+export function perkLine(kind: CommunityKindId, rules: CommunityRules = COMMUNITY_RULES): string {
   const found = rules.kinds.find((k) => k.id === kind);
-  return found ? COMMUNITY_TEXT.perkSoon(found.emoji, found.name) : '';
+  if (!found) return '';
+  return perkLive(found.effect)
+    ? COMMUNITY_TEXT.perkLive(found.emoji, found.name, found.perk)
+    : COMMUNITY_TEXT.perkSoon(found.emoji, found.name);
 }
 
 /** What a Hollowed tile's panel says and offers (#306). */

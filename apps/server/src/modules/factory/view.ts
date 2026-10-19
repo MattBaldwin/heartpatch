@@ -7,6 +7,7 @@ import {
   type FactoryTiming,
   type FactoryView,
 } from '@heartpatch/shared';
+import { workshopBatchesOf } from '../communities/service.js';
 import type { Executor } from '../../db/client.js';
 import type { ItemOwner } from '../inventory/repo.js';
 import { createFactoryRepo, type BatchRow } from './repo.js';
@@ -31,12 +32,17 @@ export async function factoryView(
   at: Date,
 ): Promise<FactoryView | null> {
   const repo = createFactoryRepo(db);
-  const [factory, rows] = await Promise.all([repo.findFactory(owner), repo.listRunning(owner)]);
+  const [factory, rows, extra] = await Promise.all([
+    repo.findFactory(owner),
+    repo.listRunning(owner),
+    workshopBatchesOf(db, owner.mapId, owner.userId),
+  ]);
   if (!factory) return null;
   return {
     buildingId: factory.id,
     level: factory.level,
-    slots: Math.max(1, factoryQueues(BUILDINGS.get(factory.buildingId), factory.level)),
+    // A won Workshop adds a batch (#306 PR 3b).
+    slots: Math.max(1, factoryQueues(BUILDINGS.get(factory.buildingId), factory.level) + extra),
     batches: rows.map((row) => {
       const next = factoryNextAtMs(timing(row), at.getTime());
       return {
