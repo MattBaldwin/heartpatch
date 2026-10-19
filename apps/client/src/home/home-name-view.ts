@@ -34,7 +34,7 @@ export const HOME_NAME_TEXT = {
   // The nudge when naming is ready: a badge on the peek bar's handle, and a line on the Heart Seed's tile.
   handleNudge: '✨ Name your home!',
   handleNudgeLabel: 'Name your home is ready. Show more to find it.',
-  seedLine: '✨ You can name your home! Open Home, then More.',
+  seedLine: '✨ Name your home! Open Home, then More.',
   // The locked card.
   lockedKicker: 'YOUR HOME · LOCKED 🔒',
   lockedTitle: 'Name your home 🔒',

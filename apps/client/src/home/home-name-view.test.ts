@@ -49,7 +49,7 @@ describe('the nudge toward naming (#306)', () => {
   });
 
   it('words say where to go, with no avoided words', () => {
-    expect(HOME_NAME_TEXT.seedLine).toBe('✨ You can name your home! Open Home, then More.');
+    expect(HOME_NAME_TEXT.seedLine).toBe('✨ Name your home! Open Home, then More.');
     expect(HOME_NAME_TEXT.handleNudge).not.toMatch(AVOIDED);
   });
 
