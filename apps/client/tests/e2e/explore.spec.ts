@@ -8,6 +8,8 @@ import { realTapAt } from './touch.js';
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
 const slow = { timeout: 30_000 };
+/** WebKit's page error for an in-flight API fetch that gets cut off (as in hollow.spec.ts). */
+const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
 
 /**
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
@@ -634,11 +636,16 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     const tap = await waypoint(page, to);
     expect(tap, 'a tappable point on the lakebed').not.toBeNull();
     await realTapAt(page, tap!.x, tap!.y);
+    // CI's software renderer can swim this few frames a second: it was still
+    // on its way (0.019) when 30 s ran out on the iPad, so wait longer here.
     await expect
-      .poll(async () => {
-        const k = (await exploreState(page))!.keeper;
-        return Math.hypot(k.x - from.x, k.z - from.z);
-      }, slow)
+      .poll(
+        async () => {
+          const k = (await exploreState(page))!.keeper;
+          return Math.hypot(k.x - from.x, k.z - from.z);
+        },
+        { timeout: 90_000 },
+      )
       .toBeGreaterThan(0.03);
     await keeperStill(page);
 
@@ -688,7 +695,7 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     expect(found.water?.layers['bubbles'] ?? 0).toBeGreaterThan(0);
     const sheet = page.getByTestId('explore-sheet');
     if (await sheet.isVisible()) await sheet.getByTestId('explore-yay').tap();
-    expect(errors).toEqual([]);
+    expect(errors.filter((e) => !ABORTED_FETCH.test(e))).toEqual([]);
     await page.getByTestId('explore-back').tap();
   } finally {
     // Pinned, its ambient life never stops for a slow renderer: close it, so it
