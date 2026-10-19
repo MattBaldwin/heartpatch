@@ -18,6 +18,11 @@ interface BattleDebug {
 }
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
+/** WebKit's page error for an in-flight API fetch a navigation aborts (as in hollow.spec.ts). */
+const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
+/** True while `meet` reloads the page: only then may an aborted fetch go by. */
+let reloading = false;
+
 /** Moves the held battle clock on (`BattleScreen.dev`). */
 async function advance(page: Page, ms: number): Promise<void> {
   await page.evaluate((step) => {
@@ -43,8 +48,13 @@ async function meet(page: Page, mapId: string, speciesId: string): Promise<strin
     },
   );
   expect(started.status).toBe(201);
-  await page.goto('/?battle-clock=manual');
-  await expect(page.getByTestId('battle-hud')).toBeVisible({ timeout: 60_000 });
+  reloading = true;
+  try {
+    await page.goto('/?battle-clock=manual');
+    await expect(page.getByTestId('battle-hud')).toBeVisible({ timeout: 60_000 });
+  } finally {
+    reloading = false;
+  }
   await expect.poll(() => battleState(page).then((s) => s?.id)).toBe(started.body.battle.id);
   return started.body.battle.id;
 }
@@ -68,7 +78,13 @@ test('a rare find gets its moment the first time, and just a banner after (#391)
   test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('rare'));
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // Only an API fetch a reload in `meet` aborts (on CI: "…/api/v1/lore due to
+  // access control checks.") is let through, and only while reloading; every
+  // other page error stays fatal.
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
 
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();

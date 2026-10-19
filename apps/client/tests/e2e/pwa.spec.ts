@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { pickKeeper, savedCode, submitSignUp, TEST_PASSWORD } from './players.js';
+import { pickKeeper, savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
 
 // The installable app (issue #26), against a production build (`vite preview`,
 // playwright.config.ts): the dev server never registers the service worker.
@@ -178,7 +178,7 @@ test('keeps the shell for offline use, but never the API', async ({
 
 test('shows the Add to Home Screen guide in Safari, in the lobby, until dismissed', async ({
   page,
-}, testInfo) => {
+}) => {
   // A sign-up, a Keeper pick and a reload that rebuilds the scene, like
   // auth.spec.ts. In CI a pass takes 11-23 s, and 5 of 8 first tries ran out
   // the 30 s default (#408); CI renders in software.
@@ -191,9 +191,7 @@ test('shows the Add to Home Screen guide in Safari, in the lobby, until dismisse
 
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family or invite code').fill(signupCode);
-  await overlay
-    .getByLabel('Pick a name')
-    .fill(`pwa_${Date.now().toString(36)}${String(testInfo.workerIndex)}`);
+  await overlay.getByLabel('Pick a name').fill(uniqueName('pwa'));
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await submitSignUp(overlay);
