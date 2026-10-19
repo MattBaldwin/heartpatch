@@ -112,9 +112,12 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     const own = tiles.filter((t) => t.ownerUserId === userId);
     const ownKeys = new Set(own.map(hexKey));
     const frontier = new Set(own.flatMap((t) => hexNeighbors(t).map(hexKey)));
-    // Never a trading post (#269): no wild squishy waits there, whatever the tables say.
+    // Never a trading post (#269), nor a grey village tile nobody has
+    // restored (#306 2a: grey and quiet): no wild squishy waits there,
+    // whatever the tables say.
+    const quiet = (t: SpawnTileRow) => t.communityId !== null && t.ownerUserId === null;
     const next = tiles.filter(
-      (t) => !ownKeys.has(hexKey(t)) && frontier.has(hexKey(t)) && !isTradingPost(t),
+      (t) => !ownKeys.has(hexKey(t)) && frontier.has(hexKey(t)) && !isTradingPost(t) && !quiet(t),
     );
     return [...own, ...next];
   };

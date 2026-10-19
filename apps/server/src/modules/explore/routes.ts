@@ -1,4 +1,5 @@
 import {
+  DevHollowedReachResponseSchema,
   DevHomesteadRequestSchema,
   ExploreQuerySchema,
   ExploreTileResponseSchema,
@@ -83,6 +84,17 @@ export const exploreRoutes =
                 request.body ?? {},
               ),
             ),
+      );
+      app.post(
+        '/maps/:mapId/dev/hollowed-reach',
+        {
+          schema: { params: MapIdParamsSchema, response: { 201: DevHollowedReachResponseSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request, reply) =>
+          reply
+            .code(201)
+            .send(await service.devHollowedReach(requireUser(request), request.params.mapId)),
       );
     }
 

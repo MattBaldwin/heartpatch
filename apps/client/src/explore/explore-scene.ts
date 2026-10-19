@@ -77,6 +77,13 @@ import {
   vinyl,
 } from '../map/map-scene.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
+import {
+  attachTerrainPlugin,
+  HollowedDrain,
+  keepColour,
+  TerrainClock,
+} from '../map/terrain-plugin.js';
+import { HollowedExplore, type HollowedStats } from '../hollowed/hollowed-explore.js';
 import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
@@ -211,6 +218,8 @@ export interface ExploreSceneStats {
     readonly moving: boolean;
     readonly bubbles: number;
   } | null;
+  /** A grey village tile's drain, joy discs, sparks and echoes (#306 2a), or null. */
+  readonly hollowed: HollowedStats | null;
 }
 
 export interface ExploreSceneOptions {
@@ -425,6 +434,8 @@ export class ExploreScene implements AmbientTarget {
   /** The high tier's swim extra (#399): kick bubbles. */
   #highTier = false;
   #now = 0;
+  /** A grey village tile (#306 2a): its drain, joy sparks and echoes; null on my own land. */
+  readonly #hollowed: HollowedExplore | null = null;
   /** Objects made since the scene opened (`stats.created`, #501). */
   readonly #created = { meshes: 0, materials: 0, textures: 0, geometries: 0 };
   /** The context's counts and their reading when the scene opened (`stats.gl`, dev only). */
@@ -473,10 +484,13 @@ export class ExploreScene implements AmbientTarget {
     const extras = waterLook
       ? lakeExtras(waterLook, tileSeed(tile, 'water'))
       : BIOME_EXTRAS[tile.terrain];
+    // A grey village tile (#306 2a): the land and its spots read one drain.
+    const drain = tile.community ? new HollowedDrain() : null;
     if (landLook) {
       // The land kit (#335 art reset): sculpted ground, layered growth, soft light and haze.
       const size = this.#size;
       this.#land = new ExploreLand(scene, {
+        ...(drain ? { drain } : {}),
         look: landLook,
         seed: tileSeed(tile, 'land'),
         size,
@@ -530,6 +544,13 @@ export class ExploreScene implements AmbientTarget {
       fadedMaterial.clearCoat.isEnabled = false;
     }
     fadedMaterial.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    if (drain) {
+      // The spots grey with the land; today's tile's ground and decor too.
+      const clock = this.#land?.clock ?? new TerrainClock();
+      for (const mat of [propMaterial, fadedMaterial, ...this.#ground.map((g) => g.mat)]) {
+        attachTerrainPlugin(mat, clock, { drain });
+      }
+    }
     this.#buildProps(tile, propMaterial, fadedMaterial);
 
     this.#buildings = new BuildingField(scene);
@@ -645,6 +666,7 @@ export class ExploreScene implements AmbientTarget {
         );
         mask.material = propMaterial;
         mask.isPickable = false;
+        keepColour(mask);
         this.#mask = mask;
         this.#bubbles = new SwimBubbles(scene, EXPLORE_VIEW.keeperScale);
         const shadow = createContactShadowMesh(scene);
@@ -670,6 +692,21 @@ export class ExploreScene implements AmbientTarget {
     for (const tool of TOOLS) {
       this.#tools[tool].material = propMaterial;
       this.#tools[tool].setEnabled(false);
+      // The Keeper's things never grey, on a drained material too (#306 2a).
+      keepColour(this.#tools[tool]);
+    }
+    if (drain && tile.community) {
+      this.#hollowed = new HollowedExplore(
+        scene,
+        drain,
+        {
+          world: (p) => this.#world(p),
+          groundAt: (p) => this.#groundAt(p),
+          size: this.#size,
+          echoes: tile.community.echoes,
+        },
+        tile.spots,
+      );
     }
 
     // The follow camera (#291): the stage's camera gets no input (the HUD's
@@ -799,6 +836,7 @@ export class ExploreScene implements AmbientTarget {
             bubbles: this.#bubbles?.alive ?? 0,
           }
         : null,
+      hollowed: this.#hollowed?.stats ?? null,
     };
   }
 
@@ -829,6 +867,8 @@ export class ExploreScene implements AmbientTarget {
 
   /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
+    // A spot just searched on a grey tile opens its joy disc and bursts into sparks.
+    this.#hollowed?.update(tile.spots, performance.now());
     this.#tile = tile;
     this.#glintNudge = [];
     this.#placeGlints();
@@ -894,6 +934,19 @@ export class ExploreScene implements AmbientTarget {
     if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, EXPLORE_TOOL.jiggle);
   }
 
+  /**
+   * A grey village tile's echoes (#306 2a): where one nudges the Keeper at
+   * `keeper` back to (tile-local) and where it is, or null. A lantern in hand
+   * keeps them at half the distance.
+   */
+  spook(
+    keeper: WorldPoint,
+    now: number,
+    lantern: boolean,
+  ): { to: WorldPoint; echo: WorldPoint } | null {
+    return this.#hollowed?.spook(keeper, now, lantern) ?? null;
+  }
+
   /** A little hop for the Keeper when a search finds something. */
   cheer(now: number): void {
     if (this.#keeper) this.#keepers.play(this.#keeper, 'bounce', now);
@@ -924,8 +977,9 @@ export class ExploreScene implements AmbientTarget {
     this.#now = now;
     const hopping = this.#underwater ? this.#stepSwims(dt) : this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
+    const hollowed = this.#hollowed?.step(now) ?? false;
     if (!following && !swinging && !hopping) this.#lastStep = null;
-    return keeper || following || swinging || hopping;
+    return keeper || following || swinging || hopping || hollowed;
   }
 
   /**
@@ -1080,6 +1134,8 @@ export class ExploreScene implements AmbientTarget {
     }
     this.#ambientStart ??= now;
     land.clock.time = (now - this.#ambientStart) / 1000;
+    // Echoes drift on ambient time, so they're still when ambient life is off.
+    this.#hollowed?.drift(land.clock.time);
     if (this.#underwater) {
       // Treading water bobs on the same clock as the kelp.
       this.#placeSwimmers();

@@ -51,6 +51,7 @@ const E2E_GROUPS = [
     'clear-land',
     'factory',
     'first-session',
+    'hollowed-explore',
     'map-hole',
     'perf-report',
     'quality-budget',

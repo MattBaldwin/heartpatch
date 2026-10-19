@@ -45,6 +45,9 @@ import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { createMilestonesConsumer } from '../milestones/consumer.js';
 import { refreshHomesteads } from './homesteads.js';
+import { HOLLOWED_FINDS } from '@heartpatch/shared/server';
+import type { Rng } from '@heartpatch/shared';
+import { createExploreService } from './service.js';
 
 /*
  * Exploring your land (#199): the explore view of a tile, searching its
@@ -82,6 +85,7 @@ interface Tile {
   terrain: string;
   ownerUserId: string | null;
   homeSlot: number | null;
+  communityId: string | null;
 }
 
 describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
@@ -936,5 +940,146 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       (t) => !t.hidden && t.id === 'seeker',
     );
     expect(seeker).toMatchObject({ name: 'Seeker', progress: 2 });
+  });
+
+  describe('grey village tiles (#306 2a)', () => {
+    /** My land reaches my nearest grey village (the dev route); its square. */
+    async function reachVillage(server: FastifyInstance, who: Player, mapId: string) {
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/hollowed-reach`, who);
+      expect(res.statusCode, res.body).toBe(201);
+      const square = res.json<{ q: number; r: number }>();
+      return (await tilesOf(mapId)).find((t) => t.q === square.q && t.r === square.r)!;
+    }
+
+    /** A spot searched by hand on a tile, with every tool in the bag in case. */
+    async function handSpot(server: FastifyInstance, who: Player, mapId: string, t: Tile) {
+      await give(mapId, who, { shovel: 20, net: 20, rope: 20, lantern: 20 });
+      const tile = await view(server, who, mapId, t);
+      return { tile, spot: tile.spots.find((s) => s.tool === null) ?? tile.spots[0]! };
+    }
+
+    it('opens to anyone whose land touches the village, by day, with its joy and echoes', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const village = (await tilesOf(mapId)).find((t) => t.communityId !== null)!;
+      // Not mine and not touching yet: the panel's own words.
+      const away = await call(
+        server,
+        'GET',
+        `/maps/${mapId}/explore?q=${village.q}&r=${village.r}`,
+        me,
+      );
+      expect(away.statusCode).toBe(403);
+      expect(errorOf(away).message).toBe('Claim land next to it to explore!');
+
+      const square = await reachVillage(server, me, mapId);
+      const { tile, spot } = await handSpot(server, me, mapId, square);
+      expect(tile.progress).toEqual({ searched: 0, total: tile.spots.length });
+      expect(tile.homestead).toBeNull();
+      expect(tile.community).toMatchObject({ id: square.communityId, joy: 0 });
+      expect(tile.community?.name).toMatch(/Hollow$/);
+      expect(tile.community?.echoes).toHaveLength(1);
+      // Never the village's seed or its cellar key's tile (rule 6).
+      expect(JSON.stringify(tile)).not.toMatch(/seed|key/i);
+
+      const res = await search(server, me, mapId, square, spot.index);
+      expect(res.statusCode, res.body).toBe(200);
+      const found = SearchSpotResponseSchema.parse(res.json());
+      expect(found.progress.searched).toBe(1);
+      expect(found.joy).toBe(Math.round(100 / tile.spots.length));
+      expect(found.explored).toBe(false);
+      expect(found.homestead).toBeNull();
+      const again = await view(server, me, mapId, square);
+      expect(again.community?.joy).toBe(found.joy);
+      expect(again.community?.echoes).toEqual(tile.community?.echoes);
+      expect(await eventsOf(mapId, 'explore.searched')).toHaveLength(1);
+    });
+
+    it('never finishes: every spot searched is still no ✨ and no homestead', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const { tile } = await handSpot(server, me, mapId, square);
+      let last = null;
+      for (const s of tile.spots) {
+        const res = await search(server, me, mapId, square, s.index);
+        expect(res.statusCode, res.body).toBe(200);
+        last = SearchSpotResponseSchema.parse(res.json());
+      }
+      expect(last).toMatchObject({ joy: 100, explored: false, homestead: null });
+      expect(await eventsOf(mapId, 'tile.explored')).toHaveLength(0);
+      const [row] = await db.query.tileExplore.findMany({
+        where: (e, { and, eq }) => and(eq(e.userId, me.id), eq(e.tileId, square.id)),
+      });
+      expect(row?.completedAt).toBeNull();
+    });
+
+    it('shuts at night, and its spots refill each morning', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const { spot } = await handSpot(server, me, mapId, square);
+      expect((await search(server, me, mapId, square, spot.index)).statusCode).toBe(200);
+      expect((await search(server, me, mapId, square, spot.index)).statusCode).toBe(409);
+
+      // 8 PM in Denver: after nightfall.
+      clock.setTime(Date.parse('2026-10-03T02:00:00Z'));
+      const night = await call(
+        server,
+        'GET',
+        `/maps/${mapId}/explore?q=${square.q}&r=${square.r}`,
+        me,
+      );
+      expect(night.statusCode).toBe(403);
+      expect(errorOf(night).message).toBe('Too spooky after dark! Come back in the morning 🌙');
+      expect((await search(server, me, mapId, square, spot.index)).statusCode).toBe(403);
+
+      // 8 AM the next day: fresh spots, grey again.
+      clock.setTime(Date.parse('2026-10-03T14:00:00Z'));
+      const morning = await view(server, me, mapId, square);
+      expect(morning.progress.searched).toBe(0);
+      expect(morning.community?.joy).toBe(0);
+      expect((await search(server, me, mapId, square, spot.index)).statusCode).toBe(200);
+    });
+
+    it('rolls the Hollowed find tables (more Heartdust)', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const { spot } = await handSpot(server, me, mapId, square);
+      const rolled: unknown[] = [];
+      const rng = {
+        weighted: <T>(items: readonly T[]) => {
+          rolled.push(items);
+          return items[0]!;
+        },
+        next: () => 0.5,
+        int: (min: number) => min,
+        chance: () => false,
+        pick: <T>(items: readonly T[]) => items[0]!,
+      } as unknown as Rng;
+      const service = createExploreService({ db, clock: () => clock, rng: () => rng });
+      await service.search(me, mapId, { q: square.q, r: square.r, spot: spot.index });
+      const table =
+        HOLLOWED_FINDS.find((t) => t.kind === spot.kind && t.terrains?.includes(square.terrain)) ??
+        HOLLOWED_FINDS.find((t) => t.kind === spot.kind && !t.terrains);
+      expect(rolled[0]).toEqual(table!.finds);
+    });
+
+    it('is still only for my own land when the tile isn’t a village', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const wild = (await tilesOf(mapId)).find(
+        (t) => t.communityId === null && t.ownerUserId === null && t.terrain === 'meadow',
+      )!;
+      const res = await call(server, 'GET', `/maps/${mapId}/explore?q=${wild.q}&r=${wild.r}`, me);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res).message).toBe('You can only explore your own land.');
+    });
   });
 });

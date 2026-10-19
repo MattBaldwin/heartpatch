@@ -1,19 +1,28 @@
 import {
   BATTLE_RULES,
+  COMMUNITY_RULES,
+  communityReach,
   deriveSeed,
   EXPLORE_RULES,
+  exploreJoy,
   exploreLayout,
   GAME_DATA,
+  HOLLOW_RULES,
+  HOME_BASE_RULES,
+  hollowedOpenAt,
   exploreNeeds,
   isExplorable,
   isFullyExplored,
   isSearched,
+  placeEchoes,
   Rng,
   searchedCount,
   searchSpots,
   withSearched,
   type DevHomesteadRequest,
   type ExploreNotable,
+  type Hex,
+  type HollowedExplore,
   type ExploreTileResponse,
   type ItemCounts,
   type PublicUser,
@@ -22,13 +31,18 @@ import {
   type SearchSpotResponse,
   type ToolId,
 } from '@heartpatch/shared';
-import { EXPLORE_FINDS, LORE_PAGES, rollExploreFind } from '@heartpatch/shared/server';
+import {
+  EXPLORE_FINDS,
+  HOLLOWED_FINDS,
+  LORE_PAGES,
+  rollExploreFind,
+} from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
 import type { Database, Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
-import type { Clock } from '../../lib/time.js';
+import { latestLocalMinute, mapLocalTime, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
@@ -41,8 +55,10 @@ import { homesteadOf, refreshHomesteads } from './homesteads.js';
 import {
   createExploreRepo,
   exploreTransaction,
+  type ExploreRepo,
   type ExploreRow,
   type ExploreTileRow,
+  type ExploreVillage,
 } from './repo.js';
 
 /*
@@ -63,6 +79,9 @@ const MESSAGES = {
   noSpot: "We couldn't find that spot.",
   searched: 'You already searched there!',
   needTool: (tool: string) => `You need a ${tool} for that! 🛠️`,
+  // A grey village tile (#306 2a), the panel's own words.
+  villageAway: 'Claim land next to it to explore!',
+  villageNight: 'Too spooky after dark! Come back in the morning 🌙',
 } as const;
 
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
@@ -82,14 +101,46 @@ async function seedOf(tx: Executor, mapId: string): Promise<string> {
   return (await createTerritoryRepo(tx).mapSeed(mapId)) ?? deriveSeed('hand-authored-map', mapId);
 }
 
-/** My tile and its spots, or a kid-readable error. */
+/** A grey village tile as one visit sees it: the village, and when this morning's spots began. */
+interface Grey {
+  readonly village: ExploreVillage;
+  readonly morning: Date;
+}
+
+/**
+ * The grey village a wild tile belongs to, if I may explore it now (#306
+ * 2a): my land touches the village and it's day on the map. Null on any
+ * other tile (mine, or someone's land, which the owner check refuses).
+ */
+async function greyVillage(
+  repo: ExploreRepo,
+  mapId: string,
+  tile: ExploreTileRow | null,
+  userId: string,
+  at: Date,
+): Promise<Grey | null> {
+  if (!tile?.communityId || tile.ownerUserId !== null) return null;
+  const village = await repo.findVillage(tile.id);
+  if (!village) return null;
+  const { reach } = communityReach(village.tiles, await repo.listTiles(mapId), userId);
+  if (reach !== 'touching') throw new AppError('FORBIDDEN', MESSAGES.villageAway);
+  const zone = await repo.mapTimeZone(mapId);
+  const rules = { ...HOME_BASE_RULES, ...HOLLOW_RULES };
+  if (!hollowedOpenAt(mapLocalTime(at, zone), rules)) {
+    throw new AppError('FORBIDDEN', MESSAGES.villageNight);
+  }
+  return { village, morning: latestLocalMinute(at, zone, HOLLOW_RULES.morningMinute) };
+}
+
+/** My tile (or a grey village tile I may explore) and its spots, or a kid-readable error. */
 function tileSpots(
   seed: string,
   tile: ExploreTileRow | null,
   userId: string,
+  grey: Grey | null,
 ): { tile: ExploreTileRow; spots: SearchSpot[] } {
   if (!tile) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-  if (tile.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notYours);
+  if (!grey && tile.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notYours);
   if (!isExplorable(tile.terrain, EXPLORE_RULES)) {
     throw new AppError('CONFLICT', MESSAGES.cantExplore);
   }
@@ -115,6 +166,31 @@ function searchedMask(
   // Finished: every spot of today's kit is done. The row's stored `searched`
   // and `spot_count` stay the old kit's on purpose; it's never written again.
   return row.completedAt ? spots.reduce((mask, s) => withSearched(mask, s.index), 0) : 0;
+}
+
+/**
+ * A grey village tile's progress (#306 2a): only today's searches count
+ * (its spots refill each morning), on today's layout.
+ */
+function greyMask(row: ExploreRow | null, tile: ExploreTileRow, grey: Grey): number {
+  if (!row || row.terrain !== tile.terrain) return 0;
+  if (row.layout !== exploreLayout(tile.terrain, EXPLORE_RULES)) return 0;
+  return row.updatedAt.getTime() >= grey.morning.getTime() ? row.searched : 0;
+}
+
+/** A grey village tile's explore extras: its name, today's joy and its echoes. */
+function greyView(
+  grey: Grey,
+  tile: Hex,
+  spots: readonly SearchSpot[],
+  searched: number,
+): HollowedExplore {
+  return {
+    id: grey.village.id,
+    name: grey.village.name,
+    joy: exploreJoy({ searched, total: spots.length }),
+    echoes: placeEchoes(grey.village.seed, tile, spots, COMMUNITY_RULES.echoesPerTile),
+  };
 }
 
 /** Uses left of each tool in a bag (a tool is counted in uses). */
@@ -171,7 +247,21 @@ export function createExploreService(options: ExploreServiceOptions) {
       return made;
     },
 
-    /** `GET /maps/:mapId/explore?q=&r=`: the explore view of one of my tiles. */
+    /** Dev only (`HP_DEV_SQUISHY_GRANTS`): my land reaches my nearest grey village (#306 2a, e2e). */
+    devHollowedReach: async (
+      user: PublicUser,
+      mapId: string,
+    ): Promise<{ q: number; r: number }> => {
+      const square = await exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        return repo.devHollowedReach(mapId, user.id);
+      });
+      if (!square) throw new AppError('CONFLICT', MESSAGES.noTile);
+      published(mapId);
+      return square;
+    },
+
+    /** `GET /maps/:mapId/explore?q=&r=`: the explore view of one of my tiles (or a grey village tile). */
     view: async (
       user: PublicUser,
       mapId: string,
@@ -180,23 +270,23 @@ export function createExploreService(options: ExploreServiceOptions) {
       const db = options.db;
       await requireMember(db, user, mapId, ['multiplayer']);
       const repo = createExploreRepo(db);
-      const { tile, spots } = tileSpots(
-        await seedOf(db, mapId),
-        await repo.findTileAt(mapId, at.q, at.r),
-        user.id,
-      );
+      const found = await repo.findTileAt(mapId, at.q, at.r);
+      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
       const row = await repo.findRow(user.id, tile.id);
-      const mask = searchedMask(row, tile, spots);
+      const mask = grey ? greyMask(row, tile, grey) : searchedMask(row, tile, spots);
       const items = await createInventoryRepo(db).list({ mapId, userId: user.id });
+      const searched = searchedCount(mask, spots.length);
       return {
         q: tile.q,
         r: tile.r,
         terrain: tile.terrain,
         spots: spots.map((s) => ({ ...s, done: isSearched(mask, s.index) })),
         needs: exploreNeeds(tile.terrain, EXPLORE_RULES),
-        progress: { searched: searchedCount(mask, spots.length), total: spots.length },
-        homestead: homesteadOf(row),
+        progress: { searched, total: spots.length },
+        homestead: grey ? null : homesteadOf(row),
         tools: toolUses(items),
+        ...(grey ? { community: greyView(grey, tile, spots, searched) } : {}),
       };
     },
 
@@ -210,12 +300,11 @@ export function createExploreService(options: ExploreServiceOptions) {
       const result = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
-        // Step 6: the tile, so its owner can't change mid-search.
-        const { tile, spots } = tileSpots(
-          seed,
-          await repo.lockTileAt(mapId, request.q, request.r),
-          user.id,
-        );
+        // Step 6: the tile, so its owner can't change mid-search. A grey
+        // village's own rows are only read: restoring (PR 3) locks the tile first.
+        const locked = await repo.lockTileAt(mapId, request.q, request.r);
+        const grey = await greyVillage(repo, mapId, locked, user.id, at);
+        const { tile, spots } = tileSpots(seed, locked, user.id, grey);
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
 
@@ -225,7 +314,9 @@ export function createExploreService(options: ExploreServiceOptions) {
         // tile_id)` order, so the refresh below can't invert it. (A finished
         // row under an older layout of the same terrain stays finished.)
         const seen = await repo.findRow(user.id, tile.id);
-        if (seen?.completedAt && searchedMask(seen, tile, spots) === 0) {
+        const maskOf = (r: ExploreRow) =>
+          grey ? greyMask(r, tile, grey) : searchedMask(r, tile, spots);
+        if (seen?.completedAt && maskOf(seen) === 0) {
           await repo.lockExplored(mapId, [user.id]);
         }
         // Then the player's row for it.
@@ -240,7 +331,7 @@ export function createExploreService(options: ExploreServiceOptions) {
             spotCount: spots.length,
             at,
           }));
-        const before = searchedMask(row, tile, spots);
+        const before = maskOf(row);
         if (isSearched(before, spot.index)) throw new AppError('CONFLICT', MESSAGES.searched);
 
         // A friendly word before `consumeItems` would refuse it.
@@ -256,13 +347,18 @@ export function createExploreService(options: ExploreServiceOptions) {
         }
 
         const searched = withSearched(before, spot.index);
-        const explored = isFullyExplored(searched, spots.length);
+        // A grey village tile never finishes: its spots refill each morning,
+        // and it isn't my land to join home (#306 2a).
+        const explored = !grey && isFullyExplored(searched, spots.length);
         const fresh = before === 0 && row.searched !== 0;
         // Only a finished row is a homestead (`tile_explore_homestead_after_explored`):
         // one that isn't finished after this search drops its homestead
         // columns, so a row that's somehow joined but short of spots ends up
-        // half-searched, not a 500 (#511).
-        const unjoin = fresh || (!explored && row.joinedAt !== null);
+        // half-searched, not a 500 (#511). On a grey tile only an old
+        // finished row (from before it was a village) has any to drop.
+        const unjoin = grey
+          ? row.completedAt !== null || row.joinedAt !== null
+          : fresh || (!explored && row.joinedAt !== null);
         await repo.updateProgress(
           user.id,
           tile.id,
@@ -289,7 +385,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           (await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
         );
         const roll = rollExploreFind(
-          EXPLORE_FINDS,
+          grey ? HOLLOWED_FINDS : EXPLORE_FINDS,
           { kind: spot.kind, terrain: tile.terrain },
           rngFor(),
           foundLore,
@@ -359,7 +455,8 @@ export function createExploreService(options: ExploreServiceOptions) {
         for (const event of events) await repo.appendEvent(event);
 
         const items = await createInventoryRepo(tx).list(owner);
-        const homestead = homesteadOf(await repo.findRow(user.id, tile.id));
+        const homestead = grey ? null : homesteadOf(await repo.findRow(user.id, tile.id));
+        const progress = { searched: searchedCount(searched, spots.length), total: spots.length };
         return {
           spot: spot.index,
           found: roll.items,
@@ -368,10 +465,11 @@ export function createExploreService(options: ExploreServiceOptions) {
           notable,
           xp: growths.map((g) => ({ squishyId: g.squishyId, xp: g.xp })),
           tool: spot.tool ? { id: spot.tool, usesLeft: items[spot.tool] ?? 0 } : null,
-          progress: { searched: searchedCount(searched, spots.length), total: spots.length },
+          progress,
           explored,
           homestead,
           items,
+          ...(grey ? { joy: exploreJoy(progress) } : {}),
         } satisfies SearchSpotResponse;
       });
       published(mapId);

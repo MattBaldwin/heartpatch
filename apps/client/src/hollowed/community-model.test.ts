@@ -65,9 +65,16 @@ describe('communityPanel', () => {
     expect(panel.open).toBe(true);
     expect(panel.note).toBeNull();
     // Once a later PR hooks the buttons up, the line says what to do.
-    expect(communityPanel(village(), 'old-forest', false, true).lines[0]).toBe(
+    const explore = communityPanel(village(), 'old-forest', false, true);
+    expect(explore.lines[0]).toBe(
       '🔗 Your land touches it. Explore by day, restore with Heartdust!',
     );
+    // Explore open (2a), Restore not yet (PR 3): a word under the buttons.
+    expect(explore.note).toBe('Restoring opens soon 🛠️');
+    expect(
+      communityPanel(village(), 'old-forest', false, true, COMMUNITY_RULES, true).note,
+    ).toBeNull();
+    expect(communityPanel(village(), 'old-forest', true, true).note).toBeNull();
   });
 
   it('says how to get there when it is away', () => {

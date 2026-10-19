@@ -22,6 +22,7 @@ import {
   attachTerrainPlugin,
   DRIFT_ATTRIBUTE,
   TerrainClock,
+  type HollowedDrain,
 } from '../map/terrain-plugin.js';
 import type { Collider } from './explore-world.js';
 import type { SkyLook } from './explore-sky-look.js';
@@ -93,6 +94,11 @@ export interface LandOptions {
    * Left out, it is worked back from what the sky has just set for `sky`.
    */
   readonly lightBase?: { readonly sun: number; readonly environment: number };
+  /**
+   * A grey village tile (#306 2a): the ground and its growth read this
+   * drain, and no butterflies or pollen drift there (grey and quiet).
+   */
+  readonly drain?: HollowedDrain;
   /**
    * A biome's own layers on top of the shared ones (#335: the lake, trail
    * and cave lanes): `place` runs inside `landLayout` (its `extras`), and
@@ -220,13 +226,18 @@ export class ExploreLand {
 
     // ── Growth: one material for the whole land, swaying on the terrain plugin ─
     const landMat = matte(scene, 'land-mat', 0.82);
+    const drained = options.drain ? { drain: options.drain } : {};
     // GLSL only, like the map: under the opt-in WebGPU renderer nothing sways
     // or drifts, so ambient life stays off rather than hanging motes in the air.
-    this.animated = attachTerrainPlugin(landMat, this.clock) !== null;
+    this.animated = attachTerrainPlugin(landMat, this.clock, drained) !== null;
     this.#tinted.push({ mat: landMat, base: landMat.albedoColor.clone() });
     const grassMat = matte(scene, 'land-grass-mat', 0.9);
     grassMat.backFaceCulling = false;
-    attachTerrainPlugin(grassMat, this.clock);
+    attachTerrainPlugin(grassMat, this.clock, drained);
+    // The painted ground greys with the rest (it takes no sway, so only then the plugin).
+    if (options.drain && this.#groundMat) {
+      attachTerrainPlugin(this.#groundMat, this.clock, drained);
+    }
     this.#tinted.push({ mat: grassMat, base: grassMat.albedoColor.clone() });
 
     const L = this.layout;
@@ -273,10 +284,13 @@ export class ExploreLand {
       });
     }
 
+    // A grey village is quiet: no butterflies or pollen (fireflies only come
+    // out at night, when it's shut).
+    const quiet = options.drain !== undefined;
     this.#drift(
       'butterflies',
       buildButterfly(scene),
-      L.butterflies,
+      quiet ? [] : L.butterflies,
       DRIFT_MODE.orbit,
       [0.5, 1.1],
       [0.5, 0.9],
@@ -286,7 +300,7 @@ export class ExploreLand {
     this.#drift(
       'pollen',
       buildMote(scene, 'land-pollen'),
-      L.pollen,
+      quiet ? [] : L.pollen,
       DRIFT_MODE.wander,
       [0.15, 0.35],
       [0.3, 0.55],

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalTimeZone,
   createClock,
+  latestLocalMinute,
   localDate,
   localDateHour,
   mapLocalTime,
@@ -219,5 +220,23 @@ describe('localDayStart', () => {
     expect(nextLocalMidnight(evening, 'America/Chicago').getTime() - start.getTime()).toBe(
       25 * 60 * 60 * 1000,
     );
+  });
+});
+
+describe('latestLocalMinute (#306 2a)', () => {
+  const six = 6 * 60;
+  it('is this morning once it has come, else yesterday morning', () => {
+    // 10:00 in Denver (UTC−6 in October): this morning's 6:00 is 12:00 UTC.
+    expect(
+      latestLocalMinute(new Date('2026-10-19T16:00:00Z'), 'America/Denver', six).toISOString(),
+    ).toBe('2026-10-19T12:00:00.000Z');
+    // 5:00 in Denver: still yesterday's morning.
+    expect(
+      latestLocalMinute(new Date('2026-10-19T11:00:00Z'), 'America/Denver', six).toISOString(),
+    ).toBe('2026-10-18T12:00:00.000Z');
+  });
+  it('is the instant itself on the minute', () => {
+    const at = new Date('2026-10-19T06:00:00Z');
+    expect(latestLocalMinute(at, 'UTC', six).toISOString()).toBe(at.toISOString());
   });
 });

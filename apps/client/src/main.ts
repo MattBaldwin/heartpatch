@@ -594,6 +594,7 @@ const hollow = createHollowScreen({
       hollowLayer.setNight(night);
       maps.setNight(night);
       communityActions.setNight(night);
+      explore.setNight(night);
       audio.setNight(night);
     },
     visit: (done) => {
@@ -908,6 +909,10 @@ const explore = createExploreScreen({
   onLorebook: (pageId) => {
     lorebook.openAt(pageId);
   },
+});
+// A grey village tile's Explore (#306 2a): the same explore view, on a tile my land touches.
+communityActions.wire('explore', (_community, tile) => {
+  void explore.open(tile);
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
