@@ -2,6 +2,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseRoomLook } from '@heartpatch/shared';
 import {
+  BED_FRAME,
   braidedRug,
   hearth,
   hearthSize,
@@ -16,6 +17,7 @@ import { HOUSE_GIFT, HOUSE_GRID, HOUSE_TIERS } from './house-config.js';
 import type { QualityTier } from '../engine/config.js';
 import { heartHallRoom, kitchenRoom, playroomRoom } from './house-rooms-grown.js';
 import type { RoomBox } from './house-layout.js';
+import { inLane, type DoorLane } from './house-walk.js';
 
 /*
  * What goes inside each room (#381 plan §1c), by its look: a registry of
@@ -38,11 +40,20 @@ export interface RoomKit {
   readonly box: RoomBox;
   /** The quality tier, so a builder can pick lighter parts on low (the iPad 9th gen budget). */
   readonly tier: QualityTier;
-  /** Matte-vinyl furniture, merged into the room's one mesh. */
-  solid(parts: readonly Mesh[]): void;
+  /**
+   * The clear lanes in front of the room's doorways (#381 W3): no furniture
+   * that blocks the Keeper may stand in one (`inLane`).
+   */
+  readonly lanes: readonly DoorLane[];
+  /**
+   * Matte-vinyl furniture, merged into the room's one mesh. `walkable`: part
+   * of the floor (a deck the walk's floor rects stand for), not furniture
+   * the Keeper walks round.
+   */
+  solid(parts: readonly Mesh[], walkable?: boolean): void;
   /** Glowing bits (lamp shades, flames), merged into the room's glow mesh. */
   glow(parts: readonly Mesh[]): void;
-  /** A bed, headboard at its local +z, turned by `yaw`; the scene colours its blanket. */
+  /** A bed, headboard at its local +z, turned by `yaw`; the scene colours its blanket (`placeBeds` picks the spots). */
   bed(x: number, z: number, yaw: number): void;
   /** A soft contact shadow on the floor under a piece (low tier: no shadow map). */
   shadow(x: number, z: number, width: number, depth: number): void;
@@ -94,6 +105,43 @@ export function placed(parts: readonly Mesh[], x: number, y: number, z: number, 
   return mesh;
 }
 
+/** Where a bed can stand: its middle and its turn (headboard at its local +z). */
+export interface BedSlot {
+  readonly x: number;
+  readonly z: number;
+  readonly yaw: number;
+}
+
+/** A bed's box on the floor: `BED_FRAME` turned by its yaw (a quarter turn lies it along a side wall). */
+export function bedFootprint(s: BedSlot): { x0: number; x1: number; z0: number; z1: number } {
+  const { length, width } = BED_FRAME;
+  const [hx, hz] =
+    Math.abs(Math.sin(s.yaw)) > 0.7 ? [width / 2, length / 2] : [length / 2, width / 2];
+  return { x0: s.x - hx, x1: s.x + hx, z0: s.z - hz, z1: s.z + hz };
+}
+
+/**
+ * Makes the room's beds, with their contact shadows, in the first of its
+ * `slots` (the room plan's, in order) that keep out of its doorways' lanes
+ * (#381 W3: at level 4 the Hall's doorway takes the Snug's back-right corner,
+ * so its second bed goes in its third slot). Short of clear slots, the rest
+ * take blocked ones (the scene test of every level catches that). The slots
+ * used, in the plan's order.
+ */
+export function placeBeds(kit: RoomKit, slots: readonly BedSlot[]): BedSlot[] {
+  const n = kit.box.beds;
+  const clear = slots.filter((s) => !inLane(kit.lanes, bedFootprint(s), kit.box.y0));
+  const used = [...clear, ...slots.filter((s) => !clear.includes(s))]
+    .slice(0, n)
+    .sort((a, b) => slots.indexOf(a) - slots.indexOf(b));
+  for (const s of used) {
+    kit.bed(s.x, s.z, s.yaw);
+    const along = Math.abs(Math.sin(s.yaw)) > 0.5;
+    kit.shadow(s.x, s.z, along ? 1.5 : 1.9, along ? 1.9 : 1.5);
+  }
+  return used;
+}
+
 /** Spots in rows across the middle of a room, front to back, for residents. */
 function rowSpots(box: RoomBox, count: number): FloorSpot[] {
   const w = box.x1 - box.x0;
@@ -110,11 +158,14 @@ function backBeds(kit: RoomKit): void {
   const { box } = kit;
   const n = box.beds;
   const w = box.x1 - box.x0;
-  for (let i = 0; i < n; i++) {
-    const x = box.x0 + (w * (i + 0.5)) / n;
-    kit.bed(x, box.z1 - 0.65, 0);
-    kit.shadow(x, box.z1 - 0.65, 1.9, 1.5);
-  }
+  placeBeds(
+    kit,
+    Array.from({ length: n }, (_, i) => ({
+      x: box.x0 + (w * (i + 0.5)) / n,
+      z: box.z1 - 0.65,
+      yaw: 0,
+    })),
+  );
 }
 
 /**
@@ -166,16 +217,17 @@ export const snugRoom: RoomBuilder = (kit) => {
   kit.light('fire', hx + fwd.x * 0.9, y + 0.75, hz + fwd.z * 0.9);
 
   // Beds along the side walls at the back: the first two, then along the back.
-  const slots: { u: number; v: number; yaw: number }[] = [
-    { u: 0.62, v: d - 0.8, yaw: -Math.PI / 2 },
-    { u: w - 0.62, v: d - 0.8, yaw: Math.PI / 2 },
-    { u: w / 2, v: d - 0.65, yaw: 0 },
-  ];
-  slots.slice(0, box.beds).forEach((s) => {
-    const [bx, bz] = at(s.u, s.v);
-    kit.bed(bx, bz, s.yaw);
-    kit.shadow(bx, bz, s.yaw === 0 ? 1.9 : 1.5, s.yaw === 0 ? 1.5 : 1.9);
-  });
+  placeBeds(
+    kit,
+    [
+      { u: 0.62, v: d - 0.8, yaw: -Math.PI / 2 },
+      { u: w - 0.62, v: d - 0.8, yaw: Math.PI / 2 },
+      { u: w / 2, v: d - 0.65, yaw: 0 },
+    ].map((s) => {
+      const [x, z] = at(s.u, s.v);
+      return { x, z, yaw: s.yaw };
+    }),
+  );
 
   const [rx, rz] = at(w / 2, d * 0.33);
   kit.solid(braidedRug(scene, rx, rz, Math.min(1.35, w * 0.28), y));

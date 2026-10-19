@@ -1,6 +1,6 @@
 import { project, type HousePose, type HouseViewport } from './house-camera.js';
 import { HOUSE_WALK } from './house-config.js';
-import type { FollowPose, WalkSpot } from './house-walk.js';
+import { copyPose, createFollowPose, type FollowPose, type WalkSpot } from './house-walk.js';
 
 /*
  * Walking the Keeper about the house by touch (#381 W2), pure: the stick's
@@ -13,6 +13,39 @@ import type { FollowPose, WalkSpot } from './house-walk.js';
 export interface FloorStep {
   x: number;
   z: number;
+}
+
+/**
+ * The camera a held stick steers from (#381 W3): the follow camera as it
+ * was when the hold began, kept until the stick is let go. Read against the
+ * live camera, one that turns round to follow (a storey up) turned "down"
+ * into "up" mid-hold and the Keeper flip-flopped.
+ */
+export interface StickLatch {
+  held: boolean;
+  readonly cam: FollowPose;
+}
+
+export function createStickLatch(): StickLatch {
+  return { held: false, cam: createFollowPose() };
+}
+
+/** The pose the stick steers from this frame: `cam` taken at the hold's start, held while `holding`. */
+export function stickFrame(latch: StickLatch, holding: boolean, cam: FollowPose): FollowPose {
+  if (!holding) {
+    latch.held = false;
+    return cam;
+  }
+  if (!latch.held) {
+    copyPose(latch.cam, cam);
+    latch.held = true;
+  }
+  return latch.cam;
+}
+
+/** Lets the latch go (the stick let go, the house closed or rebuilt): the next hold takes the camera afresh. */
+export function releaseStick(latch: StickLatch): void {
+  latch.held = false;
 }
 
 /**

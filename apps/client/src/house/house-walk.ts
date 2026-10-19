@@ -50,9 +50,42 @@ export interface Footprint {
   readonly y1: number;
 }
 
+/**
+ * The clear lane in front of an inside doorway, on one side of it (#381 W3):
+ * no furniture that blocks the Keeper stands in it, so every doorway can be
+ * walked through and turned out of. `axis` is the wall's: an `x` wall runs
+ * across the house (a front or back wall).
+ */
+export interface DoorLane {
+  /** The room it's in. */
+  readonly room: string;
+  readonly axis: 'x' | 'z';
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+  /** Its floor's height. */
+  readonly y: number;
+}
+
+/** A deck the Heart Hall builds at its second storey for the walk (#381 W3), with rails along its open edges. */
+export interface HallDeck {
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+  readonly y: number;
+  /** Each rail: the edge it runs along (`x`: across, at z = `at`) from `from` to `to`. */
+  readonly rails: readonly { axis: 'x' | 'z'; at: number; from: number; to: number }[];
+  /** Where posts hold it up from the floor below. */
+  readonly posts: readonly { x: number; z: number }[];
+}
+
 export interface WalkMap {
   readonly rooms: readonly RoomBox[];
   readonly rects: readonly WalkRect[];
+  /** Every inside doorway's clear lanes (`doorLanes`). */
+  readonly lanes: readonly DoorLane[];
   readonly ramps: readonly WalkRamp[];
   /** The furniture that blocks: taller than a step, and not room-wide. */
   readonly blocks: readonly Footprint[];
@@ -73,10 +106,22 @@ export interface FollowPose {
   readonly target: { x: number; y: number; z: number };
   fov: number;
   pitch: number;
+  /**
+   * Turned round to follow a Keeper heading back toward the front (a storey
+   * up, W3). `followPose` reads it back from the goal it writes, for its
+   * band; copies (the eased camera) carry it but nothing reads it there.
+   */
+  reverse: boolean;
 }
 
 export function createFollowPose(): FollowPose {
-  return { eye: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 1 }, fov: 1, pitch: 0 };
+  return {
+    eye: { x: 0, y: 0, z: 0 },
+    target: { x: 0, y: 0, z: 1 },
+    fov: 1,
+    pitch: 0,
+    reverse: false,
+  };
 }
 
 const inside = (
@@ -96,9 +141,151 @@ const rampHeight = (ramp: WalkRamp, z: number): number => {
 };
 
 /**
+ * The clear lanes in front of every inside doorway, one each side
+ * (`HOUSE_WALK.doorLane`: the Keeper's width and a turn deep, the doorway
+ * and a little wider). Room builders keep their furniture out of them.
+ */
+export function doorLanes(runs: readonly WallRun[]): DoorLane[] {
+  const { depth, side } = HOUSE_WALK.doorLane;
+  const face = HOUSE_GRID.wall / 2;
+  const lanes: DoorLane[] = [];
+  const back = (at: number): [number, number] => [at + face, at + face + depth];
+  const fore = (at: number): [number, number] => [at - face - depth, at - face];
+  for (const run of runs) {
+    if (run.exterior || run.other === null) continue;
+    for (const door of run.doors) {
+      const u = run.from + door.u;
+      const a = u - door.w / 2 - side;
+      const b = u + door.w / 2 + side;
+      // An inside wall is kept by the room behind it (an x wall) or to its
+      // west (a z wall); `other` is across it.
+      const sides: [string, [number, number]][] =
+        run.axis === 'x'
+          ? [
+              [run.room, back(run.at)],
+              [run.other, fore(run.at)],
+            ]
+          : [
+              [run.room, fore(run.at)],
+              [run.other, back(run.at)],
+            ];
+      for (const [room, [lo, hi]] of sides)
+        lanes.push(
+          run.axis === 'x'
+            ? { room, axis: 'x', x0: a, x1: b, z0: lo, z1: hi, y: run.y0 }
+            : { room, axis: 'z', x0: lo, x1: hi, z0: a, z1: b, y: run.y0 },
+        );
+    }
+  }
+  return lanes;
+}
+
+/** Whether a box on the floor at height `y` stands in any of the lanes. */
+export function inLane(
+  lanes: readonly DoorLane[],
+  f: { x0: number; x1: number; z0: number; z1: number },
+  y: number,
+): boolean {
+  return lanes.some(
+    (l) => Math.abs(l.y - y) < 0.3 && f.x0 < l.x1 && f.x1 > l.x0 && f.z0 < l.z1 && f.z1 > l.z0,
+  );
+}
+
+/**
+ * The way from the Heart Hall's gallery to a doorway into its second storey
+ * from the front (#381 W3: the Kitchen loft's): a walkway down the west wall
+ * (the stairs have the east) to a landing in front of the doorway. `decks`
+ * is what the Hall builds, `floors` what the Keeper walks on (overlapping
+ * each other, the gallery's floor and the doorway's strip). Nothing without
+ * such a doorway.
+ */
+export function loftWalk(
+  box: RoomBox,
+  lanes: readonly DoorLane[],
+): { decks: HallDeck[]; floors: WalkRect[] } {
+  const decks: HallDeck[] = [];
+  const floors: WalkRect[] = [];
+  if (box.look !== 'heart-hall' || box.storeys < 2) return { decks, floors };
+  const r = HOUSE_WALK.radius;
+  const face = HOUSE_GRID.wall / 2;
+  const inset = face + r;
+  const g = HOUSE_GROWN.hall;
+  const up = box.y0 + HOUSE_GRID.storey;
+  const front = box.z0 + face;
+  const lane = lanes.find(
+    (l) => l.room === box.id && l.axis === 'x' && Math.abs(l.y - up) < 0.3 && l.z0 < front + 0.1,
+  );
+  if (!lane) return { decks, floors };
+  const galleryFront = box.z1 - face - g.galleryDepth;
+  const wx1 = box.x0 + face + g.walkway;
+  // The landing reaches past the lane far enough for the Keeper to stand at its edge.
+  const lx1 = Math.min(box.x1 - face, lane.x1 + r);
+  const lz1 = front + g.walkway;
+  const landing = lx1 > wx1;
+  decks.push({
+    x0: box.x0 + face,
+    x1: wx1,
+    z0: front,
+    z1: galleryFront,
+    y: up,
+    rails: [{ axis: 'z', at: wx1, from: landing ? lz1 : front, to: galleryFront }],
+    posts: [{ x: wx1 - 0.1, z: ((landing ? lz1 : front) + galleryFront) / 2 }],
+  });
+  floors.push({
+    room: box.id,
+    x0: box.x0 + inset,
+    x1: wx1 - r,
+    z0: box.z0 + inset,
+    z1: galleryFront + r + 0.05,
+    y: up,
+  });
+  if (landing) {
+    decks.push({
+      x0: wx1,
+      x1: lx1,
+      z0: front,
+      z1: lz1,
+      y: up,
+      rails: [
+        { axis: 'x', at: lz1, from: wx1, to: lx1 },
+        { axis: 'z', at: lx1, from: front, to: lz1 },
+      ],
+      posts: [{ x: lx1 - 0.1, z: lz1 - 0.1 }],
+    });
+    floors.push({
+      room: box.id,
+      x0: wx1 - r - 0.05,
+      x1: lx1 - r,
+      z0: box.z0 + inset,
+      z1: lz1 - r,
+      y: up,
+    });
+  }
+  return { decks, floors };
+}
+
+/**
+ * The floor the Keeper stands on, by its feet's height: on the stairs it
+ * goes up a floor past `HOUSE_WALK.floorSwitch` of a storey and back down
+ * below it, with `floorBand` either side where it stays on `was` (no flip
+ * on every nudge across the line).
+ */
+export function standingFloor(y: number, was = -1): number {
+  const { floorSwitch, floorBand } = HOUSE_WALK;
+  const up = floorAbove(y, floorSwitch + floorBand);
+  const down = floorAbove(y, floorSwitch - floorBand);
+  return was >= up && was <= down ? was : floorAbove(y, floorSwitch);
+}
+
+/** The floor at height `y` when a floor starts `share` of a storey above its level. */
+const floorAbove = (y: number, share: number): number =>
+  Math.max(0, Math.floor(y / HOUSE_GRID.storey + 1 - share + 1e-6));
+
+/**
  * The walkable floor: each room's floor rect inset by half the wall and the
  * Keeper's radius, a strip through each inside doorway, and in a two-storey
- * Heart Hall the gallery deck and the stairs as a ramp up to it.
+ * Heart Hall the gallery deck and the stairs as a ramp up to it, and the
+ * walkway to an upstairs doorway (`loftWalk`).
  */
 export function walkMap(
   boxes: readonly RoomBox[],
@@ -110,6 +297,7 @@ export function walkMap(
   const inset = wall / 2 + r;
   const rects: WalkRect[] = [];
   const ramps: WalkRamp[] = [];
+  const lanes = doorLanes(runs);
   for (const b of boxes) {
     rects.push({
       room: b.id,
@@ -134,6 +322,7 @@ export function walkMap(
       z1: b.z1 - inset,
       y: up,
     });
+    rects.push(...loftWalk(b, lanes).floors);
     if (run < 2) continue;
     const sx = b.x1 - g.stairWidth / 2 - wall / 2;
     // The ramp reaches a little onto the floor at its foot and onto the deck
@@ -188,7 +377,7 @@ export function walkMap(
       !ramps.some((ramp) => ramp.sides === f),
   );
   const front = boxes.reduce((m, b) => Math.min(m, b.z0), Infinity);
-  return { rooms: boxes, rects, ramps, blocks, front };
+  return { rooms: boxes, rects, lanes, ramps, blocks, front };
 }
 
 /**
@@ -282,17 +471,32 @@ export function startSpot(map: WalkMap, room: RoomBox): WalkSpot | null {
   // At least deep enough for the camera's full step back.
   const back = cameraFront(map, room) + HOUSE_WALK.back;
   const cz = Math.min(rect.z1, Math.max(rect.z0 + (rect.z1 - rect.z0) * sz, back));
-  // Rings out from the middle, a quarter metre at a time.
-  for (let ring = 0; ring < 12; ring += 1) {
-    const d = ring * 0.25;
+  return nearestFree(map, rect, cx, cz);
+}
+
+/**
+ * The free floor in `rect` nearest (x, z) (furniture kept clear of), in
+ * rings out from it `step` metres apart up to 3 m, or null. A Keeper put
+ * where a bed stands (W3: a bed moved off a doorway's lane) stands beside it.
+ */
+export function nearestFree(
+  map: WalkMap,
+  rect: WalkRect,
+  x: number,
+  z: number,
+  step = 0.25,
+): WalkSpot | null {
+  const rings = Math.round(3 / step);
+  for (let ring = 0; ring < rings; ring += 1) {
+    const d = ring * step;
     const n = ring === 0 ? 1 : ring * 8;
     for (let i = 0; i < n; i += 1) {
       const a = (i / n) * Math.PI * 2;
-      const x = cx + Math.sin(a) * d;
-      const z = cz - Math.cos(a) * d;
-      if (!inside(x, z, rect)) continue;
-      const y = floorAt(map, x, z, room.y0);
-      if (!Number.isNaN(y)) return { x, z, y };
+      const px = x + Math.sin(a) * d;
+      const pz = z - Math.cos(a) * d;
+      if (!inside(px, pz, rect)) continue;
+      const y = floorAt(map, px, pz, rect.y);
+      if (!Number.isNaN(y)) return { x: px, z: pz, y };
     }
   }
   return null;
@@ -325,7 +529,9 @@ export function followTurn(yaw: number): number {
  * Keeper along its own heading until it's inside `room` (or on the porch
  * for a front room), under its ceiling and clear of furniture; squeezed
  * like that, it climbs and looks down at the Keeper instead of past it.
- * Residents in its way fade instead (`blockerFade`).
+ * A storey up in the Hall it never climbs, and turns round to follow a
+ * Keeper heading back toward the front (W3). Residents in its way fade
+ * instead (`blockerFade`).
  */
 export function followPose(
   out: FollowPose,
@@ -336,13 +542,29 @@ export function followPose(
   aspect: number,
 ): FollowPose {
   const W = HOUSE_WALK;
-  const turn = followTurn(yaw);
-  const dx = Math.sin(turn);
-  const dz = Math.cos(turn);
-  // The furthest back the room allows along that heading: its front (dz > 0
-  // always, as |turn| ≤ maxYaw) and its side walls.
+  // A storey up in a two-storey room (the Hall's gallery, the walkway and
+  // the landing, #381 W3: the owner's render check), it looks along the
+  // way the Keeper walks, even back toward the front, from behind it and at
+  // kid height: there's no front wall to squeeze against, only the room.
+  // `out` remembers whether it had turned round: it turns round past
+  // `turnAway` and back only `reverseBand` short of it, and stays turned
+  // round down the stairs until the floor cut would switch (no 180° flip
+  // on every wobble of the heading or the step).
+  const was = out.reverse;
+  const up = room.y0 + (was ? HOUSE_GRID.storey * W.floorSwitch : HOUSE_GRID.storey - W.floorReach);
+  const upper = room.storeys > 1 && at.y >= up;
+  const heading = Math.atan2(Math.sin(yaw - Math.PI), Math.cos(yaw - Math.PI));
+  const reverse = upper && Math.abs(heading) > (was ? W.turnAway - W.reverseBand : W.turnAway);
+  out.reverse = reverse;
+  const turn = followTurn(reverse ? yaw - Math.PI : yaw);
+  const sign = reverse ? -1 : 1;
+  const dx = Math.sin(turn) * sign;
+  const dz = Math.cos(turn) * sign;
+  // The furthest back the room allows along that heading: its front (or its
+  // back, looking out) and its side walls.
   let d: number = W.back;
-  d = Math.min(d, Math.max(0, (at.z - cameraFront(map, room)) / dz));
+  if (dz > 0) d = Math.min(d, Math.max(0, (at.z - cameraFront(map, room)) / dz));
+  else d = Math.min(d, Math.max(0, (room.z1 - W.frontMargin - at.z) / -dz));
   const xMin = room.x0 + W.sideMargin;
   const xMax = room.x1 - W.sideMargin;
   if (dx > 1e-6) d = Math.min(d, Math.max(0, (at.x - xMin) / dx));
@@ -351,7 +573,7 @@ export function followPose(
   // Kitchen table filled the frame's corner).
   while (d > 0 && nearFurniture(map, at.x - dx * d, at.z - dz * d, at.y)) d -= W.nearStep;
   d = Math.max(0, d);
-  const squeeze = 1 - d / W.back;
+  const squeeze = upper ? 0 : 1 - d / W.back;
   const eyeY = Math.min(at.y + W.eyeHeight + W.squeezeRise * squeeze, room.y1 - W.ceilingMargin);
   out.eye.x = at.x - dx * d;
   out.eye.y = eyeY;
@@ -443,6 +665,7 @@ export function easePose(pose: FollowPose, goal: FollowPose, dt: number): Follow
   pose.target.z += (goal.target.z - pose.target.z) * k;
   pose.fov += (goal.fov - pose.fov) * k;
   pose.pitch += (goal.pitch - pose.pitch) * k;
+  pose.reverse = goal.reverse;
   return pose;
 }
 
@@ -456,5 +679,6 @@ export function copyPose(to: FollowPose, from: FollowPose): FollowPose {
   to.target.z = from.target.z;
   to.fov = from.fov;
   to.pitch = from.pitch;
+  to.reverse = from.reverse;
   return to;
 }

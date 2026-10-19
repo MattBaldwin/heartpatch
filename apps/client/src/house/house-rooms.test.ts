@@ -19,6 +19,7 @@ function kit(scene: Scene, level: number, index: number) {
     scene,
     box: roomBox(room),
     tier: 'low',
+    lanes: [],
     solid: (parts) => (made.solid += parts.length),
     glow: (parts) => (made.glow += parts.length),
     bed: () => (made.beds += 1),

@@ -73,10 +73,19 @@ import {
   followPose,
   roomAt,
   slideStep,
+  standingFloor,
   startSpot,
   type WalkSpot,
 } from './house-walk.js';
-import { keeperTapped, stepToward, stickToFloor, type FloorStep } from './house-walk-input.js';
+import {
+  createStickLatch,
+  keeperTapped,
+  releaseStick,
+  stepToward,
+  stickFrame,
+  stickToFloor,
+  type FloorStep,
+} from './house-walk-input.js';
 import { createOpenGate } from './house-open-gate.js';
 import {
   frameKey,
@@ -203,6 +212,8 @@ export interface HouseDebug {
   readonly zoom: number;
   /** The Keeper's middle on screen (CSS px), or null: none drawn, or behind the camera (a tap there walks in). */
   readonly keeper: { readonly x: number; readonly y: number } | null;
+  /** The floor the cut shows (W3: walked in, the Keeper's, up and down the stairs). */
+  readonly floor: number;
   /**
    * The Keeper's walk (#381 W2): where it stands and its room, which way it
    * faces, the stick held or a tapped spot it's walking to, and the follow
@@ -247,12 +258,16 @@ export interface HouseDebug {
    */
   readonly reread: () => void;
   /**
-   * Puts the Keeper in a room (where `startSpot` stands it), as a doorway
-   * it can't pass yet would (the Hall at level 4, W3). Dev hook only: e2e
-   * and the shots walk in other rooms. `on` picks the spot (else where
-   * `startSpot` stands it). False: no such room, or no floor free there.
+   * Puts the Keeper in a room (where `startSpot` stands it). Dev hook only:
+   * e2e and the shots walk in other rooms. `on` picks the spot (else where
+   * `startSpot` stands it), `on.y` a floor above the room's own (the Hall's
+   * gallery and walkway, W3), `on.yaw` which way it faces (else straight in).
+   * False: no such room, or no floor free there.
    */
-  readonly putKeeper: (roomId: string, on?: { x: number; z: number }) => boolean;
+  readonly putKeeper: (
+    roomId: string,
+    on?: { x: number; z: number; y?: number; yaw?: number },
+  ) => boolean;
 }
 
 export interface HouseScreen {
@@ -334,6 +349,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   /** Where the follow camera wants to be, and where it is (easing after it). */
   const walkGoal = createFollowPose();
   const walkCam = createFollowPose();
+  /** The camera the held stick steers from (W3: `stickFrame`). */
+  const stickLatch = createStickLatch();
   /** The follow camera is set for this scene and screen (false: work it out afresh). */
   let walkReady = false;
   /** The last walk frame (ms), or null: the next one starts from rest. */
@@ -1373,19 +1390,24 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       options.showScene(build);
       return;
     }
-    // Walking in shows the Keeper's floor, wherever it was left (W3 makes
-    // the cut follow it up and down the stairs).
+    const slid = panner.step();
+    if (slid) showPan(slid);
+    const walking = stepWalk(s, now);
+    // Walking in shows the Keeper's floor, wherever it was left, and the cut
+    // follows it up and down the stairs (W3).
+    let cut = false;
     if (zoom > 0 || walk?.goal === 1) {
       const at = keeperFloor(s);
       if (floor !== at) {
         floor = at;
         s.setFloor(at);
-        fit(s);
+        cut = true;
+        // Walked in (or pinching), only the dollhouse pose under it is framed
+        // afresh (for Step out): the follow camera doesn't jump.
+        if (walkReady) showPan(panner.fit());
+        else fit(s);
       }
     }
-    const slid = panner.step();
-    if (slid) showPan(slid);
-    const walking = stepWalk(s, now);
     const pose = poseNow(now);
     if (pose) s.setPose(pose, glide ? 0 : clampZoom(zoom));
     // Stepped all the way out: the dollhouse frames the Keeper's first room again.
@@ -1404,7 +1426,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       }
     }
     const moving = s.update(now);
-    walkChanged ||= Boolean(slid);
+    walkChanged ||= Boolean(slid) || cut;
     // Only a change draws: a finger resting on the stick, or pushing the
     // Keeper into a wall, moves nothing.
     if (wasAsked || glide || walk || moving || walkChanged) options.invalidate();
@@ -1523,10 +1545,10 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     return walkRoom;
   }
 
-  /** The floor the Keeper stands on (its room's). */
+  /** The floor the Keeper stands on, by its height: the Hall's gallery is upstairs. */
   function keeperFloor(s: HouseScene): number {
     if (!walkReady) syncKeeper(s);
-    return keeperRoom(s)?.floor ?? 0;
+    return standingFloor(walkAt.y, floor);
   }
 
   /** Takes the scene's Keeper as the walk's (it's where the scene put it, or where it was left). */
@@ -1556,6 +1578,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function followCam(s: HouseScene): HousePose {
     if (!walkReady) {
       syncKeeper(s);
+      // A fresh walk in: not turned round from a visit or a scene before.
+      walkGoal.reverse = false;
       followGoal(s);
       copyPose(walkCam, walkGoal);
       walkReady = true;
@@ -1569,6 +1593,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
    * eases after it. True: keep drawing. Standing still, nothing runs.
    */
   function stepWalk(s: HouseScene, now: number): boolean {
+    if (!stick) releaseStick(stickLatch);
     if (!walkReady) {
       walkLast = null;
       return false;
@@ -1587,7 +1612,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       push.x = v.x;
       push.z = v.z;
       if (push.x !== 0 || push.z !== 0) {
-        stickToFloor(stride, push, walkCam);
+        stickToFloor(stride, push, stickFrame(stickLatch, true, walkCam));
         moved = slideStep(map, walkAt, stride.x * step, stride.z * step);
         // Faces the way the stick points, even pressed against a wall.
         yaw = faceYaw(stride.x, stride.z);
@@ -1673,6 +1698,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   function dropWalkInput(): void {
     press = null;
     stick = null;
+    releaseStick(stickLatch);
     walkTo = null;
     showStick();
   }
@@ -1725,11 +1751,14 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
   }
 
   /** Dev hook: the Keeper put in a room (or on a spot in it), as the walk would leave it there. */
-  function putKeeper(roomId: string, on?: { x: number; z: number }): boolean {
+  function putKeeper(
+    roomId: string,
+    on?: { x: number; z: number; y?: number; yaw?: number },
+  ): boolean {
     const s = scene3d;
     const room = s?.walkMap.rooms.find((r) => r.id === roomId);
     const map = s?.walkMap;
-    const y = room && map && on ? floorAt(map, on.x, on.z, room.y0) : NaN;
+    const y = room && map && on ? floorAt(map, on.x, on.z, on.y ?? room.y0) : NaN;
     const spot =
       room && map
         ? on
@@ -1739,8 +1768,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
           : startSpot(map, room)
         : null;
     if (!s || !spot) return false;
-    s.moveKeeper(spot, Math.PI);
-    keep(spot, Math.PI);
+    const yaw = on?.yaw ?? Math.PI;
+    s.moveKeeper(spot, yaw);
+    keep(spot, yaw);
     syncKeeper(s);
     if (walkReady) {
       followGoal(s);
@@ -1838,6 +1868,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     if (press?.id === e.pointerId) {
       press = null;
       stick = null;
+      releaseStick(stickLatch);
       showStick();
     }
     const last = panner.up(e.pointerId);
@@ -2099,6 +2130,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
         pose: glide ? 'glide' : walk ? 'walk' : walkedIn(zoom) ? 'kid' : 'dollhouse',
         zoom,
         keeper: keeperOnScreen(),
+        floor,
         walk:
           scene3d && walkReady
             ? {

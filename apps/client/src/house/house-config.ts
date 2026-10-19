@@ -376,6 +376,20 @@ export const HOUSE_WALK = {
   fadeNear: [1.2, 1.8], // TUNE
   /** One across the line to the Keeper fades from its body's edge in to this share of its radius. */
   fadeEdge: 0.6, // TUNE
+  /**
+   * The clear lane furniture leaves in front of every inside doorway, on
+   * both sides (#381 W3): this deep from the wall (the Keeper's width and a
+   * little more to turn), and this much wider than the doorway each side.
+   */
+  doorLane: { depth: 0.86, side: 0.1 }, // TUNE: 2 × radius + 0.3
+  /** A piece slid out of a doorway's lane keeps this gap from it, metres. */
+  laneGap: 0.05, // TUNE
+  /** The floor cut follows the Keeper up a floor once its feet are this share of a storey up it (on the stairs). */
+  floorSwitch: 0.5, // TUNE
+  /** ...and back down only this share of a storey below that (and up only this far above it). */
+  floorBand: 0.05, // TUNE
+  /** A storey up, the turned-round camera turns back only this far inside `turnAway`, radians. */
+  reverseBand: 0.35, // TUNE
 } as const;
 
 /** The roof-off entry glide (a cinematic `Timeline` shot). */
@@ -473,6 +487,8 @@ export const HOUSE_GROWN = {
     /** Steps up to the gallery. */
     steps: 10, // TUNE
     stairWidth: 1.0, // TUNE: metres
+    /** The walkway from the gallery down the west wall to an upstairs doorway, and its landing (#381 W3), metres wide. */
+    walkway: 1.2, // TUNE
   },
 } as const;
 
