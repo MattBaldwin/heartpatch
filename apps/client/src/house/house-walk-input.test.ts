@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { project, type HousePose } from './house-camera.js';
 import { HOUSE_WALK } from './house-config.js';
 import { createFollowPose, type FollowPose } from './house-walk.js';
-import { keeperTapped, stepToward, stickToFloor } from './house-walk-input.js';
+import {
+  createStickLatch,
+  keeperTapped,
+  releaseStick,
+  stepToward,
+  stickFrame,
+  stickToFloor,
+} from './house-walk-input.js';
 
 /** A camera at the origin looking along `heading` (radians from +z). */
 function looking(heading: number): FollowPose {
@@ -86,5 +93,40 @@ describe('a tap on the Keeper in the dollhouse (#381 W2)', () => {
 
   it('is a big enough target (44 pt or more)', () => {
     expect(HOUSE_WALK.tapRadius * 2).toBeGreaterThanOrEqual(44);
+  });
+});
+
+describe('the held stick’s camera (#381 W3)', () => {
+  const pose = (z: number) => {
+    const p = createFollowPose();
+    p.eye.z = z;
+    p.target.z = z + 1;
+    return p;
+  };
+
+  it('steers from the camera as the hold began, until it’s let go', () => {
+    const latch = createStickLatch();
+    const cam = pose(0);
+    expect(stickFrame(latch, true, cam).target.z).toBe(1);
+    // The camera turns round mid-hold: the stick keeps the first one.
+    cam.eye.z = 10;
+    cam.target.z = 9;
+    expect(stickFrame(latch, true, cam).target.z).toBe(1);
+    // Let go (no stick this frame), then a new hold takes the camera afresh.
+    stickFrame(latch, false, cam);
+    expect(stickFrame(latch, true, cam).target.z).toBe(9);
+  });
+
+  it('takes the camera afresh after a release with no frame between (the house closed mid-hold)', () => {
+    const latch = createStickLatch();
+    stickFrame(latch, true, pose(0));
+    releaseStick(latch);
+    expect(stickFrame(latch, true, pose(5)).target.z).toBe(6);
+  });
+
+  it('writes into the latch it was given, in place', () => {
+    const latch = createStickLatch();
+    const held = latch.cam;
+    expect(stickFrame(latch, true, pose(2))).toBe(held);
   });
 });

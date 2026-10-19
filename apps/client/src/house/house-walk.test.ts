@@ -1,18 +1,25 @@
 import { HOUSE_DATA, roomsAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
+import { HOUSE_DOORS, HOUSE_GRID, HOUSE_GROWN, HOUSE_WALK } from './house-config.js';
+import { createStickLatch, stickFrame, stickToFloor, type FloorStep } from './house-walk-input.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { roomBox, wallRuns, type RoomBox } from './house-layout.js';
 import {
   blockerFade,
   cameraFront,
   copyPose,
   createFollowPose,
+  doorLanes,
   easePose,
   floorAt,
   followPose,
   followTurn,
+  inLane,
+  loftWalk,
+  nearestFree,
   roomAt,
   slideStep,
+  standingFloor,
   startSpot,
   walkMap,
   type Footprint,
@@ -507,5 +514,240 @@ describe('residents fading out of the camera’s way (#381 W2)', () => {
 
   it('fades one the Keeper is walking through', () => {
     expect(fade({ x: 0.1, y: 0.5, z: 3.95, r: 0.5 })).toBeLessThan(0.5);
+  });
+});
+
+/** Every spot reachable from `from` in 0.1 m steps (up and down stairs too). */
+function reach(map: WalkMap, from: WalkSpot): WalkSpot[] {
+  const seen = new Map<string, WalkSpot>();
+  const queue = [{ ...from }];
+  while (queue.length > 0 && seen.size < 40000) {
+    const p = queue.pop()!;
+    for (const [dx, dz] of [
+      [0.1, 0],
+      [-0.1, 0],
+      [0, 0.1],
+      [0, -0.1],
+    ] as const) {
+      const y = floorAt(map, p.x + dx, p.z + dz, p.y);
+      if (Number.isNaN(y)) continue;
+      const key = `${String(Math.round((p.x + dx) * 10))},${String(Math.round((p.z + dz) * 10))},${String(Math.round(y * 10))}`;
+      if (seen.has(key)) continue;
+      const q = { x: p.x + dx, z: p.z + dz, y };
+      seen.set(key, q);
+      queue.push(q);
+    }
+  }
+  return [...seen.values()];
+}
+
+describe('doorways and the floors between (#381 W3)', () => {
+  it('keeps a lane the Keeper fits through in front of every inside doorway, one each side', () => {
+    const rooms = roomsAt(HOUSE_DATA, 4);
+    const runs = wallRuns(rooms);
+    const lanes = doorLanes(runs);
+    const doors = runs.filter((r) => !r.exterior).flatMap((r) => r.doors);
+    expect(lanes).toHaveLength(doors.length * 2);
+    const { depth, side } = HOUSE_WALK.doorLane;
+    for (const l of lanes) {
+      const [across, deep] =
+        l.axis === 'x' ? [l.x1 - l.x0, l.z1 - l.z0] : [l.z1 - l.z0, l.x1 - l.x0];
+      expect(across).toBeCloseTo(HOUSE_DOORS.width + 2 * side);
+      expect(deep).toBeCloseTo(depth);
+      expect(deep).toBeGreaterThan(2 * radius);
+      // In its own room, off the wall.
+      const box = roomBox(rooms.find((r) => r.id === l.room)!);
+      expect(l.x0).toBeGreaterThanOrEqual(box.x0 - side - 1e-6);
+      expect(l.x1).toBeLessThanOrEqual(box.x1 + side + 1e-6);
+      expect(l.z0).toBeGreaterThanOrEqual(box.z0 - side - 1e-6);
+      expect(l.z1).toBeLessThanOrEqual(box.z1 + side + 1e-6);
+    }
+    // The Kitchen loft's doorway has a lane on the Hall's side, a storey up.
+    expect(lanes.some((l) => l.room === 'heart-hall' && l.y === HOUSE_GRID.storey)).toBe(true);
+    const snugLane = lanes.find((l) => l.room === 'snug' && l.axis === 'x')!;
+    expect(
+      inLane(lanes, { x0: snugLane.x0 - 0.1, x1: snugLane.x0 + 0.01, z0: 4, z1: 4.2 }, 0),
+    ).toBe(true);
+    expect(
+      inLane(lanes, { x0: snugLane.x0 - 0.1, x1: snugLane.x0 + 0.01, z0: 4, z1: 4.2 }, 3),
+    ).toBe(false);
+  });
+
+  it('lays a walkway from the gallery down the west wall to a landing at the loft doorway', () => {
+    const rooms = roomsAt(HOUSE_DATA, 4);
+    const lanes = doorLanes(wallRuns(rooms));
+    const hall = roomBox(rooms.find((r) => r.look === 'heart-hall')!);
+    const { decks, floors } = loftWalk(hall, lanes);
+    expect(decks).toHaveLength(2);
+    expect(floors).toHaveLength(2);
+    const up = hall.y0 + HOUSE_GRID.storey;
+    expect(decks.every((d) => d.y === up && d.rails.length > 0 && d.posts.length > 0)).toBe(true);
+    // The walkway against the west wall reaches the gallery; the landing covers the lane.
+    const [walkway, landing] = decks;
+    expect(walkway!.x0).toBeCloseTo(hall.x0 + HOUSE_GRID.wall / 2);
+    expect(walkway!.z1).toBeCloseTo(hall.z1 - HOUSE_GRID.wall / 2 - HOUSE_GROWN.hall.galleryDepth);
+    const lane = lanes.find((l) => l.room === hall.id && l.y === up)!;
+    expect(landing!.x1).toBeGreaterThan(lane.x1);
+    expect(landing!.z1 - landing!.z0).toBeGreaterThanOrEqual(lane.z1 - lane.z0);
+    // Nothing without a doorway upstairs (the Hall alone), nor in another room.
+    expect(loftWalk(hall, []).decks).toHaveLength(0);
+    const snug = roomBox(rooms.find((r) => r.look === 'snug')!);
+    expect(loftWalk(snug, lanes).decks).toHaveLength(0);
+  });
+
+  it('walks from the Hall up the stairs, along the gallery and the walkway, into the Kitchen loft', () => {
+    const map = mapAt(4);
+    const hall = room(map, 'heart-hall');
+    const kitchen = room(map, 'kitchen');
+    const seen = reach(map, startSpot(map, hall)!);
+    const inKitchen = seen.filter((p) => roomAt(map, p)?.id === kitchen.id);
+    expect(inKitchen.length).toBeGreaterThan(100);
+    expect(inKitchen.every((p) => p.y === kitchen.y0)).toBe(true);
+    // And every other room on the way.
+    for (const b of map.rooms)
+      expect(
+        seen.some((p) => roomAt(map, p)?.id === b.id),
+        b.id,
+      ).toBe(true);
+  });
+
+  it('says which floor the Keeper stands on by its height, switching half way up the stairs', () => {
+    const { storey } = HOUSE_GRID;
+    expect(standingFloor(0)).toBe(0);
+    expect(standingFloor(storey * HOUSE_WALK.floorSwitch - 0.01)).toBe(0);
+    expect(standingFloor(storey * HOUSE_WALK.floorSwitch)).toBe(1);
+    expect(standingFloor(storey)).toBe(1);
+    expect(standingFloor(-0.1)).toBe(0);
+    // Nudged back and forth across the line it stays where it was, inside the band.
+    const { floorSwitch, floorBand } = HOUSE_WALK;
+    const nearLine = storey * floorSwitch + 0.02;
+    expect(standingFloor(nearLine, 0)).toBe(0);
+    expect(standingFloor(storey * floorSwitch - 0.02, 1)).toBe(1);
+    expect(standingFloor(storey * (floorSwitch + floorBand) + 0.01, 0)).toBe(1);
+    expect(standingFloor(storey * (floorSwitch - floorBand) - 0.01, 1)).toBe(0);
+    // Far from the line, where it was doesn't matter (the dollhouse showing upstairs).
+    expect(standingFloor(0, 1)).toBe(0);
+    expect(standingFloor(storey, 0)).toBe(1);
+  });
+
+  it('finds the free floor nearest a spot a bed stands on', () => {
+    const map = mapAt(1, [piece(2, 3, 2, 3)]);
+    const rect = map.rects[0]!;
+    const at = nearestFree(map, rect, 2.5, 2.5, 0.05)!;
+    expect(Number.isNaN(floorAt(map, at.x, at.z, 0))).toBe(false);
+    expect(Math.hypot(at.x - 2.5, at.z - 2.5)).toBeLessThan(0.5 + radius + 0.06);
+    expect(nearestFree(map, rect, 1, 1)).toEqual({ x: 1, z: 1, y: 0 });
+  });
+
+  describe('the follow camera a storey up (the owner’s W3 check)', () => {
+    const hallUp = () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      // On the walkway by the west wall, near its front end.
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 1.6, y: hall.y0 + HOUSE_GRID.storey };
+      expect(floorAt(map, at.x, at.z, at.y)).toBe(at.y);
+      return { map, hall, at };
+    };
+
+    it('looks along the walkway toward the front from behind the Keeper, at kid height', () => {
+      const { map, hall, at } = hallUp();
+      // Heading straight out (−z), toward the Kitchen loft.
+      const pose = followPose(createFollowPose(), map, at, 0, hall, 393 / 852);
+      expect(pose.eye.z).toBeGreaterThan(at.z + 1);
+      expect(pose.target.z).toBeLessThan(at.z);
+      expect(pose.eye.y).toBeCloseTo(at.y + HOUSE_WALK.eyeHeight);
+      expect(pose.eye.z).toBeLessThanOrEqual(hall.z1);
+    });
+
+    it('never climbs and looks steeply down, even pressed near the Hall’s front wall', () => {
+      const { map, hall, at } = hallUp();
+      const pose = followPose(createFollowPose(), map, at, Math.PI, hall, 393 / 852);
+      expect(pose.eye.z).toBeLessThan(at.z);
+      expect(pose.eye.z).toBeGreaterThanOrEqual(cameraFront(map, hall) - 1e-6);
+      expect(pose.eye.y).toBeCloseTo(at.y + HOUSE_WALK.eyeHeight);
+      expect(pose.pitch).toBeLessThan(45 * DEG);
+    });
+
+    it('still keeps looking in on the ground floor when the Keeper heads out', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = startSpot(map, hall)!;
+      const pose = followPose(createFollowPose(), map, at, 0, hall, 393 / 852);
+      expect(pose.eye.z).toBeLessThan(at.z);
+    });
+  });
+
+  describe('holding the stick a storey up (W3 review: no flip-flop with the turning camera)', () => {
+    /**
+     * Holds the stick at `push` for `seconds` as the screen does: the stick
+     * steers from `stickFrame`; the camera eases after the Keeper.
+     */
+    function hold(map: WalkMap, hall: RoomBox, at: WalkSpot, push: FloorStep, seconds: number) {
+      let yaw = Math.PI;
+      const goal = createFollowPose();
+      const cam = createFollowPose();
+      copyPose(cam, followPose(goal, map, at, yaw, hall, 393 / 852));
+      const latch = createStickLatch();
+      const stride = { x: 0, z: 0 };
+      const dt = 1 / 60;
+      const zs: number[] = [];
+      const flips: boolean[] = [];
+      for (let i = 0; i < seconds * 60; i += 1) {
+        stickToFloor(stride, push, stickFrame(latch, true, cam));
+        slideStep(map, at, stride.x * HOUSE_WALK.speed * dt, stride.z * HOUSE_WALK.speed * dt);
+        yaw = faceYaw(stride.x, stride.z);
+        followPose(goal, map, at, yaw, hall, 393 / 852);
+        easePose(cam, goal, dt);
+        zs.push(at.z);
+        flips.push(goal.reverse);
+      }
+      return { zs, flips };
+    }
+
+    it('walks on toward the front along the walkway, the camera turned round once and staying so', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 2.6, y: hall.y0 + HOUSE_GRID.storey };
+      const { zs, flips } = hold(map, hall, at, { x: 0, z: -1 }, 4);
+      // Never back the way it came, and on to the walkway's front end.
+      for (let i = 1; i < zs.length; i += 1) expect(zs[i]!).toBeLessThanOrEqual(zs[i - 1]! + 1e-9);
+      expect(zs.at(-1)!).toBeLessThan(hall.z0 + 0.6);
+      const changes = flips.filter((f, i) => i > 0 && f !== flips[i - 1]).length;
+      expect(changes).toBeLessThanOrEqual(1);
+      expect(flips.at(-1)).toBe(true);
+    });
+
+    it('walks on down the stairs from the gallery', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const ramp = map.ramps[0]!;
+      const at = { x: (ramp.x0 + ramp.x1) / 2, z: ramp.z1 - 0.1, y: ramp.y1 };
+      at.y = floorAt(map, at.x, at.z, at.y);
+      expect(at.y).toBeGreaterThan(ramp.y1 - 0.1);
+      const { zs } = hold(map, hall, at, { x: 0, z: -1 }, 5);
+      for (let i = 1; i < zs.length; i += 1) expect(zs[i]!).toBeLessThanOrEqual(zs[i - 1]! + 1e-9);
+      expect(at.y).toBeCloseTo(hall.y0, 1);
+    });
+
+    it('doesn’t turn round and back on a heading wobbling round the turn-away line', () => {
+      const map = mapAt(4);
+      const hall = room(map, 'heart-hall');
+      const at = { x: hall.x0 + 0.7, z: hall.z0 + 2.6, y: hall.y0 + HOUSE_GRID.storey };
+      const pose = createFollowPose();
+      // Heading is yaw − π: just past turn-away, then a little inside it.
+      followPose(pose, map, at, Math.PI + HOUSE_WALK.turnAway + 0.05, hall, 1);
+      expect(pose.reverse).toBe(true);
+      followPose(pose, map, at, Math.PI + HOUSE_WALK.turnAway - 0.1, hall, 1);
+      expect(pose.reverse).toBe(true);
+      followPose(
+        pose,
+        map,
+        at,
+        Math.PI + HOUSE_WALK.turnAway - HOUSE_WALK.reverseBand - 0.05,
+        hall,
+        1,
+      );
+      expect(pose.reverse).toBe(false);
+    });
   });
 });

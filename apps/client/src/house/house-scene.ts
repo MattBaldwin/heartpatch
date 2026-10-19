@@ -109,7 +109,14 @@ import {
   type GiftPlacement,
 } from './house-gift-view.js';
 import { DUSK_LOOK, type HouseLightLook } from './house-light-look.js';
-import { placed, roomBuilder, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
+import {
+  bedFootprint,
+  placed,
+  roomBuilder,
+  type FloorSpot,
+  type RoomKit,
+  type RoomPlan,
+} from './house-rooms.js';
 import { paneMaterial, radialTexture, signMaterial } from './house-textures.js';
 import {
   createHop,
@@ -123,7 +130,11 @@ import {
 import { EXPLORE_VIEW } from '../explore/explore-config.js';
 import {
   blockerFade,
+  doorLanes,
+  floorAt,
+  nearestFree,
   walkMap,
+  type DoorLane,
   type Footprint,
   type WalkBlocker,
   type WalkMap,
@@ -316,6 +327,8 @@ export class HouseScene {
   /** Walls cut low in the dollhouse that kid height stands back up, by room. */
   readonly #kidWalls = new Map<string, Mesh[]>();
   readonly #runs: readonly WallRun[];
+  /** The clear lanes in front of every inside doorway (#381 W3): each room keeps its furniture out of its own. */
+  readonly #lanes: readonly DoorLane[];
   readonly #floors: readonly number[];
   #cut: FloorCut;
   /** Which floors' thin instances are in the buffers now (`all` during the roof lift). */
@@ -475,6 +488,7 @@ export class HouseScene {
     this.#cut = floorCut(rooms, this.#floors[0] ?? 0);
     const runs = wallRuns(view.rooms);
     this.#runs = runs;
+    this.#lanes = doorLanes(runs);
     this.#buildOutside(this.bounds);
     const plans = new Map<string, RoomPlan>();
     const grooves: { floor: number; mesh: Mesh }[] = [];
@@ -1390,17 +1404,21 @@ export class HouseScene {
   #kit(parts: RoomParts): RoomKit {
     const scene = this.#scene;
     const floor = parts.box.floor;
+    const lanes = this.#lanes.filter((l) => l.room === parts.box.id);
     return {
       scene,
       box: parts.box,
       tier: this.#tier,
-      solid: (list) => {
-        // Each piece's world box, before the floor merges them: the walk's footprints.
-        for (const m of list) {
-          m.computeWorldMatrix(true);
-          const { minimumWorld: lo, maximumWorld: hi } = m.getBoundingInfo().boundingBox;
-          this.#furniture.push({ x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z, y0: lo.y, y1: hi.y });
-        }
+      lanes,
+      solid: (list, walkable = false) => {
+        // Each piece's world box, before the floor merges them: the walk's
+        // footprints (a deck is floor: the walk map stands for it).
+        if (!walkable)
+          for (const m of list) {
+            m.computeWorldMatrix(true);
+            const { minimumWorld: lo, maximumWorld: hi } = m.getBoundingInfo().boundingBox;
+            this.#furniture.push({ x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z, y0: lo.y, y1: hi.y });
+          }
         parts.solid.push(...list);
       },
       glow: (list) => parts.glow.push(...list),
@@ -1409,14 +1427,10 @@ export class HouseScene {
         own.push({ x, z, yaw });
         this.#roomBeds.set(parts.box.id, own);
         // Beds are thin instances, not solids: their footprint from the bed's size, turned.
-        const { length, width, height } = BED_FRAME;
-        const [hx, hz] =
-          Math.abs(Math.sin(yaw)) > 0.7 ? [width / 2, length / 2] : [length / 2, width / 2];
+        const { height } = BED_FRAME;
+        const foot = bedFootprint({ x, z, yaw });
         this.#furniture.push({
-          x0: x - hx,
-          x1: x + hx,
-          z0: z - hz,
-          z1: z + hz,
+          ...foot,
           y0: parts.box.y0,
           y1: parts.box.y0 + height,
         });
@@ -2152,7 +2166,17 @@ export class HouseScene {
     this.#order = [...order.filter((id) => first.has(id)), ...order.filter((id) => !first.has(id))];
     if (!keeperRoom) return;
     const box = roomBox(keeperRoom);
-    const spot = plans.get(keeperRoom.id)?.keeper ?? { x: (box.x0 + box.x1) / 2, z: box.z0 + 0.8 };
+    const planned = plans.get(keeperRoom.id)?.keeper ?? {
+      x: (box.x0 + box.x1) / 2,
+      z: box.z0 + 0.8,
+    };
+    // On free floor, so it can walk off (W3: a bed moved off a doorway's lane may stand there).
+    const map = this.walkMap;
+    const rect = map.rects.find((r) => r.room === box.id && r.y === box.y0);
+    const spot =
+      rect && Number.isNaN(floorAt(map, planned.x, planned.z, box.y0))
+        ? (nearestFree(map, rect, planned.x, planned.z, 0.05) ?? planned)
+        : planned;
     const base = KEEPER_DATA.bases[0];
     const config = options.keeper ?? (base ? defaultKeeperConfig(base) : null);
     if (!config) return;

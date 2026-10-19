@@ -3,6 +3,7 @@ import { HOUSE_GRID, HOUSE_GROWN } from './house-config.js';
 import {
   counter,
   gallery,
+  hallDeck,
   hangingLantern,
   heartTree,
   heartTreeCrown,
@@ -18,7 +19,8 @@ import {
   toyBlocks,
   type Parts,
 } from './house-models.js';
-import { placed, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
+import { placeBeds, placed, type FloorSpot, type RoomKit, type RoomPlan } from './house-rooms.js';
+import { inLane, loftWalk } from './house-walk.js';
 
 /*
  * The grown rooms (#381 B3, the owner-approved mockup 2026-10-12): what the
@@ -68,11 +70,28 @@ function put(
 
 const isParts = (piece: Parts | readonly Mesh[]): piece is Parts => !Array.isArray(piece);
 
-/** A bed with its contact shadow; `along` says it lies along a side wall. */
-function bedAt(kit: RoomKit, x: number, z: number, yaw: number): void {
-  kit.bed(x, z, yaw);
-  const along = Math.abs(Math.sin(yaw)) > 0.5;
-  kit.shadow(x, z, along ? 1.5 : 1.9, along ? 1.9 : 1.5);
+/**
+ * Places a solid piece at the first of `spots` where it keeps out of the
+ * room's doorway lanes (#381 W3), or at the last: where it went.
+ */
+function putClear(
+  kit: RoomKit,
+  make: () => readonly Mesh[],
+  y: number,
+  spots: readonly { x: number; z: number; yaw: number }[],
+): { x: number; z: number; yaw: number } {
+  for (const [i, s] of spots.entries()) {
+    const mesh = placed(make(), s.x, y, s.z, s.yaw);
+    mesh.computeWorldMatrix(true);
+    const { minimumWorld: lo, maximumWorld: hi } = mesh.getBoundingInfo().boundingBox;
+    if (i < spots.length - 1 && inLane(kit.lanes, { x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z }, y)) {
+      mesh.dispose();
+      continue;
+    }
+    kit.solid([mesh]);
+    return s;
+  }
+  throw new Error('putClear: no spots');
 }
 
 /**
@@ -97,14 +116,10 @@ export function playroomRoom(kit: RoomKit): RoomPlan {
   put(kit, playTent(scene), tx, y, tz, 0.4);
   kit.shadow(tx, tz, 1.7, 1.7);
 
-  const slots = [
-    { u: w * 0.49, v: d - 0.65, yaw: 0 },
-    { u: w - 0.62, v: d * 0.4, yaw: EAST },
-  ];
-  for (const s of slots.slice(0, kit.box.beds)) {
-    const [bx, bz] = at(s.u, s.v);
-    bedAt(kit, bx, bz, s.yaw);
-  }
+  placeBeds(kit, [
+    { ...spot(w * 0.49, d - 0.65), yaw: 0 },
+    { ...spot(w - 0.62, d * 0.4), yaw: EAST },
+  ]);
 
   // The star night-light in the open front-left corner, where it reads.
   const [lx, lz] = at(0.45, 0.45);
@@ -127,7 +142,7 @@ export function playroomRoom(kit: RoomKit): RoomPlan {
  * The Kitchen loft (level 3, upstairs): a little iron stove in the back-left
  * corner with its pipe up to the roof, a counter along the back wall under
  * the window, shelves of jars on the west wall and a round table with a pie
- * in the middle. Its beds stand along the east wall, either side of the door.
+ * in the middle. Its beds stand along the east wall.
  */
 export function kitchenRoom(kit: RoomKit): RoomPlan {
   const { scene } = kit;
@@ -149,29 +164,31 @@ export function kitchenRoom(kit: RoomKit): RoomPlan {
   kit.pool(sx, sz - 0.6, 1.3);
   kit.light('fire', sx, y + 0.8, sz - 0.7);
 
+  const [hx, hz] = at(0.27, d * 0.42);
   // Between the stove and the beds; a Kitchen tuned too narrow goes without.
+  // A doorway in the back wall (onto the Heart Hall's landing, #381 W3)
+  // keeps its lane clear: then it stands under the shelves on the west wall.
   const counterW = Math.min(2.0, w - 2.6);
   if (counterW >= 0.6) {
-    const [kx, kz] = at(1.3 + counterW / 2, d - 0.45);
-    put(kit, counter(scene, counterW), kx, y, kz, 0);
-    kit.shadow(kx, kz, counterW + 0.3, 0.9);
+    const back = at(1.3 + counterW / 2, d - 0.45);
+    const k = putClear(kit, () => counter(scene, counterW), y, [
+      { x: back[0], z: back[1], yaw: 0 },
+      { x: kit.box.x0 + HOUSE_GRID.wall / 2 + 0.36, z: hz, yaw: WEST },
+    ]);
+    const across = k.yaw === 0;
+    kit.shadow(k.x, k.z, across ? counterW + 0.3 : 0.9, across ? 0.9 : counterW + 0.3);
   }
 
-  const [hx, hz] = at(0.27, d * 0.42);
   put(kit, kitchenShelves(scene, Math.min(2.2, d * 0.5)), hx, y, hz, WEST);
 
   const [tx, tz] = at(w * 0.48, d * 0.4);
   put(kit, kitchenTable(scene), tx, y, tz, 0);
   kit.shadow(tx, tz, 2.2, 1.4);
 
-  const slots = [
-    { u: w - 0.62, v: d - 0.85, yaw: EAST },
-    { u: w - 0.62, v: 0.85, yaw: EAST },
-  ];
-  for (const s of slots.slice(0, kit.box.beds)) {
-    const [bx, bz] = at(s.u, s.v);
-    bedAt(kit, bx, bz, s.yaw);
-  }
+  placeBeds(kit, [
+    { ...spot(w - 0.62, d - 0.85), yaw: EAST },
+    { ...spot(w - 0.62, 0.85), yaw: EAST },
+  ]);
 
   return {
     keeper: null,
@@ -199,7 +216,9 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
   if (box.storeys > 1) {
     const inner = w - HOUSE_GRID.wall;
     const [gx, gz] = at(w / 2, d - HOUSE_GRID.wall / 2 - deck / 2);
-    kit.solid([placed(gallery(scene, inner, deck, upper), gx, y + upper, gz, 0)]);
+    // Its front rail opens where the Keeper walks on and off it (W3): the
+    // stairs' top and the walkway, as the walk lays them out.
+    const openings: [number, number][] = [];
     // Stairs up the east wall to the gallery's front edge (a Hall tuned too
     // shallow for a walkable flight goes without).
     const front = d - HOUSE_GRID.wall / 2 - deck;
@@ -208,7 +227,18 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
       const [sx, sz] = at(w - g.stairWidth / 2 - HOUSE_GRID.wall / 2, front - run);
       kit.solid([placed(stairs(scene, g.stairWidth, upper, run, g.steps), sx, y, sz, 0)]);
       kit.shadow(sx, sz + run / 2, g.stairWidth + 0.3, run);
+      openings.push([sx - g.stairWidth / 2 - gx, sx + g.stairWidth / 2 - gx]);
     }
+    // The walkway down the west wall to an upstairs doorway (the Kitchen
+    // loft's), as the walk's `loftWalk` lays it out.
+    for (const walkway of loftWalk(box, kit.lanes).decks) {
+      const parts = hallDeck(scene, walkway, y);
+      kit.solid(parts.deck, true);
+      kit.solid(parts.posts);
+      if (walkway.z1 > box.z1 - HOUSE_GRID.wall / 2 - deck - 0.01)
+        openings.push([walkway.x0 - gx, walkway.x1 - gx]);
+    }
+    kit.solid([placed(gallery(scene, inner, deck, upper, openings), gx, y + upper, gz, 0)]);
   }
 
   // The tree stands right of the middle: at w / 2 the Kitchen loft's wall hid its trunk.
@@ -236,13 +266,15 @@ export function heartHallRoom(kit: RoomKit): RoomPlan {
   // data has 4); a Hall tuned past that would want a second row.
   const n = kit.box.beds;
   const spacing = Math.min(1.7, (w - 1.0) / Math.max(1, n));
-  for (let i = 0; i < n; i++) {
-    const side = i < Math.ceil(n / 2) ? -1 : 1;
-    const k = side < 0 ? i : i - Math.ceil(n / 2);
-    const u = side < 0 ? 0.5 + 0.75 + k * spacing : w - 0.5 - 0.75 - k * spacing;
-    const [bx, bz] = at(u, d - 0.65);
-    bedAt(kit, bx, bz, 0);
-  }
+  placeBeds(
+    kit,
+    Array.from({ length: n }, (_, i) => {
+      const side = i < Math.ceil(n / 2) ? -1 : 1;
+      const k = side < 0 ? i : i - Math.ceil(n / 2);
+      const u = side < 0 ? 0.5 + 0.75 + k * spacing : w - 0.5 - 0.75 - k * spacing;
+      return { ...spot(u, d - 0.65), yaw: 0 };
+    }),
+  );
 
   // Residents stand right of the Kitchen loft, which hides the Hall's left
   // from the dollhouse camera (render check: faces hidden on the iPad's 48°

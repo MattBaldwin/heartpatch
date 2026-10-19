@@ -51,6 +51,25 @@ describe('house layout', () => {
     expect(side('west').windows).toHaveLength(0); // the hearth's wall
   });
 
+  it('cuts one doorway per room, never an outside one upstairs (#381 W3)', () => {
+    const runs = wallRuns(roomsAt(HOUSE_DATA, top));
+    const doorsOn = (room: string, other: string | null, floor = 0) =>
+      runs
+        .filter((r) => r.floor === floor && r.room === room && r.other === other)
+        .flatMap((r) => r.doors);
+    // The Heart Hall's front is behind the Snug and the Playroom: its doorway goes in once.
+    expect(doorsOn('heart-hall', 'snug')).toHaveLength(1);
+    expect(doorsOn('heart-hall', 'playroom')).toHaveLength(0);
+    // The Kitchen loft opens onto the Hall's second storey...
+    expect(doorsOn('heart-hall', 'kitchen', 1)).toHaveLength(1);
+    // ...and before the Hall, its back wall is outside, 3 m up: no doorway onto thin air.
+    const loft = wallRuns(roomsAt(HOUSE_DATA, 3)).filter((r) => r.floor === 1);
+    expect(loft.flatMap((r) => r.doors)).toHaveLength(0);
+    expect(loft.find((r) => r.side === 'north')!.windows).toHaveLength(1);
+    // One doorway per room in all: the Snug's front door, then one into each room grown.
+    expect(runs.flatMap((r) => r.doors)).toHaveLength(roomsAt(HOUSE_DATA, top).length);
+  });
+
   it('joins rooms with inside walls, once each, and stacks floors', () => {
     const rooms = roomsAt(HOUSE_DATA, top);
     const runs = wallRuns(rooms);
