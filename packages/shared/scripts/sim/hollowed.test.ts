@@ -9,6 +9,7 @@ import {
   runHollowed,
   villageCost,
   villageSizes,
+  villageSpotsPerDay,
 } from './hollowed.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
 
@@ -25,6 +26,24 @@ describe('the Hollowed Communities cost model (#306)', () => {
     expect(ordinary).toBeLessThan(0.2);
     expect(hollowedDustPerSearch('meadow')).toBeCloseTo(
       ordinary * COMMUNITY_RULES.heartdustFindMultiplier,
+    );
+  });
+
+  it('caps a day’s searches at the village’s spots, which refill every morning', () => {
+    // A meadow tile has 8–12 spots: a 4-tile village holds at least 32 a day.
+    expect(villageSpotsPerDay(4, 'meadow')).toBe(32);
+    const engagedPair = runHollowed(HOLLOWED_CONFIG, PROGRESSION_CONFIG).find(
+      (r) => r.kid === 'engaged' && r.team === 'with a helper',
+    )!;
+    // Two engaged kids search more than a small village holds, so it's what slows them.
+    expect(engagedPair.help.searches).toBeGreaterThan(villageSpotsPerDay(4, 'meadow'));
+    const cost = villageCost(4, 'meadow');
+    expect(engagedPair.days.get(4)).toBe(
+      daysToRestore(
+        cost,
+        { ...engagedPair.help, searches: villageSpotsPerDay(4, 'meadow') },
+        hollowedDustPerSearch('meadow'),
+      ),
     );
   });
 

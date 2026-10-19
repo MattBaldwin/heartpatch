@@ -6,6 +6,7 @@ import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
+import { EXPLORE_RULES } from '@heartpatch/shared';
 import { DRIFT_MODE } from './ambient-layout.js';
 import { AMBIENT, MUTED } from './map-config.js';
 
@@ -22,6 +23,11 @@ import { AMBIENT, MUTED } from './map-config.js';
  *   pollen and sparkles wander, leaves tumble down, fireflies blink, bats
  *   circle and flap, fog and clouds float (`DRIFT_MODE`).
  *
+ * - Drain (`drain` option, a grey village tile while exploring, #306 2a):
+ *   everything the material draws goes grey, a touch darker and cooler, and
+ *   each joy disc (a searched spot) brings the colour back with a soft edge.
+ *   Only uniforms change as the discs grow, so a find compiles nothing.
+ *
  * GLSL only, like squish-plugin.ts: under the opt-in WebGPU renderer the
  * plugin isn't attached, so props stand still in full colour and the motes
  * aren't drawn (the tiles are still muted, that's CPU-side).
@@ -29,6 +35,37 @@ import { AMBIENT, MUTED } from './map-config.js';
 
 export const AMBIENT_ATTRIBUTE = 'terrainAmbient';
 export const DRIFT_ATTRIBUTE = 'terrainDrift';
+
+/** Joy discs the drain reads: one for every search spot a tile can have (data, `EXPLORE_RULES`). */
+export const JOY_DISCS = Math.max(...EXPLORE_RULES.terrains.map((t) => t.spots.max));
+
+/**
+ * A grey village tile's drain (#306 2a): `amount` 0–1 greys everything the
+ * materials it's attached to draw, and each joy disc (world x, z, radius,
+ * strength) brings the colour back round a searched spot. One per scene,
+ * read by every material it's attached to: no extra meshes (CLAUDE.md rule 8).
+ */
+export class HollowedDrain {
+  amount = 1;
+  count = 0;
+  readonly discs = new Float32Array(JOY_DISCS * 4);
+
+  setDisc(i: number, x: number, z: number, radius: number, strength: number): void {
+    if (i < 0 || i >= JOY_DISCS) return;
+    this.discs[i * 4] = x;
+    this.discs[i * 4 + 1] = z;
+    this.discs[i * 4 + 2] = radius;
+    this.discs[i * 4 + 3] = strength;
+  }
+}
+
+/** Meshes that keep their colour on a drained material (the Keeper's tools and mask). */
+const KEEP_COLOUR = new WeakSet<AbstractMesh>();
+
+/** `mesh` is never drained, whatever material it shares (#306 2a: the Keeper never greys). */
+export function keepColour(mesh: AbstractMesh): void {
+  KEEP_COLOUR.add(mesh);
+}
 
 /** The one clock every terrain material reads: seconds of ambient time. */
 export class TerrainClock {
@@ -120,7 +157,11 @@ const VERTEX_WORLDPOS = /* glsl */ `
 #endif
 `;
 
+const JOY_UNIFORMS = Array.from({ length: JOY_DISCS }, (_, i) => `terrainJoy${String(i)}`);
+
 // Muting works on the albedo, so muted props keep their light and shade.
+// The drain too: grey, a touch darker and cooler, so the land reads as
+// drained, not foggy; where joy discs overlap the strongest wins.
 const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
 #ifdef TERRAIN_SWAY
 {
@@ -128,6 +169,25 @@ const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
   vec3 tmC = mix(vec3(tmL), surfaceAlbedo, terrainMute.w) * terrainMuteMix.y;
   tmC = mix(tmC, terrainMute.rgb, terrainMuteMix.x);
   surfaceAlbedo = mix(surfaceAlbedo, tmC, vTerrainMute);
+}
+#endif
+#ifdef TERRAIN_DRAIN
+if (terrainDrain.x > 0.0) {
+  float tdCover = 0.0;
+  vec4 tdJoy[${String(JOY_DISCS)}] = vec4[${String(JOY_DISCS)}](${JOY_UNIFORMS.join(', ')});
+  for (int i = 0; i < ${String(JOY_DISCS)}; i++) {
+    if (float(i) >= terrainDrain.y) break;
+    vec4 tdJ = tdJoy[i];
+    // A disc on its first frame has no radius yet (smoothstep needs edge0 < edge1).
+    if (tdJ.w <= 0.0 || tdJ.z <= 0.0) continue;
+    float tdD = distance(vPositionW.xz, tdJ.xy);
+    tdCover = max(tdCover, tdJ.w * (1.0 - smoothstep(tdJ.z * 0.55, tdJ.z, tdD)));
+  }
+  float tdK = terrainDrain.x * (1.0 - tdCover);
+  float tdL = dot(surfaceAlbedo, vec3(0.2126, 0.7152, 0.0722));
+  vec3 tdC = mix(vec3(tdL), surfaceAlbedo, 0.08) * 0.72;
+  tdC = mix(tdC, vec3(0.52, 0.50, 0.62) * (0.35 + tdL), 0.3);
+  surfaceAlbedo = mix(surfaceAlbedo, tdC, tdK);
 }
 #endif
 `;
@@ -148,6 +208,8 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
 export interface TerrainPluginOptions {
   /** The lake tiles: bob and glint. */
   readonly water?: boolean;
+  /** A grey village tile (#306 2a): its drain and joy discs. */
+  readonly drain?: HollowedDrain;
 }
 
 /** Attaches the terrain plugin to `material` under GLSL; null under WebGPU (WGSL). */
@@ -164,6 +226,7 @@ export function attachTerrainPlugin(
 export class TerrainPlugin extends MaterialPluginBase {
   private readonly clock: TerrainClock;
   private readonly water: boolean;
+  private readonly drain: HollowedDrain | null;
   private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
 
   constructor(material: Material, clock: TerrainClock, options: TerrainPluginOptions = {}) {
@@ -171,9 +234,11 @@ export class TerrainPlugin extends MaterialPluginBase {
       TERRAIN_SWAY: false,
       TERRAIN_WATER: false,
       TERRAIN_DRIFT: false,
+      TERRAIN_DRAIN: false,
     });
     this.clock = clock;
     this.water = options.water === true;
+    this.drain = options.drain ?? null;
     this._enable(true);
   }
 
@@ -189,6 +254,7 @@ export class TerrainPlugin extends MaterialPluginBase {
     defines['TERRAIN_SWAY'] = mesh.isVerticesDataPresent(AMBIENT_ATTRIBUTE);
     defines['TERRAIN_DRIFT'] = mesh.isVerticesDataPresent(DRIFT_ATTRIBUTE);
     defines['TERRAIN_WATER'] = this.water;
+    defines['TERRAIN_DRAIN'] = this.drain !== null && !KEEP_COLOUR.has(mesh);
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
@@ -201,16 +267,30 @@ export class TerrainPlugin extends MaterialPluginBase {
     vertex: string;
     fragment: string;
   } {
+    // The drain's uniforms only on a drained material: the map's and every
+    // other tile's materials carry and bind none of them.
+    const drain = this.drain
+      ? [
+          { name: 'terrainDrain', size: 2, type: 'vec2' },
+          ...JOY_UNIFORMS.map((name) => ({ name, size: 4, type: 'vec4' })),
+        ]
+      : [];
     return {
       ubo: [
         { name: 'terrainTime', size: 1, type: 'float' },
         { name: 'terrainMuteMix', size: 2, type: 'vec2' },
         { name: 'terrainWater', size: 2, type: 'vec2' },
         { name: 'terrainMute', size: 4, type: 'vec4' },
+        ...drain,
       ],
       vertex: 'uniform float terrainTime;\nuniform vec2 terrainWater;',
-      fragment:
-        'uniform float terrainTime;\nuniform vec2 terrainMuteMix;\nuniform vec2 terrainWater;\nuniform vec4 terrainMute;',
+      fragment: [
+        'uniform float terrainTime;',
+        'uniform vec2 terrainMuteMix;',
+        'uniform vec2 terrainWater;',
+        'uniform vec4 terrainMute;',
+        ...drain.map((u) => `uniform ${u.type} ${u.name};`),
+      ].join('\n'),
     };
   }
 
@@ -220,6 +300,20 @@ export class TerrainPlugin extends MaterialPluginBase {
     uniformBuffer.updateFloat2('terrainWater', AMBIENT.water.bob, AMBIENT.water.glint);
     const t = this.muteTint;
     uniformBuffer.updateFloat4('terrainMute', t.r, t.g, t.b, MUTED.saturation);
+    const d = this.drain;
+    if (!d) return;
+    uniformBuffer.updateFloat2('terrainDrain', d.amount, d.count);
+    const j = d.discs;
+    for (let i = 0; i < JOY_DISCS; i++) {
+      const o = i * 4;
+      uniformBuffer.updateFloat4(
+        JOY_UNIFORMS[i] ?? '',
+        j[o] ?? 0,
+        j[o + 1] ?? 0,
+        j[o + 2] ?? 0,
+        j[o + 3] ?? 0,
+      );
+    }
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

@@ -338,6 +338,10 @@ export function afterSearch(
     progress: found.progress,
     homestead: found.homestead,
     tools,
+    // A grey village tile's joy follows the search (#306 2a).
+    ...(tile.community && found.joy !== undefined
+      ? { community: { ...tile.community, joy: found.joy } }
+      : {}),
   };
 }
 

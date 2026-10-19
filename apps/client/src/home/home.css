@@ -475,6 +475,18 @@
   color: #6b4a70;
 }
 
+/* The nudge (#306): a small badge beside the word; it fits the peek bar's one row. */
+.home-handle-nudge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #2f6b3d;
+  white-space: nowrap;
+}
+
+.home-handle-nudge[hidden] {
+  display: none;
+}
+
 .home-handle::before {
   content: '';
   width: 44px;
@@ -546,6 +558,11 @@
   min-height: 48px;
   padding: var(--hp-pad-y) var(--hp-pad-x);
   overflow-wrap: anywhere;
+}
+
+.home-name-detail {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .home-name-badge {
@@ -734,4 +751,10 @@
     min-height: 48px;
     font-size: 17px;
   }
+}
+
+/* The Heart Seed's naming line (#306): small and tight, so a short phone's panel stays short. */
+.tile-action-note.tile-name-nudge {
+  font-size: 13px;
+  line-height: 1.25;
 }

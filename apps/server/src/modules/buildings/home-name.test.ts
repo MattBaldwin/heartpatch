@@ -20,7 +20,7 @@ import { createJobsRepo } from '../../jobs/repo.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { activeMember } from '../maps/repo.js';
+import { activeMember, createMapsRepo } from '../maps/repo.js';
 import { createHomeNamingConsumer } from './home-name-consumer.js';
 
 const url = inject('testDatabaseUrl');
@@ -41,7 +41,7 @@ const TEST_KEEPER = {
 };
 const ZONE = 'America/Denver';
 const START = '2026-10-02T12:00:00Z';
-const LOCKED = `Build one of each and catch ${String(NAMING_RULES.caughtToName)} squishies first!`;
+const LOCKED = `Build one of each and befriend ${String(NAMING_RULES.caughtToName)} squishies first!`;
 const SEED_FIRST = 'Your Heart Seed needs to grow first 🌱';
 
 interface Player {
@@ -139,6 +139,12 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
 
   const memberRow = async (mapId: string, who: Player) =>
     (await db.select().from(mapMembers).where(member(mapId, who)))[0]!;
+
+  /** The member row in any status (`memberRow` reads active members only). */
+  const anyMemberRow = (mapId: string, who: Player) =>
+    db.query.mapMembers.findFirst({
+      where: (t, { and: both, eq: is }) => both(is(t.mapId, mapId), is(t.userId, who.id)),
+    });
 
   const eventsOf = (mapId: string) =>
     db.query.gameEvents.findMany({
@@ -267,6 +273,23 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       const mapId = await newMap(server, owner);
       expect((await name(server, stranger, mapId, 'Not Mine')).statusCode).toBe(404);
     });
+
+    it('starts the name and its progress over when the member leaves (fresh home base)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await unlock(mapId, kid);
+      expect((await name(server, kid, mapId, 'Pumpkin Hollow')).statusCode).toBe(200);
+
+      await createMapsRepo(db).archiveMember(mapId, kid.id);
+      expect(await anyMemberRow(mapId, kid)).toMatchObject({
+        status: 'removed',
+        homeName: null,
+        homeNamedAtLevel: null,
+        caughtCount: 0,
+        kindsBuilt: [],
+      });
+    });
   });
 
   describe('the home-naming consumer', () => {
@@ -366,6 +389,31 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
           built: ['fence', 'habitat', 'training-grounds'].includes(kind),
         })),
       });
+    });
+
+    it('starts over at member.left, after counts it reached late', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await runConsumer(db, consumer, mapId);
+
+      // The kid befriends and builds, then leaves before the consumer catches up.
+      await append(mapId, [
+        captured(mapId, kid),
+        placedEvent(mapId, kid, 'cozy-meadow', 'habitat'),
+        fenceEvent(mapId, kid),
+      ]);
+      await createMapsRepo(db).archiveMember(mapId, kid.id);
+      await append(mapId, [
+        {
+          mapId,
+          type: 'member.left',
+          actorUserId: kid.id,
+          payload: { userId: kid.id, releasedTiles: 7 },
+        },
+      ]);
+      await runConsumer(db, consumer, mapId);
+      expect(await anyMemberRow(mapId, kid)).toMatchObject({ caughtCount: 0, kindsBuilt: [] });
     });
 
     it('skips building ids it does not know', async () => {

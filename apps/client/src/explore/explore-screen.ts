@@ -85,11 +85,14 @@ import {
   exploreSkyAt,
   exploreWorld,
   isUnderwater,
+  localMinuteIn,
   sameLook,
   skyLook,
   type SkyLook,
 } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
+import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
+import { HOLLOWED_TEXT, villageShut } from '../hollowed/hollowed-explore-view.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -199,8 +202,13 @@ export interface ExploreScreen {
   /** The map on screen (null: none). */
   setMap: (mapId: string | null) => void;
   setUser: (user: PublicUser | null) => void;
-  /** Opens one of my tiles up close. */
+  /** Opens one of my tiles (or a grey village tile my land touches, #306 2a) up close. */
   open: (at: { q: number; r: number }) => Promise<void>;
+  /**
+   * It's night on the map (the Hollow's night): a grey village shuts, so
+   * exploring one goes back to the map with a word why (#306 2a).
+   */
+  setNight: (night: boolean) => void;
   /** The tile panel's "Explore" on my land. */
   readonly tileActions: TileActions;
   readonly debug: ExploreDebug | null;
@@ -278,6 +286,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let opening = false;
   let frame = 0;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+  /** Clears an echo's "Boo!" line after a moment. */
+  let spookTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const back = el(
@@ -295,6 +305,21 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   });
   const title = el('h2', { class: 'explore-title', id: 'explore-title' });
   const progress = el('p', { class: 'explore-progress', 'data-testid': 'explore-progress' });
+  // A grey village tile's joy (#306 2a): a little gold meter under the
+  // progress, so the header stays one row on a phone.
+  const joyFill = el('span', { class: 'explore-joy-fill' });
+  const joyMeter = el(
+    'span',
+    {
+      class: 'explore-joy',
+      role: 'meter',
+      'aria-valuemin': '0',
+      'aria-valuemax': '100',
+      'data-testid': 'explore-joy',
+    },
+    joyFill,
+  );
+  joyMeter.hidden = true;
   // The tool in hand, short ("🪔 20"); its full name and uses are its label.
   const toolIcon = el('span', { class: 'explore-tool-icon', 'aria-hidden': 'true' });
   const toolUses = el('span', { class: 'explore-tool-uses', 'aria-hidden': 'true' });
@@ -315,7 +340,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     'header',
     { class: 'explore-top' },
     back,
-    el('div', { class: 'explore-names' }, title, progress),
+    el('div', { class: 'explore-names' }, title, progress, joyMeter),
     toolLine,
     bagChip,
   );
@@ -589,6 +614,17 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         walking = true;
       }
     }
+    // A grey village's echo nudges the Keeper back a step (#306 2a): a
+    // lantern in hand keeps it at half the distance.
+    if (tile?.community && (walking || next !== keeperAt)) {
+      const spooked = s.spook(next, now, heldTool() === 'lantern');
+      if (spooked) {
+        next = slideMove(keeperAt, spooked.to, s.colliders);
+        heading = yawToward(next, spooked.echo);
+        walkTo = null;
+        spook();
+      }
+    }
     // By value: a slide that pushes back to where it was isn't a move.
     const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
     const turned = heading !== undefined && heading !== yaw;
@@ -614,6 +650,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (moved || turned || animating) options.invalidate();
     const holding = playing !== null && playing.state.holdSince !== null;
     if (walking || animating || holding) frame = requestAnimationFrame(tick);
+  }
+
+  /** An echo's "Boo!" on the note line, for a moment. */
+  function spook(): void {
+    say(HOLLOWED_TEXT.spooked);
+    if (spookTimer !== null) clearTimeout(spookTimer);
+    spookTimer = setTimeout(() => {
+      spookTimer = null;
+      if (note.textContent === HOLLOWED_TEXT.spooked) say('');
+    }, HOLLOWED_EXPLORE.spookedMs);
   }
 
   /** The spot in front drives the action button, the halo and the tool in hand. */
@@ -894,13 +940,26 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     overlay.hidden = !isOpen;
     if (!isOpen || !tile) return;
     const t = tile;
-    title.textContent = terrainName(t.terrain);
+    // A grey village tile (#306 2a): its name, and today's joy after the progress.
+    title.textContent = t.community
+      ? HOLLOWED_TEXT.title(t.community.name)
+      : terrainName(t.terrain);
+    // A village's name is longer than a terrain's: on a narrow phone it takes two lines, never cut off.
+    title.classList.toggle('explore-title-village', t.community !== undefined);
     // Under a lake, Back brings the Keeper up for air (#335).
     back.setAttribute(
       'aria-label',
       isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
     progress.textContent = progressLine(t.progress);
+    joyMeter.hidden = !t.community;
+    if (t.community) {
+      const joy = String(t.community.joy);
+      joyMeter.setAttribute('aria-valuenow', joy);
+      joyMeter.setAttribute('aria-label', HOLLOWED_TEXT.joy(t.community.joy));
+      joyMeter.title = HOLLOWED_TEXT.joy(t.community.joy);
+      joyFill.style.setProperty('--joy', String(t.community.joy / 100));
+    }
     const held = heldTool();
     if (held) lastHeld = held;
     scene3d?.hold(held);
@@ -1345,6 +1404,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     options.showScene(build);
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = setInterval(() => {
+      // A grey village shuts at nightfall (#306 2a). The map, and its night
+      // watch, are closed while exploring, so the visit checks its own clock.
+      if (tile?.community && villageShut(localMinuteIn(zone, options.now?.() ?? new Date()))) {
+        shut();
+        return;
+      }
       const look = skyNow();
       if (skyShown && sameLook(look, skyShown)) return;
       skyShown = look;
@@ -1394,11 +1459,20 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     playing = null;
     card = null;
     clearToast();
+    if (spookTimer !== null) clearTimeout(spookTimer);
+    spookTimer = null;
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     scene3d = null;
     mapTileAtOpen = null;
     render();
+  }
+
+  /** Nightfall on a grey village tile: back to the map with a word why (#306 2a). */
+  function shut(): void {
+    if (!isOpen || !tile?.community) return;
+    close();
+    options.onProblem(HOLLOWED_TEXT.closed);
   }
 
   function close(): void {
@@ -1463,6 +1537,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       renderTile();
     },
     open,
+    setNight: (night) => {
+      if (night) shut();
+    },
     tileActions: {
       show: (container, t) => {
         panel = { container, tile: t };

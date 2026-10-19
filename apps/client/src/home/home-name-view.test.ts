@@ -6,10 +6,13 @@ import { testView, userId } from '../map/test-view.js';
 import {
   HOME_NAME_TEXT,
   homeFlags,
+  isSeedTile,
+  nameReady,
   nameCard,
   nameIdeas,
   nameRowBadge,
   nameRowLabel,
+  nameRowParts,
   ringTerrains,
   seedName,
   TERRAIN_IDEAS,
@@ -35,12 +38,42 @@ const naming = (extra: Partial<HomeNaming> = {}): HomeNaming => ({
 const AVOIDED =
   /\b(die|dead|death|kill|faint|hurt|injure|wound|bleed|blood|damage|destroy|crush|slash|stab|bite|attack|weapon|enemy|hate|stupid|loser)\b/i;
 
+describe('the nudge toward naming (#306)', () => {
+  it('shows only when naming is open and no name is picked, or a rename is open', () => {
+    const open = naming({ unlocked: true, kinds: kinds(5), caught: 10 });
+    expect(nameReady(undefined)).toBe(false);
+    expect(nameReady(naming())).toBe(false);
+    expect(nameReady(open)).toBe(true);
+    expect(nameReady({ ...open, name: 'Puddle Corner' })).toBe(false);
+    expect(nameReady({ ...open, name: 'Puddle Corner', renameOpen: true })).toBe(true);
+  });
+
+  it('words say where to go, with no avoided words', () => {
+    expect(HOME_NAME_TEXT.seedLine).toBe('✨ Name your home! Open Home, then More.');
+    expect(HOME_NAME_TEXT.handleNudge).not.toMatch(AVOIDED);
+  });
+
+  it('knows a Heart Seed from the rest of its ring', () => {
+    const view = testView();
+    const seed = findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === userId(1))?.seed;
+    if (!seed) throw new Error('no home');
+    expect(isSeedTile(view, seed)).toBe(true);
+    const ring = view.tiles.find((t) => t.homeSlot === seed.homeSlot && t.q !== seed.q);
+    expect(ring).toBeDefined();
+    expect(ring && isSeedTile(view, ring)).toBe(false);
+  });
+});
+
 describe('the "Name your home" row (#306)', () => {
   it('shows the gate progress while locked, from the server numbers', () => {
-    expect(nameRowLabel(naming())).toBe('Name your home 🔒 · 3/5 · 7/10');
+    expect(nameRowLabel(naming())).toBe('Name your home 🔒 · 3 of 5 buildings · 7 of 10 squishies');
     expect(nameRowLabel(naming({ kinds: kinds(1).slice(0, 4), caught: 2, need: 12 }))).toBe(
-      'Name your home 🔒 · 1/4 · 2/12',
+      'Name your home 🔒 · 1 of 4 buildings · 2 of 12 squishies',
     );
+    expect(nameRowParts(naming())).toEqual({
+      title: 'Name your home 🔒',
+      detail: '3 of 5 buildings · 7 of 10 squishies',
+    });
     expect(nameRowBadge(naming())).toBeNull();
     expect(nameCard(naming())).toBe('locked');
   });
@@ -64,7 +97,7 @@ describe('the "Name your home" row (#306)', () => {
 
   it('says the card copy from the rules, kindly', () => {
     expect(HOME_NAME_TEXT.lockedLine(10)).toBe(
-      'Build one of each and catch 10 squishies to name your home!',
+      'Build one of each and befriend 10 squishies to name your home!',
     );
     expect(HOME_NAME_TEXT.note(NAMING_RULES.maxLength)).toBe(
       'Tap an idea, or type your own. Up to 16 letters. Pick a new name whenever your Heart Seed grows!',

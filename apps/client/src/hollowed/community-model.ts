@@ -31,6 +31,8 @@ export const COMMUNITY_TEXT = {
   night: 'Open by day only. Too spooky after dark!',
   /** The touching line until later PRs wire Explore and Restore in. */
   soon: '🔗 Your land touches it! Exploring and restoring open soon 🕯️',
+  /** Under the buttons once Explore is open and Restore isn't yet (2a until PR 3). */
+  restoreSoon: 'Restoring opens soon 🛠️',
   explore: 'Explore 🔍',
   restore: 'Restore 🛠️',
   /** The map legend's row for the grey tiles. */
@@ -106,14 +108,15 @@ export interface CommunityPanel {
   readonly lines: readonly string[];
   /** Exploring is open now: my land touches it, by day. Restoring follows the same rule. */
   readonly open: boolean;
-  /** A line under the buttons; none today (the reach line says why they wait). */
+  /** A line under the buttons: Restore opening soon while only Explore is open; else none (the reach line says why they wait). */
   readonly note: string | null;
 }
 
 /**
  * The panel for a tile of village `c`. Explore and Restore wait until my
  * land touches it and it's day; at night that's what the reach line says,
- * whatever the reach. `wired` is true once a later PR hooks the buttons up.
+ * whatever the reach. `wired` is true once Explore is hooked up (2a), and
+ * `restoreWired` once Restore is (PR 3).
  */
 export function communityPanel(
   c: CommunityView,
@@ -121,6 +124,7 @@ export function communityPanel(
   night: boolean,
   wired = false,
   rules: CommunityRules = COMMUNITY_RULES,
+  restoreWired = false,
 ): CommunityPanel {
   const name = TERRAINS.find((t) => t.id === terrain)?.name ?? 'Mystery land';
   const reach = night
@@ -138,7 +142,7 @@ export function communityPanel(
     restored: COMMUNITY_TEXT.restored(c.name, c.restored, c.tiles.length),
     lines: [reach, kindLine(c.kind, rules), COMMUNITY_TEXT.about].filter((l) => l !== ''),
     open,
-    note: null,
+    note: open && wired && !restoreWired ? COMMUNITY_TEXT.restoreSoon : null,
   };
 }
 

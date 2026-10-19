@@ -538,6 +538,37 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
+    it('never puts a wild squishy on a grey village tile nobody has restored (#306 2a)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patchWithSquishy(server, kid);
+      const { spawns } = services(); // EVERYWHERE lists every terrain
+      const tiles = await tilesOf(mapId);
+      const grey = tiles.find((t) => t.communityId !== null)!;
+      const beside = tiles.find(
+        (t) =>
+          t.communityId === null &&
+          t.homeSlot === null &&
+          t.terrain !== 'trading-post' &&
+          hexNeighbors(grey).some((n) => n.q === t.q && n.r === t.r),
+      )!;
+      await db.execute(
+        `update tiles set owner_user_id = ${id(kid.id)} where id = ${id(beside.id)}`,
+      );
+      const hints = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hints.length).toBeGreaterThan(0);
+      expect(hints).not.toContainEqual({ q: grey.q, r: grey.r });
+      await expect(
+        spawns.findWildEncounter({
+          mapId,
+          userId: kid.id,
+          mapKind: 'multiplayer',
+          now: clock,
+          tile: { q: grey.q, r: grey.r },
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
     it('hints at tiles with someone on them, with no species', async () => {
       const server = await start();
       const kid = await player();

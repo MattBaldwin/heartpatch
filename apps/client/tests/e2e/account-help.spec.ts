@@ -1,13 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { newPlayer, savedCode } from './players.js';
+import { newPlayer, savedCode, uniqueName } from './players.js';
 
 // Grown-up helpers (#197): the kid asks at sign up, the grown-up says yes,
 // then resets the kid's forgotten password; the kid makes a new recovery code.
-test('a grown-up helper helps a kid back in', async ({ browser }, testInfo) => {
+test('a grown-up helper helps a kid back in', async ({ browser }) => {
   test.setTimeout(120_000);
-  const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
-  const grownName = `mom_${suffix}`;
-  const kidName = `pip_${suffix}`;
+  const grownName = uniqueName('mom');
+  const kidName = uniqueName('pip');
 
   // Helpers are grown-ups (18+, owner decision 2026-10-07).
   const grown = await newPlayer(browser, grownName, undefined, { birthYear: '1985' });
