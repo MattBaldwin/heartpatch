@@ -69,8 +69,17 @@ describe('moveEdge', () => {
     expect(moveEdge(move('ember-boop'), me, water)).toBe('weak');
   });
 
-  it('says nothing for a plain matchup, a move without power, or a fence feeling', () => {
+  it('says nothing for a plain matchup or a move without power', () => {
     expect(moveEdge(move('ember-boop'), me, plain)).toBeNull();
     expect(moveEdge(move('cozy-crackle'), me, { element: 'frost', feeling: 'cozy' })).toBeNull();
+  });
+
+  it('leaves the feeling table out for a fence, so only its element counts', () => {
+    // Fire into frost is a strength; a fence's feeling must not blunt it.
+    const brave = { feeling: 'brave' } as const;
+    const calm = { element: 'frost', feeling: 'cozy' } as const;
+    const flipped = GAME_DATA.feelingMatrix.brave.cozy;
+    expect(flipped).not.toBe(1);
+    expect(moveEdge(move('ember-boop'), brave, { ...calm, fence: 'leaf-fence' })).toBe('strong');
   });
 });

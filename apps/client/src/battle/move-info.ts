@@ -142,10 +142,21 @@ export function moveEdge(
   const feeling = them.fence === undefined ? GAME_DATA.feelingMatrix[me.feeling][them.feeling] : 1;
   const multiplier = GAME_DATA.elementMatrix[move.element][them.element] * feeling;
   const tier = BATTLE_RULES.effectiveness.find((t) => multiplier >= t.atLeast);
-  // The tiers with a callout line ("Super cozy!", "Just a little boop.") are the notable ones.
+  // The tiers with a callout line ("Super cozy!", "Just a little boop.") are the notable ones;
+  // a tier that starts at 1 or more is a strength, one below it a weakness.
   if (!tier || effectivenessLine(tier.id) === null) return null;
-  return multiplier >= 1 ? 'strong' : 'weak';
+  return tier.atLeast >= 1 ? 'strong' : 'weak';
 }
+
+/** What a button says when the move's row is missing (the server sent no definition). */
+export const UNKNOWN_MOVE_INFO: MoveInfo = {
+  kind: 'status',
+  look: MOVE_KINDS.status,
+  line: 'A mystery move',
+  number: null,
+  edge: null,
+  more: [],
+};
 
 export function describeMove(
   move: Move,

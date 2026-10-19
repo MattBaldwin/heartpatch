@@ -513,7 +513,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                       'span',
                       { class: `battle-move-edge battle-move-edge-${info.edge}` },
                       el('span', { 'aria-hidden': 'true' }, EDGE_WORDS[info.edge].icon),
-                      EDGE_WORDS[info.edge].label,
+                      // A live battle's narrow grid keeps the arrow and drops the word (battle.css).
+                      el('span', { class: 'battle-move-edge-word' }, EDGE_WORDS[info.edge].label),
                     ),
                   ]
                 : []),
@@ -532,19 +533,19 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           moves.append(node);
         }
         const row = el('div', { class: 'battle-row' });
-        row.append(
-          button(
-            'ⓘ',
-            () => {
-              moreMoves = !moreMoves;
-              setControls(mode);
-            },
-            { soft: true, small: true, testId: 'battle-moves-more' },
-          ),
+        const moreButton = button(
+          'ⓘ',
+          () => {
+            moreMoves = !moreMoves;
+            setControls(mode);
+            // The controls were rebuilt: keep a keyboard or VoiceOver player's place.
+            controls.querySelector<HTMLElement>('[data-testid="battle-moves-more"]')?.focus();
+          },
+          { soft: true, small: true, testId: 'battle-moves-more' },
         );
-        const more = row.firstElementChild;
-        more?.setAttribute('aria-label', 'More about these moves');
-        more?.setAttribute('aria-pressed', String(moreMoves));
+        moreButton.setAttribute('aria-label', 'More about these moves');
+        moreButton.setAttribute('aria-pressed', String(moreMoves));
+        row.append(moreButton);
         let hint: HTMLElement | null = null;
         if (mode.capture && sipped === null) {
           // Always there in a wild battle, so a player learns befriending

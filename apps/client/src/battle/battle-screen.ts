@@ -43,7 +43,7 @@ import {
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
-import { describeMove, MOVE_KINDS } from './move-info.js';
+import { describeMove, UNKNOWN_MOVE_INFO } from './move-info.js';
 import {
   activeOf,
   BattleContent,
@@ -631,16 +631,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       return {
         id,
         name: names.moveName(id),
-        info: move
-          ? describeMove(move, me, them)
-          : {
-              kind: 'status' as const,
-              look: MOVE_KINDS.status,
-              line: 'A mystery move',
-              number: null,
-              edge: null,
-              more: [],
-            },
+        info: move ? describeMove(move, me, them) : UNKNOWN_MOVE_INFO,
       };
     });
   };
