@@ -82,9 +82,7 @@ export function createCommunityActions(): CommunityActions {
       ),
       explore,
       restore,
-      ...(words.note
-        ? [el('p', { class: 'tile-action-note community-soon' }, words.note)]
-        : []),
+      ...(words.note ? [el('p', { class: 'tile-action-note community-soon' }, words.note)] : []),
     );
     debug = { community: c.name, explore: !explore.disabled, restore: !restore.disabled };
   };

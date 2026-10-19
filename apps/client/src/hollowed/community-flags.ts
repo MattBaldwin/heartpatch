@@ -81,14 +81,19 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       measure(target),
     );
     let fresh = false;
-    list.forEach((f, i) => {
+    for (const [i, f] of list.entries()) {
       const spot = spots[i] ?? null;
       const size = f.size ?? FLAG_MIN;
       f.box = spot
-        ? { x: spot.x - size.width / 2, y: spot.y - size.height, width: size.width, height: size.height }
+        ? {
+            x: spot.x - size.width / 2,
+            y: spot.y - size.height,
+            width: size.width,
+            height: size.height,
+          }
         : null;
       const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
-      if (at === f.at) return;
+      if (at === f.at) continue;
       f.at = at;
       // Shown for the first time, it was placed by the stand-in size: place
       // everything again by its own (an idle map draws no frame to fix it).
@@ -97,7 +102,7 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       if (spot) {
         f.node.style.transform = `translate(${String(spot.x)}px, ${String(spot.y)}px) translate(-50%, -100%)`;
       }
-    });
+    }
     if (fresh && again) placeAll(false);
   };
 

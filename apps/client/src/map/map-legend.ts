@@ -55,7 +55,13 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 /** `#rrggbb` from sRGB 0–1. */
 const toHex = (c: readonly number[]): string =>
-  `#${c.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('')}`;
+  `#${c
+    .map((v) =>
+      Math.round(Math.min(1, Math.max(0, v)) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 
 /**
  * The legend's swatch for a Hollowed village (#306): a meadow drawn as the

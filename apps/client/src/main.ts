@@ -1718,7 +1718,15 @@ if (import.meta.env.DEV) {
     journey: () => journeys.debug,
     trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
-    communities: () => ({ flags: communityFlags.shown, panel: communityActions.debug }),
+    communities: () => ({
+      flags: communityFlags.shown,
+      panel: communityActions.debug,
+      villages: (maps.view?.communities ?? []).map((c) => ({
+        name: c.name,
+        square: c.square,
+        reach: c.reach,
+      })),
+    }),
     posts: () => ({
       shown: postFlags.shown,
       rings: postFlags.rings,

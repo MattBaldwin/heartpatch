@@ -320,7 +320,11 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
   // the map already draws, so no new meshes. No height wobble.
   'hollowed-lantern-tower': {
     count: [2, 3],
-    items: [item('stones', 3, [1.2, 1.5]), item('stump', 2, [1.2, 1.4]), item('log', 1, [1, 1.2], { single: true })],
+    items: [
+      item('stones', 3, [1.2, 1.5]),
+      item('stump', 2, [1.2, 1.4]),
+      item('log', 1, [1, 1.2], { single: true }),
+    ],
     tints: ['#ffffff', '#efe9f4'],
     jitter: { color: 0.02, height: 0 },
   },
@@ -338,7 +342,11 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
   },
   'hollowed-bakery': {
     count: [2, 3],
-    items: [item('stump', 3, [1.2, 1.5]), item('stones', 2, [1.1, 1.4]), item('log', 1, [1, 1.2], { single: true })],
+    items: [
+      item('stump', 3, [1.2, 1.5]),
+      item('stones', 2, [1.1, 1.4]),
+      item('log', 1, [1, 1.2], { single: true }),
+    ],
     tints: ['#ffffff', '#efe9f4'],
     jitter: { color: 0.02, height: 0 },
   },

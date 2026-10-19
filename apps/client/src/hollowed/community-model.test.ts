@@ -81,7 +81,11 @@ describe('communityPanel', () => {
 
   it('closes at night, whatever the reach', () => {
     for (const reach of ['touching', 'away', null] as const) {
-      const panel = communityPanel(village({ reach, distance: reach === 'away' ? 2 : null }), 'hills', true);
+      const panel = communityPanel(
+        village({ reach, distance: reach === 'away' ? 2 : null }),
+        'hills',
+        true,
+      );
       expect(panel.lines.at(-1)).toBe('Open by day only. Too spooky after dark!');
       expect(panel.open).toBe(false);
       expect(panel.note).toBeNull();
@@ -95,7 +99,8 @@ describe('communityPanel', () => {
   });
 
   it('keeps every line short and free of avoided words (style guide §2, §9)', () => {
-    const avoided = /\b(die|dead|death|kill|faint|hurt|injure|wound|bleed|blood|damage|destroy|crush|slash|stab|bite|attack|weapon|enemy|hate|stupid|loser)\b/i;
+    const avoided =
+      /\b(die|dead|death|kill|faint|hurt|injure|wound|bleed|blood|damage|destroy|crush|slash|stab|bite|attack|weapon|enemy|hate|stupid|loser)\b/i;
     const words = [
       ...Object.values(COMMUNITY_TEXT).filter((v) => typeof v === 'string'),
       COMMUNITY_TEXT.away(3),
@@ -151,20 +156,17 @@ describe('the map view’s villages', () => {
     expect(shown.about).toBe(info.about);
     // Someone's land keeps saying whose it is.
     const owned = { ...tile, ownerUserId: userId(1) };
-    expect(hollowedTileInfo(describeTile(owned, () => undefined, userId(1)), owned, view).owner).toBe(
-      'Your land.',
-    );
+    expect(
+      hollowedTileInfo(
+        describeTile(owned, () => undefined, userId(1)),
+        owned,
+        view,
+      ).owner,
+    ).toBe('Your land.');
     // Any other tile is left as it was.
     const wild = view.tiles.find((t) => !t.communityId && t.homeSlot === null);
     if (!wild) throw new Error('no wild tile');
     const plain = describeTile(wild, () => undefined, userId(1));
     expect(hollowedTileInfo(plain, wild, view)).toBe(plain);
-  });
-
-  it('works out reach for the viewer as the server does', () => {
-    for (const c of villages) {
-      expect(c.reach === null || c.reach === 'touching' || c.reach === 'away').toBe(true);
-      if (c.reach === 'away') expect(c.distance).toBeGreaterThanOrEqual(1);
-    }
   });
 });

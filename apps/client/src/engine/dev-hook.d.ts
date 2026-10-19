@@ -145,11 +145,12 @@ declare global {
       post?(): PostDebug;
       /**
        * Hollowed villages (#306): their flags on screen (words and boxes, to check none overlap)
-       * and the village block in the open tile panel.
+       * and the village block in the open tile panel; each village's square, to select it.
        */
       communities?(): {
         flags: CommunityFlags['shown'];
         panel: CommunityActions['debug'];
+        villages: { name: string; square: { q: number; r: number }; reach: string | null }[];
       };
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;

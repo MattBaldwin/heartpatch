@@ -18,7 +18,7 @@ export const COMMUNITY_RULES: CommunityRules = {
     {
       id: 'old-well',
       name: 'Old Well',
-      emoji: '🪣',
+      emoji: '⛲',
       perk: '2 Water and 2 Greens in your mailbox every morning.',
     },
     { id: 'bakery', name: 'Bakery', emoji: '🥧', perk: '3 Treats in your mailbox every morning.' },
