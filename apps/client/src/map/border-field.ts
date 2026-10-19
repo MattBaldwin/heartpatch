@@ -28,6 +28,8 @@ export interface BorderStats {
   readonly triangles: number;
   /** Home tiles saved for a Keeper who hasn't joined yet, outlined (#318; one mesh for all). */
   readonly openHomeTiles: number;
+  /** Hollowed village tiles outlined in lavender (#306), drawn in a Keeper's mesh: no draw call of their own. */
+  readonly villageTiles: number;
 }
 
 /**
@@ -44,6 +46,14 @@ export class BorderField {
   /** Every open home's outline (#318), and its tiles as last drawn. */
   private open: Mesh | null = null;
   private openDrawn = '';
+  /**
+   * Every Hollowed village's outline (#306): its tiles as last drawn, and the
+   * Keeper slot whose mesh carries it. Only a map where nobody holds land
+   * (never in play) gives it a mesh of its own.
+   */
+  private villagesDrawn = '';
+  private villageHost: number | null = null;
+  private villages: Mesh | null = null;
   private readonly scene: Scene;
   private readonly options: BorderFieldOptions;
 
@@ -61,7 +71,8 @@ export class BorderField {
       triangles += mesh.getTotalIndices() / 3;
     }
     const openHomeTiles = this.openDrawn === '' ? 0 : this.openDrawn.split(';').length;
-    return { meshes, triangles, openHomeTiles };
+    const villageTiles = this.villagesDrawn === '' ? 0 : this.villagesDrawn.split(';').length;
+    return { meshes, triangles, openHomeTiles, villageTiles };
   }
 
   /** Tiles drawn in a Keeper's colour. */
@@ -71,8 +82,15 @@ export class BorderField {
     return n;
   }
 
-  /** Redraws each Keeper's border from the tiles and members on the map now. */
-  set(tiles: Iterable<PublicTile>, members: readonly MapMember[]): void {
+  /**
+   * Redraws each Keeper's border from the tiles and members on the map now,
+   * and the Hollowed villages' outline round `villages` (#306).
+   */
+  set(
+    tiles: Iterable<PublicTile>,
+    members: readonly MapMember[],
+    villages: readonly PublicTile[] = [],
+  ): void {
     const all = [...tiles];
     const slots = slotsByUser(members);
     const bySlot = new Map<number, PublicTile[]>();
@@ -83,16 +101,45 @@ export class BorderField {
       if (!list) bySlot.set(slot, (list = []));
       list.push(tile);
     }
+    // Hollowed villages (#306) ride in the first Keeper's mesh (same
+    // material), so their outline costs no draw call; it moves with them.
+    const villageKey = villages.map(hexKey).sort().join(';');
+    const host = [...bySlot.keys()].sort((a, b) => a - b)[0] ?? null;
+    const moved = villageKey !== this.villagesDrawn || host !== this.villageHost;
     for (const slot of new Set([...bySlot.keys(), ...this.drawn.keys()])) {
       const land = bySlot.get(slot) ?? [];
       // Which tiles they hold is all that changes a border in play: a tile's
       // terrain and home slot (its height and badge) are fixed for a map.
       const key = land.map(hexKey).sort().join(';');
-      if ((this.drawn.get(slot) ?? '') === key) continue;
+      const carries = moved && (slot === host || slot === this.villageHost);
+      if ((this.drawn.get(slot) ?? '') === key && !carries) continue;
       this.drawn.set(slot, key);
-      this.draw(slot, land);
+      this.draw(slot, land, slot === host ? villages : []);
     }
+    this.villagesDrawn = villageKey;
+    this.villageHost = host;
+    this.villages = this.upsert(
+      this.villages,
+      'border-hollowed',
+      this.villageArrays(host === null ? villages : []),
+    );
     this.drawOpenHomes(all.filter((t) => t.homeSlot !== null && t.ownerUserId === null));
+  }
+
+  /**
+   * Hollowed villages (#306): a soft lavender line round each one's tiles
+   * (their doorstep), no wash and no badges. Villages never touch, so each
+   * keeps its own outline.
+   */
+  private villageArrays(tiles: readonly PublicTile[]): MeshArrays {
+    const color = linear(BORDER.hollowed.color);
+    return borderArrays(this.borderTiles(tiles), this.options.shape, {
+      rgb: [color.r, color.g, color.b],
+      line: BORDER.hollowed.line,
+      icon: 'heart',
+      wash: false,
+      badges: false,
+    });
   }
 
   /**
@@ -155,19 +202,34 @@ export class BorderField {
     this.options.material.emissiveColor.set(keep, keep, keep);
   }
 
-  private draw(slot: number, land: readonly PublicTile[]): void {
+  private draw(slot: number, land: readonly PublicTile[], villages: readonly PublicTile[]): void {
     const old = this.meshes.get(slot) ?? null;
     if (land.length === 0) {
       old?.setEnabled(false);
       return;
     }
     const color = linear(PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff');
-    const arrays = borderArrays(this.borderTiles(land), this.options.shape, {
-      rgb: [color.r, color.g, color.b],
-      line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
-      icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
-    });
+    const arrays = joinArrays(
+      borderArrays(this.borderTiles(land), this.options.shape, {
+        rgb: [color.r, color.g, color.b],
+        line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
+        icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
+      }),
+      this.villageArrays(villages),
+    );
     const mesh = this.upsert(old, `border-${String(slot)}`, arrays);
     if (mesh) this.meshes.set(slot, mesh);
   }
+}
+
+/** Two meshes' arrays as one: the second's after the first's, drawn after it. */
+function joinArrays(a: MeshArrays, b: MeshArrays): MeshArrays {
+  if (b.positions.length === 0) return a;
+  if (a.positions.length === 0) return b;
+  const offset = a.positions.length / 3;
+  return {
+    positions: [...a.positions, ...b.positions],
+    indices: [...a.indices, ...b.indices.map((i) => i + offset)],
+    colors: [...(a.colors ?? []), ...(b.colors ?? [])],
+  };
 }

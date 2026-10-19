@@ -19,6 +19,7 @@
     "sim:costumes": "pnpm --filter @heartpatch/shared sim:costumes",
     "sim:factory": "pnpm --filter @heartpatch/shared sim:factory",
     "sim:tiles": "pnpm --filter @heartpatch/shared sim:tiles",
+    "sim:hollowed": "pnpm --filter @heartpatch/shared sim:hollowed",
     "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",

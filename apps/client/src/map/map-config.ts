@@ -4,6 +4,8 @@
  * on the playtest devices.
  */
 
+import type { CommunityKindId } from '@heartpatch/shared';
+
 /** Centre-to-corner size of one hex tile, in world units. */
 export const HEX_SIZE = 0.65; // TUNE: about 7 tiles across a portrait iPhone at the start zoom
 
@@ -142,6 +144,11 @@ export const BORDER = {
    * no wash, never a Keeper's colour. All of them draw as one mesh.
    */
   openHome: { color: '#ddd2e4', line: 'dash' as BorderLine }, // TUNE
+  /**
+   * A Hollowed village's doorstep (#306): a soft lavender line round its
+   * tiles, no wash and no badges. Every village draws in one mesh.
+   */
+  hollowed: { color: '#b9a6e6', line: 'solid' as BorderLine }, // TUNE
   /** An icon badge on every this-many-th border tile (home tiles never), and its size (world units). */
   iconEvery: 4, // TUNE
   iconSize: 0.15, // TUNE
@@ -308,12 +315,67 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     tints: ['#ffffff', '#fff6e0'],
     jitter: { color: 0.03, height: 0.004 },
   },
+  // A Hollowed village's square (#306): the kind's broken building stands in
+  // the middle (`HOLLOWED_SQUARE`) with ruins round it. Stand-ins from props
+  // the map already draws, so no new meshes. No height wobble.
+  'hollowed-lantern-tower': {
+    count: [2, 3],
+    items: [
+      item('stones', 3, [1.2, 1.5]),
+      item('stump', 2, [1.2, 1.4]),
+      item('log', 1, [1, 1.2], { single: true }),
+    ],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
+  'hollowed-workshop': {
+    count: [2, 3],
+    items: [item('log', 3, [1, 1.2]), item('stump', 2, [1.2, 1.5])],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
+  'hollowed-old-well': {
+    count: [2, 3],
+    items: [item('stones', 3, [1.2, 1.6]), item('grass', 1, [1, 1.2])],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
+  'hollowed-bakery': {
+    count: [2, 3],
+    items: [
+      item('stump', 3, [1.2, 1.5]),
+      item('stones', 2, [1.1, 1.4]),
+      item('log', 1, [1, 1.2], { single: true }),
+    ],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
+  'hollowed-watchtower': {
+    count: [2, 3],
+    items: [item('rock', 3, [0.8, 1]), item('stones', 2, [1.2, 1.5])],
+    tints: ['#ffffff', '#efe9f4'],
+    jitter: { color: 0.02, height: 0 },
+  },
   'junipers-gap': {
     count: [2, 3],
     items: [item('crystal', 3, [1, 1.4]), item('flowers', 2, [1.1, 1.4])],
     tints: ['#ffffff', '#fbeaff', '#eef0ff'],
     jitter: { color: 0.03, height: 0 },
   },
+};
+
+/**
+ * What stands in the middle of a Hollowed village's square, per kind (#306),
+ * with the square's dressing `hollowed-<kind>` round it. Stand-ins until the
+ * kinds' own buildings are drawn: the trading post's hut is the broken
+ * house, and the Old Well is the lakeside well. TUNE.
+ */
+export const HOLLOWED_SQUARE: Readonly<Record<CommunityKindId, PropKind>> = {
+  'lantern-tower': 'trading-post',
+  workshop: 'trading-post',
+  'old-well': 'well',
+  bakery: 'trading-post',
+  watchtower: 'trading-post',
 };
 
 /** Used for a terrain id this client doesn't know yet. */
@@ -404,6 +466,21 @@ export const MUTED = {
  * so fading land still reads as someone's until it goes.
  */
 export const LAND_FADE = { most: 0.8 } as const; // TUNE
+
+/**
+ * A Hollowed village's tiles (#306): drained past wild land, so they read
+ * at a glance next to it. Applied after the wild mute: keep `saturation` of
+ * the colour, dim by `shade`, then wash `wash` of the way to a cool lilac
+ * grey (`tint` × the tile's own lightness). Per instance colour, so it costs
+ * no mesh or draw call. Its props are tinted `props` too (×, sRGB).
+ */
+export const HOLLOWED_LOOK = {
+  saturation: 0.08,
+  shade: 0.74,
+  tint: '#8f8aa3',
+  wash: 0.3,
+  props: '#b4b0c2',
+} as const; // TUNE
 
 /** Ambient life: when it runs, and how busy it is per quality tier. */
 export const AMBIENT = {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ClothingDropSourceSchema } from './data/clothing.js';
+import { CommunityKindIdSchema } from './data/communities.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -474,6 +475,35 @@ export const GAME_EVENTS = {
   'post.placed': {
     internal: z.strictObject({ tiles: z.array(z.strictObject(coords)).min(1) }),
     public: z.object({ tiles: z.array(z.object(coords)) }),
+  },
+  /**
+   * Hollowed Communities (#306) came to an older map: the boot pass marked
+   * these wild tiles as grey villages. New maps are made with theirs and
+   * write none. Never the cellar key's tile (CLAUDE.md rule 6).
+   */
+  'community.placed': {
+    internal: z.strictObject({
+      communities: z
+        .array(
+          z.strictObject({
+            communityId: z.uuid(),
+            name: z.string(),
+            kind: CommunityKindIdSchema,
+            tiles: z.array(z.strictObject(coords)).min(1),
+          }),
+        )
+        .min(1),
+    }),
+    public: z.object({
+      communities: z.array(
+        z.object({
+          communityId: z.uuid(),
+          name: z.string(),
+          kind: CommunityKindIdSchema,
+          tiles: z.array(z.object(coords)),
+        }),
+      ),
+    }),
   },
   /**
    * A trade offer or a gift was sent at a trading post (#271). What it holds

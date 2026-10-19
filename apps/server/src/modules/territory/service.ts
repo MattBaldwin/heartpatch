@@ -134,6 +134,7 @@ const MESSAGES = {
   noTile: "We couldn't find that spot.",
   home: 'Home bases are safe. Nobody can ever take one!',
   tradingPost: 'Trading posts belong to everyone! Nobody can claim one.',
+  hollowed: 'Grey villages are won by restoring them, not by battles! 🕯️',
   mine: "That's already your land!",
   tooFar: "That spot's too far away. Try one next to your land!",
   pvpOff: 'Challenges are off on this patch. Claim wild land instead!',
@@ -161,6 +162,7 @@ const MESSAGES = {
 const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; message: string }> = {
   home: { code: 'FORBIDDEN', message: MESSAGES.home },
   'trading-post': { code: 'FORBIDDEN', message: MESSAGES.tradingPost },
+  hollowed: { code: 'FORBIDDEN', message: MESSAGES.hollowed },
   mine: { code: 'CONFLICT', message: MESSAGES.mine },
   'too-far': { code: 'FORBIDDEN', message: MESSAGES.tooFar },
   'pvp-off': { code: 'FORBIDDEN', message: MESSAGES.pvpOff },

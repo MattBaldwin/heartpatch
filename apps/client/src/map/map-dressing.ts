@@ -9,6 +9,7 @@ import {
 import {
   FALLBACK_DRESSING,
   HALLOWEEN,
+  HOLLOWED_LOOK,
   MUTED,
   TERRAIN_DRESSING,
   type DressingItem,
@@ -169,6 +170,22 @@ export function muteRgb(c: Rgb): Rgb {
   const out = c.map((v, i) => {
     const grey = (l + (v - l) * MUTED.saturation) * MUTED.shade;
     return grey + ((tint[i] ?? grey) - grey) * MUTED.wash;
+  });
+  return [out[0] ?? 0, out[1] ?? 0, out[2] ?? 0];
+}
+
+/**
+ * A Hollowed village tile's colour (#306), from the colour it would have
+ * (sRGB 0–1): nearly grey, darker and a little cool, so the village reads
+ * as drained next to ordinary muted wild land (`HOLLOWED_LOOK`).
+ */
+export function drainRgb(c: Rgb): Rgb {
+  const l = c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
+  const tint = hexRgb(HOLLOWED_LOOK.tint);
+  const out = c.map((v, i) => {
+    const grey = (l + (v - l) * HOLLOWED_LOOK.saturation) * HOLLOWED_LOOK.shade;
+    const cool = (tint[i] ?? grey) * (0.35 + l);
+    return grey + (cool - grey) * HOLLOWED_LOOK.wash;
   });
   return [out[0] ?? 0, out[1] ?? 0, out[2] ?? 0];
 }

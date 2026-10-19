@@ -127,6 +127,12 @@ describe('territoryAction', () => {
     expect(territoryAction(post, view, ME, status(), NOW)).toEqual({ kind: 'none' });
   });
 
+  it('offers nothing on a Hollowed village tile, even right next to my land (#306)', () => {
+    const { view, tile } = setup();
+    const grey = { ...tile, communityId: '00000000-0000-4000-8000-000000000306' };
+    expect(territoryAction(grey, view, ME, status(), NOW)).toEqual({ kind: 'none' });
+  });
+
   it('offers Challenge on a neighbour’s land, unless challenges are off', () => {
     const { view, tile } = setup(() => ({ ownerUserId: userId(2) }));
     expect(territoryAction(tile, view, ME, status(), NOW).kind).toBe('challenge');

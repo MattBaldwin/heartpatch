@@ -1,0 +1,46 @@
+/* Hollowed Communities on the map (#306). */
+
+/* A village's flag: a quiet grey-lilac pill, like the village itself (the
+   post flag's shape, `trading.css`). Text pads with the shared tokens. */
+.community-flag {
+  padding-inline: var(--hp-pad-x);
+  background: rgb(226 222 236 / 95%);
+  color: #4a3f5c;
+}
+
+/* My land touches it: a touch of the doorstep's lavender. */
+.community-flag-touching {
+  background: rgb(236 228 252 / 96%);
+}
+
+/* The village's block in the tile panel: grey and quiet, with the reach line last. */
+.community-block {
+  display: grid;
+  gap: 4px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #f1eef6;
+}
+
+.community-block .community-line {
+  font-size: 14px;
+  line-height: 1.3;
+  color: #5a4e6b;
+}
+
+.community-block .community-reach {
+  font-weight: 800;
+  color: #4a3f5c;
+}
+
+.tile-panel .community-soon {
+  color: #7a5a9a;
+}
+
+/* Explore and Restore wait (the reach line says why): plainly not tappable. */
+.tile-panel .community-action:disabled {
+  background: #e6e1ec;
+  color: #8a7f99;
+  box-shadow: none;
+  opacity: 1;
+}

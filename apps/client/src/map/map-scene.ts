@@ -19,6 +19,7 @@ import {
   hexToWorld,
   isTradingPost,
   worldToHex,
+  type CommunityKindId,
   type Hex,
   type HexKey,
   type MapView,
@@ -56,6 +57,8 @@ import {
   HEX_SIZE,
   HOMESTEAD_GLOW,
   HOME_LOOK,
+  HOLLOWED_LOOK,
+  HOLLOWED_SQUARE,
   BORDER,
   ISLAND,
   LAND_FADE,
@@ -68,7 +71,16 @@ import {
   type TerrainLook,
   WILD_MARKER,
 } from './map-config.js';
-import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
+import {
+  dressTile,
+  drainRgb,
+  hexRgb,
+  isMuted,
+  muteRgb,
+  tileColor,
+  tileJitter,
+} from './map-dressing.js';
+import { greyTiles, villageSquares } from '../hollowed/community-model.js';
 import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
@@ -129,6 +141,8 @@ export interface MapSceneStats {
   readonly borderTriangles: number;
   /** Home tiles saved for a Keeper who hasn't joined yet, drawn as a dashed outline (#318). */
   readonly openHomeTiles: number;
+  /** Hollowed village tiles drawn grey (#306), outlined in lavender (one mesh for all). */
+  readonly hollowedTiles: number;
   readonly homes: number;
   readonly claimedHomes: number;
   /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
@@ -356,6 +370,9 @@ export class MapScene {
   readonly bounds: Bounds;
   private readonly scene: Scene;
   private readonly tiles = new Map<HexKey, PublicTile>();
+  /** Hollowed village tiles (#306), drawn grey; and each village's square, by kind. */
+  private grey = new Set<HexKey>();
+  private squares = new Map<HexKey, CommunityKindId>();
   /** Whose land is whose (#278): a wash, a ribbon on the outer edges, and icons. */
   private readonly borders: BorderField;
   private readonly seedMesh: Mesh;
@@ -435,6 +452,8 @@ export class MapScene {
     this.halloween = options.halloween === true;
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
+    this.grey = greyTiles(view);
+    this.squares = villageSquares(view);
     this.bounds = mapBounds(view.tiles, HEX_SIZE);
 
     this.instrumentation = new SceneInstrumentation(scene);
@@ -570,6 +589,7 @@ export class MapScene {
       borderMeshes: this.borders.stats.meshes,
       borderTriangles: this.borders.stats.triangles,
       openHomeTiles: this.borders.stats.openHomeTiles,
+      hollowedTiles: this.grey.size,
       keepers: this.keepers.handles.length,
       // A porch lantern isn't one of the view's buildings, nor a fire.
       buildings: this.buildings.stats.buildings - this.porchCount,
@@ -754,10 +774,19 @@ export class MapScene {
   /** Redraws ownership and home bases from a fresh view of the same map. */
   update(view: MapView): void {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
-    this.recolour();
+    // Villages came to an older map (#306), or one was won: recolour them
+    // all. (Their squares' ruins are built with the props, on the next open.)
+    const grey = greyTiles(view);
+    const regrey = grey.size !== this.grey.size || [...grey].some((k) => !this.grey.has(k));
+    this.grey = grey;
+    this.recolour(regrey);
     this.clearProps();
     this.homeNode = null;
-    this.borders.set(this.tiles.values(), view.members);
+    this.borders.set(
+      this.tiles.values(),
+      view.members,
+      [...grey].flatMap((k) => this.tiles.get(k) ?? []),
+    );
 
     const homes = findHomeBases([...this.tiles.values()]);
     const seeds: Matrix[] = [];
@@ -1078,7 +1107,9 @@ export class MapScene {
           tile.homeSlot !== null
             ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
             : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
-        group.colors.set([...c.map(toLinear), 1], i * 4);
+        // A Hollowed village (#306): drained past wild, in its own instance colour.
+        const drawn = this.grey.has(key) ? drainRgb(c) : c;
+        group.colors.set([...drawn.map(toLinear), 1], i * 4);
       }
       if (changed) {
         group.mesh.thinInstanceBufferUpdated('color');
@@ -1121,15 +1152,20 @@ export class MapScene {
       // it's muted on wild land and sits at the tile's own height.
       const node = tile.nodeResource;
       // A trading post's hut stands on its centre spot (#269), like a node.
-      const middle: PropKind | undefined = isTradingPost(tile)
+      const nodeProp: PropKind | undefined = isTradingPost(tile)
         ? 'trading-post'
         : node !== null && LAND_NODES.has(node)
           ? NODE_PROPS[node]
           : undefined;
-      const dressing = dressTile(tile, tile.terrain, HEX_SIZE, {
+      // A Hollowed village's square (#306): its kind's broken building and
+      // ruins round it (a node there keeps its spot in the middle).
+      const square = this.squares.get(key);
+      const middle = nodeProp ?? (square ? HOLLOWED_SQUARE[square] : undefined);
+      const dressing = dressTile(tile, square ? `hollowed-${square}` : tile.terrain, HEX_SIZE, {
         halloween: this.halloween,
         ...(middle !== undefined && { middle }),
       });
+      const drained = this.grey.has(key) ? hexRgb(HOLLOWED_LOOK.props) : null;
       for (const prop of dressing) {
         let built = meshes.get(prop.kind);
         if (!built) {
@@ -1142,7 +1178,8 @@ export class MapScene {
         if (!kind)
           byKind.set(prop.kind, (kind = { matrices: [], tints: [], ambient: [], tiles: [] }));
         kind.matrices.push(placeAt(prop.at.x, top + DOME * 0.5, prop.at.z, s, turn.clone()));
-        kind.tints.push(...hexRgb(prop.tint).map(toLinear), 1);
+        // Props in a Hollowed village are drained too (#306).
+        kind.tints.push(...hexRgb(prop.tint).map((v, i) => toLinear(v * (drained?.[i] ?? 1))), 1);
         const sway = PROP_SWAY[prop.kind];
         // terrainAmbient: sway coefficient (tip / top²), phase, muted (set by recolour), bob.
         kind.ambient.push(

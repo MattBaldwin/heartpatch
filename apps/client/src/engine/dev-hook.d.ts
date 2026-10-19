@@ -12,6 +12,8 @@ import type { ChatDebug } from '../chat/chat-screen.js';
 import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { HouseDebug } from '../house/house-screen.js';
+import type { CommunityActions } from '../hollowed/community-actions.js';
+import type { CommunityFlags } from '../hollowed/community-flags.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
@@ -144,6 +146,15 @@ declare global {
       trickOrTreat?(): TrickOrTreatDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
       post?(): PostDebug;
+      /**
+       * Hollowed villages (#306): their flags on screen (words and boxes, to check none overlap)
+       * and the village block in the open tile panel; each village's square, to select it.
+       */
+      communities?(): {
+        flags: CommunityFlags['shown'];
+        panel: CommunityActions['debug'];
+        villages: { name: string; square: { q: number; r: number }; reach: string | null }[];
+      };
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */

@@ -11,6 +11,7 @@ import { findHomeBases } from './map-layout.js';
 import {
   buildProp,
   homeNodeShown,
+  LAND_NODES,
   MapScene,
   tileScreenRectOf,
   type MapSceneOptions,
@@ -59,7 +60,8 @@ describe('MapScene', () => {
   it("draws cleared land (#242) in the meadow's tile mesh, in its own colour, with no draw call of its own", () => {
     const plain = build(testPatch());
     const before = plain.map.stats.tileMeshes;
-    const view = testPatch();
+    // No Hollowed villages (#306): their grey is cool, not sandy, but tells nothing here.
+    const view = { ...testPatch(), communities: [] };
     const cleared = view.tiles
       .filter((t) => t.homeSlot === null && t.terrain === 'forest')
       .slice(0, 3);
@@ -491,8 +493,14 @@ describe('MapScene', () => {
     // About 34k: one mesh each, never per tile, following the tile's top
     // closely enough to clear a lake's waves. The per-tile tint it replaced
     // drew 216 a tile (47.5k on this patch).
-    expect(map.stats.borderTriangles).toBeLessThan(35_000);
-    expect(map.stats.borderTriangles).toBeGreaterThan(20_000);
+    // Hollowed villages' outlines (#306) ride in those meshes: no draw call,
+    // and a few thousand triangles at most. The Keepers' own stay as they were.
+    const bare = build({ ...view, communities: [] }).map.stats.borderTriangles;
+    expect(bare).toBeLessThan(35_000);
+    expect(bare).toBeGreaterThan(20_000);
+    expect(map.stats.borderTriangles - bare).toBeGreaterThan(0);
+    expect(map.stats.borderTriangles - bare).toBeLessThan(3_000);
+    expect(map.stats.hollowedTiles).toBeGreaterThan(0);
   });
 
   it('rebuilds only the borders whose land changed', () => {
@@ -621,5 +629,89 @@ describe('homeNodeShown (owner decision 2026-10-06)', () => {
     expect(homeNodeShown('pumpkins', new Set(['thanksgiving']))).toBe(false);
     expect(homeNodeShown('magic-fallen-leaves', october)).toBe(false);
     expect(homeNodeShown('magic-fallen-leaves', new Set(['thanksgiving']))).toBe(true);
+  });
+});
+
+describe('Hollowed villages on the map (#306)', () => {
+  const engine = new NullEngine();
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Builds `view`, keeping each mesh's instance colours. */
+  function build(view: MapView) {
+    const setBuffer = vi.spyOn(Mesh.prototype, 'thinInstanceSetBuffer');
+    const scene = new Scene(engine);
+    const map = new MapScene(scene, view);
+    const colors = new Map<string, Float32Array>();
+    setBuffer.mock.calls.forEach(([kind, data], i) => {
+      const mesh = setBuffer.mock.contexts[i] as Mesh;
+      if (kind === 'color' && data) colors.set(mesh.name, data);
+    });
+    setBuffer.mockRestore();
+    const enabled = scene.meshes.filter((m) => m.isEnabled()).length;
+    const huts = (scene.getMeshByName('trading-post') as Mesh | null)?.thinInstanceCount ?? 0;
+    return { scene, map, colors, enabled, huts };
+  }
+
+  const view = testPatch();
+  const villages = view.communities ?? [];
+  const bare = { ...view, communities: [] };
+
+  it('has villages to draw on the test patch', () => {
+    expect(villages.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('greys, rings and dresses them with no mesh or draw call of their own', () => {
+    const plain = build(bare);
+    const grey = build(view);
+    expect(grey.enabled).toBe(plain.enabled);
+    expect(grey.map.stats.tileMeshes).toBe(plain.map.stats.tileMeshes);
+    expect(grey.map.stats.borderMeshes).toBe(plain.map.stats.borderMeshes);
+    expect(grey.map.stats.hollowedTiles).toBe(villages.reduce((n, c) => n + c.tiles.length, 0));
+    expect(plain.map.stats.hollowedTiles).toBe(0);
+  });
+
+  it('draws village tiles drained: darker and greyer than the wild land they were', () => {
+    const plain = build(bare).colors;
+    const grey = build(view).colors;
+    let drained = 0;
+    for (const [name, before] of plain) {
+      if (!name.startsWith('tiles-') || name.endsWith('-far')) continue;
+      const after = grey.get(name);
+      expect(after).toBeTruthy();
+      for (let i = 0; i < before.length / 4; i++) {
+        const a = [...before.slice(i * 4, i * 4 + 3)];
+        const b = [...(after?.slice(i * 4, i * 4 + 3) ?? [])];
+        if (a.every((v, k) => v === b[k])) continue;
+        drained++;
+        const sum = (c: number[]) => c.reduce((n, v) => n + v, 0);
+        const spread = (c: number[]) => Math.max(...c) - Math.min(...c);
+        expect(sum(b)).toBeLessThan(sum(a) * 0.9);
+        expect(spread(b)).toBeLessThan(spread(a));
+      }
+    }
+    // The near and far meshes share one buffer, so each tile counts once.
+    expect(drained).toBe(villages.reduce((n, c) => n + c.tiles.length, 0));
+  });
+
+  it("puts each village's broken building on its square", () => {
+    // A lakeside spot (a well, greens, ice) there keeps the middle.
+    const node = (c: (typeof villages)[number]) =>
+      view.tiles.find((t) => t.q === c.square.q && t.r === c.square.r)?.nodeResource ?? '';
+    const huts = villages.filter((c) => c.kind !== 'old-well' && !LAND_NODES.has(node(c))).length;
+    expect(huts).toBeGreaterThan(0);
+    expect(build(view).huts - build(bare).huts).toBe(huts);
+  });
+
+  it('draws a won village in colour again, with no outline', () => {
+    const { map } = build(view);
+    const before = map.stats.borderTriangles;
+    map.update({
+      ...view,
+      communities: villages.map((c) => ({ ...c, ownerUserId: userId(1) })),
+    });
+    expect(map.stats.hollowedTiles).toBe(0);
+    expect(map.stats.borderTriangles).toBeLessThan(before);
   });
 });

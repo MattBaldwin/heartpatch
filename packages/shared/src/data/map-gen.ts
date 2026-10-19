@@ -41,4 +41,42 @@ export const MAP_GEN: MapGenSettings = {
       'Snuggle Station',
     ],
   },
+  // Hollowed Communities (#306, owner decisions 4–6 of 2026-10-18 and plan
+  // v3): compact grey villages 3–5 steps from a home, one per 2 seats (at
+  // least 2), each inside the 7-tile ring its winner earns.
+  communities: {
+    seatsPerCommunity: 2, // TUNE: "about one per 2 members"
+    minPerMap: 2,
+    // Owner decision 2026-10-19: one each on a 3-seat patch, whose homes are
+    // too far apart to share 2 fairly.
+    countBySeats: { '3': 3 },
+    size: { min: 4, max: 7 }, // TUNE: the seed plus 3–6 neighbours, never past the ring
+    minFromSeed: 3, // TUNE: the rings sit one tile apart
+    maxFromSeed: 5, // TUNE:
+    relaxedMaxFromSeed: 6, // TUNE: older patches (and a rare lake-heavy new map), before giving up
+    ringsApart: 2, // TUNE:
+    ringFromPost: 2, // TUNE:
+    excludedTerrains: ['lake'],
+    requiredKind: 'lantern-tower',
+    keyFromVillage: { min: 2, max: 4 }, // TUNE:
+    nameStems: [
+      'Bramble',
+      'Thistle',
+      'Fernwick',
+      'Mossbury',
+      'Hazelden',
+      'Willow',
+      'Pebble',
+      'Clover',
+      'Larkspur',
+      'Tansy',
+      'Nettle',
+      'Cobble',
+      'Dewdrop',
+      'Hollyhock',
+      'Wren',
+      'Marrow',
+    ],
+    nameSuffix: 'Hollow',
+  },
 };

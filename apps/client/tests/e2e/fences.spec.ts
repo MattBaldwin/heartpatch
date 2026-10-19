@@ -231,7 +231,9 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
   await page.route('**/api/v1/maps/*/view', async (route) => {
     const res = await route.fetch();
     const view = (await res.json()) as MapView;
-    const wild = view.tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    const wild = view.tiles.find(
+      (t) => t.ownerUserId === null && t.homeSlot === null && !t.communityId,
+    )!;
     wild.ownerUserId = '00000000-0000-4000-8000-000000000999';
     wild.fences = [];
     tile = { q: wild.q, r: wild.r };

@@ -22,6 +22,8 @@ import { createJourneyScreen } from './trading/journey-screen.js';
 import { createTrickOrTreat } from './trick-or-treat/trick-or-treat-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
+import { createCommunityActions } from './hollowed/community-actions.js';
+import { createCommunityFlags } from './hollowed/community-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -521,6 +523,10 @@ const panToTile = (h: Hex): void => {
 };
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
+// Hollowed villages (#306): a flag over each (after the posts', so it keeps
+// clear of theirs), and the village's block in a tile's panel.
+const communityFlags = createCommunityFlags(document.body, () => signedIn?.id ?? null);
+const communityActions = createCommunityActions();
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
 // a journey opens the battle screen like a tile battle.
 // The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
@@ -587,6 +593,7 @@ const hollow = createHollowScreen({
     setNight: (night) => {
       hollowLayer.setNight(night);
       maps.setNight(night);
+      communityActions.setNight(night);
       audio.setNight(night);
     },
     visit: (done) => {
@@ -951,6 +958,8 @@ const maps = createMapScreen({
   tileActions: combineTileActions(
     wildPicker.tileActions,
     inventory.tileActions,
+    // A Hollowed village's words and its Explore and Restore (#306).
+    communityActions,
     // Build sits near the top of a tile's actions, so it's never scrolled away.
     tileBuild.tileActions,
     home.tileActions,
@@ -985,7 +994,15 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags, trickOrTreat.layer],
+  layers: [
+    hollowLayer,
+    darkLand,
+    jobs.badges,
+    land.layer,
+    postFlags,
+    communityFlags,
+    trickOrTreat.layer,
+  ],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -1703,6 +1720,15 @@ if (import.meta.env.DEV) {
     journey: () => journeys.debug,
     trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
+    communities: () => ({
+      flags: communityFlags.shown,
+      panel: communityActions.debug,
+      villages: (maps.view?.communities ?? []).map((c) => ({
+        name: c.name,
+        square: c.square,
+        reach: c.reach,
+      })),
+    }),
     posts: () => ({
       shown: postFlags.shown,
       rings: postFlags.rings,

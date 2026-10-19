@@ -97,7 +97,7 @@ const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-h
  * trays' layout, and sheets differ per screen. Shut ones (hidden, inert, a
  * closed tray) don't count: the tutorial's own test for an open sheet.
  */
-function flagRoom(keeper: Rect | null): FlagRoom {
+export function flagRoom(keeper: Rect | null): FlagRoom {
   let top = 0;
   for (const node of document.querySelectorAll(TOP_BAR)) {
     const box = boxOf(node)?.box;

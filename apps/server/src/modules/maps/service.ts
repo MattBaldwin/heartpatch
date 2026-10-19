@@ -44,6 +44,7 @@ import { requireMember } from './members.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
+import { communitiesView, storeCommunities } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/contentment.js';
@@ -165,6 +166,7 @@ function toPublicTile(
     post: post ? { index: post.index, name: post.name } : null,
     explored: explore.explored ?? false,
     homestead: explore.homestead ?? null,
+    communityId: tile.communityId ?? null,
   };
 }
 
@@ -399,7 +401,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       const homeSlot = 0;
 
       const mapId = await withFreshCode((code) =>
-        store.transaction(async (repo) => {
+        store.transaction(async (repo, tx) => {
           // Ordered against an owner resetting this player (decision D scope check).
           await repo.lockUser(user.id);
           const map = await repo.insertMap({ name: input.name, timeZone, seed, maxPlayers });
@@ -411,6 +413,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             joinedAt: now(),
           });
           await repo.insertTiles(map.id, generated.tiles);
+          // Its Hollowed Communities (#306), placed by `generateMap` with the map.
+          await storeCommunities(tx, {
+            mapId: map.id,
+            mapSeed: seed,
+            placed: generated.communities,
+          });
           const home = await repo.claimHomeTiles(map.id, homeSlot, user.id);
           await repo.insertInvite({
             mapId: map.id,
@@ -506,6 +514,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           ),
           // How this viewer reaches each trading post (#270).
           posts: await listPostViews(tx, { mapId, userId: user.id, tiles, at }),
+          // The grey villages (#306), and how this viewer reaches each.
+          communities: await communitiesView(tx, { mapId, userId: user.id, tiles }),
           seq: map.eventSeq,
         };
       });

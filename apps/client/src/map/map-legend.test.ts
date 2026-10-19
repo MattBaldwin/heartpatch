@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BORDER, PLAYER_COLORS } from './map-config.js';
-import { legendEntries, legendLabel } from './map-legend.js';
+import { BORDER, FALLBACK_LOOK, PLAYER_COLORS } from './map-config.js';
+import { drainRgb, hexRgb, muteRgb } from './map-dressing.js';
+import { hollowedSwatch, legendEntries, legendLabel } from './map-legend.js';
 import { member, testView, userId } from './test-view.js';
 
 describe('legendEntries', () => {
@@ -31,5 +32,16 @@ describe('legendLabel', () => {
     const [you, sunny] = legendEntries([member(1, 0), member(4, 3)], userId(1));
     expect(legendLabel(you!)).toBe('Your land');
     expect(legendLabel(sunny!)).toBe("keeper4's land");
+  });
+});
+
+describe('hollowedSwatch', () => {
+  it('is a village meadow as the map draws it (#306): wild, then drained', () => {
+    const swatch = hexRgb(hollowedSwatch());
+    const drawn = drainRgb(muteRgb(hexRgb(FALLBACK_LOOK.color)));
+    swatch.forEach((v, i) => {
+      expect(Math.abs(v - (drawn[i] ?? 0))).toBeLessThanOrEqual(1 / 255);
+    });
+    expect(hollowedSwatch()).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

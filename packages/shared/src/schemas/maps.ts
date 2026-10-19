@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { HomeNameSchema, PublicBuildingSchema } from './buildings.js';
+import { CommunityViewSchema } from './communities.js';
 import { PublicFenceSchema } from './fences.js';
 import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
 import { FeelingIdSchema } from './data/elements.js';
@@ -353,6 +354,12 @@ export const PublicTileSchema = z.object({
    */
   explored: z.boolean().optional(),
   homestead: z.enum(['joined', 'paused']).nullable().optional(),
+  /**
+   * The Hollowed Community this tile belongs to (#306), its
+   * `MapView.communities[].id`; null on every other tile. Optional only so
+   * older fixtures and servers parse.
+   */
+  communityId: z.uuid().nullable().optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 
@@ -396,6 +403,11 @@ export const MapViewSchema = z.object({
    * order. Optional only so older servers' views parse.
    */
   posts: z.array(PostViewSchema).optional(),
+  /**
+   * The map's Hollowed Communities (#306), in the order they were placed.
+   * Optional only so older servers' views parse.
+   */
+  communities: z.array(CommunityViewSchema).optional(),
   /**
    * The map's latest event seq this view includes (`maps.event_seq`). Live
    * sync subscribes with it as `afterSeq` (tech spec §5 "WebSocket").

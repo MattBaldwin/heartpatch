@@ -164,8 +164,9 @@ export interface PostPlacementTileRow {
   homeSlot: number | null;
   /**
    * Something still stands, works or battles here: a building, a fence, a
-   * guard, a gatherer, an unfinished gather or an unfinished battle for it.
-   * A post never goes on such a tile, so nothing is cut off mid-way.
+   * guard, a gatherer, an unfinished gather or an unfinished battle for it,
+   * or it's a Hollowed Community's village tile (#306). A post or a new
+   * village never goes on such a tile, so nothing is cut off mid-way.
    */
   busy: boolean;
 }
@@ -594,7 +595,8 @@ function queries(db: Executor): MapsRepo {
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
           busy: sql<boolean>`(
-            exists (select 1 from ${buildings} b where b.tile_id = ${tiles}.id)
+            ${tiles}.community_id is not null
+            or exists (select 1 from ${buildings} b where b.tile_id = ${tiles}.id)
             or exists (select 1 from ${fenceSegments} f where f.tile_id = ${tiles}.id)
             or exists (select 1 from ${tileDefenders} d where d.tile_id = ${tiles}.id)
             or exists (select 1 from ${squishies} s where s.work_tile_id = ${tiles}.id)
@@ -651,6 +653,8 @@ function queries(db: Executor): MapsRepo {
           nodeResource: tiles.nodeResource,
           homeSlot: tiles.homeSlot,
           guardianStrength: tiles.guardianStrength,
+          // Its Hollowed Community (#306), if it's a village tile.
+          communityId: tiles.communityId,
           gatheringReadyAt: gatherJobs.readyAt,
           // "Clearing here" (#242): only the tile owner's own clear counts.
           clearingReadyAt: sql<string | null>`(

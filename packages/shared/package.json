@@ -29,7 +29,8 @@
     "sim:economy": "tsx scripts/sim/economy-cli.ts",
     "sim:costumes": "tsx scripts/sim/costumes-cli.ts",
     "sim:factory": "tsx scripts/sim/factory-cli.ts",
-    "sim:tiles": "tsx scripts/sim/tiles-cli.ts"
+    "sim:tiles": "tsx scripts/sim/tiles-cli.ts",
+    "sim:hollowed": "tsx scripts/sim/hollowed-cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

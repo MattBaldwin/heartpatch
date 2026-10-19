@@ -10,7 +10,7 @@ import {
   type ItemCounts,
 } from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, inject, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import type { Database } from '../../db/client.js';
@@ -33,6 +33,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { packBeforeOneBuildingPerTile, packCrowdedTiles } from './crowded-tiles.js';
 import { BUILDING_DATA } from './hearthfire.js';
+import type * as CommunitiesService from '../communities/service.js';
 
 /*
  * Migration B (#295, owner decision 2026-10-18): tiles still holding two or
@@ -41,6 +42,15 @@ import { BUILDING_DATA } from './hearthfire.js';
  * up to migration B, seeds what the old rules allowed, and runs the migrate
  * step the way `pnpm db:migrate` does.
  */
+
+// The app runs on a database from before migration B here, so before the
+// Hollowed Communities' tables too (#306, a later migration): new patches
+// get no villages and the map view lists none.
+vi.mock('../communities/service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof CommunitiesService>()),
+  storeCommunities: () => Promise.resolve([]),
+  communitiesView: () => Promise.resolve([]),
+}));
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -72,6 +82,7 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['map_members', 'home_named_at_level', 'smallint'],
   ['map_members', 'caught_count', 'integer default 0 not null'],
   ['map_members', 'kinds_built', "text[] default '{}'::text[] not null"],
+  ['tiles', 'community_id', 'uuid'],
 ];
 const START = '2026-10-02T12:00:00Z';
 
