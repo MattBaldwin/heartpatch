@@ -80,7 +80,7 @@ import {
   tileColor,
   tileJitter,
 } from './map-dressing.js';
-import { greyTiles, villageSquares } from '../hollowed/community-model.js';
+import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-model.js';
 import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
@@ -204,6 +204,9 @@ function lookOf(tile: PublicTile): TerrainLook {
   return TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
 }
 
+/** What a tile is drawn as: home land, or its terrain. */
+const shapeOf = (tile: PublicTile): string => (tile.homeSlot !== null ? 'home' : tile.terrain);
+
 /** The look whose tile mesh draws this tile: its own, or the one it borrows (`meshOf`). */
 function meshLookOf(tile: PublicTile): TerrainLook {
   const look = lookOf(tile);
@@ -239,7 +242,7 @@ interface TileGroup {
   readonly colors: Float32Array;
   /** How muted each tile is drawn: 1 on wild land, part way on land that misses its owner. */
   readonly muted: number[];
-  /** Each tile's terrain as last coloured (a clear changes it, #242). */
+  /** Each tile's shape as last drawn (`shapeOf`: a clear, #242, or a won ring, #306, changes it). */
   readonly terrains: string[];
 }
 
@@ -427,6 +430,8 @@ export class MapScene {
   private propsCleared = new Set<HexKey>();
   /** Each tile's terrain when the map was built: a tile cleared since loses its props (#242). */
   private readonly builtTerrain = new Map<HexKey, string>();
+  /** Tiles that were home land when the props were built (they have none). */
+  private readonly builtHome = new Set<HexKey>();
   /** Zoomed out: tiles and props draw from their low-detail meshes (`followZoom`). */
   private far = false;
   private readonly instrumentation: SceneInstrumentation;
@@ -476,7 +481,10 @@ export class MapScene {
 
     this.buildIsland(view.tiles);
     this.animated = this.buildTiles(view.tiles);
-    for (const t of view.tiles) this.builtTerrain.set(hexKey(t), t.terrain);
+    for (const t of view.tiles) {
+      this.builtTerrain.set(hexKey(t), t.terrain);
+      if (t.homeSlot !== null) this.builtHome.add(hexKey(t));
+    }
     this.buildProps(view.tiles);
     this.applyDetail();
     this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
@@ -779,6 +787,7 @@ export class MapScene {
     const grey = greyTiles(view);
     const regrey = grey.size !== this.grey.size || [...grey].some((k) => !this.grey.has(k));
     this.grey = grey;
+    this.squares = villageSquares(view);
     this.recolour(regrey);
     this.clearProps();
     this.homeNode = null;
@@ -795,6 +804,12 @@ export class MapScene {
       const p = hexToWorld(home.seed, HEX_SIZE);
       if (home.seed.ownerUserId === null) plots.push(placeAt(p.x, HOME_LOOK.height + 0.02, p.z));
       else seeds.push(placeAt(p.x, HOME_LOOK.height + 0.15, p.z));
+    }
+    // A won village's own Heart Seed on its square (#306 PR 3): one more
+    // instance of the same mesh, so no new draw call or material.
+    for (const village of villageSeeds(view)) {
+      const p = hexToWorld(village.square, HEX_SIZE);
+      seeds.push(placeAt(p.x, HOME_LOOK.height + 0.15, p.z));
     }
     setInstances(this.seedMesh, seeds, true);
     setInstances(this.plotMesh, plots, true);
@@ -1062,7 +1077,7 @@ export class MapScene {
         tiles: group.tiles,
         colors,
         muted: group.tiles.map(() => 0),
-        terrains: group.tiles.map((t) => t.terrain),
+        terrains: group.tiles.map(shapeOf),
       });
     }
     this.tileMeshes = groups.size;
@@ -1091,12 +1106,13 @@ export class MapScene {
         const fading = tile.homeSlot === null ? (this.landFade.get(key) ?? 0) : 0;
         const muted = isMuted(tile) ? 1 : Math.min(1, Math.max(0, fading)) * LAND_FADE.most;
         wild.set(key, muted);
-        // A clear (#242) changes a tile's terrain: its colour and height follow,
-        // so what stands on it (`topOf`) sits on its top.
-        const reshaped = group.terrains[i] !== tile.terrain;
+        // A clear (#242) changes a tile's terrain, and a won village's ring
+        // (#306 PR 3) makes land home: its colour and height follow, so what
+        // stands on it (`topOf`) sits on its top. Same mesh, new instance data.
+        const reshaped = group.terrains[i] !== shapeOf(tile);
         if (!force && group.muted[i] === muted && !reshaped) continue;
         group.muted[i] = muted;
-        group.terrains[i] = tile.terrain;
+        group.terrains[i] = shapeOf(tile);
         if (reshaped) {
           const m = tileMatrix(tile, group.look.height);
           group.mesh.thinInstanceSetMatrixAt(i, m, true);
@@ -1105,7 +1121,7 @@ export class MapScene {
         changed = true;
         const c =
           tile.homeSlot !== null
-            ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
+            ? tileColor(lookOf(tile).color, { brightness: 1, warmth: 0, height: 0 }, muted)
             : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
         // A Hollowed village (#306): drained past wild, in its own instance colour.
         const drawn = this.grey.has(key) ? drainRgb(c) : c;
@@ -1263,7 +1279,11 @@ export class MapScene {
   private clearProps(): void {
     const cleared = new Set<HexKey>();
     for (const [key, tile] of this.tiles) {
-      if (tile.homeSlot !== null) continue;
+      // Home land has no props: a won village's ring (#306 PR 3) loses its ruins.
+      if (tile.homeSlot !== null) {
+        if (!this.builtHome.has(key)) cleared.add(key);
+        continue;
+      }
       const wasCleared = this.builtTerrain.get(key) !== tile.terrain;
       if (tile.buildings.length > 0 || wasCleared) cleared.add(key);
     }
@@ -1280,6 +1300,8 @@ export class MapScene {
     if (this.propShadows) {
       setInstances(this.propShadows, hideOn(this.shadowBase, this.shadowTiles, cleared));
     }
+    // `setInstances` turned both details on: back to the one the zoom shows.
+    this.applyDetail();
   }
 
   /**

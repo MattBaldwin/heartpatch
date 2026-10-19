@@ -1,6 +1,7 @@
 import {
   communityCount,
   GAME_DATA,
+  firstHomeTiles,
   heartSeedOf,
   placeCommunities,
   type ExistingCommunity,
@@ -48,10 +49,12 @@ function plan(
   seed: string,
   existing: readonly PlacedCommunityRow[],
 ): PlacedCommunity[] | null {
-  const slots = new Set(rows.flatMap((t) => (t.homeSlot === null ? [] : [t.homeSlot])));
+  // First homes (#306 PR 3): a won village's ring shares its winner's slot.
+  const first = firstHomeTiles(rows);
+  const slots = new Set(first.flatMap((t) => (t.homeSlot === null ? [] : [t.homeSlot])));
   const homes = [...slots]
     .sort((a, b) => a - b)
-    .flatMap((slot) => heartSeedOf(rows.filter((t) => t.homeSlot === slot)) ?? []);
+    .flatMap((slot) => heartSeedOf(first.filter((t) => t.homeSlot === slot)) ?? []);
   const base = {
     tiles: rows.map((t) => ({ ...t, ownerUserId: t.busy ? 'busy' : t.ownerUserId })),
     homes,

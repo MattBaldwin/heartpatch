@@ -506,6 +506,57 @@ export const GAME_EVENTS = {
     }),
   },
   /**
+   * Someone put a piece back on a grey village tile (#306 PR 3): the
+   * village's progress for everyone. Public, like the land it becomes.
+   */
+  'community.pieceRestored': {
+    internal: z.strictObject({
+      communityId: z.uuid(),
+      userId: z.uuid(),
+      ...coords,
+      piecesDone: z.number().int().min(1),
+      piecesNeeded: z.number().int().min(1),
+    }),
+    public: z.object({
+      communityId: z.uuid(),
+      userId: z.uuid(),
+      ...coords,
+      piecesDone: z.number().int(),
+      piecesNeeded: z.number().int(),
+    }),
+  },
+  /** That piece was the tile's last: it's restored, and its restorer claimed it (#306 PR 3). */
+  'community.tileRestored': {
+    internal: z.strictObject({ communityId: z.uuid(), userId: z.uuid(), ...coords }),
+    public: z.object({ communityId: z.uuid(), userId: z.uuid(), ...coords }),
+  },
+  /**
+   * The village is won (#306 PR 3): one Keeper restored and holds every tile.
+   * Its Heart Seed is planted on the square, and `ring` is the tiles that
+   * became their home tiles (a tile someone else holds stays theirs).
+   */
+  'community.restored': {
+    internal: z.strictObject({
+      communityId: z.uuid(),
+      userId: z.uuid(),
+      square: z.strictObject(coords),
+      ring: z.array(z.strictObject(coords)).min(1),
+      name: z.string(),
+    }),
+    public: z.object({
+      communityId: z.uuid(),
+      userId: z.uuid(),
+      square: z.object(coords),
+      ring: z.array(z.object(coords)),
+      name: z.string(),
+    }),
+  },
+  /** A won village's Keeper named it (#306 PR 3): its flag shows the name to everyone. */
+  'community.named': {
+    internal: z.strictObject({ communityId: z.uuid(), userId: z.uuid(), name: z.string() }),
+    public: z.object({ communityId: z.uuid(), userId: z.uuid(), name: z.string() }),
+  },
+  /**
    * A trade offer or a gift was sent at a trading post (#271). What it holds
    * stays internal; only the two players hear of it (`twoPlayerView`).
    */

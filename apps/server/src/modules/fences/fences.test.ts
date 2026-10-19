@@ -79,6 +79,7 @@ interface Tile {
   r: number;
   ownerUserId: string | null;
   homeSlot: number | null;
+  communityId: string | null;
 }
 
 describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
@@ -791,6 +792,8 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       (t) =>
         t.ownerUserId === null &&
         t.homeSlot === null &&
+        // Not a grey village's tile (#306): it never fades.
+        t.communityId === null &&
         hexDistance(t, seed) === TERRITORY_RULES.tending.keepRadius + 3,
     )!;
     await setOwner(far.id, kid.id);

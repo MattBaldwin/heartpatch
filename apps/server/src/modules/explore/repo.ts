@@ -1,6 +1,7 @@
 import {
   EXPLORE_RULES,
   exploreLayout,
+  firstHomeTiles,
   heartSeedOf,
   hexDistance,
   hexKey,
@@ -127,13 +128,15 @@ export function createExploreRepo(db: Executor) {
           terrain: tiles.terrain,
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
+          communityId: tiles.communityId,
         })
         .from(tiles)
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.id));
       // The Heart Seed: the middle of my seven home tiles (every one of them
-      // carries my home slot, so "slot 0" alone could pick a ring tile, #429).
-      const heart = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
+      // carries my home slot, so "slot 0" alone could pick a ring tile, #429;
+      // my first home's, #306).
+      const heart = heartSeedOf(firstHomeTiles(all.filter((t) => t.ownerUserId === userId)));
       // Two steps out touches home, so it joins. Asked for one that hasn't
       // (#242), three steps out touches none of it, so it stays unjoined.
       // Neither touches my other land outside home: a homestead next door

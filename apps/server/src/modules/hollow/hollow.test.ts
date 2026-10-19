@@ -279,6 +279,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         t.ownerUserId === null &&
         t.nodeResource === null &&
         !isTradingPost(t) &&
+        // Not a grey village's tile (#306): the Hollow Man never wins one back.
+        t.communityId === null &&
         held.every((h) => hexDistance(h, t) >= 3),
     )!;
     await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${tile.id}'`);
@@ -912,11 +914,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         (t) =>
           t.homeSlot === null &&
           t.ownerUserId === null &&
+          t.communityId === null &&
           hexDistance(t, seed) === 2 &&
           all.some(
             (b) =>
               b.homeSlot === null &&
               b.ownerUserId === null &&
+              b.communityId === null &&
               hexDistance(b, seed) === 3 &&
               hexDistance(b, t) === 1,
           ),
@@ -925,6 +929,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         (t) =>
           t.homeSlot === null &&
           t.ownerUserId === null &&
+          t.communityId === null &&
           hexDistance(t, seed) === 3 &&
           hexDistance(t, a) === 1,
       )!;

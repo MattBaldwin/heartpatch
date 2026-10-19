@@ -24,6 +24,7 @@ import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createCommunityActions } from './hollowed/community-actions.js';
 import { createCommunityFlags } from './hollowed/community-flags.js';
+import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -526,7 +527,7 @@ const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
 // Hollowed villages (#306): a flag over each (after the posts', so it keeps
 // clear of theirs), and the village's block in a tile's panel.
 const communityFlags = createCommunityFlags(document.body, () => signedIn?.id ?? null);
-const communityActions = createCommunityActions();
+const communityActions = createCommunityActions(() => signedIn?.id ?? null);
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
 // a journey opens the battle screen like a tile battle.
 // The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
@@ -914,6 +915,24 @@ const explore = createExploreScreen({
 communityActions.wire('explore', (_community, tile) => {
   void explore.open(tile);
 });
+// Restoring a grey village tile, and naming a won village (#306 PR 3).
+const restoreSheet = createRestoreSheet({
+  root: document.body,
+  mapId: () => maps.view?.map.id ?? null,
+  members: () => maps.view?.members ?? [],
+  terrainAt: (at) =>
+    maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r)?.terrain ?? 'meadow',
+  expectHitch: () => stage?.quality.expectHitch(),
+  onOpen: () => {
+    maps.deselect();
+  },
+});
+communityActions.wire('restore', (community, tile) => {
+  restoreSheet.open(community, tile);
+});
+communityActions.wire('name', (community) => {
+  restoreSheet.openName(community);
+});
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
@@ -943,6 +962,7 @@ const maps = createMapScreen({
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
+    restoreSheet.close();
     roster.close();
     jobs.close();
     postScreen.close();
@@ -1728,10 +1748,14 @@ if (import.meta.env.DEV) {
     communities: () => ({
       flags: communityFlags.shown,
       panel: communityActions.debug,
+      restore: restoreSheet.debug,
       villages: (maps.view?.communities ?? []).map((c) => ({
+        id: c.id,
         name: c.name,
         square: c.square,
         reach: c.reach,
+        restored: c.restored,
+        ownerUserId: c.ownerUserId,
       })),
     }),
     posts: () => ({

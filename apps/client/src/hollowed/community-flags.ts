@@ -132,10 +132,8 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
         ? null
         : (findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === mine)?.seed ?? null);
     const byKey = new Map(view.tiles.map((t) => [hexKey(t), t] as const));
-    // Won villages are someone's home now: no Hollowed flag.
-    const wanted = new Map(
-      (view.communities ?? []).filter((c) => c.ownerUserId === null).map((c) => [c.id, c] as const),
-    );
+    // Every village, won ones too: "🏡 Bramble Glen" over a won village's ring (#306 PR 3).
+    const wanted = new Map((view.communities ?? []).map((c) => [c.id, c] as const));
     for (const [id, flag] of flags) {
       if (!wanted.has(id)) {
         flag.node.remove();
@@ -147,12 +145,14 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       const tiles = community.tiles.flatMap((h) => byKey.get(hexKey(h)) ?? []);
       if (tiles.length === 0) continue;
       const label = communityFlagLabel(community);
-      const touching = community.reach === 'touching';
+      const won = community.ownerUserId !== null;
+      const touching = !won && community.reach === 'touching';
       const flag = flags.get(id);
       if (flag) {
         flag.community = community;
         flag.tiles = tiles;
         flag.node.classList.toggle('community-flag-touching', touching);
+        flag.node.classList.toggle('community-flag-won', won);
         if (flag.label !== label) {
           flag.label = label;
           flag.node.textContent = label;
@@ -164,7 +164,7 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       const node = el(
         'div',
         {
-          class: `post-flag community-flag${touching ? ' community-flag-touching' : ''}`,
+          class: `post-flag community-flag${touching ? ' community-flag-touching' : ''}${won ? ' community-flag-won' : ''}`,
           'aria-hidden': 'true',
           'data-testid': 'community-flag',
         },

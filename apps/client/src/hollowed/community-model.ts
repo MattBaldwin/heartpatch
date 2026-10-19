@@ -37,6 +37,19 @@ export const COMMUNITY_TEXT = {
   restore: 'Restore 🛠️',
   /** The map legend's row for the grey tiles. */
   legend: 'Hollowed village',
+  // A won village (#306 PR 3): a second home with its own Heart Seed.
+  /** Its flag: "🏡 Bramble Glen". */
+  wonFlag: (name: string) => `🏡 ${name}`,
+  /** The square's title: "Bramble Glen · Heart Seed 🌱". */
+  seedTitle: (name: string) => `${name} · Heart Seed 🌱`,
+  /** A ring tile's title: "Meadow · Bramble Glen 🏡". */
+  ringTitle: (terrain: string, name: string) => `${terrain} · ${name} 🏡`,
+  mySeed: 'Your second home! Safe at night, and nobody can ever take it.',
+  myRing: 'Part of your second home. Safe at night, never fades, never taken!',
+  theirs: (who: string) => `${who}'s village. Nobody can ever take it!`,
+  /** A restored tile of a village still being restored. */
+  tileRestored: '✨ This spot is restored! Restore the rest to win the village.',
+  nameIt: 'Name it ✨',
 } as const;
 
 /** "3 tiles" / "1 tile". */
@@ -51,9 +64,15 @@ export function greyTiles(view: Pick<MapView, 'communities'>): Set<HexKey> {
   const grey = new Set<HexKey>();
   for (const c of view.communities ?? []) {
     if (c.ownerUserId !== null) continue;
-    for (const t of c.tiles) grey.add(hexKey(t));
+    const restored = new Set((c.restoredTiles ?? []).map(hexKey));
+    for (const t of c.tiles) if (!restored.has(hexKey(t))) grey.add(hexKey(t));
   }
   return grey;
+}
+
+/** Each won village's square: where its own Heart Seed grows (#306 PR 3). */
+export function villageSeeds(view: Pick<MapView, 'communities'>): CommunityView[] {
+  return (view.communities ?? []).filter((c) => c.ownerUserId !== null);
 }
 
 /** Each grey village's square and its kind: where its broken building stands. */
@@ -82,8 +101,11 @@ export function communityOf(
  * its name when I have no land here.
  */
 export function communityFlagLabel(
-  c: Pick<CommunityView, 'name' | 'tiles' | 'restored' | 'reach' | 'distance'>,
+  c: Pick<CommunityView, 'name' | 'tiles' | 'restored' | 'reach' | 'distance'> &
+    Partial<Pick<CommunityView, 'ownerUserId'>>,
 ): string {
+  // A won village is someone's home: its name, like a home's flag.
+  if ((c.ownerUserId ?? null) !== null) return COMMUNITY_TEXT.wonFlag(c.name);
   const name = `🕯️ ${c.name}`;
   if (c.reach === 'touching') {
     return `${name} · ${String(c.restored)}/${String(c.tiles.length)} restored`;
@@ -152,9 +174,33 @@ export function communityPanel(
  * land keeps saying whose it is; the progress shows in the village's block).
  * Any other tile's info is returned as it is.
  */
-export function hollowedTileInfo(info: TileInfo, tile: PublicTile, view: MapView): TileInfo {
+export function hollowedTileInfo(
+  info: TileInfo,
+  tile: PublicTile,
+  view: MapView,
+  me: string | null = null,
+): TileInfo {
   const c = communityOf(view, tile);
-  if (!c || c.ownerUserId !== null) return info;
+  if (!c) return info;
+  if (c.ownerUserId !== null) {
+    // Its ring (#306 PR 3): home tiles of the winner, the square their second Heart Seed.
+    if (tile.homeSlot === null || tile.ownerUserId !== c.ownerUserId) return info;
+    const mine = me !== null && c.ownerUserId === me;
+    const square = hexKey(tile) === hexKey(c.square);
+    const who = view.members.find((m) => m.user.id === c.ownerUserId)?.user.username;
+    const terrain = TERRAINS.find((t) => t.id === tile.terrain)?.name ?? 'Mystery land';
+    return {
+      ...info,
+      title: square ? COMMUNITY_TEXT.seedTitle(c.name) : COMMUNITY_TEXT.ringTitle(terrain, c.name),
+      owner: mine
+        ? square
+          ? COMMUNITY_TEXT.mySeed
+          : COMMUNITY_TEXT.myRing
+        : who !== undefined
+          ? COMMUNITY_TEXT.theirs(who)
+          : info.owner,
+    };
+  }
   const words = communityPanel(c, tile.terrain, false);
   return {
     ...info,

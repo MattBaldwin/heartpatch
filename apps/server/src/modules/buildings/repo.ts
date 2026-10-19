@@ -40,6 +40,8 @@ export interface HomeTileRow {
 export interface TargetTileRow extends HomeTileRow {
   ownerUserId: string | null;
   homeSlot: number | null;
+  /** A grey village's tile, or a won village's ring (#306). */
+  communityId: string | null;
 }
 
 export interface BuildingRow {
@@ -350,6 +352,12 @@ function createBuildingsTxRepo(tx: Transaction): BuildingsTxRepo {
   return { ...queries(tx), appendEvent: (event) => appendGameEvent(tx, event) };
 }
 
+/**
+ * A first home's tile (#306 PR 3): a won village's ring carries its winner's
+ * slot too, with its `community_id`, and takes no buildings yet.
+ */
+const firstHome = and(isNotNull(tiles.homeSlot), isNull(tiles.communityId));
+
 function queries(db: Executor): BuildingsRepo {
   const selectBuildings = () =>
     db.select(buildingColumns).from(buildings).innerJoin(tiles, eq(tiles.id, buildings.tileId));
@@ -357,7 +365,7 @@ function queries(db: Executor): BuildingsRepo {
     db
       .select({ id: tiles.id, q: tiles.q, r: tiles.r, nodeResource: tiles.nodeResource })
       .from(tiles)
-      .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)))
+      .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), firstHome))
       .orderBy(asc(tiles.q), asc(tiles.r));
 
   return {
@@ -370,9 +378,7 @@ function queries(db: Executor): BuildingsRepo {
       const rows = await db
         .select({ id: tiles.id, q: tiles.q, r: tiles.r, nodeResource: tiles.nodeResource })
         .from(tiles)
-        .where(
-          and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)),
-        )
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), firstHome))
         .orderBy(asc(tiles.id))
         .for('no key update');
       return rows.sort((a, b) => a.q - b.q || a.r - b.r);
@@ -387,13 +393,14 @@ function queries(db: Executor): BuildingsRepo {
           nodeResource: tiles.nodeResource,
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
+          communityId: tiles.communityId,
         })
         .from(tiles)
         .where(
           and(
             eq(tiles.mapId, mapId),
             or(
-              and(eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)),
+              and(eq(tiles.ownerUserId, userId), firstHome),
               and(eq(tiles.q, target.q), eq(tiles.r, target.r)),
             ),
           ),
@@ -401,7 +408,7 @@ function queries(db: Executor): BuildingsRepo {
         .orderBy(asc(tiles.id))
         .for('no key update');
       const home = rows
-        .filter((t) => t.ownerUserId === userId && t.homeSlot !== null)
+        .filter((t) => t.ownerUserId === userId && t.homeSlot !== null && t.communityId === null)
         .map(({ id, q, r, nodeResource }) => ({ id, q, r, nodeResource }))
         .sort((a, b) => a.q - b.q || a.r - b.r);
       return { home, target: rows.find((t) => t.q === target.q && t.r === target.r) ?? null };
@@ -509,7 +516,15 @@ function queries(db: Executor): BuildingsRepo {
           tileExplore,
           and(eq(tileExplore.tileId, tiles.id), eq(tileExplore.userId, userId)),
         )
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId)))
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            eq(tiles.ownerUserId, userId),
+            // A won village's ring (#306 PR 3) takes no buildings yet, so the
+            // pass never moves one there.
+            or(isNull(tiles.homeSlot), isNull(tiles.communityId)),
+          ),
+        )
         .orderBy(asc(tiles.id)),
 
     gatherersOnTiles: async (mapId, userId, tileIds) => {

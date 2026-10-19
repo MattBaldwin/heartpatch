@@ -438,7 +438,10 @@ function queries(db: Executor): BattlesRepo {
           mapMembers,
           and(eq(mapMembers.mapId, tiles.mapId), eq(mapMembers.homeSlot, tiles.homeSlot)),
         )
-        .where(and(eq(tiles.mapId, mapId), eq(mapMembers.userId, userId))),
+        // The first home (#306 PR 3): a won village's ring shares the slot.
+        .where(
+          and(eq(tiles.mapId, mapId), eq(mapMembers.userId, userId), isNull(tiles.communityId)),
+        ),
 
     findBattle: (battleId) => one(eq(battles.id, battleId)),
 

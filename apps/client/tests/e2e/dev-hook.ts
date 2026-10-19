@@ -38,6 +38,7 @@ export type HookName =
   | 'jobs'
   | 'roster'
   | 'posts'
+  | 'communities'
   | 'journey'
   | 'trickOrTreat'
   | 'post'

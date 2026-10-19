@@ -105,6 +105,7 @@ const MESSAGES = {
   notYet: "That one isn't ready to build yet. Soon!",
   outOfSeason: (name: string, season: string) => `${name} can only be built around ${season}!`,
   notHome: 'You can only build on your home base.',
+  villageRing: 'Building in your village comes soon! Build at home for now 🏡',
   notHomestead: (name: string) =>
     `${name} go on a homestead 🏡. Explore all of a tile next to home to make one!`,
   homesteadNapping: 'This homestead is napping zZ. Join it back up to home first!',
@@ -360,6 +361,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     homestead: 'joined' | 'paused' | null = null,
   ): HomeTileRow {
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
+    // A won village's ring (#306 PR 3): home land, but it takes no buildings yet.
+    if (!homeTile && outer?.ownerUserId === userId && outer.homeSlot !== null) {
+      throw new AppError('FORBIDDEN', MESSAGES.villageRing);
+    }
     const mine = homeTile ?? (outer?.ownerUserId === userId ? outer : null);
     if (!mine) {
       if (building.placement === 'home') throw new AppError('FORBIDDEN', MESSAGES.notHome);

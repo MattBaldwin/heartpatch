@@ -164,7 +164,13 @@ export interface SquishyJobsRepo {
   /** The tiles the player owns. */
   listOwnedTiles: (mapId: string, userId: string) => Promise<JobTileRow[]>;
   /** Every home tile with an owner (whose fires protect what). */
-  homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
+  /**
+   * Every claimed home tile on the map, a won village's ring (#306 PR 3,
+   * `communityId` set) included: all of it is safe at night.
+   */
+  homeTiles: (
+    mapId: string,
+  ) => Promise<{ ownerUserId: string; q: number; r: number; communityId: string | null }[]>;
   tileAt: (mapId: string, q: number, r: number) => Promise<JobTileRow | null>;
   /** Locks tiles in id order (`FOR NO KEY UPDATE`) until commit; returns them. */
   lockTiles: (ids: readonly string[]) => Promise<JobTileRow[]>;
@@ -409,7 +415,12 @@ function queries(db: Executor): SquishyJobsRepo {
 
     homeTiles: async (mapId) => {
       const rows = await db
-        .select({ ownerUserId: tiles.ownerUserId, q: tiles.q, r: tiles.r })
+        .select({
+          ownerUserId: tiles.ownerUserId,
+          q: tiles.q,
+          r: tiles.r,
+          communityId: tiles.communityId,
+        })
         .from(tiles)
         .where(
           and(eq(tiles.mapId, mapId), isNotNull(tiles.homeSlot), isNotNull(tiles.ownerUserId)),

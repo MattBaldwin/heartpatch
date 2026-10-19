@@ -97,8 +97,8 @@ test('a grey village tile explores drained, with an echo, and a find colours it 
     );
     await expect(explore).toBeEnabled({ timeout: 5_000 });
   }).toPass(slow);
-  // Restoring waits for its own PR, and says so.
-  await expect(page.getByTestId('community-restore')).toBeDisabled();
+  // Restoring opens by day too (#306 PR 3).
+  await expect(page.getByTestId('community-restore')).toBeEnabled();
   await expect(page.getByTestId('community-block')).toContainText('Explore by day');
   await explore.tap();
 

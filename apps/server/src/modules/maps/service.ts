@@ -44,6 +44,7 @@ import { requireMember } from './members.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
+import { createCommunitiesRepo } from '../communities/repo.js';
 import { communitiesView, storeCommunities } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
@@ -341,6 +342,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         at,
       );
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
+      // A won village's ring goes back with the land, and its name with it
+      // (#306 PR 3, owner 2026-10-19): the village stays restored, ownerless.
+      // The community rows after the tiles `releaseTiles` holds (step 6).
+      await createCommunitiesRepo(tx).uproot(mapId, memberId);
       // Written here, before the buildings (tech spec §7 exception): the
       // member's own commands wait on the archive and the account lock above,
       // and every other writer of a guard or gatherer takes its tile first,

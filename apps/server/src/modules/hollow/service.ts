@@ -240,8 +240,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         repo.strengthPercent(map.id),
         createTendingRepo(tx).wildCounts(map.id, night),
       ]);
+    // Each Keeper's first home finds their Heart Seed: a won village's ring
+    // (#306 PR 3) is home tiles too, safe at night, but not where they sleep.
     const homes = new Map<string, { q: number; r: number }[]>();
-    for (const { ownerUserId, q, r } of homeTiles) {
+    for (const { ownerUserId, q, r, communityId } of homeTiles) {
+      if (communityId !== null) continue;
       homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
     }
     // Every home base, fresh land, and the land the fires lit for this night keep safe.
@@ -329,6 +332,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           t.ownerUserId === userId &&
           t.homeSlot === null &&
           !isTradingPost(t) &&
+          // A restored tile of a village still being restored stays put
+          // until contested tiles land (#306 PR 4): nothing could win it back.
+          t.communityId === null &&
           !safe.has(hexKey(t)) &&
           !cooling.has(t.id) &&
           (lightable === null || lightable.has(hexKey(t))),

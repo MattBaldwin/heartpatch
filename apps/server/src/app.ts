@@ -20,6 +20,8 @@ import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { buildingsRoutes } from './modules/buildings/routes.js';
 import { createBuildingsService } from './modules/buildings/service.js';
+import { communityRoutes } from './modules/communities/routes.js';
+import { createRestoreService } from './modules/communities/restore.js';
 import { exploreRoutes } from './modules/explore/routes.js';
 import { createExploreService } from './modules/explore/service.js';
 import { fencesRoutes } from './modules/fences/routes.js';
@@ -416,6 +418,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Exploring my land (#199).
         await api.register(
           exploreRoutes(createExploreService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Restoring and naming grey villages (#306 PR 3).
+        await api.register(
+          communityRoutes(createRestoreService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,

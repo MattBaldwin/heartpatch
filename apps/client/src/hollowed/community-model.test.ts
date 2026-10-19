@@ -1,4 +1,11 @@
-import { COMMUNITY_RULES, hexKey, type CommunityView } from '@heartpatch/shared';
+import {
+  COMMUNITY_RULES,
+  hexKey,
+  hexNeighbors,
+  type CommunityView,
+  type MapView,
+} from '@heartpatch/shared';
+import { findHomeBases } from '../map/map-layout.js';
 import { describe, expect, it } from 'vitest';
 import { describeTile } from '../map/tile-info.js';
 import { communityId, testView, userId } from '../map/test-view.js';
@@ -10,6 +17,7 @@ import {
   greyTiles,
   hollowedTileInfo,
   kindLine,
+  villageSeeds,
   villageSquares,
 } from './community-model.js';
 
@@ -178,5 +186,79 @@ describe('the map view’s villages', () => {
     if (!wild) throw new Error('no wild tile');
     const plain = describeTile(wild, () => undefined, userId(1));
     expect(hollowedTileInfo(plain, wild, view)).toBe(plain);
+  });
+});
+
+describe('a won village (#306 PR 3)', () => {
+  const view = testView(1);
+  const [first, ...rest] = view.communities ?? [];
+  if (!first) throw new Error('no village');
+  const ring = new Set([first.square, ...hexNeighbors(first.square)].map(hexKey));
+  /** Village one won by player 1: its ring is their home land, marked as the village's. */
+  const won: MapView = {
+    ...view,
+    tiles: view.tiles.map((t) =>
+      ring.has(hexKey(t)) && t.homeSlot === null
+        ? { ...t, ownerUserId: userId(1), homeSlot: 0, communityId: first.id }
+        : t,
+    ),
+    communities: [
+      { ...first, name: 'Bramble Glen', ownerUserId: userId(1), named: false },
+      ...rest,
+    ],
+  };
+  const square = won.tiles.find((t) => hexKey(t) === hexKey(first.square))!;
+  const ringTile = won.tiles.find(
+    (t) => ring.has(hexKey(t)) && hexKey(t) !== hexKey(first.square),
+  )!;
+
+  it('flies its name like a home, not the Hollowed flag', () => {
+    expect(communityFlagLabel(won.communities![0]!)).toBe('🏡 Bramble Glen');
+  });
+
+  it('heads its square as a second Heart Seed and its ring as part of that home', () => {
+    const seed = hollowedTileInfo(
+      describeTile(square, () => undefined, userId(1)),
+      square,
+      won,
+      userId(1),
+    );
+    expect(seed.title).toBe('Bramble Glen · Heart Seed 🌱');
+    expect(seed.owner).toBe(COMMUNITY_TEXT.mySeed);
+    const tile = hollowedTileInfo(
+      describeTile(ringTile, () => undefined, userId(1)),
+      ringTile,
+      won,
+      userId(1),
+    );
+    expect(tile.title).toMatch(/ · Bramble Glen 🏡$/);
+    expect(tile.owner).toBe(COMMUNITY_TEXT.myRing);
+    // Someone else sees whose village it is.
+    const theirs = hollowedTileInfo(
+      describeTile(square, () => undefined, userId(2)),
+      square,
+      won,
+      userId(2),
+    );
+    expect(theirs.owner).toBe(
+      `${won.members[0]!.user.username}'s village. Nobody can ever take it!`,
+    );
+  });
+
+  it('draws its square as a Heart Seed, and leaves my first home the only home base', () => {
+    expect(villageSeeds(won).map((c) => c.square)).toEqual([first.square]);
+    const homes = findHomeBases(won.tiles).filter((h) => h.seed.ownerUserId === userId(1));
+    expect(homes).toHaveLength(1);
+    expect(hexKey(homes[0]!.seed)).not.toBe(hexKey(first.square));
+  });
+
+  it('draws a tile restored on its own in colour again', () => {
+    const t = first.tiles[1]!;
+    const partly = {
+      ...view,
+      communities: [{ ...first, restored: 1, restoredTiles: [t] }, ...rest],
+    };
+    expect(greyTiles(partly).has(hexKey(t))).toBe(false);
+    expect(greyTiles(partly).has(hexKey(first.square))).toBe(true);
   });
 });

@@ -162,6 +162,8 @@ export interface PostPlacementTileRow {
   terrain: string;
   ownerUserId: string | null;
   homeSlot: number | null;
+  /** A grey village's tile, or a won village's ring (#306): its community. */
+  communityId: string | null;
   /**
    * Something still stands, works or battles here: a building, a fence, a
    * guard, a gatherer, an unfinished gather or an unfinished battle for it,
@@ -521,7 +523,12 @@ function queries(db: Executor): MapsRepo {
     },
 
     listHomeRingTiles: async (mapId, lock = false) => {
-      const where = and(eq(tiles.mapId, mapId), isNotNull(tiles.homeSlot));
+      // First homes only (#306 PR 3): a won village's ring keeps its own nodes.
+      const where = and(
+        eq(tiles.mapId, mapId),
+        isNotNull(tiles.homeSlot),
+        isNull(tiles.communityId),
+      );
       if (lock) {
         await db
           .select({ id: tiles.id })
@@ -613,6 +620,7 @@ function queries(db: Executor): MapsRepo {
           terrain: tiles.terrain,
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
+          communityId: tiles.communityId,
           busy: sql<boolean>`(
             ${tiles}.community_id is not null
             or exists (select 1 from ${buildings} b where b.tile_id = ${tiles}.id)
@@ -740,7 +748,8 @@ function queries(db: Executor): MapsRepo {
       db
         .update(tiles)
         .set({ ownerUserId: userId })
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.homeSlot, homeSlot)))
+        // The seat's first home only, never a won village's ring (#306 PR 3).
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.homeSlot, homeSlot), isNull(tiles.communityId)))
         .returning({ q: tiles.q, r: tiles.r }),
 
     releaseTiles: async (mapId, userId) => {

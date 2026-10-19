@@ -155,6 +155,8 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     const free = (t: (typeof all)[number], d: number) =>
       t.ownerUserId === null &&
       t.homeSlot === null &&
+      // Not a grey village's tile (#306): won by restoring, and it never fades.
+      t.communityId === null &&
       t.terrain !== 'junipers-gap' &&
       (!terrains || terrains.includes(t.terrain)) &&
       hexDistance(t, seed) === d;
@@ -514,7 +516,13 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     // The friend's land, far from the kid's home (no home ring of their own here).
     const all = await tilesOf(mapId);
     const theirs = all
-      .filter((t) => t.ownerUserId === null && t.homeSlot === null && t.terrain !== 'junipers-gap')
+      .filter(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          t.communityId === null &&
+          t.terrain !== 'junipers-gap',
+      )
       .slice(-3);
     for (const t of theirs) await setOwner(t.id, friend.id);
     const land = createLandTending({ db, clock: () => clock });

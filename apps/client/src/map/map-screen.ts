@@ -334,7 +334,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d?.select(h);
     // A Hollowed village's tile says so in its head (#306).
     const show = (info: TileInfo): void => {
-      panel.show(hollowedTileInfo(info, tile, state.view));
+      panel.show(hollowedTileInfo(info, tile, state.view, user?.id ?? null));
     };
     show(
       describeTile(

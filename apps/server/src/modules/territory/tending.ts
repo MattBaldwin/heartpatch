@@ -69,10 +69,13 @@ const quiet = (at: Date): LandTending => ({
   now: at.toISOString(),
 });
 
-/** Each owner's Heart Seed, from the map's home tiles. */
-function heartSeeds(homeTiles: readonly { ownerUserId: string; q: number; r: number }[]) {
+/** Each owner's Heart Seed, from the map's home tiles (their first home's: #306 PR 3). */
+function heartSeeds(
+  homeTiles: readonly { ownerUserId: string; q: number; r: number; communityId: string | null }[],
+) {
   const homes = new Map<string, Hex[]>();
-  for (const { ownerUserId, q, r } of homeTiles) {
+  for (const { ownerUserId, q, r, communityId } of homeTiles) {
+    if (communityId !== null) continue;
     homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
   }
   return new Map([...homes].map(([owner, tiles]) => [owner, heartSeedOf(tiles)]));
