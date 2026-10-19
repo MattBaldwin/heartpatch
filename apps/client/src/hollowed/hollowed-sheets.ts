@@ -14,9 +14,32 @@ export interface HollowedSheets {
   openRename(c: HollowedCluster): void;
   openKeyMap(c: HollowedCluster): void;
   openHomeName(keeperName: string, onNamed: (name: string) => void): void;
+  /** The gate (owner decision 2026-10-19): one of each building and 10 squishies caught. */
+  openHomeNameLocked(progress: NamingProgress): void;
   close(): void;
   readonly open: 'restore' | 'rename' | 'keymap' | 'homename' | null;
 }
+
+/** Naming progress as the home sheet's read reports it (PR 0). */
+export interface NamingProgress {
+  /** Every buildable kind (`HOME_BASE_RULES.buildableKinds`) with its name, and whether one was ever built. */
+  readonly kinds: readonly { readonly name: string; readonly built: boolean }[];
+  readonly caught: number;
+  readonly caughtNeed: number;
+}
+
+/** The mockup's naming progress: three kinds up, seven squishies caught. */
+export const MOCK_NAMING_PROGRESS: NamingProgress = {
+  kinds: [
+    { name: 'Hearthfire', built: true },
+    { name: 'Habitat', built: true },
+    { name: 'Training Grounds', built: true },
+    { name: 'Fence', built: false },
+    { name: 'Factory', built: false },
+  ],
+  caught: 7,
+  caughtNeed: 10,
+};
 
 /** The mockup's broken buildings on the doorstep tile and their pieces. TUNE. */
 const PIECES = [
@@ -162,13 +185,34 @@ export function mountHollowedSheets(root: HTMLElement): HollowedSheets {
         close();
       });
       sheet.replaceChildren(
-        el('p', { class: 'explore-card-progress' }, 'YOUR HOME'),
+        el('p', { class: 'explore-card-progress' }, 'YOUR HOME · UNLOCKED ✨'),
         el('h3', { class: 'explore-sheet-title', id: 'hollowed-sheet-title' }, 'Name your home 🏡'),
-        el('p', { class: 'explore-card-line' }, 'Every Keeper\'s home has a name. What\'s yours called?'),
+        el('p', { class: 'explore-card-line' }, 'One of each built and 10 squishies caught. What\'s your home called?'),
         el('label', { class: 'hollowed-label', for: 'hollowed-home-name' }, 'Home name'),
         input,
         el('div', { class: 'hollowed-chips', role: 'group', 'aria-label': 'Name ideas' }, ...chips),
-        el('p', { class: 'hollowed-note' }, 'Tap an idea, or type your own. Up to 16 letters; you can rename it once a day.'),
+        el('p', { class: 'hollowed-note' }, 'Tap an idea, or type your own. Up to 16 letters. Pick a new name whenever your Heart Seed grows!'),
+        go,
+      );
+      sheet.hidden = false;
+    },
+    openHomeNameLocked: (progress) => {
+      open = 'homename';
+      const built = progress.kinds.filter((k) => k.built).length;
+      const kinds = progress.kinds.map((k) =>
+        el('li', { class: `hollowed-kind${k.built ? ' done' : ''}` }, `${k.built ? '✓' : '○'} ${k.name}`),
+      );
+      const go = el('button', { type: 'button', class: 'auth-button hollowed-primary', 'data-testid': 'hollowed-keep-going' }, 'Keep going! 💪');
+      go.addEventListener('click', close);
+      sheet.replaceChildren(
+        el('p', { class: 'explore-card-progress' }, 'YOUR HOME · LOCKED 🔒'),
+        el('h3', { class: 'explore-sheet-title', id: 'hollowed-sheet-title' }, 'Name your home 🔒'),
+        el('p', { class: 'explore-card-line' }, 'Build one of each and catch 10 squishies to name your home!'),
+        el('p', { class: 'hollowed-label' }, `Buildings: ${String(built)} of ${String(progress.kinds.length)} kinds built`),
+        el('ul', { class: 'hollowed-kinds', 'data-testid': 'hollowed-kinds' }, ...kinds),
+        el('p', { class: 'hollowed-label' }, `Squishies caught: ${String(progress.caught)} of ${String(progress.caughtNeed)}`),
+        meter(progress.caught, progress.caughtNeed),
+        el('p', { class: 'hollowed-note' }, 'Caught means won in a battle. Your starter and gifts don\'t count, but they still love you.'),
         go,
       );
       sheet.hidden = false;

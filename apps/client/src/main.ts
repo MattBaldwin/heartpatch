@@ -21,7 +21,7 @@ import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHollowedFlags, setHomeName } from './hollowed/hollowed-flags.js';
-import { mountHollowedSheets } from './hollowed/hollowed-sheets.js';
+import { MOCK_NAMING_PROGRESS, mountHollowedSheets } from './hollowed/hollowed-sheets.js';
 import {
   hollowedAt,
   hollowedClusters,
@@ -920,6 +920,11 @@ const maps = createMapScreen({
     hudMapId = mapId;
     // PROTOTYPE (#306 plan): the claim-and-rename moment over the restored village.
     const show = hollowedPreview()?.show;
+    if (mapId !== null && show === 'homename-locked') {
+      setTimeout(() => {
+        hollowedSheets.openHomeNameLocked(MOCK_NAMING_PROGRESS);
+      }, 1200);
+    }
     if (mapId !== null && show === 'homename') {
       setTimeout(() => {
         // A friendly first name for the mock (e2e usernames are generated).

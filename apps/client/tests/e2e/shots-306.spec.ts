@@ -12,6 +12,8 @@ import { realTapAt } from './touch.js';
 
 const OUT = process.env['HP_SHOTS_DIR'] ?? '/tmp/shots';
 const slow = { timeout: 120_000 };
+/** `HP_SHOTS_FROM=restored` skips the grey and explore captures (v3 reshoots the restored ones only). */
+const FROM_RESTORED = process.env['HP_SHOTS_FROM'] === 'restored';
 
 type Cluster = { id: string; centre: { q: number; r: number }; tiles: { q: number; r: number }[] };
 type Hollowed = {
@@ -154,80 +156,84 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await waitMap(page);
   const mapId = (await mapState(page))!.id;
 
-  // Baseline: today's explore of the Heart Seed, for the draw-call comparison.
-  await reopen(page, 'fps=0&tier=high');
-  const mapBaseline = await mapState(page);
-  const box = (await page.locator('#game').boundingBox())!;
-  await expect(async () => {
-    if ((await mapState(page))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
-    }
-    await expect(page.getByTestId('tile-explore')).toBeVisible({ timeout: 5_000 });
-  }).toPass(slow);
-  await page.getByTestId('tile-explore').tap();
-  await waitExplore(page);
-  const baseline = await exploreStats(page);
-  await shot(page, 'explore-today', { baseline });
-  await leaveExplore(page);
-
-  // The grey community on the map.
-  await reopen(page, 'hollowed=grey&fps=0&tier=high');
-  const clusters = (await call<Cluster[]>(page, 'clusters')) ?? [];
-  expect(clusters.length).toBeGreaterThan(0);
-  const near = clusters.find((c) => c.id === 'near')!;
-  await look(page, 'both', 9);
-  await shot(page, 'map-grey-wide', { map: await mapState(page), mapBaseline: { drawCalls: mapBaseline?.drawCalls, triangles: mapBaseline?.activeTriangles } });
-  await look(page, 'near', 5);
-  await shot(page, 'map-grey-near', { map: await mapState(page) });
-
-  // The tile panel and the restore sheet.
-  const nearTiles = [near.centre, ...near.tiles.filter((t) => t.q !== near.centre.q || t.r !== near.centre.r)];
-  await tapTile(page, nearTiles);
-  await settle(page, 800);
-  await shot(page, 'panel-hollowed');
-  await page.getByTestId('hollowed-restore-open').tap();
-  await expect(page.getByTestId('hollowed-sheet')).toBeVisible();
-  await settle(page, 600);
-  await shot(page, 'restore-sheet');
-  await page.getByTestId('hollowed-not-now').tap();
-  await expect(page.getByTestId('hollowed-sheet')).toBeHidden();
-  // Close the panel so nothing sits over the map while explore opens.
-  await page.getByRole('button', { name: 'Close', exact: true }).first().tap().catch(() => {});
-
-  // Explore: grey, then sparks, an echo and the puzzle.
-  // Explore opens straight from the dev hook (what the panel's Explore does), so no map tap is needed.
-  const openExplore = async (show: string | null) => {
-    console.log(`STEP explore ${String(show)}`);
-    await call(page, 'show', show);
-    await call(page, 'explore', near.centre.q, near.centre.r);
+  if (!FROM_RESTORED) {
+    // Baseline: today's explore of the Heart Seed, for the draw-call comparison.
+    await reopen(page, 'fps=0&tier=high');
+    const mapBaseline = await mapState(page);
+    const box = (await page.locator('#game').boundingBox())!;
+    await expect(async () => {
+      if ((await mapState(page))?.selected == null) {
+        await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      }
+      await expect(page.getByTestId('tile-explore')).toBeVisible({ timeout: 5_000 });
+    }).toPass(slow);
+    await page.getByTestId('tile-explore').tap();
     await waitExplore(page);
-  };
-  await openExplore(null);
-  await shot(page, 'explore-grey', { stats: await exploreStats(page) });
-  await leaveExplore(page);
-  await openExplore('sparks');
-  await shot(page, 'explore-sparks', { stats: await exploreStats(page) });
-  await leaveExplore(page);
-  await openExplore('echo');
-  await shot(page, 'explore-echo', { stats: await exploreStats(page) });
-  await leaveExplore(page);
-  await openExplore('puzzle');
-  await shot(page, 'explore-puzzle', { stats: await exploreStats(page) });
-  await leaveExplore(page);
+    const baseline = await exploreStats(page);
+    await shot(page, 'explore-today', { baseline });
+    await leaveExplore(page);
 
-  // The hidden cellar: the cave kit on a hills homestead, lantern-lit.
-  console.log('STEP cellar');
-  const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`, { terrain: 'hills' });
-  expect(made.status).toBe(201);
-  await call(page, 'show', 'cellar');
-  await call(page, 'explore', made.body!.q, made.body!.r);
-  await waitExplore(page);
-  await shot(page, 'explore-cellar', { stats: await exploreStats(page) });
-  await leaveExplore(page);
+    // The grey community on the map.
+    await reopen(page, 'hollowed=grey&fps=0&tier=high');
+    const clusters = (await call<Cluster[]>(page, 'clusters')) ?? [];
+    expect(clusters.length).toBeGreaterThan(0);
+    const near = clusters.find((c) => c.id === 'near')!;
+    await look(page, 'both', 9);
+    await shot(page, 'map-grey-wide', { map: await mapState(page), mapBaseline: { drawCalls: mapBaseline?.drawCalls, triangles: mapBaseline?.activeTriangles } });
+    await look(page, 'near', 5);
+    await shot(page, 'map-grey-near', { map: await mapState(page) });
+
+    // The tile panel and the restore sheet.
+    const nearTiles = [near.centre, ...near.tiles.filter((t) => t.q !== near.centre.q || t.r !== near.centre.r)];
+    await tapTile(page, nearTiles);
+    await settle(page, 800);
+    await shot(page, 'panel-hollowed');
+    await page.getByTestId('hollowed-restore-open').tap();
+    await expect(page.getByTestId('hollowed-sheet')).toBeVisible();
+    await settle(page, 600);
+    await shot(page, 'restore-sheet');
+    await page.getByTestId('hollowed-not-now').tap();
+    await expect(page.getByTestId('hollowed-sheet')).toBeHidden();
+    // Close the panel so nothing sits over the map while explore opens.
+    await page.getByRole('button', { name: 'Close', exact: true }).first().tap().catch(() => {});
+
+    // Explore: grey, then sparks, an echo and the puzzle.
+    // Explore opens straight from the dev hook (what the panel's Explore does), so no map tap is needed.
+    const openExplore = async (show: string | null) => {
+      console.log(`STEP explore ${String(show)}`);
+      await call(page, 'show', show);
+      await call(page, 'explore', near.centre.q, near.centre.r);
+      await waitExplore(page);
+    };
+    await openExplore(null);
+    await shot(page, 'explore-grey', { stats: await exploreStats(page) });
+    await leaveExplore(page);
+    await openExplore('sparks');
+    await shot(page, 'explore-sparks', { stats: await exploreStats(page) });
+    await leaveExplore(page);
+    await openExplore('echo');
+    await shot(page, 'explore-echo', { stats: await exploreStats(page) });
+    await leaveExplore(page);
+    await openExplore('puzzle');
+    await shot(page, 'explore-puzzle', { stats: await exploreStats(page) });
+    await leaveExplore(page);
+
+    // The hidden cellar: the cave kit on a hills homestead, lantern-lit.
+    console.log('STEP cellar');
+    const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`, { terrain: 'hills' });
+    expect(made.status).toBe(201);
+    await call(page, 'show', 'cellar');
+    await call(page, 'explore', made.body!.q, made.body!.r);
+    await waitExplore(page);
+    await shot(page, 'explore-cellar', { stats: await exploreStats(page) });
+    await leaveExplore(page);
+  }
 
   // Restored: the claim-and-rename moment, then the village joined to my land.
   console.log('STEP restored');
   await reopen(page, 'hollowed=restored&show=rename&fps=0&tier=high');
+  const near = ((await call<Cluster[]>(page, 'clusters')) ?? []).find((c) => c.id === 'near')!;
+  const nearTiles = [near.centre, ...near.tiles.filter((t) => t.q !== near.centre.q || t.r !== near.centre.r)];
   await look(page, 'near', 5);
   await expect(page.getByTestId('hollowed-sheet')).toBeVisible(slow);
   await settle(page, 2000);
@@ -235,6 +241,12 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await call(page, 'closeSheets');
   await settle(page, 1200);
   await shot(page, 'map-restored', { map: await mapState(page) });
+  // Owner decision 2026-10-19: the village seed and its 6 neighbours are the winner's home ring.
+  await look(page, 'near', 3.2);
+  await settle(page, 800);
+  await shot(page, 'map-ring', { map: await mapState(page) });
+  await look(page, 'near', 5);
+  await settle(page, 400);
   // The village's own Heart Seed (owner decision, Q3), then an ordinary village tile.
   await tapTile(page, [near.centre]);
   await settle(page, 800);

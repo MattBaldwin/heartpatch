@@ -21,7 +21,17 @@ import { findHomeBases } from '../map/map-layout.js';
  */
 
 export type HollowedMode = 'grey' | 'restored';
-export type HollowedShow = 'sparks' | 'echo' | 'puzzle' | 'cellar' | 'rename' | 'restore' | 'keymap' | 'homename' | null;
+export type HollowedShow =
+  | 'sparks'
+  | 'echo'
+  | 'puzzle'
+  | 'cellar'
+  | 'rename'
+  | 'restore'
+  | 'keymap'
+  | 'homename'
+  | 'homename-locked'
+  | null;
 
 export interface HollowedPreview {
   readonly mode: HollowedMode;
@@ -32,8 +42,17 @@ export interface HollowedCluster {
   readonly id: 'near' | 'far';
   readonly name: string;
   readonly restoredName: string;
+  /** The village's tiles: its seed tile plus 3–6 of the seed's neighbours (owner decision 2026-10-19). */
   readonly tiles: readonly Hex[];
+  /** The village seed tile (the square). */
   readonly centre: Hex;
+  /**
+   * The home ring the winner gets at full restoration (owner decision
+   * 2026-10-19): the seed and its 6 neighbours. `grounds` are the ring tiles
+   * that aren't village tiles; wild land until then.
+   */
+  readonly ring: readonly Hex[];
+  readonly grounds: readonly Hex[];
   /** Tiles restored so far, of `tiles.length`. */
   readonly restored: number;
   /** My connected land touches it (the trading-post reach rule), else the steps from my nearest land. */
@@ -44,7 +63,7 @@ export interface HollowedCluster {
   readonly keyTile: Hex | null;
 }
 
-const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore', 'keymap', 'homename'];
+const SHOWS: readonly string[] = ['sparks', 'echo', 'puzzle', 'cellar', 'rename', 'restore', 'keymap', 'homename', 'homename-locked'];
 
 export function readHollowedPreview(params: URLSearchParams): HollowedPreview | null {
   const mode = params.get('hollowed');
@@ -76,41 +95,27 @@ const wild = (t: PublicTile): boolean =>
   t.terrain !== 'clearing' &&
   !isTradingPost(t);
 
-/** Grows a cluster of `size` wild tiles from `start`, nearest `anchor` first. */
-function grow(start: Hex, size: number, tiles: Map<HexKey, PublicTile>, anchor: Hex): Hex[] {
-  const picked: Hex[] = [start];
-  const have = new Set([hexKey(start)]);
-  while (picked.length < size) {
-    const options: Hex[] = [];
-    for (const p of picked) {
-      for (const n of hexNeighbors(p)) {
-        const key = hexKey(n);
-        const t = tiles.get(key);
-        if (!t || have.has(key) || !wild(t)) continue;
-        options.push(n);
-      }
-    }
-    if (options.length === 0) break;
-    // Compact: the option touching the most picked tiles, then nearest the anchor.
-    options.sort((a, b) => {
-      const ta = hexNeighbors(a).filter((n) => have.has(hexKey(n))).length;
-      const tb = hexNeighbors(b).filter((n) => have.has(hexKey(n))).length;
-      return tb - ta || hexDistance(a, anchor) - hexDistance(b, anchor) || a.q - b.q || a.r - b.r;
-    });
-    const next = options[0] as Hex;
-    picked.push(next);
-    have.add(hexKey(next));
-  }
-  return picked;
+/** A village seed candidate: wild, with all 6 neighbours on the map and wild (a whole ring fits). */
+function ringFits(seed: Hex, tiles: Map<HexKey, PublicTile>): boolean {
+  return hexNeighbors(seed).every((n) => {
+    const t = tiles.get(hexKey(n));
+    return t !== undefined && wild(t);
+  });
 }
 
-function centreOf(tiles: readonly Hex[]): Hex {
-  // The tile nearest the mean.
-  const mq = tiles.reduce((s, t) => s + t.q, 0) / tiles.length;
-  const mr = tiles.reduce((s, t) => s + t.r, 0) / tiles.length;
-  return [...tiles].sort(
-    (a, b) => Math.hypot(a.q - mq, a.r - mr) - Math.hypot(b.q - mq, b.r - mr),
-  )[0] as Hex;
+/**
+ * A village on `seed`: the seed plus `size - 1` of its neighbours, nearest
+ * `anchor` first (so the near village's tiles face my home and touch my
+ * land, the reach rule the grey captures show).
+ */
+function village(seed: Hex, size: number, anchor: Hex): { tiles: Hex[]; ring: Hex[]; grounds: Hex[] } {
+  const ring = [seed, ...hexNeighbors(seed)];
+  const picked = hexNeighbors(seed)
+    .sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor) || a.q - b.q || a.r - b.r)
+    .slice(0, Math.max(0, Math.min(6, size - 1)));
+  const tiles = [seed, ...picked];
+  const have = new Set(tiles.map(hexKey));
+  return { tiles, ring, grounds: ring.filter((h) => !have.has(hexKey(h))) };
 }
 
 function compute(view: MapView, me: string | null): HollowedCluster[] {
@@ -124,27 +129,29 @@ function compute(view: MapView, me: string | null): HollowedCluster[] {
   const touches = (h: Hex) => hexNeighbors(h).some((n) => connected.has(hexKey(n)));
   const distanceFromLand = (h: Hex) =>
     Math.min(...view.tiles.filter((t) => t.ownerUserId === me).map((t) => hexDistance(t, h)));
+  const wildAround = (h: Hex) =>
+    hexNeighbors(h).filter((n) => {
+      const t = tiles.get(hexKey(n));
+      return t !== undefined && wild(t);
+    }).length;
 
-  // Near: a wild tile touching my home ring with the most wild neighbours.
-  const doorsteps = view.tiles
-    .filter((t) => wild(t) && hexDistance(t, seed) === 2)
-    .sort((a, b) => {
-      const wa = hexNeighbors(a).filter((n) => tiles.get(hexKey(n)) && wild(tiles.get(hexKey(n)) as PublicTile)).length;
-      const wb = hexNeighbors(b).filter((n) => tiles.get(hexKey(n)) && wild(tiles.get(hexKey(n)) as PublicTile)).length;
-      return wb - wa || a.q - b.q || a.r - b.r;
-    });
+  // Near: a village seed 3 steps from my Heart Seed (its ring never shares a tile
+  // with mine, and its tiles nearest home touch my home ring), whole ring wild.
+  const nearSeed = view.tiles
+    .filter((t) => wild(t) && hexDistance(t, seed) === 3 && ringFits(t, tiles))
+    .sort((a, b) => wildAround(b) - wildAround(a) || a.q - b.q || a.r - b.r)[0];
   const clusters: HollowedCluster[] = [];
-  const nearStart = doorsteps[0];
   const joined = preview?.mode === 'restored';
   let nearTiles: Hex[] = [];
-  if (nearStart) {
-    nearTiles = grow(nearStart, NEAR.size, tiles, seed);
-    // The key tile: wild, 2 steps from the village's edge, furthest from home.
-    const inVillage = new Set(nearTiles.map(hexKey));
+  if (nearSeed) {
+    const v = village(nearSeed, NEAR.size, seed);
+    nearTiles = v.tiles;
+    // The key tile: wild, outside the ring, 2 steps from the village's edge, furthest from home.
+    const inRing = new Set(v.ring.map(hexKey));
     const keyTile =
       view.tiles
-        .filter((t) => wild(t) && !inVillage.has(hexKey(t)))
-        .filter((t) => Math.min(...nearTiles.map((v) => hexDistance(v, t))) === 2)
+        .filter((t) => wild(t) && !inRing.has(hexKey(t)))
+        .filter((t) => Math.min(...nearTiles.map((x) => hexDistance(x, t))) === 2)
         .sort((a, b) => hexDistance(b, seed) - hexDistance(a, seed) || a.q - b.q || a.r - b.r)[0] ?? null;
     clusters.push({
       keyTile: keyTile ? { q: keyTile.q, r: keyTile.r } : null,
@@ -152,28 +159,32 @@ function compute(view: MapView, me: string | null): HollowedCluster[] {
       name: NEAR.name,
       restoredName: NEAR.restoredName,
       tiles: nearTiles,
-      centre: centreOf(nearTiles),
+      centre: nearSeed,
+      ring: v.ring,
+      grounds: v.grounds,
       restored: joined ? NEAR.size : NEAR.restored,
       reach: nearTiles.some(touches) ? { kind: 'touching' } : { kind: 'away', distance: Math.min(...nearTiles.map(distanceFromLand)) },
       joined,
     });
   }
-  // Far: a wild tile about 6 steps out, furthest from the near cluster.
-  const nearCentre = nearTiles.length > 0 ? centreOf(nearTiles) : seed;
-  const farStart = view.tiles
-    .filter((t) => wild(t) && hexDistance(t, seed) === 6 && hexDistance(t, { q: 0, r: 0 }) > 2)
+  // Far: a village seed about 6 steps out, furthest from the near village, whole ring wild.
+  const nearCentre = nearSeed ?? seed;
+  const farSeed = view.tiles
+    .filter((t) => wild(t) && hexDistance(t, seed) === 6 && hexDistance(t, { q: 0, r: 0 }) > 2 && ringFits(t, tiles))
     .sort((a, b) => hexDistance(b, nearCentre) - hexDistance(a, nearCentre) || a.q - b.q || a.r - b.r)[0];
-  if (farStart) {
-    const farTiles = grow(farStart, FAR.size, tiles, seed);
+  if (farSeed) {
+    const v = village(farSeed, FAR.size, seed);
     clusters.push({
       keyTile: null,
       id: 'far',
       name: FAR.name,
       restoredName: FAR.restoredName,
-      tiles: farTiles,
-      centre: centreOf(farTiles),
+      tiles: v.tiles,
+      centre: farSeed,
+      ring: v.ring,
+      grounds: v.grounds,
       restored: FAR.restored,
-      reach: farTiles.some(touches) ? { kind: 'touching' } : { kind: 'away', distance: Math.min(...farTiles.map(distanceFromLand)) },
+      reach: v.tiles.some(touches) ? { kind: 'touching' } : { kind: 'away', distance: Math.min(...v.tiles.map(distanceFromLand)) },
       joined: false,
     });
   }
@@ -210,15 +221,29 @@ export function hollowedGrey(key: HexKey): boolean {
 export function previewView(view: MapView, me: string | null): MapView {
   if (!preview) return view;
   const clusters = hollowedClusters(view, me);
-  const joined = new Set(clusters.filter((c) => c.joined).flatMap((c) => c.tiles.map(hexKey)));
-  if (joined.size === 0 || me === null) return view;
+  const won = clusters.filter((c) => c.joined);
+  if (won.length === 0 || me === null) return view;
+  const slot = view.members.find((m) => m.user.id === me)?.homeSlot ?? null;
+  if (slot === null) return view;
+  const villages = new Set(won.flatMap((c) => c.tiles.map(hexKey)));
+  const ring = new Set(won.flatMap((c) => c.ring.map(hexKey)));
+  // Owner decision 2026-10-19: the seed and its 6 neighbours are the winner's
+  // home tiles (`home_slot`), so the map draws them as home land itself and
+  // finds the village seed the way it finds the first one.
   return {
     ...view,
-    tiles: view.tiles.map((t) =>
-      joined.has(hexKey(t))
-        ? { ...t, ownerUserId: me, guardianHint: null, explored: true, homestead: 'joined' as const }
-        : t,
-    ),
+    tiles: view.tiles.map((t) => {
+      const key = hexKey(t);
+      if (!ring.has(key)) return t;
+      return {
+        ...t,
+        ownerUserId: me,
+        homeSlot: slot,
+        guardianHint: null,
+        explored: villages.has(key) ? true : t.explored,
+        homestead: null,
+      };
+    }),
   };
 }
 
@@ -241,19 +266,19 @@ export function hollowedPanel(c: HollowedCluster, terrainName: string, at?: Hex)
   reach: string;
 } {
   if (c.joined && at && at.q === c.centre.q && at.r === c.centre.r) {
-    // Owner decision (Q3): the won village gets its own Heart Seed on its centre tile.
+    // Owner decisions (Q3, 2026-10-18/19): the won village gets its own Heart Seed and a home ring.
     return {
       title: `${c.restoredName} · Heart Seed 🌱`,
-      owner: 'Your second home. Always safe at night, and nobody can ever take it!',
-      about: 'A Heart Seed planted in the village square. The land around it is yours, linked to home.',
-      reach: '🏡 Linked to your home, but its own little community.',
+      owner: 'Your second home! Safe at night, and nobody can ever take it.',
+      about: 'The village seed. It and the 6 tiles around it are yours for keeps.',
+      reach: '🏡 Linked to home: your land joins up through here too.',
     };
   }
   if (c.joined) {
     return {
       title: `${terrainName} · ${c.restoredName} 🏡`,
-      owner: 'Your land. Part of a village you brought back!',
-      about: 'Part of your second community. Outside the village square it needs fire light at night, like any land.',
+      owner: 'Your home ring here. Safe at night, never fades, never taken!',
+      about: 'Part of your second home.',
       reach: '🔗 Joined to your land.',
     };
   }

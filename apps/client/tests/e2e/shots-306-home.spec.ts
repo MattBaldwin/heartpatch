@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { draws, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
-/* PROTOTYPE (#306 plan v2): naming your home, two captures. Run with shots-306.config.ts. */
+/* PROTOTYPE (#306 plan v3): naming your home, locked and unlocked, three captures. Run with shots-306.config.ts. */
 
 const OUT = process.env['HP_SHOTS_DIR'] ?? '/tmp/shots';
 const slow = { timeout: 120_000 };
@@ -31,14 +31,21 @@ test('home naming captures', async ({ browser }) => {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden(slow);
   await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
-  await page.goto('/?hollowed=grey&show=homename&fps=0&tier=high');
-  await expect.poll(async () => (await mapState(page))?.tiles ?? 0, slow).toBe(817);
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
-  // The hint can sit under the opening card on a short phone: a quick, forced tap, or skip it.
-  const gotIt = page.getByRole('button', { name: 'Got it!' });
-  if (await gotIt.isVisible()) await gotIt.tap({ timeout: 5_000, force: true }).catch(() => {});
-  await expect(page.getByTestId('hollowed-sheet')).toBeVisible(slow);
-  await page.waitForTimeout(2000);
+  const open = async (show: string) => {
+    await page.goto(`/?hollowed=grey&show=${show}&fps=0&tier=high`);
+    await expect.poll(async () => (await mapState(page))?.tiles ?? 0, slow).toBe(817);
+    await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
+    // The hint can sit under the opening card on a short phone: a quick, forced tap, or skip it.
+    const gotIt = page.getByRole('button', { name: 'Got it!' });
+    if (await gotIt.isVisible()) await gotIt.tap({ timeout: 5_000, force: true }).catch(() => {});
+    await expect(page.getByTestId('hollowed-sheet')).toBeVisible(slow);
+    await page.waitForTimeout(2000);
+  };
+  // Owner decision 2026-10-19: naming is gated by progression. The locked card first.
+  await open('homename-locked');
+  await shot(page, 'home-name-locked');
+  await page.getByTestId('hollowed-keep-going').tap();
+  await open('homename');
   await shot(page, 'home-name-card');
   await page.getByTestId('hollowed-name-it').tap();
   const before = await draws(page);
