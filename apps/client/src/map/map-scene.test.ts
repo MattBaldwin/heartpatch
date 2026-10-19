@@ -189,6 +189,44 @@ describe('MapScene', () => {
     expect(enabled()).toBe(before.enabled);
   });
 
+  it('draws a ring back as plain land when its winner leaves (#306 PR 3)', () => {
+    const view = testView(1);
+    const [village, ...rest] = view.communities ?? [];
+    if (!village) throw new Error('no village');
+    const { scene, map } = build(view);
+    const before = {
+      muted: map.stats.mutedTiles,
+      grey: map.stats.hollowedTiles,
+      meshes: scene.meshes.length,
+    };
+    const ring = new Set([village.square, ...hexNeighbors(village.square)].map(hexKey));
+    const won: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) =>
+        ring.has(hexKey(t)) && t.homeSlot === null
+          ? { ...t, ownerUserId: userId(1), homeSlot: 0, communityId: village.id }
+          : t,
+      ),
+      communities: [{ ...village, ownerUserId: userId(1), named: false }, ...rest],
+    };
+    map.update(won);
+    expect(map.stats.mutedTiles).toBeLessThan(before.muted);
+    // The winner left: the ring is wild land again (the village stays, restored).
+    map.update({
+      ...view,
+      communities: [
+        { ...village, restored: village.tiles.length, restoredTiles: village.tiles },
+        ...rest,
+      ],
+    });
+    expect(map.stats.mutedTiles).toBe(before.muted);
+    expect(scene.meshes.length).toBe(before.meshes);
+    // Won back: home again, with no new instance.
+    map.update(won);
+    expect(map.stats.mutedTiles).toBeLessThan(before.muted);
+    expect(before.grey).toBeGreaterThan(0);
+  });
+
   it('keeps the triangles drawn near what the map drew before its dressing', () => {
     // About 570k on this 4-player map before the terrain visual pass; small
     // parts use few segments so twice the props cost about a fifth more.

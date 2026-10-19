@@ -287,6 +287,8 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
             })),
           );
           const slot = (await createMapsRepo(tx).membership(mapId, user.id))?.homeSlot ?? null;
+          // Every seated member has a slot; a member without one (none on a
+          // patch today) claims the tile but plants no ring.
           if (winner === user.id && slot !== null) {
             outcome = 'village';
             const [name = community.name] = restoredNameIdeas(

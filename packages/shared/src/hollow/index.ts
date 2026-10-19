@@ -57,7 +57,6 @@ export function minutesUntilNightChange(
   return Math.max(1, (next ?? local.minute + 1) - local.minute);
 }
 
-/** The Heart Seed: the middle of a home base (the mean of its seven tiles), or null. */
 /**
  * A map's first homes (#306 PR 3): every home tile but a won village's
  * ring, which carries its winner's slot too, marked with the village's
@@ -70,6 +69,7 @@ export function firstHomeTiles<T extends { homeSlot: number | null; communityId:
   return tiles.filter((t) => t.homeSlot !== null && t.communityId === null);
 }
 
+/** The Heart Seed: the middle of a home base (the mean of its seven tiles), or null. */
 export function heartSeedOf(homeTiles: readonly Hex[]): Hex | null {
   if (homeTiles.length === 0) return null;
   const q = homeTiles.reduce((sum, t) => sum + t.q, 0) / homeTiles.length;

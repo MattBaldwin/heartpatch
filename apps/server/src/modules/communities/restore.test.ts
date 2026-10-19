@@ -297,7 +297,9 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const me = await player();
     const rival = await player();
     const mapId = await patch(server, me, [rival]);
-    const { communityId, square, village } = await reachVillage(server, me, mapId);
+    const reached = await reachVillage(server, me, mapId);
+    const { communityId, square } = reached;
+    let village = reached.village;
     const slot = (await db.query.mapMembers.findFirst({
       where: (m, { and, eq }) => and(eq(m.mapId, mapId), eq(m.userId, me.id)),
     }))!.homeSlot!;
@@ -305,16 +307,40 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
       (t) => t.ownerUserId === me.id && t.homeSlot !== null,
     );
 
-    // A ring tile that isn't a village tile: the rival's. It stays theirs.
-    const villageKeys = new Set(village.map((v) => `${v.tile.q},${v.tile.r}`));
-    const all = await tilesOf(mapId);
-    const grounds = villageRing(square)
-      .map((h) => all.find((t) => t.q === h.q && t.r === h.r))
-      .filter((t): t is Tile => t !== undefined && !villageKeys.has(`${t.q},${t.r}`));
-    const theirs = grounds.find((t) => t.ownerUserId === null && t.homeSlot === null);
-    if (theirs) {
-      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${theirs.id}'`);
+    // A ring tile that isn't a village tile: the rival's. It stays theirs. A
+    // village that fills its ring gives one tile away from my land to its grounds.
+    let all = await tilesOf(mapId);
+    const villageKeys = () => new Set(village.map((v) => `${v.tile.q},${v.tile.r}`));
+    const freeGrounds = () =>
+      villageRing(square)
+        .map((h) => all.find((t) => t.q === h.q && t.r === h.r))
+        .filter(
+          (t): t is Tile =>
+            t !== undefined &&
+            !villageKeys().has(`${t.q},${t.r}`) &&
+            t.ownerUserId === null &&
+            t.homeSlot === null,
+        );
+    if (freeGrounds().length === 0) {
+      const mine = all.filter((t) => t.ownerUserId === me.id);
+      const spare = village.find(
+        (v) =>
+          v.tileId !== square.id &&
+          !mine.some(
+            (m) =>
+              Math.abs(m.q - v.tile.q) +
+                Math.abs(m.r - v.tile.r) +
+                Math.abs(m.q + m.r - v.tile.q - v.tile.r) <=
+              2,
+          ),
+      )!;
+      await db.execute(`delete from community_tiles where tile_id = '${spare.tileId}'`);
+      await db.execute(`update tiles set community_id = null where id = '${spare.tileId}'`);
+      village = village.filter((v) => v !== spare);
+      all = await tilesOf(mapId);
     }
+    const theirs = freeGrounds()[0]!;
+    await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${theirs.id}'`);
 
     const almost = await call(server, 'POST', `/maps/${mapId}/dev/village-almost`, me, {
       communityId,
@@ -353,7 +379,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     for (const h of villageRing(square)) {
       const t = after.find((x) => x.q === h.q && x.r === h.r);
       if (!t) continue;
-      if (theirs && t.id === theirs.id) {
+      if (t.id === theirs.id) {
         expect(t).toMatchObject({ ownerUserId: rival.id, homeSlot: null, communityId: null });
       } else {
         expect(t, `${t.q},${t.r}`).toMatchObject({
