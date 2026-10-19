@@ -83,6 +83,15 @@ async function reopen(page: Page, query: string): Promise<void> {
   await settle(page, 500);
 }
 
+/** Sprout's tray hint, if it is still up (on the SE it can outlive the first forced tap). */
+async function dismissHint(page: Page): Promise<void> {
+  const gotIt = page.getByRole('button', { name: 'Got it!' });
+  for (let i = 0; i < 5 && (await gotIt.isVisible()); i++) {
+    await gotIt.tap({ timeout: 2_000, force: true }).catch(() => {});
+    await settle(page, 400);
+  }
+}
+
 /** Pans the map (instantly) and waits for a drawn frame, so tile rects are fresh. */
 async function look(page: Page, which: 'near' | 'far' | 'both' | 'key', distance: number): Promise<void> {
   const before = await draws(page);
@@ -240,6 +249,7 @@ test('Hollowed Communities mockup captures', async ({ browser }) => {
   await settle(page, 2000);
   await shot(page, 'rename-card');
   await call(page, 'closeSheets');
+  await dismissHint(page);
   await settle(page, 1200);
   await shot(page, 'map-restored', { map: await mapState(page) });
   // Owner decision 2026-10-19: the village seed and its 6 neighbours are the winner's home ring.
