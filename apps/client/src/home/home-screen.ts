@@ -371,7 +371,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   // Its word, next to the grip, so the way to your buildings is visible (#433).
   const handleWord = el('span', { class: 'home-handle-word', 'aria-hidden': 'true' });
   // A small badge when naming is ready, only on the peek bar (#381: it never grows a row).
-  const handleNudge = el('span', { class: 'home-handle-nudge', 'data-testid': 'home-handle-nudge' });
+  const handleNudge = el('span', {
+    class: 'home-handle-nudge',
+    'data-testid': 'home-handle-nudge',
+  });
   handleNudge.hidden = true;
   handle.append(handleWord, handleNudge);
   let pressY: number | null = null;
