@@ -73,8 +73,10 @@ import {
   HOME_NAME_TEXT,
   nameCard,
   nameIdeas,
+  isSeedTile,
+  nameReady,
   nameRowBadge,
-  nameRowLabel,
+  nameRowParts,
   ringTerrains,
 } from './home-name-view.js';
 import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
@@ -368,7 +370,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   });
   // Its word, next to the grip, so the way to your buildings is visible (#433).
   const handleWord = el('span', { class: 'home-handle-word', 'aria-hidden': 'true' });
-  handle.append(handleWord);
+  // A small badge when naming is ready, only on the peek bar (#381: it never grows a row).
+  const handleNudge = el('span', { class: 'home-handle-nudge', 'data-testid': 'home-handle-nudge' });
+  handleNudge.hidden = true;
+  handle.append(handleWord, handleNudge);
   let pressY: number | null = null;
   let releasedAt = -Infinity;
   /** Where the handle was let go, until the click that tap makes has come (or not). */
@@ -629,14 +634,16 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const nameRow = (current: HomeResponse): Node[] => {
     const naming = current.naming;
     if (!naming) return [];
+    const parts = nameRowParts(naming);
     const b = button(
-      nameRowLabel(naming),
+      parts.title,
       () => {
         openName(current);
       },
       { 'data-testid': 'home-name-row', class: 'home-name-row' },
       true,
     );
+    if (parts.detail) b.append(el('span', { class: 'home-name-detail' }, parts.detail));
     const badge = nameRowBadge(naming);
     if (badge) b.append(el('span', { class: 'home-name-badge' }, badge));
     return [el('div', { class: 'home-row' }, b)];
@@ -757,7 +764,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     switch (mode.kind) {
       case 'idle': {
         handle.setAttribute('aria-expanded', String(sheetOpen));
-        handle.setAttribute('aria-label', sheetOpen ? HOME_TEXT.showLess : HOME_TEXT.showMore);
+        const nudge = !sheetOpen && nameReady(current.naming);
+        handleNudge.hidden = !nudge;
+        handleNudge.textContent = nudge ? HOME_NAME_TEXT.handleNudge : '';
+        handle.setAttribute(
+          'aria-label',
+          sheetOpen
+            ? HOME_TEXT.showLess
+            : nudge
+              ? `${HOME_TEXT.showMore}. ${HOME_NAME_TEXT.handleNudgeLabel}`
+              : HOME_TEXT.showMore,
+        );
         handleWord.textContent = sheetOpen ? `${HOME_TEXT.less} ▾` : `${HOME_TEXT.more} ▴`;
         const chips = atHome(current).buildings.map((b) =>
           button(
@@ -1450,6 +1467,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let tileTarget: TileTarget = 'fire';
   let tileNote = '';
   let tileWorking = false;
+  /** The generation a Heart Seed panel already asked for my home in, so a failed read isn't retried in a loop. */
+  let seedLoadedAt = -1;
 
   /** Reads my home (buildings, bag) for the panel when it isn't loaded yet. */
   async function loadForPanel(): Promise<void> {
@@ -1918,6 +1937,23 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
     const lines = homeTileLines(tile, me);
     const nodes: Node[] = lines.map((line) => el('p', { class: 'tile-action-note' }, line));
+    // My Heart Seed, once I can name my home (#306): say where to do it. The
+    // gate comes with my home, read once (the same GET the Home button makes).
+    if (mine && isSeedTile(panel.view, tile)) {
+      if (!home && seedLoadedAt !== generation) {
+        seedLoadedAt = generation;
+        void loadForPanel();
+      }
+      if (nameReady(home?.naming)) {
+        nodes.push(
+          el(
+            'p',
+            { class: 'tile-action-note tile-name-nudge', 'data-testid': 'tile-name-nudge' },
+            HOME_NAME_TEXT.seedLine,
+          ),
+        );
+      }
+    }
     if (tile.homeSlot !== null && mine) {
       nodes.push(
         el(
