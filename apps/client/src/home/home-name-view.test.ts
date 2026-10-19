@@ -64,7 +64,7 @@ describe('the "Name your home" row (#306)', () => {
 
   it('says the card copy from the rules, kindly', () => {
     expect(HOME_NAME_TEXT.lockedLine(10)).toBe(
-      'Build one of each and catch 10 squishies to name your home!',
+      'Build one of each and befriend 10 squishies to name your home!',
     );
     expect(HOME_NAME_TEXT.note(NAMING_RULES.maxLength)).toBe(
       'Tap an idea, or type your own. Up to 16 letters. Pick a new name whenever your Heart Seed grows!',

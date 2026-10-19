@@ -278,7 +278,11 @@ export interface MapsRepo {
     homeSlot: number | null;
     joinedAt: Date;
   }) => Promise<void>;
-  /** Archives the membership (`status = removed`, tech spec §4). */
+  /**
+   * Archives the membership (`status = removed`, tech spec §4). A returning
+   * player gets a fresh home base, so the home's name and its naming progress
+   * start over too (owner, 2026-10-19).
+   */
   archiveMember: (mapId: string, userId: string) => Promise<void>;
   /**
    * The per-map "seats" lock: row-locks the owner's member row until commit.
@@ -777,7 +781,13 @@ function queries(db: Executor): MapsRepo {
     archiveMember: async (mapId, userId) => {
       await db
         .update(mapMembers)
-        .set({ status: 'removed' })
+        .set({
+          status: 'removed',
+          homeName: null,
+          homeNamedAtLevel: null,
+          caughtCount: 0,
+          kindsBuilt: [],
+        })
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
     },
 
