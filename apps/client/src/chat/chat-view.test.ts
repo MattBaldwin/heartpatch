@@ -72,6 +72,14 @@ describe('the feed', () => {
     expect(mergeFeed([a], [{ ...a, sentAt: '2026-10-31T21:00:00.000Z' }])).toEqual([a]);
   });
 
+  it('keeps send order (row id) whatever the times say', () => {
+    // My reply carries the game clock a day ahead; a later live event the
+    // database's real time: the later message still comes last.
+    const mine = entry(1, '2026-11-01T20:00:00.000Z');
+    const theirs = entry(2, '2026-10-31T20:00:05.000Z');
+    expect(mergeFeed([mine], [theirs])).toEqual([mine, theirs]);
+  });
+
   it('reads chat.quick events, and nothing else', () => {
     const live: WsEventMessage = {
       v: 1,
