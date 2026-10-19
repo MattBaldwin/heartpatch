@@ -114,12 +114,11 @@ test('a grey village tile explores drained, with an echo, and a find colours it 
   await expect(joyMeter).toBeVisible();
   await expect(joyMeter).toHaveAttribute('aria-label', 'Joy 0% ✨');
   for (const sel of ['.explore-title', '.explore-progress']) {
-    const fits = await page
-      .locator(sel)
-      .evaluate(
-        (e) =>
-          e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight && e.clientWidth > 0,
-      );
+    const fits = await page.locator(sel).evaluate(
+      (e) =>
+        // An emoji's taller glyph may overhang the line box a pixel or two.
+        e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight + 2 && e.clientWidth > 0,
+    );
     expect(fits, `${sel} fits`).toBe(true);
   }
   // Drained grey, nothing coloured back yet, one echo drifting.

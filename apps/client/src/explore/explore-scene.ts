@@ -545,7 +545,7 @@ export class ExploreScene implements AmbientTarget {
     }
     fadedMaterial.transparencyMode = Material.MATERIAL_ALPHABLEND;
     if (drain) {
-      // The spots grey with the land; today's tile's ground and decor too.
+      // The spots grey with the land, and today's tile's ground (its decor is made below).
       const clock = this.#land?.clock ?? new TerrainClock();
       for (const mat of [propMaterial, fadedMaterial, ...this.#ground.map((g) => g.mat)]) {
         attachTerrainPlugin(mat, clock, { drain });
@@ -580,6 +580,8 @@ export class ExploreScene implements AmbientTarget {
       // Their own material, so night tints them with the ground, never the spots.
       const decorMaterial = vinyl(scene, 'explore-decor-mat', { color: '#ffffff' });
       this.#ground.push({ mat: decorMaterial, base: decorMaterial.albedoColor.clone() });
+      // A grey village tile (#306 2a): the decor greys with the ground.
+      if (drain) attachTerrainPlugin(decorMaterial, new TerrainClock(), { drain });
       const places = decorPlaces(tile, this.#colliders);
       for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
         const mesh = buildDecor(scene, kind);

@@ -150,6 +150,11 @@ body:has(.explore:not([hidden])) .auth-chip {
   .explore-names {
     padding: 6px 10px;
   }
+
+  /* With a tool's uses beside it, the progress may still need a second line: never cut off. */
+  .explore-progress {
+    white-space: normal;
+  }
 }
 
 /* A grey village's name (#306 2a): up to 16 letters, so it may wrap to a second line on a narrow phone. */
