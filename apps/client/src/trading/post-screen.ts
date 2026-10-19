@@ -67,7 +67,10 @@ export interface PostScreenOptions {
   root: HTMLElement;
   api?: TradeApi;
   swapApi?: GlimmerSwapApi;
-  /** Device wall clock in ms (tests pass a fake). */
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`): the
+   * visit pass it counts down is server time (#561). Tests pass a fake.
+   */
   now?: () => number;
 }
 

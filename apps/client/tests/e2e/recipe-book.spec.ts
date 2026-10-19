@@ -146,8 +146,8 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  // Pumpkins open the Pumpkin Treats page (Halloween is on: the dev server
-  // runs on today's date, inside the 2026 window).
+  // Pumpkins open the Pumpkin Treats page (Halloween is on: the game clock
+  // starts inside the 2026 window, playwright.config.ts `HP_DEV_NOW`).
   const mapId = (await mapState(page))!.id;
   const book = page.getByTestId('recipe-book');
   // Timber and Treats (for the Heart Charm below) also open Cozy Cocoa

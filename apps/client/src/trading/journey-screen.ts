@@ -24,6 +24,7 @@ import {
   journeyPreview,
   journeyTeamLevels,
   LANTERNS,
+  passLeft,
 } from './journey-model.js';
 import type { OpenPost } from './post-screen.js';
 import { VISIT_POST } from './post-model.js';
@@ -43,7 +44,10 @@ export interface JourneyScreenOptions {
   openPost?: (post: OpenPost, view: MapView) => void;
   api?: JourneyApi;
   jobs?: Pick<JobsApi, 'view'>;
-  /** Device wall clock in ms (tests pass a fake). Close enough for a minutes countdown. */
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`): a
+   * visit pass's `visitUntil` is server time (#561). Tests pass a fake.
+   */
   now?: () => number;
 }
 
@@ -104,7 +108,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     const until = livePasses.has(key)
       ? (livePasses.get(key) ?? null)
       : (view.posts?.find((p) => p.q === tile.q && p.r === tile.r)?.visitUntil ?? null);
-    return until !== null && Date.parse(until) > now() ? until : null;
+    return passLeft(until, now()) === null ? null : until;
   };
 
   async function loadTeam(): Promise<void> {
@@ -184,7 +188,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     if (pass) {
       container.replaceChildren(
         visitButton(tile, view, pass),
-        line(JOURNEY_TEXT.open(Date.parse(pass) - now()), 'journey-open', 'journey-open'),
+        line(JOURNEY_TEXT.open(passLeft(pass, now()) ?? 0), 'journey-open', 'journey-open'),
       );
       syncTicker(true);
       return;

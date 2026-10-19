@@ -8,7 +8,9 @@ import {
   journeyResult,
   journeyTeamLevels,
   LANTERNS,
+  passLeft,
 } from './journey-model.js';
+import { GameClock } from '../inventory/game-clock.js';
 
 type Job = JobsView['squishies'][number];
 const squishy = (
@@ -120,6 +122,34 @@ describe('the visit pass countdown', () => {
     expect(JOURNEY_TEXT.open(61_000)).toBe('⏳ The post is open for you for 2 more minutes!');
     expect(JOURNEY_TEXT.open(5_000)).toBe('⏳ The post is open for you for 1 more minute!');
   });
+
+  it('is open until the pass ends, and over after', () => {
+    const until = '2026-10-20T15:20:00.000Z';
+    expect(passLeft(until, Date.parse('2026-10-20T15:00:00.000Z'))).toBe(20 * 60_000);
+    expect(passLeft(until, Date.parse(until))).toBeNull();
+    expect(passLeft(until, Date.parse('2026-10-20T15:21:00.000Z'))).toBeNull();
+    expect(passLeft(null, 0)).toBeNull();
+  });
+
+  // The pass ends 20 minutes after the server's now; the phone's clock may be
+  // days off (or the dev server set to Halloween, #561).
+  const serverNow = '2026-10-20T15:00:00.000Z';
+  const until = '2026-10-20T15:20:00.000Z';
+  for (const [label, device] of [
+    ['a day behind', Date.parse('2026-10-19T15:00:00.000Z')],
+    ['a month ahead', Date.parse('2026-11-20T15:00:00.000Z')],
+  ] as const) {
+    it(`counts down on the game clock with the device clock ${label}`, () => {
+      const clock = new GameClock(() => device);
+      clock.sync(serverNow);
+      expect(JOURNEY_TEXT.open(passLeft(until, clock.now()) ?? 0)).toBe(
+        '⏳ The post is open for you for 20 more minutes!',
+      );
+      // On the device clock alone it would be wrong: far too long, or over.
+      const onDevice = passLeft(until, device);
+      expect(onDevice === null || onDevice > 60 * 60_000).toBe(true);
+    });
+  }
 });
 
 describe('journey words (style guide §9)', () => {

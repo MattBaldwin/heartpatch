@@ -88,19 +88,11 @@ export function mergeFeed(
   const byId = new Map(feed.map((m) => [m.id, m]));
   // First seen wins: a live event's time is the server's commit, a reply's is the send.
   for (const m of more) if (!byId.has(m.id)) byId.set(m.id, m);
-  return [...byId.values()]
-    .sort((a, b) =>
-      a.sentAt === b.sentAt
-        ? a.id < b.id
-          ? -1
-          : a.id > b.id
-            ? 1
-            : 0
-        : a.sentAt < b.sentAt
-          ? -1
-          : 1,
-    )
-    .slice(-limit);
+  // In send order by row id (a uuidv7 the server makes as it saves the row),
+  // not by time: a reply's `sentAt` is the game clock at the send and a live
+  // event's is the database's commit, so two messages close together (or a
+  // game clock set to another day, HP_DEV_NOW) could trade places.
+  return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(-limit);
 }
 
 /** A `chat.quick` live event as a feed entry; null for any other event (or a bad one). */
