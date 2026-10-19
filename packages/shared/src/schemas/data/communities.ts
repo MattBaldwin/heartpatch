@@ -76,8 +76,8 @@ export const VillagePerkSchema = z.discriminatedUnion('type', [
     type: z.literal('morning-gift'),
     items: z.record(ContentIdSchema, z.number().int().min(1).max(20)),
   }),
-  /** More guards on each of the winner's tiles (not built yet: battles field 3 a side). */
-  z.strictObject({ type: z.literal('guards'), extra: z.number().int().min(1).max(3) }),
+  /** The winner's guards fight this many levels above the guard level floor (#529) on their land. */
+  z.strictObject({ type: z.literal('guard-levels'), levels: z.number().int().min(1).max(10) }),
 ]);
 export type VillagePerk = z.infer<typeof VillagePerkSchema>;
 
@@ -89,6 +89,8 @@ export const CommunityKindSchema = z.strictObject({
   emoji: z.string().min(1),
   /** What restoring it earns, finishing "restore it for …" (no full stop). */
   perk: z.string().min(1).max(80),
+  /** Its won square's line when "<emoji> <Kind>: <perk>" doesn't read right (PR 3b). */
+  does: z.string().min(1).max(80).optional(),
   /** What that perk does once the village is won. */
   effect: VillagePerkSchema,
 });

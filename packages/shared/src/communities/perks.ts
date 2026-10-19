@@ -4,7 +4,6 @@ import type {
   CommunityKind,
   CommunityKindId,
   CommunityRules,
-  VillagePerk,
 } from '../schemas/data/communities.js';
 
 // Village perks (#306 PR 3b, plan Q4): each won village's kind does one fixed
@@ -20,15 +19,13 @@ export interface PerkVillage {
 }
 
 /** A kind's data. Throws for a kind the rules don't list (the schema makes that impossible). */
-export function villageKind(kind: CommunityKindId, rules: Pick<CommunityRules, 'kinds'>): CommunityKind {
+export function villageKind(
+  kind: CommunityKindId,
+  rules: Pick<CommunityRules, 'kinds'>,
+): CommunityKind {
   const found = rules.kinds.find((k) => k.id === kind);
   if (!found) throw new Error(`unknown village kind ${kind}`);
   return found;
-}
-
-/** Whether a perk works yet. More guards a tile waits on battles fielding more than 3 a side. */
-export function perkLive(effect: VillagePerk): boolean {
-  return effect.type !== 'guards';
 }
 
 /**
@@ -59,6 +56,25 @@ export function extraFactoryBatches(
     if (v.ownerUserId !== userId) continue;
     const { effect } = villageKind(v.kind, rules);
     if (effect.type === 'factory-batches') extra += effect.extra;
+  }
+  return extra;
+}
+
+/**
+ * How many levels the Watchtowers `userId` won add to their guard level floor
+ * (#529) on their land: their guards, or the guardians standing in, fight at
+ * least this much higher.
+ */
+export function extraGuardLevels(
+  villages: readonly PerkVillage[],
+  userId: string,
+  rules: Pick<CommunityRules, 'kinds'>,
+): number {
+  let extra = 0;
+  for (const v of villages) {
+    if (v.ownerUserId !== userId) continue;
+    const { effect } = villageKind(v.kind, rules);
+    if (effect.type === 'guard-levels') extra += effect.levels;
   }
   return extra;
 }

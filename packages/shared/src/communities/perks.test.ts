@@ -4,8 +4,8 @@ import { safeTiles } from '../home/safe-tiles.js';
 import { hexKey } from '../hex/index.js';
 import {
   extraFactoryBatches,
+  extraGuardLevels,
   morningGiftOf,
-  perkLive,
   villageKind,
   villageLights,
   type PerkVillage,
@@ -44,9 +44,12 @@ describe('village perks (#306 PR 3b)', () => {
     expect(morningGiftOf('lantern-tower', COMMUNITY_RULES)).toBeNull();
   });
 
-  it('marks only the guard perk as not working yet', () => {
-    const live = COMMUNITY_RULES.kinds.filter((k) => perkLive(k.effect)).map((k) => k.id);
-    expect(live).toEqual(['lantern-tower', 'workshop', 'old-well', 'bakery']);
-    expect(villageKind('watchtower', COMMUNITY_RULES).effect.type).toBe('guards');
+  it("raises a Watchtower winner's guard level floor by 2, theirs only", () => {
+    const won = [village('watchtower', 'kid'), village('lantern-tower', 'kid')];
+    expect(extraGuardLevels(won, 'kid', COMMUNITY_RULES)).toBe(2);
+    expect(extraGuardLevels(won, 'rival', COMMUNITY_RULES)).toBe(0);
+    expect(villageKind('watchtower', COMMUNITY_RULES).does).toBe(
+      'your guards fight 2 levels stronger',
+    );
   });
 });

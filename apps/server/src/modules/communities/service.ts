@@ -3,6 +3,7 @@ import {
   communityReach,
   deriveSeed,
   extraFactoryBatches,
+  extraGuardLevels,
   hexKey,
   HOLLOW_RULES,
   morningGiftOf,
@@ -144,6 +145,16 @@ export async function workshopBatchesOf(
 ): Promise<number> {
   const won = await createCommunitiesRepo(tx).wonVillages(mapId);
   return extraFactoryBatches(won, userId, COMMUNITY_RULES);
+}
+
+/** The levels `userId`'s won Watchtowers add to their guard level floor (PR 3b). */
+export async function watchtowerLevelsOf(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+): Promise<number> {
+  const won = await createCommunitiesRepo(tx).wonVillages(mapId);
+  return extraGuardLevels(won, userId, COMMUNITY_RULES);
 }
 
 /** Since when a village's morning gift is today's: the map's last morning (`HOLLOW_RULES.morningMinute`). */

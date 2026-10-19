@@ -42,8 +42,10 @@ export const COMMUNITY_RULES: CommunityRules = {
       id: 'watchtower',
       name: 'Watchtower',
       emoji: '🗼',
-      perk: 'one more guard on every tile',
-      effect: { type: 'guards', extra: 1 }, // TUNE: plan Q4 (not built yet)
+      perk: 'guards that fight 2 levels stronger',
+      does: 'your guards fight 2 levels stronger',
+      // TUNE: owner 2026-10-19 (option C): on the winner's land, through the #529 floor.
+      effect: { type: 'guard-levels', levels: 2 },
     },
   ],
   // TUNE: 4-tile villages 3 a tile, 5–6 tiles 4, 7 tiles 5.
