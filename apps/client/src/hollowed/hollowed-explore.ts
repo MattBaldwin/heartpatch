@@ -60,7 +60,7 @@ interface Disc {
   readonly since: number | null;
 }
 
-// Scratch (no allocations per frame).
+// Scratch (no allocations per frame for the sparks and echoes).
 const SPARK = { dx: 0, dy: 0, dz: 0, s: 0, a: 0 };
 const SPARK_TURN = new Quaternion();
 const SPARK_SCALE = new Vector3();
@@ -78,6 +78,8 @@ export class HollowedExplore {
   readonly #sparkMatrices: Float32Array;
   #burst: { x: number; y: number; z: number; since: number } | null = null;
   #bursts = 0;
+  /** Every disc has opened and is written: `step` leaves them be. */
+  #discsSettled = false;
   readonly #echoes: {
     readonly mesh: Mesh;
     readonly centre: WorldPoint;
@@ -153,13 +155,15 @@ export class HollowedExplore {
     } else if (target !== (this.#fade?.to ?? this.#drain.amount)) {
       this.#fade = { from: this.#drain.amount, to: target, since: now };
     }
-    this.#writeDiscs(now ?? 0);
+    this.#discsSettled = !this.#writeDiscs(now ?? 0);
   }
 
   /** Grows the discs, flies the sparks and fades the drain; true while any of it still moves. */
   step(now: number): boolean {
     this.#openedAt ??= now;
-    const discs = this.#writeDiscs(now);
+    // Once every disc is open they stay as written: nothing to redo each frame.
+    const discs = !this.#discsSettled && this.#writeDiscs(now);
+    if (!discs) this.#discsSettled = true;
     const sparks = this.#writeSparks(now);
     let fading = false;
     if (this.#fade) {
@@ -217,10 +221,10 @@ export class HollowedExplore {
       const at = echo.at;
       at.x = ECHO_LOCAL.x;
       at.z = ECHO_LOCAL.z;
-      const w = this.#ctx.world(at);
       // A gentle bob over its own ground; the shadow underneath rides with it.
       const bob = hover * 0.25 * Math.sin(seconds * 1.4);
-      echo.mesh.position.set(w.x, this.#ctx.groundAt(at) + bob, w.z);
+      const size = this.#ctx.size;
+      echo.mesh.position.set(at.x * size, this.#ctx.groundAt(at) + bob, at.z * size);
       // Its face (−z) towards the camera, looking about as it drifts.
       echo.mesh.rotation.y = Math.sin(seconds * 0.5) * 0.6;
     }
@@ -229,15 +233,23 @@ export class HollowedExplore {
   /** Writes the newest discs into the drain; true while one still opens. */
   #writeDiscs(now: number): boolean {
     const { radius } = HOLLOWED_EXPLORE.joy;
-    const discs = this.#discs.slice(-JOY_DISCS);
+    const size = this.#ctx.size;
+    const from = Math.max(0, this.#discs.length - JOY_DISCS);
     let opening = false;
-    discs.forEach((d, i) => {
+    for (let i = from; i < this.#discs.length; i++) {
+      const d = this.#discs[i];
+      if (!d) continue;
       const k = discOpening(d.since, now);
       if (k < 1) opening = true;
-      const at = this.#ctx.world(d);
-      this.#drain.setDisc(i, at.x, at.z, radius * this.#ctx.size * k, Math.min(1, k * 1.4));
-    });
-    this.#drain.count = discs.length;
+      this.#drain.setDisc(
+        i - from,
+        d.x * size,
+        d.z * size,
+        radius * size * k,
+        Math.min(1, k * 1.4),
+      );
+    }
+    this.#drain.count = this.#discs.length - from;
     return opening;
   }
 

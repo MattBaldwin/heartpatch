@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  communityReach,
   CLEARED_TERRAIN,
   GAME_DATA,
   GatherResponseSchema,
@@ -994,6 +995,29 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       expect(again.community?.joy).toBe(found.joy);
       expect(again.community?.echoes).toEqual(tile.community?.echoes);
       expect(await eventsOf(mapId, 'explore.searched')).toHaveLength(1);
+    });
+
+    it('opens to each member by their own reach, never the patch’s', async () => {
+      const server = await start();
+      const me = await player();
+      const friend = await player();
+      const mapId = await patch(server, me, [friend]);
+      const square = await reachVillage(server, me, mapId);
+      const tiles = await tilesOf(mapId);
+      const village = tiles.filter((t) => t.communityId === square.communityId);
+      for (const who of [me, friend]) {
+        const { reach } = communityReach(village, tiles, who.id);
+        const res = await call(
+          server,
+          'GET',
+          `/maps/${mapId}/explore?q=${String(square.q)}&r=${String(square.r)}`,
+          who,
+        );
+        expect(res.statusCode, `${who.username}: ${String(reach)}`).toBe(
+          reach === 'touching' ? 200 : 403,
+        );
+      }
+      expect(communityReach(village, tiles, me.id).reach).toBe('touching');
     });
 
     it('never finishes: every spot searched is still no ✨ and no homestead', async () => {

@@ -1,5 +1,4 @@
 import {
-  DevHollowedReachResponseSchema,
   DevHomesteadRequestSchema,
   ExploreQuerySchema,
   ExploreTileResponseSchema,
@@ -88,7 +87,8 @@ export const exploreRoutes =
       app.post(
         '/maps/:mapId/dev/hollowed-reach',
         {
-          schema: { params: MapIdParamsSchema, response: { 201: DevHollowedReachResponseSchema } },
+          // Replies with that village's square.
+          schema: { params: MapIdParamsSchema, response: { 201: HexSchema } },
           preHandler: [requireAuth, rateLimit('dev')],
         },
         async (request, reply) =>

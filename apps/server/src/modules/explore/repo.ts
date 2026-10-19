@@ -264,7 +264,8 @@ export function createExploreRepo(db: Executor) {
      * fewest wild tiles from my land to my nearest grey village become mine,
      * so the village touches my land. Never a village tile, a home, a post
      * or Juniper's Gap; never anyone's land. The village's square, or null
-     * when no path is free.
+     * when no path is free. It skips the territory bookkeeping a real claim
+     * does (locks, tending rows, events): don't copy it outside dev tools.
      */
     devHollowedReach: async (mapId: string, userId: string): Promise<Hex | null> => {
       const all = await db

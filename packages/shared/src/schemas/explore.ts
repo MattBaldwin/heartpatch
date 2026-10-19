@@ -29,14 +29,6 @@ export const DevHomesteadRequestSchema = z.strictObject({
 });
 export type DevHomesteadRequest = z.infer<typeof DevHomesteadRequestSchema>;
 
-/**
- * Dev only (`HP_DEV_SQUISHY_GRANTS`): `POST /maps/:mapId/dev/hollowed-reach`
- * (#306 2a, e2e and phone testing): the wild land between my home and my
- * nearest grey village becomes mine, so the village touches my land.
- * Replies with that village's square.
- */
-export const DevHollowedReachResponseSchema = HexSchema;
-
 /** `GET /maps/:mapId/explore?q=&r=`: one of my tiles. */
 export const ExploreQuerySchema = z.object({
   q: queryInt({ min: -32768, max: 32767 }),

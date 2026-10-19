@@ -178,6 +178,8 @@ if (terrainDrain.x > 0.0) {
   for (int i = 0; i < ${String(JOY_DISCS)}; i++) {
     if (float(i) >= terrainDrain.y) break;
     vec4 tdJ = tdJoy[i];
+    // A disc on its first frame has no radius yet (smoothstep needs edge0 < edge1).
+    if (tdJ.w <= 0.0 || tdJ.z <= 0.0) continue;
     float tdD = distance(vPositionW.xz, tdJ.xy);
     tdCover = max(tdCover, tdJ.w * (1.0 - smoothstep(tdJ.z * 0.55, tdJ.z, tdD)));
   }
