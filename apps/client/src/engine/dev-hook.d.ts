@@ -13,6 +13,7 @@ import type { FriendlyDebug } from '../friendly/friendly-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { HouseDebug } from '../house/house-screen.js';
 import type { CommunityActions } from '../hollowed/community-actions.js';
+import type { RestoreSheetDebug } from '../hollowed/restore-sheet.js';
 import type { CommunityFlags } from '../hollowed/community-flags.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
@@ -153,7 +154,16 @@ declare global {
       communities?(): {
         flags: CommunityFlags['shown'];
         panel: CommunityActions['debug'];
-        villages: { name: string; square: { q: number; r: number }; reach: string | null }[];
+        /** The restore sheet and naming card (#306 PR 3). */
+        restore: RestoreSheetDebug;
+        villages: {
+          id: string;
+          name: string;
+          square: { q: number; r: number };
+          reach: string | null;
+          restored: number;
+          ownerUserId: string | null;
+        }[];
       };
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;

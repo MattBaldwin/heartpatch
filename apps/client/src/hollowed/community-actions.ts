@@ -1,13 +1,14 @@
 import type { CommunityView, MapView, PublicTile } from '@heartpatch/shared';
 import type { TileActions } from '../map/map-screen.js';
 import { el } from '../ui/dom.js';
-import { COMMUNITY_TEXT, communityOf, communityPanel } from './community-model.js';
+import { COMMUNITY_TEXT, communityOf, communityPanel, perkSoonLine } from './community-model.js';
 import './hollowed.css';
 
 // A Hollowed village tile's block in the tile panel (#306): what the village
 // is, how my land reaches it, and Explore and Restore. PR 1 drew both
 // buttons waiting; later PRs hook them up through `wire` (2a: exploring,
 // 3: restoring), and the panel's rule for when they open stays the one here.
+// A won village's square offers its winner "Name it" until they have (PR 3).
 
 /** What a later PR does when its button is tapped on a village tile. */
 export type CommunityAction = (community: CommunityView, tile: PublicTile, view: MapView) => void;
@@ -16,16 +17,17 @@ export interface CommunityActions extends TileActions {
   /** It's night on the map (the Hollow's night): villages close, and the open panel says so. */
   setNight: (night: boolean) => void;
   /** Hooks a button up (later PRs); null unhooks it. */
-  wire: (button: 'explore' | 'restore', action: CommunityAction | null) => void;
+  wire: (button: 'explore' | 'restore' | 'name', action: CommunityAction | null) => void;
   /** The block on screen (the dev hook): its village and whether its buttons are open. */
   readonly debug: { community: string; explore: boolean; restore: boolean } | null;
 }
 
-export function createCommunityActions(): CommunityActions {
+export function createCommunityActions(me: () => string | null = () => null): CommunityActions {
   let night = false;
-  const wired: Record<'explore' | 'restore', CommunityAction | null> = {
+  const wired: Record<'explore' | 'restore' | 'name', CommunityAction | null> = {
     explore: null,
     restore: null,
+    name: null,
   };
   let shown: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
   let debug: CommunityActions['debug'] = null;
@@ -35,8 +37,50 @@ export function createCommunityActions(): CommunityActions {
     if (!shown) return;
     const { container, tile, view } = shown;
     const c = communityOf(view, tile);
-    if (!c || c.ownerUserId !== null) {
+    if (!c) {
       container.replaceChildren();
+      return;
+    }
+    if (c.ownerUserId !== null) {
+      // Won: the square says what its perk will do (PR 3b wakes it up),
+      // and its winner may name it there, until they have.
+      const square = tile.q === c.square.q && tile.r === c.square.r;
+      if (!square) {
+        container.replaceChildren();
+        return;
+      }
+      const perk = el(
+        'div',
+        { class: 'community-block', 'data-testid': 'community-perk' },
+        el('p', { class: 'tile-action-note community-line' }, perkSoonLine(c.kind)),
+      );
+      const name = wired.name;
+      if (!name || c.ownerUserId !== me() || c.named !== false) {
+        container.replaceChildren(perk);
+        return;
+      }
+      const b = el(
+        'button',
+        { type: 'button', class: 'auth-button bag-action', 'data-testid': 'community-name' },
+        COMMUNITY_TEXT.nameIt,
+      );
+      b.addEventListener('click', () => {
+        name(c, tile, view);
+      });
+      container.replaceChildren(perk, b);
+      return;
+    }
+    // A tile restored on its own: in colour again, and someone's land.
+    if ((c.restoredTiles ?? []).some((t) => t.q === tile.q && t.r === tile.r)) {
+      const words = communityPanel(c, tile.terrain, night);
+      container.replaceChildren(
+        el(
+          'div',
+          { class: 'community-block', 'data-testid': 'community-block' },
+          el('p', { class: 'tile-action-note community-line community-reach' }, words.restored),
+          el('p', { class: 'tile-action-note community-line' }, COMMUNITY_TEXT.tileRestored),
+        ),
+      );
       return;
     }
     const words = communityPanel(

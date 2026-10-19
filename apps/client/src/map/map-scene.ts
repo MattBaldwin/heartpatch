@@ -80,7 +80,7 @@ import {
   tileColor,
   tileJitter,
 } from './map-dressing.js';
-import { greyTiles, villageSquares } from '../hollowed/community-model.js';
+import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-model.js';
 import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
@@ -204,6 +204,9 @@ function lookOf(tile: PublicTile): TerrainLook {
   return TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
 }
 
+/** What a tile is drawn as: home land, or its terrain. */
+const shapeOf = (tile: PublicTile): string => (tile.homeSlot !== null ? 'home' : tile.terrain);
+
 /** The look whose tile mesh draws this tile: its own, or the one it borrows (`meshOf`). */
 function meshLookOf(tile: PublicTile): TerrainLook {
   const look = lookOf(tile);
@@ -236,10 +239,11 @@ interface TileGroup {
   readonly far: Mesh;
   readonly look: TerrainLook;
   readonly tiles: PublicTile[];
-  readonly colors: Float32Array;
+  /** Grows when land turns home (`adoptHomes`). */
+  colors: Float32Array;
   /** How muted each tile is drawn: 1 on wild land, part way on land that misses its owner. */
   readonly muted: number[];
-  /** Each tile's terrain as last coloured (a clear changes it, #242). */
+  /** Each tile's shape as last drawn (`shapeOf`: a clear, #242, or a won ring, #306, changes it). */
   readonly terrains: string[];
 }
 
@@ -258,6 +262,9 @@ interface PropGroup {
 
 /** A prop's instance on a tile that a building fills or that was cleared (#295): drawn at nothing. */
 const GONE = Matrix.Scaling(0, 0, 0);
+
+/** A tile's shape in its old terrain mesh once it moved into the home mesh (`adoptHomes`). */
+const MOVED_HOME = 'moved-home';
 
 /** `placements` with every one on a `cleared` tile (by `tiles`, index for index) drawn at nothing. */
 function hideOn(
@@ -427,6 +434,10 @@ export class MapScene {
   private propsCleared = new Set<HexKey>();
   /** Each tile's terrain when the map was built: a tile cleared since loses its props (#242). */
   private readonly builtTerrain = new Map<HexKey, string>();
+  /** Land that moved into the home tile mesh (`adoptHomes`): its index there. */
+  private readonly adopted = new Map<HexKey, number>();
+  /** Tiles that were home land when the props were built (they have none). */
+  private readonly builtHome = new Set<HexKey>();
   /** Zoomed out: tiles and props draw from their low-detail meshes (`followZoom`). */
   private far = false;
   private readonly instrumentation: SceneInstrumentation;
@@ -476,7 +487,10 @@ export class MapScene {
 
     this.buildIsland(view.tiles);
     this.animated = this.buildTiles(view.tiles);
-    for (const t of view.tiles) this.builtTerrain.set(hexKey(t), t.terrain);
+    for (const t of view.tiles) {
+      this.builtTerrain.set(hexKey(t), t.terrain);
+      if (t.homeSlot !== null) this.builtHome.add(hexKey(t));
+    }
     this.buildProps(view.tiles);
     this.applyDetail();
     this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
@@ -779,7 +793,9 @@ export class MapScene {
     const grey = greyTiles(view);
     const regrey = grey.size !== this.grey.size || [...grey].some((k) => !this.grey.has(k));
     this.grey = grey;
-    this.recolour(regrey);
+    this.squares = villageSquares(view);
+    const adopted = this.adoptHomes();
+    this.recolour(regrey || adopted);
     this.clearProps();
     this.homeNode = null;
     this.borders.set(
@@ -795,6 +811,12 @@ export class MapScene {
       const p = hexToWorld(home.seed, HEX_SIZE);
       if (home.seed.ownerUserId === null) plots.push(placeAt(p.x, HOME_LOOK.height + 0.02, p.z));
       else seeds.push(placeAt(p.x, HOME_LOOK.height + 0.15, p.z));
+    }
+    // A won village's own Heart Seed on its square (#306 PR 3): one more
+    // instance of the same mesh, so no new draw call or material.
+    for (const village of villageSeeds(view)) {
+      const p = hexToWorld(village.square, HEX_SIZE);
+      seeds.push(placeAt(p.x, HOME_LOOK.height + 0.15, p.z));
     }
     setInstances(this.seedMesh, seeds, true);
     setInstances(this.plotMesh, plots, true);
@@ -1062,7 +1084,7 @@ export class MapScene {
         tiles: group.tiles,
         colors,
         muted: group.tiles.map(() => 0),
-        terrains: group.tiles.map((t) => t.terrain),
+        terrains: group.tiles.map(shapeOf),
       });
     }
     this.tileMeshes = groups.size;
@@ -1079,37 +1101,122 @@ export class MapScene {
     this.recolour();
   }
 
+  /**
+   * Land that turned home since the map was built (a won village's ring,
+   * #306 PR 3) moves into the home tile mesh, so it looks exactly like home
+   * (its height, colour, wash and glow): its instance in its terrain's mesh
+   * shrinks to nothing, and the home mesh gets one more. A ring its winner
+   * left (it stops being home) moves back the same way. No new mesh or
+   * material. True if anything moved.
+   */
+  private adoptHomes(): boolean {
+    const home = this.tileGroups.find((g) => g.look === HOME_LOOK);
+    if (!home) return false;
+    let moved = false;
+    const added: PublicTile[] = [];
+    for (const group of this.tileGroups) {
+      if (group === home) continue;
+      for (const [i, stale] of group.tiles.entries()) {
+        const key = hexKey(stale);
+        const tile = this.tiles.get(key);
+        if (!tile) continue;
+        const isHome = tile.homeSlot !== null;
+        const there = group.terrains[i] === MOVED_HOME;
+        if (isHome === there) continue;
+        moved = true;
+        const homeIndex = this.adopted.get(key);
+        if (isHome) {
+          group.terrains[i] = MOVED_HOME;
+          // Drawn in the home mesh now: not counted as muted here.
+          group.muted[i] = -1;
+          if (homeIndex === undefined) {
+            this.adopted.set(key, home.tiles.length + added.length);
+            added.push(tile);
+          } else {
+            // Home again (won back): its home instance shows again.
+            home.terrains[homeIndex] = shapeOf(tile);
+            home.muted[homeIndex] = -1;
+          }
+        } else {
+          // Not home any more: back in its terrain's mesh, its home instance at nothing.
+          group.terrains[i] = shapeOf(tile);
+          group.muted[i] = -1;
+          if (homeIndex !== undefined) home.terrains[homeIndex] = MOVED_HOME;
+        }
+      }
+    }
+    if (!moved) return false;
+    if (added.length > 0) {
+      const colors = new Float32Array((home.tiles.length + added.length) * 4);
+      colors.set(home.colors);
+      home.colors = colors;
+      for (const tile of added) {
+        home.tiles.push(tile);
+        // Coloured by the forced recolour that follows.
+        home.muted.push(-1);
+        home.terrains.push(shapeOf(tile));
+      }
+    }
+    for (const group of this.tileGroups) this.placeTiles(group);
+    if (added.length > 0) {
+      for (const mesh of [home.mesh, home.far]) {
+        mesh.thinInstanceSetBuffer('color', home.colors, 4, false);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Writes a tile group's whole matrix buffer again, from each tile as it is
+   * now (a moved one at nothing). The buffers are static, so a single
+   * instance's matrix written on its own never reaches the GPU.
+   * `clearProps` hands the detail back to the zoom after (`applyDetail`).
+   */
+  private placeTiles(group: TileGroup): void {
+    const matrices = group.tiles.map((stale, i) =>
+      group.terrains[i] === MOVED_HOME
+        ? GONE
+        : tileMatrix(this.tiles.get(hexKey(stale)) ?? stale, group.look.height),
+    );
+    setInstances(group.mesh, matrices);
+    setInstances(group.far, matrices);
+  }
+
   /** Recolours tiles and props whose wildness changed (all of them with `force`). */
   private recolour(force = false): void {
     if (this.tileGroups.length === 0) return;
     const wild = new Map<HexKey, number>();
     for (const group of this.tileGroups) {
       let changed = false;
+      let moved = false;
       for (const [i, stale] of group.tiles.entries()) {
+        // Moved into the home mesh (`adoptHomes`): drawn there now.
+        if (group.terrains[i] === MOVED_HOME) continue;
         const key = hexKey(stale);
         const tile = this.tiles.get(key) ?? stale;
         const fading = tile.homeSlot === null ? (this.landFade.get(key) ?? 0) : 0;
         const muted = isMuted(tile) ? 1 : Math.min(1, Math.max(0, fading)) * LAND_FADE.most;
         wild.set(key, muted);
-        // A clear (#242) changes a tile's terrain: its colour and height follow,
-        // so what stands on it (`topOf`) sits on its top.
-        const reshaped = group.terrains[i] !== tile.terrain;
+        // A clear (#242) changes a tile's terrain, and a won village's ring
+        // (#306 PR 3) makes land home: its colour and height follow, so what
+        // stands on it (`topOf`) sits on its top. Same mesh, new instance data.
+        const reshaped = group.terrains[i] !== shapeOf(tile);
         if (!force && group.muted[i] === muted && !reshaped) continue;
         group.muted[i] = muted;
-        group.terrains[i] = tile.terrain;
-        if (reshaped) {
-          const m = tileMatrix(tile, group.look.height);
-          group.mesh.thinInstanceSetMatrixAt(i, m, true);
-          group.far.thinInstanceSetMatrixAt(i, m, true);
-        }
+        group.terrains[i] = shapeOf(tile);
+        if (reshaped) moved = true;
         changed = true;
         const c =
           tile.homeSlot !== null
-            ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
+            ? tileColor(lookOf(tile).color, { brightness: 1, warmth: 0, height: 0 }, muted)
             : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
         // A Hollowed village (#306): drained past wild, in its own instance colour.
         const drawn = this.grey.has(key) ? drainRgb(c) : c;
         group.colors.set([...drawn.map(toLinear), 1], i * 4);
+      }
+      if (moved) {
+        this.placeTiles(group);
+        this.applyDetail();
       }
       if (changed) {
         group.mesh.thinInstanceBufferUpdated('color');
@@ -1263,7 +1370,11 @@ export class MapScene {
   private clearProps(): void {
     const cleared = new Set<HexKey>();
     for (const [key, tile] of this.tiles) {
-      if (tile.homeSlot !== null) continue;
+      // Home land has no props: a won village's ring (#306 PR 3) loses its ruins.
+      if (tile.homeSlot !== null) {
+        if (!this.builtHome.has(key)) cleared.add(key);
+        continue;
+      }
       const wasCleared = this.builtTerrain.get(key) !== tile.terrain;
       if (tile.buildings.length > 0 || wasCleared) cleared.add(key);
     }
@@ -1280,6 +1391,8 @@ export class MapScene {
     if (this.propShadows) {
       setInstances(this.propShadows, hideOn(this.shadowBase, this.shadowTiles, cleared));
     }
+    // `setInstances` turned both details on: back to the one the zoom shows.
+    this.applyDetail();
   }
 
   /**

@@ -4,7 +4,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
-import { hexToWorld, type MapView } from '@heartpatch/shared';
+import { hexKey, hexNeighbors, hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BORDER, HEX_SIZE, MAP_DETAIL, PLAYER_COLORS, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
@@ -152,6 +152,79 @@ describe('MapScene', () => {
       // Trading posts (#269) add two: their tile look and the hut.
       expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(57);
     }
+  });
+
+  it('draws a won village as a second home with no new mesh or material (#306 PR 3)', () => {
+    const view = testView(1);
+    const [village, ...rest] = view.communities ?? [];
+    if (!village) throw new Error('no village');
+    const { scene, map, instances } = build(view);
+    const enabled = () => scene.meshes.filter((m) => m.isEnabled()).length;
+    const before = {
+      meshes: scene.meshes.length,
+      materials: scene.materials.length,
+      enabled: enabled(),
+      seeds: instances('heart-seed'),
+      homeTiles: instances('tiles-home'),
+      grey: map.stats.hollowedTiles,
+    };
+    const ring = new Set([village.square, ...hexNeighbors(village.square)].map(hexKey));
+    map.update({
+      ...view,
+      tiles: view.tiles.map((t) =>
+        ring.has(hexKey(t)) && t.homeSlot === null
+          ? { ...t, ownerUserId: userId(1), homeSlot: 0, communityId: village.id }
+          : t,
+      ),
+      communities: [{ ...village, ownerUserId: userId(1), named: false }, ...rest],
+    });
+    // Its own Heart Seed is one more instance of the seed mesh; the ring
+    // moves into the home tile mesh (instance data of meshes already built).
+    expect(instances('heart-seed')).toBe(before.seeds + 1);
+    // The ring's new home tiles join the home tile mesh, as instances.
+    expect(instances('tiles-home')).toBe(before.homeTiles + ring.size);
+    expect(map.stats.hollowedTiles).toBe(before.grey - village.tiles.length);
+    expect(scene.meshes.length).toBe(before.meshes);
+    expect(scene.materials.length).toBe(before.materials);
+    expect(enabled()).toBe(before.enabled);
+  });
+
+  it('draws a ring back as plain land when its winner leaves (#306 PR 3)', () => {
+    const view = testView(1);
+    const [village, ...rest] = view.communities ?? [];
+    if (!village) throw new Error('no village');
+    const { scene, map } = build(view);
+    const before = {
+      muted: map.stats.mutedTiles,
+      grey: map.stats.hollowedTiles,
+      meshes: scene.meshes.length,
+    };
+    const ring = new Set([village.square, ...hexNeighbors(village.square)].map(hexKey));
+    const won: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) =>
+        ring.has(hexKey(t)) && t.homeSlot === null
+          ? { ...t, ownerUserId: userId(1), homeSlot: 0, communityId: village.id }
+          : t,
+      ),
+      communities: [{ ...village, ownerUserId: userId(1), named: false }, ...rest],
+    };
+    map.update(won);
+    expect(map.stats.mutedTiles).toBeLessThan(before.muted);
+    // The winner left: the ring is wild land again (the village stays, restored).
+    map.update({
+      ...view,
+      communities: [
+        { ...village, restored: village.tiles.length, restoredTiles: village.tiles },
+        ...rest,
+      ],
+    });
+    expect(map.stats.mutedTiles).toBe(before.muted);
+    expect(scene.meshes.length).toBe(before.meshes);
+    // Won back: home again, with no new instance.
+    map.update(won);
+    expect(map.stats.mutedTiles).toBeLessThan(before.muted);
+    expect(before.grey).toBeGreaterThan(0);
   });
 
   it('keeps the triangles drawn near what the map drew before its dressing', () => {

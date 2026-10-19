@@ -44,3 +44,261 @@
   box-shadow: none;
   opacity: 1;
 }
+
+/* A won village (#306 PR 3): someone's second home, soft pink like a home's flag (`.home-flag`). */
+.community-flag-won {
+  background: rgb(255 228 240 / 95%);
+  color: #4a3150;
+}
+
+/* The restore sheet and the naming card (#306 PR 3, the plan's screens): the
+   explore big-moment card's shape, over the map. Fits or scrolls on a
+   375×667 phone with its buttons always reachable (a sticky footer, like the
+   trade screen's send row; render-check requirements 1 and 3). */
+.hollowed-sheet {
+  position: fixed;
+  z-index: 6;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  box-sizing: border-box;
+  max-width: 460px;
+  max-height: 72dvh;
+  margin: 0 auto;
+  padding: 22px 18px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 28px;
+  background: #fffafc;
+  box-shadow: 0 10px 30px rgb(74 49 80 / 30%);
+  text-align: center;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.hollowed-sheet[hidden] {
+  display: none;
+}
+
+.hollowed-kicker {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 900;
+  color: #b4532a;
+}
+
+.hollowed-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.hollowed-line {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hollowed-seed {
+  margin: 0 0 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff1cf;
+  font-size: 15px;
+  font-weight: 800;
+  color: #6b4b1e;
+}
+
+.hollowed-meter {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.hollowed-meter span {
+  width: 36px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e8dcef;
+}
+
+.hollowed-meter .on {
+  background: #ffc94d;
+}
+
+.hollowed-rows {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  border-radius: 18px;
+  background: #f7f0fa;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.hollowed-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.hollowed-row-done {
+  color: #2f6b3d;
+}
+
+.hollowed-row-have {
+  font-weight: 700;
+  color: #6b4b6e;
+  white-space: nowrap;
+}
+
+.hollowed-row-short .hollowed-row-have {
+  color: #b4532a;
+}
+
+.hollowed-said {
+  margin: 0 0 8px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fff1cf;
+  font-size: 15px;
+  font-weight: 900;
+  color: #6b4b1e;
+}
+
+.hollowed-note {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.hollowed-error {
+  min-height: 0;
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #b4532a;
+}
+
+.hollowed-error:empty {
+  display: none;
+}
+
+/* The buttons stay reachable while the card scrolls. */
+.hollowed-actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0 -18px;
+  padding: 8px 18px max(14px, env(safe-area-inset-bottom));
+  background: #fffafc;
+}
+
+.hollowed-sheet .hollowed-primary {
+  width: 100%;
+  min-height: 52px;
+  font-size: 18px;
+}
+
+.hollowed-sheet .hollowed-soft {
+  width: 100%;
+}
+
+.hollowed-label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7a6680;
+  text-align: left;
+}
+
+.hollowed-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 50px;
+  margin: 0 0 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 3px solid #b8487a;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 900;
+  color: #4a3150;
+  text-align: center;
+}
+
+.hollowed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.hollowed-chip {
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: none;
+  border-radius: 999px;
+  background: #f6dceb;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* A short phone (the SE): tighter, so the restore sheet fits without scrolling. */
+@media (max-height: 700px) {
+  .hollowed-sheet {
+    padding-top: 14px;
+    bottom: calc(env(safe-area-inset-bottom) + 12px);
+    max-height: 80dvh;
+  }
+  .hollowed-title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  .hollowed-line {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  .hollowed-rows {
+    padding: 8px 10px;
+    gap: 3px;
+    font-size: 14px;
+  }
+  .hollowed-meter {
+    margin: 0 0 6px;
+  }
+  .hollowed-note {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .hollowed-sheet .hollowed-primary {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  .hollowed-sheet .hollowed-soft {
+    min-height: 44px;
+  }
+  .hollowed-input {
+    min-height: 44px;
+    font-size: 17px;
+  }
+  .hollowed-chip {
+    min-height: 44px;
+  }
+}

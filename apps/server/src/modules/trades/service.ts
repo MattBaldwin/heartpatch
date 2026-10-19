@@ -1,6 +1,7 @@
 import {
   CLOTHING_BY_ID,
   GAME_DATA,
+  firstHomeTiles,
   heartSeedOf,
   hexDistance,
   isTradingPost,
@@ -525,7 +526,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   const devConnect = async (user: PublicUser, mapId: string) => {
     await requireMember(db, user, mapId);
     const tiles = await createTerritoryRepo(db).listTiles(mapId);
-    const seed = heartSeedOf(tiles.filter((t) => t.ownerUserId === user.id && t.homeSlot !== null));
+    const seed = heartSeedOf(firstHomeTiles(tiles.filter((t) => t.ownerUserId === user.id)));
     const [post] = tiles
       .filter(isTradingPost)
       .sort((a, b) => (seed ? hexDistance(seed, a) - hexDistance(seed, b) : 0));

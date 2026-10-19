@@ -415,6 +415,41 @@ export async function takeDownFencesOnCapture(
   };
 }
 
+/**
+ * Land restored into a player's hands (#306 PR 3): wild tiles that just
+ * became theirs. Their own segments on their tiles next to those that faced
+ * them now stand on inner edges, so they come down for the take-down share,
+ * as in a capture (`inner`, owner decision on #244). Wild land carries no
+ * segments (they came down when it went wild). One lock over every tile
+ * involved (step 8, id order). `tiles` is the map as it is now, the new
+ * land applied.
+ */
+export async function takeDownInnerFences(
+  tx: Executor,
+  mapId: string,
+  gained: readonly { id: string; q: number; r: number }[],
+  userId: string,
+  tiles: readonly { id: string; q: number; r: number; ownerUserId: string | null }[],
+): Promise<LostFence[]> {
+  if (gained.length === 0) return [];
+  const repo = createFencesRepo(tx);
+  const gainedKeys = new Set(gained.map(hexKey));
+  const mine = tiles.filter(
+    (t) => t.ownerUserId === userId && gained.some((g) => hexDistance(t, g) === 1),
+  );
+  const rows = await repo.lockOnTiles(mine.map((t) => t.id));
+  const inner = rows
+    .filter(
+      (row) =>
+        row.ownerUserId === userId &&
+        isHexEdge(row.edge) &&
+        gainedKeys.has(hexKey(edgeNeighbor(row, row.edge))),
+    )
+    .map((row) => lostFence(mapId, row, 'inner'));
+  await repo.deleteFences(inner.map((l) => l.fenceId));
+  return inner;
+}
+
 /** A segment coming down with the take-down share back, and its event. */
 function lostFence(mapId: string, row: FenceRow, lost: 'wild' | 'left' | 'inner'): LostFence {
   const refund = fenceRefund(row);

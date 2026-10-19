@@ -76,7 +76,13 @@ export class MapState {
       // posts came to this older patch (#269): new terrain and names, from the view.
       // A tile finished clearing (#242): new terrain, its spot gone, from the view too.
       // Hollowed villages came to this older patch (#306): their progress and
-      // my reach come with the view.
+      // my reach come with the view. A piece went back on a village tile, a
+      // tile was restored and claimed, a village was won and its ring planted,
+      // or it was named (PR 3): the view has the progress, the land and the ring.
+      case 'community.mended':
+      case 'tile.restored':
+      case 'community.restored':
+      case 'community.named':
       case 'member.joined':
       case 'member.left':
       case 'member.removed':

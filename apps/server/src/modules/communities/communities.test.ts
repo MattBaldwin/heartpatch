@@ -204,9 +204,11 @@ describe.skipIf(!url)('Hollowed Communities (#306, needs DATABASE_URL)', () => {
           'id',
           'kind',
           'name',
+          'named',
           'ownerUserId',
           'reach',
           'restored',
+          'restoredTiles',
           'square',
           'tiles',
         ]);

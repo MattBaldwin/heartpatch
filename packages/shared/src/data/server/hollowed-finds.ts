@@ -41,3 +41,12 @@ export const HOLLOWED_FINDS: ExploreFindTable[] = hollowedFinds(
   COMMUNITY_RULES.heartdustFindMultiplier,
   COMMUNITY_RULES.joyResource,
 );
+
+/**
+ * A helper's thank-you (#306 PR 3, plan Q2): every piece that doesn't claim
+ * its tile pays its placer this back at once, so helping a friend's village
+ * is never for nothing. Item id → how many. Secret, with the find tables.
+ */
+export const HOLLOWED_HELPER_GIFT: Readonly<Record<string, number>> = {
+  treats: 2, // TUNE: a small thank-you, about a third of a piece's Timber in value
+};

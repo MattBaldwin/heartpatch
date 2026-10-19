@@ -57,6 +57,18 @@ export function minutesUntilNightChange(
   return Math.max(1, (next ?? local.minute + 1) - local.minute);
 }
 
+/**
+ * A map's first homes (#306 PR 3): every home tile but a won village's
+ * ring, which carries its winner's slot too, marked with the village's
+ * `communityId`. Feed these to `heartSeedOf`, so a Keeper with two rings
+ * still has one Heart Seed.
+ */
+export function firstHomeTiles<T extends { homeSlot: number | null; communityId: string | null }>(
+  tiles: readonly T[],
+): T[] {
+  return tiles.filter((t) => t.homeSlot !== null && t.communityId === null);
+}
+
 /** The Heart Seed: the middle of a home base (the mean of its seven tiles), or null. */
 export function heartSeedOf(homeTiles: readonly Hex[]): Hex | null {
   if (homeTiles.length === 0) return null;

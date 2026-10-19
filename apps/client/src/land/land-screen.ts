@@ -1,5 +1,6 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  firstHomeTiles,
   GAME_EVENTS,
   heartSeedOf,
   hexKey,
@@ -197,7 +198,14 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
     const view = options.view();
     if (!view || !user) return null;
     const me = user.id;
-    return heartSeedOf(view.tiles.filter((t) => t.ownerUserId === me && t.homeSlot !== null));
+    // My first home's (#306 PR 3): a won village's ring is home land too.
+    return heartSeedOf(
+      firstHomeTiles(
+        view.tiles
+          .filter((t) => t.ownerUserId === me)
+          .map((t) => ({ ...t, communityId: t.communityId ?? null })),
+      ),
+    );
   };
 
   function render(): void {

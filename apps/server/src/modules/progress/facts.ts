@@ -3,6 +3,7 @@ import {
   connectedLand,
   EMPTY_PROGRESS_FACTS,
   hexDistance,
+  firstHomeTiles,
   heartSeedOf,
   isTradingPost,
   landMood,
@@ -82,7 +83,7 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
   );
 
   const owned = mapTiles.filter((t) => t.ownerUserId === userId);
-  const seed = heartSeedOf(owned.filter((t) => t.homeSlot !== null));
+  const seed = heartSeedOf(firstHomeTiles(owned));
 
   // Land that misses you isn't tended; the home ring, land near home and
   // joined homesteads never fade, so they always count (tending.ts `statusOf`).

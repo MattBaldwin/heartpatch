@@ -1,8 +1,17 @@
 import type { CommunityKindId, Hex } from '@heartpatch/shared';
-import { and, asc, count, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { Executor } from '../../db/client.js';
-import { communities, communityTiles, maps, tiles } from '../../db/schema.js';
+import { withTransaction, type Executor } from '../../db/client.js';
+import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
+import {
+  buildings,
+  communities,
+  communityPieces,
+  communityTiles,
+  maps,
+  tileClears,
+  tiles,
+} from '../../db/schema.js';
 
 /** A Hollowed Community to store (#306), its tiles already resolved to ids. */
 export interface NewCommunity {
@@ -25,6 +34,8 @@ export interface CommunityViewRow {
   restoredName: string | null;
   kind: CommunityKindId;
   ownerUserId: string | null;
+  /** Its winner typed its name (`named_at_level` set). */
+  named: boolean;
   square: Hex;
   /** Square first, then (q, r) order, with whether each is fully restored. */
   tiles: (Hex & { restored: boolean })[];
@@ -48,6 +59,36 @@ export interface MapCommunityCount {
   communities: number;
 }
 
+/** A community as restoring and naming read it (#306 PR 3). Server-only: its seed. */
+export interface CommunityRow {
+  id: string;
+  name: string;
+  restoredName: string | null;
+  namedAtLevel: number | null;
+  ownerUserId: string | null;
+  seedTileId: string;
+}
+
+/** One village tile's restoring progress, with where it is. */
+export interface CommunityTileRow {
+  tileId: string;
+  q: number;
+  r: number;
+  piecesNeeded: number;
+  piecesDone: number;
+  restoredBy: string | null;
+  restoredAt: Date | null;
+}
+
+/** A tile restoring may write: a village tile or its ring, locked. */
+export interface RestoreTileRow extends Hex {
+  id: string;
+  terrain: string;
+  ownerUserId: string | null;
+  homeSlot: number | null;
+  communityId: string | null;
+}
+
 /**
  * Hollowed Communities storage (#306): `communities`, `community_tiles` and
  * `tiles.community_id`. Plain queries; callers run writes inside their own
@@ -68,6 +109,48 @@ export interface CommunitiesRepo {
   listPlaced: (mapId: string) => Promise<PlacedCommunityRow[]>;
   /** Patch maps with a seed, with their seats and community count, in id order. */
   listPatchCommunityCounts: () => Promise<MapCommunityCount[]>;
+
+  // Restoring, claiming and naming (#306 PR 3).
+  /** The community on this map, unlocked; null if there's none. */
+  findCommunity: (mapId: string, communityId: string) => Promise<CommunityRow | null>;
+  /** Its village tiles' progress, square first, then (q, r); `lock` takes them in tile id order. */
+  listCommunityTiles: (communityId: string, lock?: boolean) => Promise<CommunityTileRow[]>;
+  /** The map's tiles at these places (any that exist), locked `FOR NO KEY UPDATE` in id order. */
+  lockTilesAt: (mapId: string, at: readonly Hex[]) => Promise<RestoreTileRow[]>;
+  /** The community row, `FOR UPDATE` (step 6, after its tiles). */
+  lockCommunity: (communityId: string) => Promise<CommunityRow | null>;
+  /** One more piece on a village tile, with its ledger row; returns the ledger row's id. */
+  addPiece: (input: {
+    tileId: string;
+    userId: string;
+    paid: Record<string, number>;
+    at: Date;
+  }) => Promise<string>;
+  /** The tile's last piece went in: who restored it, and when. */
+  markRestored: (tileId: string, userId: string, at: Date) => Promise<void>;
+  /** Who put pieces on this tile, most first (then by user id). */
+  helpers: (tileId: string) => Promise<{ userId: string; pieces: number }[]>;
+  /** The village is won: its owner, when, and the name it wears until they type one. */
+  win: (communityId: string, userId: string, at: Date, name: string) => Promise<void>;
+  /** The winner's ring: these tiles become their home tiles, marked as this village's. */
+  plantRing: (
+    tileIds: readonly string[],
+    input: { userId: string; homeSlot: number; communityId: string },
+  ) => Promise<void>;
+  /** Of these tiles, the ones with a building or a clear going on (a won ring leaves them be). */
+  busyTiles: (tileIds: readonly string[]) => Promise<Set<string>>;
+  /**
+   * A winner left (#306 PR 3, owner 2026-10-19): their rings, already
+   * released with their land (`releaseTiles`, which holds the tiles), stop
+   * being home tiles; the grounds stop being the village's. Their villages
+   * stay restored but have no owner and lose the name. Locks the community
+   * rows in id order. Returns how many villages it uprooted.
+   */
+  uproot: (mapId: string, userId: string) => Promise<number>;
+  /** Dev only: these tiles one piece short of restored. */
+  devAlmost: (tileIds: readonly string[]) => Promise<void>;
+  /** The winner typed a name, at their village seed's level. */
+  setName: (communityId: string, name: string, level: number) => Promise<void>;
 }
 
 const hexOf = (q: number, r: number): Hex => ({ q, r });
@@ -152,6 +235,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
             restoredName: communities.restoredName,
             kind: communities.kind,
             ownerUserId: communities.ownerUserId,
+            named: sql<boolean>`${communities.namedAtLevel} is not null`,
             q: square.q,
             r: square.r,
           })
@@ -167,6 +251,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         restoredName: c.restoredName,
         kind: c.kind as CommunityKindId,
         ownerUserId: c.ownerUserId,
+        named: c.named,
         square: hexOf(c.q, c.r),
         tiles: village
           .filter((t) => t.communityId === c.id)
@@ -218,5 +303,215 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .where(and(eq(maps.kind, 'multiplayer'), isNotNull(maps.seed)))
         .groupBy(maps.id)
         .orderBy(asc(maps.id)),
+
+    findCommunity: async (mapId, communityId) => {
+      const [row] = await db
+        .select(communityColumns)
+        .from(communities)
+        .where(and(eq(communities.id, communityId), eq(communities.mapId, mapId)));
+      return row ?? null;
+    },
+
+    listCommunityTiles: async (communityId, lock = false) => {
+      const query = db
+        .select({
+          tileId: communityTiles.tileId,
+          q: tiles.q,
+          r: tiles.r,
+          piecesNeeded: communityTiles.piecesNeeded,
+          piecesDone: communityTiles.piecesDone,
+          restoredBy: communityTiles.restoredBy,
+          restoredAt: communityTiles.restoredAt,
+          cellar: communityTiles.cellar,
+        })
+        .from(communityTiles)
+        .innerJoin(tiles, eq(tiles.id, communityTiles.tileId))
+        .where(eq(communityTiles.communityId, communityId))
+        .orderBy(asc(communityTiles.tileId));
+      const rows = lock ? await query.for('update', { of: communityTiles }) : await query;
+      return rows
+        .sort((a, b) => Number(b.cellar) - Number(a.cellar) || a.q - b.q || a.r - b.r)
+        .map((row) => ({
+          tileId: row.tileId,
+          q: row.q,
+          r: row.r,
+          piecesNeeded: row.piecesNeeded,
+          piecesDone: row.piecesDone,
+          restoredBy: row.restoredBy,
+          restoredAt: row.restoredAt,
+        }));
+    },
+
+    lockTilesAt: async (mapId, at) => {
+      if (at.length === 0) return [];
+      return db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          homeSlot: tiles.homeSlot,
+          communityId: tiles.communityId,
+        })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            sql`(${tiles.q}, ${tiles.r}) in (${sql.join(
+              at.map((h) => sql`(${h.q}, ${h.r})`),
+              sql`, `,
+            )})`,
+          ),
+        )
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+    },
+
+    lockCommunity: async (communityId) => {
+      const [row] = await db
+        .select(communityColumns)
+        .from(communities)
+        .where(eq(communities.id, communityId))
+        .for('update');
+      return row ?? null;
+    },
+
+    addPiece: async ({ tileId, userId, paid, at }) => {
+      await db
+        .update(communityTiles)
+        .set({ piecesDone: sql`${communityTiles.piecesDone} + 1` })
+        .where(eq(communityTiles.tileId, tileId));
+      const [row] = await db
+        .insert(communityPieces)
+        .values({ tileId, userId, pieces: 1, paid, at })
+        .returning({ id: communityPieces.id });
+      if (!row) throw new Error('addPiece: insert returned no row');
+      return row.id;
+    },
+
+    markRestored: async (tileId, userId, at) => {
+      await db
+        .update(communityTiles)
+        .set({ restoredBy: userId, restoredAt: at })
+        .where(eq(communityTiles.tileId, tileId));
+    },
+
+    helpers: async (tileId) => {
+      const pieces = sum(communityPieces.pieces).mapWith(Number);
+      return db
+        .select({ userId: communityPieces.userId, pieces })
+        .from(communityPieces)
+        .where(eq(communityPieces.tileId, tileId))
+        .groupBy(communityPieces.userId)
+        .orderBy(desc(pieces), asc(communityPieces.userId));
+    },
+
+    win: async (communityId, userId, at, name) => {
+      await db
+        .update(communities)
+        .set({ ownerUserId: userId, claimedAt: at, restoredName: name, namedAtLevel: null })
+        .where(eq(communities.id, communityId));
+    },
+
+    plantRing: async (tileIds, { userId, homeSlot, communityId }) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(tiles)
+        .set({ ownerUserId: userId, homeSlot, communityId })
+        .where(inArray(tiles.id, [...tileIds]));
+    },
+
+    busyTiles: async (tileIds) => {
+      if (tileIds.length === 0) return new Set();
+      const [built, clearing] = await Promise.all([
+        db
+          .select({ id: buildings.tileId })
+          .from(buildings)
+          .where(inArray(buildings.tileId, [...tileIds])),
+        db
+          .select({ id: tileClears.tileId })
+          .from(tileClears)
+          .where(and(inArray(tileClears.tileId, [...tileIds]), isNull(tileClears.endedAt))),
+      ]);
+      return new Set([...built, ...clearing].map((r) => r.id));
+    },
+
+    uproot: async (mapId, userId) => {
+      const owned = await db
+        .select({ id: communities.id })
+        .from(communities)
+        .where(and(eq(communities.mapId, mapId), eq(communities.ownerUserId, userId)))
+        .orderBy(asc(communities.id))
+        .for('update');
+      if (owned.length === 0) return 0;
+      // Released land has no owner: the leaver's ring is the only ownerless
+      // home land that belongs to a village.
+      await db
+        .update(tiles)
+        .set({
+          homeSlot: null,
+          communityId: sql`case when exists (
+            select 1 from ${communityTiles} where ${communityTiles.tileId} = ${tiles.id}
+          ) then ${tiles.communityId} else null end`,
+        })
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            isNull(tiles.ownerUserId),
+            isNotNull(tiles.homeSlot),
+            isNotNull(tiles.communityId),
+          ),
+        );
+      await db
+        .update(communities)
+        .set({ ownerUserId: null, claimedAt: null, restoredName: null, namedAtLevel: null })
+        .where(
+          inArray(
+            communities.id,
+            owned.map((c) => c.id),
+          ),
+        );
+      return owned.length;
+    },
+
+    devAlmost: async (tileIds) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(communityTiles)
+        .set({ piecesDone: sql`${communityTiles.piecesNeeded} - 1` })
+        .where(inArray(communityTiles.tileId, [...tileIds]));
+    },
+
+    setName: async (communityId, name, level) => {
+      await db
+        .update(communities)
+        .set({ restoredName: name, namedAtLevel: level })
+        .where(eq(communities.id, communityId));
+    },
   };
+}
+
+const communityColumns = {
+  id: communities.id,
+  name: communities.name,
+  restoredName: communities.restoredName,
+  namedAtLevel: communities.namedAtLevel,
+  ownerUserId: communities.ownerUserId,
+  seedTileId: communities.seedTileId,
+};
+
+/** The communities repo inside one transaction, with its events (`maps` last). */
+export interface CommunitiesTxRepo extends CommunitiesRepo {
+  appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
+}
+
+/** Runs `fn` in one transaction (restoring and naming, #306 PR 3). */
+export function communitiesTransaction<T>(
+  db: Executor,
+  fn: (repo: CommunitiesTxRepo, tx: Executor) => Promise<T>,
+): Promise<T> {
+  return withTransaction(db, (tx) =>
+    fn({ ...createCommunitiesRepo(tx), appendEvent: (event) => appendGameEvent(tx, event) }, tx),
+  );
 }

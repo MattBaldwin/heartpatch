@@ -64,6 +64,10 @@ export const ItemChangeReasonSchema = z.enum([
   'trick-or-treat',
   /** The host's thank-you Heartdust from a trick-or-treat visitor (#515), ledgered against the visit. */
   'trick-or-treat-thanks',
+  /** A piece put back on a grey village tile (#306 PR 3), ledgered against its `community_pieces` row. */
+  'restore',
+  /** A helper's thank-you for a piece that didn't claim its tile (#306 PR 3), against the same row. */
+  'restore-gift',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

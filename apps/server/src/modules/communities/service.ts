@@ -103,7 +103,9 @@ export async function communitiesView(
       square: c.square,
       tiles: village,
       restored: c.tiles.filter((t) => t.restored).length,
+      restoredTiles: c.tiles.filter((t) => t.restored).map((t) => ({ q: t.q, r: t.r })),
       ownerUserId: c.ownerUserId,
+      named: c.named,
       reach,
       distance,
     };

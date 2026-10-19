@@ -1,3 +1,4 @@
+import { pieceCost } from '../../src/communities/restore.js';
 import { COMMUNITY_RULES } from '../../src/data/communities.js';
 import { MAP_GEN } from '../../src/data/map-gen.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
@@ -43,11 +44,10 @@ export function villageCost(
 ): Record<string, number> {
   const pieces = (rules.piecesBySize[String(size)] ?? 0) * size;
   if (pieces === 0) throw new Error(`no piecesBySize for ${String(size)} tiles`);
-  const each = rules.pieceCost[terrain] ?? rules.pieceCost['default'];
-  if (!each) throw new Error(`no pieceCost for "${terrain}" and no default`);
-  const cost: Record<string, number> = { [rules.joyResource]: pieces * rules.heartdustPerPiece };
-  for (const [resource, n] of Object.entries(each))
-    cost[resource] = (cost[resource] ?? 0) + pieces * n;
+  // The same price the server charges a piece (shared `pieceCost`).
+  const cost: Record<string, number> = {};
+  for (const [resource, n] of Object.entries(pieceCost(terrain, rules)))
+    cost[resource] = pieces * n;
   return cost;
 }
 

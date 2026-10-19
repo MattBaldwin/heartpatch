@@ -23,15 +23,18 @@ export interface HomeBase {
 
 /**
  * Finds each home base's Heart Seed: the tile whose six neighbours are all
- * in the same home slot (design doc §11: the Heart Seed and its ring).
+ * in the same home slot (design doc §11: the Heart Seed and its ring). First
+ * homes only: a won village's ring carries its winner's slot too, marked
+ * with its `communityId` (#306 PR 3), and its seed is the village's square.
  */
 export function findHomeBases(tiles: readonly PublicTile[]): HomeBase[] {
   const slotAt = new Map<HexKey, number>();
-  for (const t of tiles) if (t.homeSlot !== null) slotAt.set(hexKey(t), t.homeSlot);
+  for (const t of tiles)
+    if (t.homeSlot !== null && !t.communityId) slotAt.set(hexKey(t), t.homeSlot);
   const homes: HomeBase[] = [];
   for (const t of tiles) {
     const slot = t.homeSlot;
-    if (slot === null) continue;
+    if (slot === null || t.communityId) continue;
     if (hexNeighbors(t).every((n) => slotAt.get(hexKey(n)) === slot)) homes.push({ slot, seed: t });
   }
   return homes.sort((a, b) => a.slot - b.slot);

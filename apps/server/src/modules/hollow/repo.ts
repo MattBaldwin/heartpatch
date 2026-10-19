@@ -80,6 +80,8 @@ export interface NightTileRow {
   ownerUserId: string | null;
   homeSlot: number | null;
   nodeResource: string | null;
+  /** A grey village's tile (#306), or null. */
+  communityId: string | null;
   /** When its owner claimed it (null: before #277, or never claimed). */
   claimedAt: Date | null;
   /** A homestead joined to its owner's home right now (#199): it could be cleared (#242). */
@@ -167,8 +169,10 @@ export interface HollowRepo {
   fencesOn: (tileIds: readonly string[]) => Promise<Map<string, number>>;
   /** The patch's "Hollow Man strength" percent (#277, admin console). */
   strengthPercent: (mapId: string) => Promise<number>;
-  /** Every home tile with an owner (the Heart Seeds and their rings). */
-  homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
+  /** Every home tile with an owner (the Heart Seeds and their rings, a won village's too: #306). */
+  homeTiles: (
+    mapId: string,
+  ) => Promise<{ ownerUserId: string; q: number; r: number; communityId: string | null }[]>;
   /**
    * Locks every tile someone stands watch on (step 6, id order, `FOR NO KEY
    * UPDATE`), before `nightSquishies`' squishy locks, so a guard taken to the
@@ -353,6 +357,7 @@ function queries(db: Executor): HollowRepo {
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
           nodeResource: tiles.nodeResource,
+          communityId: tiles.communityId,
           claimedAt: tileTending.claimedAt,
           // Joined and not paused (`homesteadOf`), for its owner.
           homestead: sql<boolean>`exists (
@@ -403,7 +408,12 @@ function queries(db: Executor): HollowRepo {
 
     homeTiles: async (mapId) => {
       const rows = await db
-        .select({ ownerUserId: tiles.ownerUserId, q: tiles.q, r: tiles.r })
+        .select({
+          ownerUserId: tiles.ownerUserId,
+          q: tiles.q,
+          r: tiles.r,
+          communityId: tiles.communityId,
+        })
         .from(tiles)
         .where(and(eq(tiles.mapId, mapId), isNotNull(tiles.homeSlot), isNotNull(tiles.ownerUserId)))
         .orderBy(asc(tiles.q), asc(tiles.r));
