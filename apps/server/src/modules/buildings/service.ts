@@ -138,7 +138,7 @@ const MESSAGES = {
   clearFirst: 'Clear this land first 🌱. Then you can build here!',
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
-  namingLocked: `Build one of each and catch ${String(NAMING_RULES.caughtToName)} squishies first!`,
+  namingLocked: `Build one of each and befriend ${String(NAMING_RULES.caughtToName)} squishies first!`,
   seedFirst: 'Your Heart Seed needs to grow first 🌱',
   noPatch: "We couldn't find that patch.",
 } as const;
