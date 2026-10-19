@@ -743,6 +743,32 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(built.statusCode, built.body).toBe(201);
   });
 
+  it('dev: a made homestead in the forest gets no Greens spot back at the next map read (#566)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    // Forest all round: a Greens spot grows back on one in four (#238).
+    await db.execute(
+      `update tiles set terrain = 'forest', node_resource = null where map_id = '${mapId}' and owner_user_id is null and terrain not in ('junipers-gap', 'trading-post')`,
+    );
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
+    expect(made.statusCode, made.body).toBe(201);
+    const at = made.json<{ q: number; r: number }>();
+    // Opening the patch runs the extra-node pass (`seedExtraNodes`).
+    expect((await call(server, 'GET', `/maps/${mapId}/view`, kid)).statusCode).toBe(200);
+    const tile = await db.query.tiles.findFirst({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.q, at.q), eq(t.r, at.r)),
+    });
+    expect(tile).toMatchObject({ ownerUserId: kid.id, nodeResource: null });
+    await give(mapId, kid, { timber: 30, stone: 20 });
+    const built = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
+      buildingId: 'crafting-factory',
+      ...at,
+      spot: 1,
+    });
+    expect(built.statusCode, built.body).toBe(201);
+  });
+
   it('dev: clears a homestead when nothing two steps from home can be cleared (#429)', async () => {
     const server = await start();
     const kid = await player();

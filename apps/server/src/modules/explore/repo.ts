@@ -1,7 +1,4 @@
 import {
-  CLEARED_TERRAIN,
-  CLEARING_RULES,
-  clearToolFor,
   EXPLORE_RULES,
   exploreLayout,
   heartSeedOf,
@@ -19,13 +16,7 @@ import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { communities, communityTiles, maps, tileExplore, tiles } from '../../db/schema.js';
-
-/**
- * Land no tool clears in Phase 1 (owner Q5) that the dev homestead route
- * clears itself when its ring has nothing a tool clears (#429). Never a lake,
- * Juniper's Gap or a trading post.
- */
-const DEV_CLEARABLE: ReadonlySet<string> = new Set(['old-forest', 'pumpkin-fields']);
+import { pickDevHomestead } from './dev-homestead.js';
 
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
 export interface ExploreTileRow {
@@ -143,10 +134,6 @@ export function createExploreRepo(db: Executor) {
       // The Heart Seed: the middle of my seven home tiles (every one of them
       // carries my home slot, so "slot 0" alone could pick a ring tile, #429).
       const heart = heartSeedOf(all.filter((t) => t.ownerUserId === userId && t.homeSlot !== null));
-      // Land a building can go on once its spot is gone: what a tool clears,
-      // or cleared land (never a lake, Juniper's Gap or a trading post).
-      const buildable = (terrain: string) =>
-        terrain === CLEARED_TERRAIN || clearToolFor(terrain, CLEARING_RULES) !== null;
       // Two steps out touches home, so it joins. Asked for one that hasn't
       // (#242), three steps out touches none of it, so it stays unjoined.
       // Neither touches my other land outside home: a homestead next door
@@ -165,16 +152,11 @@ export function createExploreRepo(db: Executor) {
               !mineOut.some((m) => hexDistance(m, t) === 1),
           )
         : [];
-      // A home deep in Old Forest or Pumpkin Fields can have nothing a tool
-      // clears two steps out (about 1 map in 30, #429): then one of those
-      // tiles is cleared here, as a finished clear would leave it. Asked for
-      // its land, any of that ring's land will do.
-      const tile = ask.terrain
-        ? near.find((t) => buildable(t.terrain) || DEV_CLEARABLE.has(t.terrain))
-        : (near.find((t) => buildable(t.terrain)) ??
-          near.find((t) => DEV_CLEARABLE.has(t.terrain)));
-      if (!tile) return null;
-      const terrain = ask.terrain ?? (buildable(tile.terrain) ? tile.terrain : CLEARED_TERRAIN);
+      // Land a building can go on, that keeps no spot the next map read
+      // plants back (#566), or cleared here as a finished clear would leave it.
+      const picked = pickDevHomestead(near, ask, seed);
+      if (!picked) return null;
+      const { tile, terrain } = picked;
       const claimed = await db
         .update(tiles)
         .set({ ownerUserId: userId, nodeResource: ask.nodeResource ?? null, terrain })
