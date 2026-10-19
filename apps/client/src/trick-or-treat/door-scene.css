@@ -1,0 +1,335 @@
+/* The trick-or-treat door (#515 part C, the approved drawn door): a porch
+   over the dimmed map. The house is one inline SVG; every beat is a
+   `data-scene` on the stage, so Reduce Motion shows the same beats standing
+   still. Only transform and opacity animate. */
+
+.door-overlay[hidden] {
+  display: none;
+}
+
+.door-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  overflow-y: auto;
+  padding: calc(env(safe-area-inset-top) + 72px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-left) + 16px);
+  background: rgb(52 29 66 / 94%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.door-name {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  padding: var(--hp-pad-y) 20px;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #fffafc;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.door-stage {
+  position: relative;
+  flex: none;
+  width: min(100%, 400px);
+  aspect-ratio: 360 / 300;
+  cursor: default;
+}
+
+.door-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The Keeper and their Partner stand on the grass in front of the porch. */
+.door-figure {
+  position: absolute;
+  bottom: 2%;
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 6px rgb(40 20 50 / 30%));
+}
+
+.door-partner {
+  left: 26%;
+  width: 24%;
+}
+
+.door-keeper {
+  right: 4%;
+  bottom: 8%;
+  width: 29%;
+}
+
+/* ── The door, its light and what stands in it ─────────────────────────── */
+.door-panel,
+.door-light,
+.door-ghost,
+.door-pail {
+  transition:
+    transform 520ms cubic-bezier(0.3, 1.3, 0.5, 1),
+    opacity 320ms ease-out;
+}
+
+.door-panel {
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.door-light {
+  opacity: 0;
+}
+
+.door-leaf {
+  opacity: 0;
+  transition: opacity 320ms ease-out;
+}
+
+/* Whoever stands in the doorway is drawn a little bigger than the arch's art, about its foot. */
+.door-ghost,
+.door-pail {
+  transform: translateY(46px) scale(1.15);
+  transform-origin: 180px 244px;
+  opacity: 0;
+}
+
+.door-stage:is([data-scene='open'], [data-scene='trick'], [data-scene='anyway']) .door-panel {
+  opacity: 0;
+}
+
+.door-stage:is([data-scene='open'], [data-scene='trick'], [data-scene='anyway']) .door-leaf {
+  opacity: 1;
+}
+
+.door-stage:is([data-scene='open'], [data-scene='trick'], [data-scene='anyway']) .door-light {
+  opacity: 1;
+}
+
+.door-stage:is([data-scene='open'], [data-scene='anyway']) .door-pail {
+  transform: translateY(0) scale(1.15);
+  opacity: 1;
+}
+
+.door-stage[data-scene='trick'] .door-ghost {
+  transform: translateY(0) scale(1.15);
+  opacity: 1;
+}
+
+.door-twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: door-twinkle 1.1s ease-in-out infinite;
+}
+
+.door-twinkle-b {
+  animation-delay: 0.45s;
+}
+
+/* The pumpkin glows only at a lit home; every home still gives treats. */
+.door-pumpkin-glow {
+  opacity: 0;
+}
+
+.door-lit .door-pumpkin-glow {
+  opacity: 1;
+}
+
+/* Knocking: the door trembles, and "knock!" pops out beside it. */
+.door-stage[data-scene='waiting'] .door-panel {
+  animation: door-knock 0.22s ease-in-out infinite;
+}
+
+.door-knock-word {
+  position: absolute;
+  z-index: 1;
+  opacity: 0;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff3c4;
+  text-shadow:
+    0 2px 0 #b8487a,
+    0 0 10px rgb(255 190 80 / 85%);
+  pointer-events: none;
+}
+
+.door-knock-word-1 {
+  top: 48%;
+  left: 31%;
+  rotate: -12deg;
+}
+
+.door-knock-word-2 {
+  top: 41%;
+  right: 22%;
+  rotate: 9deg;
+}
+
+.door-stage[data-scene='waiting'] .door-knock-word {
+  animation: door-word 0.9s ease-out infinite;
+}
+
+.door-stage[data-scene='waiting'] .door-knock-word-2 {
+  animation-delay: 0.3s;
+}
+
+/* The silly trick's confetti falls through the picture and the dimmed map. */
+.door-confetti {
+  position: absolute;
+  inset: -80px -16px 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.door-confetti i {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+}
+
+.door-stage[data-scene='trick'] .door-confetti i {
+  animation: door-fall 2s ease-in 1 both;
+}
+
+/* ── The speech card and its buttons ───────────────────────────────────── */
+.door-say {
+  box-sizing: border-box;
+  width: min(100%, 340px);
+  padding: 12px 22px 14px;
+  border-radius: 28px;
+  background: #fffafc;
+  text-align: center;
+}
+
+.door-say-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.door-say-sub {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #8a5f86;
+}
+
+.door-actions[hidden] {
+  display: none;
+}
+
+.door-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.door-knock {
+  min-width: 180px;
+  min-height: 58px;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 6px 0 #8a3a66;
+}
+
+.door-knock:disabled {
+  opacity: 1;
+  background: #d9a1bd;
+  box-shadow: 0 6px 0 #b9809c;
+}
+
+.door-close[hidden] {
+  display: none;
+}
+
+@keyframes door-twinkle {
+  50% {
+    transform: scale(1.35);
+    opacity: 0.7;
+  }
+}
+
+@keyframes door-knock {
+  25% {
+    transform: translateX(-1.5px);
+  }
+  75% {
+    transform: translateX(1.5px);
+  }
+}
+
+@keyframes door-word {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes door-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(420px) rotate(var(--turn, 200deg));
+  }
+}
+
+/* Reduce Motion: no swing, no shake, no confetti, no bounce. The beats still
+   show in turn; the door is simply open. */
+@media (prefers-reduced-motion: reduce) {
+  .door-panel,
+  .door-light,
+  .door-ghost,
+  .door-pail,
+  .door-leaf {
+    transition: none;
+  }
+
+  .door-twinkle,
+  .door-stage[data-scene='waiting'] .door-panel,
+  .door-stage[data-scene='waiting'] .door-knock-word {
+    animation: none;
+  }
+
+  .door-stage[data-scene='waiting'] .door-knock-word {
+    opacity: 1;
+  }
+
+  .door-confetti {
+    display: none;
+  }
+}

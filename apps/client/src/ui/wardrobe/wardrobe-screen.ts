@@ -114,6 +114,11 @@ export interface WardrobeScreen {
   liveEvent: (event: WsEventMessage) => void;
   /** What the player's Keeper wears (battles dress it too). */
   readonly wearing: readonly string[];
+  /**
+   * Puts a Keeper piece on from outside the Wardrobe (the trick-or-treat card's
+   * "Wear it!", #515): swapped into its slot and sent like a tap in the screen.
+   */
+  wearNow: (itemId: string) => Promise<void>;
   readonly debug: WardrobeDebug | null;
 }
 
@@ -526,6 +531,21 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     showLook(true);
   }
 
+  async function wearNow(itemId: string): Promise<void> {
+    if (!user) return;
+    const mine = session;
+    if (!outfit.server) {
+      try {
+        const loaded = await api.get();
+        if (mine !== session) return;
+        outfit.load(loaded);
+      } catch {
+        return;
+      }
+    }
+    if (!outfit.trying.includes(itemId)) outfit.tryOn(itemId);
+  }
+
   async function wearPreset(preset: number): Promise<void> {
     const mine = session;
     // The preset replaces taps not sent yet (sending them too would race it).
@@ -737,6 +757,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     get wearing() {
       return outfit.server?.wearing ?? [];
     },
+    wearNow,
     get debug() {
       if (!user) return null;
       return {
