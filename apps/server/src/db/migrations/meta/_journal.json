@@ -351,6 +351,13 @@
       "when": 1792344995010,
       "tag": "0049_trick_or_treat_visits",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792385493964,
+      "tag": "0050_communities",
+      "breakpoints": true
     }
   ]
 }

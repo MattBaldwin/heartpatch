@@ -397,9 +397,15 @@ export const tiles = pgTable(
     // Set on a home base's tiles (the Heart Seed and its ring): which player
     // slot (map_members.home_slot) it belongs to. Home tiles are never captured.
     homeSlot: smallint('home_slot'),
+    // The Hollowed Community (#306) this tile is a village tile of; null on
+    // every other tile. `community_tiles` holds its progress.
+    communityId: uuid('community_id').references((): AnyPgColumn => communities.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     unique('tiles_map_id_q_r_key').on(t.mapId, t.q, t.r),
+    index('tiles_community_id_idx').on(t.communityId),
     foreignKey({
       name: 'tiles_owner_member_fk',
       columns: [t.mapId, t.ownerUserId],
@@ -2302,5 +2308,109 @@ export const trickOrTreatVisits = pgTable(
     check('trick_or_treat_visits_not_self', sql`${t.visitorUserId} <> ${t.hostUserId}`),
     check('trick_or_treat_visits_prize_count_positive', sql`${t.prizeCount} >= 1`),
     check('trick_or_treat_visits_host_heartdust_non_negative', sql`${t.hostHeartdust} >= 0`),
+  ],
+);
+
+/**
+ * Hollowed Communities (#306): the grey villages the Hollow Man drained, one
+ * row each, placed with the map (`generateMap`) or on an older patch by the
+ * boot pass (`placeMissingCommunities`). `name` is the generated one
+ * ("Bramble Hollow"); `restored_name` the one its winner gives it, at
+ * `named_at_level`. `perk_id` is the kind's perk (the kind id today). `seed`
+ * (its finds) and `key_tile_id` (where the cellar key hides) are
+ * server-only and never leave it (CLAUDE.md rule 6); `key_revealed_at` is
+ * when the key was found. `owner_user_id` is who restored every tile and
+ * won it, at `claimed_at`.
+ */
+export const communities = pgTable(
+  'communities',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    restoredName: text('restored_name'),
+    namedAtLevel: smallint('named_at_level'),
+    // A `CommunityKindId` from the shared data.
+    kind: text('kind').notNull(),
+    perkId: text('perk_id').notNull(),
+    seed: text('seed').notNull(),
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    claimedAt: timestamptz('claimed_at'),
+    // The village square (where the kind's building stands).
+    seedTileId: uuid('seed_tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    keyTileId: uuid('key_tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    keyRevealedAt: timestamptz('key_revealed_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('communities_map_id_idx').on(t.mapId),
+    unique('communities_seed_tile_id_key').on(t.seedTileId),
+  ],
+);
+
+/**
+ * One row per village tile of a Hollowed Community (#306): the pieces it
+ * needs (`COMMUNITY_RULES.piecesBySize` by the village's size) and has, who
+ * finished restoring it and when. `cellar` marks the square's cellar,
+ * opened at `cellar_opened_at`. `puzzle_solved_by` is a JSON array of the
+ * user ids who solved this tile's puzzle (a set, kept sorted). A tile is
+ * in one village at most (`tile_id` unique).
+ */
+export const communityTiles = pgTable(
+  'community_tiles',
+  {
+    communityId: uuid('community_id')
+      .notNull()
+      .references(() => communities.id, { onDelete: 'cascade' }),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    piecesNeeded: integer('pieces_needed').notNull(),
+    piecesDone: integer('pieces_done').notNull().default(0),
+    restoredBy: uuid('restored_by').references(() => users.id, { onDelete: 'set null' }),
+    restoredAt: timestamptz('restored_at'),
+    cellar: boolean('cellar').notNull().default(false),
+    cellarOpenedAt: timestamptz('cellar_opened_at'),
+    puzzleSolvedBy: jsonb('puzzle_solved_by').$type<string[]>().notNull().default([]),
+  },
+  (t) => [
+    primaryKey({ columns: [t.communityId, t.tileId] }),
+    unique('community_tiles_tile_id_key').on(t.tileId),
+    check('community_tiles_pieces_needed_positive', sql`${t.piecesNeeded} >= 1`),
+    check(
+      'community_tiles_pieces_done_range',
+      sql`${t.piecesDone} between 0 and ${t.piecesNeeded}`,
+    ),
+  ],
+);
+
+/**
+ * The pieces ledger (#306): one row per restore, who put how many pieces on
+ * which village tile and what they paid (item id → quantity, Heartdust
+ * included), so every piece is accounted for (tech spec §4).
+ */
+export const communityPieces = pgTable(
+  'community_pieces',
+  {
+    id: id(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => communityTiles.tileId, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    pieces: integer('pieces').notNull(),
+    paid: jsonb('paid').$type<Record<string, number>>().notNull(),
+    at: timestamptz('at').notNull(),
+  },
+  (t) => [
+    index('community_pieces_tile_id_idx').on(t.tileId),
+    check('community_pieces_pieces_positive', sql`${t.pieces} >= 1`),
   ],
 );

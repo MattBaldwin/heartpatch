@@ -10,7 +10,7 @@ import {
   type ItemCounts,
 } from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, inject, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import type { Database } from '../../db/client.js';
@@ -33,6 +33,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { packBeforeOneBuildingPerTile, packCrowdedTiles } from './crowded-tiles.js';
 import { BUILDING_DATA } from './hearthfire.js';
+import type * as CommunitiesService from '../communities/service.js';
 
 /*
  * Migration B (#295, owner decision 2026-10-18): tiles still holding two or
@@ -41,6 +42,15 @@ import { BUILDING_DATA } from './hearthfire.js';
  * up to migration B, seeds what the old rules allowed, and runs the migrate
  * step the way `pnpm db:migrate` does.
  */
+
+// The app runs on a database from before migration B here, so before the
+// Hollowed Communities' tables too (#306, a later migration): new patches
+// get no villages and the map view lists none.
+vi.mock('../communities/service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof CommunitiesService>()),
+  storeCommunities: () => Promise.resolve([]),
+  communitiesView: () => Promise.resolve([]),
+}));
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -93,6 +103,9 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
   beforeEach(async () => {
     scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
     db = scratch.client.db;
+    // Today's code writes `tiles.community_id` (#306, a migration after B):
+    // added by hand until the pack-up has run, then dropped for its migration.
+    await db.execute('alter table tiles add column community_id uuid');
   });
   afterEach(async () => {
     await app?.close();
@@ -105,7 +118,10 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
   /** The migrate step, as `pnpm db:migrate` runs it. */
   const migrate = () =>
     runMigrations(db, {
-      beforeOneBuildingPerTile: (d) => packBeforeOneBuildingPerTile(d, () => clock, log),
+      beforeOneBuildingPerTile: async (d) => {
+        await packBeforeOneBuildingPerTile(d, () => clock, log);
+        await d.execute('alter table tiles drop column community_id');
+      },
     });
 
   async function start(): Promise<FastifyInstance> {

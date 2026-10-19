@@ -201,8 +201,12 @@ The players-per-map limit (up to 6; older patches keep 4, #318) is a game rule, 
 | `node_resource` | text, null | Resource id of the tile's node; null = none |
 | `guardian_strength` | smallint, null | Wild guardian strength on neutral tiles. Server-only (not in `PublicTileSchema`) |
 | `home_slot` | smallint, null | Set on a home base's 7 tiles: whose slot it is. Home tiles are never captured |
+| `community_id` | uuid → communities, null | The Hollowed Community this is a village tile of (#306); `on delete set null`. Indexed |
 
 Tiles are written once, from `generateMap`, when the map is created.
+
+### `communities`, `community_tiles`, `community_pieces` (#306)
+Hollowed Communities: grey villages on wild land, stored with a new map (`generateMap` places them) or put on an older patch by the boot pass (`placeMissingCommunities`). `communities`: one row each (`name`, `restored_name` and `named_at_level` once its winner names it, `kind`, `perk_id` = the kind, `owner_user_id`/`claimed_at` once won, `seed_tile_id` = the village square). `seed` and `key_tile_id` (where the cellar key hides; `key_revealed_at` once found) are **server-only** (CLAUDE.md rule 6) and never in a response or public event. `community_tiles`: one row per village tile (PK `(community_id, tile_id)`, `tile_id` unique): `pieces_needed` (`COMMUNITY_RULES.piecesBySize` by village size), `pieces_done`, `restored_by`/`restored_at`, `cellar` (the square), `cellar_opened_at`, and `puzzle_solved_by` (a JSON array of user ids, default `[]`). `community_pieces`: the restore ledger, one row per restore (`tile_id` → `community_tiles.tile_id`, `user_id`, `pieces`, `paid` item → quantity, `at`).
 
 ### `invite_codes`
 | Column | Type | Notes |

@@ -7,7 +7,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type DbClient } from './client.js';
 import { migrationsFolder, runMigrations } from './migrator.js';
-import { battles, buildings, mapMembers, tiles, users } from './schema.js';
+import { battles, buildings, mapMembers, users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -57,7 +57,7 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
   const snapshot = async () => {
     const rows = await client!.db.execute(
       `select json_build_object(
-         'tiles', (select json_agg(t order by t.id) from tiles t),
+         'tiles', (select json_agg(to_jsonb(t) - 'community_id' order by t.id) from tiles t),
          'members', (select json_agg(m order by m.user_id) from map_members m),
          'buildings', (select json_agg(b order by b.id) from buildings b),
          'attacks', (select json_agg(to_jsonb(a) - array['part', 'follows_attack_id',
@@ -94,13 +94,15 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
       r: number,
       ownerUserId: string | null,
       homeSlot: number | null,
-    ) =>
-      (
-        await db
-          .insert(tiles)
-          .values({ mapId, q, r, terrain: 'meadow', ownerUserId, homeSlot })
-          .returning({ id: tiles.id })
-      )[0]!.id;
+    ) => {
+      // Raw SQL: `tiles` gained a column after 0031 (#306).
+      const id = randomUUID();
+      await db.execute(
+        sql`insert into tiles (id, map_id, q, r, terrain, owner_user_id, home_slot)
+            values (${id}, ${mapId}, ${q}, ${r}, 'meadow', ${ownerUserId}, ${homeSlot})`,
+      );
+      return id;
+    };
     const home = await tile(0, 0, maple, 0);
     const claimed = await tile(1, 0, maple, null);
     await tile(2, 0, pip, null);

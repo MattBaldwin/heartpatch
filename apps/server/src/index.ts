@@ -10,6 +10,7 @@ import { createMilestonesService } from './modules/milestones/service.js';
 import { relayoutHomes } from './modules/buildings/layout.js';
 import { relayoutTileUses } from './modules/buildings/tile-uses.js';
 import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
+import { placeMissingCommunities } from './modules/communities/backfill.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createLandTending } from './modules/territory/tending.js';
@@ -125,7 +126,7 @@ relayoutHomes(db.db, clock, (owner, err) => {
 // Trading posts (#269) for patches made before them. Idempotent, so every
 // boot can run it; it never blocks start. A patch with no fair spot free is
 // skipped (no land is ever taken) and tried again next boot.
-placeMissingTradingPosts(
+const postsPass = placeMissingTradingPosts(
   db.db,
   (mapId, err) => {
     app.log.error({ err, mapId }, 'trading-post pass skipped a patch');
@@ -143,6 +144,32 @@ placeMissingTradingPosts(
     app.log.error({ err }, 'trading-post pass failed');
   },
 );
+// Hollowed Communities (#306) for patches made before them, after the posts
+// (a village keeps its distance from them). Idempotent, like the posts' pass:
+// a patch with no room is skipped (no land is ever taken) and tried again
+// next boot.
+postsPass
+  .then(() =>
+    placeMissingCommunities(
+      db.db,
+      (mapId, err) => {
+        app.log.error({ err, mapId }, 'community pass skipped a patch');
+      },
+      app.wsHub?.publish,
+    ),
+  )
+  .then(
+    (done) => {
+      if (done.placed > 0)
+        app.log.info({ placed: done.placed }, 'placed Hollowed Communities on older patches');
+      if (done.skipped.length > 0) {
+        app.log.warn({ mapIds: done.skipped }, 'no room for Hollowed Communities yet');
+      }
+    },
+    (err: unknown) => {
+      app.log.error({ err }, 'community pass failed');
+    },
+  );
 // Closing the app (shutdown or failed start) stops the jobs, then drains the DB pool.
 app.addHook('onClose', async () => {
   await jobs.stop();

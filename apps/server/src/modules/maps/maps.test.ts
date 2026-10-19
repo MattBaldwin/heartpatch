@@ -473,6 +473,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           'guardianHint',
           'buildings',
           'clearing',
+          'communityId',
           'explored',
           'fences',
           'gathering',
@@ -994,7 +995,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       let scratch: ScratchDatabase;
       let full: Database;
       beforeAll(async () => {
-        scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10 });
+        scratch = await databaseBefore(url!, ONE_BUILDING_PER_TILE, { max: 10, without: true });
         full = db;
         db = scratch.client.db;
       });

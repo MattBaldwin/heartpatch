@@ -8,6 +8,7 @@ import {
 } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { hashSecret } from '../modules/auth/secrets.js';
+import { storeCommunities } from '../modules/communities/service.js';
 import type { Database } from './client.js';
 import { keepers, mapMembers, maps, tiles, users } from './schema.js';
 
@@ -228,6 +229,12 @@ export async function seed(db: Database): Promise<SeedResult> {
         ownerUserId: t.homeSlot === null ? null : (userIds[t.homeSlot] ?? null),
       })),
     );
+    // Its Hollowed Communities (#306), as a new patch stores them.
+    await storeCommunities(tx, {
+      mapId: map.id,
+      mapSeed: SEED_MAP_SEED,
+      placed: generated.communities,
+    });
 
     return { created: true, mapId: map.id, userIds };
   });
