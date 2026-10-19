@@ -12,8 +12,7 @@ const all: NamingFacts = {
   heartSeedLevel: 1,
   homeNamedAtLevel: null,
 };
-const gate = (facts: Partial<NamingFacts>) =>
-  namingGate({ ...all, ...facts }, NAMING_RULES, kinds);
+const gate = (facts: Partial<NamingFacts>) => namingGate({ ...all, ...facts }, NAMING_RULES, kinds);
 
 describe('NAMING_RULES', () => {
   it('passes its schema', () => {

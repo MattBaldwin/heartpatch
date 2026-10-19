@@ -116,10 +116,7 @@ export const HomeNameSchema = z
     z
       .string()
       .min(1, 'Type a name first!')
-      .max(
-        NAMING_RULES.maxLength,
-        `Names can be up to ${String(NAMING_RULES.maxLength)} letters.`,
-      )
+      .max(NAMING_RULES.maxLength, `Names can be up to ${String(NAMING_RULES.maxLength)} letters.`)
       .regex(
         /^[\p{L}\p{N} '’!&.,-]+$/u,
         'Names can use letters, numbers, spaces and a little punctuation.',

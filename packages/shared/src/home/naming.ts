@@ -41,8 +41,7 @@ export function namingGate(
   const kinds = buildableKinds.map((kind) => ({ kind, built: built.has(kind) }));
   const unlocked = kinds.every((k) => k.built) && facts.caughtCount >= rules.caughtToName;
   const renameOpen =
-    unlocked &&
-    (facts.homeNamedAtLevel === null || facts.heartSeedLevel > facts.homeNamedAtLevel);
+    unlocked && (facts.homeNamedAtLevel === null || facts.heartSeedLevel > facts.homeNamedAtLevel);
   return {
     unlocked,
     kinds,
