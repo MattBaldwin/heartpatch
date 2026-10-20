@@ -48,7 +48,6 @@ import {
   needsHere,
   progressLine,
   rareTitle,
-  stepToward,
   terrainName,
   toolChip,
   toolChipShort,
@@ -71,8 +70,12 @@ import {
   slideMove,
   spotAtTap,
   spotInFront,
+  tapWalk,
+  tapWalkStep,
   toCaveStage,
   yawToward,
+  type Collider,
+  type TapWalk,
 } from './explore-world.js';
 import {
   interactionProgress,
@@ -192,6 +195,16 @@ export interface ExploreDebug {
    * Keeper at its detail level): a probe that reverts makes two (#501 G).
    */
   readonly tierChanges: number;
+  /** Where a tap is walking the Keeper, or null (#510). */
+  readonly walkGoal: WorldPoint | null;
+  /** A tap this near an unsearched spot walks up beside the spot, not to the tap (`EXPLORE_VIEW.tapPick`). */
+  readonly tapPick: number;
+  /**
+   * What the Keeper slides round (spots and buildings), each widened by the
+   * Keeper's own radius: its middle never comes nearer than `r`. Tests pick
+   * a tap with a clear way there (#546).
+   */
+  readonly blockers: readonly Collider[];
   /** Screen point (CSS pixels) of each spot, to tap in tests. */
   spotOnScreen: (index: number) => { x: number; y: number } | null;
   /** Screen point (CSS pixels) of a tile-local point on the ground, to tap in tests. */
@@ -263,11 +276,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
   let yaw: number = EXPLORE_VIEW.startYaw;
-  /** Where a tap sent the Keeper (beside a spot, if it tapped one). */
-  let walkTo: WorldPoint | null = null;
-  /** The closest a tap-walk has got so far, and how long since it got closer (s). */
-  let walkBest = Infinity;
-  let walkStall = 0;
+  /** Where a tap sent the Keeper (beside a spot, if it tapped one), and how it's going. */
+  let walk: TapWalk | null = null;
   /** The spot the player last tapped: the action button offers it once in reach. */
   let aimed: number | null = null;
   /** The drag steering the Keeper: from where (CSS pixels in the ground layer) to where. */
@@ -479,7 +489,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (origin.x !== p.x || origin.y !== p.y) {
       press.moved = true;
       stick = { id: e.pointerId, x0: origin.x, y0: origin.y, x: p.x, y: p.y };
-      walkTo = null;
+      walk = null;
       aimed = null;
       showStick();
       wake();
@@ -499,7 +509,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     stick = stick
       ? { ...stick, x: p.x, y: p.y }
       : { id: e.pointerId, x0: press.x, y0: press.y, x: p.x, y: p.y };
-    walkTo = null;
+    walk = null;
     aimed = null;
     showStick();
     wake();
@@ -542,9 +552,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const spot = spotAtTap(point, tile.spots);
     const goal = spot ? besideSpot(keeperAt, spot, scene3d?.colliders ?? []) : clampToTile(point);
     // Never aim inside a rock: the Keeper would bump it forever.
-    walkTo = scene3d ? slideMove(goal, goal, scene3d.colliders) : goal;
-    walkBest = Infinity;
-    walkStall = 0;
+    walk = tapWalk(scene3d ? slideMove(goal, goal, scene3d.colliders) : goal);
     aimed = spot?.index ?? null;
     wake();
   }
@@ -552,8 +560,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** Tier changes applied to the scene (`ExploreDebug.tierChanges`). */
   let tierChanges = 0;
 
-  /** Draws every frame while the Keeper walks or something plays, then stops. */
   let lastFrame = 0;
+  /** Draws every frame while the Keeper walks or something plays, then stops. */
   function wake(): void {
     if (frame === 0 && isOpen) {
       lastFrame = performance.now();
@@ -590,28 +598,17 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         heading = faceYaw(v.x, v.z);
       }
       walking = true; // keep reading the stick while it's held
-    } else if (walkTo && !gesturing()) {
-      next = slideMove(keeperAt, stepToward(keeperAt, walkTo, step), s.colliders);
-      const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
-      if (moved) heading = yawToward(keeperAt, next);
-      const left = Math.hypot(next.x - walkTo.x, next.z - walkTo.z);
-      const arrived = left < 1e-4;
-      // Sliding round a rock is progress; going nowhere for a moment is not.
-      if (left < walkBest - 1e-3) {
-        walkBest = left;
-        walkStall = 0;
+    } else if (walk && !gesturing()) {
+      const stepped = tapWalkStep(keeperAt, walk, dt, s.colliders);
+      next = stepped.at;
+      if (next.x !== keeperAt.x || next.z !== keeperAt.z) heading = yawToward(keeperAt, next);
+      walk = stepped.walk;
+      if (walk) {
+        walking = true;
       } else {
-        walkStall += dt;
-      }
-      // A tick with no time to walk (the first after a tap, while ambient life
-      // keeps frames coming: its frame began before the tap) isn't stuck.
-      if (arrived || (!moved && step > 0) || walkStall > EXPLORE_VIEW.walkGiveUp) {
-        walkTo = null;
         // Walked up to a tapped spot: turn to it.
         const spot = tile?.spots.find((x) => x.index === aimed);
         if (spot) heading = yawToward(next, spot);
-      } else {
-        walking = true;
       }
     }
     // A grey village's echo nudges the Keeper back a step (#306 2a): a
@@ -621,7 +618,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (spooked) {
         next = slideMove(keeperAt, spooked.to, s.colliders);
         heading = yawToward(next, spooked.echo);
-        walkTo = null;
+        walk = null;
         spook();
       }
     }
@@ -691,7 +688,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (missingTool(spot, t.tools)) return; // the hint says how to make one
     const now = performance.now();
     yaw = yawToward(keeperAt, spot);
-    walkTo = null;
+    walk = null;
     stick = null;
     showStick();
     s.moveKeeper(keeperAt, yaw);
@@ -1385,7 +1382,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     tile = fresh;
     keeperAt = EXPLORE_VIEW.start;
     yaw = EXPLORE_VIEW.startYaw;
-    walkTo = null;
+    walk = null;
     aimed = null;
     stick = null;
     playing = null;
@@ -1455,7 +1452,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     frame = 0;
     press = null;
     stick = null;
-    walkTo = null;
+    walk = null;
     playing = null;
     card = null;
     clearToast();
@@ -1579,6 +1576,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,
+        walkGoal: walk ? { ...walk.goal } : null,
+        tapPick: EXPLORE_VIEW.tapPick,
+        blockers: (s?.colliders ?? []).map((c) => ({
+          x: c.x,
+          z: c.z,
+          r: c.r + EXPLORE_VIEW.keeperRadius,
+        })),
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;
