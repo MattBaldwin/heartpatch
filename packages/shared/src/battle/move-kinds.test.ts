@@ -3,7 +3,6 @@ import {
   FIXTURE_BATTLE_CONTENT,
   FIXTURE_BATTLE_DATA,
   FIXTURE_BATTLE_RULES,
-  PLAYER,
   ai,
   battleSetup,
   patchActive,
@@ -264,6 +263,8 @@ describe('gentle steady moves', () => {
       );
       if (state.log.some((e) => e.type === 'miss' && e.side === 'a')) continue;
       expect(state.log.some((e) => e.type === 'tuckered-out' && e.side === 'b')).toBe(true);
+      // A finishing blow takes no stance: there's no next hit.
+      expect(state.log.some((e) => e.type === 'stance')).toBe(false);
       return;
     }
     throw new Error('Belly Flop never landed');

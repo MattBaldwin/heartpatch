@@ -9,6 +9,7 @@ import {
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { bigMoveButton } from './big-move.js';
 
 /** The dev squishy's level: strong enough to beat the guardians next to home. */
 const STRONG_LEVEL = 40;
@@ -177,8 +178,12 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
       .toMatchObject({ pending: 0, waiting: false });
     const current = (await battleState(page))!;
     if (current.status !== 'active') break;
-    const button = page.getByTestId(current.phase === 'replace' ? 'battle-replace' : 'battle-move');
-    await button.first().tap();
+    // A big move: steady ones are gentle with a neutral land's guardians (#587).
+    const button =
+      current.phase === 'replace'
+        ? page.getByTestId('battle-replace').first()
+        : await bigMoveButton(page);
+    await button.tap();
   }
   expect(await battleState(page)).toMatchObject({ status: 'finished', winner: 'a' });
   await expect(page.getByTestId('battle-result')).toContainText('This land is yours!');

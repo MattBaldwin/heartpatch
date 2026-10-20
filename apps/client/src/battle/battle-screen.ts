@@ -17,6 +17,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
+  type MoveKind,
   type WsEventMessage,
   speciesMoveKinds,
 } from '@heartpatch/shared';
@@ -633,7 +634,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const kindRules = BATTLE_RULES.moveKinds;
     const styles = kindRules
       ? speciesMoveKinds({ id: me.speciesId, moves: me.moves }, names.moves, kindRules)
-      : new Map();
+      : new Map<string, MoveKind>();
     // The gentle hint: a wild squishy (or a befriendable guardian) low enough
     // for a Heart Charm, with one in the bag.
     const gentleHint = gentleHintShows(b.view, them, charms);

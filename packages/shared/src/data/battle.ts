@@ -129,6 +129,8 @@ export const BATTLE_RULES: BattleRules = {
       defensive: { open: 0.5, guard: 0.25 },
       balanced: { open: 0.25, guard: 0 },
     },
+    // TUNE: Thundermop's three 65–90 attacks all read Big, leaving it open nearly
+    // every turn (32% in `pnpm sim`); Belly Flop as a second Steady brings it back.
     overrides: { thundermop: { 'belly-flop': 'steady' } },
   },
 };

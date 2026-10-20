@@ -513,6 +513,8 @@ class Step {
     if (!kind || !rules) return;
     const user = this.active(side);
     if (!inPlay(user)) return;
+    // A finishing blow takes no stance: there's no next hit to brace for.
+    if (!this.state.sides[otherSide(side)].squishies.some(inPlay)) return;
     user.guard = kind === 'steady' ? rules.guardPercent : -rules.openPercent;
     this.emit({ ...this.at(side), type: 'stance', stance: kind === 'steady' ? 'guard' : 'open' });
   }

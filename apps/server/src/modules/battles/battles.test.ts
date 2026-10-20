@@ -426,6 +426,34 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       for (const id of SECRET_IDS) expect(JSON.stringify(view)).not.toContain(id);
     });
 
+    it('a steady move is gentle with a wild squishy, leaving a sliver for a Heart Charm (#587)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { speciesId: 'flurrypup', level: 30 });
+      const items = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
+        items: { 'heart-charm': 1 },
+      });
+      expect(items.statusCode, items.body).toBe(201);
+      let battle = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: 'thistlepip', level: 3 },
+      });
+      expect(battle.view.gentle).toBe(true);
+      const wild = () => battle.view.sides.b.squishies[0]!;
+      for (let i = 0; i < 10 && wild().energy > 1; i++) {
+        const res = await act(server, kid, battle, { type: 'move', move: 'snowball-toss' });
+        expect(res.statusCode, res.body).toBe(200);
+        battle = battleOf(res);
+      }
+      // Snowball Toss never tuckers it out: it holds on by a whisker.
+      expect(battle.status).toBe('active');
+      expect(wild().energy).toBe(1);
+      expect(battle.view.log.some((e) => e.type === 'hit' && e.gentle === true)).toBe(true);
+      const res = await act(server, kid, battle, { type: 'capture' });
+      expect(res.statusCode, res.body).toBe(200);
+      expect(battleOf(res).view.log.some((e) => e.type === 'capture')).toBe(true);
+    });
+
     it('resumes the battle already going instead of starting another', async () => {
       const server = await start();
       const kid = await player();
