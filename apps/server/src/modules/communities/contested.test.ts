@@ -281,20 +281,27 @@ describe.skipIf(!url)('contested village tiles (#306 PR 4, needs DATABASE_URL)',
     const me = await player();
     const rival = await player();
     const mapId = await patch(server, me, [rival]);
-    const { communityId, square, village } = await restoredVillage(server, me, mapId);
-    const villageIds = new Set(village.map((t) => t.id));
-    // A grounds tile of the ring the rival holds at the win: it stays theirs, a gap.
-    const all = await tilesOf(mapId);
-    const gap = villageRing(square)
-      .map((h) => all.find((t) => t.q === h.q && t.r === h.r))
-      .find(
-        (t): t is Tile =>
-          t !== undefined &&
-          !villageIds.has(t.id) &&
-          t.homeSlot === null &&
-          t.terrain !== 'trading-post',
+    const restored = await restoredVillage(server, me, mapId);
+    const { communityId, square } = restored;
+    let village = restored.village;
+    // A village that fills its ring (7 tiles) has no grounds: give it one by
+    // taking a tile other than the square out of the village.
+    const inRing = (t: Tile) => villageRing(square).some((h) => h.q === t.q && h.r === t.r);
+    const groundsOf = async () => {
+      const ids = new Set(village.map((t) => t.id));
+      return (await tilesOf(mapId)).filter(
+        (t) => inRing(t) && !ids.has(t.id) && t.homeSlot === null && t.terrain !== 'trading-post',
       );
-    // A village that fills its ring has no grounds: nothing to plant there.
+    };
+    if ((await groundsOf()).length === 0) {
+      const spare = village.find((t) => t.id !== square.id)!;
+      await db.execute(`delete from community_tiles where tile_id = '${spare.id}'`);
+      await db.execute(`update tiles set community_id = null where id = '${spare.id}'`);
+      village = village.filter((t) => t.id !== spare.id);
+    }
+    // A grounds tile of the ring the rival holds at the win: it stays theirs, a gap.
+    const [gap] = await groundsOf();
+    expect(gap).toBeDefined();
     if (!gap) return;
     await setOwner([gap.id], rival.id);
     const [last, ...rest] = village;

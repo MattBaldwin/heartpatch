@@ -230,6 +230,7 @@ export async function plantRingGap(tx: Executor, input: RingGapInput): Promise<P
     homeSlot: input.homeSlot,
     communityId: community.id,
     ring: [tile],
+    // The capture took the inner fences down already: this is a safety net.
     gained: [tile],
     converted: [tile],
     at,
