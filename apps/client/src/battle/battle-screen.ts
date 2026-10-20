@@ -120,6 +120,11 @@ export interface BattleScreenOptions {
   /** The battle screen closed: the caller shows the map again. */
   onClosed: (mapId: string) => void;
   api?: typeof battleApi;
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`):
+   * the full-XP note counts to the server's reset (#583). Tests pass a fake.
+   */
+  now?: () => number;
   /** What "Keep going!" on a broken fence's card calls (#527); the real API by default. */
   keepGoingApi?: KeepGoingApi;
   /** The battle clock (tests pass a manual one). */
@@ -307,6 +312,7 @@ function devArena(): { terrain: string; timeOfDay: BattleTimeOfDay } | null {
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const api = options.api ?? battleApi;
+  const gameNow = options.now ?? (() => Date.now());
   const dev = options.clock ? { clock: options.clock, manual: null } : devClock();
   const clock = dev.clock;
   const now = () => clock.now();
@@ -877,9 +883,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // Guardians befriended before the land was lost still came along (#279).
     if (joined && result?.winner !== b.mySide) lines.unshift(joinedLine(friends));
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
-    // The device clock is close enough for an hours-and-minutes note.
+    // The reset is the server's time: counted on the game clock (#583).
     const fullXpAt = b.rewards?.fullXpResetAt;
-    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
+    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - gameNow() : 0;
     if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
     // A rare friend, or a first of its kind: the card celebrates (#391). (Replays left above.)
     const cheer = cheerFor(b, names.species);

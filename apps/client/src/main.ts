@@ -235,7 +235,8 @@ const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapI
 
 // Sound (#25): silent until the first tap, which unlocks it (iOS) and loads
 // the engine. Screens report moments; the audio module picks the sound.
-const audio = createAudio();
+// Halloween's loop follows the server's season on the bag's game clock (#583).
+const audio = createAudio({ now: () => inventory.gameNow() });
 
 // The map's controls live in two side trays (owner decision 2026-10-04):
 // "Adventure" on the left, "My Home" on the right, with news as badges
@@ -297,6 +298,13 @@ const inventory = createInventoryScreen({
   clearOf: () => document.querySelectorAll('.map-hud, .wardrobe-toast, .tray-say, .tray-hint'),
   // Trained squishies show their faces (#465).
   portraits,
+  // The server's time came with a reply (#583): the map's dressing, the music
+  // and a journey panel drawn before it look again.
+  onClockSync: () => {
+    maps.reseason();
+    audio.reseason();
+    journeys.clockSynced();
+  },
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
@@ -569,6 +577,8 @@ const partnerLook = async (mapId: string) => {
 };
 const trickOrTreat = createTrickOrTreat({
   root: document.body,
+  // The patch's midnight is the server's: counted on the bag's game clock (#583).
+  now: () => inventory.gameNow(),
   isGlade: (mapId) => mapId === glade,
   light: (mapId, userIds) => {
     maps.setPorchLanterns(mapId, userIds);
@@ -1008,6 +1018,8 @@ const tileBuild = createTileBuild({
 });
 const maps = createMapScreen({
   root: document.body,
+  // Decor and tile seasons by the server's date, not the phone's (#583).
+  now: () => new Date(inventory.gameNow()),
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
@@ -1261,6 +1273,8 @@ const memberName = async (mapId: string, userId: string): Promise<string | null>
 };
 const battles = createBattleScreen({
   root: document.body,
+  // The full-XP reset is the server's time (#583).
+  now: () => inventory.gameNow(),
   memberName,
   isGlade: (mapId) => mapId === glade,
   journey: {
@@ -1543,6 +1557,8 @@ const installGuide = import.meta.env.PROD ? startPwa(document.body) : null;
 // Grown-up helpers and new recovery codes (#197): Settings rows and helper asks.
 const account = mountAccount(document.body);
 const lobby = mountLobby(document.body, {
+  // Codes' days left count on the bag's game clock (#583).
+  now: () => inventory.gameNow(),
   // A patch is on screen (its map, or the home base, close-up or battle over
   // it): looking around goes back to it, with no "Back to my patches" pill (#212).
   patchOpen: () => patchOnScreen() !== null,

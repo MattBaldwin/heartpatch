@@ -27,6 +27,19 @@ export function familyCodeMeta(code: SignupCodeSummary, now: number): string {
   return `${used} · ${days <= 1 ? 'last day!' : `${String(days)} days left`}`;
 }
 
+/** "Works for 6 more days." for an invite code ending at `expiresAt`, at `now` on the game clock. */
+export function codeLifeLeft(expiresAt: string, now: number): string {
+  const days = Math.ceil((Date.parse(expiresAt) - now) / DAY_MS);
+  if (days <= 1) return 'Works until tomorrow at the latest.';
+  return `Works for ${String(days)} more days.`;
+}
+
+/** "14 days" (rounded up) until a new family code ends, at `now` on the game clock. */
+export function codeDays(expiresAt: string, now: number): string {
+  const days = Math.max(1, Math.ceil((Date.parse(expiresAt) - now) / DAY_MS));
+  return days === 1 ? '1 day' : `${String(days)} days`;
+}
+
 /** "Used by maple_leaf, oakley and fern", or null if nobody has yet. */
 export function familyCodeUsedBy(code: SignupCodeSummary): string | null {
   const names = code.usedBy;

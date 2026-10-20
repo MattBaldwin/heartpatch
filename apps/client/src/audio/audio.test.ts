@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Engine } from './audio-engine.js';
 import { AUDIO_SETTINGS_KEY } from './audio-config.js';
+import { GameClock } from '../inventory/game-clock.js';
 import { createAudio, type AudioEventTarget } from './audio.js';
 import type { CueName } from './cues.js';
 import type { TrackId } from './music-score.js';
@@ -69,7 +70,10 @@ class FakeEngine implements Engine {
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const button = { closest: (selector: string) => (selector.includes('button') ? {} : null) };
 
-function setup(opts: { stored?: string; today?: string; context?: boolean } = {}) {
+/** Noon on a day here, in ms. */
+const noonOn = (date: string): number => new Date(`${date}T12:00:00`).getTime();
+
+function setup(opts: { stored?: string; now?: () => number; context?: boolean } = {}) {
   const target = new FakeTarget();
   const data = new Map<string, string>();
   if (opts.stored) data.set(AUDIO_SETTINGS_KEY, opts.stored);
@@ -94,7 +98,7 @@ function setup(opts: { stored?: string; today?: string; context?: boolean } = {}
       loads += 1;
       return Promise.resolve({ createEngine: () => engine });
     },
-    today: () => opts.today ?? '2026-07-04',
+    now: opts.now ?? (() => noonOn('2026-07-04')),
   });
   return { audio, target, engine, data, loads: () => loads, contexts: () => contexts };
 }
@@ -148,7 +152,7 @@ describe('createAudio', () => {
   });
 
   it('plays the night loop at night, and Halloween in its window by day', async () => {
-    const { audio, target, engine } = setup({ today: '2026-10-20' });
+    const { audio, target, engine } = setup({ now: () => noonOn('2026-10-20') });
     target.tap();
     await flush();
     expect(engine.track).toBe('halloween');
@@ -157,6 +161,22 @@ describe('createAudio', () => {
     audio.setNight(false);
     expect(engine.track).toBe('halloween');
     expect(audio.debug.track).toBe('halloween');
+  });
+
+  it('follows the game clock, not the device date (#583)', async () => {
+    // The phone says July; the server's clock says Halloween, then November.
+    const device = noonOn('2026-07-04');
+    const clock = new GameClock(() => device);
+    const { audio, target, engine } = setup({ now: () => clock.now() });
+    target.tap();
+    await flush();
+    expect(engine.track).toBe('day');
+    clock.sync(new Date(noonOn('2026-10-20')).toISOString());
+    audio.reseason();
+    expect(engine.track).toBe('halloween');
+    clock.sync(new Date(noonOn('2026-11-20')).toISOString());
+    audio.reseason();
+    expect(engine.track).toBe('day');
   });
 
   it('lets the cinematic pick the music, or silence, then hands it back (#46)', async () => {

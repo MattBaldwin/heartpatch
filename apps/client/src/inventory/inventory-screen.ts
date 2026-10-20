@@ -86,6 +86,11 @@ export interface InventoryScreenOptions {
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
   /**
+   * A reply set the game clock (`gameNow`) to the server's time (#583): what
+   * reads it (the map's season, the music) looks again.
+   */
+  onClockSync?: () => void;
+  /**
    * Where things land on screen (#419): a tile's box, and my home base's,
    * while the map shows (null otherwise). What landed flies from there.
    */
@@ -502,6 +507,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const apply = (at: number, next: Partial<InventoryResponse> & { now: string }): boolean => {
     if (at !== generation || !state) return false;
     clock.sync(next.now);
+    options.onClockSync?.();
     state = { ...state, ...next };
     return true;
   };
@@ -578,6 +584,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         clock.sync(fresh.now);
         state = fresh;
         serverNextAt = nextAt;
+        options.onClockSync?.();
       }
       const away = presence.awayMs(id);
       const looks = trained.length > 0 ? await withPortraits(trained) : [];

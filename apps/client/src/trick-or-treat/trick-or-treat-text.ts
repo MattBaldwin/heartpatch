@@ -111,5 +111,6 @@ export function readDue(
 ): boolean {
   if (last.at === null) return true;
   if (last.trick && !last.trick.open && now < Date.parse(last.trick.resetsAt)) return false;
-  return now - last.at >= REFRESH_MS;
+  // The game clock stepped back past the last try (its first sync, #583): read now.
+  return now - last.at >= REFRESH_MS || now < last.at;
 }

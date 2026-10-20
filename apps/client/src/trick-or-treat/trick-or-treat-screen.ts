@@ -79,7 +79,11 @@ export interface TrickOrTreatOptions {
   /** A door or card opened or closed (so other cards wait their turn). */
   onChange?: () => void;
   api?: TrickOrTreatApi;
-  /** Device wall clock in ms (tests pass a fake). */
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`):
+   * the doors' `resetsAt` is the patch's midnight on the server (#583).
+   * Tests pass a fake.
+   */
   now?: () => number;
 }
 

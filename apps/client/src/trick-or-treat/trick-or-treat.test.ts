@@ -154,6 +154,11 @@ describe('readDue (#515)', () => {
     expect(readDue({ at, trick: view() }, at + REFRESH_MS)).toBe(true);
   });
 
+  it('reads at once if the game clock stepped back past the last try (#583)', () => {
+    // The first try ran on a device clock a day ahead; the bag's sync set it right.
+    expect(readDue({ at, trick: null }, at - 86_400_000)).toBe(true);
+  });
+
   it("out of season, waits for the patch's next day", () => {
     const closed = view({ open: false, resetsAt: '2026-10-19T07:00:00.000Z' });
     expect(readDue({ at, trick: closed }, at + 5 * REFRESH_MS)).toBe(false);
