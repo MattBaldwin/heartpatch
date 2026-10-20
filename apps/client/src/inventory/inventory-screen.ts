@@ -86,6 +86,11 @@ export interface InventoryScreenOptions {
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
   /**
+   * A reply set the game clock (`gameNow`) to the server's time (#583): what
+   * reads it (the map's season, the music) looks again.
+   */
+  onClockSync?: () => void;
+  /**
    * Where things land on screen (#419): a tile's box, and my home base's,
    * while the map shows (null otherwise). What landed flies from there.
    */
@@ -170,6 +175,12 @@ export interface InventoryScreen {
   openFactory: (recipeId?: string) => void;
   /** The game clock now, in ms (the server's). */
   gameNow: () => number;
+  /**
+   * Reads the server's time for a map's bag (#583), so a map about to be
+   * built is dressed on the game clock. Never rejects: on a failure the clock
+   * stays as it was.
+   */
+  syncClock: (mapId: string) => Promise<void>;
   /** Is this recipe book page open, as last read (the Factory only queues open pages)? */
   isPageOpen: (pageKey: string) => boolean;
   /** Ms until an ISO time on the server's clock (0 once it's passed), for countdowns. */
@@ -503,6 +514,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     if (at !== generation || !state) return false;
     clock.sync(next.now);
     state = { ...state, ...next };
+    options.onClockSync?.();
     return true;
   };
 
@@ -578,6 +590,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         clock.sync(fresh.now);
         state = fresh;
         serverNextAt = nextAt;
+        options.onClockSync?.();
       }
       const away = presence.awayMs(id);
       const looks = trained.length > 0 ? await withPortraits(trained) : [];
@@ -1315,6 +1328,14 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       openFactory(recipeId);
     },
     gameNow: () => clock.now(),
+    syncClock: async (id) => {
+      try {
+        clock.sync((await api.get(id)).now);
+        options.onClockSync?.();
+      } catch {
+        // The settle that follows the map's opening syncs it.
+      }
+    },
     isPageOpen: (key) => openPages.has(key),
     msUntil: (iso) => clock.msUntil(iso),
     tileActions: {

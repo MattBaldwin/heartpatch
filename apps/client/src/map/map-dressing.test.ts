@@ -14,6 +14,7 @@ import {
   tileColor,
   tileJitter,
 } from './map-dressing.js';
+import { GameClock } from '../inventory/game-clock.js';
 import { testView, userId } from './test-view.js';
 
 const OFF = { halloween: false };
@@ -259,6 +260,19 @@ describe('Halloween by the map’s local date', () => {
     expect(() => isHalloween('Not/AZone', new Date())).not.toThrow();
     expect(localDateIn('Not/AZone', new Date('2026-06-15T12:00:00Z'))).toMatch(/^2026-06-1[456]$/);
   });
+
+  // A sanity check that the game clock's time picks the season (#583); the
+  // wiring (main's `now` and `syncClock`) is covered by map.spec.ts.
+  for (const [label, device, server, halloween] of [
+    ['a phone past Nov 9, the server still in Halloween', '2026-11-12', '2026-11-08', true],
+    ['a phone in Halloween, the server past Nov 9', '2026-10-31', '2026-11-10', false],
+  ] as const) {
+    it(`follows the game clock with ${label}`, () => {
+      const clock = new GameClock(() => Date.parse(`${device}T18:00:00Z`));
+      clock.sync(`${server}T18:00:00.000Z`);
+      expect(isHalloween('America/Chicago', new Date(clock.now()))).toBe(halloween);
+    });
+  }
 });
 
 describe('Hollowed villages are drained past wild land (#306)', () => {

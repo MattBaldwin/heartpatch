@@ -19,6 +19,8 @@ import { slotIcon } from '../../map/map-legend.js';
 import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import {
+  codeDays,
+  codeLifeLeft,
   familyCodeBadge,
   familyCodeMeta,
   familyCodeUsedBy,
@@ -48,19 +50,6 @@ const PVP_CHOICES: readonly { mode: PvpMode; label: string; hint: string }[] = [
 
 /** A press that moves or scrolls the list further than this is a swipe, not a tap (px). */
 const SWIPE_SLOP_PX = 10; // TUNE: about iOS's own tap slop
-
-/** "Works for 6 more days." */
-function codeLifeLeft(iso: string): string {
-  const days = Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000);
-  if (days <= 1) return 'Works until tomorrow at the latest.';
-  return `Works for ${String(days)} more days.`;
-}
-
-/** "14 days" (rounded up). */
-function codeDays(iso: string): string {
-  const days = Math.max(1, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
-  return days === 1 ? '1 day' : `${String(days)} days`;
-}
 
 export interface Lobby {
   /** Shows the lobby for a logged-in player, or hides it (null). */
@@ -115,9 +104,15 @@ export interface LobbyOptions {
    * run going). Defaults to yes.
    */
   canResume?: () => Promise<boolean>;
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`): a
+   * code's `expiresAt` is server time (#583). Defaults to the device clock.
+   */
+  now?: () => number;
 }
 
 export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby {
+  const now = options.now ?? (() => Date.now());
   const panel = el('section', {
     class: 'lobby',
     'data-testid': 'lobby',
@@ -577,7 +572,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
             'p',
             { class: 'auth-hint' },
             // It signs a new family up too (#195).
-            `${codeLifeLeft(invite.expiresAt)} New families can sign up with it too!`,
+            `${codeLifeLeft(invite.expiresAt, now())} New families can sign up with it too!`,
           ),
         );
       } else {
@@ -943,7 +938,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     ];
     if (mine.codes.length > 0) {
       const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-family-code-list' });
-      const now = Date.now();
+      const at = now();
       for (const code of mine.codes) {
         const badge = familyCodeBadge(code.status);
         let corner: Node;
@@ -973,7 +968,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
               el('span', { class: 'lobby-map-name' }, code.label),
               corner,
             ),
-            el('span', { class: 'lobby-map-meta' }, familyCodeMeta(code, now)),
+            el('span', { class: 'lobby-map-meta' }, familyCodeMeta(code, at)),
             ...(usedBy ? [el('span', { class: 'lobby-map-meta' }, usedBy)] : []),
           ),
         );
@@ -1052,7 +1047,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       el(
         'p',
         { class: 'auth-hint' },
-        `It works for ${String(signupCode.maxUses)} people and ${codeDays(signupCode.expiresAt)}. They type it on the sign-up screen.`,
+        `It works for ${String(signupCode.maxUses)} people and ${codeDays(signupCode.expiresAt, now())}. They type it on the sign-up screen.`,
       ),
       el(
         'div',

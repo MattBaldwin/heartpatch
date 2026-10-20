@@ -25,6 +25,7 @@ import {
   doorOf,
   litHosts,
   prizeToast,
+  midnightWait,
   readDue,
   TRICK_TEXT,
 } from './trick-or-treat-text.js';
@@ -79,7 +80,11 @@ export interface TrickOrTreatOptions {
   /** A door or card opened or closed (so other cards wait their turn). */
   onChange?: () => void;
   api?: TrickOrTreatApi;
-  /** Device wall clock in ms (tests pass a fake). */
+  /**
+   * The game clock in ms, the server's (main passes the bag's, `gameNow`):
+   * the doors' `resetsAt` is the patch's midnight on the server (#583).
+   * Tests pass a fake.
+   */
   now?: () => number;
 }
 
@@ -107,6 +112,8 @@ export interface TrickOrTreat {
   readonly isOpen: boolean;
   /** My knock from another device: the doors are read again. */
   liveEvent: (event: WsEventMessage) => void;
+  /** The game clock moved (#583): the wake-up at the patch's midnight is set again on it. */
+  clockSynced: () => void;
   readonly debug: TrickOrTreatDebug;
 }
 
@@ -169,13 +176,15 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
   function apply(next: TrickOrTreatView): void {
     trick = next;
     if (mapId) options.light(mapId, litHosts(next));
-    // At the patch's midnight every door opens again.
-    clearTimeout(midnight);
-    const wait = Date.parse(next.resetsAt) - now();
-    if (next.open && wait > 0 && wait < 2 ** 31 - 1) {
-      midnight = setTimeout(() => void read(), wait + 1000);
-    }
+    armMidnight();
     renderPanel();
+  }
+
+  /** At the patch's midnight every door opens again: a wake-up then, on the game clock. */
+  function armMidnight(): void {
+    clearTimeout(midnight);
+    const wait = midnightWait(trick, now());
+    if (wait !== null) midnight = setTimeout(() => void read(), wait + 1000);
   }
 
   async function read(): Promise<void> {
@@ -435,6 +444,9 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       update: (view) => {
         follow(view.map.id);
       },
+    },
+    clockSynced: () => {
+      if (mapId) armMidnight();
     },
     liveEvent: (event) => {
       if (event.type !== 'trick.visited' || event.mapId !== mapId || !user) return;

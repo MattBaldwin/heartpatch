@@ -49,6 +49,8 @@ export interface GameAudio {
    * usual pick.
    */
   setScore: (track: TrackId | null | undefined) => void;
+  /** The game clock moved (#583): Halloween's loop starts or stops if the season did. */
+  reseason: () => void;
   /** Rows for the lobby's Settings screen: music and sounds. */
   settings: () => Node[];
   readonly debug: AudioDebug;
@@ -64,13 +66,17 @@ export interface AudioOptions {
   loadEngine?: () => Promise<{
     createEngine: (ctx: AudioContext, volumes: { music: number; sounds: number }) => Engine;
   }>;
-  /** Today's date on this device, `YYYY-MM-DD` (Halloween's window). */
-  today?: () => string;
+  /**
+   * Now on the game clock, in ms (Halloween's window): main passes the bag's,
+   * the server's time (#583), so a phone whose clock is off still plays the
+   * season the server says. Defaults to the device clock.
+   */
+  now?: () => number;
 }
 
-/** The device's local date as `YYYY-MM-DD`. */
-function localDate(): string {
-  const d = new Date();
+/** The local date at `at` (ms) in this device's time zone, as `YYYY-MM-DD`. */
+function localDate(at: number): string {
+  const d = new Date(at);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -111,7 +117,7 @@ function useAmbientSession(): void {
 export function createAudio(options: AudioOptions = {}): GameAudio {
   const target = options.target ?? document;
   const storage = options.storage === undefined ? safeStorage() : options.storage;
-  const today = options.today ?? localDate;
+  const now = options.now ?? (() => Date.now());
   const loadEngine = options.loadEngine ?? (() => import('./audio-engine.js'));
   let settings = loadAudioSettings(storage);
   let night = false;
@@ -132,7 +138,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
 
   const halloween = (): boolean => {
     try {
-      return activeSeasons(GAME_DATA.seasons, today()).some((s) => s.id === 'halloween');
+      return activeSeasons(GAME_DATA.seasons, localDate(now())).some((s) => s.id === 'halloween');
     } catch {
       return false;
     }
@@ -214,6 +220,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
       night = next;
       syncMusic();
     },
+    reseason: syncMusic,
     setScore: (track) => {
       if (track === scored) return;
       scored = track;

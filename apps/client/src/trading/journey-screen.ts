@@ -70,6 +70,12 @@ export interface JourneyScreen {
   ended: (battleId: string, won: boolean) => void;
   /** The post the player just made it to (once), for the map to show; null otherwise. */
   takeArrival: () => { q: number; r: number } | null;
+  /**
+   * The game clock moved (#583): a panel drawn before the bag's first sync
+   * (a cold start, a device clock off) draws again if its pass is now open
+   * or over.
+   */
+  clockSynced: () => void;
   readonly debug: JourneyDebug;
 }
 
@@ -95,6 +101,8 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
   let arrival: { q: number; r: number } | null = null;
   let ticker: number | undefined;
   let previewShown: JourneyDebug['preview'] = null;
+  /** The pass the panel shows (null: none). */
+  let passShown: string | null = null;
 
   const sendDeps = {
     newKey: newIdempotencyKey,
@@ -173,6 +181,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
 
   function render(): void {
     previewShown = null;
+    passShown = null;
     if (!panel) {
       syncTicker(false);
       return;
@@ -185,6 +194,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
       return;
     }
     const pass = passFor(tile, view);
+    passShown = pass;
     if (pass) {
       container.replaceChildren(
         visitButton(tile, view, pass),
@@ -346,6 +356,11 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
       const post = arrival;
       arrival = null;
       return post;
+    },
+    clockSynced: () => {
+      if (panel && isTradingPost(panel.tile) && passFor(panel.tile, panel.view) !== passShown) {
+        render();
+      }
     },
     get debug() {
       const view = panel?.view;

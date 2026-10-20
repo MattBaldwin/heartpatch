@@ -1,6 +1,8 @@
 import type { SignupCodeSummary } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  codeDays,
+  codeLifeLeft,
   familyCodeBadge,
   familyCodeMeta,
   familyCodeUsedBy,
@@ -47,5 +49,23 @@ describe('family code lines', () => {
 
   it('counts live codes against the cap', () => {
     expect(liveFamilyCodes([code(), code({ status: 'revoked' }), code()])).toBe(2);
+  });
+});
+
+describe('days left on a code (#583)', () => {
+  const expiresAt = new Date(NOW + 14 * DAY_MS).toISOString();
+
+  it('counts from the time it is given (the game clock), not the device clock', () => {
+    expect(codeDays(expiresAt, NOW)).toBe('14 days');
+    expect(codeLifeLeft(expiresAt, NOW)).toBe('Works for 14 more days.');
+    expect(codeDays(expiresAt, NOW - 7 * DAY_MS)).toBe('21 days');
+  });
+
+  it('rounds up, and says the last day plainly', () => {
+    expect(codeDays(new Date(NOW + 3_600_000).toISOString(), NOW)).toBe('1 day');
+    expect(codeDays(new Date(NOW - DAY_MS).toISOString(), NOW)).toBe('1 day');
+    expect(codeLifeLeft(new Date(NOW + DAY_MS).toISOString(), NOW)).toBe(
+      'Works until tomorrow at the latest.',
+    );
   });
 });

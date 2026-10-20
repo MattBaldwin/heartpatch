@@ -57,11 +57,20 @@ export interface MapScreenOptions {
   requestFrame?: () => void;
   /** The quality tier now: the low tier drops ambient life (motes and motion). */
   tier?: () => QualityTier;
-  /** Now, for the season by the map's local date (Halloween dressing). */
+  /**
+   * Now on the game clock, for the season by the map's local date (Halloween
+   * dressing): main passes the bag's, the server's time (#583), so a phone
+   * whose clock is off dresses the map as the server's season says.
+   */
   now?: () => Date;
   /** The map closed by itself (e.g. the player was removed): show the lobby with this. */
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
+  /**
+   * Syncs the game clock (`now`) for a map, read alongside its view so the
+   * first build is dressed for the server's season (#583). Never rejects.
+   */
+  syncClock?: (mapId: string) => Promise<void>;
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
@@ -123,6 +132,8 @@ export interface MapDebug extends MapSceneStats {
   readonly openHomes: readonly { key: HexKey; x: number; y: number }[];
   /** The middle of this player's home node tile on screen (CSS pixels), for e2e taps (#429); null off screen. */
   readonly homeNode: { x: number; y: number } | null;
+  /** Builds since the map was opened: 1 unless something rebuilt it (a reseason, #583). */
+  readonly builds: number;
 }
 
 export interface MapScreen {
@@ -172,6 +183,12 @@ export interface MapScreen {
   setUser: (user: PublicUser | null) => void;
   /** Night on the map (#21): fireflies, the night backdrop, lanterns glowing. */
   setNight: (night: boolean) => void;
+  /**
+   * The game clock moved (#583): if the map's seasons are no longer the ones
+   * it was dressed for (a first sync after a cold start, or a season's
+   * window closing), it's built again in the new dressing.
+   */
+  reseason: () => void;
   /** My land that misses me (owner decision 2026-10-06): each fading tile's share, 0–1. */
   setLandFade: (fade: ReadonlyMap<HexKey, number>) => void;
   /**
@@ -214,6 +231,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   /** Followed live while another screen is up (`hide`, a live battle). */
   let backgrounded = false;
   let night = false;
+  /** The seasons the map was last dressed for, and whether that scene is still on the stage. */
+  let dressedFor: string | null = null;
+  let onStage = false;
+  /** A map is being fetched to open: its own build dresses it (no reseason meanwhile). */
+  let opening = false;
+  /** Builds since the map was opened (the dev hook reads it). */
+  let builds = 0;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
   let held: ReadonlyMap<HexKey, string> = new Map();
   /** The view as drawn: held land still its Keeper's (#277), only while it's wild. */
@@ -416,11 +440,15 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     if (!state) throw new Error('no map to build');
     const at = options.now?.() ?? new Date();
     const drawn = drawnView(state.view);
+    const seasons = seasonsOn(state.view.map.timeZone, at);
+    dressedFor = seasons.join();
+    builds += 1;
     const built = new MapScene(scene, drawn, {
       halloween: isHalloween(state.view.map.timeZone, at),
-      seasons: seasonsOn(state.view.map.timeZone, at),
+      seasons,
       ...ambient.state,
     });
+    onStage = true;
     built.setNight(night);
     built.setLandFade(landFade);
     scene3d = built;
@@ -430,7 +458,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     // Another screen (a battle, a close-up) swapped the stage: stop asking for
     // frames until the map is built again.
     scene.onDisposeObservable.addOnce(() => {
-      if (scene3d === built) ambient.stop();
+      if (scene3d !== built) return;
+      ambient.stop();
+      onStage = false;
     });
     for (const layer of options.layers ?? []) layer.attach(scene, drawn);
     if (selected) built.select(selected);
@@ -489,6 +519,19 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     hideMap();
   };
 
+  /**
+   * Builds the map on screen afresh: the tile panel closes and the stage is
+   * mounted again (the camera goes home). `reseason` does this only when the
+   * seasons really changed (a window closing mid-visit).
+   */
+  const rebuild = (): void => {
+    scene3d = null;
+    selected = null;
+    panel.hide();
+    options.tileActions?.hide();
+    options.showScene(build);
+  };
+
   return {
     hide: () => {
       backgrounded = true;
@@ -496,13 +539,16 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
     open: async (mapId) => {
       backgrounded = false;
-      const state = await sync.open(mapId);
+      opening = true;
+      let state: Awaited<ReturnType<typeof sync.open>>;
+      try {
+        [state] = await Promise.all([sync.open(mapId), options.syncClock?.(mapId)]);
+      } finally {
+        opening = false;
+      }
       if (!state) return;
-      scene3d = null;
-      selected = null;
-      panel.hide();
-      options.tileActions?.hide();
-      options.showScene(build);
+      builds = 0;
+      rebuild();
       hudName.textContent = state.view.map.name;
       showLegend(state.view);
       hud.hidden = false;
@@ -534,6 +580,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       night = next;
       scene3d?.setNight(next);
       options.invalidate();
+    },
+    reseason: () => {
+      const state = sync.state;
+      // Another screen on the stage: the map is dressed afresh when it's built again.
+      if (!state || !scene3d || !onStage || backgrounded || opening) return;
+      const at = options.now?.() ?? new Date();
+      if (seasonsOn(state.view.map.timeZone, at).join() !== dressedFor) rebuild();
     },
     setLandFade: (next) => {
       landFade = next;
@@ -593,6 +646,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
           y: rect.y + rect.height / 2,
         })),
         homeNode: homeNodeMiddle(scene3d.homeNodeRect(user?.id ?? null)),
+        builds,
       };
     },
   };

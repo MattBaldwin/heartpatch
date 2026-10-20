@@ -23,6 +23,10 @@ interface MapDebug {
   openHomes: { key: string; x: number; y: number }[];
   drawCalls: number;
   activeTriangles: number;
+  /** Dressed for Halloween (the season by the map's date on the game clock, #583). */
+  halloween: boolean;
+  /** Builds since the map was opened (a reseason rebuilds it, #583). */
+  builds: number;
 }
 
 /**
@@ -230,6 +234,39 @@ test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ 
   await page.emulateMedia({ reducedMotion: null });
 
   expect(errors).toEqual([]);
+  await page.context().close();
+});
+
+test('dresses the map for the server’s season, not the phone’s date (#583)', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // shader compiles; CI renders in software
+  const page = await newPlayer(browser, uniqueName('clock'));
+  // The phone's calendar says Nov 20, past the Halloween window; the server's
+  // game clock (HP_DEV_NOW, 2026-10-20) is inside it. A cold start: the map's
+  // first build must already be dressed by the server's date.
+  await page.clock.setFixedTime(new Date('2026-11-20T12:00:00'));
+  await page.reload();
+  const lobby = page.getByTestId('lobby');
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Pumpkin Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // The map's debug view is null for a moment after the scene is ready (#429).
+  await expect.poll(async () => (await mapState(page))?.halloween, { timeout: 30_000 }).toBe(true);
+  // Once the bag has settled (its sync would reseason a map dressed wrong),
+  // the first build is still the only one: it was dressed right, not redone.
+  await expect
+    .poll(async () => (await hook<{ mapId: string }>(page, 'inventory'))?.mapId, {
+      timeout: 30_000,
+    })
+    .toBeTruthy();
+  await page.waitForTimeout(1000);
+  expect((await mapState(page))?.builds).toBe(1);
   await page.context().close();
 });
 
