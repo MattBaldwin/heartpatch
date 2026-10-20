@@ -19,7 +19,7 @@ import '../../styles.css';
  * part of the production build): the real home-base scene with sample
  * buildings at every level, to judge upgrades and scale by eye (owner
  * decision 2026-10-06). `?show=` picks the layout: `fire1`, `fire2`,
- * `fire3` (one fire at that level with its light on the land around),
+ * `ring` (habitats and Training Grounds filling ring tiles, #589), `fire3` (one fire at that level with its light on the land around),
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
  * practicing). Every shot uses one camera: `?pitch=` (degrees, default 42,
@@ -115,6 +115,22 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
       squishies: [
         squishy('emberbun', { habitatId: den.id }),
         squishy('thistlepip', { habitatId: meadow.id }),
+        squishy('puddlepuff'),
+      ],
+    };
+  }
+  if (show === 'ring') {
+    // Buildings on ring spots of ring tiles (#589): they fill their tile and
+    // the guaranteed node tucks aside; the plain tile keeps its node centred.
+    const den = building('ember-den', { q: 1, r: 0 }, 1, { spot: 3 });
+    const meadow = building('cozy-meadow', { q: 0, r: -1 }, 1, { spot: 4 });
+    const grounds = building('training-grounds', { q: -1, r: 1 }, 1, { spot: 2 });
+    return {
+      buildings: [building('hearthfire', { q: 0, r: 1 }, 1), den, meadow, grounds],
+      squishies: [
+        squishy('emberbun', { habitatId: den.id }),
+        squishy('thistlepip', { habitatId: meadow.id }),
+        squishy('pebblesnooze', { trainingId: grounds.id }),
         squishy('puddlepuff'),
       ],
     };

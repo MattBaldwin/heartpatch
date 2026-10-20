@@ -3,6 +3,7 @@ import {
   GAME_DATA,
   hexDistance,
   hexKey,
+  hexToWorld,
   type HomeResponse,
   type MapView,
   type MyBuilding,
@@ -13,7 +14,14 @@ import { findHomeBases } from '../map/map-layout.js';
 import { testView, userId } from '../map/test-view.js';
 import { HOME_VIEW } from './home-config.js';
 import { HOME_TEXT } from './home-screen.js';
-import { mapBuildings, mapSafeTiles, spotWorld } from './home-layout.js';
+import {
+  filledTiles,
+  fillsTile,
+  mapBuildings,
+  mapSafeTiles,
+  nodeAside,
+  spotWorld,
+} from './home-layout.js';
 import { homeTileLines } from './home-tile-info.js';
 import {
   atHome,
@@ -187,6 +195,50 @@ describe('home layout', () => {
       'hearthfire',
       'cozy-meadow',
     ]);
+  });
+});
+
+describe('a building filling its home tile (#589)', () => {
+  /** A building on a ring tile of the first home, and one on its Heart Seed tile. */
+  function ringView() {
+    const view = testView(2);
+    const base = findHomeBases(view.tiles)[0]!;
+    const ringTile = view.tiles.find(
+      (t) => t.homeSlot === base.slot && !(t.q === base.seed.q && t.r === base.seed.r),
+    )!;
+    const put = (at: { q: number; r: number }, b: PublicBuilding) => ({
+      ...view,
+      tiles: view.tiles.map((t) => (t.q === at.q && t.r === at.r ? { ...t, buildings: [b] } : t)),
+    });
+    return { base, ringTile, put };
+  }
+
+  it('fills ring spots off the Heart Seed tile, never the centre spot or the seed tile', () => {
+    expect(fillsTile(2, false)).toBe(true);
+    expect(fillsTile(0, false)).toBe(false);
+    expect(fillsTile(2, true)).toBe(false);
+  });
+
+  it('stands a ring-spot building in its tile middle and tucks the node aside', () => {
+    const { ringTile, put } = ringView();
+    const view = put(ringTile, meadow({ spot: 3 }));
+    const [placed] = mapBuildings(view, 0.65);
+    const middle = hexToWorld(ringTile, 0.65);
+    expect(placed!.fills).toBe(true);
+    expect(placed!.at).toEqual(middle);
+    expect(filledTiles(view)).toEqual(new Set([hexKey(ringTile)]));
+    const aside = nodeAside(middle, 0.65);
+    expect(Math.hypot(aside.x - middle.x, aside.z - middle.z)).toBeGreaterThan(0.65 * 0.5);
+  });
+
+  it('leaves the Heart Seed tile and a ring tile with no building as they were', () => {
+    const { base, ringTile, put } = ringView();
+    const onSeed = put(base.seed, meadow({ spot: 3 }));
+    const [seeded] = mapBuildings(onSeed, 0.65);
+    expect(seeded!.fills).toBe(false);
+    expect(seeded!.at).toEqual(spotWorld(base.seed, 3, 0.65));
+    expect(filledTiles(onSeed).size).toBe(0);
+    expect(filledTiles(put(ringTile, meadow({ spot: 3 }))).has(hexKey(base.seed))).toBe(false);
   });
 });
 
