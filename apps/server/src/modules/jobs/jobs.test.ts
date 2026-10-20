@@ -1692,7 +1692,8 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     it("takes the squishy before its owner's inventory rows (jobs `collect`)", async () => {
       const { kid, mapId, node, pet, service, user } = await setup();
       await service.setJob(user, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
-      // A Timber row to lock (a missing row is made by the first grant).
+      // A Timber row to hold (`lockGrantRows` would make a missing one at 0,
+      // but this test must hold it first).
       await db.insert(inventories).values({ mapId, userId: kid.id, itemId: 'timber', quantity: 1 });
       later(31 * MINUTE_MS);
       await holdThen(
