@@ -49,6 +49,7 @@ import { refreshHomesteads } from './homesteads.js';
 import { HOLLOWED_FINDS } from '@heartpatch/shared/server';
 import type { Rng } from '@heartpatch/shared';
 import { createExploreService } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 /*
  * Exploring your land (#199): the explore view of a tile, searching its
@@ -599,7 +600,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         battle.view.phase.type === 'replace'
           ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          : { type: 'move', move: bigMove(side.squishies[side.active]!) };
       const res = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
         action,
         turn: battle.view.turn,

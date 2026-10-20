@@ -36,6 +36,17 @@ export const MoveEffectSchema = z.discriminatedUnion('type', [
 ]);
 export type MoveEffect = z.infer<typeof MoveEffectSchema>;
 
+/**
+ * How a damaging move plays (#587), shown on its button. `big` hits hard but
+ * leaves the user open (it takes more from the next hit); `steady` is lighter,
+ * raises its guard for the next hit, and is gentle with a wild squishy. Not
+ * stored on the move: each species' moves are sorted into kinds by battle
+ * rules `moveKinds` (lowest power is steady), so the same move can be steady
+ * on one squishy and big on another.
+ */
+export const MoveKindSchema = z.enum(['big', 'steady']);
+export type MoveKind = z.infer<typeof MoveKindSchema>;
+
 export const MoveSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,

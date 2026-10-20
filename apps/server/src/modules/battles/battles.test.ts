@@ -34,8 +34,9 @@ import { KEY_TTL_MS } from '../../lib/idempotency.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesRepo } from './repo.js';
+import { createBattlesRepo, setupOf } from './repo.js';
 import { createBattlesService, defaultBattleContent, playerBattleView } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -201,7 +202,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         phase.type === 'replace'
           ? { type: 'replace', slot: 1 }
-          : { type: 'move', move: myActive(current).moves[0]! };
+          : { type: 'move', move: bigMove(myActive(current)) };
       const res = await act(server, who, current, action);
       expect(res.statusCode).toBe(200);
       current = battleOf(res);
@@ -378,6 +379,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(JSON.stringify(battle)).not.toContain('"rng"');
       expect(battle.view.sides.a.controller).toEqual({ type: 'player' });
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'wild' });
+      // A wild squishy can be befriended, so steady moves are gentle with it (#587).
+      expect(battle.view.gentle).toBe(true);
       expect(battle.view.sides.a.squishies).toEqual([
         expect.objectContaining({ id: squishy.id, speciesId: SECRET_IDS[1], level: 8 }),
       ]);
@@ -754,11 +757,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const row = (await rowOf(battle.id))!;
       const content = createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA));
       expect(row.contentHash).toBe(content.contentHash);
-      const replayed = replayBattle(
-        content,
-        { seed: row.seed, sides: row.setup as never },
-        row.actions as never,
-      );
+      const replayed = replayBattle(content, setupOf(row as never), row.actions as never);
       expect(replayed).toEqual(row.state);
       expect(row.result).toEqual(result);
       expect(row.log).toEqual(over.view.log);
@@ -1104,13 +1103,13 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       // for a `replace`, and refuses moves until it gets one.
       let current = swapped;
       for (let i = 0; i < 20 && current.view.phase.type === 'turn'; i++) {
-        const move = myActive(current).moves[0]!;
+        const move = bigMove(myActive(current));
         current = battleOf(await act(server, kid, current, { type: 'move', move }));
       }
       expect(current.status).toBe('active');
       expect(current.view.phase).toEqual({ type: 'replace', sides: ['a'] });
       expect(myActive(current).energy).toBe(0);
-      const move = current.view.sides.a.squishies[0]!.moves[0]!;
+      const move = bigMove(current.view.sides.a.squishies[0]!);
       expect((await act(server, kid, current, { type: 'move', move })).statusCode).toBe(409);
       // Only a squishy with energy left can come out.
       expect((await act(server, kid, current, { type: 'replace', slot: 1 })).statusCode).toBe(409);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema, DisplayNameSchema, RaritySchema } from './common.js';
 import { formatDataIssues } from './issues.js';
+import { MoveKindSchema } from './moves.js';
 
 /**
  * Who picks a computer-controlled side's moves (design doc §6): wild
@@ -44,6 +45,37 @@ export const BattleAiPolicyRulesSchema = z.strictObject({
   swapBelow: percent,
 });
 export type BattleAiPolicyRules = z.infer<typeof BattleAiPolicyRulesSchema>;
+
+/**
+ * Steady and Big moves (#587). Each species' lowest-power damaging move is
+ * steady and the rest are big (one damaging move: big), unless `overrides`
+ * says otherwise. Battle rules without this block (battles before #587) play
+ * every move as it always was.
+ */
+export const BattleMoveKindRulesSchema = z.strictObject({
+  /** A big move leaves its user open: the next hit it takes is this % bigger. */
+  openPercent: z.number().int().min(1).max(100),
+  /** A steady move raises its user's guard: the next hit it takes is this % smaller. */
+  guardPercent: z.number().int().min(1).max(99),
+  /**
+   * A gentle battle's floor (a wild squishy or a befriendable guardian): a
+   * player's steady move never takes the AI side's squishy below this much
+   * energy, so it can still be befriended.
+   */
+  gentleFloor: z.number().int().min(1),
+  /**
+   * How each AI policy weighs the stances: `open` × the foe's best hit share
+   * × openPercent is taken off a big move's score (unless it tuckers out the
+   * target); `guard` × the same share × guardPercent is added to a steady one's.
+   */
+  ai: z.record(
+    BattleAiPolicySchema,
+    z.strictObject({ open: z.number().min(0), guard: z.number().min(0) }),
+  ),
+  /** Hand fixes where the power rule reads wrong: species id → move id → kind. */
+  overrides: z.record(ContentIdSchema, z.record(ContentIdSchema, MoveKindSchema)),
+});
+export type BattleMoveKindRules = z.infer<typeof BattleMoveKindRulesSchema>;
 
 /** How a status from a move behaves (the move schema's `status` effect). */
 export const BattleStatusRulesSchema = z
@@ -179,6 +211,8 @@ export const BattleRulesSchema = z.strictObject({
    * in one battle, so they can't be stacked into an easy win.
    */
   items: z.strictObject({ usesEach: z.number().int().min(1).max(10) }),
+  /** Steady and Big moves (#587); left out, every move plays as before #587. */
+  moveKinds: BattleMoveKindRulesSchema.optional(),
 });
 export type BattleRules = z.infer<typeof BattleRulesSchema>;
 

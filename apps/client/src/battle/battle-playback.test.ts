@@ -358,16 +358,102 @@ describe('view helpers', () => {
       ...b,
       view: { ...b.view, log: [] },
     });
-    expect(shown.a.chips[0]).toEqual({ attack: false, defense: false, shield: false });
+    expect(shown.a.chips[0]).toEqual({
+      attack: false,
+      defense: false,
+      shield: false,
+      guard: false,
+      open: false,
+    });
     shown = applyStep(shown, steps[0]!);
-    expect(shown.a.chips[0]).toEqual({ attack: true, defense: false, shield: true });
+    expect(shown.a.chips[0]).toEqual({
+      attack: true,
+      defense: false,
+      shield: true,
+      guard: false,
+      open: false,
+    });
     // The bench squishy and the other side are untouched.
-    expect(shown.a.chips[1]).toEqual({ attack: false, defense: false, shield: false });
-    expect(shown.b.chips[0]).toEqual({ attack: false, defense: false, shield: false });
+    expect(shown.a.chips[1]).toEqual({
+      attack: false,
+      defense: false,
+      shield: false,
+      guard: false,
+      open: false,
+    });
+    expect(shown.b.chips[0]).toEqual({
+      attack: false,
+      defense: false,
+      shield: false,
+      guard: false,
+      open: false,
+    });
     shown = applyStep(shown, steps[1]!);
     shown = applyStep(shown, steps[2]!);
-    expect(shown.a.chips[0]).toEqual({ attack: true, defense: false, shield: false });
+    expect(shown.a.chips[0]).toEqual({
+      attack: true,
+      defense: false,
+      shield: false,
+      guard: false,
+      open: false,
+    });
     for (const step of steps) expect(findAvoidedWords(step.text)).toEqual([]);
+  });
+
+  it('plays Steady and Big (#587): stances, a guarded hit and a gentle stop', () => {
+    const b = battle([
+      { ...at('a'), type: 'move', move: 'test-hush-hum' },
+      { ...at('b'), type: 'hit', amount: 3, energy: 1, effectiveness: 'normal', gentle: true },
+      { ...at('a'), type: 'stance', stance: 'guard' },
+      { ...at('b'), type: 'move', move: 'test-hush-hum' },
+      { ...at('a'), type: 'hit', amount: 4, energy: 36, effectiveness: 'normal', guarded: true },
+      { ...at('b'), type: 'stance', stance: 'open' },
+      { ...at('b'), type: 'hit', amount: 9, energy: 0, effectiveness: 'normal', opened: true },
+      { ...at('b'), type: 'hit', amount: 0, energy: 1, effectiveness: 'normal', gentle: true },
+    ]);
+    const content = new BattleContent(b);
+    const steps = playbackSteps(b, content, 0);
+    expect(steps.map((s) => s.text)).toEqual([
+      'Puff used Hush Hum!',
+      'Wild Mallow is holding on by a whisker!',
+      'Puff is on guard!',
+      'Wild Mallow used Hush Hum!',
+      'Puff was on guard. Just a little bump!',
+      'Wild Mallow is wide open!',
+      'Wild Mallow was wide open. Big bump!',
+      'Wild Mallow is holding on by a whisker! Try a Big move or a Heart Charm.',
+    ]);
+    expect(steps[1]).toMatchObject({ callout: 'So gentle!', energy: 1 });
+    let shown = shownFrom({ ...b, view: { ...b.view, log: [] } });
+    shown = applyStep(applyStep(shown, steps[0]!), steps[1]!);
+    shown = applyStep(shown, steps[2]!);
+    expect(shown.a.chips[0]).toMatchObject({ guard: true, open: false });
+    shown = applyStep(applyStep(shown, steps[3]!), steps[4]!);
+    expect(shown.a.chips[0]).toMatchObject({ guard: false, open: false });
+    shown = applyStep(shown, steps[5]!);
+    expect(shown.b.chips[0]).toMatchObject({ guard: false, open: true });
+    shown = applyStep(shown, steps[6]!);
+    expect(shown.b.chips[0]).toMatchObject({ open: false });
+    for (const step of steps) expect(findAvoidedWords(step.text)).toEqual([]);
+  });
+
+  it('drops a stance when its squishy hops back', () => {
+    const b = battle([{ ...at('a'), type: 'swap', to: 1 }]);
+    const mine = b.view.sides.a.squishies[0]!;
+    const start = shownFrom({
+      ...b,
+      view: {
+        ...b.view,
+        log: [],
+        sides: {
+          ...b.view.sides,
+          a: { ...b.view.sides.a, squishies: [{ ...mine, guard: 25 }, mine] },
+        },
+      },
+    });
+    expect(start.a.chips[0]?.guard).toBe(true);
+    const [swap] = playbackSteps(b, new BattleContent(b), 0);
+    expect(applyStep(start, swap!).a.chips[0]?.guard).toBe(false);
   });
 
   it('starts the chips from the view, so a resumed battle keeps them', () => {
@@ -389,7 +475,13 @@ describe('view helpers', () => {
         },
       },
     };
-    expect(shownFrom(resumed).a.chips[0]).toEqual({ attack: false, defense: true, shield: true });
+    expect(shownFrom(resumed).a.chips[0]).toEqual({
+      attack: false,
+      defense: true,
+      shield: true,
+      guard: false,
+      open: false,
+    });
   });
 
   it('a free sip (#403) plays the same sip step on my squishy that’s out, before the turn', () => {

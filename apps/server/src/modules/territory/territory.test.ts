@@ -46,7 +46,7 @@ import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesRepo } from '../battles/repo.js';
+import { createBattlesRepo, setupOf } from '../battles/repo.js';
 import { createBattlesService, HEART_CHARM, type TileBattleEnd } from '../battles/service.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
@@ -57,6 +57,7 @@ import {
   defaultGuardianData,
   tileGuardians,
 } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -279,7 +280,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         current.view.phase.type === 'replace'
           ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          : { type: 'move', move: bigMove(side.squishies[side.active]!) };
       const res = await act(server, who, current, action);
       expect(res.statusCode, res.body).toBe(200);
       current = battleOf(res);
@@ -317,6 +318,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(res.statusCode, res.body).toBe(201);
       const battle = battleOf(res);
       expect(battle.kind).toBe('tile');
+      // Neutral guardians can be befriended, so steady moves are gentle (#587).
+      expect(battle.view.gentle).toBe(true);
       // It plays on the claimed tile's own terrain (owner decision 2026-10-04).
       expect(battle.terrain).toBe(target!.terrain);
       // The guardians are played by the engine's guardian AI; their ids say nothing.
@@ -657,7 +660,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       clock.setTime(clock.getTime() + (TERRITORY_RULES.abandonMinutes - 1) * MINUTE_MS);
       const side = left.view.sides.a;
       const going = await battles.act(kid, left.id, {
-        action: { type: 'move', move: side.squishies[side.active]!.moves[0]! },
+        action: { type: 'move', move: bigMove(side.squishies[side.active]!) },
         turn: left.view.turn,
       });
       expect(going.status).toBe('active');
@@ -1705,7 +1708,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(battle.setup.b.squishies.map((s) => s.level)).toEqual([12 + BONUS]);
       const content = createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA));
       const replayed = replayBattleRecord(content, {
-        setup: { seed: battle.seed, sides: battle.setup },
+        setup: setupOf(battle),
         actions: battle.actions,
         contentHash: battle.contentHash,
         result: battle.result!,
@@ -1853,7 +1856,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
           const action: PlayerBattleAction =
             battle.view.phase.type === 'replace'
               ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-              : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+              : { type: 'move', move: bigMove(side.squishies[side.active]!) };
           battle = await fights.act(kid, battle.id, { action, turn: battle.view.turn });
         }
         return battle;

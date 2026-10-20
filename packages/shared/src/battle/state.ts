@@ -37,6 +37,13 @@ export interface BattleSquishy {
   /** Percent taken off the next hit it takes (a potion's shield, #214); 0 is none. */
   readonly shield: number;
   /**
+   * Its stance from its last move (#587), used up by the next hit it takes
+   * and dropped when it swaps out: positive is a steady move's guard (that
+   * hit is this % smaller), negative a big move's opening (this % bigger).
+   * Left out when it has none, so battles before #587 keep their bytes.
+   */
+  readonly guard?: number;
+  /**
    * Said yes to a Heart Charm and left mid-battle (#279): it has joined the
    * other side's Keeper and is out of the fight, as if tuckered out, but keeps
    * its energy (battle XP counts only tuckered-out squishies). The last one
@@ -111,7 +118,18 @@ export type BattleEvent =
       readonly effectiveness: string;
       /** A potion's shield took some of it (#214), and is now used up. */
       readonly shielded?: true;
+      /** A steady move's guard took some of it (#587), and is now used up. */
+      readonly guarded?: true;
+      /** It was open from a big move (#587), so this hit was bigger. */
+      readonly opened?: true;
+      /** A gentle steady move (#587) stopped short, leaving a sliver of energy. */
+      readonly gentle?: true;
     })
+  /**
+   * The squishy at `side`/`slot` took a stance with its move (#587): a
+   * steady move's `guard` or a big move's `open`, until the next hit it takes.
+   */
+  | (At & { readonly type: 'stance'; readonly stance: 'guard' | 'open' })
   | (At & { readonly type: 'heal'; readonly amount: number; readonly energy: number })
   /** `stages` is the change actually applied (0 if already at the limit). */
   | (At & {
@@ -157,6 +175,11 @@ export interface BattleState {
   readonly turn: number;
   /** Turns it lasts at most, when less than the rules' `maxTurns` (a fence battle, #203). */
   readonly turnLimit?: number;
+  /**
+   * A player's steady moves are gentle with the AI side (#587): they never
+   * tucker it out. Only in a battle whose squishies can be befriended.
+   */
+  readonly gentle?: true;
   readonly rng: RngState;
   readonly sides: Readonly<Record<BattleSideId, BattleSide>>;
   readonly phase: BattlePhase;

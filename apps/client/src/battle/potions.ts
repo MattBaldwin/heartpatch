@@ -90,23 +90,38 @@ export function potionTotal(counts: Readonly<Record<string, number>> | null): nu
   return BATTLE_POTIONS.reduce((sum, p) => sum + (counts[p.id] ?? 0), 0);
 }
 
-/** What a pill shows for its squishy: the potion boosts and a shield that's up. */
+/**
+ * What a pill shows for its squishy: the potion boosts, a shield that's up,
+ * and its stance from a steady or big move (#587) until the next hit.
+ */
 export interface PlateChips {
   readonly attack: boolean;
   readonly defense: boolean;
   readonly shield: boolean;
+  readonly guard: boolean;
+  readonly open: boolean;
 }
 
-export const NO_CHIPS: PlateChips = { attack: false, defense: false, shield: false };
+export const NO_CHIPS: PlateChips = {
+  attack: false,
+  defense: false,
+  shield: false,
+  guard: false,
+  open: false,
+};
 
 export function chipsOf(squishy: {
   readonly boosts: { readonly attack: number; readonly defense: number };
   readonly shield: number;
+  readonly guard?: number | undefined;
 }): PlateChips {
+  const guard = squishy.guard ?? 0;
   return {
     attack: squishy.boosts.attack > 0,
     defense: squishy.boosts.defense > 0,
     shield: squishy.shield > 0,
+    guard: guard > 0,
+    open: guard < 0,
   };
 }
 
@@ -115,6 +130,7 @@ export function chipsAfterDrinking(chips: PlateChips, id: string): PlateChips {
   const effect = potionOf(id)?.effect;
   if (!effect) return chips;
   return {
+    ...chips,
     attack: chips.attack || (effect.attackPercent ?? 0) > 0,
     defense: chips.defense || (effect.defensePercent ?? 0) > 0,
     shield: true,
@@ -126,6 +142,9 @@ export const CHIP_LOOKS = {
   attack: { text: '⚔️+', label: 'Feeling bold' },
   defense: { text: '🛡️+', label: 'Softer bumps' },
   shield: { text: '✨', label: 'Sparkle shield' },
+  // Steady and Big (#587): until the next bump lands.
+  guard: { text: '🛡️', label: 'On guard' },
+  open: { text: '🎯', label: 'Wide open' },
 } as const;
 
 /** The caption for a sip: "Emberbun sipped Brave Brew! Feeling bold!" */

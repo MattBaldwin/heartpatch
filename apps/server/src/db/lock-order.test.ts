@@ -88,6 +88,7 @@ import {
   tiles,
   users,
 } from './schema.js';
+import { bigMove } from '../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -466,7 +467,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
         action = { type: 'replace', slot };
         engine = { type: 'replace', side: 'a', slot };
       } else {
-        const move = side.squishies[side.active]!.moves[0]!;
+        const move = bigMove(side.squishies[side.active]!);
         action = { type: 'move', move };
         engine = { type: 'turn', choices: { a: { type: 'move', move } } };
       }
@@ -519,7 +520,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
       const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
       const side = state.sides.a;
-      const move = side.squishies[side.active]!.moves[0]!;
+      const move = bigMove(side.squishies[side.active]!);
       const action: PlayerBattleAction = { type: 'move', move };
       const next = applyBattleAction(content, state, {
         type: 'turn',
@@ -1675,7 +1676,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         state.phase.type === 'replace'
           ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          : { type: 'move', move: bigMove(side.squishies[side.active]!) };
       await fights.act(kid, battle.id, { action, turn: state.turn });
     }
 

@@ -32,6 +32,7 @@ import { grantItems } from '../inventory/service.js';
 import { CARE_RATE_LIMITS } from './limits.js';
 import { appendGrowthEvents, applyXp } from './service.js';
 import { createCareRepo } from './repo.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -785,7 +786,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         const side = battle.view.sides.a;
         const action: PlayerBattleAction = {
           type: 'move',
-          move: side.squishies[side.active]!.moves[0]!,
+          move: bigMove(side.squishies[side.active]!),
         };
         const res = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
           action,
@@ -843,7 +844,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
         const side = battle.view.sides.a;
         const res = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
-          action: { type: 'move', move: side.squishies[side.active]!.moves[0]! },
+          action: { type: 'move', move: bigMove(side.squishies[side.active]!) },
           turn: battle.view.turn,
         });
         expect(res.statusCode).toBe(200);

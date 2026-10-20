@@ -3,9 +3,10 @@ import { hashString } from '../rng/index.js';
 import type { BattleRules } from '../schemas/data/battle.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import type { ElementMatrix, FeelingMatrix, SynergyTable } from '../schemas/data/matrices.js';
-import type { Move } from '../schemas/data/moves.js';
+import type { Move, MoveKind } from '../schemas/data/moves.js';
 import type { BattleItemEffect } from '../schemas/data/resources.js';
 import type { Species } from '../schemas/data/species.js';
+import { moveKindTable, type MoveKindTable } from './move-kinds.js';
 
 /** The data tables a battle reads, indexed by id. */
 export interface BattleContent {
@@ -24,6 +25,11 @@ export interface BattleContent {
   readonly rules: BattleRules;
   /** Items usable in battle (potions, #214): resource id → effect. */
   readonly items: ReadonlyMap<string, BattleItemEffect>;
+  /**
+   * Steady and Big (#587): species id → move id → kind. Empty when the rules
+   * have no `moveKinds` (battles before #587).
+   */
+  readonly moveKinds: MoveKindTable;
 }
 
 /**
@@ -44,15 +50,17 @@ export function createBattleContent(
   data: BattleData,
   rules: BattleRules = BATTLE_RULES,
 ): BattleContent {
+  const moves = new Map(data.moves.map((m) => [m.id, m]));
   return {
     contentHash: battleContentHash(data, rules),
     species: new Map(data.species.map((s) => [s.id, s])),
-    moves: new Map(data.moves.map((m) => [m.id, m])),
+    moves,
     elementMatrix: data.elementMatrix,
     feelingMatrix: data.feelingMatrix,
     synergy: data.synergy,
     rules,
     items: new Map(battleItems(data).map(({ id, battleEffect }) => [id, battleEffect])),
+    moveKinds: rules.moveKinds ? moveKindTable(data.species, moves, rules.moveKinds) : new Map(),
   };
 }
 
@@ -79,6 +87,16 @@ const battleItems = (data: BattleData) =>
 
 /** Hashes only the battle-relevant fields, so rewording a move changes nothing. */
 export function battleContentHash(data: BattleData, rules: BattleRules): string {
+  // Steady and Big (#587): the kinds each species plays, so a change to the
+  // sorting rule re-hashes too. Left out entirely before #587, so older
+  // content keeps its hash.
+  const moveKinds =
+    rules.moveKinds &&
+    Object.fromEntries(
+      [...moveKindTable(data.species, new Map(data.moves.map((m) => [m.id, m])), rules.moveKinds)]
+        .filter(([, kinds]) => kinds.size > 0)
+        .map(([id, kinds]) => [id, Object.fromEntries(kinds)]),
+    );
   return hashString(
     canonicalJson({
       species: byId(data.species).map(({ id, element, feeling, baseStats, moves }) => ({
@@ -104,6 +122,7 @@ export function battleContentHash(data: BattleData, rules: BattleRules): string 
         ...rules,
         effectiveness: rules.effectiveness.map(({ id, atLeast }) => ({ id, atLeast })),
       },
+      moveKinds,
     }),
   );
 }
@@ -123,4 +142,13 @@ export function getSpecies(content: BattleContent, id: string): Species {
   const species = content.species.get(id);
   if (!species) throw new BattleRuleError(`unknown species "${id}"`);
   return species;
+}
+
+/** The kind (#587) of `moveId` for `speciesId`, if it has one. */
+export function moveKindOf(
+  content: BattleContent,
+  speciesId: string,
+  moveId: string,
+): MoveKind | undefined {
+  return content.moveKinds.get(speciesId)?.get(moveId);
 }

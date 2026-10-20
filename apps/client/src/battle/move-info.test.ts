@@ -1,6 +1,12 @@
-import { findAvoidedWords, GAME_DATA, type Move } from '@heartpatch/shared';
+import {
+  BATTLE_RULES,
+  findAvoidedWords,
+  GAME_DATA,
+  speciesMoveKinds,
+  type Move,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { describeMove, moveEdge, moveLabel } from './move-info.js';
+import { describeMove, GENTLE_HINT, gentleHintShows, moveEdge, moveLabel } from './move-info.js';
 
 const me = { feeling: 'cozy' } as const;
 const plain = { element: 'light', feeling: 'cozy' } as const;
@@ -81,5 +87,69 @@ describe('moveEdge', () => {
     const flipped = GAME_DATA.feelingMatrix.brave.cozy;
     expect(flipped).not.toBe(1);
     expect(moveEdge(move('ember-boop'), brave, { ...calm, fence: 'leaf-fence' })).toBe('strong');
+  });
+});
+
+describe('Steady and Big moves (#587)', () => {
+  const moves = new Map(GAME_DATA.moves.map((m) => [m.id, m]));
+  const flurrypup = GAME_DATA.species.find((s) => s.id === 'flurrypup')!;
+  const styles = speciesMoveKinds(flurrypup, moves, BATTLE_RULES.moveKinds!);
+  // The owner's screenshot: Flurrypup Lv13 vs a wild Thistlepip Lv5 at 4/20, 5 Heart Charms.
+  const thistlepip = {
+    element: 'leaf',
+    feeling: 'silly',
+    energy: 4,
+    stats: { hp: 20, attack: 9, defense: 9, speed: 9 },
+  } as const;
+
+  it('tells Snowball Toss and Frosty Pounce apart', () => {
+    const snowball = describeMove(move('snowball-toss'), me, thistlepip, {
+      style: styles.get('snowball-toss'),
+      gentleHint: gentleHintShows({ gentle: true }, thistlepip, 5),
+    });
+    const pounce = describeMove(move('frosty-pounce'), me, thistlepip, {
+      style: styles.get('frosty-pounce'),
+      gentleHint: true,
+    });
+    expect(snowball).toMatchObject({
+      style: 'steady',
+      look: { icon: '🛡️', label: 'Steady' },
+      line: 'Lighter, raises your guard',
+      number: '45',
+      hits: null,
+      hint: GENTLE_HINT,
+    });
+    // A big move never wears the gentle hint, and says it can miss.
+    expect(pounce).toMatchObject({
+      style: 'big',
+      look: { icon: '💥', label: 'Big' },
+      line: 'Hits hard, leaves you open',
+      number: '75',
+      hits: '90% hits',
+      hint: null,
+    });
+    expect(moveLabel('Snowball Toss', snowball)).toContain(GENTLE_HINT);
+    for (const info of [snowball, pounce]) {
+      for (const text of [info.line, info.hint ?? '', ...info.more]) {
+        expect(findAvoidedWords(text)).toEqual([]);
+      }
+    }
+  });
+
+  it('shows the gentle hint only in a gentle battle, below half energy, with a Heart Charm', () => {
+    expect(gentleHintShows({ gentle: true }, thistlepip, 5)).toBe(true);
+    expect(gentleHintShows({}, thistlepip, 5)).toBe(false);
+    expect(gentleHintShows({ gentle: true }, thistlepip, 0)).toBe(false);
+    expect(gentleHintShows({ gentle: true }, thistlepip, null)).toBe(false);
+    expect(gentleHintShows({ gentle: true }, { ...thistlepip, energy: 10 }, 5)).toBe(false);
+    expect(gentleHintShows({ gentle: true }, { ...thistlepip, fence: 'hedge' }, 5)).toBe(false);
+  });
+
+  it('leaves moves with no style as they were', () => {
+    expect(describeMove(move('ember-boop'), me, plain)).toMatchObject({
+      style: null,
+      look: { label: 'Boop' },
+      line: 'Takes their energy',
+    });
   });
 });

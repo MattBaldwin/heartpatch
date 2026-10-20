@@ -253,7 +253,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       node.hidden = true;
       return node;
     };
-    const chips = { attack: chip('attack'), defense: chip('defense'), shield: chip('shield') };
+    const chips = {
+      attack: chip('attack'),
+      defense: chip('defense'),
+      shield: chip('shield'),
+      guard: chip('guard'),
+      open: chip('open'),
+    };
     const callout = el('span', { class: 'battle-callout', role: 'status' });
     const node = el(
       'div',
@@ -274,6 +280,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         chips.attack,
         chips.defense,
         chips.shield,
+        chips.guard,
+        chips.open,
       ),
       callout,
     );
@@ -493,6 +501,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
               class: `battle-button battle-move battle-move-${info.kind}`,
               'data-testid': 'battle-move',
               'data-kind': info.kind,
+              ...(info.style && { 'data-style': info.style }),
               'aria-label': moveLabel(move.name, info),
             },
             el('span', { class: 'battle-move-name' }, move.name),
@@ -507,6 +516,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                 info.look.label,
                 ...(info.number ? [el('span', { class: 'battle-move-number' }, info.number)] : []),
               ),
+              ...(info.hits ? [el('span', { class: 'battle-move-hits' }, info.hits)] : []),
               ...(info.edge
                 ? [
                     el(
@@ -520,6 +530,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                 : []),
             ),
             el('span', { class: 'battle-move-line' }, info.line),
+            ...(info.hint
+              ? [
+                  el(
+                    'span',
+                    { class: 'battle-move-hint', 'data-testid': 'battle-move-hint' },
+                    info.hint,
+                  ),
+                ]
+              : []),
             el('span', { class: 'battle-move-more' }, ...info.more.map((t) => el('span', {}, t))),
           );
           node.addEventListener('click', () => {
@@ -716,6 +735,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       p.chips.attack.hidden = !chips.attack;
       p.chips.defense.hidden = !chips.defense;
       p.chips.shield.hidden = !chips.shield;
+      p.chips.guard.hidden = !chips.guard;
+      p.chips.open.hidden = !chips.open;
       p.node.classList.toggle('battle-plate-tuckered', info.percent === 0);
       // A longer name or a status chip can grow the pill: measure again.
       forget();

@@ -1432,6 +1432,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           seed: newSeed(),
           sides: { a: { controller: { type: 'player' }, squishies: fielded }, b: opponent.side },
           ...(opponent.turnLimit !== undefined && { turnLimit: opponent.turnLimit }),
+          // Steady moves are gentle (#587) only where a Heart Charm works:
+          // never with a rival's guards or land.
+          ...(CAPTURABLE_BATTLE_KINDS.has(opponent.kind) && { gentle: true as const }),
         };
         const state = startBattle(content, setup);
         const arena = await arenaFor(repo, {

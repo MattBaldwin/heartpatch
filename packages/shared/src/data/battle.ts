@@ -115,4 +115,20 @@ export const BATTLE_RULES: BattleRules = {
 
   // TUNE: one of each potion per side per battle (#214).
   items: { usesEach: 1 },
+
+  // Steady and Big moves (#587, owner decision 2026-10-19).
+  moveKinds: {
+    openPercent: 25, // TUNE: a big move's user takes 25% more from the next hit
+    guardPercent: 25, // TUNE: a steady move's user takes 25% less from the next hit
+    gentleFloor: 1, // TUNE: a gentle hit leaves a wild squishy a sliver of energy
+    // TUNE: Bold leans big, Careful leans steady, wild squishies play for fun.
+    ai: {
+      wild: { open: 0, guard: 0 },
+      guardian: { open: 0.25, guard: 0 },
+      aggressive: { open: 0, guard: 0 },
+      defensive: { open: 0.5, guard: 0.25 },
+      balanced: { open: 0.25, guard: 0 },
+    },
+    overrides: { thundermop: { 'belly-flop': 'steady' } },
+  },
 };

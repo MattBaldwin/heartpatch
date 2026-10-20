@@ -33,6 +33,7 @@ import { createLoreConsumer } from '../lore/consumer.js';
 import { createTutorialConsumer } from './consumer.js';
 import { SEEDLING_SCARF, scarfRefId } from './rewards.js';
 import { createTutorialService } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -694,7 +695,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
           ? { type: 'capture' }
           : current.view.phase.type === 'replace'
             ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-            : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+            : { type: 'move', move: bigMove(side.squishies[side.active]!) };
         current = await act(server, who, current, action);
       }
       expect(current.status).toBe('finished');
