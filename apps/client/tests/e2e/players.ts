@@ -124,13 +124,22 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
   await done.tap();
 }
 
+/** The sign-up tick box a grown-up ticks (#593); "Sign up" sleeps until it's on. */
+export const GROWN_UP_TICK = 'A grown-up helped me and read the privacy page.';
+
+/** Ticks the grown-up box on the sign-up form (#593). */
+export async function tickGrownUp(overlay: Locator): Promise<void> {
+  await overlay.getByLabel(GROWN_UP_TICK).check();
+}
+
 /**
- * Taps "Sign up" and waits for the server's answer (#408). On a busy CI
+ * Ticks the grown-up box (#593), taps "Sign up" and waits for the server's answer (#408). On a busy CI
  * runner the tap and the answer took up to 7 s (200 sign-ups: p99 5.3 s),
  * more than the 5 s the code screen's check allows, while the screen followed
  * the answer within 1.3 s. So wait on the answer, then the screen.
  */
 export async function submitSignUp(overlay: Locator): Promise<void> {
+  await tickGrownUp(overlay);
   const [answer] = await Promise.all([
     overlay
       .page()
