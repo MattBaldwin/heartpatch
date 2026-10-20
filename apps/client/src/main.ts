@@ -929,15 +929,15 @@ communityActions.wire('explore', (_community, tile) => {
 // Restoring a grey village tile, and naming a won village (#306 PR 3).
 /** A village won in a battle (#306 PR 4), waiting for the map to come back for its joy card. */
 let wonLater: WsEventMessage | null = null;
-/** Shows the joy card for `wonLater` once the map view is up; tries again a few times. */
-const showWonLater = (tries = 20): void => {
+/** Shows the joy card for `wonLater` once the map view is up (after a battle, up to a minute). */
+const showWonLater = (tries = 120): void => {
   if (!wonLater) return;
   const view = maps.view;
   if (!view) {
     if (tries > 0)
       setTimeout(() => {
         showWonLater(tries - 1);
-      }, 250);
+      }, 500);
     return;
   }
   const won = wonElsewhere(wonLater, signedIn?.id ?? null, view.communities ?? []);
