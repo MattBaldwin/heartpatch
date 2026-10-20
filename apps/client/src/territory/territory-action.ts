@@ -54,13 +54,15 @@ export type TerritoryAction =
 
 export function territoryAction(
   tile: PublicTile,
-  view: Pick<MapView, 'tiles' | 'map' | 'members'>,
+  view: Pick<MapView, 'tiles' | 'map' | 'members'> & Partial<Pick<MapView, 'communities'>>,
   me: string | null,
   status: TerritoryStatus | null,
   now: number,
 ): TerritoryAction {
   if (me === null || !status) return { kind: 'none' };
-  const problem = attackTargetProblem(tile, view.tiles, me, view.map.pvpMode);
+  // A restored village tile is ordinary land (#306 PR 4): Claim or Challenge.
+  const restored = isRestoredVillageTile(tile, view);
+  const problem = attackTargetProblem({ ...tile, restored }, view.tiles, me, view.map.pvpMode);
   if (problem === 'mine') {
     if (tile.homeSlot !== null) return { kind: 'none' };
     const post = status.defenders.find((d) => d.q === tile.q && d.r === tile.r);
@@ -97,6 +99,16 @@ export function territoryAction(
   return tile.ownerUserId === null
     ? { kind: 'claim', attemptsLeft, triesResetAt }
     : { kind: 'challenge', attemptsLeft, triesResetAt, fence };
+}
+
+/** Whether a village tile has all its pieces back (`MapView.communities[].restoredTiles`). */
+export function isRestoredVillageTile(
+  tile: Pick<PublicTile, 'q' | 'r' | 'communityId'>,
+  view: Partial<Pick<MapView, 'communities'>>,
+): boolean {
+  if ((tile.communityId ?? null) === null) return false;
+  const c = (view.communities ?? []).find((v) => v.id === tile.communityId);
+  return (c?.restoredTiles ?? []).some((t) => t.q === tile.q && t.r === tile.r);
 }
 
 /**

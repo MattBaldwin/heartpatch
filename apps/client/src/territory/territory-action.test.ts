@@ -15,6 +15,7 @@ import {
   fenceToBreak,
   shieldUntil,
   showsGuardLevelNote,
+  isRestoredVillageTile,
   territoryAction,
   watchInTheDark,
 } from './territory-action.js';
@@ -131,6 +132,39 @@ describe('territoryAction', () => {
     const { view, tile } = setup();
     const grey = { ...tile, communityId: '00000000-0000-4000-8000-000000000306' };
     expect(territoryAction(grey, view, ME, status(), NOW)).toEqual({ kind: 'none' });
+  });
+
+  it('offers Claim or Challenge on a restored village tile, like any land (#306 PR 4)', () => {
+    const id = '00000000-0000-4000-8000-000000000306';
+    const { view, tile } = setup(() => ({ communityId: id }));
+    const withVillage = (restoredTiles: { q: number; r: number }[]): MapView => ({
+      ...view,
+      communities: [
+        {
+          id,
+          name: 'Bramble Hollow',
+          kind: 'workshop',
+          square: { q: tile.q, r: tile.r },
+          tiles: [{ q: tile.q, r: tile.r }],
+          restored: restoredTiles.length,
+          restoredTiles,
+          ownerUserId: null,
+          reach: 'touching',
+          distance: null,
+        },
+      ],
+    });
+    const at = [{ q: tile.q, r: tile.r }];
+    expect(territoryAction(tile, withVillage([]), ME, status(), NOW)).toEqual({ kind: 'none' });
+    expect(territoryAction(tile, withVillage(at), ME, status(), NOW).kind).toBe('claim');
+    const rivals = { ...tile, ownerUserId: userId(2) };
+    expect(territoryAction(rivals, withVillage(at), ME, status(), NOW).kind).toBe('challenge');
+    // Not next to my land: too far, like any land (the panel says so, not the village block).
+    const far = { ...tile, q: tile.q + 20 };
+    const farView = withVillage([{ q: far.q, r: far.r }]);
+    expect(isRestoredVillageTile(far, farView)).toBe(true);
+    expect(territoryAction(far, farView, ME, status(), NOW).kind).toBe('too-far');
+    expect(isRestoredVillageTile(far, withVillage([]))).toBe(false);
   });
 
   it('offers Challenge on a neighbour’s land, unless challenges are off', () => {

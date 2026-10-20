@@ -18,6 +18,7 @@ import {
   hollowedTileInfo,
   kindLine,
   perkLine,
+  restoredTileLines,
   villageSeeds,
   villageSquares,
 } from './community-model.js';
@@ -187,6 +188,48 @@ describe('the map view’s villages', () => {
     if (!wild) throw new Error('no wild tile');
     const plain = describeTile(wild, () => undefined, userId(1));
     expect(hollowedTileInfo(plain, wild, view)).toBe(plain);
+    // A restored tile (PR 4) is in colour again: its title says so.
+    const restored = {
+      ...view,
+      communities: view.communities!.map((v) =>
+        v.id === c.id ? { ...v, restoredTiles: [{ q: tile.q, r: tile.r }] } : v,
+      ),
+    };
+    expect(hollowedTileInfo(info, tile, restored).title).toMatch(/ · Restored ✨$/);
+  });
+});
+
+describe('a restored tile while its village has no winner (#306 PR 4)', () => {
+  const me = userId(1);
+  const rival = userId(2);
+  it('says Claim on wild land and Challenge on a rival’s, with keepers when nobody guards it', () => {
+    const c = village();
+    expect(restoredTileLines(c, { ownerUserId: null, defenders: 0 }, me)).toEqual([
+      '✨ Restored, but wild again. Claim it!',
+    ]);
+    expect(restoredTileLines(c, { ownerUserId: rival, defenders: 2 }, me)).toEqual([
+      '✨ Restored. Win it in a battle!',
+    ]);
+    expect(restoredTileLines(c, { ownerUserId: rival, defenders: 0 }, me)).toEqual([
+      '✨ Restored. Win it in a battle!',
+      '🏮 No guards here. Lantern keepers watch over it.',
+    ]);
+  });
+
+  it('on my tile: restore the rest, or once all are restored, win every tile', () => {
+    expect(restoredTileLines(village(), { ownerUserId: me, defenders: 0 }, me)).toEqual([
+      COMMUNITY_TEXT.tileRestored,
+    ]);
+    const all = village({ restored: 5 });
+    expect(restoredTileLines(all, { ownerUserId: me, defenders: 0 }, me)).toEqual([
+      '🏆 All restored! Win every tile to make it yours.',
+    ]);
+  });
+
+  it('says befriend, never catch', () => {
+    for (const line of Object.values(COMMUNITY_TEXT).filter((v) => typeof v === 'string')) {
+      expect(line).not.toMatch(/\bcatch|\bcaught/i);
+    }
   });
 });
 

@@ -41,6 +41,7 @@ import {
   type GuardianData,
 } from '@heartpatch/shared/server';
 import { watchtowerLevelsOf } from '../communities/service.js';
+import { createCommunitiesRepo } from '../communities/repo.js';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -135,7 +136,7 @@ const MESSAGES = {
   noTile: "We couldn't find that spot.",
   home: 'Home bases are safe. Nobody can ever take one!',
   tradingPost: 'Trading posts belong to everyone! Nobody can claim one.',
-  hollowed: 'Grey villages are won by restoring them, not by battles! 🕯️',
+  hollowed: 'Grey tiles are won by restoring them, not by battles! 🕯️',
   mine: "That's already your land!",
   tooFar: "That spot's too far away. Try one next to your land!",
   pvpOff: 'Challenges are off on this patch. Claim wild land instead!',
@@ -408,7 +409,11 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         throw new AppError('CONFLICT', MESSAGES.movedOn);
 
       const tiles = await repo.listTiles(map.id);
-      const problem = attackTargetProblem(tile, tiles, user.id, map.pvpMode);
+      // A village tile with all its pieces back is ordinary land (#306 PR 4);
+      // a grey one is still won only by restoring it.
+      const restored =
+        tile.communityId !== null && (await createCommunitiesRepo(tx).isRestored(tile.id));
+      const problem = attackTargetProblem({ ...tile, restored }, tiles, user.id, map.pvpMode);
       if (problem) throw new AppError(PROBLEMS[problem].code, PROBLEMS[problem].message);
 
       // Fences (#203): the defender's segments on this tile, and whether it's

@@ -27,7 +27,7 @@ import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
-import { giftLine } from './hollowed/restore-view.js';
+import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -41,7 +41,7 @@ import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-scree
 import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
-import { createMapScreen } from './map/map-screen.js';
+import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -82,7 +82,9 @@ import {
   hexKey,
   hexToWorld,
   visualRegistry,
+  type CommunityView,
   type Hex,
+  type MapView,
   type PublicUser,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
@@ -950,6 +952,26 @@ communityActions.wire('restore', (community, tile) => {
 communityActions.wire('name', (community) => {
   restoreSheet.openName(community);
 });
+// A village I won in a battle (#306 PR 4): the restore sheet's joy card, when
+// a newer view shows it mine (my own restore sheet's win shows it already).
+// Only the last map seen: a win missed while on another patch or across a
+// reload shows on the map, without the card.
+let villagesSeen: { mapId: string; communities: readonly CommunityView[] } | null = null;
+const watchWins = (view: MapView): void => {
+  const communities = view.communities ?? [];
+  const before = villagesSeen?.mapId === view.map.id ? villagesSeen.communities : null;
+  villagesSeen = { mapId: view.map.id, communities };
+  if (!before) return;
+  for (const won of newlyWon(before, communities, signedIn?.id ?? null)) {
+    restoreSheet.openWon(won);
+  }
+};
+const villageWins: MapLayer = {
+  attach: (_scene, view) => {
+    watchWins(view);
+  },
+  update: watchWins,
+};
 // A won Old Well's or Bakery's morning gift (#306 PR 3b), collected on its square.
 communityActions.wireGift(async (community) => {
   const mapId = maps.view?.map.id;
@@ -1055,6 +1077,7 @@ const maps = createMapScreen({
     land.layer,
     postFlags,
     communityFlags,
+    villageWins,
     trickOrTreat.layer,
   ],
   // The tutorial's spotlight finds the home node on the map (the gather step).

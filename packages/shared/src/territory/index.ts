@@ -17,9 +17,16 @@ export interface TerritoryTile extends Hex {
   readonly terrain?: string;
   /**
    * Set on a Hollowed Community's tiles (#306): won by restoring them, never
-   * by battle. Optional for older callers.
+   * by battle while grey. Optional for older callers.
    */
   readonly communityId?: string | null;
+  /**
+   * A village tile with all its pieces back (#306 PR 4): ordinary land under
+   * normal capture rules while its village is being restored. The server
+   * reads it from `community_tiles.restored_at`, the client from
+   * `MapView.communities[].restoredTiles`. Unset reads as grey.
+   */
+  readonly restored?: boolean;
 }
 
 /**
@@ -27,7 +34,8 @@ export interface TerritoryTile extends Hex {
  * limits, like cooldowns and daily caps, are checked separately):
  * - `home`: a Heart Seed or its ring, never taken (design doc §11).
  * - `trading-post`: a trading post, shared and never owned (#269).
- * - `hollowed`: a Hollowed village's tile, won by restoring it (#306).
+ * - `hollowed`: a grey Hollowed village tile, won by restoring it (#306); a
+ *   restored one is ordinary land (PR 4), and a won ring is `home` first.
  * - `mine`: it's already theirs.
  * - `too-far`: not next to their land (outposts come in Phase 2).
  * - `pvp-off`: another player's land, and the map's PvP mode is Off.
@@ -44,7 +52,7 @@ export function attackTargetProblem(
   if (target.homeSlot !== null) return 'home';
   if (target.terrain !== undefined && isTradingPost({ terrain: target.terrain }))
     return 'trading-post';
-  if ((target.communityId ?? null) !== null) return 'hollowed';
+  if ((target.communityId ?? null) !== null && target.restored !== true) return 'hollowed';
   if (target.ownerUserId === userId) return 'mine';
   const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
   if (!hexNeighbors(target).some((n) => mine.has(hexKey(n)))) return 'too-far';

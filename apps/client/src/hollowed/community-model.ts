@@ -21,6 +21,8 @@ import type { TileInfo } from '../map/tile-info.js';
 export const COMMUNITY_TEXT = {
   /** After the terrain's name in the tile panel's title. */
   tag: ' · Hollowed 🕯️',
+  /** …once that tile is restored (PR 4): in colour again, ordinary land. */
+  restoredTag: ' · Restored ✨',
   restored: (name: string, restored: number, total: number) =>
     `${name}. ${String(restored)} of ${String(total)} tiles restored.`,
   about: 'Grey, quiet and a little spooky. Rare squishies love quiet places…',
@@ -49,6 +51,15 @@ export const COMMUNITY_TEXT = {
   theirs: (who: string) => `${who}'s village. Nobody can ever take it!`,
   /** A restored tile of a village still being restored. */
   tileRestored: '✨ This spot is restored! Restore the rest to win the village.',
+  // Contested tiles (PR 4): a restored tile is ordinary land until the village is won.
+  /** A restored tile someone else holds. */
+  winIt: '✨ Restored. Win it in a battle!',
+  /** …with nobody on watch: the tile's own guardians stand in. */
+  keepers: '🏮 No guards here. Lantern keepers watch over it.',
+  /** A restored tile gone wild again (it faded, or the Hollow Man won it back). */
+  claimIt: '✨ Restored, but wild again. Claim it!',
+  /** Every tile restored, nobody's yet (split between Keepers, or its winner left). */
+  winEvery: '🏆 All restored! Win every tile to make it yours.',
   nameIt: 'Name it ✨',
   /** A won village's perk at work (PR 3b): "🛠️ Workshop: one more Factory batch". */
   perk: (emoji: string, kind: string, perk: string) => `${emoji} ${kind}: ${perk}`,
@@ -181,6 +192,23 @@ export function communityPanel(
 }
 
 /**
+ * The lines under a restored tile's progress while its village has no
+ * winner (PR 4): what the kid can do about it. Claim and Challenge are the
+ * territory action's own buttons; these say why they're there.
+ */
+export function restoredTileLines(
+  c: Pick<CommunityView, 'restored' | 'tiles'>,
+  tile: Pick<PublicTile, 'ownerUserId' | 'defenders'>,
+  me: string | null,
+): string[] {
+  if (tile.ownerUserId === null) return [COMMUNITY_TEXT.claimIt];
+  if (tile.ownerUserId !== me) {
+    return [COMMUNITY_TEXT.winIt, ...(tile.defenders === 0 ? [COMMUNITY_TEXT.keepers] : [])];
+  }
+  return [c.restored >= c.tiles.length ? COMMUNITY_TEXT.winEvery : COMMUNITY_TEXT.tileRestored];
+}
+
+/**
  * The tile panel's head on a grey village tile: the Hollowed title, and on
  * wild land the village's progress where "Wild land." would be (someone's
  * land keeps saying whose it is; the progress shows in the village's block).
@@ -214,9 +242,12 @@ export function hollowedTileInfo(
     };
   }
   const words = communityPanel(c, tile.terrain, false);
+  const restored = (c.restoredTiles ?? []).some((t) => hexKey(t) === hexKey(tile));
   return {
     ...info,
-    title: words.title,
+    title: restored
+      ? words.title.replace(COMMUNITY_TEXT.tag, COMMUNITY_TEXT.restoredTag)
+      : words.title,
     owner: tile.ownerUserId === null ? words.restored : info.owner,
   };
 }

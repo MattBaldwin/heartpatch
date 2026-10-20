@@ -4,14 +4,9 @@ import {
   HOLLOW_RULES,
   morningGiftOf,
   HOME_BASE_RULES,
-  hexKey,
   hollowedOpenAt,
-  MAP_GEN,
   pieceCost,
-  restoredNameIdeas,
   restoreProblem,
-  ringToPlant,
-  villageRing,
   villageWinner,
   type CommunityKindId,
   type CommunityNameRequest,
@@ -32,11 +27,9 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
-import { takeDownInnerFences } from '../fences/service.js';
+import { takeDownInnerFences, type LostFence } from '../fences/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
-import { guardWatchesOf, writeGuardCheckpoints } from '../jobs/contentment.js';
-import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
@@ -47,6 +40,7 @@ import {
   type RestoreTileRow,
 } from './repo.js';
 import { communitiesView, villageMorning } from './service.js';
+import { placesOf, winVillage } from './win.js';
 
 /*
  * Restoring a grey village (#306 PR 3, plan v3 Q1–Q3). The server is the
@@ -58,7 +52,8 @@ import { communitiesView, villageMorning } from './service.js';
  * ring (step 6, one id-ordered lock), the guards leaving the ring (6), my
  * explored rows (`refreshHomesteads`, 6), the community row then its tiles'
  * rows (6), my fences facing the new land (8), those guards (10), my bag
- * (11), then `maps`.
+ * (11), then `maps`. The win itself is `winVillage` (win.ts), shared with
+ * the community-settle consumer for a village won in a battle (PR 4).
  */
 
 const MESSAGES = {
@@ -141,13 +136,6 @@ export interface RestoreService {
 /** Adds `items` into `into`. */
 function addInto(into: ItemCounts, items: Readonly<Record<string, number>>): void {
   for (const [id, n] of Object.entries(items)) into[id] = (into[id] ?? 0) + n;
-}
-
-/** Every place the village and its ring cover, each once. */
-function placesOf(square: Hex, village: readonly Hex[]): Hex[] {
-  const seen = new Map<string, Hex>();
-  for (const h of [...villageRing(square), ...village]) seen.set(hexKey(h), h);
-  return [...seen.values()];
 }
 
 export function createRestoreService(options: RestoreServiceOptions): RestoreService {
@@ -288,12 +276,10 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
         // Every piece that doesn't claim its tile thanks its helper (plan Q2).
         const gift: ItemCounts = last ? {} : { ...HOLLOWED_HELPER_GIFT };
         let outcome: RestoreTileResponse['outcome'] = 'piece';
-        /** Tiles that became mine just now: wild before (for my fences facing them). */
-        const gained: RestoreTileRow[] = [];
-        /** My own land the ring took in: its guards go home. */
-        const converted: RestoreTileRow[] = [];
-        /** The win: the name it wears and the ring planted. */
-        let won: { name: string; ring: RestoreTileRow[] } | null = null;
+        /** The tile that became mine just now: wild before (for my fences facing it). */
+        const claimed: RestoreTileRow[] = [];
+        /** My home slot when this piece wins the village. */
+        let winSlot: number | null = null;
 
         if (last) {
           outcome = 'tile';
@@ -301,7 +287,7 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           // village is won, tended now like any claim.
           await territory.setOwner(tile.tileId, user.id);
           await createTendingRepo(tx).claim(mapId, tile.tileId, at);
-          gained.push(tileRow);
+          claimed.push(tileRow);
 
           // The village's last tile, and every one of them mine: it's won.
           const owners = new Map(locked.map((t) => [t.id, t.ownerUserId]));
@@ -315,120 +301,82 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           const slot = (await createMapsRepo(tx).membership(mapId, user.id))?.homeSlot ?? null;
           // Every seated member has a slot; a member without one (none on a
           // patch today) claims the tile but plants no ring.
-          if (winner === user.id && slot !== null) {
-            outcome = 'village';
-            const [name = community.name] = restoredNameIdeas(
-              community.name,
-              COMMUNITY_RULES,
-              MAP_GEN.communities,
-            );
-            // The ring (plan v3 Q3): the square and its neighbours that are
-            // wild or mine become my home tiles; someone else's stay theirs.
-            // My own tile with a building or a clear on it stays my land for
-            // now (a gap): home tiles follow other building rules.
-            const busy = await repo.busyTiles(
-              locked.filter((t) => t.ownerUserId === user.id).map((t) => t.id),
-            );
-            const ring = ringToPlant(
-              square,
-              locked.map((t) => (t.id === tile.tileId ? { ...t, ownerUserId: user.id } : t)),
-              user.id,
-              communityId,
-            ).filter((t) => !busy.has(t.id));
-            await repo.plantRing(
-              ring.map((t) => t.id),
-              { userId: user.id, homeSlot: slot, communityId },
-            );
-            const ringIds = new Set(ring.map((t) => t.id));
-            for (const t of locked) {
-              if (!ringIds.has(t.id) || t.id === tile.tileId) continue;
-              if (t.ownerUserId === null) gained.push(t);
-              else converted.push(t);
-            }
-            won = { name, ring };
+          if (winner === user.id && slot !== null) winSlot = slot;
+        }
+
+        // The piece, with the community rows locked (step 6): its ledger row,
+        // the tile's restorer, and their events.
+        let pieceId = '';
+        const writePiece = async (): Promise<NewGameEvent[]> => {
+          const fresh = (await repo.listCommunityTiles(communityId, true)).find(
+            (t) => t.tileId === tile.tileId,
+          );
+          if (fresh?.piecesDone !== tile.piecesDone) {
+            throw new Error('restore: a village tile changed under its tile lock');
           }
-        }
-
-        // Guards on my land the ring took in go home: home tiles hold no
-        // watch. Their watch so far held (#376): read before the posts go.
-        const guardIds: string[] = [];
-        for (const t of [...converted].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-          guardIds.push(...(await territory.listDefenders(t.id, user.id)).map((g) => g.id));
-        }
-        const watches = await guardWatchesOf(tx, guardIds);
-        for (const t of converted) await territory.clearDefenders(t.id);
-
-        // Homesteads (#199): new land may join or wake mine (step 6).
-        const homesteads =
-          gained.length > 0 ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
-
-        // The village's rows (step 6, after the tile rows above, as a leave's
-        // uproot takes them): the piece, the tile's restorer, the win.
-        await repo.lockCommunity(communityId);
-        const fresh = (await repo.listCommunityTiles(communityId, true)).find(
-          (t) => t.tileId === tile.tileId,
-        );
-        if (fresh?.piecesDone !== tile.piecesDone) {
-          throw new Error('restore: a village tile changed under its tile lock');
-        }
-        const pieceId = await repo.addPiece({
-          tileId: tile.tileId,
-          userId: user.id,
-          paid: cost,
-          at,
-        });
-        const events: NewGameEvent[] = [
-          {
-            mapId,
-            type: 'community.mended',
-            actorUserId: user.id,
-            payload: {
-              communityId,
-              userId: user.id,
-              q: tile.q,
-              r: tile.r,
-              piecesDone,
-              piecesNeeded: tile.piecesNeeded,
+          pieceId = await repo.addPiece({ tileId: tile.tileId, userId: user.id, paid: cost, at });
+          const written: NewGameEvent[] = [
+            {
+              mapId,
+              type: 'community.mended',
+              actorUserId: user.id,
+              payload: {
+                communityId,
+                userId: user.id,
+                q: tile.q,
+                r: tile.r,
+                piecesDone,
+                piecesNeeded: tile.piecesNeeded,
+              },
             },
-          },
-        ];
-        if (last) {
-          await repo.markRestored(tile.tileId, user.id, at);
-          events.push({
-            mapId,
-            type: 'tile.restored',
-            actorUserId: user.id,
-            payload: { communityId, userId: user.id, q: tile.q, r: tile.r },
-          });
-        }
-        if (won) {
-          await repo.win(communityId, user.id, at, won.name);
-          events.push({
-            mapId,
-            type: 'community.restored',
-            actorUserId: user.id,
-            payload: {
-              communityId,
-              userId: user.id,
-              square,
-              ring: won.ring.map((t) => ({ q: t.q, r: t.r })),
-              name: won.name,
-            },
-          });
-        }
-        events.push(...homesteads);
+          ];
+          if (last) {
+            await repo.markRestored(tile.tileId, user.id, at);
+            written.push({
+              mapId,
+              type: 'tile.restored',
+              actorUserId: user.id,
+              payload: { communityId, userId: user.id, q: tile.q, r: tile.r },
+            });
+          }
+          return written;
+        };
 
-        // My fences that faced the new land now stand inside it (step 8).
-        const fences = await takeDownInnerFences(
-          tx,
-          mapId,
-          gained,
-          user.id,
-          await territory.listTiles(mapId),
-        );
-        // Step 10: the guards that went home write their checkpoints.
-        await createSquishyJobsRepo(tx).lockSquishies([...guardIds].sort());
-        await writeGuardCheckpoints(tx, watches, at);
+        const events: NewGameEvent[] = [];
+        let fences: LostFence[];
+        if (winSlot !== null) {
+          // The win and its ring, the same way a battle's last tile wins it
+          // (`winVillage`, shared with the community-settle consumer).
+          outcome = 'village';
+          const won = await winVillage(tx, {
+            mapId,
+            userId: user.id,
+            homeSlot: winSlot,
+            community,
+            square,
+            locked: locked.map((t) => (t.id === tile.tileId ? { ...t, ownerUserId: user.id } : t)),
+            claimed,
+            at,
+            beforeWin: writePiece,
+          });
+          events.push(...won.events);
+          fences = won.fences;
+        } else {
+          // Homesteads (#199): new land may join or wake mine (step 6).
+          const homesteads =
+            claimed.length > 0 ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
+          // The village's rows (step 6, after the tile rows above).
+          await repo.lockCommunity(communityId);
+          events.push(...(await writePiece()), ...homesteads);
+          // My fences that faced the new land now stand inside it (step 8).
+          fences = await takeDownInnerFences(
+            tx,
+            mapId,
+            claimed,
+            user.id,
+            await territory.listTiles(mapId),
+          );
+        }
 
         // Step 11: my bag, once: the piece, the thank-you and the fences' share.
         const grants: ItemCounts = { ...gift };

@@ -5,7 +5,13 @@ import {
   type RestoreTileResponse,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { RESTORE_TEXT, giftLine, restoreSheetWords, villageNameIdeas } from './restore-view.js';
+import {
+  RESTORE_TEXT,
+  giftLine,
+  restoreSheetWords,
+  villageNameIdeas,
+  newlyWon,
+} from './restore-view.js';
 
 const ME = '00000000-0000-4000-8000-000000000001';
 const MIA = '00000000-0000-4000-8000-000000000002';
@@ -94,5 +100,21 @@ describe('restoreSheetWords (#306 PR 3)', () => {
       const ideas = villageNameIdeas({ name });
       expect(ideas).toEqual(['Bramble Glen', 'Bramble Meadow', 'Bramble Hearth']);
     }
+  });
+});
+
+describe('newlyWon (#306 PR 4)', () => {
+  const village = sheet().community;
+  const mine = { ...village, ownerUserId: ME, name: 'Bramble Glen' };
+
+  it('finds a village that became mine since the last view', () => {
+    expect(newlyWon([village], [mine], ME)).toEqual([mine]);
+  });
+
+  it('never someone else’s win, one that was mine already, or before I saw the map', () => {
+    expect(newlyWon([village], [{ ...village, ownerUserId: MIA }], ME)).toEqual([]);
+    expect(newlyWon([mine], [mine], ME)).toEqual([]);
+    expect(newlyWon([], [mine], ME)).toEqual([]);
+    expect(newlyWon([village], [mine], null)).toEqual([]);
   });
 });

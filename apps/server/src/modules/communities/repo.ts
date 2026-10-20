@@ -141,6 +141,8 @@ export interface CommunitiesRepo {
   ) => Promise<void>;
   /** Of these tiles, the ones with a building or a clear going on (a won ring leaves them be). */
   busyTiles: (tileIds: readonly string[]) => Promise<Set<string>>;
+  /** Whether this village tile has all its pieces back (PR 4: then it's ordinary land). */
+  isRestored: (tileId: string) => Promise<boolean>;
   /**
    * A winner left (#306 PR 3, owner 2026-10-19): their rings, already
    * released with their land (`releaseTiles`, which holds the tiles), stop
@@ -456,6 +458,14 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
           .where(and(inArray(tileClears.tileId, [...tileIds]), isNull(tileClears.endedAt))),
       ]);
       return new Set([...built, ...clearing].map((r) => r.id));
+    },
+
+    isRestored: async (tileId) => {
+      const [row] = await db
+        .select({ one: sql`1` })
+        .from(communityTiles)
+        .where(and(eq(communityTiles.tileId, tileId), isNotNull(communityTiles.restoredAt)));
+      return row !== undefined;
     },
 
     uproot: async (mapId, userId) => {

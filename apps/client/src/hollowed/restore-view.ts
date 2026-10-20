@@ -129,3 +129,22 @@ export function restoreSheetWords(
 export function villageNameIdeas(c: Pick<CommunityView, 'name'>): string[] {
   return restoredNameIdeas(c.name, COMMUNITY_RULES, MAP_GEN.communities);
 }
+
+/**
+ * Villages that became mine between two views of the map (#306 PR 4: the
+ * last tile won in a battle, settled a moment later on the server), for the
+ * joy card. Read from the views, not the live event: the map's socket is
+ * closed while the battle screen is up, and coming back refetches the view.
+ * A gap planted in a village that was mine already isn't one, nor anything
+ * before I've seen the map.
+ */
+export function newlyWon(
+  before: readonly CommunityView[],
+  after: readonly CommunityView[],
+  me: string | null,
+): CommunityView[] {
+  if (me === null) return [];
+  return after.filter(
+    (c) => c.ownerUserId === me && before.some((b) => b.id === c.id && b.ownerUserId !== me),
+  );
+}

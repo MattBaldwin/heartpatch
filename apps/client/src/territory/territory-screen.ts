@@ -18,6 +18,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { territoryApi, type TerritoryApi } from './territory-api.js';
 import { crackedBy, fenceCard } from '../fences/fence-model.js';
 import {
+  isRestoredVillageTile,
   showsGuardLevelNote,
   territoryAction,
   watchInTheDark,
@@ -414,8 +415,11 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'too-far':
         children.push(
           ...(tile.ownerUserId !== null ? guardsWho(tile) : []),
-          // A Hollowed village's own block says how to reach it (#306).
-          ...(tile.communityId ? [] : [line(TERRITORY_TEXT.tooFar, 'territory-too-far')]),
+          // A grey village's own block says how to reach it (#306); a
+          // restored tile's block says Claim, so this says why it waits (PR 4).
+          ...(tile.communityId && !isRestoredVillageTile(tile, view)
+            ? []
+            : [line(TERRITORY_TEXT.tooFar, 'territory-too-far')]),
         );
         break;
       case 'watch':
