@@ -123,18 +123,19 @@ export async function consumeItems(
  * Locks every inventory row these grants will touch, per owner (owner id
  * order) and in item-id order, before any grant: one grant at a time would
  * otherwise lock items in grant order, against everyone else's item-id order
- * (tech spec §7 step 11). Missing rows are made by the grant, unless
- * `createMissing` is set: then they're made here at 0, in the same order, and
- * locked too. Two transactions that each grant both of two players' new rows
- * (two Keepers knocking on each other's doors, #557) need it: a lock on rows
- * that don't exist yet holds nothing, so their grants' inserts would meet on
- * the unique key in opposite order and deadlock.
+ * (tech spec §7 step 11). Missing rows are made here at 0 first, in the same
+ * order, and locked too, so the grants only update rows this transaction
+ * holds: a lock on a row that doesn't exist yet holds nothing, and two
+ * transactions granting the same two players' new rows (two Keepers knocking
+ * on each other's doors, #557; a battle's refunds, settling, nightfall, #560)
+ * would otherwise insert them in their own grant order and deadlock on the
+ * unique key. A row made for an item that isn't granted stays at 0, like a
+ * spent-out row, and doesn't show in the bag.
  */
 export async function lockGrantRows(
   tx: Executor,
   mapId: string,
   grants: readonly { userId: string; items: ItemCounts }[],
-  options: { createMissing?: boolean } = {},
 ): Promise<void> {
   const byOwner = new Map<string, Set<string>>();
   for (const { userId, items } of grants) {
@@ -146,8 +147,7 @@ export async function lockGrantRows(
   for (const userId of [...byOwner.keys()].sort()) {
     const ids = [...(byOwner.get(userId) ?? [])].sort();
     if (ids.length === 0) continue;
-    if (options.createMissing) await inventory.createAndLockItems({ mapId, userId }, ids);
-    else await inventory.lockItems({ mapId, userId }, ids);
+    await inventory.createAndLockItems({ mapId, userId }, ids);
   }
 }
 
