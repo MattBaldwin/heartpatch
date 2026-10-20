@@ -261,8 +261,8 @@ describe('Halloween by the map’s local date', () => {
     expect(localDateIn('Not/AZone', new Date('2026-06-15T12:00:00Z'))).toMatch(/^2026-06-1[456]$/);
   });
 
-  // Main dresses the map on the bag's game clock (#583): the window's end on
-  // Nov 9 follows the server, whatever the phone's calendar says.
+  // A sanity check that the game clock's time picks the season (#583); the
+  // wiring (main's `now` and `syncClock`) is covered by map.spec.ts.
   for (const [label, device, server, halloween] of [
     ['a phone past Nov 9, the server still in Halloween', '2026-11-12', '2026-11-08', true],
     ['a phone in Halloween, the server past Nov 9', '2026-10-31', '2026-11-10', false],

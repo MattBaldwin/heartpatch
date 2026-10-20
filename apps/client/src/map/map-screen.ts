@@ -232,6 +232,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   /** The seasons the map was last dressed for, and whether that scene is still on the stage. */
   let dressedFor: string | null = null;
   let onStage = false;
+  /** A map is being fetched to open: its own build dresses it (no reseason meanwhile). */
+  let opening = false;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
   let held: ReadonlyMap<HexKey, string> = new Map();
   /** The view as drawn: held land still its Keeper's (#277), only while it's wild. */
@@ -532,7 +534,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
     open: async (mapId) => {
       backgrounded = false;
-      const [state] = await Promise.all([sync.open(mapId), options.syncClock?.(mapId)]);
+      opening = true;
+      let state: Awaited<ReturnType<typeof sync.open>>;
+      try {
+        [state] = await Promise.all([sync.open(mapId), options.syncClock?.(mapId)]);
+      } finally {
+        opening = false;
+      }
       if (!state) return;
       rebuild();
       hudName.textContent = state.view.map.name;
@@ -570,7 +578,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     reseason: () => {
       const state = sync.state;
       // Another screen on the stage: the map is dressed afresh when it's built again.
-      if (!state || !scene3d || !onStage || backgrounded) return;
+      if (!state || !scene3d || !onStage || backgrounded || opening) return;
       const at = options.now?.() ?? new Date();
       if (seasonsOn(state.view.map.timeZone, at).join() !== dressedFor) rebuild();
     },
