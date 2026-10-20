@@ -17,7 +17,8 @@ import { AppError } from '../../lib/errors.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { consumeItems, grantItems } from './service.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
+import { consumeItems, grantItems, lockGrantRows } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -119,6 +120,24 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
     });
     expect(res.statusCode).toBe(201);
     return MapResponseSchema.parse(res.json()).map.id;
+  }
+
+  /** A patch with both players on it: `host` makes it, `guest` joins. */
+  async function sharedMap(server: FastifyInstance, host: Player, guest: Player): Promise<string> {
+    const mapId = await newMap(server, host);
+    const detail = async () =>
+      MapResponseSchema.parse((await call(server, 'GET', `/maps/${mapId}`, host)).json()).map;
+    const code = (await detail()).admin!.invite!.code;
+    expect((await call(server, 'POST', '/maps/join', guest, { code })).statusCode).toBe(201);
+    const requestId = (await detail()).admin!.requests[0]!.id;
+    const approved = await call(
+      server,
+      'POST',
+      `/maps/${mapId}/requests/${requestId}/approve`,
+      host,
+    );
+    expect(approved.statusCode).toBe(204);
+    return mapId;
   }
 
   async function give(server: FastifyInstance, who: Player, mapId: string, items: object) {
@@ -254,6 +273,49 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
         [1, 'dev-grant'],
         [-1, 'capture'],
       ]);
+    });
+
+    it("makes two players' new rows in owner order before any grant, so crossed grants never deadlock (#560)", async () => {
+      const server = await start();
+      const [a, b] = [await player(), await player()];
+      const mapId = await sharedMap(server, a, b);
+      const [low, high] = a.id < b.id ? [a, b] : [b, a];
+      const grants = [
+        { userId: low.id, items: { timber: 1 } },
+        { userId: high.id, items: { timber: 1 } },
+      ];
+      const grant = (tx: Parameters<typeof grantItems>[0], who: Player) =>
+        grantItems(tx, { mapId, userId: who.id }, { timber: 1 }, 'capture');
+      // Neither bag has a Timber row yet. Each side locks both, then grants in
+      // its own order (a battle's refunds, settling a gatherer's owner and a
+      // trade's other side don't share one). A lock on a row that doesn't
+      // exist holds nothing, so without the rows made first the rival would
+      // insert the lower row, wait on our higher one, and our lower grant
+      // would deadlock.
+      let rival: Promise<void> | undefined;
+      try {
+        await withTransaction(db, async (tx) => {
+          const pid = await backendPid(tx);
+          await lockGrantRows(tx, mapId, grants);
+          await grant(tx, high);
+          rival = withTransaction(db, async (other) => {
+            await lockGrantRows(other, mapId, grants);
+            await grant(other, low);
+            await grant(other, high);
+          });
+          await waitUntilBlockedBy(db, pid);
+          await tx.execute("set local lock_timeout = '2s'");
+          await grant(tx, low);
+        });
+      } finally {
+        // Settle the rival either way, so a failure here isn't also an unhandled rejection.
+        await Promise.allSettled([rival]);
+      }
+      await rival;
+      for (const who of [low, high]) {
+        expect((await inventory(server, who, mapId)).items).toEqual({ timber: 2 });
+        expect(await reconciled(mapId, who.id)).toHaveLength(2);
+      }
     });
 
     it('keeps quantities at 0 or more in the database too', async () => {

@@ -196,15 +196,10 @@ export function createTrickOrTreatService(
         // the same two rows in the other order.
         const visitorItems: ItemCounts =
           prize.kind === 'heartdust' ? { heartdust: prize.count } : {};
-        await lockGrantRows(
-          tx,
-          mapId,
-          [
-            { userId: user.id, items: visitorItems },
-            { userId: hostUserId, items: { heartdust: hostHeartdust } },
-          ],
-          { createMissing: true },
-        );
+        await lockGrantRows(tx, mapId, [
+          { userId: user.id, items: visitorItems },
+          { userId: hostUserId, items: { heartdust: hostHeartdust } },
+        ]);
         if (prize.kind === 'heartdust') {
           await grantItems(
             tx,

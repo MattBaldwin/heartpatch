@@ -35,6 +35,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 /*
  * Fences (#203, #204): building, upgrading, repairing and taking down
@@ -253,7 +254,10 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       (await call(server, 'GET', `/maps/${mapId}/territory`, who)).json(),
     ).territory;
 
-  /** Plays the player's first move every turn until the battle ends. */
+  /**
+   * Plays a big move every turn until the battle ends: a steady one is gentle
+   * with a neutral tile's guardians (#587) and would never take the land.
+   */
   async function playOut(server: FastifyInstance, who: Player, battle: PlayerBattle) {
     let current = battle;
     for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && current.status === 'active'; i++) {
@@ -261,7 +265,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         current.view.phase.type === 'replace'
           ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          : { type: 'move', move: bigMove(side.squishies[side.active]!) };
       const res = await act(server, who, current, action);
       expect(res.statusCode, res.body).toBe(200);
       current = battleOf(res);
