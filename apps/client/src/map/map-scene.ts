@@ -30,12 +30,13 @@ import {
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
 import { activeTriangles } from '../engine/render-stats.js';
 import {
+  HOME_FILL,
   MAP_BUILDING_SCALE,
   MAP_OUTER_BUILDING_SCALE,
   MAP_OUTER_FIRE_SCALE,
   SAFE_GLOW,
 } from '../home/home-config.js';
-import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
+import { filledTiles, mapBuildings, mapSafeTiles, nodeAside } from '../home/home-layout.js';
 import { BuildingField, type BuildingPlacement } from '../procedural/buildings/building-field.js';
 import { BorderField } from './border-field.js';
 import { BuildAreaField, type BuildAreaView } from './build-area.js';
@@ -408,6 +409,7 @@ export class MapScene {
   private homeNode: { userId: string | null; tile: PublicTile | null } | null = null;
   /** Resource nodes drawn on home bases (`buildHomeNodes`). */
   private readonly homeNodes: number;
+  private readonly nodeField: HomeNodes;
   private tileMeshes = 0;
   private counts = {
     homes: 0,
@@ -493,7 +495,8 @@ export class MapScene {
     }
     this.buildProps(view.tiles);
     this.applyDetail();
-    this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
+    this.nodeField = new HomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
+    this.homeNodes = this.nodeField.count;
     this.buildGap();
     this.ambient = new MapAmbient(scene, view.tiles, this.clock, {
       halloween: this.halloween,
@@ -844,7 +847,7 @@ export class MapScene {
       );
     }
     // Fires and habitats (#18), and the warm glow over tiles a lit fire keeps safe.
-    this.placed = mapBuildings(view, HEX_SIZE).map(({ tile, building, at }) => ({
+    this.placed = mapBuildings(view, HEX_SIZE).map(({ tile, building, at, fills }) => ({
       buildingId: building.buildingId,
       level: building.level,
       lit: building.lit,
@@ -853,12 +856,13 @@ export class MapScene {
       y: topOf(tile) + DOME * 0.5,
       scale:
         HEX_SIZE *
-        (tile.homeSlot !== null
+        (tile.homeSlot !== null && !fills
           ? MAP_BUILDING_SCALE
           : building.kind === 'hearthfire'
             ? MAP_OUTER_FIRE_SCALE
             : MAP_OUTER_BUILDING_SCALE),
     }));
+    this.nodeField.set(view);
     this.drawBuildings();
     // Fence segments on the edges (#203): a border reads as one fence line.
     this.fences.set(
@@ -1556,35 +1560,58 @@ export function homeNodeShown(resourceId: string, seasons: ReadonlySet<string>):
   return season === undefined || seasons.has(season);
 }
 
-/** Draws every home node, one instanced mesh per prop kind; returns how many. */
-function buildHomeNodes(
-  scene: Scene,
-  tiles: readonly PublicTile[],
-  seasons: ReadonlySet<string>,
-): number {
-  const byKind = new Map<PropKind, Matrix[]>();
-  let count = 0;
-  for (const tile of tiles) {
+/**
+ * Draws every home node, one instanced mesh per prop kind. A tile whose
+ * building fills it (#589) shows its node as a small pile at the tile's edge;
+ * it is the same mesh, so no new draw calls.
+ */
+class HomeNodes {
+  readonly count: number;
+  readonly #kinds = new Map<PropKind, Mesh>();
+  readonly #seasons: ReadonlySet<string>;
+
+  constructor(scene: Scene, tiles: readonly PublicTile[], seasons: ReadonlySet<string>) {
+    this.#seasons = seasons;
+    let count = 0;
+    for (const tile of tiles) {
+      const kind = this.#kindOf(tile);
+      if (!kind) continue;
+      count++;
+      if (this.#kinds.has(kind)) continue;
+      const mat = vinyl(scene, 'home-node-mat', { color: '#ffffff' });
+      mat.freeze();
+      const { mesh } = buildProp(scene, kind);
+      mesh.name = `home-node-${kind}`;
+      mesh.material = mat;
+      mesh.freezeWorldMatrix();
+      this.#kinds.set(kind, mesh);
+    }
+    this.count = count;
+  }
+
+  #kindOf(tile: PublicTile): PropKind | null {
     const node = tile.homeSlot !== null ? tile.nodeResource : null;
-    const kind = node && homeNodeShown(node, seasons) ? NODE_PROPS[node] : null;
-    if (!kind) continue;
-    const p = hexToWorld(tile, HEX_SIZE);
-    const list = byKind.get(kind) ?? [];
-    list.push(placeAt(p.x, HOME_LOOK.height + DOME * 0.5, p.z));
-    byKind.set(kind, list);
-    count++;
+    return node && homeNodeShown(node, this.#seasons) ? (NODE_PROPS[node] ?? null) : null;
   }
-  if (count === 0) return 0;
-  const mat = vinyl(scene, 'home-node-mat', { color: '#ffffff' });
-  mat.freeze();
-  for (const [kind, matrices] of byKind) {
-    const { mesh } = buildProp(scene, kind);
-    mesh.name = `home-node-${kind}`;
-    mesh.material = mat;
-    setInstances(mesh, matrices);
-    mesh.freezeWorldMatrix();
+
+  /** Places the nodes for this view: in the tile's middle, or aside where a building fills it. */
+  set(view: MapView): void {
+    if (this.#kinds.size === 0) return;
+    const filled = filledTiles(view);
+    const byKind = new Map<PropKind, Matrix[]>();
+    const small = new Vector3(HOME_FILL.nodeScale, HOME_FILL.nodeScale, HOME_FILL.nodeScale);
+    for (const tile of view.tiles) {
+      const kind = this.#kindOf(tile);
+      if (!kind) continue;
+      const centre = hexToWorld(tile, HEX_SIZE);
+      const aside = filled.has(hexKey(tile));
+      const p = aside ? nodeAside(centre, HEX_SIZE) : centre;
+      const list = byKind.get(kind) ?? [];
+      list.push(placeAt(p.x, HOME_LOOK.height + DOME * 0.5, p.z, aside ? small : undefined));
+      byKind.set(kind, list);
+    }
+    for (const [kind, mesh] of this.#kinds) setInstances(mesh, byKind.get(kind) ?? []);
   }
-  return count;
 }
 
 /** This player's home node to point at: Timber first (the tutorial's gather step). */

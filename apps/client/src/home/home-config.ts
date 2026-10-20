@@ -64,6 +64,21 @@ export const MAP_BUILDING_SCALE = 0.72; // TUNE: was 0.42 when tiles held severa
 export const MAP_OUTER_FIRE_SCALE = 0.95; // TUNE: was 0.75
 export const MAP_OUTER_BUILDING_SCALE = 1.15; // TUNE
 
+/**
+ * A home ring tile with a building (#589): the building stands in the tile's
+ * middle and draws tile-sized (`MAP_OUTER_BUILDING_SCALE`, as out on the land),
+ * and the tile's guaranteed node shrinks to a small pile at the tile's edge,
+ * still gatherable. The Heart Seed tile and its Keeper's house are unchanged.
+ */
+export const HOME_FILL = {
+  /** The pile's size next to a full-size node. */
+  nodeScale: 0.45, // TUNE
+  /** Where the pile sits, in hex sizes from the tile's middle (towards the viewer). */
+  nodeOffset: { x: 0, z: -0.66 }, // TUNE: past the building's edge, inside the tile
+  /** How far squishies wander round a tile-sized habitat, world units at the home view. */
+  wanderRadius: 2.0, // TUNE: round the building, inside its tile
+} as const;
+
 /** The soft glow over Hearthfire-safe tiles on the map (linear RGB, alpha). */
 export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as const; // TUNE
 

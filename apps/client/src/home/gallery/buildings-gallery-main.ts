@@ -22,7 +22,7 @@ import '../../styles.css';
  * `fire3` (one fire at that level with its light on the land around),
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
- * practicing). Every shot uses one camera: `?pitch=` (degrees, default 42,
+ * practicing), `ring` (habitats filling ring tiles, #589). Every shot uses one camera: `?pitch=` (degrees, default 42,
  * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
  * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
  * page's `?quality=` and `?renderer=webgpu`.
@@ -116,6 +116,21 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
         squishy('emberbun', { habitatId: den.id }),
         squishy('thistlepip', { habitatId: meadow.id }),
         squishy('puddlepuff'),
+      ],
+    };
+  }
+  if (show === 'ring') {
+    // Habitats on ring spots of ring tiles (#589): they fill their tile and the
+    // guaranteed node tucks aside; the node-only tile keeps its node centred.
+    const den = building('ember-den', { q: 1, r: 0 }, 1, { spot: 3 });
+    const meadow = building('cozy-meadow', { q: 0, r: -1 }, 1, { spot: 4 });
+    const meadow2 = building('cozy-meadow', { q: -1, r: 1 }, 1, { spot: 2 });
+    return {
+      buildings: [building('hearthfire', { q: 0, r: 1 }, 1), den, meadow, meadow2],
+      squishies: [
+        squishy('emberbun', { habitatId: den.id }),
+        squishy('thistlepip', { habitatId: meadow.id }),
+        squishy('puddlepuff', { habitatId: meadow2.id }),
       ],
     };
   }
