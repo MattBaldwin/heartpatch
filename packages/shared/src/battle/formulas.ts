@@ -59,6 +59,16 @@ export function shieldedAmount(amount: number, shield: number, rules: BattleRule
   );
 }
 
+/**
+ * A landed hit's energy after the target's stance (#587): a steady guard
+ * (`guard` > 0) takes `guard`% off, rounded down but never below the damage
+ * `minimum`; a big move's opening (`guard` < 0) adds that %, rounded down.
+ */
+export function guardedAmount(amount: number, guard: number, rules: BattleRules): number {
+  if (guard === 0) return amount;
+  return Math.max(rules.damage.minimum, Math.floor((amount * (100 - guard)) / 100));
+}
+
 /** Element × feeling for a move into a defender: what the callout describes. */
 export function matchupMultiplier(
   content: BattleContent,
@@ -118,7 +128,10 @@ export function rollDamage(
   return Math.max(minimum, amount);
 }
 
-/** Expected damage (average variance), for AI planning. Never rolls. */
+/**
+ * Expected damage (average variance), for AI planning and the move buttons.
+ * Counts the defender's stance (#587). Never rolls.
+ */
 export function expectedDamage(
   content: BattleContent,
   move: Move,
@@ -127,7 +140,9 @@ export function expectedDamage(
 ): number {
   const { varianceMin, varianceMax, minimum } = content.rules.damage;
   const amount = damageBeforeVariance(content, move, attacker, defender);
-  return Math.max(minimum, (amount * (varianceMin + varianceMax)) / 2);
+  const average = Math.max(minimum, (amount * (varianceMin + varianceMax)) / 2);
+  const guard = defender.guard ?? 0;
+  return guard === 0 ? average : Math.max(minimum, (average * (100 - guard)) / 100);
 }
 
 /**

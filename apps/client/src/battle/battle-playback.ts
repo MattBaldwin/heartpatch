@@ -67,6 +67,8 @@ export interface PlaybackStep {
   readonly item: string | null;
   /** For hits: a potion's sparkle shield took most of it, and pops. */
   readonly shielded: boolean;
+  /** For a steady or big move (#587): the stance its user takes, until the next hit. */
+  readonly stance: 'guard' | 'open' | null;
   readonly ms: number;
 }
 
@@ -78,6 +80,18 @@ export interface ShownSide {
   readonly chips: readonly PlateChips[];
 }
 export type ShownState = Readonly<Record<BattleSideId, ShownSide>>;
+
+/** What the log says about Steady and Big moves (#587), style guide §3. */
+export const STANCE_WORDS = {
+  guard: (who: string) => `${who}'s guard is up!`,
+  open: (who: string) => `${who} is wide open!`,
+  guarded: (who: string) => `${who} was on guard. Just a little bump!`,
+  opened: (who: string) => `${who} was wide open. Big bump!`,
+  gentle: (who: string) => `${who} is holding on by a whisker!`,
+  /** A gentle move that did nothing: say what will. */
+  whisker: (who: string) => `${who} is holding on by a whisker! Try a Big move or a Heart Charm.`,
+  gentleCallout: 'So gentle!',
+} as const;
 
 export function shownFrom(battle: PlayerBattle): ShownState {
   const side = (id: BattleSideId): ShownSide => ({
@@ -96,13 +110,19 @@ export function applyStep(shown: ShownState, step: PlaybackStep): ShownState {
     side = { ...side, energy: side.energy.map((e, i) => (i === step.slot ? energy : e)) };
   }
   if (step.kind === 'swap' && step.to !== null) side = { ...side, active: step.to };
-  const { item } = step;
-  if ((item !== null && step.kind === 'item') || step.shielded) {
+  const { item, stance } = step;
+  // A hit uses up a stance (#587); a swap drops it; a steady or big move takes one.
+  const clears = step.kind === 'hit' || step.kind === 'swap';
+  if ((item !== null && step.kind === 'item') || step.shielded || clears || stance !== null) {
     side = {
       ...side,
       chips: side.chips.map((c, i) => {
         if (i !== step.slot) return c;
-        return item !== null ? chipsAfterDrinking(c, item) : { ...c, shield: false };
+        if (item !== null && step.kind === 'item') return chipsAfterDrinking(c, item);
+        let next = step.shielded ? { ...c, shield: false } : c;
+        if (clears) next = { ...next, guard: false, open: false };
+        if (stance !== null) next = { ...next, guard: stance === 'guard', open: stance === 'open' };
+        return next;
       }),
     };
   }
@@ -127,6 +147,7 @@ function step(
       | 'status'
       | 'item'
       | 'shielded'
+      | 'stance'
     >
   > = {},
 ): PlaybackStep {
@@ -145,6 +166,7 @@ function step(
     status: extra.status ?? null,
     item: extra.item ?? null,
     shielded: extra.shielded ?? false,
+    stance: extra.stance ?? null,
   };
 }
 
@@ -232,19 +254,40 @@ export function playbackSteps(
           'hit',
           event.side,
           event.slot,
-          event.shielded
-            ? SHIELD_LINE
-            : isFence(event.side, event.slot)
-              ? FENCE_LINES.hit(name(event.side, event.slot))
-              : `${name(event.side, event.slot)} lost some energy.`,
+          event.gentle
+            ? event.amount === 0
+              ? STANCE_WORDS.whisker(name(event.side, event.slot))
+              : STANCE_WORDS.gentle(name(event.side, event.slot))
+            : event.shielded
+              ? SHIELD_LINE
+              : isFence(event.side, event.slot)
+                ? FENCE_LINES.hit(name(event.side, event.slot))
+                : event.guarded
+                  ? STANCE_WORDS.guarded(name(event.side, event.slot))
+                  : event.opened
+                    ? STANCE_WORDS.opened(name(event.side, event.slot))
+                    : `${name(event.side, event.slot)} lost some energy.`,
           PLAYBACK.hitMs,
           {
-            callout: event.shielded ? SHIELD_CALLOUT : effectivenessLine(event.effectiveness),
+            callout: event.gentle
+              ? STANCE_WORDS.gentleCallout
+              : event.shielded
+                ? SHIELD_CALLOUT
+                : effectivenessLine(event.effectiveness),
             squish: 'wobble',
             energy: event.energy,
             effectiveness: event.effectiveness,
             shielded: event.shielded === true,
           },
+        );
+      case 'stance':
+        return step(
+          'effect',
+          event.side,
+          event.slot,
+          STANCE_WORDS[event.stance](name(event.side, event.slot)),
+          PLAYBACK.effectMs,
+          { squish: event.stance === 'guard' ? 'bounce' : 'jiggle', stance: event.stance },
         );
       case 'item':
         return step(

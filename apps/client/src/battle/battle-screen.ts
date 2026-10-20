@@ -1,5 +1,6 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  BATTLE_RULES,
   BattleTimeOfDaySchema,
   CAPTURABLE_BATTLE_KINDS,
   TILE_BATTLE_KINDS,
@@ -16,7 +17,9 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
+  type MoveKind,
   type WsEventMessage,
+  speciesMoveKinds,
 } from '@heartpatch/shared';
 import { careApi } from '../care/care-api.js';
 import type { QualityTier } from '../engine/config.js';
@@ -43,7 +46,7 @@ import {
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
-import { describeMove, UNKNOWN_MOVE_INFO } from './move-info.js';
+import { describeMove, gentleHintShows, UNKNOWN_MOVE_INFO } from './move-info.js';
 import {
   activeOf,
   BattleContent,
@@ -609,7 +612,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // A sip not sent yet (#403) shows as if drunk: it goes out with the move.
     const chips =
       sipped !== null && side === battle.mySide ? chipsAfterDrinking(known, sipped) : known;
-    scene3d?.setShield(side, chips.shield && energy > 0);
+    // A steady guard (#587) shows the same bubble as a potion's shield.
+    scene3d?.setShield(side, (chips.shield || chips.guard) && energy > 0);
     hud.setPlate(plateSideOf(battle.mySide, side), {
       chips,
       name: plateName(content, squishy, side === battle.mySide ? nicknames : undefined),
@@ -626,12 +630,22 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const moveButtons = (b: PlayerBattle, names: BattleContent) => {
     const me = activeOf(b, b.mySide);
     const them = activeOf(b, otherSide(b.mySide));
+    // Steady and Big (#587), by the same rule the server plays.
+    const kindRules = BATTLE_RULES.moveKinds;
+    const styles = kindRules
+      ? speciesMoveKinds({ id: me.speciesId, moves: me.moves }, names.moves, kindRules)
+      : new Map<string, MoveKind>();
+    // The gentle hint: a wild squishy (or a befriendable guardian) low enough
+    // for a Heart Charm, with one in the bag.
+    const gentleHint = gentleHintShows(b.view, them, charms);
     return me.moves.map((id) => {
       const move = names.moves.get(id);
       return {
         id,
         name: names.moveName(id),
-        info: move ? describeMove(move, me, them) : UNKNOWN_MOVE_INFO,
+        info: move
+          ? describeMove(move, me, them, { style: styles.get(id), gentleHint })
+          : UNKNOWN_MOVE_INFO,
       };
     });
   };
@@ -1308,7 +1322,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (squishy) {
         built.sendOut(side, squishy.speciesId, squishy.id, squishy.level);
         if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side);
-        built.setShield(side, (shown[side].chips[slot] ?? NO_CHIPS).shield);
+        const chips = shown[side].chips[slot] ?? NO_CHIPS;
+        built.setShield(side, chips.shield || chips.guard);
       }
     }
     built.update(now());

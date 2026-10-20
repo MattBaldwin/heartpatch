@@ -4,6 +4,7 @@ import { findTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { bigMoveButton } from './big-move.js';
 
 /**
  * A new player's whole first session, end to end (#28's playtest smoke):
@@ -235,8 +236,11 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   for (let i = 0; i < 60; i++) {
     const current = await settled(page);
     if (current.status !== 'active') break;
-    const button = page.getByTestId(current.phase === 'replace' ? 'battle-replace' : 'battle-move');
-    await button.first().tap();
+    const button =
+      current.phase === 'replace'
+        ? page.getByTestId('battle-replace').first()
+        : await bigMoveButton(page);
+    await button.tap();
   }
   expect(await battleState(page)).toMatchObject({ status: 'finished', winner: 'a' });
   await expect(page.getByTestId('battle-result')).toContainText('This land is yours!');

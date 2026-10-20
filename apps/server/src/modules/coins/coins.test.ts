@@ -27,6 +27,7 @@ import { keepers, sessions, squishies, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { creditCoins } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -170,7 +171,7 @@ describe.skipIf(!url)('Patch Coins (needs DATABASE_URL)', () => {
       const action: PlayerBattleAction =
         current.view.phase.type === 'replace'
           ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
-          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          : { type: 'move', move: bigMove(side.squishies[side.active]!) };
       const res = await act(server, who, current, action);
       expect(res.statusCode, res.body).toBe(200);
       current = battleOf(res);

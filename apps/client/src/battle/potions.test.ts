@@ -59,22 +59,28 @@ describe('battle potions in the HUD (#214)', () => {
   it('shows chips from the battle state', () => {
     expect(chipsOf({ boosts: { attack: 0, defense: 0 }, shield: 0 })).toEqual(NO_CHIPS);
     expect(chipsOf({ boosts: { attack: 40, defense: 0 }, shield: 75 })).toEqual({
+      ...NO_CHIPS,
       attack: true,
-      defense: false,
       shield: true,
+    });
+    // Steady and Big (#587): a guard or an opening until the next hit.
+    expect(chipsOf({ boosts: { attack: 0, defense: 0 }, shield: 0, guard: 25 })).toEqual({
+      ...NO_CHIPS,
+      guard: true,
+    });
+    expect(chipsOf({ boosts: { attack: 0, defense: 0 }, shield: 0, guard: -25 })).toEqual({
+      ...NO_CHIPS,
+      open: true,
     });
   });
 
   it('adds a potion’s chips and puts the shield up, keeping earlier boosts', () => {
     const brew = chipsAfterDrinking(NO_CHIPS, 'brave-brew');
-    expect(brew).toEqual({ attack: true, defense: false, shield: true });
+    expect(brew).toEqual({ ...NO_CHIPS, attack: true, shield: true });
     const both = chipsAfterDrinking({ ...brew, shield: false }, 'cozy-cocoa');
-    expect(both).toEqual({ attack: true, defense: true, shield: true });
-    expect(chipsAfterDrinking(NO_CHIPS, 'hearty-soup')).toEqual({
-      attack: false,
-      defense: false,
-      shield: true,
-    });
+    expect(both).toEqual({ ...NO_CHIPS, attack: true, defense: true, shield: true });
+    expect(chipsAfterDrinking(NO_CHIPS, 'hearty-soup')).toEqual({ ...NO_CHIPS, shield: true });
+    expect(chipsAfterDrinking({ ...NO_CHIPS, guard: true }, 'hearty-soup').guard).toBe(true);
     expect(chipsAfterDrinking(NO_CHIPS, 'timber')).toEqual(NO_CHIPS);
     expect(CHIP_LOOKS.attack.text).toBe('⚔️+');
     expect(CHIP_LOOKS.defense.text).toBe('🛡️+');

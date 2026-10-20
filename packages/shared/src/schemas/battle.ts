@@ -101,6 +101,12 @@ export const BattleSetupSchema = z
      * `maxTurns` (a fence battle, #203).
      */
     turnLimit: z.number().int().min(1).optional(),
+    /**
+     * A player's steady moves stop short of tuckering out the AI side (#587):
+     * the server sets it for battles whose squishies can be befriended
+     * (`CAPTURABLE_BATTLE_KINDS`), never for a rival's or a Keeper's.
+     */
+    gentle: z.literal(true).optional(),
   })
   .superRefine((setup, ctx) => {
     const seen = new Set<string>();
@@ -202,6 +208,8 @@ export const BattleSquishyViewSchema = z.object({
     .object({ attack: z.number().int().min(0), defense: z.number().int().min(0) })
     .default({ attack: 0, defense: 0 }),
   shield: z.number().int().min(0).max(100).default(0),
+  /** Steady guard (+) or big opening (−) until its next hit (#587). */
+  guard: z.number().int().min(-100).max(100).optional(),
   /** Said yes to a Heart Charm and left the fight (#279). */
   befriended: z.literal(true).optional(),
   /**
@@ -264,7 +272,11 @@ export const BattleEventSchema = z.discriminatedUnion('type', [
     energy: z.number().int().min(0),
     effectiveness: ContentIdSchema,
     shielded: z.literal(true).optional(),
+    guarded: z.literal(true).optional(),
+    opened: z.literal(true).optional(),
+    gentle: z.literal(true).optional(),
   }),
+  z.object({ ...at, type: z.literal('stance'), stance: z.enum(['guard', 'open']) }),
   z.object({
     ...at,
     type: z.literal('heal'),
@@ -304,6 +316,8 @@ export const ClientBattleViewSchema = z.object({
   turn: z.number().int().min(0),
   /** Turns the battle lasts at most, when less than the rules' (a fence battle, #203). */
   turnLimit: z.number().int().min(1).optional(),
+  /** A player's steady moves are gentle with the AI side (#587). */
+  gentle: z.literal(true).optional(),
   sides: z.object({ a: BattleSideViewSchema, b: BattleSideViewSchema }),
   phase: BattlePhaseSchema,
   log: z.array(BattleEventSchema),

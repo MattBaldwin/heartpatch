@@ -1,8 +1,12 @@
 import type { Rng } from '../rng/index.js';
 import type { BattleChoice, BattleSideId } from '../schemas/battle.js';
-import type { BattleAiPolicy, BattleAiPolicyRules } from '../schemas/data/battle.js';
+import type {
+  BattleAiPolicy,
+  BattleAiPolicyRules,
+  BattleMoveKindRules,
+} from '../schemas/data/battle.js';
 import type { Move } from '../schemas/data/moves.js';
-import { getMove, type BattleContent } from './content.js';
+import { getMove, moveKindOf, type BattleContent } from './content.js';
 import { expectedDamage } from './formulas.js';
 import {
   activeSquishy,
@@ -53,6 +57,29 @@ function damageShare(
   return Math.min(1, share);
 }
 
+/**
+ * What a move's stance (#587) is worth to this policy: a steady guard is
+ * worth `guard` × the foe's best hit share × guardPercent; a big opening costs
+ * `open` × that share × openPercent, unless the move should tucker the target
+ * out (then there's no next hit to fear). The stance comes hit or miss.
+ */
+function stanceScore(
+  content: BattleContent,
+  policyId: BattleAiPolicy,
+  move: Move,
+  user: BattleSquishy,
+  target: BattleSquishy,
+): number {
+  const rules: BattleMoveKindRules | undefined = content.rules.moveKinds;
+  const kind = moveKindOf(content, user.speciesId, move.id);
+  if (!rules || !kind || target.fence !== undefined) return 0;
+  const weights = rules.ai[policyId];
+  const threat = bestDamageShare(content, target, user);
+  if (kind === 'steady') return (weights.guard * threat * rules.guardPercent) / 100;
+  if (damageShare(content, move, user, target) >= 1) return 0;
+  return -(weights.open * threat * rules.openPercent) / 100;
+}
+
 /** How good `move` looks to this policy right now. */
 export function scoreMove(
   content: BattleContent,
@@ -60,6 +87,7 @@ export function scoreMove(
   move: Move,
   user: BattleSquishy,
   target: BattleSquishy,
+  policyId?: BattleAiPolicy,
 ): number {
   const { maxStages } = content.rules.statStages;
   const lands = move.accuracy / 100;
@@ -87,7 +115,8 @@ export function scoreMove(
         break;
     }
   }
-  return score * lands;
+  const stance = policyId ? stanceScore(content, policyId, move, user, target) : 0;
+  return score * lands + stance;
 }
 
 /** The best damage share any of `user`'s moves has against `target`. */
@@ -114,7 +143,7 @@ export function chooseAiChoice(
   const options: Option<BattleChoice>[] = user.moves.map((id) => ({
     value: { type: 'move', move: id },
     weight: sharpen(
-      Math.max(MIN_SCORE, scoreMove(content, policy, getMove(content, id), user, target)),
+      Math.max(MIN_SCORE, scoreMove(content, policy, getMove(content, id), user, target, policyId)),
       policy.focus,
     ),
   }));

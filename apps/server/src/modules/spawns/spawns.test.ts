@@ -37,8 +37,10 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
+import { setupOf } from '../battles/repo.js';
 import { grantItems } from '../inventory/service.js';
 import { createSpawnsService, defaultSpawnData, gladeSpawn } from './service.js';
+import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -603,7 +605,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
     let b = start;
     for (let i = 0; i < 50 && b.status === 'active'; i++) {
       const side = b.view.sides.a;
-      const move = side.squishies[side.active]!.moves[0]!;
+      const move = bigMove(side.squishies[side.active]!);
       b = await battles.act(who, b.id, { action: { type: 'move', move }, turn: b.view.turn });
     }
     return b;
@@ -869,13 +871,9 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       // The record replays to the same end.
       const row = await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battle.id) });
       const content = contentWith(captureRules(100));
-      expect(
-        replayBattle(
-          content,
-          { seed: row!.seed, sides: row!.setup as never },
-          row!.actions as never,
-        ),
-      ).toEqual(row!.state);
+      expect(replayBattle(content, setupOf(row as never), row!.actions as never)).toEqual(
+        row!.state,
+      );
 
       // Gone for this player for the rest of the window, back in the next one.
       const tile = { q: row!.spawnQ!, r: row!.spawnR! };

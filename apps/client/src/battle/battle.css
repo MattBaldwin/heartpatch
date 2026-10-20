@@ -188,6 +188,16 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #5a3a8c;
 }
 
+.battle-chip-guard {
+  background: #d6efe1;
+  color: #22593d;
+}
+
+.battle-chip-open {
+  background: #ffe1d3;
+  color: #8a3a12;
+}
+
 /* Saturday Morning Smackdown's comic callout: bold, outlined, a little tilted. */
 .battle-callout {
   position: absolute;
@@ -817,6 +827,23 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   --move-edge: #b3bdf0;
 }
 
+/* Steady and Big (#587): the word and icon say it too, never colour alone. */
+.battle-move[data-style='big'] {
+  --move-bg: #ffd9c7;
+  --move-edge: #f2a98a;
+}
+
+.battle-move[data-style='steady'] {
+  --move-bg: #d6efe1;
+  --move-edge: #a3d4b9;
+}
+
+.battle-move-hint {
+  font-size: 12px;
+  font-weight: 800;
+  color: #7a2f5c;
+}
+
 .battle-move-name {
   /* Not tighter than the glyphs: the roomy-labels check measures their box. */
   line-height: 1.25;
@@ -828,6 +855,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .battle-move-chips {
   display: flex;
   flex-wrap: wrap;
+  /* The button's full width, so a chip that doesn't fit wraps (where wrapping is on). */
+  align-self: stretch;
   gap: 4px;
 }
 
@@ -897,6 +926,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   .battle-move-chips {
     flex-wrap: nowrap;
     gap: 3px;
+  }
+
+  /* A move that can miss carries a third chip (#587): let the matchup wrap
+     under it rather than run off the button's edge. */
+  .battle-move-chips:has(> .battle-move-hits) {
+    flex-wrap: wrap;
   }
 
   .battle-move-chips > span {

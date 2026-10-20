@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
+import { bigMoveButton } from './big-move.js';
 
 /**
  * A PvE battle on an iPhone (issue #13): pick a fight, play it to the end,
@@ -167,12 +168,16 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   expect(resumed.scene?.arena).toMatchObject(where);
   await expect(page.getByTestId('battle-caption')).toContainText('Welcome back');
 
-  // Play it out: first move every turn until it's over (max turns is 50).
+  // Play it out: a big move every turn (steady ones are gentle with a wild squishy, #587)
+  // until it's over (max turns is 50).
   for (let i = 0; i < 60; i++) {
     const current = await settled(page);
     if (current.status !== 'active') break;
-    const button = page.getByTestId(current.phase === 'replace' ? 'battle-replace' : 'battle-move');
-    await button.first().tap();
+    const button =
+      current.phase === 'replace'
+        ? page.getByTestId('battle-replace').first()
+        : await bigMoveButton(page);
+    await button.tap();
   }
   const over = await settled(page);
   expect(over).toMatchObject({ id: battleId, status: 'finished', phase: 'over' });

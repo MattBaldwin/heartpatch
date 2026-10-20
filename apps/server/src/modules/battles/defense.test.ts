@@ -293,6 +293,8 @@ describe.skipIf(!url)('live tile defense (#29-C, needs DATABASE_URL)', () => {
 
     const started = battleOf(await attack(server, lee, mapId, near));
     expect(started.kind).toBe('rival-tile');
+    // A rival's guards are never befriended, so nothing is gentle (#587).
+    expect(started.view).not.toHaveProperty('gentle');
     // The challenger waits for the answer, on the game clock.
     expect(started.defensePrompt).toEqual({
       expiresAt: new Date(

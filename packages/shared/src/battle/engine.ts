@@ -9,13 +9,14 @@ import {
   type BattleSetup,
   type BattleSideId,
 } from '../schemas/battle.js';
-import type { BattleStat, Move } from '../schemas/data/moves.js';
+import type { BattleStat, Move, MoveKind } from '../schemas/data/moves.js';
 import { chooseAiChoice, chooseAiReplacement } from './ai.js';
-import { BattleRuleError, getMove, getSpecies, type BattleContent } from './content.js';
+import { BattleRuleError, getMove, getSpecies, moveKindOf, type BattleContent } from './content.js';
 import {
   captureChance,
   effectiveStat,
   effectivenessTier,
+  guardedAmount,
   matchupMultiplier,
   rollDamage,
   shieldedAmount,
@@ -120,6 +121,7 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
     turn: 0,
     ...(setup.turnLimit !== undefined &&
       setup.turnLimit < content.rules.maxTurns && { turnLimit: setup.turnLimit }),
+    ...(setup.gentle && { gentle: true as const }),
     rng: Rng.fromSeed(setup.seed).state(),
     sides: { a: sideFrom('a'), b: sideFrom('b') },
     phase: { type: 'turn' },
@@ -147,6 +149,7 @@ function draftOf(state: BattleState): Draft<BattleState> {
     contentHash: state.contentHash,
     turn: state.turn,
     ...(state.turnLimit !== undefined && { turnLimit: state.turnLimit }),
+    ...(state.gentle && { gentle: true as const }),
     rng: [...state.rng],
     sides: { a: copySide(state.sides.a), b: copySide(state.sides.b) },
     phase: structuredPhase(state.phase),
@@ -339,6 +342,7 @@ class Step {
   private swap(side: BattleSideId, slot: number): void {
     const leaving = this.active(side);
     leaving.stages = freshStages();
+    delete leaving.guard;
     if (leaving.status && this.content.rules.status[leaving.status.id].clearsOnSwap) {
       leaving.status = null;
     }
@@ -400,25 +404,39 @@ class Step {
     if (!inPlay(user) || !this.canAct(side)) return;
     const foeSide = otherSide(side);
     const target = this.active(foeSide);
+    const kind = moveKindOf(this.content, user.speciesId, move.id);
 
     this.emit({ ...this.at(side), type: 'move', move: move.id });
     if (!this.rng.chance(move.accuracy)) {
       this.emit({ ...this.at(side), type: 'miss', move: move.id });
+      this.takeStance(side, kind);
       return;
     }
 
     if (move.power > 0) {
+      const { rules } = this.content;
       const rolled = rollDamage(this.content, move, user, target, this.rng);
+      const guard = target.guard ?? 0;
       const shielded = target.shield > 0;
-      const amount = Math.min(
+      let amount = Math.min(
         target.energy,
-        shieldedAmount(rolled, target.shield, this.content.rules),
+        shieldedAmount(guardedAmount(rolled, guard, rules), target.shield, rules),
       );
+      // Gentle (#587): a player's steady move leaves a sliver of energy.
+      let gentle = false;
+      if (kind === 'steady' && rules.moveKinds && this.gentleInto(side)) {
+        const most = Math.max(0, target.energy - rules.moveKinds.gentleFloor);
+        if (amount > most) {
+          amount = most;
+          gentle = true;
+        }
+      }
       target.shield = 0;
+      delete target.guard;
       target.energy -= amount;
       const effectiveness = effectivenessTier(
         matchupMultiplier(this.content, move, user, target),
-        this.content.rules,
+        rules,
       );
       this.emit({
         ...this.at(foeSide),
@@ -427,9 +445,13 @@ class Step {
         energy: target.energy,
         effectiveness,
         ...(shielded && { shielded: true as const }),
+        ...(guard > 0 && { guarded: true as const }),
+        ...(guard < 0 && { opened: true as const }),
+        ...(gentle && { gentle: true as const }),
       });
       if (target.energy === 0) this.emit({ ...this.at(foeSide), type: 'tuckered-out' });
     }
+    this.takeStance(side, kind);
 
     for (const effect of move.effects ?? []) {
       switch (effect.type) {
@@ -465,6 +487,36 @@ class Step {
         }
       }
     }
+  }
+
+  /**
+   * A gentle battle (#587) spares the AI side from a player's steady moves:
+   * only a battle whose squishies can be befriended, never a fence.
+   */
+  private gentleInto(side: BattleSideId): boolean {
+    const foeSide = otherSide(side);
+    return (
+      this.state.gentle === true &&
+      this.state.sides[side].controller.type === 'player' &&
+      this.state.sides[foeSide].controller.type === 'ai' &&
+      this.active(foeSide).fence === undefined
+    );
+  }
+
+  /**
+   * The user's stance after a steady or big move (#587), hit or miss: a
+   * steady guard or a big opening, replacing any it had, until the next hit
+   * it takes. A move with no kind (or rules before #587) changes nothing.
+   */
+  private takeStance(side: BattleSideId, kind: MoveKind | undefined): void {
+    const rules = this.content.rules.moveKinds;
+    if (!kind || !rules) return;
+    const user = this.active(side);
+    if (!inPlay(user)) return;
+    // A finishing blow takes no stance: there's no next hit to brace for.
+    if (!this.state.sides[otherSide(side)].squishies.some(inPlay)) return;
+    user.guard = kind === 'steady' ? rules.guardPercent : -rules.openPercent;
+    this.emit({ ...this.at(side), type: 'stance', stance: kind === 'steady' ? 'guard' : 'open' });
   }
 
   // ── End of turn and end of battle ────────────────────────────────────
@@ -679,12 +731,13 @@ export type ClientBattleView = Omit<BattleState, 'rng'>;
  * let a client predict every roll, so they never leave the server.
  */
 export function clientBattleView(state: BattleState): ClientBattleView {
-  const { version, contentHash, turn, turnLimit, sides, phase, log } = state;
+  const { version, contentHash, turn, turnLimit, gentle, sides, phase, log } = state;
   return {
     version,
     contentHash,
     turn,
     ...(turnLimit !== undefined && { turnLimit }),
+    ...(gentle && { gentle }),
     sides,
     phase,
     log,
