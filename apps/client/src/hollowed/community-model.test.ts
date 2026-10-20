@@ -216,6 +216,20 @@ describe('a restored tile while its village has no winner (#306 PR 4)', () => {
     ]);
   });
 
+  it('says challenges are off, not "win it in a battle", when PvP is off', () => {
+    expect(restoredTileLines(village(), { ownerUserId: rival, defenders: 0 }, me, 'off')).toEqual([
+      '✨ Restored. Challenges are off on this patch.',
+    ]);
+    for (const mode of ['on', 'gentle'] as const) {
+      expect(restoredTileLines(village(), { ownerUserId: rival, defenders: 2 }, me, mode)).toEqual([
+        '✨ Restored. Win it in a battle!',
+      ]);
+    }
+    expect(restoredTileLines(village(), { ownerUserId: null, defenders: 0 }, me, 'off')).toEqual([
+      '✨ Restored, but wild again. Claim it!',
+    ]);
+  });
+
   it('on my tile: restore the rest, or once all are restored, win every tile', () => {
     expect(restoredTileLines(village(), { ownerUserId: me, defenders: 0 }, me)).toEqual([
       COMMUNITY_TEXT.tileRestored,

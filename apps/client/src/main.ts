@@ -366,6 +366,8 @@ const care = createCareSheet({
   onClosed: () => {
     roster.setCovered(false);
     void roster.refresh();
+    // A village won in the same battle waited for the evolution to be seen (#592).
+    showWonVillages();
   },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
@@ -968,14 +970,22 @@ communityActions.wire('name', (community) => {
 // Only the last map seen: a win missed while on another patch or across a
 // reload shows on the map, without the card.
 let villagesSeen: { mapId: string; communities: readonly CommunityView[] } | null = null;
+// A battle win that also evolves a squishy opens the care sheet's "Whoa!" (#19):
+// the joy card waits until that closes, so the two never stack (#592).
+const wonWaiting: CommunityView[] = [];
+let evolutionPending = false;
+const showWonVillages = (): void => {
+  if (evolutionPending || care.isOpen) return;
+  for (const won of wonWaiting.splice(0)) restoreSheet.openWon(won);
+};
 const watchWins = (view: MapView): void => {
   const communities = view.communities ?? [];
   const before = villagesSeen?.mapId === view.map.id ? villagesSeen.communities : null;
+  if (villagesSeen?.mapId !== view.map.id) wonWaiting.length = 0;
   villagesSeen = { mapId: view.map.id, communities };
   if (!before) return;
-  for (const won of newlyWon(before, communities, signedIn?.id ?? null)) {
-    restoreSheet.openWon(won);
-  }
+  wonWaiting.push(...newlyWon(before, communities, signedIn?.id ?? null));
+  showWonVillages();
 };
 const villageWins: MapLayer = {
   attach: (_scene, view) => {
@@ -1315,12 +1325,17 @@ const battles = createBattleScreen({
   },
   onClosed: (mapId) => {
     battleMapId = null;
+    evolutionPending = true;
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
         explore.setMap(mapId);
-        // A battle can make a squishy evolve: celebrate it now (#19).
-        void care.celebrateNews(mapId);
+        // A battle can make a squishy evolve: celebrate it now (#19). A village
+        // won in the same battle shows its joy card once that's closed (#592).
+        void care.celebrateNews(mapId).finally(() => {
+          evolutionPending = false;
+          showWonVillages();
+        });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
         // Made it to a trading post (#270, "Open the post"): show its panel.
@@ -1335,6 +1350,7 @@ const battles = createBattleScreen({
         ]);
       },
       (err: unknown) => {
+        evolutionPending = false;
         // No map to go back to: no battle button over the lobby either.
         void battles.setMap(null);
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');

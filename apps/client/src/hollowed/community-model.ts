@@ -7,6 +7,7 @@ import {
   type CommunityView,
   type HexKey,
   type MapView,
+  type PvpMode,
   type PublicTile,
 } from '@heartpatch/shared';
 import type { TileInfo } from '../map/tile-info.js';
@@ -54,6 +55,8 @@ export const COMMUNITY_TEXT = {
   // Contested tiles (PR 4): a restored tile is ordinary land until the village is won.
   /** A restored tile someone else holds. */
   winIt: '✨ Restored. Win it in a battle!',
+  /** …when challenges are off on this patch (the territory screen's own words). */
+  winItOff: '✨ Restored. Challenges are off on this patch.',
   /** …with nobody on watch: the tile's own guardians stand in. */
   keepers: '🏮 No guards here. Lantern keepers watch over it.',
   /** A restored tile gone wild again (it faded, or the Hollow Man won it back). */
@@ -200,9 +203,12 @@ export function restoredTileLines(
   c: Pick<CommunityView, 'restored' | 'tiles'>,
   tile: Pick<PublicTile, 'ownerUserId' | 'defenders'>,
   me: string | null,
+  pvpMode: PvpMode = 'on',
 ): string[] {
   if (tile.ownerUserId === null) return [COMMUNITY_TEXT.claimIt];
   if (tile.ownerUserId !== me) {
+    // Challenges off: no battle to win it in, and no guards to talk about.
+    if (pvpMode === 'off') return [COMMUNITY_TEXT.winItOff];
     return [COMMUNITY_TEXT.winIt, ...(tile.defenders === 0 ? [COMMUNITY_TEXT.keepers] : [])];
   }
   return [c.restored >= c.tiles.length ? COMMUNITY_TEXT.winEvery : COMMUNITY_TEXT.tileRestored];
