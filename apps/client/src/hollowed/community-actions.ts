@@ -151,7 +151,7 @@ export function createCommunityActions(me: () => string | null = () => null): Co
           'div',
           { class: 'community-block', 'data-testid': 'community-block' },
           el('p', { class: 'tile-action-note community-line community-reach' }, words.restored),
-          ...restoredTileLines(c, tile, me()).map((line) =>
+          ...restoredTileLines(c, tile, me(), view.map.pvpMode).map((line) =>
             el('p', { class: 'tile-action-note community-line' }, line),
           ),
         ),
