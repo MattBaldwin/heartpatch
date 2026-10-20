@@ -65,6 +65,7 @@ describe.skipIf(!url)('auth rate limits (needs DATABASE_URL)', () => {
     password: 'squishy-secret',
     birthYear: 2014,
     timeZone: 'America/Chicago',
+    grownUpOk: true,
     ...overrides,
   });
 

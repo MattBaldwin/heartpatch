@@ -427,6 +427,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
       password: PASSWORD,
       birthYear: 1980,
       timeZone: 'America/Chicago',
+      grownUpOk: true,
       role: 'admin',
     });
     expect(res.statusCode).toBe(201);

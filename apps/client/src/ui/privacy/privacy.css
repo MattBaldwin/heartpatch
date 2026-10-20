@@ -1,0 +1,114 @@
+/* The privacy page for grown-ups (#593): privacy.html, a plain scrolling page
+   in the game's card look. Not the game's styles.css, which locks scrolling. */
+
+:root {
+  --hp-pad-x: 12px;
+  --hp-pad-y: 8px;
+}
+
+html {
+  background: #fde8f0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: #fde8f0;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.privacy {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 24px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 24px) calc(env(safe-area-inset-left) + 16px);
+}
+
+.privacy-head {
+  text-align: center;
+}
+
+.privacy-kicker {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 4px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fbeaf2;
+  font-size: 14px;
+  font-weight: 800;
+  color: #7a2d55;
+}
+
+.privacy h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.privacy-lead {
+  margin: 10px 0 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.privacy-card {
+  padding: 18px 18px 16px;
+  border-radius: 26px;
+  background: #fffafc;
+  box-shadow: 0 10px 28px rgb(107 75 110 / 14%);
+}
+
+.privacy-card h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+
+.privacy-card ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 22px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.privacy-card li::marker {
+  color: #e3a6c6;
+}
+
+.privacy-nope {
+  list-style: none;
+}
+
+.privacy-nope li::before {
+  content: '✕';
+  display: inline-block;
+  width: 22px;
+  margin-left: -22px;
+  font-weight: 800;
+  color: #b8487a;
+}
+
+.privacy-note {
+  margin: 14px 0 0;
+  padding: 10px var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fbeaf2;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #7d6380;
+}
+
+.privacy-foot {
+  margin: 4px 0 0;
+  font-size: 14px;
+  text-align: center;
+  color: #7d6380;
+}

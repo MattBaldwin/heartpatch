@@ -169,6 +169,7 @@ describe.skipIf(!url)('family signup codes (needs DATABASE_URL)', () => {
     password: 'squishy-secret',
     birthYear: 2014,
     timeZone: 'America/Chicago',
+    grownUpOk: true as const,
   });
 
   const signup = (server: FastifyInstance, signupCode: string, username?: string, extra = {}) =>

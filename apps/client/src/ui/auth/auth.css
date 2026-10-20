@@ -509,3 +509,12 @@
   font-size: 17px;
   color: #4a3150;
 }
+
+/* The privacy page link under the grown-up tick (#593): a real link, as tall
+   as the buttons. */
+a.auth-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  padding: 0 var(--hp-pad-x);
+}

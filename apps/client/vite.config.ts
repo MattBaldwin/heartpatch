@@ -23,17 +23,18 @@ function forbidServerData(): Plugin {
 }
 
 /**
- * Serves the admin console's page (#196) at `/admin`, as Caddy does in
- * production, in dev and preview. Everything else keeps the app shell.
+ * Serves the pages that aren't the game, as Caddy does in production, in dev
+ * and preview: the admin console (#196) at `/admin` and the privacy page
+ * (#593) at `/privacy`. Everything else keeps the app shell.
  */
-function adminPage(): Plugin {
+function ownPages(): Plugin {
   const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
-    const match = /^\/admin\/?(\?.*)?$/.exec(req.url ?? '');
-    if (match) req.url = `/admin.html${match[1] ?? ''}`;
+    const match = /^\/(admin|privacy)\/?(\?.*)?$/.exec(req.url ?? '');
+    if (match) req.url = `/${match[1] ?? ''}.html${match[2] ?? ''}`;
     next();
   };
   return {
-    name: 'heartpatch:admin-page',
+    name: 'heartpatch:own-pages',
     configureServer(server) {
       server.middlewares.use(rewrite);
     },
@@ -50,7 +51,7 @@ export default defineConfig({
   },
   plugins: [
     forbidServerData(),
-    adminPage(),
+    ownPages(),
     pwaAssets(),
     // What's new (#220): changelog.json from changes/*.md.
     changelogAsset(),
@@ -76,9 +77,10 @@ export default defineConfig({
           'pwa/icon-*.png',
           'pwa/apple-touch-icon.png',
         ],
-        // The admin console (#196) is its own page: players' devices never
-        // download or cache it, and a change to it never prompts a game update.
-        globIgnores: ['assets/admin-*'],
+        // The admin console (#196) and the privacy page (#593) are their own
+        // pages: they're never cached with the game, and a change to them
+        // never prompts a game update.
+        globIgnores: ['assets/admin-*', 'assets/privacy-*'],
         // Hashed names already change with their content.
         dontCacheBustURLsMatching: /^assets\//,
         // TUNE: the engine bundle is ~1 MB; fail the build well before a
@@ -109,8 +111,9 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
     rollupOptions: {
-      // The game, and the operator admin console (#196) as its own page.
-      input: { main: 'index.html', admin: 'admin.html' },
+      // The game, and the operator admin console (#196) and the privacy page
+      // for grown-ups (#593) as their own pages.
+      input: { main: 'index.html', admin: 'admin.html', privacy: 'privacy.html' },
     },
   },
   test: {

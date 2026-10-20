@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fde8f0" />
+    <title>Heartpatch · Privacy</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/ui/privacy/privacy.css" />
+  </head>
+  <body>
+    <!-- The privacy page for grown-ups (#593). Served at /privacy; no script, no
+         login. Every line must match what the game really keeps: check the
+         users table (apps/server/src/db/schema.ts) before changing it. -->
+    <main class="privacy" data-testid="privacy-page">
+      <header class="privacy-head">
+        <p class="privacy-kicker">For kids and grown-ups</p>
+        <h1>Heartpatch keeps your secrets safe</h1>
+        <p class="privacy-lead">
+          Heartpatch is a cozy squishy game for families. We keep as little about you as we can.
+          Here's all of it.
+        </p>
+      </header>
+
+      <section class="privacy-card" aria-labelledby="privacy-keep">
+        <h2 id="privacy-keep"><span aria-hidden="true">🎒</span> What we keep</h2>
+        <ul>
+          <li>
+            <strong>A made-up name.</strong> The one you pick to play, never your real name. A
+            filter says no to unkind names, phone numbers and addresses.
+          </li>
+          <li>
+            <strong>Your password, scrambled.</strong> It's stored as an Argon2id hash, so nobody
+            can read it. Not even us.
+          </li>
+          <li>
+            <strong>The year you were born.</strong> Just the year, to tell kids from grown-ups.
+          </li>
+          <li>
+            <strong>Your device's time zone,</strong> like "America/Chicago", so each day in the
+            game starts at your midnight.
+          </li>
+          <li>
+            <strong>Which code you signed up with,</strong> and who made it, so your family stays
+            together.
+          </li>
+          <li>
+            <strong>Your game:</strong> your squishies, land, Keeper, outfits and progress, and the
+            patches you play in.
+          </li>
+          <li>
+            <strong>Quick messages.</strong> Players pick them from a list; nobody can type their
+            own. Each patch keeps only its latest 30.
+          </li>
+          <li><strong>One cookie,</strong> to keep you logged in. That's all it does.</li>
+          <li>
+            <strong>Server logs.</strong> Our server notes each visit, with an internet address, to
+            keep things running and stop spam. Old logs are cleared by themselves.
+          </li>
+        </ul>
+        <p class="privacy-note">
+          On your device, the game also remembers the names that log in there (so you can tap yours)
+          and settings like sound. "Not you?" on the log in screen forgets the names.
+        </p>
+      </section>
+
+      <section class="privacy-card" aria-labelledby="privacy-never">
+        <h2 id="privacy-never"><span aria-hidden="true">🚫</span> What we never ask for</h2>
+        <ul class="privacy-nope">
+          <li>No email, real name, address or phone number</li>
+          <li>No photos, camera, microphone or location</li>
+          <li>No typed chat with other players</li>
+          <li>No ads, and nothing to buy with real money</li>
+          <li>No tracking or analytics. The game only talks to our own server.</li>
+          <li>We never sell or share anything about you.</li>
+        </ul>
+      </section>
+
+      <section class="privacy-card" aria-labelledby="privacy-grownups">
+        <h2 id="privacy-grownups"><span aria-hidden="true">💗</span> For grown-ups</h2>
+        <ul>
+          <li>
+            <strong>Want an account deleted?</strong> Ask Matt to delete it, along with its game.
+            Our nightly backups keep a copy for up to 14 days, then it's gone.
+          </li>
+          <li>
+            <strong>Forgot a password?</strong> Use the recovery code from sign-up, or ask your
+            patch owner or Matt.
+          </li>
+          <li><strong>Questions?</strong> Ask Matt, the grown-up who gave you your family code.</li>
+        </ul>
+      </section>
+
+      <p class="privacy-foot">Heartpatch · made with care for families</p>
+    </main>
+  </body>
+</html>
