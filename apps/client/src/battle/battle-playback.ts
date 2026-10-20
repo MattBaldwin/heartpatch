@@ -83,7 +83,7 @@ export type ShownState = Readonly<Record<BattleSideId, ShownSide>>;
 
 /** What the log says about Steady and Big moves (#587), style guide §3. */
 export const STANCE_WORDS = {
-  guard: (who: string) => `${who} is on guard!`,
+  guard: (who: string) => `${who}'s guard is up!`,
   open: (who: string) => `${who} is wide open!`,
   guarded: (who: string) => `${who} was on guard. Just a little bump!`,
   opened: (who: string) => `${who} was wide open. Big bump!`,

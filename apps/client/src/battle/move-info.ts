@@ -41,14 +41,15 @@ const STYLE_LINES: Readonly<Record<MoveStyle, string>> = {
   steady: 'Lighter, raises your guard',
 };
 
-const STYLE_MORE: Readonly<Record<MoveStyle, string>> = {
-  big: 'Leaves you open: the next bump on you is bigger.',
-  steady: 'Raises your guard: the next bump on you is smaller.',
+/** The ⓘ explainer (owner follow-up on #587): what Big and Steady mean, kid-readable. */
+export const STYLE_MORE: Readonly<Record<MoveStyle, string>> = {
+  big: 'A big hit! But it leaves you open, so the next boop you get is a bit bigger.',
+  steady:
+    "A lighter hit that keeps your guard up, so the next boop you get is a bit smaller. On a wild squishy it's gentle: it never tuckers them out, so you can befriend them with a Heart Charm.",
 };
 
 /** The gentle hint (#587), when a Heart Charm is in reach. */
 export const GENTLE_HINT = 'Gentle! Leaves a sliver for a Heart Charm';
-const GENTLE_MORE = 'Gentle with wild squishies: never tuckers them out.';
 
 /** The gentle hint shows once they are below this % of their energy. */
 export const GENTLE_HINT_BELOW = 50; // TUNE: "in reach of a Heart Charm"
@@ -235,7 +236,6 @@ export function describeMove(
   else if (move.accuracy < 100) more.push(`Works ${String(move.accuracy)}% of the time.`);
   const line = style ? STYLE_LINES[style] : lineOf(move, kind);
   if (style) more.push(STYLE_MORE[style]);
-  if (style === 'steady' && context.gentleHint) more.push(GENTLE_MORE);
   for (const effect of move.effects ?? []) {
     const sentence = effectSentence(effect);
     // The button's own line already says it; the card adds only what is new.

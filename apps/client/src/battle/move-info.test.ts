@@ -6,7 +6,14 @@ import {
   type Move,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { describeMove, GENTLE_HINT, gentleHintShows, moveEdge, moveLabel } from './move-info.js';
+import {
+  describeMove,
+  GENTLE_HINT,
+  gentleHintShows,
+  moveEdge,
+  moveLabel,
+  STYLE_MORE,
+} from './move-info.js';
 
 const me = { feeling: 'cozy' } as const;
 const plain = { element: 'light', feeling: 'cozy' } as const;
@@ -129,6 +136,9 @@ describe('Steady and Big moves (#587)', () => {
       hint: null,
     });
     expect(moveLabel('Snowball Toss', snowball)).toContain(GENTLE_HINT);
+    // The ⓘ view explains what each kind means (owner follow-up).
+    expect(snowball.more).toContain(STYLE_MORE.steady);
+    expect(pounce.more).toContain(STYLE_MORE.big);
     for (const info of [snowball, pounce]) {
       for (const text of [info.line, info.hint ?? '', ...info.more]) {
         expect(findAvoidedWords(text)).toEqual([]);

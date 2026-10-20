@@ -416,7 +416,7 @@ describe('view helpers', () => {
     expect(steps.map((s) => s.text)).toEqual([
       'Puff used Hush Hum!',
       'Wild Mallow is holding on by a whisker!',
-      'Puff is on guard!',
+      "Puff's guard is up!",
       'Wild Mallow used Hush Hum!',
       'Puff was on guard. Just a little bump!',
       'Wild Mallow is wide open!',
