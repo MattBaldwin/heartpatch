@@ -132,6 +132,8 @@ export interface MapDebug extends MapSceneStats {
   readonly openHomes: readonly { key: HexKey; x: number; y: number }[];
   /** The middle of this player's home node tile on screen (CSS pixels), for e2e taps (#429); null off screen. */
   readonly homeNode: { x: number; y: number } | null;
+  /** Builds since the map was opened: 1 unless something rebuilt it (a reseason, #583). */
+  readonly builds: number;
 }
 
 export interface MapScreen {
@@ -234,6 +236,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let onStage = false;
   /** A map is being fetched to open: its own build dresses it (no reseason meanwhile). */
   let opening = false;
+  /** Builds since the map was opened (the dev hook reads it). */
+  let builds = 0;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
   let held: ReadonlyMap<HexKey, string> = new Map();
   /** The view as drawn: held land still its Keeper's (#277), only while it's wild. */
@@ -438,6 +442,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     const drawn = drawnView(state.view);
     const seasons = seasonsOn(state.view.map.timeZone, at);
     dressedFor = seasons.join();
+    builds += 1;
     const built = new MapScene(scene, drawn, {
       halloween: isHalloween(state.view.map.timeZone, at),
       seasons,
@@ -542,6 +547,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         opening = false;
       }
       if (!state) return;
+      builds = 0;
       rebuild();
       hudName.textContent = state.view.map.name;
       showLegend(state.view);
@@ -640,6 +646,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
           y: rect.y + rect.height / 2,
         })),
         homeNode: homeNodeMiddle(scene3d.homeNodeRect(user?.id ?? null)),
+        builds,
       };
     },
   };

@@ -25,6 +25,8 @@ interface MapDebug {
   activeTriangles: number;
   /** Dressed for Halloween (the season by the map's date on the game clock, #583). */
   halloween: boolean;
+  /** Builds since the map was opened (a reseason rebuilds it, #583). */
+  builds: number;
 }
 
 /**
@@ -256,6 +258,15 @@ test('dresses the map for the server’s season, not the phone’s date (#583)',
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   // The map's debug view is null for a moment after the scene is ready (#429).
   await expect.poll(async () => (await mapState(page))?.halloween, { timeout: 30_000 }).toBe(true);
+  // Once the bag has settled (its sync would reseason a map dressed wrong),
+  // the first build is still the only one: it was dressed right, not redone.
+  await expect
+    .poll(async () => (await hook<{ mapId: string }>(page, 'inventory'))?.mapId, {
+      timeout: 30_000,
+    })
+    .toBeTruthy();
+  await page.waitForTimeout(1000);
+  expect((await mapState(page))?.builds).toBe(1);
   await page.context().close();
 });
 
