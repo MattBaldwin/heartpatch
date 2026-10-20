@@ -67,6 +67,7 @@ interface ExploreDebug {
     z: number;
   }[];
   keeper: { x: number; z: number };
+  walkGoal: { x: number; z: number } | null;
   near: number | null;
   playing: string | null;
   card: 'rare' | null;
@@ -116,6 +117,61 @@ const mapState = (page: Page) =>
 const testScenes = (page: Page) => hook<number>(page, 'testScenes');
 const quality = (page: Page) => hook<{ tier: string; renderScale: number }>(page, 'quality');
 const hitchesExpected = (page: Page) => hook<number>(page, 'hitchesExpected');
+
+/** How far the lake test swims (tile-local; the tile is 2 across). */
+const LAKE_SWIM = 0.15;
+/** Near enough the tapped point to have arrived: a tap lands within a pixel or two of it. */
+const ARRIVED = 0.02;
+
+/**
+ * A point `reach` from the Keeper that a tap lands on the ground at and that
+ * the Keeper swims straight to: nothing it slides round on the way, no spot
+ * near enough to take the tap, well inside the tile. Its screen point, and where it is. Null if no direction
+ * round the Keeper works.
+ */
+function clearTap(
+  page: Page,
+  reach: number,
+): Promise<{ x: number; y: number; to: { x: number; z: number } } | null> {
+  return page.evaluate((reach) => {
+    type Hook = {
+      explore?: () => {
+        keeper: { x: number; z: number };
+        blockers: readonly { x: number; z: number; r: number }[];
+        spots: readonly { x: number; z: number; done: boolean }[];
+        tapPick: number;
+        pointOnScreen: (p: { x: number; z: number }) => { x: number; y: number } | null;
+      };
+    };
+    const e = (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.();
+    if (!e) return null;
+    const ground = document.querySelector('[data-testid="explore-ground"]');
+    const k = e.keeper;
+    /** Distance from `c` to the segment from the Keeper to `to`. */
+    const gap = (c: { x: number; z: number }, to: { x: number; z: number }) => {
+      const dx = to.x - k.x;
+      const dz = to.z - k.z;
+      const t = Math.max(
+        0,
+        Math.min(1, ((c.x - k.x) * dx + (c.z - k.z) * dz) / (dx * dx + dz * dz)),
+      );
+      return Math.hypot(k.x + dx * t - c.x, k.z + dz * t - c.z);
+    };
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * 2 * Math.PI;
+      const to = { x: k.x + Math.cos(a) * reach, z: k.z + Math.sin(a) * reach };
+      if (Math.hypot(to.x, to.z) > 0.6) continue; // well clear of the tile's edge
+      if (e.blockers.some((c) => gap(c, to) < c.r + 0.02)) continue;
+      // Not so near a spot that the tap picks it (the Keeper would stop beside it).
+      if (e.spots.some((p) => !p.done && Math.hypot(p.x - to.x, p.z - to.z) < e.tapPick + 0.02)) {
+        continue;
+      }
+      const at = e.pointOnScreen(to);
+      if (at && document.elementFromPoint(at.x, at.y) === ground) return { ...at, to };
+    }
+    return null;
+  }, reach);
+}
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -640,23 +696,29 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     await expect.poll(async () => (await exploreState(page))?.scene?.warm, slow).toBe(true);
     await keeperStill(page);
     const from = (await exploreState(page))!.keeper;
-    // Somewhere on the lakebed a little way off, clear of the spots.
-    const to = { x: from.x + 0.12, z: from.z + 0.12 };
-    const tap = await waypoint(page, to);
-    expect(tap, 'a tappable point on the lakebed').not.toBeNull();
-    await realTapAt(page, tap!.x, tap!.y);
+    // Somewhere on the lakebed a little way off with a clear way there (no
+    // spot to slide round or stop at), so the swim falls short only if the
+    // tap is lost (#546): the Keeper must arrive, not just set off.
+    const clear = await clearTap(page, LAKE_SWIM);
+    expect(clear, 'a tappable point on the lakebed with a clear way there').not.toBeNull();
+    await realTapAt(page, clear!.x, clear!.y);
     // CI's software renderer can swim this few frames a second: it was still
     // on its way (0.019) when 30 s ran out on the iPad, so wait longer here.
     await expect
       .poll(
         async () => {
           const k = (await exploreState(page))!.keeper;
-          return Math.hypot(k.x - from.x, k.z - from.z);
+          return Math.hypot(k.x - clear!.to.x, k.z - clear!.to.z);
         },
         { timeout: 90_000 },
       )
-      .toBeGreaterThan(0.03);
+      .toBeLessThan(ARRIVED);
     await keeperStill(page);
+    const swum = (await exploreState(page))!;
+    expect(Math.hypot(swum.keeper.x - from.x, swum.keeper.z - from.z)).toBeGreaterThan(
+      LAKE_SWIM - ARRIVED,
+    );
+    expect(swum.walkGoal).toBeNull();
 
     // A find on the lake (#501 H, the owner's "glint, tap, celebrate, frozen"):
     // up to a bubble spring or a reed bed, the easy way, then the toast or

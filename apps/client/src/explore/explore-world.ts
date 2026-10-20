@@ -8,7 +8,7 @@ import {
 } from './explore-config.js';
 import { roundedHexOutline } from '../map/hex-mesh.js';
 import { faceYaw } from '../procedural/face-yaw.js';
-import { clampToTile, insideTile } from './explore-view.js';
+import { clampToTile, insideTile, stepToward } from './explore-view.js';
 
 // The explore view's world (#291, owner mockup 2026-10-08): colliders the
 // Keeper slides along, which spot is in front of it, the follow camera and
@@ -80,6 +80,45 @@ export function blocked(
   radius: number = EXPLORE_VIEW.keeperRadius,
 ): boolean {
   return colliders.some((c) => (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < (c.r + radius) ** 2 - 1e-9);
+}
+
+/** A tap-walk under way (#291, #510): where it's going, the closest it has got, and for how long it hasn't got closer (s). */
+export interface TapWalk {
+  readonly goal: WorldPoint;
+  readonly best: number;
+  readonly stall: number;
+}
+
+/** A tap-walk to `goal`, not yet started. */
+export function tapWalk(goal: WorldPoint): TapWalk {
+  return { goal, best: Infinity, stall: 0 };
+}
+
+/**
+ * One frame of a tap-walk: `dt` seconds toward the goal, sliding round
+ * colliders. `walk` comes back null once it's over: arrived, pushed straight
+ * into a rock (nothing to slide along), or no closer for `walkGiveUp`. A
+ * frame with no time to walk (`dt` 0) ends nothing (#510): a tap's first
+ * frame can have none, and the walk must still start on the next.
+ */
+export function tapWalkStep(
+  at: WorldPoint,
+  walk: TapWalk,
+  dt: number,
+  colliders: readonly Collider[],
+): { at: WorldPoint; walk: TapWalk | null } {
+  const step = EXPLORE_VIEW.walkSpeed * dt;
+  const next = slideMove(at, stepToward(at, walk.goal, step), colliders);
+  const moved = next.x !== at.x || next.z !== at.z;
+  const left = Math.hypot(next.x - walk.goal.x, next.z - walk.goal.z);
+  // Sliding round a rock is progress; going nowhere for a moment is not.
+  const closer = left < walk.best - 1e-3;
+  const stall = closer ? 0 : walk.stall + dt;
+  const over = left < 1e-4 || (!moved && step > 0) || stall > EXPLORE_VIEW.walkGiveUp;
+  return {
+    at: next,
+    walk: over ? null : { goal: walk.goal, best: closer ? left : walk.best, stall },
+  };
 }
 
 /**
