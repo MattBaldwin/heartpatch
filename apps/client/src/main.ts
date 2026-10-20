@@ -236,6 +236,7 @@ const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapI
 // Sound (#25): silent until the first tap, which unlocks it (iOS) and loads
 // the engine. Screens report moments; the audio module picks the sound.
 // Halloween's loop follows the server's season on the bag's game clock (#583).
+// `inventory` is made below: `now` is only read once a tap has loaded the engine.
 const audio = createAudio({ now: () => inventory.gameNow() });
 
 // The map's controls live in two side trays (owner decision 2026-10-04):
