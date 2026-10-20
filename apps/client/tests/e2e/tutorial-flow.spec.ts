@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
-import { newPlayer, skipCinematic, TEST_PASSWORD, uniqueName } from './players.js';
+import { newPlayer, skipCinematic, TEST_PASSWORD, tickGrownUp, uniqueName } from './players.js';
 import { REAL_TAP_HOLD_MS, realTap, realTapAt } from './touch.js';
 
 /**
@@ -594,6 +594,7 @@ async function desktopPlayer(browser: Browser, name: string): Promise<Page> {
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
+  await tickGrownUp(overlay);
   await realTap(overlay.getByRole('button', { name: 'Sign up' }));
   await realTap(overlay.getByText("I've saved it"));
   await realTap(overlay.getByTestId('auth-code-done'));

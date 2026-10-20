@@ -48,6 +48,7 @@ import { buildTestScene } from './scenes/test-scene.js';
 import { createCinematicScreen } from './cinematics/cinematic-screen.js';
 import { mountAccount } from './ui/account/account-screen.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { openPrivacy, PRIVACY_TEXT } from './ui/privacy/privacy-link.js';
 import { createLoreBagEntry } from './lore/bag-entry.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
@@ -1736,6 +1737,7 @@ mountAuth(document.body, {
     menuRow('⚙️', 'Settings', () => {
       lobby.showSettings();
     }),
+    menuRow('🔒', PRIVACY_TEXT.menuRow, openPrivacy),
   ],
   onChange: (user) => {
     account.setUser(user);

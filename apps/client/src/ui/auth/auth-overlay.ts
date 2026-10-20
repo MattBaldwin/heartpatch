@@ -10,6 +10,7 @@ import { deviceTimeZone, el, messageOf, type Attrs } from '../dom.js';
 import { authApi } from './auth-api.js';
 import { AUTH_HELP_TEXT, nameList } from './auth-help-text.js';
 import { forgetNames, rememberedNames, rememberName } from './remembered-names.js';
+import { PRIVACY_TEXT, privacyLink } from '../privacy/privacy-link.js';
 import { saveCodePanel } from './save-code.js';
 import './auth.css';
 
@@ -23,6 +24,13 @@ interface FieldSpec {
   /** Attributes for the `<input>`; ignored when `options` makes it a `<select>`. */
   input?: Attrs;
   options?: { value: string; label: string }[];
+  /**
+   * A tick box the form can't be sent without (the grown-up checkbox, #593):
+   * the submit button sleeps until it's on. Its value is `'yes'` or `''`.
+   */
+  tick?: boolean;
+  /** Shown under the field, after the hint. */
+  extra?: Node[];
 }
 
 /** A message to show, and the field to focus. */
@@ -211,8 +219,28 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       ...(spec.intro ?? []),
     );
     const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
+    const ticks: HTMLInputElement[] = [];
+    /** A send is on its way: a tick can't wake the button mid-send. */
+    let busy = false;
     for (const field of spec.fields) {
       const id = `${spec.id}-${field.name}`;
+      if (field.tick) {
+        const box = el('input', { type: 'checkbox', id, name: field.name });
+        const label = el(
+          'label',
+          { class: 'auth-tick', for: id },
+          box,
+          el('span', {}, field.label),
+        );
+        box.addEventListener('change', () => {
+          label.classList.toggle('auth-tick-on', box.checked);
+          submit.disabled = busy || !ready();
+        });
+        ticks.push(box);
+        controls.set(field.name, box);
+        form.append(el('div', { class: 'auth-field' }, label, ...(field.extra ?? [])));
+        continue;
+      }
       let control: HTMLInputElement | HTMLSelectElement;
       if (field.options) {
         control = el('select', { id, name: field.name, class: 'auth-input' });
@@ -230,9 +258,13 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           el('label', { for: id }, field.label),
           control,
           ...(field.hint ? [el('p', { class: 'auth-hint' }, field.hint)] : []),
+          ...(field.extra ?? []),
         ),
       );
     }
+    /** Every tick box is on; until then the submit button sleeps. */
+    const ready = () => ticks.every((box) => box.checked);
+    submit.disabled = !ready();
     form.append(error, submit);
     let pairRow: HTMLElement | null = null;
     for (const link of spec.links) {
@@ -256,11 +288,19 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (submit.disabled) return;
+      if (busy || submit.disabled) return;
       const values = Object.fromEntries(
-        [...controls].map(([name, control]) => [name, control.value]),
+        [...controls].map(([name, control]) => [
+          name,
+          control instanceof HTMLInputElement && control.type === 'checkbox'
+            ? control.checked
+              ? 'yes'
+              : ''
+            : control.value,
+        ]),
       );
       error.textContent = '';
+      busy = true;
       submit.disabled = true;
       submit.textContent = 'One moment…';
       void spec
@@ -272,7 +312,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           if (result.field) controls.get(result.field)?.focus();
         })
         .finally(() => {
-          submit.disabled = false;
+          busy = false;
+          submit.disabled = !ready();
           submit.textContent = spec.submitLabel;
         });
     });
@@ -503,6 +544,12 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
             input: { type: 'password', autocomplete: 'new-password' },
           },
           { name: 'birthYear', label: 'Year you were born', options: birthYearOptions() },
+          {
+            name: 'grownUpOk',
+            label: PRIVACY_TEXT.grownUpOk,
+            tick: true,
+            extra: [privacyLink('auth-privacy')],
+          },
         ],
         submitLabel: 'Sign up',
         onSubmit: async (values) => {
@@ -510,6 +557,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
             ...values,
             birthYear: values['birthYear'] ? Number(values['birthYear']) : undefined,
             timeZone: deviceTimeZone(),
+            // Checked here and on the server; nothing is stored (#593).
+            grownUpOk: values['grownUpOk'] === 'yes' ? true : undefined,
           });
           if (!parsed.success) return firstIssue(parsed.error);
           const result = await authApi.signup(parsed.data);

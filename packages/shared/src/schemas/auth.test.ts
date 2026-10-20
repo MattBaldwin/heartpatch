@@ -67,6 +67,7 @@ describe('request schemas', () => {
       password: 'correct horse',
       birthYear: 2014,
       timeZone: 'America/Chicago',
+      grownUpOk: true,
     };
     expect(SignupRequestSchema.parse(body)).toEqual({ ...body, signupCode: 'family' });
   });
@@ -78,9 +79,26 @@ describe('request schemas', () => {
       password: 'correct horse',
       birthYear: 2014,
       timeZone: 'UTC',
+      grownUpOk: true,
     };
     expect(SignupRequestSchema.safeParse({ ...base, password: 'short' }).success).toBe(false);
     expect(SignupRequestSchema.safeParse({ ...base, birthYear: 2014.5 }).success).toBe(false);
+  });
+
+  it('needs the grown-up checkbox ticked (#593)', () => {
+    const base = {
+      signupCode: 'family',
+      username: 'pumpkinpal',
+      password: 'correct horse',
+      birthYear: 2014,
+      timeZone: 'UTC',
+    };
+    for (const grownUpOk of [undefined, false, 'true', 'on']) {
+      const result = SignupRequestSchema.safeParse({ ...base, grownUpOk });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.message).toBe('Ask a grown-up to help you sign up.');
+    }
+    expect(SignupRequestSchema.parse({ ...base, grownUpOk: true }).grownUpOk).toBe(true);
   });
 
   it('only shape-checks login, so any password length is just "wrong"', () => {

@@ -86,6 +86,9 @@ export const SignupRequestSchema = z.object({
   password: PasswordSchema,
   birthYear: BirthYearSchema,
   timeZone: TimeZoneSchema,
+  // The grown-up checkbox (#593): a grown-up helped and read /privacy. Only
+  // checked, never stored.
+  grownUpOk: z.literal(true, 'Ask a grown-up to help you sign up.'),
 });
 export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 
