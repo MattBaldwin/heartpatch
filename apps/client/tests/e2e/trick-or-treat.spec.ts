@@ -27,6 +27,52 @@ interface ViewBody {
   tiles: { q: number; r: number; homeSlot: number | null; ownerUserId: string | null }[];
 }
 
+interface DoorSeen {
+  door: string;
+  title: string;
+}
+
+type DoorWindow = Window & {
+  __heartpatch?: { trickOrTreat?: () => { door: string | null } };
+  __doorSeen?: DoorSeen[];
+};
+
+/**
+ * Records every door beat the page shows, with its title, sampled every 20 ms
+ * inside the page. A beat holds only 1.5 to 2.4 s (`BEAT_MS`), and polling the
+ * hook from here backs off to a second between reads, so on a slow runner a
+ * check could miss a beat or read its title after it had moved on. Checks read
+ * this log instead. `reset` clears it before a knock.
+ */
+async function recordDoor(page: Page) {
+  await page.evaluate(() => {
+    const w = window as DoorWindow;
+    w.__doorSeen = [];
+    setInterval(() => {
+      const door = w.__heartpatch?.trickOrTreat?.().door ?? null;
+      if (!door) return;
+      const title = document.querySelector('[data-testid="door-title"]')?.textContent ?? '';
+      const seen = (w.__doorSeen ??= []);
+      const last = seen[seen.length - 1];
+      if (last?.door !== door || last.title !== title) seen.push({ door, title });
+    }, 20);
+  });
+  return {
+    seen: () => page.evaluate(() => (window as DoorWindow).__doorSeen ?? []),
+    reset: () =>
+      page.evaluate(() => {
+        (window as DoorWindow).__doorSeen = [];
+      }),
+  };
+}
+
+/** The beats a knock played, in order, without the porch and the wait for the server. */
+const beatsOf = (seen: DoorSeen[]) =>
+  seen
+    .map((s) => s.door)
+    .filter((d) => d !== 'knock' && d !== 'waiting')
+    .filter((d, i, all) => d !== all[i - 1]);
+
 /** The middle of `userId`'s home base: their Heart Seed. */
 async function heartSeedOf(page: Page, mapId: string, userId: string) {
   const view = await api<ViewBody>(page, 'GET', `/maps/${mapId}/view`);
@@ -142,18 +188,19 @@ test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the hos
   const door = guest.getByTestId('door-scene');
   const card = guest.getByTestId('treat-card');
   const doorNow = async () => (await hook<TrickDebug>(guest, 'trickOrTreat'))?.door;
+  const doorLog = await recordDoor(guest);
 
   // 1) A silly trick first, then a Keeper costume anyway: "Wear it!" puts it on.
   await knock.tap();
   await expect(door).toBeVisible();
   await expect(guest.getByTestId('door-title')).toHaveText('Knock, knock! 🎃');
   expect(await doorNow()).toBe('knock');
+  await doorLog.reset();
   await guest.getByTestId('door-knock').tap();
-  await expect.poll(doorNow, { timeout: 15_000 }).toBe('trick');
-  await expect(guest.getByTestId('door-title')).toHaveText('Boo! 👻');
-  await expect.poll(doorNow, { timeout: 15_000 }).toBe('anyway');
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(door).toBeHidden();
+  expect(beatsOf(await doorLog.seen())).toEqual(['trick', 'anyway']);
+  expect(await doorLog.seen()).toContainEqual({ door: 'trick', title: 'Boo! 👻' });
   await expect(guest.getByTestId('treat-title')).toHaveText('Bat Buddy');
   const worn = guest.waitForRequest(
     (req) =>
@@ -172,9 +219,10 @@ test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the hos
   // 2) A squishy costume, no trick: "Dress up!" opens the squishy picker on the Partner.
   await expect(knock).toHaveText('🎃 Trick or treat!');
   await knock.tap();
+  await doorLog.reset();
   await guest.getByTestId('door-knock').tap();
-  await expect.poll(doorNow, { timeout: 15_000 }).toBe('open');
   await expect(card).toBeVisible({ timeout: 15_000 });
+  expect(beatsOf(await doorLog.seen())).toEqual(['open']);
   await expect(guest.getByTestId('treat-title')).toHaveText('Little Bat Wings');
   await guest.getByTestId('treat-primary').tap();
   await expect(card).toBeHidden();
