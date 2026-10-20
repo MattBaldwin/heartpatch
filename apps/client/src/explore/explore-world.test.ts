@@ -34,6 +34,8 @@ import {
   spotAtTap,
   spotInFront,
   spotRadius,
+  tapWalk,
+  tapWalkStep,
   tileSurface,
   toCaveStage,
   yawToward,
@@ -55,6 +57,70 @@ const RIGHT = -Math.PI / 2;
 /** The same heading, whichever way round the circle it's written. */
 const turnBetween = (a: number, b: number) =>
   Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
+describe('tap to walk (#510)', () => {
+  /** Frames of `dt` seconds until the walk ends (or `max` frames pass). */
+  const walkOut = (
+    from: { x: number; z: number },
+    goal: { x: number; z: number },
+    dt: number,
+    colliders: { x: number; z: number; r: number }[] = [],
+    max = 1000,
+  ) => {
+    let at = from;
+    let walk = tapWalk(goal);
+    for (let i = 0; i < max; i++) {
+      const stepped = tapWalkStep(at, walk, dt, colliders);
+      at = stepped.at;
+      if (!stepped.walk) return { at, frames: i + 1 };
+      walk = stepped.walk;
+    }
+    return { at, frames: max };
+  };
+
+  it('walks all the way to where the ground was tapped', () => {
+    const goal = { x: 0.12, z: 0.12 };
+    const { at } = walkOut({ x: 0, z: 0 }, goal, 1 / 30);
+    expect(Math.hypot(at.x - goal.x, at.z - goal.z)).toBeLessThan(1e-4);
+  });
+
+  it('a frame with no time to walk keeps the walk (a tap is handled after its frame began)', () => {
+    const goal = { x: 0.12, z: 0.12 };
+    const first = tapWalkStep({ x: 0, z: 0 }, tapWalk(goal), 0, []);
+    expect(first.at).toEqual({ x: 0, z: 0 });
+    expect(first.walk).not.toBeNull();
+    // Several in a row (a busy frame or two) still don't end it.
+    let walk = first.walk!;
+    for (let i = 0; i < 5; i++) walk = tapWalkStep({ x: 0, z: 0 }, walk, 0, []).walk!;
+    expect(walk).not.toBeNull();
+    const next = tapWalkStep({ x: 0, z: 0 }, walk, 1 / 30, []);
+    expect(Math.hypot(next.at.x, next.at.z)).toBeCloseTo(EXPLORE_VIEW.walkSpeed / 30, 9);
+    expect(next.walk).not.toBeNull();
+  });
+
+  it('walks there on a slow renderer too (frames capped at maxFrameStep)', () => {
+    const goal = { x: -0.3, z: 0.2 };
+    const { at } = walkOut({ x: 0, z: 0 }, goal, EXPLORE_VIEW.maxFrameStep);
+    expect(Math.hypot(at.x - goal.x, at.z - goal.z)).toBeLessThan(1e-4);
+  });
+
+  it('slides round a rock in the way and still gets there', () => {
+    const rock = { x: 0.1, z: 0.005, r: 0.05 };
+    const goal = { x: 0.25, z: 0 };
+    const { at } = walkOut({ x: 0, z: 0 }, goal, 1 / 30, [rock]);
+    expect(Math.hypot(at.x - goal.x, at.z - goal.z)).toBeLessThan(1e-4);
+  });
+
+  it('stops when walked straight into a gap too narrow to pass', () => {
+    const a = { x: -0.04, z: 0, r: 0.05 };
+    const b = { x: 0.04, z: 0, r: 0.05 };
+    const from = { x: 0, z: -0.3 };
+    const { at, frames } = walkOut(from, { x: 0, z: 0.3 }, 1 / 30, [a, b]);
+    expect(frames).toBeLessThan(1000);
+    expect(blocked(at, [a, b])).toBe(false);
+    expect(at.z).toBeLessThan(0);
+  });
+});
 
 describe('colliders', () => {
   it('turns spots and buildings into circles', () => {
