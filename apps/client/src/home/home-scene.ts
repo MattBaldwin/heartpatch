@@ -297,13 +297,13 @@ export class HomeScene {
     );
   }
 
-  /** Whether a building fills its home tile (#589): ring spots off the Heart Seed tile. */
-  #fills(b: { q: number; r: number; spot: number }): boolean {
-    return fillsTile(b.spot, b.q === this.#seed.q && b.r === this.#seed.r);
+  /** Whether a building fills its home tile (#589): a habitat on a ring spot off the Heart Seed tile. */
+  #fills(b: { q: number; r: number; spot: number; kind: string }): boolean {
+    return fillsTile(b.spot, b.q === this.#seed.q && b.r === this.#seed.r, b.kind);
   }
 
   /** Where a building stands: the tile's middle if it fills the tile, else its spot. */
-  #buildingAt(b: { q: number; r: number; spot: number }): WorldPoint {
+  #buildingAt(b: { q: number; r: number; spot: number; kind: string }): WorldPoint {
     return this.#fills(b) ? this.spotAt({ q: b.q, r: b.r, spot: 0 }) : this.spotAt(b);
   }
 
@@ -765,8 +765,7 @@ export class HomeScene {
     if (training !== null) {
       const side = training % 2 === 0 ? 0 : Math.PI;
       const angle = side + (rng.next() - 0.5) * 0.8;
-      const fill = wide ? HOME_VIEW.hexSize * MAP_OUTER_BUILDING_SCALE : HOME_VIEW.buildingScale;
-      const distance = (0.32 + rng.next() * 0.16) * fill;
+      const distance = (0.32 + rng.next() * 0.16) * HOME_VIEW.buildingScale;
       return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
     }
     const angle = rng.next() * Math.PI * 2;

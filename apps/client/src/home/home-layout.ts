@@ -31,12 +31,13 @@ export function spotWorld(
 }
 
 /**
- * Whether a building fills its home tile (#589): any building on a ring spot
- * of a home ring tile. Fires stand on the centre spot already, and the Heart
- * Seed tile keeps its spots as they are.
+ * Whether a building fills its home tile (#589): a habitat on a ring spot of
+ * a home ring tile, the only buildings homes hold (DECISIONS #277: Training
+ * Grounds and the rest build on homesteads, which draw as they did). Fires
+ * stand on the centre spot already, and the Heart Seed tile keeps its spots.
  */
-export function fillsTile(spot: number, onHeartSeed: boolean): boolean {
-  return spot !== 0 && !onHeartSeed;
+export function fillsTile(spot: number, onHeartSeed: boolean, kind: string): boolean {
+  return kind === 'habitat' && spot !== 0 && !onHeartSeed;
 }
 
 /** Where the small node pile sits on a tile whose building fills it (#589). */
@@ -54,7 +55,7 @@ export function filledTiles(view: MapView): Set<HexKey> {
   for (const tile of view.tiles) {
     if (tile.homeSlot === null) continue;
     const onSeed = seeds.has(hexKey(tile));
-    if (tile.buildings.some((b) => fillsTile(b.spot, onSeed))) filled.add(hexKey(tile));
+    if (tile.buildings.some((b) => fillsTile(b.spot, onSeed, b.kind))) filled.add(hexKey(tile));
   }
   return filled;
 }
@@ -76,7 +77,8 @@ export function mapBuildings(view: MapView, hexSize: number): PlacedOnMap[] {
     for (const building of tile.buildings) {
       // A building fills its tile, in the middle: out on the land (#295) and
       // on a home ring tile (#589). Only the Heart Seed tile still uses spots.
-      const fills = tile.homeSlot !== null && fillsTile(building.spot, seeds.has(hexKey(tile)));
+      const fills =
+        tile.homeSlot !== null && fillsTile(building.spot, seeds.has(hexKey(tile)), building.kind);
       const at =
         tile.homeSlot === null || fills
           ? hexToWorld(tile, hexSize)

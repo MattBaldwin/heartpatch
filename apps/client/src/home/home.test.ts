@@ -214,9 +214,14 @@ describe('a building filling its home tile (#589)', () => {
   }
 
   it('fills ring spots off the Heart Seed tile, never the centre spot or the seed tile', () => {
-    expect(fillsTile(2, false)).toBe(true);
-    expect(fillsTile(0, false)).toBe(false);
-    expect(fillsTile(2, true)).toBe(false);
+    expect(fillsTile(2, false, 'habitat')).toBe(true);
+    expect(fillsTile(0, false, 'habitat')).toBe(false);
+    expect(fillsTile(2, true, 'habitat')).toBe(false);
+  });
+
+  it('only fills for habitats: other kinds draw as they did', () => {
+    expect(fillsTile(2, false, 'training-grounds')).toBe(false);
+    expect(fillsTile(2, false, 'hearthfire')).toBe(false);
   });
 
   it('stands a ring-spot building in its tile middle and tucks the node aside', () => {
