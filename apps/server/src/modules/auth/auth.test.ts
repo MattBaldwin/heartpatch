@@ -72,6 +72,7 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
     password: 'squishy-secret',
     birthYear: 2014,
     timeZone: 'America/Chicago',
+    grownUpOk: true,
     ...overrides,
   });
 
@@ -212,6 +213,20 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
         where: (u, { eq, sql }) => eq(sql`lower(${u.username})`, 'sh1thead'),
       });
       expect(stored).toBeUndefined();
+    });
+
+    it('needs the grown-up checkbox ticked, and makes no account without it (#593)', async () => {
+      const server = await start();
+      for (const grownUpOk of [undefined, false, 'true']) {
+        const username = newName();
+        const res = await post(server, '/auth/signup', signupBody({ username, grownUpOk }));
+        expect(res.statusCode).toBe(400);
+        expect(errorOf(res).code).toBe('VALIDATION_FAILED');
+        const stored = await db.query.users.findFirst({
+          where: (u, { eq }) => eq(u.username, username),
+        });
+        expect(stored).toBeUndefined();
+      }
     });
 
     it('validates birth year and time zone on the server', async () => {

@@ -46,6 +46,7 @@ async function signUpByApi(request: APIRequestContext, username: string): Promis
       password: TEST_PASSWORD,
       birthYear: 1985,
       timeZone: 'America/Chicago',
+      grownUpOk: true,
     },
   });
   expect(res.status()).toBe(201);

@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
+import {
+  GROWN_UP_TICK,
+  savedCode,
+  submitSignUp,
+  TEST_PASSWORD,
+  tickGrownUp,
+  uniqueName,
+} from './players.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -108,6 +115,7 @@ test('explains form problems in kid-friendly words', async ({ page }) => {
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family or invite code').fill('anything');
   await overlay.getByLabel('Pick a name').fill('ab');
+  await tickGrownUp(overlay);
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await expect(overlay.getByTestId('auth-error')).toHaveText(/Names need at least 3/);
   await expect(overlay.getByLabel('Pick a name')).toBeFocused();
@@ -126,4 +134,34 @@ test('the welcome card shows no keyboard focus ring before any key is pressed (#
   expect(
     await page.evaluate(() => document.querySelector(':focus-visible')?.matches('button') ?? false),
   ).toBe(false);
+});
+
+test('sign up waits for the grown-up tick, and the privacy page opens without logging in (#593)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const overlay = page.getByTestId('auth-overlay');
+  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await overlay.getByLabel('Pick a name').fill('privacy_pal');
+  const submit = overlay.getByRole('button', { name: 'Sign up' });
+  await expect(submit).toBeDisabled();
+
+  // The page opens in its own window; the half-filled form stays put.
+  const link = overlay.getByTestId('auth-privacy');
+  await expect(link).toHaveAttribute('href', '/privacy');
+  const [privacy] = await Promise.all([page.context().waitForEvent('page'), link.tap()]);
+  await expect(
+    privacy.getByRole('heading', { name: 'What Heartpatch keeps about you' }),
+  ).toBeVisible();
+  await expect(
+    privacy.getByText('Ask Matt, the grown-up who gave you your family code.'),
+  ).toBeVisible();
+  await privacy.close();
+  await expect(overlay.getByLabel('Pick a name')).toHaveValue('privacy_pal');
+
+  const tick = overlay.getByLabel(GROWN_UP_TICK);
+  await tick.check();
+  await expect(submit).toBeEnabled();
+  await tick.uncheck();
+  await expect(submit).toBeDisabled();
 });
