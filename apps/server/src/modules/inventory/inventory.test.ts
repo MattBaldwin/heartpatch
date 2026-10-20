@@ -293,19 +293,24 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       // insert the lower row, wait on our higher one, and our lower grant
       // would deadlock.
       let rival: Promise<void> | undefined;
-      await withTransaction(db, async (tx) => {
-        const pid = await backendPid(tx);
-        await lockGrantRows(tx, mapId, grants);
-        await grant(tx, high);
-        rival = withTransaction(db, async (other) => {
-          await lockGrantRows(other, mapId, grants);
-          await grant(other, low);
-          await grant(other, high);
+      try {
+        await withTransaction(db, async (tx) => {
+          const pid = await backendPid(tx);
+          await lockGrantRows(tx, mapId, grants);
+          await grant(tx, high);
+          rival = withTransaction(db, async (other) => {
+            await lockGrantRows(other, mapId, grants);
+            await grant(other, low);
+            await grant(other, high);
+          });
+          await waitUntilBlockedBy(db, pid);
+          await tx.execute("set local lock_timeout = '2s'");
+          await grant(tx, low);
         });
-        await waitUntilBlockedBy(db, pid);
-        await tx.execute("set local lock_timeout = '2s'");
-        await grant(tx, low);
-      });
+      } finally {
+        // Settle the rival either way, so a failure here isn't also an unhandled rejection.
+        await Promise.allSettled([rival]);
+      }
       await rival;
       for (const who of [low, high]) {
         expect((await inventory(server, who, mapId)).items).toEqual({ timber: 2 });
