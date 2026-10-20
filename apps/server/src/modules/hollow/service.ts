@@ -338,9 +338,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           t.ownerUserId === userId &&
           t.homeSlot === null &&
           !isTradingPost(t) &&
-          // A restored tile of a village still being restored stays put
-          // until contested tiles land (#306 PR 4): nothing could win it back.
-          t.communityId === null &&
+          // A restored village tile is ordinary land (#306 PR 4): won back,
+          // it goes wild but stays restored, so it can be claimed again.
           !safe.has(hexKey(t)) &&
           !cooling.has(t.id) &&
           (lightable === null || lightable.has(hexKey(t))),

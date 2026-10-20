@@ -221,6 +221,28 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       `update tiles set owner_user_id = ${userId === null ? 'null' : `'${uuid(userId)}'`} where id = '${uuid(tileId)}'`,
     );
 
+  /**
+   * A grey village tile made restored (#306 PR 4: ordinary land), and a plain
+   * wild tile next to it to stand on.
+   */
+  async function restoredBesideOf(mapId: string) {
+    const all = await tilesOf(mapId);
+    const tile = all.find((t) => t.communityId !== null && t.homeSlot === null)!;
+    const beside = all.find(
+      (t) =>
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        t.communityId === null &&
+        t.terrain !== 'trading-post' &&
+        hexNeighbors(tile).some((n) => n.q === t.q && n.r === t.r),
+    )!;
+    await db.execute(
+      `update community_tiles set pieces_done = pieces_needed, restored_at = now()
+       where tile_id = '${uuid(tile.id)}'`,
+    );
+    return { tile, beside };
+  }
+
   /** Neutral, non-home tiles next to `who`'s land, in (q, r) order. */
   async function edgeOf(mapId: string, who: PublicUser): Promise<Tile[]> {
     const all = await tilesOf(mapId);
@@ -509,6 +531,19 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(errorOf(res).message).toMatch(/won by restoring them/);
       expect(await attacksOf(mapId)).toEqual([]);
       expect((await tileAt(mapId, grey)).ownerUserId).toBeNull();
+    });
+
+    it('lets a kid claim a restored village tile gone wild, like any land (#306 PR 4)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      const { tile, beside } = await restoredBesideOf(mapId);
+      await setOwner(beside.id, kid.id);
+      const res = await attack(server, kid, mapId, tile);
+      expect(res.statusCode, res.body).toBe(201);
+      expect(battleOf(res).kind).toBe('tile');
+      expect(battleOf(res).view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
     });
 
     it('shows every member the patch’s trading posts, one per seat, named, with no guardians (#269, #318)', async () => {
@@ -1623,6 +1658,28 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(fielded(battle)).toEqual([
         { id: buddy.id, speciesId: buddy.speciesId, level: 12 + BONUS + 2 },
       ]);
+    });
+
+    it('a rival’s restored village tile is challenged, its unguarded guardians at the floor (#306 PR 4)', async () => {
+      const server = await start();
+      const { kid, rival, mapId } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 12);
+      await setPartner(mapId, rival.id, partner.id);
+      const { tile, beside } = await restoredBesideOf(mapId);
+      await setOwner(beside.id, kid.id);
+      await setOwner(tile.id, rival.id);
+      const guardians = await rolled(mapId, tile);
+
+      const res = await attack(server, kid, mapId, tile);
+      expect(res.statusCode, res.body).toBe(201);
+      const battle = battleOf(res);
+      expect(battle.kind).toBe('rival-tile');
+      // No guards on watch: the tile's own guardians stand in (the lantern
+      // keepers), at least at the owner's floor.
+      expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+      expect(fielded(battle)).toEqual(
+        guardians.map((g) => ({ ...g, level: Math.max(g.level, 12 + BONUS) })),
+      );
     });
 
     it('a guard stronger than the floor keeps its own level', async () => {

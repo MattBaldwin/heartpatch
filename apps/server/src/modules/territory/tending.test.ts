@@ -155,7 +155,7 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     const free = (t: (typeof all)[number], d: number) =>
       t.ownerUserId === null &&
       t.homeSlot === null &&
-      // Not a grey village's tile (#306): won by restoring, and it never fades.
+      // Not a grey village's tile (#306): nobody holds one until it's restored.
       t.communityId === null &&
       t.terrain !== 'junipers-gap' &&
       (!terrains || terrains.includes(t.terrain)) &&
@@ -209,6 +209,34 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     expect(
       tendingOf(await call(server, 'GET', `/maps/${mapId}/territory/tending`, kid)).missing,
     ).toEqual([]);
+  });
+
+  it('fades a restored village tile like any land: wild again, still restored (#306 PR 4)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const tile = (await tilesOf(mapId)).find((t) => t.communityId !== null)!;
+    await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${tile.id}'`);
+    await db.execute(
+      `update community_tiles set pieces_done = pieces_needed, restored_at = now()
+       where tile_id = '${tile.id}'`,
+    );
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+
+    advance(RULES.missesYouAfterDays + 1);
+    const missing = tendingOf(await call(server, 'GET', `/maps/${mapId}/territory/tending`, kid));
+    expect(missing.missing.map((t) => `${String(t.q)},${String(t.r)}`)).toEqual([
+      `${String(tile.q)},${String(tile.r)}`,
+    ]);
+    advance(RULES.wildAfterDays);
+    expect(await land.nightfall(mapId, '2026-10-20')).toEqual({ wild: 1 });
+    const after = (await tilesOf(mapId)).find((t) => t.id === tile.id)!;
+    expect(after.ownerUserId).toBeNull();
+    const row = await db.query.communityTiles.findFirst({
+      where: (t, { eq }) => eq(t.tileId, tile.id),
+    });
+    expect(row!.restoredAt).not.toBeNull();
   });
 
   it('lets a few long-untended tiles go wild each night, farthest first, never twice a night', async () => {

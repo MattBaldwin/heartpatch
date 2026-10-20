@@ -1,6 +1,7 @@
 import {
   COMMUNITY_RULES,
   GAME_DATA,
+  GAME_EVENTS,
   MAP_GEN,
   needMoreText,
   restoredNameIdeas,
@@ -10,6 +11,7 @@ import {
   type MapMember,
   type RestoreProblem,
   type RestoreTileResponse,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { itemIcon } from '../inventory/item-icons.js';
 
@@ -128,4 +130,24 @@ export function restoreSheetWords(
 /** The naming card's three tap-to-fill ideas for a won village. */
 export function villageNameIdeas(c: Pick<CommunityView, 'name'>): string[] {
   return restoredNameIdeas(c.name, COMMUNITY_RULES, MAP_GEN.communities);
+}
+
+/**
+ * A village I just won somewhere other than the restore sheet (#306 PR 4: its
+ * last tile won in a battle, settled a moment later on the server): the
+ * village as the joy card shows it, from the map view before the resync.
+ * Null for anyone else's win, a gap planted in a village that was mine
+ * already, or a village the view doesn't have.
+ */
+export function wonElsewhere(
+  event: WsEventMessage,
+  me: string | null,
+  communities: readonly CommunityView[],
+): CommunityView | null {
+  if (event.type !== 'community.restored' || me === null) return null;
+  const parsed = GAME_EVENTS['community.restored'].public.safeParse(event.data);
+  if (!parsed.success || parsed.data.userId !== me) return null;
+  const c = communities.find((v) => v.id === parsed.data.communityId);
+  if (!c || c.ownerUserId === me) return null;
+  return { ...c, name: parsed.data.name, ownerUserId: me, named: false };
 }

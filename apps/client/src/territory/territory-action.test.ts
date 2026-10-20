@@ -133,6 +133,33 @@ describe('territoryAction', () => {
     expect(territoryAction(grey, view, ME, status(), NOW)).toEqual({ kind: 'none' });
   });
 
+  it('offers Claim or Challenge on a restored village tile, like any land (#306 PR 4)', () => {
+    const id = '00000000-0000-4000-8000-000000000306';
+    const { view, tile } = setup(() => ({ communityId: id }));
+    const withVillage = (restoredTiles: { q: number; r: number }[]): MapView => ({
+      ...view,
+      communities: [
+        {
+          id,
+          name: 'Bramble Hollow',
+          kind: 'workshop',
+          square: { q: tile.q, r: tile.r },
+          tiles: [{ q: tile.q, r: tile.r }],
+          restored: restoredTiles.length,
+          restoredTiles,
+          ownerUserId: null,
+          reach: 'touching',
+          distance: null,
+        },
+      ],
+    });
+    const at = [{ q: tile.q, r: tile.r }];
+    expect(territoryAction(tile, withVillage([]), ME, status(), NOW)).toEqual({ kind: 'none' });
+    expect(territoryAction(tile, withVillage(at), ME, status(), NOW).kind).toBe('claim');
+    const rivals = { ...tile, ownerUserId: userId(2) };
+    expect(territoryAction(rivals, withVillage(at), ME, status(), NOW).kind).toBe('challenge');
+  });
+
   it('offers Challenge on a neighbour’s land, unless challenges are off', () => {
     const { view, tile } = setup(() => ({ ownerUserId: userId(2) }));
     expect(territoryAction(tile, view, ME, status(), NOW).kind).toBe('challenge');

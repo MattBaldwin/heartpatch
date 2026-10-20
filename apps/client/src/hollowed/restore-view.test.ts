@@ -3,9 +3,16 @@ import {
   pieceCost,
   type MapMember,
   type RestoreTileResponse,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { RESTORE_TEXT, giftLine, restoreSheetWords, villageNameIdeas } from './restore-view.js';
+import {
+  RESTORE_TEXT,
+  giftLine,
+  restoreSheetWords,
+  villageNameIdeas,
+  wonElsewhere,
+} from './restore-view.js';
 
 const ME = '00000000-0000-4000-8000-000000000001';
 const MIA = '00000000-0000-4000-8000-000000000002';
@@ -94,5 +101,31 @@ describe('restoreSheetWords (#306 PR 3)', () => {
       const ideas = villageNameIdeas({ name });
       expect(ideas).toEqual(['Bramble Glen', 'Bramble Meadow', 'Bramble Hearth']);
     }
+  });
+});
+
+describe('wonElsewhere (#306 PR 4)', () => {
+  const village = sheet().community;
+  const won = (userId: string, ring = [{ q: 4, r: -2 }]) =>
+    ({
+      type: 'community.restored',
+      seq: 9,
+      data: { communityId: village.id, userId, square: village.square, ring, name: 'Bramble Glen' },
+    }) as unknown as WsEventMessage;
+
+  it('shows the joy card for my win from a battle, with the name it wears', () => {
+    expect(wonElsewhere(won(ME), ME, [village])).toEqual({
+      ...village,
+      name: 'Bramble Glen',
+      ownerUserId: ME,
+      named: false,
+    });
+  });
+
+  it('never for someone else’s win, a gap planted in my village, or before sign-in', () => {
+    expect(wonElsewhere(won(MIA), ME, [village])).toBeNull();
+    expect(wonElsewhere(won(ME), ME, [{ ...village, ownerUserId: ME }])).toBeNull();
+    expect(wonElsewhere(won(ME), null, [village])).toBeNull();
+    expect(wonElsewhere(won(ME), ME, [])).toBeNull();
   });
 });

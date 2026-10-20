@@ -27,7 +27,7 @@ import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
-import { giftLine } from './hollowed/restore-view.js';
+import { giftLine, wonElsewhere } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -1078,6 +1078,9 @@ const maps = createMapScreen({
     defense.liveEvent(event);
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
+    // A village I won in a battle (#306 PR 4): the restore sheet's joy card.
+    const won = wonElsewhere(event, signedIn?.id ?? null, maps.view?.communities ?? []);
+    if (won) restoreSheet.openWon(won);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My

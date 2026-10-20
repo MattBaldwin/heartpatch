@@ -1,7 +1,13 @@
 import type { CommunityView, MapView, PublicTile } from '@heartpatch/shared';
 import type { TileActions } from '../map/map-screen.js';
 import { el } from '../ui/dom.js';
-import { COMMUNITY_TEXT, communityOf, communityPanel, perkLine } from './community-model.js';
+import {
+  COMMUNITY_TEXT,
+  communityOf,
+  communityPanel,
+  perkLine,
+  restoredTileLines,
+} from './community-model.js';
 import './hollowed.css';
 
 // A Hollowed village tile's block in the tile panel (#306): what the village
@@ -136,7 +142,8 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       container.replaceChildren(perk, ...gift, ...name);
       return;
     }
-    // A tile restored on its own: in colour again, and someone's land.
+    // A tile restored on its own: in colour again, and ordinary land (PR 4):
+    // the territory action's Claim or Challenge sits under this block.
     if ((c.restoredTiles ?? []).some((t) => t.q === tile.q && t.r === tile.r)) {
       const words = communityPanel(c, tile.terrain, night);
       container.replaceChildren(
@@ -144,7 +151,9 @@ export function createCommunityActions(me: () => string | null = () => null): Co
           'div',
           { class: 'community-block', 'data-testid': 'community-block' },
           el('p', { class: 'tile-action-note community-line community-reach' }, words.restored),
-          el('p', { class: 'tile-action-note community-line' }, COMMUNITY_TEXT.tileRestored),
+          ...restoredTileLines(c, tile, me()).map((line) =>
+            el('p', { class: 'tile-action-note community-line' }, line),
+          ),
         ),
       );
       return;

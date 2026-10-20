@@ -279,7 +279,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         t.ownerUserId === null &&
         t.nodeResource === null &&
         !isTradingPost(t) &&
-        // Not a grey village's tile (#306): the Hollow Man never wins one back.
+        // Not a grey village's tile (#306): nobody holds one until it's restored.
         t.communityId === null &&
         held.every((h) => hexDistance(h, t) >= 3),
     )!;
@@ -835,6 +835,35 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await spotsAllAround(mapId, kid, 'old-forest');
       await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+    });
+
+    it('wins back a restored village tile too: it goes wild but stays restored (#306 PR 4)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      const tile = (
+        await db.query.tiles.findMany({
+          where: (t, { and, eq, isNotNull }) => and(eq(t.mapId, mapId), isNotNull(t.communityId)),
+          orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+        })
+      ).find((t) => t.nodeResource === null)!;
+      await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${tile.id}'`);
+      await db.execute(
+        `update community_tiles set pieces_done = pieces_needed, restored_at = now()
+         where tile_id = '${tile.id}'`,
+      );
+      await dark(mapId, kid, { tileId: tile.id });
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+
+      await hollow.runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 1 });
+      expect(await ownerOf(tile.id)).toBeNull();
+      const row = await db.query.communityTiles.findFirst({
+        where: (t, { eq }) => eq(t.tileId, tile.id),
+      });
+      expect(row!.restoredAt).not.toBeNull();
     });
 
     it('wins back a dark homestead too, which keeps its explore progress (#199)', async () => {

@@ -64,12 +64,30 @@ describe('territory rules', () => {
     expect(attackTargetProblem({ ...post, terrain: 'meadow' }, TILES, ME, 'on')).toBeNull();
   });
 
-  it('never lets anyone battle for a Hollowed village tile (#306): it is won by restoring', () => {
+  it('never lets anyone battle for a grey Hollowed village tile (#306): it is won by restoring', () => {
     const grey = { ...tile(2, -1), communityId: '00000000-0000-4000-8000-000000000306' };
     expect(attackTargetProblem(grey, TILES, ME, 'on')).toBe('hollowed');
-    // Someone's restored village tile too: no challenge until PR 4's rules.
-    expect(attackTargetProblem({ ...grey, ownerUserId: RIVAL }, TILES, ME, 'on')).toBe('hollowed');
+    expect(attackTargetProblem({ ...grey, restored: false }, TILES, ME, 'on')).toBe('hollowed');
     expect(attackTargetProblem({ ...grey, communityId: null }, TILES, ME, 'on')).toBeNull();
+  });
+
+  it('treats a restored village tile as ordinary land (#306 PR 4)', () => {
+    const restored = {
+      ...tile(2, -1),
+      communityId: '00000000-0000-4000-8000-000000000306',
+      restored: true,
+    };
+    // Wild again: Claim. A rival's: Challenge, and PvP Off still blocks it.
+    expect(attackTargetProblem(restored, TILES, ME, 'on')).toBeNull();
+    expect(tileBattleKindFor(restored)).toBe('tile');
+    const rivals = { ...restored, ownerUserId: RIVAL };
+    expect(attackTargetProblem(rivals, TILES, ME, 'gentle')).toBeNull();
+    expect(tileBattleKindFor(rivals)).toBe('rival-tile');
+    expect(attackTargetProblem(rivals, TILES, ME, 'off')).toBe('pvp-off');
+    expect(attackTargetProblem({ ...restored, ownerUserId: ME }, TILES, ME, 'on')).toBe('mine');
+    expect(attackTargetProblem({ ...restored, q: 5, r: 4 }, TILES, ME, 'on')).toBe('too-far');
+    // A won village's ring is home first, restored or not.
+    expect(attackTargetProblem({ ...rivals, homeSlot: 1 }, TILES, ME, 'on')).toBe('home');
   });
 
   it('blocks challenges, not claims, when PvP is Off', () => {

@@ -734,9 +734,8 @@ function tendingQueries(db: Executor): TendingRepo {
           and(
             eq(tiles.mapId, mapId),
             isNull(tiles.homeSlot),
-            // A restored tile of a village still being restored never fades
-            // until contested tiles land (#306 PR 4): nothing could win it back.
-            isNull(tiles.communityId),
+            // A restored village tile fades like any land (#306 PR 4): it goes
+            // wild but stays restored, so anyone next to it can claim it.
             userId === undefined ? isNotNull(tiles.ownerUserId) : eq(tiles.ownerUserId, userId),
             notExists(
               db

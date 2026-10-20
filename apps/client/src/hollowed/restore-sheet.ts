@@ -55,6 +55,11 @@ export interface RestoreSheet {
   open: (community: CommunityView, at: Hex) => void;
   /** The naming card for a won village (the square's "Name it"). */
   openName: (community: CommunityView) => void;
+  /**
+   * The joy card for a village won elsewhere (PR 4: its last tile won in a
+   * battle). Skipped when this sheet already showed it for that village.
+   */
+  openWon: (community: CommunityView) => void;
   close: () => void;
   readonly debug: RestoreSheetDebug;
 }
@@ -78,6 +83,8 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
   let blocked: string | null = null;
   /** The village the won and naming cards are about, and the naming card's error line. */
   let naming: { community: CommunityView; error: string | null } | null = null;
+  /** Villages a piece of mine won here: their live event mustn't show the card again. */
+  const wonHere = new Set<string>();
   const input = el('input', {
     type: 'text',
     class: 'hollowed-input',
@@ -270,6 +277,8 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
     const at = generation;
     working = true;
     said = null;
+    // This piece may win it: its live event can land before the reply.
+    wonHere.add(r.community.id);
     renderRestore();
     try {
       const next = await sendCommand(
@@ -289,6 +298,7 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       );
       if (at !== generation || !next) return;
       working = false;
+      if (next.outcome !== 'village') wonHere.delete(r.community.id);
       if (next.outcome === 'village') {
         // The map recolours the ring, lifts it home and plants the seed as
         // the live event lands: let that burst pass, then the party, with
@@ -309,6 +319,7 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
     } catch (err) {
       if (at !== generation) return;
       working = false;
+      wonHere.delete(r.community.id);
       said = messageOf(err);
       renderRestore();
     }
@@ -373,6 +384,19 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       input.value = villageNameIdeas(community)[0] ?? community.name;
       naming = { community, error: null };
       renderName();
+      show();
+      options.reveal?.(community.square, true);
+    },
+    openWon: (community) => {
+      if (wonHere.has(community.id)) return;
+      wonHere.add(community.id);
+      close();
+      // The ring recolours and lifts home with the resync: let that burst pass.
+      options.expectHitch();
+      input.value = villageNameIdeas(community)[0] ?? community.name;
+      naming = { community, error: null };
+      card = 'won';
+      renderWon();
       show();
       options.reveal?.(community.square, true);
     },
