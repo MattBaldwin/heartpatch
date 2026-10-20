@@ -84,6 +84,7 @@ import {
   visualRegistry,
   type Hex,
   type PublicUser,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
 import { createPortraits } from './procedural/portraits.js';
@@ -926,6 +927,23 @@ communityActions.wire('explore', (_community, tile) => {
   void explore.open(tile);
 });
 // Restoring a grey village tile, and naming a won village (#306 PR 3).
+/** A village won in a battle (#306 PR 4), waiting for the map to come back for its joy card. */
+let wonLater: WsEventMessage | null = null;
+/** Shows the joy card for `wonLater` once the map view is up; tries again a few times. */
+const showWonLater = (tries = 20): void => {
+  if (!wonLater) return;
+  const view = maps.view;
+  if (!view) {
+    if (tries > 0)
+      setTimeout(() => {
+        showWonLater(tries - 1);
+      }, 250);
+    return;
+  }
+  const won = wonElsewhere(wonLater, signedIn?.id ?? null, view.communities ?? []);
+  wonLater = null;
+  if (won) restoreSheet.openWon(won);
+};
 const restoreSheet = createRestoreSheet({
   root: document.body,
   mapId: () => maps.view?.map.id ?? null,
@@ -1037,6 +1055,7 @@ const maps = createMapScreen({
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    if (mapId !== null) showWonLater();
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
@@ -1078,9 +1097,12 @@ const maps = createMapScreen({
     defense.liveEvent(event);
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
-    // A village I won in a battle (#306 PR 4): the restore sheet's joy card.
-    const won = wonElsewhere(event, signedIn?.id ?? null, maps.view?.communities ?? []);
-    if (won) restoreSheet.openWon(won);
+    // A village I won in a battle (#306 PR 4): the restore sheet's joy card,
+    // once the map is back (the win lands while the battle screen is up).
+    if (event.type === 'community.restored') {
+      wonLater = event;
+      showWonLater();
+    }
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
