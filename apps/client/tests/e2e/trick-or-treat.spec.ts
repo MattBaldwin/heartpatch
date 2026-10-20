@@ -106,7 +106,7 @@ test.afterEach(async ({ browser }) => {
 test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the host hears of it (#515)', async ({
   browser,
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(420_000); // two players, two map builds, three knocks and a morning; CI renders in software
   const hostName = uniqueName('host');
   const guestName = uniqueName('guest');
 
