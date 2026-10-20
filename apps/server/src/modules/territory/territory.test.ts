@@ -35,6 +35,7 @@ import {
   type GuardianData,
   SERVER_GAME_DATA,
   serverBattleData,
+  SPAWN_RULES,
 } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -1354,18 +1355,27 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const taken = new Set([near, near2].map(hexKey));
       const free = (t: Tile) =>
         t.ownerUserId === null && t.homeSlot === null && !taken.has(hexKey(t));
-      const rustle = (await wild())
-        .map((h) => all.find((t) => t.q === h.q && t.r === h.r)!)
-        .find(
-          (t) =>
-            free(t) &&
-            t.terrain !== 'trading-post' &&
-            hexNeighbors(t).some((n) => {
-              const next = all.find((x) => x.q === n.q && x.r === n.r);
-              return next !== undefined && free(next) && next.terrain !== 'trading-post';
-            }),
-        );
-      expect(rustle).toBeDefined();
+      const rustling = async () =>
+        (await wild())
+          .map((h) => all.find((t) => t.q === h.q && t.r === h.r)!)
+          .find(
+            (t) =>
+              free(t) &&
+              t.terrain !== 'trading-post' &&
+              hexNeighbors(t).some((n) => {
+                const next = all.find((x) => x.q === n.q && x.r === n.r);
+                return next !== undefined && free(next) && next.terrain !== 'trading-post';
+              }),
+          );
+      // Spawns are rolled per tile per window off the map's random seed: now
+      // and then a window has none on a free tile in reach, so wait for the
+      // next one (a day of windows makes a miss vanishingly rare).
+      let rustle = await rustling();
+      for (let i = 1; !rustle && i < 24 / SPAWN_RULES.windowHours; i++) {
+        clock.setTime(clock.getTime() + SPAWN_RULES.windowHours * HOUR_MS);
+        rustle = await rustling();
+      }
+      expect(rustle, 'no wild squishy on a free tile in reach all day').toBeDefined();
       const step = hexNeighbors(rustle!)
         .map((n) => all.find((x) => x.q === n.q && x.r === n.r))
         .find((t) => t !== undefined && free(t) && t.terrain !== 'trading-post')!;
