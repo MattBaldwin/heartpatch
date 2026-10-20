@@ -8,8 +8,10 @@ import { PRIVACY_TEXT } from './privacy-link.js';
 const text = page.replace(/\s+/g, ' ');
 
 describe('the privacy page', () => {
-  it('names the quick-message feed limit each patch keeps', () => {
-    expect(text).toContain(`Each patch keeps only its latest ${String(QUICK_MESSAGES.feedLimit)}.`);
+  it('names the quick-message feed limit the chat shows', () => {
+    expect(text).toContain(
+      `The chat shows each patch's latest ${String(QUICK_MESSAGES.feedLimit)}.`,
+    );
   });
 
   it('names the operator as the contact, with no email address', () => {
@@ -17,8 +19,11 @@ describe('the privacy page', () => {
     expect(text).not.toMatch(/@|mailto:/);
   });
 
-  it('is what the sign-up tick box says the grown-up read', () => {
+  it('is the page the sign-up tick box names', () => {
     expect(PRIVACY_TEXT.grownUpOk).toMatch(/privacy page/);
+  });
+
+  it('runs no script, so it loads anywhere without logging in', () => {
     expect(text).not.toMatch(/<script/);
   });
 });

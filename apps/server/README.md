@@ -50,7 +50,7 @@ Accounts live in `src/modules/auth` (issue #3). The session is the `hp_session` 
 
 | Endpoint | Does |
 |---|---|
-| `POST /api/v1/auth/signup` | Code + username + password + birth year + time zone → 201 `{ user, recoveryCode }`, logged in. The code is a family code (spends one use), a patch invite (also files a join request for that patch, #195) or `HP_SIGNUP_CODE` (bootstrap, for one release), all in the account's transaction |
+| `POST /api/v1/auth/signup` | Code + username + password + birth year + time zone + `grownUpOk: true` (the grown-up tick box, #593; checked, never stored) → 201 `{ user, recoveryCode }`, logged in. The code is a family code (spends one use), a patch invite (also files a join request for that patch, #195) or `HP_SIGNUP_CODE` (bootstrap, for one release), all in the account's transaction |
 | `POST /api/v1/auth/login` | → `{ user }`, logged in |
 | `POST /api/v1/auth/logout` | → 204, ends this device's session |
 | `POST /api/v1/auth/recover` | Username + recovery code + new password → `{ user, recoveryCode }`; revokes every session, logs this device in, rotates the code |
