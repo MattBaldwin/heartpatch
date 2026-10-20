@@ -304,6 +304,7 @@ const inventory = createInventoryScreen({
     maps.reseason();
     audio.reseason();
     journeys.clockSynced();
+    trickOrTreat.clockSynced();
   },
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
@@ -1018,8 +1019,10 @@ const tileBuild = createTileBuild({
 });
 const maps = createMapScreen({
   root: document.body,
-  // Decor and tile seasons by the server's date, not the phone's (#583).
+  // Decor and tile seasons by the server's date, not the phone's (#583): the
+  // clock is read alongside the view, so the first build is dressed right.
   now: () => new Date(inventory.gameNow()),
+  syncClock: (mapId) => inventory.syncClock(mapId),
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),

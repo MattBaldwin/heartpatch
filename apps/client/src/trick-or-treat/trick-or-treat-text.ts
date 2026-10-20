@@ -97,6 +97,17 @@ export function litHosts(trick: TrickOrTreatView | null): Set<string> {
   return new Set(trick.hosts.filter((h) => h.lit).map((h) => h.userId));
 }
 
+/**
+ * Ms until the patch's midnight (`resetsAt`, server time) at `now` on the game
+ * clock, for the wake-up that reads the doors again; null while it's closed,
+ * past, or too far for a timer.
+ */
+export function midnightWait(trick: TrickOrTreatView | null, now: number): number | null {
+  if (!trick?.open) return null;
+  const wait = Date.parse(trick.resetsAt) - now;
+  return wait > 0 && wait < 2 ** 31 - 1 ? wait : null;
+}
+
 /** A redraw re-reads the doors at most this often (lanterns light and go out). */
 export const REFRESH_MS = 60_000; // TUNE: the server allows 60 reads a minute
 
@@ -111,6 +122,8 @@ export function readDue(
 ): boolean {
   if (last.at === null) return true;
   if (last.trick && !last.trick.open && now < Date.parse(last.trick.resetsAt)) return false;
-  // The game clock stepped back past the last try (its first sync, #583): read now.
-  return now - last.at >= REFRESH_MS || now < last.at;
+  // The game clock stepped back a long way past the last try (its first sync
+  // after a device clock running ahead, #583): read now. A sync's few ms of
+  // latency also step it back, so only a step past `REFRESH_MS` counts.
+  return Math.abs(now - last.at) >= REFRESH_MS;
 }

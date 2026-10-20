@@ -6,6 +6,7 @@ import {
   doorOf,
   litHosts,
   prizeToast,
+  midnightWait,
   readDue,
   REFRESH_MS,
   TRICK_TEXT,
@@ -142,6 +143,22 @@ describe('litHosts (#515)', () => {
   });
 });
 
+describe('midnightWait (#583)', () => {
+  const resetsAt = '2026-10-21T05:00:00.000Z';
+
+  it("waits for the patch's midnight on the clock it's given", () => {
+    const at = Date.parse('2026-10-21T04:00:00.000Z');
+    expect(midnightWait(view({ resetsAt }), at)).toBe(3_600_000);
+    // A device clock a day ahead would set no wake-up at all; the game clock does.
+    expect(midnightWait(view({ resetsAt }), at + 86_400_000)).toBeNull();
+  });
+
+  it('sets none while closed or with nothing heard', () => {
+    expect(midnightWait(view({ open: false, resetsAt }), 0)).toBeNull();
+    expect(midnightWait(null, 0)).toBeNull();
+  });
+});
+
 describe('readDue (#515)', () => {
   const at = Date.parse('2026-10-18T20:00:00.000Z');
 
@@ -157,6 +174,8 @@ describe('readDue (#515)', () => {
   it('reads at once if the game clock stepped back past the last try (#583)', () => {
     // The first try ran on a device clock a day ahead; the bag's sync set it right.
     expect(readDue({ at, trick: null }, at - 86_400_000)).toBe(true);
+    // A sync's latency steps it back a little: not a reason to read again.
+    expect(readDue({ at, trick: null }, at - 50)).toBe(false);
   });
 
   it("out of season, waits for the patch's next day", () => {

@@ -66,6 +66,11 @@ export interface MapScreenOptions {
   /** The map closed by itself (e.g. the player was removed): show the lobby with this. */
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
+  /**
+   * Syncs the game clock (`now`) for a map, read alongside its view so the
+   * first build is dressed for the server's season (#583). Never rejects.
+   */
+  syncClock?: (mapId: string) => Promise<void>;
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
@@ -507,7 +512,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     hideMap();
   };
 
-  /** Builds the map on screen afresh (the tile panel closes). */
+  /**
+   * Builds the map on screen afresh: the tile panel closes and the stage is
+   * mounted again (the camera goes home). `reseason` does this only when the
+   * seasons really changed (a window closing mid-visit).
+   */
   const rebuild = (): void => {
     scene3d = null;
     selected = null;
@@ -523,7 +532,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
     open: async (mapId) => {
       backgrounded = false;
-      const state = await sync.open(mapId);
+      const [state] = await Promise.all([sync.open(mapId), options.syncClock?.(mapId)]);
       if (!state) return;
       rebuild();
       hudName.textContent = state.view.map.name;
