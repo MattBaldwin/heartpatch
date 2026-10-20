@@ -24,7 +24,10 @@ import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createCommunityActions } from './hollowed/community-actions.js';
 import { createCommunityFlags } from './hollowed/community-flags.js';
+import { COMMUNITY_TEXT } from './hollowed/community-model.js';
+import { restoreApi } from './hollowed/restore-api.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
+import { giftLine } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -39,6 +42,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
+import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { createCinematicScreen } from './cinematics/cinematic-screen.js';
@@ -72,7 +76,7 @@ import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
-import { el } from './ui/dom.js';
+import { el, messageOf } from './ui/dom.js';
 import {
   GAME_DATA,
   hexKey,
@@ -945,6 +949,18 @@ communityActions.wire('restore', (community, tile) => {
 });
 communityActions.wire('name', (community) => {
   restoreSheet.openName(community);
+});
+// A won Old Well's or Bakery's morning gift (#306 PR 3b), collected on its square.
+communityActions.wireGift(async (community) => {
+  const mapId = maps.view?.map.id;
+  if (!mapId) return { ok: false, text: messageOf(null) };
+  try {
+    const { gift } = await restoreApi.gift(mapId, community.id, newIdempotencyKey());
+    void inventory.refresh();
+    return { ok: true, text: COMMUNITY_TEXT.giftGot(giftLine(gift)) };
+  } catch (err) {
+    return { ok: false, text: messageOf(err) };
+  }
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.

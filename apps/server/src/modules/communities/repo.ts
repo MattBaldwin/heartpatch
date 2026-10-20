@@ -1,5 +1,5 @@
 import type { CommunityKindId, Hex } from '@heartpatch/shared';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -9,6 +9,7 @@ import {
   communityPieces,
   communityTiles,
   maps,
+  resourceLedger,
   tileClears,
   tiles,
 } from '../../db/schema.js';
@@ -65,6 +66,7 @@ export interface CommunityRow {
   name: string;
   restoredName: string | null;
   namedAtLevel: number | null;
+  kind: CommunityKindId;
   ownerUserId: string | null;
   seedTileId: string;
 }
@@ -149,8 +151,27 @@ export interface CommunitiesRepo {
   uproot: (mapId: string, userId: string) => Promise<number>;
   /** Dev only: these tiles one piece short of restored. */
   devAlmost: (tileIds: readonly string[]) => Promise<void>;
+  /** Dev only: the village becomes this kind (its perk with it). */
+  devKind: (communityId: string, kind: CommunityKindId) => Promise<void>;
   /** The winner typed a name, at their village seed's level. */
   setName: (communityId: string, name: string, level: number) => Promise<void>;
+  /** The map's won villages as their perks need them (PR 3b): kind, winner and square. */
+  wonVillages: (mapId: string) => Promise<WonVillageRow[]>;
+  /** Of these villages, the ones whose morning gift `userId` has collected since `since`. */
+  giftsCollectedSince: (
+    mapId: string,
+    userId: string,
+    communityIds: readonly string[],
+    since: Date,
+  ) => Promise<Set<string>>;
+}
+
+/** A won village for its perks (#306 PR 3b). */
+export interface WonVillageRow {
+  id: string;
+  kind: CommunityKindId;
+  ownerUserId: string;
+  square: Hex;
 }
 
 const hexOf = (q: number, r: number): Hex => ({ q, r });
@@ -309,7 +330,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .select(communityColumns)
         .from(communities)
         .where(and(eq(communities.id, communityId), eq(communities.mapId, mapId)));
-      return row ?? null;
+      return row ? { ...row, kind: row.kind as CommunityKindId } : null;
     },
 
     listCommunityTiles: async (communityId, lock = false) => {
@@ -374,7 +395,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .from(communities)
         .where(eq(communities.id, communityId))
         .for('update');
-      return row ?? null;
+      return row ? { ...row, kind: row.kind as CommunityKindId } : null;
     },
 
     addPiece: async ({ tileId, userId, paid, at }) => {
@@ -483,11 +504,55 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .where(inArray(communityTiles.tileId, [...tileIds]));
     },
 
+    devKind: async (communityId, kind) => {
+      await db
+        .update(communities)
+        .set({ kind, perkId: kind })
+        .where(eq(communities.id, communityId));
+    },
+
     setName: async (communityId, name, level) => {
       await db
         .update(communities)
         .set({ restoredName: name, namedAtLevel: level })
         .where(eq(communities.id, communityId));
+    },
+
+    wonVillages: async (mapId) => {
+      const rows = await db
+        .select({
+          id: communities.id,
+          kind: communities.kind,
+          ownerUserId: communities.ownerUserId,
+          q: tiles.q,
+          r: tiles.r,
+        })
+        .from(communities)
+        .innerJoin(tiles, eq(tiles.id, communities.seedTileId))
+        .where(and(eq(communities.mapId, mapId), isNotNull(communities.ownerUserId)))
+        .orderBy(asc(communities.id));
+      return rows.flatMap(({ id, kind, ownerUserId, q, r }) =>
+        ownerUserId === null
+          ? []
+          : [{ id, kind: kind as CommunityKindId, ownerUserId, square: hexOf(q, r) }],
+      );
+    },
+
+    giftsCollectedSince: async (mapId, userId, communityIds, since) => {
+      if (communityIds.length === 0) return new Set();
+      const rows = await db
+        .selectDistinct({ id: resourceLedger.refId })
+        .from(resourceLedger)
+        .where(
+          and(
+            eq(resourceLedger.mapId, mapId),
+            eq(resourceLedger.userId, userId),
+            eq(resourceLedger.reason, 'village-gift'),
+            inArray(resourceLedger.refId, [...communityIds]),
+            gte(resourceLedger.createdAt, since),
+          ),
+        );
+      return new Set(rows.flatMap((r) => (r.id === null ? [] : [r.id])));
     },
   };
 }
@@ -497,6 +562,7 @@ const communityColumns = {
   name: communities.name,
   restoredName: communities.restoredName,
   namedAtLevel: communities.namedAtLevel,
+  kind: communities.kind,
   ownerUserId: communities.ownerUserId,
   seedTileId: communities.seedTileId,
 };

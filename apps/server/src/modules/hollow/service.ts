@@ -44,7 +44,9 @@ import {
   type RescueGuardianRules,
   type Species,
   type StartRescueRequest,
+  type SafeFire,
 } from '@heartpatch/shared';
+import { villageLightsOn } from '../communities/service.js';
 import {
   RESCUE_GUARDIANS,
   resolveRescueGuardians,
@@ -174,8 +176,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     fires: Parameters<typeof litSafeTiles>[0],
     homeTiles: readonly Hex[],
     mapTiles: readonly NightTileRow[],
+    lights: readonly SafeFire[],
   ): Set<HexKey> => {
-    const safe = litSafeTiles(fires, homeTiles, { date: night, minute: 0 });
+    const safe = litSafeTiles(fires, homeTiles, { date: night, minute: 0 }, lights);
     for (const t of mapTiles) {
       if (t.ownerUserId === null || t.homeSlot !== null || t.claimedAt === null) continue;
       if (isFreshTile(mapLocalTime(t.claimedAt, map.timeZone), night, nightRules)) {
@@ -240,6 +243,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         repo.strengthPercent(map.id),
         createTendingRepo(tx).wildCounts(map.id, night),
       ]);
+    // A won Lantern Tower lights its village and the land around it (#306 PR 3b).
+    const lights = await villageLightsOn(tx, map.id);
     // Each Keeper's first home finds their Heart Seed: a won village's ring
     // (#306 PR 3) is home tiles too, safe at night, but not where they sleep.
     const homes = new Map<string, { q: number; r: number }[]>();
@@ -254,6 +259,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       buildings.filter((b) => b.kind === 'hearthfire'),
       homeTiles,
       mapTiles,
+      lights,
     );
     const lightable = lightableOn(mapTiles);
     const canTake = gameplayOverrides(map.kind)?.hollowManCanTake ?? true;
@@ -611,6 +617,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         buildings.filter((b) => b.kind === 'hearthfire'),
         homeTiles,
         { date: tonight, minute: 0 },
+        await villageLightsOn(db, mapId),
       );
       const inTheDark = squishyRows.some((s) => {
         if (s.ownerUserId !== user.id || s.state !== 'active') return false;

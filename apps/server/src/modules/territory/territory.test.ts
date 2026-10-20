@@ -1603,6 +1603,28 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(row.setup.b.squishies.map((s) => s.level)).toEqual([12 + BONUS]);
     });
 
+    it('a won Watchtower lifts its winner’s floor 2 more levels (#306 PR 3b)', async () => {
+      const server = await start();
+      const { kid, rival, mapId, buddy, near } = await rivals(server);
+      const partner = await grant(server, rival, mapId, 12);
+      await setPartner(mapId, rival.id, partner.id);
+      await post(server, rival, mapId, near, [buddy.id]);
+      // One of the patch's villages, won by the rival as a Watchtower.
+      const village = await db.query.communities.findFirst({
+        where: (t, { eq }) => eq(t.mapId, mapId),
+      });
+      expect(village).toBeDefined();
+      await db.execute(
+        `update communities set kind = 'watchtower', owner_user_id = '${uuid(rival.id)}'
+         where id = '${uuid(village!.id)}'`,
+      );
+
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(fielded(battle)).toEqual([
+        { id: buddy.id, speciesId: buddy.speciesId, level: 12 + BONUS + 2 },
+      ]);
+    });
+
     it('a guard stronger than the floor keeps its own level', async () => {
       const server = await start();
       const { kid, rival, mapId, buddy, near } = await rivals(server);

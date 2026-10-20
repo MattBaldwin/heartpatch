@@ -557,6 +557,18 @@ export const GAME_EVENTS = {
     public: z.object({ communityId: z.uuid(), userId: z.uuid(), name: z.string() }),
   },
   /**
+   * A won village's Keeper collected its morning gift (#306 PR 3b: the Old
+   * Well, the Bakery): the square stops offering it until the next morning.
+   */
+  'community.gift': {
+    internal: z.strictObject({
+      communityId: z.uuid(),
+      userId: z.uuid(),
+      items: z.record(ContentIdSchema, z.number().int().min(1)),
+    }),
+    public: z.object({ communityId: z.uuid(), userId: z.uuid() }),
+  },
+  /**
    * A trade offer or a gift was sent at a trading post (#271). What it holds
    * stays internal; only the two players hear of it (`twoPlayerView`).
    */

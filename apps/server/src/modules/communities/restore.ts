@@ -2,6 +2,7 @@ import {
   COMMUNITY_RULES,
   communityReach,
   HOLLOW_RULES,
+  morningGiftOf,
   HOME_BASE_RULES,
   hexKey,
   hollowedOpenAt,
@@ -12,6 +13,7 @@ import {
   ringToPlant,
   villageRing,
   villageWinner,
+  type CommunityKindId,
   type CommunityNameRequest,
   type CommunityTileQuery,
   type CommunityView,
@@ -21,6 +23,7 @@ import {
   type RestorePieceRequest,
   type RestoreProblem,
   type RestoreTileResponse,
+  type VillageGiftResponse,
 } from '@heartpatch/shared';
 import { HOLLOWED_HELPER_GIFT } from '@heartpatch/shared/server';
 import type { Database, Executor } from '../../db/client.js';
@@ -43,7 +46,7 @@ import {
   type CommunityTileRow,
   type RestoreTileRow,
 } from './repo.js';
-import { communitiesView } from './service.js';
+import { communitiesView, villageMorning } from './service.js';
 
 /*
  * Restoring a grey village (#306 PR 3, plan v3 Q1–Q3). The server is the
@@ -67,6 +70,9 @@ const MESSAGES = {
     away: 'Claim land next to it to restore it!',
   } satisfies Record<RestoreProblem, string>,
   notWinner: 'Only the Keeper who restored it can name it!',
+  notYourGift: 'Only the Keeper who restored it gets its gift!',
+  noGift: 'This village has no morning gift.',
+  giftTaken: 'You got today’s gift! Come back tomorrow morning 🌅',
   seedFirst: 'Your village’s Heart Seed needs to grow first 🌱',
 } as const;
 
@@ -115,7 +121,21 @@ export interface RestoreService {
    * touches gets every unrestored tile to one piece short, and my bag what
    * those last pieces cost. Replies with the village, or NOT_FOUND.
    */
-  devAlmost: (user: PublicUser, mapId: string, communityId?: string) => Promise<CommunityView>;
+  devAlmost: (
+    user: PublicUser,
+    mapId: string,
+    communityId?: string,
+    kind?: CommunityKindId,
+  ) => Promise<CommunityView>;
+  /**
+   * This morning's gift from a won village of a gift kind (PR 3b: the Old
+   * Well, the Bakery), into its winner's bag, once a morning.
+   */
+  collectGift: (
+    user: PublicUser,
+    mapId: string,
+    communityId: string,
+  ) => Promise<VillageGiftResponse>;
 }
 
 /** Adds `items` into `into`. */
@@ -166,10 +186,16 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
       createMapsRepo(tx).findMap(mapId),
       repo.helpers(tile.tileId),
     ]);
-    const view = (await communitiesView(tx, { mapId, userId: user.id, tiles: mapTiles })).find(
-      (c) => c.id === communityId,
-    );
-    if (!view || !map) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+    if (!map) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+    const view = (
+      await communitiesView(tx, {
+        mapId,
+        userId: user.id,
+        tiles: mapTiles,
+        morning: villageMorning(at, map.timeZone),
+      })
+    ).find((c) => c.id === communityId);
+    if (!view) throw new AppError('NOT_FOUND', MESSAGES.noTile);
     const cost = pieceCost(terrain, COMMUNITY_RULES);
     const bag = await createInventoryRepo(tx).list({ mapId, userId: user.id });
     const have = Object.fromEntries(Object.keys(cost).map((id) => [id, bag[id] ?? 0]));
@@ -435,11 +461,14 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
       return result;
     },
 
-    devAlmost: async (user, mapId, communityId) =>
+    devAlmost: async (user, mapId, communityId, kind) =>
       communitiesTransaction(db, async (repo, tx) => {
-        await requireMember(tx, user, mapId, ['multiplayer']);
+        const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
         const tiles = await createTerritoryRepo(tx).listTiles(mapId);
-        const village = (await communitiesView(tx, { mapId, userId: user.id, tiles })).find(
+        const morning = villageMorning(now(), map.timeZone);
+        const village = (
+          await communitiesView(tx, { mapId, userId: user.id, tiles, morning })
+        ).find(
           (c) =>
             c.ownerUserId === null &&
             c.reach === 'touching' &&
@@ -455,16 +484,17 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           addInto(bill, pieceCost(terrain, COMMUNITY_RULES));
         }
         await repo.devAlmost(left.map((t) => t.tileId));
+        if (kind) await repo.devKind(village.id, kind);
         await lockGrantRows(tx, mapId, [{ userId: user.id, items: bill }]);
         await grantItems(tx, { mapId, userId: user.id }, bill, 'dev-grant');
-        return village;
+        return kind ? { ...village, kind } : village;
       }),
 
     name: async (user, mapId, communityId, { name }) => {
       // The text filter before any lock (CLAUDE.md rule 9): VALIDATION_FAILED.
       assertAllowedText(name, 'name');
       const result = await communitiesTransaction(db, async (repo, tx) => {
-        await requireMember(tx, user, mapId, ['multiplayer']);
+        const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
         if (!(await repo.findCommunity(mapId, communityId))) {
           throw new AppError('NOT_FOUND', MESSAGES.noTile);
         }
@@ -485,11 +515,51 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           payload: { communityId, userId: user.id, name },
         });
         const tiles = await createTerritoryRepo(tx).listTiles(mapId);
-        const view = (await communitiesView(tx, { mapId, userId: user.id, tiles })).find(
+        const morning = villageMorning(now(), map.timeZone);
+        const view = (await communitiesView(tx, { mapId, userId: user.id, tiles, morning })).find(
           (c) => c.id === communityId,
         );
         if (!view) throw new AppError('NOT_FOUND', MESSAGES.noTile);
         return view;
+      });
+      published(mapId);
+      return result;
+    },
+
+    collectGift: async (user, mapId, communityId) => {
+      const result = await communitiesTransaction(db, async (repo, tx) => {
+        const at = now();
+        const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
+        if (!(await repo.findCommunity(mapId, communityId))) {
+          throw new AppError('NOT_FOUND', MESSAGES.noTile);
+        }
+        // The community row (step 6) holds a double tap until this one commits,
+        // then my bag (11), then `maps` (the event).
+        const community = await repo.lockCommunity(communityId);
+        if (!community) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+        if (community.ownerUserId !== user.id) {
+          throw new AppError('FORBIDDEN', MESSAGES.notYourGift);
+        }
+        const gift = morningGiftOf(community.kind, COMMUNITY_RULES);
+        if (!gift) throw new AppError('CONFLICT', MESSAGES.noGift);
+        const morning = villageMorning(at, map.timeZone);
+        if ((await repo.giftsCollectedSince(mapId, user.id, [communityId], morning)).size > 0) {
+          throw new AppError('CONFLICT', MESSAGES.giftTaken);
+        }
+        await lockGrantRows(tx, mapId, [{ userId: user.id, items: gift }]);
+        await grantItems(tx, { mapId, userId: user.id }, gift, 'village-gift', communityId, at);
+        await repo.appendEvent({
+          mapId,
+          type: 'community.gift',
+          actorUserId: user.id,
+          payload: { communityId, userId: user.id, items: { ...gift } },
+        });
+        const tiles = await createTerritoryRepo(tx).listTiles(mapId);
+        const view = (await communitiesView(tx, { mapId, userId: user.id, tiles, morning })).find(
+          (c) => c.id === communityId,
+        );
+        if (!view) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+        return { community: view, gift: { ...gift } };
       });
       published(mapId);
       return result;

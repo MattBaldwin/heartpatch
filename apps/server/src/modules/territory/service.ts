@@ -40,6 +40,7 @@ import {
   SERVER_GAME_DATA,
   type GuardianData,
 } from '@heartpatch/shared/server';
+import { watchtowerLevelsOf } from '../communities/service.js';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -461,8 +462,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         defenders = await repo.listDefenders(tile.id, defenderId);
         // The guard level floor (#529): a rival's guards, or the land's
         // guardians standing in, fight at least at their Partner's level plus
-        // the bonus. Baked into the setup, so a replay needs no lookup.
-        floor = watchFloor(await repo.defenderFloorLevel(map.id, defenderId), rules.guardLevel);
+        // the bonus, and a won Watchtower's levels on top (#306 PR 3b).
+        // Baked into the setup, so a replay needs no lookup.
+        const base = watchFloor(
+          await repo.defenderFloorLevel(map.id, defenderId),
+          rules.guardLevel,
+        );
+        floor = base === null ? null : base + (await watchtowerLevelsOf(tx, map.id, defenderId));
       }
 
       // The defender's stance, read under their member lock (#16).

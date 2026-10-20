@@ -176,11 +176,17 @@ export function soonestFreeMs(view: FactoryView, nowMs: number): number {
   return left.length === 0 ? 0 : Math.min(...left);
 }
 
-/** The next level's extra batch spot, for the locked row ("🔒 Level 3 …"), or null at the top. */
+/**
+ * The next level's extra batch spot, for the locked row ("🔒 Level 3 …"), or
+ * null at the top. Batches a won Workshop adds (#306 PR 3b) carry over: the
+ * server's `slots` past this level's own.
+ */
 export function nextLevelRoom(view: FactoryView): { level: number; slots: number } | null {
   if (FACTORY?.kind !== 'factory') return null;
+  const now = FACTORY.levels[view.level - 1];
   const next = FACTORY.levels[view.level];
-  return next ? { level: view.level + 1, slots: next.queues } : null;
+  const extra = Math.max(0, view.slots - (now?.queues ?? view.slots));
+  return next ? { level: view.level + 1, slots: next.queues + extra } : null;
 }
 
 /** "Next one in 0:42 · all done in 6m" (empty once it's all made). */

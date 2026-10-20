@@ -62,6 +62,25 @@ export const CommunityPlacementRulesSchema = z
   );
 export type CommunityPlacementRules = z.infer<typeof CommunityPlacementRulesSchema>;
 
+/**
+ * What a won village does for its winner (#306 PR 3b), one fixed perk a
+ * kind (plan Q4). Each type hooks into a system that already exists.
+ */
+export const VillagePerkSchema = z.discriminatedUnion('type', [
+  /** Lit every night without fuel: its square and this many tiles around it (the night's safe tiles). */
+  z.strictObject({ type: z.literal('light'), radius: z.number().int().min(1).max(3) }),
+  /** More Crafting Factory batches at once for the winner. */
+  z.strictObject({ type: z.literal('factory-batches'), extra: z.number().int().min(1).max(2) }),
+  /** A gift the winner collects on the square once every morning. */
+  z.strictObject({
+    type: z.literal('morning-gift'),
+    items: z.record(ContentIdSchema, z.number().int().min(1).max(20)),
+  }),
+  /** The winner's guards fight this many levels above the guard level floor (#529) on their land. */
+  z.strictObject({ type: z.literal('guard-levels'), levels: z.number().int().min(1).max(10) }),
+]);
+export type VillagePerk = z.infer<typeof VillagePerkSchema>;
+
 /** One village kind as kids see it on the map and the panel. */
 export const CommunityKindSchema = z.strictObject({
   id: CommunityKindIdSchema,
@@ -70,6 +89,10 @@ export const CommunityKindSchema = z.strictObject({
   emoji: z.string().min(1),
   /** What restoring it earns, finishing "restore it for …" (no full stop). */
   perk: z.string().min(1).max(80),
+  /** Its won square's line when "<emoji> <Kind>: <perk>" doesn't read right (PR 3b). */
+  does: z.string().min(1).max(80).optional(),
+  /** What that perk does once the village is won. */
+  effect: VillagePerkSchema,
 });
 export type CommunityKind = z.infer<typeof CommunityKindSchema>;
 

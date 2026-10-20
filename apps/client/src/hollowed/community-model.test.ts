@@ -17,7 +17,7 @@ import {
   greyTiles,
   hollowedTileInfo,
   kindLine,
-  perkSoonLine,
+  perkLine,
   villageSeeds,
   villageSquares,
 } from './community-model.js';
@@ -253,8 +253,10 @@ describe('a won village (#306 PR 3)', () => {
     expect(hexKey(homes[0]!.seed)).not.toBe(hexKey(first.square));
   });
 
-  it('says its perk wakes up soon, until PR 3b', () => {
-    expect(perkSoonLine('workshop')).toBe('🛠️ Workshop: wakes up soon ✨');
+  it('says what its perk does (PR 3b)', () => {
+    expect(perkLine('workshop')).toBe('🛠️ Workshop: one more Factory batch');
+    expect(perkLine('bakery')).toBe('🥧 Bakery: Treats every morning');
+    expect(perkLine('watchtower')).toBe('🗼 Watchtower: your guards fight 2 levels stronger');
   });
 
   it('draws a tile restored on its own in colour again', () => {

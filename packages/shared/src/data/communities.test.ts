@@ -32,6 +32,15 @@ describe('COMMUNITY_RULES (#306)', () => {
     expect(resources.has(COMMUNITY_RULES.joyResource)).toBe(true);
   });
 
+  it('gives morning gifts in real resources (#306 PR 3b)', () => {
+    const resources = new Set(RESOURCES.map((r) => r.id));
+    const gifts = COMMUNITY_RULES.kinds.flatMap((k) =>
+      k.effect.type === 'morning-gift' ? Object.keys(k.effect.items) : [],
+    );
+    expect(gifts.length).toBeGreaterThan(0);
+    for (const id of gifts) expect(resources.has(id)).toBe(true);
+  });
+
   it('keeps every village name and kind kid-friendly', () => {
     const { nameStems, nameSuffix } = MAP_GEN.communities;
     for (const stem of nameStems) expect(findAvoidedWords(`${stem} ${nameSuffix}`)).toEqual([]);

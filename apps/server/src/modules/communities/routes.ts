@@ -7,6 +7,7 @@ import {
   MapIdParamsSchema,
   RestorePieceRequestSchema,
   RestoreTileResponseSchema,
+  VillageGiftResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -95,6 +96,18 @@ export const communityRoutes =
         ),
     );
 
+    // This morning's gift from a won Old Well or Bakery (PR 3b), once a morning.
+    app.post(
+      '/maps/:mapId/communities/:communityId/gift',
+      {
+        schema: { params: CommunityParamsSchema, response: { 200: VillageGiftResponseSchema } },
+        preHandler: [requireAuth, rateLimit('communities'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.collectGift(requireUser(request), request.params.mapId, request.params.communityId),
+    );
+
     if (options.devTools) {
       app.post(
         '/maps/:mapId/dev/village-almost',
@@ -114,6 +127,7 @@ export const communityRoutes =
                 requireUser(request),
                 request.params.mapId,
                 request.body?.communityId,
+                request.body?.kind,
               ),
             ),
       );

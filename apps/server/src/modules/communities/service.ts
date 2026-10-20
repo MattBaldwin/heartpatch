@@ -2,13 +2,20 @@ import {
   COMMUNITY_RULES,
   communityReach,
   deriveSeed,
+  extraFactoryBatches,
+  extraGuardLevels,
   hexKey,
+  HOLLOW_RULES,
+  morningGiftOf,
+  villageLights,
   type CommunityView,
   type PlacedCommunity,
   type ReachTile,
+  type SafeFire,
   type Seed,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
+import { latestLocalMinute } from '../../lib/time.js';
 import { createCommunitiesRepo } from './repo.js';
 
 /*
@@ -90,12 +97,24 @@ export async function storeCommunities(
  */
 export async function communitiesView(
   tx: Executor,
-  input: { mapId: string; userId: string; tiles: readonly ReachTile[] },
+  input: { mapId: string; userId: string; tiles: readonly ReachTile[]; morning: Date },
 ): Promise<CommunityView[]> {
-  const rows = await createCommunitiesRepo(tx).listForView(input.mapId);
+  const repo = createCommunitiesRepo(tx);
+  const rows = await repo.listForView(input.mapId);
+  // The viewer's own gift villages (PR 3b), and which of them they've collected this morning.
+  const gifts = rows.filter(
+    (c) => c.ownerUserId === input.userId && morningGiftOf(c.kind, COMMUNITY_RULES) !== null,
+  );
+  const collected = await repo.giftsCollectedSince(
+    input.mapId,
+    input.userId,
+    gifts.map((c) => c.id),
+    input.morning,
+  );
   return rows.map((c) => {
     const village = c.tiles.map((t) => ({ q: t.q, r: t.r }));
     const { reach, distance } = communityReach(village, input.tiles, input.userId);
+    const items = c.ownerUserId === input.userId ? morningGiftOf(c.kind, COMMUNITY_RULES) : null;
     return {
       id: c.id,
       name: c.restoredName ?? c.name,
@@ -108,6 +127,37 @@ export async function communitiesView(
       named: c.named,
       reach,
       distance,
+      ...(items ? { gift: { items, ready: !collected.has(c.id) } } : {}),
     };
   });
+}
+
+/** The night light of the map's won Lantern Towers (PR 3b), for `litSafeTiles`. */
+export async function villageLightsOn(tx: Executor, mapId: string): Promise<SafeFire[]> {
+  return villageLights(await createCommunitiesRepo(tx).wonVillages(mapId), COMMUNITY_RULES);
+}
+
+/** The extra Factory batches `userId`'s won Workshops give them (PR 3b). */
+export async function workshopBatchesOf(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+): Promise<number> {
+  const won = await createCommunitiesRepo(tx).wonVillages(mapId);
+  return extraFactoryBatches(won, userId, COMMUNITY_RULES);
+}
+
+/** The levels `userId`'s won Watchtowers add to their guard level floor (PR 3b). */
+export async function watchtowerLevelsOf(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+): Promise<number> {
+  const won = await createCommunitiesRepo(tx).wonVillages(mapId);
+  return extraGuardLevels(won, userId, COMMUNITY_RULES);
+}
+
+/** Since when a village's morning gift is today's: the map's last morning (`HOLLOW_RULES.morningMinute`). */
+export function villageMorning(at: Date, timeZone: string): Date {
+  return latestLocalMinute(at, timeZone, HOLLOW_RULES.morningMinute);
 }

@@ -308,6 +308,32 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     expect(batchesIn(third).map((b) => b.total)).toEqual([3, 2, 1]);
   });
 
+  it("runs one more batch for a won Workshop's Keeper (#306 PR 3b)", async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await buildFactory(server, kid, mapId);
+    await give(mapId, kid, { timber: 40, treats: 20, greens: 20 });
+    await queued(server, kid, mapId, 'heart-charm', 1);
+    await queued(server, kid, mapId, 'heart-charm', 1);
+    expect((await queue(server, kid, mapId, 'cook-treats', 1)).statusCode).toBe(409);
+    // One of the patch's villages, won by the kid as a Workshop.
+    const village = await db.query.communities.findFirst({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    expect(village).toBeDefined();
+    await db.execute(
+      `update communities set kind = 'workshop', owner_user_id = '${kid.id}' where id = '${village!.id}'`,
+    );
+    const third = await queued(server, kid, mapId, 'cook-treats', 1);
+    expect(third.factory).toMatchObject({ level: 1, slots: 3 });
+    const fourth = await queue(server, kid, mapId, 'cook-treats', 1);
+    expect(fourth.statusCode).toBe(409);
+    expect(errorOf(fourth).message).toBe(
+      'Your Factory is busy! A spot frees up when a batch finishes.',
+    );
+  });
+
   it('settles one thing at a time as they finish, ends a finished batch and frees its spot', async () => {
     const server = await start();
     const kid = await player();

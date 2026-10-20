@@ -47,7 +47,7 @@ import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
 import { createCommunitiesRepo } from '../communities/repo.js';
-import { communitiesView, storeCommunities } from '../communities/service.js';
+import { communitiesView, storeCommunities, villageMorning } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/contentment.js';
@@ -524,7 +524,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           // How this viewer reaches each trading post (#270).
           posts: await listPostViews(tx, { mapId, userId: user.id, tiles, at }),
           // The grey villages (#306), and how this viewer reaches each.
-          communities: await communitiesView(tx, { mapId, userId: user.id, tiles }),
+          communities: await communitiesView(tx, {
+            mapId,
+            userId: user.id,
+            tiles,
+            morning: villageMorning(at, map.timeZone),
+          }),
           seq: map.eventSeq,
         };
       });

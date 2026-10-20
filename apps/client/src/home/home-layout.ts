@@ -1,9 +1,11 @@
 import {
+  COMMUNITY_RULES,
   hexAdd,
   hexKey,
   hexToWorld,
   safeTiles,
   spotOffset,
+  villageLights,
   type HexKey,
   type MapView,
   type PublicTile,
@@ -54,7 +56,8 @@ export function mapBuildings(view: MapView, hexSize: number): PlacedOnMap[] {
 /**
  * Tiles safe tonight, as the map shows them: every claimed home base (the
  * Heart Seed keeps it safe, owner decision 2026-10-07) plus each lit fire's
- * tile and radius out on land (shared `safeTiles`, the rule nightfall uses).
+ * tile and radius out on land (shared `safeTiles`, the rule nightfall uses),
+ * and every won Lantern Tower's light.
  * `lit` is as of the view or the last event about it.
  */
 export function mapSafeTiles(view: MapView): Set<HexKey> {
@@ -66,6 +69,8 @@ export function mapSafeTiles(view: MapView): Set<HexKey> {
       fires.push({ at: tile, radius: b.safeRadius });
     }
   }
+  // A won Lantern Tower lights its village and the land around it (#306 PR 3b).
+  fires.push(...villageLights(view.communities ?? [], COMMUNITY_RULES));
   const known = new Set(view.tiles.map((t) => hexKey(t)));
   return new Set([...safeTiles(fires, homes)].filter((key) => known.has(key)));
 }

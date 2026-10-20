@@ -39,8 +39,22 @@ export const CommunityViewSchema = z.object({
    */
   reach: z.enum(['touching', 'away']).nullable(),
   distance: z.number().int().min(1).nullable(),
+  /**
+   * The winner's morning gift (PR 3b: the Old Well, the Bakery), only on
+   * their own won villages of a gift kind: what it gives and whether this
+   * morning's is still waiting on the square.
+   */
+  gift: z.object({ items: ItemCountsSchema, ready: z.boolean() }).optional(),
 });
 export type CommunityView = z.infer<typeof CommunityViewSchema>;
+
+/** `POST /maps/:mapId/communities/:communityId/gift`: this morning's gift, collected. */
+export const VillageGiftResponseSchema = z.object({
+  community: CommunityViewSchema,
+  /** What went into the bag. */
+  gift: ItemCountsSchema,
+});
+export type VillageGiftResponse = z.infer<typeof VillageGiftResponseSchema>;
 
 /** A village tile, by its place on the map (the explore routes' `q`, `r`). */
 export const CommunityTileQuerySchema = z.object({
@@ -93,7 +107,11 @@ export const RestoreTileResponseSchema = z.object({
 export type RestoreTileResponse = z.infer<typeof RestoreTileResponseSchema>;
 
 /** Dev only: which village to bring to its last pieces (else the first my land touches). */
-export const DevVillageAlmostRequestSchema = z.object({ communityId: z.uuid().optional() });
+export const DevVillageAlmostRequestSchema = z.object({
+  communityId: z.uuid().optional(),
+  /** Dev and captures only (PR 3b): makes the village this kind first, to show its perk. */
+  kind: CommunityKindIdSchema.optional(),
+});
 
 /** Name a won village (#306 PR 3): the same name rules as a home. */
 export const CommunityNameRequestSchema = z.object({ name: HomeNameSchema });
