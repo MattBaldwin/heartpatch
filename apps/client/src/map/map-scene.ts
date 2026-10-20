@@ -1583,6 +1583,7 @@ class HomeNodes {
       const { mesh } = buildProp(scene, kind);
       mesh.name = `home-node-${kind}`;
       mesh.material = mat;
+      mesh.freezeWorldMatrix();
       this.#kinds.set(kind, mesh);
     }
     this.count = count;

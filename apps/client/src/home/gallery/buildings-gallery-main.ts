@@ -19,10 +19,10 @@ import '../../styles.css';
  * part of the production build): the real home-base scene with sample
  * buildings at every level, to judge upgrades and scale by eye (owner
  * decision 2026-10-06). `?show=` picks the layout: `fire1`, `fire2`,
- * `ring` (habitats filling ring tiles, #589), `fire3` (one fire at that level with its light on the land around),
+ * `fire3` (one fire at that level with its light on the land around),
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
- * practicing). Every shot uses one camera: `?pitch=` (degrees, default 42,
+ * practicing), `ring` (habitats filling ring tiles, #589). Every shot uses one camera: `?pitch=` (degrees, default 42,
  * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
  * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
  * page's `?quality=` and `?renderer=webgpu`.
