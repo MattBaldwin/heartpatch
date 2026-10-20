@@ -155,7 +155,9 @@ export async function winVillage(tx: Executor, input: WinVillageInput): Promise<
     COMMUNITY_RULES,
     MAP_GEN.communities,
   );
-  const busy = await repo.busyTiles(locked.filter((t) => t.ownerUserId === userId).map((t) => t.id));
+  const busy = await repo.busyTiles(
+    locked.filter((t) => t.ownerUserId === userId).map((t) => t.id),
+  );
   const ring = ringToPlant(square, locked, userId, community.id).filter((t) => !busy.has(t.id));
   const ringIds = new Set(ring.map((t) => t.id));
   const gained: RestoreTileRow[] = [...(input.claimed ?? [])];
@@ -231,19 +233,20 @@ export async function plantRingGap(tx: Executor, input: RingGapInput): Promise<P
     gained: [tile],
     converted: [tile],
     at,
-    withCommunity: async () => [
-      {
-        mapId,
-        type: 'community.restored',
-        actorUserId: userId,
-        payload: {
-          communityId: community.id,
-          userId,
-          square,
-          ring: [{ q: tile.q, r: tile.r }],
-          name: community.name,
+    withCommunity: () =>
+      Promise.resolve([
+        {
+          mapId,
+          type: 'community.restored',
+          actorUserId: userId,
+          payload: {
+            communityId: community.id,
+            userId,
+            square,
+            ring: [{ q: tile.q, r: tile.r }],
+            name: community.name,
+          },
         },
-      },
-    ],
+      ]),
   });
 }

@@ -188,6 +188,14 @@ describe('the map view’s villages', () => {
     if (!wild) throw new Error('no wild tile');
     const plain = describeTile(wild, () => undefined, userId(1));
     expect(hollowedTileInfo(plain, wild, view)).toBe(plain);
+    // A restored tile (PR 4) is in colour again: its title says so.
+    const restored = {
+      ...view,
+      communities: view.communities!.map((v) =>
+        v.id === c.id ? { ...v, restoredTiles: [{ q: tile.q, r: tile.r }] } : v,
+      ),
+    };
+    expect(hollowedTileInfo(info, tile, restored).title).toMatch(/ · Restored ✨$/);
   });
 });
 

@@ -21,6 +21,8 @@ import type { TileInfo } from '../map/tile-info.js';
 export const COMMUNITY_TEXT = {
   /** After the terrain's name in the tile panel's title. */
   tag: ' · Hollowed 🕯️',
+  /** …once that tile is restored (PR 4): in colour again, ordinary land. */
+  restoredTag: ' · Restored ✨',
   restored: (name: string, restored: number, total: number) =>
     `${name}. ${String(restored)} of ${String(total)} tiles restored.`,
   about: 'Grey, quiet and a little spooky. Rare squishies love quiet places…',
@@ -240,9 +242,12 @@ export function hollowedTileInfo(
     };
   }
   const words = communityPanel(c, tile.terrain, false);
+  const restored = (c.restoredTiles ?? []).some((t) => hexKey(t) === hexKey(tile));
   return {
     ...info,
-    title: words.title,
+    title: restored
+      ? words.title.replace(COMMUNITY_TEXT.tag, COMMUNITY_TEXT.restoredTag)
+      : words.title,
     owner: tile.ownerUserId === null ? words.restored : info.owner,
   };
 }
