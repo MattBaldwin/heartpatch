@@ -15,6 +15,7 @@ import {
   fenceToBreak,
   shieldUntil,
   showsGuardLevelNote,
+  isRestoredVillageTile,
   territoryAction,
   watchInTheDark,
 } from './territory-action.js';
@@ -158,6 +159,12 @@ describe('territoryAction', () => {
     expect(territoryAction(tile, withVillage(at), ME, status(), NOW).kind).toBe('claim');
     const rivals = { ...tile, ownerUserId: userId(2) };
     expect(territoryAction(rivals, withVillage(at), ME, status(), NOW).kind).toBe('challenge');
+    // Not next to my land: too far, like any land (the panel says so, not the village block).
+    const far = { ...tile, q: tile.q + 20 };
+    const farView = withVillage([{ q: far.q, r: far.r }]);
+    expect(isRestoredVillageTile(far, farView)).toBe(true);
+    expect(territoryAction(far, farView, ME, status(), NOW).kind).toBe('too-far');
+    expect(isRestoredVillageTile(far, withVillage([]))).toBe(false);
   });
 
   it('offers Challenge on a neighbour’s land, unless challenges are off', () => {

@@ -954,6 +954,8 @@ communityActions.wire('name', (community) => {
 });
 // A village I won in a battle (#306 PR 4): the restore sheet's joy card, when
 // a newer view shows it mine (my own restore sheet's win shows it already).
+// Only the last map seen: a win missed while on another patch or across a
+// reload shows on the map, without the card.
 let villagesSeen: { mapId: string; communities: readonly CommunityView[] } | null = null;
 const watchWins = (view: MapView): void => {
   const communities = view.communities ?? [];
