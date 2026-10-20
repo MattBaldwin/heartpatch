@@ -135,9 +135,10 @@ export function villageNameIdeas(c: Pick<CommunityView, 'name'>): string[] {
 /**
  * A village I just won somewhere other than the restore sheet (#306 PR 4: its
  * last tile won in a battle, settled a moment later on the server): the
- * village as the joy card shows it, from the map view before the resync.
- * Null for anyone else's win, a gap planted in a village that was mine
- * already, or a village the view doesn't have.
+ * village as the joy card shows it. Null for anyone else's win, a village
+ * the view doesn't have, or a gap planted in a village that was mine already:
+ * that ring is the one tile, never the square (a win plants the square with
+ * the rest). The view can't tell: the capture's resync may already show it won.
  */
 export function wonElsewhere(
   event: WsEventMessage,
@@ -147,7 +148,10 @@ export function wonElsewhere(
   if (event.type !== 'community.restored' || me === null) return null;
   const parsed = GAME_EVENTS['community.restored'].public.safeParse(event.data);
   if (!parsed.success || parsed.data.userId !== me) return null;
-  const c = communities.find((v) => v.id === parsed.data.communityId);
-  if (!c || c.ownerUserId === me) return null;
-  return { ...c, name: parsed.data.name, ownerUserId: me, named: false };
+  const { ring, square, communityId, name } = parsed.data;
+  const [only] = ring;
+  if (ring.length === 1 && only && (only.q !== square.q || only.r !== square.r)) return null;
+  const c = communities.find((v) => v.id === communityId);
+  if (!c) return null;
+  return { ...c, name, ownerUserId: me, named: false };
 }

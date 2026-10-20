@@ -124,7 +124,10 @@ describe('wonElsewhere (#306 PR 4)', () => {
 
   it('never for someone else’s win, a gap planted in my village, or before sign-in', () => {
     expect(wonElsewhere(won(MIA), ME, [village])).toBeNull();
-    expect(wonElsewhere(won(ME), ME, [{ ...village, ownerUserId: ME }])).toBeNull();
+    // A gap planted later: one tile, not the square.
+    expect(wonElsewhere(won(ME, [{ q: 3, r: -2 }]), ME, [village])).toBeNull();
+    // The view may show it won already (the capture's resync): still my win.
+    expect(wonElsewhere(won(ME), ME, [{ ...village, ownerUserId: ME }])?.name).toBe('Bramble Glen');
     expect(wonElsewhere(won(ME), null, [village])).toBeNull();
     expect(wonElsewhere(won(ME), ME, [])).toBeNull();
   });
