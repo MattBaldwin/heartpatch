@@ -91,8 +91,11 @@ describe('tap to walk (#510)', () => {
     expect(first.walk).not.toBeNull();
     // Several in a row (a busy frame or two) still don't end it.
     let walk = first.walk!;
-    for (let i = 0; i < 5; i++) walk = tapWalkStep({ x: 0, z: 0 }, walk, 0, []).walk!;
-    expect(walk).not.toBeNull();
+    for (let i = 0; i < 5; i++) {
+      const again = tapWalkStep({ x: 0, z: 0 }, walk, 0, []);
+      expect(again.walk).not.toBeNull();
+      walk = again.walk!;
+    }
     const next = tapWalkStep({ x: 0, z: 0 }, walk, 1 / 30, []);
     expect(Math.hypot(next.at.x, next.at.z)).toBeCloseTo(EXPLORE_VIEW.walkSpeed / 30, 9);
     expect(next.walk).not.toBeNull();

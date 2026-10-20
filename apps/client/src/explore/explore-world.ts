@@ -82,7 +82,7 @@ export function blocked(
   return colliders.some((c) => (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < (c.r + radius) ** 2 - 1e-9);
 }
 
-/** A tap-walk under way (#291): where it's going, the closest it has got, and for how long it hasn't got closer (s). */
+/** A tap-walk under way (#291, #510): where it's going, the closest it has got, and for how long it hasn't got closer (s). */
 export interface TapWalk {
   readonly goal: WorldPoint;
   readonly best: number;

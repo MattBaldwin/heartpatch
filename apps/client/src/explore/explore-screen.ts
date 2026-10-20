@@ -197,6 +197,8 @@ export interface ExploreDebug {
   readonly tierChanges: number;
   /** Where a tap is walking the Keeper, or null (#510). */
   readonly walkGoal: WorldPoint | null;
+  /** A tap this near an unsearched spot walks up beside the spot, not to the tap (`EXPLORE_VIEW.tapPick`). */
+  readonly tapPick: number;
   /**
    * What the Keeper slides round (spots and buildings), each widened by the
    * Keeper's own radius: its middle never comes nearer than `r`. Tests pick
@@ -558,11 +560,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** Tier changes applied to the scene (`ExploreDebug.tierChanges`). */
   let tierChanges = 0;
 
-  /**
-   * The walk's clock (`performance.now()`, ms). Not the frame's own time: a
-   * tap is handled at the start of a frame, after that frame's time was
-   * taken, so the first frame after a tap would have no time to walk (#510).
-   */
   let lastFrame = 0;
   /** Draws every frame while the Keeper walks or something plays, then stops. */
   function wake(): void {
@@ -583,9 +580,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       s.setLod(lodFor('closeUp', tier));
       s.setTier(tier);
     }
-    const clock = performance.now();
-    const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (clock - lastFrame) / 1000));
-    lastFrame = clock;
+    const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
+    lastFrame = now;
     let walking = false;
     const step = EXPLORE_VIEW.walkSpeed * dt;
     let next = keeperAt;
@@ -1581,6 +1577,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         batchUploads: batchUploads.count,
         tierChanges,
         walkGoal: walk ? { ...walk.goal } : null,
+        tapPick: EXPLORE_VIEW.tapPick,
         blockers: (s?.colliders ?? []).map((c) => ({
           x: c.x,
           z: c.z,

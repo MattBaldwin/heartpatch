@@ -125,8 +125,8 @@ const ARRIVED = 0.02;
 
 /**
  * A point `reach` from the Keeper that a tap lands on the ground at and that
- * the Keeper swims straight to: nothing it slides round on the way, well
- * inside the tile. Its screen point, and where it is. Null if no direction
+ * the Keeper swims straight to: nothing it slides round on the way, no spot
+ * near enough to take the tap, well inside the tile. Its screen point, and where it is. Null if no direction
  * round the Keeper works.
  */
 function clearTap(
@@ -138,6 +138,8 @@ function clearTap(
       explore?: () => {
         keeper: { x: number; z: number };
         blockers: readonly { x: number; z: number; r: number }[];
+        spots: readonly { x: number; z: number; done: boolean }[];
+        tapPick: number;
         pointOnScreen: (p: { x: number; z: number }) => { x: number; y: number } | null;
       };
     };
@@ -160,6 +162,10 @@ function clearTap(
       const to = { x: k.x + Math.cos(a) * reach, z: k.z + Math.sin(a) * reach };
       if (Math.hypot(to.x, to.z) > 0.6) continue; // well clear of the tile's edge
       if (e.blockers.some((c) => gap(c, to) < c.r + 0.02)) continue;
+      // Not so near a spot that the tap picks it (the Keeper would stop beside it).
+      if (e.spots.some((p) => !p.done && Math.hypot(p.x - to.x, p.z - to.z) < e.tapPick + 0.02)) {
+        continue;
+      }
       const at = e.pointOnScreen(to);
       if (at && document.elementFromPoint(at.x, at.y) === ground) return { ...at, to };
     }
