@@ -1,6 +1,7 @@
 /* The privacy page for grown-ups (#593): privacy.html, a plain scrolling page
    in the game's card look. Not the game's styles.css, which locks scrolling. */
 
+/* The shared padding tokens: keep in sync with src/styles.css. */
 :root {
   --hp-pad-x: 12px;
   --hp-pad-y: 8px;

@@ -10,12 +10,13 @@
   </head>
   <body>
     <!-- The privacy page for grown-ups (#593). Served at /privacy; no script, no
-         login. Every line must match what the game really keeps: check the
+         login. "latest 30" is QUICK_MESSAGES.feedLimit (src/ui/privacy/privacy-page.test.ts
+         checks it). Every line must match what the game really keeps: check the
          users table (apps/server/src/db/schema.ts) before changing it. -->
     <main class="privacy" data-testid="privacy-page">
       <header class="privacy-head">
         <p class="privacy-kicker">For kids and grown-ups</p>
-        <h1>Heartpatch keeps your secrets safe</h1>
+        <h1>What Heartpatch keeps about you</h1>
         <p class="privacy-lead">
           Heartpatch is a cozy squishy game for families. We keep as little about you as we can.
           Here's all of it.
@@ -31,7 +32,7 @@
           </li>
           <li>
             <strong>Your password, scrambled.</strong> It's stored as an Argon2id hash, so nobody
-            can read it. Not even us.
+            can read it. Not even us. Your recovery code is scrambled the same way.
           </li>
           <li>
             <strong>The year you were born.</strong> Just the year, to tell kids from grown-ups.
@@ -45,8 +46,9 @@
             together.
           </li>
           <li>
-            <strong>Your game:</strong> your squishies, land, Keeper, outfits and progress, and the
-            patches you play in.
+            <strong>Your game:</strong> your squishies and the names you give them, your home and
+            land, Keeper, outfits and progress, the patches you play in, and any grown-up helper you
+            asked to help you.
           </li>
           <li>
             <strong>Quick messages.</strong> Players pick them from a list; nobody can type their
@@ -56,6 +58,10 @@
           <li>
             <strong>Server logs.</strong> Our server notes each visit, with an internet address, to
             keep things running and stop spam. Old logs are cleared by themselves.
+          </li>
+          <li>
+            <strong>A slow-game note.</strong> If the game runs very slowly, it tells our server how
+            fast it ran, so we can fix it. Just numbers, and your account's id.
           </li>
         </ul>
         <p class="privacy-note">
@@ -81,7 +87,8 @@
         <ul>
           <li>
             <strong>Want an account deleted?</strong> Ask Matt to delete it, along with its game.
-            Our nightly backups keep a copy for up to 14 days, then it's gone.
+            Our nightly backups still hold a copy for up to 14 days, and any older backup Matt has
+            saved stays private.
           </li>
           <li>
             <strong>Forgot a password?</strong> Use the recovery code from sign-up, or ask your

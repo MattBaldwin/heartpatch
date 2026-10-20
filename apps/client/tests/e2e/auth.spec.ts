@@ -151,7 +151,7 @@ test('sign up waits for the grown-up tick, and the privacy page opens without lo
   await expect(link).toHaveAttribute('href', '/privacy');
   const [privacy] = await Promise.all([page.context().waitForEvent('page'), link.tap()]);
   await expect(
-    privacy.getByRole('heading', { name: 'Heartpatch keeps your secrets safe' }),
+    privacy.getByRole('heading', { name: 'What Heartpatch keeps about you' }),
   ).toBeVisible();
   await expect(
     privacy.getByText('Ask Matt, the grown-up who gave you your family code.'),

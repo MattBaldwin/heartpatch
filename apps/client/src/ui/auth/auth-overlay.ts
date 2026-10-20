@@ -220,6 +220,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     );
     const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
     const ticks: HTMLInputElement[] = [];
+    /** A send is on its way: a tick can't wake the button mid-send. */
+    let busy = false;
     for (const field of spec.fields) {
       const id = `${spec.id}-${field.name}`;
       if (field.tick) {
@@ -232,7 +234,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         );
         box.addEventListener('change', () => {
           label.classList.toggle('auth-tick-on', box.checked);
-          submit.disabled = !ready();
+          submit.disabled = busy || !ready();
         });
         ticks.push(box);
         controls.set(field.name, box);
@@ -286,7 +288,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (submit.disabled) return;
+      if (busy || submit.disabled) return;
       const values = Object.fromEntries(
         [...controls].map(([name, control]) => [
           name,
@@ -298,6 +300,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         ]),
       );
       error.textContent = '';
+      busy = true;
       submit.disabled = true;
       submit.textContent = 'One moment…';
       void spec
@@ -309,6 +312,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           if (result.field) controls.get(result.field)?.focus();
         })
         .finally(() => {
+          busy = false;
           submit.disabled = !ready();
           submit.textContent = spec.submitLabel;
         });
