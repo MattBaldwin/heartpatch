@@ -27,7 +27,7 @@ import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
-import { giftLine, wonElsewhere } from './hollowed/restore-view.js';
+import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -41,7 +41,7 @@ import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-scree
 import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
-import { createMapScreen } from './map/map-screen.js';
+import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -82,9 +82,10 @@ import {
   hexKey,
   hexToWorld,
   visualRegistry,
+  type CommunityView,
   type Hex,
+  type MapView,
   type PublicUser,
-  type WsEventMessage,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
 import { createPortraits } from './procedural/portraits.js';
@@ -927,23 +928,6 @@ communityActions.wire('explore', (_community, tile) => {
   void explore.open(tile);
 });
 // Restoring a grey village tile, and naming a won village (#306 PR 3).
-/** A village won in a battle (#306 PR 4), waiting for the map to come back for its joy card. */
-let wonLater: WsEventMessage | null = null;
-/** Shows the joy card for `wonLater` once the map view is up (after a battle, up to a minute). */
-const showWonLater = (tries = 120): void => {
-  if (!wonLater) return;
-  const view = maps.view;
-  if (!view) {
-    if (tries > 0)
-      setTimeout(() => {
-        showWonLater(tries - 1);
-      }, 500);
-    return;
-  }
-  const won = wonElsewhere(wonLater, signedIn?.id ?? null, view.communities ?? []);
-  wonLater = null;
-  if (won) restoreSheet.openWon(won);
-};
 const restoreSheet = createRestoreSheet({
   root: document.body,
   mapId: () => maps.view?.map.id ?? null,
@@ -968,6 +952,24 @@ communityActions.wire('restore', (community, tile) => {
 communityActions.wire('name', (community) => {
   restoreSheet.openName(community);
 });
+// A village I won in a battle (#306 PR 4): the restore sheet's joy card, when
+// a newer view shows it mine (my own restore sheet's win shows it already).
+let villagesSeen: { mapId: string; communities: readonly CommunityView[] } | null = null;
+const watchWins = (view: MapView): void => {
+  const communities = view.communities ?? [];
+  const before = villagesSeen?.mapId === view.map.id ? villagesSeen.communities : null;
+  villagesSeen = { mapId: view.map.id, communities };
+  if (!before) return;
+  for (const won of newlyWon(before, communities, signedIn?.id ?? null)) {
+    restoreSheet.openWon(won);
+  }
+};
+const villageWins: MapLayer = {
+  attach: (_scene, view) => {
+    watchWins(view);
+  },
+  update: watchWins,
+};
 // A won Old Well's or Bakery's morning gift (#306 PR 3b), collected on its square.
 communityActions.wireGift(async (community) => {
   const mapId = maps.view?.map.id;
@@ -1055,7 +1057,6 @@ const maps = createMapScreen({
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
-    if (mapId !== null) showWonLater();
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
@@ -1074,6 +1075,7 @@ const maps = createMapScreen({
     land.layer,
     postFlags,
     communityFlags,
+    villageWins,
     trickOrTreat.layer,
   ],
   // The tutorial's spotlight finds the home node on the map (the gather step).
@@ -1097,12 +1099,6 @@ const maps = createMapScreen({
     defense.liveEvent(event);
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
-    // A village I won in a battle (#306 PR 4): the restore sheet's joy card,
-    // once the map is back (the win lands while the battle screen is up).
-    if (event.type === 'community.restored') {
-      wonLater = event;
-      showWonLater();
-    }
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My

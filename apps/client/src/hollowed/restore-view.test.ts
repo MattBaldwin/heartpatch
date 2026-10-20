@@ -3,7 +3,6 @@ import {
   pieceCost,
   type MapMember,
   type RestoreTileResponse,
-  type WsEventMessage,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,7 +10,7 @@ import {
   giftLine,
   restoreSheetWords,
   villageNameIdeas,
-  wonElsewhere,
+  newlyWon,
 } from './restore-view.js';
 
 const ME = '00000000-0000-4000-8000-000000000001';
@@ -104,31 +103,18 @@ describe('restoreSheetWords (#306 PR 3)', () => {
   });
 });
 
-describe('wonElsewhere (#306 PR 4)', () => {
+describe('newlyWon (#306 PR 4)', () => {
   const village = sheet().community;
-  const won = (userId: string, ring = [{ q: 4, r: -2 }]) =>
-    ({
-      type: 'community.restored',
-      seq: 9,
-      data: { communityId: village.id, userId, square: village.square, ring, name: 'Bramble Glen' },
-    }) as unknown as WsEventMessage;
+  const mine = { ...village, ownerUserId: ME, name: 'Bramble Glen' };
 
-  it('shows the joy card for my win from a battle, with the name it wears', () => {
-    expect(wonElsewhere(won(ME), ME, [village])).toEqual({
-      ...village,
-      name: 'Bramble Glen',
-      ownerUserId: ME,
-      named: false,
-    });
+  it('finds a village that became mine since the last view', () => {
+    expect(newlyWon([village], [mine], ME)).toEqual([mine]);
   });
 
-  it('never for someone else’s win, a gap planted in my village, or before sign-in', () => {
-    expect(wonElsewhere(won(MIA), ME, [village])).toBeNull();
-    // A gap planted later: one tile, not the square.
-    expect(wonElsewhere(won(ME, [{ q: 3, r: -2 }]), ME, [village])).toBeNull();
-    // The view may show it won already (the capture's resync): still my win.
-    expect(wonElsewhere(won(ME), ME, [{ ...village, ownerUserId: ME }])?.name).toBe('Bramble Glen');
-    expect(wonElsewhere(won(ME), null, [village])).toBeNull();
-    expect(wonElsewhere(won(ME), ME, [])).toBeNull();
+  it('never someone else’s win, one that was mine already, or before I saw the map', () => {
+    expect(newlyWon([village], [{ ...village, ownerUserId: MIA }], ME)).toEqual([]);
+    expect(newlyWon([mine], [mine], ME)).toEqual([]);
+    expect(newlyWon([], [mine], ME)).toEqual([]);
+    expect(newlyWon([village], [mine], null)).toEqual([]);
   });
 });

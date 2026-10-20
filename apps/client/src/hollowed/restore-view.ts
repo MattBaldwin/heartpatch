@@ -1,7 +1,6 @@
 import {
   COMMUNITY_RULES,
   GAME_DATA,
-  GAME_EVENTS,
   MAP_GEN,
   needMoreText,
   restoredNameIdeas,
@@ -11,7 +10,6 @@ import {
   type MapMember,
   type RestoreProblem,
   type RestoreTileResponse,
-  type WsEventMessage,
 } from '@heartpatch/shared';
 import { itemIcon } from '../inventory/item-icons.js';
 
@@ -133,25 +131,20 @@ export function villageNameIdeas(c: Pick<CommunityView, 'name'>): string[] {
 }
 
 /**
- * A village I just won somewhere other than the restore sheet (#306 PR 4: its
- * last tile won in a battle, settled a moment later on the server): the
- * village as the joy card shows it. Null for anyone else's win, a village
- * the view doesn't have, or a gap planted in a village that was mine already:
- * that ring is the one tile, never the square (a win plants the square with
- * the rest). The view can't tell: the capture's resync may already show it won.
+ * Villages that became mine between two views of the map (#306 PR 4: the
+ * last tile won in a battle, settled a moment later on the server), for the
+ * joy card. Read from the views, not the live event: the map's socket is
+ * closed while the battle screen is up, and coming back refetches the view.
+ * A gap planted in a village that was mine already isn't one, nor anything
+ * before I've seen the map.
  */
-export function wonElsewhere(
-  event: WsEventMessage,
+export function newlyWon(
+  before: readonly CommunityView[],
+  after: readonly CommunityView[],
   me: string | null,
-  communities: readonly CommunityView[],
-): CommunityView | null {
-  if (event.type !== 'community.restored' || me === null) return null;
-  const parsed = GAME_EVENTS['community.restored'].public.safeParse(event.data);
-  if (!parsed.success || parsed.data.userId !== me) return null;
-  const { ring, square, communityId, name } = parsed.data;
-  const [only] = ring;
-  if (ring.length === 1 && only && (only.q !== square.q || only.r !== square.r)) return null;
-  const c = communities.find((v) => v.id === communityId);
-  if (!c) return null;
-  return { ...c, name, ownerUserId: me, named: false };
+): CommunityView[] {
+  if (me === null) return [];
+  return after.filter(
+    (c) => c.ownerUserId === me && before.some((b) => b.id === c.id && b.ownerUserId !== me),
+  );
 }
