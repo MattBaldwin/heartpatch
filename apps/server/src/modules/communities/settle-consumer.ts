@@ -114,7 +114,8 @@ export function createCommunitySettleConsumer(options: { clock?: Clock } = {}): 
           for (const [id, n] of Object.entries(f.refund)) items[id] = (items[id] ?? 0) + n;
         }
         await lockGrantRows(tx, mapId, [{ userId, items }]);
-        for (const f of refunds) await grantItems(tx, owner, f.refund, 'build-refund', f.fenceId, when);
+        for (const f of refunds)
+          await grantItems(tx, owner, f.refund, 'build-refund', f.fenceId, when);
       }
       for (const f of fences) events.push(f.event);
       for (const e of events) await appendGameEvent(tx, e);

@@ -107,7 +107,13 @@ describe.skipIf(!url)('contested village tiles (#306 PR 4, needs DATABASE_URL)',
     return { id: user!.id, username, token };
   }
 
-  function call(server: FastifyInstance, method: 'POST', path: string, who: Player, payload?: object) {
+  function call(
+    server: FastifyInstance,
+    method: 'POST',
+    path: string,
+    who: Player,
+    payload?: object,
+  ) {
     return server.inject({
       method,
       url: `/api/v1${path}`,
@@ -118,7 +124,10 @@ describe.skipIf(!url)('contested village tiles (#306 PR 4, needs DATABASE_URL)',
   }
 
   async function patch(server: FastifyInstance, owner: Player, others: Player[] = []) {
-    const res = await call(server, 'POST', '/maps', owner, { name: 'Contest Patch', timeZone: ZONE });
+    const res = await call(server, 'POST', '/maps', owner, {
+      name: 'Contest Patch',
+      timeZone: ZONE,
+    });
     expect(res.statusCode, res.body).toBe(201);
     const map: MapDetail = MapResponseSchema.parse(res.json()).map;
     for (const other of others) {
@@ -126,7 +135,12 @@ describe.skipIf(!url)('contested village tiles (#306 PR 4, needs DATABASE_URL)',
         code: map.admin!.invite!.code,
       });
       const request = JoinMapResponseSchema.parse(join.json()).request;
-      const ok = await call(server, 'POST', `/maps/${map.id}/requests/${request.id}/approve`, owner);
+      const ok = await call(
+        server,
+        'POST',
+        `/maps/${map.id}/requests/${request.id}/approve`,
+        owner,
+      );
       expect(ok.statusCode).toBe(204);
     }
     return map.id;
