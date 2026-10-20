@@ -159,9 +159,10 @@ describe('stances', () => {
     // Rock-a-Bye has no power, so it has no kind and no stance.
     expect(after.sides.b.squishies[0]?.guard).toBeUndefined();
 
+    // Full energy again, so Belly Flop isn't a finishing blow (which takes no stance).
     const big = applyBattleAction(
       content,
-      after,
+      patchActive(after, 'b', { energy: after.sides.b.squishies[0]!.stats.hp }),
       turn({ a: moveOf(FLOP), b: moveOf('fixture-rock-a-bye') }),
     );
     expect(big.sides.a.squishies[0]?.guard).toBe(-kindRules.openPercent);
