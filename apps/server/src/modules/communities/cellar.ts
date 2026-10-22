@@ -67,8 +67,8 @@ import { communitiesView, villageMorning } from './service.js';
  */
 
 const MESSAGES = {
-  noVillage: "We couldn't find that village.",
-  notWinner: 'Only the Keeper who restored this village has its map! 🗺️',
+  noVillage: "We couldn't find that place.",
+  notWinner: 'Only the Keeper who brought this Hollow back has its map! 🗺️',
   keyFound: 'You already found this key! 🔑',
   keyAway: 'Claim land next to it to dig for the key!',
   noKey: 'Find the cellar key first! 🗺️',

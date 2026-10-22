@@ -17,7 +17,7 @@ export const KEY_TEXT = {
   mapKicker: (name: string) => `${name.toUpperCase()} · A SECRET`,
   mapTitle: 'A map to the key! 🗺️',
   mapLine:
-    'The village squishies hid the cellar key from the Hollow Man. The map shows the tile where they tucked it away.',
+    'The squishies who lived here hid the cellar key from the Hollow Man. The map shows the tile where they tucked it away.',
   showMe: 'Show me on the map',
   later: 'Later',
   // The key's tile.
