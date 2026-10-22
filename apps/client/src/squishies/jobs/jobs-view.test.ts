@@ -382,6 +382,25 @@ describe('job moods on the map and at home (#393)', () => {
     expect(workerLine(1, { name: 'Pip', squishy: loves }, { homestead: 'paused' })).toBe(
       JOBS_TEXT.workerPaused('Pip'),
     );
+    // Napping and not keen: the line says both, as the map's 🌧️ mark does.
+    const mehFull = squishy(7, { job: 'gatherer', gatherFits: [], work: work({ full: true }) });
+    expect(gathererMark(mehFull, open)).toBe('meh');
+    expect(workerLine(1, { name: 'Pip', squishy: mehFull }, open)).toBe(
+      `${JOBS_TEXT.workerFull('Pip')} ${JOBS_TEXT.workerNotKeen}`,
+    );
+    expect(gathererMark(meh, { homestead: 'paused' })).toBe('meh');
+    expect(workerLine(1, { name: 'Pip', squishy: meh }, { homestead: 'paused' })).toBe(
+      `${JOBS_TEXT.workerPaused('Pip')} ${JOBS_TEXT.workerNotKeen}`,
+    );
+    // Whatever the mark says, the line says too.
+    for (const s of [loves, meh, full, mehFull]) {
+      for (const tile of [open, { homestead: 'paused' as const }]) {
+        const line = workerLine(1, { name: 'Pip', squishy: s }, tile);
+        const mark = gathererMark(s, tile);
+        if (mark === 'meh') expect(line).toContain('🌧️');
+        if (mark === 'napping') expect(line).toContain('💤');
+      }
+    }
     for (const line of [
       JOBS_TEXT.workerHere('Pip'),
       JOBS_TEXT.workerLoves('Pip'),

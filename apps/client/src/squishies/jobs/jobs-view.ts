@@ -15,6 +15,7 @@ import {
 import { describeItems, itemName } from '../../inventory/bag-view.js';
 import { formatTimeLeft, formatWait } from '../../inventory/game-clock.js';
 import { itemIcon } from '../../inventory/item-icons.js';
+import type { TileMarkKind } from '../../map/tile-marks.js';
 
 // The job board's and team picker's words and models (owner decisions
 // 2026-10-04). Pure, so tests read them without a DOM. Kid-readable copy
@@ -57,6 +58,8 @@ export const JOBS_TEXT = {
   workerLoves: (name: string) => `🧺 ${name} is gathering here. Loves it!\u00a0💕`,
   workerMeh: (name: string) => `🧺 ${name} is gathering here. Not their thing\u00a0🌧️`,
   workerFull: (name: string) => `💤 ${name} is napping. Basket full!`,
+  /** Added to a napping line when it isn't keen on the job either (the map shows its 🌧️). */
+  workerNotKeen: 'Not their thing\u00a0🌧️',
   workerPaused: (name: string) =>
     `💤 ${name} is napping till this homestead joins back up to home.`,
   firelit: '🔥 Safe by the fire tonight',
@@ -265,12 +268,14 @@ export function gathererMark(
   return null;
 }
 
-/** A gatherer mark on the map (#602). */
-export type GathererMark = 'meh' | 'napping';
+/** A gatherer mark on the map (#602): the tile-mark kinds it uses. */
+export type GathererMark = Extract<TileMarkKind, 'meh' | 'napping'>;
 
 /**
  * The tile panel's line about who gathers here (#602): my own gatherer by
- * name and how it feels; a patch-mate's never says which squishy.
+ * name and how it feels; a patch-mate's never says which squishy. It says
+ * everything the map's mark stands for (`gathererMark`): one napping that
+ * isn't keen either says both, so the 🌧️ on the map is always explained.
  */
 export function workerLine(
   count: number,
@@ -279,11 +284,16 @@ export function workerLine(
 ): string {
   if (!mine) return JOBS_TEXT.gatheringHere(count);
   const { name, squishy } = mine;
-  if (tile.homestead === 'paused') return JOBS_TEXT.workerPaused(name);
-  if (squishy.work?.full) return JOBS_TEXT.workerFull(name);
-  const mood = workMood(squishy);
-  if (mood === 'loves') return JOBS_TEXT.workerLoves(name);
-  if (mood === 'meh') return JOBS_TEXT.workerMeh(name);
+  const meh = workMood(squishy) === 'meh';
+  const napping =
+    tile.homestead === 'paused'
+      ? JOBS_TEXT.workerPaused(name)
+      : squishy.work?.full
+        ? JOBS_TEXT.workerFull(name)
+        : null;
+  if (napping) return meh ? `${napping} ${JOBS_TEXT.workerNotKeen}` : napping;
+  if (meh) return JOBS_TEXT.workerMeh(name);
+  if (workMood(squishy) === 'loves') return JOBS_TEXT.workerLoves(name);
   return JOBS_TEXT.workerHere(name);
 }
 

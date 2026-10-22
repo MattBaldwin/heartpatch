@@ -138,8 +138,9 @@ export function planGatherers(
       continue;
     }
     const slot = tile.ownerUserId === null ? null : (slots.get(tile.ownerUserId) ?? null);
+    const fallback = GATHERER_ON_TILE.standIn.fallback;
     const color =
-      slot === null ? '#c9b8ff' : (PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#c9b8ff');
+      slot === null ? fallback : (PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? fallback);
     plans.push({
       key,
       tile,
