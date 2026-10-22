@@ -6,6 +6,7 @@ import {
   type ItemCounts,
   type KeeperConfig,
   type PublicSearchSpot,
+  type MapView,
   type PublicTile,
   type PublicUser,
   type SearchSpotResponse,
@@ -118,7 +119,7 @@ import {
   skinOf,
   villageShut,
 } from '../hollowed/hollowed-explore-view.js';
-import { KEY_TEXT } from '../hollowed/key-hunt-view.js';
+import { KEY_TEXT, keyHuntOn } from '../hollowed/key-hunt-view.js';
 import { createPuzzleSheet, type PuzzleDebug } from '../hollowed/puzzle-sheet.js';
 import './explore.css';
 
@@ -341,7 +342,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let working = false;
   let opening = false;
   let frame = 0;
-  let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+  let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
   /** Clears an echo's "Boo!" line after a moment. */
   let spookTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1168,7 +1169,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       'aria-label',
       isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
-    progress.textContent = cellarOf ? chestsLine(t.progress) : progressLine(t.progress);
+    // Cleared land with only the cellar key's glint has no spots to count (#306).
+    progress.textContent = cellarOf
+      ? chestsLine(t.progress)
+      : t.progress.total > 0
+        ? progressLine(t.progress)
+        : '';
     joyMeter.hidden = !t.community;
     if (t.community) {
       const joy = String(t.community.joy);
@@ -1487,6 +1493,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const chest = cellarOf !== null && isChest(c.spot);
     const big = chest && isBigChest(c.spot);
     sheet.classList.toggle('explore-sheet-treasure', big);
+    if (found.cellarKey) {
+      keyCard(found.cellarKey.name);
+      return;
+    }
     const nodes: Node[] = [
       el(
         'p',
@@ -1555,6 +1565,30 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     nodes.push(yay);
     sheet.hidden = false;
     sheet.replaceChildren(...nodes);
+  }
+
+  /** The cellar key found at its glinting spot (#306, owner decision 2026-10-22): the big moment. */
+  function keyCard(name: string): void {
+    const yay = el(
+      'button',
+      { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
+      EXPLORE_TEXT.yay,
+    );
+    yay.addEventListener('click', () => {
+      card = null;
+      render();
+    });
+    sheet.hidden = false;
+    sheet.replaceChildren(
+      el('p', { class: 'explore-key-art', 'aria-hidden': 'true' }, '🔑'),
+      el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, KEY_TEXT.foundTitle),
+      el(
+        'p',
+        { class: 'explore-card-line', 'data-testid': 'explore-key-found' },
+        KEY_TEXT.foundLine(name),
+      ),
+      yay,
+    );
   }
 
   // ── Scene ─────────────────────────────────────────────────────────────
@@ -1747,9 +1781,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function renderTile(): void {
     if (!panel) return;
-    const { container, tile: t } = panel;
+    const { container, tile: t, view } = panel;
     const mine = user !== null && t.ownerUserId === user.id;
-    if (!mine || !mapId || options.isGlade(mapId) || !isExplorable(t.terrain, EXPLORE_RULES)) {
+    // The cellar key's tile is explored for its glint even where nothing else is (cleared land, #306).
+    const keyTile = user !== null && keyHuntOn(view, t, user.id)?.kind === 'key';
+    if (
+      !mine ||
+      !mapId ||
+      options.isGlade(mapId) ||
+      (!isExplorable(t.terrain, EXPLORE_RULES) && !keyTile)
+    ) {
       container.replaceChildren();
       return;
     }
@@ -1802,8 +1843,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (night) shut();
     },
     tileActions: {
-      show: (container, t) => {
-        panel = { container, tile: t };
+      show: (container, t, view) => {
+        panel = { container, tile: t, view };
         renderTile();
       },
       hide: () => {

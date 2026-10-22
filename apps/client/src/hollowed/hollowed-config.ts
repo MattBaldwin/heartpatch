@@ -53,11 +53,88 @@ export const KEY_HUNT = {
 } as const;
 
 /**
- * The hidden cellar's chests (#306, owner decision of 2026-10-22): how a lid
- * pops open and the sparkle it lets out, and the big chest's bigger moment
- * (a wobble, a slower swing, a fountain of sparkles and a beam of warm
- * light). Angles are radians, times ms, lengths world units.
+ * The cellar key's treasure map (#306, owner decision 2026-10-22): an old
+ * parchment drawing of the patch before the Hollow Man (treasure-map.ts).
+ * Sepia inks (sRGB), sizes in CSS pixels.
  */
+export const TREASURE_MAP = {
+  /** Parchment round the land, px. */
+  margin: 18, // TUNE
+  /** Steps of land shown round the Hollow and the key (a closer map reads better on a phone). */
+  around: 3, // TUNE
+  /** How much the rim's tiles fade into the paper, 0–1. */
+  rimFade: 0.55, // TUNE
+  /** The tallest the drawing gets, as a share of the screen's height. */
+  maxScreenShare: 0.46, // TUNE
+  /** Drawn at the device's pixel ratio up to this (never pixelated, never huge). */
+  maxDpr: 3,
+  ink: {
+    paper: '#fbf0d6',
+    paperMid: '#f3e0b5',
+    paperEdge: '#e0c08a',
+    edge: 'rgb(122 84 40 / 45%)',
+    sea: 'rgb(96 120 120 / 55%)',
+    grid: 'rgb(110 78 40 / 16%)',
+    coast: '#6e4a22',
+    doodle: '#6e4a22',
+    tree: '#b9a36a',
+    peak: '#efe0bd',
+    pumpkin: '#e2a95c',
+    trail: '#8a3b2a',
+    cross: '#a3361f',
+    glow: 'rgb(255 205 90 / 85%)',
+    land: {
+      meadow: '#eedcab',
+      forest: '#d9c48c',
+      'old-forest': '#c9b07a',
+      hills: '#e6cf98',
+      mountains: '#d8c39a',
+      lake: '#c9d3bd',
+      pumpkins: '#ecd096',
+      gap: '#e8d6c0',
+    },
+  },
+} as const; // TUNE
+
+/**
+ * The key's tile on the world map while I hunt for it (#306, owner decision
+ * 2026-10-22: "really highlight" it): a warm gold glow over the tile, a bright
+ * pulsing rim, a soft column of light rising from it and a few sparkles in
+ * the column. One thin-instanced mesh, built only while a hunt is on; it
+ * breathes (and the column stretches, lifting its sparkles) on the frames
+ * the map draws anyway, and holds still with reduced motion. Linear RGB,
+ * alpha; sizes in tile radii (the column's height in world units).
+ */
+export const KEY_GLOW = {
+  rgb: [1, 0.62, 0.14],
+  /** The fill over the tile's middle, and the rim round its edge. */
+  fill: 0.85,
+  rim: { inner: 0.74, peak: 0.94, outer: 1.06, alpha: 1 },
+  /** The column of light: its rings from the tile up, narrowing and fading. */
+  column: [
+    { scale: 0.7, y: 0, alpha: 0.85 },
+    { scale: 0.62, y: 0.35, alpha: 0.65 },
+    { scale: 0.52, y: 0.8, alpha: 0.3 },
+    { scale: 0.42, y: 1.3, alpha: 0 },
+  ],
+  /** Sparkles in the column: where (tile radii out, world units up) and how big (world units). */
+  sparkles: [
+    { x: 0.22, z: 0.05, y: 0.3, size: 0.11 },
+    { x: -0.2, z: -0.12, y: 0.6, size: 0.09 },
+    { x: 0.08, z: 0.22, y: 0.9, size: 0.08 },
+    { x: -0.1, z: 0.1, y: 1.12, size: 0.06 },
+  ],
+  /** Its softest and brightest, as a share of the look. */
+  low: 0.55,
+  high: 1,
+  /** The column stretches up this much at its brightest, lifting its sparkles. */
+  stretch: 0.25,
+  /** One breath, seconds. */
+  periodS: 2.2,
+  /** Over the tile's top, world units: above a homestead's glow, so the two never z-fight. */
+  lift: 0.03,
+} as const; // TUNE
+
 /**
  * The cellar's camera (#306): a little further back and higher than
  * exploring a tile, so the row of chests reads as one set, the big one in
@@ -68,6 +145,12 @@ export const CELLAR_CAMERA = {
   pitch: (5 * Math.PI) / 180, // TUNE
 } as const;
 
+/**
+ * The hidden cellar's chests (#306, owner decision of 2026-10-22): how a lid
+ * pops open and the sparkle it lets out, and the big chest's bigger moment
+ * (a wobble, a slower swing, a fountain of sparkles and a beam of warm
+ * light). Angles are radians, times ms, lengths world units.
+ */
 export const CELLAR_CHESTS = {
   small: {
     open: 1.95, // TUNE: how far the lid swings back

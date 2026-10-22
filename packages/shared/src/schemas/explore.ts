@@ -175,6 +175,11 @@ export const SearchSpotResponseSchema = z.object({
   items: ItemCountsSchema,
   /** On a grey village tile (#306 2a): its joy after this search, 0–100. */
   joy: z.number().int().min(0).max(100).optional(),
+  /**
+   * The search was the cellar key's glinting spot (`KEY_SPOT`, owner decision
+   * 2026-10-22): the village whose key it found, by id and name. Absent otherwise.
+   */
+  cellarKey: z.object({ communityId: z.uuid(), name: z.string() }).optional(),
 });
 export type SearchSpotResponse = z.infer<typeof SearchSpotResponseSchema>;
 

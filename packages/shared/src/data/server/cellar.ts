@@ -4,6 +4,7 @@ import type { CellarRules } from '../../schemas/data/cellar.js';
 export const CELLAR_RULES: CellarRules = {
   keyFromVillage: { min: 2, max: 4 }, // TUNE: moved here from `MAP_GEN.communities`
   rareFindMultiplier: 2, // TUNE: the issue's "hidden cellars about 2×"
+  keyMoveRange: 4, // TUNE: steps from the key's tile now (matches how far keys hide from villages)
   // The big chest (#306, owner decision of 2026-10-22).
   bigChest: {
     afterSmall: true, // owner decision of 2026-10-22: the small chests first

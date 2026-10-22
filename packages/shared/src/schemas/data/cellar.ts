@@ -24,6 +24,12 @@ export const CellarRulesSchema = z.strictObject({
    */
   rareFindMultiplier: z.number().int().min(1),
   /**
+   * On a patch with no challenges, how far a key on someone else's land may
+   * move to the nearest wild tile (owner decision 2026-10-22); with none that
+   * near it stays, and land next to it is enough.
+   */
+  keyMoveRange: z.number().int().min(1),
+  /**
    * The big chest in the middle of the cellar (#306, owner decision of
    * 2026-10-22): the cellar's best loot, a big pile of finds and the
    * cellar's keepsake.

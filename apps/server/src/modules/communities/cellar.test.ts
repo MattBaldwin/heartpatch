@@ -5,9 +5,11 @@ import {
   CommunityKindIdSchema,
   CommunityViewSchema,
   BIG_CHEST_KIND,
+  ExploreTileResponseSchema,
   hexDistance,
+  hexNeighbors,
   isBigChest,
-  keyInReach,
+  KEY_SPOT,
   MapResponseSchema,
   MapViewSchema,
   JoinMapResponseSchema,
@@ -30,10 +32,11 @@ import { setDevDropChance } from '../wardrobe/drops.js';
 
 /*
  * The key hunt and the hidden cellar (#306 PR 2c): winning a village gives
- * its winner (only) a map to the key's tile; they dig the key up there once
- * their land reaches it, whoever holds that tile, and nobody's land changes;
- * the key opens the cellar on the square once; its spots are searched once
- * each for never-empty finds; leaving takes the key and the cellar with it.
+ * its winner (only) a map to the key's tile; once that tile is theirs, a
+ * glinting spot there finds the key in explore (owner decision 2026-10-22),
+ * which nobody else sees; the key opens the cellar on the square once; its
+ * spots are searched once each for never-empty finds; leaving takes the key
+ * and the cellar with it.
  */
 
 const url = inject('testDatabaseUrl');
@@ -217,6 +220,27 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
   const path = (mapId: string, communityId: string, rest: string) =>
     `/maps/${mapId}/communities/${communityId}/${rest}`;
 
+  const exploreAt = (server: FastifyInstance, who: Player, mapId: string, at: Tile) =>
+    call(server, 'GET', `/maps/${mapId}/explore?q=${String(at.q)}&r=${String(at.r)}`, who);
+  const searchKey = (server: FastifyInstance, who: Player, mapId: string, at: Tile) =>
+    call(server, 'POST', `/maps/${mapId}/explore/search`, who, {
+      q: at.q,
+      r: at.r,
+      spot: KEY_SPOT.index,
+    });
+  const keyTileOf = async (mapId: string, communityId: string) => {
+    const row = (await communityRow(communityId))!;
+    return (await tilesOf(mapId)).find((t) => t.id === row.keyTileId)!;
+  };
+
+  /** Claim the key's tile (the dev path) and find the key at its glinting spot. */
+  async function findKey(server: FastifyInstance, me: Player, mapId: string, communityId: string) {
+    const reach = await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    expect(reach.statusCode, reach.body).toBe(201);
+    const found = await searchKey(server, me, mapId, await keyTileOf(mapId, communityId));
+    expect(found.statusCode, found.body).toBe(200);
+  }
+
   it('gives the winner, and only the winner, a map to the key', async () => {
     const { server, me, rival, mapId, communityId } = await wonVillage();
     const row = (await communityRow(communityId))!;
@@ -228,62 +252,139 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     expect(Math.min(...mine!.tiles.map((t) => hexDistance(t, key)))).toBeGreaterThanOrEqual(2);
     // Rule 6: the rival's view never says where it is.
     expect((await villageOf(server, rival, mapId, communityId))?.cellar).toBeUndefined();
-    expect((await call(server, 'POST', path(mapId, communityId, 'key'), rival)).statusCode).toBe(
-      403,
-    );
+    // The old dig route is gone: the key is found by exploring.
+    expect((await call(server, 'POST', path(mapId, communityId, 'key'), me)).statusCode).toBe(404);
   });
 
-  it("digs the key up next to my land on a rival's tile, and changes nobody's land", async () => {
+  it("finds the key by exploring its tile once it's mine, and nobody else sees it", async () => {
     const { server, me, rival, mapId, communityId } = await wonVillage();
-    // Hide the key on a rival's tile out of my reach (the placement allows owned and busy land).
+    // Hide the key on a rival's tile next to my land (the placement allows claimed land).
     const all = await tilesOf(mapId);
-    const far = all.find(
+    const next = all.find(
       (t) =>
         t.homeSlot === null &&
         t.communityId === null &&
         t.ownerUserId === null &&
         t.terrain !== 'trading-post' &&
         t.terrain !== 'junipers-gap' &&
-        !keyInReach(t, all, me.id) &&
-        all.some((x) => x.ownerUserId === me.id && hexDistance(x, t) === 3),
+        hexNeighbors(t).some((n) =>
+          all.some((x) => x.ownerUserId === me.id && x.q === n.q && x.r === n.r),
+        ),
     )!;
     await db.execute(
-      `update tiles set owner_user_id = '${rival.id}' where id = '${far.id}';
-       update communities set key_tile_id = '${far.id}' where id = '${communityId}';`,
+      `update tiles set owner_user_id = '${rival.id}' where id = '${next.id}';
+       update communities set key_tile_id = '${next.id}' where id = '${communityId}';`,
     );
-    const dig = path(mapId, communityId, 'key');
-    const away = await call(server, 'POST', dig, me);
-    expect(away.statusCode).toBe(403);
-    expect(errorOf(away).message).toBe('Claim land next to it to dig for the key!');
+
+    // Next to my land isn't enough any more (owner decision 2026-10-22).
+    expect((await exploreAt(server, me, mapId, next)).statusCode).toBe(403);
+    expect((await searchKey(server, me, mapId, next)).statusCode).toBe(403);
+    // Its owner explores it and sees no key: the spot is the winner's alone (rule 6).
+    const theirs = ExploreTileResponseSchema.parse(
+      (await exploreAt(server, rival, mapId, next)).json(),
+    );
+    expect(theirs.spots.some((s) => s.index === KEY_SPOT.index)).toBe(false);
+    expect(JSON.stringify(theirs)).not.toContain(KEY_SPOT.kind);
+    expect((await searchKey(server, rival, mapId, next)).statusCode).toBe(404);
+    // A key on someone's land is won in a battle, not claimed by the dev path.
+    const blocked = await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, {
+      communityId,
+    });
+    expect(blocked.statusCode).toBe(409);
     expect((await communityRow(communityId))?.keyRevealedAt).toBeNull();
 
-    // Claim toward it (the dev path), then dig: the tile stays the rival's.
-    const reach = await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    expect(reach.statusCode, reach.body).toBe(201);
-    const before = (await tilesOf(mapId)).find((t) => t.id === far.id);
-    const ok = await call(server, 'POST', dig, me);
-    expect(ok.statusCode, ok.body).toBe(200);
-    expect(CommunityViewSchema.parse(ok.json()).cellar).toEqual({ state: 'key' });
-    expect((await tilesOf(mapId)).find((t) => t.id === far.id)).toEqual(before);
-    expect(before?.ownerUserId).toBe(rival.id);
-    expect((await communityRow(communityId))?.keyRevealedAt).toEqual(new Date(NOON));
+    // On any other tile of mine there's no such spot to ask for.
+    const other = (await tilesOf(mapId)).find(
+      (t) =>
+        t.ownerUserId === me.id &&
+        t.id !== next.id &&
+        t.homeSlot === null &&
+        !['clearing', 'junipers-gap', 'trading-post'].includes(t.terrain),
+    )!;
+    expect((await searchKey(server, me, mapId, other)).statusCode).toBe(404);
 
-    // Once.
-    const again = await call(server, 'POST', dig, me);
-    expect(again.statusCode).toBe(409);
-    expect(errorOf(again).message).toBe('You already found this key! 🔑');
+    // I win the tile: the key glints there, past the tile's own spots.
+    await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${next.id}'`);
+    const view = ExploreTileResponseSchema.parse((await exploreAt(server, me, mapId, next)).json());
+    const glint = view.spots.find((s) => s.index === KEY_SPOT.index);
+    expect(glint).toMatchObject({ kind: KEY_SPOT.kind, tool: null, done: false });
+    expect(view.progress).toEqual({ searched: 0, total: view.spots.length - 1 });
+    // The same place every look.
+    const again = ExploreTileResponseSchema.parse(
+      (await exploreAt(server, me, mapId, next)).json(),
+    );
+    expect(again.spots).toEqual(view.spots);
+
+    const found = await searchKey(server, me, mapId, next);
+    expect(found.statusCode, found.body).toBe(200);
+    const body = SearchSpotResponseSchema.parse(found.json());
+    const village = (await communityRow(communityId))!;
+    expect(body).toMatchObject({
+      spot: KEY_SPOT.index,
+      found: {},
+      tool: null,
+      explored: false,
+      progress: { searched: 0, total: view.spots.length - 1 },
+      cellarKey: { communityId, name: village.restoredName ?? village.name },
+    });
+    expect(village.keyRevealedAt).toEqual(new Date(NOON));
+    expect((await villageOf(server, me, mapId, communityId))?.cellar).toEqual({ state: 'key' });
+    // Finding the key searched none of the tile's own spots.
+    const row = await db.query.tileExplore.findFirst({
+      where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.tileId, next.id)),
+    });
+    expect(row).toBeUndefined();
+
+    // Once: the glint is gone, and a second search says so.
+    const after = ExploreTileResponseSchema.parse(
+      (await exploreAt(server, me, mapId, next)).json(),
+    );
+    expect(after.spots.some((s) => s.index === KEY_SPOT.index)).toBe(false);
+    const twice = await searchKey(server, me, mapId, next);
+    expect(twice.statusCode).toBe(409);
+    expect(errorOf(twice).message).toBe('You already found this key! 🔑');
 
     // The event keeps where internally, and only I hear of it.
-    const [found] = await eventsOf(mapId, 'key.found');
-    expect(found?.payload).toEqual({ communityId, userId: me.id, q: far.q, r: far.r });
-    expect(publicViewFor(PUBLIC_VIEWS, found!, { userId: me.id })).toEqual({
+    const [event] = await eventsOf(mapId, 'key.found');
+    expect(event?.payload).toEqual({ communityId, userId: me.id, q: next.q, r: next.r });
+    expect(publicViewFor(PUBLIC_VIEWS, event!, { userId: me.id })).toEqual({
       communityId,
       userId: me.id,
     });
-    expect(publicViewFor(PUBLIC_VIEWS, found!, { userId: rival.id })).toBeNull();
+    expect(publicViewFor(PUBLIC_VIEWS, event!, { userId: rival.id })).toBeNull();
     // And my view stops naming the key's tile.
-    const view = JSON.stringify(await villageOf(server, me, mapId, communityId));
-    expect(view).not.toContain('keyTile');
+    expect(JSON.stringify(await villageOf(server, me, mapId, communityId))).not.toContain(
+      'keyTile',
+    );
+  });
+
+  it('still finds a key on land that was cleared since, which nothing else can explore', async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    const key = await keyTileOf(mapId, communityId);
+    await db.execute(`update tiles set terrain = 'clearing' where id = '${key.id}'`);
+    const view = ExploreTileResponseSchema.parse((await exploreAt(server, me, mapId, key)).json());
+    expect(view).toMatchObject({ terrain: 'clearing', progress: { searched: 0, total: 0 } });
+    expect(view.spots.map((s) => s.index)).toEqual([KEY_SPOT.index]);
+    const found = await searchKey(server, me, mapId, key);
+    expect(found.statusCode, found.body).toBe(200);
+    expect((await communityRow(communityId))?.keyRevealedAt).toEqual(new Date(NOON));
+    // Once found, it's plain cleared land again: nothing to explore.
+    const after = await exploreAt(server, me, mapId, key);
+    expect(after.statusCode).toBe(409);
+    expect(errorOf(after).message).toBe("There's nothing to search here yet!");
+  });
+
+  it('claims a wild key tile itself on the dev path, and the glint is there', async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    const key = await keyTileOf(mapId, communityId);
+    // Wild, whoever the patch's own claims gave it to.
+    await db.execute(`update tiles set owner_user_id = null where id = '${key.id}'`);
+    const reach = await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    expect(reach.statusCode, reach.body).toBe(201);
+    expect((await keyTileOf(mapId, communityId)).ownerUserId).toBe(me.id);
+    const view = ExploreTileResponseSchema.parse((await exploreAt(server, me, mapId, key)).json());
+    expect(view.spots.filter((s) => s.kind === KEY_SPOT.kind)).toHaveLength(1);
   });
 
   it('opens the cellar with the key, once, and only for its winner', async () => {
@@ -296,8 +397,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     expect(shut.statusCode).toBe(409);
     expect(errorOf(shut).message).toBe('Open the cellar with its key first! 🔑');
 
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    expect((await call(server, 'POST', path(mapId, communityId, 'key'), me)).statusCode).toBe(200);
+    await findKey(server, me, mapId, communityId);
     expect((await call(server, 'POST', open, rival)).statusCode).toBe(403);
     const opened = await call(server, 'POST', open, me);
     expect(opened.statusCode, opened.body).toBe(200);
@@ -311,8 +411,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
   it('searches every cellar spot once, hands only, for finds that are never empty', async () => {
     const { server, me, rival, mapId, communityId, square } = await wonVillage();
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await findKey(server, me, mapId, communityId);
     await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
 
     const res = await call(server, 'GET', path(mapId, communityId, 'cellar'), me);
@@ -366,8 +465,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
   it('finds the Rekindled set in the cellar too, through its cellar odds (#306 PR 5)', async () => {
     const { server, me, mapId, communityId } = await wonVillage();
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await findKey(server, me, mapId, communityId);
     await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
     const view = CellarViewSchema.parse(
       (await call(server, 'GET', path(mapId, communityId, 'cellar'), me)).json(),
@@ -396,8 +494,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
   it("opens the big chest last, once, for a big pile and the Hollow kind's keepsake (#306)", async () => {
     const { server, me, mapId, communityId } = await wonVillage();
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await findKey(server, me, mapId, communityId);
     await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
     const view = CellarViewSchema.parse(
       (await call(server, 'GET', path(mapId, communityId, 'cellar'), me)).json(),
@@ -456,8 +553,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
   it('gives the pile but not a second keepsake to a Keeper who has it already (#306)', async () => {
     const { server, me, mapId, communityId } = await wonVillage();
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await findKey(server, me, mapId, communityId);
     await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
     const kind = CommunityKindIdSchema.parse((await communityRow(communityId))?.kind);
     const keepsake = CELLAR_RULES.bigChest.keepsakes[kind];
@@ -482,9 +578,102 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     ).toHaveLength(1);
   });
 
-  it('lets a double tap dig, open or search only once', async () => {
+  describe('on a patch with no challenges (owner decision 2026-10-22)', () => {
+    const hexDist = (a: { q: number; r: number }, b: { q: number; r: number }) =>
+      (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+    const viewKey = async (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      (await villageOf(server, who, mapId, id))?.cellar?.keyTile;
+
+    /** A won village on a no-challenge patch with its key on the rival's land. */
+    async function rivalsKey() {
+      const won = await wonVillage();
+      const { mapId, communityId, rival } = won;
+      await db.execute(`update maps set pvp_mode = 'off' where id = '${mapId}'`);
+      const key = await keyTileOf(mapId, communityId);
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${key.id}'`);
+      return { ...won, key };
+    }
+
+    it("moves a key off another Keeper's land to the nearest wild tile, once, and tells nobody", async () => {
+      const { server, me, rival, mapId, communityId, key } = await rivalsKey();
+      const allEvents = async () =>
+        (await db.query.gameEvents.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) })).length;
+      const before = await allEvents();
+      // The rival looking moves nothing: only the winner's own looks do.
+      const looked = await call(server, 'GET', `/maps/${mapId}/view`, rival);
+      expect(looked.statusCode).toBe(200);
+      expect((await communityRow(communityId))?.keyTileId).toBe(key.id);
+      const moved = await viewKey(server, me, mapId, communityId);
+      expect(moved).toBeDefined();
+      expect(moved).not.toEqual({ q: key.q, r: key.r });
+      const to = (await tilesOf(mapId)).find((t) => t.q === moved!.q && t.r === moved!.r)!;
+      expect(to.ownerUserId).toBeNull();
+      expect(hexDist(to, key)).toBeLessThanOrEqual(4);
+      expect((await communityRow(communityId))?.keyTileId).toBe(to.id);
+      // Idempotent: another look keeps it there; the rival's land is untouched.
+      expect(await viewKey(server, me, mapId, communityId)).toEqual(moved);
+      expect((await tilesOf(mapId)).find((t) => t.id === key.id)?.ownerUserId).toBe(rival.id);
+      // A move is the winner's secret: no game event at all.
+      expect(await allEvents()).toBe(before);
+      // Someone else claims the new tile: it moves again. My own claim doesn't move it.
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${to.id}'`);
+      const again = await viewKey(server, me, mapId, communityId);
+      expect(again).not.toEqual(moved);
+      const next = (await tilesOf(mapId)).find((t) => t.q === again!.q && t.r === again!.r)!;
+      await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${next.id}'`);
+      expect(await viewKey(server, me, mapId, communityId)).toEqual(again);
+      // And it's found there by exploring, as anywhere.
+      const found = await searchKey(server, me, mapId, next);
+      expect(found.statusCode, found.body).toBe(200);
+    });
+
+    it('keeps "win the key tile" on patches with challenges', async () => {
+      const { server, me, mapId, communityId, key } = await rivalsKey();
+      for (const mode of ['on', 'gentle']) {
+        await db.execute(`update maps set pvp_mode = '${mode}' where id = '${mapId}'`);
+        expect(await viewKey(server, me, mapId, communityId)).toEqual({ q: key.q, r: key.r });
+      }
+    });
+
+    it('stays put with no wild tile near enough, and land next to it finds it', async () => {
+      const { server, me, rival, mapId, communityId, key } = await rivalsKey();
+      // Every wild tile near the key becomes the rival's; one beside it becomes mine.
+      const all = await tilesOf(mapId);
+      const beside = all.find(
+        (t) =>
+          hexDist(t, key) === 1 &&
+          t.homeSlot === null &&
+          t.communityId === null &&
+          !['junipers-gap', 'trading-post', 'clearing'].includes(t.terrain),
+      )!;
+      const near = all.filter(
+        (t) => t.ownerUserId === null && hexDist(t, key) <= 4 && t.id !== beside.id,
+      );
+      for (const t of near) {
+        await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${t.id}'`);
+      }
+      await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${beside.id}'`);
+      expect(await viewKey(server, me, mapId, communityId)).toEqual({ q: key.q, r: key.r });
+      // The glint is on my land next to it.
+      const view = ExploreTileResponseSchema.parse(
+        (await exploreAt(server, me, mapId, beside)).json(),
+      );
+      expect(view.spots.some((s) => s.index === KEY_SPOT.index)).toBe(true);
+      const found = await searchKey(server, me, mapId, beside);
+      expect(found.statusCode, found.body).toBe(200);
+      // A second tap from next door is told it's found, as on the key's own tile.
+      const again = await searchKey(server, me, mapId, beside);
+      expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toBe('You already found this key! 🔑');
+      const [event] = await eventsOf(mapId, 'key.found');
+      expect(event?.payload).toMatchObject({ q: key.q, r: key.r });
+    });
+  });
+
+  it('lets a double tap find the key, open or search only once', async () => {
     const { server, me, mapId, communityId } = await wonVillage();
     await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    const key = await keyTileOf(mapId, communityId);
     const twice = async (p: string, payload?: object) =>
       (
         await Promise.all([
@@ -494,7 +683,9 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
       )
         .map((r) => r.statusCode)
         .sort();
-    expect(await twice(path(mapId, communityId, 'key'))).toEqual([200, 409]);
+    expect(
+      await twice(`/maps/${mapId}/explore/search`, { q: key.q, r: key.r, spot: KEY_SPOT.index }),
+    ).toEqual([200, 409]);
     expect(await twice(path(mapId, communityId, 'cellar'))).toEqual([200, 409]);
     expect(await twice(path(mapId, communityId, 'cellar/search'), { spot: 1 })).toEqual([200, 409]);
     expect(await eventsOf(mapId, 'key.found')).toHaveLength(1);
@@ -504,8 +695,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
   it('takes the key and the cellar with the winner when they leave', async () => {
     const { server, me, mapId, communityId } = await wonVillage(true);
-    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
-    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await findKey(server, me, mapId, communityId);
     await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
     await call(server, 'POST', path(mapId, communityId, 'cellar/search'), me, { spot: 0 });
     const left = await call(server, 'POST', `/maps/${mapId}/leave`, me);
