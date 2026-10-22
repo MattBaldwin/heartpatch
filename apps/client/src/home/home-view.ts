@@ -335,12 +335,8 @@ export function groundsTileOffer(
 /** The home's top line (owner decision 2026-10-07): the Heart Seed keeps home safe. */
 export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
 
-/** Where fires go, on the build sheet (fires stand only on captured land). */
-export const FIRES_ON_LAND =
-  'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!';
-
-/** My one homestead building of a kind is up (the Crafting Factory, #295). */
-export const BUILT_ON_HOMESTEAD = 'Built! Tap it on its homestead to open it.';
+/** The Home build sheet's one line about fires (they stand only on captured land): no card. */
+export const FIRES_ON_LAND = 'Fires go out on your land: tap a tile on the map 🔥';
 
 /** No free tile left at home (#537): one building per tile (#295), and every one is taken. */
 export const HOME_FULL = 'Your home base is full! Take down a building to make room 🏡';
@@ -360,10 +356,6 @@ export const HOME_FULL_GROW = 'Your home base is full! Tap Not now, then tap one
 
 /** Every home building is up to its cap, each at its top level (#537). */
 export const HOME_ALL_TOP = 'Every squishy home is built and as big as it gets! 🏆';
-
-/** Where homestead buildings go, on the build sheet (#277 Training Grounds, #295 the Crafting Factory). */
-export const ON_HOMESTEAD =
-  'Goes on a homestead 🏡. Explore a tile next to home, then tap it on the map to build!';
 
 /**
  * One ingredient as have/need ("🪵 12/5"), so a kid sees at a glance what's
@@ -414,10 +406,6 @@ export type BuildOption =
   | { readonly kind: 'craft'; readonly note: string }
   /** Already built (as many as the home base holds): upgrade it at home instead. */
   | { readonly kind: 'built'; readonly note: string }
-  /** Built only out on my land, from the map's tile panel (fires, #202). */
-  | { readonly kind: 'land'; readonly note: string }
-  /** Built only on a homestead, from its tile panel (Training Grounds, #277). */
-  | { readonly kind: 'homestead'; readonly note: string }
   | { readonly kind: 'blocked'; readonly note: string };
 
 export interface BuildRow {
@@ -479,8 +467,9 @@ export function slotLine(building: Pick<Building, 'kind' | 'slot'>): string {
 const isCrafted = (id: string) => GAME_DATA.resources.find((r) => r.id === id)?.kind === 'crafted';
 
 /**
- * The build menu: every building a player can put up at home, in data order.
- * Counts only home buildings (fires out on my land don't use up home's one).
+ * The Home build menu: every building that goes at home (the habitats), in
+ * data order. Fires and homestead buildings are built out on the land from the
+ * map's tile panel, so they have no card here.
  */
 export function buildRows(everything: HomeResponse): BuildRow[] {
   const home = atHome(everything);
@@ -488,6 +477,7 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
   return (
     GAME_DATA.buildings
       .filter((b) => isBuildable(RULES, b))
+      .filter((b) => b.placement === 'home')
       // Fences (#203) go on a tile's edges, from the tile's panel on the map.
       .filter((b) => b.slot !== 'edge')
       .filter((b) => inSeason(b, seasons) || home.buildings.some((m) => m.buildingId === b.id))
@@ -497,26 +487,7 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
         const short = Object.keys(shortfall(home.items, cost));
         const crafted = short.find(isCrafted);
         let option: BuildOption = { kind: 'ready' };
-        if (building.placement === 'land' && crafted) {
-          // Carve the Jack-o'-Lantern first, then build it out on your land.
-          const verb = CRAFT_VERBS[crafted] ?? 'Make';
-          option = {
-            kind: 'craft',
-            note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
-          };
-        } else if (building.placement === 'land') {
-          option = { kind: 'land', note: FIRES_ON_LAND };
-        } else if (
-          building.placement === 'homestead' &&
-          building.maxPerHome !== undefined &&
-          everything.buildings.filter((b) => b.buildingId === building.id).length >=
-            building.maxPerHome
-        ) {
-          // My one Crafting Factory stands on a homestead (#295).
-          option = { kind: 'built', note: BUILT_ON_HOMESTEAD };
-        } else if (building.placement === 'homestead') {
-          option = { kind: 'homestead', note: ON_HOMESTEAD };
-        } else if (owned >= (building.maxPerHome ?? 0)) {
+        if (owned >= (building.maxPerHome ?? 0)) {
           option = {
             kind: 'built',
             note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
@@ -524,7 +495,7 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
         } else if (!inSeason(building, seasons)) {
           const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
           option = { kind: 'blocked', note: `Only around ${season}.` };
-        } else if (freeHomeSpots(home, null, building.slot).length === 0) {
+        } else if (freeHomeTiles(home, null, building.slot).length === 0) {
           // Before what it costs: gathering more wouldn't make room (#537).
           option = { kind: 'blocked', note: HOME_FULL };
         } else if (crafted) {
@@ -541,13 +512,9 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           icon: buildingIcon(building.id),
           description: building.description,
           effects: effectChips(building),
-          needs:
-            option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
+          needs: option.kind === 'built' ? [] : needChips(home.items, cost),
           option,
-          where:
-            building.placement === 'land' || building.placement === 'homestead'
-              ? ''
-              : slotLine(building),
+          where: slotLine(building),
         };
       })
   );
@@ -677,7 +644,11 @@ export function upgradeReach(home: HomeResponse, fire: MyBuilding, toRadius: num
   });
 }
 
-/** A spot on one of my home tiles. */
+/**
+ * A home tile to build on, as the server's `spot` field wants it: a building
+ * fills its whole ring tile (#589), so the spot is only which ring slot the
+ * server records, the tile's first free one.
+ */
 export interface HomeSpot {
   readonly q: number;
   readonly r: number;
@@ -685,26 +656,26 @@ export interface HomeSpot {
 }
 
 /**
- * Every free spot on my home base: the Heart Seed tile first, then the ring
- * in `q, r` order, spots in order. One building per tile (#295, shared
- * `tileUseRefusal`, as the server checks it): a tile with a building on it
- * has no free spot (#537), and neither has the house's tile while the
- * house stands (#604, shared `houseTile` over the buildings as they stand,
- * as the server checks it). `except` is a building being moved (its own
- * tile counts as free); `slot` keeps only that kind of spot (#204).
+ * Every free tile on my home base's ring, in `q, r` order, for the Build and
+ * Move taps (#589: one building a tile, and it fills the tile). One entry a
+ * tile, carrying the ring spot to send. The Heart Seed keeps the middle
+ * (#604), so its tile is never offered, as the server refuses it. A tile
+ * holding a building isn't free (shared `tileUseRefusal`, as the server
+ * checks it, #537), and neither is the house's tile while the house stands
+ * (#604, shared `houseTile` over the buildings as they stand). `except` is a
+ * building being moved (its own tile counts as free); `slot` is the kind of
+ * spot to send, a habitat's ring (#204).
  */
-export function freeHomeSpots(
+export function freeHomeTiles(
   home: HomeResponse,
   except: string | null = null,
-  slot?: BuildingSlot,
+  slot: BuildingSlot = 'ring',
 ): HomeSpot[] {
-  const tiles = [...home.tiles].sort(
-    (a, b) => Number(b.heartSeed) - Number(a.heartSeed) || a.q - b.q || a.r - b.r,
-  );
+  const tiles = home.tiles.filter((t) => !t.heartSeed).sort((a, b) => a.q - b.q || a.r - b.r);
   // The house's tile as it's drawn now (the server reads it the same way).
   const house = home.house ? houseTile(home.tiles, home.buildings) : null;
   const others = home.buildings.filter((b) => b.id !== except);
-  const spots: HomeSpot[] = [];
+  const free: HomeSpot[] = [];
   for (const tile of tiles) {
     if (house && house.q === tile.q && house.r === tile.r) continue;
     const taken = new Set(
@@ -720,11 +691,10 @@ export function freeHomeSpots(
     ) {
       continue;
     }
-    for (const spot of freeSpots(RULES, tile, taken, slot)) {
-      spots.push({ q: tile.q, r: tile.r, spot });
-    }
+    const spot = freeSpots(RULES, tile, taken, slot)[0];
+    if (spot !== undefined) free.push({ q: tile.q, r: tile.r, spot });
   }
-  return spots;
+  return free;
 }
 
 /** Species the client can draw: the public table plus what the server sent along. */

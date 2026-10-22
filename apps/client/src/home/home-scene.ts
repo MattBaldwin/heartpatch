@@ -121,6 +121,9 @@ const SQUISHY_REACH = 0.2; // TUNE
 /** A tap this close to the middle of a tile-sized building counts as on it, in hex sizes (#589). */
 const FILLED_REACH = HOME_VIEW.hexSize * 0.55; // TUNE
 
+/** A tap this close to the middle of a glowing tile picks it, in world units (#589): most of the tile. */
+const TILE_REACH = HOME_VIEW.hexSize * 0.85; // TUNE
+
 export interface HomeSceneOptions {
   readonly registry: VisualRegistry;
   readonly lod: SquishyLod;
@@ -205,7 +208,7 @@ export class HomeScene {
     // out from the sand-coloured tiles, not melt into them.
     this.#spotMarkers = CreateTorus(
       'home-spots',
-      { diameter: 0.9, thickness: 0.12, tessellation: 32 },
+      { diameter: 0.9, thickness: 0.06, tessellation: 32 },
       scene,
     );
     const ringMat = overlayMaterial(scene, 'home-spots-mat');
@@ -528,31 +531,38 @@ export class HomeScene {
     this.#cottage = { exterior, tile, mesh };
   }
 
-  /** Lights up free spots to tap while placing or moving (empty: off). */
+  /** The middle of the tile a lit spot is on: a building fills its whole ring tile (#589). */
+  #tileAt(spot: HomeSpot): WorldPoint {
+    return this.spotAt({ q: spot.q, r: spot.r, spot: 0 });
+  }
+
+  /** Lights up the free tiles to tap while placing or moving (empty: off). */
   showSpots(spots: readonly HomeSpot[]): void {
     this.#spots = [...spots];
-    const at = spots.map((s) => this.spotAt(s));
+    const at = spots.map((s) => this.#tileAt(s));
+    const glow = new Vector3(HOME_FILL.glowScale, 1, HOME_FILL.glowScale);
     setInstances(
       this.#spotFill,
       // Above the tile's dome everywhere, or the dome cuts wedges out of it.
-      at.map((p) => placeAt(p.x, this.#ground + DOME * 0.5 * this.#k + 0.01, p.z)),
+      at.map((p) => placeAt(p.x, this.#ground + DOME * 0.5 * this.#k + 0.01, p.z, glow)),
       true,
     );
     setInstances(
       this.#spotMarkers,
-      at.map((p) => placeAt(p.x, this.#ground + 0.03, p.z)),
+      at.map((p) => placeAt(p.x, this.#ground + 0.03, p.z, glow)),
       true,
     );
   }
 
-  /** Rings the spot the Build sheet will build on (#371), among the glowing ones; null clears it. */
+  /** Rings the tile the Build sheet will build on (#371), among the glowing ones; null clears it. */
   markSpot(spot: HomeSpot | null): void {
     if (!spot) {
       this.#selection.setEnabled(false);
       return;
     }
-    const at = this.spotAt(spot);
+    const at = this.#tileAt(spot);
     this.#selection.position.set(at.x, this.#ground + 0.02, at.z);
+    this.#selection.scaling.setAll(HOME_FILL.markScale);
     this.#selection.setEnabled(true);
   }
 
@@ -565,6 +575,7 @@ export class HomeScene {
     }
     const at = this.spotAt(b);
     this.#selection.position.set(at.x, this.#ground + 0.02, at.z);
+    this.#selection.scaling.setAll(1);
     this.#selection.setEnabled(true);
   }
 
@@ -590,14 +601,15 @@ export class HomeScene {
     const near = <T>(
       items: readonly T[],
       at: (item: T) => WorldPoint,
-      wide: (item: T) => boolean = () => false,
+      wide: (item: T) => number | null = () => null,
     ): T | null => {
       let best: T | null = null;
       let bestD = Infinity;
       for (const item of items) {
         const w = at(item);
         const d = (w.x - p.x) * (w.x - p.x) + (w.z - p.z) * (w.z - p.z);
-        const limit = wide(item) ? FILLED_REACH * FILLED_REACH : reach * reach;
+        const far = wide(item) ?? reach;
+        const limit = far * far;
         if (d < limit && d < bestD) {
           best = item;
           bestD = d;
@@ -605,12 +617,16 @@ export class HomeScene {
       }
       return best;
     };
-    const spot = near(this.#spots, (s) => this.spotAt(s));
+    const spot = near(
+      this.#spots,
+      (s) => this.#tileAt(s),
+      () => TILE_REACH,
+    );
     if (spot) return { kind: 'spot', spot };
     const building = near(
       this.#home.buildings,
       (b) => this.#buildingAt(b),
-      (b) => this.#fills(b),
+      (b) => (this.#fills(b) ? FILLED_REACH : null),
     );
     if (this.#spots.length === 0) {
       // Near a squishy's feet counts too (they're small), unless the tap is

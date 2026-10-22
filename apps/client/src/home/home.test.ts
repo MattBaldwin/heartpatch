@@ -27,12 +27,11 @@ import {
   atHome,
   buildingNote,
   buildRows,
-  ON_HOMESTEAD,
   effectChip,
   effectChips,
   FIRES_ON_LAND,
   HOME_SAFE_LINE,
-  freeHomeSpots,
+  freeHomeTiles,
   fuelAllOffer,
   HOME_ALL_BUILT,
   HOME_ALL_TOP,
@@ -40,10 +39,10 @@ import {
   HOME_FULL_GROW,
   homeBuildReason,
   landFires,
-  BUILT_ON_HOMESTEAD,
   factoryTileOffer,
   groundsTileOffer,
   landTileOffer,
+  GROUNDS,
   LAND_FIRE,
   likesHabitat,
   refundPreview,
@@ -287,38 +286,12 @@ describe('home screen copy', () => {
 });
 
 describe('build menu', () => {
-  it('offers fires, habitats, Training Grounds and the Factory, and says why one can’t be built', () => {
+  it('offers only the buildings that go at home, and says why one can’t be built', () => {
     const rows = buildRows(homeWith({ buildings: [fire()], items: { timber: 4, stone: 9 } }));
-    expect(rows.map((r) => r.building.id)).toEqual([
-      'hearthfire',
-      'jack-o-lantern-hearthfire',
-      'joy-lantern',
-      'ember-den',
-      'cozy-meadow',
-      'training-grounds',
-      'crafting-factory',
-    ]);
+    // Fires, the lantern, Training Grounds and the Factory go out on the land: no card here.
+    expect(rows.map((r) => r.building.id)).toEqual(['ember-den', 'cozy-meadow']);
+    expect(rows.every((r) => r.building.placement === 'home')).toBe(true);
     const byId = new Map(rows.map((r) => [r.building.id, r]));
-    // Fires go out on land, never at home (owner decision 2026-10-07): no Build, no cost line.
-    expect(byId.get('hearthfire')).toMatchObject({
-      option: {
-        kind: 'land',
-        note: 'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
-      },
-      where: '',
-      needs: [],
-    });
-    // Never "to build X you need X" (design review 2026-10-05): make the lantern first.
-    expect(byId.get('jack-o-lantern-hearthfire')?.option).toEqual({
-      kind: 'craft',
-      note: "Carve a Jack-o'-Lantern first! It's in your recipe book.",
-    });
-    expect(byId.get('jack-o-lantern-hearthfire')?.needs.map((n) => n.label)).toEqual(['🏮 0/1']);
-    // The Joy Lantern (#306 PR 5) the same way: its kit comes from the recipe book.
-    expect(byId.get('joy-lantern')?.option).toEqual({
-      kind: 'craft',
-      note: "Make a Joy Lantern Kit first! It's in your recipe book.",
-    });
     // One cost line, as have/need chips.
     expect(byId.get('cozy-meadow')).toMatchObject({ option: { kind: 'ready' } });
     expect(byId.get('cozy-meadow')?.needs.map((n) => [n.label, n.ok])).toEqual([
@@ -330,6 +303,11 @@ describe('build menu', () => {
       ['🪵 4/5', false],
       ['🪨 9/3', true],
     ]);
+  });
+
+  it('keeps the fires line short, with no card (STYLE_GUIDE)', () => {
+    expect(FIRES_ON_LAND).toBe('Fires go out on your land: tap a tile on the map 🔥');
+    expect(FIRES_ON_LAND.split(' ').length).toBeLessThanOrEqual(15);
   });
 
   it('offers the next level with what it does and costs, and nothing past the top', () => {
@@ -390,41 +368,44 @@ describe('build menu', () => {
     expect(off).not.toContain('jack-o-lantern-hearthfire');
   });
 
-  it('finds free spots: Heart Seed tile first, never a middle with a seed or node', () => {
-    const empty = freeHomeSpots(homeWith());
-    expect(empty[0]).toEqual({ q: 0, r: 0, spot: 1 });
-    expect(empty.some((s) => s.q === 0 && s.r === 0 && s.spot === 0)).toBe(false);
-    expect(empty.some((s) => s.q === 1 && s.r === 0 && s.spot === 0)).toBe(false); // Timber
-    // 6 (Heart Seed) + 6 (node tile) + 5 × 7
-    expect(empty).toHaveLength(6 + 6 + 35);
+  it('finds free tiles: the ring only, one entry a tile, a node tile too (#589)', () => {
+    const empty = freeHomeTiles(homeWith());
+    expect(empty).toHaveLength(6);
+    expect(new Set(empty.map((t) => `${String(t.q)},${String(t.r)}`)).size).toBe(6);
+    // The Heart Seed keeps the middle (#604): its tile is never offered.
+    expect(empty.some((t) => t.q === 0 && t.r === 0)).toBe(false);
+    // The tile with a Timber node is free: the node tucks aside. Its spot is a ring spot.
+    expect(empty.find((t) => t.q === 1 && t.r === 0)).toEqual({ q: 1, r: 0, spot: 1 });
+    expect(empty.every((t) => t.spot === 1)).toBe(true);
   });
 
   it('keeps one building per home tile, as the server does (#295, #537)', () => {
-    const spots = freeHomeSpots(homeWith({ buildings: [fire({ spot: 1 })] }));
-    // The Heart Seed's tile is taken whole: the first free spot is on the ring.
-    expect(spots.some((s) => s.q === 0 && s.r === 0)).toBe(false);
-    expect(spots).toHaveLength(6 + 35);
+    const built = homeWith({ buildings: [meadow({ q: -1, r: 0, spot: 1 })] });
+    const tiles = freeHomeTiles(built);
+    expect(tiles.some((t) => t.q === -1 && t.r === 0)).toBe(false);
+    expect(tiles).toHaveLength(5);
     // A building being moved: its own tile counts as free.
-    const moving = freeHomeSpots(homeWith({ buildings: [fire({ spot: 1 })] }), ID(1));
-    expect(moving[0]).toEqual({ q: 0, r: 0, spot: 1 });
+    const moving = freeHomeTiles(built, meadow().id);
+    expect(moving).toHaveLength(6);
+    expect(moving.some((t) => t.q === -1 && t.r === 0 && t.spot === 1)).toBe(true);
   });
 
   it("never offers the house's tile while the house stands (#604), as the server refuses it", () => {
     const onTile = (spots: HomeSpot[], q: number, r: number) =>
       spots.some((s) => s.q === q && s.r === r);
     // House off: every tile, as before.
-    expect(onTile(freeHomeSpots(homeWith()), 1, -1)).toBe(true);
+    expect(onTile(freeHomeTiles(homeWith()), 1, -1)).toBe(true);
     // A new home's house is on the back-right tile, (1, −1).
-    const fresh = freeHomeSpots(homeWith({ house: { level: 1 } }));
+    const fresh = freeHomeTiles(homeWith({ house: { level: 1 } }));
     expect(onTile(fresh, 1, -1)).toBe(false);
-    expect(fresh).toHaveLength(6 + 6 + 28);
+    expect(fresh).toHaveLength(5);
     // An older home with a habitat there: the house takes the next one, (0, −1).
     const den = meadow({ q: 1, r: -1, spot: 2 });
     const older = homeWith({ house: { level: 1 }, buildings: [den] });
-    expect(onTile(freeHomeSpots(older), 1, -1)).toBe(false);
-    expect(onTile(freeHomeSpots(older), 0, -1)).toBe(false);
+    expect(onTile(freeHomeTiles(older), 1, -1)).toBe(false);
+    expect(onTile(freeHomeTiles(older), 0, -1)).toBe(false);
     // Moving that habitat: its own tile is offered (a spot change), the house's never.
-    const moving = freeHomeSpots(older, den.id);
+    const moving = freeHomeTiles(older, den.id);
     expect(onTile(moving, 1, -1)).toBe(true);
     expect(onTile(moving, 0, -1)).toBe(false);
   });
@@ -514,23 +495,19 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(landFires(home).map((b) => b.id)).toEqual([outer.id]);
   });
 
-  it('lights only the right kind of spot (#204)', () => {
+  it('says where a habitat goes, and lights tiles with a ring spot to send (#204, #589)', () => {
     const home = homeWith();
-    // Five plain tiles have a free middle; the Heart Seed and the node don't.
-    expect(freeHomeSpots(home, null, 'centre')).toHaveLength(5);
-    expect(freeHomeSpots(home, null, 'centre').every((s) => s.spot === 0)).toBe(true);
-    expect(freeHomeSpots(home, null, 'ring').every((s) => s.spot > 0)).toBe(true);
+    expect(freeHomeTiles(home, null, 'ring').every((s) => s.spot > 0)).toBe(true);
     const rows = new Map(buildRows(home).map((r) => [r.building.id, r.where]));
     expect(rows.get('cozy-meadow')).toBe('Goes around the middle 🏡');
   });
 
-  it('sends Training Grounds to a homestead, with their cost to show (#277)', () => {
-    const row = buildRows(homeWith({ items: { timber: 20, stone: 2 } })).find(
-      (r) => r.building.id === 'training-grounds',
-    )!;
-    expect(row.option).toEqual({ kind: 'homestead', note: ON_HOMESTEAD });
-    expect(row.where).toBe('');
-    expect(row.needs.map((n) => n.label)).toEqual(['🪵 20/8', '🪨 2/8']);
+  it('leaves Training Grounds and the Crafting Factory to the land, not the home sheet (#277, #295)', () => {
+    const ids = buildRows(homeWith({ items: { timber: 20, stone: 20 } })).map((r) => r.building.id);
+    expect(ids).not.toContain('training-grounds');
+    expect(ids).not.toContain('crafting-factory');
+    expect(ids).not.toContain('hearthfire');
+    expect(ids).not.toContain('jack-o-lantern-hearthfire');
   });
 
   it('offers Fuel all fires with what filling every fire costs, once a fire is out on my land', () => {
@@ -631,16 +608,6 @@ describe('the Crafting Factory on a homestead (#295)', () => {
     expect(factoryTileOffer(tile({ homestead: null }), homeWith())).toBeNull();
     expect(factoryTileOffer({ ...tile(), buildings: [{ spot: 0 }] }, homeWith())).toBeNull();
   });
-
-  it('says where it goes on the home Build sheet, and that it is built once it is', () => {
-    const row = (home: HomeResponse) =>
-      buildRows(home).find((r) => r.building.id === 'crafting-factory')!;
-    expect(row(homeWith()).option).toEqual({ kind: 'homestead', note: ON_HOMESTEAD });
-    expect(row(homeWith({ buildings: [factory] })).option).toEqual({
-      kind: 'built',
-      note: BUILT_ON_HOMESTEAD,
-    });
-  });
 });
 
 describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
@@ -700,11 +667,7 @@ describe('what each building does (#207)', () => {
   it('gives every build-menu row its description and effect chips, in data order', () => {
     const rows = buildRows(homeWith({ items: {} }));
     const byId = new Map(rows.map((r) => [r.building.id, r]));
-    expect(rows[0]?.building.id).toBe('hearthfire');
-    expect(byId.get('hearthfire')).toMatchObject({
-      description: 'Keeps squishies out on your land safe from the Hollow Man at night.',
-      effects: ['🛡️ Safe 1 tile around', '🪵 Needs fuel each night'],
-    });
+    expect(rows[0]?.building.id).toBe('ember-den');
     expect(byId.get('ember-den')?.effects).toEqual([
       '✨ Faster growing: 🔥 Fire · Cozy',
       '🏠 Room for 3',
@@ -713,7 +676,10 @@ describe('what each building does (#207)', () => {
       '✨ Faster growing: 🍃 Leaf · Cozy · Sleepy',
       '🏠 Room for 3',
     ]);
-    expect(byId.get('training-grounds')?.effects).toEqual(['🏋️ 2 squishies · 5 XP/hr']);
+    expect(effectChips(GROUNDS!)).toEqual(['🏋️ 2 squishies · 5 XP/hr']);
+    expect(LAND_FIRE?.description).toBe(
+      'Keeps squishies out on your land safe from the Hollow Man at night.',
+    );
   });
 
   it('words each effect for any number', () => {
@@ -752,7 +718,7 @@ function homeFilled(
 /** The cards home's Build sheet shows (home-screen.ts `buildView`). */
 const sheetCards = (home: HomeResponse) =>
   buildRows(home)
-    .filter((r) => !['built', 'land', 'homestead'].includes(r.option.kind))
+    .filter((r) => r.option.kind !== 'built')
     .map((r) => r.building.id);
 
 describe('a home base with no room left (#537)', () => {
@@ -785,9 +751,9 @@ describe('a home base with no room left (#537)', () => {
     expect(homeBuildReason(home)).toBe(HOME_FULL);
   });
 
-  it('with every den and meadow built, only the lantern cards are left', () => {
+  it('with every den and meadow built, no card is left but the sheet says why', () => {
     const home = homeFilled((i) => (i < 4 ? den : {}), 8, { ...roomy, items: {} });
-    expect(sheetCards(home)).toEqual(['jack-o-lantern-hearthfire', 'joy-lantern']);
+    expect(sheetCards(home)).toEqual([]);
     const rows = new Map(buildRows(home).map((r) => [r.building.id, r.option.kind]));
     expect(rows.get('ember-den')).toBe('built');
     expect(rows.get('cozy-meadow')).toBe('built');
@@ -805,10 +771,22 @@ describe('a home base with no room left (#537)', () => {
     const home = homeFilled((i) =>
       i === 0 ? den : { buildingId: 'hearthfire', kind: 'hearthfire', capacity: null },
     );
-    expect(freeHomeSpots(home)).toEqual([]);
+    expect(freeHomeTiles(home)).toEqual([]);
     const row = buildRows(home).find((r) => r.building.id === 'ember-den')!;
     expect(row.option).toEqual({ kind: 'blocked', note: HOME_FULL });
     expect(homeBuildReason(home)).toBe(HOME_FULL_GROW);
+  });
+
+  it('says full when the ring is taken, even with the Heart Seed tile empty (#604)', () => {
+    const home = homeFilled(() => ({ buildingId: 'hearthfire', kind: 'hearthfire' }), 7, {
+      items: {},
+    });
+    const ringOnly = {
+      ...home,
+      buildings: home.buildings.filter((b) => !(b.q === 0 && b.r === 0)),
+    };
+    expect(freeHomeTiles(ringOnly)).toEqual([]);
+    expect(homeBuildReason(ringOnly)).toBe(HOME_FULL);
   });
 
   it('says full before short: gathering more would not make room', () => {

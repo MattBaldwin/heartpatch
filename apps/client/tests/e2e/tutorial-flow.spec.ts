@@ -321,11 +321,13 @@ async function playTutorial(page: Page): Promise<void> {
   await expect(main).toHaveText('Got it!');
   await tapOn(main);
   await step('first-battle');
-  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
-  const view = await api<{
-    tiles: { q: number; r: number; homeSlot: number | null; ownerUserId: string | null }[];
-  }>(page, 'GET', `/maps/${glade}/view`);
-  const home = view.body.tiles.find((t) => t.homeSlot !== null && t.ownerUserId === me);
+  // A ring tile of my home: the Heart Seed keeps the middle (#604).
+  const homeView = await api<{ tiles: { q: number; r: number; heartSeed: boolean }[] }>(
+    page,
+    'GET',
+    `/maps/${glade}/home`,
+  );
+  const home = homeView.body.tiles.find((t) => !t.heartSeed);
   expect(home).toBeTruthy();
   await reloadAt('first-battle', glade);
 
