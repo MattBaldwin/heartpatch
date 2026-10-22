@@ -67,6 +67,11 @@
   color: #6b4b1e;
 }
 
+/* The key map card's buttons wait a moment after it shows (PR 2c, `KEY_HUNT.tapGuardMs`). */
+.hollowed-sheet[data-armed='false'] button {
+  pointer-events: none;
+}
+
 /* The restore sheet and the naming card (#306 PR 3, the plan's screens): the
    explore big-moment card's shape, over the map. Fits or scrolls on a
    375×667 phone with its buttons always reachable (a sticky footer, like the

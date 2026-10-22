@@ -979,7 +979,9 @@ const keyHunt = createKeyHunt({
   enterCellar: (communityId) => {
     void explore.openCellar(communityId);
   },
-  busy: () => restoreSheet.isOpen || care.isOpen,
+  // The joy card's own queue counts too (#592): after a battle the care sheet
+  // may still be fetching before its "Whoa!" or the joy card opens.
+  busy: () => evolutionPending || wonWaiting.length > 0 || restoreSheet.isOpen || care.isOpen,
 });
 communityActions.wire('restore', (community, tile) => {
   restoreSheet.open(community, tile);

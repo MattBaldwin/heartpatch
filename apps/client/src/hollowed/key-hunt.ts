@@ -58,7 +58,7 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
   card.hidden = true;
   options.root.append(card);
 
-  /** Villages whose map card waits for the joy card to close. */
+  /** Villages whose map card waits its turn (another card up, then a beat). */
   const waiting: CommunityView[] = [];
   let carded: CommunityView | null = null;
   let seen: { mapId: string; communities: readonly CommunityView[] } | null = null;
@@ -118,10 +118,15 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
               button(KEY_TEXT.showMe, 'key-map-show', false, () => {
                 closeCard();
                 options.showKey(key);
+                showWaiting();
               }),
             ]
           : []),
-        button(KEY_TEXT.later, 'key-map-later', true, closeCard),
+        button(KEY_TEXT.later, 'key-map-later', true, () => {
+          closeCard();
+          // A second Hollow's map, if one is waiting, takes its turn next.
+          showWaiting();
+        }),
       ),
     );
     card.dataset['armed'] = 'false';
