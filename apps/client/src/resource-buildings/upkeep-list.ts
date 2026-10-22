@@ -23,7 +23,7 @@ export interface UpkeepListOptions {
   /** The save failed: says why. */
   onError: (err: unknown) => void;
   /** The seasons on at an instant (a Pumpkin Barn asleep after Halloween says so). */
-  seasons?: (at: Date) => readonly string[];
+  seasons?: (at: Date) => readonly string[] | null;
 }
 
 export function createUpkeepList(options: UpkeepListOptions): UpkeepList {

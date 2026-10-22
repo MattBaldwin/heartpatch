@@ -295,6 +295,20 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(asked).toEqual([morning]);
   });
 
+  it('can read a 0-coin row as a sleep, since every level has upkeep', () => {
+    for (const b of RESOURCE_BUILDINGS) {
+      for (const level of b.levels) expect(level.upkeep).toBeGreaterThan(0);
+    }
+  });
+
+  it('says Napping when the seasons are not known (no patch time zone yet)', () => {
+    const barn = { ...row('e', 0), buildingId: 'pumpkin-barn' };
+    expect(upkeepSection({ ...upkeep, due: [barn] }, 0)?.rows[0]?.coins).toBe('Napping');
+    expect(upkeepSection({ ...upkeep, due: [barn] }, 0, () => null)?.rows[0]?.coins).toBe(
+      'Napping',
+    );
+  });
+
   it('knows a Pumpkin Barn sleeps out of season, and the others never do', () => {
     expect(outOfSeason('pumpkin-barn', [])).toBe(true);
     expect(outOfSeason('pumpkin-barn', ['halloween'])).toBe(false);

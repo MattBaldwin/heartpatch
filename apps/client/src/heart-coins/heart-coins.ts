@@ -26,7 +26,7 @@ export interface HeartCoinsScreenOptions {
   /** The upkeep order changed (#601): whoever shows buildings may read them again. */
   onUpkeepOrder?: () => void;
   /** The seasons on at an instant on the patch on screen (the upkeep list's sleeping Pumpkin Barn). */
-  seasons?: (at: Date) => readonly string[];
+  seasons?: (at: Date) => readonly string[] | null;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */

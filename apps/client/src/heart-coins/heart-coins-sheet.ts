@@ -36,7 +36,7 @@ export interface HeartCoinsSheetOptions {
   /** The patch's midnight came while open: read the balance again (once per midnight). */
   onExpired: () => void;
   /** The seasons on at an instant, for the upkeep list (#601). */
-  seasons?: (at: Date) => readonly string[];
+  seasons?: (at: Date) => readonly string[] | null;
   /** Saves the kid's upkeep order (#601 Q5); without it the upkeep list shows no arrows' effect. */
   onUpkeepOrder?: (buildingIds: readonly string[]) => Promise<void>;
 }

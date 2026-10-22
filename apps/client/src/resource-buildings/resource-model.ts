@@ -118,10 +118,11 @@ export function itemsShort(items: ItemCounts): string {
  * homestead is napping. Every resource building level has upkeep, so a 0 can
  * only mean one of those two (a free level would need a third word here).
  */
-function sleepRow(buildingId: string, seasons: readonly string[]): string {
+function sleepRow(buildingId: string, seasons: readonly string[] | null): string {
   const building = RESOURCE_BUILDINGS.find((b) => b.id === buildingId);
   const season = building ? resourceSeason(building) : null;
-  return season !== null && !seasons.includes(season)
+  // Seasons unknown (no patch time zone yet): Napping, the less surprising word.
+  return season !== null && seasons !== null && !seasons.includes(season)
     ? RESOURCE_TEXT.rowAsleep(season)
     : RESOURCE_TEXT.rowNapping;
 }
@@ -357,8 +358,9 @@ export function upkeepSection(
    * The seasons on at an instant, to tell a sleeping Pumpkin Barn from a
    * napping homestead. Read at the next morning, the one the server charges
    * for (`canWorkAt`): on a season's last day the barn already owes nothing.
+   * Null: not known (the row then says Napping).
    */
-  seasonsAt: (at: Date) => readonly string[] = () => [],
+  seasonsAt: (at: Date) => readonly string[] | null = () => null,
 ): UpkeepSection | null {
   if (!upkeep || upkeep.due.length === 0) return null;
   const seasons = seasonsAt(new Date(upkeep.nextMorningAt));

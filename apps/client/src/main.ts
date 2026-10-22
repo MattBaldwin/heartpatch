@@ -379,13 +379,19 @@ const roster = createRosterSheet({
 const heartCoins = createHeartCoinsScreen({
   root: document.body,
   now: () => inventory.gameNow(),
-  // By the patch's own date, as the map dresses its seasons (#583).
+  // By the sheet's own patch's date, as the map dresses its seasons (#583).
+  // Its zone is remembered: Home closes the map, but the sheet opens there too.
   seasons: (at) => {
-    const view = maps.view;
-    return view ? seasonsOn(view.map.timeZone, at) : [];
+    const zone = heartCoinsZone;
+    return zone === null ? null : seasonsOn(zone, at);
   },
 });
+/** The time zone of the patch the Heart Coins sheet shows, or null if not known. */
+let heartCoinsZone: string | null = null;
 const heartCoinsOn = (mapId: string): void => {
+  const view = maps.view;
+  if (view?.map.id === mapId) heartCoinsZone = view.map.timeZone;
+  else if (heartCoins.debug.mapId !== mapId) heartCoinsZone = null;
   heartCoins.setMap(mapId === glade ? null : mapId);
 };
 const care = createCareSheet({
