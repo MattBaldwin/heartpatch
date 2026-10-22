@@ -29,6 +29,8 @@ import { restoreApi } from './hollowed/restore-api.js';
 import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { createFarHollowSheet } from './hollowed/far-hollow-sheet.js';
+import { farHollowApi } from './hollowed/far-hollow-api.js';
+import { justArrived } from './hollowed/far-hollow-model.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
@@ -84,7 +86,6 @@ import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.
 import { el, messageOf } from './ui/dom.js';
 import {
   GAME_DATA,
-  GAME_EVENTS,
   hexKey,
   hexToWorld,
   visualRegistry,
@@ -92,7 +93,6 @@ import {
   type Hex,
   type MapView,
   type PublicUser,
-  type WsEventMessage,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
 import { createPortraits } from './procedural/portraits.js';
@@ -617,21 +617,29 @@ let farHollowArrived = false;
 /** Back from a far-Hollow tile, waiting for the map to come back to open the sheet. */
 let farHollowBack = false;
 /**
- * A far road won (#306 PR 6), heard live: the sheet opens once the battle
- * closes, even for a road started before a reload (the sheet only knows its own).
+ * A journey won that this device didn't start (a reload mid-battle): it may
+ * have been the far road. The map's live events stop while a battle is open,
+ * so once it closes we ask (#306 PR 6).
  */
-const farHollowArrival = (event: WsEventMessage): void => {
-  if (event.type !== 'journey.ended') return;
-  const ended = GAME_EVENTS['journey.ended'].public.safeParse(event.data);
-  if (!ended.success || ended.data.kind !== 'far-hollow' || ended.data.result !== 'won') return;
-  if (ended.data.userId !== signedIn?.id) return;
-  farHollowArrived = true;
-};
+let farHollowMaybe = false;
 /** Made it to the far Hollow ("Explore it"): its sheet, once an evolution's "Whoa!" is seen (#592). */
 const showFarHollowArrival = (): void => {
-  if (!farHollowArrived || evolutionPending || care.isOpen) return;
-  farHollowArrived = false;
-  void farHollowSheet.open(farHollowPost);
+  if (evolutionPending || care.isOpen) return;
+  if (farHollowArrived) {
+    farHollowArrived = false;
+    farHollowMaybe = false;
+    void farHollowSheet.open(farHollowPost);
+    return;
+  }
+  const mapId = maps.view?.map.id;
+  if (!farHollowMaybe || !mapId) return;
+  farHollowMaybe = false;
+  farHollowApi.view(mapId).then(
+    (view) => {
+      if (justArrived(view) && maps.view?.map.id === mapId) void farHollowSheet.open(null);
+    },
+    () => undefined,
+  );
 };
 let mapNight = false;
 const farHollowSheet = createFarHollowSheet({
@@ -1252,7 +1260,6 @@ const maps = createMapScreen({
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
-    farHollowArrival(event);
     trickOrTreat.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
@@ -1427,6 +1434,7 @@ const battles = createBattleScreen({
     ended: (battleId, won) => {
       journeys.ended(battleId, won);
       if (won && farHollowSheet.isRoad(battleId)) farHollowArrived = true;
+      else if (won && journeys.postFor(battleId) === null) farHollowMaybe = true;
     },
     farHollow: (battleId) => farHollowSheet.isRoad(battleId),
   },

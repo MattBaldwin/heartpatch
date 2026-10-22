@@ -99,7 +99,13 @@ export function createProgressRepo(db: Executor): ProgressRepo {
         .selectDistinct({ id: journeys.postTileId })
         .from(journeys)
         .where(
-          and(eq(journeys.mapId, mapId), eq(journeys.userId, userId), eq(journeys.outcome, 'won')),
+          and(
+            eq(journeys.mapId, mapId),
+            eq(journeys.userId, userId),
+            eq(journeys.outcome, 'won'),
+            // The far road (#306 PR 6) sets off from a post; it's no journey to one.
+            eq(journeys.kind, 'post'),
+          ),
         )
         .then((rows) => rows.map((r) => r.id)),
 

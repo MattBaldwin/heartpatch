@@ -47,6 +47,19 @@ export function farHollowState(
   return view.completedAt === null ? 'arrived' : 'complete';
 }
 
+/**
+ * Did I only just arrive (nothing searched yet, not finished)? The far road
+ * is once a season, so a won journey of unknown origin (a reload mid-battle)
+ * was the far road exactly when this holds.
+ */
+export function justArrived(view: {
+  readonly arrived: boolean;
+  readonly completedAt: string | null;
+  readonly tiles: readonly Pick<FarHollowTileSummary, 'searched' | 'total'>[];
+}): boolean {
+  return view.arrived && view.completedAt === null && view.tiles.every((t) => t.searched === 0);
+}
+
 /** Every spot of the far Hollow, found and all. */
 export function farHollowProgress(
   tiles: readonly Pick<FarHollowTileSummary, 'searched' | 'total'>[],

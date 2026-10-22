@@ -7,6 +7,7 @@ import {
   farHollowSpots,
   farHollowState,
   freshLine,
+  justArrived,
   shortDate,
 } from './far-hollow-model.js';
 
@@ -16,6 +17,21 @@ describe('the far Hollow sheet model (#306 PR 6)', () => {
     expect(farHollowState({ arrived: true, completedAt: null })).toBe('arrived');
     expect(farHollowState({ arrived: true, completedAt: '2026-11-04T16:00:00.000Z' })).toBe(
       'complete',
+    );
+  });
+
+  it('knows I only just arrived, so a journey of unknown origin was the far road', () => {
+    const tiles = [
+      { searched: 0, total: 8 },
+      { searched: 0, total: 9 },
+    ];
+    expect(justArrived({ arrived: true, completedAt: null, tiles })).toBe(true);
+    expect(justArrived({ arrived: false, completedAt: null, tiles })).toBe(false);
+    expect(
+      justArrived({ arrived: true, completedAt: null, tiles: [{ searched: 1, total: 8 }] }),
+    ).toBe(false);
+    expect(justArrived({ arrived: true, completedAt: '2026-11-04T16:00:00.000Z', tiles: [] })).toBe(
+      false,
     );
   });
 

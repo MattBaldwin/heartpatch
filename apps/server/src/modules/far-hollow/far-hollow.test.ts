@@ -260,12 +260,23 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     expect(far.statusCode).toBe(403);
     await openPost(server, kid, mapId);
 
-    const res = await call(server, 'POST', `/maps/${mapId}/far-hollow/journey`, kid, {
-      q: post.q,
-      r: post.r,
-    });
+    // Sent with an Idempotency-Key, as the app does: a retry replays the 201,
+    // which tells the app it started this battle (its win card names the far Hollow).
+    const setOff = () =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/far-hollow/journey`,
+        headers: { ...HEADERS, 'idempotency-key': 'far-road-1' },
+        cookies: { [SESSION_COOKIE]: kid.token },
+        payload: { q: post.q, r: post.r },
+      });
+    const res = await setOff();
     expect(res.statusCode, res.body).toBe(201);
+    const replay = await setOff();
+    expect(replay.statusCode).toBe(201);
+    expect(replay.headers['idempotent-replayed']).toBe('true');
     const battle = battleOf(res);
+    expect(battleOf(replay).id).toBe(battle.id);
     expect(battle.kind).toBe('journey');
     const trail = battle.view.sides.b.squishies;
     expect(trail).toHaveLength(road.teamSize);
