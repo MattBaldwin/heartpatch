@@ -15,6 +15,7 @@ import {
   productionProgress,
   productionSource,
   productionYield,
+  resumeSinceMs,
   storageCycles,
   upkeepMornings,
   upkeepOrder,
@@ -118,6 +119,21 @@ describe('productionProgress (#601)', () => {
     ).toBe(0);
   });
 
+  it('carries a part-done cycle across an upkeep pause, so nothing is lost', () => {
+    const pausedAtMs = T0 + 35 * MIN;
+    const banked = productionProgress({ ...base, pausedAtMs, nowMs: T0 + 5 * HOUR }, JOB_RULES);
+    expect(banked.nextSinceMs).toBe(T0 + 30 * MIN);
+    // Five minutes into its fourth cycle when it paused: five minutes after waking it finishes.
+    const wake = T0 + 9 * HOUR;
+    const since = resumeSinceMs(banked.nextSinceMs, pausedAtMs, wake);
+    expect(since).toBe(wake - 5 * MIN);
+    expect(
+      productionProgress({ ...base, sinceMs: since, nowMs: wake + 5 * MIN }, JOB_RULES).cycles,
+    ).toBe(1);
+    // A building banked at the pause itself starts afresh.
+    expect(resumeSinceMs(pausedAtMs, pausedAtMs, wake)).toBe(wake);
+  });
+
   it("leaves a cut-off homestead's pause out", () => {
     const pause = { fromMs: T0 + 15 * MIN, toMs: T0 + 2 * HOUR + 15 * MIN };
     const p = productionProgress(
@@ -174,13 +190,13 @@ describe('upkeep mornings (#601)', () => {
     // Placed at 5 AM: owes 6 AM that day. Placed at noon: the next morning.
     expect(
       upkeepMornings(
-        { placed: at('2026-10-20', 5 * 60), paidThrough: null, now: at('2026-10-20', 7 * 60) },
+        { placed: at('2026-10-20', 5 * 60), settledThrough: null, now: at('2026-10-20', 7 * 60) },
         MORNING,
       ),
     ).toEqual(['2026-10-20']);
     expect(
       upkeepMornings(
-        { placed: at('2026-10-20', 12 * 60), paidThrough: null, now: at('2026-10-21', 5 * 60) },
+        { placed: at('2026-10-20', 12 * 60), settledThrough: null, now: at('2026-10-21', 5 * 60) },
         MORNING,
       ),
     ).toEqual([]);
@@ -192,7 +208,7 @@ describe('upkeep mornings (#601)', () => {
       upkeepMornings(
         {
           placed: at('2026-10-01', 9 * 60),
-          paidThrough: '2026-10-30',
+          settledThrough: '2026-10-30',
           now: at('2026-11-02', 6 * 60),
         },
         MORNING,
@@ -202,7 +218,7 @@ describe('upkeep mornings (#601)', () => {
       upkeepMornings(
         {
           placed: at('2026-10-01', 9 * 60),
-          paidThrough: '2026-11-02',
+          settledThrough: '2026-11-02',
           now: at('2026-11-02', 23 * 60),
         },
         MORNING,

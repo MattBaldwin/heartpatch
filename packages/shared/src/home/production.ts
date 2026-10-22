@@ -147,6 +147,17 @@ export function productionYield(
   return workYield(work, finishedMs, resources, seasonsAt);
 }
 
+/**
+ * Where counting starts again when a building wakes from an upkeep pause
+ * (owner decision: nothing is lost). Call it after a settle banked the
+ * building up to its pause (`sinceMs` is that settle's `nextSinceMs`): a
+ * part-done cycle carries on from where it stopped. A full one banked at the
+ * pause (`sinceMs` at the pause) starts afresh.
+ */
+export function resumeSinceMs(sinceMs: number, pausedAtMs: number, wakeMs: number): number {
+  return wakeMs - Math.max(0, pausedAtMs - sinceMs);
+}
+
 /** The Warehouse as one of its owner's resource buildings sees it. */
 export interface WarehouseState {
   /** Unpaid upkeep: it doesn't deliver. */
@@ -186,17 +197,20 @@ export function latestMorning(at: LocalMoment, morningMinute: number): LocalDate
 
 /**
  * The mornings a building owes upkeep for, oldest first: those after
- * `paidThrough` (or the first morning after it was placed) up to the latest
- * morning at or before `now`. Map-local dates, so a clock change never adds
+ * `settledThrough` (or the first morning after it was placed) up to the
+ * latest morning at or before `now`. `settledThrough` is the last morning
+ * already dealt with, whether it was paid, paused or skipped: the caller
+ * moves it on past every morning `planUpkeep` returned, so a paused or
+ * napping morning is never charged back (owner decision Q6). Map-local dates, so a clock change never adds
  * or drops one. Which of them it actually pays is `planUpkeep`'s call.
  */
 export function upkeepMornings(
-  facts: { placed: LocalMoment; paidThrough: LocalDate | null; now: LocalMoment },
+  facts: { placed: LocalMoment; settledThrough: LocalDate | null; now: LocalMoment },
   morningMinute: number,
 ): LocalDate[] {
   const first =
-    facts.paidThrough !== null
-      ? addDays(facts.paidThrough, 1)
+    facts.settledThrough !== null
+      ? addDays(facts.settledThrough, 1)
       : facts.placed.minute < morningMinute
         ? facts.placed.date
         : addDays(facts.placed.date, 1);

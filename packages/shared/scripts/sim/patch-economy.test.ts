@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { PATCH_ECONOMY_CONFIG as CONFIG } from './patch-economy-config.js';
 import {
   awayWindow,
+  buildIncome,
   buildPlan,
   levelDays,
   pausedWhilePlaying,
   playCoins,
   renderPatchEconomy,
+  runKid,
   runPatchEconomy,
   upkeepPercent,
   type PatchEconomyRun,
@@ -123,5 +125,32 @@ describe('runPatchEconomy guards (#601)', () => {
       const out = (r: PatchEconomyRun) => awayWindow(r).reduce((a, d) => a + d.output, 0);
       expect(out(withIt)).toBeGreaterThan(out(without));
     }
+  });
+});
+
+describe('a kid who never sells (#601: pause and wake)', () => {
+  // Play alone (no sales) can't pay for two huts every morning, so this run
+  // must pause buildings and wake them again as play coins come in.
+  const casual = kid('casual');
+  const neverSell = [...casual.neverSell, ...['timber', 'stone', 'greens', 'water']];
+  const income = buildIncome(CONFIG, PROGRESSION_CONFIG).get(`4/casual`) ?? [];
+  const run = runKid({
+    kid: { ...casual, neverSell, maxLevel: 1 },
+    seats: 4,
+    income,
+    away: [],
+    days: 20,
+    useWarehouse: true,
+  });
+
+  it('pauses when short, never goes into debt, and wakes once the balance covers a morning', () => {
+    const paused = run.days.reduce((a, d) => a + d.pausedMornings, 0);
+    expect(paused).toBeGreaterThan(0);
+    for (const d of run.days) expect(d.balance).toBeGreaterThanOrEqual(0);
+    // Some day ends with fewer buildings asleep than the day before: one woke.
+    const woke = run.days.some((d, i) => i > 0 && d.pausedNow < (run.days[i - 1]?.pausedNow ?? 0));
+    expect(woke).toBe(true);
+    // It still makes things between pauses.
+    expect(run.days.slice(-5).some((d) => d.output > 0)).toBe(true);
   });
 });

@@ -45,7 +45,10 @@ export interface PatchEconomyConfig {
   readonly upkeepShare: { readonly min: number; readonly max: number };
   /** The casual kid pays at most this percent of their Heart Coins in upkeep, playing daily. */
   readonly casualUpkeepMaxPercent: number;
-  /** A first level-1 hut by this day. */
+  /**
+   * A first level-1 hut by this day. The model assumes a free homestead of
+   * the right land, so this checks the build cost against early income only.
+   */
   readonly firstHutByDay: Readonly<Record<string, number>>;
 }
 

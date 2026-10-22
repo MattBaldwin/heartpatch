@@ -15,6 +15,7 @@ import {
   productionProgress,
   productionSource,
   productionYield,
+  resumeSinceMs,
   storageCycles,
   upkeepOrder,
   warehouseDelivers,
@@ -49,6 +50,7 @@ export const PATCH_ECONOMY_LIMITS = [
   'battles, captures and care earn the same each day; nothing else spends Heart Coins',
   'matches, fences, the Factory, trades and captures between kids',
   'the kid sells everything over what their next build needs, up to the daily cap',
+  "seasons (the Pumpkin Barn) and cut-off homesteads: the maths handles both, the kids' plans use neither",
 ] as const;
 
 const HOUR_MS = 3_600_000;
@@ -265,7 +267,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
       const items = productionYield(source, progress.finishedMs, RESOURCES, () => NO_SEASONS);
       add(bag, items);
       landed += Object.values(items).reduce((a, n) => a + n, 0);
-      p.sinceMs = p.pausedAtMs === null ? progress.nextSinceMs : Math.max(p.sinceMs, atMs);
+      p.sinceMs = progress.nextSinceMs;
     }
     return landed;
   };
@@ -346,8 +348,9 @@ export function runKid(input: RunInput): PatchEconomyRun {
       for (const w of woken) {
         const p = placed.find((x) => x.rowId === w.id);
         if (p) {
+          // The settle above banked it to its pause: a part-done cycle carries on.
+          p.sinceMs = resumeSinceMs(p.sinceMs, p.pausedAtMs ?? atMs, atMs);
           p.pausedAtMs = null;
-          p.sinceMs = atMs;
         }
       }
 
