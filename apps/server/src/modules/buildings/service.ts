@@ -120,7 +120,7 @@ const MESSAGES = {
   notYet: "That one isn't ready to build yet. Soon!",
   outOfSeason: (name: string, season: string) => `${name} can only be built around ${season}!`,
   notHome: 'You can only build on your home base.',
-  villageRing: 'Building in your village comes soon! Build at home for now 🏡',
+  villageRing: 'Building in your restored Hollow comes soon! Build at home for now 🏡',
   notHomestead: (name: string) =>
     `${name} go on a homestead 🏡. Explore all of a tile next to home to make one!`,
   homesteadNapping: 'This homestead is napping zZ. Join it back up to home first!',

@@ -59,16 +59,16 @@ import { placesOf, winVillage } from './win.js';
 const MESSAGES = {
   noTile: "We couldn't find that spot.",
   problem: {
-    won: 'This village is already restored! 🌈',
+    won: 'This Hollow is already restored! 🌈',
     restored: 'This spot is all fixed up! Try another grey tile 🛠️',
     night: 'Too spooky after dark! Come back in the morning 🌙',
     away: 'Claim land next to it to restore it!',
   } satisfies Record<RestoreProblem, string>,
   notWinner: 'Only the Keeper who restored it can name it!',
   notYourGift: 'Only the Keeper who restored it gets its gift!',
-  noGift: 'This village has no morning gift.',
+  noGift: 'This Hollow has no morning gift.',
   giftTaken: 'You got today’s gift! Come back tomorrow morning 🌅',
-  seedFirst: 'Your village’s Heart Seed needs to grow first 🌱',
+  seedFirst: 'Your Hollow’s Heart Seed needs to grow first 🌱',
 } as const;
 
 const PROBLEM_CODES: Record<RestoreProblem, 'CONFLICT' | 'FORBIDDEN'> = {
