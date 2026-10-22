@@ -588,7 +588,7 @@ export const GAME_EVENTS = {
    * They won the far road and arrived in this season's far Hollow (#306 PR
    * 6): their own, fresh every season. Only they hear of it.
    */
-  'farHollow.entered': {
+  'journey.arrived': {
     internal: z.strictObject({
       userId: z.uuid(),
       journeyId: z.uuid(),
@@ -603,7 +603,7 @@ export const GAME_EVENTS = {
    * that last search's `explore.searched` (null when they had every one).
    * Members hear who did it.
    */
-  'farHollow.completed': {
+  'journey.completed': {
     internal: z.strictObject({
       userId: z.uuid(),
       season: ContentIdSchema,

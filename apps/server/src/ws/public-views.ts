@@ -61,7 +61,7 @@ function ownerOnlyView(
     | 'house.gift'
     | 'key.found'
     | 'cellar.opened'
-    | 'farHollow.entered',
+    | 'journey.arrived',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -186,7 +186,7 @@ export const PUBLIC_VIEWS: PublicViews = {
   'key.found': ownerOnlyView('key.found'),
   'cellar.opened': ownerOnlyView('cellar.opened'),
   // Arriving in your own far Hollow (#306 PR 6) is yours; finishing it the patch hears.
-  'farHollow.entered': ownerOnlyView('farHollow.entered'),
+  'journey.arrived': ownerOnlyView('journey.arrived'),
   // Trick-or-treat (#515): the visitor's treat is theirs; the host hears who came.
   'trick.visited': trickVisitedView,
   // A live battle's turns and cheers (#29) are its two players' business;

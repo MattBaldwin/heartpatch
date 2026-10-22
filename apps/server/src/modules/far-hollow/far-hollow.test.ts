@@ -274,14 +274,14 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     const roadRow = (await journeysOf(mapId)).at(-1)!;
     expect(roadRow).toMatchObject({ kind: 'far-hollow', outcome: 'won', visitUntil: null });
     const events = await eventsOf(mapId);
-    expect(events.slice(-2).map((e) => e.type)).toEqual(['journey.ended', 'farHollow.entered']);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['journey.ended', 'journey.arrived']);
     expect(parseGameEventPayload('journey.ended', events.at(-2)!.payload)).toMatchObject({
       result: 'won',
       visitUntil: null,
       kind: 'far-hollow',
     });
     const entered = events.at(-1)!;
-    expect(parseGameEventPayload('farHollow.entered', entered.payload)).toMatchObject({
+    expect(parseGameEventPayload('journey.arrived', entered.payload)).toMatchObject({
       userId: kid.id,
       season: 'thanksgiving',
       year: 2026,
@@ -431,8 +431,8 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     }
 
     const events = await eventsOf(mapId);
-    const completed = events.find((e) => e.type === 'farHollow.completed')!;
-    expect(parseGameEventPayload('farHollow.completed', completed.payload)).toMatchObject({
+    const completed = events.find((e) => e.type === 'journey.completed')!;
+    expect(parseGameEventPayload('journey.completed', completed.payload)).toMatchObject({
       userId: kid.id,
       season: 'thanksgiving',
       lorePage: found.lore!.id,

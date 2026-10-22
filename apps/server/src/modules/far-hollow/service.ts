@@ -395,7 +395,7 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
             ? [
                 {
                   mapId,
-                  type: 'farHollow.completed' as const,
+                  type: 'journey.completed' as const,
                   actorUserId: user.id,
                   payload: {
                     userId: user.id,
@@ -477,7 +477,7 @@ export async function arriveInFarHollow(
   return [
     {
       mapId: input.mapId,
-      type: 'farHollow.entered',
+      type: 'journey.arrived',
       actorUserId: input.userId,
       payload: {
         userId: input.userId,
