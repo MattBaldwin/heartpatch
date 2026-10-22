@@ -1,0 +1,1 @@
+ALTER TABLE "community_tiles" ADD COLUMN "cellar_searched" integer DEFAULT 0 NOT NULL;

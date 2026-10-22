@@ -16,7 +16,7 @@ import {
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { latestLocalMinute } from '../../lib/time.js';
-import { createCommunitiesRepo } from './repo.js';
+import { createCommunitiesRepo, type CommunityViewRow } from './repo.js';
 
 /*
  * Hollowed Communities (#306): the grey villages. A new map stores the ones
@@ -68,6 +68,8 @@ export async function storeCommunities(
     const index = (input.firstIndex ?? 0) + i;
     const piecesNeeded = piecesNeededFor(placed.tiles.length);
     const squareKey = hexKey(placed.square);
+    // The server always places keys (`CELLAR_RULES`); a village without one is a bug.
+    if (!placed.keyTile) throw new Error('storeCommunities: a village without its cellar key');
     const { id, marked } = await repo.insertCommunity(input.mapId, {
       name: placed.name,
       kind: placed.kind,
@@ -93,7 +95,8 @@ export async function storeCommunities(
 /**
  * The map's Hollowed Communities as `viewerUserId` sees them: public fields,
  * plus how they reach each (shared `communityReach` over the view's tiles).
- * Never a community's seed or key tile.
+ * Never a community's seed, and its key tile only to its own winner while
+ * they hunt for it (PR 2c).
  */
 export async function communitiesView(
   tx: Executor,
@@ -128,8 +131,19 @@ export async function communitiesView(
       reach,
       distance,
       ...(items ? { gift: { items, ready: !collected.has(c.id) } } : {}),
+      ...(c.ownerUserId === input.userId ? { cellar: cellarOf(c) } : {}),
     };
   });
+}
+
+/**
+ * A won village's key hunt and cellar as its winner sees it (PR 2c). The
+ * key's tile goes to them alone, and only while they're still hunting.
+ */
+function cellarOf(c: CommunityViewRow): NonNullable<CommunityView['cellar']> {
+  if (c.cellarOpen) return { state: 'open' };
+  if (c.keyFound) return { state: 'key' };
+  return { state: 'hunt', keyTile: c.keyTile };
 }
 
 /** The night light of the map's won Lantern Towers (PR 3b), for `litSafeTiles`. */

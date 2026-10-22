@@ -8,6 +8,7 @@ import {
   freeSpots,
   GAME_DATA,
   hexKey,
+  houseTile,
   hexSpiral,
   inSeason,
   isBuildable,
@@ -685,8 +686,10 @@ export interface HomeSpot {
  * Every free spot on my home base: the Heart Seed tile first, then the ring
  * in `q, r` order, spots in order. One building per tile (#295, shared
  * `tileUseRefusal`, as the server checks it): a tile with a building on it
- * has no free spot (#537). `except` is a building being moved (its own tile
- * counts as free); `slot` keeps only that kind of spot (#204).
+ * has no free spot (#537), and neither has the house's tile while the
+ * house stands (#604, shared `houseTile` over the buildings as they stand,
+ * as the server checks it). `except` is a building being moved (its own
+ * tile counts as free); `slot` keeps only that kind of spot (#204).
  */
 export function freeHomeSpots(
   home: HomeResponse,
@@ -696,12 +699,14 @@ export function freeHomeSpots(
   const tiles = [...home.tiles].sort(
     (a, b) => Number(b.heartSeed) - Number(a.heartSeed) || a.q - b.q || a.r - b.r,
   );
+  // The house's tile as it's drawn now (the server reads it the same way).
+  const house = home.house ? houseTile(home.tiles, home.buildings) : null;
+  const others = home.buildings.filter((b) => b.id !== except);
   const spots: HomeSpot[] = [];
   for (const tile of tiles) {
+    if (house && house.q === tile.q && house.r === tile.r) continue;
     const taken = new Set(
-      home.buildings
-        .filter((b) => b.id !== except && b.q === tile.q && b.r === tile.r)
-        .map((b) => b.spot),
+      others.filter((b) => b.q === tile.q && b.r === tile.r).map((b) => b.spot),
     );
     const use = { id: hexKey(tile), q: tile.q, r: tile.r, homeSlot: 0, homestead: null };
     if (

@@ -80,11 +80,15 @@ export class MapState {
       // tile was restored and claimed, a village was won and its ring planted,
       // or it was named (PR 3): the view has the progress, the land and the ring.
       // Its Keeper collected its morning gift (PR 3b): the view says it's taken.
+      // Its Keeper dug its cellar key up or opened the cellar (PR 2c, only
+      // they hear it): the view's key hunt moves on.
       case 'community.mended':
       case 'tile.restored':
       case 'community.restored':
       case 'community.named':
       case 'community.gift':
+      case 'key.found':
+      case 'cellar.opened':
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
