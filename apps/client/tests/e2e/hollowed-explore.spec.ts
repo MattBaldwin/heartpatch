@@ -1,7 +1,8 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
-import { nearestFirst, walkTo } from './explore-walk.js';
+import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
+import { realTapAt } from './touch.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -11,7 +12,9 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * opens a joy disc and bursts into sparks, inside the explore budget
  * (explore.spec.ts: under 46 draw calls and 420k triangles) and without
  * linking a shader program (the owner's find freezes, #555 and #569).
- * Checked through the dev hook.
+ * Its broken thing's memory puzzle (#306 PR 2b) opens from the big button,
+ * shrugs off a wrong piece, finishes the easy way and gives a lore page;
+ * mended, it keeps its colour. Checked through the dev hook.
  */
 
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -33,8 +36,16 @@ interface ExploreDebug {
     z: number;
   }[];
   keeper: { x: number; z: number };
+  near: number | null;
   toast: string | null;
   card: 'rare' | null;
+  puzzle: {
+    card: 'puzzle' | 'reward';
+    phase: 'watch' | 'play' | 'done';
+    order: string[];
+    placed: string[];
+  } | null;
+  brokenThing: { x: number; z: number; skin: string; solved: boolean } | null;
   scene: {
     keeper: boolean;
     drawCalls: number;
@@ -49,6 +60,7 @@ interface ExploreDebug {
       bursts: number;
       echoes: number;
       echoAt: { x: number; z: number }[];
+      puzzle: 'broken' | 'fixed' | null;
     } | null;
   } | null;
 }
@@ -56,7 +68,7 @@ interface ExploreDebug {
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 const hitchesExpected = (page: Page) => hook<number>(page, 'hitchesExpected');
 
-test('a grey village tile explores drained, with an echo, and a find colours it in (#306 2a)', async ({
+test('a grey village tile explores drained, with an echo, a find colours it in, and its broken thing mends (#306 2a, 2b)', async ({
   browser,
 }) => {
   test.setTimeout(300_000); // a scene build, a walk and a find; CI renders in software
@@ -128,7 +140,9 @@ test('a grey village tile explores drained, with an echo, and a find colours it 
     sparks: 0,
     bursts: 0,
     echoes: 1,
+    puzzle: 'broken',
   });
+  expect(first.brokenThing).toMatchObject({ solved: false });
 
   // The budget on a settled frame, and every program compiled before the first tap.
   await expect.poll(async () => (await exploreState(page))?.scene?.warm ?? false, slow).toBe(true);
@@ -202,5 +216,48 @@ test('a grey village tile explores drained, with an echo, and a find colours it 
   await expect(joyMeter).toHaveAttribute('aria-valuenow', String(joy));
   await expect(joyMeter).toHaveAttribute('aria-label', `Joy ${String(joy)}% ✨`);
   expect(findAvoidedWords((await page.locator('.explore-title').textContent()) ?? '')).toEqual([]);
+
+  // The memory puzzle (#306 PR 2b): walk up to the broken thing.
+  const broken = first.brokenThing!;
+  for (let tries = 0; tries < 10 && (await exploreState(page))?.near !== -1; tries++) {
+    const tap = await waypoint(page, broken);
+    if (!tap) break;
+    await realTapAt(page, tap.x, tap.y);
+    await keeperStill(page);
+  }
+  expect((await exploreState(page))?.near, 'walked up to the broken thing').toBe(-1);
+  await expect(action).toHaveText(/Fix the /);
+  await action.tap();
+  const card = page.getByTestId('hollowed-puzzle');
+  await slowExpect(card).toBeVisible();
+  // It fits the phone, its buttons in reach (render-check: 375×667).
+  for (const id of ['hollowed-puzzle-easy', 'hollowed-puzzle-not-now']) {
+    await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
+  }
+  const shown = (await exploreState(page))!.puzzle!;
+  expect(shown).toMatchObject({ card: 'puzzle', placed: [] });
+  // A wrong piece only wobbles.
+  await page.getByTestId(`hollowed-piece-${shown.order[1]!}`).tap();
+  await expect(page.getByTestId('hollowed-puzzle-line')).toHaveText(
+    'Hmm, not that one. Try another!',
+  );
+  expect((await exploreState(page))!.puzzle!.placed).toEqual([]);
+  // The first piece by hand, the rest the easy way.
+  await page.getByTestId(`hollowed-piece-${shown.order[0]!}`).tap();
+  for (let i = 1; i < shown.order.length; i++) {
+    await page.getByTestId('hollowed-puzzle-easy').tap();
+  }
+  await slowExpect(page.getByTestId('hollowed-puzzle-finds')).toBeVisible();
+  await expect(page.getByTestId('hollowed-puzzle-finds')).toContainText('A lore page!');
+  await page.getByTestId('hollowed-puzzle-yay').tap();
+  await expect(card).toBeHidden();
+  const mended = (await exploreState(page))!;
+  expect(mended.brokenThing?.solved).toBe(true);
+  expect(mended.scene?.hollowed?.puzzle).toBe('fixed');
+  expect(mended.near).not.toBe(-1);
+  await page.waitForTimeout(2000);
+  const after = (await exploreState(page))!.scene!;
+  test.info().annotations.push({ type: 'mendedDrawCalls', description: String(after.drawCalls) });
+  expect(after.drawCalls).toBeLessThan(DRAW_CALL_CEILING);
   expect(errors).toEqual([]);
 });

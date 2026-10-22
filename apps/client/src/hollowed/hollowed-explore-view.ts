@@ -1,4 +1,16 @@
-import { HOLLOW_RULES, HOME_BASE_RULES, hollowedOpenAt, type WorldPoint } from '@heartpatch/shared';
+import {
+  HOLLOW_RULES,
+  HOME_BASE_RULES,
+  hollowedOpenAt,
+  MEMORY_PUZZLES,
+  puzzleSkinFor,
+  type HollowedPuzzle,
+  type PuzzleSkin,
+  type SolvePuzzleResponse,
+  type WorldPoint,
+} from '@heartpatch/shared';
+import { itemName } from '../inventory/bag-view.js';
+import { itemIcon } from '../inventory/item-icons.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
 
 // Exploring a grey village tile (#306 2a), in words and numbers (copy
@@ -14,7 +26,78 @@ export const HOLLOWED_TEXT = {
   spooked: 'Boo! An echo spooked you back a step 👻',
   /** Nightfall while exploring a village: back to the map. */
   closed: 'Too spooky after dark! Come back in the morning 🌙',
+  // A memory puzzle (PR 2b).
+  /** The big button in front of a broken thing. */
+  fix: (skin: PuzzleSkin) => `Fix the ${skin.name}`,
+  /** The card's title. */
+  broken: (skin: PuzzleSkin) => `A broken ${skin.name} ${skin.emoji}`,
+  /** How far along: "2 of 4 back". */
+  placed: (placed: number, total: number) => `${String(placed)} of ${String(total)} back`,
+  ready: "I'm ready!",
+  again: 'Show me again',
+  wrong: 'Hmm, not that one. Try another!',
+  glow: 'Psst! The glowing one is next ✨',
+  fixing: 'Putting it back together…',
+  tryAgain: 'Try again',
+  lorePage: (title: string) => `📜 A lore page! “${title}”`,
+  recipe: (title: string) => `📖 A new recipe! “${title}”`,
+  thanks: 'The village says thank you!',
+  addedToLorebook: 'Added to your Lorebook 📖',
 } as const;
+
+/**
+ * The broken thing's index where the explore view treats it as one more
+ * spot (aiming, a tap walking up beside it, the halo): never a real spot's.
+ */
+export const PUZZLE_INDEX = -1;
+
+/**
+ * A grey village tile's broken thing as a spot the Keeper can walk up to,
+ * or null when there's none. `done` once I've mended it.
+ */
+export function puzzleSpot(
+  puzzle: HollowedPuzzle | undefined,
+): (WorldPoint & { index: number; kind: 'puzzle'; tool: null; done: boolean }) | null {
+  if (!puzzle) return null;
+  return {
+    index: PUZZLE_INDEX,
+    kind: 'puzzle',
+    tool: null,
+    x: puzzle.x,
+    z: puzzle.z,
+    done: puzzle.solved,
+  };
+}
+
+/** A puzzle's skin (its look and words), from `MEMORY_PUZZLES`. */
+export function skinOf(puzzle: Pick<HollowedPuzzle, 'skin'>): PuzzleSkin {
+  return (
+    MEMORY_PUZZLES.skins.find((s) => s.id === puzzle.skin) ?? puzzleSkinFor('', MEMORY_PUZZLES)
+  );
+}
+
+/** One piece as the card shows it: its picture and its name. */
+export function pieceOf(skin: PuzzleSkin, id: string): { emoji: string; name: string } {
+  const piece = skin.pieces.find((p) => p.id === id);
+  return { emoji: piece?.emoji ?? '❔', name: piece?.name ?? id };
+}
+
+/** What fixing it gave, one line each (the reward card's list). */
+export function puzzleLines(fixed: SolvePuzzleResponse): { text: string; note?: string }[] {
+  const lines: { text: string; note?: string }[] = [];
+  if (fixed.lore) {
+    lines.push({
+      text: HOLLOWED_TEXT.lorePage(fixed.lore.title),
+      note: HOLLOWED_TEXT.addedToLorebook,
+    });
+  }
+  if (fixed.recipe) lines.push({ text: HOLLOWED_TEXT.recipe(fixed.recipe.title) });
+  for (const [id, n] of Object.entries(fixed.found)) {
+    if (n > 0) lines.push({ text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}` });
+  }
+  if (lines.length === 0) lines.push({ text: HOLLOWED_TEXT.thanks });
+  return lines;
+}
 
 /** Is a grey village shut at `minute` past midnight, map time? (Night: the server refuses too.) */
 export function villageShut(minute: number): boolean {

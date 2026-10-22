@@ -5,6 +5,11 @@ import {
   discOpening,
   echoAt,
   HOLLOWED_TEXT,
+  pieceOf,
+  PUZZLE_INDEX,
+  puzzleLines,
+  puzzleSpot,
+  skinOf,
   sparkAt,
   spookPush,
   spookReach,
@@ -83,6 +88,57 @@ describe('joy discs and sparks', () => {
       expect(Math.hypot(out.dx, out.dz)).toBeLessThanOrEqual(HOLLOWED_EXPLORE.sparks.spread);
       sparkAt(i, 1, out);
       expect(out.s).toBeCloseTo(0);
+    }
+  });
+});
+
+describe('a grey village tile’s memory puzzle (#306 PR 2b): words', () => {
+  const puzzle = {
+    skin: 'mural',
+    order: ['sun', 'tree', 'house', 'rainbow'],
+    x: 0.2,
+    z: -0.1,
+    solved: false,
+  };
+
+  it('names the broken thing on the button and the card', () => {
+    const skin = skinOf(puzzle);
+    expect(HOLLOWED_TEXT.fix(skin)).toBe('Fix the mural');
+    expect(HOLLOWED_TEXT.broken(skin)).toBe('A broken mural 🖼️');
+    expect(HOLLOWED_TEXT.placed(2, 4)).toBe('2 of 4 back');
+    expect(pieceOf(skin, 'sun')).toEqual({ emoji: '🌞', name: 'the sun' });
+    // A skin this build doesn't know yet still draws (the default's words).
+    expect(skinOf({ skin: 'tea-set' }).id).toBe('music-box');
+  });
+
+  it('is one more spot to walk up to, done once mended', () => {
+    expect(puzzleSpot(undefined)).toBeNull();
+    expect(puzzleSpot(puzzle)).toEqual({
+      index: PUZZLE_INDEX,
+      kind: 'puzzle',
+      tool: null,
+      x: 0.2,
+      z: -0.1,
+      done: false,
+    });
+    expect(puzzleSpot({ ...puzzle, solved: true })?.done).toBe(true);
+  });
+
+  it('says what mending it gave, and never nothing', () => {
+    const base = { puzzle: { ...puzzle, solved: true }, recipe: null, found: {}, items: {} };
+    expect(
+      puzzleLines({ ...base, lore: { id: 'the-painted-wall', title: 'The Painted Wall' } }),
+    ).toEqual([{ text: '📜 A lore page! “The Painted Wall”', note: 'Added to your Lorebook 📖' }]);
+    expect(
+      puzzleLines({ ...base, lore: null, recipe: { id: 'heart-tea', title: 'Heart Tea' } }),
+    ).toEqual([{ text: '📖 A new recipe! “Heart Tea”' }]);
+    expect(puzzleLines({ ...base, lore: null, found: { heartdust: 1 } })[0]?.text).toMatch(/×1$/);
+    expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The village says thank you!' }]);
+  });
+
+  it('keeps every puzzle line kind (style guide §9)', () => {
+    for (const line of Object.values(HOLLOWED_TEXT)) {
+      if (typeof line === 'string') expect(findAvoidedWords(line)).toEqual([]);
     }
   });
 });

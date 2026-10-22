@@ -79,14 +79,29 @@ export function puzzleSolvedBy(puzzle: Pick<MemoryPuzzle, 'order'>, order: reado
   return order.length === puzzle.order.length && order.every((id, i) => puzzle.order[i] === id);
 }
 
+/** Twelve places round the middle (unit length: the six hex directions and between them), as constants (tech spec §8). */
+const AROUND: readonly WorldPoint[] = [
+  { x: 1, z: 0 },
+  { x: 0.866, z: 0.5 },
+  { x: 0.5, z: 0.866 },
+  { x: 0, z: 1 },
+  { x: -0.5, z: 0.866 },
+  { x: -0.866, z: 0.5 },
+  { x: -1, z: 0 },
+  { x: -0.866, z: -0.5 },
+  { x: -0.5, z: -0.866 },
+  { x: 0, z: -1 },
+  { x: 0.5, z: -0.866 },
+  { x: 0.866, z: -0.5 },
+];
+
 /** Of a ring of places round the middle, the one furthest from everything. */
 function roomiest(spots: readonly WorldPoint[], echoes: readonly WorldPoint[]): WorldPoint {
   const all = [...spots, ...echoes];
   let best = { x: 0, z: round(PUZZLE_REACH * 0.6) };
   let room = -1;
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const p = { x: round(Math.cos(a) * PUZZLE_REACH * 0.7), z: round(Math.sin(a) * PUZZLE_REACH * 0.7) };
+  for (const u of AROUND) {
+    const p = { x: round(u.x * PUZZLE_REACH * 0.7), z: round(u.z * PUZZLE_REACH * 0.7) };
     const nearest = all.reduce(
       (m, s) => Math.min(m, (s.x - p.x) * (s.x - p.x) + (s.z - p.z) * (s.z - p.z)),
       Infinity,

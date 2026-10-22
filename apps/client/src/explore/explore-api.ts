@@ -1,8 +1,11 @@
 import {
   ExploreTileResponseSchema,
   SearchSpotResponseSchema,
+  SolvePuzzleResponseSchema,
   type ExploreTileResponse,
   type SearchSpotResponse,
+  type SolvePuzzleRequest,
+  type SolvePuzzleResponse,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -25,6 +28,15 @@ export const exploreApi = {
       method: 'POST',
       body,
       schema: SearchSpotResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Puts a grey village tile's broken thing back together (#306 PR 2b); the server checks and rolls. */
+  puzzle: (mapId: string, body: SolvePuzzleRequest, key: string): Promise<SolvePuzzleResponse> =>
+    apiCallFor(`/maps/${mapId}/explore/puzzle`, {
+      method: 'POST',
+      body,
+      schema: SolvePuzzleResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

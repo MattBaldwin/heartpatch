@@ -8,6 +8,7 @@ import {
   type PublicTile,
   type PublicUser,
   type SearchSpotResponse,
+  type SolvePuzzleResponse,
   type SpotInteraction,
   type ToolId,
   type WorldPoint,
@@ -95,7 +96,14 @@ import {
 } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
-import { HOLLOWED_TEXT, villageShut } from '../hollowed/hollowed-explore-view.js';
+import {
+  HOLLOWED_TEXT,
+  PUZZLE_INDEX,
+  puzzleSpot,
+  skinOf,
+  villageShut,
+} from '../hollowed/hollowed-explore-view.js';
+import { createPuzzleSheet, type PuzzleDebug } from '../hollowed/puzzle-sheet.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -174,8 +182,17 @@ export interface ExploreDebug {
   readonly keeper: WorldPoint;
   /** The Keeper's heading, radians (0 faces the camera). */
   readonly yaw: number;
-  /** The spot in front of the Keeper (the action button's), or null. */
+  /** The spot in front of the Keeper (the action button's), or null; a grey village's broken thing is `PUZZLE_INDEX` (#306 PR 2b). */
   readonly near: number | null;
+  /** The memory puzzle's card, while it's up (#306 PR 2b), or null. */
+  readonly puzzle: PuzzleDebug | null;
+  /** A grey village tile's broken thing: where it stands, its look and whether I've mended it (#306 PR 2b). */
+  readonly brokenThing: {
+    readonly x: number;
+    readonly z: number;
+    readonly skin: string;
+    readonly solved: boolean;
+  } | null;
   readonly playing: SpotInteraction | null;
   /** The full card: only for rare finds and a finished tile (#291). */
   readonly card: 'rare' | null;
@@ -207,6 +224,8 @@ export interface ExploreDebug {
   readonly blockers: readonly Collider[];
   /** Screen point (CSS pixels) of each spot, to tap in tests. */
   spotOnScreen: (index: number) => { x: number; y: number } | null;
+  /** Screen point (CSS pixels) of a grey village's broken thing (#306 PR 2b), to tap in tests. */
+  puzzleOnScreen: () => { x: number; y: number } | null;
   /** Screen point (CSS pixels) of a tile-local point on the ground, to tap in tests. */
   pointOnScreen: (p: WorldPoint) => { x: number; y: number } | null;
 }
@@ -283,6 +302,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** The drag steering the Keeper: from where (CSS pixels in the ground layer) to where. */
   let stick: { id: number; x0: number; y0: number; x: number; y: number } | null = null;
   let front: PublicSearchSpot | null = null;
+  /** A grey village's broken thing is in front instead (#306 PR 2b): the button offers to fix it. */
+  let puzzleFront = false;
   let playing: { spot: PublicSearchSpot; state: InteractionState } | null = null;
   let card: RareCard | null = null;
   let toast: { main: string; extra: string } | null = null;
@@ -402,6 +423,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       grab();
       return;
     }
+    if (puzzleFront) {
+      openPuzzle();
+      return;
+    }
     if (front) begin(front);
   });
 
@@ -446,6 +471,21 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   overlay.hidden = true;
   options.root.append(overlay);
 
+  // A grey village tile's memory puzzle (#306 PR 2b): its card over the world.
+  const puzzleSheet = createPuzzleSheet({
+    parent: overlay,
+    solve: solvePuzzle,
+    ...(options.onLorebook ? { onLorebook: options.onLorebook } : {}),
+    onClosed: () => {
+      scene3d?.nudge(null);
+      front = null;
+      puzzleFront = false;
+      findFront();
+      render();
+      wake();
+    },
+  });
+
   const say = (text: string) => {
     note.textContent = text;
   };
@@ -471,7 +511,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   }
 
   ground.addEventListener('pointerdown', (e) => {
-    if (!isOpen || card || press || working) return;
+    if (!isOpen || card || press || working || puzzleSheet.isOpen) return;
     const p = local(e);
     const gesture = gesturing();
     press = { id: e.pointerId, x: p.x, y: p.y, moved: false, gesture };
@@ -549,7 +589,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function tapGround(x: number, y: number): void {
     const point = scene3d?.groundAt(x, y);
     if (!point || !tile) return;
-    const spot = spotAtTap(point, tile.spots);
+    const spot = spotAtTap(point, targets(tile));
     const goal = spot ? besideSpot(keeperAt, spot, scene3d?.colliders ?? []) : clampToTile(point);
     // Never aim inside a rock: the Keeper would bump it forever.
     walk = tapWalk(scene3d ? slideMove(goal, goal, scene3d.colliders) : goal);
@@ -606,8 +646,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (walk) {
         walking = true;
       } else {
-        // Walked up to a tapped spot: turn to it.
-        const spot = tile?.spots.find((x) => x.index === aimed);
+        // Walked up to a tapped spot (or a broken thing): turn to it.
+        const spot = tile ? targets(tile).find((x) => x.index === aimed) : undefined;
         if (spot) heading = yawToward(next, spot);
       }
     }
@@ -659,12 +699,23 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }, HOLLOWED_EXPLORE.spookedMs);
   }
 
+  /** What the Keeper can walk up to: the spots, and a grey village's broken thing (#306 PR 2b). */
+  function targets(
+    t: ExploreTileResponse,
+  ): readonly (PublicSearchSpot | NonNullable<ReturnType<typeof puzzleSpot>>)[] {
+    const puzzle = puzzleSpot(t.community?.puzzle);
+    return puzzle ? [...t.spots, puzzle] : t.spots;
+  }
+
   /** The spot in front drives the action button, the halo and the tool in hand. */
   function findFront(): void {
-    const next = tile ? spotInFront(keeperAt, yaw, tile.spots, aimed) : null;
-    if (next?.index === front?.index) return;
-    front = next;
-    scene3d?.highlight(front?.index ?? null);
+    const next = tile ? spotInFront(keeperAt, yaw, targets(tile), aimed) : null;
+    const atPuzzle = next?.index === PUZZLE_INDEX;
+    const spot = next && !atPuzzle ? (next as PublicSearchSpot) : null;
+    if (spot?.index === front?.index && atPuzzle === puzzleFront) return;
+    front = spot;
+    puzzleFront = atPuzzle;
+    scene3d?.highlight(atPuzzle ? PUZZLE_INDEX : (front?.index ?? null));
     render();
   }
 
@@ -819,6 +870,68 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
+  // ── A grey village's memory puzzle (#306 PR 2b) ─────────────────────────
+
+  /** The action button in front of a broken thing: turn to it and open its card. */
+  function openPuzzle(): void {
+    const puzzle = tile?.community?.puzzle;
+    const s = scene3d;
+    if (!puzzle || puzzle.solved || !s || working || playing || card) return;
+    yaw = yawToward(keeperAt, puzzle);
+    walk = null;
+    stick = null;
+    showStick();
+    s.moveKeeper(keeperAt, yaw);
+    s.nudge(puzzle);
+    puzzleSheet.open(puzzle, seedAt(puzzle));
+    render();
+    wake();
+  }
+
+  /**
+   * Sends the order the kid put back; the server checks it and rolls what it
+   * gives (CLAUDE.md rule 1). Null if the visit moved on, or the tile changed
+   * under it (it looks again and the card closes with a word why).
+   */
+  async function solvePuzzle(order: readonly string[]): Promise<SolvePuzzleResponse | null> {
+    const id = mapId;
+    const t = tile;
+    if (!id || !t?.community) return null;
+    const at = generation;
+    expectHitch();
+    try {
+      const fixed = await sendCommand(
+        {
+          newKey: newIdempotencyKey,
+          wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          retryAfterMs: COMMAND_RETRY_MS,
+        },
+        (key) => api.puzzle(id, { q: t.q, r: t.r, order: [...order] }, key),
+        () => at === generation,
+      );
+      if (at !== generation || !fixed || tile?.q !== t.q || tile.r !== t.r || !tile.community) {
+        return null;
+      }
+      tile = { ...tile, community: { ...tile.community, puzzle: fixed.puzzle } };
+      bag = fixed.items;
+      expectHitch();
+      scene3d?.update(tile);
+      scene3d?.cheer(performance.now());
+      options.onFound?.(id);
+      return fixed;
+    } catch (err) {
+      if (at !== generation) return null;
+      // Fixed on another device, or the village changed: look again.
+      if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        await reload();
+        puzzleSheet.close();
+        say(messageOf(err));
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async function reload(): Promise<void> {
     const id = mapId;
     const t = tile;
@@ -966,7 +1079,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     toolLine.setAttribute('aria-label', toolChip(held, uses));
     toolLine.classList.toggle('explore-tool-hands', held === null);
     overlay.classList.toggle('explore-gesture', gesturing());
-    overlay.classList.toggle('explore-carded', card !== null);
+    overlay.classList.toggle('explore-carded', card !== null || puzzleSheet.isOpen);
     renderAction();
     renderNeed();
     renderPlay();
@@ -987,6 +1100,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       action.classList.toggle('explore-action-ready', found);
       actionIcon.textContent = '✨';
       actionLabel.textContent = EXPLORE_TEXT.grab;
+      return;
+    }
+    if (puzzleFront && t.community?.puzzle) {
+      const skin = skinOf(t.community.puzzle);
+      action.disabled = working;
+      action.classList.add('explore-action-ready');
+      actionIcon.textContent = skin.emoji;
+      actionLabel.textContent = HOLLOWED_TEXT.fix(skin);
       return;
     }
     if (!front) {
@@ -1388,6 +1509,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     playing = null;
     card = null;
     front = null;
+    puzzleFront = false;
     bag = null;
     bagAsked = false;
     lastHeld = null;
@@ -1455,11 +1577,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     walk = null;
     playing = null;
     card = null;
+    puzzleFront = false;
     clearToast();
     if (spookTimer !== null) clearTimeout(spookTimer);
     spookTimer = null;
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
+    // Closed without a word: `isOpen` is already false, so its close redraws nothing.
+    puzzleSheet.close();
     scene3d = null;
     mapTileAtOpen = null;
     render();
@@ -1568,7 +1693,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         })),
         keeper: { ...keeperAt },
         yaw,
-        near: front?.index ?? null,
+        near: puzzleFront ? PUZZLE_INDEX : (front?.index ?? null),
+        puzzle: puzzleSheet.debug,
+        brokenThing: tile?.community?.puzzle
+          ? {
+              x: tile.community.puzzle.x,
+              z: tile.community.puzzle.z,
+              skin: tile.community.puzzle.skin,
+              solved: tile.community.puzzle.solved,
+            }
+          : null,
         playing: playing?.state.kind ?? null,
         card: card ? ('rare' as const) : null,
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
@@ -1586,6 +1720,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;
+        },
+        puzzleOnScreen: () => {
+          const puzzle = tile?.community?.puzzle;
+          return puzzle && s ? s.screenOf(puzzle) : null;
         },
         pointOnScreen: (p: WorldPoint) => (s ? s.screenOf(p) : null),
       };
@@ -1608,6 +1746,12 @@ const RING_STEPS: readonly (readonly [number, number])[] = [
 /** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
 function exploreIcon(icon: string): Node {
   return iconNode(icon, 'explore-icon');
+}
+
+/** Stable 0–1 per place, so a broken thing lays out its tray the same way each time (#306 PR 2b). */
+function seedAt(p: WorldPoint): number {
+  const k = (Math.round(p.x * 1000) * 73856093) ^ (Math.round(p.z * 1000) * 19349663);
+  return ((k >>> 0) % 1000) / 1000;
 }
 
 /** Stable 0–1 per spot, so the lantern's glint hides in the same place each time. */

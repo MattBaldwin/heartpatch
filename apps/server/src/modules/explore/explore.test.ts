@@ -26,6 +26,7 @@ import {
   SquishyResponseSchema,
   MEMORY_PUZZLES,
   puzzleSkinFor,
+  type HexKey,
   type MapDetail,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -40,7 +41,7 @@ import {
   type DbClient,
   type Executor,
 } from '../../db/client.js';
-import { communityTiles, keepers, loreFound, sessions, tileExplore, users } from '../../db/schema.js';
+import { keepers, loreFound, sessions, tileExplore, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -50,7 +51,6 @@ import { runConsumer } from '../../jobs/consumers.js';
 import { createMilestonesConsumer } from '../milestones/consumer.js';
 import { refreshHomesteads } from './homesteads.js';
 import { HOLLOWED_FINDS, PUZZLE_REWARDS } from '@heartpatch/shared/server';
-import { eq } from 'drizzle-orm';
 import { createLoreConsumer } from '../lore/consumer.js';
 import type { Rng } from '@heartpatch/shared';
 import { createExploreService } from './service.js';
@@ -1145,11 +1145,10 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         );
       const solvedBy = async (t: Tile) =>
         (
-          await db
-            .select({ by: communityTiles.puzzleSolvedBy })
-            .from(communityTiles)
-            .where(eq(communityTiles.tileId, t.id))
-        )[0]?.by;
+          await db.query.communityTiles.findFirst({
+            where: (c, { eq: is }) => is(c.tileId, t.id),
+          })
+        )?.puzzleSolvedBy;
       /** The fewest wild tiles from `who`'s land to `square`'s village become theirs, so it touches. */
       async function touchVillage(who: Player, mapId: string, square: Tile) {
         const tiles = await tilesOf(mapId);
@@ -1157,12 +1156,12 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const village = new Set(
           tiles.filter((t) => t.communityId === square.communityId).map(hexKey),
         );
-        const from = new Map<string, string | null>();
+        const from = new Map<HexKey, HexKey | null>();
         let frontier = tiles.filter((t) => t.ownerUserId === who.id).map(hexKey);
         for (const k of frontier) from.set(k, null);
-        let goal: string | null = null;
+        let goal: HexKey | null = null;
         while (frontier.length > 0 && goal === null) {
-          const next: string[] = [];
+          const next: HexKey[] = [];
           for (const k of frontier) {
             const at = byKey.get(k)!;
             if (hexNeighbors(at).some((n) => village.has(hexKey(n)))) {
@@ -1249,7 +1248,11 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const mapId = await patch(server, me);
         const square = await reachVillage(server, me, mapId);
         const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
-        for (const wrong of [[...order].reverse(), order.slice(0, 3), ['bell', 'bell', 'bell', 'bell']]) {
+        for (const wrong of [
+          [...order].reverse(),
+          order.slice(0, 3),
+          ['bell', 'bell', 'bell', 'bell'],
+        ]) {
           const res = await solve(server, me, mapId, square, wrong);
           expect(res.statusCode).toBe(409);
           expect(errorOf(res).message).toBe('Not quite! Watch it once more and try again.');
@@ -1331,7 +1334,11 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           },
         });
         const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
-        const fixed = await service.solvePuzzle(me, mapId, { q: square.q, r: square.r, order: [...order] });
+        const fixed = await service.solvePuzzle(me, mapId, {
+          q: square.q,
+          r: square.r,
+          order: [...order],
+        });
         expect(fixed).toMatchObject({
           lore: null,
           recipe: { id: 'heart-tea', title: 'Heart Tea' },
