@@ -46,6 +46,25 @@ export const BUILDINGS: Building[] = [
     levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 1 }],
   },
   {
+    // Rekindled (#306 PR 5): built from the crafted kit, whose recipe page
+    // opens only with a Joy Ember found in a Hollowed village. A stronger
+    // fire: its light reaches a tile past its ring, like a top-level
+    // Hearthfire, from the start.
+    id: 'joy-lantern',
+    kind: 'hearthfire',
+    name: 'Joy Lantern',
+    description: 'A happy heart flame. Its light reaches one tile further than a new Hearthfire!',
+    placement: 'land', // like every Hearthfire (owner decision 2026-10-07)
+    maxPerTile: 1, // TUNE:
+    slot: 'centre',
+    // The Joy Ember was a lucky find: the kit always comes back whole.
+    refundPercent: 100, // TUNE:
+    fuelResource: 'emberwood',
+    fuelPerNight: 1, // TUNE:
+    maxFuelNights: 8, // TUNE: same as a plain Hearthfire
+    levels: [{ cost: { 'joy-lantern': 1 }, safeRadius: 2 }], // TUNE: a Hearthfire's level 3 light
+  },
+  {
     id: 'ember-den',
     kind: 'habitat',
     name: 'Ember Den',

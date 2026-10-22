@@ -8,6 +8,7 @@ import {
   MapResponseSchema,
   MapViewSchema,
   JoinMapResponseSchema,
+  REKINDLED,
   SearchSpotResponseSchema,
   type MapDetail,
   type PublicUser,
@@ -21,6 +22,7 @@ import { keepers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { setDevDropChance } from '../wardrobe/drops.js';
 
 /*
  * The key hunt and the hidden cellar (#306 PR 2c): winning a village gives
@@ -354,6 +356,36 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     );
     expect(searched).toHaveLength(view.spots.length);
     expect(searched[0]?.payload).toMatchObject({ q: square.q, r: square.r, tool: null });
+  });
+
+  it('finds the Rekindled set in the cellar too, through its cellar odds (#306 PR 5)', async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    await call(server, 'POST', path(mapId, communityId, 'key'), me);
+    await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
+    const view = CellarViewSchema.parse(
+      (await call(server, 'GET', path(mapId, communityId, 'cellar'), me)).json(),
+    );
+    // Every drop table finds something: each search turns up a piece or a find
+    // of the set (two members here, so pieces count toward the title).
+    setDevDropChance(100);
+    try {
+      for (const spot of view.spots) {
+        const res = await call(server, 'POST', path(mapId, communityId, 'cellar/search'), me, {
+          spot: spot.index,
+        });
+        expect(res.statusCode, res.body).toBe(200);
+        const body = SearchSpotResponseSchema.parse(res.json());
+        const piece = body.clothing !== null && REKINDLED.pieces.includes(body.clothing);
+        const find = REKINDLED.finds.some((id) => (body.found[id] ?? 0) > 0);
+        expect(piece || find, res.body).toBe(true);
+        for (const id of REKINDLED.finds) {
+          if ((body.found[id] ?? 0) > 0) expect(body.items[id]).toBeGreaterThan(0);
+        }
+      }
+    } finally {
+      setDevDropChance(null);
+    }
   });
 
   it('lets a double tap dig, open or search only once', async () => {

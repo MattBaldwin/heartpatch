@@ -33,9 +33,12 @@ export {
   HOLLOWED_FINDS,
   HOLLOWED_HELPER_GIFT,
   hollowedFinds,
+  REKINDLED_DROPS,
 } from './hollowed-finds.js';
 export * from '../../schemas/data/cellar.js';
 export { CELLAR_RULES } from './cellar.js';
+export * from '../../schemas/data/found-set-drops.js';
+export * from '../../wardrobe/found-set-drops.js';
 export * from '../../schemas/data/house-gifts.js';
 export * from '../../house/gifts.js';
 export { HOUSE_GIFTS } from './house-gifts.js';

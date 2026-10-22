@@ -63,12 +63,12 @@ describe('itemEffects (#241)', () => {
           'ice-wall',
         ],
       },
-      { kind: 'recipes', recipes: ['lantern'] },
+      { kind: 'recipes', recipes: ['lantern', 'joy-lantern'] },
     ]);
     const ember = itemEffects('emberwood');
     expect(ember).toContainEqual({
       kind: 'fuel',
-      buildings: ['hearthfire', 'jack-o-lantern-hearthfire'],
+      buildings: ['hearthfire', 'jack-o-lantern-hearthfire', 'joy-lantern'],
     });
     expect(ember).toContainEqual(expect.objectContaining({ kind: 'recipes' }));
     expect(itemEffects('heartdust')).toEqual([{ kind: 'care', actions: ['heart-snack'] }]);

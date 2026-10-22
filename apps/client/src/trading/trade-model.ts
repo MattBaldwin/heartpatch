@@ -18,7 +18,7 @@ import {
   type TradesView,
   type WsEventMessage,
 } from '@heartpatch/shared';
-import { itemIcon } from '../inventory/item-icons.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
 // and f) in words and picks. Pure, so every case is unit-tested. The server
@@ -31,19 +31,6 @@ export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap'
 
 const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
-
-/** One clothing slot's little picture. */
-const SLOT_ICONS: Readonly<Record<string, string>> = {
-  hat: '🎩',
-  'hair-accessory': '🎀',
-  top: '👕',
-  bottom: '👖',
-  shoes: '👟',
-  back: '🎒',
-  held: '🧸',
-  costume: '🎭',
-  squishy: '🧣',
-};
 
 /** Notes are quick-message presets, never typed text (design doc §17). */
 export const NOTE_IDS = ['want-to-trade', 'thank-you', 'so-cute', 'hi', 'heart', 'sparkles'];
@@ -162,7 +149,7 @@ export function lineLook(line: TradeLineView): LineLook {
   }
   const item = CLOTHING_BY_ID.get(line.itemId);
   return {
-    icon: SLOT_ICONS[item?.slot ?? 'hat'] ?? '✨',
+    icon: clothingSlotIcon(item?.slot ?? 'hat'),
     name: item?.name ?? line.itemId,
     sub: '',
     color: null,
