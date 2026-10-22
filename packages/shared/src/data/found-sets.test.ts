@@ -57,7 +57,7 @@ describe('found sets (#306 PR 5)', () => {
     expect(track.tiers[0]).toMatchObject({
       threshold: REKINDLED.pieces.length,
       title: { id: 'rekindler', name: 'Rekindler' },
-      goal: 'Find all 5 Rekindled pieces in grey villages.',
+      goal: 'Find all 5 Rekindled pieces in the Hollows.',
     });
     expect(track.progress).toEqual({
       from: 'events',

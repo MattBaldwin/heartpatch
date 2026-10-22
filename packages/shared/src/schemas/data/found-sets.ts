@@ -17,7 +17,7 @@ import type { Resource } from './resources.js';
 export const FoundSetSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
-  /** Where it's found, in a kid's words, for the Milestones goal ("in grey villages"). */
+  /** Where it's found, in a kid's words, for the Milestones goal ("in the Hollows"). */
   where: DescriptionSchema,
   /** The clothing pieces, in catalog order. `found`, never traded, in no other drop table. */
   pieces: z.array(ContentIdSchema).min(2).max(12),

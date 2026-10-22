@@ -4,7 +4,7 @@ import type { FoundSet } from '../schemas/data/found-sets.js';
 export const REKINDLED: FoundSet = {
   id: 'rekindled',
   name: 'Rekindled',
-  where: 'in grey villages',
+  where: 'in the Hollows',
   pieces: [
     'lantern-glow-cap',
     'ember-patch-jacket',

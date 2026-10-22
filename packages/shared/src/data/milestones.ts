@@ -23,6 +23,11 @@ const HALLOWEEN_CLOTHING = CLOTHING.filter(
   (c) => c.season === 'halloween' && c.sources.includes('found'),
 ).map((c) => c.id);
 
+/** A found set's milestone track id: its counted keys are the pieces found (#306 PR 5). */
+export function foundSetTrackId(set: Pick<FoundSet, 'id'>): string {
+  return `set-${set.id}`;
+}
+
 /**
  * A found set's track (#306 PR 5): one step per different piece found, and
  * the set's title once every piece is in. Finds only (`clothing.found`), so a
@@ -30,7 +35,7 @@ const HALLOWEEN_CLOTHING = CLOTHING.filter(
  */
 export function foundSetTrack(set: FoundSet): MilestoneTrack {
   return {
-    id: `set-${set.id}`,
+    id: foundSetTrackId(set),
     name: set.name,
     secret: false,
     progress: {

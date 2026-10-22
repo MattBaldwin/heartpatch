@@ -354,7 +354,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       rescuer: 1,
       seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
-      'set-rekindled': 0, // found in grey villages (#306 PR 5)
+      'set-rekindled': 0, // found in the Hollows (#306 PR 5)
     });
     expect(earned(view, 'territory')).toEqual([1]);
     expect(earned(view, 'collector')).toEqual([1]);

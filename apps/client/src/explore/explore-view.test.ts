@@ -176,6 +176,14 @@ describe('explore text', () => {
     expect(rareTitle(lore, 'meadow')).toBe(EXPLORE_TEXT.lorePage);
     expect(findShowsCard(found({ clothing: 'pumpkin-hood' }))).toBe(true);
     expect(findShowsCard(found({ notable: 'heartdust' }))).toBe(true);
+    // A Rekindled find opens a recipe page (#306 PR 5): the card, and where it goes.
+    const ember = found({ found: { 'joy-ember': 1, stone: 1 } });
+    expect(findShowsCard(ember)).toBe(true);
+    expect(rareTitle(ember, 'meadow')).toBe('A Rekindled find! ✨');
+    expect(findLines(ember)).toEqual([
+      { kind: 'item', text: '🔆 Joy Ember ×1', note: EXPLORE_TEXT.setFindNote },
+      { kind: 'item', text: '🪨 Stone ×1' },
+    ]);
     const done = found({ explored: true, homestead: 'joined' });
     expect(findShowsCard(done)).toBe(true);
     expect(rareTitle(done, 'meadow')).toBe('Meadow joined your home!');

@@ -21,7 +21,8 @@ import { villageSizes, villageSpotsPerDay } from './hollowed.js';
 export const REKINDLED_LIMITS = [
   'only village searches: solved puzzles, cellars and the far Hollow (their own, better tables) would make it quicker',
   'every search is on grey village land: searches on the kid’s own land find no Rekindled pieces',
-  'a village’s tiles stop being grey once restored; a patch has several villages, so a kid can keep searching another',
+  'a Hollow stops being grey once restored (about a week for a casual kid): the days assume grey Hollows are left to search (a patch has 3 or more; none is checked here)',
+  'pieces drop only on patches where milestones count (2 or more members), as the title needs',
 ] as const;
 
 /** Days (1 = the first day of searching) by which something was found, in one kid's run. */

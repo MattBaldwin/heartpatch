@@ -397,7 +397,11 @@ export function createExploreService(options: ExploreServiceOptions) {
         // A grey village search may find some of the Rekindled set too (#306
         // PR 5): rolled now, so its finds join the one bag grant below.
         const rekindled = grey
-          ? await rekindledDrop(tx, { place: 'village', userId: user.id }, { rng: rngFor() })
+          ? await rekindledDrop(
+              tx,
+              { place: 'village', userId: user.id, mapId, at },
+              { rng: rngFor() },
+            )
           : NOTHING_FOUND;
         const found = withFoundItems(roll.items, rekindled);
 

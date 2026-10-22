@@ -24,18 +24,19 @@ export function foundSetTables(
 
 /**
  * Rolls one table: its chance first, then a weighted pick. A piece the
- * player already has (`owned`) finds nothing rather than another pick, so
- * the odds of everything else never shift as the set fills up.
+ * player has already found (`found`: what the set's title has counted)
+ * finds nothing rather than another pick, so the odds of everything else
+ * never shift as the set fills up.
  */
 export function rollFoundSet(
   table: FoundSetDropTable,
-  owned: ReadonlySet<string>,
+  found: ReadonlySet<string>,
   rng: Rng,
 ): FoundSetRoll {
   if (!rng.chance(table.chance)) return NOTHING_FOUND;
   const entry = rng.weighted(table.entries);
   if (entry.clothing !== undefined) {
-    return owned.has(entry.clothing) ? NOTHING_FOUND : { clothing: entry.clothing, items: {} };
+    return found.has(entry.clothing) ? NOTHING_FOUND : { clothing: entry.clothing, items: {} };
   }
   return { clothing: null, items: { ...(entry.items ?? {}) } };
 }
@@ -47,13 +48,13 @@ export function rollFoundSet(
 export function rollFoundSets(
   tables: readonly FoundSetDropTable[],
   place: FoundSetPlace,
-  owned: ReadonlySet<string>,
+  found: ReadonlySet<string>,
   rng: Rng,
 ): FoundSetRoll {
   let clothing: string | null = null;
   const items: Record<string, number> = {};
   for (const table of foundSetTables(tables, place)) {
-    const roll = rollFoundSet(table, owned, rng);
+    const roll = rollFoundSet(table, found, rng);
     clothing ??= roll.clothing;
     for (const [id, n] of Object.entries(roll.items)) items[id] = (items[id] ?? 0) + n;
   }

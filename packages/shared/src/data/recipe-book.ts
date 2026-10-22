@@ -95,7 +95,7 @@ export const RECIPE_BOOK: RecipeBookData = {
     // Rekindled (#306 PR 5): sealed by finds only a grey village gives.
     {
       page: 'recipe:joy-lantern',
-      line: 'A Joy Ember glows somewhere in a grey village. Search one by day, and this page opens!',
+      line: 'A Joy Ember glows somewhere in a Hollow. Search one by day, and this page opens!',
     },
     {
       page: 'building:joy-lantern',
@@ -103,7 +103,7 @@ export const RECIPE_BOOK: RecipeBookData = {
     },
     {
       page: 'recipe:heart-tea',
-      line: 'Heart Petals bloom again in grey villages. Search one by day, and this page opens!',
+      line: 'Heart Petals bloom again in the Hollows. Search one by day, and this page opens!',
     },
     {
       page: 'recipe:shovel',

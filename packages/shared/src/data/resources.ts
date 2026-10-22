@@ -170,14 +170,14 @@ export const RESOURCES: Resource[] = [
   {
     id: 'joy-ember',
     name: 'Joy Ember',
-    description: 'A warm little spark of joy, found glowing in a grey village.',
+    description: 'A warm little spark of joy, found glowing in a Hollow.',
     kind: 'gathered',
     tradable: false,
   },
   {
     id: 'heart-petals',
     name: 'Heart Petals',
-    description: 'Soft pink petals that bloom again where a village is happy.',
+    description: 'Soft pink petals that bloom again when a Hollow gets happy.',
     kind: 'gathered',
     tradable: false,
   },

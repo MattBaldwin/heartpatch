@@ -1140,7 +1140,8 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     it('finds a Rekindled piece in a grey village: its one piece of clothing (#306 PR 5)', async () => {
       const server = await start();
       const me = await player();
-      const mapId = await patch(server, me);
+      // Pieces drop where milestones count (two members), so the title can count them.
+      const mapId = await patch(server, me, [await player()]);
       const square = await reachVillage(server, me, mapId);
       const { spot } = await handSpot(server, me, mapId, square);
       const rng = rekindledRng((e) => e['clothing'] === 'ember-patch-jacket');

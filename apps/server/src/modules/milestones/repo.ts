@@ -68,6 +68,8 @@ export interface MilestonesRepo {
     at: Date;
   }) => Promise<number | null>;
   listProgress: (userId: string) => Promise<ProgressRow[]>;
+  /** What `userId`'s tracks have counted so far (their `distinct` keys), across `milestoneIds`. */
+  countedKeys: (userId: string, milestoneIds: readonly string[]) => Promise<Set<string>>;
   /** Records a tier; false if it was already earned (nothing written). */
   insertReward: (reward: NewReward) => Promise<boolean>;
   /** Every tier the player earned, oldest first. */
@@ -142,6 +144,20 @@ export function createMilestonesRepo(db: Executor): MilestonesRepo {
         })
         .from(milestoneProgress)
         .where(eq(milestoneProgress.userId, userId)),
+
+    countedKeys: async (userId, milestoneIds) => {
+      if (milestoneIds.length === 0) return new Set();
+      const rows = await db
+        .select({ kinds: milestoneProgress.kinds })
+        .from(milestoneProgress)
+        .where(
+          and(
+            eq(milestoneProgress.userId, userId),
+            inArray(milestoneProgress.milestoneId, [...milestoneIds]),
+          ),
+        );
+      return new Set(rows.flatMap((r) => r.kinds));
+    },
 
     insertReward: async ({ id, userId, milestoneId, tier, mapId, at }) => {
       const inserted = await db
