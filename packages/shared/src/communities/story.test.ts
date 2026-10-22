@@ -78,7 +78,8 @@ describe('makeStory (#306)', () => {
     }
     // Up to 6 tiles, a day with a spare clue is rare.
     expect(spares / days).toBeLessThan(0.1);
-  });
+    // Every order of 320 days: a few seconds under CI's coverage run, as mapgen's property tests.
+  }, 30_000);
 
   it('never deals the cards already in order, and never sends the order', () => {
     for (let s = 0; s < SEEDS; s++) {
