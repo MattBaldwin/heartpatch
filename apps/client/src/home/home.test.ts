@@ -50,6 +50,7 @@ import {
   squishyRarity,
   upgradeOffer,
   upgradeReach,
+  type HomeSpot,
 } from './home-view.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000001${String(n).padStart(2, '0')}`;
@@ -367,12 +368,11 @@ describe('build menu', () => {
     expect(off).not.toContain('jack-o-lantern-hearthfire');
   });
 
-  it('finds free tiles: the ring only, one entry a tile, a node tile too (#589)', () => {
+  it('finds free tiles: one entry a tile, the Heart Seed tile first, a node tile too (#589)', () => {
     const empty = freeHomeTiles(homeWith());
-    // Six ring tiles, each once; the Heart Seed's tile keeps its spots.
-    expect(empty).toHaveLength(6);
-    expect(new Set(empty.map((t) => `${String(t.q)},${String(t.r)}`)).size).toBe(6);
-    expect(empty.some((t) => t.q === 0 && t.r === 0)).toBe(false);
+    expect(empty).toHaveLength(7);
+    expect(new Set(empty.map((t) => `${String(t.q)},${String(t.r)}`)).size).toBe(7);
+    expect(empty[0]).toEqual({ q: 0, r: 0, spot: 1 });
     // The tile with a Timber node is free: the node tucks aside. Its spot is a ring spot.
     expect(empty.find((t) => t.q === 1 && t.r === 0)).toEqual({ q: 1, r: 0, spot: 1 });
     expect(empty.every((t) => t.spot === 1)).toBe(true);
@@ -382,11 +382,31 @@ describe('build menu', () => {
     const built = homeWith({ buildings: [meadow({ q: -1, r: 0, spot: 1 })] });
     const tiles = freeHomeTiles(built);
     expect(tiles.some((t) => t.q === -1 && t.r === 0)).toBe(false);
-    expect(tiles).toHaveLength(5);
+    expect(tiles).toHaveLength(6);
     // A building being moved: its own tile counts as free.
     const moving = freeHomeTiles(built, meadow().id);
-    expect(moving).toHaveLength(6);
-    expect(moving[0]).toEqual({ q: -1, r: 0, spot: 1 });
+    expect(moving).toHaveLength(7);
+    expect(moving.some((t) => t.q === -1 && t.r === 0 && t.spot === 1)).toBe(true);
+  });
+
+  it("never offers the house's tile while the house stands (#604), as the server refuses it", () => {
+    const onTile = (spots: HomeSpot[], q: number, r: number) =>
+      spots.some((s) => s.q === q && s.r === r);
+    // House off: every tile, as before.
+    expect(onTile(freeHomeTiles(homeWith()), 1, -1)).toBe(true);
+    // A new home's house is on the back-right tile, (1, −1).
+    const fresh = freeHomeTiles(homeWith({ house: { level: 1 } }));
+    expect(onTile(fresh, 1, -1)).toBe(false);
+    expect(fresh).toHaveLength(6);
+    // An older home with a habitat there: the house takes the next one, (0, −1).
+    const den = meadow({ q: 1, r: -1, spot: 2 });
+    const older = homeWith({ house: { level: 1 }, buildings: [den] });
+    expect(onTile(freeHomeTiles(older), 1, -1)).toBe(false);
+    expect(onTile(freeHomeTiles(older), 0, -1)).toBe(false);
+    // Moving that habitat: its own tile is offered (a spot change), the house's never.
+    const moving = freeHomeTiles(older, den.id);
+    expect(onTile(moving, 1, -1)).toBe(true);
+    expect(onTile(moving, 0, -1)).toBe(false);
   });
 
   it('previews what taking down gives back, unburned fuel included', () => {
@@ -754,7 +774,7 @@ describe('a home base with no room left (#537)', () => {
     expect(homeBuildReason(home)).toBe(HOME_FULL_GROW);
   });
 
-  it('says full when the ring is taken, even with the Heart Seed tile empty (#589)', () => {
+  it('keeps the Heart Seed tile free for a building when the ring is taken, as the server does (#589)', () => {
     const home = homeFilled(() => ({ buildingId: 'hearthfire', kind: 'hearthfire' }), 7, {
       items: {},
     });
@@ -762,8 +782,8 @@ describe('a home base with no room left (#537)', () => {
       ...home,
       buildings: home.buildings.filter((b) => !(b.q === 0 && b.r === 0)),
     };
-    expect(freeHomeTiles(ringOnly)).toEqual([]);
-    expect(homeBuildReason(ringOnly)).toBe(HOME_FULL);
+    expect(freeHomeTiles(ringOnly)).toEqual([{ q: 0, r: 0, spot: 1 }]);
+    expect(homeBuildReason(ringOnly)).toBeNull();
   });
 
   it('says full before short: gathering more would not make room', () => {

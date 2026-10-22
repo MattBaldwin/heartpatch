@@ -1,4 +1,9 @@
-import type { GlimmerSwapRules, TradeRules, TradeValues } from '../schemas/data/trading.js';
+import type {
+  GlimmerSwapRules,
+  SellRules,
+  TradeRules,
+  TradeValues,
+} from '../schemas/data/trading.js';
 
 /** Trades and gifts at trading posts (#271). Checked by `checkTradeRules` in tests. */
 export const TRADE_RULES: TradeRules = {
@@ -75,4 +80,34 @@ export const GLIMMER_SWAP: GlimmerSwapRules = {
   give: 10, // TUNE: #523
   get: 1, // TUNE: #523
   dailyCap: 3, // TUNE: #523, Glimmer a day
+};
+
+/**
+ * Selling extras to the trading post for Heart Coins (#601 PR 3; #320 part 1).
+ * Checked by `checkSellRules` in tests. Selling should feel like tidying up,
+ * not a money-maker: prices are small, the day's cap is Heart Coins' own
+ * (`HEART_COIN_RULES.dailyCaps.sell`), and well below the Glimmer swap's 10
+ * for 1, so selling never beats swapping for Glimmer. `pnpm sim:patch-economy`
+ * (#601 PR 5) sets the numbers against building upkeep.
+ */
+export const SELL_RULES: SellRules = {
+  items: {
+    timber: { lot: 5, coins: 1 }, // TUNE: #601 plan §3
+    stone: { lot: 5, coins: 1 }, // TUNE:
+    greens: { lot: 5, coins: 1 }, // TUNE:
+    water: { lot: 5, coins: 1 }, // TUNE:
+    ice: { lot: 3, coins: 1 }, // TUNE:
+    emberwood: { lot: 3, coins: 1 }, // TUNE:
+    pumpkins: { lot: 3, coins: 1 }, // TUNE:
+    glimmer: { lot: 1, coins: 2 }, // TUNE:
+    treats: { lot: 3, coins: 1 }, // TUNE:
+    'heart-charm': { lot: 1, coins: 2 }, // TUNE:
+    'brave-brew': { lot: 1, coins: 2 }, // TUNE: a potion, like a Heart Charm
+    'cozy-cocoa': { lot: 1, coins: 2 }, // TUNE:
+    'hearty-soup': { lot: 1, coins: 2 }, // TUNE:
+  },
+  // TUNE: a spare piece, by rarity; even a mythic one is half a day's cap.
+  clothing: { common: 2, uncommon: 3, rare: 5, epic: 8, legendary: 12, mythic: 15 },
+  // Heartdust is rare (rescues only); a Hearthfire is a season's centrepiece.
+  neverSold: ['heartdust', 'jack-o-lantern-hearthfire'],
 };

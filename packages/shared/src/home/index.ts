@@ -7,3 +7,4 @@ export * from './building-effects.js';
 export * from './item-effects.js';
 export * from './tile-uses.js';
 export * from './naming.js';
+export * from './house-tile.js';

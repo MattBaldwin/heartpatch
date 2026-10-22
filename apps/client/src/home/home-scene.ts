@@ -14,6 +14,7 @@ import {
   hexKey,
   hexSpiral,
   hexToWorld,
+  houseTile,
   KEEPER_DATA,
   Rng,
   HOUSE_DATA,
@@ -56,10 +57,12 @@ import { buildCottage } from '../house/house-models.js';
 import type { WorkMood } from '../squishies/jobs/jobs-view.js';
 import {
   HOME_FILL,
+  HOME_FRAME,
   HOME_HOUSE,
   HOME_VIEW,
   MAP_OUTER_BUILDING_SCALE,
   MOOD_CUES,
+  ROAM,
   SPOT_SIZE,
   WANDER,
 } from './home-config.js';
@@ -79,8 +82,10 @@ export interface HomeSceneStats {
   readonly buildings: number;
   readonly litFires: number;
   readonly squishies: number;
-  /** Squishies drawn at a habitat or the Training Grounds (the rest wait by the Heart Seed). */
+  /** Squishies drawn at a habitat or the Training Grounds (the rest roam the home tiles, #604). */
   readonly housed: number;
+  /** Gatherers, guards and trainees, out on their tiles and not drawn here (#604). */
+  readonly away: number;
   /** Tiles around the home base a lit fire's light reaches (owner decision 2026-10-06). */
   readonly firelit: number;
   readonly keeper: boolean;
@@ -90,8 +95,10 @@ export interface HomeSceneStats {
   readonly spots: number;
   /** Building draw calls (one per look, not per building). */
   readonly buildingMeshes: number;
-  /** The cottage on the Heart Seed tile (#381), by its exterior; null while the house is switched off. */
+  /** The cottage (#381), by its exterior; null while the house is switched off. */
   readonly house: HouseExterior | null;
+  /** The ring tile the cottage fills (#604, shared `houseTile`), as a step from the Heart Seed; null: by the Heart Seed. */
+  readonly houseTile: { q: number; r: number } | null;
   /** Squishies at a job they love (💕, and a bounce now and then), and ones drooping (🌧️, #393). */
   readonly happy: number;
   readonly drooping: number;
@@ -104,7 +111,7 @@ export type HomePick =
   | { readonly kind: 'spot'; readonly spot: HomeSpot }
   | { readonly kind: 'squishy'; readonly id: string }
   | { readonly kind: 'building'; readonly id: string }
-  /** The cottage on the Heart Seed tile (#381). */
+  /** The cottage (#381). */
   | { readonly kind: 'house' }
   | null;
 
@@ -127,8 +134,10 @@ export interface HomeSceneOptions {
 
 interface Resident {
   readonly handle: SquishyHandle;
-  /** Where it wanders around (its habitat's spot), or null by the Heart Seed. */
-  readonly home: WorldPoint | null;
+  /** Where it wanders around: its habitat's spot, or the home tile it roams (#604). */
+  readonly home: WorldPoint;
+  /** It has no habitat and roams a home tile (#604): nothing to be tucked inside. */
+  readonly roams: boolean;
   /** Its habitat fills its tile (#589): it wanders round the building, not through it. */
   readonly wide: boolean;
   /**
@@ -167,9 +176,11 @@ export class HomeScene {
   /** The node props, one instanced mesh per kind (`#placeNodes`). */
   readonly #nodeMeshes = new Map<PropKind, Mesh>();
   #spots: HomeSpot[] = [];
-  #counts = { housed: 0, firelit: 0 };
-  /** The cottage drawn now, if the house is on for this player. */
-  #cottage: { exterior: HouseExterior; mesh: Mesh } | null = null;
+  #counts = { housed: 0, away: 0, firelit: 0 };
+  /** The cottage drawn now, if the house is on for this player, and the tile it fills (#604). */
+  #cottage: { exterior: HouseExterior; tile: string | null; mesh: Mesh } | null = null;
+  /** The ring tile the house fills (#604), or null: by the Heart Seed, or no house. */
+  #houseAt: { q: number; r: number } | null = null;
   /** Each of my squishies' work mood (#393), by squishy id. */
   #moods: ReadonlyMap<string, WorkMood> = new Map();
   #cheers = 0;
@@ -257,12 +268,25 @@ export class HomeScene {
       return mesh;
     });
 
+    this.update(home);
     const radius = HOME_VIEW.hexSize * HOME_VIEW.landRings * 1.8;
     this.content = {
       bounds: { minX: -radius, maxX: radius, minZ: -radius, maxZ: radius },
-      start: { x: 0, z: 0 },
+      start: { x: 0, z: this.#startZ(scene.getEngine().getRenderingCanvas()?.clientHeight ?? 0) },
     };
-    this.update(home);
+  }
+
+  /**
+   * Where the camera starts, front to back (#604): towards the house's tile
+   * by `HOME_FRAME`'s share for a canvas `height` CSS px tall, so the house
+   * shows in full under the top card. No house tile: the Heart Seed.
+   */
+  #startZ(height: number): number {
+    if (!this.#houseAt) return 0;
+    const f = HOME_FRAME;
+    const t = Math.min(1, Math.max(0, (height - f.shortAt) / (f.tallAt - f.shortAt)));
+    const share = height > 0 ? f.short + (f.tall - f.short) * t : f.short;
+    return this.spotAt({ ...this.#houseAt, spot: 0 }).z * share;
   }
 
   get stats(): HomeSceneStats {
@@ -272,12 +296,17 @@ export class HomeScene {
       litFires: this.#buildings.stats.lit,
       squishies: this.#residents.size,
       housed: this.#counts.housed,
+      away: this.#counts.away,
       firelit: this.#counts.firelit,
       keeper: this.#keepers.handles.length > 0,
       keeperWearing: this.#keepers.handles[0]?.params.worn ?? [],
       spots: this.#spots.length,
       buildingMeshes: this.#buildings.stats.meshes,
       house: this.#cottage?.exterior ?? null,
+      houseTile:
+        this.#cottage && this.#houseAt
+          ? { q: this.#houseAt.q - this.#seed.q, r: this.#houseAt.r - this.#seed.r }
+          : null,
       happy: this.happy.length,
       drooping: [...this.#residents.values()].filter((r) => r.mood === 'meh').length,
       cheers: this.#cheers,
@@ -329,12 +358,16 @@ export class HomeScene {
         };
       }),
     );
+    // The house's own ring tile (#604): the rule the server refuses building there by.
+    this.#houseAt = home.house ? houseTile(home.tiles, home.buildings) : null;
     this.#placeNodes(home);
     const firelit = this.#showFirelight(home);
     this.#showCottage(home);
 
     // Squishies: at their habitat or the Training Grounds they practice at,
-    // or waiting by the Heart Seed.
+    // or roaming a free home tile (#604). Gatherers, guards and trainees on
+    // a homestead's Training Grounds are out on their tiles, so they aren't here.
+    const roam = this.#roamTiles(home);
     const anchors = new Map<string, { at: WorldPoint; wide: boolean }>(
       home.buildings
         .filter((b) => b.kind === 'habitat' || b.kind === 'training-grounds')
@@ -343,41 +376,49 @@ export class HomeScene {
     const species = new Map<string, Species>();
     for (const s of this.#speciesList()) species.set(s.id, s);
     const keep = new Set<string>();
-    let waiting = 0;
     let housed = 0;
+    let away = 0;
     /** Trainees seen so far per Training Grounds (each gets its own side). */
     const trainees = new Map<string, number>();
     for (const squishy of home.squishies) {
       const kind = species.get(squishy.speciesId);
       if (!kind) continue; // a species this client can't draw: it still shows in the list
+      if (squishy.job === 'gatherer' || squishy.job === 'guard') {
+        away++;
+        continue;
+      }
       const anchorId = squishy.trainingId ?? squishy.habitatId;
       const place = anchorId ? (anchors.get(anchorId) ?? null) : null;
-      const anchor = place?.at ?? null;
+      // A trainee is at its Training Grounds (#604), out on a homestead
+      // (#277) unless they're drawn here: away, like a gatherer.
+      if (squishy.trainingId !== null && !place) {
+        away++;
+        continue;
+      }
+      const roams = !place;
+      // One without a habitat roams a free home tile, picked by its id (#604).
+      const anchor = place?.at ?? this.#roamAnchor(roam, squishy.id);
       const wide = place?.wide ?? false;
-      // Every squishy without a habitat gets its own place by the Heart Seed, in list order.
-      const waitAt = anchor ? null : this.#waitingPoint(waiting++);
       let training: number | null = null;
-      if (anchor !== null && squishy.trainingId !== null) {
+      if (!roams && squishy.trainingId !== null) {
         training = trainees.get(squishy.trainingId) ?? 0;
         trainees.set(squishy.trainingId, training + 1);
       }
       const existing = this.#residents.get(squishy.id);
       keep.add(squishy.id);
-      if (anchor) housed++;
+      if (!roams) housed++;
       if (
         existing &&
         existing.training === training &&
         existing.wide === wide &&
-        sameAnchor(existing.home, anchor) &&
-        (anchor || sameAnchor(existing.at, waitAt))
+        existing.roams === roams &&
+        sameAnchor(existing.home, anchor)
       ) {
         this.#squishies.setAccessory(existing.handle, accessoryItem(squishy.accessory));
         continue;
       }
       if (existing) this.#squishies.remove(existing.handle);
-      const at = anchor
-        ? this.#wanderPoint(anchor, squishy.id, 0, training, wide)
-        : (waitAt ?? { x: 0, z: 0 });
+      const at = this.#wanderPoint(anchor, squishy.id, 0, training, wide, roams);
       const mood = this.#moods.get(squishy.id) ?? null;
       const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0, 0, mood));
       // What it wears (#340): the same pieces as up close.
@@ -386,6 +427,7 @@ export class HomeScene {
       this.#residents.set(squishy.id, {
         handle,
         home: anchor,
+        roams,
         wide,
         training,
         at,
@@ -401,7 +443,7 @@ export class HomeScene {
       this.#squishies.remove(resident.handle);
       this.#residents.delete(id);
     }
-    this.#counts = { housed, firelit };
+    this.#counts = { housed, away, firelit };
     this.#countHappy();
 
     this.#keepers.clear();
@@ -461,44 +503,65 @@ export class HomeScene {
   }
 
   /**
-   * The Keeper's house (#381): a cottage behind the Heart Seed, between the
-   * tile's back building spots, sized by its level's exterior. None at all
-   * while the house is switched off for this player (no `home.house`).
+   * The Keeper's house (#381), sized by its level's exterior: filling its own
+   * ring tile (#604, like a habitat, #589), or, with no ring tile free,
+   * behind the Heart Seed between the tile's back building spots, as before.
+   * None at all while the house is switched off for this player (no
+   * `home.house`).
    */
   #showCottage(home: HomeResponse): void {
     const exterior = home.house ? houseLevelData(HOUSE_DATA, home.house.level).exterior : null;
-    if (this.#cottage?.exterior === exterior) return;
+    const tile = this.#houseAt ? hexKey(this.#houseAt) : null;
+    if (this.#cottage?.exterior === exterior && this.#cottage.tile === tile) return;
     // Its material too: each swap makes a new one.
     this.#cottage?.mesh.dispose(false, true);
     this.#cottage = null;
     if (!exterior) return;
     const mesh = buildCottage(this.#scene, exterior);
     mesh.material = vinyl(this.#scene, 'home-cottage-mat', { color: '#ffffff' });
-    const at = HOME_HOUSE.offset;
-    mesh.position.set(at.x * HOME_VIEW.hexSize, this.#ground, at.z * HOME_VIEW.hexSize);
-    mesh.scaling.setAll(HOME_HOUSE.scale);
-    this.#cottage = { exterior, mesh };
+    if (this.#houseAt) {
+      const at = this.spotAt({ ...this.#houseAt, spot: 0 });
+      mesh.position.set(at.x, this.#ground, at.z);
+      mesh.scaling.setAll(HOME_HOUSE.fillScale);
+    } else {
+      const at = HOME_HOUSE.offset;
+      mesh.position.set(at.x * HOME_VIEW.hexSize, this.#ground, at.z * HOME_VIEW.hexSize);
+      mesh.scaling.setAll(HOME_HOUSE.scale);
+    }
+    this.#cottage = { exterior, tile, mesh };
   }
 
-  /** The middle of the tile a lit spot is on: a building fills its whole ring tile (#589). */
-  #tileAt(spot: HomeSpot): WorldPoint {
-    return this.spotAt({ q: spot.q, r: spot.r, spot: 0 });
+  /** Does a lit spot light a whole tile? A ring tile's building fills it (#589); the Heart Seed tile keeps its spots. */
+  #lightsTile(spot: HomeSpot): boolean {
+    return !(spot.q === this.#seed.q && spot.r === this.#seed.r);
+  }
+
+  /** Where a lit spot glows: the middle of its tile, or the spot itself on the Heart Seed tile. */
+  #litAt(spot: HomeSpot): WorldPoint {
+    return this.#lightsTile(spot)
+      ? this.spotAt({ q: spot.q, r: spot.r, spot: 0 })
+      : this.spotAt(spot);
   }
 
   /** Lights up the free tiles to tap while placing or moving (empty: off). */
   showSpots(spots: readonly HomeSpot[]): void {
     this.#spots = [...spots];
-    const at = spots.map((s) => this.#tileAt(s));
     const glow = new Vector3(HOME_FILL.glowScale, 1, HOME_FILL.glowScale);
+    const lit = spots.map((s) => ({
+      at: this.#litAt(s),
+      scale: this.#lightsTile(s) ? glow : undefined,
+    }));
     setInstances(
       this.#spotFill,
       // Above the tile's dome everywhere, or the dome cuts wedges out of it.
-      at.map((p) => placeAt(p.x, this.#ground + DOME * 0.5 * this.#k + 0.01, p.z, glow)),
+      lit.map(({ at, scale }) =>
+        placeAt(at.x, this.#ground + DOME * 0.5 * this.#k + 0.01, at.z, scale),
+      ),
       true,
     );
     setInstances(
       this.#spotMarkers,
-      at.map((p) => placeAt(p.x, this.#ground + 0.03, p.z, glow)),
+      lit.map(({ at, scale }) => placeAt(at.x, this.#ground + 0.03, at.z, scale)),
       true,
     );
   }
@@ -509,9 +572,9 @@ export class HomeScene {
       this.#selection.setEnabled(false);
       return;
     }
-    const at = this.#tileAt(spot);
+    const at = this.#litAt(spot);
     this.#selection.position.set(at.x, this.#ground + 0.02, at.z);
-    this.#selection.scaling.setAll(HOME_FILL.markScale);
+    this.#selection.scaling.setAll(this.#lightsTile(spot) ? HOME_FILL.markScale : 1);
     this.#selection.setEnabled(true);
   }
 
@@ -568,8 +631,8 @@ export class HomeScene {
     };
     const spot = near(
       this.#spots,
-      (s) => this.#tileAt(s),
-      () => TILE_REACH,
+      (s) => this.#litAt(s),
+      (s) => (this.#lightsTile(s) ? TILE_REACH : null),
     );
     if (spot) return { kind: 'spot', spot };
     const building = near(
@@ -593,10 +656,10 @@ export class HomeScene {
       }
       if (best) return { kind: 'squishy', id: best };
       // The cottage (#381), after a squishy's feet, when the tap is nearer it
-      // than any building it sits beside.
+      // than any building it sits beside; across its whole tile once it fills one (#604).
       if (this.#cottage) {
         const c = this.#cottage.mesh.position;
-        const r = HOME_HOUSE.tapReach * HOME_VIEW.hexSize;
+        const r = this.#houseAt ? FILLED_REACH : HOME_HOUSE.tapReach * HOME_VIEW.hexSize;
         const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2;
         if (d < r * r && d < (building ? d2(this.#buildingAt(building)) : Infinity)) {
           return { kind: 'house' };
@@ -611,11 +674,9 @@ export class HomeScene {
     return null;
   }
 
-  /** Squishies that live in a habitat (only they wander; a drooping one sits still, #393). */
+  /** Squishies that wander: every one drawn, but a drooping one sits still (#393). */
   get wanderers(): string[] {
-    return [...this.#residents]
-      .filter(([, r]) => r.home !== null && r.mood !== 'meh')
-      .map(([id]) => id);
+    return [...this.#residents].filter(([, r]) => r.mood !== 'meh').map(([id]) => id);
   }
 
   /** Squishies at a job they love (#393): they bounce now and then. Kept, not rebuilt per frame. */
@@ -693,7 +754,7 @@ export class HomeScene {
    */
   tucked(squishyId: string): boolean {
     const r = this.#residents.get(squishyId);
-    if (!r?.home || r.training !== null) return false;
+    if (!r || r.roams || r.training !== null) return false;
     const reach = HOME_VIEW.buildingScale * MOOD_CUES.tuckedWithin;
     return (r.now.x - r.home.x) ** 2 + (r.now.z - r.home.z) ** 2 < reach * reach;
   }
@@ -704,14 +765,14 @@ export class HomeScene {
     return r ? this.#squishies.faceOf(r.handle) : null;
   }
 
-  /** Starts one wander hop for a housed squishy (`now`: wall-clock ms). */
+  /** Starts one wander hop for a squishy (`now`: wall-clock ms). */
   hop(squishyId: string, now: number): void {
     const r = this.#residents.get(squishyId);
-    if (!r?.home) return;
+    if (!r) return;
     r.hops += 1;
     r.hop = {
       from: r.at,
-      to: this.#wanderPoint(r.home, squishyId, r.hops, r.training, r.wide),
+      to: this.#wanderPoint(r.home, squishyId, r.hops, r.training, r.wide, r.roams, r.at),
       start: now,
     };
   }
@@ -768,7 +829,11 @@ export class HomeScene {
   /**
    * A seeded spot near a habitat: the same squishy wanders the same way for
    * everyone. A trainee keeps to the left or right of the mat, beside the
-   * target at its front, so the target stays in view.
+   * target at its front, so the target stays in view. One roaming a home
+   * tile (#604) keeps round the tile's middle, clear of its node or the
+   * Heart Seed. Round a tile's middle or a tile-sized habitat, a hop from
+   * `from` turns at most `WANDER.turn` about the anchor, so it walks round
+   * what's there rather than through it.
    */
   #wanderPoint(
     anchor: WorldPoint,
@@ -776,6 +841,8 @@ export class HomeScene {
     n: number,
     training: number | null = null,
     wide = false,
+    roams = false,
+    from: WorldPoint | null = null,
   ): WorldPoint {
     const rng = Rng.fromSeed(deriveSeed('home-wander', squishyId, n));
     if (training !== null) {
@@ -784,22 +851,51 @@ export class HomeScene {
       const distance = (0.32 + rng.next() * 0.16) * HOME_VIEW.buildingScale;
       return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
     }
-    const angle = rng.next() * Math.PI * 2;
-    const distance = wide
-      ? (0.75 + rng.next() * 0.25) * HOME_FILL.wanderRadius
-      : (0.45 + rng.next() * 0.55) * HOME_VIEW.wanderRadius;
+    const turn = rng.next();
+    const angle =
+      (roams || wide) && from
+        ? Math.atan2(from.z - anchor.z, from.x - anchor.x) + (turn - 0.5) * 2 * WANDER.turn
+        : turn * Math.PI * 2;
+    const distance = roams
+      ? (ROAM.near + rng.next() * (ROAM.far - ROAM.near)) * HOME_VIEW.hexSize
+      : wide
+        ? HOME_FILL.wander.near + rng.next() * (HOME_FILL.wander.far - HOME_FILL.wander.near)
+        : (0.45 + rng.next() * 0.55) * HOME_VIEW.wanderRadius;
     return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
   }
 
   /**
-   * Where the n-th squishy without a habitat waits (0-based): around the
-   * Heart Seed between the building spots, in widening rings of six.
+   * The home tiles squishies without a habitat roam (#604): every home tile
+   * with no building and no house on it, the Heart Seed's included (round
+   * the Heart Seed). The Heart Seed's tile still, when nothing else is free.
    */
-  #waitingPoint(n: number): WorldPoint {
-    const ring = Math.floor(n / 6);
-    const angle = ((30 + 60 * (n % 6) + 30 * (ring % 2)) * Math.PI) / 180;
-    const d = HOME_VIEW.hexSize * (0.32 + 0.16 * ring);
-    return { x: Math.cos(angle) * d, z: Math.sin(angle) * d };
+  #roamTiles(home: HomeResponse): { key: string; at: WorldPoint }[] {
+    const built = new Set(home.buildings.map((b) => hexKey(b)));
+    // The house fills its own tile, or stands by the Heart Seed with none free.
+    if (home.house) built.add(hexKey(this.#houseAt ?? this.#seed));
+    const free = home.tiles.filter((t) => !built.has(hexKey(t)));
+    return (free.length > 0 ? free : [this.#seed]).map((t) => ({
+      key: hexKey(t),
+      at: this.spotAt({ ...t, spot: 0 }),
+    }));
+  }
+
+  /**
+   * The tile one roams (#604), the same for everyone: the tile its id scores
+   * highest on (rendezvous hashing), so building on one tile moves only the
+   * squishies that roamed there.
+   */
+  #roamAnchor(tiles: readonly { key: string; at: WorldPoint }[], squishyId: string): WorldPoint {
+    let best: WorldPoint = { x: 0, z: 0 };
+    let bestScore = -1;
+    for (const t of tiles) {
+      const score = Rng.fromSeed(deriveSeed('home-roam', squishyId, t.key)).next();
+      if (score > bestScore) {
+        bestScore = score;
+        best = t.at;
+      }
+    }
+    return best;
   }
 
   #buildGround(home: HomeResponse): void {
@@ -896,6 +992,8 @@ export class HomeScene {
       HOME_FILL.nodeScale * k,
     );
     const filled = new Set(home.buildings.filter((b) => this.#fills(b)).map((b) => hexKey(b)));
+    // The house fills its tile too (#604): the node pile steps aside for it.
+    if (this.#houseAt) filled.add(hexKey(this.#houseAt));
     const seasons = new Set(home.seasons);
     const byKind = new Map<PropKind, Matrix[]>();
     for (const t of home.tiles) {
@@ -918,7 +1016,6 @@ export class HomeScene {
   }
 }
 
-function sameAnchor(a: WorldPoint | null, b: WorldPoint | null): boolean {
-  if (a === null || b === null) return a === b;
+function sameAnchor(a: WorldPoint, b: WorldPoint): boolean {
   return a.x === b.x && a.z === b.z;
 }

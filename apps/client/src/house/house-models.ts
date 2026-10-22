@@ -761,10 +761,10 @@ export function paintSky(dome: Mesh, radius: number, colours: readonly string[])
   dome.setVerticesData(VertexBuffer.ColorKind, colors);
 }
 
-// ── The cottage on the Heart Seed tile (home base) ──────────────────
+// ── The cottage on its home tile (home base) ────────────────────────
 
 /**
- * The little cottage the home base draws by the Heart Seed (#381), bigger
+ * The little cottage the home base draws on its own tile (#381, #604), bigger
  * per level's exterior: a hut, a hut with a wing, a two-storey loft, and the
  * heart-tree house with a pink canopy over it. About a metre and a half
  * across at its biggest, foot at the origin, door facing -z (the camera).
