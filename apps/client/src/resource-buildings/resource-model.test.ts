@@ -170,6 +170,11 @@ describe('resourceCard: the tile card in its five states (#601 PR 7)', () => {
     );
     expect(paused?.state).toBe('paused');
     expect(paused?.line).toMatch(/💛 17/);
+    // Its own word: "napping" is for a homestead cut off from home.
+    expect(paused?.line).toMatch(/^⏸️ Paused/);
+    expect(paused?.line).not.toMatch(/nap/i);
+    const napping = resourceCard(quarry(), { homestead: 'paused' }, [], NOW);
+    expect(napping?.line).toMatch(/napping, cut off from home/);
   });
 
   it('naps for free on a cut-off homestead, which wins over everything', () => {
@@ -249,7 +254,7 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(section?.rows.map((r) => [r.coins, r.first, r.last])).toEqual([
       ['💛 17', true, false],
       ['💛 17', false, false],
-      ['Paused', false, true],
+      ['Needs 💛', false, true],
     ]);
     expect(section?.canOrder).toBe(true);
     expect(upkeepSection({ ...upkeep, due: [row('a', 17)] }, 0)?.canOrder).toBe(false);
@@ -258,9 +263,20 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(upkeepSection({ ...upkeep, total: 0 }, 0)?.total).toMatch(/Nothing due/);
   });
 
-  it('says Free for one asleep on a napping homestead or out of season', () => {
-    const section = upkeepSection({ ...upkeep, due: [row('a', 17), row('d', 0)] }, 0);
-    expect(section?.rows.map((r) => r.coins)).toEqual(['💛 17', 'Free']);
+  it('gives the three sleeps three words: short of coins, cut off, out of season', () => {
+    const barn = { ...row('e', 0), buildingId: 'pumpkin-barn' };
+    const due = [row('a', 17), row('c', 0, true), row('d', 0), barn];
+    // After Halloween: the barn says till when.
+    expect(upkeepSection({ ...upkeep, due }, 0, [])?.rows.map((r) => r.coins)).toEqual([
+      '💛 17',
+      'Needs 💛',
+      'Napping',
+      'Asleep till Halloween 🎃',
+    ]);
+    // In season, a barn that owes nothing is on a napping homestead.
+    expect(upkeepSection({ ...upkeep, due: [barn] }, 0, ['halloween'])?.rows[0]?.coins).toBe(
+      'Napping',
+    );
   });
 
   it('knows a Pumpkin Barn sleeps out of season, and the others never do', () => {

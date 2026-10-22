@@ -22,6 +22,8 @@ export interface UpkeepListOptions {
   onOrder: (buildingIds: readonly string[]) => Promise<void>;
   /** The save failed: says why. */
   onError: (err: unknown) => void;
+  /** The seasons on today (a Pumpkin Barn asleep after Halloween says so). */
+  seasons?: () => readonly string[];
 }
 
 export function createUpkeepList(options: UpkeepListOptions): UpkeepList {
@@ -45,7 +47,7 @@ export function createUpkeepList(options: UpkeepListOptions): UpkeepList {
   let last: { coins: HeartCoins; ms: number } | null = null;
 
   function draw(coins: HeartCoins, ms: number): void {
-    const section = upkeepSection(coins.upkeep, ms);
+    const section = upkeepSection(coins.upkeep, ms, options.seasons?.() ?? []);
     element.hidden = section === null;
     if (!section) return;
     total.textContent = section.total;

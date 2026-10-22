@@ -35,6 +35,8 @@ export interface HeartCoinsSheetOptions {
   clock: Pick<GameClock, 'msUntil'>;
   /** The patch's midnight came while open: read the balance again (once per midnight). */
   onExpired: () => void;
+  /** The seasons on today, for the upkeep list (#601). */
+  seasons?: () => readonly string[];
   /** Saves the kid's upkeep order (#601 Q5); without it the upkeep list shows no arrows' effect. */
   onUpkeepOrder?: (buildingIds: readonly string[]) => Promise<void>;
 }
@@ -75,6 +77,7 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   // Morning upkeep for my resource buildings, and the order they pay in (#601).
   const upkeep = createUpkeepList({
     onOrder: options.onUpkeepOrder ?? (() => Promise.resolve()),
+    ...(options.seasons ? { seasons: options.seasons } : {}),
     onError: (err) => {
       problem.textContent = messageOf(err);
     },

@@ -25,6 +25,8 @@ export interface HeartCoinsScreenOptions {
   api?: HeartCoinsApi;
   /** The upkeep order changed (#601): whoever shows buildings may read them again. */
   onUpkeepOrder?: () => void;
+  /** The seasons on today on the patch on screen (the upkeep list's sleeping Pumpkin Barn). */
+  seasons?: () => readonly string[];
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -63,6 +65,7 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
     root: options.root,
     clock,
     onExpired: () => void store.read(),
+    ...(options.seasons ? { seasons: options.seasons } : {}),
     // The kid's upkeep order (#601 Q5): saved, then the sheet reads it back.
     onUpkeepOrder: async (ids) => {
       const mapId = store.mapId;

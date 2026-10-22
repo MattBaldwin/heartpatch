@@ -96,9 +96,10 @@ export const RESOURCE_TEXT = {
   upkeepTotal: (coins: number, wait: string) => `💛 ${String(coins)} next morning, in ${wait}`,
   upkeepNone: 'Nothing due: every building is asleep.',
   upkeepOrderHint: 'Short on coins? The top ones keep running. Tap the arrows to choose!',
-  rowPaused: 'Paused',
-  /** A row for one that sleeps for free (its homestead napping, or out of season). */
-  rowFree: 'Free',
+  /** Three different sleeps, three words, so a kid knows what to do (#601). */
+  rowPaused: 'Needs 💛',
+  rowNapping: 'Napping',
+  rowAsleep: (season: string) => `Asleep till ${SEASON_NAMES.get(season) ?? 'its season'} 🎃`,
   moveUp: (name: string) => `Move ${name} up`,
   moveDown: (name: string) => `Move ${name} down`,
   saving: 'Saving…',
@@ -110,6 +111,15 @@ export function itemsShort(items: ItemCounts): string {
     .filter(([, n]) => n > 0)
     .map(([id, n]) => `${String(n)} ${itemIcon(id)}`)
     .join(' and ');
+}
+
+/** A row that owes nothing: out of season (it says till when), else its homestead is napping. */
+function sleepRow(buildingId: string, seasons: readonly string[]): string {
+  const building = RESOURCE_BUILDINGS.find((b) => b.id === buildingId);
+  const season = building ? resourceSeason(building) : null;
+  return season !== null && !seasons.includes(season)
+    ? RESOURCE_TEXT.rowAsleep(season)
+    : RESOURCE_TEXT.rowNapping;
 }
 
 /** Asleep for its season (a Pumpkin Barn after Halloween), so it makes nothing and owes nothing. */
@@ -320,7 +330,7 @@ export interface UpkeepRow {
   readonly icon: string;
   readonly name: string;
   readonly level: number;
-  /** "💛 6", "Paused" for one short of coins, "Free" for a sleeping one (owner decisions Q4, Q6). */
+  /** "💛 6"; "Needs 💛" short of coins, "Napping" cut off from home, "Asleep till Halloween 🎃" out of season (owner decisions Q4, Q6). */
   readonly coins: string;
   readonly paused: boolean;
   readonly first: boolean;
@@ -339,6 +349,8 @@ export interface UpkeepSection {
 export function upkeepSection(
   upkeep: Upkeep | undefined,
   msUntilMorning: number,
+  /** The seasons on today, to tell a sleeping Pumpkin Barn from a napping homestead. */
+  seasons: readonly string[] = [],
 ): UpkeepSection | null {
   if (!upkeep || upkeep.due.length === 0) return null;
   const rows = upkeep.due.map((d, i) => ({
@@ -348,9 +360,9 @@ export function upkeepSection(
     level: d.level,
     coins: d.paused
       ? RESOURCE_TEXT.rowPaused
-      : d.coins === 0
-        ? RESOURCE_TEXT.rowFree
-        : `💛 ${String(d.coins)}`,
+      : d.coins > 0
+        ? `💛 ${String(d.coins)}`
+        : sleepRow(d.buildingId, seasons),
     paused: d.paused,
     first: i === 0,
     last: i === upkeep.due.length - 1,

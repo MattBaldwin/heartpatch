@@ -43,6 +43,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
+import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
@@ -375,6 +376,11 @@ const roster = createRosterSheet({
 const heartCoins = createHeartCoinsScreen({
   root: document.body,
   now: () => inventory.gameNow(),
+  // By the patch's own date, as the map dresses its seasons (#583).
+  seasons: () => {
+    const view = maps.view;
+    return view ? seasonsOn(view.map.timeZone, new Date(inventory.gameNow())) : [];
+  },
 });
 const heartCoinsOn = (mapId: string): void => {
   heartCoins.setMap(mapId === glade ? null : mapId);
