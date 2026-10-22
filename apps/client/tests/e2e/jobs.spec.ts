@@ -29,7 +29,7 @@ interface JobsDebug {
 /** The part of `HomeDebug` (src/home/home-screen.ts) the mood test reads. */
 interface HomeMoodDebug {
   open: boolean;
-  scene: { happy: number; drooping: number } | null;
+  scene: { happy: number; drooping: number; away: number } | null;
   moodCues: 'bounce' | 'static';
   moodLayout: { id: string; mood: 'loves' | 'meh' | null }[];
 }
@@ -194,7 +194,9 @@ test('a gatherer on a spot it loves stays happy while a resting one drifts (#376
   expect(errors).toEqual([]);
 });
 
-test('my gatherers show how they feel on the map and at home (#393)', async ({ browser }) => {
+test('my gatherers show how they feel on the map, and are away from home (#393, #604)', async ({
+  browser,
+}) => {
   test.setTimeout(180_000); // a full map build; CI renders in software
   const page = await newPlayer(browser, uniqueName('cue'));
   const errors: string[] = [];
@@ -247,22 +249,12 @@ test('my gatherers show how they feel on the map and at home (#393)', async ({ b
   await expect(badges.filter({ hasText: '💕' })).toHaveCount(1);
   await expect(badges.filter({ hasText: '🌧️' })).toHaveCount(1);
 
-  // At home, each has its bubble (shown, or waiting hidden behind a neighbour):
-  // the happy one may bounce, the glum one droops.
+  // At home they're away (#604): gatherers are out on their tiles, so
+  // home draws neither them nor a bubble. The badges above say how they feel.
   await (await trayButton(page, 'home-open')).tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.happy, { timeout: 30_000 }).toBe(1);
-  expect((await homeState(page))!.scene!.drooping).toBe(1);
-  await expect
-    .poll(async () => {
-      const layout = (await homeState(page))?.moodLayout ?? [];
-      return Object.fromEntries(layout.filter((l) => l.mood).map((l) => [l.id, l.mood]));
-    })
-    .toEqual({ [happyId]: 'loves', [glumId]: 'meh' });
-  await expect(page.getByTestId('home-mood-mark')).toHaveCount(2);
-
-  // Reduce Motion: the bubbles and the droop stay, the bounce doesn't.
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect.poll(async () => (await homeState(page))?.moodCues).toBe('static');
-  await expect(page.getByTestId('home-mood-mark')).toHaveCount(2);
+  await expect.poll(async () => (await homeState(page))?.scene?.away, { timeout: 30_000 }).toBe(2);
+  expect((await homeState(page))!.scene).toMatchObject({ happy: 0, drooping: 0 });
+  expect(((await homeState(page))?.moodLayout ?? []).map((l) => l.id)).not.toContain(glumId);
+  await expect(page.getByTestId('home-mood-mark')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

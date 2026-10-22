@@ -90,15 +90,25 @@ export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as cons
 export const WANDER = { everyMs: 3500, jitterMs: 1500, hopMs: 650, hopHeight: 0.35 } as const; // TUNE
 
 /**
- * The Keeper's house cottage on the Heart Seed tile (#381): behind the Heart
- * Seed, in the gap between the tile's two back spots (the last ones filled),
- * in hex sizes from the Heart Seed. Taps this near it open the house.
+ * The Keeper's house cottage (#381). It fills its own ring tile (#604) at
+ * `fillScale`, like a habitat (#589). With no ring tile free it stands on the
+ * Heart Seed tile instead: behind the Heart Seed, in the gap between the
+ * tile's two back spots (the last ones filled), at `offset` hex sizes from
+ * the Heart Seed and `scale`. Taps this near it open the house.
  */
 export const HOME_HOUSE = {
   offset: { x: 0, z: 0.74 }, // TUNE
   scale: 1.25, // TUNE: the biggest cottage is about two metres across here
+  fillScale: 2.2, // TUNE: about a habitat's size on its tile
   tapReach: 0.36, // TUNE
 } as const;
+
+/**
+ * Squishies without a habitat roam a free home tile (#604): each hop lands
+ * between `near` and `far` hex sizes from the tile's middle, clear of its
+ * node, and inside the tile.
+ */
+export const ROAM = { near: 0.34, far: 0.68 } as const; // TUNE
 
 /**
  * How squishies show how they feel about their job at home (#393). A small

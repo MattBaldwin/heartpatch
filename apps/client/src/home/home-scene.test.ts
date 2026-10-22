@@ -227,3 +227,108 @@ describe('home scene mood cues (#393)', () => {
     expect(homeScene.headAndFeet('nobody', top, foot)).toBe(false);
   });
 });
+
+describe('home scene: the house’s tile and who’s home (#604)', () => {
+  let engine: NullEngine | null = null;
+  afterEach(() => {
+    engine?.dispose();
+    engine = null;
+  });
+
+  const RING = [
+    [1, 0],
+    [1, -1],
+    [0, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, 1],
+  ] as const;
+  const id = (n: number) => `0190a8c4-0000-7000-8000-${String(n).padStart(12, '0')}`;
+  const squishy = (n: number, extra: Partial<HomeResponse['squishies'][number]> = {}) => ({
+    ...home.squishies[0]!,
+    id: id(300 + n),
+    habitatId: null,
+    ...extra,
+  });
+  const full: HomeResponse = {
+    ...home,
+    tiles: [
+      { q: 0, r: 0, heartSeed: true, nodeResource: null },
+      ...RING.map(([q, r]) => ({ q, r, heartSeed: false, nodeResource: null })),
+    ],
+    buildings: [{ ...home.buildings[0]!, q: 1, r: 0, spot: 2 }],
+    squishies: [
+      squishy(1),
+      squishy(2, { job: 'team' }),
+      squishy(3, { job: 'gatherer' }),
+      squishy(4, { job: 'guard' }),
+      squishy(5, { habitatId: HABITAT }),
+    ],
+    house: { level: 1 },
+  };
+  const make = (reply: HomeResponse) => {
+    engine = new NullEngine();
+    return new HomeScene(new Scene(engine), reply, {
+      registry: visualRegistry(GAME_DATA),
+      lod: 'low',
+      keeper: null,
+    });
+  };
+
+  it('fills the back-right ring tile with the cottage, or the next free one', () => {
+    expect(make(full).stats.houseTile).toEqual({ q: 1, r: -1 });
+    const older = make({
+      ...full,
+      buildings: [...full.buildings, { ...home.buildings[0]!, id: id(103), q: 1, r: -1, spot: 2 }],
+    });
+    expect(older.stats.houseTile).toEqual({ q: 0, r: -1 });
+    // Every ring tile built on: it stays by the Heart Seed, as before.
+    const packed = make({
+      ...full,
+      buildings: RING.map(([q, r], i) => ({
+        ...home.buildings[0]!,
+        id: id(110 + i),
+        q,
+        r,
+        spot: 2,
+      })),
+    });
+    expect(packed.stats).toMatchObject({ house: 'hut', houseTile: null });
+  });
+
+  it('leaves gatherers and guards out, and every other squishy wanders', () => {
+    const homeScene = make(full);
+    expect(homeScene.stats).toMatchObject({ squishies: 3, housed: 1, away: 2 });
+    expect(new Set(homeScene.wanderers)).toEqual(new Set([id(301), id(302), id(305)]));
+  });
+
+  it('roams a free home tile, never the house’s or a habitat’s', () => {
+    const homeScene = make(full);
+    const top = new Vector3();
+    const foot = new Vector3();
+    const tileOf = (p: { x: number; z: number }) => {
+      // The nearest home tile's middle.
+      let best = '';
+      let bestD = Infinity;
+      for (const [q, r] of [[0, 0], ...RING]) {
+        const c = homeScene.spotAt({ q, r, spot: 0 });
+        const d = (c.x - p.x) ** 2 + (c.z - p.z) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = `${String(q)},${String(r)}`;
+        }
+      }
+      return best;
+    };
+    for (const n of [1, 2]) {
+      for (let hop = 0; hop < 8; hop++) {
+        const at = hop * WANDER.hopMs * 2;
+        homeScene.hop(id(300 + n), at);
+        homeScene.step(at + WANDER.hopMs);
+        expect(homeScene.headAndFeet(id(300 + n), top, foot)).toBe(true);
+        expect(['1,-1', '1,0']).not.toContain(tileOf(foot));
+        expect(homeScene.tucked(id(300 + n))).toBe(false);
+      }
+    }
+  });
+});
