@@ -36,6 +36,8 @@ describe('makeStory (#306)', () => {
   });
 
   it('always has exactly one answer, one clue a tile, and gives at most one place away', () => {
+    let spares = 0;
+    let days = 0;
     for (const tiles of [4, 5, 6, 7]) {
       for (let s = 0; s < SEEDS; s++) {
         const day = makeStory(`seed-${tiles}-${s}`, tiles, RULES);
@@ -48,16 +50,32 @@ describe('makeStory (#306)', () => {
         day.order.forEach((m, place) => (pos[m] = place));
         for (const clue of day.clues) expect(clueHolds(clue, pos, n)).toBe(true);
         expect(storyFits(day.clues, n)).toBe(1);
+        // Every page counts: leave any one out and more than one order fits
+        // (a 7-tile Hollow's day is the rare exception: more pages than it needs).
+        const spare = day.clues.filter(
+          (_, k) =>
+            storyFits(
+              day.clues.filter((__, j) => j !== k),
+              n,
+            ) === 1,
+        ).length;
+        if (tiles <= 6) {
+          spares += spare > 0 ? 1 : 0;
+          days += 1;
+        }
         expect(
           day.clues.filter((c) => c.kind === 'first' || c.kind === 'last').length,
         ).toBeLessThanOrEqual(RULES.maxPlaceClues);
         expect(checkStory(day, storyAnswer(day))).toEqual({
+          kind: 'checked',
           ok: true,
           right: n,
           marks: new Array<boolean>(n).fill(true),
         });
       }
     }
+    // Up to 6 tiles, a day with a spare clue is rare.
+    expect(spares / days).toBeLessThan(0.1);
   });
 
   it('never deals the cards already in order, and never sends the order', () => {
@@ -124,6 +142,7 @@ describe('checkStory (#306)', () => {
   it('marks each place right or wrong', () => {
     const swapped = [answer[1], answer[0], ...answer.slice(2)] as string[];
     expect(checkStory(day, swapped)).toEqual({
+      kind: 'checked',
       ok: false,
       right: 3,
       marks: [false, false, true, true, true],
@@ -131,7 +150,7 @@ describe('checkStory (#306)', () => {
   });
 
   it('refuses an order that is not the day’s moments once each', () => {
-    const bad = { ok: false, why: 'not-the-moments' };
+    const bad = { kind: 'not-the-moments' };
     expect(checkStory(day, answer.slice(1))).toEqual(bad);
     expect(checkStory(day, [answer[0], ...answer.slice(0, 4)] as string[])).toEqual(bad);
     expect(checkStory(day, [...answer.slice(0, 4), 'not-a-moment'])).toEqual(bad);

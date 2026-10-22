@@ -1831,6 +1831,74 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           expect(devStory.json()).toEqual({ attempt, order });
         });
 
+        it('counts a restored tile’s page as found, so nobody is locked out', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const village = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          );
+          const total = village.length;
+          // Every page but two ring tiles' (the heart's own, found by search).
+          expect(await storyPages(server, me, mapId, square, 3)).toEqual({
+            found: total - 3,
+            total,
+          });
+          const { spot } = await handSpot(server, me, mapId, square);
+          await search(server, me, mapId, square, spot.index);
+          const left = (
+            await Promise.all(village.map(async (t) => ({ t, row: await rowOf(me, t) })))
+          ).filter(({ row }) => !row?.fragmentFoundAt);
+          expect(left).toHaveLength(2);
+          // Someone restores one before I search it: it can't be searched grey any more.
+          await db.execute(
+            `update community_tiles set restored_at = now() where tile_id = '${left[0]!.t.id}'`,
+          );
+          expect((await view(server, me, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: total - 1,
+            total,
+          });
+          await db.execute(
+            `update community_tiles set restored_at = now() where tile_id = '${left[1]!.t.id}'`,
+          );
+          expect((await view(server, me, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: total,
+            total,
+          });
+          expect((await begin(server, me, mapId, square)).statusCode).toBe(200);
+        });
+
+        it('never tells a story whose pages aren’t found, even with an old try', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const total = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          ).length;
+          await storyPages(server, me, mapId, square, 1);
+          // A try left on the heart from before (its old Relight stand-in).
+          await db.insert(tileExplore).values({
+            userId: me.id,
+            tileId: square.id,
+            mapId,
+            layout: 1,
+            terrain: square.terrain,
+            spotCount: 1,
+            puzzleAttempt: 3,
+          });
+          const res = await tell(server, me, mapId, square, {
+            attempt: 3,
+            order: ['bell', 'baker', 'miller', 'fiddler', 'ferry'],
+          });
+          expect(res.statusCode).toBe(409);
+          expect(errorOf(res).message).toBe(
+            `Find every torn page first! 📜 ${total - 1} of ${total} found.`,
+          );
+          expect((await rowOf(me, square))?.puzzleAttempt).toBe(3);
+        });
+
         it('is each kid’s own: a friend finds their own pages and gets their own day', async () => {
           const server = await start();
           const me = await player();

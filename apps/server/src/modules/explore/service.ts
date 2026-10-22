@@ -871,7 +871,8 @@ export function createExploreService(options: ExploreServiceOptions) {
           (a, b) => Number(hexEquals(a, square)) - Number(hexEquals(b, square)),
         );
         const take = order.slice(0, Math.max(0, order.length - (request.leave ?? 0)));
-        // Tiles, then my rows (step 6), each in (q, r) order.
+        // Tile by tile in (q, r) order, each tile then my row for it (dev only:
+        // lockPuzzleRow's order, repeated, not one statement's tiles-then-rows).
         for (const hex of take.sort((a, b) => a.q - b.q || a.r - b.r)) {
           const { row, tile } = await lockPuzzleRow(repo, seed, mapId, hex, user.id, at);
           if (row.fragmentFoundAt === null) {
@@ -968,12 +969,20 @@ export function createExploreService(options: ExploreServiceOptions) {
         const puzzle = puzzleView(grey, tile, spots, row, solvedBy, user.id);
         if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
         if (puzzle.kind !== 'story') throw new AppError('CONFLICT', MESSAGES.notStory);
+        // The same gate as a start: a try left from before (the heart's old
+        // Relight stand-in) never tells a story whose pages aren't found.
+        const pages = await pagesOf(repo, grey, user.id);
+        if (pages.found < pages.total) {
+          throw new AppError('CONFLICT', MESSAGES.storyPages(pages.found, pages.total));
+        }
         if (row.puzzleAttempt === 0 || request.attempt !== row.puzzleAttempt) {
           throw new AppError('CONFLICT', MESSAGES.puzzleStale);
         }
         const day = storyOf(grey, tile, user.id, row.puzzleAttempt);
         const check = checkStory(day, request.order);
-        if (!('right' in check)) throw new AppError('BAD_REQUEST', MESSAGES.storyMoments);
+        if (check.kind === 'not-the-moments') {
+          throw new AppError('BAD_REQUEST', MESSAGES.storyMoments);
+        }
         if (!check.ok) {
           const next = nextAttempt(row.puzzleAttempt);
           await repo.setPuzzle(user.id, tile.id, { puzzleAttempt: next });
@@ -989,7 +998,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           userId: user.id,
           grey,
           tile,
-          puzzle: { ...puzzle, pages: await pagesOf(repo, grey, user.id) },
+          puzzle: { ...puzzle, pages },
           solvedBy,
           attempt: row.puzzleAttempt,
           moves: request.order.length,

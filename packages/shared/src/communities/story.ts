@@ -12,6 +12,8 @@ import type { StoryDeal } from '../schemas/explore.js';
 
 /** Tries at one seed before giving up (a few dozen at most in practice). */
 const TRIES = 2000;
+/** TUNE: tries that insist every clue is needed before any one-answer day will do. */
+const STRICT_TRIES = 300;
 
 /** One clue about the day, by moment index into the day's moments. */
 export type StoryClue =
@@ -158,8 +160,9 @@ const givesPlace = (c: StoryClue) => c.kind === 'first' || c.kind === 'last';
 /**
  * One try's day from a seed, for a Hollow of `tiles` tiles: `tiles` clues,
  * one a torn page, that fit exactly one order of the day's moments (every
- * order is checked), with at most `maxPlaceClues` giving a place away
- * outright. The cards are dealt in any order but the answer.
+ * order is checked), preferring days where none could be left out, with at most
+ * `maxPlaceClues` giving a place away outright. The cards are dealt in any
+ * order but the answer.
  */
 export function makeStory(seed: Seed, tiles: number, rules: StoryRules): StoryDay {
   const n = storyMoments(tiles, rules);
@@ -179,6 +182,23 @@ export function makeStory(seed: Seed, tiles: number, rules: StoryRules): StoryDa
     const clues = shuffled(rng, truePool(pos)).slice(0, count);
     if (clues.length < count || clues.filter(givesPlace).length > rules.maxPlaceClues) continue;
     if (storyFits(clues, n, 2) !== 1) continue;
+    // Prefer no spare clue: drop any one page and the day no longer has one
+    // answer, so every page has to be read (owner decision: no easy way). A
+    // big Hollow (more pages than a small day needs) rarely has such a day,
+    // so after a while any one-answer day will do.
+    if (
+      tryNo < STRICT_TRIES &&
+      clues.some(
+        (_, k) =>
+          storyFits(
+            clues.filter((__, j) => j !== k),
+            n,
+            2,
+          ) === 1,
+      )
+    ) {
+      continue;
+    }
     let dealt = shuffled(rng, order);
     // Never dealt already in order: rotate it one place.
     if (dealt.every((m, k) => m === order[k])) dealt = [...dealt.slice(1), dealt[0] as number];
@@ -204,8 +224,13 @@ export function storyAnswer(day: StoryDay): string[] {
 }
 
 export type StoryCheck =
-  | { readonly ok: false; readonly why: 'not-the-moments' }
-  | { readonly ok: boolean; readonly right: number; readonly marks: readonly boolean[] };
+  | { readonly kind: 'not-the-moments' }
+  | {
+      readonly kind: 'checked';
+      readonly ok: boolean;
+      readonly right: number;
+      readonly marks: readonly boolean[];
+    };
 
 /**
  * What the server does with a told order: every one of the day's moments
@@ -219,9 +244,9 @@ export function checkStory(day: StoryDay, order: readonly string[]): StoryCheck 
     ids.size !== order.length ||
     answer.some((id) => !ids.has(id))
   ) {
-    return { ok: false, why: 'not-the-moments' };
+    return { kind: 'not-the-moments' };
   }
   const marks = order.map((id, k) => answer[k] === id);
   const right = marks.filter((m) => m).length;
-  return { ok: right === answer.length, right, marks };
+  return { kind: 'checked', ok: right === answer.length, right, marks };
 }

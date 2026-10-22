@@ -13,7 +13,7 @@ import {
   type HexKey,
   type Seed,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
@@ -318,20 +318,24 @@ export function createExploreRepo(db: Executor) {
     },
 
     /**
-     * How many of a Hollow's torn pages I've found (#306, the forgotten
-     * story): my rows on its tiles with a page found. Read without a lock: a
-     * page once found stays found.
+     * How many of a Hollow's torn pages I have (#306, the forgotten story):
+     * its tiles where my row found the page, or that someone has restored
+     * (a restored tile is no longer grey to search, so its page counts as
+     * found and nobody is locked out). Read without a lock: a page once
+     * found stays found, and a restored tile stays restored.
      */
     countPages: async (communityId: string, userId: string): Promise<number> => {
       const [row] = await db
         .select({ found: sql<number>`count(*)::int` })
-        .from(tileExplore)
-        .innerJoin(communityTiles, eq(communityTiles.tileId, tileExplore.tileId))
+        .from(communityTiles)
+        .leftJoin(
+          tileExplore,
+          and(eq(tileExplore.tileId, communityTiles.tileId), eq(tileExplore.userId, userId)),
+        )
         .where(
           and(
             eq(communityTiles.communityId, communityId),
-            eq(tileExplore.userId, userId),
-            isNotNull(tileExplore.fragmentFoundAt),
+            or(isNotNull(communityTiles.restoredAt), isNotNull(tileExplore.fragmentFoundAt)),
           ),
         );
       return row?.found ?? 0;
