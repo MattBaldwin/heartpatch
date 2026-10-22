@@ -181,3 +181,66 @@ export const GlimmerSwapRequestSchema = z.strictObject({
   itemId: ContentIdSchema,
 });
 export type GlimmerSwapRequest = z.infer<typeof GlimmerSwapRequestSchema>;
+
+/**
+ * `GET /maps/:mapId/posts/sell` (#601 PR 3): what I could sell at a post on
+ * this patch. My Heart Coins there and how many I've earned selling today
+ * (the patch's day, `cap` from `HEART_COIN_RULES.dailyCaps.sell`); the items
+ * in my bag the post buys, each with how many it leaves behind for a recipe;
+ * and my clothing with more than one free copy. Prices are shared data
+ * (`SELL_RULES`).
+ */
+export const SellViewSchema = z.object({
+  balance: z.number().int().min(0),
+  soldToday: z.number().int().min(0),
+  cap: z.number().int().min(1),
+  resetsAt: z.iso.datetime(),
+  /** In `SELL_RULES.items` order. `keep` is what a sale leaves (`recipeKeep`). */
+  items: z.array(
+    z.object({
+      itemId: ContentIdSchema,
+      have: z.number().int().min(1),
+      keep: z.number().int().min(0),
+    }),
+  ),
+  /** Sellable pieces I have spares of, by item id. `copies` counts free ones (not in an offer). */
+  clothing: z.array(z.object({ itemId: ContentIdSchema, copies: z.number().int().min(2) })),
+});
+export type SellView = z.infer<typeof SellViewSchema>;
+
+export const SellViewResponseSchema = z.object({ sell: SellViewSchema });
+export type SellViewResponse = z.infer<typeof SellViewResponseSchema>;
+
+/**
+ * `POST /maps/:mapId/posts/sell` at the post at (q, r): `lots` lots of an
+ * item from my bag, or one spare piece of a clothing item (never the last
+ * copy). The client confirms first; there's no undo. Send an `Idempotency-Key`.
+ */
+export const SellRequestSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('item'),
+    q: HexSchema.shape.q,
+    r: HexSchema.shape.r,
+    itemId: ContentIdSchema,
+    lots: z.number().int().min(1).max(100),
+  }),
+  z.strictObject({
+    kind: z.literal('clothing'),
+    q: HexSchema.shape.q,
+    r: HexSchema.shape.r,
+    itemId: ContentIdSchema,
+  }),
+]);
+export type SellRequest = z.infer<typeof SellRequestSchema>;
+
+/** What a sale took and paid, and the Sell tab after it. */
+export const SellResponseSchema = z.object({
+  sold: z.object({
+    kind: z.enum(['item', 'clothing']),
+    itemId: ContentIdSchema,
+    quantity: z.number().int().min(1),
+    coins: z.number().int().min(1),
+  }),
+  sell: SellViewSchema,
+});
+export type SellResponse = z.infer<typeof SellResponseSchema>;
