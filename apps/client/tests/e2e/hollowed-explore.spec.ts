@@ -12,9 +12,10 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * opens a joy disc and bursts into sparks, inside the explore budget
  * (explore.spec.ts: under 46 draw calls and 420k triangles) and without
  * linking a shader program (the owner's find freezes, #555 and #569).
- * Its broken thing's memory puzzle (#306 PR 2b) opens from the big button,
- * shrugs off a wrong piece, finishes the easy way and gives a lore page;
- * mended, it keeps its colour. Checked through the dev hook.
+ * Its broken thing's Relight puzzle (#306 PR 2b) opens from the big button:
+ * a move counts, giving up fades the light and the next path is a new try,
+ * and lighting every lantern gives a lore page; mended, it keeps its
+ * colour. Checked through the dev hook.
  */
 
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -40,10 +41,15 @@ interface ExploreDebug {
   toast: string | null;
   card: 'rare' | null;
   puzzle: {
-    card: 'puzzle' | 'reward';
-    phase: 'watch' | 'play' | 'done';
-    order: string[];
-    placed: string[];
+    card: 'loading' | 'board' | 'reward';
+    outcome: 'playing' | 'won' | 'faded' | null;
+    attempt: number | null;
+    size: number | null;
+    moves: number;
+    limit: number | null;
+    lit: number;
+    lanterns: number;
+    picked: number | null;
   } | null;
   brokenThing: { x: number; z: number; skin: string; solved: boolean } | null;
   scene: {
@@ -217,7 +223,7 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   await expect(joyMeter).toHaveAttribute('aria-label', `Joy ${String(joy)}% ✨`);
   expect(findAvoidedWords((await page.locator('.explore-title').textContent()) ?? '')).toEqual([]);
 
-  // The memory puzzle (#306 PR 2b): walk up to the broken thing.
+  // The Relight puzzle (#306 PR 2b): walk up to the broken thing.
   const broken = first.brokenThing!;
   for (let tries = 0; tries < 10 && (await exploreState(page))?.near !== -1; tries++) {
     const tap = await waypoint(page, broken);
@@ -230,22 +236,45 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   await action.tap();
   const card = page.getByTestId('hollowed-puzzle');
   await slowExpect(card).toBeVisible();
+  await expect.poll(async () => (await exploreState(page))?.puzzle?.card, slow).toBe('board');
   // It fits the phone, its buttons in reach (render-check: 375×667).
-  for (const id of ['hollowed-puzzle-easy', 'hollowed-puzzle-not-now']) {
+  for (const id of [
+    'hollowed-relight-board',
+    'hollowed-relight-give-up',
+    'hollowed-puzzle-not-now',
+  ]) {
     await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
   }
+  const widths = await card.evaluate((e) => [e.scrollWidth, e.clientWidth]);
+  expect(widths[0], 'the card never scrolls sideways').toBeLessThanOrEqual(widths[1]!);
   const shown = (await exploreState(page))!.puzzle!;
-  expect(shown).toMatchObject({ card: 'puzzle', placed: [] });
-  // A wrong piece only wobbles.
-  await page.getByTestId(`hollowed-piece-${shown.order[1]!}`).tap();
-  await expect(page.getByTestId('hollowed-puzzle-line')).toHaveText(
-    'Hmm, not that one. Try another!',
-  );
-  expect((await exploreState(page))!.puzzle!.placed).toEqual([]);
-  // The first piece by hand, the rest the easy way.
-  await page.getByTestId(`hollowed-piece-${shown.order[0]!}`).tap();
-  for (let i = 1; i < shown.order.length; i++) {
-    await page.getByTestId('hollowed-puzzle-easy').tap();
+  // The square is the Hollow's heart: the big board.
+  expect(shown).toMatchObject({ outcome: 'playing', attempt: 1, size: 6, moves: 0 });
+  const moves = page.getByTestId('hollowed-relight-moves');
+  await expect(moves).toHaveText(`Moves 0 of ${String(shown.limit)}`);
+  await expect(page.getByTestId('hollowed-relight-lit')).toHaveText(/^Lanterns lit \d of 4$/);
+  // A turn is a move.
+  await card.locator('.hollowed-relight-pipe:not(.hollowed-relight-loose)').first().tap();
+  await expect(moves).toHaveText(`Moves 1 of ${String(shown.limit)}`);
+  // Giving up fades the light; the next path is a new try (no hints, no peeking).
+  await page.getByTestId('hollowed-relight-give-up').tap();
+  await expect(page.getByTestId('hollowed-relight-faded')).toContainText('The light fades…');
+  await page.getByTestId('hollowed-relight-new-path').tap();
+  await expect.poll(async () => (await exploreState(page))?.puzzle?.attempt, slow).toBe(2);
+  await expect(moves).toHaveText(/^Moves 0 of /);
+  // Light it through the real board: the dev answer's moves, tap by tap.
+  const answer = await api<{
+    attempt: number;
+    moves: ({ type: 'turn'; at: number } | { type: 'slide'; at: number; to: number })[];
+  }>(page, 'POST', `/maps/${mapId}/dev/relight-answer`, square);
+  expect(answer.body.attempt).toBe(2);
+  const cells = card.locator('.hollowed-relight-cell');
+  for (const move of answer.body.moves) {
+    if ((await exploreState(page))?.puzzle?.outcome !== 'playing') break;
+    await cells.nth(move.at).tap();
+    if (move.type === 'slide' && (await exploreState(page))?.puzzle?.picked !== null) {
+      await cells.nth(move.to).tap();
+    }
   }
   await slowExpect(page.getByTestId('hollowed-puzzle-finds')).toBeVisible();
   await expect(page.getByTestId('hollowed-puzzle-finds')).toContainText('A lore page!');

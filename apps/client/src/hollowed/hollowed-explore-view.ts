@@ -26,19 +26,38 @@ export const HOLLOWED_TEXT = {
   spooked: 'Boo! An echo spooked you back a step 👻',
   /** Nightfall while exploring a village: back to the map. */
   closed: 'Too spooky after dark! Come back in the morning 🌙',
-  // A memory puzzle (PR 2b).
+  // Relight the path (PR 2b): no hints, no peeking (owner decision 2026-10-22).
   /** The big button in front of a broken thing. */
   fix: (skin: PuzzleSkin) => `Fix the ${skin.name}`,
-  /** The card's title. */
+  /** The card's first line: what's broken. */
   broken: (skin: PuzzleSkin) => `A broken ${skin.name} ${skin.emoji}`,
-  /** How far along: "2 of 4 back". */
-  placed: (placed: number, total: number) => `${String(placed)} of ${String(total)} back`,
-  ready: "I'm ready!",
-  again: 'Show me again',
-  wrong: 'Hmm, not that one. Try another!',
-  glow: 'Psst! The glowing one is next ✨',
-  fixing: 'Putting it back together…',
+  relight: 'Relight the path',
+  moves: (used: number, limit: number) => `Moves ${String(used)} of ${String(limit)}`,
+  lit: (lit: number, total: number) => `Lanterns lit ${String(lit)} of ${String(total)}`,
+  play: 'Turn the pieces so the light reaches every lantern.',
+  echo: 'An echo is in the way! The light won’t pass a shadow.',
+  pickSlot: 'Now tap an empty slot next to it.',
+  stuck: 'That piece is stuck. Slide it next to an empty slot first.',
+  oneStep: 'It can only slide one step, into the slot beside it.',
+  shuffling: 'The Hollow lays out a path…',
+  won: 'Every lantern glows! ✨',
+  relighting: 'Relighting…',
+  pathLit: 'The path is lit! ✨',
+  faded: 'The light fades…',
+  fadedText: 'The Hollow shuffles a new path of the same size. Try again!',
+  giveUp: 'Give up',
+  newPath: 'New path',
   tryAgain: 'Try again',
+  /** Each cell's name, for screen readers. */
+  cell: {
+    heart: 'The heart of the Hollow',
+    litLantern: 'A lit lantern',
+    darkLantern: 'A dark lantern',
+    loose: 'A wooden piece: tap to slide',
+    pipe: 'A path piece: tap to turn',
+    shadow: 'An echo shadow',
+    empty: 'An empty slot',
+  },
   lorePage: (title: string) => `📜 A lore page! “${title}”`,
   recipe: (title: string) => `📖 A new recipe! “${title}”`,
   thanks: 'The Hollow says thank you!',
@@ -74,12 +93,6 @@ export function skinOf(puzzle: Pick<HollowedPuzzle, 'skin'>): PuzzleSkin {
   return (
     MEMORY_PUZZLES.skins.find((s) => s.id === puzzle.skin) ?? puzzleSkinFor('', MEMORY_PUZZLES)
   );
-}
-
-/** One piece as the card shows it: its picture and its name. */
-export function pieceOf(skin: PuzzleSkin, id: string): { emoji: string; name: string } {
-  const piece = skin.pieces.find((p) => p.id === id);
-  return { emoji: piece?.emoji ?? '❔', name: piece?.name ?? id };
 }
 
 /** What fixing it gave, one line each (the reward card's list). */

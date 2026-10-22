@@ -31,7 +31,7 @@ import { buildPuzzleProp, type PuzzleProp } from './puzzle-props.js';
  * - Hollow echoes: one merged mesh each in the shadow look with its soft
  *   dark shadow baked in (one draw call), drifting on ambient time (still
  *   when ambient life is off). Inside its reach the Keeper is nudged back.
- * - The memory puzzle's broken thing (PR 2b): one merged mesh, grey with
+ * - The Relight puzzle's broken thing (PR 2b): one merged mesh, grey with
  *   the drain; mended, it swaps for its coloured look (one mesh shown, one
  *   draw call), opens a joy disc round it and bursts into sparks.
  * Nothing here is sent anywhere: the server's `done` flags and echo points
@@ -47,7 +47,7 @@ export interface HollowedSceneContext {
   readonly size: number;
   /** Where each echo drifts, tile-local (`HollowedExplore.echoes`). */
   readonly echoes: readonly WorldPoint[];
-  /** The tile's memory puzzle (PR 2b), and the land's prop material its broken thing stands in. */
+  /** The tile's Relight puzzle (PR 2b), and the land's prop material its broken thing stands in. */
   readonly puzzle?: HollowedPuzzle;
   readonly propMaterial?: Material;
 }
@@ -102,7 +102,7 @@ export class HollowedExplore {
     readonly centre: WorldPoint;
     readonly at: { x: number; z: number };
   }[];
-  /** The memory puzzle's broken thing (PR 2b), where it stands, and whether it's mended. */
+  /** The Relight puzzle's broken thing (PR 2b), where it stands, and whether it's mended. */
   readonly #puzzle: (PuzzleProp & { readonly at: WorldPoint; mended: boolean }) | null = null;
   /** When the tile opened, and the Keeper was last spooked (ms). */
   #openedAt: number | null = null;

@@ -1,127 +1,139 @@
-/* A grey village tile's memory puzzle (#306 PR 2b): the card over the
-   explore view. It's the explore card (`.explore-sheet`, which fits or
-   scrolls inside 72dvh on an iPhone SE) with a row of slots and a tray of
-   big pieces to tap. */
+/* A grey village tile's Relight card (#306 PR 2b): the explore card
+   (`.explore-sheet`, which fits or scrolls inside 72dvh on an iPhone SE)
+   with a square board of path pieces, the approved mockup's look. */
+
+.hollowed-puzzle {
+  --relight-light: #ffc94d;
+  --relight-pipe: #b9adc4;
+  --relight-pipe-dark: #8c7f99;
+  --relight-lamp-off: #d7cfe0;
+  --relight-echo: #4b3d66;
+  --relight-cell: #efe7f3;
+}
+
+/* The world waits behind it, so the card may use most of the screen below
+   the explore header (beats `.explore-sheet`'s 72dvh). */
+.explore-sheet.hollowed-puzzle {
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
+  padding: 16px 14px;
+}
+
+.hollowed-puzzle > * {
+  min-width: 0;
+}
 
 .hollowed-puzzle .explore-sheet-title {
+  margin: 0 0 6px;
   font-size: 22px;
 }
 
-.hollowed-puzzle-slots {
+.hollowed-relight-counters {
   display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin: 4px 0 14px;
-  padding: 0;
-  list-style: none;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #b4532a;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
 }
 
-.hollowed-puzzle-slot {
+.hollowed-relight-low {
+  color: #d23b5b;
+}
+
+/* Square cells sized to the card, and short enough to leave the buttons on screen. */
+.hollowed-relight-board {
+  --relight-n: 4;
+
+  display: grid;
+  grid-template-columns: repeat(var(--relight-n), minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 380px, calc(100dvh - 330px));
+  margin: 0 auto 10px;
+  touch-action: manipulation;
+}
+
+.hollowed-relight-cell {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  box-sizing: border-box;
-  border: 3px dashed #d9c6e0;
-  border-radius: 50%;
-  background: #f7f0fa;
-  font-size: 26px;
-}
-
-.hollowed-puzzle-slot-on {
-  border: 3px solid #ffc94d;
-  background: #fff6db;
-}
-
-.hollowed-puzzle-tray {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(56px, 72px));
-  justify-content: center;
-  gap: 10px;
-  margin: 0 0 14px;
-}
-
-.hollowed-piece {
-  min-width: 56px;
-  min-height: 64px;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
   border: none;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: inset 0 0 0 3px #f6dceb;
-  font: inherit;
-  font-size: 32px;
-  line-height: 1;
-  transition:
-    transform 160ms ease-out,
-    box-shadow 160ms ease-out,
-    opacity 160ms ease-out;
+  border-radius: 12px;
+  background: var(--relight-cell);
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
-.hollowed-piece:disabled {
-  opacity: 0.35;
+.hollowed-relight-cell:focus-visible {
+  outline: 3px solid var(--relight-light);
+  outline-offset: 2px;
 }
 
-/* Lit while the broken thing shows its order. */
-.hollowed-piece-lit {
-  transform: scale(1.12);
-  background: #fff6db;
+.hollowed-relight-cell:disabled {
+  cursor: default;
+}
+
+.hollowed-relight-cell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Wooden pieces slide and never turn. */
+.hollowed-relight-loose {
+  background: repeating-linear-gradient(135deg, #e9d3b6 0 6px, #e2c7a4 6px 12px);
+  box-shadow: inset 0 0 0 2px #c79f72;
+}
+
+.hollowed-relight-picked {
+  box-shadow: inset 0 0 0 3px #b8487a;
+}
+
+.hollowed-relight-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ead9e3;
+}
+
+.hollowed-echo-body {
+  fill: var(--relight-echo);
+}
+
+/* The echo flare: the shadow the light touched glows, and the line goes dark. */
+.hollowed-relight-flare {
   box-shadow:
-    inset 0 0 0 3px #ffc94d,
-    0 0 18px rgb(255 201 77 / 80%);
+    0 0 0 3px #d23b5b,
+    0 0 14px rgb(210 59 91 / 60%);
 }
 
-/* The next one, after a couple of wrong taps. */
-.hollowed-piece-glow {
-  box-shadow:
-    inset 0 0 0 3px #ffc94d,
-    0 0 14px rgb(255 201 77 / 70%);
-  animation: hollowed-piece-pulse 1.1s ease-in-out infinite;
+.hollowed-relight-flare .hollowed-echo-body {
+  fill: #6b4f99;
 }
 
-/* A wrong tap: a little wobble, never a buzz. */
-.hollowed-piece-wobble {
-  animation: hollowed-piece-wobble 450ms ease-in-out;
+.hollowed-relight-glow {
+  filter: drop-shadow(0 0 6px rgb(255 201 77 / 90%));
 }
 
-@keyframes hollowed-piece-pulse {
-  50% {
-    transform: scale(1.08);
-  }
+.hollowed-relight-done .hollowed-relight-cell:disabled {
+  opacity: 1;
 }
 
-@keyframes hollowed-piece-wobble {
-  25% {
-    transform: rotate(-9deg);
-  }
-
-  75% {
-    transform: rotate(9deg);
-  }
+.hollowed-relight-end {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: #f6dceb;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hollowed-piece {
-    transition: none;
-  }
-
-  .hollowed-piece-lit {
-    transform: none;
-  }
-
-  .hollowed-piece-glow,
-  .hollowed-piece-wobble {
-    animation: none;
-  }
-
-  .hollowed-piece-wobble {
-    box-shadow: inset 0 0 0 3px #d9c6e0;
-  }
+.hollowed-relight-end[hidden] {
+  display: none;
 }
 
-/* The narrowest phones: the tray still fits four across. */
-@media (max-width: 360px) {
-  .hollowed-puzzle-tray {
-    grid-template-columns: repeat(4, 56px);
-    gap: 8px;
-  }
+.hollowed-relight-end-title {
+  color: #7a2d55;
+  font-size: 18px;
 }

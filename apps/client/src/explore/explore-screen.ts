@@ -8,8 +8,10 @@ import {
   type PublicTile,
   type PublicUser,
   type SearchSpotResponse,
+  type RelightMove,
   type SolvePuzzleResponse,
   type SpotInteraction,
+  type StartPuzzleResponse,
   type ToolId,
   type WorldPoint,
 } from '@heartpatch/shared';
@@ -188,7 +190,7 @@ export interface ExploreDebug {
   readonly yaw: number;
   /** The spot in front of the Keeper (the action button's), or null; a grey village's broken thing is `PUZZLE_INDEX` (#306 PR 2b). */
   readonly near: number | null;
-  /** The memory puzzle's card, while it's up (#306 PR 2b), or null. */
+  /** The Relight card, while it's up (#306 PR 2b), or null. */
   readonly puzzle: PuzzleDebug | null;
   /** A grey village tile's broken thing: where it stands, its look and whether I've mended it (#306 PR 2b). */
   readonly brokenThing: {
@@ -480,9 +482,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   overlay.hidden = true;
   options.root.append(overlay);
 
-  // A grey village tile's memory puzzle (#306 PR 2b): its card over the world.
+  // A grey village tile's Relight puzzle (#306 PR 2b): its card over the world.
   const puzzleSheet = createPuzzleSheet({
     parent: overlay,
+    start: startPuzzle,
     solve: solvePuzzle,
     ...(options.onLorebook ? { onLorebook: options.onLorebook } : {}),
     onClosed: () => {
@@ -883,7 +886,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  // ── A grey village's memory puzzle (#306 PR 2b) ─────────────────────────
+  // ── A grey village's Relight puzzle (#306 PR 2b) ────────────────────────
 
   /** The action button in front of a broken thing: turn to it and open its card. */
   function openPuzzle(): void {
@@ -896,17 +899,46 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     showStick();
     s.moveKeeper(keeperAt, yaw);
     s.nudge(puzzle);
-    puzzleSheet.open(puzzle, seedAt(puzzle));
+    puzzleSheet.open(puzzle);
     render();
     wake();
   }
 
   /**
-   * Sends the order the kid put back; the server checks it and rolls what it
-   * gives (CLAUDE.md rule 1). Null if the visit moved on, or the tile changed
-   * under it (it looks again and the card closes with a word why).
+   * A new try: the server counts it and sends a fresh path. Null if the
+   * visit moved on, or it's fixed already (it looks again and the card
+   * closes with a word why).
    */
-  async function solvePuzzle(order: readonly string[]): Promise<SolvePuzzleResponse | null> {
+  async function startPuzzle(): Promise<StartPuzzleResponse | null> {
+    const id = mapId;
+    const t = tile;
+    if (!id || !t?.community) return null;
+    const at = generation;
+    try {
+      const reply = await api.puzzleStart(id, { q: t.q, r: t.r });
+      return at === generation && tile?.q === t.q && tile.r === t.r ? reply : null;
+    } catch (err) {
+      if (at !== generation) return null;
+      if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        await reload();
+        puzzleSheet.close();
+        say(messageOf(err));
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Sends a lit try's moves; the server replays them on its own copy of the
+   * board and rolls what it gives (CLAUDE.md rule 1). Null if the visit
+   * moved on, or the tile changed under it (it looks again and the card
+   * closes with a word why).
+   */
+  async function solvePuzzle(
+    attempt: number,
+    moves: readonly RelightMove[],
+  ): Promise<SolvePuzzleResponse | null> {
     const id = mapId;
     const t = tile;
     if (!id || !t?.community) return null;
@@ -919,7 +951,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
           retryAfterMs: COMMAND_RETRY_MS,
         },
-        (key) => api.puzzle(id, { q: t.q, r: t.r, order: [...order] }, key),
+        (key) => api.puzzle(id, { q: t.q, r: t.r, attempt, moves: [...moves] }, key),
         () => at === generation,
       );
       if (at !== generation || !fixed || tile?.q !== t.q || tile.r !== t.r || !tile.community) {
@@ -934,7 +966,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       return fixed;
     } catch (err) {
       if (at !== generation) return null;
-      // Fixed on another device, or the village changed: look again.
+      // Fixed or tried again on another device, or the Hollow changed: look again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         await reload();
         puzzleSheet.close();
@@ -1776,12 +1808,6 @@ const RING_STEPS: readonly (readonly [number, number])[] = [
 /** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
 function exploreIcon(icon: string): Node {
   return iconNode(icon, 'explore-icon');
-}
-
-/** Stable 0–1 per place, so a broken thing lays out its tray the same way each time (#306 PR 2b). */
-function seedAt(p: WorldPoint): number {
-  const k = (Math.round(p.x * 1000) * 73856093) ^ (Math.round(p.z * 1000) * 19349663);
-  return ((k >>> 0) % 1000) / 1000;
 }
 
 /** Stable 0–1 per spot, so the lantern's glint hides in the same place each time. */

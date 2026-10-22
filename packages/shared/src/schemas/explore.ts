@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
 import { ToolIdSchema } from './data/explore.js';
+import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ExploreNotableSchema } from './events.js';
 import { ItemCountsSchema } from './inventory.js';
 import { queryInt } from './query.js';
@@ -51,23 +52,57 @@ export type PublicSearchSpot = z.infer<typeof PublicSearchSpotSchema>;
 export const HomesteadStateSchema = z.enum(['joined', 'paused']).nullable();
 
 /**
- * A grey village tile's memory puzzle (#306 PR 2b): a broken thing to put
- * back together, its pieces in the order they go back in (the card shows
- * the order first; that's the puzzle, so it isn't secret), where it stands
- * and whether I've fixed it. What fixing it gives stays server-side.
+ * A grey village tile's puzzle (#306 PR 2b, "Relight the path"): its broken
+ * thing, how deep in the Hollow the tile is (that sets the board's size),
+ * where it stands and whether I've fixed it. The board itself comes with
+ * each try (`POST …/explore/puzzle/start`); what fixing it gives stays
+ * server-side.
  */
 export const HollowedPuzzleSchema = z.object({
   /** Its look (`MEMORY_PUZZLES.skins[].id`). */
   skin: ContentIdSchema,
-  /** Its pieces' ids, in the order they go back in. */
-  order: z.array(ContentIdSchema).min(2).max(6),
+  depth: RelightDepthSchema,
   /** Where it stands, tile-local (`hexToWorld` at size 1, like the spots). */
   x: z.number(),
   z: z.number(),
-  /** I've fixed it already (once a tile each, `community_tiles.puzzle_solved_by`). */
+  /** I've fixed it already (once a tile each, `tile_explore.puzzle_solved_at`). */
   solved: z.boolean(),
 });
 export type HollowedPuzzle = z.infer<typeof HollowedPuzzleSchema>;
+
+/**
+ * One cell of a Relight board: the heart, a lantern, a path piece, an echo
+ * shadow or an empty slot. `open` is its openings as they are now (a 4-bit
+ * mask: north 1, east 2, south 4, west 8), never how it sits when solved.
+ * A `loose` (wooden) piece slides and never turns.
+ */
+export const RelightCellSchema = z.object({
+  kind: z.enum(['heart', 'lantern', 'pipe', 'shadow', 'empty']),
+  open: z.number().int().min(0).max(15),
+  loose: z.boolean(),
+});
+export type RelightCell = z.infer<typeof RelightCellSchema>;
+
+/** A Relight board, row by row from the top, and how many moves it allows. */
+export const RelightBoardSchema = z.object({
+  size: z.number().int().min(3).max(8),
+  /** The heart's cell (bottom row): where the light comes from. */
+  heart: z.number().int().min(0),
+  limit: z.number().int().min(1),
+  cells: z.array(RelightCellSchema).max(64),
+});
+export type RelightBoard = z.infer<typeof RelightBoardSchema>;
+
+/** One move: a quarter turn of a piece, or a wooden piece's slide into the empty slot beside it. */
+export const RelightMoveSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('turn'), at: z.number().int().min(0).max(63) }),
+  z.strictObject({
+    type: z.literal('slide'),
+    at: z.number().int().min(0).max(63),
+    to: z.number().int().min(0).max(63),
+  }),
+]);
+export type RelightMove = z.infer<typeof RelightMoveSchema>;
 
 /**
  * A grey village tile's explore extras (#306 2a), on `ExploreTileResponse`
@@ -82,7 +117,7 @@ export const HollowedExploreSchema = z.object({
   joy: z.number().int().min(0).max(100),
   /** Where each Hollow echo drifts, tile-local (`hexToWorld` at size 1, like the spots). */
   echoes: z.array(z.object({ x: z.number(), z: z.number() })),
-  /** Its memory puzzle (PR 2b). */
+  /** Its Relight puzzle (PR 2b). */
   puzzle: HollowedPuzzleSchema.optional(),
 });
 export type HollowedExplore = z.infer<typeof HollowedExploreSchema>;
@@ -143,14 +178,41 @@ export const SearchSpotResponseSchema = z.object({
 });
 export type SearchSpotResponse = z.infer<typeof SearchSpotResponseSchema>;
 
-/** `POST /maps/:mapId/explore/puzzle`: put a grey village tile's broken thing back together (#306 PR 2b). */
+/** `POST /maps/:mapId/explore/puzzle/start`: a new try at a grey village tile's puzzle (#306 PR 2b). */
+export const StartPuzzleRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+});
+export type StartPuzzleRequest = z.infer<typeof StartPuzzleRequestSchema>;
+
+/** This try's board: every try is a fresh puzzle of the same size (owner decision: a reshuffle). */
+export const StartPuzzleResponseSchema = z.object({
+  /** The try's number, sent back with its moves. */
+  attempt: z.number().int().min(1),
+  board: RelightBoardSchema,
+});
+export type StartPuzzleResponse = z.infer<typeof StartPuzzleResponseSchema>;
+
+/** `POST /maps/:mapId/explore/puzzle`: relight a grey village tile's path (#306 PR 2b). */
 export const SolvePuzzleRequestSchema = z.strictObject({
   q: HexSchema.shape.q,
   r: HexSchema.shape.r,
-  /** The pieces in the order the kid put them back. */
-  order: z.array(ContentIdSchema).min(1).max(6),
+  /** The try these moves were made on (the latest start's). */
+  attempt: z.number().int().min(1),
+  /** Every move, in order; the server replays them (CLAUDE.md rule 1). */
+  moves: z.array(RelightMoveSchema).max(200),
 });
 export type SolvePuzzleRequest = z.infer<typeof SolvePuzzleRequestSchema>;
+/**
+ * Dev only (`HP_DEV_SQUISHY_GRANTS`, never in production):
+ * `POST /maps/:mapId/dev/relight-answer { q, r }`, my latest try's answer,
+ * so an e2e or a capture can play a win through the real board.
+ */
+export const DevRelightAnswerResponseSchema = z.object({
+  attempt: z.number().int().min(1),
+  moves: z.array(RelightMoveSchema),
+});
+export type DevRelightAnswerResponse = z.infer<typeof DevRelightAnswerResponseSchema>;
 
 /** What fixing it gave: the server rolls it (CLAUDE.md rule 1). */
 export const SolvePuzzleResponseSchema = z.object({

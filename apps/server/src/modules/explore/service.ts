@@ -14,10 +14,14 @@ import {
   isExplorable,
   isFullyExplored,
   isSearched,
+  checkRelight,
+  makeRelight,
   memoryPuzzle,
   MEMORY_PUZZLES,
   placeEchoes,
-  puzzleSolvedBy,
+  relightBoard,
+  relightDepth,
+  relightSeed,
   Rng,
   searchedCount,
   searchSpots,
@@ -35,6 +39,9 @@ import {
   type SearchSpotResponse,
   type SolvePuzzleRequest,
   type SolvePuzzleResponse,
+  type DevRelightAnswerResponse,
+  type StartPuzzleRequest,
+  type StartPuzzleResponse,
   type ToolId,
 } from '@heartpatch/shared';
 import {
@@ -90,17 +97,18 @@ const MESSAGES = {
   // A grey village tile (#306 2a), the panel's own words.
   villageAway: 'Claim land next to it to explore!',
   villageNight: 'Too spooky after dark! Come back in the morning 🌙',
-  // Memory puzzles (#306 PR 2b).
+  // Relight the path (#306 PR 2b).
   noPuzzle: "There's nothing to fix here!",
   puzzleFixed: 'You already fixed this one! ✨',
-  puzzleWrong: 'Not quite! Watch it once more and try again.',
+  puzzleStale: 'The path has shuffled! Try the new one.',
+  puzzleWrong: "The light didn't reach every lantern. Try a new path!",
 } as const;
 
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
 const LORE_TITLES = new Map(LORE_PAGES.map((p) => [p.id, p.title]));
 
 /**
- * Rekindled recipe pages a memory puzzle can give (#306 PR 5 plugs this in;
+ * Rekindled recipe pages a Relight puzzle can give (#306 PR 5 plugs this in;
  * until then puzzles give lore pages and the fallback). Both run inside the
  * solve's transaction, after the bag (tech spec §7 step 11) and before the
  * events.
@@ -122,7 +130,7 @@ export interface RekindledRecipes {
 
 export interface ExploreServiceOptions {
   db: Database;
-  /** Rekindled recipe pages for memory puzzles (#306 PR 5); none until it lands. */
+  /** Rekindled recipe pages for Relight puzzles (#306 PR 5); none until it lands. */
   rekindled?: RekindledRecipes;
   clock?: Clock;
   /** Live sync (`wsHub.publish`) after a commit. */
@@ -218,23 +226,48 @@ function echoesOf(grey: Grey, tile: Hex, spots: readonly SearchSpot[]) {
   return placeEchoes(grey.village.seed, tile, spots, COMMUNITY_RULES.echoesPerTile);
 }
 
-/** A grey village tile's memory puzzle (PR 2b) as I see it. */
+/**
+ * A grey village tile's puzzle (PR 2b) as I see it. I've fixed it once my
+ * row says so, or the tile's list has me (a row a departure deleted).
+ */
 function puzzleView(
   grey: Grey,
   tile: ExploreTileRow,
   spots: readonly SearchSpot[],
+  row: ExploreRow | null,
   solvedBy: readonly string[],
   userId: string,
 ): HollowedPuzzle {
-  const puzzle = memoryPuzzle(
+  const thing = memoryPuzzle(
     grey.village.seed,
     tile,
     spots,
     echoesOf(grey, tile, spots),
     MEMORY_PUZZLES,
   );
-  return { ...puzzle, order: [...puzzle.order], solved: solvedBy.includes(userId) };
+  return {
+    ...thing,
+    depth: relightDepth(tile, grey.village.square, grey.village.tiles),
+    solved: row?.puzzleSolvedAt != null || solvedBy.includes(userId),
+  };
 }
+
+/** A try's Relight board: its seed is the Hollow's secret seed, the tile, me and the try (rule 1). */
+function relightOf(
+  grey: Grey,
+  tile: ExploreTileRow,
+  puzzle: HollowedPuzzle,
+  userId: string,
+  attempt: number,
+) {
+  return makeRelight(
+    relightSeed(grey.village.seed, tile, userId, attempt),
+    MEMORY_PUZZLES.relight[puzzle.depth],
+  );
+}
+
+/** `tile_explore.puzzle_attempt` is a smallint: past this the count starts over (the boards are still fresh). */
+const MAX_ATTEMPT = 32_767;
 
 /** A grey village tile's explore extras: its name, today's joy, its echoes and its puzzle. */
 function greyView(
@@ -242,6 +275,7 @@ function greyView(
   tile: ExploreTileRow,
   spots: readonly SearchSpot[],
   searched: number,
+  row: ExploreRow | null,
   userId: string,
 ): HollowedExplore {
   return {
@@ -249,7 +283,7 @@ function greyView(
     name: grey.village.name,
     joy: exploreJoy({ searched, total: spots.length }),
     echoes: echoesOf(grey, tile, spots),
-    puzzle: puzzleView(grey, tile, spots, grey.village.puzzleSolvedBy, userId),
+    puzzle: puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, userId),
   };
 }
 
@@ -273,6 +307,44 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
         ? 'heartdust'
         : null;
   return notable;
+}
+
+/**
+ * The tile and my explore row for a puzzle command, locked in tech spec §7
+ * order (step 6: the tile, then my `tile_explore` row, made if it's my
+ * first visit), or a kid-readable error. Only an unrestored grey village
+ * tile has a puzzle.
+ */
+async function lockPuzzleRow(
+  repo: ExploreRepo,
+  seed: string,
+  mapId: string,
+  at: { q: number; r: number },
+  userId: string,
+  now: Date,
+): Promise<{ grey: Grey; tile: ExploreTileRow; spots: SearchSpot[]; row: ExploreRow }> {
+  // The tile, so its owner can't change mid-try (restoring takes it first too).
+  const locked = await repo.lockTileAt(mapId, at.q, at.r);
+  if (!locked) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+  const grey = await greyVillage(repo, mapId, locked, userId, now);
+  if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+  const { tile, spots } = tileSpots(seed, locked, userId, grey);
+  // An old finished row (from before the tile was a village) is one of my
+  // explored rows, which a capture may be locking as a set: take the set
+  // first, as a search does.
+  if ((await repo.findRow(userId, tile.id))?.completedAt) await repo.lockExplored(mapId, [userId]);
+  const row =
+    (await repo.lockRow(userId, tile.id)) ??
+    (await repo.insertRow({
+      userId,
+      tileId: tile.id,
+      mapId,
+      layout: exploreLayout(tile.terrain, EXPLORE_RULES),
+      terrain: tile.terrain,
+      spotCount: spots.length,
+      at: now,
+    }));
+  return { grey, tile, spots, row };
 }
 
 export function createExploreService(options: ExploreServiceOptions) {
@@ -346,7 +418,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         progress: { searched, total: spots.length },
         homestead: grey ? null : homesteadOf(row),
         tools: toolUses(items),
-        ...(grey ? { community: greyView(grey, tile, spots, searched, user.id) } : {}),
+        ...(grey ? { community: greyView(grey, tile, spots, searched, row, user.id) } : {}),
       };
     },
 
@@ -537,9 +609,65 @@ export function createExploreService(options: ExploreServiceOptions) {
     },
 
     /**
-     * `POST /maps/:mapId/explore/puzzle`: put a grey village tile's broken
-     * thing back together (#306 PR 2b). Once a tile each; the server checks
-     * the order against the tile's own and rolls what it gives (rule 1).
+     * `POST /maps/:mapId/explore/puzzle/start`: a new try at a grey village
+     * tile's Relight puzzle (#306 PR 2b). Every start is the next try, and
+     * every try is a fresh board of the same size (owner decision: opening
+     * it again or running out of moves reshuffles), so a board can't be
+     * learned by heart.
+     */
+    startPuzzle: async (
+      user: PublicUser,
+      mapId: string,
+      request: StartPuzzleRequest,
+    ): Promise<StartPuzzleResponse> =>
+      exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        const seed = await seedOf(tx, mapId);
+        const { grey, tile, spots, row } = await lockPuzzleRow(
+          repo,
+          seed,
+          mapId,
+          request,
+          user.id,
+          now(),
+        );
+        const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
+        if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
+        const attempt = row.puzzleAttempt >= MAX_ATTEMPT ? 1 : row.puzzleAttempt + 1;
+        await repo.setPuzzle(user.id, tile.id, { puzzleAttempt: attempt });
+        return { attempt, board: relightBoard(relightOf(grey, tile, puzzle, user.id, attempt)) };
+      }),
+
+    /**
+     * Dev only (`HP_DEV_SQUISHY_GRANTS`, refused in production): my latest
+     * Relight try's answer, the undo of its scramble, so an e2e or a capture
+     * can win through the real board. Read only.
+     */
+    devRelightAnswer: async (
+      user: PublicUser,
+      mapId: string,
+      request: StartPuzzleRequest,
+    ): Promise<DevRelightAnswerResponse> => {
+      const db = options.db;
+      await requireMember(db, user, mapId, ['multiplayer']);
+      const repo = createExploreRepo(db);
+      const found = await repo.findTileAt(mapId, request.q, request.r);
+      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
+      const row = await repo.findRow(user.id, tile.id);
+      if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.puzzleStale);
+      const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
+      const board = relightOf(grey, tile, puzzle, user.id, row.puzzleAttempt);
+      return { attempt: row.puzzleAttempt, moves: [...board.solution] };
+    },
+
+    /**
+     * `POST /maps/:mapId/explore/puzzle`: relight a grey village tile's path
+     * (#306 PR 2b). Once a tile each. The server rebuilds the try's board
+     * from its seed, replays every move (an illegal one is refused) within
+     * the limit, checks every lantern is lit with no echo touched, and rolls
+     * what it gives (rule 1).
      */
     solvePuzzle: async (
       user: PublicUser,
@@ -550,20 +678,27 @@ export function createExploreService(options: ExploreServiceOptions) {
       const result = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
-        // Step 6: the tile, so its owner can't change mid-solve (restoring
-        // takes it first too), then its village row below.
-        const locked = await repo.lockTileAt(mapId, request.q, request.r);
-        if (!locked) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-        const grey = await greyVillage(repo, mapId, locked, user.id, at);
-        if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
-        const { tile, spots } = tileSpots(seed, locked, user.id, grey);
+        const { grey, tile, spots, row } = await lockPuzzleRow(
+          repo,
+          seed,
+          mapId,
+          request,
+          user.id,
+          at,
+        );
+        // Then its village row (step 6, after the explore rows).
         const solvedBy = await repo.lockPuzzle(tile.id);
         if (solvedBy === null) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
-        const puzzle = puzzleView(grey, tile, spots, solvedBy, user.id);
+        const puzzle = puzzleView(grey, tile, spots, row, solvedBy, user.id);
         if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
-        if (!puzzleSolvedBy(puzzle, request.order)) {
+        if (row.puzzleAttempt === 0 || request.attempt !== row.puzzleAttempt) {
+          throw new AppError('CONFLICT', MESSAGES.puzzleStale);
+        }
+        const board = relightOf(grey, tile, puzzle, user.id, row.puzzleAttempt);
+        if (!checkRelight(board, request.moves).ok) {
           throw new AppError('CONFLICT', MESSAGES.puzzleWrong);
         }
+        await repo.setPuzzle(user.id, tile.id, { puzzleSolvedAt: at });
         await repo.setPuzzleSolvedBy(tile.id, [...solvedBy, user.id]);
 
         // What it gives: a page not found yet, else a small thank-you (rule 1, rule 6).
@@ -604,6 +739,9 @@ export function createExploreService(options: ExploreServiceOptions) {
             communityId: grey.village.id,
             solveId,
             skin: puzzle.skin,
+            depth: puzzle.depth,
+            attempt: row.puzzleAttempt,
+            moves: request.moves.length,
             lorePage,
             recipe,
             items: found,

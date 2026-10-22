@@ -1,23 +1,14 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
 
-// Memory puzzles on grey village tiles (#306 PR 2b, plan Q5): a broken
-// thing (a music box, a mural, a fountain) is put back together by
-// remembering the order of its pieces. One puzzle a tile; its skin comes
-// from the tile's terrain. What a kid sees lives here (CLAUDE.md rule 5);
-// what solving one gives stays server-side (`PUZZLE_REWARDS`, rule 6).
+// Hollow puzzles on grey village tiles (#306 PR 2b, owner decisions
+// 2026-10-22): each tile's broken thing (a music box, a mural, a fountain)
+// holds a "Relight the path" lantern line. Its look comes from the tile's
+// terrain; how hard it is comes from how deep in the Hollow the tile is.
+// What a kid sees lives here (CLAUDE.md rule 5); what solving one gives
+// stays in the server-only data (rule 6).
 
-/** One piece of a broken thing: what the kid taps. */
-export const PuzzlePieceSchema = z.strictObject({
-  id: ContentIdSchema,
-  /** What it shows on the puzzle card. */
-  emoji: z.string().min(1).max(8),
-  /** Its name, for screen readers ("the bell"). */
-  name: z.string().min(1).max(24),
-});
-export type PuzzlePiece = z.infer<typeof PuzzlePieceSchema>;
-
-/** One look of the puzzle: the broken thing, its pieces and its words (style guide §6). */
+/** One look of the broken thing and its words (style guide §6). */
 export const PuzzleSkinSchema = z.strictObject({
   id: ContentIdSchema,
   /** Its name on the action button and the card ("music box"). */
@@ -25,26 +16,49 @@ export const PuzzleSkinSchema = z.strictObject({
   emoji: z.string().min(1).max(8),
   /** The terrains it stands on; the rest get `defaultSkin`. */
   terrains: z.array(ContentIdSchema),
-  /** Exactly `pieceCount` pieces, all different. */
-  pieces: z.array(PuzzlePieceSchema),
-  /** The card's first line, while it shows the order. */
-  watch: z.string().min(1).max(80),
-  /** The card's line while the kid puts it back. */
-  play: z.string().min(1).max(80),
-  /** The easy way's button (every puzzle has one, like #199's). */
-  easy: z.string().min(1).max(24),
   /** The card's title once it's whole again. */
   fixed: z.string().min(1).max(48),
 });
 export type PuzzleSkin = z.infer<typeof PuzzleSkinSchema>;
 
+/** How deep in its Hollow a tile is: touching land outside, the square, or neither. */
+export const RelightDepthSchema = z.enum(['rim', 'inner', 'heart']);
+export type RelightDepth = z.infer<typeof RelightDepthSchema>;
+
+/** One Relight difficulty: a square grid and what's on it. */
+export const RelightTierSchema = z
+  .strictObject({
+    /** The grid is `size` × `size`. */
+    size: z.number().int().min(3).max(8),
+    lanterns: z.number().int().min(1),
+    /** Echo shadows: light that touches one is snuffed out. */
+    shadows: z.number().int().min(0),
+    /** Wooden pieces: they slide into an empty slot and never turn. */
+    loose: z.number().int().min(0),
+    /** Empty slots for them to slide into. */
+    empty: z.number().int().min(0),
+    /** Moves allowed over the puzzle's work: limit = work + slack. */
+    slack: z.number().int().min(0),
+    /** A board whose work is under this is made again: no puzzle is trivial. */
+    minWork: z.number().int().min(1),
+  })
+  .superRefine((tier, ctx) => {
+    if (tier.lanterns + tier.shadows + tier.empty + 1 >= tier.size * tier.size) {
+      ctx.addIssue({ code: 'custom', message: 'too much on too small a grid' });
+    }
+    if ((tier.loose === 0) !== (tier.empty === 0)) {
+      ctx.addIssue({ code: 'custom', path: ['empty'], message: 'wooden pieces need empty slots' });
+    }
+  });
+export type RelightTier = z.infer<typeof RelightTierSchema>;
+
 export const MemoryPuzzleRulesSchema = z
   .strictObject({
-    /** Pieces in every puzzle (the plan's "4-piece ordered puzzle"). */
-    pieceCount: z.number().int().min(2).max(6),
     skins: z.array(PuzzleSkinSchema).min(1),
     /** The skin for a terrain no skin lists. */
     defaultSkin: ContentIdSchema,
+    /** Relight's difficulty by depth. */
+    relight: z.record(RelightDepthSchema, RelightTierSchema),
   })
   .superRefine((rules, ctx) => {
     const ids = new Set<string>();
@@ -54,16 +68,6 @@ export const MemoryPuzzleRulesSchema = z
         ctx.addIssue({ code: 'custom', path: ['skins', i, 'id'], message: 'listed twice' });
       }
       ids.add(skin.id);
-      if (skin.pieces.length !== rules.pieceCount) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['skins', i, 'pieces'],
-          message: `needs exactly ${String(rules.pieceCount)} pieces`,
-        });
-      }
-      if (new Set(skin.pieces.map((p) => p.id)).size !== skin.pieces.length) {
-        ctx.addIssue({ code: 'custom', path: ['skins', i, 'pieces'], message: 'pieces repeat' });
-      }
       for (const terrain of skin.terrains) {
         if (terrains.has(terrain)) {
           ctx.addIssue({

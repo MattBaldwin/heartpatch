@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MEMORY_PUZZLES } from '../data/memory-puzzles.js';
-import { memoryPuzzle, puzzleSkinFor, puzzleSolvedBy } from './puzzle.js';
+import { memoryPuzzle, puzzleSkinFor } from './puzzle.js';
 
 /** Squared distance (the shared code keeps clear of `Math.hypot`, tech spec §8). */
 const d2 = (a: { x: number; z: number }, b: { x: number; z: number }) =>
@@ -35,19 +35,6 @@ describe('memoryPuzzle (#306 PR 2b)', () => {
     for (const b of others) expect({ ...b }).not.toEqual({ ...a });
   });
 
-  it('puts every one of its skin pieces back, each once, in a shuffled order', () => {
-    const pieces = MEMORY_PUZZLES.skins[0]?.pieces.map((p) => p.id).sort();
-    const orders = new Set<string>();
-    for (let q = 0; q < 24; q++) {
-      const p = memoryPuzzle('village-seed', { ...tile, q }, spots, echoes, MEMORY_PUZZLES);
-      expect(p.skin).toBe('music-box');
-      expect([...p.order].sort()).toEqual(pieces);
-      orders.add(p.order.join());
-    }
-    // Not always the data's own order: 24 tiles give many orders.
-    expect(orders.size).toBeGreaterThan(6);
-  });
-
   it('stands clear of the spots and the echoes, inside the tile', () => {
     for (let q = 0; q < 40; q++) {
       const p = memoryPuzzle(`seed-${String(q)}`, { ...tile, q }, spots, echoes, MEMORY_PUZZLES);
@@ -65,15 +52,5 @@ describe('memoryPuzzle (#306 PR 2b)', () => {
     const p = memoryPuzzle('village-seed', tile, crowded, echoes, MEMORY_PUZZLES);
     expect(Number.isFinite(p.x) && Number.isFinite(p.z)).toBe(true);
     expect(d2(p, { x: 0, z: 0 })).toBeLessThanOrEqual(0.6 * 0.6);
-  });
-});
-
-describe('puzzleSolvedBy (#306 PR 2b)', () => {
-  it('takes only the puzzle’s own order, piece for piece', () => {
-    const puzzle = { order: ['bell', 'drum', 'horn', 'fiddle'] };
-    expect(puzzleSolvedBy(puzzle, ['bell', 'drum', 'horn', 'fiddle'])).toBe(true);
-    expect(puzzleSolvedBy(puzzle, ['drum', 'bell', 'horn', 'fiddle'])).toBe(false);
-    expect(puzzleSolvedBy(puzzle, ['bell', 'drum', 'horn'])).toBe(false);
-    expect(puzzleSolvedBy(puzzle, ['bell', 'drum', 'horn', 'fiddle', 'bell'])).toBe(false);
   });
 });

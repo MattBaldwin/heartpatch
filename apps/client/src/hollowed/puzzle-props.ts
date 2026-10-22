@@ -8,6 +8,7 @@ import {
   kitMesh,
   merged,
   painted,
+  torus,
   uvSphere,
   type Part,
 } from '../explore/kit-mesh.js';
@@ -113,51 +114,115 @@ const SHAPES: Readonly<Record<string, { broken: () => Part; fixed: () => Part }>
       ]);
     },
   },
+  // A two-tier fountain (owner: "make the fountain read clearly as a
+  // fountain"): a wide basin with a lip, a column, a small bowl on top and,
+  // mended, a plume of water falling back into both.
   fountain: {
     broken: () => {
-      const inside = painted(disc({ radius: 0.34, tessellation: 20 }), '#5f574c');
-      inside.rotation.x = Math.PI / 2;
-      inside.position.y = 0.2;
+      const dry = painted(disc({ radius: 0.36, tessellation: 20 }), '#5f574c');
+      dry.rotation.x = Math.PI / 2;
+      dry.position.y = 0.17;
+      // The top bowl has toppled off and lies on its side in the grass.
+      const bowl = painted(
+        cylinderPart({ height: 0.1, diameterTop: 0.36, diameterBottom: 0.16, tessellation: 14 }),
+        '#a39684',
+      );
+      bowl.position.set(0.56, 0.12, -0.26);
+      bowl.rotation.set(0.2, 0.6, 1.3);
       const chip = painted(box({ width: 0.14, height: 0.04, depth: 0.12 }), '#a39684');
-      chip.position.set(0.48, 0.02, -0.2);
+      chip.position.set(-0.5, 0.02, 0.28);
       chip.rotation.y = 0.5;
       return merged([
+        ...basin('#b8ab98', '#a39684'),
+        dry,
+        // A snapped column.
         at(
-          painted(cylinderPart({ height: 0.22, diameter: 0.86, tessellation: 20 }), '#b8ab98'),
+          painted(cylinderPart({ height: 0.2, diameter: 0.12, tessellation: 10 }), '#a39684'),
           0,
-          0.11,
+          0.27,
           0,
         ),
-        inside,
-        at(
-          painted(cylinderPart({ height: 0.26, diameter: 0.12, tessellation: 10 }), '#a39684'),
-          0,
-          0.3,
-          0,
-        ),
+        bowl,
         chip,
       ]);
     },
     fixed: () => {
-      const water = painted(disc({ radius: 0.36, tessellation: 20 }), '#7fc8f0');
+      const water = painted(disc({ radius: 0.38, tessellation: 20 }), '#7fc8f0');
       water.rotation.x = Math.PI / 2;
-      water.position.y = 0.2;
+      water.position.y = 0.18;
+      const topWater = painted(disc({ radius: 0.16, tessellation: 14 }), '#7fc8f0');
+      topWater.rotation.x = Math.PI / 2;
+      topWater.position.y = 0.6;
+      // Droplets arcing from the top bowl's lip down into the basin.
+      const drops = [0, 1, 2, 3, 4, 5].flatMap((k) => {
+        const [cx, cz] = AROUND6[k] as readonly [number, number];
+        return [
+          at(
+            painted(uvSphere({ diameter: 0.06, segments: 6 }), '#bfe6ff'),
+            cx * 0.24,
+            0.52,
+            cz * 0.24,
+          ),
+          at(
+            painted(uvSphere({ diameter: 0.05, segments: 6 }), '#bfe6ff'),
+            cx * 0.3,
+            0.36,
+            cz * 0.3,
+          ),
+        ];
+      });
       return merged([
-        at(
-          painted(cylinderPart({ height: 0.22, diameter: 0.86, tessellation: 20 }), '#e9dcc4'),
-          0,
-          0.11,
-          0,
-        ),
+        ...basin('#e9dcc4', '#d08a54'),
         water,
         at(
-          painted(cylinderPart({ height: 0.34, diameter: 0.12, tessellation: 10 }), '#d08a54'),
+          painted(cylinderPart({ height: 0.36, diameter: 0.1, tessellation: 10 }), '#d08a54'),
           0,
-          0.34,
+          0.36,
           0,
         ),
-        at(painted(uvSphere({ diameter: 0.2, segments: 8 }), '#bfe6ff'), 0, 0.56, 0),
+        at(
+          painted(
+            cylinderPart({
+              height: 0.1,
+              diameterTop: 0.36,
+              diameterBottom: 0.16,
+              tessellation: 14,
+            }),
+            '#e9dcc4',
+          ),
+          0,
+          0.57,
+          0,
+        ),
+        topWater,
+        // The plume.
+        at(
+          painted(cylinderPart({ height: 0.16, diameter: 0.05, tessellation: 8 }), '#bfe6ff'),
+          0,
+          0.68,
+          0,
+        ),
+        at(painted(uvSphere({ diameter: 0.14, segments: 8 }), '#bfe6ff'), 0, 0.78, 0),
+        ...drops,
       ]);
     },
   },
 };
+
+/** The fountain's basin: a low wall and a rounded lip, so it reads as a pool from above. */
+function basin(wall: string, lip: string): Part[] {
+  return [
+    at(painted(cylinderPart({ height: 0.2, diameter: 0.9, tessellation: 20 }), wall), 0, 0.1, 0),
+    at(painted(torus({ diameter: 0.88, thickness: 0.08, tessellation: 24 }), lip), 0, 0.2, 0),
+  ];
+}
+
+/** Six directions round the column (unit length), as constants (tech spec §8). */
+const AROUND6: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [0.5, 0.866],
+  [-0.5, 0.866],
+  [-1, 0],
+  [-0.5, -0.866],
+  [0.5, -0.866],
+];

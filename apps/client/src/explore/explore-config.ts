@@ -79,7 +79,7 @@ export const EXPLORE_VIEW = {
     reeds: 0.04,
     ledge: 0.046,
     cave: 0.046,
-    // A grey village's broken thing (#306 PR 2b): the memory puzzle.
+    // A grey village's broken thing (#306 PR 2b): the Relight puzzle.
     puzzle: 0.05,
   } as Readonly<Record<string, number>>, // TUNE
   /** Any other kind of spot. */

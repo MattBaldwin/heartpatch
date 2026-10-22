@@ -35,18 +35,6 @@ export const HOLLOWED_EXPLORE = {
   }, // TUNE
   /** How long the spook's line stays up, ms. */
   spookedMs: 2600, // TUNE
-  /**
-   * A memory puzzle (PR 2b; its collider is `EXPLORE_VIEW.spotRadius.puzzle`):
-   * how long each piece lights up while
-   * it shows the order and the pause between (ms), how many wrong taps
-   * before the next piece glows by itself, and how long a wrong piece wobbles.
-   */
-  puzzle: {
-    showMs: 750,
-    gapMs: 250,
-    missesForGlow: 2,
-    wobbleMs: 450,
-  }, // TUNE
 } as const;
 
 /**

@@ -9,7 +9,7 @@ export const LORE_CHAPTERS: LoreChapter[] = [
   { id: 'wild-lands', title: 'The Wild Lands', order: 2 },
   { id: 'hollow-man', title: 'The Hollow Man', order: 3 },
   { id: 'little-guardians', title: 'Little Guardians', order: 4 },
-  // Hollowed Communities (#306 PR 2b): pages a grey village's memory puzzles give.
+  // Hollowed Communities (#306 PR 2b): pages a grey village's Relight puzzles give.
   { id: 'hollows', title: 'The Hollows', order: 5 },
 ];
 
@@ -209,7 +209,7 @@ export const LORE_PAGES: LoreEntry[] = [
   },
 
   // ── The Hollows ──────────────────────────────────────────────────────
-  // A grey village's memory puzzle gives one (#306 PR 2b, `PUZZLE_REWARDS`):
+  // A grey village's Relight puzzle gives one (#306 PR 2b, `PUZZLE_REWARDS`):
   // any puzzle, whichever page is still unfound.
   {
     id: 'the-market-day-tune',

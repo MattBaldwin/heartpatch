@@ -5,3 +5,4 @@ export * from './restore.js';
 export * from './perks.js';
 export * from './cellar.js';
 export * from './puzzle.js';
+export * from './relight.js';

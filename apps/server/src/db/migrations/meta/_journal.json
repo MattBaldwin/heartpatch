@@ -379,6 +379,13 @@
       "when": 1792639416128,
       "tag": "0053_cellar_searched",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792667381907,
+      "tag": "0054_tile_explore_puzzle",
+      "breakpoints": true
     }
   ]
 }

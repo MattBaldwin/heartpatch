@@ -2,10 +2,10 @@ import type { WorldPoint } from '../hex/index.js';
 import type { MemoryPuzzleRules, PuzzleSkin } from '../schemas/data/memory-puzzles.js';
 import { Rng, deriveSeed, type Seed } from '../rng/index.js';
 
-// A grey village tile's memory puzzle (#306 PR 2b). Pure: the server fills
-// `HollowedExplore.puzzle` with these from the village's secret seed and
-// checks a solve against the same order, so the card a kid saw and the
-// server's answer never disagree.
+// Where a grey village tile's broken thing stands, and what it looks like
+// (#306 PR 2b). Pure: the server fills `HollowedExplore.puzzle` with these
+// from the village's secret seed. The puzzle it holds is Relight
+// (`relight.ts`), made fresh for each try.
 
 /** The skin a terrain's puzzle wears (`MEMORY_PUZZLES`). */
 export function puzzleSkinFor(terrain: string, rules: MemoryPuzzleRules): PuzzleSkin {
@@ -17,10 +17,9 @@ export function puzzleSkinFor(terrain: string, rules: MemoryPuzzleRules): Puzzle
   return skin;
 }
 
-/** A tile's puzzle: its skin, the order its pieces go back in, and where it stands (tile-local). */
+/** A tile's broken thing: its skin and where it stands (tile-local). */
 export interface MemoryPuzzle {
   readonly skin: string;
-  readonly order: readonly string[];
   readonly x: number;
   readonly z: number;
 }
@@ -34,9 +33,9 @@ const ECHO_GAP = 0.34;
 const TRIES = 120;
 
 /**
- * The memory puzzle of a grey village tile, from the village's secret seed
- * and the tile: the same for everyone. Its order is a shuffle of its skin's
- * pieces; it stands clear of the spots and the echoes.
+ * The broken thing of a grey village tile, from the village's secret seed
+ * and the tile: the same for everyone. It stands clear of the spots and the
+ * echoes.
  */
 export function memoryPuzzle(
   seed: Seed,
@@ -47,14 +46,6 @@ export function memoryPuzzle(
 ): MemoryPuzzle {
   const rng = Rng.fromSeed(deriveSeed(seed, 'puzzle', tile.q, tile.r));
   const skin = puzzleSkinFor(tile.terrain, rules);
-  // Fisher–Yates on the seeded roll.
-  const order = skin.pieces.map((p) => p.id);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = rng.int(0, i);
-    const swap = order[i] as string;
-    order[i] = order[j] as string;
-    order[j] = swap;
-  }
   const clear = (x: number, z: number, from: readonly WorldPoint[], gap: number) =>
     from.every((p) => (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) >= gap * gap);
   let best: WorldPoint | null = null;
@@ -71,12 +62,7 @@ export function memoryPuzzle(
   }
   // A crowded tile: the clearest of a few places round the middle.
   const at = best ?? roomiest(spots, echoes);
-  return { skin: skin.id, order, x: at.x, z: at.z };
-}
-
-/** Is `order` the puzzle's own, piece for piece? */
-export function puzzleSolvedBy(puzzle: Pick<MemoryPuzzle, 'order'>, order: readonly string[]) {
-  return order.length === puzzle.order.length && order.every((id, i) => puzzle.order[i] === id);
+  return { skin: skin.id, x: at.x, z: at.z };
 }
 
 /** Twelve places round the middle (unit length: the six hex directions and between them), as constants (tech spec §8). */

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ClothingDropSourceSchema } from './data/clothing.js';
 import { CommunityKindIdSchema } from './data/communities.js';
+import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -730,10 +731,12 @@ export const GAME_EVENTS = {
     }),
   },
   /**
-   * A player fixed a grey village tile's memory puzzle (#306 PR 2b): once a
-   * tile each. `lorePage` and `recipe` are the server-only pages it gave
-   * (the lore consumer grants `lorePage`); members see who fixed which
-   * kind of thing where, and a `notable` find's kind.
+   * A player relit a grey village tile's path (#306 PR 2b, Relight): once a
+   * tile each. `depth`, `attempt` and `moves` say which try and how long it
+   * took (the try's board is rebuilt from the Hollow's seed, so any solve
+   * can be checked again). `lorePage` and `recipe` are the server-only
+   * pages it gave (the lore consumer grants `lorePage`); members see who
+   * fixed which kind of thing where, and a `notable` find's kind.
    */
   'explore.puzzled': {
     internal: z.strictObject({
@@ -744,6 +747,9 @@ export const GAME_EVENTS = {
       /** The solve: the ledger's `refId` for its items. */
       solveId: z.uuid(),
       skin: ContentIdSchema,
+      depth: RelightDepthSchema,
+      attempt: z.number().int().min(1),
+      moves: z.number().int().min(0),
       lorePage: ContentIdSchema.nullable(),
       recipe: ContentIdSchema.nullable(),
       items: z.record(z.string(), z.number().int().min(1)),

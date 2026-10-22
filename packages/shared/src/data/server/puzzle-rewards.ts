@@ -1,7 +1,7 @@
 import type { Rng } from '../../rng/index.js';
 
 /**
- * What fixing a grey village tile's memory puzzle gives (#306 PR 2b, plan
+ * What fixing a grey village tile's Relight puzzle gives (#306 PR 2b, plan
  * Q5: "the server rolls a lore page or a Rekindled recipe page"). Secret
  * (CLAUDE.md rule 6), like the find tables.
  */

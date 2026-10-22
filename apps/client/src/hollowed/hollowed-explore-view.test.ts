@@ -5,7 +5,6 @@ import {
   discOpening,
   echoAt,
   HOLLOWED_TEXT,
-  pieceOf,
   PUZZLE_INDEX,
   puzzleLines,
   puzzleSpot,
@@ -92,10 +91,10 @@ describe('joy discs and sparks', () => {
   });
 });
 
-describe('a grey village tile’s memory puzzle (#306 PR 2b): words', () => {
+describe('a grey village tile’s Relight puzzle (#306 PR 2b): words', () => {
   const puzzle = {
     skin: 'mural',
-    order: ['sun', 'tree', 'house', 'rainbow'],
+    depth: 'rim' as const,
     x: 0.2,
     z: -0.1,
     solved: false,
@@ -105,8 +104,8 @@ describe('a grey village tile’s memory puzzle (#306 PR 2b): words', () => {
     const skin = skinOf(puzzle);
     expect(HOLLOWED_TEXT.fix(skin)).toBe('Fix the mural');
     expect(HOLLOWED_TEXT.broken(skin)).toBe('A broken mural 🖼️');
-    expect(HOLLOWED_TEXT.placed(2, 4)).toBe('2 of 4 back');
-    expect(pieceOf(skin, 'sun')).toEqual({ emoji: '🌞', name: 'the sun' });
+    expect(HOLLOWED_TEXT.moves(3, 12)).toBe('Moves 3 of 12');
+    expect(HOLLOWED_TEXT.lit(1, 2)).toBe('Lanterns lit 1 of 2');
     // A skin this build doesn't know yet still draws (the default's words).
     expect(skinOf({ skin: 'tea-set' }).id).toBe('music-box');
   });
@@ -136,9 +135,15 @@ describe('a grey village tile’s memory puzzle (#306 PR 2b): words', () => {
     expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The Hollow says thank you!' }]);
   });
 
-  it('keeps every puzzle line kind (style guide §9)', () => {
-    for (const line of Object.values(HOLLOWED_TEXT)) {
-      if (typeof line === 'string') expect(findAvoidedWords(line)).toEqual([]);
+  it('keeps every puzzle line kind and Hollow-worded (style guide §9, #602)', () => {
+    const lines: unknown[] = [
+      ...Object.values(HOLLOWED_TEXT),
+      ...Object.values(HOLLOWED_TEXT.cell),
+    ];
+    const words = lines.filter((line): line is string => typeof line === 'string');
+    for (const line of words) {
+      expect(findAvoidedWords(line)).toEqual([]);
+      expect(line).not.toMatch(/village|community|hint|peek/i);
     }
   });
 });

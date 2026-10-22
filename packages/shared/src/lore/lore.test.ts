@@ -16,7 +16,7 @@ describe('lore pages', () => {
     }
     expect(LORE_PAGES.filter((p) => p.trigger.mapKinds.includes('tutorial'))).toHaveLength(2);
     expect(LORE_PAGES.filter((p) => p.trigger.eventType === 'explore.searched')).toHaveLength(5);
-    // The grey villages' memory puzzles (#306 PR 2b).
+    // The grey villages' Relight puzzles (#306 PR 2b).
     expect(LORE_PAGES.filter((p) => p.trigger.eventType === 'explore.puzzled')).toHaveLength(3);
   });
 
