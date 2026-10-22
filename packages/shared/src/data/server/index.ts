@@ -28,11 +28,15 @@ export * from '../../schemas/data/explore-finds.js';
 export * from '../../explore/finds.js';
 export { EXPLORE_FINDS } from './explore-finds.js';
 export {
+  CELLAR_FINDS,
+  cellarFinds,
   HOLLOWED_FINDS,
   HOLLOWED_HELPER_GIFT,
-  REKINDLED_DROPS,
   hollowedFinds,
+  REKINDLED_DROPS,
 } from './hollowed-finds.js';
+export * from '../../schemas/data/cellar.js';
+export { CELLAR_RULES } from './cellar.js';
 export * from '../../schemas/data/found-set-drops.js';
 export * from '../../wardrobe/found-set-drops.js';
 export * from '../../schemas/data/house-gifts.js';

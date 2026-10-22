@@ -13,7 +13,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
-import { itemIcon } from '../inventory/item-icons.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 import { TOOL_ICONS, TOOL_WORDS } from '../inventory/tool-uses.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 
@@ -283,7 +283,9 @@ export function findLines(found: SearchSpotResponse): FindLine[] {
   }
   if (found.clothing) {
     const piece = CLOTHING_BY_ID.get(found.clothing);
-    lines.push({ kind: 'clothing', text: `👒 ${piece?.name ?? EXPLORE_TEXT.clothing}` });
+    // The piece's own slot picture (a jacket's 👕, not a hat's).
+    const icon = piece ? clothingSlotIcon(piece.slot) : '✨';
+    lines.push({ kind: 'clothing', text: `${icon} ${piece?.name ?? EXPLORE_TEXT.clothing}` });
   }
   if (lines.length === 0) lines.push({ kind: 'none', text: EXPLORE_TEXT.worm });
   return lines;

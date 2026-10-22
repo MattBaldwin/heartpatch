@@ -1,6 +1,14 @@
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
-import { battles, mapMembers, maps, speciesSeen, squishies, tiles } from '../../db/schema.js';
+import {
+  battles,
+  communityTiles,
+  mapMembers,
+  maps,
+  speciesSeen,
+  squishies,
+  tiles,
+} from '../../db/schema.js';
 
 /** What spawning needs to know about a map. `seed` is secret (tech spec §8). */
 export interface SpawnMapRow {
@@ -18,6 +26,8 @@ export interface SpawnTileRow {
   ownerUserId: string | null;
   /** Its Hollowed Community (#306), or null. */
   communityId: string | null;
+  /** A village tile with every piece back (#306 PR 3); false on any other tile. */
+  restored: boolean;
 }
 
 export interface SeenRow {
@@ -90,8 +100,10 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
           terrain: tiles.terrain,
           ownerUserId: tiles.ownerUserId,
           communityId: tiles.communityId,
+          restored: sql<boolean>`${communityTiles.restoredAt} is not null`,
         })
         .from(tiles)
+        .leftJoin(communityTiles, eq(communityTiles.tileId, tiles.id))
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r)),
 

@@ -21,6 +21,7 @@ import {
   GAME_DATA,
   gameplayOverrides,
   GROWTH_RULES,
+  HEART_COIN_RULES,
   MAP_GEN,
   befriendedBetween,
   otherSide,
@@ -64,6 +65,7 @@ import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
 import { writeGuardCheckpoints, type GuardWatch } from '../jobs/contentment.js';
 import { creditCoins } from '../coins/service.js';
+import { creditHeartCoins } from '../heart-coins/service.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
@@ -955,21 +957,21 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
   };
 
-  /** Credits each of a finished battle's coin rewards to its player (`creditCoins`). */
+  /**
+   * Credits each of a finished battle's coin rewards to its player: Patch
+   * Coins (`creditCoins`, step 12), then Heart Coins on the patch
+   * (`creditHeartCoins`, step 12b, #601).
+   */
   const payCoins = async (
     tx: Executor,
     row: BattleRow,
     at: Date,
-    rewards: readonly { source: 'battle' | 'capture'; amount: number }[],
+    rewards: readonly { source: 'battle' | 'capture'; amount: number; heart: number }[],
   ): Promise<void> => {
-    for (const reward of rewards) {
-      await creditCoins(tx, {
-        ...reward,
-        refId: row.id,
-        userId: row.playerUserId,
-        mapId: row.mapId,
-        at,
-      });
+    const paid = { refId: row.id, userId: row.playerUserId, mapId: row.mapId, at };
+    for (const { source, amount } of rewards) await creditCoins(tx, { ...paid, source, amount });
+    for (const { source, heart } of rewards) {
+      await creditHeartCoins(tx, { ...paid, source, amount: heart });
     }
   };
 
@@ -1154,23 +1156,23 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Patch Coins (#45): a win, and a befriended squishy or a claimed tile,
     // each once per battle. Gentle's share scales them like the XP and the
     // find. After the squishy and `species_seen` locks, before the events.
+    // Heart Coins (#601) follow the same rules from their own table.
+    const won = result.winner === PLAYER_SIDE;
+    const share = (coins: number, percent: number) => Math.floor((coins * percent) / 100);
+    const capture = (rules: { capture: { wild: number; tile: number } }) =>
+      captured ? rules.capture.wild : tile.drop ? share(rules.capture.tile, tile.drop.percent) : 0;
     await payCoins(tx, row, at, [
       {
         source: 'battle',
-        amount:
-          result.winner === PLAYER_SIDE
-            ? Math.floor((COIN_RULES.battleWin[row.kind] * tile.xpPercent) / 100)
-            : 0,
+        amount: won ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        heart: won ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
       },
       {
         // A befriended wild squishy, or a claimed tile (befriending its
         // guardians on the way pays nothing more, #279).
         source: 'capture',
-        amount: captured
-          ? COIN_RULES.capture.wild
-          : tile.drop
-            ? Math.floor((COIN_RULES.capture.tile * tile.drop.percent) / 100)
-            : 0,
+        amount: capture(COIN_RULES),
+        heart: capture(HEART_COIN_RULES),
       },
     ]);
     await repo.finish(row.id, {

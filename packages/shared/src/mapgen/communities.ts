@@ -32,6 +32,16 @@ export interface ExistingCommunity {
   readonly keyTile: Hex;
 }
 
+/**
+ * How far a village's cellar key hides from it, in steps from the nearest
+ * village tile (owner decision 5). Server-only data (`data/server`, rule
+ * 6), so the server passes it in.
+ */
+export interface CellarKeyRange {
+  readonly min: number;
+  readonly max: number;
+}
+
 export interface CommunityPlacementInput {
   /** Every tile on the map, in any order: they're sorted by (q, r) first, and the seed breaks ties. */
   readonly tiles: readonly CommunityPlacementTile[];
@@ -48,6 +58,11 @@ export interface CommunityPlacementInput {
   readonly maxFromSeed?: number;
   /** Boot pass last resort: place as many as fit, without covering every home. */
   readonly partial?: boolean;
+  /**
+   * Where cellar keys hide (the server-only cellar key range). The server always
+   * passes it; without it (a client preview) villages get no key tile.
+   */
+  readonly keys?: CellarKeyRange;
 }
 
 /** One new village. */
@@ -57,8 +72,11 @@ export interface PlacedCommunity {
   readonly square: Hex;
   /** Every village tile: the square first, then the neighbours in (q, r) order. */
   readonly tiles: readonly Hex[];
-  /** Where the cellar key hides: outside the village (owner decision 5). Secret. */
-  readonly keyTile: Hex;
+  /**
+   * Where the cellar key hides: outside the village (owner decision 5).
+   * Secret. Null only when placed without `keys` (a client preview).
+   */
+  readonly keyTile: Hex | null;
 }
 
 /**
@@ -147,8 +165,10 @@ export function placeCommunities(input: CommunityPlacementInput): PlacedCommunit
     t.homeSlot !== null;
   // Can the cellar key hide near this square? One tile `min + 1`..`max`
   // steps out is `min`..`max` from whichever tiles the village takes.
+  const keyRange = input.keys;
   const hasKeySpot = (square: Hex): boolean => {
-    for (let steps = rules.keyFromVillage.min + 1; steps <= rules.keyFromVillage.max; steps++) {
+    if (!keyRange) return true;
+    for (let steps = keyRange.min + 1; steps <= keyRange.max; steps++) {
       for (const h of hexRing(square, steps)) {
         const key = hexKey(h);
         if (!blocked(byKey.get(key)) && !existingRings.has(key) && !existingKeys.has(key)) {
@@ -392,7 +412,7 @@ function dress(
     (_, i) => `${stems[i % Math.max(1, stems.length)] ?? rules.nameStems[0]} ${rules.nameSuffix}`,
   );
 
-  // Cellar keys: outside every ring, distinct, `keyFromVillage` from their own village.
+  // Cellar keys: outside every ring, distinct, `input.keys` steps from their own village.
   const rings = new Set<HexKey>([
     ...existing.flatMap((c) => hexSpiral(c.square, 1).map(hexKey)),
     ...villages.flatMap((v) => hexSpiral(v.square, 1).map(hexKey)),
@@ -406,26 +426,26 @@ function dress(
       t.homeSlot === null &&
       !rings.has(hexKey(t)),
   );
+  const range = input.keys;
   const placed: PlacedCommunity[] = [];
   for (const [i, v] of villages.entries()) {
+    const village = { name: names[i] as string, kind: kinds[i] as CommunityKindId, ...v };
+    if (!range) {
+      placed.push({ ...village, keyTile: null });
+      continue;
+    }
     const fits = spots.filter((t) => {
       // Every village tile is a step from the square at most, so a spot
       // further than that can't fit: skip it without measuring them all.
-      if (hexDistance(v.square, t) > rules.keyFromVillage.max + 1) return false;
+      if (hexDistance(v.square, t) > range.max + 1) return false;
       if (keys.has(hexKey(t))) return false;
       const steps = Math.min(...v.tiles.map((h) => hexDistance(h, t)));
-      return steps >= rules.keyFromVillage.min && steps <= rules.keyFromVillage.max;
+      return steps >= range.min && steps <= range.max;
     });
     if (fits.length === 0) return null;
     const spot = rng.pick(fits);
     keys.add(hexKey(spot));
-    placed.push({
-      name: names[i] as string,
-      kind: kinds[i] as CommunityKindId,
-      square: v.square,
-      tiles: v.tiles,
-      keyTile: { q: spot.q, r: spot.r },
-    });
+    placed.push({ ...village, keyTile: { q: spot.q, r: spot.r } });
   }
   return placed;
 }

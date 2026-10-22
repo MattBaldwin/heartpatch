@@ -20,6 +20,8 @@ import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { buildingsRoutes } from './modules/buildings/routes.js';
 import { createBuildingsService } from './modules/buildings/service.js';
+import { cellarRoutes } from './modules/communities/cellar-routes.js';
+import { createCellarService } from './modules/communities/cellar.js';
 import { communityRoutes } from './modules/communities/routes.js';
 import { createRestoreService } from './modules/communities/restore.js';
 import { exploreRoutes } from './modules/explore/routes.js';
@@ -45,6 +47,8 @@ import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
 import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
+import { postSellRoutes } from './modules/post-sell/routes.js';
+import { createPostSellService } from './modules/post-sell/service.js';
 import { trickOrTreatRoutes } from './modules/trick-or-treat/routes.js';
 import { createTrickOrTreatService } from './modules/trick-or-treat/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
@@ -91,6 +95,8 @@ import { boutiqueRoutes } from './modules/boutique/routes.js';
 import { createBoutiqueService } from './modules/boutique/service.js';
 import { coinsRoutes } from './modules/coins/routes.js';
 import { createCoinsService } from './modules/coins/service.js';
+import { heartCoinsRoutes } from './modules/heart-coins/routes.js';
+import { createHeartCoinsService } from './modules/heart-coins/service.js';
 import { setDevDropChance } from './modules/wardrobe/drops.js';
 import { wardrobeRoutes } from './modules/wardrobe/routes.js';
 import { createWardrobeService } from './modules/wardrobe/service.js';
@@ -431,6 +437,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        // The key hunt and the hidden cellar of a won village (#306 PR 2c).
+        await api.register(
+          cellarRoutes(createCellarService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
         // Journeys to trading posts (#270).
         await api.register(
           journeysRoutes(createJourneysService({ battles }), { hooks: authHooks, idempotency }),
@@ -445,6 +459,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The trading post's Glimmer swap (#523).
         await api.register(
           glimmerSwapRoutes(createGlimmerSwapService({ db, clock }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Selling extras to the trading post for Heart Coins (#601 PR 3).
+        await api.register(
+          postSellRoutes(createPostSellService({ db, clock }), {
             hooks: authHooks,
             idempotency,
           }),
@@ -498,6 +519,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Patch Coins and the Boutique (#45): account-level, earned in play.
         await api.register(
           coinsRoutes(createCoinsService({ db, clock }), {
+            hooks: authHooks,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Heart Coins (#601): per player per patch, earned by playing there.
+        await api.register(
+          heartCoinsRoutes(createHeartCoinsService({ db, clock }), {
             hooks: authHooks,
             devGrants: config.HP_DEV_SQUISHY_GRANTS,
           }),

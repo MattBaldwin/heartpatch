@@ -132,3 +132,53 @@ export function checkGlimmerSwapRules(
   if (!byId.has('glimmer')) problems.push('glimmer: not an item');
   return problems;
 }
+
+/**
+ * Selling extras to the trading post for Heart Coins (#601 PR 3; #320 part 1,
+ * owner decisions 2026-10-22). Public: the Sell tab shows the prices, and the
+ * server enforces them. The daily cap is Heart Coins' own
+ * (`HEART_COIN_RULES.dailyCaps.sell`), so it lives in one place.
+ */
+export const SellRulesSchema = z.strictObject({
+  /**
+   * What the post buys from the bag, and for how much: `coins` Heart Coins
+   * for each `lot` of the item. An item not listed isn't sold.
+   */
+  items: z.record(ContentIdSchema, z.strictObject({ lot: positiveInt, coins: positiveInt })),
+  /** Heart Coins for one spare clothing piece, by its rarity. */
+  clothing: z.record(ClothingRaritySchema, positiveInt),
+  /** Items the post never buys, however the price list changes (rare, or kept for a reason). */
+  neverSold: z.array(ContentIdSchema),
+});
+export type SellRules = z.infer<typeof SellRulesSchema>;
+
+/**
+ * Validates the sell rules against the game's items and returns readable
+ * problems, or `[]`: the post buys only known, tradable items (so never a
+ * tool), never one on `neverSold`, and every price fits under the day's cap.
+ */
+export function checkSellRules(
+  input: unknown,
+  resources: readonly Pick<Resource, 'id' | 'tradable'>[],
+  dailyCap: number,
+): string[] {
+  const result = SellRulesSchema.safeParse(input);
+  if (!result.success) return formatDataIssues(input, result.error);
+  const rules = result.data;
+  const problems: string[] = [];
+  const byId = new Map(resources.map((r) => [r.id, r]));
+  for (const [id, price] of Object.entries(rules.items)) {
+    const resource = byId.get(id);
+    if (!resource) problems.push(`items: unknown item "${id}"`);
+    else if (!isTradableResource(resource)) problems.push(`items: "${id}" stays with its Keeper`);
+    if (rules.neverSold.includes(id)) problems.push(`items: "${id}" is never sold`);
+    if (price.coins > dailyCap) problems.push(`items: one lot of "${id}" is more than a day's cap`);
+  }
+  for (const id of rules.neverSold) {
+    if (!byId.has(id)) problems.push(`neverSold: unknown item "${id}"`);
+  }
+  for (const [rarity, coins] of Object.entries(rules.clothing)) {
+    if (coins > dailyCap) problems.push(`clothing: a ${rarity} piece is more than a day's cap`);
+  }
+  return problems;
+}

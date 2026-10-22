@@ -51,6 +51,7 @@ import {
   squishyRarity,
   upgradeOffer,
   upgradeReach,
+  type HomeSpot,
 } from './home-view.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000001${String(n).padStart(2, '0')}`;
@@ -406,6 +407,26 @@ describe('build menu', () => {
     // A building being moved: its own tile counts as free.
     const moving = freeHomeSpots(homeWith({ buildings: [fire({ spot: 1 })] }), ID(1));
     expect(moving[0]).toEqual({ q: 0, r: 0, spot: 1 });
+  });
+
+  it("never offers the house's tile while the house stands (#604), as the server refuses it", () => {
+    const onTile = (spots: HomeSpot[], q: number, r: number) =>
+      spots.some((s) => s.q === q && s.r === r);
+    // House off: every tile, as before.
+    expect(onTile(freeHomeSpots(homeWith()), 1, -1)).toBe(true);
+    // A new home's house is on the back-right tile, (1, −1).
+    const fresh = freeHomeSpots(homeWith({ house: { level: 1 } }));
+    expect(onTile(fresh, 1, -1)).toBe(false);
+    expect(fresh).toHaveLength(6 + 6 + 28);
+    // An older home with a habitat there: the house takes the next one, (0, −1).
+    const den = meadow({ q: 1, r: -1, spot: 2 });
+    const older = homeWith({ house: { level: 1 }, buildings: [den] });
+    expect(onTile(freeHomeSpots(older), 1, -1)).toBe(false);
+    expect(onTile(freeHomeSpots(older), 0, -1)).toBe(false);
+    // Moving that habitat: its own tile is offered (a spot change), the house's never.
+    const moving = freeHomeSpots(older, den.id);
+    expect(onTile(moving, 1, -1)).toBe(true);
+    expect(onTile(moving, 0, -1)).toBe(false);
   });
 
   it('previews what taking down gives back, unburned fuel included', () => {

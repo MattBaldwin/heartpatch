@@ -1,4 +1,4 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, houseTile } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -318,7 +318,7 @@ interface BookDebug {
 test('a home base with no room says why, and Recipe book opens the book and comes home (#537)', async ({
   browser,
 }) => {
-  test.setTimeout(240_000); // two home scene builds (seven buildings) and the map between; CI renders in software
+  test.setTimeout(240_000); // two home scene builds (six buildings) and the map between; CI renders in software
   const page = await newPlayer(browser, uniqueName('full'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -333,8 +333,9 @@ test('a home base with no room says why, and Recipe book opens the book and come
     .toBeGreaterThan(0);
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
-  // Four Ember Dens and three Cozy Meadows (four each may stand, owner
-  // 2026-10-18): one on every home tile, so a meadow could go up but has no room.
+  // Four Ember Dens and two Cozy Meadows (four each may stand, owner
+  // 2026-10-18): one on every home tile but the house's (#604, HP_HOUSE is
+  // on for e2e), so a meadow could go up but has no room.
   expect(
     (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 40, stone: 20 } }))
       .status,
@@ -344,14 +345,16 @@ test('a home base with no room says why, and Recipe book opens the book and come
     'GET',
     `/maps/${mapId}/home`,
   );
-  const tiles = [...home.body.tiles].sort((a, b) => Number(b.heartSeed) - Number(a.heartSeed));
-  expect(tiles).toHaveLength(7);
+  expect(home.body.tiles).toHaveLength(7);
+  const house = houseTile(home.body.tiles, [])!;
+  const tiles = home.body.tiles
+    .filter((t) => t.q !== house.q || t.r !== house.r)
+    .sort((a, b) => Number(b.heartSeed) - Number(a.heartSeed));
   for (const [i, buildingId] of [
     'ember-den',
     'ember-den',
     'ember-den',
     'ember-den',
-    'cozy-meadow',
     'cozy-meadow',
     'cozy-meadow',
   ].entries()) {
@@ -365,7 +368,7 @@ test('a home base with no room says why, and Recipe book opens the book and come
   // (the owner saw no reason).
   await (await trayButton(page, 'home-open')).tap();
   const slow = { timeout: 30_000 };
-  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(7);
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(6);
   const sheet = page.getByTestId('home');
   await sheet.getByTestId('home-build').tap();
   await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();

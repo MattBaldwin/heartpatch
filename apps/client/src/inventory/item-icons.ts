@@ -74,3 +74,21 @@ export function itemIconNode(itemId: string, className: string): Node {
   const drawn = tool ? TOOL_ICONS[tool.tool] : clears ? CLEAR_TOOL_ICONS[clears] : null;
   return iconNode(drawn ?? itemIcon(itemId), className);
 }
+
+/** One clothing slot's little picture (a trade line, a find card). */
+const CLOTHING_SLOT_ICONS: Readonly<Record<string, string>> = {
+  hat: '🎩',
+  'hair-accessory': '🎀',
+  top: '👕',
+  bottom: '👖',
+  shoes: '👟',
+  back: '🎒',
+  held: '🧸',
+  costume: '🎭',
+  squishy: '🧣',
+};
+
+/** The picture for a piece of clothing in `slot`; a sparkle for a slot this client doesn't know. */
+export function clothingSlotIcon(slot: string): string {
+  return CLOTHING_SLOT_ICONS[slot] ?? '✨';
+}

@@ -40,6 +40,8 @@ export interface RestoreSheetOptions {
   onOpen?: () => void;
   /** Glides the camera so a tile sits above the sheet (the restore sheet's tile, the won ring). */
   reveal?: (at: Hex, wide: boolean) => void;
+  /** The sheet closed (PR 2c: a won village's key map card waits for the joy card). */
+  onClose?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -61,6 +63,8 @@ export interface RestoreSheet {
    */
   openWon: (community: CommunityView) => void;
   close: () => void;
+  /** A card is up. */
+  readonly isOpen: boolean;
   readonly debug: RestoreSheetDebug;
 }
 
@@ -105,8 +109,10 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
     said = null;
     blocked = null;
     working = false;
+    const was = !sheet.hidden;
     sheet.hidden = true;
     sheet.replaceChildren();
+    if (was) options.onClose?.();
   };
 
   const button = (label: string, testId: string, soft: boolean, onTap?: () => void) => {
@@ -401,6 +407,9 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       options.reveal?.(community.square, true);
     },
     close,
+    get isOpen() {
+      return !sheet.hidden;
+    },
     get debug() {
       return { card, piecesDone: reply?.tile.piecesDone ?? null, blocked, said };
     },

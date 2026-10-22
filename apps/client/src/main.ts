@@ -26,6 +26,7 @@ import { createCommunityActions } from './hollowed/community-actions.js';
 import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
+import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -42,6 +43,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
+import { createTileMarks } from './map/tile-marks.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -386,8 +388,13 @@ const care = createCareSheet({
 // Squishy jobs (owner decisions 2026-10-04): the job board and team picker
 // sheets. Temporary entry points the trays will move: home's "Jobs & team",
 // the tile panel's "Send a gatherer", and Team / Jobs by the battle entry.
+// One quiet mark on my own tiles that need me (#602): my gatherers' now,
+// #601's resource buildings' later. One map layer, handed to each feature.
+const tileMarks = createTileMarks(document.body);
 const jobs = createJobs({
   root: document.body,
+  marks: tileMarks,
+  invalidate: () => stage?.invalidate(),
   isGlade: (mapId) => mapId === glade,
   // Finished work goes straight to the bag (owner decision 2026-10-06): the
   // board settles the map on screen (the bag's) before it reads its view.
@@ -960,6 +967,27 @@ const restoreSheet = createRestoreSheet({
       wide ? RING_ZOOM : BUILD_ZOOM,
     );
   },
+  // The joy card closed: a won village's key map card shows next (#306 PR 2c).
+  onClose: () => {
+    keyHunt.showWaiting();
+  },
+});
+// A won village's key hunt and hidden cellar (#306 PR 2c): the map card, the
+// key's flag and panel, the cellar door on the square, and down into it.
+const keyHunt = createKeyHunt({
+  root: document.body,
+  me: () => signedIn?.id ?? null,
+  mapId: () => maps.view?.map.id ?? null,
+  showKey: (at) => {
+    const point = maps.focus(at);
+    if (point) stage?.camera.panTo(point, stillPans.matches);
+  },
+  enterCellar: (communityId) => {
+    void explore.openCellar(communityId);
+  },
+  // The joy card's own queue counts too (#592): after a battle the care sheet
+  // may still be fetching before its "Whoa!" or the joy card opens.
+  busy: () => evolutionPending || wonWaiting.length > 0 || restoreSheet.isOpen || care.isOpen,
 });
 communityActions.wire('restore', (community, tile) => {
   restoreSheet.open(community, tile);
@@ -1041,6 +1069,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     restoreSheet.close();
+    keyHunt.close();
     roster.close();
     jobs.close();
     postScreen.close();
@@ -1060,9 +1089,13 @@ const maps = createMapScreen({
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
+    // Who gathers here and how they feel (#602): the map shows only the squishy, so the tap says it.
+    jobs.workerLine,
     inventory.tileActions,
     // A Hollowed village's words and its Explore and Restore (#306).
     communityActions,
+    // A won village's cellar door, and its key's tile (#306 PR 2c).
+    keyHunt.tileActions,
     // Build sits near the top of a tile's actions, so it's never scrolled away.
     tileBuild.tileActions,
     home.tileActions,
@@ -1100,12 +1133,15 @@ const maps = createMapScreen({
   layers: [
     hollowLayer,
     darkLand,
-    jobs.badges,
+    jobs.gatherers,
     land.layer,
     postFlags,
     communityFlags,
     villageWins,
+    keyHunt.layer,
     trickOrTreat.layer,
+    // Last: each frame the marks keep clear of the flags placed just before them.
+    tileMarks,
   ],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
@@ -1839,6 +1875,7 @@ if (import.meta.env.DEV) {
       flags: communityFlags.shown,
       panel: communityActions.debug,
       restore: restoreSheet.debug,
+      keyHunt: keyHunt.debug,
       villages: (maps.view?.communities ?? []).map((c) => ({
         id: c.id,
         name: c.name,
@@ -1846,6 +1883,7 @@ if (import.meta.env.DEV) {
         reach: c.reach,
         restored: c.restored,
         ownerUserId: c.ownerUserId,
+        cellar: c.cellar ?? null,
       })),
     }),
     posts: () => ({
