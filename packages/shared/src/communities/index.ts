@@ -7,3 +7,4 @@ export * from './cellar.js';
 export * from './puzzle.js';
 export * from './relight.js';
 export * from './story.js';
+export * from './far-hollow.js';

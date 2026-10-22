@@ -1,4 +1,5 @@
 import {
+  COMMUNITY_RULES,
   deriveSeed,
   GAME_DATA,
   GROWTH_RULES,
@@ -21,6 +22,13 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { spawnWindowId } from '../../lib/time.js';
 import type { BattlesService, JourneyBattlePort, StartResult } from '../battles/service.js';
+import {
+  arriveInFarHollow,
+  farHollowOpen,
+  farHollowSeasonAt,
+  FAR_HOLLOW_MESSAGES,
+} from '../far-hollow/service.js';
+import { createFarHollowRepo } from '../far-hollow/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createJourneysRepo } from './repo.js';
 
@@ -40,11 +48,23 @@ const MESSAGES = {
   connected: 'Your land reaches this post. No journey needed!',
   open: 'This post is already open for you! 🏮',
   needJourney: 'This post is far from your land. Win a journey to visit it! 🧭',
+  // The far road (#306 PR 6).
+  arrived: "You're already in the far Hollow this season! 🕯️",
 } as const;
 
 export interface JourneysService {
   /** Sets off on a journey to the post at (q, r), or resumes the battle going. */
   start: (user: PublicUser, mapId: string, request: StartJourneyRequest) => Promise<StartResult>;
+  /**
+   * Sets off on the far road from the post at (q, r) to this season's far
+   * Hollow (#306 PR 6), or resumes the battle going. The post must be open
+   * to me (my land reaches it, or I hold its visit pass), and it must be day.
+   */
+  startFarHollow: (
+    user: PublicUser,
+    mapId: string,
+    request: StartJourneyRequest,
+  ) => Promise<StartResult>;
 }
 
 export interface JourneysServiceOptions {
@@ -126,6 +146,71 @@ export function createJourneysService(options: JourneysServiceOptions): Journeys
           },
         };
       }),
+
+    startFarHollow: (user, mapId, request) =>
+      options.battles.startJourney(user, mapId, async (tx, { map, at }) => {
+        const repo = createJourneysRepo(tx);
+        // Read without locks, as a post command checks (#30 contract §6).
+        await requirePostAccess(tx, { mapId, userId: user.id, post: request, at });
+        const season = await farHollowSeasonAt(tx, mapId, at);
+        if (!farHollowOpen(at, season.timeZone)) {
+          throw new AppError('FORBIDDEN', FAR_HOLLOW_MESSAGES.night);
+        }
+        const arrived = await createFarHollowRepo(tx).listRows({
+          userId: user.id,
+          mapId,
+          seasonSeed: season.seed,
+        });
+        if (arrived.length > 0) throw new AppError('CONFLICT', MESSAGES.arrived);
+        const post = await createTerritoryRepo(tx).findTile(mapId, request.q, request.r);
+        if (!post) throw new AppError('NOT_FOUND', MESSAGES.notAPost);
+        const distance = COMMUNITY_RULES.farHollow.distance;
+        const { level, teamSize } = journeyFor(distance, rules, GROWTH_RULES.maxLevel);
+        // Fixed per player and window, from any post (no rerolls, tech spec §8).
+        const window = spawnWindowId(at, map.timeZone, rules.windowHours);
+        const seed = deriveSeed(
+          seedOf(await repo.mapSeed(mapId), mapId),
+          'far-road',
+          user.id,
+          window,
+        );
+        const trail = journeyTeam({ seed, distance }, rules, GROWTH_RULES.maxLevel);
+        return {
+          side: { controller: { type: 'ai', policy: 'wild' }, squishies: trail },
+          tile: { q: post.q, r: post.r },
+          started: async (startTx, battle): Promise<NewGameEvent[]> => {
+            const journey = await createJourneysRepo(startTx).insertJourney({
+              mapId,
+              userId: user.id,
+              postTileId: post.id,
+              battleId: battle.id,
+              distance,
+              level,
+              teamSize,
+              startedAt: battle.startedAt,
+              kind: 'far-hollow',
+            });
+            return [
+              {
+                mapId,
+                type: 'journey.started',
+                actorUserId: user.id,
+                payload: {
+                  userId: user.id,
+                  journeyId: journey.id,
+                  battleId: battle.id,
+                  q: post.q,
+                  r: post.r,
+                  distance,
+                  level,
+                  teamSize,
+                  kind: 'far-hollow',
+                },
+              },
+            ];
+          },
+        };
+      }),
   };
 }
 
@@ -144,9 +229,20 @@ export function createJourneyBattlePort(rules: JourneyRules = JOURNEY_RULES): Jo
     const repo = createJourneysRepo(tx);
     const journey = await repo.lockJourneyByBattle(battleId);
     if (journey?.outcome !== 'active') return [];
+    const far = journey.kind === 'far-hollow';
+    // The far road's win is an arrival in the far Hollow (#306 PR 6), never a pass.
     const visitUntil =
-      outcome === 'won' ? new Date(at.getTime() + rules.visitMinutes * 60_000) : null;
+      outcome === 'won' && !far ? new Date(at.getTime() + rules.visitMinutes * 60_000) : null;
     await repo.endJourney(journey.id, outcome, at, visitUntil);
+    const arrival =
+      far && outcome === 'won'
+        ? await arriveInFarHollow(tx, {
+            mapId: journey.mapId,
+            userId: journey.userId,
+            journeyId: journey.id,
+            at,
+          })
+        : [];
     return [
       {
         mapId: journey.mapId,
@@ -160,8 +256,10 @@ export function createJourneyBattlePort(rules: JourneyRules = JOURNEY_RULES): Jo
           r: journey.r,
           result: outcome,
           visitUntil: visitUntil?.toISOString() ?? null,
+          ...(far ? { kind: 'far-hollow' as const } : {}),
         },
       },
+      ...arrival,
     ];
   };
   return {

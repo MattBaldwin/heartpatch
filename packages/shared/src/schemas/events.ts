@@ -16,6 +16,7 @@ import { TradeKindSchema, TradeLineSchema } from './trading.js';
 import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
 import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
+import { JourneyKindSchema } from './journeys.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -584,6 +585,34 @@ export const GAME_EVENTS = {
     public: z.object({ communityId: z.uuid(), userId: z.uuid() }),
   },
   /**
+   * They won the far road and arrived in this season's far Hollow (#306 PR
+   * 6): their own, fresh every season. Only they hear of it.
+   */
+  'farHollow.entered': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      journeyId: z.uuid(),
+      season: ContentIdSchema,
+      year: z.number().int(),
+    }),
+    public: z.object({ userId: z.uuid(), season: ContentIdSchema }),
+  },
+  /**
+   * They searched every spot in this season's far Hollow (#306 PR 6): the
+   * joy is all back. `lorePage` is the season's guaranteed page, found by
+   * that last search's `explore.searched` (null when they had every one).
+   * Members hear who did it.
+   */
+  'farHollow.completed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      season: ContentIdSchema,
+      year: z.number().int(),
+      lorePage: ContentIdSchema.nullable(),
+    }),
+    public: z.object({ userId: z.uuid(), season: ContentIdSchema }),
+  },
+  /**
    * A trade offer or a gift was sent at a trading post (#271). What it holds
    * stays internal; only the two players hear of it (`twoPlayerView`).
    */
@@ -675,11 +704,14 @@ export const GAME_EVENTS = {
       distance: z.number().int().min(1),
       level: z.number().int().min(1),
       teamSize: z.number().int().min(1),
+      /** The far road to the far Hollow (#306 PR 6) sets off from the post at (q, r). */
+      kind: JourneyKindSchema.optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       ...coords,
       distance: z.number().int().min(1),
+      kind: JourneyKindSchema.optional(),
     }),
   },
   /**
@@ -695,12 +727,15 @@ export const GAME_EVENTS = {
       ...coords,
       result: z.enum(['won', 'lost', 'no-contest']),
       visitUntil: z.iso.datetime().nullable(),
+      /** The far road (#306 PR 6): a win is an arrival in the far Hollow, never a visit pass. */
+      kind: JourneyKindSchema.optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       ...coords,
       result: z.enum(['won', 'lost', 'no-contest']),
       visitUntil: z.iso.datetime().nullable(),
+      kind: JourneyKindSchema.optional(),
     }),
   },
   /**

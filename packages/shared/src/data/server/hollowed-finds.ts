@@ -3,6 +3,7 @@ import type { ExploreFindTable } from '../../schemas/data/explore-finds.js';
 import type { FoundSetDropTable } from '../../schemas/data/found-set-drops.js';
 import { CELLAR_RULES } from './cellar.js';
 import { EXPLORE_FINDS } from './explore-finds.js';
+import { FAR_HOLLOW_SECRETS } from './far-hollow.js';
 
 type Find = ExploreFindTable['finds'][number];
 
@@ -77,6 +78,17 @@ export const HOLLOWED_FINDS: ExploreFindTable[] = hollowedFinds(
 export const CELLAR_FINDS: ExploreFindTable[] = cellarFinds(
   HOLLOWED_FINDS,
   CELLAR_RULES.rareFindMultiplier,
+  COMMUNITY_RULES.joyResource,
+);
+
+/**
+ * What a search in the far Hollow finds (#306 PR 6, plan Q7): the ordinary
+ * explore tables with Heartdust `FAR_HOLLOW_SECRETS.heartdustFindMultiplier`
+ * times as often (4×, against a grey village's 3×).
+ */
+export const FAR_HOLLOW_FINDS: ExploreFindTable[] = hollowedFinds(
+  EXPLORE_FINDS,
+  FAR_HOLLOW_SECRETS.heartdustFindMultiplier,
   COMMUNITY_RULES.joyResource,
 );
 

@@ -1,3 +1,4 @@
+import type { JourneyKind } from '@heartpatch/shared';
 import { and, asc, eq, gt } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
 import { journeys, maps, tiles } from '../../db/schema.js';
@@ -14,6 +15,8 @@ export interface JourneyRow {
   battleId: string;
   outcome: 'active' | 'won' | 'lost' | 'no-contest';
   visitUntil: Date | null;
+  /** A post's visit pass, or the far road to the far Hollow (#306 PR 6). */
+  kind: JourneyKind;
 }
 
 /** A visit pass still good: the post and when it runs out. */
@@ -41,6 +44,8 @@ export interface JourneysRepo {
     level: number;
     teamSize: number;
     startedAt: Date;
+    /** Default `post`. */
+    kind?: JourneyKind;
   }) => Promise<{ id: string }>;
   /** Row-locks a battle's journey until commit (step 5b, after the battle). */
   lockJourneyByBattle: (battleId: string) => Promise<JourneyRow | null>;
@@ -64,6 +69,7 @@ const journeyColumns = {
   battleId: journeys.battleId,
   outcome: journeys.outcome,
   visitUntil: journeys.visitUntil,
+  kind: journeys.kind,
 };
 
 export function createJourneysRepo(db: Executor): JourneysRepo {
@@ -107,7 +113,12 @@ export function createJourneysRepo(db: Executor): JourneysRepo {
         .from(journeys)
         .innerJoin(tiles, eq(tiles.id, journeys.postTileId))
         .where(
-          and(eq(journeys.mapId, mapId), eq(journeys.userId, userId), gt(journeys.visitUntil, at)),
+          and(
+            eq(journeys.mapId, mapId),
+            eq(journeys.userId, userId),
+            eq(journeys.kind, 'post'),
+            gt(journeys.visitUntil, at),
+          ),
         )
         .orderBy(asc(journeys.postTileId));
       // The latest pass for each post (two wins in a row: the later one counts).

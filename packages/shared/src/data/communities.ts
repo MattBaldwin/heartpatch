@@ -80,4 +80,17 @@ export const COMMUNITY_RULES: CommunityRules = {
     curve: 0.07, // TUNE
     big: 0.62, // TUNE
   },
+  // The far Hollow (PR 6, plan Q7): a kid's own grey village each season.
+  farHollow: {
+    name: 'The far Hollow',
+    distance: 6, // TUNE: plan Q7, the far road's trail is a distance-6 journey
+    tiles: { min: 7, max: 9 }, // TUNE: plan Q7, "7–9 tiles"
+    echoesPerTile: 2, // TUNE: plan v3, two echoes a far-Hollow tile
+    terrains: [
+      { terrain: 'meadow', weight: 3 }, // TUNE:
+      { terrain: 'forest', weight: 2 }, // TUNE:
+      { terrain: 'hills', weight: 2 }, // TUNE:
+      { terrain: 'old-forest', weight: 1 }, // TUNE:
+    ],
+  },
 };

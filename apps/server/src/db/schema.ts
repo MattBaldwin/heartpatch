@@ -1543,6 +1543,8 @@ export const hollowRescues = pgTable(
 );
 
 export const journeyOutcome = pgEnum('journey_outcome', ['active', 'won', 'lost', 'no-contest']);
+/** What a journey is for (#306 PR 6): a post's visit pass, or the far road to the far Hollow. */
+export const journeyKind = pgEnum('journey_kind', ['post', 'far-hollow']);
 
 /**
  * Journeys to trading posts (#270, owner decisions 2 and 3 on #30): one row
@@ -1573,6 +1575,9 @@ export const journeys = pgTable(
     startedAt: timestamptz('started_at').notNull(),
     endedAt: timestamptz('ended_at'),
     visitUntil: timestamptz('visit_until'),
+    // The far road (#306 PR 6) sets off from the post too; a win is an
+    // arrival in the far Hollow, never a visit pass.
+    kind: journeyKind('kind').notNull().default('post'),
   },
   (t) => [
     unique('journeys_battle_id_key').on(t.battleId),
@@ -1590,6 +1595,36 @@ export const journeys = pgTable(
     ),
     check('journeys_distance_positive', sql`${t.distance} >= 1`),
     check('journeys_visit_won', sql`${t.visitUntil} is null or ${t.outcome} = 'won'`),
+    check('journeys_far_hollow_no_visit', sql`${t.kind} = 'post' or ${t.visitUntil} is null`),
+  ],
+);
+
+/**
+ * The far Hollow (#306 PR 6, plan Q7, owner decision 7): each player's own
+ * grey village, fresh every season. Its layout is worked out from the map's
+ * secret seed and the season (`farHollowLayout`), so only progress is stored:
+ * one row per tile of a player's far Hollow, written when they arrive (the
+ * far road won), keyed by the season's seed (`farHollowSeed`), so a new
+ * season simply stops matching last season's rows (the next arrival clears
+ * them). `searched` is one bit per search spot; `completed_at` once every
+ * spot on the tile is searched. Server-only: the seed never leaves (rule 6).
+ */
+export const farHollowExplore = pgTable(
+  'far_hollow_explore',
+  {
+    userId: uuid('user_id').notNull(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    seasonSeed: text('season_seed').notNull(),
+    tileIndex: smallint('tile_index').notNull(),
+    searched: integer('searched').notNull().default(0),
+    completedAt: timestamptz('completed_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed, t.tileIndex] }),
+    check('far_hollow_explore_tile_index_range', sql`${t.tileIndex} between 0 and 31`),
+    check('far_hollow_explore_searched_range', sql`${t.searched} >= 0`),
   ],
 );
 
