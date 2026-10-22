@@ -445,6 +445,38 @@ export const WILD_MARKER = {
 } as const;
 
 /**
+ * A gatherer standing on the tile it works (#602): the squishy itself,
+ * small, off the tile's middle (where the node and props crowd), facing the
+ * camera. Still: no breathing or shadow on the map, like the Keepers.
+ */
+export const GATHERER_ON_TILE = {
+  /** Offset from the tile's middle (world units): left, clear of the night's 🌙 in the middle. */
+  offset: { x: -0.25, z: -0.1 }, // TUNE
+  /** Times the squishy's own size: about a Keeper's height on the map. */
+  scale: 0.5, // TUNE
+} as const;
+
+/**
+ * The one quiet mark on a tile of mine that needs me (#602): a small round
+ * chip just beside my gatherer's head (or, with nothing to sit by, in the
+ * tile's top right), only for my own gatherers (and #601's resource
+ * buildings). Kinds are listed most pressing first: a tile shows one.
+ */
+export const TILE_MARK = {
+  /** From the top of what it's about (its head) to the chip's middle, CSS px: up and to the right. */
+  beside: { x: 12, y: -10 }, // TUNE
+  /** With nothing to sit by: where on the tile's screen box the chip's middle sits (0–1 across, 0–1 down). */
+  across: 0.78, // TUNE
+  down: 0.3, // TUNE
+  kinds: {
+    /** A gatherer of mine that isn't keen on this job (#393's 🌧️). */
+    meh: { glyph: '🌧️' },
+    /** A gatherer of mine napping: a full basket, or a homestead cut off from home. */
+    napping: { glyph: '💤' },
+  },
+} as const;
+
+/**
  * Wild land (no owner) is drawn soft and grey-ish; claimed land is in full
  * colour (Sprout: "See the grey land? … the color comes back"). `saturation`
  * is the share of colour kept, `shade` dims it a little (grey that keeps its

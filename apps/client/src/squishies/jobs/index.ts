@@ -8,18 +8,23 @@ import {
 } from '@heartpatch/shared';
 import type { TileActions } from '../../map/map-screen.js';
 import { el } from '../../ui/dom.js';
-import { createGathererBadges, type GathererBadges } from './gatherer-badges.js';
+import {
+  createGathererSquishies,
+  type GathererSquishies,
+  type GathererSquishiesDebug,
+} from './gatherer-squishies.js';
 import { createJobBoard, type JobBoard, type JobBoardDebug } from './job-board.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
-import { JOBS_TEXT, type WorkMood } from './jobs-view.js';
+import { JOBS_TEXT, workerLine } from './jobs-view.js';
 import { createViewFeed } from './view-feed.js';
 import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-picker.js';
 
 // Squishy jobs on the client (owner decisions 2026-10-04): the job board and
 // the team picker, as self-contained sheets (`openJobBoard(mapId)` /
 // `openTeamPicker(mapId)`). Entry points: the tile panel's "Send a gatherer"
-// line (`tileActions`) and the Team and Jobs row (`mountTeamButton`), which
-// main.ts mounts in the My Home tray.
+// button (`tileActions`; who gathers there is `workerLine`, #602) and the
+// Team and Jobs row (`mountTeamButton`), which main.ts mounts in the My Home
+// tray.
 
 export interface JobsOptions {
   root: HTMLElement;
@@ -33,10 +38,8 @@ export interface JobsOptions {
 export interface JobsDebug {
   readonly board: JobBoardDebug;
   readonly team: TeamPickerDebug;
-  /** Gatherer badges on screen over the map. */
-  readonly badges: number;
-  /** Of those, the ones showing my gatherers' mood (#393). */
-  readonly badgeMoods: Readonly<Record<WorkMood, number>>;
+  /** Gatherers standing on their tiles on the map, and my marks (#602). */
+  readonly gatherers: GathererSquishiesDebug;
 }
 
 export interface Jobs {
@@ -45,15 +48,17 @@ export interface Jobs {
   /** Closes both sheets (another screen took over). */
   close: () => void;
   setUser: (user: PublicUser | null) => void;
-  /** The tile panel's lines: who's gathering here, and "Send a gatherer" on my land. */
+  /** The tile panel's line about who's gathering here and how they feel (#602): near the top. */
+  readonly workerLine: TileActions;
+  /** The tile panel's "Send a gatherer" on my land. */
   readonly tileActions: TileActions;
   /**
    * Puts the Team and Jobs buttons in `box` (a box in the My Home tray),
    * opening the sheets for the map `mapNow` names; shown while `box` is.
    */
   mountTeamButton: (box: Element | null, mapNow: () => string | null) => void;
-  /** The map layer that puts a 🧺 over tiles with a gatherer (pass it to the map screen). */
-  readonly badges: GathererBadges;
+  /** The map layer that stands each gatherer on its tile (pass it to the map screen). */
+  readonly gatherers: GathererSquishies;
   /**
    * Asks for my fresh jobs view of a map (#393): it reaches `onView` (only if
    * it's still the newest), for the home's bubbles, bounce and droop.
@@ -87,7 +92,7 @@ export function openTeamPicker(mapId: string): Promise<void> {
 }
 
 export function createJobs(options: JobsOptions): Jobs {
-  // My jobs views, newest only, for the map's badges and the home's moods (#393).
+  // My jobs views, newest only, for the map's gatherers and the home's moods (#393).
   const feed = createViewFeed(options.api ?? jobsApi);
   const api = feed.api;
   const board: JobBoard = createJobBoard({
@@ -102,9 +107,9 @@ export function createJobs(options: JobsOptions): Jobs {
   const loadView = (mapId: string) => {
     if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
   };
-  const badges = createGathererBadges(options.root, { load: loadView });
+  const gatherers = createGathererSquishies(options.root, { load: loadView });
   feed.listen((mapId, view) => {
-    badges.setMine(mapId, view);
+    gatherers.setMine(mapId, view);
   });
 
   const jobs: Jobs = {
@@ -130,38 +135,46 @@ export function createJobs(options: JobsOptions): Jobs {
       if (changed) {
         // Another player (or none): the last one's moods go, and so does anything still on its way.
         feed.reset();
-        badges.forget();
+        gatherers.forget();
       }
       if (!user) jobs.close();
+    },
+    workerLine: {
+      show: (container, tile, view) => {
+        const count = tile.workers ?? 0;
+        container.replaceChildren(
+          ...(count > 0 && !glade(view.map.id)
+            ? [
+                el(
+                  'p',
+                  { class: 'tile-workers', 'data-testid': 'tile-workers' },
+                  workerLine(count, gatherers.mineOn(view.map.id, tile), tile),
+                ),
+              ]
+            : []),
+        );
+      },
+      hide: () => {
+        // The line goes with the panel.
+      },
     },
     tileActions: {
       show: (container, tile, view) => {
         const lines: HTMLElement[] = [];
-        if (!glade(view.map.id)) {
-          if ((tile.workers ?? 0) > 0) {
-            lines.push(
-              el(
-                'p',
-                { class: 'tile-workers', 'data-testid': 'tile-workers' },
-                JOBS_TEXT.gatheringHere(tile.workers ?? 0),
-              ),
-            );
-          }
-          if (workableByMe(tile, userId)) {
-            const send = el(
-              'button',
-              {
-                type: 'button',
-                class: 'auth-button auth-button-soft auth-button-small',
-                'data-testid': 'tile-send-gatherer',
-              },
-              JOBS_TEXT.sendGatherer,
-            );
-            send.addEventListener('click', () => {
-              void jobs.openJobBoard(view.map.id, { q: tile.q, r: tile.r });
-            });
-            lines.push(send);
-          }
+        if (!glade(view.map.id) && workableByMe(tile, userId)) {
+          const send = el(
+            'button',
+            {
+              type: 'button',
+              class: 'auth-button auth-button-soft auth-button-small',
+              'data-testid': 'tile-send-gatherer',
+            },
+            JOBS_TEXT.sendGatherer,
+          );
+          send.addEventListener('click', () => {
+            void jobs.openJobBoard(view.map.id, { q: tile.q, r: tile.r });
+          });
+          lines.push(send);
         }
         container.replaceChildren(...lines);
       },
@@ -208,7 +221,7 @@ export function createJobs(options: JobsOptions): Jobs {
       new MutationObserver(refresh).observe(box, { attributes: true, attributeFilter: ['hidden'] });
       refresh();
     },
-    badges,
+    gatherers,
     loadView,
     onView: feed.listen,
     get isOpen() {
@@ -218,8 +231,7 @@ export function createJobs(options: JobsOptions): Jobs {
       return {
         board: board.debug,
         team: picker.debug,
-        badges: badges.shown,
-        badgeMoods: badges.moods,
+        gatherers: gatherers.debug,
       };
     },
   };

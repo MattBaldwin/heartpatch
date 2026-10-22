@@ -1060,6 +1060,8 @@ const maps = createMapScreen({
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
+    // Who gathers here and how they feel (#602): the map shows only the squishy, so the tap says it.
+    jobs.workerLine,
     inventory.tileActions,
     // A Hollowed village's words and its Explore and Restore (#306).
     communityActions,
@@ -1100,7 +1102,7 @@ const maps = createMapScreen({
   layers: [
     hollowLayer,
     darkLand,
-    jobs.badges,
+    jobs.gatherers,
     land.layer,
     postFlags,
     communityFlags,

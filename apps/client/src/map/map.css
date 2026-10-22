@@ -372,3 +372,31 @@
     white-space: nowrap;
   }
 }
+
+/* One quiet mark on a tile of mine that needs me (#602, tile-marks.ts): a
+   small soft chip in the tile's corner, under every panel and sheet, never in
+   the way of a tap. Not keen is a rain-blue chip so the white 🌧️ reads. */
+.tile-mark {
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgb(255 250 252 / 88%);
+  box-shadow: 0 1px 4px rgb(107 75 110 / 25%);
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.tile-mark[hidden] {
+  display: none;
+}
+
+.tile-mark-meh {
+  background: rgb(84 112 146 / 90%);
+}

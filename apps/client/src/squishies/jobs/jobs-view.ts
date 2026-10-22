@@ -1,14 +1,13 @@
 import {
   BATTLE_RULES,
   GAME_DATA,
-  hexKey,
   JOB_RULES,
   jobHints,
-  type HexKey,
   jobHintText,
   type ItemCounts,
   type JobSquishy,
   type JobsView,
+  type PublicTile,
   type Rarity,
   type WorkSpot,
   type WorkStatus,
@@ -53,8 +52,12 @@ export const JOBS_TEXT = {
   gatheringHere: (n: number) =>
     n === 1 ? '🧺 A squishy is gathering here' : `🧺 ${String(n)} squishies are gathering here`,
   sendGatherer: '🧺 Send a gatherer',
-  /** On the map's 🧺 over my gatherers (#393): it loves this spot, or isn't keen. */
-  badgeMood: { loves: '💕', meh: '🌧️' },
+  // The tile panel's line about my own gatherer there (#602).
+  workerHere: (name: string) => `🧺 ${name} is gathering here`,
+  workerLoves: (name: string) => `🧺 ${name} is gathering here. Loves it!\u00a0💕`,
+  workerMeh: (name: string) => `🧺 ${name} is gathering here. Not their thing\u00a0🌧️`,
+  workerFull: (name: string) => `💤 ${name} is napping. Basket full!`,
+  workerPaused: (name: string) => `💤 ${name} is napping till this homestead joins home.`,
   firelit: '🔥 Safe by the fire tonight',
   dark: '🌙 Outside the firelight. The Hollow Man may visit at night!',
   takenBy: (name: string) => `${name} is here`,
@@ -246,26 +249,41 @@ export function workMoods(view: Pick<JobsView, 'squishies'>): Map<string, WorkMo
 }
 
 /**
- * How my gatherers feel on each tile they work (#393), for the map's 🧺
- * badge: `meh` when any of mine there isn't keen, else `loves`. Tiles where
- * none of mine has a mood (a full basket, only a patch-mate's) aren't in it.
+ * The one quiet mark a gatherer of mine gets on the map (#602), or null:
+ * `meh` when it isn't keen on the job, `napping` when its basket is full or
+ * its homestead is cut off from home. Happy, busy gatherers get none: tap the
+ * tile to see how they feel.
  */
-export function tileMoods(view: Pick<JobsView, 'squishies'>): Map<HexKey, WorkMood> {
-  const moods = new Map<HexKey, WorkMood>();
-  for (const s of view.squishies) {
-    if (s.job !== 'gatherer' || !s.work) continue;
-    const mood = workMood(s);
-    if (!mood) continue;
-    const key = hexKey(s.work);
-    if (moods.get(key) !== 'meh') moods.set(key, mood);
-  }
-  return moods;
+export function gathererMark(
+  s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work' | 'training'>,
+  tile: Pick<PublicTile, 'homestead'>,
+): GathererMark | null {
+  if (s.job !== 'gatherer' || !s.work) return null;
+  if (workMood(s) === 'meh') return 'meh';
+  if (s.work.full || tile.homestead === 'paused') return 'napping';
+  return null;
 }
 
-/** The 🧺 badge's words (#393): how many gather there, and how mine feel. */
-export function badgeLabel(count: number, mood: WorkMood | null): string {
-  const n = count > 1 ? String(count) : '';
-  return `🧺${n}${mood ? JOBS_TEXT.badgeMood[mood] : ''}`;
+/** A gatherer mark on the map (#602). */
+export type GathererMark = 'meh' | 'napping';
+
+/**
+ * The tile panel's line about who gathers here (#602): my own gatherer by
+ * name and how it feels; a patch-mate's never says which squishy.
+ */
+export function workerLine(
+  count: number,
+  mine: { name: string; squishy: JobSquishy } | null,
+  tile: Pick<PublicTile, 'homestead'>,
+): string {
+  if (!mine) return JOBS_TEXT.gatheringHere(count);
+  const { name, squishy } = mine;
+  if (tile.homestead === 'paused') return JOBS_TEXT.workerPaused(name);
+  if (squishy.work?.full) return JOBS_TEXT.workerFull(name);
+  const mood = workMood(squishy);
+  if (mood === 'loves') return JOBS_TEXT.workerLoves(name);
+  if (mood === 'meh') return JOBS_TEXT.workerMeh(name);
+  return JOBS_TEXT.workerHere(name);
 }
 
 /** Everything my gatherers have ready, added up. */
