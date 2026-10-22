@@ -173,11 +173,7 @@ const heartSeedLevel = (): number => EMPTY_PROGRESS_FACTS.heartSeedLevel;
 /** Naming my home as the home view shows it (#306 PR 0). */
 const namingOf = (row: MemberNamingRow): HomeNaming => ({
   name: row.homeName,
-  ...namingGate(
-    { ...row, heartSeedLevel: heartSeedLevel() },
-    NAMING_RULES,
-    HOME_BASE_RULES.buildableKinds,
-  ),
+  ...namingGate({ ...row, heartSeedLevel: heartSeedLevel() }, NAMING_RULES),
 });
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
