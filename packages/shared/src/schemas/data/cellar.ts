@@ -29,7 +29,7 @@ export const CellarRulesSchema = z.strictObject({
    * cellar's keepsake.
    */
   bigChest: z.strictObject({
-    /** It opens once every small chest is open (owner to judge on the screens). */
+    /** It opens once every small chest is open (owner decision of 2026-10-22). */
     afterSmall: z.boolean(),
     /** The big pile: item id → how many. */
     items: z.record(ContentIdSchema, z.number().int().min(1).max(50)),

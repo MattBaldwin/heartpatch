@@ -6,10 +6,10 @@ export const CELLAR_RULES: CellarRules = {
   rareFindMultiplier: 2, // TUNE: the issue's "hidden cellars about 2×"
   // The big chest (#306, owner decision of 2026-10-22).
   bigChest: {
-    afterSmall: true, // TUNE: owner to pick on the screens (true: the small chests first)
+    afterSmall: true, // owner decision of 2026-10-22: the small chests first
     items: {
-      heartdust: 5, // TUNE: a big pile; a restore piece costs 1
-      glimmer: 12, // TUNE: a cave search finds about 1
+      heartdust: 10, // TUNE: a big pile (owner decision of 2026-10-22); a restore piece costs 1
+      glimmer: 25, // TUNE: a cave search finds about 1
     },
     keepsakes: {
       'lantern-tower': 'lamplighters-crown',
