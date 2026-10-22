@@ -389,6 +389,8 @@ const care = createCareSheet({
     void heartCoins.refresh();
     // A village won in the same battle waited for the evolution to be seen (#592).
     showWonVillages();
+    // So did the far Hollow's sheet after the far road (#306 PR 6).
+    showFarHollowArrival();
   },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
@@ -612,6 +614,12 @@ let farHollowPost: { q: number; r: number } | null = null;
 let farHollowArrived = false;
 /** Back from a far-Hollow tile, waiting for the map to come back to open the sheet. */
 let farHollowBack = false;
+/** Made it to the far Hollow ("Explore it"): its sheet, once an evolution's "Whoa!" is seen (#592). */
+const showFarHollowArrival = (): void => {
+  if (!farHollowArrived || evolutionPending || care.isOpen) return;
+  farHollowArrived = false;
+  void farHollowSheet.open(farHollowPost);
+};
 let mapNight = false;
 const farHollowSheet = createFarHollowSheet({
   root: document.body,
@@ -1450,17 +1458,13 @@ const battles = createBattleScreen({
         void care.celebrateNews(mapId).finally(() => {
           evolutionPending = false;
           showWonVillages();
+          showFarHollowArrival();
         });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
         // Made it to a trading post (#270, "Open the post"): show its panel.
         const arrived = journeys.takeArrival();
         if (arrived) maps.focus(arrived);
-        // Made it to the far Hollow (#306 PR 6, "Explore it"): its sheet.
-        if (farHollowArrived) {
-          farHollowArrived = false;
-          void farHollowSheet.open(farHollowPost);
-        }
         return Promise.all([
           inventory.setMap(mapId),
           territory.setMap(mapId),

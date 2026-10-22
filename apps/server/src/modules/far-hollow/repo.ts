@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor } from '../../db/client.js';
+import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { farHollowExplore, journeys, maps, tiles } from '../../db/schema.js';
 
 /** My progress on one tile of a season's far Hollow (#306 PR 6). */
@@ -127,4 +128,19 @@ export function createFarHollowRepo(db: Executor): FarHollowRepo {
       return row ?? null;
     },
   };
+}
+
+/** The repo inside a transaction, which can also append events (`maps` last). */
+export type FarHollowTxRepo = FarHollowRepo & {
+  appendEvent: (event: NewGameEvent) => Promise<unknown>;
+};
+
+/** Runs `fn` in one transaction (a savepoint inside one), with the repo on it. */
+export function farHollowTransaction<T>(
+  db: Executor,
+  fn: (repo: FarHollowTxRepo, tx: Executor) => Promise<T>,
+): Promise<T> {
+  return withTransaction(db, (tx) =>
+    fn({ ...createFarHollowRepo(tx), appendEvent: (event) => appendGameEvent(tx, event) }, tx),
+  );
 }

@@ -35,7 +35,6 @@ import { grantItems } from '../inventory/service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MINUTE_MS = 60 * 1000;
 const TEST_KEEPER = {
   base: 'pip',
   hairColor: 'honey',

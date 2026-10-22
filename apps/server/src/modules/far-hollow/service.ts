@@ -43,8 +43,8 @@ import {
   withFoundItems,
 } from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
-import { withTransaction, type Database, type Executor } from '../../db/client.js';
-import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
+import type { Database, Executor } from '../../db/client.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
@@ -55,7 +55,12 @@ import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js
 import { createLoreRepo } from '../lore/repo.js';
 import { requireMember } from '../maps/members.js';
 import { grantRekindledPiece, rekindledDrop } from '../wardrobe/rekindled.js';
-import { createFarHollowRepo, type FarHollowKey, type FarHollowRow } from './repo.js';
+import {
+  createFarHollowRepo,
+  farHollowTransaction,
+  type FarHollowKey,
+  type FarHollowRow,
+} from './repo.js';
 
 /*
  * The far Hollow (#306 PR 6, plan Q7, owner decision 7): each kid's own grey
@@ -270,9 +275,8 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
 
     search: async (user, mapId, request) => {
       const at = now();
-      const result = await withTransaction(db, async (tx) => {
+      const result = await farHollowTransaction(db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        const repo = createFarHollowRepo(tx);
         const { season, key } = await mine(tx, user.id, mapId, at);
         if (!farHollowOpen(at, season.timeZone)) {
           throw new AppError('FORBIDDEN', FAR_HOLLOW_MESSAGES.night);
@@ -404,7 +408,7 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
             : []),
           ...growthEvents(growths),
         ];
-        for (const event of events) await appendGameEvent(tx, event);
+        for (const event of events) await repo.appendEvent(event);
 
         const items = await createInventoryRepo(tx).list(owner);
         const progress = { searched: searchedCount(searched, spots.length), total: spots.length };
@@ -430,9 +434,8 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
 
     devArrive: async (user, mapId, nearlyDone) => {
       const at = now();
-      const result = await withTransaction(db, async (tx) => {
+      const result = await farHollowTransaction(db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        const repo = createFarHollowRepo(tx);
         const { season, key } = await mine(tx, user.id, mapId, at);
         await repo.arrive(key, season.tiles.length);
         const last = season.tiles.at(-1);
