@@ -14,6 +14,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import {
   hexKey,
   KEEPER_DATA,
+  KEY_SPOT,
   type ExploreTileResponse,
   type KeeperConfig,
   type PublicSearchSpot,
@@ -265,6 +266,9 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   pond: 'pond',
   ledge: 'ledge',
   cave: 'cave',
+  // The cellar key's glinting spot (#306, owner decision 2026-10-22): a little
+  // mound of freshly turned earth, on any land.
+  'cellar-key': 'mound',
   // #335: the trail's and the cave's own spots are drawn by their land kit
   // (kitSpot); without one they fall back to a rock.
 };
@@ -1419,7 +1423,9 @@ export class ExploreScene implements AmbientTarget {
         : 0;
       if (slide === 0) this.#glintSide.delete(s.index);
       else this.#glintSide.set(s.index, Math.sign(slide + glint.x - keeper.x));
-      return { ...glint, x: glint.x + Math.round(slide * 100) / 100 };
+      // The cellar key's glint (#306) twinkles bigger than the rest: same mesh, no extra draw.
+      const scale = s.kind === KEY_SPOT.kind ? EXPLORE_VIEW.keyGlintScale : 1;
+      return { ...glint, x: glint.x + Math.round(slide * 100) / 100, scale };
     });
     const nudge = places.map((p) => p.x);
     const same =
@@ -1428,7 +1434,9 @@ export class ExploreScene implements AmbientTarget {
     this.#glintNudge = nudge;
     setInstances(
       this.#glints,
-      places.map((p) => placeAt(p.x, p.y, p.z, new Vector3(size, size, size))),
+      places.map((p) =>
+        placeAt(p.x, p.y, p.z, new Vector3(size * p.scale, size * p.scale, size * p.scale)),
+      ),
       true,
     );
   }

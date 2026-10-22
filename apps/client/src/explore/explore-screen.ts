@@ -1265,6 +1265,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       return;
     }
     const { found } = c;
+    if (found.cellarKey) {
+      keyCard(found.cellarKey.name);
+      return;
+    }
     const nodes: Node[] = [
       el('p', { class: 'explore-card-progress' }, progressLine(found.progress)),
       el(
@@ -1328,6 +1332,30 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     nodes.push(yay);
     sheet.hidden = false;
     sheet.replaceChildren(...nodes);
+  }
+
+  /** The cellar key found at its glinting spot (#306, owner decision 2026-10-22): the big moment. */
+  function keyCard(name: string): void {
+    const yay = el(
+      'button',
+      { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
+      EXPLORE_TEXT.yay,
+    );
+    yay.addEventListener('click', () => {
+      card = null;
+      render();
+    });
+    sheet.hidden = false;
+    sheet.replaceChildren(
+      el('p', { class: 'explore-key-art', 'aria-hidden': 'true' }, '🔑'),
+      el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, KEY_TEXT.foundTitle),
+      el(
+        'p',
+        { class: 'explore-card-line', 'data-testid': 'explore-key-found' },
+        KEY_TEXT.foundLine(name),
+      ),
+      yay,
+    );
   }
 
   // ── Scene ─────────────────────────────────────────────────────────────

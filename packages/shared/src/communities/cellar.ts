@@ -1,24 +1,52 @@
-import { hexKey, hexNeighbors, type Hex } from '../hex/index.js';
-import { searchSpots, type SearchSpot } from '../explore/index.js';
+import { hexKey, type Hex } from '../hex/index.js';
+import { extraSpotAt, searchSpots, type SearchSpot } from '../explore/index.js';
 import { deriveSeed, type Seed } from '../rng/index.js';
 import type { CommunityRules } from '../schemas/data/communities.js';
-import type { ExploreRules } from '../schemas/data/explore.js';
+import { MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
 import type { ReachTile } from '../territory/reach.js';
 
 // The key hunt and the hidden cellar (#306 PR 2c, owner decision 5): a won
-// village's winner gets a map to the tile where the village squishies hid
-// the cellar key, digs it up there, then opens the cellar under the square.
-// Pure, so the server decides with it and the client explains with it.
+// village's winner gets a treasure map to the tile where the village
+// squishies hid the cellar key, finds it there by exploring (a glinting spot,
+// owner decision 2026-10-22), then opens the cellar under the square. Pure,
+// so the server decides with it and the client explains with it.
 
 /**
- * Can `userId` dig on the key's tile? It's theirs, or next to land they hold
- * (the reach claiming and wild squishies use). Whoever holds the key's tile,
- * and whatever stands on it, doesn't matter: digging the key up takes
- * nothing from that tile and changes nobody's land.
+ * Can `userId` find the key on its tile? Only once the tile is theirs (owner
+ * decision 2026-10-22): the key may lie on another Keeper's land, and the
+ * Keeper wins that tile first.
  */
 export function keyInReach(keyTile: Hex, tiles: readonly ReachTile[], userId: string): boolean {
-  const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
-  return mine.has(hexKey(keyTile)) || hexNeighbors(keyTile).some((n) => mine.has(hexKey(n)));
+  const at = hexKey(keyTile);
+  return tiles.some((t) => t.ownerUserId === userId && hexKey(t) === at);
+}
+
+/**
+ * The cellar key's glinting spot in explore (owner decision 2026-10-22): its
+ * index sits past every progress bit (`MAX_SEARCH_SPOTS`), so it never counts
+ * toward a tile's spots or its "fully explored", and its kind is its own.
+ */
+export const KEY_SPOT = { index: MAX_SEARCH_SPOTS, kind: 'cellar-key' } as const;
+
+/** How far in from the tile's edge the key's glint stays, so the close-up shows it on the land, not against the sky. */
+const KEY_SPOT_MARGIN = 0.3; // TUNE
+
+/**
+ * Where the key's glinting spot sits on its tile: clear of the tile's own
+ * `spots` and building spots, the same every time for the same seed (the
+ * server derives it from the secret map seed, so only the place is sent).
+ */
+export function keySpot(
+  seed: Seed,
+  spots: readonly SearchSpot[],
+  explore: ExploreRules,
+): SearchSpot {
+  const at = extraSpotAt(seed, spots, explore, KEY_SPOT_MARGIN) ??
+    extraSpotAt(seed, spots, explore) ?? {
+      x: 0,
+      z: 0,
+    };
+  return { index: KEY_SPOT.index, kind: KEY_SPOT.kind, tool: null, ...at };
 }
 
 /**

@@ -14,6 +14,9 @@ import {
   isExplorable,
   isFullyExplored,
   isSearched,
+  KEY_SPOT,
+  keyInReach,
+  keySpot,
   placeEchoes,
   Rng,
   searchedCount,
@@ -47,6 +50,7 @@ import { newSeed } from '../../lib/rng.js';
 import { latestLocalMinute, mapLocalTime, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
+import { createCommunitiesRepo } from '../communities/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { createLoreRepo } from '../lore/repo.js';
@@ -60,6 +64,7 @@ import {
   exploreTransaction,
   type ExploreRepo,
   type ExploreRow,
+  type ExploreTxRepo,
   type ExploreTileRow,
   type ExploreVillage,
 } from './repo.js';
@@ -85,6 +90,8 @@ const MESSAGES = {
   // A grey village tile (#306 2a), the panel's own words.
   villageAway: 'Claim land next to it to explore!',
   villageNight: 'Too spooky after dark! Come back in the morning 🌙',
+  // The cellar key's glinting spot (#306, owner decision 2026-10-22).
+  keyFound: 'You already found this key! 🔑',
 } as const;
 
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
@@ -218,6 +225,81 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
   return notable;
 }
 
+/**
+ * The cellar key's glinting spot on this tile (#306, owner decision
+ * 2026-10-22), or null: only on a tile I own that hides the key of a
+ * village I won, while I'm still hunting for it. Its place comes from the
+ * secret map seed; nobody else exploring the tile ever sees it (rule 6).
+ */
+async function keySpotOn(
+  repo: ExploreRepo,
+  mapId: string,
+  seed: string,
+  tile: ExploreTileRow,
+  userId: string,
+  spots: readonly SearchSpot[],
+): Promise<SearchSpot | null> {
+  if (!keyInReach(tile, [tile], userId)) return null;
+  const hunt = await repo.findKeyHunt(mapId, userId, tile.id);
+  if (!hunt || hunt.found) return null;
+  return keySpot(deriveSeed(seed, 'cellar-key', tile.q, tile.r), spots, EXPLORE_RULES);
+}
+
+/**
+ * Searching the cellar key's glinting spot (#306, owner decision
+ * 2026-10-22): the key is found, nothing else changes. The tile is locked
+ * already (step 6), then the village's community row (step 6, after the
+ * tile), then `maps`. The tile's own spots, progress and the bag stay as
+ * they were; `key.found` tells the patch.
+ */
+async function findKey(
+  repo: ExploreTxRepo,
+  tx: Executor,
+  input: {
+    mapId: string;
+    userId: string;
+    tile: ExploreTileRow;
+    spots: readonly SearchSpot[];
+    at: Date;
+  },
+): Promise<SearchSpotResponse> {
+  const { mapId, userId, tile, spots, at } = input;
+  const hunt = keyInReach(tile, [tile], userId)
+    ? await repo.findKeyHunt(mapId, userId, tile.id)
+    : null;
+  if (!hunt) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
+  const communities = createCommunitiesRepo(tx);
+  // Under the lock: a double tap's second search finds the key gone.
+  const community = await communities.lockCommunity(hunt.id);
+  if (!community || community.ownerUserId !== userId || community.keyTileId !== tile.id) {
+    throw new AppError('NOT_FOUND', MESSAGES.noSpot);
+  }
+  if (community.keyRevealedAt !== null) throw new AppError('CONFLICT', MESSAGES.keyFound);
+  await communities.revealKey(community.id, at);
+  await repo.appendEvent({
+    mapId,
+    type: 'key.found',
+    actorUserId: userId,
+    payload: { communityId: community.id, userId, q: tile.q, r: tile.r },
+  });
+  const row = await repo.findRow(userId, tile.id);
+  const mask = row ? searchedMask(row, tile, spots) : 0;
+  return {
+    spot: KEY_SPOT.index,
+    found: {},
+    lore: null,
+    clothing: null,
+    notable: null,
+    xp: [],
+    tool: null,
+    progress: { searched: searchedCount(mask, spots.length), total: spots.length },
+    explored: false,
+    homestead: homesteadOf(row),
+    items: await createInventoryRepo(tx).list({ mapId, userId }),
+    cellarKey: { communityId: community.id, name: hunt.name },
+  };
+}
+
 export function createExploreService(options: ExploreServiceOptions) {
   const now = options.clock ?? (() => new Date());
   const rngFor = options.rng ?? (() => Rng.fromSeed(newSeed()));
@@ -275,16 +357,22 @@ export function createExploreService(options: ExploreServiceOptions) {
       const repo = createExploreRepo(db);
       const found = await repo.findTileAt(mapId, at.q, at.r);
       const grey = await greyVillage(repo, mapId, found, user.id, now());
-      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
+      const seed = await seedOf(db, mapId);
+      const { tile, spots } = tileSpots(seed, found, user.id, grey);
       const row = await repo.findRow(user.id, tile.id);
       const mask = grey ? greyMask(row, tile, grey) : searchedMask(row, tile, spots);
       const items = await createInventoryRepo(db).list({ mapId, userId: user.id });
       const searched = searchedCount(mask, spots.length);
+      // The cellar key glints here for its hunter only, past the tile's own spots.
+      const key = grey ? null : await keySpotOn(repo, mapId, seed, tile, user.id, spots);
       return {
         q: tile.q,
         r: tile.r,
         terrain: tile.terrain,
-        spots: spots.map((s) => ({ ...s, done: isSearched(mask, s.index) })),
+        spots: [
+          ...spots.map((s) => ({ ...s, done: isSearched(mask, s.index) })),
+          ...(key ? [{ ...key, done: false }] : []),
+        ],
         needs: exploreNeeds(tile.terrain, EXPLORE_RULES),
         progress: { searched, total: spots.length },
         homestead: grey ? null : homesteadOf(row),
@@ -308,6 +396,9 @@ export function createExploreService(options: ExploreServiceOptions) {
         const locked = await repo.lockTileAt(mapId, request.q, request.r);
         const grey = await greyVillage(repo, mapId, locked, user.id, at);
         const { tile, spots } = tileSpots(seed, locked, user.id, grey);
+        if (request.spot === KEY_SPOT.index && !grey) {
+          return findKey(repo, tx, { mapId, userId: user.id, tile, spots, at });
+        }
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
 

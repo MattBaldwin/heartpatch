@@ -92,6 +92,7 @@ export const EXPLORE_VIEW = {
     'flower-bed': 0.16,
     'pumpkin-row': 0.22,
     mound: 0.18,
+    'cellar-key': 0.18,
     pond: 0.08,
     reeds: 0.3,
     ledge: 0.36,
@@ -99,6 +100,8 @@ export const EXPLORE_VIEW = {
   } as Readonly<Record<string, number>>, // TUNE
   /** The glint's size, world units. */
   glintSize: 0.42, // TUNE
+  /** The cellar key's glint (#306), this many times a spot's: the one to look for. */
+  keyGlintScale: 1.7, // TUNE
   /** The glint sits off to one side of its prop, this share of the spot's collider. */
   glintSide: 0.6, // TUNE
   /** The soft halo under the spot in front: its radius (times the spot's collider) and opacity. */

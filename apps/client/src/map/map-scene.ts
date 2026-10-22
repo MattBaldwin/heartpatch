@@ -1477,7 +1477,7 @@ export class MapScene {
  * A soft glow over a tile's middle (homesteads, #199): a bright ring
  * inside the owner's border, so the tile's colour and border still show.
  */
-function buildTileGlow(
+export function buildTileGlow(
   scene: Scene,
   name: string,
   look: { readonly rgb: readonly number[]; readonly fill: number; readonly edge: number },

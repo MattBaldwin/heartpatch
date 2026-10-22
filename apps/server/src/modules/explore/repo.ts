@@ -19,6 +19,14 @@ import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { communities, communityTiles, maps, tileExplore, tiles } from '../../db/schema.js';
 import { pickDevHomestead } from './dev-homestead.js';
 
+/** A won village whose cellar key hides on a tile (#306), by id and the name it wears. */
+export interface ExploreKeyHunt {
+  id: string;
+  name: string;
+  /** Its winner found the key already. */
+  found: boolean;
+}
+
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
 export interface ExploreTileRow {
   id: string;
@@ -233,6 +241,37 @@ export function createExploreRepo(db: Executor) {
         .where(eq(communityTiles.communityId, row.id))
         .orderBy(asc(tiles.q), asc(tiles.r));
       return { id: row.id, name: row.restoredName ?? row.name, seed: row.seed, tiles: village };
+    },
+
+    /**
+     * The village `userId` won whose cellar key hides on this tile (#306,
+     * owner decision 2026-10-22), or null. Server-only: which tile holds a
+     * key never leaves here but as the winner's glinting spot. Read without
+     * a lock: a search locks the community row itself.
+     */
+    findKeyHunt: async (
+      mapId: string,
+      userId: string,
+      tileId: string,
+    ): Promise<ExploreKeyHunt | null> => {
+      const [row] = await db
+        .select({
+          id: communities.id,
+          name: communities.name,
+          restoredName: communities.restoredName,
+          keyRevealedAt: communities.keyRevealedAt,
+        })
+        .from(communities)
+        .where(
+          and(
+            eq(communities.mapId, mapId),
+            eq(communities.keyTileId, tileId),
+            eq(communities.ownerUserId, userId),
+          ),
+        );
+      return row
+        ? { id: row.id, name: row.restoredName ?? row.name, found: row.keyRevealedAt !== null }
+        : null;
     },
 
     /** The map's time zone (its day and night), read without a lock. */

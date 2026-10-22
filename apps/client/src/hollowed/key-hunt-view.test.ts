@@ -1,7 +1,7 @@
 import { hexKey, hexNeighbors, type CommunityView, type MapView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { KEY_TEXT, keyFlags, keyHuntOn, newMaps } from './key-hunt-view.js';
+import { glintLine, KEY_TEXT, keyGlows, keyHuntOn, keyMaps, newMaps } from './key-hunt-view.js';
 
 const ME = userId(1);
 
@@ -21,29 +21,49 @@ function farTile(view: MapView) {
 }
 
 describe('the key hunt on the map (#306 PR 2c)', () => {
-  it("shows the key's block on its tile to its winner, and whether they can dig", () => {
+  it("shows the key's block on its tile to its winner, and what to do to find it", () => {
     const base = wonView(ME, undefined);
     const key = farTile(base);
     const view = wonView(ME, { state: 'hunt', keyTile: { q: key.q, r: key.r } });
-    const away = keyHuntOn(view, key, ME);
-    expect(away).toMatchObject({ kind: 'key', inReach: false });
-    expect(away?.community.id).toBe(view.communities![0]!.id);
+    const wild = keyHuntOn(view, key, ME);
+    expect(wild).toMatchObject({ kind: 'key', land: 'wild' });
+    expect(wild?.community.id).toBe(view.communities![0]!.id);
 
-    // A neighbour becomes mine: in reach, whoever holds the key's tile.
-    const beside = hexNeighbors(key)[0]!;
-    const near: MapView = {
+    const owned = (owner: string): MapView => ({
       ...view,
       tiles: view.tiles.map((t) =>
-        t.q === beside.q && t.r === beside.r
-          ? { ...t, ownerUserId: ME }
-          : t.q === key.q && t.r === key.r
-            ? { ...t, ownerUserId: userId(2) }
-            : t,
+        t.q === key.q && t.r === key.r ? { ...t, ownerUserId: owner } : t,
+      ),
+    });
+    // Next to my land isn't enough (owner decision 2026-10-22): a rival's tile is won first.
+    const beside = hexNeighbors(key)[0]!;
+    const near: MapView = {
+      ...owned(userId(2)),
+      tiles: owned(userId(2)).tiles.map((t) =>
+        t.q === beside.q && t.r === beside.r ? { ...t, ownerUserId: ME } : t,
       ),
     };
-    expect(keyHuntOn(near, key, ME)).toMatchObject({ kind: 'key', inReach: true });
+    const theirs = near.tiles.find((t) => t.q === key.q && t.r === key.r)!;
+    expect(keyHuntOn(near, theirs, ME)).toMatchObject({ kind: 'key', land: 'theirs' });
+    const mine = owned(ME);
+    expect(
+      keyHuntOn(
+        mine,
+        mine.tiles.find((t) => t.q === key.q && t.r === key.r)!,
+        ME,
+      ),
+    ).toMatchObject({
+      kind: 'key',
+      land: 'mine',
+    });
     // Nobody else sees it (their view never has `cellar`, but even so).
-    expect(keyHuntOn(near, key, userId(2))).toBeNull();
+    expect(keyHuntOn(near, theirs, userId(2))).toBeNull();
+  });
+
+  it('says what to do next on the key tile, by whose land it is', () => {
+    expect(glintLine('mine')).toBe(KEY_TEXT.glintMine);
+    expect(glintLine('wild')).toContain('Claim');
+    expect(glintLine('theirs')).toContain('Challenge');
   });
 
   it('shows the cellar door on my won square in every state, and nothing on others', () => {
@@ -61,14 +81,24 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
     expect(keyHuntOn(theirs, square, ME)).toBeNull();
   });
 
-  it('flags the key only while I hunt for it', () => {
+  it('glows the key, and keeps its map in the bag, only while I hunt for it', () => {
     const key = { q: 0, r: 0 };
     const hunting = wonView(ME, { state: 'hunt', keyTile: key });
-    expect(keyFlags(hunting, ME)).toEqual([
-      { id: `key:${hunting.communities![0]!.id}`, community: hunting.communities![0], tile: key },
-    ]);
-    expect(keyFlags(wonView(ME, { state: 'key' }), ME)).toEqual([]);
-    expect(keyFlags(hunting, null)).toEqual([]);
+    expect(keyGlows(hunting, ME)).toEqual([key]);
+    expect(keyMaps(hunting, ME)).toEqual([{ community: hunting.communities![0], keyTile: key }]);
+    for (const view of [wonView(ME, { state: 'key' }), wonView(ME, { state: 'open' })]) {
+      expect(keyGlows(view, ME)).toEqual([]);
+      expect(keyMaps(view, ME)).toEqual([]);
+    }
+    expect(keyGlows(hunting, null)).toEqual([]);
+    expect(keyGlows(hunting, userId(2))).toEqual([]);
+  });
+
+  it('keeps every player line free of "village" and "community" (style guide)', () => {
+    const lines = Object.values(KEY_TEXT).map((v) =>
+      typeof v === 'function' ? v('Bramble Glen') : v,
+    );
+    for (const line of lines) expect(line).not.toMatch(/village|community/i);
   });
 
   it('pops the map card once, when a village I win starts its hunt', () => {
