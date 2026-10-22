@@ -512,10 +512,17 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   test.setTimeout(360_000); // two scene builds and a walk to a mound; CI renders in software
   const page = await newPlayer(browser, uniqueName('builds'));
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // As in the lake test: only an API fetch the navigation below aborts is let
+  // through, and only while it loads.
+  let reloading = false;
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
   // One tier throughout (dev `?tier=`, governor off; low, the quickest to
   // render in software), so a find below is judged on what it compiles, not
   // on a software renderer's tier change.
+  reloading = true;
   await page.goto('/?tier=low');
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -527,6 +534,7 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   // on a busy runner an early tap can land before the camera rests on the Heart Seed.
   await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  reloading = false;
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
   const box = (await page.locator('#game').boundingBox())!;
