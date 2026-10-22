@@ -49,6 +49,10 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
     spot: row.spot,
     lit: radius === null ? null : hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).lit,
     safeRadius: radius,
+    // Napping for unpaid upkeep (#601): resource buildings and the Warehouse only.
+    ...(row.kind === 'resource' || row.kind === 'warehouse'
+      ? { paused: row.pausedAt !== null }
+      : {}),
   };
 }
 

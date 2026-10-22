@@ -465,6 +465,18 @@ export const buildings = pgTable(
     fuelledThrough: date('fuelled_through', { mode: 'string' }),
     fuelUpdatedAt: timestamptz('fuel_updated_at'),
     placedAt: timestamptz('placed_at').notNull().defaultNow(),
+    // Resource buildings (#601): when counting their output starts (placed,
+    // or the last settle that banked it); null for every other kind.
+    producedSince: timestamptz('produced_since'),
+    // Paused for unpaid upkeep at this morning (#601): output counts only to
+    // here. Null while running, and for kinds without upkeep.
+    pausedAt: timestamptz('paused_at'),
+    // The last map-local morning whose upkeep is settled (paid, paused or
+    // skipped: a napping morning is never charged back, owner decision Q6).
+    upkeepPaidThrough: date('upkeep_paid_through', { mode: 'string' }),
+    // The kid's own upkeep order (#601 owner decision Q5): lower pays first.
+    // Null: the default order (highest level, then oldest, Warehouse last).
+    upkeepRank: smallint('upkeep_rank'),
   },
   (t) => [
     foreignKey({

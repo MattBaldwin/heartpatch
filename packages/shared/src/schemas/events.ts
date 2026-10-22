@@ -1015,6 +1015,63 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
   },
   /**
+   * A resource building's output landed in its owner's bag (#601): a settle,
+   * or its take-down. Members see the building was busy; what it made stays
+   * internal.
+   */
+  'building.produced': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      buildingId: ContentIdSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /**
+   * A resource building or the Warehouse fell asleep (#601): its morning's
+   * upkeep wasn't covered. Members see it nap; the coins stay internal.
+   */
+  'building.paused': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      reason: z.enum(['upkeep']),
+      /** The map-local morning it couldn't pay. */
+      day: LocalDateSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /** A napping building woke up (#601): its owner's Heart Coins cover a morning again. Free. */
+  'building.resumed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /**
    * A player fenced edges of one of their tiles (#203): one event per
    * segment. Members see the fence on the map; the bill stays internal.
    */

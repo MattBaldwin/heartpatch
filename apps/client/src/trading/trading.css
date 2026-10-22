@@ -192,8 +192,8 @@
 
 .post-tabs {
   display: grid;
-  /* Trade, Gift, Mailbox and the Glimmer swap (#523). */
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Trade, Gift, Mailbox, the Glimmer swap (#523) and Sell (#601). */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   border-radius: 22px;
@@ -1234,4 +1234,56 @@ button.post-col-head {
 
 .post-swap-confirm b {
   font-size: 18px;
+}
+
+/* The Sell tab (#601 PR 4): the Swap tab's rows, a 💛 cap line, a lot stepper. */
+.post-sell-today {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fff1c2;
+  color: #6b4a00;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.post-sell-keep {
+  color: #8a5a00;
+  font-weight: 700;
+}
+
+.post-sell-stepper {
+  gap: 12px;
+}
+
+.post-sell-lots {
+  min-width: 72px;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.post-sell-done {
+  text-align: center;
+  background: #e3f7ec;
+  border: 2px solid #b9e8cd;
+  box-shadow: none;
+}
+
+.post-sell-done b {
+  font-size: 18px;
+}
+
+.post-sell-stays {
+  text-align: center;
+}
+
+.post-sell-line span,
+.post-sell-keep {
+  white-space: nowrap;
+}
+
+.post-sell-price {
+  font-weight: 800;
 }

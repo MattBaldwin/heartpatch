@@ -1,5 +1,5 @@
 {
-  "id": "a1f8924b-9f3f-49b5-86c2-1ad6ac9e2875",
+  "id": "478e21f2-e99c-4b3a-b23a-44667deadbcf",
   "prevId": "6c9ca581-07a4-406e-b322-996639e4a81c",
   "version": "7",
   "dialect": "postgresql",
@@ -774,6 +774,30 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "produced_since": {
+          "name": "produced_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paused_at": {
+          "name": "paused_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upkeep_paid_through": {
+          "name": "upkeep_paid_through",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upkeep_rank": {
+          "name": "upkeep_rank",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -6892,25 +6916,6 @@
         },
         "resumed_at": {
           "name": "resumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "puzzle_attempt": {
-          "name": "puzzle_attempt",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "puzzle_solved_at": {
-          "name": "puzzle_solved_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "fragment_found_at": {
-          "name": "fragment_found_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

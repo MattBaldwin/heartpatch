@@ -55,6 +55,10 @@ export const MorningReportSchema = z.object({
     fires: z.number().int().min(0),
     fences: z.number().int().min(0),
     trainingGrounds: z.number().int().min(0),
+    /** Resource buildings (#601); older reports have none. */
+    resourceBuildings: z.number().int().min(0).optional(),
+    /** The Warehouse (#601); older reports have none. */
+    warehouses: z.number().int().min(0).optional(),
   }),
 });
 export type MorningReport = z.infer<typeof MorningReportSchema>;

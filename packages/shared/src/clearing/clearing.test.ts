@@ -9,6 +9,28 @@ const drop = (terrain: string, nodeResource: string | null = null) =>
   clearDrop({ terrain, nodeResource }, RESOURCES, JOB_RULES, CLEARING_RULES);
 
 describe('clearDrop (#242)', () => {
+  it('drops nothing seasonal out of its season (#601: Pumpkin Fields clear all year)', () => {
+    const at =
+      (seasons: string[]) =>
+      (terrain: string, node: string | null = null) =>
+        clearDrop(
+          { terrain, nodeResource: node },
+          RESOURCES,
+          JOB_RULES,
+          CLEARING_RULES,
+          new Set(seasons),
+        );
+    const halloween = at(['halloween']);
+    const winter = at([]);
+    expect(halloween('pumpkin-fields')).toEqual({ pumpkins: 2 });
+    expect(halloween('pumpkin-fields', 'pumpkins')).toEqual({ pumpkins: 2 });
+    expect(winter('pumpkin-fields')).toEqual({});
+    expect(winter('pumpkin-fields', 'pumpkins')).toEqual({});
+    // Year-round land still drops: a lake's Water, Old Forest's Emberwood.
+    expect(winter('lake')).not.toEqual({});
+    expect(winter('old-forest')).not.toEqual({});
+  });
+
   it("drops one gather of the tile's spot", () => {
     const stone = RESOURCES.find((r) => r.id === 'stone')?.gather?.quantity;
     expect(drop('hills', 'stone')).toEqual({ stone });

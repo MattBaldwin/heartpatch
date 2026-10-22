@@ -1,5 +1,9 @@
 import {
+  addDays,
   addFuel,
+  HOLLOW_RULES,
+  latestMorning,
+  type UpkeepOrderRequest,
   buildCost,
   buildingPageKey,
   EMPTY_PROGRESS_FACTS,
@@ -67,6 +71,15 @@ import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.
 import { requireMember } from '../maps/members.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
+import {
+  bankOutput,
+  productionAt,
+  productionBeforeUnpaid,
+  productionView,
+  suitsLand,
+  upkeepOf,
+} from './production.js';
+import { chargeUpkeep } from './upkeep.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
   createBuildingsRepo,
@@ -94,6 +107,7 @@ import {
  */
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
 const SPECIES_NAMES = new Map(
@@ -141,9 +155,12 @@ const MESSAGES = {
   clearFirst: 'Clear this land first 🌱. Then you can build here!',
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
+  wrongLand: (name: string, terrain: string) =>
+    `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} needs ${/^[aeiou]/i.test(terrain) ? 'an' : 'a'} ${terrain} tile!`,
   namingLocked: `Build one of each and befriend ${String(NAMING_RULES.caughtToName)} squishies first!`,
   seedFirst: 'Your Heart Seed needs to grow first 🌱',
   noPatch: "We couldn't find that patch.",
+  noUpkeep: "That building doesn't need Heart Coins.",
 } as const;
 
 /**
@@ -196,6 +213,19 @@ export interface BuildingsService {
    * Heart Seed upgrade. Patches only, never the Tutorial Glade.
    */
   name: (user: PublicUser, mapId: string, request: HomeNameRequest) => Promise<HomeResponse>;
+  /**
+   * Sets the order my upkeep buildings pay their mornings in (#601, owner
+   * decision Q5): the listed ones first, in order; the rest by the default.
+   */
+  upkeepOrder: (
+    user: PublicUser,
+    mapId: string,
+    request: UpkeepOrderRequest,
+  ) => Promise<HomeResponse>;
+  /** Dev/test only (#601): my resource buildings' storage fills, as if a storage-full had passed. */
+  devReady: (user: PublicUser, mapId: string) => Promise<HomeResponse>;
+  /** Dev/test only (#601): my upkeep buildings owe `mornings` more mornings. */
+  devUpkeepDue: (user: PublicUser, mapId: string, mornings: number) => Promise<HomeResponse>;
   /** Moves one of my squishies into a habitat, or out (null). */
   house: (
     user: PublicUser,
@@ -229,7 +259,13 @@ const placed = (row: BuildingRow, local: MapLocalTime): PlacedBuilding => ({
  * One of my buildings as I see it. `residents`: squishies living in it (a
  * habitat) or practicing at it (Training Grounds).
  */
-function toMyBuilding(row: BuildingRow, local: MapLocalTime, residents: number): MyBuilding {
+function toMyBuilding(
+  row: BuildingRow,
+  local: MapLocalTime,
+  residents: number,
+  at: Date,
+  timeZone: string,
+): MyBuilding {
   const building = BUILDING_DATA.get(row.buildingId);
   const fire = building?.kind === 'hearthfire' ? building : null;
   const roomy = building?.kind === 'habitat' || building?.kind === 'training-grounds';
@@ -243,6 +279,8 @@ function toMyBuilding(row: BuildingRow, local: MapLocalTime, residents: number):
     fuelSpace: fire ? fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) : null,
     capacity: roomy ? (step && 'capacity' in step ? step.capacity : 0) : null,
     residents: roomy ? residents : null,
+    // Resource buildings (#601): what's waiting for the next settle.
+    ...(row.kind === 'resource' ? { production: productionView(row, at, timeZone) } : {}),
   };
 }
 
@@ -312,6 +350,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           local,
           squishies.filter((s) => s.habitatBuildingId === b.id || s.trainingBuildingId === b.id)
             .length,
+          at,
+          timeZone,
         ),
       ),
       squishies: active.map((s) => ({
@@ -510,6 +550,42 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     return row;
   }
 
+  /**
+   * Before an upkeep building banks its output (#601: an upgrade, a
+   * take-down): all my upkeep buildings, locked in id order (step 8) ahead of
+   * it, so the mornings they owe can be charged first. Null for other kinds,
+   * which lock only their own row.
+   */
+  async function lockForUpkeep(
+    repo: BuildingsRepo,
+    mapId: string,
+    userId: string,
+    buildingRowId: string,
+  ): Promise<BuildingRow[] | null> {
+    const before = (await repo.listOwned(mapId, userId)).find((b) => b.id === buildingRowId);
+    if (!before || upkeepOf(before) === null) return null;
+    return repo.lockUpkeepBuildings(mapId, userId);
+  }
+
+  /**
+   * The mornings my upkeep buildings owe, charged (step 12b, after the
+   * caller's inventory rows) before `row` banks, so an unpaid morning stops
+   * its output as the settle would. `row` as it is after, and the
+   * `building.paused` events.
+   */
+  async function chargeFirst(
+    tx: Executor,
+    map: { id: string; timeZone: string },
+    userId: string,
+    upkeepRows: readonly BuildingRow[] | null,
+    row: BuildingRow,
+    at: Date,
+  ): Promise<{ row: BuildingRow; events: NewGameEvent[] }> {
+    if (!upkeepRows) return { row, events: [] };
+    const charged = await chargeUpkeep(tx, map, userId, upkeepRows, at);
+    return { row: charged.rows.find((r) => r.id === row.id) ?? row, events: charged.events };
+  }
+
   return {
     home: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
@@ -580,6 +656,14 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             if (await clearGoingOn(tx, tile.id, user.id)) {
               throw new AppError('CONFLICT', MESSAGES.clearing);
             }
+            // A resource building works its own land (#601): that terrain, or
+            // land cleared from it (owner decisions Q1, Q2). Read under the tile lock.
+            if (building.kind === 'resource') {
+              if (!suitsLand(building, await repo.landOf(tile.id))) {
+                const terrain = TERRAIN_NAMES.get(building.terrain) ?? building.terrain;
+                throw new AppError('CONFLICT', MESSAGES.wrongLand(building.name, terrain));
+              }
+            }
           }
           const row = await repo.insertBuilding({
             mapId,
@@ -589,6 +673,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             kind: building.kind,
             spot: request.spot,
             placedAt: at,
+            // A resource building starts making things now (#601).
+            producedSince: building.kind === 'resource' ? at : null,
           });
           // Short of anything: CONFLICT, and the row rolls back with it.
           const cost = buildCost(building);
@@ -648,25 +734,41 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind }) => {
-          const row = await lockMine(repo, mapId, user.id, buildingRowId);
-          const refund = takeDownRefund(row, local);
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          const refund = takeDownRefund(locked, local);
+          // A resource building's stored output lands first (#601): its rows
+          // lock with the refund's (a pause only makes less).
+          const most = productionAt(locked, at, timeZone);
           // A Crafting Factory's batches stop (#294): what's made is kept, the
           // rest comes back. Its batches after the building (step 8, id order).
           const batches =
-            row.kind === 'factory'
-              ? (await createFactoryRepo(tx).lockRunningIn(row.id)).map((b) =>
+            locked.kind === 'factory'
+              ? (await createFactoryRepo(tx).lockRunningIn(locked.id)).map((b) =>
                   stopPlan(b, at, 'taken-down'),
                 )
               : [];
-          const movedOut = await repo.moveOutAll(row.id);
-          const trainees = await repo.lockTrainees(row.id);
+          const movedOut = await repo.moveOutAll(locked.id);
+          const trainees = await repo.lockTrainees(locked.id);
           // Inventory rows before `species_seen` (tech spec §7 step 11): the
           // refund first, then trainees land what they earned (an evolution
           // writes `species_seen`) and stop, then the building goes.
           await lockGrantRows(tx, mapId, [
             { userId: user.id, items: refund },
+            ...(most ? [{ userId: user.id, items: most.ready }] : []),
             ...planGrants(batches),
           ]);
+          // The mornings it owes first (12b): an unpaid one stops its output.
+          const { row, events: paused } = await chargeFirst(
+            tx,
+            { id: mapId, timeZone },
+            user.id,
+            upkeepRows,
+            locked,
+            at,
+          );
+          const made = productionAt(row, at, timeZone);
+          const banked = made ? await bankOutput(tx, row, made) : null;
           if (Object.keys(refund).length > 0) {
             await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
           }
@@ -674,6 +776,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const training =
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
           await repo.deleteBuilding(row.id);
+          for (const event of paused) await repo.appendEvent(event);
+          if (banked) await repo.appendEvent(banked.event);
           await repo.appendEvent({
             mapId,
             type: 'building.removed',
@@ -804,14 +908,38 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind }) => {
-          const row = await lockMine(repo, mapId, user.id, buildingRowId);
-          const building = requireBuildingData(row.buildingId);
-          const cost = upgradeCost(building, row.level);
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          const building = requireBuildingData(locked.buildingId);
+          const cost = upgradeCost(building, locked.level);
           if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
           // Trainees (squishies, step 10) are locked before the cost's inventory
           // rows (step 11).
           const trainees =
-            building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
+            building.kind === 'training-grounds' ? await repo.lockTrainees(locked.id) : [];
+          // A resource building banks what it made at the old pace first
+          // (#601); its rows lock with the cost's (step 11, one item-id order),
+          // then the mornings it owes are charged (12b): an unpaid one stops
+          // its output. Banked before the cost, so what it made can pay.
+          const most = productionAt(locked, at, timeZone);
+          // Locked whenever a charge follows, so the cost's rows (step 11)
+          // never come after the balance (12b), even for one that makes nothing.
+          if (most || upkeepRows) {
+            await lockGrantRows(tx, mapId, [
+              { userId: user.id, items: cost },
+              ...(most ? [{ userId: user.id, items: most.ready }] : []),
+            ]);
+          }
+          const { row, events: paused } = await chargeFirst(
+            tx,
+            { id: mapId, timeZone },
+            user.id,
+            upkeepRows,
+            locked,
+            at,
+          );
+          const made = productionAt(row, at, timeZone);
+          const banked = made ? await bankOutput(tx, row, made) : null;
           // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
           await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
           // Training XP is worked out from the level, so the whole XP earned at
@@ -821,6 +949,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
           const level = row.level + 1;
           await repo.setLevel(row.id, level);
+          for (const event of paused) await repo.appendEvent(event);
+          if (banked) await repo.appendEvent(banked.event);
           await repo.appendEvent({
             mapId,
             type: 'building.upgraded',
@@ -865,6 +995,38 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       published(mapId);
       return result;
     },
+
+    upkeepOrder: (user, mapId, { buildingIds }) =>
+      command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
+        // My upkeep buildings (step 8, id order): only those can be ordered.
+        const mine = new Set((await repo.lockUpkeepBuildings(mapId, user.id)).map((r) => r.id));
+        if (buildingIds.some((id) => !mine.has(id))) {
+          throw new AppError('NOT_FOUND', MESSAGES.noUpkeep);
+        }
+        await repo.setUpkeepRanks(mapId, user.id, buildingIds);
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
+      }),
+
+    devReady: (user, mapId) =>
+      command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
+        for (const row of await repo.lockUpkeepBuildings(mapId, user.id)) {
+          const made = productionAt(row, at, timeZone);
+          if (!made || made.maxCycles === null) continue;
+          const back = made.maxCycles * made.cycleSeconds * 1000;
+          await repo.setProduction(row.id, { producedSince: new Date(at.getTime() - back) });
+        }
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
+      }),
+
+    devUpkeepDue: (user, mapId, mornings) =>
+      command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind }) => {
+        const today = latestMorning(local, HOLLOW_RULES.morningMinute);
+        for (const row of await repo.lockUpkeepBuildings(mapId, user.id)) {
+          const from = row.upkeepPaidThrough ?? today;
+          await repo.setProduction(row.id, { upkeepPaidThrough: addDays(from, -mornings) });
+        }
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
+      }),
 
     house: (user, mapId, squishyId, habitatRowId) =>
       command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
@@ -978,6 +1140,21 @@ export interface LostBuilding {
    * `factory.*` events.
    */
   readonly batches: readonly BatchPlan[];
+  /**
+   * A resource building's stored output (#601; empty for anything else): the
+   * caller locks it with the refunds (step 11, `lostOutputGrants`), and
+   * `finishLostBuildings` banks it to the owner's bag.
+   */
+  readonly output: ItemCounts;
+}
+
+/** What lost resource buildings give their owners, for the caller's inventory lock (#601). */
+export function lostOutputGrants(
+  lost: readonly LostBuilding[],
+): { userId: string; items: ItemCounts }[] {
+  return lost.flatMap((l) =>
+    Object.keys(l.output).length > 0 ? [{ userId: l.ownerUserId, items: l.output }] : [],
+  );
 }
 
 /**
@@ -1016,6 +1193,8 @@ export async function takeDownOnLostLand(
     // into a habitat locks only the squishy): `landTraining` reads them again
     // after the squishy locks, so nothing lands twice.
     const trainees = row.kind === 'training-grounds' ? await repo.traineesOf(row.id) : [];
+    // A resource building's output up to now lands with the refund (#601).
+    const output = productionBeforeUnpaid(row, at, timeZone)?.ready ?? {};
     if (row.kind !== 'training-grounds') await repo.deleteBuilding(row.id);
     down.push({
       ownerUserId: row.ownerUserId,
@@ -1023,6 +1202,7 @@ export async function takeDownOnLostLand(
       refund,
       trainees,
       batches,
+      output,
       event: {
         mapId,
         type: 'building.removed',
@@ -1063,16 +1243,29 @@ export async function finishLostBuildings(
     lost.flatMap((l) => l.batches),
     at,
   );
+  // Lost resource buildings' output lands in their owners' bags (#601).
+  const produced: NewGameEvent[] = [];
+  for (const l of lost) {
+    if (Object.keys(l.output).length === 0) continue;
+    const { userId, buildingRowId, buildingId, q, r } = l.event.payload;
+    await grantItems(tx, { mapId, userId }, l.output, 'produced', buildingRowId);
+    produced.push({
+      mapId,
+      type: 'building.produced',
+      actorUserId: null,
+      payload: { userId, buildingRowId, buildingId, q, r, items: l.output },
+    });
+  }
   const grounds = lost.filter(
     (l) => BUILDING_DATA.get(l.event.payload.buildingId)?.kind === 'training-grounds',
   );
-  if (grounds.length === 0) return stopped.events;
+  if (grounds.length === 0) return [...produced, ...stopped.events];
   const trainees = grounds.flatMap((l) => l.trainees);
   const events =
     trainees.length > 0 ? (await landTraining(tx, { id: mapId }, trainees, at, true)).events : [];
   const repo = createBuildingsRepo(tx);
   for (const l of grounds) await repo.deleteBuilding(l.event.payload.buildingRowId);
-  return [...stopped.events, ...events];
+  return [...produced, ...stopped.events, ...events];
 }
 
 /**
@@ -1102,12 +1295,35 @@ export async function removeMemberBuildings(
   const local = mapLocalTime(at, map.timeZone);
   const lost = outer.map((row) => ({ row, refund: takeDownRefund(row, local) }));
   const grants = lost.filter((l) => Object.keys(l.refund).length > 0);
+  // A resource building's stored output lands in their bag on this patch (#601).
+  const outputs = outer.flatMap((row) => {
+    const items = productionBeforeUnpaid(row, at, map.timeZone)?.ready ?? {};
+    return Object.keys(items).length > 0 ? [{ row, items }] : [];
+  });
   await lockGrantRows(tx, map.id, [
     ...grants.map((l) => ({ userId, items: l.refund })),
+    ...outputs.map((o) => ({ userId, items: o.items })),
     ...planGrants(batches),
   ]);
   for (const { row, refund } of grants) {
     await grantItems(tx, { mapId: map.id, userId }, refund, 'build-refund', row.id);
+  }
+  const produced: NewGameEvent<'building.produced'>[] = [];
+  for (const { row, items } of outputs) {
+    await grantItems(tx, { mapId: map.id, userId }, items, 'produced', row.id);
+    produced.push({
+      mapId: map.id,
+      type: 'building.produced',
+      actorUserId: null,
+      payload: {
+        userId,
+        buildingRowId: row.id,
+        buildingId: row.buildingId,
+        q: row.q,
+        r: row.r,
+        items,
+      },
+    });
   }
   const stopped = await applyBatchPlans(tx, batches, at);
   const removed: NewGameEvent<'building.removed'>[] = lost.map(({ row, refund }) => ({
@@ -1125,7 +1341,7 @@ export async function removeMemberBuildings(
       lost: 'left',
     },
   }));
-  return [...removed, ...stopped.events];
+  return [...produced, ...removed, ...stopped.events];
 }
 
 /**

@@ -10,12 +10,17 @@ export const CLEARING_RULES: ClearingRules = {
     { id: 'pickaxe', name: 'Pickaxe', uses: 3 },
     { id: 'spade', name: 'Spade', uses: 3 },
   ],
-  // Owner Q5: not lakes, Juniper's Gap, Old Forest or Pumpkin Fields in Phase 1.
+  // Owner Q5: not Juniper's Gap. Lakes, Old Forest and Pumpkin Fields clear
+  // like other land, taking their spot with them (owner decision 2026-10-22,
+  // #601 Q1), so the Water Well, Ember Kiln and Pumpkin Barn have land to stand on.
   terrains: [
     { terrain: 'forest', tool: 'axe' },
     { terrain: 'mountains', tool: 'pickaxe' },
     { terrain: 'meadow', tool: 'spade' },
     { terrain: 'hills', tool: 'spade' },
+    { terrain: 'lake', tool: 'spade' },
+    { terrain: 'old-forest', tool: 'axe' },
+    { terrain: 'pumpkin-fields', tool: 'spade' },
   ],
   landDropCycles: 2, // TUNE: a meadow drops 4 Greens, like a Greens spot's gather
 };
