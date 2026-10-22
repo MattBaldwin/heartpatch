@@ -129,6 +129,7 @@ const MESSAGES = {
   storyPages: (found: number, total: number) =>
     `Find every torn page first! 📜 ${found} of ${total} found.`,
   storyMoments: "Those aren't the story's moments. Try again!",
+  storyStale: 'The ink has shifted! Read the new pages.',
   notStory: 'This one is a lantern path, not a story!',
   notRelight: 'This one is a story, not a lantern path!',
 } as const;
@@ -994,7 +995,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
       const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
       const row = await repo.findRow(user.id, tile.id);
-      if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.puzzleStale);
+      if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.storyStale);
       const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
       if (puzzle.kind !== 'story') throw new AppError('CONFLICT', MESSAGES.notStory);
       const day = storyOf(grey, tile, user.id, row.puzzleAttempt);
@@ -1130,7 +1131,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           throw new AppError('CONFLICT', MESSAGES.storyPages(pages.found, pages.total));
         }
         if (row.puzzleAttempt === 0 || request.attempt !== row.puzzleAttempt) {
-          throw new AppError('CONFLICT', MESSAGES.puzzleStale);
+          throw new AppError('CONFLICT', MESSAGES.storyStale);
         }
         const day = storyOf(grey, tile, user.id, row.puzzleAttempt);
         const check = checkStory(day, request.order);

@@ -1776,7 +1776,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           // The spent try can't be fixed up and told again.
           const late = await tell(server, me, mapId, square, first);
           expect(late.statusCode).toBe(409);
-          expect(errorOf(late).message).toBe('The path has shuffled! Try the new one.');
+          expect(errorOf(late).message).toBe('The ink has shifted! Read the new pages.');
           expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(0);
           expect(await solvedBy(square)).toEqual([]);
           // The new day, told right.
@@ -1801,7 +1801,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
             attempt: 1,
             order: ['bell', 'baker', 'miller'],
           });
-          expect(errorOf(none).message).toBe('The path has shuffled! Try the new one.');
+          expect(errorOf(none).message).toBe('The ink has shifted! Read the new pages.');
           const { attempt, order } = await storyOf(server, me, mapId, square);
           for (const bad of [
             order.slice(1),
