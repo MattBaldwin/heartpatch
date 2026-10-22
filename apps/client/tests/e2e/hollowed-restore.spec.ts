@@ -142,7 +142,8 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
     .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
     .toContain(`🏡 ${name}`);
   // Then the map to its cellar key (PR 2c, hollowed-cellar.spec.ts): later.
-  await slowExpect(page.getByTestId('key-map-card')).toBeVisible();
+  // It waits its turn, and its buttons arm a moment after it shows.
+  await slowExpect(page.getByTestId('key-map-card')).toHaveAttribute('data-armed', 'true');
   await page.getByTestId('key-map-later').tap();
   await expect(page.getByTestId('key-map-card')).toBeHidden();
 

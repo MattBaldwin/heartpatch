@@ -4,6 +4,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { cellarApi, type CellarApi } from './cellar-api.js';
+import { KEY_HUNT } from './hollowed-config.js';
 import { KEY_TEXT, keyHuntOn, newMaps, type KeyHuntBlock } from './key-hunt-view.js';
 import './hollowed.css';
 
@@ -23,7 +24,7 @@ export interface KeyHuntOptions {
   showKey: (at: Hex) => void;
   /** Down into the open cellar. */
   enterCellar: (communityId: string) => void;
-  /** Another card is up (the joy card): the map card waits for `showWaiting`. */
+  /** Another card is up (the joy or naming card, the care sheet): the map card waits its turn. */
   busy: () => boolean;
 }
 
@@ -40,7 +41,7 @@ export interface KeyHunt {
   readonly tileActions: TileActions;
   /** Watches the map view for a newly won village's map. */
   readonly layer: MapLayer;
-  /** Another card closed: a map card that waited shows now. */
+  /** Another card closed: a map card that waited shows after a beat, once nothing else is up. */
   showWaiting: () => void;
   close: () => void;
   readonly debug: KeyHuntDebug;
@@ -66,10 +67,18 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
   /** What the last dig or open said, on that tile until the panel shows another. */
   let said: { at: string; ok: boolean; text: string } | null = null;
   let block: KeyHunt['debug']['block'] = null;
+  /** The next look for a turn to show a waiting card, while one is pending. */
+  let turn: ReturnType<typeof setTimeout> | null = null;
+  /** Arms the card's buttons `KEY_HUNT.tapGuardMs` after it shows. */
+  let arming: ReturnType<typeof setTimeout> | null = null;
 
   const where = (t: Hex) => `${String(t.q)},${String(t.r)}`;
 
   const closeCard = (): void => {
+    if (turn !== null) clearTimeout(turn);
+    if (arming !== null) clearTimeout(arming);
+    turn = null;
+    arming = null;
     carded = null;
     card.hidden = true;
     card.replaceChildren();
@@ -90,7 +99,11 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
         },
         label,
       );
-      b.addEventListener('click', onTap);
+      b.addEventListener('click', () => {
+        // A tap that was meant for the card before this one isn't for us.
+        if (card.dataset['armed'] !== 'true') return;
+        onTap();
+      });
       return b;
     };
     card.replaceChildren(
@@ -111,13 +124,30 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
         button(KEY_TEXT.later, 'key-map-later', true, closeCard),
       ),
     );
+    card.dataset['armed'] = 'false';
     card.hidden = false;
+    arming = setTimeout(() => {
+      arming = null;
+      card.dataset['armed'] = 'true';
+    }, KEY_HUNT.tapGuardMs);
   };
 
+  /**
+   * Waits its turn: a beat after the last look, and only once nothing else
+   * is up (it looks again until then). One look pending at a time.
+   */
   const showWaiting = (): void => {
-    if (carded || options.busy()) return;
-    const next = waiting.shift();
-    if (next) showCard(next);
+    if (carded || turn !== null || waiting.length === 0) return;
+    turn = setTimeout(() => {
+      turn = null;
+      if (carded || waiting.length === 0) return;
+      if (options.busy()) {
+        showWaiting();
+        return;
+      }
+      const next = waiting.shift();
+      if (next) showCard(next);
+    }, KEY_HUNT.afterCardMs);
   };
 
   const watch = (view: MapView): void => {

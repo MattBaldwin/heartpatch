@@ -18,7 +18,6 @@ const slow = { timeout: 30_000 };
 type Hex = { q: number; r: number };
 
 interface CommunitiesDebug {
-  flags: { label: string }[];
   keyHunt: {
     card: string | null;
     block: { kind: 'key' | 'square'; state: string; canDig: boolean } | null;
@@ -103,7 +102,8 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   await slowExpect(later).toBeVisible();
   await expect(card).toBeHidden();
   await later.tap();
-  await slowExpect(card).toBeVisible();
+  // A beat later it shows, and its buttons arm a moment after that.
+  await slowExpect(card).toHaveAttribute('data-armed', 'true');
   await expect(card.getByRole('heading')).toHaveText('A map to the key! 🗺️');
   const mine = (await communities(page))!.villages.find((v) => v.id === communityId)!;
   expect(mine.cellar?.state).toBe('hunt');
@@ -112,10 +112,8 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   // "Show me on the map": the key's tile and its panel, where I can dig.
   await page.getByTestId('key-map-show').tap();
   await expect(card).toBeHidden();
-  // The camera glides there: its flag is on screen (only flags on screen are listed).
-  await expect
-    .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
-    .toContain('🗺️ The cellar key is hidden here');
+  // Its flag stands in the flag room (shown wherever the panel and other flags leave room).
+  await expect(page.getByTestId('key-flag')).toHaveText('🗺️ The cellar key is hidden here');
   const dig = page.getByTestId('key-dig');
   await expect(async () => {
     expect(await show(page, keyTile)).toBe(true);
@@ -132,9 +130,7 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
       slow,
     )
     .toBe('key');
-  await expect
-    .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
-    .not.toContain('🗺️ The cellar key is hidden here');
+  await slowExpect(page.getByTestId('key-flag')).toHaveCount(0);
 
   // The square: open the cellar, and down we go.
   const open = page.getByTestId('cellar-open');
