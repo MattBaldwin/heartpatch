@@ -96,17 +96,39 @@ export const TREASURE_MAP = {
 
 /**
  * The key's tile on the world map while I hunt for it (#306, owner decision
- * 2026-10-22): a soft gold glow over the tile, breathing gently. One mesh,
- * one draw call, only while a hunt is on; it breathes only on frames the map
- * draws anyway (still with reduced motion). Linear RGB, alpha.
+ * 2026-10-22: "really highlight" it): a warm gold glow over the tile, a bright
+ * pulsing rim, a soft column of light rising from it and a few sparkles in
+ * the column. One thin-instanced mesh, built only while a hunt is on; it
+ * breathes (and the column stretches, lifting its sparkles) on the frames
+ * the map draws anyway, and holds still with reduced motion. Linear RGB,
+ * alpha; sizes in tile radii (the column's height in world units).
  */
 export const KEY_GLOW = {
-  look: { rgb: [1, 0.88, 0.42], fill: 0.72, edge: 1 },
+  rgb: [1, 0.62, 0.14],
+  /** The fill over the tile's middle, and the rim round its edge. */
+  fill: 0.85,
+  rim: { inner: 0.74, peak: 0.94, outer: 1.06, alpha: 1 },
+  /** The column of light: its rings from the tile up, narrowing and fading. */
+  column: [
+    { scale: 0.7, y: 0, alpha: 0.85 },
+    { scale: 0.62, y: 0.35, alpha: 0.65 },
+    { scale: 0.52, y: 0.8, alpha: 0.3 },
+    { scale: 0.42, y: 1.3, alpha: 0 },
+  ],
+  /** Sparkles in the column: where (tile radii out, world units up) and how big (world units). */
+  sparkles: [
+    { x: 0.22, z: 0.05, y: 0.3, size: 0.11 },
+    { x: -0.2, z: -0.12, y: 0.6, size: 0.09 },
+    { x: 0.08, z: 0.22, y: 0.9, size: 0.08 },
+    { x: -0.1, z: 0.1, y: 1.12, size: 0.06 },
+  ],
   /** Its softest and brightest, as a share of the look. */
   low: 0.55,
   high: 1,
+  /** The column stretches up this much at its brightest, lifting its sparkles. */
+  stretch: 0.25,
   /** One breath, seconds. */
-  periodS: 2.4,
+  periodS: 2.2,
   /** Over the tile's top, world units: above a homestead's glow, so the two never z-fight. */
   lift: 0.03,
 } as const; // TUNE
