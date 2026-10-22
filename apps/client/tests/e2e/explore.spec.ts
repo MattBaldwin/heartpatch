@@ -162,9 +162,8 @@ function clearTap(
       const a = (i / 16) * 2 * Math.PI;
       const to = { x: k.x + Math.cos(a) * reach, z: k.z + Math.sin(a) * reach };
       if (Math.hypot(to.x, to.z) > 0.6) continue; // well clear of the tile's edge
-      // One the Keeper already stands against (a spot by where it starts)
-      // blocks only the way into it: measured from the Keeper, it blocked
-      // every way, away from it too.
+      // A blocker the Keeper already stands beside blocks only headings into
+      // it: a straight swim away from it or along it only gets farther off.
       const blocked = (c: { x: number; z: number; r: number }) =>
         Math.hypot(c.x - k.x, c.z - k.z) < c.r + 0.02
           ? (to.x - k.x) * (c.x - k.x) + (to.z - k.z) * (c.z - k.z) > 0
