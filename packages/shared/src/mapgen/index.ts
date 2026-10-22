@@ -73,7 +73,7 @@ export interface GenerateMapOptions {
   readonly playerCount: number;
   /**
    * Where the villages' cellar keys hide (#306 PR 2c): the server-only
-   * `CELLAR_RULES.keyFromVillage`. The server always passes it; without it
+   * the server-only cellar key range. The server always passes it; without it
    * (a client preview) the villages have no key tile.
    */
   readonly cellarKeys?: CellarKeyRange;

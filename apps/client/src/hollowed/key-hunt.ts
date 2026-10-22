@@ -1,5 +1,6 @@
 import type { CommunityView, Hex, MapView, PublicTile } from '@heartpatch/shared';
 import type { MapLayer, TileActions } from '../map/map-screen.js';
+import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { cellarApi, type CellarApi } from './cellar-api.js';
@@ -138,7 +139,17 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
     working = true;
     render();
     try {
-      await api[which](mapId, c.id, newIdempotencyKey());
+      // A lost reply is retried with the same key, so a dig that went in replays.
+      const done = await sendCommand(
+        {
+          newKey: newIdempotencyKey,
+          wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          retryAfterMs: COMMAND_RETRY_MS,
+        },
+        (key) => api[which](mapId, c.id, key),
+        () => options.mapId() === mapId,
+      );
+      if (done === null) return;
       said = which === 'dig' ? { at: where(at), ok: true, text: KEY_TEXT.found(c.name) } : null;
       if (which === 'open') options.enterCellar(c.id);
     } catch (err) {

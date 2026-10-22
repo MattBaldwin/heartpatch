@@ -62,11 +62,12 @@ const same = (a: Hex, b: Hex) => a.q === b.q && a.r === b.r;
  * (a village's key never sits on another's square), else my won village's square.
  */
 export function keyHuntOn(view: MapView, tile: PublicTile, me: string | null): KeyHuntBlock | null {
+  if (me === null) return null;
   const mine = hunting(view, me);
   for (const c of mine) {
     const key = c.cellar?.state === 'hunt' ? c.cellar.keyTile : undefined;
     if (key && same(key, tile)) {
-      return { kind: 'key', community: c, inReach: keyInReach(key, view.tiles, me as string) };
+      return { kind: 'key', community: c, inReach: keyInReach(key, view.tiles, me) };
     }
   }
   const square = mine.find((c) => same(c.square, tile));

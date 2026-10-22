@@ -118,7 +118,7 @@ export const CommunityRulesSchema = z.strictObject({
    * The hidden cellar under a won village's square (PR 2c): its spots, an
    * explore kit like a terrain's (`terrain` is the look it borrows, the hills
    * cave). Hands only, so a kid never needs a tool to search it. What its
-   * spots hold is server-only (`CELLAR_FINDS`, rule 6).
+   * spots hold is server-only (the cellar find tables, rule 6).
    */
   cellar: ExploreTerrainSchema,
 });

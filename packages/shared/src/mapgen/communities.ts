@@ -34,7 +34,7 @@ export interface ExistingCommunity {
 
 /**
  * How far a village's cellar key hides from it, in steps from the nearest
- * village tile (owner decision 5). Server-only data (`CELLAR_RULES`, rule
+ * village tile (owner decision 5). Server-only data (`data/server`, rule
  * 6), so the server passes it in.
  */
 export interface CellarKeyRange {
@@ -59,7 +59,7 @@ export interface CommunityPlacementInput {
   /** Boot pass last resort: place as many as fit, without covering every home. */
   readonly partial?: boolean;
   /**
-   * Where cellar keys hide (`CELLAR_RULES.keyFromVillage`). The server always
+   * Where cellar keys hide (the server-only cellar key range). The server always
    * passes it; without it (a client preview) villages get no key tile.
    */
   readonly keys?: CellarKeyRange;

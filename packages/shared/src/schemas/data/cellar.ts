@@ -16,8 +16,9 @@ export const CellarRulesSchema = z.strictObject({
   keyFromVillage: CellarKeyRangeSchema,
   /**
    * How much more often a cellar spot holds a rare find (Heartdust or a lore
-   * page) than a grey village tile's (the issue's "about 2×"). A cellar spot
-   * is never empty either.
+   * page) than a grey village tile's, once its empty finds are taken out (a
+   * cellar spot is never empty). With today's tables that's about 2.4× a grey
+   * tile's share: the issue's "about 2×".
    */
   rareFindMultiplier: z.number().int().min(1),
 });

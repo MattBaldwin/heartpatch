@@ -63,7 +63,7 @@ export const COMMUNITY_RULES: CommunityRules = {
   echoesPerTile: 1, // TUNE: plan v3, one echo a patch tile (the far Hollow has two)
   restoredSuffixes: ['Glen', 'Meadow', 'Hearth', 'Rise'],
   // The hidden cellar (PR 2c, plan Q5): a few hands-only spots in the cave's
-  // look. Where its key hides and what it holds are server-only (`CELLAR_RULES`).
+  // look. Where its key hides and what it holds are server-only (the cellar rules in `data/server`).
   cellar: {
     terrain: 'hills',
     kinds: [
