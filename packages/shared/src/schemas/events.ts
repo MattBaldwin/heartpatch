@@ -716,6 +716,33 @@ export const GAME_EVENTS = {
     }),
   },
   /**
+   * A player fixed a grey village tile's memory puzzle (#306 PR 2b): once a
+   * tile each. `lorePage` and `recipe` are the server-only pages it gave
+   * (the lore consumer grants `lorePage`); members see who fixed which
+   * kind of thing where, and a `notable` find's kind.
+   */
+  'explore.puzzled': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      communityId: z.uuid(),
+      /** The solve: the ledger's `refId` for its items. */
+      solveId: z.uuid(),
+      skin: ContentIdSchema,
+      lorePage: ContentIdSchema.nullable(),
+      recipe: ContentIdSchema.nullable(),
+      items: z.record(z.string(), z.number().int().min(1)),
+      notable: ExploreNotableSchema.nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      skin: ContentIdSchema,
+      notable: ExploreNotableSchema.nullable(),
+    }),
+  },
+  /**
    * A player started clearing one of their homesteads (#242): members see
    * "clearing here, ready at …" on the tile. The tool and drop stay internal.
    */

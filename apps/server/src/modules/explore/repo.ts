@@ -42,6 +42,8 @@ export interface ExploreVillage {
   seed: Seed;
   /** Every village tile, for the reach rule. */
   tiles: Hex[];
+  /** Who has fixed this tile's memory puzzle (PR 2b, `community_tiles.puzzle_solved_by`). */
+  puzzleSolvedBy: string[];
 }
 
 /** A player's explore row for one tile (`tile_explore`). */
@@ -221,6 +223,7 @@ export function createExploreRepo(db: Executor) {
           restoredName: communities.restoredName,
           seed: communities.seed,
           restoredAt: communityTiles.restoredAt,
+          puzzleSolvedBy: communityTiles.puzzleSolvedBy,
         })
         .from(communityTiles)
         .innerJoin(communities, eq(communities.id, communityTiles.communityId))
@@ -232,7 +235,36 @@ export function createExploreRepo(db: Executor) {
         .innerJoin(tiles, eq(tiles.id, communityTiles.tileId))
         .where(eq(communityTiles.communityId, row.id))
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return { id: row.id, name: row.restoredName ?? row.name, seed: row.seed, tiles: village };
+      return {
+        id: row.id,
+        name: row.restoredName ?? row.name,
+        seed: row.seed,
+        tiles: village,
+        puzzleSolvedBy: row.puzzleSolvedBy,
+      };
+    },
+
+    /**
+     * Who has fixed a grey village tile's memory puzzle (#306 PR 2b),
+     * row-locked until commit: the caller holds the tile's lock first (tech
+     * spec §7 step 6, the restore path's order: tiles, then community rows).
+     * Null when the tile isn't a village tile.
+     */
+    lockPuzzle: async (tileId: string): Promise<string[] | null> => {
+      const [row] = await db
+        .select({ puzzleSolvedBy: communityTiles.puzzleSolvedBy })
+        .from(communityTiles)
+        .where(eq(communityTiles.tileId, tileId))
+        .for('update');
+      return row?.puzzleSolvedBy ?? null;
+    },
+
+    /** Writes who has fixed a tile's puzzle, a sorted set (the caller holds `lockPuzzle`). */
+    setPuzzleSolvedBy: async (tileId: string, solvedBy: readonly string[]): Promise<void> => {
+      await db
+        .update(communityTiles)
+        .set({ puzzleSolvedBy: [...new Set(solvedBy)].sort() })
+        .where(eq(communityTiles.tileId, tileId));
     },
 
     /** The map's time zone (its day and night), read without a lock. */

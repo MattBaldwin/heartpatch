@@ -9,6 +9,8 @@ export const LORE_CHAPTERS: LoreChapter[] = [
   { id: 'wild-lands', title: 'The Wild Lands', order: 2 },
   { id: 'hollow-man', title: 'The Hollow Man', order: 3 },
   { id: 'little-guardians', title: 'Little Guardians', order: 4 },
+  // Hollowed Communities (#306 PR 2b): pages a grey village's memory puzzles give.
+  { id: 'grey-villages', title: 'The Grey Villages', order: 5 },
 ];
 
 /**
@@ -202,6 +204,52 @@ export const LORE_PAGES: LoreEntry[] = [
       mapKinds: ['multiplayer'],
       eventType: 'squishy.captured',
       where: [],
+      finder: 'actor',
+    },
+  },
+
+  // ── The Grey Villages ─────────────────────────────────────────────────
+  // A grey village's memory puzzle gives one (#306 PR 2b, `PUZZLE_REWARDS`):
+  // any puzzle, whichever page is still unfound.
+  {
+    id: 'the-market-day-tune',
+    chapter: 'grey-villages',
+    order: 1,
+    title: 'The Market Day Tune',
+    text: 'The little music box plays a tune you almost know: bell, drum, horn, fiddle. Long ago the whole village danced to it on market day, even the squishies with very short legs.',
+    hint: 'Broken things still remember songs.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.puzzled',
+      where: [{ op: 'equals', field: 'lorePage', value: 'the-market-day-tune' }],
+      finder: 'actor',
+    },
+  },
+  {
+    id: 'the-painted-wall',
+    chapter: 'grey-villages',
+    order: 2,
+    title: 'The Painted Wall',
+    text: 'Pieced back together, the old wall shows the village as it was: bright doors, a lantern in every window, and a pile of squishies on the bakery step, waiting for crumbs.',
+    hint: 'Old walls keep old pictures.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.puzzled',
+      where: [{ op: 'equals', field: 'lorePage', value: 'the-painted-wall' }],
+      finder: 'actor',
+    },
+  },
+  {
+    id: 'keep-the-lanterns-lit',
+    chapter: 'grey-villages',
+    order: 3,
+    title: 'Keep the Lanterns Lit',
+    text: 'A note tucked under a fountain tile: “The night we forgot the lanterns, the colour slipped away. The little ones hid the cellar key somewhere safe. If you find this, keep the lights on for us.”',
+    hint: 'Some notes hide where water used to sing.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.puzzled',
+      where: [{ op: 'equals', field: 'lorePage', value: 'keep-the-lanterns-lit' }],
       finder: 'actor',
     },
   },

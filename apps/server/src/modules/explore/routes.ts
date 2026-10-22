@@ -6,6 +6,8 @@ import {
   MapIdParamsSchema,
   SearchSpotRequestSchema,
   SearchSpotResponseSchema,
+  SolvePuzzleRequestSchema,
+  SolvePuzzleResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -26,7 +28,7 @@ export interface ExploreRoutesOptions {
   devTools?: boolean;
 }
 
-/** Exploring your land (#199): the explore view of one of my tiles, and searching a spot. */
+/** Exploring your land (#199): the explore view of one of my tiles, searching a spot, and a grey village's memory puzzle (#306 PR 2b). */
 export const exploreRoutes =
   (service: ExploreService, options: ExploreRoutesOptions): FastifyPluginCallback =>
   (fastify, _options, done) => {
@@ -60,6 +62,22 @@ export const exploreRoutes =
         onSend: idempotency.onSend,
       },
       async (request) => service.search(requireUser(request), request.params.mapId, request.body),
+    );
+
+    // A grey village tile's memory puzzle (#306 PR 2b).
+    app.post(
+      '/maps/:mapId/explore/puzzle',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: SolvePuzzleRequestSchema,
+          response: { 200: SolvePuzzleResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('explore'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.solvePuzzle(requireUser(request), request.params.mapId, request.body),
     );
 
     if (options.devTools) {

@@ -51,6 +51,25 @@ export type PublicSearchSpot = z.infer<typeof PublicSearchSpotSchema>;
 export const HomesteadStateSchema = z.enum(['joined', 'paused']).nullable();
 
 /**
+ * A grey village tile's memory puzzle (#306 PR 2b): a broken thing to put
+ * back together, its pieces in the order they go back in (the card shows
+ * the order first; that's the puzzle, so it isn't secret), where it stands
+ * and whether I've fixed it. What fixing it gives stays server-side.
+ */
+export const HollowedPuzzleSchema = z.object({
+  /** Its look (`MEMORY_PUZZLES.skins[].id`). */
+  skin: ContentIdSchema,
+  /** Its pieces' ids, in the order they go back in. */
+  order: z.array(ContentIdSchema).min(2).max(6),
+  /** Where it stands, tile-local (`hexToWorld` at size 1, like the spots). */
+  x: z.number(),
+  z: z.number(),
+  /** I've fixed it already (once a tile each, `community_tiles.puzzle_solved_by`). */
+  solved: z.boolean(),
+});
+export type HollowedPuzzle = z.infer<typeof HollowedPuzzleSchema>;
+
+/**
  * A grey village tile's explore extras (#306 2a), on `ExploreTileResponse`
  * when the tile is an unrestored Hollowed village tile. Its spots refill
  * each morning (map time), so `joy` is today's colour.
@@ -63,6 +82,8 @@ export const HollowedExploreSchema = z.object({
   joy: z.number().int().min(0).max(100),
   /** Where each Hollow echo drifts, tile-local (`hexToWorld` at size 1, like the spots). */
   echoes: z.array(z.object({ x: z.number(), z: z.number() })),
+  /** Its memory puzzle (PR 2b). */
+  puzzle: HollowedPuzzleSchema.optional(),
 });
 export type HollowedExplore = z.infer<typeof HollowedExploreSchema>;
 
@@ -121,3 +142,27 @@ export const SearchSpotResponseSchema = z.object({
   joy: z.number().int().min(0).max(100).optional(),
 });
 export type SearchSpotResponse = z.infer<typeof SearchSpotResponseSchema>;
+
+/** `POST /maps/:mapId/explore/puzzle`: put a grey village tile's broken thing back together (#306 PR 2b). */
+export const SolvePuzzleRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  /** The pieces in the order the kid put them back. */
+  order: z.array(ContentIdSchema).min(1).max(6),
+});
+export type SolvePuzzleRequest = z.infer<typeof SolvePuzzleRequestSchema>;
+
+/** What fixing it gave: the server rolls it (CLAUDE.md rule 1). */
+export const SolvePuzzleResponseSchema = z.object({
+  /** The puzzle, fixed now. */
+  puzzle: HollowedPuzzleSchema,
+  /** A lore page, by id and title; its words come from `GET /lore`. */
+  lore: z.object({ id: ContentIdSchema, title: z.string() }).nullable(),
+  /** A Rekindled recipe (its recipe id), once #306 PR 5's recipes can be found here; null until then. */
+  recipe: z.object({ id: ContentIdSchema, title: z.string() }).nullable(),
+  /** Items, when there's no page left to find (may be empty). */
+  found: ItemCountsSchema,
+  /** The bag after it. */
+  items: ItemCountsSchema,
+});
+export type SolvePuzzleResponse = z.infer<typeof SolvePuzzleResponseSchema>;

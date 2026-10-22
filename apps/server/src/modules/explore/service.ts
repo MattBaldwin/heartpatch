@@ -14,7 +14,10 @@ import {
   isExplorable,
   isFullyExplored,
   isSearched,
+  memoryPuzzle,
+  MEMORY_PUZZLES,
   placeEchoes,
+  puzzleSolvedBy,
   Rng,
   searchedCount,
   searchSpots,
@@ -23,19 +26,24 @@ import {
   type ExploreNotable,
   type Hex,
   type HollowedExplore,
+  type HollowedPuzzle,
   type ExploreTileResponse,
   type ItemCounts,
   type PublicUser,
   type SearchSpot,
   type SearchSpotRequest,
   type SearchSpotResponse,
+  type SolvePuzzleRequest,
+  type SolvePuzzleResponse,
   type ToolId,
 } from '@heartpatch/shared';
 import {
   EXPLORE_FINDS,
   HOLLOWED_FINDS,
   LORE_PAGES,
+  PUZZLE_REWARDS,
   rollExploreFind,
+  rollPuzzleReward,
 } from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
 import type { Database, Executor } from '../../db/client.js';
@@ -82,13 +90,40 @@ const MESSAGES = {
   // A grey village tile (#306 2a), the panel's own words.
   villageAway: 'Claim land next to it to explore!',
   villageNight: 'Too spooky after dark! Come back in the morning 🌙',
+  // Memory puzzles (#306 PR 2b).
+  noPuzzle: "There's nothing to fix here!",
+  puzzleFixed: 'You already fixed this one! ✨',
+  puzzleWrong: 'Not quite! Watch it once more and try again.',
 } as const;
 
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
 const LORE_TITLES = new Map(LORE_PAGES.map((p) => [p.id, p.title]));
 
+/**
+ * Rekindled recipe pages a memory puzzle can give (#306 PR 5 plugs this in;
+ * until then puzzles give lore pages and the fallback). Both run inside the
+ * solve's transaction, after the bag (tech spec §7 step 11) and before the
+ * events.
+ */
+export interface RekindledRecipes {
+  /** The Rekindled recipe pages still sealed for this player on this patch, by id and title. */
+  sealed: (
+    tx: Executor,
+    owner: { mapId: string; userId: string },
+  ) => Promise<{ id: string; title: string }[]>;
+  /** Opens one of them for the player (`refId`: the solve). */
+  grant: (
+    tx: Executor,
+    owner: { mapId: string; userId: string },
+    pageId: string,
+    refId: string,
+  ) => Promise<void>;
+}
+
 export interface ExploreServiceOptions {
   db: Database;
+  /** Rekindled recipe pages for memory puzzles (#306 PR 5); none until it lands. */
+  rekindled?: RekindledRecipes;
   clock?: Clock;
   /** Live sync (`wsHub.publish`) after a commit. */
   publish?: (mapId: string) => Promise<void> | void;
@@ -178,18 +213,43 @@ function greyMask(row: ExploreRow | null, tile: ExploreTileRow, grey: Grey): num
   return row.updatedAt.getTime() >= grey.morning.getTime() ? row.searched : 0;
 }
 
-/** A grey village tile's explore extras: its name, today's joy and its echoes. */
+/** A grey village tile's echoes, from the village's secret seed. */
+function echoesOf(grey: Grey, tile: Hex, spots: readonly SearchSpot[]) {
+  return placeEchoes(grey.village.seed, tile, spots, COMMUNITY_RULES.echoesPerTile);
+}
+
+/** A grey village tile's memory puzzle (PR 2b) as I see it. */
+function puzzleView(
+  grey: Grey,
+  tile: ExploreTileRow,
+  spots: readonly SearchSpot[],
+  solvedBy: readonly string[],
+  userId: string,
+): HollowedPuzzle {
+  const puzzle = memoryPuzzle(
+    grey.village.seed,
+    tile,
+    spots,
+    echoesOf(grey, tile, spots),
+    MEMORY_PUZZLES,
+  );
+  return { ...puzzle, order: [...puzzle.order], solved: solvedBy.includes(userId) };
+}
+
+/** A grey village tile's explore extras: its name, today's joy, its echoes and its puzzle. */
 function greyView(
   grey: Grey,
-  tile: Hex,
+  tile: ExploreTileRow,
   spots: readonly SearchSpot[],
   searched: number,
+  userId: string,
 ): HollowedExplore {
   return {
     id: grey.village.id,
     name: grey.village.name,
     joy: exploreJoy({ searched, total: spots.length }),
-    echoes: placeEchoes(grey.village.seed, tile, spots, COMMUNITY_RULES.echoesPerTile),
+    echoes: echoesOf(grey, tile, spots),
+    puzzle: puzzleView(grey, tile, spots, grey.village.puzzleSolvedBy, userId),
   };
 }
 
@@ -286,7 +346,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         progress: { searched, total: spots.length },
         homestead: grey ? null : homesteadOf(row),
         tools: toolUses(items),
-        ...(grey ? { community: greyView(grey, tile, spots, searched) } : {}),
+        ...(grey ? { community: greyView(grey, tile, spots, searched, user.id) } : {}),
       };
     },
 
@@ -471,6 +531,93 @@ export function createExploreService(options: ExploreServiceOptions) {
           items,
           ...(grey ? { joy: exploreJoy(progress) } : {}),
         } satisfies SearchSpotResponse;
+      });
+      published(mapId);
+      return result;
+    },
+
+    /**
+     * `POST /maps/:mapId/explore/puzzle`: put a grey village tile's broken
+     * thing back together (#306 PR 2b). Once a tile each; the server checks
+     * the order against the tile's own and rolls what it gives (rule 1).
+     */
+    solvePuzzle: async (
+      user: PublicUser,
+      mapId: string,
+      request: SolvePuzzleRequest,
+    ): Promise<SolvePuzzleResponse> => {
+      const at = now();
+      const result = await exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        const seed = await seedOf(tx, mapId);
+        // Step 6: the tile, so its owner can't change mid-solve (restoring
+        // takes it first too), then its village row below.
+        const locked = await repo.lockTileAt(mapId, request.q, request.r);
+        if (!locked) throw new AppError('NOT_FOUND', MESSAGES.noTile);
+        const grey = await greyVillage(repo, mapId, locked, user.id, at);
+        if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+        const { tile, spots } = tileSpots(seed, locked, user.id, grey);
+        const solvedBy = await repo.lockPuzzle(tile.id);
+        if (solvedBy === null) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+        const puzzle = puzzleView(grey, tile, spots, solvedBy, user.id);
+        if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
+        if (!puzzleSolvedBy(puzzle, request.order)) {
+          throw new AppError('CONFLICT', MESSAGES.puzzleWrong);
+        }
+        await repo.setPuzzleSolvedBy(tile.id, [...solvedBy, user.id]);
+
+        // What it gives: a page not found yet, else a small thank-you (rule 1, rule 6).
+        const owner = { mapId, userId: user.id };
+        const foundLore = new Set(
+          (await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
+        );
+        const recipes = (await options.rekindled?.sealed(tx, owner)) ?? [];
+        const reward = rollPuzzleReward(
+          PUZZLE_REWARDS,
+          { foundLore, recipes: recipes.map((r) => r.id) },
+          rngFor(),
+        );
+        const found = reward.kind === 'items' ? { ...reward.items } : {};
+        const lorePage = reward.kind === 'lore' ? reward.id : null;
+        const recipe = reward.kind === 'recipe' ? reward.id : null;
+
+        // Step 11: the bag.
+        const solveId = uuidv7();
+        if (Object.keys(found).length > 0) {
+          await lockGrantRows(tx, mapId, [{ userId: user.id, items: found }]);
+          await grantItems(tx, owner, found, 'explore', solveId);
+        }
+        if (recipe) await options.rekindled?.grant(tx, owner, recipe, solveId);
+
+        const notable = notableOf(found, lorePage, null);
+        await repo.appendEvent({
+          mapId,
+          type: 'explore.puzzled',
+          actorUserId: user.id,
+          payload: {
+            userId: user.id,
+            q: tile.q,
+            r: tile.r,
+            terrain: tile.terrain,
+            communityId: grey.village.id,
+            solveId,
+            skin: puzzle.skin,
+            lorePage,
+            recipe,
+            items: found,
+            notable,
+          },
+        });
+
+        return {
+          puzzle: { ...puzzle, solved: true },
+          lore: lorePage ? { id: lorePage, title: LORE_TITLES.get(lorePage) ?? '' } : null,
+          recipe: recipe
+            ? { id: recipe, title: recipes.find((r) => r.id === recipe)?.title ?? '' }
+            : null,
+          found,
+          items: await createInventoryRepo(tx).list(owner),
+        } satisfies SolvePuzzleResponse;
       });
       published(mapId);
       return result;

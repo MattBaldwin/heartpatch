@@ -222,8 +222,9 @@ describe.skipIf(!url)('the Lorebook (needs DATABASE_URL)', () => {
       'wild-lands',
       'hollow-man',
       'little-guardians',
+      'grey-villages',
     ]);
-    expect(body.total).toBe(12);
+    expect(body.total).toBe(15);
     expect(body.slots.map((s) => `${s.chapter}#${String(s.order)}`)).toEqual(
       body.chapters.flatMap((c) => [1, 2, 3].map((n) => `${c.id}#${String(n)}`)),
     );

@@ -22,7 +22,10 @@ import {
   MilestonesResponseSchema,
   MapViewSchema,
   SearchSpotResponseSchema,
+  SolvePuzzleResponseSchema,
   SquishyResponseSchema,
+  MEMORY_PUZZLES,
+  puzzleSkinFor,
   type MapDetail,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -37,7 +40,7 @@ import {
   type DbClient,
   type Executor,
 } from '../../db/client.js';
-import { keepers, sessions, tileExplore, users } from '../../db/schema.js';
+import { communityTiles, keepers, loreFound, sessions, tileExplore, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -46,7 +49,9 @@ import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { createMilestonesConsumer } from '../milestones/consumer.js';
 import { refreshHomesteads } from './homesteads.js';
-import { HOLLOWED_FINDS } from '@heartpatch/shared/server';
+import { HOLLOWED_FINDS, PUZZLE_REWARDS } from '@heartpatch/shared/server';
+import { eq } from 'drizzle-orm';
+import { createLoreConsumer } from '../lore/consumer.js';
 import type { Rng } from '@heartpatch/shared';
 import { createExploreService } from './service.js';
 import { bigMove } from '../../../tests/big-move.js';
@@ -1119,6 +1124,251 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         HOLLOWED_FINDS.find((t) => t.kind === spot.kind && t.terrains?.includes(square.terrain)) ??
         HOLLOWED_FINDS.find((t) => t.kind === spot.kind && !t.terrains);
       expect(rolled[0]).toEqual(table!.finds);
+    });
+
+    describe('memory puzzles (#306 PR 2b)', () => {
+      const solve = (
+        server: FastifyInstance,
+        who: Player,
+        mapId: string,
+        t: Tile,
+        order: readonly string[],
+        key?: string,
+      ) =>
+        call(
+          server,
+          'POST',
+          `/maps/${mapId}/explore/puzzle`,
+          who,
+          { q: t.q, r: t.r, order },
+          key ? { 'idempotency-key': key } : {},
+        );
+      const solvedBy = async (t: Tile) =>
+        (
+          await db
+            .select({ by: communityTiles.puzzleSolvedBy })
+            .from(communityTiles)
+            .where(eq(communityTiles.tileId, t.id))
+        )[0]?.by;
+      /** The fewest wild tiles from `who`'s land to `square`'s village become theirs, so it touches. */
+      async function touchVillage(who: Player, mapId: string, square: Tile) {
+        const tiles = await tilesOf(mapId);
+        const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
+        const village = new Set(
+          tiles.filter((t) => t.communityId === square.communityId).map(hexKey),
+        );
+        const from = new Map<string, string | null>();
+        let frontier = tiles.filter((t) => t.ownerUserId === who.id).map(hexKey);
+        for (const k of frontier) from.set(k, null);
+        let goal: string | null = null;
+        while (frontier.length > 0 && goal === null) {
+          const next: string[] = [];
+          for (const k of frontier) {
+            const at = byKey.get(k)!;
+            if (hexNeighbors(at).some((n) => village.has(hexKey(n)))) {
+              goal = k;
+              break;
+            }
+            for (const n of hexNeighbors(at)) {
+              const t = byKey.get(hexKey(n));
+              if (!t || from.has(hexKey(t))) continue;
+              if (t.ownerUserId !== null || t.communityId !== null || t.homeSlot !== null) continue;
+              from.set(hexKey(t), k);
+              next.push(hexKey(t));
+            }
+          }
+          frontier = next;
+        }
+        for (let k = goal; k !== null; k = from.get(k) ?? null) {
+          const t = byKey.get(k)!;
+          if (t.ownerUserId === null) {
+            await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${t.id}'`);
+          }
+        }
+      }
+      const findAll = (who: Player, pages: readonly string[]) =>
+        db
+          .insert(loreFound)
+          .values(pages.map((pageId) => ({ userId: who.id, pageId, foundAt: new Date(START) })));
+
+      it('shows a broken thing by terrain, and fixing it gives a lore page, once a tile', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        const tile = await view(server, me, mapId, square);
+        const puzzle = tile.community?.puzzle;
+        const skin = puzzleSkinFor(square.terrain, MEMORY_PUZZLES);
+        expect(puzzle).toMatchObject({ skin: skin.id, solved: false });
+        expect([...puzzle!.order].sort()).toEqual(skin.pieces.map((p) => p.id).sort());
+        // It stands clear of every spot (the Keeper walks round both).
+        for (const s of tile.spots) {
+          expect(Math.hypot(s.x - puzzle!.x, s.z - puzzle!.z)).toBeGreaterThan(0.25);
+        }
+        // The same for everyone, every time.
+        expect((await view(server, me, mapId, square)).community?.puzzle).toEqual(puzzle);
+
+        const res = await solve(server, me, mapId, square, puzzle!.order);
+        expect(res.statusCode, res.body).toBe(200);
+        const fixed = SolvePuzzleResponseSchema.parse(res.json());
+        expect(fixed.puzzle).toEqual({ ...puzzle, solved: true });
+        expect(fixed.recipe).toBeNull();
+        expect(PUZZLE_REWARDS.lorePages).toContain(fixed.lore?.id);
+        expect(fixed.lore?.title.length).toBeGreaterThan(0);
+        expect(fixed.found).toEqual({});
+        expect(await solvedBy(square)).toEqual([me.id]);
+        const [event] = await eventsOf(mapId, 'explore.puzzled');
+        expect(event).toMatchObject({
+          userId: me.id,
+          q: square.q,
+          r: square.r,
+          communityId: square.communityId,
+          skin: skin.id,
+          lorePage: fixed.lore!.id,
+          recipe: null,
+          items: {},
+          notable: 'lore',
+        });
+        // The lore consumer grants the page.
+        await runConsumer(db, createLoreConsumer({ clock: () => clock }), mapId);
+        const found = await db.query.loreFound.findMany({
+          where: (f, { eq: is }) => is(f.userId, me.id),
+        });
+        expect(found.map((f) => f.pageId)).toContain(fixed.lore!.id);
+
+        expect((await view(server, me, mapId, square)).community?.puzzle?.solved).toBe(true);
+        const again = await solve(server, me, mapId, square, puzzle!.order);
+        expect(again.statusCode).toBe(409);
+        expect(errorOf(again).message).toBe('You already fixed this one! ✨');
+        expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(1);
+      });
+
+      it('takes only the right order, and a wrong one changes nothing', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        for (const wrong of [[...order].reverse(), order.slice(0, 3), ['bell', 'bell', 'bell', 'bell']]) {
+          const res = await solve(server, me, mapId, square, wrong);
+          expect(res.statusCode).toBe(409);
+          expect(errorOf(res).message).toBe('Not quite! Watch it once more and try again.');
+        }
+        expect(await solvedBy(square)).toEqual([]);
+        expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(0);
+      });
+
+      it('is each kid’s own: a friend fixes it too, and a retry is one solve', async () => {
+        const server = await start();
+        const me = await player();
+        const friend = await player();
+        const mapId = await patch(server, me, [friend]);
+        const square = await reachVillage(server, me, mapId);
+        await touchVillage(friend, mapId, square);
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        const first = await solve(server, me, mapId, square, order, 'puzzle-key-1');
+        const retry = await solve(server, me, mapId, square, order, 'puzzle-key-1');
+        expect(retry.statusCode).toBe(200);
+        expect(retry.json()).toEqual(first.json());
+        expect((await view(server, friend, mapId, square)).community?.puzzle?.solved).toBe(false);
+        expect((await solve(server, friend, mapId, square, order)).statusCode).toBe(200);
+        expect(await solvedBy(square)).toEqual([me.id, friend.id].sort());
+        expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(2);
+      });
+
+      it('lets two taps at once fix it only once', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        const both = await Promise.all([
+          solve(server, me, mapId, square, order),
+          solve(server, me, mapId, square, order),
+        ]);
+        expect(both.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+        expect(await solvedBy(square)).toEqual([me.id]);
+      });
+
+      it('gives a little Heartdust once every page is found', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        await findAll(me, PUZZLE_REWARDS.lorePages);
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        const res = await solve(server, me, mapId, square, order);
+        expect(res.statusCode, res.body).toBe(200);
+        const fixed = SolvePuzzleResponseSchema.parse(res.json());
+        expect(fixed).toMatchObject({ lore: null, recipe: null, found: PUZZLE_REWARDS.fallback });
+        for (const [id, n] of Object.entries(PUZZLE_REWARDS.fallback)) {
+          expect(fixed.items[id]).toBe(n);
+        }
+        const [event] = await eventsOf(mapId, 'explore.puzzled');
+        expect(event).toMatchObject({ lorePage: null, notable: 'heartdust' });
+        const ledger = await db.query.resourceLedger.findMany({
+          where: (l, { and, eq: is }) => and(is(l.userId, me.id), is(l.reason, 'explore')),
+        });
+        expect(ledger.map((l) => l.refId)).toEqual([event!['solveId']]);
+      });
+
+      it('can give a Rekindled recipe page through the PR 5 hook', async () => {
+        const me = await player();
+        const server = await start();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        await findAll(me, PUZZLE_REWARDS.lorePages);
+        const granted: unknown[] = [];
+        const service = createExploreService({
+          db,
+          clock: () => clock,
+          rekindled: {
+            sealed: () => Promise.resolve([{ id: 'heart-tea', title: 'Heart Tea' }]),
+            grant: (_tx, owner, pageId, refId) => {
+              granted.push({ ...owner, pageId, refId });
+              return Promise.resolve();
+            },
+          },
+        });
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        const fixed = await service.solvePuzzle(me, mapId, { q: square.q, r: square.r, order: [...order] });
+        expect(fixed).toMatchObject({
+          lore: null,
+          recipe: { id: 'heart-tea', title: 'Heart Tea' },
+          found: {},
+        });
+        const [event] = await eventsOf(mapId, 'explore.puzzled');
+        expect(event).toMatchObject({ recipe: 'heart-tea', lorePage: null, notable: null });
+        expect(granted).toEqual([
+          { mapId, userId: me.id, pageId: 'heart-tea', refId: event!['solveId'] },
+        ]);
+      });
+
+      it('is shut at night and out of reach, and there is none on my own land', async () => {
+        const server = await start();
+        const me = await player();
+        const friend = await player();
+        const mapId = await patch(server, me, [friend]);
+        const square = await reachVillage(server, me, mapId);
+        const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
+        const tiles = await tilesOf(mapId);
+        const village = tiles.filter((t) => t.communityId === square.communityId);
+        if (communityReach(village, tiles, friend.id).reach !== 'touching') {
+          const away = await solve(server, friend, mapId, square, order);
+          expect(away.statusCode).toBe(403);
+          expect(errorOf(away).message).toBe('Claim land next to it to explore!');
+        }
+        const { first } = await lineFromHome(mapId, me);
+        await ownMeadow(first, me);
+        const mine = await solve(server, me, mapId, first, order);
+        expect(mine.statusCode).toBe(409);
+        expect(errorOf(mine).message).toBe("There's nothing to fix here!");
+        // 8 PM in Denver: after nightfall.
+        clock.setTime(Date.parse('2026-10-03T02:00:00Z'));
+        const night = await solve(server, me, mapId, square, order);
+        expect(night.statusCode).toBe(403);
+        expect(await solvedBy(square)).toEqual([]);
+      });
     });
 
     it('is still only for my own land when the tile isn’t a village', async () => {

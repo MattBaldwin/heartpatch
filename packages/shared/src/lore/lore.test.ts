@@ -7,15 +7,17 @@ import { loreFinds } from './index.js';
 const KID = '11111111-1111-4111-8111-111111111111';
 
 describe('lore pages', () => {
-  it('fills the book: 12 pages, 3 in each of 4 chapters, two on the Glade (#307), all valid', () => {
+  it('fills the book: 15 pages, 3 in each of 5 chapters, two on the Glade (#307), all valid', () => {
     expect(checkLoreData(LORE_PAGES, LORE_CHAPTERS)).toEqual([]);
-    expect(LORE_PAGES).toHaveLength(12);
+    expect(LORE_PAGES).toHaveLength(15);
     for (const chapter of LORE_CHAPTERS) {
       const pages = LORE_PAGES.filter((p) => p.chapter === chapter.id);
       expect(pages.map((p) => p.order).sort()).toEqual([1, 2, 3]);
     }
     expect(LORE_PAGES.filter((p) => p.trigger.mapKinds.includes('tutorial'))).toHaveLength(2);
     expect(LORE_PAGES.filter((p) => p.trigger.eventType === 'explore.searched')).toHaveLength(5);
+    // The grey villages' memory puzzles (#306 PR 2b).
+    expect(LORE_PAGES.filter((p) => p.trigger.eventType === 'explore.puzzled')).toHaveLength(3);
   });
 
   it('gives every page a short hint that never repeats its title or words', () => {
