@@ -122,6 +122,20 @@ Player-facing words for game actions. The code can use technical names; the UI u
 | tiles a player owns | **land** ("Claim some land", "Someone challenged your land!") |
 | a player's home base, and its tray | **home** (the right-hand tray is **My Home**: "Your home is on the right!") |
 
+### Places glossary: Patch › Town › Hollow
+Owner decision (#602). Big to small, these are the only place words a player reads.
+
+| Say | It means |
+|---|---|
+| **Patch** | The whole shared map. |
+| **Town** | A Keeper's home plus their homesteads. |
+| **Hollow** | A ruined town to restore. Grey until you bring it back. |
+| **Home** | A Keeper's home base, where the Heart Seed lives. |
+| **Homestead** | A tile you explored all of, joined up to your home. |
+| **Heart Seed** | The glowing seed at the middle of a home. A restored Hollow grows its own. |
+
+**Don't say:** *village*, *villages*, *community* or *communities*, in any case. They are code names only (`communities` stays in code, tables and routes). `apps/client/tooling/words/player-words.test.ts` fails if a client text table or a `changes/` entry uses them.
+
 ### Avoided words
 One list, so tests can scan the **player-facing string fields** in data files (names, descriptions, lines, captions; not keys like `baseStats.attack`). Don't use these in player-facing text:
 

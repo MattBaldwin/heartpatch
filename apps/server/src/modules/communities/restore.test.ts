@@ -418,7 +418,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const needed = village.find((v) => v.tileId === square.id)!.piecesNeeded;
     const again = await restore(server, me, mapId, communityId, square, needed);
     expect(again.statusCode).toBe(409);
-    expect(errorOf(again).message).toBe('This village is already restored! 🌈');
+    expect(errorOf(again).message).toBe('This Hollow is already restored! 🌈');
   });
 
   it('takes in my own grounds (its guard goes home), but leaves my tile with a building be', async () => {
@@ -527,7 +527,7 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     // Village seeds don't grow yet: no second name.
     const twice = await call(server, 'POST', path, me, { name: 'Sunny Glen' });
     expect(twice.statusCode).toBe(403);
-    expect(errorOf(twice).message).toBe('Your village’s Heart Seed needs to grow first 🌱');
+    expect(errorOf(twice).message).toBe('Your Hollow’s Heart Seed needs to grow first 🌱');
   });
 
   it('sends the ring and its name back when the winner leaves', async () => {

@@ -299,7 +299,7 @@ describe('a won village (#306 PR 3)', () => {
       userId(2),
     );
     expect(theirs.owner).toBe(
-      `${won.members[0]!.user.username}'s village. Nobody can ever take it!`,
+      `${won.members[0]!.user.username}'s restored Hollow. Nobody can ever take it!`,
     );
   });
 

@@ -40,7 +40,7 @@ export const COMMUNITY_TEXT = {
   explore: 'Explore 🔍',
   restore: 'Restore 🛠️',
   /** The map legend's row for the grey tiles. */
-  legend: 'Hollowed village',
+  legend: 'Hollow',
   // A won village (#306 PR 3): a second home with its own Heart Seed.
   /** Its flag: "🏡 Bramble Glen". */
   wonFlag: (name: string) => `🏡 ${name}`,
@@ -50,9 +50,9 @@ export const COMMUNITY_TEXT = {
   ringTitle: (terrain: string, name: string) => `${terrain} · ${name} 🏡`,
   mySeed: 'Your second home! Safe at night, and nobody can ever take it.',
   myRing: 'Part of your second home. Safe at night, never fades, never taken!',
-  theirs: (who: string) => `${who}'s village. Nobody can ever take it!`,
+  theirs: (who: string) => `${who}'s restored Hollow. Nobody can ever take it!`,
   /** A restored tile of a village still being restored. */
-  tileRestored: '✨ This spot is restored! Restore the rest to win the village.',
+  tileRestored: '✨ This spot is restored! Restore the rest to win this Hollow.',
   // Contested tiles (PR 4): a restored tile is ordinary land until the village is won.
   /** A restored tile someone else holds. */
   winIt: '✨ Restored. Win it in a battle!',
