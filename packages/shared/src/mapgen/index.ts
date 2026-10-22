@@ -72,8 +72,8 @@ export interface GenerateMapOptions {
   readonly seed: Seed;
   readonly playerCount: number;
   /**
-   * Where the villages' cellar keys hide (#306 PR 2c): the server-only
-   * the server-only cellar key range. The server always passes it; without it
+   * Where the villages' cellar keys hide (#306 PR 2c): the server-only cellar
+   * key range. The server always passes it; without it
    * (a client preview) the villages have no key tile.
    */
   readonly cellarKeys?: CellarKeyRange;

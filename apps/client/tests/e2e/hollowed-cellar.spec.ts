@@ -105,9 +105,6 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   await later.tap();
   await slowExpect(card).toBeVisible();
   await expect(card.getByRole('heading')).toHaveText('A map to the key! 🗺️');
-  await expect
-    .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
-    .toContain('🗺️ The cellar key is hidden here');
   const mine = (await communities(page))!.villages.find((v) => v.id === communityId)!;
   expect(mine.cellar?.state).toBe('hunt');
   const keyTile = mine.cellar!.keyTile!;
@@ -115,6 +112,10 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   // "Show me on the map": the key's tile and its panel, where I can dig.
   await page.getByTestId('key-map-show').tap();
   await expect(card).toBeHidden();
+  // The camera glides there: its flag is on screen (only flags on screen are listed).
+  await expect
+    .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
+    .toContain('🗺️ The cellar key is hidden here');
   const dig = page.getByTestId('key-dig');
   await expect(async () => {
     expect(await show(page, keyTile)).toBe(true);
