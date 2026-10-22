@@ -84,7 +84,7 @@ export interface HomeSceneStats {
   readonly squishies: number;
   /** Squishies drawn at a habitat or the Training Grounds (the rest roam the home tiles, #604). */
   readonly housed: number;
-  /** Gatherers and guards, out on their tiles and not drawn here (#604). */
+  /** Gatherers, guards and trainees, out on their tiles and not drawn here (#604). */
   readonly away: number;
   /** Tiles around the home base a lit fire's light reaches (owner decision 2026-10-06). */
   readonly firelit: number;
@@ -362,8 +362,8 @@ export class HomeScene {
     this.#showCottage(home);
 
     // Squishies: at their habitat or the Training Grounds they practice at,
-    // or roaming a free home tile (#604). Gatherers and guards are out on
-    // their tiles, so they aren't here.
+    // or roaming a free home tile (#604). Gatherers, guards and trainees on
+    // a homestead's Training Grounds are out on their tiles, so they aren't here.
     const roam = this.#roamTiles(home);
     const anchors = new Map<string, { at: WorldPoint; wide: boolean }>(
       home.buildings
@@ -386,6 +386,12 @@ export class HomeScene {
       }
       const anchorId = squishy.trainingId ?? squishy.habitatId;
       const place = anchorId ? (anchors.get(anchorId) ?? null) : null;
+      // A trainee is at its Training Grounds (#604), out on a homestead
+      // (#277) unless they're drawn here: away, like a gatherer.
+      if (squishy.trainingId !== null && !place) {
+        away++;
+        continue;
+      }
       const roams = !place;
       // One without a habitat roams a free home tile, picked by its id (#604).
       const anchor = place?.at ?? this.#roamAnchor(roam, squishy.id);

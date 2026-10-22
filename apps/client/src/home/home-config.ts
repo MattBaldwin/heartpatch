@@ -78,9 +78,9 @@ export const HOME_FILL = {
   /**
    * How far squishies wander round a tile-sized habitat, world units at the
    * home view: a narrow ring between the building's footprint (about 1.5
-   * across its middle, a meadow's fence included) and the tile's edge (about
-   * 2.14), less half a squishy's width, so none stands on the fence or the
-   * next tile (#604).
+   * from its middle, a meadow's fence included) and the tile's edge (about
+   * 2.25), each with half a squishy's width to spare, so none stands on the
+   * fence or the next tile (#604).
    */
   wander: { near: 1.8, far: 1.84 }, // TUNE
 } as const;

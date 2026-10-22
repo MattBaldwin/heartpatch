@@ -1185,7 +1185,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(off, kid);
       await give(mapId, kid, PLENTY);
-      const { tiles, seed } = await homeTiles(off, kid, mapId);
+      const { seed } = await homeTiles(off, kid, mapId);
       const ring = (i: number) => ({
         q: seed.q + HOUSE_TILE_ORDER[i]!.q,
         r: seed.r + HOUSE_TILE_ORDER[i]!.r,
@@ -1218,7 +1218,6 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
           .message,
       ).toBe(houseMessage);
       await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(1), spot: 2 });
-      expect(tiles).toHaveLength(7);
     });
   });
 

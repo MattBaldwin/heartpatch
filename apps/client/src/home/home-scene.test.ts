@@ -263,6 +263,8 @@ describe('home scene: the house’s tile and who’s home (#604)', () => {
       squishy(3, { job: 'gatherer' }),
       squishy(4, { job: 'guard' }),
       squishy(5, { habitatId: HABITAT }),
+      // Training out on a homestead (#277): its grounds aren't drawn at home.
+      squishy(6, { job: 'training', trainingId: id(130) }),
     ],
     house: { level: 1 },
   };
@@ -296,9 +298,9 @@ describe('home scene: the house’s tile and who’s home (#604)', () => {
     expect(packed.stats).toMatchObject({ house: 'hut', houseTile: null });
   });
 
-  it('leaves gatherers and guards out, and every other squishy wanders', () => {
+  it('leaves gatherers, guards and homestead trainees out, and every other squishy wanders', () => {
     const homeScene = make(full);
-    expect(homeScene.stats).toMatchObject({ squishies: 3, housed: 1, away: 2 });
+    expect(homeScene.stats).toMatchObject({ squishies: 3, housed: 1, away: 3 });
     expect(new Set(homeScene.wanderers)).toEqual(new Set([id(301), id(302), id(305)]));
   });
 
