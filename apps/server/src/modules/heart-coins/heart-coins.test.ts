@@ -249,7 +249,11 @@ describe.skipIf(!url)('Heart Coins (needs DATABASE_URL)', () => {
       const kid = await player();
       const stranger = await player();
       const mapId = await patch(server, kid);
-      await expect(credit(stranger, mapId, 'battle', 2)).rejects.toThrow();
+      // No route gets here (battles and care check membership first, and
+      // leaving is a status change), so this is the database fact itself.
+      await expect(credit(stranger, mapId, 'battle', 2)).rejects.toMatchObject({
+        cause: { code: '23503', constraint_name: 'heart_coin_balances_member_fk' },
+      });
       expect(await balanceRow(mapId, stranger.id)).toBeUndefined();
     });
   });

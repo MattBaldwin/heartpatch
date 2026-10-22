@@ -1,5 +1,4 @@
 import {
-  HEART_COIN_CAPPED_SOURCES,
   HEART_COIN_RULES,
   type HeartCoinCappedSource,
   type HeartCoins,
@@ -116,7 +115,7 @@ export async function trySpendHeartCoins(
 ): Promise<number | null> {
   if (spend.amount <= 0) throw new Error(`trySpendHeartCoins: amount ${String(spend.amount)}`);
   const patch = await patchDay(tx, spend.mapId, spend.at);
-  if (!patch) return null;
+  if (!patch) throw new Error(`trySpendHeartCoins: no map ${spend.mapId}`);
   const repo = createHeartCoinsRepo(tx);
   const balance = await repo.lockBalance(spend.mapId, spend.userId);
   if (await repo.hasChange(spend.source, spend.refId)) return balance;
@@ -131,12 +130,15 @@ export async function spendHeartCoins(tx: Executor, spend: HeartCoinSpend): Prom
   return after;
 }
 
-/** Per capped source, from a full record. */
-const bySource = (pick: (source: HeartCoinCappedSource) => number) =>
-  Object.fromEntries(HEART_COIN_CAPPED_SOURCES.map((s) => [s, pick(s)])) as Record<
-    HeartCoinCappedSource,
-    number
-  >;
+/** One number per capped source. */
+const bySource = (
+  pick: (source: HeartCoinCappedSource) => number,
+): Record<HeartCoinCappedSource, number> => ({
+  battle: pick('battle'),
+  capture: pick('capture'),
+  care: pick('care'),
+  sell: pick('sell'),
+});
 
 /** My Heart Coins on a patch at `at`: the balance, today's earnings and caps, and the reset. */
 export async function heartCoinsView(
