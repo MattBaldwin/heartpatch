@@ -63,6 +63,7 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
+  showcaseStance,
   CAVE_STAGE,
   freePoint,
   fromCaveStage,
@@ -488,10 +489,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     start: startPuzzle,
     solve: solvePuzzle,
     ...(options.onLorebook ? { onLorebook: options.onLorebook } : {}),
-    onClosed: () => {
+    onClosed: (fixed) => {
       scene3d?.nudge(null);
       front = null;
       puzzleFront = false;
+      if (fixed) showMended(fixed.puzzle);
       findFront();
       render();
       wake();
@@ -602,7 +604,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const point = scene3d?.groundAt(x, y);
     if (!point || !tile) return;
     const spot = spotAtTap(point, targets(tile));
-    const goal = spot ? besideSpot(keeperAt, spot, scene3d?.colliders ?? []) : clampToTile(point);
+    const colliders = scene3d?.colliders ?? [];
+    // A broken thing is walked up to from the side, so it never hides behind the Keeper (#306 PR 2b).
+    const goal = spot
+      ? ((spot.index === PUZZLE_INDEX ? showcaseStance(keeperAt, spot, colliders) : null) ??
+        besideSpot(keeperAt, spot, colliders))
+      : clampToTile(point);
     // Never aim inside a rock: the Keeper would bump it forever.
     walk = tapWalk(scene3d ? slideMove(goal, goal, scene3d.colliders) : goal);
     aimed = spot?.index ?? null;
@@ -887,6 +894,34 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   }
 
   // ── A grey village's Relight puzzle (#306 PR 2b) ────────────────────────
+
+  let mendedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Back in the world after a win, the mended thing is the payoff (owner fix
+   * 2026-10-22): the Keeper steps beside it, never in front, and the camera
+   * frames both for a moment.
+   */
+  function showMended(puzzle: WorldPoint): void {
+    const s = scene3d;
+    if (!s) return;
+    const stance = showcaseStance(
+      keeperAt,
+      { kind: 'puzzle', x: puzzle.x, z: puzzle.z },
+      s.colliders,
+    );
+    if (stance && Math.hypot(stance.x - keeperAt.x, stance.z - keeperAt.z) > 0.01) {
+      walk = tapWalk(stance);
+      aimed = PUZZLE_INDEX;
+    }
+    s.nudge(puzzle);
+    if (mendedTimer !== null) clearTimeout(mendedTimer);
+    mendedTimer = setTimeout(() => {
+      mendedTimer = null;
+      if (!playing && !puzzleSheet.isOpen) scene3d?.nudge(null);
+      wake();
+    }, HOLLOWED_EXPLORE.mendedShowMs);
+  }
 
   /** The action button in front of a broken thing: turn to it and open its card. */
   function openPuzzle(): void {
@@ -1641,6 +1676,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     clearToast();
     if (spookTimer !== null) clearTimeout(spookTimer);
     spookTimer = null;
+    if (mendedTimer !== null) clearTimeout(mendedTimer);
+    mendedTimer = null;
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     // Closed without a word: `isOpen` is already false, so its close redraws nothing.
