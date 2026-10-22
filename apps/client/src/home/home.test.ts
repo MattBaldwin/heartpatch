@@ -687,7 +687,9 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
     });
     expect(groundsTileOffer({ ...tile(), nodeResource: null }, home)).toBeNull();
     // Land no tool clears (owner Q5) keeps its spot: nothing to wait for.
-    expect(groundsTileOffer({ ...tile(), terrain: 'junipers-gap', buildings: [] }, home)).toBeNull();
+    expect(
+      groundsTileOffer({ ...tile(), terrain: 'junipers-gap', buildings: [] }, home),
+    ).toBeNull();
     // Not on land that isn't a homestead; nothing new on a napping one.
     expect(groundsTileOffer(tile({ homestead: null }), home)).toBeNull();
     expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({ kind: 'napping' });
