@@ -116,12 +116,20 @@ describe('journeyResult', () => {
   });
 
   it('says the far road (#306 PR 6) arrives in the far Hollow, and loses nothing otherwise', () => {
-    expect(journeyResult('won', 'Lantern Post', { farHollow: true })).toEqual({
+    expect(journeyResult('won', 'Lantern Post', { to: 'far-hollow' })).toEqual({
       title: 'You made it to the far Hollow!',
       subtitle: "It's yours to explore all season.",
       done: 'Explore it 🕯️',
     });
-    expect(journeyResult('lost', null, { farHollow: true }).subtitle).toMatch(
+    // A journey this device didn't start (a reload): the win card promises neither a pass nor the far Hollow.
+    const somewhere = journeyResult('won', null, { to: 'unknown' });
+    expect(somewhere).toEqual({
+      title: 'You made it! 🧭',
+      subtitle: 'Back to the map to see where your journey took you.',
+    });
+    expect(JSON.stringify(somewhere)).not.toMatch(/open|far Hollow|minutes/);
+    expect(journeyResult('lost', null, { to: 'unknown' }).subtitle).toMatch(/didn't lose a thing/);
+    expect(journeyResult('lost', null, { to: 'far-hollow' }).subtitle).toMatch(
       /didn't lose a thing/,
     );
   });

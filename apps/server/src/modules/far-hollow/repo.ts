@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { farHollowExplore, journeys, maps, tiles } from '../../db/schema.js';
+import { farHollowExplore, gameEvents, journeys, maps, tiles } from '../../db/schema.js';
 
 /** My progress on one tile of a season's far Hollow (#306 PR 6). */
 export interface FarHollowRow {
@@ -41,6 +41,14 @@ export interface FarHollowRepo {
     tileIndex: number,
     progress: { searched: number; completedAt: Date | null },
   ) => Promise<void>;
+  /**
+   * Did I already bring a season's far Hollow all back (`journey.completed`)?
+   * Read only on a last spot, so it may scan the map's events.
+   */
+  completedBefore: (
+    key: Omit<FarHollowKey, 'seasonSeed'>,
+    season: { id: string; year: number },
+  ) => Promise<boolean>;
   /** The post my latest won far road set off from, for an event's place on the patch. */
   roadPost: (mapId: string, userId: string) => Promise<{ q: number; r: number } | null>;
 }
@@ -108,6 +116,23 @@ export function createFarHollowRepo(db: Executor): FarHollowRepo {
         .update(farHollowExplore)
         .set(progress)
         .where(and(whereKey(key), eq(farHollowExplore.tileIndex, tileIndex)));
+    },
+
+    completedBefore: async (key, season) => {
+      const [row] = await db
+        .select({ id: gameEvents.id })
+        .from(gameEvents)
+        .where(
+          and(
+            eq(gameEvents.mapId, key.mapId),
+            eq(gameEvents.type, 'journey.completed'),
+            eq(gameEvents.actorUserId, key.userId),
+            sql`${gameEvents.payload}->>'season' = ${season.id}`,
+            sql`(${gameEvents.payload}->>'year')::int = ${season.year}`,
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
     },
 
     roadPost: async (mapId, userId) => {

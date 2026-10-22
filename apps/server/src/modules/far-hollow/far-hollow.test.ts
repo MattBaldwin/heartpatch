@@ -493,6 +493,20 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     const done = await view(server, kid, mapId);
     expect(done.completedAt).toBe(clock.toISOString());
     expect(done.tiles.every((t) => t.searched === t.total)).toBe(true);
+
+    // Once a season: a last spot again (as after a data change) brings no second gift.
+    const again = lastTile.spots.find((s) => s.tool === null)!;
+    const allBut = lastTile.spots
+      .filter((s) => s.index !== again.index)
+      .reduce((m, s) => m | (1 << s.index), 0);
+    await db.execute(
+      `update far_hollow_explore set searched = ${String(allBut)}, completed_at = null where user_id = '${kid.id}' and tile_index = ${String(last.index)}`,
+    );
+    const twice = FarHollowSearchResponseSchema.parse(
+      (await search(server, kid, mapId, { tile: last.index, spot: again.index })).json(),
+    );
+    expect(twice.completed).toBe(false);
+    expect((await eventsOf(mapId)).filter((e) => e.type === 'journey.completed')).toHaveLength(1);
   });
 
   it('is fresh next season: new tiles, no progress, and the far road again (acceptance)', async () => {

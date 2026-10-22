@@ -331,9 +331,12 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
         const after = rows.map((r) =>
           r.tileIndex === tile.index ? { ...r, completedAt: explored ? at : r.completedAt } : r,
         );
-        // The last spot of the whole far Hollow: the joy is all back.
+        // The last spot of the whole far Hollow: the joy is all back, once a
+        // season (a tile the data added after that doesn't bring it back twice).
         const completed =
-          explored && completedAt(after, season.tiles) !== null && row.completedAt === null;
+          explored &&
+          completedAt(after, season.tiles) !== null &&
+          !(await repo.completedBefore(key, season.run));
 
         // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
         const foundLore = new Set(

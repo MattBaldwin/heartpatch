@@ -19,14 +19,27 @@ export const farHollowApi = {
   view: (mapId: string): Promise<FarHollowView> =>
     apiCallFor(`/maps/${mapId}/far-hollow`, { method: 'GET', schema: FarHollowViewSchema }),
 
-  /** Sets off on the far road from the post at (q, r) (or resumes the battle going). */
-  road: (mapId: string, post: { q: number; r: number }, key: string): Promise<PlayerBattle> =>
-    apiCallFor(`/maps/${mapId}/far-hollow/journey`, {
+  /**
+   * Sets off on the far road from the post at (q, r) (`created`), or resumes
+   * the battle going, which may be any battle (one at a time).
+   */
+  road: async (
+    mapId: string,
+    post: { q: number; r: number },
+    key: string,
+  ): Promise<{ battle: PlayerBattle; created: boolean }> => {
+    let created = false;
+    const res = await apiCallFor(`/maps/${mapId}/far-hollow/journey`, {
       method: 'POST',
       body: { q: post.q, r: post.r },
       schema: BattleResponseSchema,
       headers: { 'idempotency-key': key },
-    }).then((res) => res.battle),
+      onStatus: (status) => {
+        created = status === 201;
+      },
+    });
+    return { battle: res.battle, created };
+  },
 
   /** One of its tiles up close, as the explore view of a grey Hollow tile. */
   tile: (mapId: string, index: number): Promise<FarHollowTileView> =>

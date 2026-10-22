@@ -46,10 +46,12 @@ export function farHollowLayout(
     const [picked] = free.splice(rng.int(0, free.length - 1), 1);
     if (picked) places.push(picked);
   }
+  // Each tile's terrain from its own seed, so a tile count tuned mid-season
+  // never re-rolls the terrains (and spots) of tiles kids have searched.
   return places.map((place, index) => ({
     index,
     q: place.q,
     r: place.r,
-    terrain: rng.weighted(rules.terrains).terrain,
+    terrain: Rng.fromSeed(deriveSeed(seed, 'terrain', index)).weighted(rules.terrains).terrain,
   }));
 }

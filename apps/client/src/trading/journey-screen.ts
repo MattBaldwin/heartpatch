@@ -146,15 +146,18 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     note = '';
     render();
     try {
-      const battle = await sendCommand(
+      const reply = await sendCommand(
         sendDeps,
         (key) => api.start(id, { q: tile.q, r: tile.r }, key),
         stillHere,
       );
-      if (battle && stillHere()) {
-        // A battle already going comes back instead (one at a time): only a
-        // journey's is this post's.
-        if (battle.kind === 'journey') started.set(battle.id, { name, q: tile.q, r: tile.r });
+      if (reply && stillHere()) {
+        // A battle already going comes back instead (one at a time; even the
+        // far road, #306 PR 6): only one this tap started is this post's.
+        const { battle, created } = reply;
+        if (created && battle.kind === 'journey') {
+          started.set(battle.id, { name, q: tile.q, r: tile.r });
+        }
         options.openBattle(battle);
       }
     } catch (err) {

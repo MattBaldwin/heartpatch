@@ -40,6 +40,8 @@ export async function apiCall<T>(
     signal?: AbortSignal;
     /** Extra request headers, e.g. `Idempotency-Key` (tech spec §5) on a retried command. */
     headers?: Record<string, string>;
+    /** Hears a successful reply's HTTP status (201: the command made something new). */
+    onStatus?: (status: number) => void;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<T | null> {
@@ -65,6 +67,7 @@ export async function apiCall<T>(
       throw new ApiRequestError(parsed.data.error.code, parsed.data.error.message);
     throw new ApiRequestError('INTERNAL', DEFAULT_ERROR_MESSAGES.INTERNAL);
   }
+  options.onStatus?.(res.status);
   if (options.schema === null) {
     // Read the (empty) body out anyway: a reply left unread is cancelled when
     // its Response is collected, and Chromium logs that as net::ERR_ABORTED.
@@ -83,6 +86,7 @@ export async function apiCallFor<T>(
     schema: Schema<T>;
     signal?: AbortSignal;
     headers?: Record<string, string>;
+    onStatus?: (status: number) => void;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<T> {

@@ -114,12 +114,13 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
     note = null;
     render();
     try {
-      const battle = await sendCommand(sendDeps, (key) => api.road(id, from, key), stillHere);
-      if (battle && stillHere()) {
-        // A battle already going comes back instead (one at a time).
-        if (battle.kind === 'journey') roads.add(battle.id);
+      const reply = await sendCommand(sendDeps, (key) => api.road(id, from, key), stillHere);
+      if (reply && stillHere()) {
+        // A battle already going comes back instead (one at a time; even a
+        // post's journey): only one this tap started is the far road.
+        if (reply.created && reply.battle.kind === 'journey') roads.add(reply.battle.id);
         close();
-        options.openBattle(battle);
+        options.openBattle(reply.battle);
         return;
       }
     } catch (err) {
