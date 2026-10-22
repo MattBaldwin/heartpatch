@@ -74,6 +74,25 @@ describe('keys on a patch with no challenges (owner decision 2026-10-22)', () =>
     expect(others).not.toEqual(to);
   });
 
+  it('never moves onto a lake, the Gap, a post, a home or a village, and breaks ties by (q, r)', () => {
+    // Only the ring round the key is near enough; every tile on it is ruled out but one.
+    const blocked: Record<string, string> = {
+      '1,0': 'lake',
+      '1,-1': 'junipers-gap',
+      '0,-1': 'trading-post',
+    };
+    const base = patch({ '0,0': 'rival' }, blocked).map((t) => {
+      const k = hexKey(t);
+      if (k === '-1,0') return { ...t, homeSlot: 0 };
+      if (k === '-1,1') return { ...t, communityId: 'village' };
+      return t;
+    });
+    expect(keyMoveTo(key, base, 'me', { ...rules, range: 1 })).toEqual({ q: 0, r: 1 });
+    // With two equally near wild tiles, the lower q (then r) wins.
+    const two = base.map((t) => (hexKey(t) === '-1,1' ? { ...t, communityId: null } : t));
+    expect(keyMoveTo(key, two, 'me', { ...rules, range: 1 })).toEqual({ q: -1, r: 1 });
+  });
+
   it('stays on wild land, on my own land, and on patches with challenges', () => {
     expect(keyMoveTo(key, patch(), 'me', rules)).toBeNull();
     expect(keyMoveTo(key, patch({ '0,0': 'me' }), 'me', rules)).toBeNull();

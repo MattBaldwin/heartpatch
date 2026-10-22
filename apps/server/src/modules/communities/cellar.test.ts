@@ -504,7 +504,13 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
 
     it("moves a key off another Keeper's land to the nearest wild tile, once, and tells nobody", async () => {
       const { server, me, rival, mapId, communityId, key } = await rivalsKey();
-      const before = (await eventsOf(mapId, 'key.found')).length;
+      const allEvents = async () =>
+        (await db.query.gameEvents.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) })).length;
+      const before = await allEvents();
+      // The rival looking moves nothing: only the winner's own looks do.
+      const looked = await call(server, 'GET', `/maps/${mapId}/view`, rival);
+      expect(looked.statusCode).toBe(200);
+      expect((await communityRow(communityId))?.keyTileId).toBe(key.id);
       const moved = await viewKey(server, me, mapId, communityId);
       expect(moved).toBeDefined();
       expect(moved).not.toEqual({ q: key.q, r: key.r });
@@ -515,7 +521,8 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
       // Idempotent: another look keeps it there; the rival's land is untouched.
       expect(await viewKey(server, me, mapId, communityId)).toEqual(moved);
       expect((await tilesOf(mapId)).find((t) => t.id === key.id)?.ownerUserId).toBe(rival.id);
-      expect(await eventsOf(mapId, 'key.found')).toHaveLength(before);
+      // A move is the winner's secret: no game event at all.
+      expect(await allEvents()).toBe(before);
       // Someone else claims the new tile: it moves again. My own claim doesn't move it.
       await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${to.id}'`);
       const again = await viewKey(server, me, mapId, communityId);
@@ -562,6 +569,10 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
       expect(view.spots.some((s) => s.index === KEY_SPOT.index)).toBe(true);
       const found = await searchKey(server, me, mapId, beside);
       expect(found.statusCode, found.body).toBe(200);
+      // A second tap from next door is told it's found, as on the key's own tile.
+      const again = await searchKey(server, me, mapId, beside);
+      expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toBe('You already found this key! 🔑');
       const [event] = await eventsOf(mapId, 'key.found');
       expect(event?.payload).toMatchObject({ q: key.q, r: key.r });
     });

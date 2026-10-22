@@ -253,9 +253,10 @@ async function huntOn(
   mapId: string,
   tile: ExploreTileRow,
   userId: string,
+  found = false,
 ): Promise<ExploreKeyHunt | null> {
   if (tile.ownerUserId !== userId) return null;
-  const hunts = await repo.listKeyHunts(mapId, userId);
+  const hunts = await repo.listKeyHunts(mapId, userId, found);
   if (hunts.length === 0) return null;
   const here = hunts.find((h) => h.keyTileId === tile.id);
   if (here) return here;
@@ -312,10 +313,9 @@ async function findKey(
   const { mapId, userId, tile, spots, at } = input;
   const hunt = await huntOn(repo, mapId, tile, userId);
   if (!hunt) {
-    // Found already (a double tap's second search), else no key to find here.
-    const done = (await createCommunitiesRepo(tx).keyTiles(mapId)).some(
-      (k) => k.ownerUserId === userId && k.found && k.keyTileId === tile.id,
-    );
+    // Found already from here (a double tap's second search, on the key's
+    // tile or, next door, beside it), else no key to find here.
+    const done = await huntOn(repo, mapId, tile, userId, true);
     throw done
       ? new AppError('CONFLICT', MESSAGES.keyFound)
       : new AppError('NOT_FOUND', MESSAGES.noSpot);

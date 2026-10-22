@@ -16,8 +16,11 @@ import { communitiesTransaction, createCommunitiesRepo } from './repo.js';
  * secret (rule 6): no game event.
  *
  * Each move is its own transaction: the community row `FOR UPDATE` (step 6;
- * no tile is locked, the land is only read), re-checked under the lock, so
- * a second look that raced it moves nothing.
+ * the land is only read, and the target tile only key-shared by the
+ * foreign key), re-checked under the lock, so a second look that raced it
+ * moves nothing. Two winners whose keys move at the same moment read the
+ * taken tiles unlocked, so their keys can rarely land on one tile; that
+ * mends itself (either claiming it moves the other key on its owner's next look).
  */
 
 /** Moves `userId`'s hunted keys off claimed land on a no-challenge patch; how many moved. */

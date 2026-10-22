@@ -247,12 +247,16 @@ export function createExploreRepo(db: Executor) {
     },
 
     /**
-     * The villages `userId` won and still hunts the cellar key of (#306), each
-     * with its key's tile and who holds it. Server-only: which tile holds a
+     * The villages `userId` won whose cellar key they still hunt for (#306), or
+     * (`found`) whose key they found already, each with its key's tile and who holds it. Server-only: which tile holds a
      * key never leaves here but as the winner's glinting spot. Read without
      * a lock: a search locks the community row itself.
      */
-    listKeyHunts: async (mapId: string, userId: string): Promise<ExploreKeyHunt[]> => {
+    listKeyHunts: async (
+      mapId: string,
+      userId: string,
+      found = false,
+    ): Promise<ExploreKeyHunt[]> => {
       const rows = await db
         .select({
           id: communities.id,
@@ -269,7 +273,7 @@ export function createExploreRepo(db: Executor) {
           and(
             eq(communities.mapId, mapId),
             eq(communities.ownerUserId, userId),
-            isNull(communities.keyRevealedAt),
+            found ? isNotNull(communities.keyRevealedAt) : isNull(communities.keyRevealedAt),
           ),
         )
         .orderBy(asc(communities.id));
