@@ -365,6 +365,13 @@
       "when": 1792389125875,
       "tag": "0051_communities",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792631481106,
+      "tag": "0052_heart_coins",
+      "breakpoints": true
     }
   ]
 }
