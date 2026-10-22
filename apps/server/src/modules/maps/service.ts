@@ -24,8 +24,14 @@ import {
   type PublicUser,
   type PublicTile,
   type PvpMode,
+  type WorkerLook,
 } from '@heartpatch/shared';
-import { CELLAR_RULES, hintForGuardians, type GuardianData } from '@heartpatch/shared/server';
+import {
+  CELLAR_RULES,
+  hintForGuardians,
+  SERVER_GAME_DATA,
+  type GuardianData,
+} from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
@@ -52,6 +58,7 @@ import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/contentment.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 
 export interface MapsService {
@@ -140,6 +147,26 @@ function newInviteCode(): string {
   ).join('');
 }
 
+const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
+const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
+
+/**
+ * A tile's gatherer as this viewer may see it (#602, owner decision
+ * 2026-10-22), masked like the trading shelf: a public species shows; a
+ * secret one only once the viewer has met it, with its look, since the
+ * client has no row for it. Anything else is null, a plain stand-in.
+ */
+export function workerLookFor(
+  speciesId: string | null,
+  seen: ReadonlySet<string>,
+): WorkerLook | null {
+  if (speciesId === null) return null;
+  if (PUBLIC_SPECIES.has(speciesId)) return { speciesId };
+  const secret = SECRET_SPECIES.get(speciesId);
+  if (!secret || !seen.has(speciesId)) return null;
+  return { speciesId, visual: secret.visual, rarity: secret.rarity };
+}
+
 /**
  * A tile as members see it: every public field named, so the secret
  * `guardianStrength` can never ride along (tech spec §8).
@@ -151,6 +178,7 @@ function toPublicTile(
   fences: NonNullable<PublicTile['fences']>,
   post: TradingPostLabel | null,
   explore: Pick<PublicTile, 'explored' | 'homestead'> = { explored: false, homestead: null },
+  workerLook: WorkerLook | null = null,
 ): PublicTile {
   return {
     q: tile.q,
@@ -165,6 +193,7 @@ function toPublicTile(
     defenders: tile.defenders,
     defenderFeelings: tile.defenderFeelings ?? [],
     workers: tile.workers,
+    workerLook,
     guardianHint,
     buildings,
     fences,
@@ -474,7 +503,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
-        const [members, tiles, buildings, fences, seed, explored] = await Promise.all([
+        const [members, tiles, buildings, fences, seed, explored, seen] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
           // Fires and habitats (#18), with `lit` as of now.
@@ -484,7 +513,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           createTerritoryRepo(tx).mapSeed(mapId),
           // Land its owner has fully explored, and their homesteads (#199).
           createExploreRepo(tx).listOwnersExplored(mapId),
+          // Species this viewer has met, to mask gatherers' looks (#602).
+          createSpawnsRepo(tx).listSeen(mapId, user.id),
         ]);
+        const met = new Set(seen.map((row) => row.speciesId));
         // Trading posts (#269), named by their place in (q, r) order.
         const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
         const exploredAt = new Map(
@@ -523,6 +555,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               fences.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
               posts.get(`${String(tile.q)},${String(tile.r)}`) ?? null,
               exploredAt.get(`${String(tile.q)},${String(tile.r)}`),
+              workerLookFor(tile.workerSpeciesId, met),
             ),
           ),
           // How this viewer reaches each trading post (#270).
