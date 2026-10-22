@@ -41,11 +41,10 @@ export function keySpot(
   spots: readonly SearchSpot[],
   explore: ExploreRules,
 ): SearchSpot {
+  // Inside the margin, else anywhere on the tile; the middle only if no try
+  // fits at all, which today's kits never come near (the tests lay out every terrain).
   const at = extraSpotAt(seed, spots, explore, KEY_SPOT_MARGIN) ??
-    extraSpotAt(seed, spots, explore) ?? {
-      x: 0,
-      z: 0,
-    };
+    extraSpotAt(seed, spots, explore) ?? { x: 0, z: 0 };
   return { index: KEY_SPOT.index, kind: KEY_SPOT.kind, tool: null, ...at };
 }
 

@@ -106,6 +106,11 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
   let turn: ReturnType<typeof setTimeout> | null = null;
   /** Arms the map's buttons `KEY_HUNT.tapGuardMs` after it shows. */
   let arming: ReturnType<typeof setTimeout> | null = null;
+  /** Draws the open map again at the room it has now; null while it's shut. */
+  let redraw: (() => void) | null = null;
+  window.addEventListener('resize', () => {
+    redraw?.();
+  });
 
   const where = (t: Hex) => `${String(t.q)},${String(t.r)}`;
 
@@ -115,6 +120,7 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
     turn = null;
     arming = null;
     carded = null;
+    redraw = null;
     card.hidden = true;
     card.replaceChildren();
   };
@@ -180,22 +186,26 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
     );
     card.dataset['armed'] = 'false';
     card.hidden = false;
-    // Drawn once it's laid out, at the room the card has (never pixelated: at the DPR).
-    const plan = planTreasureMap(
-      view.tiles,
-      { key, start: c.square },
-      {
-        maxWidth: Math.max(200, frame.clientWidth || 300),
-        maxHeight: Math.max(160, Math.round(window.innerHeight * TREASURE_MAP.maxScreenShare)),
-      },
-    );
-    paintTreasureMap(canvas, plan, dpr());
-    if (plan.key) {
-      glint.style.left = `${String(plan.key.x)}px`;
-      glint.style.top = `${String(plan.key.y)}px`;
-      glint.style.setProperty('--glint', `${String(Math.max(18, plan.radius * 2.6))}px`);
-    }
-    glint.hidden = plan.key === null;
+    // Drawn once it's laid out, at the room the card has (never pixelated: at
+    // the DPR), and again when that room changes (an iPad turned round).
+    redraw = () => {
+      const plan = planTreasureMap(
+        view.tiles,
+        { key, start: c.square },
+        {
+          maxWidth: Math.max(200, frame.clientWidth || 300),
+          maxHeight: Math.max(160, Math.round(window.innerHeight * TREASURE_MAP.maxScreenShare)),
+        },
+      );
+      paintTreasureMap(canvas, plan, dpr());
+      if (plan.key) {
+        glint.style.left = `${String(plan.key.x)}px`;
+        glint.style.top = `${String(plan.key.y)}px`;
+        glint.style.setProperty('--glint', `${String(Math.max(18, plan.radius * 2.6))}px`);
+      }
+      glint.hidden = plan.key === null;
+    };
+    redraw();
     arming = setTimeout(() => {
       arming = null;
       card.dataset['armed'] = 'true';

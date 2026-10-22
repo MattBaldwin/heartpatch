@@ -5,6 +5,7 @@ import {
   type ItemCounts,
   type KeeperConfig,
   type PublicSearchSpot,
+  type MapView,
   type PublicTile,
   type PublicUser,
   type SearchSpotResponse,
@@ -97,7 +98,7 @@ import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
 import { cellarApi, type CellarApi } from '../hollowed/cellar-api.js';
 import { HOLLOWED_TEXT, villageShut } from '../hollowed/hollowed-explore-view.js';
-import { KEY_TEXT } from '../hollowed/key-hunt-view.js';
+import { KEY_TEXT, keyHuntOn } from '../hollowed/key-hunt-view.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -304,7 +305,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let working = false;
   let opening = false;
   let frame = 0;
-  let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+  let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
   /** Clears an echo's "Boo!" line after a moment. */
   let spookTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -965,7 +966,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       'aria-label',
       isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
-    progress.textContent = progressLine(t.progress);
+    // Cleared land with only the cellar key's glint has no spots to count (#306).
+    progress.textContent = t.progress.total > 0 ? progressLine(t.progress) : '';
     joyMeter.hidden = !t.community;
     if (t.community) {
       const joy = String(t.community.joy);
@@ -1541,9 +1543,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function renderTile(): void {
     if (!panel) return;
-    const { container, tile: t } = panel;
+    const { container, tile: t, view } = panel;
     const mine = user !== null && t.ownerUserId === user.id;
-    if (!mine || !mapId || options.isGlade(mapId) || !isExplorable(t.terrain, EXPLORE_RULES)) {
+    // The cellar key's tile is explored for its glint even where nothing else is (cleared land, #306).
+    const keyTile = user !== null && keyHuntOn(view, t, user.id)?.kind === 'key';
+    if (
+      !mine ||
+      !mapId ||
+      options.isGlade(mapId) ||
+      (!isExplorable(t.terrain, EXPLORE_RULES) && !keyTile)
+    ) {
       container.replaceChildren();
       return;
     }
@@ -1596,8 +1605,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (night) shut();
     },
     tileActions: {
-      show: (container, t) => {
-        panel = { container, tile: t };
+      show: (container, t, view) => {
+        panel = { container, tile: t, view };
         renderTile();
       },
       hide: () => {

@@ -226,6 +226,21 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
 }
 
 /**
+ * My own tile that can't be explored (cleared land, #242), or null: the
+ * cellar key may still hide there (a homestead cleared after the key was
+ * placed, or an older patch's key), so its glint is offered on it alone
+ * (#306). Refusing to clear the key tile instead would tell a rival where it is.
+ */
+function keyOnly(
+  tile: ExploreTileRow | null,
+  userId: string,
+  grey: Grey | null,
+): ExploreTileRow | null {
+  if (!tile || grey || tile.ownerUserId !== userId) return null;
+  return isExplorable(tile.terrain, EXPLORE_RULES) ? null : tile;
+}
+
+/**
  * The cellar key's glinting spot on this tile (#306, owner decision
  * 2026-10-22), or null: only on a tile I own that hides the key of a
  * village I won, while I'm still hunting for it. Its place comes from the
@@ -358,13 +373,18 @@ export function createExploreService(options: ExploreServiceOptions) {
       const found = await repo.findTileAt(mapId, at.q, at.r);
       const grey = await greyVillage(repo, mapId, found, user.id, now());
       const seed = await seedOf(db, mapId);
-      const { tile, spots } = tileSpots(seed, found, user.id, grey);
+      // My own land no one can explore (cleared land): only the cellar key's glint, if it hides there.
+      const bare = keyOnly(found, user.id, grey);
+      const { tile, spots } = bare
+        ? { tile: bare, spots: [] }
+        : tileSpots(seed, found, user.id, grey);
       const row = await repo.findRow(user.id, tile.id);
       const mask = grey ? greyMask(row, tile, grey) : searchedMask(row, tile, spots);
       const items = await createInventoryRepo(db).list({ mapId, userId: user.id });
       const searched = searchedCount(mask, spots.length);
       // The cellar key glints here for its hunter only, past the tile's own spots.
       const key = grey ? null : await keySpotOn(repo, mapId, seed, tile, user.id, spots);
+      if (bare && !key) throw new AppError('CONFLICT', MESSAGES.cantExplore);
       return {
         q: tile.q,
         r: tile.r,
@@ -395,6 +415,10 @@ export function createExploreService(options: ExploreServiceOptions) {
         // village's own rows are only read: restoring (PR 3) locks the tile first.
         const locked = await repo.lockTileAt(mapId, request.q, request.r);
         const grey = await greyVillage(repo, mapId, locked, user.id, at);
+        const bare = keyOnly(locked, user.id, grey);
+        if (bare && request.spot === KEY_SPOT.index) {
+          return findKey(repo, tx, { mapId, userId: user.id, tile: bare, spots: [], at });
+        }
         const { tile, spots } = tileSpots(seed, locked, user.id, grey);
         if (request.spot === KEY_SPOT.index && !grey) {
           return findKey(repo, tx, { mapId, userId: user.id, tile, spots, at });

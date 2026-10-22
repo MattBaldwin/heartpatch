@@ -20,6 +20,7 @@ const slow = { timeout: 30_000 };
 type Hex = { q: number; r: number };
 
 interface CommunitiesDebug {
+  flags: { label: string }[];
   keyHunt: {
     card: string | null;
     block: { kind: 'key' | 'square'; state: string } | null;
@@ -124,7 +125,8 @@ test('hunts a won Hollow’s cellar key by its treasure map, opens the cellar an
   const hunt = (await communities(page))!.keyHunt;
   expect(hunt.glowing).toEqual([keyTile]);
   expect(hunt.bag).toEqual([communityId]);
-  await expect(page.getByTestId('key-flag')).toHaveCount(0);
+  // No words over it: only the Hollows' own flags fly.
+  expect((await communities(page))!.flags.every((f) => !f.label.includes('🗺️'))).toBe(true);
 
   // "Show me on the map": the key's tile, whose panel says to explore it.
   await page.getByTestId('key-map-show').tap();

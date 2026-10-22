@@ -344,6 +344,23 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     );
   });
 
+  it('still finds a key on land that was cleared since, which nothing else can explore', async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
+    const key = await keyTileOf(mapId, communityId);
+    await db.execute(`update tiles set terrain = 'clearing' where id = '${key.id}'`);
+    const view = ExploreTileResponseSchema.parse((await exploreAt(server, me, mapId, key)).json());
+    expect(view).toMatchObject({ terrain: 'clearing', progress: { searched: 0, total: 0 } });
+    expect(view.spots.map((s) => s.index)).toEqual([KEY_SPOT.index]);
+    const found = await searchKey(server, me, mapId, key);
+    expect(found.statusCode, found.body).toBe(200);
+    expect((await communityRow(communityId))?.keyRevealedAt).toEqual(new Date(NOON));
+    // Once found, it's plain cleared land again: nothing to explore.
+    const after = await exploreAt(server, me, mapId, key);
+    expect(after.statusCode).toBe(409);
+    expect(errorOf(after).message).toBe("There's nothing to search here yet!");
+  });
+
   it('claims a wild key tile itself on the dev path, and the glint is there', async () => {
     const { server, me, mapId, communityId } = await wonVillage();
     const key = await keyTileOf(mapId, communityId);
