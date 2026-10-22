@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_BUILDINGS,
   moveInOrder,
+  outOfSeason,
   producedLines,
   resourceBuildCards,
   resourceBuildingFor,
@@ -255,6 +256,17 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(upkeepSection(undefined, 0)).toBeNull();
     expect(upkeepSection({ ...upkeep, due: [] }, 0)).toBeNull();
     expect(upkeepSection({ ...upkeep, total: 0 }, 0)?.total).toMatch(/Nothing due/);
+  });
+
+  it('says Free for one asleep on a napping homestead or out of season', () => {
+    const section = upkeepSection({ ...upkeep, due: [row('a', 17), row('d', 0)] }, 0);
+    expect(section?.rows.map((r) => r.coins)).toEqual(['💛 17', 'Free']);
+  });
+
+  it('knows a Pumpkin Barn sleeps out of season, and the others never do', () => {
+    expect(outOfSeason('pumpkin-barn', [])).toBe(true);
+    expect(outOfSeason('pumpkin-barn', ['halloween'])).toBe(false);
+    expect(outOfSeason('stone-quarry', [])).toBe(false);
   });
 
   it('moves one building a place up or down, and stays put at the ends', () => {

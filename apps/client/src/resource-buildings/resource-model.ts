@@ -94,9 +94,11 @@ export const RESOURCE_TEXT = {
   // The Heart Coins sheet's upkeep list (#601, owner decision Q5).
   upkeepTitle: 'Morning upkeep',
   upkeepTotal: (coins: number, wait: string) => `💛 ${String(coins)} next morning, in ${wait}`,
-  upkeepNone: 'Nothing due: every building is napping.',
+  upkeepNone: 'Nothing due: every building is asleep.',
   upkeepOrderHint: 'Short on coins? The top ones keep running. Tap the arrows to choose!',
   rowPaused: 'Napping',
+  /** A row for one that sleeps for free (its homestead napping, or out of season). */
+  rowFree: 'Free',
   moveUp: (name: string) => `Move ${name} up`,
   moveDown: (name: string) => `Move ${name} down`,
   saving: 'Saving…',
@@ -108,6 +110,13 @@ export function itemsShort(items: ItemCounts): string {
     .filter(([, n]) => n > 0)
     .map(([id, n]) => `${String(n)} ${itemIcon(id)}`)
     .join(' and ');
+}
+
+/** Asleep for its season (a Pumpkin Barn after Halloween), so it makes nothing and owes nothing. */
+export function outOfSeason(buildingId: string, seasons: readonly string[]): boolean {
+  const building = RESOURCE_BUILDINGS.find((b) => b.id === buildingId);
+  const season = building ? resourceSeason(building) : null;
+  return season !== null && !seasons.includes(season);
 }
 
 /** The season a building's resource grows in (the Pumpkin Barn's Halloween), or null. */
@@ -311,7 +320,7 @@ export interface UpkeepRow {
   readonly icon: string;
   readonly name: string;
   readonly level: number;
-  /** "💛 6", or "Napping" for a paused one (it owes nothing, owner decision Q6). */
+  /** "💛 6", "Napping" for a paused one, "Free" for a sleeping one (owner decisions Q4, Q6). */
   readonly coins: string;
   readonly paused: boolean;
   readonly first: boolean;
@@ -337,7 +346,11 @@ export function upkeepSection(
     icon: buildingIcon(d.buildingId),
     name: buildingName(d.buildingId),
     level: d.level,
-    coins: d.paused ? RESOURCE_TEXT.rowPaused : `💛 ${String(d.coins)}`,
+    coins: d.paused
+      ? RESOURCE_TEXT.rowPaused
+      : d.coins === 0
+        ? RESOURCE_TEXT.rowFree
+        : `💛 ${String(d.coins)}`,
     paused: d.paused,
     first: i === 0,
     last: i === upkeep.due.length - 1,

@@ -283,6 +283,11 @@ const inventory = createInventoryScreen({
   onCollected: () => {
     void recipeBook.check();
   },
+  // A settle charges the morning's upkeep (#601): the 💛 pill reads after it,
+  // not alongside it (its own read on coming back can beat the charge).
+  onSettled: () => {
+    void heartCoins.refresh();
+  },
   // The welcome-back card's "See Factory" (#294): its batches, wherever it
   // stands (on a homestead since #295).
   onSeeFactory: () => {

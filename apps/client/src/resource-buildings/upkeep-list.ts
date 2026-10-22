@@ -13,7 +13,7 @@ export interface UpkeepList {
   readonly element: HTMLElement;
   /** Fills it from a reply (hidden when I have no upkeep buildings). */
   show: (coins: HeartCoins, msUntilMorning: number) => void;
-  /** The order being saved, while a tap is on its way (null: none). */
+  /** Whether the order is being saved (a tap is on its way). */
   readonly saving: boolean;
 }
 

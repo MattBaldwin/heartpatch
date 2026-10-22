@@ -74,6 +74,11 @@ export interface InventoryScreenOptions {
   devTools?: boolean;
   /** Something new landed in the bag (a gather or craft finished): the recipe book may open a page. */
   onCollected?: () => void;
+  /**
+   * A settle finished on this patch: it may have charged the morning's
+   * upkeep or paused a building (#601), so the 💛 balance reads again.
+   */
+  onSettled?: () => void;
   /** The Crafting Factory's calls (#294). */
   factoryApi?: FactoryApi;
   /** The recipe book pages this account has opened (only those can be queued). */
@@ -632,6 +637,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
       presence.settled(id, document.visibilityState === 'visible');
+      options.onSettled?.();
       if (!newest) return;
       render();
       scheduleSettle();

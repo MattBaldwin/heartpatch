@@ -163,6 +163,38 @@ describe('the night words', () => {
     ).toBe(
       'A bit of your dark land went wild again. Your fires and Training Grounds there came back to your bag.',
     );
+    // A resource building on lost land (#601): it and what it made come home.
+    expect(
+      wildLine([
+        {
+          ...base,
+          reclaimed: [{ q: 1, r: 0 }],
+          lostBuildings: { fires: 0, fences: 0, trainingGrounds: 0, resourceBuildings: 1 },
+        },
+      ])?.text,
+    ).toBe(
+      'A bit of your dark land went wild again. Your building there came back to your bag. What it made came home too!',
+    );
+    expect(
+      wildLine([
+        {
+          ...base,
+          reclaimed: [
+            { q: 1, r: 0 },
+            { q: 2, r: 0 },
+          ],
+          lostBuildings: {
+            fires: 1,
+            fences: 0,
+            trainingGrounds: 0,
+            resourceBuildings: 2,
+            warehouses: 1,
+          },
+        },
+      ])?.text,
+    ).toBe(
+      '2 bits of your dark land went wild again. Your fire, buildings and Warehouse there came back to your bag. What they made came home too!',
+    );
   });
 
   it('uses kind words only (style guide §9) and keeps the chips short', () => {
