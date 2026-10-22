@@ -2,7 +2,10 @@ import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import { hexKey, type HexKey, type PublicTile } from '@heartpatch/shared';
 import type { MapLayer } from './map-screen.js';
+import { flagRoom } from '../trading/post-flags.js';
+import { boxOf } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
+import { intersects, type Rect } from '../ui/geometry.js';
 import { TILE_MARK } from './map-config.js';
 import { tileScreenRectOf, type ScreenRect } from './map-scene.js';
 
@@ -16,9 +19,13 @@ import { tileScreenRectOf, type ScreenRect } from './map-scene.js';
 //
 // A DOM overlay. A mark with an anchor (a gatherer's head) sits just beside
 // it, so it says which squishy; one without sits in the tile's top corner,
-// placed with the map's one tile projection. Unlike the old 🧺 badges it
-// never pins to the screen's edge and never steps clear of a neighbour: a
-// mark whose spot is off screen shows nothing.
+// placed with the map's one tile projection. It keeps to the flags' room
+// (`flagRoom`, post-flags.ts): clear of the top bar, the patch name, the
+// tray handles, the night's chips, open sheets and every map flag, trying
+// the other side of the head, then above it, and hiding only when all three
+// are covered. Unlike the old 🧺 badges it never pins to the screen's edge
+// and never steps clear of a neighbour: a mark whose spot is off screen
+// shows nothing.
 
 /** What a mark says (`TILE_MARK.kinds`, most pressing first). */
 export type TileMarkKind = (typeof TILE_MARK.kinds)[number];
@@ -70,26 +77,43 @@ export function pickMarks(
 }
 
 /**
- * Where a mark sits (CSS px, its middle), or null when that's off screen:
- * beside its anchor's screen point when it has one, else in its tile's top
- * right, inside the rim (pure, for tests).
+ * Where a mark sits (CSS px, its middle), or null to hide it: beside its
+ * anchor's screen point when it has one (the first of `TILE_MARK.beside`
+ * clear of `covers`), else in its tile's top right, inside the rim. Hidden
+ * off screen, or when every spot touches a cover (pure, for tests).
  */
 export function markSpot(
   anchor: { x: number; y: number } | null,
   rect: ScreenRect | null,
   screen: { width: number; height: number },
+  covers: readonly Rect[] = [],
 ): { x: number; y: number } | null {
-  let x: number;
-  let y: number;
-  if (anchor) {
-    x = anchor.x + TILE_MARK.beside.x;
-    y = anchor.y + TILE_MARK.beside.y;
-  } else if (rect) {
-    x = rect.x + rect.width * TILE_MARK.across;
-    y = rect.y + rect.height * TILE_MARK.down;
-  } else return null;
-  if (x < 0 || y < 0 || x > screen.width || y > screen.height) return null;
-  return { x: Math.round(x), y: Math.round(y) };
+  const tries = anchor
+    ? TILE_MARK.beside.map((d) => ({ x: anchor.x + d.x, y: anchor.y + d.y }))
+    : rect
+      ? [{ x: rect.x + rect.width * TILE_MARK.across, y: rect.y + rect.height * TILE_MARK.down }]
+      : [];
+  const half = TILE_MARK.size / 2;
+  for (const at of tries) {
+    if (at.x < 0 || at.y < 0 || at.x > screen.width || at.y > screen.height) return null;
+    const box = { x: at.x - half, y: at.y - half, width: TILE_MARK.size, height: TILE_MARK.size };
+    if (covers.some((cover) => intersects(box, cover))) continue;
+    return { x: Math.round(at.x), y: Math.round(at.y) };
+  }
+  return null;
+}
+
+/** Map flags (trading posts, homes, Hollows), which marks keep clear of. */
+const FLAGS = '.post-flag';
+
+/** What a mark must not touch: the flags' room (no Keeper cover) and every map flag shown. */
+function markCovers(): Rect[] {
+  const covers = [...flagRoom(null).covers];
+  for (const node of document.querySelectorAll(FLAGS)) {
+    const box = boxOf(node)?.box;
+    if (box) covers.push(box);
+  }
+  return covers;
 }
 
 /** Scratch for `screenPointOf`, which runs every drawn frame while a mark shows. */
@@ -125,12 +149,16 @@ export function createTileMarks(root: HTMLElement): TileMarks {
   const sources = new Map<string, readonly TileMark[]>();
   const shown = new Map<HexKey, Shown>();
 
-  /** `box`: the canvas on screen, read once a frame (before any mark moves). */
-  const place = (mark: Shown, box: DOMRect | null) => {
+  /**
+   * `box`: the canvas on screen and `covers` what to keep clear of, both
+   * read once a frame (before any mark moves).
+   */
+  const place = (mark: Shown, box: DOMRect | null, covers: readonly Rect[]) => {
     const spot = markSpot(
       scene && box && mark.anchor ? screenPointOf(scene, box, mark.anchor) : null,
       scene && !mark.anchor ? tileScreenRectOf(scene, mark.tile) : null,
       { width: window.innerWidth, height: window.innerHeight },
+      covers,
     );
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === mark.at) return;
@@ -144,7 +172,8 @@ export function createTileMarks(root: HTMLElement): TileMarks {
   const placeAll = () => {
     if (shown.size === 0) return;
     const box = canvasBox();
-    for (const mark of shown.values()) place(mark, box);
+    const covers = markCovers();
+    for (const mark of shown.values()) place(mark, box, covers);
   };
 
   /** Matches the marks on screen to what the sources say now. */
@@ -161,7 +190,7 @@ export function createTileMarks(root: HTMLElement): TileMarks {
         had.tile = want.tile;
         had.anchor = want.at;
         had.at = '';
-        place(had, canvasBox());
+        place(had, canvasBox(), markCovers());
         continue;
       }
       const node = el(
@@ -178,7 +207,7 @@ export function createTileMarks(root: HTMLElement): TileMarks {
       root.append(node);
       const added: Shown = { tile: want.tile, kind: want.kind, anchor: want.at, node, at: '' };
       shown.set(key, added);
-      place(added, canvasBox());
+      place(added, canvasBox(), markCovers());
     }
   };
 

@@ -1109,12 +1109,13 @@ const maps = createMapScreen({
     hollowLayer,
     darkLand,
     jobs.gatherers,
-    tileMarks,
     land.layer,
     postFlags,
     communityFlags,
     villageWins,
     trickOrTreat.layer,
+    // Last: each frame the marks keep clear of the flags placed just before them.
+    tileMarks,
   ],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },

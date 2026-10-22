@@ -474,8 +474,18 @@ export const GATHERER_ON_TILE = {
  * buildings). Kinds are listed most pressing first: a tile shows one.
  */
 export const TILE_MARK = {
-  /** From the top of what it's about (its head) to the chip's middle, CSS px: up and to the right. */
-  beside: { x: 12, y: -10 }, // TUNE
+  /**
+   * From the top of what it's about (its head) to the chip's middle, CSS px,
+   * tried in order until one keeps clear of the flags and everything over
+   * the map: up and to the right, up and to the left, then straight above.
+   */
+  beside: [
+    { x: 12, y: -10 },
+    { x: -12, y: -10 },
+    { x: 0, y: -36 },
+  ], // TUNE
+  /** The chip's size, CSS px (as `.tile-mark` in map.css). */
+  size: 24,
   /** With nothing to sit by: where on the tile's screen box the chip's middle sits (0–1 across, 0–1 down). */
   across: 0.78, // TUNE
   down: 0.3, // TUNE

@@ -35,10 +35,32 @@ describe('markSpot (#602)', () => {
   const rect = { x: 100, y: 200, width: 80, height: 60 };
 
   it('sits just beside what it is about (a gatherer’s head)', () => {
+    const [right] = TILE_MARK.beside;
     expect(markSpot({ x: 150, y: 300 }, rect, screen)).toEqual({
-      x: 150 + TILE_MARK.beside.x,
-      y: 300 + TILE_MARK.beside.y,
+      x: 150 + right.x,
+      y: 300 + right.y,
     });
+  });
+
+  it('keeps clear of a flag: the other side of the head, then above it, else hidden', () => {
+    const [right, left, above] = TILE_MARK.beside;
+    const head = { x: 150, y: 300 };
+    const chip = (d: { x: number; y: number }) => ({
+      x: head.x + d.x - TILE_MARK.size / 2,
+      y: head.y + d.y - TILE_MARK.size / 2,
+      width: TILE_MARK.size,
+      height: TILE_MARK.size,
+    });
+    expect(markSpot(head, null, screen, [chip(right)])).toEqual({
+      x: head.x + left.x,
+      y: head.y + left.y,
+    });
+    // A wide label over both sides of the head (a village's flag, #602's screens).
+    expect(markSpot(head, null, screen, [chip(right), chip(left)])).toEqual({
+      x: head.x + above.x,
+      y: head.y + above.y,
+    });
+    expect(markSpot(head, null, screen, [chip(right), chip(left), chip(above)])).toBeNull();
   });
 
   it("sits in the tile's top right with nothing to sit by", () => {
