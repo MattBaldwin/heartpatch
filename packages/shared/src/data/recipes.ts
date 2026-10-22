@@ -156,7 +156,7 @@ export const RECIPES: Recipe[] = [
     id: 'joy-lantern',
     name: 'Joy Lantern',
     description:
-      'A lantern with a happy heart flame. Built on your land, it shines a whole tile further than a Hearthfire!',
+      'A lantern with a happy heart flame. Built on your land, it shines a whole tile further than a new Hearthfire!',
     inputs: { 'joy-ember': 1, emberwood: 3, glimmer: 1 }, // TUNE:
     output: { resource: 'joy-lantern', quantity: 1 }, // built into a fire out on your land
     craftSeconds: 5 * 60, // TUNE: like the Jack-o'-Lantern

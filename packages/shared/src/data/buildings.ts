@@ -53,7 +53,7 @@ export const BUILDINGS: Building[] = [
     id: 'joy-lantern',
     kind: 'hearthfire',
     name: 'Joy Lantern',
-    description: 'A happy heart flame. Its light reaches one tile further than a Hearthfire!',
+    description: 'A happy heart flame. Its light reaches one tile further than a new Hearthfire!',
     placement: 'land', // like every Hearthfire (owner decision 2026-10-07)
     maxPerTile: 1, // TUNE:
     slot: 'centre',

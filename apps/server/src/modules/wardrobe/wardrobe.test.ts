@@ -917,7 +917,18 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect((await eventsOf(mapId)).filter((e) => e.type === 'clothing.found')).toHaveLength(1);
       // Owned but not counted yet (a patch-mate left first, say): it can still turn up,
       // so the title stays in reach.
-      expect((await roll(kid, mapId, 'puzzle')).clothing).toBe('lantern-glow-cap');
+      const again = await roll(kid, mapId, 'puzzle');
+      expect(again.clothing).toBe('lantern-glow-cap');
+      // Found again, it's a new find: its own `clothing.found` for the title to count.
+      const refAgain = '00000000-0000-7000-8000-0000000000e3';
+      expect(
+        await withTransaction(db, (tx) =>
+          grantRekindledPiece(tx, drop(mapId, kid, refAgain), again),
+        ),
+      ).toBe('lantern-glow-cap');
+      expect(
+        (await eventsOf(mapId)).filter((e) => e.type === 'clothing.found').map((e) => e.payload),
+      ).toContainEqual(expect.objectContaining({ itemId: 'lantern-glow-cap', refId: refAgain }));
       await counted(kid, 'lantern-glow-cap');
       expect(await roll(kid, mapId, 'puzzle')).toEqual({ clothing: null, items: {} });
     });
