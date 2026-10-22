@@ -113,7 +113,11 @@ export function itemsShort(items: ItemCounts): string {
     .join(' and ');
 }
 
-/** A row that owes nothing: out of season (it says till when), else its homestead is napping. */
+/**
+ * A row that owes nothing: out of season (it says till when), else its
+ * homestead is napping. Every resource building level has upkeep, so a 0 can
+ * only mean one of those two (a free level would need a third word here).
+ */
 function sleepRow(buildingId: string, seasons: readonly string[]): string {
   const building = RESOURCE_BUILDINGS.find((b) => b.id === buildingId);
   const season = building ? resourceSeason(building) : null;
@@ -349,10 +353,15 @@ export interface UpkeepSection {
 export function upkeepSection(
   upkeep: Upkeep | undefined,
   msUntilMorning: number,
-  /** The seasons on today, to tell a sleeping Pumpkin Barn from a napping homestead. */
-  seasons: readonly string[] = [],
+  /**
+   * The seasons on at an instant, to tell a sleeping Pumpkin Barn from a
+   * napping homestead. Read at the next morning, the one the server charges
+   * for (`canWorkAt`): on a season's last day the barn already owes nothing.
+   */
+  seasonsAt: (at: Date) => readonly string[] = () => [],
 ): UpkeepSection | null {
   if (!upkeep || upkeep.due.length === 0) return null;
+  const seasons = seasonsAt(new Date(upkeep.nextMorningAt));
   const rows = upkeep.due.map((d, i) => ({
     buildingRowId: d.buildingRowId,
     icon: buildingIcon(d.buildingId),

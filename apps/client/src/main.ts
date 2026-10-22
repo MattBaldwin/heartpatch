@@ -380,9 +380,9 @@ const heartCoins = createHeartCoinsScreen({
   root: document.body,
   now: () => inventory.gameNow(),
   // By the patch's own date, as the map dresses its seasons (#583).
-  seasons: () => {
+  seasons: (at) => {
     const view = maps.view;
-    return view ? seasonsOn(view.map.timeZone, new Date(inventory.gameNow())) : [];
+    return view ? seasonsOn(view.map.timeZone, at) : [];
   },
 });
 const heartCoinsOn = (mapId: string): void => {

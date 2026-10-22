@@ -267,16 +267,32 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     const barn = { ...row('e', 0), buildingId: 'pumpkin-barn' };
     const due = [row('a', 17), row('c', 0, true), row('d', 0), barn];
     // After Halloween: the barn says till when.
-    expect(upkeepSection({ ...upkeep, due }, 0, [])?.rows.map((r) => r.coins)).toEqual([
+    expect(upkeepSection({ ...upkeep, due }, 0, () => [])?.rows.map((r) => r.coins)).toEqual([
       '💛 17',
       'Needs 💛',
       'Napping',
       'Asleep till Halloween 🎃',
     ]);
-    // In season, a barn that owes nothing is on a napping homestead.
-    expect(upkeepSection({ ...upkeep, due: [barn] }, 0, ['halloween'])?.rows[0]?.coins).toBe(
+    // In season next morning too, a barn that owes nothing is on a napping homestead.
+    expect(upkeepSection({ ...upkeep, due: [barn] }, 0, () => ['halloween'])?.rows[0]?.coins).toBe(
       'Napping',
     );
+  });
+
+  it("judges the season at the morning it charges, not now (a season's last day)", () => {
+    // Halloween is on today but over by the next morning, which the server
+    // charges for: the barn owes nothing because it sleeps, not because it naps.
+    const barn = { ...row('e', 0), buildingId: 'pumpkin-barn' };
+    const morning = Date.parse(upkeep.nextMorningAt);
+    const asked: number[] = [];
+    const seasonsAt = (at: Date) => {
+      asked.push(at.getTime());
+      return at.getTime() >= morning ? [] : ['halloween'];
+    };
+    expect(upkeepSection({ ...upkeep, due: [barn] }, 0, seasonsAt)?.rows[0]?.coins).toBe(
+      'Asleep till Halloween 🎃',
+    );
+    expect(asked).toEqual([morning]);
   });
 
   it('knows a Pumpkin Barn sleeps out of season, and the others never do', () => {
