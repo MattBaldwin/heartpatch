@@ -69,6 +69,19 @@ describe('clearOffer (#242)', () => {
     ).toMatchObject({ tool: 'spade', drop: { stone: expect.any(Number) as number } });
   });
 
+  it("promises no Pumpkins out of their season, as the server's clear drops none (#601)", () => {
+    const fields = tile({ terrain: 'pumpkin-fields', nodeResource: 'pumpkins' });
+    const spade = { spade: 3 };
+    expect(clearOffer(fields, me, { ...bag(spade), seasons: ['halloween'] }, NOW)).toMatchObject({
+      tool: 'spade',
+      drop: { pumpkins: 2 },
+    });
+    expect(clearOffer(fields, me, { ...bag(spade), seasons: [] }, NOW)).toMatchObject({
+      tool: 'spade',
+      drop: {},
+    });
+  });
+
   it('asks for the tool first when the bag has none', () => {
     expect(clearOffer(tile(), me, bag({}), NOW)).toMatchObject({ needTool: true, blocked: null });
   });

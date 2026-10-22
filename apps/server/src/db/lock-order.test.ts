@@ -1190,6 +1190,32 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
 
+  it("charges a take-down's owed mornings after its inventory rows (buildings `remove`, #601 step 11 then 12b)", async () => {
+    const { kid, mapId } = await hutSetup('hut-taker');
+    const [hut] = await db
+      .select({ id: buildings.id })
+      .from(buildings)
+      .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, kid.id)));
+    const service = createBuildingsService({ db });
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ itemId: inventories.itemId })
+          .from(inventories)
+          .where(
+            and(
+              eq(inventories.mapId, mapId),
+              eq(inventories.userId, kid.id),
+              eq(inventories.itemId, 'timber'),
+            ),
+          )
+          .for('update'),
+      () => service.remove(kid, mapId, hut!.id),
+      (tx) => lockHeart(tx, mapId, kid.id),
+    );
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+  });
+
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
     const owner = await player('owner');
     const kid = await player('picker');

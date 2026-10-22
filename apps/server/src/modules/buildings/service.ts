@@ -922,10 +922,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // then the mornings it owes are charged (12b): an unpaid one stops
           // its output. Banked before the cost, so what it made can pay.
           const most = productionAt(locked, at, timeZone);
-          if (most) {
+          // Locked whenever a charge follows, so the cost's rows (step 11)
+          // never come after the balance (12b), even for one that makes nothing.
+          if (most || upkeepRows) {
             await lockGrantRows(tx, mapId, [
               { userId: user.id, items: cost },
-              { userId: user.id, items: most.ready },
+              ...(most ? [{ userId: user.id, items: most.ready }] : []),
             ]);
           }
           const { row, events: paused } = await chargeFirst(
