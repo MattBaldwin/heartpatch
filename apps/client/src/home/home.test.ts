@@ -417,10 +417,10 @@ describe('build menu', () => {
     const older = homeWith({ house: { level: 1 }, buildings: [den] });
     expect(onTile(freeHomeSpots(older), 1, -1)).toBe(false);
     expect(onTile(freeHomeSpots(older), 0, -1)).toBe(false);
-    // Moving that habitat: its tile frees up for the house, so the house's next tile is offered.
+    // Moving that habitat: its own tile is offered (a spot change), the house's never.
     const moving = freeHomeSpots(older, den.id);
-    expect(onTile(moving, 0, -1)).toBe(true);
-    expect(onTile(moving, 1, -1)).toBe(false);
+    expect(onTile(moving, 1, -1)).toBe(true);
+    expect(onTile(moving, 0, -1)).toBe(false);
   });
 
   it('previews what taking down gives back, unburned fuel included', () => {

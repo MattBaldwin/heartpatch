@@ -57,6 +57,7 @@ import { buildCottage } from '../house/house-models.js';
 import type { WorkMood } from '../squishies/jobs/jobs-view.js';
 import {
   HOME_FILL,
+  HOME_FRAME,
   HOME_HOUSE,
   HOME_VIEW,
   MAP_OUTER_BUILDING_SCALE,
@@ -264,12 +265,25 @@ export class HomeScene {
       return mesh;
     });
 
+    this.update(home);
     const radius = HOME_VIEW.hexSize * HOME_VIEW.landRings * 1.8;
     this.content = {
       bounds: { minX: -radius, maxX: radius, minZ: -radius, maxZ: radius },
-      start: { x: 0, z: 0 },
+      start: { x: 0, z: this.#startZ(scene.getEngine().getRenderingCanvas()?.clientHeight ?? 0) },
     };
-    this.update(home);
+  }
+
+  /**
+   * Where the camera starts, front to back (#604): towards the house's tile
+   * by `HOME_FRAME`'s share for a canvas `height` CSS px tall, so the house
+   * shows in full under the top card. No house tile: the Heart Seed.
+   */
+  #startZ(height: number): number {
+    if (!this.#houseAt) return 0;
+    const f = HOME_FRAME;
+    const t = Math.min(1, Math.max(0, (height - f.shortAt) / (f.tallAt - f.shortAt)));
+    const share = height > 0 ? f.short + (f.tall - f.short) * t : f.short;
+    return this.spotAt({ ...this.#houseAt, spot: 0 }).z * share;
   }
 
   get stats(): HomeSceneStats {
@@ -724,7 +738,7 @@ export class HomeScene {
     r.hops += 1;
     r.hop = {
       from: r.at,
-      to: this.#wanderPoint(r.home, squishyId, r.hops, r.training, r.wide, r.roams),
+      to: this.#wanderPoint(r.home, squishyId, r.hops, r.training, r.wide, r.roams, r.at),
       start: now,
     };
   }
@@ -783,7 +797,9 @@ export class HomeScene {
    * everyone. A trainee keeps to the left or right of the mat, beside the
    * target at its front, so the target stays in view. One roaming a home
    * tile (#604) keeps round the tile's middle, clear of its node or the
-   * Heart Seed.
+   * Heart Seed. Round a tile's middle or a tile-sized habitat, a hop from
+   * `from` turns at most `WANDER.turn` about the anchor, so it walks round
+   * what's there rather than through it.
    */
   #wanderPoint(
     anchor: WorldPoint,
@@ -792,6 +808,7 @@ export class HomeScene {
     training: number | null = null,
     wide = false,
     roams = false,
+    from: WorldPoint | null = null,
   ): WorldPoint {
     const rng = Rng.fromSeed(deriveSeed('home-wander', squishyId, n));
     if (training !== null) {
@@ -800,34 +817,51 @@ export class HomeScene {
       const distance = (0.32 + rng.next() * 0.16) * HOME_VIEW.buildingScale;
       return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
     }
-    const angle = rng.next() * Math.PI * 2;
+    const turn = rng.next();
+    const angle =
+      (roams || wide) && from
+        ? Math.atan2(from.z - anchor.z, from.x - anchor.x) + (turn - 0.5) * 2 * WANDER.turn
+        : turn * Math.PI * 2;
     const distance = roams
       ? (ROAM.near + rng.next() * (ROAM.far - ROAM.near)) * HOME_VIEW.hexSize
       : wide
-        ? (0.75 + rng.next() * 0.25) * HOME_FILL.wanderRadius
+        ? HOME_FILL.wander.near + rng.next() * (HOME_FILL.wander.far - HOME_FILL.wander.near)
         : (0.45 + rng.next() * 0.55) * HOME_VIEW.wanderRadius;
     return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
   }
 
   /**
-   * The home tiles squishies without a habitat roam (#604), by their
-   * middles: the Heart Seed's tile (round the Heart Seed) and every ring
-   * tile with no building and no house, in `q, r` order.
+   * The home tiles squishies without a habitat roam (#604): every home tile
+   * with no building and no house on it, the Heart Seed's included (round
+   * the Heart Seed). The Heart Seed's tile still, when nothing else is free.
    */
-  #roamTiles(home: HomeResponse): WorldPoint[] {
+  #roamTiles(home: HomeResponse): { key: string; at: WorldPoint }[] {
     const built = new Set(home.buildings.map((b) => hexKey(b)));
-    if (this.#houseAt) built.add(hexKey(this.#houseAt));
-    const isSeed = (t: { q: number; r: number }) => t.q === this.#seed.q && t.r === this.#seed.r;
-    const free = home.tiles
-      .filter((t) => isSeed(t) || !built.has(hexKey(t)))
-      .sort((a, b) => a.q - b.q || a.r - b.r);
-    return free.map((t) => this.spotAt({ ...t, spot: 0 }));
+    // The house fills its own tile, or stands by the Heart Seed with none free.
+    if (home.house) built.add(hexKey(this.#houseAt ?? this.#seed));
+    const free = home.tiles.filter((t) => !built.has(hexKey(t)));
+    return (free.length > 0 ? free : [this.#seed]).map((t) => ({
+      key: hexKey(t),
+      at: this.spotAt({ ...t, spot: 0 }),
+    }));
   }
 
-  /** The tile one roams (#604): picked by its id, so it's the same one for everyone. */
-  #roamAnchor(tiles: readonly WorldPoint[], squishyId: string): WorldPoint {
-    const rng = Rng.fromSeed(deriveSeed('home-roam', squishyId));
-    return tiles[Math.floor(rng.next() * tiles.length)] ?? { x: 0, z: 0 };
+  /**
+   * The tile one roams (#604), the same for everyone: the tile its id scores
+   * highest on (rendezvous hashing), so building on one tile moves only the
+   * squishies that roamed there.
+   */
+  #roamAnchor(tiles: readonly { key: string; at: WorldPoint }[], squishyId: string): WorldPoint {
+    let best: WorldPoint = { x: 0, z: 0 };
+    let bestScore = -1;
+    for (const t of tiles) {
+      const score = Rng.fromSeed(deriveSeed('home-roam', squishyId, t.key)).next();
+      if (score > bestScore) {
+        bestScore = score;
+        best = t.at;
+      }
+    }
+    return best;
   }
 
   #buildGround(home: HomeResponse): void {

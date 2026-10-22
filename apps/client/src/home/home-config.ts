@@ -75,8 +75,14 @@ export const HOME_FILL = {
   nodeScale: 0.45, // TUNE
   /** Where the pile sits, in hex sizes from the tile's middle (towards the viewer). */
   nodeOffset: { x: 0, z: -0.66 }, // TUNE: past the building's edge, inside the tile
-  /** How far squishies wander round a tile-sized habitat, world units at the home view. */
-  wanderRadius: 2.0, // TUNE: round the building, inside its tile
+  /**
+   * How far squishies wander round a tile-sized habitat, world units at the
+   * home view: a narrow ring between the building's footprint (about 1.5
+   * across its middle, a meadow's fence included) and the tile's edge (about
+   * 2.14), less half a squishy's width, so none stands on the fence or the
+   * next tile (#604).
+   */
+  wander: { near: 1.8, far: 1.84 }, // TUNE
 } as const;
 
 /** The soft glow over Hearthfire-safe tiles on the map (linear RGB, alpha). */
@@ -87,7 +93,14 @@ export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as cons
  * hops to a new spot near its habitat, over `hopMs`. Between hops nothing
  * moves and nothing is drawn.
  */
-export const WANDER = { everyMs: 3500, jitterMs: 1500, hopMs: 650, hopHeight: 0.35 } as const; // TUNE
+export const WANDER = {
+  everyMs: 3500,
+  jitterMs: 1500,
+  hopMs: 650,
+  hopHeight: 0.35,
+  /** The most a hop round a tile's middle or a tile-sized habitat turns about it, radians (#604). */
+  turn: Math.PI / 4,
+} as const; // TUNE
 
 /**
  * The Keeper's house cottage (#381). It fills its own ring tile (#604) at
@@ -108,7 +121,15 @@ export const HOME_HOUSE = {
  * between `near` and `far` hex sizes from the tile's middle, clear of its
  * node, and inside the tile.
  */
-export const ROAM = { near: 0.34, far: 0.68 } as const; // TUNE
+export const ROAM = { near: 0.34, far: 0.6 } as const; // TUNE: far + half a squishy stays inside the tile
+
+/**
+ * Where Home's camera starts (#604): a share of the way from the Heart Seed
+ * towards the house's tile, front to back, so the house shows in full under
+ * the top card. Short screens need the most: `short` on a screen `shortAt`
+ * CSS px tall or less, easing to `tall` at `tallAt` px or more.
+ */
+export const HOME_FRAME = { shortAt: 667, short: 0.5, tallAt: 1100, tall: 0.12 } as const; // TUNE
 
 /**
  * How squishies show how they feel about their job at home (#393). A small

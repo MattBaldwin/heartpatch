@@ -416,13 +416,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       case 'clear-first':
         throw new AppError('CONFLICT', MESSAGES.clearFirst);
     }
-    // The house's tile (#604): worked out from the buildings as they'd be
-    // after this one moves, so the client's free tiles say the same.
+    // The house's tile (#604): worked out from the buildings as they stand,
+    // as the client draws it. A moving building's own tile counts as built,
+    // so it's never the house's, and the house's tile is always refused.
     if (houseStands && homeTile) {
-      const at = houseTile(
-        home,
-        owned.filter((b) => b.id !== moving),
-      );
+      const at = houseTile(home, owned);
       if (at && at.q === homeTile.q && at.r === homeTile.r) {
         throw new AppError('CONFLICT', MESSAGES.houseTile);
       }

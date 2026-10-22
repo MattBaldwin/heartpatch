@@ -222,6 +222,11 @@ test('my gatherers show how they feel on the map, and are away from home (#393, 
   };
   const happyId = await grant();
   const glumId = await grant();
+  // A team member stays home and loves its job (#393): home's own bubble.
+  const teamId = await grant();
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/squishies/${teamId}/job`, { job: 'team' })).status,
+  ).toBe(200);
 
   // One on a spot it loves, one on a spot that isn't its thing.
   await (await trayButton(page, 'jobs-open')).tap();
@@ -249,12 +254,25 @@ test('my gatherers show how they feel on the map, and are away from home (#393, 
   await expect(badges.filter({ hasText: '💕' })).toHaveCount(1);
   await expect(badges.filter({ hasText: '🌧️' })).toHaveCount(1);
 
-  // At home they're away (#604): gatherers are out on their tiles, so
-  // home draws neither them nor a bubble. The badges above say how they feel.
+  // At home the gatherers are away (#604): out on their tiles, so home
+  // draws neither them nor a bubble. The badges above say how they feel.
+  // The team member is home, with its bubble (shown, or waiting hidden
+  // behind a neighbour), and may bounce.
   await (await trayButton(page, 'home-open')).tap();
   await expect.poll(async () => (await homeState(page))?.scene?.away, { timeout: 30_000 }).toBe(2);
-  expect((await homeState(page))!.scene).toMatchObject({ happy: 0, drooping: 0 });
-  expect(((await homeState(page))?.moodLayout ?? []).map((l) => l.id)).not.toContain(glumId);
-  await expect(page.getByTestId('home-mood-mark')).toHaveCount(0);
+  await expect.poll(async () => (await homeState(page))?.scene?.happy, { timeout: 30_000 }).toBe(1);
+  expect((await homeState(page))!.scene!.drooping).toBe(0);
+  await expect
+    .poll(async () => {
+      const layout = (await homeState(page))?.moodLayout ?? [];
+      return Object.fromEntries(layout.filter((l) => l.mood).map((l) => [l.id, l.mood]));
+    })
+    .toEqual({ [teamId]: 'loves' });
+  await expect(page.getByTestId('home-mood-mark')).toHaveCount(1);
+
+  // Reduce Motion: the bubble stays, the bounce doesn't.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(async () => (await homeState(page))?.moodCues).toBe('static');
+  await expect(page.getByTestId('home-mood-mark')).toHaveCount(1);
   expect(errors).toEqual([]);
 });

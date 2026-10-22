@@ -1179,7 +1179,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(houseTile(after.tiles, after.buildings)).toEqual(at);
     });
 
-    it('moves an older home’s house to its first free ring tile, and back when that frees up', async () => {
+    it('gives an older home’s house its first free ring tile, and moves it back when that frees up', async () => {
       // Built while the house was off: a habitat on what is now the house's first tile.
       const off = await start();
       const kid = await player();
@@ -1203,18 +1203,21 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         errorOf(await place(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(1), spot: 2 }))
           .message,
       ).toBe(houseMessage);
-      // Moving the den onto the house's tile frees the first one, so the house goes back there.
       const move = (body: object) =>
         call(server, 'POST', `/maps/${mapId}/buildings/${den.id}/move`, kid, body);
-      expect((await move({ ...ring(1), spot: 3 })).statusCode).toBe(200);
+      // The den can't move onto the tile the house stands on…
+      expect(errorOf(await move({ ...ring(1), spot: 3 })).message).toBe(houseMessage);
+      // …but a spot change on its own tile is fine (its tile counts as built).
+      expect((await move({ ...ring(0), spot: 4 })).statusCode).toBe(200);
+      // Moving it further on frees the first tile, so the house goes back there.
+      expect((await move({ ...ring(2), spot: 3 })).statusCode).toBe(200);
       const moved = await home(server, kid, mapId);
       expect(houseTile(moved.tiles, moved.buildings)).toEqual(ring(0));
       expect(
         errorOf(await place(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(0), spot: 2 }))
           .message,
       ).toBe(houseMessage);
-      // A spot change on the den's own tile is still fine.
-      expect((await move({ ...ring(1), spot: 4 })).statusCode).toBe(200);
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(1), spot: 2 });
       expect(tiles).toHaveLength(7);
     });
   });

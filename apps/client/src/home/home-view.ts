@@ -687,9 +687,9 @@ export interface HomeSpot {
  * in `q, r` order, spots in order. One building per tile (#295, shared
  * `tileUseRefusal`, as the server checks it): a tile with a building on it
  * has no free spot (#537), and neither has the house's tile while the
- * house stands (#604, shared `houseTile`, as the server checks it). `except`
- * is a building being moved (its own tile counts as free); `slot` keeps only
- * that kind of spot (#204).
+ * house stands (#604, shared `houseTile` over the buildings as they stand,
+ * as the server checks it). `except` is a building being moved (its own
+ * tile counts as free); `slot` keeps only that kind of spot (#204).
  */
 export function freeHomeSpots(
   home: HomeResponse,
@@ -699,8 +699,9 @@ export function freeHomeSpots(
   const tiles = [...home.tiles].sort(
     (a, b) => Number(b.heartSeed) - Number(a.heartSeed) || a.q - b.q || a.r - b.r,
   );
+  // The house's tile as it's drawn now (the server reads it the same way).
+  const house = home.house ? houseTile(home.tiles, home.buildings) : null;
   const others = home.buildings.filter((b) => b.id !== except);
-  const house = home.house ? houseTile(home.tiles, others) : null;
   const spots: HomeSpot[] = [];
   for (const tile of tiles) {
     if (house && house.q === tile.q && house.r === tile.r) continue;
