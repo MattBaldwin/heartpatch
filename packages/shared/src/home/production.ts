@@ -152,10 +152,22 @@ export function productionYield(
  * (owner decision: nothing is lost). Call it after a settle banked the
  * building up to its pause (`sinceMs` is that settle's `nextSinceMs`): a
  * part-done cycle carries on from where it stopped. A full one banked at the
- * pause (`sinceMs` at the pause) starts afresh.
+ * pause (`sinceMs` at the pause) starts afresh. The part done is worked
+ * time: a cut-off homestead's stretch before the pause (`homesteadPause`,
+ * the one that settle used) never counts, as it never pays (#199). Pass
+ * only later cut-offs to `productionProgress` after the wake.
  */
-export function resumeSinceMs(sinceMs: number, pausedAtMs: number, wakeMs: number): number {
-  return wakeMs - Math.max(0, pausedAtMs - sinceMs);
+export function resumeSinceMs(
+  sinceMs: number,
+  pausedAtMs: number,
+  wakeMs: number,
+  homesteadPause: WorkPause | null,
+): number {
+  const span = Math.max(0, pausedAtMs - sinceMs);
+  if (!homesteadPause) return wakeMs - span;
+  const cutTo = Math.min(homesteadPause.toMs ?? pausedAtMs, pausedAtMs);
+  const cut = Math.max(0, cutTo - Math.max(homesteadPause.fromMs, sinceMs));
+  return wakeMs - Math.max(0, span - cut);
 }
 
 /** The Warehouse as one of its owner's resource buildings sees it. */
@@ -201,8 +213,8 @@ export function latestMorning(at: LocalMoment, morningMinute: number): LocalDate
  * latest morning at or before `now`. `settledThrough` is the last morning
  * already dealt with, whether it was paid, paused or skipped: the caller
  * moves it on past every morning `planUpkeep` returned, so a paused or
- * napping morning is never charged back (owner decision Q6). Map-local dates, so a clock change never adds
- * or drops one. Which of them it actually pays is `planUpkeep`'s call.
+ * napping morning is never charged back (owner decision Q6). Map-local
+ * dates, so a clock change never adds or drops one. Which of them it actually pays is `planUpkeep`'s call.
  */
 export function upkeepMornings(
   facts: { placed: LocalMoment; settledThrough: LocalDate | null; now: LocalMoment },

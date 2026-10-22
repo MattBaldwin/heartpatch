@@ -125,13 +125,35 @@ describe('productionProgress (#601)', () => {
     expect(banked.nextSinceMs).toBe(T0 + 30 * MIN);
     // Five minutes into its fourth cycle when it paused: five minutes after waking it finishes.
     const wake = T0 + 9 * HOUR;
-    const since = resumeSinceMs(banked.nextSinceMs, pausedAtMs, wake);
+    const since = resumeSinceMs(banked.nextSinceMs, pausedAtMs, wake, null);
     expect(since).toBe(wake - 5 * MIN);
     expect(
       productionProgress({ ...base, sinceMs: since, nowMs: wake + 5 * MIN }, JOB_RULES).cycles,
     ).toBe(1);
     // A building banked at the pause itself starts afresh.
-    expect(resumeSinceMs(pausedAtMs, pausedAtMs, wake)).toBe(wake);
+    expect(resumeSinceMs(pausedAtMs, pausedAtMs, wake, null)).toBe(wake);
+  });
+
+  it("never counts a cut-off homestead's stretch inside the part-done cycle", () => {
+    // Settled at T0, cut off from 3 minutes in until 5 minutes before the
+    // upkeep pause: 8 minutes of work done when it paused.
+    const cutOff = { fromMs: T0 + 3 * MIN, toMs: T0 + 20 * HOUR };
+    const pausedAtMs = T0 + 20 * HOUR + 5 * MIN;
+    const banked = productionProgress(
+      { ...base, pausedAtMs, homesteadPause: cutOff, nowMs: T0 + 21 * HOUR },
+      JOB_RULES,
+    );
+    expect(banked).toMatchObject({ cycles: 0, nextSinceMs: T0 });
+    const wake = T0 + 22 * HOUR;
+    const since = resumeSinceMs(banked.nextSinceMs, pausedAtMs, wake, cutOff);
+    expect(since).toBe(wake - 8 * MIN);
+    // 30 minutes after waking: 38 minutes of work, three 10-minute cycles.
+    expect(
+      productionProgress({ ...base, sinceMs: since, nowMs: wake + 30 * MIN }, JOB_RULES).cycles,
+    ).toBe(3);
+    // A cut-off still going at the pause counts up to the pause only.
+    const open = { fromMs: T0 + 3 * MIN, toMs: null };
+    expect(resumeSinceMs(T0, T0 + 9 * MIN, wake, open)).toBe(wake - 3 * MIN);
   });
 
   it("leaves a cut-off homestead's pause out", () => {

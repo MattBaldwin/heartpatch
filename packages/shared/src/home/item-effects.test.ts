@@ -92,7 +92,7 @@ describe('itemEffects (#241)', () => {
       BUILDINGS.filter((b) => !isBuildable(HOME_BASE_RULES, b)).map((b) => b.id),
     );
     expect(gated.has('woodcutters-hut') && gated.has('warehouse')).toBe(true);
-    for (const id of ['timber', 'stone', 'glimmer']) {
+    for (const { id } of GAME_DATA.resources) {
       for (const effect of itemEffects(id)) {
         const named =
           'buildings' in effect ? effect.buildings : 'building' in effect ? [effect.building] : [];

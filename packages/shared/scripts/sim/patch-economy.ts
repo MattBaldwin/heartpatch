@@ -349,7 +349,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
         const p = placed.find((x) => x.rowId === w.id);
         if (p) {
           // The settle above banked it to its pause: a part-done cycle carries on.
-          p.sinceMs = resumeSinceMs(p.sinceMs, p.pausedAtMs ?? atMs, atMs);
+          p.sinceMs = resumeSinceMs(p.sinceMs, p.pausedAtMs ?? atMs, atMs, null);
           p.pausedAtMs = null;
         }
       }
