@@ -2,6 +2,8 @@ import {
   GLIMMER_SWAP,
   type GlimmerSwapView,
   type MapView,
+  type SellResponse,
+  type SellView,
   type TradeTip,
   type PublicUser,
   type TradeKind,
@@ -18,6 +20,9 @@ import { slotIcon } from '../map/map-legend.js';
 import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
+import { sellApi, type SellApi } from './sell-api.js';
+import { clampLots, sellRequest, sellRows, type SellPick } from './sell-model.js';
+import { sellTab } from './sell-tab.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
   fitName,
@@ -52,7 +57,7 @@ import {
 import './trading.css';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
-// and f, and the iPad side panel). Trade, Gift and Mailbox tabs. Picks are
+// and f, and the iPad side panel). Trade, Gift, Mailbox, Swap and Sell tabs. Picks are
 // only a request: the server checks the post, the things and the rules, holds
 // the sender's side and swaps in one go (CLAUDE.md rules 1 and 7). The Trade
 // tab is the #305 split view (the owner-approved mockup, option A): my things
@@ -67,6 +72,9 @@ export interface PostScreenOptions {
   root: HTMLElement;
   api?: TradeApi;
   swapApi?: GlimmerSwapApi;
+  sellApi?: SellApi;
+  /** A sale went through (#601 PR 4): the 💛 pill and the bag read again. */
+  onSold?: () => void;
   /**
    * The game clock in ms, the server's (main passes the bag's, `gameNow`): the
    * visit pass it counts down is server time (#561). Tests pass a fake.
@@ -100,6 +108,14 @@ export interface PostDebug {
   readonly sorts: Readonly<Record<Side, ShelfSort>>;
   /** The Glimmer swap (#523): today's swaps and the resource waiting on its confirm. */
   readonly swap: { readonly today: number; readonly picked: string | null } | null;
+  /** The Sell tab (#601 PR 4): today's 💛 from selling, the pick on its confirm, the last sale. */
+  readonly sell: {
+    readonly soldToday: number;
+    readonly rows: number;
+    readonly picked: string | null;
+    readonly lots: number;
+    readonly sold: SellResponse['sold'] | null;
+  } | null;
 }
 
 export interface PostScreen {
@@ -116,6 +132,7 @@ export interface PostScreen {
 export function createPostScreen(options: PostScreenOptions): PostScreen {
   const api = options.api ?? tradeApi;
   const swapApi = options.swapApi ?? glimmerSwapApi;
+  const sells = options.sellApi ?? sellApi;
   const now = options.now ?? (() => Date.now());
 
   let user: PublicUser | null = null;
@@ -127,6 +144,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let swap: GlimmerSwapView | null = null;
   /** The resource waiting on "Swap 10 Stone for 1 💎?". */
   let swapPick: string | null = null;
+  /** What I could sell here (#601 PR 4), loaded when the Sell tab opens. */
+  let sell: SellView | null = null;
+  /** The stack or piece waiting on "Sell 10 Timber for 2 💛?", and how many lots. */
+  let sellPick: SellPick | null = null;
+  /** The last sale, for the tab's "Yay!" card. */
+  let sold: SellResponse['sold'] | null = null;
   const shelves = new Map<string, TradeShelf>();
   let mate: string | null = null;
   let give: TradeLine[] = [];
@@ -257,6 +280,46 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         swapPick = null;
         render();
       }
+    }
+  }
+
+  async function loadSell(): Promise<void> {
+    const at = generation;
+    if (!mapView) return;
+    try {
+      const view = await sells.view(mapView.map.id);
+      if (at === generation) sell = view;
+    } catch (err) {
+      if (at === generation) note = messageOf(err);
+    }
+    if (at === generation) render();
+  }
+
+  /** One sale at this post: one transaction on the server, keyed so a retry never sells twice. No undo. */
+  async function sellCommand(pick: SellPick): Promise<void> {
+    if (working || !post) return;
+    const gen = generation;
+    const stillHere = () => gen === generation;
+    working = true;
+    note = '';
+    render();
+    try {
+      const res = await sendCommand(
+        sendDeps,
+        (key) => sells.sell(mapId(), sellRequest(pick, at()), key),
+        stillHere,
+      );
+      if (res && stillHere()) {
+        sell = res.sell;
+        sold = res.sold;
+        sellPick = null;
+        options.onSold?.();
+      }
+    } catch (err) {
+      if (stillHere()) note = messageOf(err);
+    } finally {
+      working = false;
+      if (stillHere()) render();
     }
   }
 
@@ -1203,7 +1266,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             'aria-selected': on ? 'true' : 'false',
             'data-testid': `post-tab-${t}`,
           },
-          // Picture over word, so four tabs fit a 320 px phone (#523).
+          // Picture over word, so five tabs fit a 320 px phone (#523, #601).
           ...tabLabel(TRADE_TEXT.tabs[t]),
           ...(badges[t] > 0
             ? [
@@ -1219,7 +1282,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           if (tab === t) return;
           tab = t;
           swapPick = null;
+          sellPick = null;
+          sold = null;
           if (t === 'swap') void loadSwap();
+          if (t === 'sell') void loadSell();
           give = [];
           want = [];
           noteId = null;
@@ -1233,8 +1299,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
     const banner = passOver()
       ? TRADE_TEXT.closed
-      : // The Glimmer swap works with trading off: nobody else is involved (#523).
-        trades?.tradingEnabled === false && tab !== 'swap'
+      : // The Glimmer swap and selling work with trading off: nobody else is
+        // involved (#523, #601).
+        trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell'
         ? TRADE_TEXT.tradingOff
         : '';
     status.textContent = note || banner;
@@ -1251,7 +1318,32 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           ? giftTab(trades, my)
           : tab === 'mailbox'
             ? mailboxTab(trades)
-            : swapTab();
+            : tab === 'swap'
+              ? swapTab()
+              : sellTab(
+                  { view: sell, pick: sellPick, sold, passOver: passOver(), nowMs: now() },
+                  {
+                    button,
+                    onPick: (row) => {
+                      sellPick = { kind: row.kind, itemId: row.itemId, lots: 1 };
+                      sold = null;
+                      note = '';
+                      render();
+                    },
+                    onLots: (lots) => {
+                      const row = sell && sellRows(sell).find((r) => r.itemId === sellPick?.itemId);
+                      if (sellPick && row) sellPick = { ...sellPick, lots: clampLots(lots, row) };
+                      render();
+                    },
+                    onCancel: () => {
+                      sellPick = null;
+                      render();
+                    },
+                    onSell: (pick) => {
+                      void sellCommand(pick);
+                    },
+                  },
+                );
     body.replaceChildren(...parts);
     fitNames(body);
   }
@@ -1317,6 +1409,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     composing = false;
     swap = null;
     swapPick = null;
+    sell = null;
+    sellPick = null;
+    sold = null;
   }
 
   function close(): void {
@@ -1382,6 +1477,15 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         filters: { ...filters },
         sorts: { ...sorts },
         swap: swap ? { today: swap.swappedToday, picked: swapPick } : null,
+        sell: sell
+          ? {
+              soldToday: sell.soldToday,
+              rows: sellRows(sell).length,
+              picked: sellPick?.itemId ?? null,
+              lots: sellPick?.lots ?? 0,
+              sold,
+            }
+          : null,
       };
     },
   };

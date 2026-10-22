@@ -55,12 +55,13 @@ test('shows Heart Coins on the map, at home and on the patch list, and care pays
   await expect.poll(async () => (await heartState(page))?.page?.balance, slow).toBe(12);
   await expect(page.getByTestId('heart-coins-balance')).toHaveText('💛12');
   await expect(mapPill).toHaveText('💛12');
-  // Today's bars: battles, new friends and land, caring; none earned yet.
-  await expect(sheet.getByTestId('heart-coins-row')).toHaveCount(3);
+  // Today's bars: battles, new friends and land, caring, selling; none earned yet.
+  await expect(sheet.getByTestId('heart-coins-row')).toHaveCount(4);
   expect((await heartState(page))!.page!.rows).toEqual([
     expect.objectContaining({ source: 'battle', value: '0 / 20' }),
     expect.objectContaining({ source: 'capture', value: '0 / 15' }),
     expect.objectContaining({ source: 'care', value: '0 / 10' }),
+    expect.objectContaining({ source: 'sell', value: '0 / 30' }),
   ]);
   await expect(page.getByTestId('heart-coins-resets')).toHaveText(/^More to earn in \d/);
   // How they differ from Patch Coins, in kid words.
