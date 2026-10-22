@@ -1,5 +1,6 @@
 import {
   EXPLORE_RULES,
+  isBigChest,
   isExplorable,
   type ExploreTileResponse,
   type ItemCounts,
@@ -96,6 +97,15 @@ import {
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
 import { cellarApi, type CellarApi } from '../hollowed/cellar-api.js';
+import { cellarShown, isChest } from '../hollowed/cellar-look.js';
+import {
+  cardDelayMs,
+  chestAction,
+  chestCardTitle,
+  chestPlayText,
+  chestsLine,
+  keepsakeLine,
+} from '../hollowed/cellar-view.js';
 import { HOLLOWED_TEXT, villageShut } from '../hollowed/hollowed-explore-view.js';
 import { KEY_TEXT } from '../hollowed/key-hunt-view.js';
 import './explore.css';
@@ -238,6 +248,8 @@ export interface ExploreScreen {
 interface RareCard {
   readonly found: SearchSpotResponse;
   readonly interaction: SpotInteraction;
+  /** The spot it came from (a cellar chest names its card, #306). */
+  readonly spot: PublicSearchSpot;
 }
 
 export function createExploreScreen(options: ExploreScreenOptions): ExploreScreen {
@@ -689,6 +701,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     return usable(lastHeld) ? lastHeld : null;
   }
 
+  /** A spot's action button: a cellar's chests open (#306), the rest as explore says. */
+  const actionOf = (spot: PublicSearchSpot) =>
+    cellarOf && isChest(spot) ? chestAction(spot) : actionFor(spot);
+
   /** The action button: turn to the spot, take the tool out, and start its gesture. */
   function begin(spot: PublicSearchSpot): void {
     const t = tile;
@@ -701,7 +717,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     stick = null;
     showStick();
     s.moveKeeper(keeperAt, yaw);
-    const kind = actionFor(spot).interaction;
+    const kind = actionOf(spot).interaction;
     let state: InteractionState;
     if (kind === 'light') {
       // The reducer's stage is a square round the cave; its glint stays on the tile.
@@ -723,7 +739,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // The lantern walks: the camera follows the Keeper and its light, not the cave.
     s.nudge(spot, kind === 'light');
     s.useTool(now);
-    buildPlay(kind);
+    buildPlay(kind, spot);
     render();
     wake();
   }
@@ -808,8 +824,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       scene3d?.update(tile);
       scene3d?.cheer(performance.now());
       say('');
+      // A cellar chest's moment plays before its card covers it (#306).
+      const delay = cellar ? cardDelayMs(spot) : 0;
+      if (delay > 0 && findShowsCard(found)) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        if (at !== generation) return;
+      }
       if (findShowsCard(found)) {
-        card = { found, interaction };
+        card = { found, interaction, spot };
       } else {
         showToast(found, bigSplash);
         fly(spot, found);
@@ -839,7 +861,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!id || !t) return;
     const at = generation;
     try {
-      const fresh = cellar ? await cellars.view(id, cellar.id) : await api.tile(id, t);
+      const fresh = cellar ? cellarShown(await cellars.view(id, cellar.id)) : await api.tile(id, t);
       if (at !== generation) return;
       tile = fresh;
       scene3d?.update(fresh);
@@ -965,7 +987,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       'aria-label',
       isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
-    progress.textContent = progressLine(t.progress);
+    progress.textContent = cellarOf ? chestsLine(t.progress) : progressLine(t.progress);
     joyMeter.hidden = !t.community;
     if (t.community) {
       const joy = String(t.community.joy);
@@ -1013,7 +1035,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       actionLabel.textContent = done ? EXPLORE_TEXT.allDone : EXPLORE_TEXT.nothingNear;
       return;
     }
-    const what = actionFor(front);
+    const what = actionOf(front);
     const missing = missingTool(front, t.tools) !== null;
     action.disabled = working || missing;
     action.classList.add(missing ? 'explore-action-missing' : 'explore-action-ready');
@@ -1060,8 +1082,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let playDots: HTMLElement | null = null;
 
   /** Builds a gesture's overlay once (boards b, d, e, f, g). */
-  function buildPlay(kind: SpotInteraction): void {
-    const text = PLAY_TEXT[kind];
+  function buildPlay(kind: SpotInteraction, spot: PublicSearchSpot): void {
+    const text = cellarOf && isChest(spot) ? chestPlayText(spot) : PLAY_TEXT[kind];
     play.dataset['kind'] = kind;
     playDots = el('span', { class: 'explore-dots' });
     const playChip = el(
@@ -1265,14 +1287,23 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       return;
     }
     const { found } = c;
+    // A cellar chest's card (#306): the big chest's is the treasure.
+    const chest = cellarOf !== null && isChest(c.spot);
+    const big = chest && isBigChest(c.spot);
+    sheet.classList.toggle('explore-sheet-treasure', big);
     const nodes: Node[] = [
-      el('p', { class: 'explore-card-progress' }, progressLine(found.progress)),
+      el(
+        'p',
+        { class: 'explore-card-progress' },
+        chest ? chestsLine(found.progress) : progressLine(found.progress),
+      ),
       el(
         'h3',
         { class: 'explore-sheet-title', id: 'explore-sheet-title' },
-        rareTitle(found, t.terrain),
+        chest ? chestCardTitle(c.spot) : rareTitle(found, t.terrain),
       ),
     ];
+    if (big) nodes.push(el('p', { class: 'explore-card-line' }, keepsakeLine(found)));
     if (found.explored && found.homestead === 'joined') {
       nodes.push(el('p', { class: 'explore-card-line' }, EXPLORE_TEXT.joinedHome));
     }
@@ -1398,7 +1429,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         jobs.view(id).catch(() => null),
       ]);
       if (ask !== generation) return;
-      fresh = view;
+      // A cellar is shown as its stone vault and chests (#306).
+      fresh = room ? cellarShown(view) : view;
       cellar = room;
       teamNames = board?.names ?? {};
     } catch (err) {

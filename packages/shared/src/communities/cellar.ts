@@ -7,7 +7,8 @@ import type { ReachTile } from '../territory/reach.js';
 
 // The key hunt and the hidden cellar (#306 PR 2c, owner decision 5): a won
 // village's winner gets a map to the tile where the village squishies hid
-// the cellar key, digs it up there, then opens the cellar under the square.
+// the cellar key, digs it up there, then opens the cellar under the square,
+// a stone vault with a row of treasure chests (owner, 2026-10-22).
 // Pure, so the server decides with it and the client explains with it.
 
 /**
@@ -21,15 +22,26 @@ export function keyInReach(keyTile: Hex, tiles: readonly ReachTile[], userId: st
   return mine.has(hexKey(keyTile)) || hexNeighbors(keyTile).some((n) => mine.has(hexKey(n)));
 }
 
+/** The big chest's spot kind: the cellar's best loot (#306, owner decision of 2026-10-22). */
+export const BIG_CHEST_KIND = 'big-chest';
+
+/** Is this cellar spot the big chest? */
+export const isBigChest = (spot: { readonly kind: string }): boolean =>
+  spot.kind === BIG_CHEST_KIND;
+
 /**
- * A village's hidden cellar's search spots: the cellar kit
- * (`COMMUNITY_RULES.cellar`) laid out from the village's secret seed, the
- * same every time. The cellar is its own little room, so its spots are
- * placed as if on a tile at the origin, in the kit's borrowed look.
+ * A village's hidden cellar's chests (#306, owner decision of 2026-10-22):
+ * the cellar kit (`COMMUNITY_RULES.cellar`) picks how many small chests and
+ * their kinds from the village's secret seed, the same every time (a kind
+ * picks its row of the find table; every kind is drawn as a chest). They
+ * stand in a row along the back wall (`cellarChests`), alternating right and
+ * left of the big chest, which is last: its index is the small chests' count.
+ * So a small chest keeps the index its spot had before the chests, and the
+ * cellar's saved progress (`cellar_searched`) still reads the same.
  */
 export function cellarSpots(
   villageSeed: Seed,
-  rules: Pick<CommunityRules, 'cellar'>,
+  rules: Pick<CommunityRules, 'cellar' | 'cellarChests'>,
   explore: ExploreRules,
 ): SearchSpot[] {
   const kit = rules.cellar;
@@ -39,5 +51,17 @@ export function cellarSpots(
     { ...explore, terrains: [kit] },
   );
   if (!spots || spots.length === 0) throw new Error('cellarSpots: the cellar kit placed no spots');
-  return spots;
+  const { row, first, gap, curve, big } = rules.cellarChests;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  const chests = spots.map((s, i) => {
+    const side = i % 2 === 0 ? 1 : -1;
+    const out = Math.floor(i / 2);
+    return {
+      ...s,
+      tool: null,
+      x: round(side * (first + out * gap)),
+      z: round(row - out * curve),
+    };
+  });
+  return [...chests, { index: spots.length, kind: BIG_CHEST_KIND, tool: null, x: 0, z: big }];
 }

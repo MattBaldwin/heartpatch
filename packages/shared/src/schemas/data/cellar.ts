@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { ContentIdSchema } from './common.js';
+import { CommunityKindIdSchema } from './communities.js';
 
 /**
  * The key hunt and the hidden cellar (#306 PR 2c). Server-only (CLAUDE.md
@@ -21,5 +23,21 @@ export const CellarRulesSchema = z.strictObject({
    * tile's share: the issue's "about 2×".
    */
   rareFindMultiplier: z.number().int().min(1),
+  /**
+   * The big chest in the middle of the cellar (#306, owner decision of
+   * 2026-10-22): the cellar's best loot, a big pile of finds and the
+   * cellar's keepsake.
+   */
+  bigChest: z.strictObject({
+    /** It opens once every small chest is open (owner to judge on the screens). */
+    afterSmall: z.boolean(),
+    /** The big pile: item id → how many. */
+    items: z.record(ContentIdSchema, z.number().int().min(1).max(50)),
+    /**
+     * Each kind of Hollow's one-of-a-kind keepsake: a found piece of
+     * clothing (`CLOTHING`), never one kind's twice. Secret until found.
+     */
+    keepsakes: z.record(CommunityKindIdSchema, ContentIdSchema),
+  }),
 });
 export type CellarRules = z.infer<typeof CellarRulesSchema>;

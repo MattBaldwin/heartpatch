@@ -70,6 +70,14 @@ export const COMMUNITY_RULES: CommunityRules = {
       { kind: 'glow-mushrooms', weight: 2 }, // TUNE:
       { kind: 'rock', weight: 1 }, // TUNE:
     ],
-    spots: { min: 4, max: 6 }, // TUNE: plan Q5, "4–6 spots"
+    spots: { min: 4, max: 6 }, // TUNE: plan Q5, "4–6 spots": now the small chests
+  },
+  // The chests along the cellar's back wall (#306, owner 2026-10-22).
+  cellarChests: {
+    row: 0.5, // TUNE: in front of the back wall's arches
+    first: 0.36, // TUNE: room for the big chest's lid to swing
+    gap: 0.22, // TUNE: chests side by side, a hop apart
+    curve: 0.07, // TUNE
+    big: 0.62, // TUNE
   },
 };

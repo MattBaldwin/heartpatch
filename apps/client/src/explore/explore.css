@@ -803,3 +803,11 @@ body:has(.explore:not([hidden])) .auth-chip {
     animation: none;
   }
 }
+
+/* A cellar's big chest (#306): its card glows gold, like the treasure. */
+.explore-sheet.explore-sheet-treasure {
+  border: 3px solid #f2b84b;
+  box-shadow:
+    0 0 0 6px rgb(255 210 122 / 35%),
+    0 12px 36px rgb(217 153 58 / 45%);
+}

@@ -8,8 +8,10 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * the map open pops "A map to the key!", whose "Show me on the map" takes
  * me to the key's flagged tile; I dig the key up there (my land reaches it
  * through the dev route), open the cellar on the square, and go down into it:
- * the explore view of a little room in the cave's look, where a spot searched
- * by hand finds something. Checked through the dev hook.
+ * a stone vault with a row of chests and the big chest in the middle (#306,
+ * owner 2026-10-22). A small chest opened by hand pops its lid and finds
+ * something; the big chest waits for the little ones. Checked through the
+ * dev hook.
  */
 
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -36,7 +38,15 @@ interface ExploreDebug {
   tile: { terrain: string } | null;
   progress: { searched: number; total: number } | null;
   keeper: { x: number; z: number };
-  spots: { index: number; tool: string | null; done: boolean; x: number; z: number }[];
+  spots: {
+    index: number;
+    kind: string;
+    tool: string | null;
+    done: boolean;
+    x: number;
+    z: number;
+  }[];
+  scene: { cellar: { chests: number; open: number; moments: number } | null } | null;
 }
 
 interface MapView {
@@ -141,15 +151,19 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   await open.tap();
   await expect.poll(async () => (await exploreState(page))?.open ?? false, slow).toBe(true);
   const inside = (await exploreState(page))!;
-  expect(inside.tile?.terrain).toBe('hills');
-  expect(inside.spots.length).toBeGreaterThanOrEqual(4);
+  expect(inside.tile?.terrain).toBe('cellar');
+  const small = inside.spots.filter((s) => s.kind === 'chest');
+  expect(small.length).toBeGreaterThanOrEqual(4);
+  expect(inside.spots.at(-1)?.kind).toBe('big-chest');
   expect(inside.spots.every((s) => s.tool === null && !s.done)).toBe(true);
+  expect(inside.scene?.cellar).toMatchObject({ chests: small.length + 1, open: 0 });
   await expect(page.locator('#explore-title')).toHaveText(/'s cellar 🕯️$/);
 
-  // A spot searched the easy way finds something (a cellar spot is never empty).
+  // A chest opened the easy way finds something (a small chest is never empty).
   const action = page.getByTestId('explore-action');
+  await expect(action).not.toHaveText(/Lift/);
   let searched = false;
-  for (const spot of nearestFirst(inside.spots, inside.keeper).slice(0, 4)) {
+  for (const spot of nearestFirst(small, inside.keeper).slice(0, 4)) {
     if (!(await walkTo(page, spot.index))) continue;
     await slowExpect(action).toBeEnabled();
     await action.tap();
@@ -171,5 +185,23 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   }
   expect(searched).toBe(true);
   expect((await exploreState(page))?.progress?.searched).toBe(1);
+  // Its lid popped open here.
+  expect((await exploreState(page))?.scene?.cellar).toMatchObject({ open: 1, moments: 1 });
+  const yay = page.getByTestId('explore-yay');
+  if (await yay.isVisible()) await yay.tap();
+
+  // The big chest waits until every little one is open.
+  const big = inside.spots.at(-1)!;
+  expect(await walkTo(page, big.index)).toBe(true);
+  await slowExpect(action).toHaveText(/Open/);
+  await action.tap();
+  const play = page.getByTestId('explore-play');
+  await slowExpect(play).toBeVisible();
+  for (let i = 0; i < 8 && (await play.isVisible()); i++) {
+    await page.getByTestId('explore-easy').tap();
+    await page.waitForTimeout(250);
+  }
+  await slowExpect(page.getByTestId('explore-note')).toHaveText('Open the little chests first! 🗝️');
+  expect((await exploreState(page))?.spots.at(-1)?.done).toBe(false);
   expect(errors).toEqual([]);
 });

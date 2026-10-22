@@ -3010,6 +3010,167 @@ const REKINDLED: ClothingItem[] = [
   },
 ];
 
+// ── Cellar keepsakes (#306): one in each kind of Hollow's cellar ─────────
+// The big chest's best loot (owner decision of 2026-10-22): a one-of-a-kind
+// keepsake, a different one for each kind of Hollow, found only in its
+// cellar. Which kind holds which is server-only (`CELLAR_RULES.bigChest`,
+// CLAUDE.md rule 6), as every found piece's odds are; kept, never traded, so
+// wearing one shows the Keeper brought that kind of Hollow back. Each glows
+// a little, like the candlelight they were found in.
+const CELLAR_KEEPSAKES: ClothingItem[] = [
+  {
+    // The Lantern Tower's: a gold crown with the tower's own lantern on top.
+    id: 'lamplighters-crown',
+    name: "Lamplighter's Crown",
+    description: 'A golden crown with a tiny lantern on top. It never, ever goes out.',
+    slot: 'hat',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.0, 0.04], size: [1.0, 0.26, 1.0], color: '#f2b84b' },
+        { shape: 'cone', at: [-0.4, 0.22, -0.22], size: [0.16, 0.24, 0.16], color: '#f2b84b' },
+        { shape: 'cone', at: [-0.22, 0.24, -0.4], size: [0.16, 0.26, 0.16], color: '#f2b84b' },
+        { shape: 'cone', at: [0.22, 0.24, -0.4], size: [0.16, 0.26, 0.16], color: '#f2b84b' },
+        { shape: 'cone', at: [0.4, 0.22, -0.22], size: [0.16, 0.24, 0.16], color: '#f2b84b' },
+        { shape: 'ellipsoid', at: [0, 0.02, -0.5], size: [0.18, 0.18, 0.08], color: '#ff6f91' },
+        { shape: 'capsule', at: [0, 0.2, 0.02], size: [0.42, 0.1, 0.42], color: '#7a4f2c' },
+        {
+          shape: 'ellipsoid',
+          at: [0, 0.46, 0.02],
+          size: [0.38, 0.46, 0.38],
+          color: '#ffb347',
+          glow: true,
+        },
+        { shape: 'capsule', at: [-0.12, 0.46, -0.16], size: [0.05, 0.42, 0.05], color: '#7a4f2c' },
+        { shape: 'capsule', at: [0.12, 0.46, -0.16], size: [0.05, 0.42, 0.05], color: '#7a4f2c' },
+        { shape: 'cone', at: [0, 0.76, 0.02], size: [0.46, 0.24, 0.46], color: '#7a4f2c' },
+        { shape: 'ellipsoid', at: [0, 0.9, 0.02], size: [0.12, 0.12, 0.12], color: '#f2b84b' },
+      ],
+    },
+  },
+  {
+    // The Workshop's: a big brass wrench with a glowing gear in its jaw.
+    id: 'gearheart-wrench',
+    name: 'Gearheart Wrench',
+    description: 'A big brass wrench with a glowing gear. It fixes almost anything (not homework).',
+    slot: 'held',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      // Held like the Tiny Broom: the grip in the hand, the jaw down by the knee.
+      pieces: [
+        { shape: 'capsule', at: [0, 0.12, 0], size: [0.28, 0.5, 0.28], color: '#8a5a3c' },
+        { shape: 'capsule', at: [0, -0.4, 0], size: [0.22, 0.9, 0.22], color: '#d9ab55' },
+        {
+          shape: 'arc',
+          at: [0, -1.0, 0],
+          size: [1.05, 1.05, 0.3],
+          turn: [0, 90, 180],
+          color: '#d9ab55',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0, -1.0, 0],
+          size: [0.2, 0.56, 0.56],
+          color: '#7fe4f5',
+          glow: true,
+        },
+      ],
+    },
+  },
+  {
+    // The Old Well's: a sea-blue cape scattered with glowing wishing coins.
+    id: 'wishing-well-cape',
+    name: 'Wishing Well Cape',
+    description: 'Sparkly wishing coins swirl all over it. Make a wish and give it a twirl!',
+    slot: 'back',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.4, 0.5], size: [1.3, 1.75, 0.22], color: '#4f7fc4' },
+        { shape: 'ellipsoid', at: [0, 0.42, 0], size: [1.14, 0.22, 1.14], color: '#8fd3ff' },
+        {
+          shape: 'ellipsoid',
+          at: [-0.3, -0.2, 0.63],
+          size: [0.26, 0.26, 0.06],
+          color: '#ffe48a',
+          glow: true,
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.26, -0.56, 0.63],
+          size: [0.28, 0.28, 0.06],
+          color: '#ffe48a',
+          glow: true,
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.16, -0.94, 0.63],
+          size: [0.24, 0.24, 0.06],
+          color: '#ffe48a',
+          glow: true,
+        },
+        { shape: 'ellipsoid', at: [0, 0.3, -0.52], size: [0.24, 0.24, 0.12], color: '#ffe48a' },
+      ],
+    },
+  },
+  {
+    // The Bakery's: a cream baker's jacket with a big glowing pie badge.
+    id: 'golden-baker-jacket',
+    name: 'Golden Baker Jacket',
+    description:
+      'Smells like warm pie forever. The golden pie badge is only for the very best bakers.',
+    slot: 'top',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.14, 1.1, 1.14], color: '#fff3dc' },
+        { shape: 'ellipsoid', at: [0, 0.46, 0], size: [0.8, 0.24, 0.82], color: '#f2b84b' },
+        { shape: 'ellipsoid', at: [0, -0.4, 0], size: [1.16, 0.2, 1.16], color: '#f2b84b' },
+        {
+          shape: 'ellipsoid',
+          at: [0, 0.04, -0.55],
+          size: [0.46, 0.4, 0.1],
+          color: '#ffb347',
+          glow: true,
+        },
+        { shape: 'ellipsoid', at: [0, 0.12, -0.6], size: [0.36, 0.14, 0.06], color: '#c97a3c' },
+      ],
+    },
+  },
+  {
+    // The Watchtower's: tall lookout boots with a glowing star on each cuff.
+    id: 'lookout-boots',
+    name: 'Lookout Boots',
+    description: 'Tall boots for standing guard. The stars on top twinkle when a friend is near.',
+    slot: 'shoes',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.1, -0.05], size: [1.2, 1.2, 1.25], color: '#4f5f92' },
+        { shape: 'capsule', at: [0, 0.85, 0.15], size: [0.9, 1.1, 0.8], color: '#4f5f92' },
+        { shape: 'ellipsoid', at: [0, 1.35, 0.15], size: [1.1, 0.3, 1.0], color: '#c9d4ff' },
+        {
+          shape: 'ellipsoid',
+          at: [0, 0.95, -0.3],
+          size: [0.5, 0.5, 0.12],
+          color: '#fff3a8',
+          glow: true,
+        },
+      ],
+    },
+  },
+];
+
 /** Every clothing item, checked by `checkClothingData` in tests. */
 export const CLOTHING: ClothingItem[] = [
   ...STARTER,
@@ -3018,6 +3179,7 @@ export const CLOTHING: ClothingItem[] = [
   ...HALLOWEEN_COSTUMES,
   ...MILESTONE,
   ...REKINDLED,
+  ...CELLAR_KEEPSAKES,
   ...SQUISHY,
   ...SQUISHY_COSTUMES,
 ];

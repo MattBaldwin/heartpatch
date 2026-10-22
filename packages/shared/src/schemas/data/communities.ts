@@ -121,5 +121,23 @@ export const CommunityRulesSchema = z.strictObject({
    * spots hold is server-only (the cellar find tables, rule 6).
    */
   cellar: ExploreTerrainSchema,
+  /**
+   * Where the cellar's chests stand (#306, owner decision of 2026-10-22):
+   * the kit's spots become small chests in a row along the back wall, with
+   * the big chest in the middle. Tile-local, like a spot (+z away from the
+   * camera, the corner 1 from the middle).
+   */
+  cellarChests: z.strictObject({
+    /** How far back the row stands (the chests nearest the middle). */
+    row: z.number().min(0).max(0.9),
+    /** The gap between the big chest and the first small chest on each side. */
+    first: z.number().min(0.1).max(0.6),
+    /** The gap between two small chests. */
+    gap: z.number().min(0.1).max(0.5),
+    /** How far each chest out from the middle comes forward, so the row curves round the big one. */
+    curve: z.number().min(0).max(0.3),
+    /** How far back the big chest stands. */
+    big: z.number().min(0).max(0.95),
+  }),
 });
 export type CommunityRules = z.infer<typeof CommunityRulesSchema>;

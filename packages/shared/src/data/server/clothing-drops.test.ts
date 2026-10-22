@@ -3,12 +3,17 @@ import { checkClothingDrops, type ClothingDropTable } from '../../schemas/data/c
 import { CLOTHING } from '../clothing.js';
 import { FOUND_SETS } from '../found-sets.js';
 import { GAME_DATA } from '../index.js';
+import { CELLAR_RULES } from './cellar.js';
 import { CLOTHING_DROPS } from './clothing-drops.js';
 
 const TERRAINS = GAME_DATA.terrains.map((t) => t.id);
 const copy = (): ClothingDropTable[] => structuredClone(CLOTHING_DROPS);
-// Found sets' pieces drop from their own tables (#306 PR 5).
-const SET_PIECES = new Set(FOUND_SETS.flatMap((s) => s.pieces));
+// Found sets' pieces drop from their own tables (#306 PR 5), and the cellar
+// keepsakes only from a cellar's big chest (#306).
+const SET_PIECES = new Set([
+  ...FOUND_SETS.flatMap((s) => s.pieces),
+  ...Object.values(CELLAR_RULES.bigChest.keepsakes),
+]);
 
 describe('clothing drop tables (server-only)', () => {
   it('pass their checks: every found item can drop, from gathers, captures, rescues, wild wins and explore finds', () => {

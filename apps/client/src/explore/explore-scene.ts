@@ -83,6 +83,8 @@ import {
   keepColour,
   TerrainClock,
 } from '../map/terrain-plugin.js';
+import { CellarChests, type CellarStats } from '../hollowed/cellar-chests.js';
+import { CELLAR_TERRAIN, isChest } from '../hollowed/cellar-look.js';
 import { HollowedExplore, type HollowedStats } from '../hollowed/hollowed-explore.js';
 import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
@@ -223,6 +225,8 @@ export interface ExploreSceneStats {
   } | null;
   /** A grey village tile's drain, joy discs, sparks and echoes (#306 2a), or null. */
   readonly hollowed: HollowedStats | null;
+  /** A hidden cellar's chests: their lids and moments (#306), or null. */
+  readonly cellar: CellarStats | null;
 }
 
 export interface ExploreSceneOptions {
@@ -439,6 +443,8 @@ export class ExploreScene implements AmbientTarget {
   #now = 0;
   /** A grey village tile (#306 2a): its drain, joy sparks and echoes; null on my own land. */
   readonly #hollowed: HollowedExplore | null = null;
+  /** A hidden cellar (#306): its chests' lids and moments; null elsewhere. */
+  readonly #cellar: CellarChests | null = null;
   /** Objects made since the scene opened (`stats.created`, #501). */
   readonly #created = { meshes: 0, materials: 0, textures: 0, geometries: 0 };
   /** The context's counts and their reading when the scene opened (`stats.gl`, dev only). */
@@ -716,6 +722,14 @@ export class ExploreScene implements AmbientTarget {
       );
     }
 
+    if (tile.terrain === CELLAR_TERRAIN) {
+      this.#cellar = new CellarChests(
+        scene,
+        { world: (p) => this.#world(p), groundAt: (p) => this.#groundAt(p) },
+        tile.spots,
+      );
+    }
+
     // The follow camera (#291): the stage's camera gets no input (the HUD's
     // ground layer covers the canvas), so its shot is written just before
     // each render, as the battle does.
@@ -854,6 +868,7 @@ export class ExploreScene implements AmbientTarget {
           }
         : null,
       hollowed: this.#hollowed?.stats ?? null,
+      cellar: this.#cellar?.stats ?? null,
     };
   }
 
@@ -886,6 +901,8 @@ export class ExploreScene implements AmbientTarget {
   update(tile: ExploreTileResponse): void {
     // A spot just searched on a grey tile opens its joy disc and bursts into sparks.
     this.#hollowed?.update(tile.spots, performance.now());
+    // A chest just opened pops its lid (#306).
+    this.#cellar?.update(tile.spots, performance.now());
     this.#tile = tile;
     this.#glintNudge = [];
     this.#placeGlints();
@@ -995,8 +1012,9 @@ export class ExploreScene implements AmbientTarget {
     const hopping = this.#underwater ? this.#stepSwims(dt) : this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
     const hollowed = this.#hollowed?.step(now) ?? false;
+    const cellar = this.#cellar?.step(now) ?? false;
     if (!following && !swinging && !hopping) this.#lastStep = null;
-    return keeper || following || swinging || hopping || hollowed;
+    return keeper || following || swinging || hopping || hollowed || cellar;
   }
 
   /**
@@ -1611,8 +1629,10 @@ export class ExploreScene implements AmbientTarget {
         );
       }
       const at = this.#world(spot);
-      // Each spot turned its own way, the same for everyone.
-      const turn = Quaternion.RotationYawPitchRoll(spinOf(tile, spot.index), 0, 0);
+      // Each spot turned its own way, the same for everyone; a cellar's
+      // chests face the camera (#306).
+      const spin = isChest(spot) ? 0 : spinOf(tile, spot.index);
+      const turn = Quaternion.RotationYawPitchRoll(spin, 0, 0);
       const s = kit ? 1 : scale;
       const list = byKind.get(kind) ?? [];
       list.push({

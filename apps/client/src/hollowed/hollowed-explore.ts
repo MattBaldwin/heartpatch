@@ -294,7 +294,7 @@ function shown(part: Part, hex: string, alpha: number): Part {
  * A joy spark, 1 across: a four-point star in a soft glow, like the glints
  * over the spots, stood up and tipped to face the follow camera.
  */
-function sparkShape(): Part {
+export function sparkShape(): Part {
   const diamond = (sx: number, sy: number, z: number, hex: string) => {
     const m = disc({ radius: 0.5, tessellation: 4 });
     m.scaling.set(sx, sy, 1);

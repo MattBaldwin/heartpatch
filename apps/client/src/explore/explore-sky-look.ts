@@ -116,6 +116,32 @@ export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 };
 
 /**
+ * In a Hollow's hidden cellar (#306): a stone vault lit by candles, the
+ * vaulted roof a warm dusk-brown overhead (never black), the same at any
+ * hour.
+ */
+const VAULT: SkyLook = {
+  zenith: '#2e2420', // TUNE: the vaulted roof
+  horizon: '#3b302a', // TUNE: the far dark (never black)
+  sun: '#ffd36e',
+  sunDisc: false,
+  moon: false,
+  cloud: '#5c4a40',
+  clouds: 0,
+  stars: false,
+  starColor: '#ffd27a',
+  fog: null,
+  groundTint: '#fff8ee', // TUNE: candle-warm
+  light: { color: '#ffd2a0', sun: 0.62, environment: 0.66 }, // TUNE: warm, kid-readable
+};
+export const VAULT_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  dawn: VAULT,
+  day: VAULT,
+  dusk: VAULT,
+  night: VAULT,
+};
+
+/**
  * Under a lake (#335): the bright surface at the top fading to deep water,
  * bubbles drifting up, and the light the colour of the sky above. At night
  * the plankton glows. Never black (art bible §2).
@@ -176,11 +202,13 @@ export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
  * explored underwater, hills inside a cave, mountains up a trail; the rest
  * on cozy open ground.
  */
-export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail';
+export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail' | 'vault';
 const WORLDS: Readonly<Record<string, ExploreWorld>> = {
   lake: 'water',
   hills: 'cave',
   mountains: 'trail',
+  // A Hollow's hidden cellar (#306), shown in its own look by the client.
+  cellar: 'vault',
 };
 
 /** The world a terrain is explored in. */
@@ -229,7 +257,14 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
  * clouds and the moon switch halfway. Underwater and in a cave, their own looks.
  */
 export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
-  const looks = world === 'water' ? WATER_LOOKS : world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
+  const looks =
+    world === 'water'
+      ? WATER_LOOKS
+      : world === 'cave'
+        ? CAVE_LOOKS
+        : world === 'vault'
+          ? VAULT_LOOKS
+          : SKY_LOOKS;
   const a = looks[at.phase];
   const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));
