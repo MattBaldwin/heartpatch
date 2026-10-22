@@ -145,6 +145,8 @@ export function wildLine(reports: readonly MorningReport[]): ReportLine | null {
       : `${String(tiles)} bits of your dark land went wild again.`;
   const back = things.length > 0 ? ` Your ${joinNames(things)} there came back to your bag.` : '';
   const made =
-    lost.makers > 0 ? ` What ${lost.makers === 1 ? 'it' : 'they'} made came home too!` : '';
+    lost.makers > 0
+      ? ` What your ${lost.makers === 1 ? 'building' : 'buildings'} made came home too!`
+      : '';
   return { icon: '🌿', text: `${land}${back}${made}` };
 }

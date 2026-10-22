@@ -173,7 +173,7 @@ describe('the night words', () => {
         },
       ])?.text,
     ).toBe(
-      'A bit of your dark land went wild again. Your building there came back to your bag. What it made came home too!',
+      'A bit of your dark land went wild again. Your building there came back to your bag. What your building made came home too!',
     );
     expect(
       wildLine([
@@ -193,7 +193,7 @@ describe('the night words', () => {
         },
       ])?.text,
     ).toBe(
-      '2 bits of your dark land went wild again. Your fire, buildings and Warehouse there came back to your bag. What they made came home too!',
+      '2 bits of your dark land went wild again. Your fire, buildings and Warehouse there came back to your bag. What your buildings made came home too!',
     );
   });
 
