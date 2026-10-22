@@ -106,7 +106,7 @@ const CLOTHING_ICONS: Readonly<Record<string, string>> = {
   // The cellar keepsakes (#306).
   'lamplighters-crown': '👑',
   'gearheart-wrench': '🔧',
-  'wishing-well-cape': '🪙',
+  'wishing-well-cape': '⛲', // the Old Well's own (a coin is Emoji 13, too new for older iPads)
   'golden-baker-jacket': '🥧',
   'lookout-boots': '🥾',
 };
