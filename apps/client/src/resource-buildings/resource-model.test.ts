@@ -161,7 +161,7 @@ describe('resourceCard: the tile card in its five states (#601 PR 7)', () => {
     expect(full?.line).toMatch(/full/);
   });
 
-  it('naps when the morning upkeep was short, and says what wakes it', () => {
+  it('pauses when the morning upkeep was short, and says what starts it again', () => {
     const paused = resourceCard(
       quarry({ pausedAt: '2026-10-22T10:00:00Z', nextReadyAt: null }),
       { homestead: 'joined' },
@@ -249,7 +249,7 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(section?.rows.map((r) => [r.coins, r.first, r.last])).toEqual([
       ['💛 17', true, false],
       ['💛 17', false, false],
-      ['Napping', false, true],
+      ['Paused', false, true],
     ]);
     expect(section?.canOrder).toBe(true);
     expect(upkeepSection({ ...upkeep, due: [row('a', 17)] }, 0)?.canOrder).toBe(false);

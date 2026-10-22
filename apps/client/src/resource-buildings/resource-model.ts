@@ -81,7 +81,7 @@ export const RESOURCE_TEXT = {
   next: (wait: string) => `Next batch in ${wait}`,
   full: "It's full! Tap Collect to bring it all home 🧺",
   paused: (coins: number) =>
-    `zZ Napping: this morning's 💛 ${String(coins)} wasn't there. It wakes up as soon as you have 💛 ${String(coins)}!`,
+    `⏸️ Paused: this morning's 💛 ${String(coins)} wasn't there. It starts again as soon as you have 💛 ${String(coins)}!`,
   napping: 'zZ This homestead is napping, cut off from home. It wakes up when it joins home again.',
   dormant: (season: string) =>
     `zZ Asleep till ${SEASON_NAMES.get(season) ?? 'its season'} comes back. It costs nothing while it sleeps 🎃`,
@@ -96,7 +96,7 @@ export const RESOURCE_TEXT = {
   upkeepTotal: (coins: number, wait: string) => `💛 ${String(coins)} next morning, in ${wait}`,
   upkeepNone: 'Nothing due: every building is asleep.',
   upkeepOrderHint: 'Short on coins? The top ones keep running. Tap the arrows to choose!',
-  rowPaused: 'Napping',
+  rowPaused: 'Paused',
   /** A row for one that sleeps for free (its homestead napping, or out of season). */
   rowFree: 'Free',
   moveUp: (name: string) => `Move ${name} up`,
@@ -320,7 +320,7 @@ export interface UpkeepRow {
   readonly icon: string;
   readonly name: string;
   readonly level: number;
-  /** "💛 6", "Napping" for a paused one, "Free" for a sleeping one (owner decisions Q4, Q6). */
+  /** "💛 6", "Paused" for one short of coins, "Free" for a sleeping one (owner decisions Q4, Q6). */
   readonly coins: string;
   readonly paused: boolean;
   readonly first: boolean;
