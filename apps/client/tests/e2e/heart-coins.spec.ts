@@ -1,3 +1,4 @@
+import { HEART_COIN_RULES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -61,7 +62,10 @@ test('shows Heart Coins on the map, at home and on the patch list, and care pays
     expect.objectContaining({ source: 'battle', value: '0 / 20' }),
     expect.objectContaining({ source: 'capture', value: '0 / 15' }),
     expect.objectContaining({ source: 'care', value: '0 / 10' }),
-    expect.objectContaining({ source: 'sell', value: '0 / 30' }),
+    expect.objectContaining({
+      source: 'sell',
+      value: `0 / ${String(HEART_COIN_RULES.dailyCaps.sell)}`,
+    }),
   ]);
   await expect(page.getByTestId('heart-coins-resets')).toHaveText(/^More to earn in \d/);
   // How they differ from Patch Coins, in kid words.

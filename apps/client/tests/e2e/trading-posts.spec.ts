@@ -1,4 +1,4 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, HEART_COIN_RULES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { SCREENS } from './layout.js';
@@ -428,8 +428,9 @@ test('sells extras and a spare piece for Heart Coins at a post (#601 PR 4)', asy
     ),
   );
   expect(tabsFit).toBe(true);
+  const SELL_CAP = HEART_COIN_RULES.dailyCaps.sell;
   const today = page.getByTestId('post-sell-today');
-  await expect(today).toHaveText('💛 0 of 30 today');
+  await expect(today).toHaveText(`💛 0 of ${String(SELL_CAP)} today`);
   // Not a whole lot of Greens (plus what a recipe keeps): the button says
   // what's needed and can't be tapped.
   await expect(page.getByTestId('post-sell-greens')).toHaveText(/^Need \d+$/);
@@ -446,7 +447,7 @@ test('sells extras and a spare piece for Heart Coins at a post (#601 PR 4)', asy
   await expect(confirm).toContainText("Once it's sold, it's sold!");
   await page.getByTestId('post-sell-yes').tap();
   await expect(page.getByTestId('post-sell-done')).toContainText('Yay! +2 💛 for your patch!');
-  await expect(today).toHaveText('💛 2 of 30 today');
+  await expect(today).toHaveText(`💛 2 of ${String(SELL_CAP)} today`);
   await expect(confirm).toBeHidden();
 
   // One spare beanie goes; the last copy stays, so its row is gone.
@@ -454,7 +455,7 @@ test('sells extras and a spare piece for Heart Coins at a post (#601 PR 4)', asy
   await expect(confirm).toContainText('Sell 1 Pom-Pom Beanie for 2 💛?');
   await expect(page.getByTestId('post-sell-stepper')).toHaveCount(0);
   await page.getByTestId('post-sell-yes').tap();
-  await expect(today).toHaveText('💛 4 of 30 today');
+  await expect(today).toHaveText(`💛 4 of ${String(SELL_CAP)} today`);
   await expect(page.getByTestId('post-sell-pom-pom-beanie')).toHaveCount(0);
 
   const inventory = await api<{ items: Record<string, number> }>(

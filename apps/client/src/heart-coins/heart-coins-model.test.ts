@@ -59,7 +59,12 @@ describe('heartCoinsPage', () => {
     expect(page.rows.map((r) => r.source)).toEqual([...HEART_COIN_ROWS]);
     // Selling is the post's Sell tab (#601 PR 4): its bar is last.
     expect(page.rows.map((r) => r.source)).toEqual(['battle', 'capture', 'care', 'sell']);
-    expect(page.rows.map((r) => r.value)).toEqual(['4 / 20', '5 / 15', '2 / 10', '0 / 30']);
+    expect(page.rows.map((r) => r.value)).toEqual([
+      '4 / 20',
+      '5 / 15',
+      '2 / 10',
+      `0 / ${String(HEART_COIN_RULES.dailyCaps.sell)}`,
+    ]);
     expect(page.rows.at(-1)?.label).toBe('Selling extras');
     expect(page.allFull).toBe(false);
   });
