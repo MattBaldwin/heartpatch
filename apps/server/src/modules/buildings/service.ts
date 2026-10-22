@@ -71,7 +71,15 @@ import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.
 import { requireMember } from '../maps/members.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
-import { bankOutput, productionAt, productionView, suitsLand } from './production.js';
+import {
+  bankOutput,
+  productionAt,
+  productionBeforeUnpaid,
+  productionView,
+  suitsLand,
+  upkeepOf,
+} from './production.js';
+import { chargeUpkeep } from './upkeep.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
   createBuildingsRepo,
@@ -542,6 +550,42 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     return row;
   }
 
+  /**
+   * Before an upkeep building banks its output (#601: an upgrade, a
+   * take-down): all my upkeep buildings, locked in id order (step 8) ahead of
+   * it, so the mornings they owe can be charged first. Null for other kinds,
+   * which lock only their own row.
+   */
+  async function lockForUpkeep(
+    repo: BuildingsRepo,
+    mapId: string,
+    userId: string,
+    buildingRowId: string,
+  ): Promise<BuildingRow[] | null> {
+    const before = (await repo.listOwned(mapId, userId)).find((b) => b.id === buildingRowId);
+    if (!before || upkeepOf(before) === null) return null;
+    return repo.lockUpkeepBuildings(mapId, userId);
+  }
+
+  /**
+   * The mornings my upkeep buildings owe, charged (step 12b, after the
+   * caller's inventory rows) before `row` banks, so an unpaid morning stops
+   * its output as the settle would. `row` as it is after, and the
+   * `building.paused` events.
+   */
+  async function chargeFirst(
+    tx: Executor,
+    map: { id: string; timeZone: string },
+    userId: string,
+    upkeepRows: readonly BuildingRow[] | null,
+    row: BuildingRow,
+    at: Date,
+  ): Promise<{ row: BuildingRow; events: NewGameEvent[] }> {
+    if (!upkeepRows) return { row, events: [] };
+    const charged = await chargeUpkeep(tx, map, userId, upkeepRows, at);
+    return { row: charged.rows.find((r) => r.id === row.id) ?? row, events: charged.events };
+  }
+
   return {
     home: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
@@ -690,28 +734,40 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind }) => {
-          const row = await lockMine(repo, mapId, user.id, buildingRowId);
-          const refund = takeDownRefund(row, local);
-          // A resource building's stored output lands first (#601).
-          const made = productionAt(row, at, timeZone);
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          const refund = takeDownRefund(locked, local);
+          // A resource building's stored output lands first (#601): its rows
+          // lock with the refund's (a pause only makes less).
+          const most = productionAt(locked, at, timeZone);
           // A Crafting Factory's batches stop (#294): what's made is kept, the
           // rest comes back. Its batches after the building (step 8, id order).
           const batches =
-            row.kind === 'factory'
-              ? (await createFactoryRepo(tx).lockRunningIn(row.id)).map((b) =>
+            locked.kind === 'factory'
+              ? (await createFactoryRepo(tx).lockRunningIn(locked.id)).map((b) =>
                   stopPlan(b, at, 'taken-down'),
                 )
               : [];
-          const movedOut = await repo.moveOutAll(row.id);
-          const trainees = await repo.lockTrainees(row.id);
+          const movedOut = await repo.moveOutAll(locked.id);
+          const trainees = await repo.lockTrainees(locked.id);
           // Inventory rows before `species_seen` (tech spec §7 step 11): the
           // refund first, then trainees land what they earned (an evolution
           // writes `species_seen`) and stop, then the building goes.
           await lockGrantRows(tx, mapId, [
             { userId: user.id, items: refund },
-            ...(made ? [{ userId: user.id, items: made.ready }] : []),
+            ...(most ? [{ userId: user.id, items: most.ready }] : []),
             ...planGrants(batches),
           ]);
+          // The mornings it owes first (12b): an unpaid one stops its output.
+          const { row, events: paused } = await chargeFirst(
+            tx,
+            { id: mapId, timeZone },
+            user.id,
+            upkeepRows,
+            locked,
+            at,
+          );
+          const made = productionAt(row, at, timeZone);
           const banked = made ? await bankOutput(tx, row, made) : null;
           if (Object.keys(refund).length > 0) {
             await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
@@ -720,6 +776,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const training =
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
           await repo.deleteBuilding(row.id);
+          for (const event of paused) await repo.appendEvent(event);
           if (banked) await repo.appendEvent(banked.event);
           await repo.appendEvent({
             mapId,
@@ -851,26 +908,38 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind }) => {
-          const row = await lockMine(repo, mapId, user.id, buildingRowId);
-          const building = requireBuildingData(row.buildingId);
-          const cost = upgradeCost(building, row.level);
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          const building = requireBuildingData(locked.buildingId);
+          const cost = upgradeCost(building, locked.level);
           if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
           // Trainees (squishies, step 10) are locked before the cost's inventory
           // rows (step 11).
           const trainees =
-            building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
+            building.kind === 'training-grounds' ? await repo.lockTrainees(locked.id) : [];
           // A resource building banks what it made at the old pace first
-          // (#601); its rows lock with the cost's (step 11, one item-id order).
-          const made = productionAt(row, at, timeZone);
-          if (made) {
+          // (#601); its rows lock with the cost's (step 11, one item-id order),
+          // then the mornings it owes are charged (12b): an unpaid one stops
+          // its output. Banked before the cost, so what it made can pay.
+          const most = productionAt(locked, at, timeZone);
+          if (most) {
             await lockGrantRows(tx, mapId, [
               { userId: user.id, items: cost },
-              { userId: user.id, items: made.ready },
+              { userId: user.id, items: most.ready },
             ]);
           }
+          const { row, events: paused } = await chargeFirst(
+            tx,
+            { id: mapId, timeZone },
+            user.id,
+            upkeepRows,
+            locked,
+            at,
+          );
+          const made = productionAt(row, at, timeZone);
+          const banked = made ? await bankOutput(tx, row, made) : null;
           // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
           await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
-          const banked = made ? await bankOutput(tx, row, made) : null;
           // Training XP is worked out from the level, so the whole XP earned at
           // the old rate lands before the level changes; only the part of a
           // point still in progress (minutes) carries on at the new rate.
@@ -878,6 +947,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
           const level = row.level + 1;
           await repo.setLevel(row.id, level);
+          for (const event of paused) await repo.appendEvent(event);
           if (banked) await repo.appendEvent(banked.event);
           await repo.appendEvent({
             mapId,
@@ -1122,7 +1192,7 @@ export async function takeDownOnLostLand(
     // after the squishy locks, so nothing lands twice.
     const trainees = row.kind === 'training-grounds' ? await repo.traineesOf(row.id) : [];
     // A resource building's output up to now lands with the refund (#601).
-    const output = productionAt(row, at, timeZone)?.ready ?? {};
+    const output = productionBeforeUnpaid(row, at, timeZone)?.ready ?? {};
     if (row.kind !== 'training-grounds') await repo.deleteBuilding(row.id);
     down.push({
       ownerUserId: row.ownerUserId,
@@ -1225,7 +1295,7 @@ export async function removeMemberBuildings(
   const grants = lost.filter((l) => Object.keys(l.refund).length > 0);
   // A resource building's stored output lands in their bag on this patch (#601).
   const outputs = outer.flatMap((row) => {
-    const items = productionAt(row, at, map.timeZone)?.ready ?? {};
+    const items = productionBeforeUnpaid(row, at, map.timeZone)?.ready ?? {};
     return Object.keys(items).length > 0 ? [{ row, items }] : [];
   });
   await lockGrantRows(tx, map.id, [

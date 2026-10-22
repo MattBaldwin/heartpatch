@@ -538,6 +538,48 @@ describe.skipIf(!url)('resource buildings (#601, needs DATABASE_URL)', () => {
     expect(await eventsOf(mapId, 'building.produced')).toHaveLength(1);
   });
 
+  it('an upgrade or take-down charges the mornings owed first: unpaid, output stops there', async () => {
+    const { server, kid, mapId } = await patch();
+    const plot0 = await forest(mapId, kid, 0);
+    const plot1 = await forest(mapId, kid, 1);
+    const upgraded = await build(server, kid, mapId, plot0);
+    const taken = await build(server, kid, mapId, plot1);
+    // No Heart Coins: this morning (Oct 3, 6:00) goes unpaid. Asked at 9:00.
+    clock.setTime(Date.parse('2026-10-03T15:00:00Z'));
+    const madeToMorning =
+      Math.floor((Date.parse(morning('2026-10-03')) - Date.parse(START)) / (CYCLE_S * 1000)) *
+      SOURCE.perCycle;
+    const up = await call(server, 'POST', `/maps/${mapId}/buildings/${upgraded.id}/upgrade`, kid);
+    expect(up.statusCode, up.body).toBe(200);
+    const down = await call(server, 'POST', `/maps/${mapId}/buildings/${taken.id}/remove`, kid);
+    expect(down.statusCode, down.body).toBe(200);
+    const produced = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.reason, 'produced')),
+    });
+    expect(produced.map((l) => [l.refId, l.delta]).sort()).toEqual(
+      [
+        [upgraded.id, madeToMorning],
+        [taken.id, madeToMorning],
+      ].sort(),
+    );
+    expect((await row(upgraded.id)).pausedAt?.toISOString()).toBe(morning('2026-10-03'));
+    expect((await eventsOf(mapId, 'building.paused')).length).toBeGreaterThan(0);
+  });
+
+  it('lost land gives nothing past a morning nobody paid (leaving banks the same way)', async () => {
+    const { server, kid, mapId } = await patch();
+    const plot = await forest(mapId, kid);
+    await build(server, kid, mapId, plot);
+    clock.setTime(Date.parse('2026-10-03T15:00:00Z'));
+    const madeToMorning =
+      Math.floor((Date.parse(morning('2026-10-03')) - Date.parse(START)) / (CYCLE_S * 1000)) *
+      SOURCE.perCycle;
+    await withTransaction(db, async (tx) => {
+      const lost = await takeDownOnLostLand(tx, mapId, [plot.id], clock, ZONE, 'captured');
+      expect(lost.map((l) => l.output)).toEqual([{ timber: madeToMorning }]);
+    });
+  });
+
   it('lost land banks the output to its owner first, then half back', async () => {
     const { server, kid, mapId } = await patch();
     const plot = await forest(mapId, kid);

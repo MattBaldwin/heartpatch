@@ -303,6 +303,19 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     expect((await tileOf(server, kid, mapId, plot)).nodeResource).toBeNull();
   });
 
+  it('Pumpkin Fields cleared after Halloween drop nothing (#601)', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    clock.setTime(Date.parse('2026-11-12T18:00:00Z'));
+    await setLand(plot, 'pumpkin-fields', 'pumpkins');
+    await give(mapId, kid, { spade: 3 });
+    const res = await clear(server, kid, mapId, plot);
+    expect(res.statusCode, res.body).toBe(201);
+    expect(ClearResponseSchema.parse(res.json()).clearing).toMatchObject({
+      tool: 'spade',
+      drop: {},
+    });
+  });
+
   /** A rival on the patch. */
   async function rivalOn(mapId: string): Promise<Player> {
     const rival = await player();

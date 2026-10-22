@@ -233,7 +233,7 @@ export const RESOURCES: Resource[] = [
   {
     id: 'axe',
     name: 'Axe',
-    description: 'Clears a forest on your homestead, ready to build on.',
+    description: 'Clears a forest or old forest on your homestead, ready to build on.',
     kind: 'crafted',
     clearTool: 'axe',
     tradable: false, // worn in uses, it stays with its Keeper
@@ -249,7 +249,8 @@ export const RESOURCES: Resource[] = [
   {
     id: 'spade',
     name: 'Spade',
-    description: 'Clears a meadow or hill on your homestead, ready to build on.',
+    description:
+      'Clears a meadow, hill, lake or pumpkin field on your homestead, ready to build on.',
     kind: 'crafted',
     clearTool: 'spade',
     tradable: false, // worn in uses, it stays with its Keeper

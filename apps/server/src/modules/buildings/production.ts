@@ -4,6 +4,8 @@ import {
   JOB_RULES,
   inSeason,
   addDays,
+  HOLLOW_RULES,
+  upkeepMornings,
   paysUpkeep,
   productionCycleSeconds,
   productionProgress,
@@ -228,4 +230,32 @@ export async function bankOutput(
       payload: { userId: row.ownerUserId, ...produced },
     },
   };
+}
+
+/**
+ * `productionAt` for a building banked without its mornings charged (#601:
+ * lost land, a leave): output stops at the first morning it owes and could
+ * work, as an unpaid one would have paused it. Nobody's Heart Coins are
+ * taken there, so nothing past an unpaid morning is given either.
+ */
+export function productionBeforeUnpaid(
+  row: BuildingRow,
+  at: Date,
+  timeZone: string,
+): ProductionAt | null {
+  if (row.pausedAt === null && upkeepOf(row) !== null) {
+    const minute = HOLLOW_RULES.morningMinute;
+    const owed = upkeepMornings(
+      {
+        placed: mapLocalTime(row.placedAt, timeZone),
+        settledThrough: row.upkeepPaidThrough,
+        now: mapLocalTime(at, timeZone),
+      },
+      minute,
+    )
+      .map((day) => morningAt(day, minute, timeZone))
+      .find((instant) => canWorkAt(row, instant, timeZone));
+    if (owed) return productionAt({ ...row, pausedAt: owed }, at, timeZone);
+  }
+  return productionAt(row, at, timeZone);
 }
