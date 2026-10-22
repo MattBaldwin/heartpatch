@@ -16,7 +16,10 @@ import type { CellarService } from './cellar.js';
 import { COMMUNITY_RATE_LIMITS } from './limits.js';
 import type { CommunityRoutesOptions } from './routes.js';
 
-/** The key hunt and the hidden cellar (#306 PR 2c). The hunt's state comes with the map view. */
+/**
+ * The key hunt and the hidden cellar (#306 PR 2c). The hunt's state comes with
+ * the map view; the key itself is found by exploring its tile (modules/explore).
+ */
 export const cellarRoutes =
   (service: CellarService, options: CommunityRoutesOptions): FastifyPluginCallback =>
   (fastify, _options, done) => {
@@ -24,18 +27,6 @@ export const cellarRoutes =
     const { requireAuth } = options.hooks;
     const idempotency = options.idempotency(fastify);
     const rateLimit = playerRateLimit(fastify, 'communities', COMMUNITY_RATE_LIMITS);
-
-    // Dig the cellar key up on the tile the village's map points to.
-    app.post(
-      '/maps/:mapId/communities/:communityId/key',
-      {
-        schema: { params: CommunityParamsSchema, response: { 200: CommunityViewSchema } },
-        preHandler: [requireAuth, rateLimit('communities'), idempotency.preHandler],
-        onSend: idempotency.onSend,
-      },
-      async (request) =>
-        service.digKey(requireUser(request), request.params.mapId, request.params.communityId),
-    );
 
     // Open the cellar under the square with the key.
     app.post(

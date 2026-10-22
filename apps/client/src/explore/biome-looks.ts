@@ -1,3 +1,4 @@
+import { CELLAR_LOOK } from '../hollowed/cellar-look.js';
 import type { LandLook } from './land-config.js';
 
 /**
@@ -78,4 +79,6 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
       fireflies: 40, // TUNE: the cave's glow motes
     },
   },
+  // A Hollow's hidden cellar (#306): a stone vault, its own look.
+  cellar: CELLAR_LOOK,
 };

@@ -14,6 +14,7 @@ import { cylinder, shaded, sphere } from './land-kit.js';
 import type { ExtrasContext, Growth } from './land-layout.js';
 import { buildCairn, buildLookout, buildSnowDrift, type SpotShape } from './trail-kit.js';
 import type { LandOptions } from './explore-land.js';
+import { CELLAR_EXTRAS, CELLAR_SPOTS } from '../hollowed/cellar-look.js';
 
 // What the trail and the cave add on top of the meadow's land kit (#335 art
 // reset): their own layers through the kit's `extras` hook, and their search
@@ -113,6 +114,8 @@ export const BIOME_EXTRAS: Readonly<Record<string, NonNullable<LandOptions['extr
       'glow-caps': { build: buildGlowCaps, glow: 1.15 }, // TUNE
     },
   },
+  // A Hollow's hidden cellar (#306): its walls, candles and stair.
+  cellar: CELLAR_EXTRAS,
 };
 
 const SPOTS: Readonly<Record<string, (scene: Scene) => SpotShape>> = {
@@ -121,6 +124,8 @@ const SPOTS: Readonly<Record<string, (scene: Scene) => SpotShape>> = {
   cairn: buildCairn,
   cave: buildNook,
   'glow-mushrooms': buildGlowMushroomSpot,
+  // The cellar's chests (#306).
+  ...CELLAR_SPOTS,
 };
 
 /** A biome's own take on a shared spot (the cave's rock is bare stone). */

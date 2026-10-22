@@ -274,6 +274,8 @@ const portraits = createPortraits({
   lod: () => heroLodFor(stage?.quality.snapshot.tier ?? tier),
   invalidate: () => stage?.invalidate(),
 });
+// The cellar key's treasure maps in the bag while a hunt is on (#306; filled by `keyHunt`).
+const keyMapsInBag = document.createElement('div');
 const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -295,6 +297,7 @@ const inventory = createInventoryScreen({
     inventory.openFactory();
   },
   lore: loreBag,
+  keyMaps: keyMapsInBag,
   onBagOpen: () => {
     lorebook.refresh();
   },
@@ -1013,13 +1016,17 @@ const restoreSheet = createRestoreSheet({
     keyHunt.showWaiting();
   },
 });
-// A won village's key hunt and hidden cellar (#306 PR 2c): the map card, the
-// key's flag and panel, the cellar door on the square, and down into it.
+// A won Hollow's key hunt and hidden cellar (#306 PR 2c; owner decision
+// 2026-10-22): the treasure map (in the bag too), the key tile's gold glow
+// and panel, the cellar door on the square, and down into it. The key itself
+// is found by exploring its tile.
 const keyHunt = createKeyHunt({
   root: document.body,
   me: () => signedIn?.id ?? null,
   mapId: () => maps.view?.map.id ?? null,
+  bag: keyMapsInBag,
   showKey: (at) => {
+    inventory.closeBag();
     const point = maps.focus(at);
     if (point) stage?.camera.panTo(point, stillPans.matches);
   },

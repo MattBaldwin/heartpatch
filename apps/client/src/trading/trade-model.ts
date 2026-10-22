@@ -18,7 +18,7 @@ import {
   type TradesView,
   type WsEventMessage,
 } from '@heartpatch/shared';
-import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
+import { clothingIcon, clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
 // and f) in words and picks. Pure, so every case is unit-tested. The server
@@ -150,7 +150,7 @@ export function lineLook(line: TradeLineView): LineLook {
   }
   const item = CLOTHING_BY_ID.get(line.itemId);
   return {
-    icon: clothingSlotIcon(item?.slot ?? 'hat'),
+    icon: item ? clothingIcon(item) : clothingSlotIcon('hat'),
     name: item?.name ?? line.itemId,
     sub: '',
     color: null,
