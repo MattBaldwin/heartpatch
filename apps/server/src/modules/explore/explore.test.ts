@@ -119,11 +119,12 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     clock.setTime(Date.parse(START));
   });
 
-  async function start(): Promise<FastifyInstance> {
+  async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
     const config = loadConfig({
       NODE_ENV: 'test',
       DATABASE_URL: url!,
       HP_DEV_SQUISHY_GRANTS: 'true',
+      ...env,
     });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
@@ -1132,7 +1133,25 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       expect(rolled[0]).toEqual(table!.finds);
     });
 
+    /**
+     * A roll that takes each table's first find, and in a Rekindled table
+     * (the one with pieces in it) the entry `want` picks.
+     */
+    const rekindledRng = (want: (entry: Record<string, unknown>) => boolean) =>
+      ({
+        weighted: <T>(items: readonly T[]) =>
+          items.some((e) => 'clothing' in (e as object))
+            ? (items.find((e) => want(e as Record<string, unknown>)) ?? items[0]!)
+            : items[0]!,
+        next: () => 0.5,
+        int: (min: number) => min,
+        chance: () => true,
+        pick: <T>(items: readonly T[]) => items[0]!,
+      }) as unknown as Rng;
+
     describe('Relight the path (#306 PR 2b)', () => {
+      /** No Rekindled drops (#306 PR 5), for a test that checks exactly what a solve gives. */
+      const noDrops = { HP_DEV_DROP_CHANCE: '0' };
       const begin = (server: FastifyInstance, who: Player, mapId: string, t: Tile) =>
         call(server, 'POST', `/maps/${mapId}/explore/puzzle/start`, who, { q: t.q, r: t.r });
       const solve = (
@@ -1223,7 +1242,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           .values(pages.map((pageId) => ({ userId: who.id, pageId, foundAt: new Date(START) })));
 
       it('shows a broken thing by terrain, and relighting it gives a lore page, once a tile', async () => {
-        const server = await start();
+        const server = await start(noDrops);
         const me = await player();
         const mapId = await patch(server, me);
         const square = await reachVillage(server, me, mapId);
@@ -1246,7 +1265,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(res.statusCode, res.body).toBe(200);
         const fixed = SolvePuzzleResponseSchema.parse(res.json());
         expect(fixed.puzzle).toEqual({ ...puzzle, solved: true });
-        expect(fixed.recipe).toBeNull();
+        expect(fixed.clothing).toBeNull();
         expect(PUZZLE_REWARDS.lorePages).toContain(fixed.lore?.id);
         expect(fixed.lore?.title.length).toBeGreaterThan(0);
         expect(fixed.found).toEqual({});
@@ -1263,7 +1282,6 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           attempt: 1,
           moves: moves.length,
           lorePage: fixed.lore!.id,
-          recipe: null,
           items: {},
           notable: 'lore',
         });
@@ -1441,7 +1459,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       });
 
       it('gives a little Heartdust once every page is found', async () => {
-        const server = await start();
+        const server = await start(noDrops);
         const me = await player();
         const mapId = await patch(server, me);
         const square = await reachVillage(server, me, mapId);
@@ -1455,7 +1473,7 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         );
         expect(res.statusCode, res.body).toBe(200);
         const fixed = SolvePuzzleResponseSchema.parse(res.json());
-        expect(fixed).toMatchObject({ lore: null, recipe: null, found: PUZZLE_REWARDS.fallback });
+        expect(fixed).toMatchObject({ lore: null, clothing: null, found: PUZZLE_REWARDS.fallback });
         for (const [id, n] of Object.entries(PUZZLE_REWARDS.fallback)) {
           expect(fixed.items[id]).toBe(n);
         }
@@ -1467,24 +1485,14 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(ledger.map((l) => l.refId)).toEqual([event!['solveId']]);
       });
 
-      it('can give a Rekindled recipe page through the PR 5 hook', async () => {
+      it('rolls the Rekindled set on top: a piece is the solve’s own (#306 PR 5)', async () => {
         const me = await player();
         const server = await start();
-        const mapId = await patch(server, me);
+        // Pieces drop where milestones count (two members).
+        const mapId = await patch(server, me, [await player()]);
         const square = await reachVillage(server, me, mapId);
-        await findAll(me, PUZZLE_REWARDS.lorePages);
-        const granted: unknown[] = [];
-        const service = createExploreService({
-          db,
-          clock: () => clock,
-          rekindled: {
-            sealed: () => Promise.resolve([{ id: 'heart-tea', title: 'Heart Tea' }]),
-            grant: (_tx, owner, pageId, refId) => {
-              granted.push({ ...owner, pageId, refId });
-              return Promise.resolve();
-            },
-          },
-        });
+        const rng = rekindledRng((e) => e['clothing'] === 'ember-patch-jacket');
+        const service = createExploreService({ db, clock: () => clock, rng: () => rng });
         const { attempt, moves } = await attemptOf(server, me, mapId, square);
         const fixed = await service.solvePuzzle(me, mapId, {
           q: square.q,
@@ -1492,16 +1500,48 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           attempt,
           moves: [...moves],
         });
-        expect(fixed).toMatchObject({
-          lore: null,
-          recipe: { id: 'heart-tea', title: 'Heart Tea' },
-          found: {},
-        });
+        expect(fixed.clothing).toBe('ember-patch-jacket');
+        expect(PUZZLE_REWARDS.lorePages).toContain(fixed.lore?.id);
+        // The lore page outranks the piece as the solve's notable kind, as on a search.
         const [event] = await eventsOf(mapId, 'explore.puzzled');
-        expect(event).toMatchObject({ recipe: 'heart-tea', lorePage: null, notable: null });
-        expect(granted).toEqual([
-          { mapId, userId: me.id, pageId: 'heart-tea', refId: event!['solveId'] },
+        expect(event).toMatchObject({ lorePage: fixed.lore!.id, notable: 'lore' });
+        expect(await eventsOf(mapId, 'clothing.found')).toEqual([
+          {
+            userId: me.id,
+            itemId: 'ember-patch-jacket',
+            source: 'explore',
+            refId: event!['solveId'],
+          },
         ]);
+      });
+
+      it('rolls the Rekindled finds into the one bag grant (#306 PR 5)', async () => {
+        const me = await player();
+        const server = await start();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        await findAll(me, PUZZLE_REWARDS.lorePages);
+        const rng = rekindledRng(
+          (e) => (e['items'] as Record<string, number> | undefined)?.['joy-ember'] !== undefined,
+        );
+        const service = createExploreService({ db, clock: () => clock, rng: () => rng });
+        const { attempt, moves } = await attemptOf(server, me, mapId, square);
+        const fixed = await service.solvePuzzle(me, mapId, {
+          q: square.q,
+          r: square.r,
+          attempt,
+          moves: [...moves],
+        });
+        // The thank-you and the find, granted together under the solve.
+        expect(fixed.found).toEqual({ ...PUZZLE_REWARDS.fallback, 'joy-ember': 1 });
+        expect(fixed.items['joy-ember']).toBe(1);
+        expect(fixed.clothing).toBeNull();
+        const [event] = await eventsOf(mapId, 'explore.puzzled');
+        expect(event!['items']).toEqual(fixed.found);
+        const ledger = await db.query.resourceLedger.findMany({
+          where: (l, { and, eq: is }) => and(is(l.userId, me.id), is(l.reason, 'explore')),
+        });
+        expect(new Set(ledger.map((l) => l.refId))).toEqual(new Set([event!['solveId']]));
       });
 
       it('is shut at night and out of reach, and there is none on my own land', async () => {
@@ -1531,22 +1571,6 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(await solvedBy(square)).toEqual([]);
       });
     });
-
-    /**
-     * A roll that takes each table's first find, and in a Rekindled table
-     * (the one with pieces in it) the entry `want` picks.
-     */
-    const rekindledRng = (want: (entry: Record<string, unknown>) => boolean) =>
-      ({
-        weighted: <T>(items: readonly T[]) =>
-          items.some((e) => 'clothing' in (e as object))
-            ? (items.find((e) => want(e as Record<string, unknown>)) ?? items[0]!)
-            : items[0]!,
-        next: () => 0.5,
-        int: (min: number) => min,
-        chance: () => true,
-        pick: <T>(items: readonly T[]) => items[0]!,
-      }) as unknown as Rng;
 
     it('finds a Rekindled piece in a grey village: its one piece of clothing (#306 PR 5)', async () => {
       const server = await start();

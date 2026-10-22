@@ -735,9 +735,9 @@ export const GAME_EVENTS = {
    * tile each. `depth`, `attempt` and `moves` (how many) say which try and
    * how long it took; the moves themselves were checked by replaying them
    * on the try's board, rebuilt from the Hollow's seed, and aren't kept.
-   * `lorePage` and `recipe` are the server-only pages it gave (the lore
-   * consumer grants `lorePage`); members see who fixed which kind of thing
-   * where, and a `notable` find's kind.
+   * `lorePage` is the server-only page it gave (the lore consumer grants
+   * it); a Rekindled piece is its own `clothing.found`. Members see who
+   * fixed which kind of thing where, and a `notable` find's kind.
    */
   'explore.puzzled': {
     internal: z.strictObject({
@@ -752,7 +752,6 @@ export const GAME_EVENTS = {
       attempt: z.number().int().min(1),
       moves: z.number().int().min(0),
       lorePage: ContentIdSchema.nullable(),
-      recipe: ContentIdSchema.nullable(),
       items: z.record(z.string(), z.number().int().min(1)),
       notable: ExploreNotableSchema.nullable(),
     }),

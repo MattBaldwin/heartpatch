@@ -220,9 +220,9 @@ export const SolvePuzzleResponseSchema = z.object({
   puzzle: HollowedPuzzleSchema,
   /** A lore page, by id and title; its words come from `GET /lore`. */
   lore: z.object({ id: ContentIdSchema, title: z.string() }).nullable(),
-  /** A Rekindled recipe (its recipe id), once #306 PR 5's recipes can be found here; null until then. */
-  recipe: z.object({ id: ContentIdSchema, title: z.string() }).nullable(),
-  /** Items, when there's no page left to find (may be empty). */
+  /** A Rekindled piece found (wardrobe item id, #306 PR 5), or null. */
+  clothing: ContentIdSchema.nullable(),
+  /** Items: the thank-you when there's no page left to find, and any Rekindled finds (may be empty). */
   found: ItemCountsSchema,
   /** The bag after it. */
   items: ItemCountsSchema,

@@ -110,31 +110,8 @@ const MESSAGES = {
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
 const LORE_TITLES = new Map(LORE_PAGES.map((p) => [p.id, p.title]));
 
-/**
- * Rekindled recipe pages a Relight puzzle can give (#306 PR 5 plugs this in;
- * until then puzzles give lore pages and the fallback). Both run inside the
- * solve's transaction, after the bag (tech spec §7 step 11) and before the
- * events.
- */
-export interface RekindledRecipes {
-  /** The Rekindled recipe pages still sealed for this player on this patch, by id and title. */
-  sealed: (
-    tx: Executor,
-    owner: { mapId: string; userId: string },
-  ) => Promise<{ id: string; title: string }[]>;
-  /** Opens one of them for the player (`refId`: the solve). */
-  grant: (
-    tx: Executor,
-    owner: { mapId: string; userId: string },
-    pageId: string,
-    refId: string,
-  ) => Promise<void>;
-}
-
 export interface ExploreServiceOptions {
   db: Database;
-  /** Rekindled recipe pages for Relight puzzles (#306 PR 5); none until it lands. */
-  rekindled?: RekindledRecipes;
   clock?: Clock;
   /** Live sync (`wsHub.publish`) after a commit. */
   publish?: (mapId: string) => Promise<void> | void;
@@ -723,15 +700,16 @@ export function createExploreService(options: ExploreServiceOptions) {
           ...(await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
           ...(await repo.listPuzzledPages(mapId, user.id)),
         ]);
-        const recipes = (await options.rekindled?.sealed(tx, owner)) ?? [];
-        const reward = rollPuzzleReward(
-          PUZZLE_REWARDS,
-          { foundLore, recipes: recipes.map((r) => r.id) },
-          rngFor(),
-        );
-        const found = reward.kind === 'items' ? { ...reward.items } : {};
+        const reward = rollPuzzleReward(PUZZLE_REWARDS, { foundLore }, rngFor());
         const lorePage = reward.kind === 'lore' ? reward.id : null;
-        const recipe = reward.kind === 'recipe' ? reward.id : null;
+        // The Rekindled set's puzzle odds (#306 PR 5): rolled now, so its finds
+        // join the one bag grant below. Reads only, so the lock order holds.
+        const rekindled = await rekindledDrop(
+          tx,
+          { place: 'puzzle', userId: user.id, mapId, at },
+          { rng: rngFor() },
+        );
+        const found = withFoundItems(reward.kind === 'items' ? reward.items : {}, rekindled);
 
         // Step 11: the bag.
         const solveId = uuidv7();
@@ -739,9 +717,14 @@ export function createExploreService(options: ExploreServiceOptions) {
           await lockGrantRows(tx, mapId, [{ userId: user.id, items: found }]);
           await grantItems(tx, owner, found, 'explore', solveId);
         }
-        if (recipe) await options.rekindled?.grant(tx, owner, recipe, solveId);
+        // A Rekindled piece appends its own event first; ours stays the last write.
+        const clothing = await grantRekindledPiece(
+          tx,
+          { source: 'explore', refId: solveId, userId: user.id, mapId, at },
+          rekindled,
+        );
 
-        const notable = notableOf(found, lorePage, null);
+        const notable = notableOf(found, lorePage, clothing);
         await repo.appendEvent({
           mapId,
           type: 'explore.puzzled',
@@ -758,7 +741,6 @@ export function createExploreService(options: ExploreServiceOptions) {
             attempt: row.puzzleAttempt,
             moves: request.moves.length,
             lorePage,
-            recipe,
             items: found,
             notable,
           },
@@ -767,9 +749,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         return {
           puzzle: { ...puzzle, solved: true },
           lore: lorePage ? { id: lorePage, title: LORE_TITLES.get(lorePage) ?? '' } : null,
-          recipe: recipe
-            ? { id: recipe, title: recipes.find((r) => r.id === recipe)?.title ?? '' }
-            : null,
+          clothing,
           found,
           items: await createInventoryRepo(tx).list(owner),
         } satisfies SolvePuzzleResponse;

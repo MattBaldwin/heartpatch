@@ -1,5 +1,11 @@
-import { findAvoidedWords, HOLLOW_RULES, HOME_BASE_RULES } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  findAvoidedWords,
+  HOLLOW_RULES,
+  HOME_BASE_RULES,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { EXPLORE_TEXT } from '../explore/explore-view.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
 import {
   discOpening,
@@ -124,13 +130,17 @@ describe('a grey village tile’s Relight puzzle (#306 PR 2b): words', () => {
   });
 
   it('says what mending it gave, and never nothing', () => {
-    const base = { puzzle: { ...puzzle, solved: true }, recipe: null, found: {}, items: {} };
+    const base = { puzzle: { ...puzzle, solved: true }, clothing: null, found: {}, items: {} };
     expect(
       puzzleLines({ ...base, lore: { id: 'the-painted-wall', title: 'The Painted Wall' } }),
     ).toEqual([{ text: '📜 A lore page! “The Painted Wall”', note: 'Added to your Lorebook 📖' }]);
-    expect(
-      puzzleLines({ ...base, lore: null, recipe: { id: 'heart-tea', title: 'Heart Tea' } }),
-    ).toEqual([{ text: '📖 A new recipe! “Heart Tea”' }]);
+    expect(puzzleLines({ ...base, lore: null, clothing: 'ember-patch-jacket' })[0]?.text).toContain(
+      CLOTHING_BY_ID.get('ember-patch-jacket')!.name,
+    );
+    // A Rekindled find says where it belongs, as the search card does.
+    expect(puzzleLines({ ...base, lore: null, found: { 'joy-ember': 1 } })[0]).toMatchObject({
+      note: EXPLORE_TEXT.setFindNote,
+    });
     expect(puzzleLines({ ...base, lore: null, found: { heartdust: 1 } })[0]?.text).toMatch(/×1$/);
     expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The Hollow says thank you!' }]);
   });

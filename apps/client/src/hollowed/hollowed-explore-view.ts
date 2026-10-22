@@ -1,4 +1,6 @@
 import {
+  CLOTHING_BY_ID,
+  FOUND_SETS,
   HOLLOW_RULES,
   HOME_BASE_RULES,
   hollowedOpenAt,
@@ -9,8 +11,9 @@ import {
   type SolvePuzzleResponse,
   type WorldPoint,
 } from '@heartpatch/shared';
+import { EXPLORE_TEXT } from '../explore/explore-view.js';
 import { itemName } from '../inventory/bag-view.js';
-import { itemIcon } from '../inventory/item-icons.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
 
 // Exploring a grey village tile (#306 2a), in words and numbers (copy
@@ -59,7 +62,6 @@ export const HOLLOWED_TEXT = {
     empty: 'An empty slot',
   },
   lorePage: (title: string) => `📜 A lore page! “${title}”`,
-  recipe: (title: string) => `📖 A new recipe! “${title}”`,
   thanks: 'The Hollow says thank you!',
   addedToLorebook: 'Added to your Lorebook 📖',
 } as const;
@@ -104,9 +106,19 @@ export function puzzleLines(fixed: SolvePuzzleResponse): { text: string; note?: 
       note: HOLLOWED_TEXT.addedToLorebook,
     });
   }
-  if (fixed.recipe) lines.push({ text: HOLLOWED_TEXT.recipe(fixed.recipe.title) });
+  // Items and a Rekindled piece as the search card shows them.
   for (const [id, n] of Object.entries(fixed.found)) {
-    if (n > 0) lines.push({ text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}` });
+    if (n <= 0) continue;
+    const set = FOUND_SETS.some((s) => s.finds.includes(id));
+    lines.push({
+      text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}`,
+      ...(set ? { note: EXPLORE_TEXT.setFindNote } : {}),
+    });
+  }
+  if (fixed.clothing) {
+    const piece = CLOTHING_BY_ID.get(fixed.clothing);
+    const icon = piece ? clothingSlotIcon(piece.slot) : '✨';
+    lines.push({ text: `${icon} ${piece?.name ?? EXPLORE_TEXT.clothing}` });
   }
   if (lines.length === 0) lines.push({ text: HOLLOWED_TEXT.thanks });
   return lines;
