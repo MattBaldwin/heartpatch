@@ -6,6 +6,7 @@ import {
   pickTotals,
   SELL_TEXT,
   sellCapped,
+  sellLabel,
   sellRows,
   type SellPick,
   type SellRow,
@@ -113,12 +114,7 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
   return parts;
 
   function rowCard(row: SellRow): HTMLElement {
-    const label =
-      row.block !== 'ok' && row.block !== 'cap' && row.kind === 'item'
-        ? SELL_TEXT.need(row.need)
-        : row.block === 'cap' && !capped
-          ? SELL_TEXT.tomorrow
-          : SELL_TEXT.sell;
+    const label = sellLabel(row, capped);
     return el(
       'div',
       {

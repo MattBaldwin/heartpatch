@@ -7,6 +7,7 @@ import {
   pickTotals,
   SELL_TEXT,
   sellCapped,
+  sellLabel,
   sellRequest,
   sellRoom,
   sellRows,
@@ -135,6 +136,27 @@ describe('the Sell tab (#601 PR 4)', () => {
     const resetsAt = '2026-11-05T07:00:00.000Z';
     expect(hoursToReset(view({ resetsAt }), Date.parse('2026-11-05T01:30:00.000Z'))).toBe(6);
     expect(SELL_TEXT.resetsIn(1)).toBe('More selling in less than an hour');
+  });
+
+  it('says "Need N" on every row that can\'t sell yet, never a greyed Sell', () => {
+    const v = view();
+    // Timber 8 with 4 kept: one lot of 5 needs 9 (the owner's success shot).
+    const kept = view({ items: [{ itemId: 'timber', have: 8, keep: 4 }] });
+    expect(sellLabel(row(kept, 'timber'), false)).toBe('Need 9');
+    expect(sellLabel(row(v, 'stone'), false)).toBe('Need 9');
+    expect(sellLabel(row(v, 'greens'), false)).toBe('Need 5');
+    expect(sellLabel(row(v, 'timber'), false)).toBe('Sell');
+  });
+
+  it('says "Tomorrow" when only today\'s 💛 stops a row, and "Sell" once all are capped', () => {
+    // 1 💛 left: a Timber lot (1) fits, Glimmer (2) doesn't.
+    const near = view({ soldToday: 29 });
+    expect(sellLabel(row(near, 'glimmer'), sellCapped(near))).toBe('Tomorrow');
+    expect(sellLabel(row(near, 'timber'), sellCapped(near))).toBe('Sell');
+    const full = view({ soldToday: 30 });
+    expect(sellLabel(row(full, 'timber'), sellCapped(full))).toBe('Sell');
+    // Short beats the cap: the kid still needs more first.
+    expect(sellLabel(row(full, 'greens'), sellCapped(full))).toBe('Need 5');
   });
 
   it("matches the server's cap message", () => {

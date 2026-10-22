@@ -156,6 +156,18 @@ export function sellRows(view: SellView, rules: SellRules = SELL_RULES): SellRow
   return [...items, ...pieces];
 }
 
+/**
+ * A row's button: "Sell", or why it can't yet. Short of a lot (with what a
+ * recipe keeps) always says "Need N", N being what the bag must hold (owner,
+ * #616); a row only today's 💛 stops says "Tomorrow" while cheaper rows still
+ * fit. Once nothing fits, the capped card explains and the buttons say "Sell".
+ */
+export function sellLabel(row: Pick<SellRow, 'block' | 'need'>, capped: boolean): string {
+  if (row.block === 'short' || row.block === 'keep') return SELL_TEXT.need(row.need);
+  if (row.block === 'cap' && !capped) return SELL_TEXT.tomorrow;
+  return SELL_TEXT.sell;
+}
+
 /** A pick's lots kept between 1 and what the row can sell. */
 export const clampLots = (lots: number, row: Pick<SellRow, 'maxLots'>): number =>
   Math.max(1, Math.min(lots, row.maxLots));
