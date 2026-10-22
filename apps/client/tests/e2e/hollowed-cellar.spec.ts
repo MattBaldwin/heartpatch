@@ -157,7 +157,7 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   expect(inside.spots.at(-1)?.kind).toBe('big-chest');
   expect(inside.spots.every((s) => s.tool === null && !s.done)).toBe(true);
   expect(inside.scene?.cellar).toMatchObject({ chests: small.length + 1, open: 0 });
-  await expect(page.locator('#explore-title')).toHaveText(/'s cellar 🕯️$/);
+  await expect(page.locator('#explore-title')).toHaveText(/'s cellar\s🕯️$/);
 
   // A chest opened the easy way finds something (a small chest is never empty).
   const action = page.getByTestId('explore-action');

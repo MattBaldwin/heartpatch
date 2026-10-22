@@ -34,8 +34,8 @@ export const KEY_TEXT = {
   opening: 'Unlocking… 🔑',
   goDown: 'Go down to the cellar 🕯️',
   cellarLine: 'Better finds down here… 🎁',
-  // Inside: the explore header.
-  title: (name: string) => `${name}'s cellar 🕯️`,
+  // Inside: the explore header (a no-break space, so the candle never wraps alone).
+  title: (name: string) => `${name}'s cellar\u00a0🕯️`,
 } as const;
 
 /** What the key hunt shows on one tile's panel, or null for none. */

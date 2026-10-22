@@ -1,4 +1,9 @@
-import { BIG_CHEST_KIND, isBigChest, type ExploreTileResponse } from '@heartpatch/shared';
+import {
+  BIG_CHEST_KIND,
+  COMMUNITY_RULES,
+  isBigChest,
+  type ExploreTileResponse,
+} from '@heartpatch/shared';
 import type { LandOptions } from '../explore/explore-land.js';
 import type { LandLook } from '../explore/land-config.js';
 import type { ExtrasContext, Growth } from '../explore/land-layout.js';
@@ -8,6 +13,7 @@ import {
   buildBigChest,
   buildCandleFlames,
   buildCandles,
+  buildChestArch,
   buildDaylight,
   buildFlagstone,
   buildFlame,
@@ -22,7 +28,7 @@ import {
 // stone vault under a Hollow's square, unmistakably not the hills cave.
 // Warm grey flagstones underfoot, a back wall of big mossy blocks with
 // arched alcoves and pillars whose ribs spring up into the vaulted dark,
-// candles in sconces and on the floor, a stair back up to the daylight, and
+// candles in sconces and on the floor, a low arch over the big chest, a stair back up to the daylight, and
 // a row of chests along the back with the big one in the middle. Built on
 // the explore land kit: every layer is one thin-instanced draw call.
 
@@ -95,6 +101,8 @@ export const CELLAR_ROOM = {
   /** The side walls, and how far forwards they run. */
   side: 1.5, // TUNE
   sideFrom: -1.6, // TUNE
+  /** The low arch over the big chest: this far behind it (world units). */
+  arch: { behind: 0.95 }, // TUNE: clear of its lid swinging back
   /** The stair back up, at the back wall's left end. */
   stairs: { x: -1.0, z: 0.8 }, // TUNE: just past the row's left end
   /** Candle clusters on the floor. */
@@ -137,6 +145,9 @@ const cellarPlace = (ctx: ExtrasContext): Readonly<Record<string, readonly Growt
     ctx.shade(c.x, c.z, 0.5, 0.6);
     ctx.glow(c.x, c.z, R.glow.candle, R.glow.tint, R.glow.strength);
   }
+  // The low arch, just behind the big chest (its spot is the server's).
+  const arch = at(0, COMMUNITY_RULES.cellarChests.big * S + R.arch.behind);
+  ctx.shade(arch.x, arch.z, 2.2, 3);
   const stair = at(R.stairs.x * S, R.stairs.z * S);
   const stairs = [stair];
   ctx.shade(stair.x, stair.z, 2.2, 2);
@@ -157,6 +168,7 @@ const cellarPlace = (ctx: ExtrasContext): Readonly<Record<string, readonly Growt
     flames: sconces,
     candles,
     'candle-flames': candles,
+    arch: [arch],
     stairs,
     daylight: stairs,
     flagstones,
@@ -173,6 +185,7 @@ export const CELLAR_EXTRAS: NonNullable<LandOptions['extras']> = {
     flames: { build: buildFlame, glow: 1.6 }, // TUNE: over 1 blooms
     candles: { build: buildCandles },
     'candle-flames': { build: buildCandleFlames, glow: 1.6 }, // TUNE
+    arch: { build: buildChestArch },
     stairs: { build: buildStairs },
     daylight: { build: buildDaylight, glow: 1.2 }, // TUNE
     flagstones: { build: buildFlagstone },

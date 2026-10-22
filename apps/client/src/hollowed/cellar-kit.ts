@@ -250,6 +250,79 @@ export function buildStairs(scene: Scene): Mesh {
   });
 }
 
+/**
+ * The low arch over the big chest, about 4 across and 2.9 tall: two stout
+ * pillars on plinths and a squat ring of pale blocks with a gold keystone
+ * round a dark recess, standing just behind the chest. The explore camera
+ * looks down and leaves the wall's own vault above the frame, so this is
+ * what makes the room read as a vault. Paler than the wall so it stands out.
+ */
+export function buildChestArch(scene: Scene): Mesh {
+  return kitMesh(scene, 'cellar-chest-arch', () => {
+    const pale = { foot: '#857a70', top: '#cdbfb0' } as const;
+    const stone = (w: number, h: number, d: number, at: [number, number, number]) =>
+      shaded(softBox(w, h, d, at, 0.6), pale.foot, pale.top, at[1] - h / 2, at[1] + h / 2);
+    const span = 1.6; // the pillars' middles, either side
+    const spring = 1.3; // where the ring starts
+    const rise = 1.05; // the ring's height over its spring (squat, under the camera)
+    // The recess: a dark arched niche behind the opening (a disc on its
+    // side, squat like the ring: its local z is world up once it's turned).
+    const recess = flat(
+      cylinder(0.12, span * 2, span * 2, 20, [0, spring, 0.32], [Math.PI / 2, 0, 0]),
+      '#2a2320',
+    );
+    recess.scaling.set(1, 1, rise / span);
+    const parts: Part[] = [
+      placed(flat(box({ width: span * 2, height: spring, depth: 0.12 }), '#2a2320'), [
+        0,
+        spring / 2,
+        0.32,
+      ]),
+      recess,
+    ];
+    for (const side of [-1, 1]) {
+      const x = side * span;
+      parts.push(stone(0.82, 0.34, 0.82, [x, 0.17, 0]));
+      parts.push(
+        shaded(
+          cylinder(spring - 0.4, 0.58, 0.64, 10, [x, 0.3 + (spring - 0.4) / 2, 0]),
+          pale.foot,
+          pale.top,
+          0,
+          spring,
+        ),
+      );
+      parts.push(stone(0.84, 0.3, 0.84, [x, spring - 0.1, 0]));
+    }
+    // The ring: blocks on a squat half-ellipse, the top one a gold keystone.
+    const steps = 8;
+    for (let k = 0; k <= steps; k++) {
+      const a = Math.PI * (k / steps);
+      const at: [number, number, number] = [
+        Math.cos(a) * span,
+        spring + 0.1 + Math.sin(a) * rise,
+        0,
+      ];
+      if (k === steps / 2) {
+        parts.push(
+          shaded(
+            softBox(0.46, 0.56, 0.66, at, 0.6),
+            GOLD.deep,
+            GOLD.light,
+            at[1] - 0.28,
+            at[1] + 0.28,
+          ),
+        );
+      } else {
+        parts.push(stone(0.58, 0.46, 0.6, at));
+      }
+    }
+    // Moss curling round one pillar's foot.
+    parts.push(flat(sphere(0.42, 4, [-span - 0.2, 0.08, -0.25], [1.3, 0.45, 0.8]), MOSS[1]));
+    return merged(parts);
+  });
+}
+
 /** The doorway at the top of the stair: a soft arch of warm daylight, lit from inside. */
 export function buildDaylight(scene: Scene): Mesh {
   return kitMesh(scene, 'cellar-daylight', () => {
