@@ -57,9 +57,15 @@ describe('heartCoinsPage', () => {
     const page = heartCoinsPage(coins(), clockAt(NOW), null);
     expect(page.balance).toBe(42);
     expect(page.rows.map((r) => r.source)).toEqual([...HEART_COIN_ROWS]);
-    // Selling joins with the post's Sell tab (#601 PR 4).
-    expect(page.rows.map((r) => r.source)).not.toContain('sell');
-    expect(page.rows.map((r) => r.value)).toEqual(['4 / 20', '5 / 15', '2 / 10']);
+    // Selling is the post's Sell tab (#601 PR 4): its bar is last.
+    expect(page.rows.map((r) => r.source)).toEqual(['battle', 'capture', 'care', 'sell']);
+    expect(page.rows.map((r) => r.value)).toEqual([
+      '4 / 20',
+      '5 / 15',
+      '2 / 10',
+      `0 / ${String(HEART_COIN_RULES.dailyCaps.sell)}`,
+    ]);
+    expect(page.rows.at(-1)?.label).toBe('Selling extras');
     expect(page.allFull).toBe(false);
   });
 
@@ -78,9 +84,9 @@ describe('heartCoinsPage', () => {
   });
 
   it('is all full when every bar is', () => {
-    const { battle, capture, care } = HEART_COIN_RULES.dailyCaps;
+    const { battle, capture, care, sell } = HEART_COIN_RULES.dailyCaps;
     const page = heartCoinsPage(
-      coins({ today: { battle, capture, care, sell: 0 } }),
+      coins({ today: { battle, capture, care, sell } }),
       clockAt(NOW),
       null,
     );
