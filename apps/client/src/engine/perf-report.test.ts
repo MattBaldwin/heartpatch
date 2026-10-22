@@ -187,12 +187,29 @@ describe('PerfProbe', () => {
     let now = 1000;
     probe.frame(now, null, 2);
     for (let i = 0; i < 100; i++) {
-      now += 250; // 4 fps: a report would fire
+      now += 250; // 4 fps: a slow-run report would fire
       probe.frame(now, 250, 1.5);
     }
-    probe.frame(now + 1000, 1000, 900); // a hitch would too
     expect(fetch).not.toHaveBeenCalled();
     expect(lastReport()).toBeNull();
+  });
+
+  it('posts no hitch row either on such a page', async () => {
+    const { PerfProbe, setPerfReports } = await import('./perf-report.js');
+    setPerfReports(false);
+    vi.spyOn(performance, 'now').mockReturnValueOnce(0);
+    const probe = new PerfProbe({}, 'webgl2', quality, () => null);
+    let now = 0;
+    probe.frame(now, null, 2);
+    const step = (ms: number, render = 2) => {
+      now += ms;
+      probe.frame(now, ms, render);
+    };
+    // The hitch test's shape: quick frames, one long one, then the follow-up a row waits for.
+    for (let i = 0; i < 30; i++) step(33);
+    step(220, 180);
+    for (let i = 0; i < 60; i++) step(33);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('carries the governor decisions it saw', async () => {

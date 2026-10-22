@@ -21,7 +21,7 @@ export const PuzzleSkinSchema = z.strictObject({
 });
 export type PuzzleSkin = z.infer<typeof PuzzleSkinSchema>;
 
-/** How deep in its Hollow a tile is: the square (heart), a ring tile with Hollow on both sides (inner), or any other (rim). */
+/** How deep in its Hollow a tile is: the square (heart), a ring tile with Hollow on both sides (inner), or another ring tile (rim); see `relightDepth`. */
 export const RelightDepthSchema = z.enum(['rim', 'inner', 'heart']);
 export type RelightDepth = z.infer<typeof RelightDepthSchema>;
 
