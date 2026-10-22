@@ -161,6 +161,7 @@ function toPublicTile(
     homeSlot: tile.homeSlot,
     gathering: tile.gathering,
     clearing: tile.clearing,
+    clearedFrom: tile.clearedFrom ?? null,
     cooldownUntil: tile.cooldownUntil,
     defenders: tile.defenders,
     defenderFeelings: tile.defenderFeelings ?? [],

@@ -1,4 +1,5 @@
 import {
+  CLEARED_TERRAIN,
   TRADING_POST_TERRAIN,
   type DefenseStance,
   type FeelingId,
@@ -698,6 +699,15 @@ function queries(db: Executor): MapsRepo {
             where ${tileClears.tileId} = ${tiles.id}
               and ${tileClears.endedAt} is null
               and ${tileClears.userId} = ${tiles.ownerUserId}
+          )`,
+          // Cleared land remembers its terrain (#601 Q2): its latest finished clear's.
+          clearedFrom: sql<string | null>`(
+            select ${tileClears.fromTerrain} from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id}
+              and ${tileClears.endReason} = 'cleared'
+              and ${tiles.terrain} = ${CLEARED_TERRAIN}
+            order by ${tileClears.endedAt} desc
+            limit 1
           )`,
           // The raid cooldown (#15): the latest tile battle's, past or not.
           cooldownUntil: sql<string | null>`(

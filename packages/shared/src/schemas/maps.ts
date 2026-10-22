@@ -300,6 +300,13 @@ export const PublicTileSchema = z.object({
    */
   clearing: z.object({ readyAt: z.iso.datetime() }).nullable().optional(),
   /**
+   * Cleared land (#242) remembers what it was (#601, owner decision Q2):
+   * the terrain its finished clear started from, so the Build sheet offers
+   * the resource building that matches. Null on land that isn't cleared.
+   * Optional so older fixtures and servers parse; the server always sends it.
+   */
+  clearedFrom: z.string().nullable().optional(),
+  /**
    * When the latest battle for this tile stops blocking another (#15, the
    * raid cooldown); null if there's never been one. May be in the past.
    */

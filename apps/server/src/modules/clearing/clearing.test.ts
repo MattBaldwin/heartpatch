@@ -283,6 +283,26 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     });
   });
 
+  it('a lake clears with a Spade, takes its well, and remembers it was a lake (#601 Q1, Q2)', async () => {
+    const { server, kid, mapId, plot } = await forestHomestead();
+    await setLand(plot, 'lake', 'water');
+    await give(mapId, kid, { spade: 3 });
+    expect((await tileOf(server, kid, mapId, plot)).clearedFrom).toBeNull();
+    const res = await clear(server, kid, mapId, plot);
+    expect(res.statusCode).toBe(201);
+    expect(ClearResponseSchema.parse(res.json()).clearing.tool).toBe('spade');
+    clock.setTime(Date.parse(START) + CLEAR_MS);
+    await settle(server, kid, mapId);
+    expect(await tileOf(server, kid, mapId, plot)).toMatchObject({
+      terrain: 'clearing',
+      nodeResource: null,
+      clearedFrom: 'lake',
+    });
+    // The extra-node pass puts a well on every lake, never on cleared land.
+    await seedExtraNodes(db, mapId);
+    expect((await tileOf(server, kid, mapId, plot)).nodeResource).toBeNull();
+  });
+
   /** A rival on the patch. */
   async function rivalOn(mapId: string): Promise<Player> {
     const rival = await player();
@@ -534,10 +554,8 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
       expect(errorOf(res).message).toMatch(message);
     };
 
-    // A lake can't be cleared (owner Q5), nor Old Forest.
-    await setLand(plot, 'lake', 'water');
-    await refused(plot, 409, /can't be cleared/);
-    await setLand(plot, 'old-forest', 'emberwood');
+    // Juniper's Gap can't be cleared (owner Q5).
+    await setLand(plot, 'junipers-gap', null);
     await refused(plot, 409, /can't be cleared/);
     // A mountain needs a Pickaxe.
     await setLand(plot, 'mountains', 'stone');

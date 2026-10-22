@@ -32,6 +32,9 @@ import { createCoinsRepo } from '../modules/coins/repo.js';
 import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js';
 import { createGatheringService } from '../modules/gathering/service.js';
 import { createHeartCoinsRepo } from '../modules/heart-coins/repo.js';
+import { creditHeartCoins } from '../modules/heart-coins/service.js';
+import { createSettleService } from '../modules/settle/service.js';
+import { makeHomestead } from '../../tests/homestead.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHouseRepo } from '../modules/house/repo.js';
@@ -1113,6 +1116,78 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect(await heartRows(mapId, kid.id)).toEqual([
       { source: 'care', amount: HEART_COIN_RULES.care.perFullAction },
     ]);
+  });
+
+  /**
+   * A patch with a Woodcutter's Hut on a forest homestead (#601), placed two
+   * days ago with an hour's Timber waiting and two mornings owed, and Heart
+   * Coins for both, for the settle.
+   */
+  async function hutSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const now = new Date();
+    const plot = await makeHomestead(db, map.id, kid.id, now);
+    await db.execute(
+      sql`update tiles set terrain = 'forest', node_resource = null where id = ${plot.id}`,
+    );
+    await db.insert(buildings).values({
+      mapId: map.id,
+      ownerUserId: kid.id,
+      tileId: plot.id,
+      buildingId: 'woodcutters-hut',
+      kind: 'resource',
+      spot: 1,
+      placedAt: new Date(now.getTime() - 2 * 24 * 3600_000),
+      producedSince: new Date(now.getTime() - 3600_000),
+    });
+    await withTransaction(db, async (tx) => {
+      await grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 1 }, 'dev-grant');
+      await creditHeartCoins(tx, {
+        source: 'dev-grant',
+        refId: randomUUID(),
+        mapId: map.id,
+        userId: kid.id,
+        amount: 500,
+        at: now,
+      });
+    });
+    return { kid, mapId: map.id, settle: createSettleService({ db }) };
+  }
+
+  it("banks a resource building's output before charging its upkeep (settle, #601 step 11 then 12b)", async () => {
+    const { kid, mapId, settle } = await hutSetup('hut-banker');
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ itemId: inventories.itemId })
+          .from(inventories)
+          .where(
+            and(
+              eq(inventories.mapId, mapId),
+              eq(inventories.userId, kid.id),
+              eq(inventories.itemId, 'timber'),
+            ),
+          )
+          .for('update'),
+      () => settle.settle(kid, mapId),
+      (tx) => lockHeart(tx, mapId, kid.id),
+    );
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+  });
+
+  it("charges upkeep before the settle's events (settle, #601 step 12b then 13)", async () => {
+    const { kid, mapId, settle } = await hutSetup('hut-payer');
+    await holdThen(
+      (tx) => lockHeart(tx, mapId, kid.id),
+      () => settle.settle(kid, mapId),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
 
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
