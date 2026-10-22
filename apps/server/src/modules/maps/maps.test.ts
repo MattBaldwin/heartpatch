@@ -487,6 +487,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           'q',
           'r',
           'terrain',
+          'workerLook',
           'workers',
         ].sort(),
       );

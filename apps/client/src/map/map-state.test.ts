@@ -135,21 +135,31 @@ describe('MapState', () => {
   });
 
   it('follows squishy gatherers from tile to tile, and drops them on capture', () => {
-    const state = new MapState(testView(2));
     const a = { q: 1, r: 0 };
     const b = { q: 2, r: 0 };
+    const look = { speciesId: 'puddlepuff' };
+    const view = testView(2);
+    const state = new MapState({
+      ...view,
+      tiles: view.tiles.map((t) => (hexKey(t) === hexKey(a) ? { ...t, workerLook: look } : t)),
+    });
     const assigned = (from: object | null, to: object | null, seq: number) =>
       event('squishy.assigned', { userId: userId(1), from, to }, seq);
-    expect(state.apply(assigned(null, a, 2))).toBe('redraw');
-    expect(state.tileAt(hexKey(a))?.workers).toBe(1);
-    expect(state.apply(assigned(a, b, 3))).toBe('redraw');
+    // Who came isn't in the event (#602): draw a stand-in now, then read
+    // the view again for its look, masked for me.
+    expect(state.apply(assigned(null, a, 2))).toBe('refresh');
+    expect(state.tileAt(hexKey(a))).toMatchObject({ workers: 1, workerLook: null });
+    expect(state.apply(assigned(a, b, 3))).toBe('refresh');
     expect(state.tileAt(hexKey(a))?.workers).toBe(0);
     expect(state.tileAt(hexKey(b))?.workers).toBe(1);
+    // Leaving needs no look: just redraw.
+    expect(state.apply(assigned(b, null, 4))).toBe('redraw');
+    expect(state.apply(assigned(null, b, 5))).toBe('refresh');
     // A team pick moves nobody on the map.
-    expect(state.apply(assigned(null, null, 4))).toBe('none');
-    expect(state.apply(event('squishy.assigned', { userId: userId(1) }, 5))).toBe('resync');
-    state.apply(event('tile.captured', { userId: userId(2), fromUserId: userId(1), ...b }, 6));
-    expect(state.tileAt(hexKey(b))?.workers).toBe(0);
+    expect(state.apply(assigned(null, null, 6))).toBe('none');
+    expect(state.apply(event('squishy.assigned', { userId: userId(1) }, 7))).toBe('resync');
+    state.apply(event('tile.captured', { userId: userId(2), fromUserId: userId(1), ...b }, 8));
+    expect(state.tileAt(hexKey(b))).toMatchObject({ workers: 0, workerLook: null });
   });
 
   it('follows battles for land live: cooldown, capture and guards (#15)', () => {
