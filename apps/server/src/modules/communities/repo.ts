@@ -189,6 +189,14 @@ export interface CommunitiesRepo {
   tileById: (tileId: string) => Promise<(Hex & { id: string }) | null>;
   /** The key is dug up: when (the community row is locked). */
   revealKey: (communityId: string, at: Date) => Promise<void>;
+  /** Every village's key tile on the map (owner decision 2026-10-22: keys never share a tile). */
+  keyTiles: (
+    mapId: string,
+  ) => Promise<
+    { communityId: string; ownerUserId: string | null; keyTileId: string; found: boolean }[]
+  >;
+  /** The key hides somewhere else now (the community row is locked). */
+  moveKey: (communityId: string, tileId: string) => Promise<void>;
   /** The village's cellar (the square's row); `lock` takes it `FOR UPDATE` (after the community row). */
   cellarOf: (communityId: string, lock?: boolean) => Promise<CellarRow | null>;
   /** The cellar opens. */
@@ -629,6 +637,27 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .from(tiles)
         .where(eq(tiles.id, tileId));
       return row ?? null;
+    },
+
+    keyTiles: async (mapId) => {
+      const rows = await db
+        .select({
+          communityId: communities.id,
+          ownerUserId: communities.ownerUserId,
+          keyTileId: communities.keyTileId,
+          revealedAt: communities.keyRevealedAt,
+        })
+        .from(communities)
+        .where(eq(communities.mapId, mapId))
+        .orderBy(asc(communities.id));
+      return rows.map(({ revealedAt, ...r }) => ({ ...r, found: revealedAt !== null }));
+    },
+
+    moveKey: async (communityId, tileId) => {
+      await db
+        .update(communities)
+        .set({ keyTileId: tileId })
+        .where(eq(communities.id, communityId));
     },
 
     revealKey: async (communityId, at) => {

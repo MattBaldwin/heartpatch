@@ -83,6 +83,8 @@ export interface InventoryScreenOptions {
   onSeeFactory?: () => void;
   /** The Lorebook's way in (#307): a tile at the top of the sheet and a sparkle on the Bag button. */
   lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };
+  /** The cellar key's treasure maps while a hunt is on (#306): under the Lorebook's tile. */
+  keyMaps?: HTMLElement;
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
   /**
@@ -151,6 +153,8 @@ export interface InventoryScreen {
   /** The map on screen (null: none): shows the Bag button and loads the bag. */
   setMap: (mapId: string | null) => Promise<void>;
   setUser: (user: PublicUser | null) => void;
+  /** Shuts the bag, if it's open (the treasure map's "Show me on the map", #306). */
+  closeBag: () => void;
   readonly tileActions: TileActions;
   /** The Build sheet's Clear land card on my homesteads (#242). */
   readonly clearSource: BuildSource;
@@ -349,6 +353,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     { class: 'bag', 'data-testid': 'bag', role: 'dialog', 'aria-labelledby': 'bag-title' },
     el('div', { class: 'tile-panel-head' }, el('h2', { id: 'bag-title' }, TEXT.title), close),
     ...(options.lore ? [options.lore.tile] : []),
+    ...(options.keyMaps ? [options.keyMaps] : []),
     note,
     itemsBox,
     detailBox,
@@ -496,12 +501,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   };
   open.addEventListener('click', openBag);
   chip.addEventListener('click', openBag);
-  close.addEventListener('click', () => {
+  const closeBag = (): void => {
     sheet.hidden = true;
     picked = null;
     say('');
     render();
-  });
+  };
+  close.addEventListener('click', closeBag);
 
   const say = (text: string) => {
     note.textContent = text;
@@ -1285,6 +1291,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   return {
     clearSource,
+    closeBag,
     setMap: async (next) => {
       if (next === mapId) return;
       if (mapId) presence.left(mapId);
