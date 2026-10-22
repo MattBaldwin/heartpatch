@@ -176,6 +176,26 @@ export function createTileMarks(root: HTMLElement): TileMarks {
     for (const mark of shown.values()) place(mark, box, covers);
   };
 
+  // A sheet opening or shutting over an idle map draws no frame, so watch for
+  // it and place the marks again on the next frame, as the flags do
+  // (post-flags.ts): a mark hidden under the job board shows once it shuts.
+  // A mark's own changes are skipped.
+  let recheck = 0;
+  const watch = new MutationObserver((changes) => {
+    if (recheck || !scene || shown.size === 0) return;
+    if (
+      changes.every(
+        (c) => c.target instanceof HTMLElement && c.target.classList.contains('tile-mark'),
+      )
+    ) {
+      return;
+    }
+    recheck = requestAnimationFrame(() => {
+      recheck = 0;
+      if (scene) placeAll();
+    });
+  });
+
   /** Matches the marks on screen to what the sources say now. */
   const draw = () => {
     const wanted = pickMarks(sources);
@@ -216,9 +236,17 @@ export function createTileMarks(root: HTMLElement): TileMarks {
       scene = next;
       placeAll();
       next.onAfterRenderObservable.add(placeAll);
+      watch.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['hidden', 'inert', 'class'],
+      });
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
         scene = null;
+        watch.disconnect();
+        cancelAnimationFrame(recheck);
+        recheck = 0;
         placeAll();
       });
     },
