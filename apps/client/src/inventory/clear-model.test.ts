@@ -97,10 +97,9 @@ describe('clearOffer (#242)', () => {
     expect(clearOffer(tile(), null, bag(), NOW)).toBeNull();
     expect(off({ ownerUserId: userId(2) })).toBeNull();
     expect(off({ homeSlot: 3 })).toBeNull();
-    expect(off({ homestead: null, terrain: 'old-forest' })).toBeNull();
+    expect(off({ homestead: null, terrain: 'junipers-gap' })).toBeNull();
     expect(off({ terrain: 'clearing' })).toBeNull();
-    expect(off({ terrain: 'old-forest' })).toBeNull();
-    expect(off({ terrain: 'lake' })).toBeNull();
+    expect(off({ terrain: 'junipers-gap' })).toBeNull();
     expect(
       off({
         buildings: [
@@ -151,7 +150,7 @@ describe('clearCards (#242)', () => {
       craft: null,
     });
     expect(clearCards(tile({ terrain: 'meadow' }), me, bag(), NOW)[0]?.icon).toBe('spade');
-    expect(clearCards(tile({ terrain: 'lake' }), me, bag(), NOW)).toEqual([]);
+    expect(clearCards(tile({ terrain: 'junipers-gap' }), me, bag(), NOW)).toEqual([]);
     expect(clearCards(tile(), me, bag({}), NOW)[0]?.craft).toBe(
       'Make an Axe in your recipe book first!',
     );
@@ -195,7 +194,7 @@ describe('clearsFirst (#242)', () => {
     expect(clearsFirst(tile())).toBe(false);
     expect(clearsFirst(tile({ nodeResource: 'timber', homestead: null }))).toBe(false);
     expect(clearsFirst(tile({ nodeResource: 'timber', homeSlot: 1 }))).toBe(false);
-    expect(clearsFirst(tile({ nodeResource: 'stone', terrain: 'old-forest' }))).toBe(false);
+    expect(clearsFirst(tile({ nodeResource: 'stone', terrain: 'junipers-gap' }))).toBe(false);
   });
 });
 
