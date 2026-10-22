@@ -31,10 +31,10 @@ import { gathererMark, nameOf, type GathererMark } from './jobs-view.js';
 // stands there as its species, or, for a secret one I haven't met, as a
 // plain squishy in its family's colour. Its look is seeded by the tile,
 // never by a squishy. Mine come from my own jobs view (`setMine`) and stand
-// there as themselves. Tapping the tile says who and how they feel (the tile panel's
-// worker line, `index.ts`); the only thing drawn over the map is one small
-// mark on a tile of mine that needs me: a gatherer not keen, or napping
-// (`tile-marks.ts`). Nothing over a patch-mate's.
+// there as themselves. Tapping the tile says who and how they feel (the tile
+// panel's worker line, `index.ts`); the only thing drawn over the map is one
+// small mark on a tile of mine that needs me: a gatherer not keen, or
+// napping (`tile-marks.ts`). Nothing over a patch-mate's.
 
 export interface GathererSquishiesOptions {
   /** The map's one mark layer (main.ts makes it): my gatherers' marks go in as `gatherers`. */

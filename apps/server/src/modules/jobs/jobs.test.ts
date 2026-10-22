@@ -623,8 +623,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const theirs = MapViewSchema.parse(unmet.json()).tiles;
       expect(lookOn(theirs, timber)).toEqual({ speciesId: 'puddlepuff' });
       expect(lookOn(theirs, stone)).toBeNull();
-      // Never which squishy, and the secret's name nowhere.
-      for (const text of [plain, hidden, secret.name]) expect(unmet.body).not.toContain(text);
+      // Never which squishy, and nothing of the secret species.
+      for (const text of [plain, hidden, secret.id, secret.name]) {
+        expect(unmet.body).not.toContain(text);
+      }
 
       // Once they've met it, it shows as itself.
       await db

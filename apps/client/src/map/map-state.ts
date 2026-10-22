@@ -25,7 +25,8 @@ import {
  *   refetch the map view rather than guess.
  * - `refresh`: both. What the event says is patched in, so redraw at once,
  *   and the rest only the server knows, so refetch too (a capture: the new
- *   owner's homestead and exploring, #242).
+ *   owner's homestead and exploring, #242; a gatherer arriving: its look,
+ *   masked for me, #602).
  */
 export type LiveEventEffect = 'none' | 'redraw' | 'resync' | 'refresh';
 
