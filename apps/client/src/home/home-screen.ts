@@ -717,8 +717,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (m.kind === 'moving') {
       const moving = home.buildings.find((b) => b.id === m.id);
       const slot = BUILDING_DATA.get(moving?.buildingId ?? '')?.slot;
+      // One entry a tile, so its own tile is out whatever spot it stands on.
       return freeHomeTiles(home, m.id, slot).filter(
-        (s) => !(moving && s.q === moving.q && s.r === moving.r && s.spot === moving.spot),
+        (s) => !(moving && s.q === moving.q && s.r === moving.r),
       );
     }
     return [];
