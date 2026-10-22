@@ -125,8 +125,8 @@ export function planTreasureMap(
   box: { readonly maxWidth: number; readonly maxHeight: number },
 ): TreasureMapPlan {
   const pad = TREASURE_MAP.margin;
-  const window = mapWindow(tiles, marks);
-  const shown = window?.tiles ?? tiles;
+  const area = mapWindow(tiles, marks);
+  const shown = area?.tiles ?? tiles;
   const placed = shown.map((t) => {
     const w = hexToWorld(t, 1);
     return { tile: t, x: w.x, y: -w.z };
@@ -170,7 +170,7 @@ export function planTreasureMap(
       land: oldLand(tile.terrain),
       coast: coast.sort(),
       seed: seedOf(tile),
-      rim: window !== null && hexDistance(tile, window.centre) === window.reach,
+      rim: area !== null && hexDistance(tile, area.centre) === area.reach,
     };
   });
   const inside = new Set(shown.map(hexKey));

@@ -1,7 +1,15 @@
 import { hexKey, hexNeighbors, type CommunityView, type MapView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { glintLine, KEY_TEXT, keyGlows, keyHuntOn, keyMaps, newMaps } from './key-hunt-view.js';
+import {
+  bagMaps,
+  glintLine,
+  KEY_TEXT,
+  keyGlows,
+  keyHuntOn,
+  keyMaps,
+  newMaps,
+} from './key-hunt-view.js';
 
 const ME = userId(1);
 
@@ -92,6 +100,18 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
     }
     expect(keyGlows(hunting, null)).toEqual([]);
     expect(keyGlows(hunting, userId(2))).toEqual([]);
+  });
+
+  it("names the bag's map after the Hollow, and follows its new name", () => {
+    const hunting = wonView(ME, { state: 'hunt', keyTile: { q: 0, r: 0 } });
+    const first = hunting.communities![0]!;
+    expect(bagMaps(hunting, ME)).toEqual([{ id: first.id, line: KEY_TEXT.bagLine(first.name) }]);
+    const named: MapView = {
+      ...hunting,
+      communities: [{ ...first, name: 'Bramble Glen' }, ...hunting.communities!.slice(1)],
+    };
+    expect(bagMaps(named, ME)[0]?.line).toBe("Bramble Glen's cellar key");
+    expect(bagMaps(wonView(ME, { state: 'key' }), ME)).toEqual([]);
   });
 
   it('keeps every player line free of "village" and "community" (style guide)', () => {

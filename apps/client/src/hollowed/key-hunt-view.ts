@@ -111,6 +111,17 @@ export function keyMaps(
   );
 }
 
+/**
+ * The bag's treasure maps: one tile per hunt on, each saying whose cellar key
+ * it leads to. A Hollow named after its win changes its line.
+ */
+export function bagMaps(view: MapView, me: string | null): { id: string; line: string }[] {
+  return keyMaps(view, me).map(({ community }) => ({
+    id: community.id,
+    line: KEY_TEXT.bagLine(community.name),
+  }));
+}
+
 /** The tiles that glow on the world map: each key I'm still hunting for. */
 export function keyGlows(view: MapView, me: string | null): Hex[] {
   return keyMaps(view, me).map((m) => m.keyTile);

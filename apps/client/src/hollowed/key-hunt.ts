@@ -7,6 +7,7 @@ import { cellarApi, type CellarApi } from './cellar-api.js';
 import { KEY_HUNT, TREASURE_MAP } from './hollowed-config.js';
 import { createKeyGlow, type KeyGlow } from './key-glow.js';
 import {
+  bagMaps,
   glintLine,
   KEY_TEXT,
   keyHuntOn,
@@ -101,13 +102,16 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
   /** Why the last open failed, on that tile until the panel shows another. */
   let said: { at: string; text: string } | null = null;
   let block: KeyHunt['debug']['block'] = null;
-  let bagMaps: string[] = [];
+  /** The bag's tiles as last drawn (id and line each), and their Hollows (the dev hook). */
+  let inBag = '';
+  let bagIds: string[] = [];
   /** The next look for a turn to show a waiting map, while one is pending. */
   let turn: ReturnType<typeof setTimeout> | null = null;
   /** Arms the map's buttons `KEY_HUNT.tapGuardMs` after it shows. */
   let arming: ReturnType<typeof setTimeout> | null = null;
   /** Draws the open map again at the room it has now; null while it's shut. */
   let redraw: (() => void) | null = null;
+  // One key hunt lives as long as the app (main.ts), so this listener does too.
   window.addEventListener('resize', () => {
     redraw?.();
   });
@@ -239,13 +243,15 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
 
   /** The bag's treasure maps: one tile for each hunt on. */
   const renderBag = (view: MapView): void => {
-    const maps = keyMaps(view, options.me());
-    const ids = maps.map((m) => m.community.id);
-    if (ids.join() === bagMaps.join()) return;
-    bagMaps = ids;
+    const maps = bagMaps(view, options.me());
+    // By name too: naming the Hollow after its win changes the line.
+    const drawn = maps.map((m) => `${m.id}:${m.line}`).join('\n');
+    if (drawn === inBag) return;
+    inBag = drawn;
+    bagIds = maps.map((m) => m.id);
     bagEntry.hidden = maps.length === 0;
     bagEntry.replaceChildren(
-      ...maps.map(({ community }) => {
+      ...maps.map(({ id, line }) => {
         const tile = el(
           'button',
           { type: 'button', class: 'key-map-bag-tile', 'data-testid': 'bag-key-map' },
@@ -254,12 +260,12 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
             'span',
             { class: 'key-map-bag-words' },
             el('span', { class: 'key-map-bag-title' }, KEY_TEXT.bagTile),
-            el('span', { class: 'key-map-bag-line' }, KEY_TEXT.bagLine(community.name)),
+            el('span', { class: 'key-map-bag-line' }, line),
           ),
           el('span', { class: 'key-map-bag-chevron', 'aria-hidden': 'true' }, '›'),
         );
         tile.addEventListener('click', () => {
-          openMap(community.id);
+          openMap(id);
         });
         return tile;
       }),
@@ -426,7 +432,7 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
         block,
         said: said?.text ?? null,
         glowing: glow.glowing,
-        bag: bagMaps,
+        bag: bagIds,
       };
     },
   };
