@@ -734,9 +734,10 @@ export const GAME_EVENTS = {
    * A player relit a grey village tile's path (#306 PR 2b, Relight): once a
    * tile each. `depth`, `attempt` and `moves` (how many) say which try and
    * how long it took; the moves themselves were checked by replaying them
-   * on the try's board, rebuilt from the Hollow's seed, and aren't kept. `lorePage` and `recipe` are the server-only
-   * pages it gave (the lore consumer grants `lorePage`); members see who
-   * fixed which kind of thing where, and a `notable` find's kind.
+   * on the try's board, rebuilt from the Hollow's seed, and aren't kept.
+   * `lorePage` and `recipe` are the server-only pages it gave (the lore
+   * consumer grants `lorePage`); members see who fixed which kind of thing
+   * where, and a `notable` find's kind.
    */
   'explore.puzzled': {
     internal: z.strictObject({

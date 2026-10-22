@@ -180,6 +180,21 @@ describe('PerfProbe', () => {
     });
   });
 
+  it('posts nothing on a page that turned reports off (the dev galleries)', async () => {
+    const { PerfProbe, lastReport, setPerfReports } = await import('./perf-report.js');
+    setPerfReports(false);
+    const probe = new PerfProbe({}, 'webgl2', quality, () => null);
+    let now = 1000;
+    probe.frame(now, null, 2);
+    for (let i = 0; i < 100; i++) {
+      now += 250; // 4 fps: a report would fire
+      probe.frame(now, 250, 1.5);
+    }
+    probe.frame(now + 1000, 1000, 900); // a hitch would too
+    expect(fetch).not.toHaveBeenCalled();
+    expect(lastReport()).toBeNull();
+  });
+
   it('carries the governor decisions it saw', async () => {
     const { PerfProbe } = await import('./perf-report.js');
     const live = { snapshot: { ...quality.snapshot } };

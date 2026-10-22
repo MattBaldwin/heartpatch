@@ -1,5 +1,6 @@
 import { GAME_DATA, visualRegistry, type HouseView } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
+import { setPerfReports } from '../../engine/perf-report.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from '../../engine/stage.js';
@@ -15,6 +16,9 @@ import {
 } from '../house-fixtures.js';
 import { createHouseScreen } from '../house-screen.js';
 import '../../styles.css';
+
+// A dev gallery never signs in: its perf reports would only be refused (401).
+setPerfReports(false);
 
 /**
  * Dev-only house gallery at `/house.html` (a separate Vite page, never part
