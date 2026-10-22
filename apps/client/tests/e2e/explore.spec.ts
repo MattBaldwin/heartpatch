@@ -1,8 +1,8 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { tapCanvas } from './claim-land.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
 

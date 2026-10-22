@@ -793,9 +793,11 @@ export class ExploreScene implements AmbientTarget {
       }
       this.#warm = true;
     })();
-    // The meshes on show compile on the stage's loading frames, not here.
-    // When every mesh above was compiled on an earlier visit, this finishes
-    // before those frames draw, so `stats.warm` also waits for the scene.
+    // The meshes on show compile as the scene checks it's ready (the stage's
+    // loading frames, or the wait below), not above. When every mesh above
+    // was compiled on an earlier visit, `compiled` finishes before those
+    // frames draw, so `stats.warm` also waits for the scene. Outside
+    // `compiled`: inside, it would wait on its own pending data.
     void compiled
       .then(() => scene.whenReadyAsync(true))
       .then(() => {
