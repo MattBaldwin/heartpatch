@@ -30,7 +30,7 @@ describe('turnOpenings (#306 PR 2b)', () => {
 });
 
 describe('relightDepth (#306 PR 2b)', () => {
-  // A square with its six neighbours: the ring is all rim, the square the heart.
+  // The square and its six neighbours, in ring order.
   const square = { q: 0, r: 0 };
   const ring = [
     { q: 1, r: 0 },
@@ -40,16 +40,28 @@ describe('relightDepth (#306 PR 2b)', () => {
     { q: -1, r: 1 },
     { q: 0, r: 1 },
   ];
-  it('makes the square the heart and a tile touching outside the rim', () => {
+  const at = (i: number) => ring[((i % 6) + 6) % 6]!;
+
+  it('makes the square the heart, and a full ring all inner', () => {
     const village = [square, ...ring];
     expect(relightDepth(square, square, village)).toBe('heart');
-    for (const t of ring) expect(relightDepth(t, square, village)).toBe('rim');
+    for (const t of ring) expect(relightDepth(t, square, village)).toBe('inner');
   });
 
-  it('makes a tile with only Hollow round it inner', () => {
-    // The square sits at the edge; (0,0) is wholly surrounded.
-    const edge = { q: 2, r: 0 };
-    expect(relightDepth({ q: 0, r: 0 }, edge, [square, ...ring, edge])).toBe('inner');
+  it('makes a ring tile inner only with Hollow tiles on both sides along the ring', () => {
+    // Three in a row round the square: the middle one is flanked, the ends are not.
+    const village = [square, at(0), at(1), at(2)];
+    expect(relightDepth(at(1), square, village)).toBe('inner');
+    expect(relightDepth(at(0), square, village)).toBe('rim');
+    expect(relightDepth(at(2), square, village)).toBe('rim');
+    // Spread apart, none is.
+    const apart = [square, at(0), at(2), at(4)];
+    for (const t of apart.slice(1)) expect(relightDepth(t, square, apart)).toBe('rim');
+  });
+
+  it('falls back to touching outside for a tile off the ring', () => {
+    const far = { q: 2, r: 0 };
+    expect(relightDepth(far, square, [square, ...ring, far])).toBe('rim');
   });
 });
 

@@ -1285,18 +1285,18 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(1);
       });
 
-      it('sizes the board by depth: the rim is the smallest', async () => {
+      it('sizes the board by how deep the tile is', async () => {
         const server = await start();
         const me = await player();
         const mapId = await patch(server, me);
         const square = await reachVillage(server, me, mapId);
         const tiles = await tilesOf(mapId);
         const village = tiles.filter((t) => t.communityId === square.communityId);
-        const rim = village.find((t) => relightDepth(t, square, village) === 'rim')!;
-        const { depth, board } = await attemptOf(server, me, mapId, rim);
-        expect(depth).toBe('rim');
-        expect(board.size).toBe(MEMORY_PUZZLES.relight.rim.size);
-        expect(board.limit).toBeLessThanOrEqual(board.size * board.size * 3);
+        for (const t of village.filter((v) => v.id !== square.id).slice(0, 3)) {
+          const { depth, board } = await attemptOf(server, me, mapId, t);
+          expect(depth).toBe(relightDepth(t, square, village));
+          expect(board.size).toBe(MEMORY_PUZZLES.relight[depth].size);
+        }
       });
 
       it('reshuffles every try, and takes only the latest try’s lit path', async () => {

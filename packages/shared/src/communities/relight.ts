@@ -51,11 +51,25 @@ export interface RelightPuzzle extends RelightBoard {
   readonly work: number;
 }
 
-/** How deep a village tile is in its Hollow: the square is the heart, a tile touching land outside is the rim. */
+/**
+ * How deep a village tile is in its Hollow (coordinator decision 2026-10-22):
+ * the square is the heart; a tile round the square with Hollow tiles on both
+ * sides of it along the ring is inner, so a fuller Hollow is a harder one;
+ * any other is the rim. (Every ring tile touches land outside, so "touches
+ * outside" alone would make them all rim.) A tile off the ring, which today's
+ * Hollows don't have, is inner unless it touches land outside.
+ */
 export function relightDepth(tile: Hex, square: Hex, village: readonly Hex[]): RelightDepth {
   if (hexEquals(tile, square)) return 'heart';
   const inside = new Set(village.map(hexKey));
-  return hexNeighbors(tile).some((h) => !inside.has(hexKey(h))) ? 'rim' : 'inner';
+  const around = new Set(hexNeighbors(square).map(hexKey));
+  const near = hexNeighbors(tile);
+  if (around.has(hexKey(tile))) {
+    // Its two neighbours along the ring are the ones it shares with the square.
+    const flanks = near.filter((h) => around.has(hexKey(h)));
+    return flanks.every((h) => inside.has(hexKey(h))) ? 'inner' : 'rim';
+  }
+  return near.some((h) => !inside.has(hexKey(h))) ? 'rim' : 'inner';
 }
 
 /** A try's seed: every try (and so every reshuffle) is its own puzzle, the same on a rebuild. */
