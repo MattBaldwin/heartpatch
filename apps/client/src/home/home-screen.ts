@@ -130,8 +130,9 @@ export interface HomeScreenOptions {
   /** The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375). No button without it. */
   onSquishies?: (mapId: string) => void;
   /**
-   * In the peek bar's corner beside the handle (the 💛 Heart Coin pill,
-   * #601). It shows only on the peek bar: the sheet carries `home-sheet-peek`.
+   * Beside the handle, in its row (the 💛 Heart Coin pill, #601), so the
+   * peek bar never grows a row (#381). It shows only on the peek bar: the
+   * sheet carries `home-sheet-peek`.
    */
   peekCorner?: HTMLElement;
   /**
@@ -412,8 +413,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const sheet = el(
     'section',
     { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
-    handle,
-    ...(options.peekCorner ? [options.peekCorner] : []),
+    options.peekCorner
+      ? el('div', { class: 'home-handle-row' }, options.peekCorner, handle)
+      : handle,
     note,
     body,
   );

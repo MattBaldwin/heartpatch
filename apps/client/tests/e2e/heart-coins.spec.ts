@@ -76,6 +76,21 @@ test('shows Heart Coins on the map, at home and on the patch list, and care pays
   const homePill = page.locator('[data-testid="heart-coins"][data-where="home"]');
   await slowExpect(homePill).toBeVisible();
   await expect(homePill).toHaveText('💛12');
+  // It shares the handle's row (#381), beside the handle, never over its grip,
+  // down to a 320pt phone.
+  const handle = page.getByTestId('home-handle');
+  const besideHandle = async () => {
+    const pill = (await homePill.boundingBox())!;
+    const grip = (await handle.boundingBox())!;
+    expect(pill.x + pill.width).toBeLessThanOrEqual(grip.x + 0.5);
+    expect(pill.x).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(pill.y + pill.height / 2 - (grip.y + grip.height / 2))).toBeLessThan(4);
+  };
+  await besideHandle();
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: 320, height: 568 });
+  await besideHandle();
+  await page.setViewportSize(size);
 
   // Care pays a Heart Coin here (a full-value pet), and the pill follows.
   const care = await careFromRoster(page);

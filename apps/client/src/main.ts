@@ -1782,6 +1782,7 @@ mountAuth(document.body, {
     chat.setUser(user);
     friendly.setUser(user);
     home.setUser(user);
+    heartCoins.setUser(user);
     explore.setUser(user);
     wardrobe.setUser(user);
     starters.setUser(user);

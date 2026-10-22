@@ -54,16 +54,12 @@
   margin-left: 4px;
 }
 
-/* On Home's peek bar, in the sheet's top-left corner beside the handle. It
-   never grows a row (#381); the opened sheet has room of its own. */
-.heart-pill-home {
-  position: absolute;
-  z-index: 1;
-  top: 8px;
-  left: 14px;
-}
-
-.home-sheet:not(.home-sheet-peek) .heart-pill-home {
+/* On Home's peek bar, first in the handle's row (#381: it never grows a
+   row). Only on the peek bar; the opened sheet has room of its own. While
+   the "Name your home!" nudge shows, the nudge needs the whole row on a
+   320pt phone, so the pill steps aside (it's still on the map). */
+.home-sheet:not(.home-sheet-peek) .heart-pill-home,
+.home-handle-row:has(.home-handle-nudge:not([hidden])) .heart-pill-home {
   display: none;
 }
 

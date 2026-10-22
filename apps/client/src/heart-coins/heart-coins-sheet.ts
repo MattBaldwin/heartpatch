@@ -1,4 +1,5 @@
 import type { HeartCoins } from '@heartpatch/shared';
+import type { GameClock } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   HEART_COINS_TEXT,
@@ -27,16 +28,19 @@ export interface HeartCoinsSheet {
 
 export interface HeartCoinsSheetOptions {
   root: HTMLElement;
-  /** The game clock in ms (the bag's `gameNow`): `resetsAt` is server time. */
-  now: () => number;
+  /** The game clock (the bag's): `resetsAt` is server time. */
+  clock: Pick<GameClock, 'msUntil'>;
+  /** The patch's midnight came while open: read the balance again (once per midnight). */
+  onExpired: () => void;
 }
 
-/** How often the "More to earn in …" line counts down while open. */
-const TICK_MS = 30_000;
+/** How often the "More to earn in …" line counts down while open (territory's pace). */
+const TICK_MS = 1000;
 
 function rowItem(row: HeartCoinRow): HTMLElement {
-  const bar = el('span', { class: 'heart-sheet-bar' }, el('span', { class: 'heart-sheet-fill' }));
-  (bar.firstElementChild as HTMLElement).style.width = `${String(row.percent)}%`;
+  const fill = el('span', { class: 'heart-sheet-fill' });
+  fill.style.width = `${String(row.percent)}%`;
+  const bar = el('span', { class: 'heart-sheet-bar' }, fill);
   return el(
     'li',
     {
@@ -55,6 +59,8 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   let coins: HeartCoins | null = null;
   let page: HeartCoinsPage | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
+  /** The `resetsAt` already asked about, so a stale reply is asked for once. */
+  let asked: string | null = null;
 
   const balance = el('p', { class: 'heart-sheet-balance', 'data-testid': 'heart-coins-balance' });
   const rows = el('ul', { class: 'heart-sheet-rows', 'aria-label': HEART_COINS_TEXT.today });
@@ -132,17 +138,35 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   panel.hidden = true;
   options.root.append(panel);
 
+  /** Works the page out again; at the patch's midnight, asks for a fresh reply once. */
+  function refigure(current: HeartCoins): HeartCoinsPage {
+    const next = heartCoinsPage(current, options.clock, asked);
+    page = next;
+    if (next.ask) {
+      asked = current.resetsAt;
+      options.onExpired();
+    }
+    return next;
+  }
+
+  /** The countdown line only, each second: the rows stay put (VoiceOver keeps its place). */
+  function tick(): void {
+    if (!coins) return;
+    const next = refigure(coins);
+    if (resets.textContent !== next.resets) resets.textContent = next.resets;
+  }
+
   function draw(): void {
     if (!coins) return;
-    page = heartCoinsPage(coins, options.now());
-    status.textContent = page.allFull ? HEART_COINS_TEXT.allDoneDay : '';
+    const view = refigure(coins);
+    status.textContent = view.allFull ? HEART_COINS_TEXT.allDoneDay : '';
     balance.replaceChildren(
       el('span', { class: 'heart-sheet-balance-icon', 'aria-hidden': 'true' }, '💛'),
-      el('span', {}, String(page.balance)),
+      el('span', {}, String(view.balance)),
     );
-    balance.setAttribute('aria-label', HEART_COINS_TEXT.label(page.balance));
-    rows.replaceChildren(...page.rows.map(rowItem));
-    resets.textContent = page.resets;
+    balance.setAttribute('aria-label', HEART_COINS_TEXT.label(view.balance));
+    rows.replaceChildren(...view.rows.map(rowItem));
+    resets.textContent = view.resets;
   }
 
   function stopTicking(): void {
@@ -170,7 +194,7 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
       problem.textContent = '';
       panel.hidden = false;
       stopTicking();
-      timer = setInterval(draw, TICK_MS);
+      timer = setInterval(tick, TICK_MS);
     },
     show: (next) => {
       if (panel.hidden) return;

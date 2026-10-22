@@ -1,8 +1,10 @@
-import type { HeartCoins } from '@heartpatch/shared';
+import type { PublicUser } from '@heartpatch/shared';
+import type { GameClock } from '../inventory/game-clock.js';
 import { el } from '../ui/dom.js';
 import { heartCoinsApi, type HeartCoinsApi } from './heart-coins-api.js';
 import { HEART_COINS_TEXT, type HeartCoinsPage } from './heart-coins-model.js';
 import { createHeartCoinsSheet } from './heart-coins-sheet.js';
+import { createHeartCoinsStore } from './heart-coins-store.js';
 import { createHeartPill } from './heart-pill.js';
 import '../ui/coins/coins.css';
 import './heart-coins.css';
@@ -11,8 +13,9 @@ import './heart-coins.css';
 // one on Home's peek bar, a "💛 42" line on each patch-list card, and the
 // sheet a pill opens. Each patch has its own balance, read fresh from
 // `GET /maps/:mapId/heart-coins` whenever the map or home comes up, a care
-// sheet closes, the app comes back, or the sheet opens. None on the Tutorial
-// Glade (main passes null there): it pays none.
+// sheet closes, the app comes back, the sheet opens, or the patch's
+// midnight passes with the sheet open. None on the Tutorial Glade (main
+// passes null there): it pays none.
 
 export interface HeartCoinsScreenOptions {
   root: HTMLElement;
@@ -34,6 +37,8 @@ export interface HeartCoinsScreen {
   readonly mapPill: HTMLElement;
   /** For Home's peek bar. */
   readonly homePill: HTMLElement;
+  /** Who's logged in: another account (or none) forgets every balance seen. */
+  setUser: (user: PublicUser | null) => void;
   /** The patch on screen (the map or home), or null (none, or the Glade): reads its balance. */
   setMap: (mapId: string | null) => void;
   /** Reads the balance of the patch on screen again (a failed read keeps the last one). */
@@ -46,66 +51,50 @@ export interface HeartCoinsScreen {
 }
 
 export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartCoinsScreen {
-  const api = options.api ?? heartCoinsApi;
-  const sheet = createHeartCoinsSheet({ root: options.root, now: options.now });
-  let mapId: string | null = null;
-  let balance: number | null = null;
-  /** Bumped on every read and map change, so a late reply for an old one is dropped. */
-  let ticket = 0;
-  /** The last balance seen on each patch, so a redrawn patch list doesn't flicker. */
-  const known = new Map<string, number>();
-
+  const clock: Pick<GameClock, 'msUntil'> = {
+    msUntil: (iso) => Math.max(0, Date.parse(iso) - options.now()),
+  };
+  const sheet = createHeartCoinsSheet({
+    root: options.root,
+    clock,
+    onExpired: () => void store.read(),
+  });
   const openSheet = (): void => {
-    if (mapId === null) return;
+    if (store.mapId === null) return;
     sheet.open();
-    void read();
+    void store.read();
   };
   const mapPill = createHeartPill('map', openSheet);
   const homePill = createHeartPill('home', openSheet);
-  const pills = [mapPill, homePill];
-
-  function setBalance(next: number | null): void {
-    balance = next;
-    for (const pill of pills) pill.set(next);
-  }
-
-  async function read(): Promise<void> {
-    const id = mapId;
-    if (id === null) return;
-    const mine = (ticket += 1);
-    let coins: HeartCoins;
-    try {
-      coins = await api.get(id);
-    } catch (err) {
-      // Offline or logged out: keep showing the last balance.
-      if (mine === ticket) sheet.fail(err);
-      return;
-    }
-    known.set(id, coins.balance);
-    if (mine !== ticket) return;
-    setBalance(coins.balance);
-    sheet.show(coins);
-  }
+  const store = createHeartCoinsStore({
+    api: options.api ?? heartCoinsApi,
+    onBalance: (balance) => {
+      mapPill.set(balance);
+      homePill.set(balance);
+    },
+    onCoins: sheet.show,
+    // Offline or logged out: the pill keeps the last balance; the sheet says why.
+    onError: sheet.fail,
+  });
 
   // Back from another app: an hour away may have crossed midnight.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void read();
+    if (document.visibilityState === 'visible') void store.read();
   });
 
   return {
     mapPill: mapPill.node,
     homePill: homePill.node,
-    setMap: (next) => {
-      if (next !== mapId) {
-        ticket += 1;
-        mapId = next;
-        sheet.close();
-        setBalance(next === null ? null : (known.get(next) ?? null));
-      }
-      void read();
+    setUser: (user) => {
+      sheet.close();
+      store.setUser(user?.id ?? null);
     },
-    refresh: read,
-    lobbyLine: (id) => {
+    setMap: (mapId) => {
+      if (mapId !== store.mapId) sheet.close();
+      void store.setMap(mapId);
+    },
+    refresh: store.read,
+    lobbyLine: (mapId) => {
       const line = el('span', {
         class: 'lobby-heart-coins',
         'data-testid': 'lobby-heart-coins',
@@ -116,16 +105,7 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
         if (n === null) line.removeAttribute('aria-label');
         else line.setAttribute('aria-label', HEART_COINS_TEXT.label(n));
       };
-      fill(known.get(id) ?? null);
-      api.get(id).then(
-        (coins) => {
-          known.set(id, coins.balance);
-          fill(coins.balance);
-        },
-        () => {
-          // Offline: the last balance seen (if any) stays.
-        },
-      );
+      fill(store.balanceOf(mapId, fill));
       return line;
     },
     close: sheet.close,
@@ -133,7 +113,12 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
       return sheet.isOpen;
     },
     get debug() {
-      return { mapId, balance, open: sheet.isOpen, page: sheet.page };
+      return {
+        mapId: store.mapId,
+        balance: store.balance,
+        open: sheet.isOpen,
+        page: sheet.page,
+      };
     },
   };
 }

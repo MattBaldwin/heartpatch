@@ -12,8 +12,8 @@ export interface HeartPill {
   set: (balance: number | null) => void;
 }
 
-/** `where` styles each copy (`map`, `home`); `data-where` tells them apart in tests. */
-export function createHeartPill(where: string, onTap: () => void): HeartPill {
+/** `where` styles each copy; `data-where` tells them apart in tests. */
+export function createHeartPill(where: 'map' | 'home', onTap: () => void): HeartPill {
   const amount = el('span', { class: 'heart-pill-amount' });
   const node = el(
     'button',
@@ -33,7 +33,8 @@ export function createHeartPill(where: string, onTap: () => void): HeartPill {
     set: (balance) => {
       node.hidden = balance === null;
       amount.textContent = balance === null ? '' : String(balance);
-      node.setAttribute('aria-label', balance === null ? '' : HEART_COINS_TEXT.pillLabel(balance));
+      if (balance === null) node.removeAttribute('aria-label');
+      else node.setAttribute('aria-label', HEART_COINS_TEXT.pillLabel(balance));
     },
   };
 }

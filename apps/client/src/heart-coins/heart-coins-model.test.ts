@@ -5,10 +5,11 @@ import {
   HEART_COINS_TEXT,
   heartCoinRow,
   heartCoinsPage,
-  waitText,
 } from './heart-coins-model.js';
 
 const NOW = Date.parse('2026-10-20T18:48:00.000Z');
+/** The game clock at `at`. */
+const clockAt = (at: number) => ({ msUntil: (iso: string) => Math.max(0, Date.parse(iso) - at) });
 
 const coins = (over: Partial<HeartCoins> = {}): HeartCoins => ({
   balance: 42,
@@ -17,20 +18,6 @@ const coins = (over: Partial<HeartCoins> = {}): HeartCoins => ({
   // 5 h 12 min after NOW.
   resetsAt: '2026-10-21T00:00:00.000Z',
   ...over,
-});
-
-describe('waitText', () => {
-  it('reads hours and minutes, rounded up to the minute', () => {
-    expect(waitText(5 * 3_600_000 + 12 * 60_000)).toBe('5 h 12 min');
-    expect(waitText(5 * 3_600_000 + 11 * 60_000 + 1)).toBe('5 h 12 min');
-    expect(waitText(2 * 3_600_000)).toBe('2 h');
-    expect(waitText(12 * 60_000)).toBe('12 min');
-  });
-
-  it('never says 0 min', () => {
-    expect(waitText(1)).toBe('1 min');
-    expect(waitText(0)).toBe('1 min');
-  });
 });
 
 describe('heartCoinRow', () => {
@@ -67,7 +54,7 @@ describe('heartCoinRow', () => {
 
 describe('heartCoinsPage', () => {
   it('lists the sources a kid can earn from today, in order', () => {
-    const page = heartCoinsPage(coins(), NOW);
+    const page = heartCoinsPage(coins(), clockAt(NOW), null);
     expect(page.balance).toBe(42);
     expect(page.rows.map((r) => r.source)).toEqual([...HEART_COIN_ROWS]);
     // Selling joins with the post's Sell tab (#601 PR 4).
@@ -76,19 +63,27 @@ describe('heartCoinsPage', () => {
     expect(page.allFull).toBe(false);
   });
 
-  it('counts down to the patch midnight on the game clock', () => {
-    expect(heartCoinsPage(coins(), NOW).resets).toBe('More to earn in 5 h 12 min');
+  it('counts down to the patch midnight on the game clock, as other countdowns do', () => {
+    const page = heartCoinsPage(coins(), clockAt(NOW), null);
+    expect(page.resets).toBe('More to earn in 5h 12m');
+    expect(page.ask).toBe(false);
   });
 
-  it('says any minute now once midnight has passed but the reply has not caught up', () => {
-    expect(heartCoinsPage(coins(), Date.parse('2026-10-21T00:00:30Z')).resets).toBe(
-      HEART_COINS_TEXT.resetsSoon,
-    );
+  it('asks for a fresh reply once the patch midnight passes, and only once', () => {
+    const after = clockAt(Date.parse('2026-10-21T00:00:30Z'));
+    const first = heartCoinsPage(coins(), after, null);
+    expect(first.ask).toBe(true);
+    expect(first.resets).toBe('More to earn in less than a minute');
+    expect(heartCoinsPage(coins(), after, '2026-10-21T00:00:00.000Z').ask).toBe(false);
   });
 
   it('is all full when every bar is', () => {
     const { battle, capture, care } = HEART_COIN_RULES.dailyCaps;
-    const page = heartCoinsPage(coins({ today: { battle, capture, care, sell: 0 } }), NOW);
+    const page = heartCoinsPage(
+      coins({ today: { battle, capture, care, sell: 0 } }),
+      clockAt(NOW),
+      null,
+    );
     expect(page.allFull).toBe(true);
   });
 });

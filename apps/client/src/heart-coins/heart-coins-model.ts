@@ -1,4 +1,5 @@
 import type { HeartCoins, HeartCoinsBySource } from '@heartpatch/shared';
+import { countdownAt, type GameClock } from '../inventory/game-clock.js';
 
 // Heart Coins (#601): what the sheet shows, worked out from the server's
 // reply. Pure, so the numbers and words are tested without a DOM. The server
@@ -18,7 +19,6 @@ export const HEART_COINS_TEXT = {
   allDone: 'All done today!',
   allDoneDay: "You've earned every Heart Coin for today. Wow!",
   resetsIn: (wait: string) => `More to earn in ${wait}`,
-  resetsSoon: 'More to earn any minute now!',
   loading: 'Counting coins…',
   close: 'Close',
 } as const;
@@ -58,8 +58,13 @@ export interface HeartCoinsPage {
   readonly rows: readonly HeartCoinRow[];
   /** Every bar is full. */
   readonly allFull: boolean;
-  /** "More to earn in 5 h 12 min". */
+  /** "More to earn in 5h 12m", on the game clock. */
   readonly resets: string;
+  /**
+   * The patch's midnight has come and this reply is from before it: ask the
+   * server again (once per `resetsAt`), as territory's tries do.
+   */
+  readonly ask: boolean;
 }
 
 export function heartCoinRow(
@@ -81,23 +86,23 @@ export function heartCoinRow(
   };
 }
 
-/** "5 h 12 min", "12 min", "1 min": how long until `resetsAt`, rounded up to the minute. */
-export function waitText(ms: number): string {
-  const minutes = Math.max(1, Math.ceil(ms / 60_000));
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${String(rest)} min`;
-  return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
-}
-
-/** The sheet's words and bars at `nowMs` (the game clock, server time). */
-export function heartCoinsPage(coins: HeartCoins, nowMs: number): HeartCoinsPage {
+/**
+ * The sheet's words and bars on the game clock. `asked` is the `resetsAt`
+ * already asked about (null: none), so a reply that's still stale after
+ * midnight isn't asked for again and again.
+ */
+export function heartCoinsPage(
+  coins: HeartCoins,
+  clock: Pick<GameClock, 'msUntil'>,
+  asked: string | null,
+): HeartCoinsPage {
   const rows = HEART_COIN_ROWS.map((s) => heartCoinRow(s, coins.today, coins.caps));
-  const left = Date.parse(coins.resetsAt) - nowMs;
+  const { wait, ask } = countdownAt(clock, coins.resetsAt, asked);
   return {
     balance: coins.balance,
     rows,
     allFull: rows.every((r) => r.full),
-    resets: left <= 0 ? HEART_COINS_TEXT.resetsSoon : HEART_COINS_TEXT.resetsIn(waitText(left)),
+    resets: HEART_COINS_TEXT.resetsIn(wait),
+    ask,
   };
 }
