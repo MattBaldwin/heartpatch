@@ -240,37 +240,35 @@ export function buildBuildingModel(
       break;
     }
     case 'joy-lantern': {
-      // A little lantern house on a stone step: four posts, a rosy roof and,
-      // when lit, a heart-shaped flame (two lobes over a point) glowing inside.
+      // A little open lantern on a stone step: four short posts holding a
+      // rosy ring and, floating above it, a big heart-shaped flame (two lobes
+      // over a point). Open-topped, so the map's high camera sees the heart.
       part(body, cylinder(0.14, 0.86, 0.92, 16), C.joyBase, [0, 0.07, 0]);
       around(4, (a) => {
-        part(body, cylinder(0.7, 0.07, 0.08, 8), C.joyFrame, [
+        part(body, cylinder(0.5, 0.07, 0.08, 8), C.joyFrame, [
           Math.cos(a + Math.PI / 4) * 0.28,
-          0.49,
+          0.39,
           Math.sin(a + Math.PI / 4) * 0.28,
         ]);
       });
       part(
         body,
-        cylinder(0.32, 0, 0.94, 4),
+        CreateTorus(`${name}-ring`, { diameter: 0.6, thickness: 0.09, tessellation: 24 }, scene),
         C.joyRoof,
-        [0, 1.0, 0],
-        [1, 1, 1],
-        [0, Math.PI / 4, 0],
+        [0, 0.66, 0],
       );
-      part(body, sphere(0.12, 8), C.joyRoof, [0, 1.2, 0]);
       const heart = look === 'lit' ? glow : body;
       const lobe = look === 'lit' ? C.joyFlame : C.joyOut;
-      const heartShade = look === 'lit' ? flameShade(0.36, 0.72, C.joyCore, C.joyFlame) : undefined;
-      for (const x of [-0.08, 0.08]) {
-        part(heart, sphere(0.2, 12), lobe, [x, 0.6, 0], [1, 1, 0.8], [0, 0, 0], heartShade);
+      const heartShade = look === 'lit' ? flameShade(0.62, 1.12, C.joyCore, C.joyFlame) : undefined;
+      for (const x of [-0.12, 0.12]) {
+        part(heart, sphere(0.3, 14), lobe, [x, 0.98, 0], [1, 1, 0.85], [0, 0, 0], heartShade);
       }
       part(
         heart,
-        cylinder(0.24, 0.3, 0, 12),
+        cylinder(0.34, 0.44, 0, 14),
         lobe,
-        [0, 0.46, 0],
-        [1, 1, 0.7],
+        [0, 0.8, 0],
+        [1, 1, 0.75],
         [0, 0, 0],
         heartShade,
       );

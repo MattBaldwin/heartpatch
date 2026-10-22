@@ -43,10 +43,10 @@ export const BUILDING_COLORS = {
   porthole: '#cdeefa', // TUNE: round windows
   gear: '#7aa9c7', // TUNE: the gear in the big window, and the belt
   crate: '#ff8fb8', // TUNE: a little heart crate riding the belt
-  // The Joy Lantern (#306 PR 5): a little lantern house with a heart flame.
+  // The Joy Lantern (#306 PR 5): an open lantern with a heart flame.
   joyBase: '#e9d6c4', // TUNE: its soft stone step
   joyFrame: '#a8716f', // TUNE: the posts
-  joyRoof: '#e8709f', // TUNE: the rosy roof, like the Factory's
+  joyRoof: '#e8709f', // TUNE: the rosy ring, like the Factory's roof
   joyFlame: '#ff7aa8', // TUNE: the heart flame, pink
   joyCore: '#ffe1ec', // TUNE: its hot heart, bright enough to bloom
   joyOut: '#9a8f99', // TUNE: a lantern that's out (the fire's ash)
