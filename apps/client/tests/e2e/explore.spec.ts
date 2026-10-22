@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { tapCanvas } from './claim-land.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
 
@@ -191,14 +192,18 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
 
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  // The camera starts on the Heart Seed: tap it, then Explore. A busy WebKit
-  // runner can miss the first tap while the map settles, so tap again only
-  // while nothing is picked (a second tap on the picked Heart Seed opens Home).
+  // The camera starts on the Heart Seed: tap it, then Explore. The tap is
+  // dispatched in the page (`tapCanvas`): a press Playwright sends during a
+  // slow software frame isn't handled until the frame ends, so its lift came
+  // 500–700 ms later and the map took it for a long press (TAP_MAX_MS). A busy
+  // WebKit runner can still miss the first tap while the map settles, so tap
+  // again only while nothing is picked (a second tap on the picked Heart Seed
+  // opens Home).
   const box = (await page.locator('#game').boundingBox())!;
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
     if ((await mapState(page))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);
@@ -529,7 +534,7 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   const openExplore = async () => {
     await expect(async () => {
       if ((await mapState(page))?.selected == null) {
-        await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+        await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
       }
       await expect(explore).toBeVisible({ timeout: 5_000 });
     }).toPass(slow);
@@ -679,7 +684,7 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
     if ((await mapState(page))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);
