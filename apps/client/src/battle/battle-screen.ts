@@ -877,8 +877,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         ? journeyResult(
             result.winner === b.mySide ? 'won' : result.reason === 'forfeit' ? 'scooted' : 'lost',
             options.journey?.postName(b.id) ?? null,
-            undefined,
-            options.journey?.farHollow?.(b.id) ?? false,
+            { farHollow: options.journey?.farHollow?.(b.id) ?? false },
           )
         : null;
     if (b.kind === 'journey') options.journey?.ended(b.id, result?.winner === b.mySide);

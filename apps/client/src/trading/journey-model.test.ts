@@ -116,12 +116,12 @@ describe('journeyResult', () => {
   });
 
   it('says the far road (#306 PR 6) arrives in the far Hollow, and loses nothing otherwise', () => {
-    expect(journeyResult('won', 'Lantern Post', JOURNEY_RULES, true)).toEqual({
+    expect(journeyResult('won', 'Lantern Post', { farHollow: true })).toEqual({
       title: 'You made it to the far Hollow!',
       subtitle: "It's yours to explore all season.",
       done: 'Explore it 🕯️',
     });
-    expect(journeyResult('lost', null, JOURNEY_RULES, true).subtitle).toMatch(
+    expect(journeyResult('lost', null, { farHollow: true }).subtitle).toMatch(
       /didn't lose a thing/,
     );
   });

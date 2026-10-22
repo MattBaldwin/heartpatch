@@ -31,6 +31,8 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
+import { runConsumer } from '../../jobs/consumers.js';
+import { createLoreConsumer } from '../lore/consumer.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -376,6 +378,44 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     expect((await search(server, stranger, mapId, { tile: 0, spot: 0 })).statusCode).toBe(404);
   });
 
+  it('refuses the far road after dark', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid, 10);
+    // My land reaches a post (dev), so it stays open all evening.
+    expect((await call(server, 'POST', `/maps/${mapId}/dev/posts/connect`, kid)).statusCode).toBe(
+      200,
+    );
+    const { post: near } = await nearestPost(mapId, kid);
+    // 20:00 in Denver.
+    clock.setTime(Date.parse('2026-11-05T03:00:00Z'));
+    const res = await call(server, 'POST', `/maps/${mapId}/far-hollow/journey`, kid, {
+      q: near.q,
+      r: near.r,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(errorOf(res).message).toMatch(/after dark/);
+  });
+
+  it('keeps a far Hollow finishable when its data gains a tile mid-season', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid, 10);
+    await call(server, 'POST', `/maps/${mapId}/dev/far-hollow`, kid, {});
+    const before = await view(server, kid, mapId);
+    // As if the data had one tile fewer when I arrived: the last tile's row is gone.
+    const last = before.tiles.at(-1)!;
+    await db.execute(
+      `delete from far_hollow_explore where user_id = '${kid.id}' and tile_index = ${String(last.index)}`,
+    );
+    const lastTile = await tile(server, kid, mapId, last.index);
+    expect(lastTile.progress.searched).toBe(0);
+    const spot = handsSpot(lastTile)!;
+    const res = await search(server, kid, mapId, { tile: last.index, spot: spot.index });
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await rowsOf(kid)).map((r) => r.tileIndex)).toContain(last.index);
+  });
+
   it('closes after dark, like every Hollowed place', async () => {
     const server = await start();
     const kid = await player();
@@ -447,6 +487,9 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
       found.lore!.id,
     );
     // The lore consumer grants it from that search.
+    await runConsumer(db, createLoreConsumer({ clock: () => clock }), mapId);
+    const pages = await db.query.loreFound.findMany({ where: (t, { eq }) => eq(t.userId, kid.id) });
+    expect(pages.map((p) => p.pageId)).toContain(found.lore!.id);
     const done = await view(server, kid, mapId);
     expect(done.completedAt).toBe(clock.toISOString());
     expect(done.tiles.every((t) => t.searched === t.total)).toBe(true);

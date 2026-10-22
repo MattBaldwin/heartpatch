@@ -84,6 +84,7 @@ import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.
 import { el, messageOf } from './ui/dom.js';
 import {
   GAME_DATA,
+  GAME_EVENTS,
   hexKey,
   hexToWorld,
   visualRegistry,
@@ -91,6 +92,7 @@ import {
   type Hex,
   type MapView,
   type PublicUser,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
 import { createPortraits } from './procedural/portraits.js';
@@ -614,6 +616,17 @@ let farHollowPost: { q: number; r: number } | null = null;
 let farHollowArrived = false;
 /** Back from a far-Hollow tile, waiting for the map to come back to open the sheet. */
 let farHollowBack = false;
+/**
+ * A far road won (#306 PR 6), heard live: the sheet opens once the battle
+ * closes, even for a road started before a reload (the sheet only knows its own).
+ */
+const farHollowArrival = (event: WsEventMessage): void => {
+  if (event.type !== 'journey.ended') return;
+  const ended = GAME_EVENTS['journey.ended'].public.safeParse(event.data);
+  if (!ended.success || ended.data.kind !== 'far-hollow' || ended.data.result !== 'won') return;
+  if (ended.data.userId !== signedIn?.id) return;
+  farHollowArrived = true;
+};
 /** Made it to the far Hollow ("Explore it"): its sheet, once an evolution's "Whoa!" is seen (#592). */
 const showFarHollowArrival = (): void => {
   if (!farHollowArrived || evolutionPending || care.isOpen) return;
@@ -1239,6 +1252,7 @@ const maps = createMapScreen({
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
+    farHollowArrival(event);
     trickOrTreat.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);

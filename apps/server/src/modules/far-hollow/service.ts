@@ -133,13 +133,22 @@ export function farHollowOpen(at: Date, timeZone: string): boolean {
 const spotsOf = (season: FarHollowSeason, tile: FarHollowTile): SearchSpot[] =>
   searchSpots(season.seed, tile, EXPLORE_RULES) ?? [];
 
-/** Every tile of mine searched to its last spot, and when the last was. */
-function completedAt(rows: readonly FarHollowRow[], tileCount: number): Date | null {
-  if (rows.length < tileCount || rows.some((r) => r.completedAt === null)) return null;
-  return rows.reduce<Date | null>(
-    (last, r) => (r.completedAt && (!last || r.completedAt > last) ? r.completedAt : last),
-    null,
-  );
+/**
+ * Every tile of the season's far Hollow searched to its last spot, and when
+ * the last was. Counts the season's tiles as the data has them now, so a
+ * mid-season data change (a tile more or fewer) never leaves it unfinishable.
+ */
+function completedAt(
+  rows: readonly FarHollowRow[],
+  tiles: readonly Pick<FarHollowTile, 'index'>[],
+): Date | null {
+  let last: Date | null = null;
+  for (const tile of tiles) {
+    const done = rows.find((r) => r.tileIndex === tile.index)?.completedAt ?? null;
+    if (done === null) return null;
+    if (!last || done > last) last = done;
+  }
+  return last;
 }
 
 /** Uses left of each tool in a bag (a tool is counted in uses). */
@@ -201,7 +210,7 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
     const byIndex = new Map(rows.map((r) => [r.tileIndex, r]));
     const date = localDate(now(), season.timeZone);
     const next = nextSeasonRun(GAME_DATA.seasons, date);
-    const done = completedAt(rows, season.tiles.length);
+    const done = completedAt(rows, season.tiles);
     return {
       name: RULES.name,
       season: { id: season.run.id, name: season.run.name },
@@ -286,8 +295,14 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
         const rows = await repo.lockRows(key);
         if (rows.length === 0) throw new AppError('FORBIDDEN', FAR_HOLLOW_MESSAGES.notArrived);
         const tile = season.tiles.find((t) => t.index === request.tile);
-        const row = rows.find((r) => r.tileIndex === request.tile);
-        if (!tile || !row) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noTile);
+        if (!tile) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noTile);
+        // A tile the data added after I arrived gets its row now (an insert takes no lock to order).
+        let row = rows.find((r) => r.tileIndex === tile.index);
+        if (!row) {
+          await repo.arrive(key, season.tiles.length);
+          row = { tileIndex: tile.index, searched: 0, completedAt: null };
+          rows.push(row);
+        }
         const spots = spotsOf(season, tile);
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noSpot);
@@ -318,7 +333,7 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
         );
         // The last spot of the whole far Hollow: the joy is all back.
         const completed =
-          explored && completedAt(after, season.tiles.length) !== null && row.completedAt === null;
+          explored && completedAt(after, season.tiles) !== null && row.completedAt === null;
 
         // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
         const foundLore = new Set(

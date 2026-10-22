@@ -126,10 +126,13 @@ export function journeyChance(team: readonly number[], journey: JourneyPreview):
 export function journeyResult(
   outcome: 'won' | 'lost' | 'scooted',
   post: string | null,
-  rules: JourneyRules = JOURNEY_RULES,
-  /** The far road to the far Hollow (#306 PR 6): a win is an arrival there. */
-  farHollow = false,
+  options: {
+    rules?: JourneyRules;
+    /** The far road to the far Hollow (#306 PR 6): a win is an arrival there. */
+    farHollow?: boolean;
+  } = {},
 ): { title: string; subtitle: string; done?: string } {
+  const { rules = JOURNEY_RULES, farHollow = false } = options;
   const name = post ?? JOURNEY_TEXT.somePost;
   if (outcome === 'won' && farHollow) {
     return {

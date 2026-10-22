@@ -1,4 +1,4 @@
-import type { FarHollowView, PlayerBattle } from '@heartpatch/shared';
+import { COMMUNITY_RULES, type FarHollowView, type PlayerBattle } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { terrainName } from '../explore/explore-view.js';
@@ -261,7 +261,21 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
     } catch (err) {
       if (at !== generation) return;
       note = messageOf(err);
-      if (view) render();
+      if (view) {
+        render();
+        return;
+      }
+      // Nothing to show yet (offline, say): the sheet still opens and says why.
+      sheet.replaceChildren(
+        el(
+          'h3',
+          { class: 'hollowed-title', id: 'far-hollow-title' },
+          T.title(COMMUNITY_RULES.farHollow.name),
+        ),
+        el('p', { class: 'hollowed-said', role: 'status', 'data-testid': 'far-hollow-note' }, note),
+        el('div', { class: 'hollowed-actions' }, button(T.close, 'far-hollow-close', true, close)),
+      );
+      sheet.hidden = false;
     }
   }
 
