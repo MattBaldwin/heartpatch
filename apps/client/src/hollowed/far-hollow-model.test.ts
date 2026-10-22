@@ -75,9 +75,15 @@ describe('the far Hollow sheet model (#306 PR 6)', () => {
   it('keeps the words kind and short', () => {
     expect(FAR_HOLLOW_TEXT.title('The far Hollow')).toBe('The far Hollow 🕯️');
     // Patch › Town › Hollow: never "village" or "community" in player text.
-    const words = Object.values(FAR_HOLLOW_TEXT).map((w) =>
-      typeof w === 'string' ? w : w('Christmas', 'Dec 1'),
-    );
+    const words = [
+      ...Object.values(FAR_HOLLOW_TEXT).flatMap((w) => (typeof w === 'string' ? [w] : [])),
+      FAR_HOLLOW_TEXT.title('The far Hollow'),
+      FAR_HOLLOW_TEXT.kicker('Christmas'),
+      FAR_HOLLOW_TEXT.road(3, 16),
+      FAR_HOLLOW_TEXT.progress(12, 86),
+      FAR_HOLLOW_TEXT.tileLabel('Meadow', 2, 10),
+      FAR_HOLLOW_TEXT.fresh('Christmas', 'Dec 1'),
+    ];
     for (const line of words) {
       expect(line).not.toMatch(/village|community/i);
       expect(line.length).toBeLessThan(140);

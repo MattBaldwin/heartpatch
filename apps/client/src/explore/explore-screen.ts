@@ -913,9 +913,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         if (at !== generation) return;
       }
       // The far Hollow's last spot always has its card: the joy is all back.
-      const farDone = far !== null && 'completed' in found && found.completed;
+      const farDone = far !== null && 'completed' in found && found.completed === true;
       if (farDone || findShowsCard(found)) {
-        card = { found, interaction, spot, ...(farDone ? { farDone } : {}) };
+        card = { found, interaction, spot, ...(farDone ? { farDone: true } : {}) };
       } else {
         showToast(found, bigSplash);
         fly(spot, found);
