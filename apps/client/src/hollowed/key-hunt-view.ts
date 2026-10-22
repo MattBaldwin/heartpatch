@@ -1,4 +1,8 @@
 import {
+  GAME_DATA,
+  hexKey,
+  hexNeighbors,
+  isTradingPost,
   keyInReach,
   type CommunityView,
   type Hex,
@@ -33,6 +37,7 @@ export const KEY_TEXT = {
   // A patch with no challenges, and no wild land near enough for the key to move to.
   glintNext: '✨ Something glints here… Explore your land next to it!',
   glintNear: '✨ Something glints here… Claim land next to it to look!',
+  glintTaken: 'Something glints here… the land around it is all taken for now. 🌙',
   // In explore: the glinting spot, and finding the key there.
   dig: 'Dig it up',
   foundTitle: 'You found the cellar key!',
@@ -53,9 +58,10 @@ export const KEY_TEXT = {
  * Whose land the key's tile is, as its panel says it. On a patch with no
  * challenges a key stays on someone else's land only with no wild land near
  * enough to move to: then my land next to it finds it (`next`), else I claim
- * some (`near`).
+ * some (`near`), or, with nothing next to it left to claim, it waits (`taken`).
+ * Display only: the server enforces the rule.
  */
-export type KeyLand = 'mine' | 'wild' | 'theirs' | 'next' | 'near';
+export type KeyLand = 'mine' | 'wild' | 'theirs' | 'next' | 'near' | 'taken';
 
 /** What the key hunt shows on one tile's panel, or null for none. */
 export type KeyHuntBlock =
@@ -96,12 +102,27 @@ export function keyHuntOn(view: MapView, tile: PublicTile, me: string | null): K
               ? 'theirs'
               : keyInReach(key, view.tiles, me, 'off')
                 ? 'next'
-                : 'near';
+                : claimableNextTo(key, view.tiles)
+                  ? 'near'
+                  : 'taken';
       return { kind: 'key', community: c, land };
     }
   }
   const square = mine.find((c) => same(c.square, tile));
   return square?.cellar ? { kind: 'square', community: square, state: square.cellar.state } : null;
+}
+
+/** Is any tile next to `at` wild land someone could still claim? */
+function claimableNextTo(at: Hex, tiles: readonly PublicTile[]): boolean {
+  const next = new Set(hexNeighbors(at).map(hexKey));
+  return tiles.some(
+    (t) =>
+      next.has(hexKey(t)) &&
+      t.ownerUserId === null &&
+      t.homeSlot === null &&
+      !isTradingPost(t) &&
+      t.terrain !== GAME_DATA.mapGen.gapTerrain,
+  );
 }
 
 /** The panel's line on the key's tile: what to do next to find it. */
@@ -112,6 +133,7 @@ export function glintLine(land: KeyLand): string {
     theirs: KEY_TEXT.glintTheirs,
     next: KEY_TEXT.glintNext,
     near: KEY_TEXT.glintNear,
+    taken: KEY_TEXT.glintTaken,
   }[land];
 }
 

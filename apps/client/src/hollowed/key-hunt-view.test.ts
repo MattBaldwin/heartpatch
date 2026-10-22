@@ -70,6 +70,14 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
     const far = owned(userId(2));
     const lone = far.tiles.find((t) => t.q === key.q && t.r === key.r)!;
     expect(keyHuntOn(off(far), lone, ME)).toMatchObject({ kind: 'key', land: 'near' });
+    // Nothing next to it left to claim: it waits, softly.
+    const ring = new Set(hexNeighbors(key).map(hexKey));
+    const full: MapView = {
+      ...far,
+      tiles: far.tiles.map((t) => (ring.has(hexKey(t)) ? { ...t, ownerUserId: userId(2) } : t)),
+    };
+    const waits = full.tiles.find((t) => t.q === key.q && t.r === key.r)!;
+    expect(keyHuntOn(off(full), waits, ME)).toMatchObject({ kind: 'key', land: 'taken' });
     // Nobody else sees it (their view never has `cellar`, but even so).
     expect(keyHuntOn(near, theirs, userId(2))).toBeNull();
   });
@@ -80,6 +88,9 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
     expect(glintLine('theirs')).toContain('Challenge');
     expect(glintLine('next')).toContain('next to it');
     expect(glintLine('near')).toContain('Claim land next to it');
+    expect(glintLine('taken')).toBe(
+      'Something glints here… the land around it is all taken for now. 🌙',
+    );
   });
 
   it('shows the cellar door on my won square in every state, and nothing on others', () => {
