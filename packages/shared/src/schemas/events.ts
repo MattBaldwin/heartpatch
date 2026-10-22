@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ClothingDropSourceSchema } from './data/clothing.js';
 import { CommunityKindIdSchema } from './data/communities.js';
+import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -726,6 +727,38 @@ export const GAME_EVENTS = {
       userId: z.uuid(),
       ...coords,
       kind: ContentIdSchema,
+      notable: ExploreNotableSchema.nullable(),
+    }),
+  },
+  /**
+   * A player relit a grey village tile's path (#306 PR 2b, Relight): once a
+   * tile each. `depth`, `attempt` and `moves` (how many) say which try and
+   * how long it took; the moves themselves were checked by replaying them
+   * on the try's board, rebuilt from the Hollow's seed, and aren't kept.
+   * `lorePage` is the server-only page it gave (the lore consumer grants
+   * it); a Rekindled piece is its own `clothing.found`. Members see who
+   * fixed which kind of thing where, and a `notable` find's kind.
+   */
+  'explore.puzzled': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      communityId: z.uuid(),
+      /** The solve: the ledger's `refId` for its items. */
+      solveId: z.uuid(),
+      skin: ContentIdSchema,
+      depth: RelightDepthSchema,
+      attempt: z.number().int().min(1),
+      moves: z.number().int().min(0),
+      lorePage: ContentIdSchema.nullable(),
+      items: z.record(z.string(), z.number().int().min(1)),
+      notable: ExploreNotableSchema.nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      skin: ContentIdSchema,
       notable: ExploreNotableSchema.nullable(),
     }),
   },

@@ -2,6 +2,7 @@ import type { Engine } from '@babylonjs/core/Engines/engine';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type ClothingItem } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
+import { setPerfReports } from '../../engine/perf-report.js';
 import { countGl } from '../../engine/gl-counters.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
@@ -17,6 +18,9 @@ import { buildGalleryScene } from './gallery-scene.js';
 import { galleryLooks } from './showcase.js';
 import '../../styles.css';
 import './gallery.css';
+
+// A dev gallery never signs in: its perf reports would only be refused (401).
+setPerfReports(false);
 
 /**
  * Dev-only squishy gallery at `/gallery.html` (a separate Vite page, never

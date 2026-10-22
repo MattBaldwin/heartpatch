@@ -237,6 +237,8 @@ const page = {
   /** When this page last posted (or began waiting to post) any report: hitches wait a minute after it. */
   lastPostAt: null as number | null,
   slow: false,
+  /** Whether this page posts reports: the dev galleries never sign in, so theirs would only be refused. */
+  posting: true,
   /** The badge lines' reader once loaded, and its load (a chunk fetched as a slow run begins). */
   badge: null as BadgeReader | null,
   badgeLoad: null as Promise<unknown> | null,
@@ -245,6 +247,15 @@ const page = {
 /** `?slow=1`, set once from `main.ts` in a dev build (the e2e check that a report fires). */
 export function setSlowFrames(on: boolean): void {
   page.slow = on;
+}
+
+/**
+ * Turns the reports off for a page that never signs in (the dev galleries,
+ * set once from their `main`): the server would only refuse them (401), and
+ * the browser logs that as an error.
+ */
+export function setPerfReports(on: boolean): void {
+  page.posting = on;
 }
 
 export function slowFrames(): boolean {
@@ -323,9 +334,10 @@ export class PerfProbe {
     this.#frames.push(frameMs, renderMs);
     const run = page.trigger.frame(now, frameMs);
     if (page.trigger.slowMs >= BADGE_START_MS) this.#watchBadge();
-    if (run) void this.#report(run, now);
+    if (run && page.posting) void this.#report(run, now);
     const hitch = page.hitches.frame(now, frameMs, renderMs, this.#governor, page.lastPostAt);
-    if (hitch) void this.#send(now, { fps: this.#frames.fps ?? 0, slowMs: 0, hitch });
+    if (hitch && page.posting)
+      void this.#send(now, { fps: this.#frames.fps ?? 0, slowMs: 0, hitch });
   }
 
   /** The governor just sampled a frame and wants a change (logged if its tier or scale moved). */

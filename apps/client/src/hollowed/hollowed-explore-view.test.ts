@@ -1,10 +1,20 @@
-import { findAvoidedWords, HOLLOW_RULES, HOME_BASE_RULES } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  findAvoidedWords,
+  HOLLOW_RULES,
+  HOME_BASE_RULES,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { EXPLORE_TEXT } from '../explore/explore-view.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
 import {
   discOpening,
   echoAt,
   HOLLOWED_TEXT,
+  PUZZLE_INDEX,
+  puzzleLines,
+  puzzleSpot,
+  skinOf,
   sparkAt,
   spookPush,
   spookReach,
@@ -83,6 +93,67 @@ describe('joy discs and sparks', () => {
       expect(Math.hypot(out.dx, out.dz)).toBeLessThanOrEqual(HOLLOWED_EXPLORE.sparks.spread);
       sparkAt(i, 1, out);
       expect(out.s).toBeCloseTo(0);
+    }
+  });
+});
+
+describe('a grey village tile’s Relight puzzle (#306 PR 2b): words', () => {
+  const puzzle = {
+    skin: 'mural',
+    depth: 'rim' as const,
+    x: 0.2,
+    z: -0.1,
+    solved: false,
+  };
+
+  it('names the broken thing on the button and the card', () => {
+    const skin = skinOf(puzzle);
+    expect(HOLLOWED_TEXT.fix(skin)).toBe('Fix the mural');
+    expect(HOLLOWED_TEXT.broken(skin)).toBe('A broken mural 🖼️');
+    expect(HOLLOWED_TEXT.moves(3, 12)).toBe('Moves 3 of 12');
+    expect(HOLLOWED_TEXT.lit(1, 2)).toBe('Lanterns lit 1 of 2');
+    // A skin this build doesn't know yet still draws (the default's words).
+    expect(skinOf({ skin: 'tea-set' }).id).toBe('music-box');
+  });
+
+  it('is one more spot to walk up to, done once mended', () => {
+    expect(puzzleSpot(undefined)).toBeNull();
+    expect(puzzleSpot(puzzle)).toEqual({
+      index: PUZZLE_INDEX,
+      kind: 'puzzle',
+      tool: null,
+      x: 0.2,
+      z: -0.1,
+      done: false,
+    });
+    expect(puzzleSpot({ ...puzzle, solved: true })?.done).toBe(true);
+  });
+
+  it('says what mending it gave, and never nothing', () => {
+    const base = { puzzle: { ...puzzle, solved: true }, clothing: null, found: {}, items: {} };
+    expect(
+      puzzleLines({ ...base, lore: { id: 'the-painted-wall', title: 'The Painted Wall' } }),
+    ).toEqual([{ text: '📜 A lore page! “The Painted Wall”', note: 'Added to your Lorebook 📖' }]);
+    expect(puzzleLines({ ...base, lore: null, clothing: 'ember-patch-jacket' })[0]?.text).toContain(
+      CLOTHING_BY_ID.get('ember-patch-jacket')!.name,
+    );
+    // A Rekindled find says where it belongs, as the search card does.
+    expect(puzzleLines({ ...base, lore: null, found: { 'joy-ember': 1 } })[0]).toMatchObject({
+      note: EXPLORE_TEXT.setFindNote,
+    });
+    expect(puzzleLines({ ...base, lore: null, found: { heartdust: 1 } })[0]?.text).toMatch(/×1$/);
+    expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The Hollow says thank you!' }]);
+  });
+
+  it('keeps every puzzle line kind and Hollow-worded (style guide §9, #602)', () => {
+    const lines: unknown[] = [
+      ...Object.values(HOLLOWED_TEXT),
+      ...Object.values(HOLLOWED_TEXT.cell),
+    ];
+    const words = lines.filter((line): line is string => typeof line === 'string');
+    for (const line of words) {
+      expect(findAvoidedWords(line)).toEqual([]);
+      expect(line).not.toMatch(/village|community|hint|peek/i);
     }
   });
 });
