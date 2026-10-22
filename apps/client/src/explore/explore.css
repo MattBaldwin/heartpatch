@@ -819,3 +819,10 @@ body:has(.explore:not([hidden])) .auth-chip {
     0 0 0 6px rgb(255 210 122 / 35%),
     0 12px 36px rgb(217 153 58 / 45%);
 }
+
+/* The far Hollow's last card (#306 PR 6): long on an iPhone SE, so Yay! stays in reach while it scrolls. */
+.explore-sheet-far-done .explore-yay {
+  position: sticky;
+  bottom: 0;
+  box-shadow: 0 -10px 14px #fffafc;
+}

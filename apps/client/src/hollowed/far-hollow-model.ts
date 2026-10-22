@@ -34,8 +34,7 @@ export const FAR_HOLLOW_TEXT = {
   wonDone: 'Explore it 🕯️',
   // The last spot's card in the explore view.
   cardTitle: 'All the joy is back! 🌈',
-  cardLine: 'You found every spot in the far Hollow.',
-  cardNext: 'A brand-new one comes next season!',
+  cardLine: 'You found every spot in the far Hollow. A brand-new one comes next season!',
 } as const;
 
 /** Where I am with this season's far Hollow. */

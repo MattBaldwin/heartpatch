@@ -1573,6 +1573,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const chest = cellarOf !== null && isChest(c.spot);
     const big = chest && isBigChest(c.spot);
     sheet.classList.toggle('explore-sheet-treasure', big);
+    // The far Hollow's last card is long: its Yay! stays in reach while it scrolls (#306 PR 6).
+    sheet.classList.toggle('explore-sheet-far-done', c.farDone === true);
     if (found.cellarKey) {
       keyCard(found.cellarKey.name);
       return;
@@ -1647,9 +1649,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         options.onLorebook?.(lore.id);
       });
       nodes.push(openBook);
-    }
-    if (farDone) {
-      nodes.push(el('p', { class: 'explore-card-line' }, FAR_HOLLOW_TEXT.cardNext));
     }
     const yay = el(
       'button',

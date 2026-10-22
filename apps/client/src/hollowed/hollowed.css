@@ -523,3 +523,10 @@
 .far-hollow-progress {
   font-size: 15px;
 }
+
+/* A short screen (iPhone SE): a smaller map, so the sheet's last line still shows. */
+@media (max-height: 700px) {
+  .far-hollow-map {
+    width: min(100%, 190px);
+  }
+}
