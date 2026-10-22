@@ -88,6 +88,8 @@ export interface LobbyOptions {
   listActions?: () => Node[];
   /** Shown under the patch list's title (the Patch Coin counter, #45). */
   listHeader?: () => Node[];
+  /** Extra lines on a patch's card in the list (its Heart Coins, #601). */
+  mapLines?: (mapId: string) => Node[];
   /** Rows on the Settings screen (the tutorial's replay, #47). */
   settings?: () => Node[];
   /**
@@ -363,6 +365,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
             map.role === 'owner' ? 'Yours' : `${map.owner.username}'s`
           }`,
         ),
+        ...(options.mapLines?.(map.id) ?? []),
       );
       open.addEventListener('click', () => void showMap(map.id));
       list.append(el('li', {}, open));

@@ -311,7 +311,10 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     const kid = await player();
     const lotsToCap = CAP / TIMBER.coins;
     const at = await patch(server, kid, { timber: TIMBER.lot * (lotsToCap + 4) + 10 });
-    expect((await sellLots(server, kid, at, 'timber', lotsToCap - 1)).statusCode).toBe(200);
+    // Up to one lot short of the cap, in sales the request allows (at most 100 lots).
+    for (let left = lotsToCap - 1; left > 0; left -= 100) {
+      expect((await sellLots(server, kid, at, 'timber', Math.min(left, 100))).statusCode).toBe(200);
+    }
     // Two lots would pass the cap by one: refused whole, not sold in part.
     const over = await sellLots(server, kid, at, 'timber', 2);
     expect(over.statusCode).toBe(409);
@@ -471,7 +474,8 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
   it('never passes the cap, oversells or sells the last copy when taps race', async () => {
     const server = await start();
     const kid = await player();
-    const lotsPerTap = 3;
+    // Ten taps reach the cap, so twelve stay under the per-player rate limit.
+    const lotsPerTap = CAP / (10 * TIMBER.coins);
     const taps = CAP / (lotsPerTap * TIMBER.coins) + 2;
     const at = await patch(server, kid, { timber: TIMBER.lot * lotsPerTap * taps + 10 });
     const results = await Promise.all(

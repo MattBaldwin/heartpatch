@@ -16,7 +16,12 @@ import {
   type PublicTile,
   type Wardrobe,
 } from '@heartpatch/shared';
-import { CLOTHING_DROPS, type ClothingDropTable } from '@heartpatch/shared/server';
+import {
+  CLOTHING_DROPS,
+  type ClothingDropTable,
+  type FoundSetDropTable,
+  type FoundSetPlace,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -27,7 +32,9 @@ import { createClock } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { createMilestonesRepo } from '../milestones/repo.js';
 import { rollFoundDrop } from './drops.js';
+import { grantRekindledPiece, rekindledDrop } from './rekindled.js';
 import { grantClothing } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -852,6 +859,106 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       ).rejects.toThrow('the collect failed');
       expect(await piecesOf(kid.id)).toEqual([]);
       expect((await eventsOf(mapId)).some((e) => e.type === 'clothing.found')).toBe(false);
+    });
+  });
+
+  describe('the Rekindled set (#306 PR 5)', () => {
+    const tables: FoundSetDropTable[] = [
+      {
+        set: 'rekindled',
+        place: 'puzzle',
+        chance: 100,
+        entries: [{ weight: 1, clothing: 'lantern-glow-cap' }],
+      },
+      {
+        set: 'rekindled',
+        place: 'cellar',
+        chance: 100,
+        entries: [{ weight: 1, items: { 'heart-petals': 2 } }],
+      },
+    ];
+    const roll = (kid: Player, mapId: string, place: FoundSetPlace) =>
+      withTransaction(db, (tx) =>
+        rekindledDrop(tx, { place, userId: kid.id, mapId, at: clock }, { tables }),
+      );
+    const drop = (mapId: string, kid: Player, refId: string) => ({
+      source: 'explore' as const,
+      refId,
+      userId: kid.id,
+      mapId,
+      at: clock,
+    });
+    /** The milestones consumer counting a piece for the Rekindler title. */
+    const counted = (kid: Player, piece: string) =>
+      withTransaction(db, (tx) =>
+        createMilestonesRepo(tx).addProgress({
+          userId: kid.id,
+          milestoneId: 'set-rekindled',
+          amount: 100,
+          key: piece,
+          at: clock,
+        }),
+      );
+
+    it('finds a piece where milestones count, once it is counted never again', async () => {
+      const server = await start();
+      const kid = await player();
+      const pal = await player();
+      const mapId = await newMap(server, kid);
+      await join(server, kid, pal, mapId);
+      const found = await roll(kid, mapId, 'puzzle');
+      expect(found).toEqual({ clothing: 'lantern-glow-cap', items: {} });
+      // Rolling writes nothing: the caller grants after its own state writes.
+      expect(await piecesOf(kid.id)).toEqual([]);
+      const refId = '00000000-0000-7000-8000-0000000000e1';
+      expect(
+        await withTransaction(db, (tx) => grantRekindledPiece(tx, drop(mapId, kid, refId), found)),
+      ).toBe('lantern-glow-cap');
+      expect((await eventsOf(mapId)).filter((e) => e.type === 'clothing.found')).toHaveLength(1);
+      // Owned but not counted yet (a patch-mate left first, say): it can still turn up,
+      // so the title stays in reach.
+      const again = await roll(kid, mapId, 'puzzle');
+      expect(again.clothing).toBe('lantern-glow-cap');
+      // Found again, it's a new find: its own `clothing.found` for the title to count.
+      const refAgain = '00000000-0000-7000-8000-0000000000e3';
+      expect(
+        await withTransaction(db, (tx) =>
+          grantRekindledPiece(tx, drop(mapId, kid, refAgain), again),
+        ),
+      ).toBe('lantern-glow-cap');
+      expect(
+        (await eventsOf(mapId)).filter((e) => e.type === 'clothing.found').map((e) => e.payload),
+      ).toContainEqual(expect.objectContaining({ itemId: 'lantern-glow-cap', refId: refAgain }));
+      await counted(kid, 'lantern-glow-cap');
+      expect(await roll(kid, mapId, 'puzzle')).toEqual({ clothing: null, items: {} });
+    });
+
+    it('finds no pieces on a patch where milestones don’t count, but still its finds', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid); // one member: the title couldn't count a piece
+      expect(await roll(kid, mapId, 'puzzle')).toEqual({ clothing: null, items: {} });
+      expect(await roll(kid, mapId, 'cellar')).toEqual({
+        clothing: null,
+        items: { 'heart-petals': 2 },
+      });
+    });
+
+    it('finds nothing at a place with no table, and grants nothing for no piece', async () => {
+      const server = await start();
+      const kid = await player();
+      const pal = await player();
+      const mapId = await newMap(server, kid);
+      await join(server, kid, pal, mapId);
+      expect(await roll(kid, mapId, 'far-hollow')).toEqual({ clothing: null, items: {} });
+      expect(
+        await withTransaction(db, (tx) =>
+          grantRekindledPiece(tx, drop(mapId, kid, '00000000-0000-7000-8000-0000000000e2'), {
+            clothing: null,
+            items: { 'heart-petals': 2 },
+          }),
+        ),
+      ).toBeNull();
     });
   });
 });

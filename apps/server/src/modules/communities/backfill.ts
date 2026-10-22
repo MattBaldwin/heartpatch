@@ -8,6 +8,7 @@ import {
   type Hex,
   type PlacedCommunity,
 } from '@heartpatch/shared';
+import { CELLAR_RULES } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { createMapsRepo, type PostPlacementTileRow } from '../maps/repo.js';
 import { createCommunitiesRepo, type PlacedCommunityRow } from './repo.js';
@@ -42,6 +43,11 @@ export interface CommunitiesPlaced {
 
 const RULES = GAME_DATA.mapGen.communities;
 const keyOf = (h: Hex) => `${String(h.q)},${String(h.r)}`;
+/** A placed village's key tile (the server always places one: it passes `keys`). */
+const keyTileOf = (c: PlacedCommunity): Hex => {
+  if (!c.keyTile) throw new Error('placeCommunities: a village without its cellar key');
+  return c.keyTile;
+};
 
 /** The rule's input from stored tiles: busy tiles count as taken. */
 function plan(
@@ -61,6 +67,7 @@ function plan(
     gapTerrain: GAME_DATA.mapGen.gapTerrain,
     rules: RULES,
     seed,
+    keys: CELLAR_RULES.keyFromVillage,
     existing: existing.map((c): ExistingCommunity => ({
       square: c.square,
       tiles: c.tiles,
@@ -79,7 +86,7 @@ function plan(
 /** One plan as a string, to tell whether the plan under the lock is the same. */
 const planKey = (placed: readonly PlacedCommunity[]) =>
   placed
-    .map((c) => `${c.kind}:${c.name}:${c.tiles.map(keyOf).join(' ')}:${keyOf(c.keyTile)}`)
+    .map((c) => `${c.kind}:${c.name}:${c.tiles.map(keyOf).join(' ')}:${keyOf(keyTileOf(c))}`)
     .join('|');
 
 /**
@@ -129,7 +136,7 @@ async function placeOne(
   return createMapsRepo(db).transaction(async (repo, tx) => {
     const before = await repo.listPostPlacementTiles(mapId);
     const idAt = new Map(before.map((t) => [keyOf(t), t.id]));
-    const hexes = first.flatMap((c) => [...c.tiles, c.keyTile]);
+    const hexes = first.flatMap((c) => [...c.tiles, keyTileOf(c)]);
     const ids = [...new Set(hexes.flatMap((h) => idAt.get(keyOf(h)) ?? []))];
     // Under the lock: a claim, a gather or another boot may have got there first.
     const locked = await repo.listPostPlacementTiles(mapId, ids);

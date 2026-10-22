@@ -531,37 +531,25 @@ export class HomeScene {
     this.#cottage = { exterior, tile, mesh };
   }
 
-  /** Does a lit spot light a whole tile? A ring tile's building fills it (#589); the Heart Seed tile keeps its spots. */
-  #lightsTile(spot: HomeSpot): boolean {
-    return !(spot.q === this.#seed.q && spot.r === this.#seed.r);
-  }
-
-  /** Where a lit spot glows: the middle of its tile, or the spot itself on the Heart Seed tile. */
-  #litAt(spot: HomeSpot): WorldPoint {
-    return this.#lightsTile(spot)
-      ? this.spotAt({ q: spot.q, r: spot.r, spot: 0 })
-      : this.spotAt(spot);
+  /** The middle of the tile a lit spot is on: a building fills its whole ring tile (#589). */
+  #tileAt(spot: HomeSpot): WorldPoint {
+    return this.spotAt({ q: spot.q, r: spot.r, spot: 0 });
   }
 
   /** Lights up the free tiles to tap while placing or moving (empty: off). */
   showSpots(spots: readonly HomeSpot[]): void {
     this.#spots = [...spots];
+    const at = spots.map((s) => this.#tileAt(s));
     const glow = new Vector3(HOME_FILL.glowScale, 1, HOME_FILL.glowScale);
-    const lit = spots.map((s) => ({
-      at: this.#litAt(s),
-      scale: this.#lightsTile(s) ? glow : undefined,
-    }));
     setInstances(
       this.#spotFill,
       // Above the tile's dome everywhere, or the dome cuts wedges out of it.
-      lit.map(({ at, scale }) =>
-        placeAt(at.x, this.#ground + DOME * 0.5 * this.#k + 0.01, at.z, scale),
-      ),
+      at.map((p) => placeAt(p.x, this.#ground + DOME * 0.5 * this.#k + 0.01, p.z, glow)),
       true,
     );
     setInstances(
       this.#spotMarkers,
-      lit.map(({ at, scale }) => placeAt(at.x, this.#ground + 0.03, at.z, scale)),
+      at.map((p) => placeAt(p.x, this.#ground + 0.03, p.z, glow)),
       true,
     );
   }
@@ -572,9 +560,9 @@ export class HomeScene {
       this.#selection.setEnabled(false);
       return;
     }
-    const at = this.#litAt(spot);
+    const at = this.#tileAt(spot);
     this.#selection.position.set(at.x, this.#ground + 0.02, at.z);
-    this.#selection.scaling.setAll(this.#lightsTile(spot) ? HOME_FILL.markScale : 1);
+    this.#selection.scaling.setAll(HOME_FILL.markScale);
     this.#selection.setEnabled(true);
   }
 
@@ -631,8 +619,8 @@ export class HomeScene {
     };
     const spot = near(
       this.#spots,
-      (s) => this.#litAt(s),
-      (s) => (this.#lightsTile(s) ? TILE_REACH : null),
+      (s) => this.#tileAt(s),
+      () => TILE_REACH,
     );
     if (spot) return { kind: 'spot', spot };
     const building = near(

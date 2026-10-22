@@ -1,4 +1,5 @@
 import {
+  GAME_DATA,
   hexKey,
   hexToWorld,
   type JobSquishy,
@@ -87,6 +88,45 @@ describe('planGatherers (#602)', () => {
       expect(plan.mark).toBeNull();
       expect(plan.species).toEqual(standInSpecies(PLAYER_COLORS[slot] ?? ''));
       // Seeded by the tile, not a squishy id the public view doesn't have.
+      expect(plan.instanceId).toBe(plan.key);
+    }
+  });
+
+  it("draws a patch-mate's gatherer as its species when the view shows it, else a stand-in", () => {
+    const view = busy(1);
+    const theirs = view.tiles.filter((t) => t.ownerUserId !== null && (t.workers ?? 0) > 0);
+    const [plain, secret, masked] = theirs;
+    const visual = GAME_DATA.species[1]!.visual;
+    const looks = new Map<string, NonNullable<MapView['tiles'][number]['workerLook']>>([
+      [hexKey(plain!), { speciesId: 'mossmuffin' }],
+      // A secret species I've met: the view brings its look (no client row).
+      [hexKey(secret!), { speciesId: 'hush-secret', visual, rarity: 'secret' }],
+    ]);
+    const plans = new Map(
+      planGatherers(
+        {
+          ...view,
+          tiles: view.tiles.map((t) => ({
+            ...t,
+            workerLook: looks.get(hexKey(t)) ?? (t === masked ? null : t.workerLook),
+          })),
+        },
+        null,
+      ).map((p) => [p.key, p]),
+    );
+    expect(plans.get(hexKey(plain!))?.species).toBe(
+      GAME_DATA.species.find((s) => s.id === 'mossmuffin'),
+    );
+    expect(plans.get(hexKey(secret!))?.species).toEqual({
+      id: 'hush-secret',
+      visual,
+      rarity: 'secret',
+    });
+    // An unmet secret one is masked: the plain stand-in.
+    expect(plans.get(hexKey(masked!))?.species.id).toBe(standInSpecies('').id);
+    for (const plan of plans.values()) {
+      expect(plan.mine).toBe(false);
+      // Seeded by the tile, never a squishy id.
       expect(plan.instanceId).toBe(plan.key);
     }
   });

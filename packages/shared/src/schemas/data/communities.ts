@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
+import { ExploreTerrainSchema } from './explore.js';
 
 // Hollowed Communities (#306, plan v3): grey villages the Hollow Man drained,
 // seeded into wild land. Data, so tuning them is a data edit (CLAUDE.md
@@ -46,10 +47,6 @@ export const CommunityPlacementRulesSchema = z
     excludedTerrains: z.array(ContentIdSchema),
     /** Every map has at least one village of this kind (owner decision 4). */
     requiredKind: CommunityKindIdSchema,
-    /** The cellar key's tile: this many steps from the nearest village tile (owner decision 5). */
-    keyFromVillage: z
-      .strictObject({ min: z.number().int().min(2), max: z.number().int().min(2) })
-      .refine((k) => k.min <= k.max, 'keyFromVillage.min must not exceed max'),
     /** Name stems, each paired with `nameSuffix` ("Bramble" + " Hollow"). */
     nameStems: z.array(z.string().min(1).max(9)).min(1),
     nameSuffix: z.string().min(1),
@@ -117,5 +114,12 @@ export const CommunityRulesSchema = z.strictObject({
   echoesPerTile: z.number().int().min(0).max(3),
   /** Restored-name endings for PR 3's suggestions ("Bramble Glen"). */
   restoredSuffixes: z.array(z.string().min(1).max(6)).min(1),
+  /**
+   * The hidden cellar under a won village's square (PR 2c): its spots, an
+   * explore kit like a terrain's (`terrain` is the look it borrows, the hills
+   * cave). Hands only, so a kid never needs a tool to search it. What its
+   * spots hold is server-only (the cellar find tables, rule 6).
+   */
+  cellar: ExploreTerrainSchema,
 });
 export type CommunityRules = z.infer<typeof CommunityRulesSchema>;

@@ -45,6 +45,8 @@ export function buildingIcon(buildingId: string): string {
       return '🔥';
     case 'jack-o-lantern-hearthfire':
       return '🎃';
+    case 'joy-lantern':
+      return '🕯️';
     case 'ember-den':
       return '🛖';
     case 'cozy-meadow':
@@ -645,8 +647,7 @@ export function upgradeReach(home: HomeResponse, fire: MyBuilding, toRadius: num
 /**
  * A home tile to build on, as the server's `spot` field wants it: a building
  * fills its whole ring tile (#589), so the spot is only which ring slot the
- * server records, the tile's first free one (on the Heart Seed tile, where
- * the building doesn't fill, the spot it stands on).
+ * server records, the tile's first free one.
  */
 export interface HomeSpot {
   readonly q: number;
@@ -655,24 +656,22 @@ export interface HomeSpot {
 }
 
 /**
- * Every free tile on my home base, the Heart Seed tile first, then the ring
- * in `q, r` order, for the Build and Move taps (#589: one building a tile).
- * One entry a tile, carrying the ring spot to send: a ring tile's building
- * fills the tile, the Heart Seed tile's stands on that spot. A tile holding
- * a building isn't free (shared `tileUseRefusal`, as the server checks it,
- * #537), and neither is the house's tile while the house stands (#604,
- * shared `houseTile` over the buildings as they stand, as the server checks
- * it). `except` is a building being moved (its own tile counts as free);
- * `slot` is the kind of spot to send, a habitat's ring (#204).
+ * Every free tile on my home base's ring, in `q, r` order, for the Build and
+ * Move taps (#589: one building a tile, and it fills the tile). One entry a
+ * tile, carrying the ring spot to send. The Heart Seed keeps the middle
+ * (#604), so its tile is never offered, as the server refuses it. A tile
+ * holding a building isn't free (shared `tileUseRefusal`, as the server
+ * checks it, #537), and neither is the house's tile while the house stands
+ * (#604, shared `houseTile` over the buildings as they stand). `except` is a
+ * building being moved (its own tile counts as free); `slot` is the kind of
+ * spot to send, a habitat's ring (#204).
  */
 export function freeHomeTiles(
   home: HomeResponse,
   except: string | null = null,
   slot: BuildingSlot = 'ring',
 ): HomeSpot[] {
-  const tiles = [...home.tiles].sort(
-    (a, b) => Number(b.heartSeed) - Number(a.heartSeed) || a.q - b.q || a.r - b.r,
-  );
+  const tiles = home.tiles.filter((t) => !t.heartSeed).sort((a, b) => a.q - b.q || a.r - b.r);
   // The house's tile as it's drawn now (the server reads it the same way).
   const house = home.house ? houseTile(home.tiles, home.buildings) : null;
   const others = home.buildings.filter((b) => b.id !== except);

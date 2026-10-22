@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
+import { EXPLORE_RULES } from '../data/explore.js';
+import { JOB_RULES } from '../data/jobs.js';
+import { RESOURCE_BUILDING_RULES } from '../data/resource-buildings.js';
 import { BuildingSchema, type Building } from '../schemas/data/buildings.js';
-import { buildingEffects } from './building-effects.js';
+import { buildingEffects, economyEffects } from './building-effects.js';
 
 const byId = (id: string): Building => {
   const b = BUILDINGS.find((x) => x.id === id);
@@ -65,6 +68,42 @@ describe('buildingEffects (#207)', () => {
   });
 
   it('gives every building in the data at least one effect', () => {
-    for (const b of BUILDINGS) expect(buildingEffects(b).length).toBeGreaterThan(0);
+    for (const b of BUILDINGS) {
+      const effects = [...buildingEffects(b), ...economyEffects(b, 1, RULES)];
+      expect(effects.length, b.id).toBeGreaterThan(0);
+    }
+  });
+});
+
+const RULES = {
+  jobs: JOB_RULES,
+  explore: EXPLORE_RULES,
+  resourceBuildings: RESOURCE_BUILDING_RULES,
+} as const;
+
+describe('economyEffects (#601)', () => {
+  it('says what a resource building makes an hour, holds and costs a morning, per level', () => {
+    const hut = byId('woodcutters-hut');
+    // Forest: 2 Timber a 15-minute gather, +1 on a homestead; a cycle is
+    // 15 min × 200 % ÷ 300 % = 10 min, so 3 Timber every 10 minutes.
+    expect(economyEffects(hut, 1, RULES)).toEqual([
+      { kind: 'produces', resource: 'timber', perHour: 18, storageHours: 24, upkeep: 17 },
+    ]);
+    expect(economyEffects(hut, 3, RULES)[0]).toMatchObject({ perHour: 24, storageHours: 72 });
+    // Past the last level reads as the last.
+    expect(economyEffects(hut, 99, RULES)).toEqual(economyEffects(hut, 4, RULES));
+    // The old building kinds have none, and the resource kinds no plain chips.
+    expect(economyEffects(byId('hearthfire'), 1, RULES)).toEqual([]);
+    expect(buildingEffects(hut)).toEqual([]);
+  });
+
+  it('says from which level the Warehouse delivers, and its upkeep', () => {
+    expect(economyEffects(byId('warehouse'), 1, RULES)).toEqual([
+      {
+        kind: 'delivers',
+        fromLevel: RESOURCE_BUILDING_RULES.warehouseDeliversFromLevel,
+        upkeep: 30,
+      },
+    ]);
   });
 });

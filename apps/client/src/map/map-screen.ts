@@ -76,6 +76,8 @@ export interface MapScreenOptions {
   tileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
   layers?: readonly MapLayer[];
+  /** Small things at the end of the patch-name card's row (the 💛 Heart Coin pill, #601). */
+  hudExtras?: readonly HTMLElement[];
   /** The map's HUD came on screen (its id) or went away (null): the side trays follow it (ui/trays). */
   onHudChange?: (mapId: string | null) => void;
   /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
@@ -287,7 +289,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
     legend.icons,
   );
-  const hudTitle = el('div', { class: 'map-hud-title' }, hudName, legendButton);
+  const hudTitle = el(
+    'div',
+    { class: 'map-hud-title' },
+    hudName,
+    legendButton,
+    ...(options.hudExtras ?? []),
+  );
   const setLegend = (open: boolean): void => {
     legend.setOpen(open);
     legendButton.setAttribute('aria-expanded', legend.open ? 'true' : 'false');

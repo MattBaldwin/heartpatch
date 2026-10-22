@@ -16,6 +16,7 @@ import {
   extraNodes,
   GAME_DATA,
 } from '@heartpatch/shared';
+import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -29,6 +30,7 @@ import {
   mapMembers,
   maps,
   sessions,
+  speciesSeen,
   squishies,
   tileAttacks,
   tileDefenders,
@@ -577,6 +579,60 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       });
       const view = await tilesOf(server, kid, mapId);
       expect(view.find((t) => t.q === forest.q && t.r === forest.r)?.workers).toBe(1);
+    });
+
+    it("shows a gatherer's species to each viewer, masked like the trading shelf (#602)", async () => {
+      const server = await start();
+      const [kid, mate] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await db.insert(mapMembers).values({ mapId, userId: mate.id, role: 'member' });
+      const secret = SERVER_GAME_DATA.secretSpecies[0]!;
+      const [plain, hidden] = [
+        await squishy(mapId, kid, { speciesId: 'puddlepuff' }),
+        await squishy(mapId, kid, { speciesId: secret.id, element: secret.element }),
+      ];
+      const [timber, stone] = [
+        await homeNode(server, kid, mapId, 'timber'),
+        await homeNode(server, kid, mapId, 'stone'),
+      ];
+      for (const [pet, at] of [
+        [plain, timber],
+        [hidden, stone],
+      ] as const) {
+        const res = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: at.q, r: at.r });
+        expect(res.statusCode).toBe(200);
+      }
+      // The keeper met their own secret squishy when it joined them.
+      await db
+        .insert(speciesSeen)
+        .values({ mapId, userId: kid.id, speciesId: secret.id, firstSeenAt: clock });
+      const lookOn = (view: PublicTile[], at: PublicTile) =>
+        view.find((t) => t.q === at.q && t.r === at.r)?.workerLook;
+      const whatIs = { speciesId: secret.id, visual: secret.visual, rarity: secret.rarity };
+
+      // Mine, as I see them: a public species by its id, my secret one with its look.
+      const mine = await tilesOf(server, kid, mapId);
+      expect(lookOn(mine, timber)).toEqual({ speciesId: 'puddlepuff' });
+      expect(lookOn(mine, stone)).toEqual(whatIs);
+      // Nobody gathers on the rest.
+      expect(mine.filter((t) => !(t.workers ?? 0)).every((t) => t.workerLook === null)).toBe(true);
+
+      // A patch-mate who never met either: the public species still shows
+      // (the shelf's rule), the secret one is a plain stand-in.
+      const unmet = await call(server, 'GET', `/maps/${mapId}/view`, mate);
+      const theirs = MapViewSchema.parse(unmet.json()).tiles;
+      expect(lookOn(theirs, timber)).toEqual({ speciesId: 'puddlepuff' });
+      expect(lookOn(theirs, stone)).toBeNull();
+      // Never which squishy, and nothing of the secret species.
+      for (const text of [plain, hidden, secret.id, secret.name]) {
+        expect(unmet.body).not.toContain(text);
+      }
+
+      // Once they've met it, it shows as itself.
+      await db
+        .insert(speciesSeen)
+        .values({ mapId, userId: mate.id, speciesId: secret.id, firstSeenAt: clock });
+      expect(lookOn(await tilesOf(server, mate, mapId), stone)).toEqual(whatIs);
     });
 
     it('banks what was ready when taken off (a part-done cycle is let go)', async () => {

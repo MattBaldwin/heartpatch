@@ -621,7 +621,8 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { seed, plain, plain2 } = await homeTiles(server, kid, mapId);
+      const { seed, plain, plain2, tiles } = await homeTiles(server, kid, mapId);
+      const plain3 = tiles.filter((t) => !t.heartSeed).map((t) => ({ q: t.q, r: t.r }))[2]!;
       const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
@@ -639,25 +640,29 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       );
       // Another spot on its own tile is fine.
       expect((await move(den.id, { q: plain.q, r: plain.r, spot: 4 })).statusCode).toBe(200);
+      // The Heart Seed keeps its tile (#604): nothing moves onto it, whatever the spot.
       expect(errorOf(await move(den.id, { q: seed.q, r: seed.r, spot: 0 })).message).toBe(
-        'The Ember Den goes around the middle of a tile!',
+        'Your Heart Seed lives here 💗. Try another tile!',
+      );
+      expect(errorOf(await move(den.id, { q: seed.q, r: seed.r, spot: 6 })).message).toBe(
+        'Your Heart Seed lives here 💗. Try another tile!',
       );
       // A fire out on my land stays put; it never comes home (owner decision 2026-10-07).
       expect(errorOf(await move(fire.id, { q: seed.q, r: seed.r, spot: 6 })).message).toBe(
         'Your Hearthfire stays where it is. Take it down to build it somewhere else.',
       );
-      const moved = await move(den.id, { q: seed.q, r: seed.r, spot: 6 });
+      const moved = await move(den.id, { q: plain3.q, r: plain3.r, spot: 6 });
       expect(moved.statusCode).toBe(200);
       expect(
         HomeResponseSchema.parse(moved.json()).buildings.find((b) => b.id === den.id),
-      ).toMatchObject({ q: seed.q, r: seed.r, spot: 6 });
+      ).toMatchObject({ q: plain3.q, r: plain3.r, spot: 6 });
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'building.moved',
         payload: { from: { q: plain.q, r: plain.r, spot: 4 }, building: { spot: 6 } },
       });
       // Back where it was: a no-op move writes no event.
       const seq = (await eventsOf(mapId)).length;
-      expect((await move(den.id, { q: seed.q, r: seed.r, spot: 6 })).statusCode).toBe(200);
+      expect((await move(den.id, { q: plain3.q, r: plain3.r, spot: 6 })).statusCode).toBe(200);
       expect(await eventsOf(mapId)).toHaveLength(seq);
     });
 
@@ -1150,6 +1155,22 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) }))?.xp,
       ).toBe(66);
       await reconciled(mapId, kid.id);
+    });
+  });
+
+  describe("the Heart Seed's own tile (#604)", () => {
+    it('refuses a home building on the Heart Seed tile, and keeps ring tiles open', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { seed, plain } = await homeTiles(server, kid, mapId);
+      for (const spot of [0, 1, 4]) {
+        const refused = await place(server, kid, mapId, { buildingId: 'ember-den', ...seed, spot });
+        expect(refused.statusCode).toBe(409);
+        expect(errorOf(refused).message).toBe('Your Heart Seed lives here 💗. Try another tile!');
+      }
+      await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
     });
   });
 

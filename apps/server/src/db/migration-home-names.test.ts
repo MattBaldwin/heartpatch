@@ -18,6 +18,11 @@ const tag = (file ?? 'missing.sql').replace(/\.sql$/, '');
 const migrationSql = readFileSync(join(migrationsFolder, file ?? 'missing.sql'), 'utf8');
 
 const BUILDABLE = new Set<string>(HOME_BASE_RULES.buildableKinds);
+/**
+ * Buildings added after 0050: none was placed before it, so its back-fill
+ * never meets one (the `home-naming` consumer reads every kind from data).
+ */
+const ADDED_AFTER = new Set(['joy-lantern']); // #306 PR 5
 
 describe('migration 0050 home names (#306)', () => {
   it("maps every buildable building id to its kind, as today's data does", () => {
@@ -27,7 +32,9 @@ describe('migration 0050 home names (#306)', () => {
       ),
     );
     const expected = Object.fromEntries(
-      GAME_DATA.buildings.filter((b) => BUILDABLE.has(b.kind)).map((b) => [b.id, b.kind]),
+      GAME_DATA.buildings
+        .filter((b) => BUILDABLE.has(b.kind) && !ADDED_AFTER.has(b.id))
+        .map((b) => [b.id, b.kind]),
     );
     expect(cases).toEqual(expected);
     const standing = /"b"\."kind" IN \(([^)]*)\)/.exec(migrationSql)?.[1] ?? '';

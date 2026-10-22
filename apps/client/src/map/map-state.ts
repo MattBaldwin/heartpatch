@@ -25,7 +25,8 @@ import {
  *   refetch the map view rather than guess.
  * - `refresh`: both. What the event says is patched in, so redraw at once,
  *   and the rest only the server knows, so refetch too (a capture: the new
- *   owner's homestead and exploring, #242).
+ *   owner's homestead and exploring, #242; a gatherer arriving: its look,
+ *   masked for me, #602).
  */
 export type LiveEventEffect = 'none' | 'redraw' | 'resync' | 'refresh';
 
@@ -80,11 +81,15 @@ export class MapState {
       // tile was restored and claimed, a village was won and its ring planted,
       // or it was named (PR 3): the view has the progress, the land and the ring.
       // Its Keeper collected its morning gift (PR 3b): the view says it's taken.
+      // Its Keeper dug its cellar key up or opened the cellar (PR 2c, only
+      // they hear it): the view's key hunt moves on.
       case 'community.mended':
       case 'tile.restored':
       case 'community.restored':
       case 'community.named':
       case 'community.gift':
+      case 'key.found':
+      case 'cellar.opened':
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
@@ -163,6 +168,7 @@ export class MapState {
           guardianHint: null,
           // The old owner's gatherer there stopped (squishy jobs).
           workers: 0,
+          workerLook: null,
           // Explored and homestead belong to the owner (#199). The new
           // owner's own may already be on file: a homestead won back keeps
           // its joined_at, so no homestead event follows (#242). Blank them
@@ -193,16 +199,21 @@ export class MapState {
       }
       case 'squishy.assigned': {
         // A squishy left or started gathering on a tile (squishy jobs): the
-        // tile's gatherer count follows it.
+        // tile's gatherer count follows it. The event never says which
+        // species (#602): both tiles drop their look, and a new gatherer's
+        // comes with the refetched view, masked for me.
         const parsed = GAME_EVENTS['squishy.assigned'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
         const { from, to } = parsed.data;
         const workers = (at: { q: number; r: number }) => this.byHex.get(hexKey(at))?.workers ?? 0;
         const left = from
-          ? this.patchTile(from, { workers: Math.max(0, workers(from) - 1) })
+          ? this.patchTile(from, { workers: Math.max(0, workers(from) - 1), workerLook: null })
           : false;
-        const came = to ? this.patchTile(to, { workers: workers(to) + 1 }) : false;
-        return left || came ? 'redraw' : 'none';
+        const came = to
+          ? this.patchTile(to, { workers: workers(to) + 1, workerLook: null })
+          : false;
+        if (came) return 'refresh';
+        return left ? 'redraw' : 'none';
       }
       case 'defenders.changed': {
         const parsed = GAME_EVENTS['defenders.changed'].public.safeParse(event.data);

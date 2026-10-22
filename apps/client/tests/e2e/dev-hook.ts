@@ -29,6 +29,7 @@ export type HookName =
   | 'house'
   | 'catalog'
   | 'wardrobe'
+  | 'heartCoins'
   | 'starter'
   | 'lore'
   | 'milestones'

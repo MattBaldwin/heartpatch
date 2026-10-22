@@ -48,7 +48,7 @@ describe('runMapFill', () => {
     // at the end of a day, after its nightfall.
     expect(
       GAME_DATA.buildings.flatMap((b) => (b.kind === 'hearthfire' ? [b.maxFuelNights] : [])),
-    ).toEqual([8, 8]);
+    ).toEqual([8, 8, 8]);
     const run = runMapFill(scenario('engaged-stops'), FADING_GENTLE, SHORT);
     const away = awayTiles(run, [3, 7, 14, 30])!;
     expect(away.away[0]!.tiles).toBe(away.atStop);

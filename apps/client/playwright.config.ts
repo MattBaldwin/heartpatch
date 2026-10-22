@@ -51,6 +51,8 @@ const E2E_GROUPS = [
     'clear-land',
     'factory',
     'first-session',
+    'heart-coins',
+    'hollowed-cellar',
     'hollowed-explore',
     'hollowed-restore',
     'map-hole',
