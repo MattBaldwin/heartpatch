@@ -2055,7 +2055,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await seenAt(b!)).defenderFeelings).toEqual([]);
       const wild = (await edgeOf(mapId, kid)).find((t) => t.ownerUserId === null)!;
       expect((await seenAt(wild)).defenderFeelings).toEqual([]);
-    });
+    }, 30_000); // a patch and its guards: about 5 s on a busy CI runner
 
     it('puts up to the max on a tile, moves a squishy between tiles, and shows only the count', async () => {
       const server = await start();

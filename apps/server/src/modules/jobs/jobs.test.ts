@@ -579,7 +579,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       });
       const view = await tilesOf(server, kid, mapId);
       expect(view.find((t) => t.q === forest.q && t.r === forest.r)?.workers).toBe(1);
-    });
+    }, 30_000); // two Keepers and a patch: about 5 s on a busy CI runner
 
     it("shows a gatherer's species to each viewer, masked like the trading shelf (#602)", async () => {
       const server = await start();
@@ -633,7 +633,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         .insert(speciesSeen)
         .values({ mapId, userId: mate.id, speciesId: secret.id, firstSeenAt: clock });
       expect(lookOn(await tilesOf(server, mate, mapId), stone)).toEqual(whatIs);
-    });
+    }, 30_000); // two Keepers and a patch: about 5 s on a busy CI runner
 
     it('banks what was ready when taken off (a part-done cycle is let go)', async () => {
       const server = await start();
