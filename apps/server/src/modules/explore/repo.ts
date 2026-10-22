@@ -13,10 +13,17 @@ import {
   type HexKey,
   type Seed,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { communities, communityTiles, maps, tileExplore, tiles } from '../../db/schema.js';
+import {
+  communities,
+  communityTiles,
+  gameEvents,
+  maps,
+  tileExplore,
+  tiles,
+} from '../../db/schema.js';
 import { pickDevHomestead } from './dev-homestead.js';
 
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
@@ -257,6 +264,25 @@ export function createExploreRepo(db: Executor) {
         .where(eq(communityTiles.tileId, tileId))
         .for('update');
       return row?.puzzleSolvedBy ?? null;
+    },
+
+    /**
+     * The lore pages my memory puzzles on this map already gave (#306 PR 2b),
+     * from their events: the lore consumer records them a moment after the
+     * solve commits, so a quick second solve mustn't roll one again. Unlocked.
+     */
+    listPuzzledPages: async (mapId: string, userId: string): Promise<string[]> => {
+      const rows = await db
+        .select({ page: sql<string | null>`${gameEvents.payload}->>'lorePage'` })
+        .from(gameEvents)
+        .where(
+          and(
+            eq(gameEvents.mapId, mapId),
+            eq(gameEvents.type, 'explore.puzzled'),
+            eq(gameEvents.actorUserId, userId),
+          ),
+        );
+      return rows.flatMap((r) => (r.page ? [r.page] : []));
     },
 
     /** Writes who has fixed a tile's puzzle, a sorted set (the caller holds `lockPuzzle`). */

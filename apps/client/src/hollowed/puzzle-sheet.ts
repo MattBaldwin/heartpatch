@@ -112,7 +112,12 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     try {
       const reply = await options.solve(s.order.slice(0, s.placed.length));
       if (at !== visit) return;
-      if (reply) fixed = reply;
+      if (!reply) {
+        // The visit or the tile moved on: nothing left to send from here.
+        close(null);
+        return;
+      }
+      fixed = reply;
     } catch (err) {
       if (at !== visit) return;
       problem = messageOf(err);

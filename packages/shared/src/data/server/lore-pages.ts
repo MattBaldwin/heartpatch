@@ -216,7 +216,7 @@ export const LORE_PAGES: LoreEntry[] = [
     chapter: 'grey-villages',
     order: 1,
     title: 'The Market Day Tune',
-    text: 'The little music box plays a tune you almost know: bell, drum, horn, fiddle. Long ago the whole village danced to it on market day, even the squishies with very short legs.',
+    text: 'As the last piece clicks back, you hear a tune you almost know. Long ago the whole village hummed it on market day, and everyone danced, even the squishies with very short legs.',
     hint: 'Broken things still remember songs.',
     trigger: {
       mapKinds: ['multiplayer'],
@@ -230,7 +230,7 @@ export const LORE_PAGES: LoreEntry[] = [
     chapter: 'grey-villages',
     order: 2,
     title: 'The Painted Wall',
-    text: 'Pieced back together, the old wall shows the village as it was: bright doors, a lantern in every window, and a pile of squishies on the bakery step, waiting for crumbs.',
+    text: 'Under the grey, the village kept a picture of itself: bright doors, a lantern in every window, and a pile of squishies on the bakery step, waiting for crumbs.',
     hint: 'Old walls keep old pictures.',
     trigger: {
       mapKinds: ['multiplayer'],
@@ -244,8 +244,8 @@ export const LORE_PAGES: LoreEntry[] = [
     chapter: 'grey-villages',
     order: 3,
     title: 'Keep the Lanterns Lit',
-    text: 'A note tucked under a fountain tile: “The night we forgot the lanterns, the colour slipped away. The little ones hid the cellar key somewhere safe. If you find this, keep the lights on for us.”',
-    hint: 'Some notes hide where water used to sing.',
+    text: 'A note tucked inside the broken piece: “The night we forgot the lanterns, the colour slipped away. The little ones hid the cellar key somewhere safe. If you find this, keep the lights on for us.”',
+    hint: 'Some notes hide inside broken things.',
     trigger: {
       mapKinds: ['multiplayer'],
       eventType: 'explore.puzzled',

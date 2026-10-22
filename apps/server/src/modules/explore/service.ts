@@ -568,9 +568,11 @@ export function createExploreService(options: ExploreServiceOptions) {
 
         // What it gives: a page not found yet, else a small thank-you (rule 1, rule 6).
         const owner = { mapId, userId: user.id };
-        const foundLore = new Set(
-          (await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
-        );
+        // Found, or given by a solve the lore consumer hasn't recorded yet.
+        const foundLore = new Set([
+          ...(await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
+          ...(await repo.listPuzzledPages(mapId, user.id)),
+        ]);
         const recipes = (await options.rekindled?.sealed(tx, owner)) ?? [];
         const reward = rollPuzzleReward(
           PUZZLE_REWARDS,

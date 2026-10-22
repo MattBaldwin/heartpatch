@@ -1293,6 +1293,26 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(await solvedBy(square)).toEqual([me.id]);
       });
 
+      it('never gives the same page twice, before the Lorebook has caught up', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        const village = (await tilesOf(mapId)).filter((t) => t.communityId === square.communityId);
+        const pages: (string | undefined)[] = [];
+        // No lore consumer runs in between: every page comes from the events.
+        for (const t of village.slice(0, PUZZLE_REWARDS.lorePages.length + 1)) {
+          const { order } = (await view(server, me, mapId, t)).community!.puzzle!;
+          const res = await solve(server, me, mapId, t, order);
+          expect(res.statusCode, res.body).toBe(200);
+          pages.push(SolvePuzzleResponseSchema.parse(res.json()).lore?.id);
+        }
+        const given = pages.filter((id) => id !== undefined);
+        expect(new Set(given).size).toBe(given.length);
+        expect([...given].sort()).toEqual([...PUZZLE_REWARDS.lorePages].sort());
+        expect(pages.at(-1)).toBeUndefined();
+      });
+
       it('gives a little Heartdust once every page is found', async () => {
         const server = await start();
         const me = await player();
@@ -1354,17 +1374,14 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       it('is shut at night and out of reach, and there is none on my own land', async () => {
         const server = await start();
         const me = await player();
-        const friend = await player();
-        const mapId = await patch(server, me, [friend]);
+        const mapId = await patch(server, me);
+        // A new home never touches a village (they sit 3–5 steps out): out of reach.
+        const village = (await tilesOf(mapId)).find((t) => t.communityId !== null)!;
+        const away = await solve(server, me, mapId, village, ['bell', 'drum', 'horn', 'fiddle']);
+        expect(away.statusCode).toBe(403);
+        expect(errorOf(away).message).toBe('Claim land next to it to explore!');
         const square = await reachVillage(server, me, mapId);
         const { order } = (await view(server, me, mapId, square)).community!.puzzle!;
-        const tiles = await tilesOf(mapId);
-        const village = tiles.filter((t) => t.communityId === square.communityId);
-        if (communityReach(village, tiles, friend.id).reach !== 'touching') {
-          const away = await solve(server, friend, mapId, square, order);
-          expect(away.statusCode).toBe(403);
-          expect(errorOf(away).message).toBe('Claim land next to it to explore!');
-        }
         const { first } = await lineFromHome(mapId, me);
         await ownMeadow(first, me);
         const mine = await solve(server, me, mapId, first, order);
