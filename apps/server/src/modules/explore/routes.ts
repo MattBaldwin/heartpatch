@@ -7,10 +7,15 @@ import {
   SearchSpotRequestSchema,
   SearchSpotResponseSchema,
   DevRelightAnswerResponseSchema,
+  DevStoryAnswerResponseSchema,
+  DevStoryPagesRequestSchema,
+  DevStoryPagesResponseSchema,
   SolvePuzzleRequestSchema,
   SolvePuzzleResponseSchema,
   StartPuzzleRequestSchema,
   StartPuzzleResponseSchema,
+  TellStoryRequestSchema,
+  TellStoryResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -31,7 +36,7 @@ export interface ExploreRoutesOptions {
   devTools?: boolean;
 }
 
-/** Exploring your land (#199): the explore view of one of my tiles, searching a spot, and a grey village's Relight puzzle (#306 PR 2b). */
+/** Exploring your land (#199): the explore view of one of my tiles, searching a spot, and a grey village's puzzles (#306: Relight the path, The forgotten story). */
 export const exploreRoutes =
   (service: ExploreService, options: ExploreRoutesOptions): FastifyPluginCallback =>
   (fastify, _options, done) => {
@@ -95,6 +100,21 @@ export const exploreRoutes =
       async (request) =>
         service.solvePuzzle(requireUser(request), request.params.mapId, request.body),
     );
+    // The heart tile's forgotten story (#306): tell it, first to last.
+    app.post(
+      '/maps/:mapId/explore/puzzle/story',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: TellStoryRequestSchema,
+          response: { 200: TellStoryResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('explore'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.tellStory(requireUser(request), request.params.mapId, request.body),
+    );
 
     if (options.devTools) {
       app.post(
@@ -131,6 +151,34 @@ export const exploreRoutes =
         },
         async (request) =>
           service.devRelightAnswer(requireUser(request), request.params.mapId, request.body),
+      );
+      // The forgotten story (#306), for e2e and captures only: my latest try's
+      // order, and the Hollow's torn pages found.
+      app.post(
+        '/maps/:mapId/dev/story-answer',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: StartPuzzleRequestSchema,
+            response: { 200: DevStoryAnswerResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) =>
+          service.devStoryAnswer(requireUser(request), request.params.mapId, request.body),
+      );
+      app.post(
+        '/maps/:mapId/dev/story-pages',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevStoryPagesRequestSchema,
+            response: { 200: DevStoryPagesResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) =>
+          service.devStoryPages(requireUser(request), request.params.mapId, request.body),
       );
       app.post(
         '/maps/:mapId/dev/hollowed-reach',

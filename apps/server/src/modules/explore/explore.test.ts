@@ -31,6 +31,11 @@ import {
   relightBoard,
   relightDepth,
   relightSeed,
+  makeStory,
+  storyAnswer,
+  storyDeal,
+  storySeed,
+  TellStoryResponseSchema,
   type RelightMove,
   type HexKey,
   type MapDetail,
@@ -1178,7 +1183,9 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       async function attemptOf(server: FastifyInstance, who: Player, mapId: string, t: Tile) {
         const res = await begin(server, who, mapId, t);
         expect(res.statusCode, res.body).toBe(200);
-        const { attempt, board } = StartPuzzleResponseSchema.parse(res.json());
+        const started = StartPuzzleResponseSchema.parse(res.json());
+        if (started.kind !== 'relight') throw new Error('not a Relight tile');
+        const { attempt, board } = started;
         const village = await db.query.communities.findFirst({
           where: (c, { eq: is }) => is(c.id, t.communityId!),
         });
@@ -1236,6 +1243,63 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
           }
         }
       }
+      /** A Hollow tile round the heart, reached: the heart's own puzzle is the story. */
+      async function ringTile(server: FastifyInstance, who: Player, mapId: string) {
+        const square = await reachVillage(server, who, mapId);
+        return (await tilesOf(mapId)).find(
+          (t) => t.communityId === square.communityId && t.id !== square.id,
+        )!;
+      }
+      /** Every torn page of `t`'s Hollow found but `leave` (dev route). */
+      async function storyPages(
+        server: FastifyInstance,
+        who: Player,
+        mapId: string,
+        t: Tile,
+        leave = 0,
+      ) {
+        const res = await call(server, 'POST', `/maps/${mapId}/dev/story-pages`, who, {
+          q: t.q,
+          r: t.r,
+          leave,
+        });
+        expect(res.statusCode, res.body).toBe(200);
+        return res.json<{ found: number; total: number }>();
+      }
+      const tell = (
+        server: FastifyInstance,
+        who: Player,
+        mapId: string,
+        t: Tile,
+        body: { attempt: number; order: readonly string[] },
+        key?: string,
+      ) =>
+        call(
+          server,
+          'POST',
+          `/maps/${mapId}/explore/puzzle/story`,
+          who,
+          { q: t.q, r: t.r, attempt: body.attempt, order: body.order },
+          key ? { 'idempotency-key': key } : {},
+        );
+      /** The day a try was dealt from, rebuilt from the Hollow's secret seed as the server does. */
+      async function dayOf(mapId: string, who: Player, t: Tile, attempt: number) {
+        const village = await db.query.communities.findFirst({
+          where: (c, { eq: is }) => is(c.id, t.communityId!),
+        });
+        const size = (await tilesOf(mapId)).filter((v) => v.communityId === t.communityId).length;
+        return makeStory(storySeed(village!.seed, t, who.id, attempt), size, MEMORY_PUZZLES.story);
+      }
+      /** A new story try, checked against the rebuilt day, and its answer. */
+      async function storyOf(server: FastifyInstance, who: Player, mapId: string, t: Tile) {
+        const res = await begin(server, who, mapId, t);
+        expect(res.statusCode, res.body).toBe(200);
+        const started = StartPuzzleResponseSchema.parse(res.json());
+        if (started.kind !== 'story') throw new Error('not the story');
+        const day = await dayOf(mapId, who, t, started.attempt);
+        expect(started.story).toEqual(storyDeal(day));
+        return { attempt: started.attempt, story: started.story, order: storyAnswer(day) };
+      }
       const findAll = (who: Player, pages: readonly string[]) =>
         db
           .insert(loreFound)
@@ -1245,23 +1309,24 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start(noDrops);
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
-        const tile = await view(server, me, mapId, square);
+        const ring = await ringTile(server, me, mapId);
+        const tile = await view(server, me, mapId, ring);
         const puzzle = tile.community?.puzzle;
-        const skin = puzzleSkinFor(square.terrain, MEMORY_PUZZLES);
-        // The square is the Hollow's heart: the biggest board until The forgotten story lands.
-        expect(puzzle).toMatchObject({ skin: skin.id, depth: 'heart', solved: false });
+        const skin = puzzleSkinFor(ring.terrain, MEMORY_PUZZLES);
+        // A tile round the heart holds a Relight path, sized by how deep it is.
+        expect(puzzle).toMatchObject({ skin: skin.id, kind: 'relight', solved: false });
+        expect(puzzle?.pages).toBeUndefined();
         // It stands clear of every spot (the Keeper walks round both).
         for (const s of tile.spots) {
           expect(Math.hypot(s.x - puzzle!.x, s.z - puzzle!.z)).toBeGreaterThan(0.25);
         }
         // The same for everyone, every time.
-        expect((await view(server, me, mapId, square)).community?.puzzle).toEqual(puzzle);
+        expect((await view(server, me, mapId, ring)).community?.puzzle).toEqual(puzzle);
 
-        const { attempt, board, moves } = await attemptOf(server, me, mapId, square);
+        const { attempt, board, moves } = await attemptOf(server, me, mapId, ring);
         expect(attempt).toBe(1);
-        expect(board.size).toBe(MEMORY_PUZZLES.relight.heart.size);
-        const res = await solve(server, me, mapId, square, { attempt, moves });
+        expect(board.size).toBe(MEMORY_PUZZLES.relight[puzzle!.depth].size);
+        const res = await solve(server, me, mapId, ring, { attempt, moves });
         expect(res.statusCode, res.body).toBe(200);
         const fixed = SolvePuzzleResponseSchema.parse(res.json());
         expect(fixed.puzzle).toEqual({ ...puzzle, solved: true });
@@ -1269,16 +1334,16 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect(PUZZLE_REWARDS.lorePages).toContain(fixed.lore?.id);
         expect(fixed.lore?.title.length).toBeGreaterThan(0);
         expect(fixed.found).toEqual({});
-        expect(await solvedBy(square)).toEqual([me.id]);
-        expect((await rowOf(me, square))?.puzzleSolvedAt?.getTime()).toBe(clock.getTime());
+        expect(await solvedBy(ring)).toEqual([me.id]);
+        expect((await rowOf(me, ring))?.puzzleSolvedAt?.getTime()).toBe(clock.getTime());
         const [event] = await eventsOf(mapId, 'explore.puzzled');
         expect(event).toMatchObject({
           userId: me.id,
-          q: square.q,
-          r: square.r,
-          communityId: square.communityId,
+          q: ring.q,
+          r: ring.r,
+          communityId: ring.communityId,
           skin: skin.id,
-          depth: 'heart',
+          depth: puzzle!.depth,
           attempt: 1,
           moves: moves.length,
           lorePage: fixed.lore!.id,
@@ -1292,10 +1357,10 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         });
         expect(found.map((f) => f.pageId)).toContain(fixed.lore!.id);
 
-        expect((await view(server, me, mapId, square)).community?.puzzle?.solved).toBe(true);
+        expect((await view(server, me, mapId, ring)).community?.puzzle?.solved).toBe(true);
         for (const again of [
-          await solve(server, me, mapId, square, { attempt, moves }),
-          await begin(server, me, mapId, square),
+          await solve(server, me, mapId, ring, { attempt, moves }),
+          await begin(server, me, mapId, ring),
         ]) {
           expect(again.statusCode).toBe(409);
           expect(errorOf(again).message).toBe('You already fixed this one! ✨');
@@ -1321,17 +1386,17 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start();
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
+        const ring = await ringTile(server, me, mapId);
         // A search this morning, then tries: a try never touches the morning's searches.
-        const spot = (await view(server, me, mapId, square)).spots.find((s) => s.tool === null)!;
-        expect((await search(server, me, mapId, square, spot.index)).statusCode).toBe(200);
-        const searchedAt = (await rowOf(me, square))!.updatedAt;
-        const first = await attemptOf(server, me, mapId, square);
-        const second = await attemptOf(server, me, mapId, square);
+        const spot = (await view(server, me, mapId, ring)).spots.find((s) => s.tool === null)!;
+        expect((await search(server, me, mapId, ring, spot.index)).statusCode).toBe(200);
+        const searchedAt = (await rowOf(me, ring))!.updatedAt;
+        const first = await attemptOf(server, me, mapId, ring);
+        const second = await attemptOf(server, me, mapId, ring);
         expect([first.attempt, second.attempt]).toEqual([1, 2]);
         expect(second.board.cells).not.toEqual(first.board.cells);
-        expect(await rowOf(me, square)).toMatchObject({ puzzleAttempt: 2, updatedAt: searchedAt });
-        expect((await view(server, me, mapId, square)).progress.searched).toBe(1);
+        expect(await rowOf(me, ring)).toMatchObject({ puzzleAttempt: 2, updatedAt: searchedAt });
+        expect((await view(server, me, mapId, ring)).progress.searched).toBe(1);
 
         const turnHeart = { type: 'turn' as const, at: second.board.heart };
         for (const [body, message] of [
@@ -1358,27 +1423,27 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
             "The light didn't reach every lantern. Try a new path!",
           ],
         ] as const) {
-          const res = await solve(server, me, mapId, square, body);
+          const res = await solve(server, me, mapId, ring, body);
           expect(res.statusCode, JSON.stringify(body.moves.length)).toBe(409);
           expect(errorOf(res).message).toBe(message);
         }
-        expect(await solvedBy(square)).toEqual([]);
+        expect(await solvedBy(ring)).toEqual([]);
         expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(0);
         // The latest try, lit, within the limit.
-        expect((await solve(server, me, mapId, square, second)).statusCode).toBe(200);
+        expect((await solve(server, me, mapId, ring, second)).statusCode).toBe(200);
       });
 
       it('stays fixed once the tile lists me, even with my explore row gone', async () => {
         const server = await start();
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
-        const lit = await attemptOf(server, me, mapId, square);
-        expect((await solve(server, me, mapId, square, lit)).statusCode).toBe(200);
+        const ring = await ringTile(server, me, mapId);
+        const lit = await attemptOf(server, me, mapId, ring);
+        expect((await solve(server, me, mapId, ring, lit)).statusCode).toBe(200);
         // A departure deletes my explore rows; the tile's list still has me.
         await db.execute(`delete from tile_explore where user_id = '${me.id}'`);
-        expect((await view(server, me, mapId, square)).community?.puzzle?.solved).toBe(true);
-        const again = await begin(server, me, mapId, square);
+        expect((await view(server, me, mapId, ring)).community?.puzzle?.solved).toBe(true);
+        const again = await begin(server, me, mapId, ring);
         expect(again.statusCode).toBe(409);
         expect(errorOf(again).message).toBe('You already fixed this one! ✨');
       });
@@ -1387,20 +1452,18 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start();
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
-        const res = await solve(server, me, mapId, square, { attempt: 1, moves: [] });
+        const ring = await ringTile(server, me, mapId);
+        const res = await solve(server, me, mapId, ring, { attempt: 1, moves: [] });
         expect(res.statusCode).toBe(409);
         expect(errorOf(res).message).toBe('The path has shuffled! Try the new one.');
         // The dev answer (e2e and captures only) is the latest try's, and it lights the path.
         const answer = (body: { q: number; r: number }) =>
           call(server, 'POST', `/maps/${mapId}/dev/relight-answer`, me, body);
-        expect((await answer({ q: square.q, r: square.r })).statusCode).toBe(409);
-        const { moves } = await attemptOf(server, me, mapId, square);
-        const dev = await answer({ q: square.q, r: square.r });
+        expect((await answer({ q: ring.q, r: ring.r })).statusCode).toBe(409);
+        const { moves } = await attemptOf(server, me, mapId, ring);
+        const dev = await answer({ q: ring.q, r: ring.r });
         expect(dev.json()).toEqual({ attempt: 1, moves });
-        expect((await solve(server, me, mapId, square, { attempt: 1, moves })).statusCode).toBe(
-          200,
-        );
+        expect((await solve(server, me, mapId, ring, { attempt: 1, moves })).statusCode).toBe(200);
       });
 
       it('is each kid’s own: a friend gets their own board, and a retry is one solve', async () => {
@@ -1408,20 +1471,20 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const me = await player();
         const friend = await player();
         const mapId = await patch(server, me, [friend]);
-        const square = await reachVillage(server, me, mapId);
-        await touchVillage(friend, mapId, square);
-        const mine = await attemptOf(server, me, mapId, square);
-        const theirs = await attemptOf(server, friend, mapId, square);
+        const ring = await ringTile(server, me, mapId);
+        await touchVillage(friend, mapId, ring);
+        const mine = await attemptOf(server, me, mapId, ring);
+        const theirs = await attemptOf(server, friend, mapId, ring);
         expect(theirs.board.cells).not.toEqual(mine.board.cells);
-        const first = await solve(server, me, mapId, square, mine, 'puzzle-key-1');
-        const retry = await solve(server, me, mapId, square, mine, 'puzzle-key-1');
+        const first = await solve(server, me, mapId, ring, mine, 'puzzle-key-1');
+        const retry = await solve(server, me, mapId, ring, mine, 'puzzle-key-1');
         expect(retry.statusCode).toBe(200);
         expect(retry.json()).toEqual(first.json());
-        expect((await view(server, friend, mapId, square)).community?.puzzle?.solved).toBe(false);
+        expect((await view(server, friend, mapId, ring)).community?.puzzle?.solved).toBe(false);
         // My answer isn't theirs.
-        expect((await solve(server, friend, mapId, square, mine)).statusCode).toBe(409);
-        expect((await solve(server, friend, mapId, square, theirs)).statusCode).toBe(200);
-        expect(await solvedBy(square)).toEqual([me.id, friend.id].sort());
+        expect((await solve(server, friend, mapId, ring, mine)).statusCode).toBe(409);
+        expect((await solve(server, friend, mapId, ring, theirs)).statusCode).toBe(200);
+        expect(await solvedBy(ring)).toEqual([me.id, friend.id].sort());
         expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(2);
       });
 
@@ -1429,14 +1492,14 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start();
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
-        const lit = await attemptOf(server, me, mapId, square);
+        const ring = await ringTile(server, me, mapId);
+        const lit = await attemptOf(server, me, mapId, ring);
         const both = await Promise.all([
-          solve(server, me, mapId, square, lit),
-          solve(server, me, mapId, square, lit),
+          solve(server, me, mapId, ring, lit),
+          solve(server, me, mapId, ring, lit),
         ]);
         expect(both.map((r) => r.statusCode).sort()).toEqual([200, 409]);
-        expect(await solvedBy(square)).toEqual([me.id]);
+        expect(await solvedBy(ring)).toEqual([me.id]);
       });
 
       it('never gives the same page twice, before the Lorebook has caught up', async () => {
@@ -1447,8 +1510,14 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const village = (await tilesOf(mapId)).filter((t) => t.communityId === square.communityId);
         const pages: (string | undefined)[] = [];
         // No lore consumer runs in between: every page comes from the events.
-        for (const t of village.slice(0, PUZZLE_REWARDS.lorePages.length + 1)) {
-          const res = await solve(server, me, mapId, t, await attemptOf(server, me, mapId, t));
+        // The heart holds the story, told right: it gives from the same pages.
+        await storyPages(server, me, mapId, square);
+        const fixes = [square, ...village.filter((t) => t.id !== square.id)];
+        for (const t of fixes.slice(0, PUZZLE_REWARDS.lorePages.length + 1)) {
+          const res =
+            t.id === square.id
+              ? await tell(server, me, mapId, t, await storyOf(server, me, mapId, t))
+              : await solve(server, me, mapId, t, await attemptOf(server, me, mapId, t));
           expect(res.statusCode, res.body).toBe(200);
           pages.push(SolvePuzzleResponseSchema.parse(res.json()).lore?.id);
         }
@@ -1462,15 +1531,9 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start(noDrops);
         const me = await player();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
+        const ring = await ringTile(server, me, mapId);
         await findAll(me, PUZZLE_REWARDS.lorePages);
-        const res = await solve(
-          server,
-          me,
-          mapId,
-          square,
-          await attemptOf(server, me, mapId, square),
-        );
+        const res = await solve(server, me, mapId, ring, await attemptOf(server, me, mapId, ring));
         expect(res.statusCode, res.body).toBe(200);
         const fixed = SolvePuzzleResponseSchema.parse(res.json());
         expect(fixed).toMatchObject({ lore: null, clothing: null, found: PUZZLE_REWARDS.fallback });
@@ -1490,13 +1553,13 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const server = await start();
         // Pieces drop where milestones count (two members).
         const mapId = await patch(server, me, [await player()]);
-        const square = await reachVillage(server, me, mapId);
+        const ring = await ringTile(server, me, mapId);
         const rng = rekindledRng((e) => e['clothing'] === 'ember-patch-jacket');
         const service = createExploreService({ db, clock: () => clock, rng: () => rng });
-        const { attempt, moves } = await attemptOf(server, me, mapId, square);
+        const { attempt, moves } = await attemptOf(server, me, mapId, ring);
         const fixed = await service.solvePuzzle(me, mapId, {
-          q: square.q,
-          r: square.r,
+          q: ring.q,
+          r: ring.r,
           attempt,
           moves: [...moves],
         });
@@ -1519,16 +1582,16 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const me = await player();
         const server = await start();
         const mapId = await patch(server, me);
-        const square = await reachVillage(server, me, mapId);
+        const ring = await ringTile(server, me, mapId);
         await findAll(me, PUZZLE_REWARDS.lorePages);
         const rng = rekindledRng(
           (e) => (e['items'] as Record<string, number> | undefined)?.['joy-ember'] !== undefined,
         );
         const service = createExploreService({ db, clock: () => clock, rng: () => rng });
-        const { attempt, moves } = await attemptOf(server, me, mapId, square);
+        const { attempt, moves } = await attemptOf(server, me, mapId, ring);
         const fixed = await service.solvePuzzle(me, mapId, {
-          q: square.q,
-          r: square.r,
+          q: ring.q,
+          r: ring.r,
           attempt,
           moves: [...moves],
         });
@@ -1553,8 +1616,8 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         const away = await begin(server, me, mapId, village);
         expect(away.statusCode).toBe(403);
         expect(errorOf(away).message).toBe('Claim land next to it to explore!');
-        const square = await reachVillage(server, me, mapId);
-        const lit = await attemptOf(server, me, mapId, square);
+        const ring = await ringTile(server, me, mapId);
+        const lit = await attemptOf(server, me, mapId, ring);
         const { first } = await lineFromHome(mapId, me);
         await ownMeadow(first, me);
         for (const mine of [
@@ -1566,9 +1629,312 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         }
         // 8 PM in Denver: after nightfall.
         clock.setTime(Date.parse('2026-10-03T02:00:00Z'));
-        expect((await begin(server, me, mapId, square)).statusCode).toBe(403);
-        expect((await solve(server, me, mapId, square, lit)).statusCode).toBe(403);
-        expect(await solvedBy(square)).toEqual([]);
+        expect((await begin(server, me, mapId, ring)).statusCode).toBe(403);
+        expect((await solve(server, me, mapId, ring, lit)).statusCode).toBe(403);
+        expect(await solvedBy(ring)).toEqual([]);
+      });
+
+      describe('The forgotten story (#306)', () => {
+        it('hides a torn page on each Hollow tile, found on my first search there', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const village = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          );
+          const total = village.length;
+          const puzzle = (await view(server, me, mapId, square)).community?.puzzle;
+          expect(puzzle).toMatchObject({
+            kind: 'story',
+            depth: 'heart',
+            solved: false,
+            pages: { found: 0, total },
+          });
+
+          // Asleep until every page is found.
+          const asleep = await begin(server, me, mapId, square);
+          expect(asleep.statusCode).toBe(409);
+          expect(errorOf(asleep).message).toBe(
+            `Find every torn page first! 📜 0 of ${total} found.`,
+          );
+          expect((await rowOf(me, square))?.puzzleAttempt ?? 0).toBe(0);
+
+          const { spot } = await handSpot(server, me, mapId, square);
+          const first = await search(server, me, mapId, square, spot.index);
+          expect(first.statusCode, first.body).toBe(200);
+          expect(SearchSpotResponseSchema.parse(first.json()).tornPage).toEqual({
+            found: 1,
+            total,
+          });
+          expect((await rowOf(me, square))?.fragmentFoundAt?.getTime()).toBe(clock.getTime());
+          // The next search there finds no page: one a tile.
+          const other = (await view(server, me, mapId, square)).spots.find((s) => !s.done)!;
+          const second = await search(server, me, mapId, square, other.index);
+          expect(SearchSpotResponseSchema.parse(second.json()).tornPage).toBeUndefined();
+          // Another tile's first search finds its page.
+          const ring = village.find((t) => t.id !== square.id)!;
+          const ringSpot = (await view(server, me, mapId, ring)).spots.find(
+            (s) => s.tool === null,
+          )!;
+          const third = await search(server, me, mapId, ring, ringSpot.index);
+          expect(SearchSpotResponseSchema.parse(third.json()).tornPage).toEqual({
+            found: 2,
+            total,
+          });
+          // My own land never has one.
+          const { first: home } = await lineFromHome(mapId, me);
+          await ownMeadow(home, me);
+          const mine = await search(server, me, mapId, home, 0);
+          expect(mine.statusCode, mine.body).toBe(200);
+          expect(SearchSpotResponseSchema.parse(mine.json()).tornPage).toBeUndefined();
+
+          expect((await view(server, me, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: 2,
+            total,
+          });
+          // Every page found wakes it.
+          expect(await storyPages(server, me, mapId, square)).toEqual({ found: total, total });
+          const { story } = await storyOf(server, me, mapId, square);
+          // One clue a tile, and never the order.
+          expect(story.clues).toHaveLength(total);
+          expect(story.moments).toHaveLength(
+            MEMORY_PUZZLES.story.sizes.findLast((s) => total >= s.tiles)!.moments,
+          );
+        });
+
+        it('tells it right once: a lore page, the event, and a retry is one telling', async () => {
+          const server = await start(noDrops);
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          await storyPages(server, me, mapId, square);
+          const { attempt, order, story } = await storyOf(server, me, mapId, square);
+          // The start's reply holds the cards and clues only.
+          expect(Object.keys(story).sort()).toEqual(['clues', 'moments']);
+          expect(story.moments.map((m) => m.id)).not.toEqual(order);
+
+          const res = await tell(server, me, mapId, square, { attempt, order }, 'story-key-1');
+          expect(res.statusCode, res.body).toBe(200);
+          const whole = TellStoryResponseSchema.parse(res.json());
+          if (whole.result !== 'whole') throw new Error('not whole');
+          expect(whole.puzzle).toMatchObject({ kind: 'story', depth: 'heart', solved: true });
+          expect(PUZZLE_REWARDS.lorePages).toContain(whole.lore?.id);
+          expect(whole.found).toEqual({});
+          const retry = await tell(server, me, mapId, square, { attempt, order }, 'story-key-1');
+          expect(retry.json()).toEqual(res.json());
+          expect(await solvedBy(square)).toEqual([me.id]);
+          expect((await rowOf(me, square))?.puzzleSolvedAt?.getTime()).toBe(clock.getTime());
+          const events = await eventsOf(mapId, 'explore.puzzled');
+          expect(events).toHaveLength(1);
+          expect(events[0]).toMatchObject({
+            userId: me.id,
+            q: square.q,
+            r: square.r,
+            depth: 'heart',
+            attempt,
+            moves: order.length,
+            lorePage: whole.lore!.id,
+            notable: 'lore',
+          });
+          expect((await view(server, me, mapId, square)).community?.puzzle?.solved).toBe(true);
+          for (const again of [
+            await tell(server, me, mapId, square, { attempt, order }),
+            await begin(server, me, mapId, square),
+          ]) {
+            expect(again.statusCode).toBe(409);
+            expect(errorOf(again).message).toBe('You already fixed this one! ✨');
+          }
+        });
+
+        it('spends a wrong telling: which places were right, then a new day on the same pages', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          await storyPages(server, me, mapId, square);
+          const first = await storyOf(server, me, mapId, square);
+          const [a, b, ...rest] = first.order;
+          const wrong = [b!, a!, ...rest];
+          const res = await tell(server, me, mapId, square, {
+            attempt: first.attempt,
+            order: wrong,
+          });
+          expect(res.statusCode, res.body).toBe(200);
+          const smudged = TellStoryResponseSchema.parse(res.json());
+          if (smudged.result !== 'smudged') throw new Error('not smudged');
+          expect(smudged.right).toBe(first.order.length - 2);
+          expect(smudged.marks).toEqual([false, false, ...rest.map(() => true)]);
+          // The ink shifts: the next try is dealt at once, a new day of the same size.
+          expect(smudged.next.attempt).toBe(first.attempt + 1);
+          const nextDay = await dayOf(mapId, me, square, smudged.next.attempt);
+          expect(smudged.next.story).toEqual(storyDeal(nextDay));
+          expect(smudged.next.story).not.toEqual(first.story);
+          expect(smudged.next.story.clues).toHaveLength(first.story.clues.length);
+          expect((await rowOf(me, square))?.puzzleAttempt).toBe(first.attempt + 1);
+
+          // The spent try can't be fixed up and told again.
+          const late = await tell(server, me, mapId, square, first);
+          expect(late.statusCode).toBe(409);
+          expect(errorOf(late).message).toBe('The ink has shifted! Read the new pages.');
+          expect(await eventsOf(mapId, 'explore.puzzled')).toHaveLength(0);
+          expect(await solvedBy(square)).toEqual([]);
+          // The new day, told right.
+          const right = await tell(server, me, mapId, square, {
+            attempt: smudged.next.attempt,
+            order: storyAnswer(nextDay),
+          });
+          expect(TellStoryResponseSchema.parse(right.json()).result).toBe('whole');
+        });
+
+        it('refuses moments not the day’s, and each puzzle only on its own route', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const ring = (await tilesOf(mapId)).find(
+            (t) => t.communityId === square.communityId && t.id !== square.id,
+          )!;
+          await storyPages(server, me, mapId, square);
+          // No try yet.
+          const none = await tell(server, me, mapId, square, {
+            attempt: 1,
+            order: ['bell', 'baker', 'miller'],
+          });
+          expect(errorOf(none).message).toBe('The ink has shifted! Read the new pages.');
+          const { attempt, order } = await storyOf(server, me, mapId, square);
+          for (const bad of [
+            order.slice(1),
+            [order[0]!, ...order.slice(0, -1)],
+            [...order.slice(1), 'not-a-moment'],
+          ]) {
+            const res = await tell(server, me, mapId, square, { attempt, order: bad });
+            expect(res.statusCode, JSON.stringify(bad)).toBe(400);
+            expect(errorOf(res).message).toBe("Those aren't the story's moments. Try again!");
+          }
+          // A refused order spends nothing.
+          expect((await rowOf(me, square))?.puzzleAttempt).toBe(attempt);
+          const lantern = await solve(server, me, mapId, square, { attempt, moves: [] });
+          expect(errorOf(lantern).message).toBe('This one is a story, not a lantern path!');
+          const notStory = await tell(server, me, mapId, ring, { attempt: 1, order });
+          expect(errorOf(notStory).message).toBe('This one is a lantern path, not a story!');
+          // The dev answers (e2e and captures only) each know their own puzzle.
+          const devRelight = await call(server, 'POST', `/maps/${mapId}/dev/relight-answer`, me, {
+            q: square.q,
+            r: square.r,
+          });
+          expect(errorOf(devRelight).message).toBe('This one is a story, not a lantern path!');
+          const devStory = await call(server, 'POST', `/maps/${mapId}/dev/story-answer`, me, {
+            q: square.q,
+            r: square.r,
+          });
+          expect(devStory.json()).toEqual({ attempt, order });
+        });
+
+        it('counts a restored tile’s page as found, so nobody is locked out', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const village = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          );
+          const total = village.length;
+          // Every page but two ring tiles' (the heart's own, found by search).
+          expect(await storyPages(server, me, mapId, square, 3)).toEqual({
+            found: total - 3,
+            total,
+          });
+          const { spot } = await handSpot(server, me, mapId, square);
+          await search(server, me, mapId, square, spot.index);
+          const left = (
+            await Promise.all(village.map(async (t) => ({ t, row: await rowOf(me, t) })))
+          ).filter(({ row }) => !row?.fragmentFoundAt);
+          expect(left).toHaveLength(2);
+          // Someone restores one before I search it: it can't be searched grey any more.
+          await db.execute(
+            `update community_tiles set restored_at = now() where tile_id = '${left[0]!.t.id}'`,
+          );
+          expect((await view(server, me, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: total - 1,
+            total,
+          });
+          await db.execute(
+            `update community_tiles set restored_at = now() where tile_id = '${left[1]!.t.id}'`,
+          );
+          expect((await view(server, me, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: total,
+            total,
+          });
+          expect((await begin(server, me, mapId, square)).statusCode).toBe(200);
+        });
+
+        it('never tells a story whose pages aren’t found, even with an old try', async () => {
+          const server = await start();
+          const me = await player();
+          const mapId = await patch(server, me);
+          const square = await reachVillage(server, me, mapId);
+          const total = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          ).length;
+          await storyPages(server, me, mapId, square, 1);
+          // A try left on the heart from before (its old Relight stand-in).
+          await db.insert(tileExplore).values({
+            userId: me.id,
+            tileId: square.id,
+            mapId,
+            layout: 1,
+            terrain: square.terrain,
+            spotCount: 1,
+            puzzleAttempt: 3,
+          });
+          const res = await tell(server, me, mapId, square, {
+            attempt: 3,
+            order: ['bell', 'baker', 'miller', 'fiddler', 'ferry'],
+          });
+          expect(res.statusCode).toBe(409);
+          expect(errorOf(res).message).toBe(
+            `Find every torn page first! 📜 ${total - 1} of ${total} found.`,
+          );
+          expect((await rowOf(me, square))?.puzzleAttempt).toBe(3);
+        });
+
+        it('is each kid’s own: a friend finds their own pages and gets their own day', async () => {
+          const server = await start();
+          const me = await player();
+          const friend = await player();
+          const mapId = await patch(server, me, [friend]);
+          const square = await reachVillage(server, me, mapId);
+          await touchVillage(friend, mapId, square);
+          await storyPages(server, me, mapId, square);
+          const total = (await tilesOf(mapId)).filter(
+            (t) => t.communityId === square.communityId,
+          ).length;
+          expect((await view(server, friend, mapId, square)).community?.puzzle?.pages).toEqual({
+            found: 0,
+            total,
+          });
+          // One page short (the heart's) is still asleep; the last wakes it.
+          expect(await storyPages(server, friend, mapId, square, 1)).toEqual({
+            found: total - 1,
+            total,
+          });
+          expect(errorOf(await begin(server, friend, mapId, square)).message).toBe(
+            `Find every torn page first! 📜 ${total - 1} of ${total} found.`,
+          );
+          await storyPages(server, friend, mapId, square);
+          const mine = await storyOf(server, me, mapId, square);
+          const theirs = await storyOf(server, friend, mapId, square);
+          expect(theirs.story).not.toEqual(mine.story);
+          expect(
+            TellStoryResponseSchema.parse((await tell(server, me, mapId, square, mine)).json())
+              .result,
+          ).toBe('whole');
+          expect((await view(server, friend, mapId, square)).community?.puzzle?.solved).toBe(false);
+          // Mine is fixed; theirs still waits on their own telling.
+          expect((await tell(server, friend, mapId, square, theirs)).statusCode).toBe(200);
+          expect(await solvedBy(square)).toEqual([me.id, friend.id].sort());
+        });
       });
     });
 

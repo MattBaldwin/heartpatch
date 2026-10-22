@@ -68,7 +68,7 @@ const E2E_GROUPS = [
   // the next) until close-up, explore, fences and squishy-gallery moved out (#429).
   ['accessory-everywhere', 'account-help', 'dress-up', 'hollow', 'house', 'jobs', 'map', 'potions'],
   // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391),
-  // and hollowed-explore's Relight win (#306 PR 2b; the WebKit jobs took ~11-12 min before it). Keep it light.
+  // and hollowed-explore's story win (#306; a wrong telling and a right one, lighter than PR 2b's Relight win). Keep it light.
   [
     'cinematic',
     'friendly',

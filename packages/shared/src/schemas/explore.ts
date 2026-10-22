@@ -52,8 +52,8 @@ export type PublicSearchSpot = z.infer<typeof PublicSearchSpotSchema>;
 export const HomesteadStateSchema = z.enum(['joined', 'paused']).nullable();
 
 /**
- * A grey village tile's puzzle (#306 PR 2b, "Relight the path"): its broken
- * thing, how deep in the Hollow the tile is (that sets the board's size),
+ * A grey village tile's puzzle (#306 PR 2b, "Relight the path", or "The
+ * forgotten story" on the heart tile): its broken thing, how deep in the Hollow the tile is (that sets the board's size),
  * where it stands and whether I've fixed it. The board itself comes with
  * each try (`POST …/explore/puzzle/start`); what fixing it gives stays
  * server-side.
@@ -61,12 +61,16 @@ export const HomesteadStateSchema = z.enum(['joined', 'paused']).nullable();
 export const HollowedPuzzleSchema = z.object({
   /** Its look (`MEMORY_PUZZLES.skins[].id`). */
   skin: ContentIdSchema,
+  /** What it holds: Relight the path, or The forgotten story on the heart tile. */
+  kind: z.enum(['relight', 'story']),
   depth: RelightDepthSchema,
   /** Where it stands, tile-local (`hexToWorld` at size 1, like the spots). */
   x: z.number(),
   z: z.number(),
   /** I've fixed it already (once a tile each, `tile_explore.puzzle_solved_at`). */
   solved: z.boolean(),
+  /** The story's torn pages I've found in this Hollow (one a tile); it wakes once I have them all. */
+  pages: z.object({ found: z.number().int().min(0), total: z.number().int().min(1) }).optional(),
 });
 export type HollowedPuzzle = z.infer<typeof HollowedPuzzleSchema>;
 
@@ -175,6 +179,8 @@ export const SearchSpotResponseSchema = z.object({
   items: ItemCountsSchema,
   /** On a grey village tile (#306 2a): its joy after this search, 0–100. */
   joy: z.number().int().min(0).max(100).optional(),
+  /** The forgotten story's torn page, on a grey village tile's first search (#306): my pages after it. */
+  tornPage: z.object({ found: z.number().int().min(1), total: z.number().int().min(1) }).optional(),
   /**
    * The search was the cellar key's glinting spot (`KEY_SPOT`, owner decision
    * 2026-10-22): the village whose key it found, by id and name. Absent otherwise.
@@ -190,12 +196,46 @@ export const StartPuzzleRequestSchema = z.strictObject({
 });
 export type StartPuzzleRequest = z.infer<typeof StartPuzzleRequestSchema>;
 
-/** This try's board: every try is a fresh puzzle of the same size (owner decision: a reshuffle). */
-export const StartPuzzleResponseSchema = z.object({
-  /** The try's number, sent back with its moves. */
-  attempt: z.number().int().min(1),
-  board: RelightBoardSchema,
+/** One moment card of the forgotten story: what happened, never where it goes. */
+export const StoryCardSchema = z.object({
+  id: ContentIdSchema,
+  emoji: z.string().min(1).max(8),
+  text: z.string().min(1).max(40),
 });
+export type StoryCard = z.infer<typeof StoryCardSchema>;
+
+/**
+ * A forgotten story try as the kid sees it: the moments as dealt (never in
+ * order) and the clue written on each torn page, page 1 first. The day's
+ * order stays on the server (CLAUDE.md rule 1).
+ */
+export const StoryDealSchema = z.object({
+  moments: z.array(StoryCardSchema).min(3).max(6),
+  clues: z.array(z.string().min(1).max(160)).min(1).max(12),
+});
+export type StoryDeal = z.infer<typeof StoryDealSchema>;
+
+/** A story try: its number, sent back with the order, and its pages. */
+export const StoryStartSchema = z.object({
+  kind: z.literal('story'),
+  attempt: z.number().int().min(1),
+  story: StoryDealSchema,
+});
+export type StoryStart = z.infer<typeof StoryStartSchema>;
+
+/**
+ * This try's puzzle: every try is a fresh puzzle of the same size (owner
+ * decision: a reshuffle). A Relight board, or on the heart tile a story.
+ */
+export const StartPuzzleResponseSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('relight'),
+    /** The try's number, sent back with its moves. */
+    attempt: z.number().int().min(1),
+    board: RelightBoardSchema,
+  }),
+  StoryStartSchema,
+]);
 export type StartPuzzleResponse = z.infer<typeof StartPuzzleResponseSchema>;
 
 /** `POST /maps/:mapId/explore/puzzle`: relight a grey village tile's path (#306 PR 2b). */
@@ -219,6 +259,45 @@ export const DevRelightAnswerResponseSchema = z.object({
 });
 export type DevRelightAnswerResponse = z.infer<typeof DevRelightAnswerResponseSchema>;
 
+/** `POST /maps/:mapId/explore/puzzle/story`: tell the heart tile's forgotten story (#306). */
+export const TellStoryRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  /** The try this order was made on (the latest start's). */
+  attempt: z.number().int().min(1),
+  /** The moments, first to last; the server checks it against the try's day (rule 1). */
+  order: z.array(ContentIdSchema).min(3).max(6),
+});
+export type TellStoryRequest = z.infer<typeof TellStoryRequestSchema>;
+
+/**
+ * Dev only (`HP_DEV_SQUISHY_GRANTS`, never in production):
+ * `POST /maps/:mapId/dev/story-answer { q, r }`, my latest story try's order,
+ * so an e2e or a capture can tell it right through the real card.
+ */
+export const DevStoryAnswerResponseSchema = z.object({
+  attempt: z.number().int().min(1),
+  order: z.array(ContentIdSchema),
+});
+export type DevStoryAnswerResponse = z.infer<typeof DevStoryAnswerResponseSchema>;
+
+/**
+ * Dev only (`HP_DEV_SQUISHY_GRANTS`, never in production):
+ * `POST /maps/:mapId/dev/story-pages { q, r, leave? }` finds every torn page
+ * of that Hollow but `leave` of them (the heart tile's last), so an e2e or a
+ * capture can wake the story without walking every tile. Replies with my pages.
+ */
+export const DevStoryPagesRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  leave: z.number().int().min(0).max(12).optional(),
+});
+export type DevStoryPagesRequest = z.infer<typeof DevStoryPagesRequestSchema>;
+export const DevStoryPagesResponseSchema = z.object({
+  found: z.number().int().min(0),
+  total: z.number().int().min(1),
+});
+
 /** What fixing it gave: the server rolls it (CLAUDE.md rule 1). */
 export const SolvePuzzleResponseSchema = z.object({
   /** The puzzle, fixed now. */
@@ -233,3 +312,23 @@ export const SolvePuzzleResponseSchema = z.object({
   items: ItemCountsSchema,
 });
 export type SolvePuzzleResponse = z.infer<typeof SolvePuzzleResponseSchema>;
+
+/**
+ * What telling the story did: whole again (what fixing it gave, as a Relight
+ * win), or smudged. A smudged try is spent: it says how many moments were in
+ * the right place and which, and the ink shifts to the next try's day (owner
+ * decision: a failed attempt reshuffles).
+ */
+export const TellStoryResponseSchema = z.discriminatedUnion('result', [
+  SolvePuzzleResponseSchema.extend({ result: z.literal('whole') }),
+  z.object({
+    result: z.literal('smudged'),
+    /** How many moments were in the right place. */
+    right: z.number().int().min(0),
+    /** Place by place, first to last: was it right? */
+    marks: z.array(z.boolean()),
+    /** The next try: a new day of the same size, on the same pages. */
+    next: StoryStartSchema,
+  }),
+]);
+export type TellStoryResponse = z.infer<typeof TellStoryResponseSchema>;

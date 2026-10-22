@@ -12,10 +12,12 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * opens a joy disc and bursts into sparks, inside the explore budget
  * (explore.spec.ts: under 46 draw calls and 420k triangles) and without
  * linking a shader program (the owner's find freezes, #555 and #569).
- * Its broken thing's Relight puzzle (#306 PR 2b) opens from the big button:
- * a move counts, giving up fades the light and the next path is a new try,
- * and lighting every lantern gives a lore page; mended, it keeps its
- * colour. Checked through the dev hook.
+ * The square is the Hollow's heart: its first search finds the last torn
+ * page, which wakes its broken thing's forgotten story (#306). It opens from
+ * the big button: a wrong order shows how many were right and the ink
+ * shifts to a new try, and telling the day right gives a lore page; mended,
+ * it keeps its colour. (Relight the path, on the other tiles, is played
+ * through in its unit tests.) Checked through the dev hook.
  */
 
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -50,6 +52,11 @@ interface ExploreDebug {
     lit: number;
     lanterns: number;
     picked: number | null;
+    kind: 'relight' | 'story' | null;
+    places: number;
+    placed: string[];
+    story: 'playing' | 'telling' | 'smudged' | null;
+    right: number | null;
   } | null;
   brokenThing: { x: number; z: number; skin: string; solved: boolean } | null;
   scene: {
@@ -97,6 +104,14 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   );
   expect(reach.status, JSON.stringify(reach.body)).toBe(201);
   const square = reach.body;
+  // Every torn page of the Hollow found but the heart's own (dev only).
+  const pages = await api<{ found: number; total: number }>(
+    page,
+    'POST',
+    `/maps/${mapId}/dev/story-pages`,
+    { ...square, leave: 1 },
+  );
+  expect(pages.body.found).toBe(pages.body.total - 1);
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
@@ -208,10 +223,12 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
     }
     expect(await hitchesExpected(page)).toBeGreaterThanOrEqual(hitches + 2);
     test.info().annotations.push({ type: 'sparksSeen', description: String(sparks) });
-    if (after.card === 'rare') {
-      await slowExpect(sheet).toBeVisible();
-      await sheet.getByTestId('explore-yay').tap();
-    }
+    // The heart's own torn page, the last one: the story wakes.
+    expect(after.card).toBe('rare');
+    await slowExpect(sheet).toBeVisible();
+    await expect(sheet.getByTestId('explore-finds')).toContainText('A torn page! 📜');
+    await expect(sheet.getByTestId('explore-finds')).toContainText('Every page found!');
+    await sheet.getByTestId('explore-yay').tap();
     found = after;
     break;
   }
@@ -223,7 +240,7 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   await expect(joyMeter).toHaveAttribute('aria-label', `Joy ${String(joy)}% ✨`);
   expect(findAvoidedWords((await page.locator('.explore-title').textContent()) ?? '')).toEqual([]);
 
-  // The Relight puzzle (#306 PR 2b): walk up to the broken thing.
+  // The forgotten story (#306): walk up to the broken thing.
   const broken = first.brokenThing!;
   for (let tries = 0; tries < 10 && (await exploreState(page))?.near !== -1; tries++) {
     const tap = await waypoint(page, broken);
@@ -237,55 +254,50 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   const card = page.getByTestId('hollowed-puzzle');
   await slowExpect(card).toBeVisible();
   await expect.poll(async () => (await exploreState(page))?.puzzle?.card, slow).toBe('board');
-  // It fits the phone, its buttons in reach (render-check: 375×667).
-  for (const id of [
-    'hollowed-relight-board',
-    'hollowed-relight-give-up',
-    'hollowed-puzzle-not-now',
-  ]) {
+  const shown = (await exploreState(page))!.puzzle!;
+  expect(shown).toMatchObject({ kind: 'story', story: 'playing', attempt: 1, placed: [] });
+  // One clue a tile, on its torn page.
+  await expect(card.locator('.hollowed-story-page')).toHaveCount(pages.body.total);
+  // Its buttons stay in reach while the pages scroll (render-check: 375×667).
+  for (const id of ['hollowed-story-tell', 'hollowed-puzzle-not-now']) {
     await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
   }
+  await expect(page.getByTestId('hollowed-story-tell')).toBeDisabled();
   const widths = await card.evaluate((e) => [e.scrollWidth, e.clientWidth]);
   expect(widths[0], 'the card never scrolls sideways').toBeLessThanOrEqual(widths[1]!);
-  // A phone on its side: the cells keep their 44px touch size and the card scrolls.
-  const portrait = page.viewportSize();
-  if (portrait && portrait.width < portrait.height) {
-    await page.setViewportSize({ width: portrait.height, height: portrait.width });
-    const cell = await card.locator('.hollowed-relight-cell').first().boundingBox();
-    expect(cell?.width ?? 0, 'a landscape cell').toBeGreaterThanOrEqual(44);
-    const fits = await card.evaluate((e) => e.scrollWidth <= e.clientWidth);
-    expect(fits, 'the card never scrolls sideways in landscape').toBe(true);
-    await page.setViewportSize(portrait);
+  const tray = page.getByTestId('hollowed-story-tray');
+  const slots = page.getByTestId('hollowed-story-slots');
+  /** Taps the moments into their places, first to last, through the real card. */
+  async function tellOrder(order: readonly string[]): Promise<void> {
+    for (const id of order) await tray.locator(`[data-moment="${id}"]`).tap();
+    await expect.poll(async () => (await exploreState(page))?.puzzle?.placed).toEqual(order);
+    await page.getByTestId('hollowed-story-tell').tap();
   }
-  const shown = (await exploreState(page))!.puzzle!;
-  // The square is the Hollow's heart: the big board.
-  expect(shown).toMatchObject({ outcome: 'playing', attempt: 1, size: 6, moves: 0 });
-  const moves = page.getByTestId('hollowed-relight-moves');
-  await expect(moves).toHaveText(`Moves 0 of ${String(shown.limit)}`);
-  await expect(page.getByTestId('hollowed-relight-lit')).toHaveText(/^Lanterns lit \d of 4$/);
-  // A turn is a move.
-  await card.locator('.hollowed-relight-pipe:not(.hollowed-relight-loose)').first().tap();
-  await expect(moves).toHaveText(`Moves 1 of ${String(shown.limit)}`);
-  // Giving up fades the light; the next path is a new try (no hints, no peeking).
-  await page.getByTestId('hollowed-relight-give-up').tap();
-  await expect(page.getByTestId('hollowed-relight-faded')).toContainText('The light fades…');
-  await page.getByTestId('hollowed-relight-new-path').tap();
+  const answerOf = () =>
+    api<{ attempt: number; order: string[] }>(
+      page,
+      'POST',
+      `/maps/${mapId}/dev/story-answer`,
+      square,
+    );
+  const first1 = await answerOf();
+  expect(first1.body.attempt).toBe(1);
+  // A placed moment taps back to the tray.
+  await tray.locator(`[data-moment="${first1.body.order[0]!}"]`).tap();
+  await slots.locator('.hollowed-story-slot-on').first().tap();
+  await expect.poll(async () => (await exploreState(page))?.puzzle?.placed).toEqual([]);
+  // A wrong order: the places show right or wrong, and the ink shifts to a new try.
+  await tellOrder([...first1.body.order].reverse());
+  await slowExpect(page.getByTestId('hollowed-story-smudged')).toBeVisible();
+  await expect(page.getByTestId('hollowed-puzzle-line')).toContainText(`were in the right place`);
+  await expect(slots.locator('.hollowed-story-slot-wrong').first()).toBeVisible();
+  await page.getByTestId('hollowed-story-new-pages').tap();
   await expect.poll(async () => (await exploreState(page))?.puzzle?.attempt, slow).toBe(2);
-  await expect(moves).toHaveText(/^Moves 0 of /);
-  // Light it through the real board: the dev answer's moves, tap by tap.
-  const answer = await api<{
-    attempt: number;
-    moves: ({ type: 'turn'; at: number } | { type: 'slide'; at: number; to: number })[];
-  }>(page, 'POST', `/maps/${mapId}/dev/relight-answer`, square);
-  expect(answer.body.attempt).toBe(2);
-  const cells = card.locator('.hollowed-relight-cell');
-  for (const move of answer.body.moves) {
-    if ((await exploreState(page))?.puzzle?.outcome !== 'playing') break;
-    await cells.nth(move.at).tap();
-    if (move.type === 'slide' && (await exploreState(page))?.puzzle?.picked !== null) {
-      await cells.nth(move.to).tap();
-    }
-  }
+  await expect.poll(async () => (await exploreState(page))?.puzzle?.story).toBe('playing');
+  // Tell the new day right through the real card: the dev answer's order.
+  const second = await answerOf();
+  expect(second.body.attempt).toBe(2);
+  await tellOrder(second.body.order);
   await slowExpect(page.getByTestId('hollowed-puzzle-finds')).toBeVisible();
   await expect(page.getByTestId('hollowed-puzzle-finds')).toContainText('A lore page!');
   await page.getByTestId('hollowed-puzzle-yay').tap();
