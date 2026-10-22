@@ -66,6 +66,6 @@ export function swapCards(
 }
 
 /** Whole hours (rounded up) until my day's swaps come back. */
-export function hoursToReset(view: GlimmerSwapView, nowMs: number): number {
+export function hoursToReset(view: Pick<GlimmerSwapView, 'resetsAt'>, nowMs: number): number {
   return Math.max(1, Math.ceil((Date.parse(view.resetsAt) - nowMs) / 3_600_000));
 }
