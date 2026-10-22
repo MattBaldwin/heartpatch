@@ -1,12 +1,12 @@
 import { CLOTHING_BY_ID, SELL_RULES, type SellView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { hoursToReset } from './glimmer-swap-model.js';
 import {
   clampLots,
   MAX_LOTS,
   pickTotals,
   SELL_TEXT,
   sellCapped,
-  sellHoursToReset,
   sellRequest,
   sellRoom,
   sellRows,
@@ -71,7 +71,14 @@ describe('the Sell tab (#601 PR 4)', () => {
   });
 
   it('asks for a whole lot when there is not one', () => {
-    expect(row(view(), 'greens')).toMatchObject({ maxLots: 0, block: 'short' });
+    expect(row(view(), 'greens')).toMatchObject({ maxLots: 0, block: 'short', need: 5 });
+  });
+
+  it('counts what a recipe keeps in what I need', () => {
+    // 3 Stone, 4 kept: a lot of 5 needs 9 in the bag, not 5.
+    const few = view({ items: [{ itemId: 'stone', have: 3, keep: 4 }] });
+    expect(row(few, 'stone')).toMatchObject({ maxLots: 0, need: 9 });
+    expect(row(view(), 'stone').need).toBe(9);
   });
 
   it("stops at today's 💛 cap", () => {
@@ -124,10 +131,9 @@ describe('the Sell tab (#601 PR 4)', () => {
     ).toEqual({ kind: 'clothing', q: 0, r: 0, itemId: 'pom-pom-beanie' });
   });
 
-  it('counts down to more selling in whole hours', () => {
+  it("reuses the swap tab's countdown for the cap card", () => {
     const resetsAt = '2026-11-05T07:00:00.000Z';
-    expect(sellHoursToReset({ resetsAt }, Date.parse('2026-11-05T01:30:00.000Z'))).toBe(6);
-    expect(sellHoursToReset({ resetsAt }, Date.parse('2026-11-05T06:59:00.000Z'))).toBe(1);
+    expect(hoursToReset(view({ resetsAt }), Date.parse('2026-11-05T01:30:00.000Z'))).toBe(6);
     expect(SELL_TEXT.resetsIn(1)).toBe('More selling in less than an hour');
   });
 

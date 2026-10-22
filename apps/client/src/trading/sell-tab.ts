@@ -1,11 +1,11 @@
 import type { SellResponse, SellView } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import { hoursToReset } from './glimmer-swap-model.js';
 import {
   clampLots,
   pickTotals,
   SELL_TEXT,
   sellCapped,
-  sellHoursToReset,
   sellRows,
   type SellPick,
   type SellRow,
@@ -80,11 +80,7 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
         'div',
         { class: 'post-card post-card-cream', 'data-testid': 'post-sell-capped' },
         el('b', {}, SELL_TEXT.capped),
-        el(
-          'span',
-          { class: 'post-small' },
-          SELL_TEXT.resetsIn(sellHoursToReset(view, state.nowMs)),
-        ),
+        el('span', { class: 'post-small' }, SELL_TEXT.resetsIn(hoursToReset(view, state.nowMs))),
       ),
     );
   }
@@ -118,7 +114,11 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
 
   function rowCard(row: SellRow): HTMLElement {
     const label =
-      row.block === 'short' && row.kind === 'item' ? SELL_TEXT.need(row.lot) : SELL_TEXT.sell;
+      row.block !== 'ok' && row.block !== 'cap' && row.kind === 'item'
+        ? SELL_TEXT.need(row.need)
+        : row.block === 'cap' && !capped
+          ? SELL_TEXT.tomorrow
+          : SELL_TEXT.sell;
     return el(
       'div',
       {
@@ -166,35 +166,33 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
 
   function confirmCard(pick: SellPick, row: SellRow): HTMLElement {
     const { quantity, coins } = pickTotals(pick, row);
+    /** A − or + that says what it does to a screen reader. */
+    const step = (glyph: string, testId: string, label: string, lots: number, off: boolean) => {
+      const b = button(
+        glyph,
+        testId,
+        'secondary',
+        () => {
+          deps.onLots(lots);
+        },
+        off,
+      );
+      b.setAttribute('aria-label', label);
+      return b;
+    };
     const stepper =
       row.maxLots > 1
         ? [
             el(
               'div',
               { class: 'post-stepper post-sell-stepper', 'data-testid': 'post-sell-stepper' },
-              button(
-                '−',
-                'post-sell-less',
-                'secondary',
-                () => {
-                  deps.onLots(pick.lots - 1);
-                },
-                pick.lots <= 1,
-              ),
+              step('−', 'post-sell-less', SELL_TEXT.less, pick.lots - 1, pick.lots <= 1),
               el(
                 'span',
                 { class: 'post-sell-lots', 'data-testid': 'post-sell-lots' },
                 `${String(quantity)} ${row.icon}`,
               ),
-              button(
-                '+',
-                'post-sell-more',
-                'secondary',
-                () => {
-                  deps.onLots(pick.lots + 1);
-                },
-                pick.lots >= row.maxLots,
-              ),
+              step('+', 'post-sell-more', SELL_TEXT.more, pick.lots + 1, pick.lots >= row.maxLots),
             ),
           ]
         : [];
@@ -219,13 +217,6 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
         ),
       ),
     );
-    // The stepper's − and + say what they do to a screen reader.
-    card
-      .querySelector('[data-testid="post-sell-less"]')
-      ?.setAttribute('aria-label', SELL_TEXT.less);
-    card
-      .querySelector('[data-testid="post-sell-more"]')
-      ?.setAttribute('aria-label', SELL_TEXT.more);
     return card;
   }
 }

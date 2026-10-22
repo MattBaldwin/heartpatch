@@ -37,6 +37,8 @@ export const SELL_TEXT = {
   keeping: (n: number) => `Keeping ${String(n)} for recipes`,
   sell: 'Sell',
   need: (n: number) => `Need ${String(n)}`,
+  /** A row today's 💛 can't fit, while cheaper ones still can. */
+  tomorrow: 'Tomorrow',
   confirm: (quantity: number, itemId: string, coins: number) =>
     `Sell ${String(quantity)} ${nameOf(itemId)} for ${String(coins)} 💛?`,
   noUndo: "Once it's sold, it's sold!",
@@ -65,6 +67,8 @@ export interface SellRow {
   readonly name: string;
   /** In my bag (an item), or free copies (a piece). */
   readonly have: number;
+  /** How many I need to sell one lot: a lot plus what a recipe keeps. */
+  readonly need: number;
   /** How many one lot is: 1 for a piece. */
   readonly lot: number;
   /** 💛 for one lot. */
@@ -118,6 +122,7 @@ export function sellRows(view: SellView, rules: SellRules = SELL_RULES): SellRow
         icon: itemIcon(stack.itemId),
         name: nameOf(stack.itemId),
         have: stack.have,
+        need: price.lot + stack.keep,
         lot: price.lot,
         coins: price.coins,
         maxLots: Math.min(byStock, byRoom),
@@ -140,6 +145,7 @@ export function sellRows(view: SellView, rules: SellRules = SELL_RULES): SellRow
         icon: clothingIcon(item.slot),
         name: item.name,
         have: piece.copies,
+        need: 2,
         lot: 1,
         coins,
         maxLots: Math.min(byStock, byRoom),
@@ -165,9 +171,4 @@ export function sellRequest(pick: SellPick, at: { q: number; r: number }): SellR
   return pick.kind === 'item'
     ? { kind: 'item', q: at.q, r: at.r, itemId: pick.itemId, lots: pick.lots }
     : { kind: 'clothing', q: at.q, r: at.r, itemId: pick.itemId };
-}
-
-/** Whole hours (rounded up) until today's selling comes back. */
-export function sellHoursToReset(view: Pick<SellView, 'resetsAt'>, nowMs: number): number {
-  return Math.max(1, Math.ceil((Date.parse(view.resetsAt) - nowMs) / 3_600_000));
 }

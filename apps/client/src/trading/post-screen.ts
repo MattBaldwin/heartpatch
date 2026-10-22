@@ -313,10 +313,19 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         sell = res.sell;
         sold = res.sold;
         sellPick = null;
+        // My shelf on the Trade and Gift tabs reads again: the sale took from it.
+        const my = me();
+        if (my !== null) void load({ shelves: [my] });
         options.onSold?.();
       }
     } catch (err) {
-      if (stillHere()) note = messageOf(err);
+      if (stillHere()) {
+        // Refused (today's cap from another device, a recipe opened, an offer
+        // named the spare): drop the pick and show what the server sees now.
+        note = messageOf(err);
+        sellPick = null;
+        void loadSell();
+      }
     } finally {
       working = false;
       if (stillHere()) render();

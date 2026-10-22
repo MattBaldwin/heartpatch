@@ -430,8 +430,9 @@ test('sells extras and a spare piece for Heart Coins at a post (#601 PR 4)', asy
   expect(tabsFit).toBe(true);
   const today = page.getByTestId('post-sell-today');
   await expect(today).toHaveText('💛 0 of 30 today');
-  // Not a whole lot of Greens: the button says what's needed and can't be tapped.
-  await expect(page.getByTestId('post-sell-greens')).toHaveText('Need 5');
+  // Not a whole lot of Greens (plus what a recipe keeps): the button says
+  // what's needed and can't be tapped.
+  await expect(page.getByTestId('post-sell-greens')).toHaveText(/^Need \d+$/);
   await expect(page.getByTestId('post-sell-greens')).toBeDisabled();
   await expect(page.getByTestId('post-sell-stays')).toContainText('stay with you');
 
