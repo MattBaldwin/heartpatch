@@ -85,7 +85,7 @@ export function pickMarks(
 export function markSpot(
   anchor: { x: number; y: number } | null,
   rect: ScreenRect | null,
-  screen: { width: number; height: number },
+  screen: { width: number; height: number; top?: number },
   covers: readonly Rect[] = [],
 ): { x: number; y: number } | null {
   const tries = anchor
@@ -97,6 +97,8 @@ export function markSpot(
   for (const at of tries) {
     if (at.x < 0 || at.y < 0 || at.x > screen.width || at.y > screen.height) return null;
     const box = { x: at.x - half, y: at.y - half, width: TILE_MARK.size, height: TILE_MARK.size };
+    // Never up under the top bar or the phone's status bar, as the flags.
+    if (box.y < (screen.top ?? 0)) continue;
     if (covers.some((cover) => intersects(box, cover))) continue;
     return { x: Math.round(at.x), y: Math.round(at.y) };
   }
@@ -106,14 +108,18 @@ export function markSpot(
 /** Map flags (trading posts, homes, Hollows), which marks keep clear of. */
 const FLAGS = '.post-flag';
 
-/** What a mark must not touch: the flags' room (no Keeper cover) and every map flag shown. */
-function markCovers(): Rect[] {
-  const covers = [...flagRoom(null).covers];
+/**
+ * What a mark must keep clear of: the flags' room (no Keeper cover), with
+ * where the top bar ends, and every map flag shown.
+ */
+function markRoom(): { covers: Rect[]; top: number } {
+  const room = flagRoom(null);
+  const covers = [...room.covers];
   for (const node of document.querySelectorAll(FLAGS)) {
     const box = boxOf(node)?.box;
     if (box) covers.push(box);
   }
-  return covers;
+  return { covers, top: room.top };
 }
 
 /** Scratch for `screenPointOf`, which runs every drawn frame while a mark shows. */
@@ -150,15 +156,19 @@ export function createTileMarks(root: HTMLElement): TileMarks {
   const shown = new Map<HexKey, Shown>();
 
   /**
-   * `box`: the canvas on screen and `covers` what to keep clear of, both
-   * read once a frame (before any mark moves).
+   * `box`: the canvas on screen and `room` what to keep clear of, both read
+   * once a frame (before any mark moves).
    */
-  const place = (mark: Shown, box: DOMRect | null, covers: readonly Rect[]) => {
+  const place = (
+    mark: Shown,
+    box: DOMRect | null,
+    room: { covers: readonly Rect[]; top: number },
+  ) => {
     const spot = markSpot(
       scene && box && mark.anchor ? screenPointOf(scene, box, mark.anchor) : null,
       scene && !mark.anchor ? tileScreenRectOf(scene, mark.tile) : null,
-      { width: window.innerWidth, height: window.innerHeight },
-      covers,
+      { width: window.innerWidth, height: window.innerHeight, top: room.top },
+      room.covers,
     );
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === mark.at) return;
@@ -172,8 +182,8 @@ export function createTileMarks(root: HTMLElement): TileMarks {
   const placeAll = () => {
     if (shown.size === 0) return;
     const box = canvasBox();
-    const covers = markCovers();
-    for (const mark of shown.values()) place(mark, box, covers);
+    const room = markRoom();
+    for (const mark of shown.values()) place(mark, box, room);
   };
 
   // A sheet opening or shutting over an idle map draws no frame, so watch for
@@ -210,7 +220,7 @@ export function createTileMarks(root: HTMLElement): TileMarks {
         had.tile = want.tile;
         had.anchor = want.at;
         had.at = '';
-        place(had, canvasBox(), markCovers());
+        place(had, canvasBox(), markRoom());
         continue;
       }
       const node = el(
@@ -227,7 +237,7 @@ export function createTileMarks(root: HTMLElement): TileMarks {
       root.append(node);
       const added: Shown = { tile: want.tile, kind: want.kind, anchor: want.at, node, at: '' };
       shown.set(key, added);
-      place(added, canvasBox(), markCovers());
+      place(added, canvasBox(), markRoom());
     }
   };
 

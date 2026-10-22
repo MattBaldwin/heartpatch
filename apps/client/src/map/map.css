@@ -374,8 +374,9 @@
 }
 
 /* One quiet mark on a tile of mine that needs me (#602, tile-marks.ts): a
-   small soft chip in the tile's corner, under every panel and sheet, never in
-   the way of a tap. Not keen is a rain-blue chip so the white 🌧️ reads. */
+   small soft chip by my gatherer's head (the tile's corner with nothing to
+   sit by), under every panel and sheet, never in the way of a tap. Not keen
+   is a rain-blue chip so the white 🌧️ reads. */
 .tile-mark {
   position: fixed;
   z-index: 1;

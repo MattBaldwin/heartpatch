@@ -70,6 +70,18 @@ describe('markSpot (#602)', () => {
     });
   });
 
+  it('never goes up under the top bar: the next spot, else hidden', () => {
+    const [right] = TILE_MARK.beside;
+    const head = { x: 150, y: 40 };
+    const chipTop = head.y + right.y - TILE_MARK.size / 2;
+    // Right and left sit at the same height, above just higher: all under a bar there.
+    expect(markSpot(head, null, { ...screen, top: chipTop + 1 })).toBeNull();
+    expect(markSpot(head, null, { ...screen, top: chipTop })).toEqual({
+      x: head.x + right.x,
+      y: head.y + right.y,
+    });
+  });
+
   it('hides off screen instead of pinning to the edge (the old badges did)', () => {
     expect(markSpot({ x: -40, y: 300 }, null, screen)).toBeNull();
     expect(markSpot(null, { ...rect, x: 500 }, screen)).toBeNull();

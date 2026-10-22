@@ -407,6 +407,9 @@ describe('job moods on the map and at home (#393)', () => {
       JOBS_TEXT.workerMeh('Pip'),
       JOBS_TEXT.workerFull('Pip'),
       JOBS_TEXT.workerPaused('Pip'),
+      JOBS_TEXT.workerNotKeen,
+      workerLine(1, { name: 'Pip', squishy: mehFull }, open),
+      workerLine(1, { name: 'Pip', squishy: meh }, { homestead: 'paused' }),
     ]) {
       expect(findAvoidedWords(line)).toEqual([]);
     }
