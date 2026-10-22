@@ -918,7 +918,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (mendedTimer !== null) clearTimeout(mendedTimer);
     mendedTimer = setTimeout(() => {
       mendedTimer = null;
-      if (!playing && !puzzleSheet.isOpen) scene3d?.nudge(null);
+      if (!playing && !working && !puzzleSheet.isOpen) scene3d?.nudge(null);
       wake();
     }, HOLLOWED_EXPLORE.mendedShowMs);
   }
