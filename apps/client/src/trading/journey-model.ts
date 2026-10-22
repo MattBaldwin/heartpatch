@@ -1,3 +1,4 @@
+import { FAR_HOLLOW_TEXT } from '../hollowed/far-hollow-model.js';
 import {
   GROWTH_RULES,
   JOURNEY_RULES,
@@ -126,8 +127,17 @@ export function journeyResult(
   outcome: 'won' | 'lost' | 'scooted',
   post: string | null,
   rules: JourneyRules = JOURNEY_RULES,
+  /** The far road to the far Hollow (#306 PR 6): a win is an arrival there. */
+  farHollow = false,
 ): { title: string; subtitle: string; done?: string } {
   const name = post ?? JOURNEY_TEXT.somePost;
+  if (outcome === 'won' && farHollow) {
+    return {
+      title: FAR_HOLLOW_TEXT.wonTitle,
+      subtitle: FAR_HOLLOW_TEXT.wonSub,
+      done: FAR_HOLLOW_TEXT.wonDone,
+    };
+  }
   if (outcome === 'won') {
     return {
       title: JOURNEY_TEXT.wonTitle(name),

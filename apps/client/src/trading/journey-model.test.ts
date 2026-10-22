@@ -114,6 +114,17 @@ describe('journeyResult', () => {
     expect(journeyResult('scooted', null).subtitle).toMatch(/didn't lose a thing/);
     expect(journeyResult('won', null).title).toBe('You made it to the trading post!');
   });
+
+  it('says the far road (#306 PR 6) arrives in the far Hollow, and loses nothing otherwise', () => {
+    expect(journeyResult('won', 'Lantern Post', JOURNEY_RULES, true)).toEqual({
+      title: 'You made it to the far Hollow!',
+      subtitle: "It's yours to explore all season.",
+      done: 'Explore it 🕯️',
+    });
+    expect(journeyResult('lost', null, JOURNEY_RULES, true).subtitle).toMatch(
+      /didn't lose a thing/,
+    );
+  });
 });
 
 describe('the visit pass countdown', () => {

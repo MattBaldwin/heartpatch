@@ -28,6 +28,7 @@ import {
 } from './journey-model.js';
 import type { OpenPost } from './post-screen.js';
 import { VISIT_POST } from './post-model.js';
+import { FAR_HOLLOW_TEXT } from '../hollowed/far-hollow-model.js';
 import './trading.css';
 
 // Journeys to trading posts in the tile panel (#270; the owner-approved
@@ -42,6 +43,8 @@ export interface JourneyScreenOptions {
   openBattle: (battle: PlayerBattle) => void;
   /** "Visit post" (#271): the post's screen opens, my land reaches it or I hold a pass. */
   openPost?: (post: OpenPost, view: MapView) => void;
+  /** "The far Hollow" (#306 PR 6): its sheet, from a post that's open to me (the far road starts there). */
+  openFarHollow?: (post: { q: number; r: number }) => void;
   api?: JourneyApi;
   jobs?: Pick<JobsApi, 'view'>;
   /**
@@ -179,6 +182,22 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     return visit;
   };
 
+  /** "The far Hollow": my own grey Hollow this season, reached by the far road from here. */
+  const farButton = (tile: PublicTile) => {
+    if (!options.openFarHollow) return [];
+    const far = el(
+      'button',
+      {
+        type: 'button',
+        class: 'auth-button auth-button-soft bag-action',
+        'data-testid': 'post-far-hollow',
+      },
+      FAR_HOLLOW_TEXT.open,
+    );
+    far.addEventListener('click', () => options.openFarHollow?.({ q: tile.q, r: tile.r }));
+    return [far];
+  };
+
   function render(): void {
     previewShown = null;
     passShown = null;
@@ -198,6 +217,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     if (pass) {
       container.replaceChildren(
         visitButton(tile, view, pass),
+        ...farButton(tile),
         line(JOURNEY_TEXT.open(passLeft(pass, now()) ?? 0), 'journey-open', 'journey-open'),
       );
       syncTicker(true);
@@ -206,7 +226,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     syncTicker(false);
     const reach = postReach(tile, view.tiles, me);
     if (reach?.kind === 'connected') {
-      container.replaceChildren(visitButton(tile, view, null));
+      container.replaceChildren(visitButton(tile, view, null), ...farButton(tile));
       return;
     }
     if (reach?.kind !== 'journey') {
@@ -342,6 +362,8 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
       if (event.mapId !== mapId || event.type !== 'journey.ended') return;
       const parsed = GAME_EVENTS['journey.ended'].public.safeParse(event.data);
       if (!parsed.success || parsed.data.userId !== user?.id) return;
+      // The far road (#306 PR 6) never opens or ends a post's pass.
+      if (parsed.data.kind === 'far-hollow') return;
       livePasses.set(hexKey(parsed.data), parsed.data.visitUntil);
       render();
     },

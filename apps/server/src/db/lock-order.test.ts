@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import {
   applyBattleAction,
   BATTLE_RULES,
+  EXPLORE_RULES,
   GAME_DATA,
   hexDistance,
   hexKey,
@@ -12,6 +13,7 @@ import {
   HOME_BASE_RULES,
   HOUSE_DATA,
   NAMING_RULES,
+  searchSpots,
   STARTERS,
   type BattleAction,
   type PlayerBattleAction,
@@ -44,6 +46,7 @@ import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
 import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
+import { createFarHollowService, farHollowSeasonAt } from '../modules/far-hollow/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
@@ -73,6 +76,7 @@ import {
   buildings,
   clothingOwned,
   coinLedger,
+  farHollowExplore,
   factoryQueues,
   fenceSegments,
   gameEvents,
@@ -562,6 +566,35 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     const [row] = await db.select().from(journeys).where(eq(journeys.battleId, battle.id));
     expect(row).toMatchObject({ outcome: 'won' });
     expect(row!.visitUntil).not.toBeNull();
+  });
+
+  it("takes the far Hollow's rows before the team's squishies (far-hollow `search`, #306 PR 6 step 6 then 10)", async () => {
+    const { kid, mapId, petId } = await careSetup('faraway');
+    const at = new Date('2026-11-04T16:00:00Z'); // daytime on a UTC patch
+    const farHollow = createFarHollowService({ db, clock: () => at });
+    await farHollow.devArrive(kid, mapId, false);
+    const season = await farHollowSeasonAt(db, mapId, at);
+    const spot = searchSpots(season.seed, season.tiles[0]!, EXPLORE_RULES)!.find(
+      (s) => s.tool === null,
+    )!;
+    // Hold my far Hollow's rows (another search), let this search queue there,
+    // then take the team's squishy: the search must not hold it yet.
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ tileIndex: farHollowExplore.tileIndex })
+          .from(farHollowExplore)
+          .where(eq(farHollowExplore.userId, kid.id))
+          .orderBy(asc(farHollowExplore.tileIndex))
+          .for('update'),
+      () => farHollow.search(kid, mapId, { tile: 0, spot: spot.index }),
+      (tx) => lockSquishy(tx, petId),
+    );
+    const [row] = await db
+      .select()
+      .from(farHollowExplore)
+      .where(and(eq(farHollowExplore.userId, kid.id), eq(farHollowExplore.tileIndex, 0)));
+    expect(row!.searched).not.toBe(0);
   });
 
   it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {

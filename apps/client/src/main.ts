@@ -28,6 +28,7 @@ import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
 import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
+import { createFarHollowSheet } from './hollowed/far-hollow-sheet.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
@@ -597,6 +598,34 @@ const journeys = createJourneyScreen({
     maps.deselect();
     postScreen.open(post, view);
   },
+  openFarHollow: (post) => {
+    farHollowPost = post;
+    void farHollowSheet.open(post);
+  },
+});
+// The far Hollow (#306 PR 6): my own grey Hollow each season, from any open
+// trading post's panel. The far road is a journey (the battle screen's card
+// says "Explore it"); its tiles open in the explore view, and back from one
+// is back to its sheet.
+let farHollowPost: { q: number; r: number } | null = null;
+/** A far road won, waiting for the map to come back to open the sheet. */
+let farHollowArrived = false;
+/** Back from a far-Hollow tile, waiting for the map to come back to open the sheet. */
+let farHollowBack = false;
+let mapNight = false;
+const farHollowSheet = createFarHollowSheet({
+  root: document.body,
+  mapId: () => maps.view?.map.id ?? null,
+  night: () => mapNight,
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
+  },
+  explore: (index) => {
+    void explore.openFarHollow(index);
+  },
+  onOpen: () => {
+    maps.deselect();
+  },
 });
 // Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
 // button, and a lit home a porch lantern. A treat may be Heartdust: the bag
@@ -650,6 +679,7 @@ const hollow = createHollowScreen({
   // The night loop plays while it's night on the map, and his visit hushes it.
   layer: {
     setNight: (night) => {
+      mapNight = night;
       hollowLayer.setNight(night);
       maps.setNight(night);
       communityActions.setNight(night);
@@ -923,6 +953,9 @@ const explore = createExploreScreen({
     home.setMap(null);
     lobby.stepOut();
   },
+  onFarHollowClosed: () => {
+    farHollowBack = true;
+  },
   onClosed: (mapId) => {
     exploreSquishies.hidden = true;
     roster.close();
@@ -949,6 +982,11 @@ const explore = createExploreScreen({
         // A page or a milestone found while exploring shows now (#129).
         lorebook.check();
         milestones.check();
+        // Back from a far-Hollow tile (#306 PR 6): to its sheet.
+        if (farHollowBack) {
+          farHollowBack = false;
+          void farHollowSheet.open(farHollowPost);
+        }
       })
       .catch((err: unknown) => {
         noScene();
@@ -1099,6 +1137,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     restoreSheet.close();
+    farHollowSheet.close();
     keyHunt.close();
     roster.close();
     jobs.close();
@@ -1363,7 +1402,11 @@ const battles = createBattleScreen({
   isGlade: (mapId) => mapId === glade,
   journey: {
     postName: (battleId) => journeys.postFor(battleId)?.name ?? null,
-    ended: journeys.ended,
+    ended: (battleId, won) => {
+      journeys.ended(battleId, won);
+      if (won && farHollowSheet.isRoad(battleId)) farHollowArrived = true;
+    },
+    farHollow: (battleId) => farHollowSheet.isRoad(battleId),
   },
   onWildHints: (mapId, tiles) => {
     wildPicker.setHints(mapId, tiles);
@@ -1413,6 +1456,11 @@ const battles = createBattleScreen({
         // Made it to a trading post (#270, "Open the post"): show its panel.
         const arrived = journeys.takeArrival();
         if (arrived) maps.focus(arrived);
+        // Made it to the far Hollow (#306 PR 6, "Explore it"): its sheet.
+        if (farHollowArrived) {
+          farHollowArrived = false;
+          void farHollowSheet.open(farHollowPost);
+        }
         return Promise.all([
           inventory.setMap(mapId),
           territory.setMap(mapId),
@@ -1907,6 +1955,7 @@ if (import.meta.env.DEV) {
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,
+    farHollow: () => farHollowSheet.debug,
     trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
     communities: () => ({

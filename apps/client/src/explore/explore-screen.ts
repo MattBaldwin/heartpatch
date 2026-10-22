@@ -103,6 +103,8 @@ import {
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
 import { cellarApi, type CellarApi } from '../hollowed/cellar-api.js';
+import { farHollowApi, type FarHollowApi } from '../hollowed/far-hollow-api.js';
+import { FAR_HOLLOW_TEXT } from '../hollowed/far-hollow-model.js';
 import { cellarShown, isChest } from '../hollowed/cellar-look.js';
 import {
   CELLAR_TEXT,
@@ -178,6 +180,10 @@ export interface ExploreScreenOptions {
   api?: ExploreApi;
   /** A won village's hidden cellar (#306 PR 2c): the same view, of a little room. */
   cellarApi?: Pick<CellarApi, 'view' | 'search'>;
+  /** The far Hollow's tiles (#306 PR 6): the same view, of my own grey Hollow. */
+  farHollowApi?: Pick<FarHollowApi, 'tile' | 'search'>;
+  /** Back from a far-Hollow tile (#306 PR 6): its sheet comes back, after `onClosed`. */
+  onFarHollowClosed?: (mapId: string) => void;
   jobs?: Pick<JobsApi, 'view'>;
   bag?: (mapId: string) => Promise<ItemCounts>;
   /** Reduced motion: finds skip their flight into the bag. */
@@ -259,6 +265,8 @@ export interface ExploreScreen {
   open: (at: { q: number; r: number }) => Promise<void>;
   /** Opens my won village's hidden cellar (#306 PR 2c): a little room in the cave's look. */
   openCellar: (communityId: string) => Promise<void>;
+  /** Opens one tile of my far Hollow (#306 PR 6) up close. */
+  openFarHollow: (index: number) => Promise<void>;
   /**
    * It's night on the map (the Hollow's night): a grey village shuts, so
    * exploring one goes back to the map with a word why (#306 2a).
@@ -276,11 +284,14 @@ interface RareCard {
   readonly interaction: SpotInteraction;
   /** The spot it came from (a cellar chest names its card, #306). */
   readonly spot: PublicSearchSpot;
+  /** It was the far Hollow's very last spot (#306 PR 6): the joy is all back. */
+  readonly farDone?: boolean;
 }
 
 export function createExploreScreen(options: ExploreScreenOptions): ExploreScreen {
   const api = options.api ?? exploreApi;
   const cellars = options.cellarApi ?? cellarApi;
+  const farHollows = options.farHollowApi ?? farHollowApi;
   const jobs = options.jobs ?? jobsApi;
   const bagOf = options.bag ?? (async (mapId: string) => (await inventoryApi.get(mapId)).items);
   const reducedMotion =
@@ -294,6 +305,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let tile: ExploreTileResponse | null = null;
   /** The won village whose cellar is open on screen (#306 PR 2c), or null on a tile. */
   let cellarOf: { id: string; name: string } | null = null;
+  /** The far-Hollow tile open on screen (#306 PR 6), or null elsewhere. */
+  let farOf: { index: number } | null = null;
   let teamNames: Record<string, string> = {};
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
@@ -860,6 +873,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const id = mapId;
     const t = tile;
     const cellar = cellarOf;
+    const far = farOf;
     if (!id || !t || working) return;
     const at = generation;
     working = true;
@@ -880,7 +894,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         (key) =>
           cellar
             ? cellars.search(id, cellar.id, spot.index, key)
-            : api.search(id, { q: t.q, r: t.r, spot: spot.index }, key),
+            : far
+              ? farHollows.search(id, { tile: far.index, spot: spot.index }, key)
+              : api.search(id, { q: t.q, r: t.r, spot: spot.index }, key),
         () => at === generation,
       );
       if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
@@ -896,8 +912,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
         if (at !== generation) return;
       }
-      if (findShowsCard(found)) {
-        card = { found, interaction, spot };
+      // The far Hollow's last spot always has its card: the joy is all back.
+      const farDone = far !== null && 'completed' in found && found.completed;
+      if (farDone || findShowsCard(found)) {
+        card = { found, interaction, spot, ...(farDone ? { farDone } : {}) };
       } else {
         showToast(found, bigSplash);
         fly(spot, found);
@@ -1092,10 +1110,15 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const id = mapId;
     const t = tile;
     const cellar = cellarOf;
+    const far = farOf;
     if (!id || !t) return;
     const at = generation;
     try {
-      const fresh = cellar ? cellarShown(await cellars.view(id, cellar.id)) : await api.tile(id, t);
+      const fresh = cellar
+        ? cellarShown(await cellars.view(id, cellar.id))
+        : far
+          ? await farHollows.tile(id, far.index)
+          : await api.tile(id, t);
       if (at !== generation) return;
       tile = fresh;
       scene3d?.update(fresh);
@@ -1554,6 +1577,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       keyCard(found.cellarKey.name);
       return;
     }
+    // The far Hollow's last spot (#306 PR 6): the joy's all back, then what it found.
+    const farDone = c.farDone === true;
     const nodes: Node[] = [
       el(
         'p',
@@ -1563,9 +1588,22 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       el(
         'h3',
         { class: 'explore-sheet-title', id: 'explore-sheet-title' },
-        chest ? chestCardTitle(c.spot) : rareTitle(found, t.terrain),
+        farDone
+          ? FAR_HOLLOW_TEXT.cardTitle
+          : chest
+            ? chestCardTitle(c.spot)
+            : rareTitle(found, t.terrain),
       ),
     ];
+    if (farDone) {
+      nodes.push(
+        el(
+          'p',
+          { class: 'explore-card-line', 'data-testid': 'far-hollow-done' },
+          FAR_HOLLOW_TEXT.cardLine,
+        ),
+      );
+    }
     if (big) nodes.push(el('p', { class: 'explore-card-line' }, keepsakeLine(found)));
     if (found.explored && found.homestead === 'joined') {
       nodes.push(el('p', { class: 'explore-card-line' }, EXPLORE_TEXT.joinedHome));
@@ -1609,6 +1647,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         options.onLorebook?.(lore.id);
       });
       nodes.push(openBook);
+    }
+    if (farDone) {
+      nodes.push(el('p', { class: 'explore-card-line' }, FAR_HOLLOW_TEXT.cardNext));
     }
     const yay = el(
       'button',
@@ -1685,7 +1726,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     return built.content;
   };
 
-  async function open(at: { q: number; r: number } | { cellar: string }): Promise<void> {
+  /** Where an explore visit goes: a tile on the patch, a won village's cellar, or a far-Hollow tile. */
+  type Place = { q: number; r: number } | { cellar: string } | { farHollow: number };
+
+  async function open(at: Place): Promise<void> {
     const id = mapId;
     // A second quick tap on Explore waits for the first.
     if (!id || isOpen || opening) return;
@@ -1697,10 +1741,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  async function openTile(
-    id: string,
-    at: { q: number; r: number } | { cellar: string },
-  ): Promise<void> {
+  async function openTile(id: string, at: Place): Promise<void> {
     const ask = generation;
     zone = options.timeZone?.(id) ?? null;
     let fresh: ExploreTileResponse;
@@ -1711,7 +1752,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           ? cellars
               .view(id, at.cellar)
               .then((v) => [v, { id: at.cellar, name: v.cellar.name }] as const)
-          : api.tile(id, at).then((v) => [v, null] as const),
+          : 'farHollow' in at
+            ? farHollows.tile(id, at.farHollow).then((v) => [v, null] as const)
+            : api.tile(id, at).then((v) => [v, null] as const),
         // The team's names for the find toast: exploring works without them.
         jobs.view(id).catch(() => null),
       ]);
@@ -1726,6 +1769,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
     tile = fresh;
     cellarOf = cellar;
+    farOf = 'farHollow' in at ? { index: at.farHollow } : null;
     keeperAt = EXPLORE_VIEW.start;
     yaw = EXPLORE_VIEW.startYaw;
     walk = null;
@@ -1744,7 +1788,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // The map's view of the tile, before `onOpen` closes the map and its
     // view goes with it (#347: the tile's buildings never reached the scene).
     // A cellar is a room of its own: nothing on the square above stands in it.
-    mapTileAtOpen = cellar ? null : options.mapTile(fresh);
+    // The far Hollow is far away: nothing of the patch's stands in it either.
+    mapTileAtOpen = cellar || farOf ? null : options.mapTile(fresh);
     options.onOpen(id);
     options.showScene(build);
     if (skyTimer !== null) clearInterval(skyTimer);
@@ -1816,6 +1861,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     scene3d = null;
     mapTileAtOpen = null;
     cellarOf = null;
+    farOf = null;
     render();
   }
 
@@ -1829,9 +1875,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function close(): void {
     const id = mapId;
     if (!isOpen) return;
+    const far = farOf !== null;
     hide();
     if (id) options.onClosed(id);
     else options.showScene(null);
+    // Back from a far-Hollow tile: to its sheet, over the map.
+    if (id && far) options.onFarHollowClosed?.(id);
   }
 
   // ── Tile panel ────────────────────────────────────────────────────────
@@ -1896,6 +1945,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     },
     open,
     openCellar: (communityId) => open({ cellar: communityId }),
+    openFarHollow: (index) => open({ farHollow: index }),
     setNight: (night) => {
       if (night) shut();
     },
