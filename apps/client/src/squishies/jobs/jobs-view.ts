@@ -57,7 +57,8 @@ export const JOBS_TEXT = {
   workerLoves: (name: string) => `🧺 ${name} is gathering here. Loves it!\u00a0💕`,
   workerMeh: (name: string) => `🧺 ${name} is gathering here. Not their thing\u00a0🌧️`,
   workerFull: (name: string) => `💤 ${name} is napping. Basket full!`,
-  workerPaused: (name: string) => `💤 ${name} is napping till this homestead joins home.`,
+  workerPaused: (name: string) =>
+    `💤 ${name} is napping till this homestead joins back up to home.`,
   firelit: '🔥 Safe by the fire tonight',
   dark: '🌙 Outside the firelight. The Hollow Man may visit at night!',
   takenBy: (name: string) => `${name} is here`,

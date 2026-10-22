@@ -14,7 +14,7 @@ import { GATHERER_ON_TILE, HEX_SIZE, PLAYER_COLORS } from '../../map/map-config.
 import { slotsByUser } from '../../map/map-layout.js';
 import { DOME, tileScreenRectOf, topOf } from '../../map/map-scene.js';
 import type { MapLayer } from '../../map/map-screen.js';
-import { createTileMarks, type TileMark, type TileMarks } from '../../map/tile-marks.js';
+import type { TileMark, TileMarks } from '../../map/tile-marks.js';
 import type { SquishySpecies } from '../../procedural/params.js';
 import { SquishyField, type SquishyHandle } from '../../procedural/squishy-field.js';
 import { gathererMark, nameOf, type GathererMark } from './jobs-view.js';
@@ -35,6 +35,13 @@ import { gathererMark, nameOf, type GathererMark } from './jobs-view.js';
 // (`tile-marks.ts`). Nothing over a patch-mate's.
 
 export interface GathererSquishiesOptions {
+  /** The map's one mark layer (main.ts makes it): my gatherers' marks go in as `gatherers`. */
+  marks: TileMarks;
+  /**
+   * Asks the map for a frame (`Stage.invalidate`): my jobs view lands on its
+   * own, after the map drew, and the map only draws on demand.
+   */
+  invalidate?: () => void;
   /**
    * Asks for my jobs view of this map (it arrives through `setMine`): when
    * the layer attaches, and when the map's gatherer counts change.
@@ -87,14 +94,8 @@ const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 
 /** A patch-mate's gatherer: a plain little squishy in its family's colour. */
 export function standInSpecies(color: string): SquishySpecies {
-  return {
-    id: 'gatherer-stand-in',
-    visual: {
-      body: 'bun',
-      palette: [color, '#fff3e2'],
-      parts: ['oval-eyes', 'smile', 'blush-cheeks'],
-    },
-  };
+  const { body, belly, parts } = GATHERER_ON_TILE.standIn;
+  return { id: 'gatherer-stand-in', visual: { body, palette: [color, belly], parts: [...parts] } };
 }
 
 /**
@@ -163,12 +164,9 @@ interface Standing {
 const lookOf = (plan: GathererPlan) =>
   `${plan.species.id} ${plan.species.visual.palette.join()} ${plan.instanceId} ${String(plan.x)},${String(plan.y)},${String(plan.z)}`;
 
-export function createGathererSquishies(
-  root: HTMLElement,
-  options: GathererSquishiesOptions = {},
-): GathererSquishies {
+export function createGathererSquishies(options: GathererSquishiesOptions): GathererSquishies {
   const registry = visualRegistry(GAME_DATA);
-  const marks: TileMarks = createTileMarks(root);
+  const { marks } = options;
   let scene: Scene | null = null;
   let field: SquishyField | null = null;
   let view: MapView | null = null;
@@ -240,7 +238,6 @@ export function createGathererSquishies(
       // contact shadow (map props and Keepers have none either).
       field = new SquishyField(next, { registry, lod: 'low', breathing: false, shadows: false });
       const built = field;
-      marks.attach(next);
       draw(first);
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
@@ -255,13 +252,18 @@ export function createGathererSquishies(
     },
     setMine: (mapId, jobs) => {
       mine = { mapId, view: jobs };
-      if (scene && view?.map.id === mapId) draw(view);
+      if (scene && view?.map.id === mapId) {
+        draw(view);
+        options.invalidate?.();
+      }
     },
     forget: () => {
       mine = null;
       asked = '';
-      if (scene && view) draw(view);
-      else marks.clear();
+      if (scene && view) {
+        draw(view);
+        options.invalidate?.();
+      } else marks.set('gatherers', []);
     },
     mineOn: (mapId, tile) => {
       if (mine?.mapId !== mapId) return null;

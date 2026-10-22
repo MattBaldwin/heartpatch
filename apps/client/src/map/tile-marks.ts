@@ -1,6 +1,7 @@
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import { hexKey, type HexKey, type PublicTile } from '@heartpatch/shared';
+import type { MapLayer } from './map-screen.js';
 import { el } from '../ui/dom.js';
 import { TILE_MARK } from './map-config.js';
 import { tileScreenRectOf, type ScreenRect } from './map-scene.js';
@@ -8,9 +9,10 @@ import { tileScreenRectOf, type ScreenRect } from './map-scene.js';
 // One small, quiet mark on a tile of mine that needs me (#602, owner decision
 // 2026-10-22: a quiet map, details on tap). Only ever my own problems: a
 // gatherer of mine that isn't keen, or one napping. Features hand in their
-// marks by source (`set('gatherers', …)`); #601's resource buildings add
-// theirs (full, paused for upkeep) the same way. A tile shows one mark, the
-// most pressing of what its sources say.
+// marks by source (`set('gatherers', …)`) on the one layer main.ts makes;
+// #601's resource buildings add theirs (full, paused for upkeep) the same
+// way, with their kinds in `TILE_MARK`. A tile shows one mark, the most
+// pressing of what its sources say.
 //
 // A DOM overlay. A mark with an anchor (a gatherer's head) sits just beside
 // it, so it says which squishy; one without sits in the tile's top corner,
@@ -18,8 +20,8 @@ import { tileScreenRectOf, type ScreenRect } from './map-scene.js';
 // never pins to the screen's edge and never steps clear of a neighbour: a
 // mark whose spot is off screen shows nothing.
 
-/** What a mark says, most pressing first (the order `TILE_MARK.kinds` lists them in). */
-export type TileMarkKind = keyof typeof TILE_MARK.kinds;
+/** What a mark says (`TILE_MARK.kinds`, most pressing first). */
+export type TileMarkKind = (typeof TILE_MARK.kinds)[number];
 
 export interface TileMark {
   readonly tile: PublicTile;
@@ -28,10 +30,9 @@ export interface TileMark {
   readonly at?: { readonly x: number; readonly y: number; readonly z: number };
 }
 
-export interface TileMarks {
-  /** The map was built into a fresh scene: marks follow its camera. */
-  attach: (scene: Scene) => void;
-  /** Replaces one source's marks (e.g. `gatherers`). */
+/** A map layer: pass it to the map screen once, and to every feature that marks tiles. */
+export interface TileMarks extends MapLayer {
+  /** Replaces one source's marks (e.g. `gatherers`); an empty list drops them. */
   set: (source: string, marks: readonly TileMark[]) => void;
   /** Drops every source's marks (another player signed in). */
   clear: () => void;
@@ -48,7 +49,7 @@ interface Shown {
   at: string;
 }
 
-const RANK = new Map(Object.keys(TILE_MARK.kinds).map((k, i) => [k as TileMarkKind, i]));
+const RANK = new Map<TileMarkKind, number>(TILE_MARK.kinds.map((k, i) => [k, i]));
 
 /**
  * Each tile's one mark: the most pressing of what every source says there
@@ -101,13 +102,11 @@ const PROJECTED = new Vector3();
  */
 function screenPointOf(
   scene: Scene,
+  box: DOMRect,
   at: { x: number; y: number; z: number },
 ): { x: number; y: number } | null {
   const camera = scene.activeCamera;
-  const canvas = scene.getEngine().getRenderingCanvas();
-  if (!camera || !canvas) return null;
-  const box = canvas.getBoundingClientRect();
-  if (box.width <= 0 || box.height <= 0) return null;
+  if (!camera || box.width <= 0 || box.height <= 0) return null;
   const viewport = camera.viewport.toGlobal(box.width, box.height);
   WORLD.set(at.x, at.y, at.z);
   const s = Vector3.ProjectToRef(
@@ -126,9 +125,10 @@ export function createTileMarks(root: HTMLElement): TileMarks {
   const sources = new Map<string, readonly TileMark[]>();
   const shown = new Map<HexKey, Shown>();
 
-  const place = (mark: Shown) => {
+  /** `box`: the canvas on screen, read once a frame (before any mark moves). */
+  const place = (mark: Shown, box: DOMRect | null) => {
     const spot = markSpot(
-      scene && mark.anchor ? screenPointOf(scene, mark.anchor) : null,
+      scene && box && mark.anchor ? screenPointOf(scene, box, mark.anchor) : null,
       scene && !mark.anchor ? tileScreenRectOf(scene, mark.tile) : null,
       { width: window.innerWidth, height: window.innerHeight },
     );
@@ -140,8 +140,11 @@ export function createTileMarks(root: HTMLElement): TileMarks {
       mark.node.style.transform = `translate(${String(spot.x)}px, ${String(spot.y)}px) translate(-50%, -50%)`;
     }
   };
+  const canvasBox = () => scene?.getEngine().getRenderingCanvas()?.getBoundingClientRect() ?? null;
   const placeAll = () => {
-    for (const mark of shown.values()) place(mark);
+    if (shown.size === 0) return;
+    const box = canvasBox();
+    for (const mark of shown.values()) place(mark, box);
   };
 
   /** Matches the marks on screen to what the sources say now. */
@@ -158,10 +161,9 @@ export function createTileMarks(root: HTMLElement): TileMarks {
         had.tile = want.tile;
         had.anchor = want.at;
         had.at = '';
-        place(had);
+        place(had, canvasBox());
         continue;
       }
-      const kind = TILE_MARK.kinds[want.kind];
       const node = el(
         'div',
         {
@@ -170,13 +172,13 @@ export function createTileMarks(root: HTMLElement): TileMarks {
           'data-testid': 'tile-mark',
           'data-kind': want.kind,
         },
-        kind.glyph,
+        TILE_MARK.glyphs[want.kind],
       );
       node.hidden = true;
       root.append(node);
       const added: Shown = { tile: want.tile, kind: want.kind, anchor: want.at, node, at: '' };
       shown.set(key, added);
-      place(added);
+      place(added, canvasBox());
     }
   };
 

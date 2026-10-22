@@ -7,6 +7,7 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import type { TileActions } from '../../map/map-screen.js';
+import type { TileMarks } from '../../map/tile-marks.js';
 import { el } from '../../ui/dom.js';
 import {
   createGathererSquishies,
@@ -31,6 +32,10 @@ export interface JobsOptions {
   api?: JobsApi;
   /** The Tutorial Glade keeps its own flow: no job entry points there. */
   isGlade?: (mapId: string) => boolean;
+  /** The map's one tile-mark layer: my gatherers' 🌧️ and 💤 go on it (#602). */
+  marks: TileMarks;
+  /** Asks the map for a frame: my jobs view changes my gatherers on a still map. */
+  invalidate?: () => void;
   /** Banks finished work into the bag (the bag's settle), before the job board reads its view. */
   settle?: (mapId: string) => Promise<void>;
 }
@@ -107,7 +112,11 @@ export function createJobs(options: JobsOptions): Jobs {
   const loadView = (mapId: string) => {
     if (userId !== null && !glade(mapId)) void api.view(mapId).catch(() => undefined);
   };
-  const gatherers = createGathererSquishies(options.root, { load: loadView });
+  const gatherers = createGathererSquishies({
+    marks: options.marks,
+    load: loadView,
+    ...(options.invalidate ? { invalidate: options.invalidate } : {}),
+  });
   feed.listen((mapId, view) => {
     gatherers.setMine(mapId, view);
   });

@@ -454,6 +454,17 @@ export const GATHERER_ON_TILE = {
   offset: { x: -0.25, z: -0.1 }, // TUNE
   /** Times the squishy's own size: about a Keeper's height on the map. */
   scale: 0.5, // TUNE
+  /**
+   * A patch-mate's gatherer, whose species the map view never names: a plain
+   * little squishy in its family's colour (`fallback` before the members
+   * list knows the owner).
+   */
+  standIn: {
+    body: 'bun',
+    belly: '#fff3e2',
+    parts: ['oval-eyes', 'smile', 'blush-cheeks'],
+    fallback: '#c9b8ff',
+  }, // TUNE
 } as const;
 
 /**
@@ -468,12 +479,13 @@ export const TILE_MARK = {
   /** With nothing to sit by: where on the tile's screen box the chip's middle sits (0–1 across, 0–1 down). */
   across: 0.78, // TUNE
   down: 0.3, // TUNE
-  kinds: {
-    /** A gatherer of mine that isn't keen on this job (#393's 🌧️). */
-    meh: { glyph: '🌧️' },
-    /** A gatherer of mine napping: a full basket, or a homestead cut off from home. */
-    napping: { glyph: '💤' },
-  },
+  /**
+   * What a mark can say, most pressing first: `meh`, a gatherer of mine
+   * that isn't keen on this job (#393's 🌧️); `napping`, a gatherer of mine
+   * with a full basket or on a homestead cut off from home.
+   */
+  kinds: ['meh', 'napping'],
+  glyphs: { meh: '🌧️', napping: '💤' },
 } as const;
 
 /**
