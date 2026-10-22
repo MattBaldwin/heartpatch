@@ -54,18 +54,14 @@ import { communitiesView, villageMorning } from './service.js';
 
 /*
  * The key hunt and the hidden cellar (#306 PR 2c, owner decision 5 of
- * 2026-10-18). Winning a village gives its winner a map to the tile where
- * the village squishies hid the cellar key (`CommunityView.cellar`). They
- * dig it up there once their land reaches it, then open the cellar under
+ * 2026-10-18). Winning a village gives its winner a treasure map to the tile
+ * where the village squishies hid the cellar key (`CommunityView.cellar`).
+ * They find it by exploring that tile once it's theirs (owner decision
+ * 2026-10-22: a glinting spot, modules/explore), then open the cellar under
  * the square and search its spots, once each, for better finds than a grey
  * tile's (`CELLAR_FINDS`). The server is the authority (rule 1): the key's
  * tile, the spots' layout (from the village's secret seed) and the finds
- * stay here (rule 6).
- *
- * The key's tile can be anyone's land, or busy (a building, a guard, a
- * battle): digging the key up only reads who holds the tiles around it and
- * writes nothing there, so it changes nobody's land. The key and the cellar
- * are the village's winner's alone.
+ * stay here (rule 6). The key and the cellar are the village's winner's alone.
  *
  * Lock order (tech spec §7): the community row, then the square's
  * `community_tiles` row (step 6); a search then the team's squishies (10)
@@ -75,8 +71,6 @@ import { communitiesView, villageMorning } from './service.js';
 const MESSAGES = {
   noVillage: "We couldn't find that place.",
   notWinner: 'Only the Keeper who brought this Hollow back has its map! 🗺️',
-  keyFound: 'You already found this key! 🔑',
-  keyAway: 'Claim land next to it to dig for the key!',
   noKey: 'Find the cellar key first! 🗺️',
   cellarOpen: 'The cellar is already open! 🕯️',
   cellarShut: 'Open the cellar with its key first! 🔑',
@@ -97,8 +91,6 @@ export interface CellarServiceOptions {
 }
 
 export interface CellarService {
-  /** Dig the cellar key up on the tile the map points to. */
-  digKey: (user: PublicUser, mapId: string, communityId: string) => Promise<CommunityView>;
   /** Open the cellar under the square with the key. */
   open: (user: PublicUser, mapId: string, communityId: string) => Promise<CommunityView>;
   /** The open cellar up close: its spots and which are done. */
@@ -110,7 +102,7 @@ export interface CellarService {
     communityId: string,
     request: CellarSearchRequest,
   ) => Promise<SearchSpotResponse>;
-  /** Dev and e2e only (`HP_DEV_SQUISHY_GRANTS`): my land reaches a village's key tile, won or not. */
+  /** Dev and e2e only (`HP_DEV_SQUISHY_GRANTS`): I hold a village's key tile, won or not (when it's wild). */
   devKeyReach: (user: PublicUser, mapId: string, communityId: string) => Promise<Hex>;
 }
 
@@ -195,31 +187,6 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
   };
 
   return {
-    digKey: async (user, mapId, communityId) => {
-      const result = await communitiesTransaction(db, async (repo, tx) => {
-        const at = now();
-        await requireMember(tx, user, mapId, ['multiplayer']);
-        // The community row holds a double tap until this one commits.
-        const community = await lockMine(tx, mapId, communityId, user.id);
-        if (community.keyRevealedAt !== null) throw new AppError('CONFLICT', MESSAGES.keyFound);
-        const key = await repo.tileById(community.keyTileId);
-        if (!key) throw new AppError('NOT_FOUND', MESSAGES.noVillage);
-        // Only read: whoever holds the key's tile keeps it, untouched.
-        const tiles = await createTerritoryRepo(tx).listTiles(mapId);
-        if (!keyInReach(key, tiles, user.id)) throw new AppError('FORBIDDEN', MESSAGES.keyAway);
-        await repo.revealKey(communityId, at);
-        await repo.appendEvent({
-          mapId,
-          type: 'key.found',
-          actorUserId: user.id,
-          payload: { communityId, userId: user.id, q: key.q, r: key.r },
-        });
-        return viewOf(tx, mapId, user.id, communityId, at);
-      });
-      published(mapId);
-      return result;
-    },
-
     open: async (user, mapId, communityId) => {
       const result = await communitiesTransaction(db, async (repo, tx) => {
         const at = now();
@@ -379,15 +346,16 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
     devKeyReach: async (user, mapId, communityId) => {
       const result = await communitiesTransaction(db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        // Dev only, so e2e can claim toward the key before the win: the
-        // community row is only read, and the tiles lock first (step 6).
+        // Dev only, so e2e can claim the key's tile before the win: the
+        // community row is only read, and the tiles lock first (step 6). A
+        // key on someone else's land has to be won in a battle instead.
         const community = await repo.findCommunity(mapId, communityId);
         if (!community) throw new AppError('NOT_FOUND', MESSAGES.noVillage);
         const key = await repo.tileById(community.keyTileId);
         if (!key) throw new AppError('NOT_FOUND', MESSAGES.noVillage);
         const tiles = await createTerritoryRepo(tx).listTiles(mapId);
         if (keyInReach(key, tiles, user.id)) return { q: key.q, r: key.r };
-        // Breadth first out from my land over free wild tiles, to one next to the key.
+        // Breadth first out from my land over free wild tiles, to the key's own tile.
         const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
         const free = (t: (typeof tiles)[number]) =>
           t.ownerUserId === null &&
@@ -395,7 +363,7 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
           t.communityId === null &&
           !isTradingPost(t) &&
           t.terrain !== 'junipers-gap';
-        const goal = new Set(hexNeighbors(key).map(hexKey));
+        const goal = hexKey(key);
         const from = new Map<HexKey, HexKey | null>();
         let frontier = tiles.filter((t) => t.ownerUserId === user.id).map(hexKey);
         for (const k of frontier) from.set(k, null);
@@ -410,7 +378,7 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
               const tile = byKey.get(nk);
               if (from.has(nk) || !tile || !free(tile)) continue;
               from.set(nk, k);
-              if (goal.has(nk)) {
+              if (nk === goal) {
                 end = nk;
                 break;
               }

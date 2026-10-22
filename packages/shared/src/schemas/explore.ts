@@ -181,6 +181,11 @@ export const SearchSpotResponseSchema = z.object({
   joy: z.number().int().min(0).max(100).optional(),
   /** The forgotten story's torn page, on a grey village tile's first search (#306): my pages after it. */
   tornPage: z.object({ found: z.number().int().min(1), total: z.number().int().min(1) }).optional(),
+  /**
+   * The search was the cellar key's glinting spot (`KEY_SPOT`, owner decision
+   * 2026-10-22): the village whose key it found, by id and name. Absent otherwise.
+   */
+  cellarKey: z.object({ communityId: z.uuid(), name: z.string() }).optional(),
 });
 export type SearchSpotResponse = z.infer<typeof SearchSpotResponseSchema>;
 

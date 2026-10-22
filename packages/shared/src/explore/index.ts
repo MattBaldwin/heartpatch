@@ -153,6 +153,40 @@ export function searchSpots(
 }
 
 /**
+ * One more place on a tile (the cellar key's glint, #306): the most open of
+ * a fixed set of tries, at least `margin` in from the tile's edge and clear
+ * of its building spots, as far from `spots` as it can be, so it stands
+ * where the Keeper can walk up to it. The same seed always gives the same
+ * place; null only when no try fits at all.
+ */
+export function extraSpotAt(
+  seed: Seed,
+  spots: readonly { readonly x: number; readonly z: number }[],
+  rules: ExploreRules,
+  margin: number = rules.placement.edgeMargin,
+): { x: number; z: number } | null {
+  const rng = Rng.fromSeed(seed);
+  const { buildingClearance } = rules.placement;
+  const blocked = buildingSpots(rules);
+  const gap2 = (a: { x: number; z: number }, x: number, z: number) =>
+    (a.x - x) * (a.x - x) + (a.z - z) * (a.z - z);
+  let best: { x: number; z: number } | null = null;
+  let room = -1;
+  for (let attempt = 0; attempt < TRIES_PER_SPOT * 4; attempt++) {
+    const x = round((rng.next() * 2 - 1) * (SQRT3 / 2));
+    const z = round(rng.next() * 2 - 1);
+    if (!insideTile(x, z, margin)) continue;
+    if (!blocked.every((b) => gap2(b, x, z) >= buildingClearance * buildingClearance)) continue;
+    const nearest = spots.reduce((min, s) => Math.min(min, gap2(s, x, z)), Infinity);
+    if (nearest > room) {
+      best = { x, z };
+      room = nearest;
+    }
+  }
+  return best;
+}
+
+/**
  * What one finished cycle gives on a joined homestead, a squishy's or the
  * Keeper's (owner decision 2026-10-07: yield, not speed): the usual
  * `quantity` scaled by `yieldPercent` (rounded up, whole-number maths) plus

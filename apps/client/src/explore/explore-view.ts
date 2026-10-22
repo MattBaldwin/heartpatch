@@ -3,6 +3,7 @@ import {
   EXPLORE_RULES,
   FOUND_SETS,
   GAME_DATA,
+  KEY_SPOT,
   TERRAINS,
   type ExploreTileResponse,
   type ItemCounts,
@@ -15,6 +16,7 @@ import {
 import { itemName } from '../inventory/bag-view.js';
 import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 import { TOOL_ICONS, TOOL_WORDS } from '../inventory/tool-uses.js';
+import { KEY_TEXT } from '../hollowed/key-hunt-view.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 
 export { TOOL_ICONS, TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
@@ -134,6 +136,8 @@ export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   readonly label: string;
   readonly interaction: SpotInteraction;
 } {
+  // The cellar key's glinting spot (#306, owner decision 2026-10-22): dug up by hand.
+  if (spot.kind === KEY_SPOT.kind) return { icon: '🔑', label: KEY_TEXT.dig, interaction: 'dig' };
   const kind = EXPLORE_RULES.spotKinds.find((k) => k.id === spot.kind);
   const interaction: SpotInteraction = kind?.interaction ?? 'lift';
   if (spot.tool) {
@@ -323,6 +327,7 @@ export function xpLines(
  */
 export function findShowsCard(found: SearchSpotResponse): boolean {
   return (
+    found.cellarKey !== undefined ||
     found.lore !== null ||
     found.clothing !== null ||
     found.notable !== null ||

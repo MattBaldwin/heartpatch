@@ -161,6 +161,25 @@ describe('explore text', () => {
     expect(makeOneLine([], true)).toBe('');
   });
 
+  it("digs up the cellar key's glinting spot by hand, and makes it a big moment (#306)", () => {
+    expect(actionFor({ kind: 'cellar-key', tool: null })).toEqual({
+      icon: '🔑',
+      label: 'Dig it up',
+      interaction: 'dig',
+    });
+    const key = found({ cellarKey: { communityId: 'c', name: 'Bramble Glen' } });
+    expect(findShowsCard(key)).toBe(true);
+    // Its spot is marked searched; the tile's own count stays as the server says.
+    const tile = {
+      spots: [{ index: 30, kind: 'cellar-key', tool: null, x: 0, z: 0, done: false }],
+      progress: { searched: 0, total: 8 },
+      tools: { shovel: 0, net: 0, rope: 0, lantern: 0 },
+    } as unknown as ExploreTileResponse;
+    const after = afterSearch(tile, { ...key, spot: 30, progress: { searched: 0, total: 8 } });
+    expect(after.spots[0]?.done).toBe(true);
+    expect(after.progress).toEqual({ searched: 0, total: 8 });
+  });
+
   it('toasts a common find and keeps the card for rare ones', () => {
     const common = found({ found: { timber: 2 }, xp: [{ squishyId: 'a', xp: 6 }] });
     expect(findShowsCard(common)).toBe(false);

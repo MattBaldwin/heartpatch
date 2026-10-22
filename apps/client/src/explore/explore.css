@@ -722,6 +722,14 @@ body:has(.explore:not([hidden])) .auth-chip {
   font-weight: 700;
 }
 
+/* The cellar key found (#306): a big golden key with a soft glow. */
+.explore-key-art {
+  margin: 0 0 4px;
+  font-size: 56px;
+  line-height: 1.1;
+  filter: drop-shadow(0 0 12px rgb(255 205 90 / 85%));
+}
+
 .explore-finds {
   margin: 0 0 10px;
   padding: 12px;

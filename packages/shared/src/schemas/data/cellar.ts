@@ -21,5 +21,11 @@ export const CellarRulesSchema = z.strictObject({
    * tile's share: the issue's "about 2×".
    */
   rareFindMultiplier: z.number().int().min(1),
+  /**
+   * On a patch with no challenges, how far a key on someone else's land may
+   * move to the nearest wild tile (owner decision 2026-10-22); with none that
+   * near it stays, and land next to it is enough.
+   */
+  keyMoveRange: z.number().int().min(1),
 });
 export type CellarRules = z.infer<typeof CellarRulesSchema>;
