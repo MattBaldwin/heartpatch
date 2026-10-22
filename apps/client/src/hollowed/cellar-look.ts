@@ -96,7 +96,7 @@ export const CELLAR_ROOM = {
   side: 1.5, // TUNE
   sideFrom: -1.6, // TUNE
   /** The stair back up, at the back wall's left end. */
-  stairs: { x: -1.16, z: 0.84 }, // TUNE
+  stairs: { x: -1.0, z: 0.8 }, // TUNE: just past the row's left end
   /** Candle clusters on the floor. */
   candles: [
     [-0.2, 0.86],

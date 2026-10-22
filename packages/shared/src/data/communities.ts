@@ -75,8 +75,8 @@ export const COMMUNITY_RULES: CommunityRules = {
   // The chests along the cellar's back wall (#306, owner 2026-10-22).
   cellarChests: {
     row: 0.5, // TUNE: in front of the back wall's arches
-    first: 0.36, // TUNE: room for the big chest's lid to swing
-    gap: 0.22, // TUNE: chests side by side, a hop apart
+    first: 0.3, // TUNE: room for the big chest's lid to swing
+    gap: 0.17, // TUNE: chests side by side, so the row reads as one set
     curve: 0.07, // TUNE
     big: 0.62, // TUNE
   },

@@ -106,17 +106,32 @@ export function buildWallBay(scene: Scene): Mesh {
     }
     parts.push(block(1.9, 0.32, 0.6, [0.1, 1.45, 0.05], 1)); // the alcove's sill
     // The pillar on the left, standing proud of the wall.
+    // Short and stout, so the vault's arches spring low enough to show
+    // under the explore camera.
     parts.push(
-      shaded(cylinder(5.2, 0.9, 1.05, 10, [-2.1, 2.6, -0.15]), STONE.foot, STONE.light, 0, 5.2),
+      shaded(cylinder(3.4, 0.95, 1.1, 10, [-2.1, 1.7, -0.15]), STONE.foot, STONE.light, 0, 3.4),
     );
     parts.push(block(1.3, 0.45, 1.25, [-2.1, 0.22, -0.15], 0));
-    parts.push(block(1.25, 0.4, 1.2, [-2.1, 5.3, -0.15], 1));
-    // The vault's rib springing from the pillar's top, curving up and over.
-    for (let k = 0; k <= 5; k++) {
-      const a = (Math.PI / 2) * (k / 5);
-      parts.push(
-        block(0.6, 0.5, 0.75, [-2.1 + (1 - Math.cos(a)) * 2.1, 5.6 + Math.sin(a) * 1.4, -0.15], 1),
-      );
+    parts.push(block(1.35, 0.42, 1.3, [-2.1, 3.5, -0.15], 1));
+    // The vault: ribs spring from this pillar and the next one's top and meet
+    // over the bay's middle, leaning out over the room like a ceiling.
+    for (const side of [-1, 1]) {
+      for (let k = 0; k <= 6; k++) {
+        const a = (Math.PI / 2) * (k / 6);
+        parts.push(
+          block(
+            0.62,
+            0.52,
+            0.8,
+            [
+              side * (2.1 - Math.sin(a) * 2.0),
+              3.85 + (1 - Math.cos(a)) * 1.6,
+              -0.2 - Math.sin(a) * 0.9,
+            ],
+            1,
+          ),
+        );
+      }
     }
     // Moss at the foot and in a few cracks.
     const moss: [number, number, number, number][] = [

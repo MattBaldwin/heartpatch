@@ -99,6 +99,7 @@ import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
 import { cellarApi, type CellarApi } from '../hollowed/cellar-api.js';
 import { cellarShown, isChest } from '../hollowed/cellar-look.js';
 import {
+  CELLAR_TEXT,
   cardDelayMs,
   chestAction,
   chestCardTitle,
@@ -1031,8 +1032,15 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!front) {
       const done = t.progress.total > 0 && t.progress.searched >= t.progress.total;
       action.disabled = true;
-      actionIcon.textContent = '✨';
-      actionLabel.textContent = done ? EXPLORE_TEXT.allDone : EXPLORE_TEXT.nothingNear;
+      actionIcon.textContent = cellarOf && !done ? '🗝️' : '✨';
+      // A cellar's chests have their own words (#306).
+      actionLabel.textContent = cellarOf
+        ? done
+          ? CELLAR_TEXT.allOpen
+          : CELLAR_TEXT.findChest
+        : done
+          ? EXPLORE_TEXT.allDone
+          : EXPLORE_TEXT.nothingNear;
       return;
     }
     const what = actionOf(front);

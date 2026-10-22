@@ -92,3 +92,26 @@ const CLOTHING_SLOT_ICONS: Readonly<Record<string, string>> = {
 export function clothingSlotIcon(slot: string): string {
   return CLOTHING_SLOT_ICONS[slot] ?? '✨';
 }
+
+/**
+ * Pieces whose slot's picture would be wrong for them (a crown isn't a top
+ * hat): the found sets' and the cellar keepsakes' own pictures (#306).
+ */
+const CLOTHING_ICONS: Readonly<Record<string, string>> = {
+  // Rekindled (#306 PR 5).
+  'lantern-glow-cap': '🧶',
+  'ember-patch-jacket': '🧥',
+  'lantern-glow-boots': '🥾',
+  'joy-lantern-charm': '🏮',
+  // The cellar keepsakes (#306).
+  'lamplighters-crown': '👑',
+  'gearheart-wrench': '🔧',
+  'wishing-well-cape': '🪙',
+  'golden-baker-jacket': '🥧',
+  'lookout-boots': '🥾',
+};
+
+/** A piece of clothing's picture: its own, else its slot's. */
+export function clothingIcon(item: { readonly id: string; readonly slot: string }): string {
+  return CLOTHING_ICONS[item.id] ?? clothingSlotIcon(item.slot);
+}

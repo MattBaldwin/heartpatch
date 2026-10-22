@@ -56,6 +56,16 @@ export const KEY_HUNT = {
  * (a wobble, a slower swing, a fountain of sparkles and a beam of warm
  * light). Angles are radians, times ms, lengths world units.
  */
+/**
+ * The cellar's camera (#306): a little further back and higher than
+ * exploring a tile, so the row of chests reads as one set, the big one in
+ * the middle. Times the explore shot's distance, plus radians of pitch.
+ */
+export const CELLAR_CAMERA = {
+  distance: 1.4, // TUNE
+  pitch: (5 * Math.PI) / 180, // TUNE
+} as const;
+
 export const CELLAR_CHESTS = {
   small: {
     open: 1.95, // TUNE: how far the lid swings back

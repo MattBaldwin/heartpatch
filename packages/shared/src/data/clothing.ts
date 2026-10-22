@@ -3060,21 +3060,42 @@ const CELLAR_KEEPSAKES: ClothingItem[] = [
     sources: ['found'],
     tradable: false,
     visual: {
-      // Held like the Tiny Broom: the grip in the hand, the jaw down by the knee.
+      // Held up and out from the hand, so the jaw shows beside the Keeper:
+      // a brass shaft and an open jaw with a glowing gear.
       pieces: [
-        { shape: 'capsule', at: [0, 0.12, 0], size: [0.28, 0.5, 0.28], color: '#8a5a3c' },
-        { shape: 'capsule', at: [0, -0.4, 0], size: [0.22, 0.9, 0.22], color: '#d9ab55' },
         {
-          shape: 'arc',
-          at: [0, -1.0, 0],
-          size: [1.05, 1.05, 0.3],
-          turn: [0, 90, 180],
-          color: '#d9ab55',
+          shape: 'capsule',
+          at: [0.06, 0.08, 0.0],
+          size: [0.3, 0.55, 0.3],
+          turn: [0, 0, -35],
+          color: '#8a5a3c',
+        },
+        {
+          shape: 'capsule',
+          at: [0.46, 0.66, 0.0],
+          size: [0.24, 1.2, 0.24],
+          turn: [0, 0, -35],
+          color: '#e0b25a',
         },
         {
           shape: 'ellipsoid',
-          at: [0, -1.0, 0],
-          size: [0.2, 0.56, 0.56],
+          at: [0.89, 1.27, 0.0],
+          size: [1.0, 0.95, 0.32],
+          turn: [0, 0, -35],
+          color: '#e0b25a',
+        },
+        // The jaw's open notch: a dark bite out of the head's end.
+        {
+          shape: 'ellipsoid',
+          at: [1.13, 1.61, 0.0],
+          size: [0.46, 0.5, 0.36],
+          turn: [0, 0, -35],
+          color: '#4a3020',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.84, 1.2, -0.14],
+          size: [0.42, 0.42, 0.12],
           color: '#7fe4f5',
           glow: true,
         },
@@ -3155,17 +3176,20 @@ const CELLAR_KEEPSAKES: ClothingItem[] = [
     sources: ['found'],
     tradable: false,
     visual: {
+      // Bright watch-blue with gold cuffs and a big glowing star on each, so
+      // they show at a glance.
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0.1, -0.05], size: [1.2, 1.2, 1.25], color: '#4f5f92' },
-        { shape: 'capsule', at: [0, 0.85, 0.15], size: [0.9, 1.1, 0.8], color: '#4f5f92' },
-        { shape: 'ellipsoid', at: [0, 1.35, 0.15], size: [1.1, 0.3, 1.0], color: '#c9d4ff' },
+        { shape: 'ellipsoid', at: [0, 0.1, -0.08], size: [1.32, 1.3, 1.4], color: '#3f6fd6' },
+        { shape: 'capsule', at: [0, 0.9, 0.12], size: [1.0, 1.2, 0.9], color: '#3f6fd6' },
+        { shape: 'ellipsoid', at: [0, 1.45, 0.12], size: [1.22, 0.36, 1.1], color: '#f2b84b' },
         {
           shape: 'ellipsoid',
-          at: [0, 0.95, -0.3],
-          size: [0.5, 0.5, 0.12],
+          at: [0, 0.95, -0.36],
+          size: [0.64, 0.64, 0.14],
           color: '#fff3a8',
           glow: true,
         },
+        { shape: 'ellipsoid', at: [0, -0.3, -0.5], size: [0.9, 0.24, 0.5], color: '#f2b84b' },
       ],
     },
   },

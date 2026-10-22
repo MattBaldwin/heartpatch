@@ -6,8 +6,10 @@ import { isChest } from './cellar-look.js';
 // kid-readable; "Hollow", never "village" or "community".
 
 export const CELLAR_TEXT = {
-  /** The action button by a chest. */
+  /** The action button by a chest, away from one, and once every chest is open. */
   open: 'Open',
+  findChest: 'Find a chest',
+  allOpen: 'All open!',
   /** The chest's gesture: hold until it pops (the `lift` reducer). */
   hint: 'Hold to open it!',
   easy: 'tap to open',

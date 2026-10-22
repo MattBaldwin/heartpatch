@@ -85,6 +85,7 @@ import {
 } from '../map/terrain-plugin.js';
 import { CellarChests, type CellarStats } from '../hollowed/cellar-chests.js';
 import { CELLAR_TERRAIN, isChest } from '../hollowed/cellar-look.js';
+import { CELLAR_CAMERA } from '../hollowed/hollowed-config.js';
 import { HollowedExplore, type HollowedStats } from '../hollowed/hollowed-explore.js';
 import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
@@ -1261,6 +1262,11 @@ export class ExploreScene implements AmbientTarget {
   }
 
   /** Writes the follow camera's shot into the stage's camera. */
+  /** The camera's pitch now: the screen's shot, a little higher in a cellar (#306). */
+  get #pitch(): number {
+    return this.#shot.pitch + (this.#cellar ? CELLAR_CAMERA.pitch : 0);
+  }
+
   #applyCamera(): void {
     const camera = this.#scene.activeCamera;
     if (!(camera instanceof TargetCamera)) return;
@@ -1272,8 +1278,10 @@ export class ExploreScene implements AmbientTarget {
       this.#aspect = aspect;
       this.#shot = cameraShot(aspect);
     }
-    const { pitch, distance } = this.#shot;
-    const d = distance * this.#camera.zoom;
+    const pitch = this.#pitch;
+    // A hidden cellar's camera stands back so the chest row reads as one set (#306).
+    const room = this.#cellar ? CELLAR_CAMERA.distance : 1;
+    const d = this.#shot.distance * this.#camera.zoom * room;
     const tx = this.#camera.target.x * this.#size;
     const tz = this.#camera.target.z * this.#size;
     // Aim at the Keeper's own ground, not the ground ahead: on sculpted land a
@@ -1346,7 +1354,7 @@ export class ExploreScene implements AmbientTarget {
     const hiding = hidingSpots(
       this.#at,
       this.#tile.spots,
-      this.#shot.pitch,
+      this.#pitch,
       this.#heightOf,
       middle,
       this.#hidingNext,
@@ -1429,7 +1437,7 @@ export class ExploreScene implements AmbientTarget {
             glint,
             keeper,
             this.keeperTall,
-            this.#shot.pitch,
+            this.#pitch,
             half,
             EXPLORE_FADE.glintClearHalfWidth,
             this.#glintSide.get(s.index),
