@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../data/index.js';
+import { CELLAR_RULES } from '../data/server/cellar.js';
 import { hashString } from '../rng/index.js';
 import { hex, hexDistance, hexKey, hexRing, hexSpiral } from '../hex/index.js';
 import { terrainNodeResources } from '../schemas/data/terrains.js';
@@ -24,8 +25,9 @@ const center = hex(0, 0);
  */
 const SIX_SEAT_SPREAD_SLACK = 5;
 
+// As the server makes them: with the (server-only) range the cellar keys hide in.
 const generate = (seed: string, playerCount: number, data: MapGenData = GAME_DATA) =>
-  generateMap(data, { seed, playerCount });
+  generateMap(data, { seed, playerCount, cellarKeys: CELLAR_RULES.keyFromVillage });
 
 /** Every map we test against: each player count × many seeds. */
 const maps: GeneratedMap[] = PLAYER_COUNTS.flatMap((n) => SEEDS.map((seed) => generate(seed, n)));

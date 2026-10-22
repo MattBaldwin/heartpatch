@@ -196,7 +196,10 @@ export interface ExploreSceneStats {
    * counts them there anyway); null otherwise.
    */
   readonly gl: { readonly buffers: number; readonly programs: number } | null;
-  /** Every program a mesh shown later needs is compiled (`#prewarm`). */
+  /**
+   * Every program a mesh shown later needs is compiled (`#prewarm`), and so
+   * is every program the meshes on show draw with (the scene is ready).
+   */
   readonly warm: boolean;
   /** The land kit's layers and tier (#335 art reset), or null on today's tile. */
   readonly land: LandStats | null;
@@ -441,6 +444,8 @@ export class ExploreScene implements AmbientTarget {
   /** The context's counts and their reading when the scene opened (`stats.gl`, dev only). */
   readonly #gl: { readonly counts: GlCounts; readonly atOpen: GlCounts } | null;
   #warm = false;
+  /** The scene was ready (every mesh on show compiled) once `#warm` was. */
+  #ready = false;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
@@ -788,6 +793,16 @@ export class ExploreScene implements AmbientTarget {
       }
       this.#warm = true;
     })();
+    // The meshes on show compile as the scene checks it's ready (the stage's
+    // loading frames, or the wait below), not above. When every mesh above
+    // was compiled on an earlier visit, `compiled` finishes before those
+    // frames draw, so `stats.warm` also waits for the scene. Outside
+    // `compiled`: inside, it would wait on its own pending data.
+    void compiled
+      .then(() => scene.whenReadyAsync(true))
+      .then(() => {
+        this.#ready = true;
+      });
     // A compile that never finishes holds the stage no longer than `EXPLORE_PREWARM.maxMs`.
     let cap: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -826,7 +841,7 @@ export class ExploreScene implements AmbientTarget {
             programs: this.#gl.counts.programs - this.#gl.atOpen.programs,
           }
         : null,
-      warm: this.#warm,
+      warm: this.#warm && this.#ready,
       land: this.#land?.stats ?? null,
       water: this.#water?.stats ?? null,
       ambient: this.ambientStatus,

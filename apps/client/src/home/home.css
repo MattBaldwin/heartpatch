@@ -467,6 +467,25 @@
   touch-action: none;
 }
 
+/* With something beside it (the 💛 pill, #601), the handle shares its row
+   and the row takes the grip's place in the sheet's top padding. */
+.home-handle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 -10px;
+}
+
+.home-handle-row > .home-handle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.home-handle-row:has(> .home-handle[hidden]) {
+  display: none;
+}
+
 /* The handle's word (#433): small, beside the grip. */
 .home-handle-word {
   font: inherit;

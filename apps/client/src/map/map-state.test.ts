@@ -51,6 +51,13 @@ describe('MapState', () => {
     expect(state.view).toBe(before);
   });
 
+  it("refetches when my village's key hunt moves on (#306 PR 2c)", () => {
+    const state = new MapState(testView());
+    const mine = { communityId: '0190a8c4-0000-7000-8000-c00000000001', userId: userId(1) };
+    expect(state.apply(event('key.found', mine))).toBe('resync');
+    expect(state.apply(event('cellar.opened', mine))).toBe('resync');
+  });
+
   it('refetches when an event it draws from is malformed', () => {
     const state = new MapState(testView());
     expect(state.apply(event('map.updated', { pvpMode: 'sideways' }))).toBe('resync');

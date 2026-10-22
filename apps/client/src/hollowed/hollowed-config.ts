@@ -36,3 +36,16 @@ export const HOLLOWED_EXPLORE = {
   /** How long the spook's line stays up, ms. */
   spookedMs: 2600, // TUNE
 } as const;
+
+/**
+ * The key map card (#306 PR 2c): it waits its turn behind the joy and naming
+ * cards. Once they close, a beat passes before it shows (so the moment the
+ * naming card closed stays its own), and its buttons ignore taps for a
+ * moment after it shows, so a tap meant for the card before can't land on it.
+ */
+export const KEY_HUNT = {
+  /** After the card before it closes (or a busy check fails), ms before looking again. */
+  afterCardMs: 1200, // TUNE
+  /** Its buttons ignore taps for this long once it shows, ms. */
+  tapGuardMs: 450, // TUNE
+} as const;

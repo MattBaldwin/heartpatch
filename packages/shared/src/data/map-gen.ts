@@ -58,7 +58,6 @@ export const MAP_GEN: MapGenSettings = {
     ringFromPost: 2, // TUNE:
     excludedTerrains: ['lake'],
     requiredKind: 'lantern-tower',
-    keyFromVillage: { min: 2, max: 4 }, // TUNE:
     nameStems: [
       'Bramble',
       'Thistle',

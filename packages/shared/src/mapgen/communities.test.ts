@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '../data/avoided-words.js';
+import { CELLAR_RULES } from '../data/server/cellar.js';
 import { GAME_DATA } from '../data/index.js';
 import { hexDistance, hexKey, hexSpiral, type Hex } from '../hex/index.js';
 import { isTradingPost } from '../territory/reach.js';
@@ -16,6 +17,8 @@ import {
 
 const rules = GAME_DATA.mapGen.communities;
 const { gapTerrain } = GAME_DATA.mapGen;
+// Server-only (rule 6): the server passes it in, as these tests do.
+const keys = CELLAR_RULES.keyFromVillage;
 const PLAYER_COUNTS = [2, 3, 4, 6] as const;
 const SEEDS = Array.from({ length: 60 }, (_, i) => `villages-${i}`);
 const squareApart = rules.ringsApart + 2;
@@ -65,16 +68,16 @@ function expectValidVillage(
     expect(hexDistance(o.square, village.square)).toBeGreaterThanOrEqual(squareApart);
   }
   // The cellar key: outside every ring, a few steps from its own village.
-  const key = byKey.get(hexKey(village.keyTile));
+  const key = byKey.get(hexKey(village.keyTile!));
   expect(key).toBeDefined();
   expect(key!.terrain).not.toBe(gapTerrain);
   expect(rules.excludedTerrains).not.toContain(key!.terrain);
   expect(isTradingPost(key!)).toBe(false);
   expect(key!.homeSlot).toBeNull();
-  for (const o of others) expect(ringKeys(o)).not.toContain(hexKey(village.keyTile));
-  const steps = near(village.keyTile, village.tiles);
-  expect(steps).toBeGreaterThanOrEqual(rules.keyFromVillage.min);
-  expect(steps).toBeLessThanOrEqual(rules.keyFromVillage.max);
+  for (const o of others) expect(ringKeys(o)).not.toContain(hexKey(village.keyTile!));
+  const steps = near(village.keyTile!, village.tiles);
+  expect(steps).toBeGreaterThanOrEqual(keys.min);
+  expect(steps).toBeLessThanOrEqual(keys.max);
 }
 
 /** Every home's nearest village square, by slot. */
@@ -95,7 +98,7 @@ describe('communityCount (#306)', () => {
 describe('villages at mapgen (#306)', () => {
   const maps = PLAYER_COUNTS.map((n) => ({
     n,
-    maps: SEEDS.map((seed) => generateMap(GAME_DATA, { seed, playerCount: n })),
+    maps: SEEDS.map((seed) => generateMap(GAME_DATA, { cellarKeys: keys, seed, playerCount: n })),
   }));
 
   it('keeps every hard rule on 60 seeds of every layout', () => {
@@ -106,8 +109,8 @@ describe('villages at mapgen (#306)', () => {
         for (const v of map.communities) expectValidVillage(map, v, map.communities);
         expect(map.radius).toBe(radius);
         // Distinct key tiles, at least one Lantern Tower, distinct short kind names.
-        const keys = map.communities.map((v) => hexKey(v.keyTile));
-        expect(new Set(keys).size).toBe(keys.length);
+        const hidden = map.communities.map((v) => hexKey(v.keyTile!));
+        expect(new Set(hidden).size).toBe(hidden.length);
         const kinds = map.communities.map((v) => v.kind);
         expect(kinds).toContain(rules.requiredKind);
         expect(new Set(kinds).size).toBe(kinds.length);
@@ -151,34 +154,40 @@ describe('villages at mapgen (#306)', () => {
 
   it('relaxes the distance on a lake-heavy map rather than fail', () => {
     // 'posts-98': the first home's side is mostly lake (about 1 map in 1000).
-    const map = generateMap(GAME_DATA, { seed: 'posts-98', playerCount: 2 });
+    const map = generateMap(GAME_DATA, { cellarKeys: keys, seed: 'posts-98', playerCount: 2 });
     expect(map.communities).toHaveLength(2);
     for (const v of map.communities) {
       expectValidVillage(map, v, map.communities, rules.relaxedMaxFromSeed);
     }
   });
 
+  it('places no key tiles without the key range (a client preview)', () => {
+    const map = generateMap(GAME_DATA, { seed: 'preview', playerCount: 6 });
+    expect(map.communities.length).toBeGreaterThan(0);
+    for (const v of map.communities) expect(v.keyTile).toBeNull();
+  });
+
   it('is deterministic', () => {
     for (const n of PLAYER_COUNTS) {
-      const a = generateMap(GAME_DATA, { seed: 'same', playerCount: n });
-      const b = generateMap(GAME_DATA, { seed: 'same', playerCount: n });
+      const a = generateMap(GAME_DATA, { cellarKeys: keys, seed: 'same', playerCount: n });
+      const b = generateMap(GAME_DATA, { cellarKeys: keys, seed: 'same', playerCount: n });
       expect(a.communities).toEqual(b.communities);
     }
   });
 
   it('is the same rule on stored tiles, whatever order they come in', () => {
-    const map = generateMap(GAME_DATA, { seed: 'stored', playerCount: 6 });
+    const map = generateMap(GAME_DATA, { cellarKeys: keys, seed: 'stored', playerCount: 6 });
     const byQr = [...map.tiles].sort((a, b) => a.q - b.q || a.r - b.r);
     for (const tiles of [byQr, [...byQr].reverse()]) {
       expect(
-        placeCommunities({ tiles, homes: map.homes, gapTerrain, rules, seed: 'stored' }),
+        placeCommunities({ tiles, homes: map.homes, gapTerrain, rules, keys, seed: 'stored' }),
       ).toEqual(map.communities);
     }
   });
 });
 
 describe('placeCommunities on an older map (#306 boot pass)', () => {
-  const map = generateMap(GAME_DATA, { seed: 'older-villages', playerCount: 6 });
+  const map = generateMap(GAME_DATA, { cellarKeys: keys, seed: 'older-villages', playerCount: 6 });
   const home = map.homes[0]!;
   // Two years of play: a kid owns everything within 4 steps of the first
   // Heart Seed, and a building or gatherer keeps some wild tiles busy.
@@ -194,6 +203,7 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
       homes: map.homes,
       gapTerrain,
       rules,
+      keys,
       seed: 'older-villages',
       ...extra,
     });
@@ -214,14 +224,14 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
 
   it('back-fills only the missing villages, around the ones already there', () => {
     const [kept] = map.communities;
-    const existing: ExistingCommunity[] = [{ ...kept!, kind: 'bakery' }];
+    const existing: ExistingCommunity[] = [{ ...kept!, keyTile: kept!.keyTile!, kind: 'bakery' }];
     const villages = place({ existing, partial: true })!;
     expect(villages.length).toBeGreaterThan(0);
     expect(villages.length).toBeLessThanOrEqual(communityCount(6, rules) - 1);
     const all = [...existing, ...villages];
     for (const v of villages) {
       expectValidVillage({ ...map, tiles: played }, v, all);
-      expect(hexKey(v.keyTile)).not.toBe(hexKey(kept!.keyTile));
+      expect(hexKey(v.keyTile!)).not.toBe(hexKey(kept!.keyTile!));
     }
     // The map still gets its Lantern Tower, and no name twice.
     expect(villages.map((v) => v.kind)).toContain(rules.requiredKind);
@@ -235,8 +245,9 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
         homes: map.homes,
         gapTerrain,
         rules,
+        keys,
         seed: 'x',
-        existing: map.communities,
+        existing: map.communities.map((c) => ({ ...c, keyTile: c.keyTile! })),
       }),
     ).toEqual([]);
   });
@@ -248,8 +259,9 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
       homes: map.homes,
       gapTerrain,
       rules,
+      keys,
       seed: 'older-villages',
-      existing: [kept!],
+      existing: [{ ...kept!, keyTile: kept!.keyTile! }],
     })!;
     expect(villages).toHaveLength(rest.length);
     const all = [kept!, ...villages];
@@ -267,7 +279,7 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
         ? { ...t, ownerUserId: 'someone' }
         : t,
     );
-    const input = { tiles: crowded, homes: map.homes, gapTerrain, rules, seed: 'crowded' };
+    const input = { tiles: crowded, homes: map.homes, gapTerrain, rules, keys, seed: 'crowded' };
     expect(placeCommunities(input)).toBeNull();
     const some = placeCommunities({ ...input, partial: true })!;
     expect(some.length).toBeGreaterThan(0);
@@ -278,7 +290,7 @@ describe('placeCommunities on an older map (#306 boot pass)', () => {
 
   it('is null, even partial, when there is no room at all', () => {
     const full = map.tiles.map((t) => (t.homeSlot === null ? { ...t, ownerUserId: 'kid' } : t));
-    const input = { tiles: full, homes: map.homes, gapTerrain, rules, seed: 'full' };
+    const input = { tiles: full, homes: map.homes, gapTerrain, rules, keys, seed: 'full' };
     expect(placeCommunities(input)).toBeNull();
     expect(placeCommunities({ ...input, partial: true })).toBeNull();
   });

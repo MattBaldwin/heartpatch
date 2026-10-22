@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
@@ -161,7 +162,13 @@ function clearTap(
       const a = (i / 16) * 2 * Math.PI;
       const to = { x: k.x + Math.cos(a) * reach, z: k.z + Math.sin(a) * reach };
       if (Math.hypot(to.x, to.z) > 0.6) continue; // well clear of the tile's edge
-      if (e.blockers.some((c) => gap(c, to) < c.r + 0.02)) continue;
+      // A blocker the Keeper already stands beside blocks only headings into
+      // it: a straight swim away from it or along it only gets farther off.
+      const blocked = (c: { x: number; z: number; r: number }) =>
+        Math.hypot(c.x - k.x, c.z - k.z) < c.r + 0.02
+          ? (to.x - k.x) * (c.x - k.x) + (to.z - k.z) * (c.z - k.z) > 0
+          : gap(c, to) < c.r + 0.02;
+      if (e.blockers.some(blocked)) continue;
       // Not so near a spot that the tap picks it (the Keeper would stop beside it).
       if (e.spots.some((p) => !p.done && Math.hypot(p.x - to.x, p.z - to.z) < e.tapPick + 0.02)) {
         continue;
@@ -191,14 +198,18 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
 
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  // The camera starts on the Heart Seed: tap it, then Explore. A busy WebKit
-  // runner can miss the first tap while the map settles, so tap again only
-  // while nothing is picked (a second tap on the picked Heart Seed opens Home).
+  // The camera starts on the Heart Seed: tap it, then Explore. The tap is
+  // dispatched in the page (`tapCanvas`): a press Playwright sends during a
+  // slow software frame isn't handled until the frame ends, so its lift came
+  // 500–700 ms later and the map took it for a long press (TAP_MAX_MS). A busy
+  // WebKit runner can still miss the first tap while the map settles, so tap
+  // again only while nothing is picked (a second tap on the picked Heart Seed
+  // opens Home).
   const box = (await page.locator('#game').boundingBox())!;
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
     if ((await mapState(page))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);
@@ -507,10 +518,17 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   test.setTimeout(360_000); // two scene builds and a walk to a mound; CI renders in software
   const page = await newPlayer(browser, uniqueName('builds'));
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // As in the lake test: only an API fetch the navigation below aborts is let
+  // through, and only while it loads.
+  let reloading = false;
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
   // One tier throughout (dev `?tier=`, governor off; low, the quickest to
   // render in software), so a find below is judged on what it compiles, not
   // on a software renderer's tier change.
+  reloading = true;
   await page.goto('/?tier=low');
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -522,6 +540,7 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   // on a busy runner an early tap can land before the camera rests on the Heart Seed.
   await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  reloading = false;
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
   const box = (await page.locator('#game').boundingBox())!;
@@ -529,7 +548,7 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   const openExplore = async () => {
     await expect(async () => {
       if ((await mapState(page))?.selected == null) {
-        await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+        await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
       }
       await expect(explore).toBeVisible({ timeout: 5_000 });
     }).toPass(slow);
@@ -667,6 +686,9 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
+  // The map itself, as in the test above: the lobby's stage can already be
+  // `data-ready` while the map is still opening (its hook null).
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   reloading = false;
   // Every tool, so the server's own spot (whatever it needs) can be searched.
@@ -679,7 +701,7 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
     if ((await mapState(page))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);

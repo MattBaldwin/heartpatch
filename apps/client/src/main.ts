@@ -26,6 +26,7 @@ import { createCommunityActions } from './hollowed/community-actions.js';
 import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
+import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -58,6 +59,7 @@ import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { lobbyApi } from './ui/lobby/lobby-api.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
+import { createHeartCoinsScreen } from './heart-coins/heart-coins.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/wardrobe-return.js';
@@ -362,6 +364,16 @@ const roster = createRosterSheet({
     void house.open(mapId, current, { pick: squishyId });
   },
 });
+// Heart Coins (#601): each patch's own balance, a 💛 pill on the map's name
+// card and on Home's peek bar, and a line on each patch-list card. Never on
+// the Tutorial Glade: it pays none.
+const heartCoins = createHeartCoinsScreen({
+  root: document.body,
+  now: () => inventory.gameNow(),
+});
+const heartCoinsOn = (mapId: string): void => {
+  heartCoins.setMap(mapId === glade ? null : mapId);
+};
 const care = createCareSheet({
   root: document.body,
   portraits,
@@ -369,6 +381,8 @@ const care = createCareSheet({
   onClosed: () => {
     roster.setCovered(false);
     void roster.refresh();
+    // Full-value care pays Heart Coins on this patch (#601).
+    void heartCoins.refresh();
     // A village won in the same battle waited for the evolution to be seen (#592).
     showWonVillages();
   },
@@ -775,6 +789,7 @@ const home = createHomeScreen({
   onOpen: (mapId) => {
     rosterMapId.home = mapId;
     homeSquishies.hidden = false;
+    heartCoinsOn(mapId);
     roster.close();
     maps.close();
     catalog.close();
@@ -792,6 +807,7 @@ const home = createHomeScreen({
   onSquishies: (mapId) => {
     void roster.open(mapId);
   },
+  peekCorner: heartCoins.homePill,
   onCloseUp: (mapId, squishyId) => {
     audio.cue('squeak');
     void closeUp.open(mapId, squishyId, 'home');
@@ -966,6 +982,27 @@ const restoreSheet = createRestoreSheet({
       wide ? RING_ZOOM : BUILD_ZOOM,
     );
   },
+  // The joy card closed: a won village's key map card shows next (#306 PR 2c).
+  onClose: () => {
+    keyHunt.showWaiting();
+  },
+});
+// A won village's key hunt and hidden cellar (#306 PR 2c): the map card, the
+// key's flag and panel, the cellar door on the square, and down into it.
+const keyHunt = createKeyHunt({
+  root: document.body,
+  me: () => signedIn?.id ?? null,
+  mapId: () => maps.view?.map.id ?? null,
+  showKey: (at) => {
+    const point = maps.focus(at);
+    if (point) stage?.camera.panTo(point, stillPans.matches);
+  },
+  enterCellar: (communityId) => {
+    void explore.openCellar(communityId);
+  },
+  // The joy card's own queue counts too (#592): after a battle the care sheet
+  // may still be fetching before its "Whoa!" or the joy card opens.
+  busy: () => evolutionPending || wonWaiting.length > 0 || restoreSheet.isOpen || care.isOpen,
 });
 communityActions.wire('restore', (community, tile) => {
   restoreSheet.open(community, tile);
@@ -1047,6 +1084,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     restoreSheet.close();
+    keyHunt.close();
     roster.close();
     jobs.close();
     postScreen.close();
@@ -1071,6 +1109,8 @@ const maps = createMapScreen({
     inventory.tileActions,
     // A Hollowed village's words and its Explore and Restore (#306).
     communityActions,
+    // A won village's cellar door, and its key's tile (#306 PR 2c).
+    keyHunt.tileActions,
     // Build sits near the top of a tile's actions, so it's never scrolled away.
     tileBuild.tileActions,
     home.tileActions,
@@ -1092,8 +1132,11 @@ const maps = createMapScreen({
       },
     },
   ),
+  hudExtras: [heartCoins.mapPill],
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // Back on the map (after a battle, home, the lobby): read its Heart Coins again.
+    if (mapId !== null) heartCoinsOn(mapId);
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
@@ -1113,6 +1156,7 @@ const maps = createMapScreen({
     postFlags,
     communityFlags,
     villageWins,
+    keyHunt.layer,
     trickOrTreat.layer,
     // Last: each frame the marks keep clear of the flags placed just before them.
     tileMarks,
@@ -1318,6 +1362,7 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: (mapId, live) => {
     battleMapId = mapId;
+    heartCoins.close();
     // A live battle (#29) keeps following the patch underneath: the other
     // Keeper's picks and cheers arrive on it, and it keeps me "here".
     if (live) maps.hide();
@@ -1630,6 +1675,7 @@ const lobby = mountLobby(document.body, {
     ...wardrobe.listActions(),
     ...(installGuide?.cards() ?? []),
   ],
+  mapLines: (mapId) => [heartCoins.lobbyLine(mapId)],
   listHeader: () => {
     void lobbyCoins.refresh();
     return [lobbyCoins.node, ...account.listHeader()];
@@ -1683,6 +1729,7 @@ const whatsNew = createWhatsNew({
     (wardrobe.debug?.open ?? false) ||
     recipeBook.isOpen ||
     postScreen.isOpen ||
+    heartCoins.isOpen ||
     raidReportOpen ||
     (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
@@ -1771,6 +1818,7 @@ mountAuth(document.body, {
     chat.setUser(user);
     friendly.setUser(user);
     home.setUser(user);
+    heartCoins.setUser(user);
     explore.setUser(user);
     wardrobe.setUser(user);
     starters.setUser(user);
@@ -1840,6 +1888,7 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     house: () => house.debug,
     wardrobe: () => wardrobe.debug,
+    heartCoins: () => heartCoins.debug,
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,
@@ -1849,6 +1898,7 @@ if (import.meta.env.DEV) {
       flags: communityFlags.shown,
       panel: communityActions.debug,
       restore: restoreSheet.debug,
+      keyHunt: keyHunt.debug,
       villages: (maps.view?.communities ?? []).map((c) => ({
         id: c.id,
         name: c.name,
@@ -1856,6 +1906,7 @@ if (import.meta.env.DEV) {
         reach: c.reach,
         restored: c.restored,
         ownerUserId: c.ownerUserId,
+        cellar: c.cellar ?? null,
       })),
     }),
     posts: () => ({

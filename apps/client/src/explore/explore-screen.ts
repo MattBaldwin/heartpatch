@@ -95,7 +95,9 @@ import {
 } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import { HOLLOWED_EXPLORE } from '../hollowed/hollowed-config.js';
+import { cellarApi, type CellarApi } from '../hollowed/cellar-api.js';
 import { HOLLOWED_TEXT, villageShut } from '../hollowed/hollowed-explore-view.js';
+import { KEY_TEXT } from '../hollowed/key-hunt-view.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -149,6 +151,8 @@ export interface ExploreScreenOptions {
   /** "Open Lorebook" on a find card with a lore page (#307): the book opens at it, over exploring. */
   onLorebook?: (pageId: string) => void;
   api?: ExploreApi;
+  /** A won village's hidden cellar (#306 PR 2c): the same view, of a little room. */
+  cellarApi?: Pick<CellarApi, 'view' | 'search'>;
   jobs?: Pick<JobsApi, 'view'>;
   bag?: (mapId: string) => Promise<ItemCounts>;
   /** Reduced motion: finds skip their flight into the bag. */
@@ -217,6 +221,8 @@ export interface ExploreScreen {
   setUser: (user: PublicUser | null) => void;
   /** Opens one of my tiles (or a grey village tile my land touches, #306 2a) up close. */
   open: (at: { q: number; r: number }) => Promise<void>;
+  /** Opens my won village's hidden cellar (#306 PR 2c): a little room in the cave's look. */
+  openCellar: (communityId: string) => Promise<void>;
   /**
    * It's night on the map (the Hollow's night): a grey village shuts, so
    * exploring one goes back to the map with a word why (#306 2a).
@@ -236,6 +242,7 @@ interface RareCard {
 
 export function createExploreScreen(options: ExploreScreenOptions): ExploreScreen {
   const api = options.api ?? exploreApi;
+  const cellars = options.cellarApi ?? cellarApi;
   const jobs = options.jobs ?? jobsApi;
   const bagOf = options.bag ?? (async (mapId: string) => (await inventoryApi.get(mapId)).items);
   const reducedMotion =
@@ -247,6 +254,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
   let tile: ExploreTileResponse | null = null;
+  /** The won village whose cellar is open on screen (#306 PR 2c), or null on a tile. */
+  let cellarOf: { id: string; name: string } | null = null;
   let teamNames: Record<string, string> = {};
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
@@ -768,6 +777,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   ): Promise<void> {
     const id = mapId;
     const t = tile;
+    const cellar = cellarOf;
     if (!id || !t || working) return;
     const at = generation;
     working = true;
@@ -785,7 +795,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
           retryAfterMs: COMMAND_RETRY_MS,
         },
-        (key) => api.search(id, { q: t.q, r: t.r, spot: spot.index }, key),
+        (key) =>
+          cellar
+            ? cellars.search(id, cellar.id, spot.index, key)
+            : api.search(id, { q: t.q, r: t.r, spot: spot.index }, key),
         () => at === generation,
       );
       if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
@@ -822,10 +835,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   async function reload(): Promise<void> {
     const id = mapId;
     const t = tile;
+    const cellar = cellarOf;
     if (!id || !t) return;
     const at = generation;
     try {
-      const fresh = await api.tile(id, t);
+      const fresh = cellar ? await cellars.view(id, cellar.id) : await api.tile(id, t);
       if (at !== generation) return;
       tile = fresh;
       scene3d?.update(fresh);
@@ -938,11 +952,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     // A grey village tile (#306 2a): its name, and today's joy after the progress.
-    title.textContent = t.community
-      ? HOLLOWED_TEXT.title(t.community.name)
-      : terrainName(t.terrain);
+    // A hidden cellar (#306 PR 2c) is its village's, wherever its look comes from.
+    title.textContent = cellarOf
+      ? KEY_TEXT.title(cellarOf.name)
+      : t.community
+        ? HOLLOWED_TEXT.title(t.community.name)
+        : terrainName(t.terrain);
     // A village's name is longer than a terrain's: on a narrow phone it takes two lines, never cut off.
-    title.classList.toggle('explore-title-village', t.community !== undefined);
+    title.classList.toggle('explore-title-village', t.community !== undefined || cellarOf !== null);
     // Under a lake, Back brings the Keeper up for air (#335).
     back.setAttribute(
       'aria-label',
@@ -1350,7 +1367,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     return built.content;
   };
 
-  async function open(at: { q: number; r: number }): Promise<void> {
+  async function open(at: { q: number; r: number } | { cellar: string }): Promise<void> {
     const id = mapId;
     // A second quick tap on Explore waits for the first.
     if (!id || isOpen || opening) return;
@@ -1362,24 +1379,34 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  async function openTile(id: string, at: { q: number; r: number }): Promise<void> {
+  async function openTile(
+    id: string,
+    at: { q: number; r: number } | { cellar: string },
+  ): Promise<void> {
     const ask = generation;
     zone = options.timeZone?.(id) ?? null;
     let fresh: ExploreTileResponse;
+    let cellar: { id: string; name: string } | null;
     try {
-      const [view, board] = await Promise.all([
-        api.tile(id, at),
+      const [[view, room], board] = await Promise.all([
+        'cellar' in at
+          ? cellars
+              .view(id, at.cellar)
+              .then((v) => [v, { id: at.cellar, name: v.cellar.name }] as const)
+          : api.tile(id, at).then((v) => [v, null] as const),
         // The team's names for the find toast: exploring works without them.
         jobs.view(id).catch(() => null),
       ]);
       if (ask !== generation) return;
       fresh = view;
+      cellar = room;
       teamNames = board?.names ?? {};
     } catch (err) {
       if (ask === generation) options.onProblem(messageOf(err));
       return;
     }
     tile = fresh;
+    cellarOf = cellar;
     keeperAt = EXPLORE_VIEW.start;
     yaw = EXPLORE_VIEW.startYaw;
     walk = null;
@@ -1396,7 +1423,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     say('');
     // The map's view of the tile, before `onOpen` closes the map and its
     // view goes with it (#347: the tile's buildings never reached the scene).
-    mapTileAtOpen = options.mapTile(at);
+    // A cellar is a room of its own: nothing on the square above stands in it.
+    mapTileAtOpen = cellar ? null : options.mapTile(fresh);
     options.onOpen(id);
     options.showScene(build);
     if (skyTimer !== null) clearInterval(skyTimer);
@@ -1462,6 +1490,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     working = false;
     scene3d = null;
     mapTileAtOpen = null;
+    cellarOf = null;
     render();
   }
 
@@ -1534,6 +1563,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       renderTile();
     },
     open,
+    openCellar: (communityId) => open({ cellar: communityId }),
     setNight: (night) => {
       if (night) shut();
     },
