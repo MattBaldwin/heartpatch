@@ -199,6 +199,8 @@ function tryRelight(rng: Rng, tier: RelightTier): RelightPuzzle | null {
 
   // Scramble with legal moves only: slide wooden pieces through the empty slots…
   const undoSlides: RelightMove[] = [];
+  /** The last slide, as (slot it left, slot it filled): sliding it straight back would be wasted work. */
+  let last: { from: number; into: number } | null = null;
   if (tier.empty > 0) {
     for (let s = 0; s < SLIDE_PICKS && undoSlides.length < tier.loose * SLIDES_PER_PIECE; s++) {
       const e = rng.pick(cells.flatMap((c, i) => (c.kind === 'empty' ? [i] : [])));
@@ -207,12 +209,14 @@ function tryRelight(rng: Rng, tier: RelightTier): RelightPuzzle | null {
         const cc = (e % n) + d.dc;
         return inside(rr, cc) && cells[at(rr, cc)]?.loose ? [at(rr, cc)] : [];
       });
-      if (near.length === 0) continue;
-      const j = rng.pick(near);
+      const fresh = near.filter((j) => !(last && e === last.from && j === last.into));
+      if (fresh.length === 0) continue;
+      const j = rng.pick(fresh);
       const swap = cells[e] as RelightCell;
       cells[e] = cells[j] as RelightCell;
       cells[j] = swap;
       undoSlides.unshift({ type: 'slide', at: e, to: j });
+      last = { from: j, into: e };
     }
   }
   // …and turn every other path piece and lantern at random.

@@ -35,7 +35,7 @@ export const HOLLOWED_TEXT = {
   moves: (used: number, limit: number) => `Moves ${String(used)} of ${String(limit)}`,
   lit: (lit: number, total: number) => `Lanterns lit ${String(lit)} of ${String(total)}`,
   play: 'Turn the pieces so the light reaches every lantern.',
-  echo: 'An echo is in the way! The light won’t pass a shadow.',
+  echo: "An echo is in the way! The light won't pass a shadow.",
   pickSlot: 'Now tap an empty slot next to it.',
   stuck: 'That piece is stuck. Slide it next to an empty slot first.',
   oneStep: 'It can only slide one step, into the slot beside it.',

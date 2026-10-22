@@ -266,7 +266,11 @@ function relightOf(
   );
 }
 
-/** `tile_explore.puzzle_attempt` is a smallint: past this the count starts over (the boards are still fresh). */
+/**
+ * `tile_explore.puzzle_attempt` is a smallint: past this the count starts
+ * over at 1, which deals try 1's board again (out of reach in practice: it
+ * takes 32,767 tries on one tile).
+ */
 const MAX_ATTEMPT = 32_767;
 
 /** A grey village tile's explore extras: its name, today's joy, its echoes and its puzzle. */

@@ -1350,6 +1350,21 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         expect((await solve(server, me, mapId, square, second)).statusCode).toBe(200);
       });
 
+      it('stays fixed once the tile lists me, even with my explore row gone', async () => {
+        const server = await start();
+        const me = await player();
+        const mapId = await patch(server, me);
+        const square = await reachVillage(server, me, mapId);
+        const lit = await attemptOf(server, me, mapId, square);
+        expect((await solve(server, me, mapId, square, lit)).statusCode).toBe(200);
+        // A departure deletes my explore rows; the tile's list still has me.
+        await db.execute(`delete from tile_explore where user_id = '${me.id}'`);
+        expect((await view(server, me, mapId, square)).community?.puzzle?.solved).toBe(true);
+        const again = await begin(server, me, mapId, square);
+        expect(again.statusCode).toBe(409);
+        expect(errorOf(again).message).toBe('You already fixed this one! ✨');
+      });
+
       it('needs a try first, and the dev answer is that try’s', async () => {
         const server = await start();
         const me = await player();

@@ -43,7 +43,11 @@ export const RelightTierSchema = z
     minWork: z.number().int().min(1),
   })
   .superRefine((tier, ctx) => {
-    if (tier.lanterns + tier.shadows + tier.empty + 1 >= tier.size * tier.size) {
+    // Shadows never sit on the heart or the (up to) 3 cells beside it.
+    if (
+      tier.lanterns + tier.shadows + tier.empty + 1 >= tier.size * tier.size ||
+      tier.shadows > tier.size * tier.size - 4
+    ) {
       ctx.addIssue({ code: 'custom', message: 'too much on too small a grid' });
     }
     if ((tier.loose === 0) !== (tier.empty === 0)) {

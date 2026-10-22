@@ -247,6 +247,16 @@ test('a grey village tile explores drained, with an echo, a find colours it in, 
   }
   const widths = await card.evaluate((e) => [e.scrollWidth, e.clientWidth]);
   expect(widths[0], 'the card never scrolls sideways').toBeLessThanOrEqual(widths[1]!);
+  // A phone on its side: the cells keep their 44px touch size and the card scrolls.
+  const portrait = page.viewportSize();
+  if (portrait && portrait.width < portrait.height) {
+    await page.setViewportSize({ width: portrait.height, height: portrait.width });
+    const cell = await card.locator('.hollowed-relight-cell').first().boundingBox();
+    expect(cell?.width ?? 0, 'a landscape cell').toBeGreaterThanOrEqual(44);
+    const fits = await card.evaluate((e) => e.scrollWidth <= e.clientWidth);
+    expect(fits, 'the card never scrolls sideways in landscape').toBe(true);
+    await page.setViewportSize(portrait);
+  }
   const shown = (await exploreState(page))!.puzzle!;
   // The square is the Hollow's heart: the big board.
   expect(shown).toMatchObject({ outcome: 'playing', attempt: 1, size: 6, moves: 0 });

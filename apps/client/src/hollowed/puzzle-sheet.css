@@ -42,14 +42,22 @@
   color: #d23b5b;
 }
 
-/* Square cells sized to the card, and short enough to leave the buttons on screen. */
+/* Square cells sized to the card, and short enough to leave the buttons on
+   screen; never under 44px a cell (the touch-target floor), so a short
+   screen (a phone on its side) scrolls the card instead. */
 .hollowed-relight-board {
   --relight-n: 4;
 
   display: grid;
   grid-template-columns: repeat(var(--relight-n), minmax(0, 1fr));
   gap: 4px;
-  width: min(100%, 380px, calc(100dvh - 360px));
+  width: min(
+    100%,
+    max(
+      calc(var(--relight-n) * 44px + (var(--relight-n) - 1) * 4px),
+      min(380px, calc(100dvh - 360px))
+    )
+  );
   margin: 0 auto;
   touch-action: manipulation;
 }
