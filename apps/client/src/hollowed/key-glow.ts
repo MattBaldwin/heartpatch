@@ -62,10 +62,10 @@ export function createKeyGlow(
       : 0.5 + 0.5 * Math.sin((performance.now() / 1000 / periodS) * Math.PI * 2);
     m.visibility = low + (high - low) * wave;
     stretch.y = 1 + KEY_GLOW.stretch * wave;
-    bases.forEach((at, i) => {
-      Matrix.ComposeToRef(stretch, turn, at, matrix);
+    for (let i = 0; i < bases.length; i++) {
+      Matrix.ComposeToRef(stretch, turn, bases[i] as Vector3, matrix);
       m.thinInstanceSetMatrixAt(i, matrix, i === bases.length - 1);
-    });
+    }
   };
 
   const draw = (view: MapView): void => {

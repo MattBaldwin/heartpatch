@@ -120,6 +120,8 @@ function claimableNextTo(at: Hex, tiles: readonly PublicTile[]): boolean {
       next.has(hexKey(t)) &&
       t.ownerUserId === null &&
       t.homeSlot === null &&
+      // A grey village's tiles are restored, not claimed.
+      (t.communityId ?? null) === null &&
       !isTradingPost(t) &&
       t.terrain !== GAME_DATA.mapGen.gapTerrain,
   );
