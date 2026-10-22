@@ -13,6 +13,9 @@ export const HEART_COIN_RULES: HeartCoinRules = {
   capture: { wild: 5, tile: 5 },
   // TUNE: one a full-value care action.
   care: { perFullAction: 1 },
-  // TUNE: per player per patch day, on that patch only.
-  dailyCaps: { battle: 20, capture: 15, care: 10, sell: 30 },
+  // TUNE: per player per patch day, on that patch only. Selling is how a
+  // kid pays for their buildings (upkeep is a fifth of a day's output
+  // sold), so its cap covers an engaged kid's four level-4 buildings and
+  // the Warehouse (`pnpm sim:patch-economy`; 30 couldn't pay for two).
+  dailyCaps: { battle: 20, capture: 15, care: 10, sell: 120 },
 };

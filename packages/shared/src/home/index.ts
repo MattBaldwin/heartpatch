@@ -8,3 +8,4 @@ export * from './item-effects.js';
 export * from './tile-uses.js';
 export * from './naming.js';
 export * from './house-tile.js';
+export * from './production.js';

@@ -1,5 +1,8 @@
-import type { Building } from '../schemas/data/buildings.js';
+import type { Building, ResourceBuildingRules } from '../schemas/data/buildings.js';
 import type { ElementId, FeelingId } from '../schemas/data/elements.js';
+import type { ExploreRules } from '../schemas/data/explore.js';
+import type { JobRules } from '../schemas/data/jobs.js';
+import { productionCycleSeconds, productionSource } from './production.js';
 
 // What a building does (#207), worked out from its data alone, so a new
 // building gets its build-menu chips without engine code (CLAUDE.md rule 5).
@@ -59,5 +62,73 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
       return [{ kind: 'fence', hp: at(building.levels).hp, element: building.element }];
     case 'factory':
       return [{ kind: 'batches', queues: at(building.levels).queues }];
+    case 'resource':
+    case 'warehouse':
+      // Their effects need the job rules: `economyEffects`.
+      return [];
   }
+}
+
+/** Picks a level's row: 1-based, below 1 reads as 1 and past the last as the last. */
+function levelRow<T>(levels: readonly T[], level: number): T {
+  const i = Math.min(Math.max(Math.floor(level) || 1, 1), levels.length) - 1;
+  return (levels[i] ?? levels[levels.length - 1]) as T;
+}
+
+/**
+ * What a patch-economy building does (#601), for its build card. Kept apart
+ * from `BuildingEffect` until the client words them (#601 PR 7), so an
+ * older build menu's chips stay exhaustive.
+ */
+export type EconomyEffect =
+  /**
+   * A resource building: what it makes an hour on a joined homestead, how
+   * many hours of it it holds, and its Heart Coins a morning.
+   */
+  | {
+      readonly kind: 'produces';
+      readonly resource: string;
+      readonly perHour: number;
+      readonly storageHours: number;
+      readonly upkeep: number;
+    }
+  /** The Warehouse: buildings from this level up deliver to the bag; its Heart Coins a morning. */
+  | { readonly kind: 'delivers'; readonly fromLevel: number; readonly upkeep: number };
+
+/** The rules `economyEffects` reads, all public data. */
+export interface EconomyEffectRules {
+  readonly jobs: Pick<JobRules, 'work' | 'terrainYields'>;
+  readonly explore: Pick<ExploreRules, 'homestead'>;
+  readonly resourceBuildings: Pick<ResourceBuildingRules, 'warehouseDeliversFromLevel'>;
+}
+
+/**
+ * What a resource building or the Warehouse does at `level` (1 = just
+ * built); `[]` for any other building. A level past its last reads as its last.
+ */
+export function economyEffects(
+  building: Building,
+  level: number,
+  rules: EconomyEffectRules,
+): EconomyEffect[] {
+  if (building.kind === 'warehouse') {
+    const { upkeep } = levelRow(building.levels, level);
+    return [
+      { kind: 'delivers', fromLevel: rules.resourceBuildings.warehouseDeliversFromLevel, upkeep },
+    ];
+  }
+  if (building.kind !== 'resource') return [];
+  const row = levelRow(building.levels, level);
+  const source = productionSource(building, rules.jobs, rules.explore);
+  if (!source) return [];
+  const cycle = productionCycleSeconds(source.seconds, row, rules.jobs);
+  return [
+    {
+      kind: 'produces',
+      resource: source.resource,
+      perHour: Math.floor((source.perCycle * 3600) / cycle),
+      storageHours: row.storageHours,
+      upkeep: row.upkeep,
+    },
+  ];
 }

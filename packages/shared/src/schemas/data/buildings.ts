@@ -6,6 +6,8 @@ import {
   ResourceCostSchema,
 } from './common.js';
 import { ElementIdSchema, FeelingIdSchema } from './elements.js';
+import { formatDataIssues, type Report } from './issues.js';
+import type { JobRules } from './jobs.js';
 
 /** Each upgrade level's cost; level 1 is the build cost (design doc §13). */
 const levels = <T extends z.ZodRawShape>(shape: T) =>
@@ -118,12 +120,50 @@ export const FactoryBuildingSchema = z.strictObject({
   levels: levels({ queues: z.number().int().min(1).max(8) }),
 });
 
+/** Heart Coins a building costs each morning it can work (#601). */
+const upkeep = z.number().int().min(0).max(500);
+
+/**
+ * A resource building (#601, owner decisions 2026-10-22): a homestead
+ * building that works its tile's land by itself, no squishy needed. It
+ * stands only on land of its `terrain` (or land cleared from it) and makes
+ * that terrain's `JOB_RULES.terrainYields` resource. Each level:
+ * - `pacePercent`: how fast, as a whole percent of a plain squishy
+ *   gatherer's pace (300 = three times as fast);
+ * - `storageHours`: how many hours of its own output it holds before it
+ *   pauses until the settle collects it;
+ * - `upkeep`: Heart Coins each morning it can work (running or full).
+ */
+export const ResourceBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('resource'),
+  terrain: ContentIdSchema,
+  levels: levels({
+    pacePercent: z.number().int().min(100).max(1000),
+    storageHours: z.number().int().min(1).max(240),
+    upkeep,
+  }),
+});
+
+/**
+ * The Warehouse (#601): with one standing, paid and joined, its owner's
+ * resource buildings from `RESOURCE_BUILDING_RULES.warehouseDeliversFromLevel`
+ * up deliver straight to the bag and never fill up.
+ */
+export const WarehouseBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('warehouse'),
+  levels: levels({ upkeep }),
+});
+
 export const BuildingSchema = z.discriminatedUnion('kind', [
   HearthfireBuildingSchema,
   HabitatBuildingSchema,
   TrainingGroundsBuildingSchema,
   FenceBuildingSchema,
   FactoryBuildingSchema,
+  ResourceBuildingSchema,
+  WarehouseBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
@@ -137,3 +177,75 @@ export function buildsAtHome(building: Pick<Building, 'placement'>): boolean {
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;
 export type FenceBuilding = z.infer<typeof FenceBuildingSchema>;
+export type ResourceBuilding = z.infer<typeof ResourceBuildingSchema>;
+export type ResourceBuildingLevel = ResourceBuilding['levels'][number];
+export type WarehouseBuilding = z.infer<typeof WarehouseBuildingSchema>;
+
+/** The buildings that pay Heart Coin upkeep each morning (#601). */
+export type UpkeepBuilding = ResourceBuilding | WarehouseBuilding;
+
+/** Does this building pay a morning upkeep? (A resource building or the Warehouse.) */
+export function paysUpkeep(building: Building): building is UpkeepBuilding {
+  return building.kind === 'resource' || building.kind === 'warehouse';
+}
+
+/**
+ * How the patch economy's buildings work together (#601), beside their
+ * levels in `BUILDINGS`.
+ */
+export const ResourceBuildingRulesSchema = z.strictObject({
+  /**
+   * With a paid Warehouse standing, resource buildings at this level and up
+   * deliver straight to the bag (owner decision 2026-10-22: level 3+).
+   */
+  warehouseDeliversFromLevel: z.number().int().min(1).max(10),
+});
+export type ResourceBuildingRules = z.infer<typeof ResourceBuildingRulesSchema>;
+
+/**
+ * Readable problems with the patch economy's buildings, or `[]`: the rules
+ * parse; each resource building works a terrain with a land yield
+ * (`JOB_RULES.terrainYields`), one building a terrain, a homestead building
+ * on one tile; each level is at least as fast, holds at least as much and
+ * costs at least as much upkeep as the one below; and there's at most one
+ * Warehouse, one a patch.
+ */
+export function checkResourceBuildings(
+  buildings: readonly Building[],
+  rules: unknown,
+  jobRules: Pick<JobRules, 'terrainYields'>,
+): string[] {
+  const parsed = ResourceBuildingRulesSchema.safeParse(rules);
+  if (!parsed.success) return formatDataIssues(rules, parsed.error);
+  const problems: string[] = [];
+  const report: Report = (path, message) => {
+    problems.push(`${path.join('.')}: ${message}`);
+  };
+  const terrains = new Set<string>();
+  let warehouses = 0;
+  for (const b of buildings) {
+    if (!paysUpkeep(b)) continue;
+    if (b.placement !== 'homestead' || b.maxPerTile !== 1 || b.slot !== 'ring') {
+      report([b.id], 'a homestead building that fills its tile (placement, maxPerTile 1, ring)');
+    }
+    if (b.kind === 'warehouse') {
+      warehouses += 1;
+      if (b.maxPerHome !== 1) report([b.id, 'maxPerHome'], 'one Warehouse a patch');
+      continue;
+    }
+    if (!jobRules.terrainYields.some((y) => y.terrain === b.terrain)) {
+      report([b.id, 'terrain'], `"${b.terrain}" has no land yield to work`);
+    }
+    if (terrains.has(b.terrain)) report([b.id, 'terrain'], `a second building for "${b.terrain}"`);
+    terrains.add(b.terrain);
+    b.levels.forEach((level, i) => {
+      const below = b.levels[i - 1];
+      if (!below) return;
+      if (level.pacePercent < below.pacePercent) report([b.id, 'levels', i], 'slower than below');
+      if (level.storageHours < below.storageHours) report([b.id, 'levels', i], 'holds less');
+      if (level.upkeep < below.upkeep) report([b.id, 'levels', i], 'cheaper upkeep than below');
+    });
+  }
+  if (warehouses > 1) report(['warehouse'], 'more than one Warehouse');
+  return problems;
+}

@@ -98,6 +98,7 @@ export * from './requirements/index.js';
 export * from './house/index.js';
 export * from './data/explore.js';
 export * from './data/factory.js';
+export * from './data/resource-buildings.js';
 export * from './data/trick-or-treat.js';
 export * from './factory/index.js';
 export * from './data/app-version.js';
