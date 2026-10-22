@@ -155,6 +155,9 @@ async function grantKeepsake(
   drop: Parameters<typeof grantFoundPiece>[1],
   itemId: string,
 ): Promise<string | null> {
+  // Only read (no lock): the cellar's row lock holds one village, so two
+  // same-kind cellars opened at the same instant on two patches could each
+  // give one. Harmless for an untradable piece (TECH_SPEC lock order).
   const owned = await createWardrobeRepo(tx).countOwned(drop.userId);
   if ((owned.get(itemId) ?? 0) > 0) return null;
   return grantFoundPiece(tx, drop, itemId);

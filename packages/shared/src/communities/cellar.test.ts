@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMMUNITY_RULES } from '../data/communities.js';
 import { EXPLORE_RULES } from '../data/explore.js';
+import { MAX_SEARCH_SPOTS } from '../schemas/data/explore.js';
 import { BIG_CHEST_KIND, cellarSpots, isBigChest, keyInReach } from './cellar.js';
 import { searchSpots } from '../explore/index.js';
 import { deriveSeed } from '../rng/index.js';
@@ -84,6 +85,16 @@ describe('cellarSpots (#306 PR 2c, chests)', () => {
       expect(Math.abs(small[0]!.x)).toBeCloseTo(first);
       if (small[2]) expect(Math.abs(small[2].x)).toBeCloseTo(first + gap);
     }
+  });
+
+  it("keeps the fullest cellar's row inside the tile, with room for the big chest's bit", () => {
+    // The seeds above may never draw the kit's most chests: check it from the data.
+    const { row, first, gap, curve } = COMMUNITY_RULES.cellarChests;
+    const out = Math.floor((spots.max - 1) / 2);
+    expect(first + out * gap).toBeLessThan(Math.sqrt(3) / 2);
+    expect(row - out * curve).toBeGreaterThan(0);
+    // The big chest's index is the small chests' count: one more bit in `cellar_searched`.
+    expect(spots.max + 1).toBeLessThanOrEqual(MAX_SEARCH_SPOTS);
   });
 
   it('differs between villages in how many chests and which kinds', () => {

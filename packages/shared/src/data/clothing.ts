@@ -3013,8 +3013,9 @@ const REKINDLED: ClothingItem[] = [
 // ── Cellar keepsakes (#306): one in each kind of Hollow's cellar ─────────
 // The big chest's best loot (owner decision of 2026-10-22): a one-of-a-kind
 // keepsake, a different one for each kind of Hollow, found only in its
-// cellar. Which kind holds which is server-only (the big chest in `data/server/cellar.ts`,
-// CLAUDE.md rule 6), as every found piece's odds are; kept, never traded, so
+// cellar. The rule that gives it lives on the server (the big chest in
+// `data/server/cellar.ts`, CLAUDE.md rule 6), as every found piece's odds
+// do; the names say which kind's it is. Kept, never traded, so
 // wearing one shows the Keeper brought that kind of Hollow back. Each glows
 // a little, like the candlelight they were found in.
 const CELLAR_KEEPSAKES: ClothingItem[] = [
