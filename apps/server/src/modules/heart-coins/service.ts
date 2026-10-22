@@ -9,6 +9,7 @@ import { uuidv7 } from 'uuidv7';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, nextLocalMidnight, type Clock } from '../../lib/time.js';
+import { upkeepView } from '../buildings/upkeep-view.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createHeartCoinsRepo } from './repo.js';
@@ -149,15 +150,18 @@ export async function heartCoinsView(
 ): Promise<HeartCoins> {
   const repo = createHeartCoinsRepo(tx);
   const day = localDate(at, map.timeZone);
-  const [balance, earned] = await Promise.all([
+  const [balance, earned, upkeep] = await Promise.all([
     repo.balance(map.id, userId),
     repo.earnedOn(map.id, userId, day),
+    upkeepView(tx, map, userId, at),
   ]);
   return {
     balance,
     today: bySource((s) => Math.max(0, earned[s] ?? 0)),
     caps: bySource((s) => HEART_COIN_RULES.dailyCaps[s]),
     resetsAt: nextLocalMidnight(at, map.timeZone).toISOString(),
+    // Building upkeep (#601), when I have any upkeep buildings.
+    ...(upkeep ? { upkeep } : {}),
   };
 }
 

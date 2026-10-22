@@ -48,6 +48,13 @@ export const PublicBuildingSchema = z.object({
   lit: z.boolean().nullable(),
   /** Hearthfires: safe radius in tiles at this level. Null for other kinds. */
   safeRadius: z.number().int().min(0).nullable(),
+  /**
+   * Resource buildings and the Warehouse (#601): napping because its
+   * morning upkeep wasn't paid. Members see a sleeping building, never why
+   * in coins. Left out for other kinds, by older servers and in older
+   * stored events.
+   */
+  paused: z.boolean().nullable().optional(),
 });
 export type PublicBuilding = z.infer<typeof PublicBuildingSchema>;
 
@@ -58,6 +65,37 @@ export const PlacedBuildingSchema = z.object({
   r: HexSchema.shape.r,
 });
 export type PlacedBuilding = z.infer<typeof PlacedBuildingSchema>;
+
+/**
+ * A resource building's output as its owner sees it (#601): the resource
+ * and how much a cycle makes, how long a cycle takes, what's waiting for
+ * the next settle and how much fits, and its morning upkeep.
+ */
+export const BuildingProductionSchema = z.object({
+  resource: ContentIdSchema,
+  perCycle: z.number().int().min(0),
+  cycleSeconds: z.number().int().min(1),
+  /** Finished and waiting: the next settle banks it. */
+  ready: ItemCountsSchema,
+  cycles: z.number().int().min(0),
+  /** Its storage in cycles, or null while the Warehouse delivers (never full). */
+  maxCycles: z.number().int().min(1).nullable(),
+  /** Storage full: it waits for the next settle. */
+  full: z.boolean(),
+  /** When the next cycle finishes, or null while full, paused or napping. */
+  nextReadyAt: z.iso.datetime().nullable(),
+  /** Heart Coins each morning at this level. */
+  upkeep: z.number().int().min(0),
+  /** The last map-local morning settled (paid, paused or skipped), or null. */
+  paidThrough: LocalDateSchema.nullable(),
+  /** Paused for unpaid upkeep since this morning, or null while running. */
+  pausedAt: z.iso.datetime().nullable(),
+  /** The kid's place for it in the upkeep order (lower first), or null for the default. */
+  upkeepRank: z.number().int().min(0).nullable(),
+  /** The Warehouse delivers its output straight to the bag (#601 PR 8). */
+  delivering: z.boolean(),
+});
+export type BuildingProduction = z.infer<typeof BuildingProductionSchema>;
 
 /** One of my buildings, with what only I see (fuel, residents). */
 export const MyBuildingSchema = z.object({
@@ -73,6 +111,11 @@ export const MyBuildingSchema = z.object({
    * keeps its bed). Training Grounds: squishies practicing there. Null for fires.
    */
   residents: z.number().int().min(0).nullable(),
+  /**
+   * Resource buildings (#601): what it makes and where it's up to. Left out
+   * for other kinds and by an older server.
+   */
+  production: BuildingProductionSchema.nullable().optional(),
 });
 export type MyBuilding = z.infer<typeof MyBuildingSchema>;
 
@@ -234,3 +277,24 @@ export const FuelAllResponseSchema = z.object({
   home: HomeResponseSchema,
 });
 export type FuelAllResponse = z.infer<typeof FuelAllResponseSchema>;
+
+/**
+ * `POST /maps/:mapId/buildings/upkeep-order` (#601, owner decision Q5): the
+ * order my upkeep buildings pay their mornings in when Heart Coins run
+ * short, first first. Every one listed must be mine and pay upkeep; any of
+ * mine left out goes back to the default order (highest level, then
+ * oldest, the Warehouse last), after the listed ones.
+ */
+export const UpkeepOrderRequestSchema = z.strictObject({
+  buildingIds: z
+    .array(z.uuid())
+    .max(64)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each building goes in the order once.'),
+});
+export type UpkeepOrderRequest = z.infer<typeof UpkeepOrderRequestSchema>;
+
+/** `POST /maps/:mapId/dev/upkeep/due` (dev/test only): my upkeep buildings owe this many more mornings. */
+export const DevUpkeepDueRequestSchema = z.strictObject({
+  mornings: z.number().int().min(1).max(30),
+});
+export type DevUpkeepDueRequest = z.infer<typeof DevUpkeepDueRequestSchema>;

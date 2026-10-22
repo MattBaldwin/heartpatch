@@ -1,5 +1,6 @@
 import {
   BuildingKindSchema,
+  CLEARED_TERRAIN,
   ElementIdSchema,
   FeelingIdSchema,
   ItemCountsSchema,
@@ -61,12 +62,29 @@ export interface BuildingRow {
   fuelledThrough: string | null;
   fuelUpdatedAt: Date | null;
   placedAt: Date;
+  /** Resource buildings (#601): where counting output starts; null for other kinds. */
+  producedSince: Date | null;
+  /** Paused for unpaid upkeep at this morning (#601), or null. */
+  pausedAt: Date | null;
+  /** The last map-local morning whose upkeep is settled (#601), or null. */
+  upkeepPaidThrough: string | null;
+  /** The kid's upkeep order (#601 Q5): lower pays first; null for the default. */
+  upkeepRank: number | null;
+  /** Its owner's homestead flags for the tile (#199), or null when there's no explore row. */
+  homestead: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
 }
 
 export type NewBuilding = Pick<
   BuildingRow,
   'mapId' | 'ownerUserId' | 'tileId' | 'buildingId' | 'kind' | 'spot'
-> & { placedAt: Date };
+> & { placedAt: Date; producedSince?: Date | null };
+
+/** What a settle writes back to a resource building (#601); fields left out stay. */
+export interface ProductionUpdate {
+  producedSince?: Date | null;
+  pausedAt?: Date | null;
+  upkeepPaidThrough?: string | null;
+}
 
 export interface HomeSquishyRow {
   id: string;
@@ -257,6 +275,20 @@ export interface BuildingsRepo {
   /** Every building on the map, on tiles its owner still holds, by tile then spot. */
   listOnMap: (mapId: string) => Promise<BuildingRow[]>;
   lockBuilding: (buildingRowId: string) => Promise<BuildingRow | null>;
+  /**
+   * A tile's land (#601): its terrain, and for cleared land the terrain its
+   * latest finished clear started from (owner decision Q2), else null.
+   */
+  landOf: (tileId: string) => Promise<{ terrain: string; clearedFrom: string | null } | null>;
+  /** Locks the player's buildings that pay upkeep (#601: resource, Warehouse), in id order (step 8). */
+  lockUpkeepBuildings: (mapId: string, userId: string) => Promise<BuildingRow[]>;
+  /** Writes a resource building's output count and upkeep state (#601). */
+  setProduction: (buildingRowId: string, update: ProductionUpdate) => Promise<void>;
+  /**
+   * Sets the upkeep order (#601 Q5): each id's rank (its index), and null
+   * for the player's other upkeep buildings. Lock them first (`lockUpkeepBuildings`).
+   */
+  setUpkeepRanks: (mapId: string, userId: string, ranked: readonly string[]) => Promise<void>;
   insertBuilding: (building: NewBuilding) => Promise<BuildingRow>;
   moveBuilding: (buildingRowId: string, to: { tileId: string; spot: number }) => Promise<void>;
   setFuel: (buildingRowId: string, fuelledThrough: string, at: Date) => Promise<void>;
@@ -318,6 +350,15 @@ const buildingColumns = {
   fuelledThrough: buildings.fuelledThrough,
   fuelUpdatedAt: buildings.fuelUpdatedAt,
   placedAt: buildings.placedAt,
+  producedSince: buildings.producedSince,
+  pausedAt: buildings.pausedAt,
+  upkeepPaidThrough: buildings.upkeepPaidThrough,
+  upkeepRank: buildings.upkeepRank,
+  homestead: {
+    joinedAt: tileExplore.joinedAt,
+    pausedAt: tileExplore.pausedAt,
+    resumedAt: tileExplore.resumedAt,
+  },
 };
 
 const squishyColumns = {
@@ -359,8 +400,20 @@ function createBuildingsTxRepo(tx: Transaction): BuildingsTxRepo {
 const firstHome = and(isNotNull(tiles.homeSlot), isNull(tiles.communityId));
 
 function queries(db: Executor): BuildingsRepo {
+  // The owner's explore row for the tile rides along (a homestead's flags,
+  // #199): it's never locked here (`for … of buildings`).
   const selectBuildings = () =>
-    db.select(buildingColumns).from(buildings).innerJoin(tiles, eq(tiles.id, buildings.tileId));
+    db
+      .select(buildingColumns)
+      .from(buildings)
+      .innerJoin(tiles, eq(tiles.id, buildings.tileId))
+      .leftJoin(
+        tileExplore,
+        and(
+          eq(tileExplore.tileId, buildings.tileId),
+          eq(tileExplore.userId, buildings.ownerUserId),
+        ),
+      );
   const homeTiles = (mapId: string, userId: string) =>
     db
       .select({ id: tiles.id, q: tiles.q, r: tiles.r, nodeResource: tiles.nodeResource })
@@ -691,6 +744,61 @@ function queries(db: Executor): BuildingsRepo {
           .where(and(eq(buildings.mapId, mapId), eq(tiles.ownerUserId, buildings.ownerUserId)))
           .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot))
       ).map(toBuilding),
+
+    landOf: async (tileId) => {
+      const [row] = await db
+        .select({
+          terrain: tiles.terrain,
+          clearedFrom: sql<string | null>`(
+            select ${tileClears.fromTerrain} from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id} and ${tileClears.endReason} = 'cleared'
+            order by ${tileClears.endedAt} desc
+            limit 1
+          )`,
+        })
+        .from(tiles)
+        .where(eq(tiles.id, tileId));
+      if (!row) return null;
+      return {
+        terrain: row.terrain,
+        clearedFrom: row.terrain === CLEARED_TERRAIN ? row.clearedFrom : null,
+      };
+    },
+
+    lockUpkeepBuildings: async (mapId, userId) =>
+      (
+        await selectBuildings()
+          .where(
+            and(
+              eq(buildings.mapId, mapId),
+              eq(buildings.ownerUserId, userId),
+              inArray(buildings.kind, ['resource', 'warehouse']),
+            ),
+          )
+          .orderBy(asc(buildings.id))
+          .for('update', { of: buildings })
+      ).map(toBuilding),
+
+    setProduction: async (buildingRowId, update) => {
+      if (Object.keys(update).length === 0) return;
+      await db.update(buildings).set(update).where(eq(buildings.id, buildingRowId));
+    },
+
+    setUpkeepRanks: async (mapId, userId, ranked) => {
+      // Only the rows `lockUpkeepBuildings` holds.
+      const owned = and(
+        eq(buildings.mapId, mapId),
+        eq(buildings.ownerUserId, userId),
+        inArray(buildings.kind, ['resource', 'warehouse']),
+      );
+      await db.update(buildings).set({ upkeepRank: null }).where(owned);
+      for (const [rank, id] of ranked.entries()) {
+        await db
+          .update(buildings)
+          .set({ upkeepRank: rank })
+          .where(and(owned, eq(buildings.id, id)));
+      }
+    },
 
     lockBuilding: async (buildingRowId) => {
       const [row] = await selectBuildings()

@@ -773,7 +773,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(report!.walk.filter((p) => p.kind === 'strike').length).toBeGreaterThanOrEqual(3);
       // The fire came down if its land was won back.
       const fires = (await ownerOf(tiles[0]!)) === null ? 1 : 0;
-      expect(report!.lostBuildings).toEqual({ fires, fences: 0, trainingGrounds: 0 });
+      expect(report!.lostBuildings).toEqual({
+        fires,
+        fences: 0,
+        trainingGrounds: 0,
+        resourceBuildings: 0,
+        warehouses: 0,
+      });
       expect(
         await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
       ).toHaveLength(1 - fires);
@@ -831,8 +837,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await patch(server, kid);
       await pvpOn(mapId);
-      // Old Forest can't be cleared (owner Q5), so its Stone spot stays put.
-      await spotsAllAround(mapId, kid, 'old-forest');
+      // Juniper's Gap can't be cleared (owner Q5), so its Stone spot stays put.
+      await spotsAllAround(mapId, kid, 'junipers-gap');
       await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
     });
@@ -1202,7 +1208,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
           reclaimed: [{ q: expect.any(Number) as unknown, r: expect.any(Number) as unknown }],
           stage: 'curious',
           walk: expect.arrayContaining([expect.objectContaining({ kind: 'strike' })]) as unknown,
-          lostBuildings: { fires: 0, fences: 0, trainingGrounds: 0 },
+          lostBuildings: {
+            fires: 0,
+            fences: 0,
+            trainingGrounds: 0,
+            resourceBuildings: 0,
+            warehouses: 0,
+          },
         },
       ]);
       expect(mine.hollowed.map((s) => s.id)).toEqual([taken]);

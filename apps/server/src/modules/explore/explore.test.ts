@@ -770,13 +770,13 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     expect(built.statusCode, built.body).toBe(201);
   });
 
-  it('dev: clears a homestead when nothing two steps from home can be cleared (#429)', async () => {
+  it('dev: clears a homestead when nothing two steps from home stays spotless (#429)', async () => {
     const server = await start();
     const kid = await player();
     const mapId = await patch(server, kid);
-    // A home deep in Old Forest: no free land around it that a tool clears.
+    // A home among lakes: each grows its well back, so one is cleared.
     await db.execute(
-      `update tiles set terrain = 'old-forest' where map_id = '${mapId}' and owner_user_id is null and terrain not in ('junipers-gap', 'trading-post')`,
+      `update tiles set terrain = 'lake' where map_id = '${mapId}' and owner_user_id is null and terrain not in ('junipers-gap', 'trading-post')`,
     );
     const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
     expect(made.statusCode, made.body).toBe(201);

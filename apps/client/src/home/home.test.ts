@@ -577,7 +577,7 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       line: expect.stringMatching(/reach it!$/) as string,
     });
     expect(
-      landTileOffer({ ...stone, terrain: 'old-forest', homestead: 'joined' }, home),
+      landTileOffer({ ...stone, terrain: 'junipers-gap', homestead: 'joined' }, home),
     ).toMatchObject({ line: expect.stringMatching(/reach it!$/) as string });
     // No carved pumpkin, no lantern; with one in Halloween, its own build card and cost.
     expect(empty.kind === 'build' && empty.lantern).toBeNull();
@@ -687,7 +687,9 @@ describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
     });
     expect(groundsTileOffer({ ...tile(), nodeResource: null }, home)).toBeNull();
     // Land no tool clears (owner Q5) keeps its spot: nothing to wait for.
-    expect(groundsTileOffer({ ...tile(), terrain: 'old-forest', buildings: [] }, home)).toBeNull();
+    expect(
+      groundsTileOffer({ ...tile(), terrain: 'junipers-gap', buildings: [] }, home),
+    ).toBeNull();
     // Not on land that isn't a homestead; nothing new on a napping one.
     expect(groundsTileOffer(tile({ homestead: null }), home)).toBeNull();
     expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({ kind: 'napping' });
