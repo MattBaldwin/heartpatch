@@ -40,7 +40,12 @@ describe('MEMORY_PUZZLES (#306 PR 2b)', () => {
       skins: [
         first,
         { ...first, terrains: ['meadow'], pieces: first.pieces.slice(0, 3) },
-        { ...first, id: 'twin', terrains: [], pieces: [first.pieces[0], ...first.pieces.slice(0, 3)] },
+        {
+          ...first,
+          id: 'twin',
+          terrains: [],
+          pieces: [first.pieces[0], ...first.pieces.slice(0, 3)],
+        },
       ],
       defaultSkin: 'nope',
     };

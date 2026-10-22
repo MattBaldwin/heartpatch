@@ -38,6 +38,8 @@ const EMBLEMS: Readonly<Record<string, string>> = {
   'wild-lands': '🍂',
   'hollow-man': '🌙',
   'little-guardians': '🐾',
+  // The Hollows' memory puzzles (#306 PR 2b).
+  hollows: '🕯️',
 };
 
 export function chapterEmblem(chapterId: string): string {

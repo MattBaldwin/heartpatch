@@ -41,7 +41,7 @@ export const HOLLOWED_TEXT = {
   tryAgain: 'Try again',
   lorePage: (title: string) => `📜 A lore page! “${title}”`,
   recipe: (title: string) => `📖 A new recipe! “${title}”`,
-  thanks: 'The village says thank you!',
+  thanks: 'The Hollow says thank you!',
   addedToLorebook: 'Added to your Lorebook 📖',
 } as const;
 

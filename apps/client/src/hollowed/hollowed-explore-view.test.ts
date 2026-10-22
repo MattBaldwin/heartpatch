@@ -133,7 +133,7 @@ describe('a grey village tile’s memory puzzle (#306 PR 2b): words', () => {
       puzzleLines({ ...base, lore: null, recipe: { id: 'heart-tea', title: 'Heart Tea' } }),
     ).toEqual([{ text: '📖 A new recipe! “Heart Tea”' }]);
     expect(puzzleLines({ ...base, lore: null, found: { heartdust: 1 } })[0]?.text).toMatch(/×1$/);
-    expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The village says thank you!' }]);
+    expect(puzzleLines({ ...base, lore: null })).toEqual([{ text: 'The Hollow says thank you!' }]);
   });
 
   it('keeps every puzzle line kind (style guide §9)', () => {

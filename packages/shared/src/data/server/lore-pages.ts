@@ -10,7 +10,7 @@ export const LORE_CHAPTERS: LoreChapter[] = [
   { id: 'hollow-man', title: 'The Hollow Man', order: 3 },
   { id: 'little-guardians', title: 'Little Guardians', order: 4 },
   // Hollowed Communities (#306 PR 2b): pages a grey village's memory puzzles give.
-  { id: 'grey-villages', title: 'The Grey Villages', order: 5 },
+  { id: 'hollows', title: 'The Hollows', order: 5 },
 ];
 
 /**
@@ -208,15 +208,15 @@ export const LORE_PAGES: LoreEntry[] = [
     },
   },
 
-  // ── The Grey Villages ─────────────────────────────────────────────────
+  // ── The Hollows ──────────────────────────────────────────────────────
   // A grey village's memory puzzle gives one (#306 PR 2b, `PUZZLE_REWARDS`):
   // any puzzle, whichever page is still unfound.
   {
     id: 'the-market-day-tune',
-    chapter: 'grey-villages',
+    chapter: 'hollows',
     order: 1,
     title: 'The Market Day Tune',
-    text: 'As the last piece clicks back, you hear a tune you almost know. Long ago the whole village hummed it on market day, and everyone danced, even the squishies with very short legs.',
+    text: 'As the last piece clicks back, you hear a tune you almost know. Long ago everyone here hummed it on market day, and everyone danced, even the squishies with very short legs.',
     hint: 'Broken things still remember songs.',
     trigger: {
       mapKinds: ['multiplayer'],
@@ -227,10 +227,10 @@ export const LORE_PAGES: LoreEntry[] = [
   },
   {
     id: 'the-painted-wall',
-    chapter: 'grey-villages',
+    chapter: 'hollows',
     order: 2,
     title: 'The Painted Wall',
-    text: 'Under the grey, the village kept a picture of itself: bright doors, a lantern in every window, and a pile of squishies on the bakery step, waiting for crumbs.',
+    text: 'Under the grey, this place kept a picture of itself: bright doors, a lantern in every window, and a pile of squishies on the bakery step, waiting for crumbs.',
     hint: 'Old walls keep old pictures.',
     trigger: {
       mapKinds: ['multiplayer'],
@@ -241,7 +241,7 @@ export const LORE_PAGES: LoreEntry[] = [
   },
   {
     id: 'keep-the-lanterns-lit',
-    chapter: 'grey-villages',
+    chapter: 'hollows',
     order: 3,
     title: 'Keep the Lanterns Lit',
     text: 'A note tucked inside the broken piece: “The night we forgot the lanterns, the colour slipped away. The little ones hid the cellar key somewhere safe. If you find this, keep the lights on for us.”',
