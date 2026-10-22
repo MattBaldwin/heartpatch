@@ -57,6 +57,7 @@ import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { lobbyApi } from './ui/lobby/lobby-api.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
+import { createHeartCoinsScreen } from './heart-coins/heart-coins.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/wardrobe-return.js';
@@ -361,6 +362,16 @@ const roster = createRosterSheet({
     void house.open(mapId, current, { pick: squishyId });
   },
 });
+// Heart Coins (#601): each patch's own balance, a 💛 pill on the map's name
+// card and on Home's peek bar, and a line on each patch-list card. Never on
+// the Tutorial Glade: it pays none.
+const heartCoins = createHeartCoinsScreen({
+  root: document.body,
+  now: () => inventory.gameNow(),
+});
+const heartCoinsOn = (mapId: string): void => {
+  heartCoins.setMap(mapId === glade ? null : mapId);
+};
 const care = createCareSheet({
   root: document.body,
   portraits,
@@ -368,6 +379,8 @@ const care = createCareSheet({
   onClosed: () => {
     roster.setCovered(false);
     void roster.refresh();
+    // Full-value care pays Heart Coins on this patch (#601).
+    void heartCoins.refresh();
     // A village won in the same battle waited for the evolution to be seen (#592).
     showWonVillages();
   },
@@ -769,6 +782,7 @@ const home = createHomeScreen({
   onOpen: (mapId) => {
     rosterMapId.home = mapId;
     homeSquishies.hidden = false;
+    heartCoinsOn(mapId);
     roster.close();
     maps.close();
     catalog.close();
@@ -786,6 +800,7 @@ const home = createHomeScreen({
   onSquishies: (mapId) => {
     void roster.open(mapId);
   },
+  peekCorner: heartCoins.homePill,
   onCloseUp: (mapId, squishyId) => {
     audio.cue('squeak');
     void closeUp.open(mapId, squishyId, 'home');
@@ -1084,8 +1099,11 @@ const maps = createMapScreen({
       },
     },
   ),
+  hudExtras: [heartCoins.mapPill],
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // Back on the map (after a battle, home, the lobby): read its Heart Coins again.
+    if (mapId !== null) heartCoinsOn(mapId);
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
@@ -1308,6 +1326,7 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: (mapId, live) => {
     battleMapId = mapId;
+    heartCoins.close();
     // A live battle (#29) keeps following the patch underneath: the other
     // Keeper's picks and cheers arrive on it, and it keeps me "here".
     if (live) maps.hide();
@@ -1620,6 +1639,7 @@ const lobby = mountLobby(document.body, {
     ...wardrobe.listActions(),
     ...(installGuide?.cards() ?? []),
   ],
+  mapLines: (mapId) => [heartCoins.lobbyLine(mapId)],
   listHeader: () => {
     void lobbyCoins.refresh();
     return [lobbyCoins.node, ...account.listHeader()];
@@ -1673,6 +1693,7 @@ const whatsNew = createWhatsNew({
     (wardrobe.debug?.open ?? false) ||
     recipeBook.isOpen ||
     postScreen.isOpen ||
+    heartCoins.isOpen ||
     raidReportOpen ||
     (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
@@ -1830,6 +1851,7 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     house: () => house.debug,
     wardrobe: () => wardrobe.debug,
+    heartCoins: () => heartCoins.debug,
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,

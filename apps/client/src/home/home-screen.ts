@@ -130,6 +130,11 @@ export interface HomeScreenOptions {
   /** The peek bar's "🐾 Squishies" (#412): opens the Squishies roster (#375). No button without it. */
   onSquishies?: (mapId: string) => void;
   /**
+   * In the peek bar's corner beside the handle (the 💛 Heart Coin pill,
+   * #601). It shows only on the peek bar: the sheet carries `home-sheet-peek`.
+   */
+  peekCorner?: HTMLElement;
+  /**
    * "📖 Recipe book" on a build row short of something you make (the
    * Jack-o'-Lantern). Said just before the home closes: the book opens over
    * the map once it's back, and shutting the book comes home again (#537).
@@ -408,6 +413,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     'section',
     { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
     handle,
+    ...(options.peekCorner ? [options.peekCorner] : []),
     note,
     body,
   );
@@ -758,6 +764,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
     const current = home;
     const peek = mode.kind === 'idle' && !sheetOpen;
+    sheet.classList.toggle('home-sheet-peek', peek);
     handle.hidden = mode.kind !== 'idle';
     sheet.classList.toggle('home-sheet-name', mode.kind === 'name');
     status.textContent = HOME_SAFE_LINE;

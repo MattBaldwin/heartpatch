@@ -24,6 +24,7 @@ import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
 import type { CinematicDebug } from '../cinematics/cinematic-screen.js';
 import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
+import type { HeartCoinsDebug } from '../heart-coins/heart-coins.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
 import type { DefensePromptDebug } from '../battle/defense-prompt.js';
@@ -132,6 +133,8 @@ declare global {
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
       wardrobe?(): WardrobeDebug | null;
+      /** Heart Coins (#601): the patch read, its balance, and the sheet's page while open. */
+      heartCoins?(): HeartCoinsDebug;
       /** Squishy jobs: the job board and team picker (open, jobs, team, ready work). */
       jobs?(): JobsDebug;
       /** The Squishies roster (#375): open, rows shown, sort, filter, the open row. */
