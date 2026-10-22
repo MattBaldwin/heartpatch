@@ -1,7 +1,7 @@
 import type { GameEventPayload, LocalDate } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
-import { finishLostBuildings, takeDownOnLostLand } from '../buildings/service.js';
+import { finishLostBuildings, lostOutputGrants, takeDownOnLostLand } from '../buildings/service.js';
 import { planGrants } from '../factory/service.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
@@ -117,7 +117,12 @@ export async function rewildTiles(
   ]);
   await writeGuardCheckpoints(tx, watches, at);
   // A lost Factory's batches grant too (#295): their rows lock with the refunds.
-  const toLock = [...refunds, ...planGrants(lostFires.flatMap((l) => l.batches))];
+  // A lost resource building's output too (#601).
+  const toLock = [
+    ...refunds,
+    ...planGrants(lostFires.flatMap((l) => l.batches)),
+    ...lostOutputGrants(lostFires),
+  ];
   const events: NewGameEvent[] =
     workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, toLock) : [];
   if (workers.length === 0) await lockGrantRows(tx, mapId, toLock);

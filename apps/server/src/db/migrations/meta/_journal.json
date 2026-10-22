@@ -379,6 +379,20 @@
       "when": 1792639416128,
       "tag": "0053_cellar_searched",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792683176583,
+      "tag": "0054_resource_buildings",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792692727071,
+      "tag": "0055_tile_explore_puzzle",
+      "breakpoints": true
     }
   ]
 }

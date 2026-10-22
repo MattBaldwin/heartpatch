@@ -1,4 +1,19 @@
-import { HOLLOW_RULES, HOME_BASE_RULES, hollowedOpenAt, type WorldPoint } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  FOUND_SETS,
+  HOLLOW_RULES,
+  HOME_BASE_RULES,
+  hollowedOpenAt,
+  MEMORY_PUZZLES,
+  puzzleSkinFor,
+  type HollowedPuzzle,
+  type PuzzleSkin,
+  type SolvePuzzleResponse,
+  type WorldPoint,
+} from '@heartpatch/shared';
+import { EXPLORE_TEXT } from '../explore/explore-view.js';
+import { itemName } from '../inventory/bag-view.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
 
 // Exploring a grey village tile (#306 2a), in words and numbers (copy
@@ -14,7 +29,100 @@ export const HOLLOWED_TEXT = {
   spooked: 'Boo! An echo spooked you back a step 👻',
   /** Nightfall while exploring a village: back to the map. */
   closed: 'Too spooky after dark! Come back in the morning 🌙',
+  // Relight the path (PR 2b): no hints, no peeking (owner decision 2026-10-22).
+  /** The big button in front of a broken thing. */
+  fix: (skin: PuzzleSkin) => `Fix the ${skin.name}`,
+  /** The card's first line: what's broken. */
+  broken: (skin: PuzzleSkin) => `A broken ${skin.name} ${skin.emoji}`,
+  relight: 'Relight the path',
+  moves: (used: number, limit: number) => `Moves ${String(used)} of ${String(limit)}`,
+  lit: (lit: number, total: number) => `Lanterns lit ${String(lit)} of ${String(total)}`,
+  play: 'Turn the pieces so the light reaches every lantern.',
+  echo: "An echo is in the way! The light won't pass a shadow.",
+  pickSlot: 'Now tap an empty slot next to it.',
+  stuck: 'That piece is stuck. Slide it next to an empty slot first.',
+  oneStep: 'It can only slide one step, into the slot beside it.',
+  shuffling: 'The Hollow lays out a path…',
+  won: 'Every lantern glows! ✨',
+  relighting: 'Relighting…',
+  pathLit: 'The path is lit! ✨',
+  faded: 'The light fades…',
+  fadedText: 'The Hollow shuffles a new path of the same size. Try again!',
+  giveUp: 'Give up',
+  newPath: 'New path',
+  tryAgain: 'Try again',
+  /** Each cell's name, for screen readers. */
+  cell: {
+    heart: 'The heart of the Hollow',
+    litLantern: 'A lit lantern',
+    darkLantern: 'A dark lantern',
+    loose: 'A wooden piece: tap to slide',
+    pipe: 'A path piece: tap to turn',
+    shadow: 'An echo shadow',
+    empty: 'An empty slot',
+  },
+  lorePage: (title: string) => `📜 A lore page! “${title}”`,
+  thanks: 'The Hollow says thank you!',
+  addedToLorebook: 'Added to your Lorebook 📖',
 } as const;
+
+/**
+ * The broken thing's index where the explore view treats it as one more
+ * spot (aiming, a tap walking up beside it, the halo): never a real spot's.
+ */
+export const PUZZLE_INDEX = -1;
+
+/**
+ * A grey village tile's broken thing as a spot the Keeper can walk up to,
+ * or null when there's none. `done` once I've mended it.
+ */
+export function puzzleSpot(
+  puzzle: HollowedPuzzle | undefined,
+): (WorldPoint & { index: number; kind: 'puzzle'; tool: null; done: boolean }) | null {
+  if (!puzzle) return null;
+  return {
+    index: PUZZLE_INDEX,
+    kind: 'puzzle',
+    tool: null,
+    x: puzzle.x,
+    z: puzzle.z,
+    done: puzzle.solved,
+  };
+}
+
+/** A puzzle's skin (its look and words), from `MEMORY_PUZZLES`. */
+export function skinOf(puzzle: Pick<HollowedPuzzle, 'skin'>): PuzzleSkin {
+  return (
+    MEMORY_PUZZLES.skins.find((s) => s.id === puzzle.skin) ?? puzzleSkinFor('', MEMORY_PUZZLES)
+  );
+}
+
+/** What fixing it gave, one line each (the reward card's list). */
+export function puzzleLines(fixed: SolvePuzzleResponse): { text: string; note?: string }[] {
+  const lines: { text: string; note?: string }[] = [];
+  if (fixed.lore) {
+    lines.push({
+      text: HOLLOWED_TEXT.lorePage(fixed.lore.title),
+      note: HOLLOWED_TEXT.addedToLorebook,
+    });
+  }
+  // Items and a Rekindled piece as the search card shows them.
+  for (const [id, n] of Object.entries(fixed.found)) {
+    if (n <= 0) continue;
+    const set = FOUND_SETS.some((s) => s.finds.includes(id));
+    lines.push({
+      text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}`,
+      ...(set ? { note: EXPLORE_TEXT.setFindNote } : {}),
+    });
+  }
+  if (fixed.clothing) {
+    const piece = CLOTHING_BY_ID.get(fixed.clothing);
+    const icon = piece ? clothingSlotIcon(piece.slot) : '✨';
+    lines.push({ text: `${icon} ${piece?.name ?? EXPLORE_TEXT.clothing}` });
+  }
+  if (lines.length === 0) lines.push({ text: HOLLOWED_TEXT.thanks });
+  return lines;
+}
 
 /** Is a grey village shut at `minute` past midnight, map time? (Night: the server refuses too.) */
 export function villageShut(minute: number): boolean {

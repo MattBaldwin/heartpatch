@@ -87,6 +87,7 @@ import { CellarChests, type CellarStats } from '../hollowed/cellar-chests.js';
 import { CELLAR_TERRAIN, isChest } from '../hollowed/cellar-look.js';
 import { CELLAR_CAMERA } from '../hollowed/hollowed-config.js';
 import { HollowedExplore, type HollowedStats } from '../hollowed/hollowed-explore.js';
+import { PUZZLE_INDEX, puzzleSpot } from '../hollowed/hollowed-explore-view.js';
 import { CONTACT_SHADOW, type SquishyLod } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
@@ -481,8 +482,10 @@ export class ExploreScene implements AmbientTarget {
       b,
       at: spotWorld({ q: 0, r: 0 }, b.spot, this.#size),
     }));
+    // A grey village's broken thing (#306 PR 2b) stands in the way like a spot.
+    const puzzle = puzzleSpot(tile.community?.puzzle);
     this.#colliders = collidersOf(
-      tile.spots,
+      puzzle ? [...tile.spots, puzzle] : tile.spots,
       buildingsAt.map(({ at }) => ({ x: at.x / this.#size, z: at.z / this.#size })),
     );
     // The start clear of the spots, as the screen moves it, so the camera
@@ -718,6 +721,7 @@ export class ExploreScene implements AmbientTarget {
           groundAt: (p) => this.#groundAt(p),
           size: this.#size,
           echoes: tile.community.echoes,
+          ...(tile.community.puzzle ? { puzzle: tile.community.puzzle, propMaterial } : {}),
         },
         tile.spots,
       );
@@ -901,13 +905,17 @@ export class ExploreScene implements AmbientTarget {
   /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
     // A spot just searched on a grey tile opens its joy disc and bursts into sparks.
-    this.#hollowed?.update(tile.spots, performance.now());
+    this.#hollowed?.update(tile.spots, performance.now(), tile.community?.puzzle);
     // A chest just opened pops its lid (#306).
     this.#cellar?.update(tile.spots, performance.now());
     this.#tile = tile;
     this.#glintNudge = [];
     this.#placeGlints();
-    if (this.#highlighted !== null && tile.spots.find((s) => s.index === this.#highlighted)?.done) {
+    const lit =
+      this.#highlighted === PUZZLE_INDEX
+        ? puzzleSpot(tile.community?.puzzle)
+        : tile.spots.find((s) => s.index === this.#highlighted);
+    if (this.#highlighted !== null && lit?.done) {
       this.highlight(null);
     }
   }
@@ -915,7 +923,12 @@ export class ExploreScene implements AmbientTarget {
   /** The soft halo under the spot in front (null: none). */
   highlight(index: number | null): void {
     this.#highlighted = index;
-    const spot = index === null ? undefined : this.#tile.spots.find((s) => s.index === index);
+    const spot =
+      index === null
+        ? undefined
+        : index === PUZZLE_INDEX
+          ? (puzzleSpot(this.#tile.community?.puzzle) ?? undefined)
+          : this.#tile.spots.find((s) => s.index === index);
     if (!spot) {
       this.#highlighted = null;
       this.#halo.setEnabled(false);

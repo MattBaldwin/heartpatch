@@ -12,6 +12,7 @@ import {
   coverShare,
   glintNudge,
   besideSpot,
+  showcaseStance,
   blocked,
   cameraGoal,
   cameraSettled,
@@ -662,5 +663,35 @@ describe('on-screen cover (#335)', () => {
     );
     // In front, low down (over the feet on screen): slides too.
     expect(glintNudge({ x: 0.1, y: 0.3, z: -0.4 }, keeper, 1, pitch, 0.15, 0.55)).not.toBe(0);
+  });
+
+  it('shows a thing off: the Keeper stands beside it, never between it and the camera (#306 PR 2b)', () => {
+    const thing = { kind: 'puzzle' as const, x: 0, z: 0.1 };
+    // Walking up from the camera's side (−z), a little to the left.
+    const at = showcaseStance({ x: -0.05, z: -0.6 }, thing);
+    expect(at).not.toBeNull();
+    const keep = spotRadius('puzzle') + EXPLORE_VIEW.keeperRadius;
+    // Beside it (the left, the side it came from), level with it or a touch nearer the camera.
+    expect(at!.x).toBeLessThan(thing.x - keep * 0.8);
+    expect(Math.abs(at!.z - thing.z)).toBeLessThan(Math.abs(at!.x - thing.x));
+    expect(gapTo(at!, thing)).toBeGreaterThan(0);
+    expect(gapTo(at!, thing)).toBeLessThanOrEqual(EXPLORE_VIEW.reach);
+    // From the right, the right.
+    expect(showcaseStance({ x: 0.3, z: -0.6 }, thing)!.x).toBeGreaterThan(thing.x);
+  });
+
+  it('moves round a neighbour beside the thing, and gives up only when boxed in', () => {
+    const thing = { kind: 'puzzle' as const, x: 0, z: 0 };
+    const left = showcaseStance({ x: -0.3, z: -0.6 }, thing)!;
+    const colliders = [{ x: left.x, z: left.z, r: 0.08 }];
+    const other = showcaseStance({ x: -0.3, z: -0.6 }, thing, colliders);
+    expect(other).not.toBeNull();
+    expect(blocked(other!, colliders)).toBe(false);
+    const ring = Array.from({ length: 24 }, (_, i) => ({
+      x: Math.cos((i / 24) * Math.PI * 2) * 0.12,
+      z: Math.sin((i / 24) * Math.PI * 2) * 0.12,
+      r: 0.08,
+    }));
+    expect(showcaseStance({ x: -0.3, z: -0.6 }, thing, ring)).toBeNull();
   });
 });

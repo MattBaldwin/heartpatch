@@ -1,6 +1,6 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, houseTile } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { tapCanvas } from './claim-land.js';
+import { selectTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
@@ -543,20 +543,31 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   reloading = false;
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
-  const box = (await page.locator('#game').boundingBox())!;
+  // A ring tile of the home, not the house's: the Heart Seed keeps the middle (#604),
+  // so nothing is built on its tile.
+  const homeTiles = (
+    await api<{ tiles: { q: number; r: number; heartSeed: boolean }[] }>(
+      page,
+      'GET',
+      `/maps/${mapId}/home`,
+    )
+  ).body.tiles;
+  const house = houseTile(homeTiles, []);
+  const ringTile = homeTiles.find(
+    (t) => !t.heartSeed && !(house && t.q === house.q && t.r === house.r),
+  )!;
+  const ringKey = `${String(ringTile.q)},${String(ringTile.r)}`;
   const explore = page.getByTestId('tile-explore');
   const openExplore = async () => {
     await expect(async () => {
-      if ((await mapState(page))?.selected == null) {
-        await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
-      }
+      if ((await mapState(page))?.selected !== ringKey) await selectTile(page, ringTile);
       await expect(explore).toBeVisible({ timeout: 5_000 });
     }).toPass(slow);
     await explore.tap();
     await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
   };
 
-  // The Heart Seed's tile has nothing built on it yet.
+  // The ring tile has nothing built on it yet.
   await openExplore();
   const first = (await exploreState(page))!;
   expect(first.scene?.buildings).toBe(0);

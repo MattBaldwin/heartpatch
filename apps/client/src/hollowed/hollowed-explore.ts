@@ -1,14 +1,23 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { Material } from '@babylonjs/core/Materials/material';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import type { PublicSearchSpot, WorldPoint } from '@heartpatch/shared';
+import type { HollowedPuzzle, PublicSearchSpot, WorldPoint } from '@heartpatch/shared';
 import { EXPLORE_CAMERA, EXPLORE_VIEW } from '../explore/explore-config.js';
 import { disc, kitMesh, merged, type Part, uvSphere } from '../explore/kit-mesh.js';
 import { overlayMaterial } from '../map/map-scene.js';
 import { JOY_DISCS, type HollowedDrain } from '../map/terrain-plugin.js';
 import { HOLLOWED_EXPLORE } from './hollowed-config.js';
-import { discOpening, echoAt, sparkAt, spookPush, spookReach } from './hollowed-explore-view.js';
+import {
+  discOpening,
+  echoAt,
+  PUZZLE_INDEX,
+  sparkAt,
+  spookPush,
+  spookReach,
+} from './hollowed-explore-view.js';
+import { buildPuzzleProp, type PuzzleProp } from './puzzle-props.js';
 
 /*
  * What a grey village tile adds to the explore scene (#306 2a):
@@ -22,6 +31,9 @@ import { discOpening, echoAt, sparkAt, spookPush, spookReach } from './hollowed-
  * - Hollow echoes: one merged mesh each in the shadow look with its soft
  *   dark shadow baked in (one draw call), drifting on ambient time (still
  *   when ambient life is off). Inside its reach the Keeper is nudged back.
+ * - The Relight puzzle's broken thing (PR 2b): one merged mesh, grey with
+ *   the drain; mended, it swaps for its coloured look (one mesh shown, one
+ *   draw call), opens a joy disc round it and bursts into sparks.
  * Nothing here is sent anywhere: the server's `done` flags and echo points
  * drive it, so two devices agree.
  */
@@ -35,6 +47,9 @@ export interface HollowedSceneContext {
   readonly size: number;
   /** Where each echo drifts, tile-local (`HollowedExplore.echoes`). */
   readonly echoes: readonly WorldPoint[];
+  /** The tile's Relight puzzle (PR 2b), and the land's prop material its broken thing stands in. */
+  readonly puzzle?: HollowedPuzzle;
+  readonly propMaterial?: Material;
 }
 
 /** Read-only numbers for the dev hook (Playwright asserts on these). */
@@ -50,6 +65,8 @@ export interface HollowedStats {
   readonly echoes: number;
   /** Where each echo is now, tile-local. */
   readonly echoAt: readonly WorldPoint[];
+  /** The broken thing's look (PR 2b), or null on a tile with none. */
+  readonly puzzle: 'broken' | 'fixed' | null;
 }
 
 interface Disc {
@@ -85,6 +102,8 @@ export class HollowedExplore {
     readonly centre: WorldPoint;
     readonly at: { x: number; z: number };
   }[];
+  /** The Relight puzzle's broken thing (PR 2b), where it stands, and whether it's mended. */
+  readonly #puzzle: (PuzzleProp & { readonly at: WorldPoint; mended: boolean }) | null = null;
   /** When the tile opened, and the Keeper was last spooked (ms). */
   #openedAt: number | null = null;
   #spookedAt = -Infinity;
@@ -123,7 +142,20 @@ export class HollowedExplore {
       return { mesh, centre, at: { ...centre } };
     });
     this.#placeEchoes(0);
-    this.update(spots, null);
+
+    const puzzle = ctx.puzzle;
+    if (puzzle && ctx.propMaterial) {
+      const prop = buildPuzzleProp(scene, puzzle.skin, ctx.propMaterial);
+      const world = ctx.world(puzzle);
+      // Turned a little off the camera, by where it stands, so it reads as a thing, not a sign.
+      const turn = 0.35 * Math.sin(puzzle.x * 12.9898 + puzzle.z * 78.233);
+      for (const mesh of [prop.broken, prop.fixed]) {
+        mesh.position.set(world.x, ctx.groundAt(puzzle), world.z);
+        mesh.rotation.y = turn;
+      }
+      this.#puzzle = { ...prop, at: { x: puzzle.x, z: puzzle.z }, mended: false };
+    }
+    this.update(spots, null, puzzle);
   }
 
   /**
@@ -131,15 +163,32 @@ export class HollowedExplore {
    * newest one bursts into sparks); a refill (a new morning) closes them.
    * `now` null: the tile just opened, so what's searched is already open.
    */
-  update(spots: readonly PublicSearchSpot[], now: number | null): void {
+  update(
+    spots: readonly PublicSearchSpot[],
+    now: number | null,
+    puzzle?: Pick<HollowedPuzzle, 'solved'>,
+  ): void {
     const done = spots.filter((s) => s.done);
     const had = new Set(this.#discs.map((d) => d.index));
-    this.#discs = this.#discs.filter((d) => done.some((s) => s.index === d.index));
-    let newest: PublicSearchSpot | null = null;
+    // The mended thing's disc stays: it isn't a spot, and it never refills.
+    this.#discs = this.#discs.filter(
+      (d) => d.index === PUZZLE_INDEX || done.some((s) => s.index === d.index),
+    );
+    let newest: WorldPoint | null = null;
     for (const s of done) {
       if (had.has(s.index)) continue;
       this.#discs.push({ index: s.index, x: s.x, z: s.z, since: now });
       newest = s;
+    }
+    const prop = this.#puzzle;
+    if (prop && puzzle?.solved && !prop.mended) {
+      prop.mended = true;
+      this.#discs.push({ index: PUZZLE_INDEX, x: prop.at.x, z: prop.at.z, since: now });
+      newest = prop.at;
+    }
+    if (prop) {
+      prop.broken.setEnabled(!prop.mended);
+      prop.fixed.setEnabled(prop.mended);
     }
     if (newest && now !== null) {
       const at = this.#ctx.world(newest);
@@ -211,6 +260,7 @@ export class HollowedExplore {
       bursts: this.#bursts,
       echoes: this.#echoes.length,
       echoAt: this.#echoes.map((e) => ({ ...e.at })),
+      puzzle: this.#puzzle ? (this.#puzzle.mended ? 'fixed' : 'broken') : null,
     };
   }
 

@@ -72,6 +72,8 @@ export const ItemChangeReasonSchema = z.enum([
   'restore-gift',
   /** A won village's morning gift (#306 PR 3b: the Old Well, the Bakery), against the community. */
   'village-gift',
+  /** What a resource building made (#601), banked by a settle or its take-down, against its row. */
+  'produced',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
@@ -218,6 +220,22 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
    * so an older app's `landed` still parses. Optional for an older server.
    */
   cleared: z.array(ClearedTileSchema).optional(),
+  /**
+   * What my resource buildings made since the last settle (#601), one entry
+   * per building. Its own list, like `cleared`, so an older app's `landed`
+   * still parses. Optional for an older server.
+   */
+  produced: z
+    .array(
+      z.object({
+        buildingRowId: z.uuid(),
+        buildingId: ContentIdSchema,
+        q: z.number().int(),
+        r: z.number().int(),
+        items: ItemCountsSchema,
+      }),
+    )
+    .optional(),
   nextAt: z.iso.datetime().nullable(),
 });
 export type SettleResponse = z.infer<typeof SettleResponseSchema>;

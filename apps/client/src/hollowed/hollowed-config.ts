@@ -35,6 +35,8 @@ export const HOLLOWED_EXPLORE = {
   }, // TUNE
   /** How long the spook's line stays up, ms. */
   spookedMs: 2600, // TUNE
+  /** After a win, how long the camera stays framed on the mended thing, ms (#306 PR 2b). */
+  mendedShowMs: 3500, // TUNE
 } as const;
 
 /**

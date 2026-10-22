@@ -1,8 +1,14 @@
 import {
   ExploreTileResponseSchema,
   SearchSpotResponseSchema,
+  SolvePuzzleResponseSchema,
+  StartPuzzleResponseSchema,
   type ExploreTileResponse,
   type SearchSpotResponse,
+  type SolvePuzzleRequest,
+  type SolvePuzzleResponse,
+  type StartPuzzleRequest,
+  type StartPuzzleResponse,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -25,6 +31,23 @@ export const exploreApi = {
       method: 'POST',
       body,
       schema: SearchSpotResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** A new try at a grey village tile's Relight puzzle (#306 PR 2b): a fresh path every time. */
+  puzzleStart: (mapId: string, body: StartPuzzleRequest): Promise<StartPuzzleResponse> =>
+    apiCallFor(`/maps/${mapId}/explore/puzzle/start`, {
+      method: 'POST',
+      body,
+      schema: StartPuzzleResponseSchema,
+    }),
+
+  /** Sends a try's moves (#306 PR 2b); the server replays them, checks the light and rolls. */
+  puzzle: (mapId: string, body: SolvePuzzleRequest, key: string): Promise<SolvePuzzleResponse> =>
+    apiCallFor(`/maps/${mapId}/explore/puzzle`, {
+      method: 'POST',
+      body,
+      schema: SolvePuzzleResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

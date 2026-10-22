@@ -25,6 +25,7 @@ import { bankableWork, landTraining, squishyName } from '../jobs/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
+import { lockProducing, producingTiles } from '../buildings/settle-production.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { createSettleRepo } from './repo.js';
 
@@ -42,7 +43,9 @@ import { createSettleRepo } from './repo.js';
  * `JOB_RULES.training.maxHours`). Crafting Factory batches (#294) bank
  * what they've made since the last settle (`factory.crafted`). Finished
  * clears (#242) turn their tiles into cleared land and bank what they
- * dropped (`tile.cleared`). Settling twice, or from two phones at
+ * dropped (`tile.cleared`). Resource buildings (#601) bank what they made
+ * (`building.produced`), after their mornings' upkeep is charged
+ * (`building.paused`, `building.resumed`). Settling twice, or from two phones at
  * once, banks each thing once: the member row lock runs settles one at a
  * time, and each row is re-read under its lock.
  */
@@ -78,6 +81,8 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
     settle: async (user, mapId) => {
       const at = now();
       const owner = { mapId, userId: user.id };
+      // A building that fell asleep or woke (#601) shows on everyone's map.
+      let buildingNews = false;
       const result = await createSettleRepo(db).transaction(async (repo, tx) => {
         const { map } = await requireMember(tx, user, mapId);
         // Lock order (tech spec §7): the member row (one settle at a time per
@@ -91,10 +96,11 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         const jobs = createSquishyJobsRepo(tx);
 
         // What might be due, read unlocked; each is read again under its lock.
-        const [gathersBefore, mine, clearsBefore] = await Promise.all([
+        const [gathersBefore, mine, clearsBefore, producingBefore] = await Promise.all([
           gathering.listToSettle(map.id, user.id),
           jobs.listMine(map.id, user.id),
           clearTilesToSettle(tx, map.id, user.id),
+          producingTiles(tx, map.id, user.id),
         ]);
         const workersBefore = mine.filter((r) => r.workTile !== null);
         // Only squishies whose one job is training: a row an older server
@@ -114,11 +120,14 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         for (const g of gathersBefore) tileIds.add(g.tileId);
         for (const w of workersBefore) if (w.workTile) tileIds.add(w.workTile.id);
         for (const id of clearsBefore.tileIds) tileIds.add(id);
+        for (const id of producingBefore) tileIds.add(id);
         // The tiles first, so the land can't change hands mid-settle.
         await jobs.lockTiles([...tileIds].sort());
         const gathers = await gathering.lockToSettle(gathersBefore.map((g) => g.id));
         // Clears after the gathers (step 7, id order, #242).
         const clears = await planClearSettlement(tx, clearsBefore.ids, tileIds, at);
+        // Resource buildings and the Warehouse (#601), then the craft (step 8).
+        const production = await lockProducing(tx, map, user.id, tileIds, at);
         const crafts = await inventory.lockActiveCrafts(owner);
         // Factory batches after the craft (step 8, id order).
         const batches = await planSettleBatches(tx, owner, at);
@@ -150,6 +159,7 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           ),
           ...planGrants(batches.plans),
           ...clears.grants,
+          ...production.grants,
         ]);
 
         const landed: Landed[] = [];
@@ -237,6 +247,14 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           };
         });
 
+        // Resource buildings (#601): the mornings' upkeep (the Heart Coin
+        // balance, step 12b, after training's `species_seen`), then their
+        // output. Before any clothing roll takes `maps`.
+        const producing = await production.apply();
+        events.push(...producing.events);
+        due.push(...producing.due);
+        buildingNews = producing.events.length > 0;
+
         // Gathers' grants are in: mark them collected and roll for clothing.
         for (const gather of banking) {
           events.push(await bankGather(tx, gathering, gather, at, { granted: true }));
@@ -260,10 +278,20 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
 
         const bag = await createInventoryService({ db: tx, clock: () => at }).get(user, mapId);
         const next = due.length === 0 ? null : new Date(Math.min(...due)).toISOString();
-        return { ...bag, landed, trained, cleared: clearing.cleared, nextAt: next };
+        return {
+          ...bag,
+          landed,
+          trained,
+          cleared: clearing.cleared,
+          produced: producing.produced,
+          nextAt: next,
+        };
       });
       const changed =
-        result.landed.length > 0 || result.trained.length > 0 || result.cleared.length > 0;
+        result.landed.length > 0 ||
+        result.trained.length > 0 ||
+        result.cleared.length > 0 ||
+        buildingNews;
       if (changed) void options.publish?.(mapId);
       return result;
     },
