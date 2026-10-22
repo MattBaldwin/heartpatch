@@ -9,6 +9,7 @@ import {
   GAME_DATA,
   heartSeedOf,
   HOME_BASE_RULES,
+  houseTile,
   hearthfireState,
   inSeason,
   isBuildable,
@@ -136,6 +137,7 @@ const MESSAGES = {
   topLevel: (name: string) => `Your ${name} is as big as it gets!`,
   fenceOnEdge: 'Fences go on the edges of a tile. Tap 🪵 Fences on your land!',
   tileTaken: 'Only one building fits on a tile! Try another one.',
+  houseTile: 'Your house lives on this tile 🏡. Try another one!',
   clearFirst: 'Clear this land first 🌱. Then you can build here!',
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
@@ -259,6 +261,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     void options.publish?.(mapId);
   };
 
+  /** Whether the Keeper's house (#381) stands at this player's home: patches only, behind its switch. */
+  function houseOn(user: PublicUser, kind: MapRow['kind']): boolean {
+    return kind === 'multiplayer' && houseOpenFor(house, user);
+  }
+
   /** Everything the home screen shows, read through `repo` (inside or outside a transaction). */
   async function homeView(
     repo: BuildingsRepo,
@@ -270,7 +277,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
   ): Promise<HomeResponse> {
     const userId = user.id;
     const { timeZone } = map;
-    const houseShown = map.kind === 'multiplayer' && houseOpenFor(house, user);
+    const houseShown = houseOn(user, map.kind);
     const local = mapLocalTime(at, timeZone);
     const [tiles, buildings, squishies, items, naming] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
@@ -347,8 +354,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
    * The target tile and spot, checked for `building`: one of my tiles its
    * `placement` allows, with no other building on it (#295: one building per
    * tile), no resource spot outside home (clear it first, #242), its slot's
-   * kind of spot (#204), and free. `homestead` is the target's homestead
-   * state when it's out on my land.
+   * kind of spot (#204), free, and not the house's tile while the house
+   * stands (#604; `houseStands`). `homestead` is the target's homestead state when
+   * it's out on my land.
    */
   function checkSpot(
     userId: string,
@@ -359,6 +367,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     outer: TargetTileRow | null = null,
     moving: string | null = null,
     homestead: 'joined' | 'paused' | null = null,
+    houseStands = false,
   ): HomeTileRow {
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
     // A won village's ring (#306 PR 3): home land, but it takes no buildings yet.
@@ -406,6 +415,15 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         throw new AppError('CONFLICT', MESSAGES.tileTaken);
       case 'clear-first':
         throw new AppError('CONFLICT', MESSAGES.clearFirst);
+    }
+    // The house's tile (#604): worked out from the buildings as they stand,
+    // as the client draws it. A moving building's own tile counts as built,
+    // so it's never the house's, and the house's tile is always refused.
+    if (houseStands && homeTile) {
+      const at = houseTile(home, owned);
+      if (at && at.q === homeTile.q && at.r === homeTile.r) {
+        throw new AppError('CONFLICT', MESSAGES.houseTile);
+      }
     }
     if (!fitsSlot(building.slot, target.spot)) {
       throw new AppError('CONFLICT', MESSAGES.wrongSlot(building));
@@ -524,7 +542,17 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
               ? homesteadOf(await createExploreRepo(tx).findRow(user.id, outer.id))
               : null;
           const owned = await repo.listOwned(mapId, user.id);
-          const tile = checkSpot(user.id, home, owned, building, request, outer, null, homestead);
+          const tile = checkSpot(
+            user.id,
+            home,
+            owned,
+            building,
+            request,
+            outer,
+            null,
+            homestead,
+            houseOn(user, mapKind),
+          );
           const same = owned.filter((b) => b.buildingId === building.id);
           const homeIds = new Set(home.map((t) => t.id));
           if (homeIds.has(tile.id)) {
@@ -585,7 +613,17 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         if (!home.some((t) => t.id === row.tileId))
           throw new AppError('CONFLICT', MESSAGES.staysPut(building.name));
         const owned = await repo.listOwned(mapId, user.id);
-        const tile = checkSpot(user.id, home, owned, building, request, null, row.id);
+        const tile = checkSpot(
+          user.id,
+          home,
+          owned,
+          building,
+          request,
+          null,
+          row.id,
+          null,
+          houseOn(user, mapKind),
+        );
         if (tile.id !== row.tileId || request.spot !== row.spot) {
           await repo.moveBuilding(row.id, { tileId: tile.id, spot: request.spot });
           await repo.appendEvent({

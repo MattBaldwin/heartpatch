@@ -2023,6 +2023,72 @@ export const coinBalances = pgTable(
 );
 
 /**
+ * Every Heart Coin change (#601, tech spec §4 "ledger table"): per player
+ * per patch, append-only. `heart_coin_balances.balance` always equals the
+ * sum of `amount` for the same `(map_id, user_id)`, which tests reconcile.
+ * `(source, ref_id)` is unique, so each battle, capture, care action, sale
+ * or morning's upkeep changes it exactly once. `day` is the patch's local
+ * date (`maps.time_zone`), for the daily earning caps. The member foreign
+ * key makes "never leaves the patch" a database fact.
+ */
+export const heartCoinLedger = pgTable(
+  'heart_coin_ledger',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // `HeartCoinSource` from shared (`battle`, `capture`, `care`, `sell`, `upkeep`, `dev-grant`).
+    source: text('source').notNull(),
+    // What it was for: a battle, a care action, a sale, a building's morning.
+    refId: uuid('ref_id').notNull(),
+    // Positive for earning, negative for spending; never 0.
+    amount: integer('amount').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'heart_coin_ledger_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    uniqueIndex('heart_coin_ledger_source_ref_id_key').on(t.source, t.refId),
+    // The daily caps sum one player's patch day by source.
+    index('heart_coin_ledger_map_id_user_id_day_idx').on(t.mapId, t.userId, t.day, t.source),
+    check('heart_coin_ledger_amount_nonzero', sql`${t.amount} <> 0`),
+  ],
+);
+
+/**
+ * Each player's Heart Coins on each patch (#601), cached from
+ * `heart_coin_ledger` and changed in the same transaction as its ledger row.
+ * The row lock serialises one player's credits and spends on one patch
+ * (tech spec §7 step 12b). A missing row is 0.
+ */
+export const heartCoinBalances = pgTable(
+  'heart_coin_balances',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    balance: integer('balance').notNull().default(0),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId] }),
+    foreignKey({
+      name: 'heart_coin_balances_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('heart_coin_balances_balance_nonnegative', sql`${t.balance} >= 0`),
+  ],
+);
+
+/**
  * Keeper milestone progress (#44, design doc §24): one row per account and
  * track, written by the `milestones` event consumer. `progress` is in
  * hundredths of a step (`MILESTONE_UNIT`), so Gentle's half share counts half
@@ -2374,7 +2440,8 @@ export const communities = pgTable(
  * One row per village tile of a Hollowed Community (#306): the pieces it
  * needs (`COMMUNITY_RULES.piecesBySize` by the village's size) and has, who
  * finished restoring it and when. `cellar` marks the square's cellar,
- * opened at `cellar_opened_at`. `puzzle_solved_by` is a JSON array of the
+ * opened at `cellar_opened_at`, its spots searched in `cellar_searched` (one
+ * bit a spot, like `tile_explore.searched`; #306 PR 2c). `puzzle_solved_by` is a JSON array of the
  * user ids who solved this tile's puzzle (a set, kept sorted). A tile is
  * in one village at most (`tile_id` unique).
  */
@@ -2393,6 +2460,7 @@ export const communityTiles = pgTable(
     restoredAt: timestamptz('restored_at'),
     cellar: boolean('cellar').notNull().default(false),
     cellarOpenedAt: timestamptz('cellar_opened_at'),
+    cellarSearched: integer('cellar_searched').notNull().default(0),
     puzzleSolvedBy: jsonb('puzzle_solved_by').$type<string[]>().notNull().default([]),
   },
   (t) => [

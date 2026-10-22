@@ -6,6 +6,7 @@ import {
   MAP_MAX_PLAYERS,
   type KeeperConfig,
 } from '@heartpatch/shared';
+import { CELLAR_RULES } from '@heartpatch/shared/server';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { hashSecret } from '../modules/auth/secrets.js';
 import { storeCommunities } from '../modules/communities/service.js';
@@ -194,6 +195,7 @@ export async function seed(db: Database): Promise<SeedResult> {
     const generated = generateMap(GAME_DATA, {
       seed: SEED_MAP_SEED,
       playerCount: MAP_MAX_PLAYERS,
+      cellarKeys: CELLAR_RULES.keyFromVillage,
     });
     const [map] = await tx
       .insert(maps)

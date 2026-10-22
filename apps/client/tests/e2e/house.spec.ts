@@ -54,7 +54,7 @@ interface HouseDebug {
 
 interface HomeDebug {
   open: boolean;
-  scene: { tiles: number; house: string | null } | null;
+  scene: { tiles: number; house: string | null; houseTile: { q: number; r: number } | null } | null;
 }
 
 const houseState = (page: Page) => hook<HouseDebug>(page, 'house');
@@ -81,9 +81,13 @@ test('enter the house from home, walk in and step out, and go back home', async 
   page.on('pageerror', (err) => errors.push(err.message));
   await patchAndHome(page);
 
-  // The cottage stands on the Heart Seed tile. Home opens as its peek bar
-  // (#412), with a 🏠 shortcut; the opened sheet has the house card.
-  expect((await homeState(page))?.scene?.house).toBe('hut');
+  // The cottage fills its own ring tile (#604), the back-right one on a new
+  // home. Home opens as its peek bar (#412), with a 🏠 shortcut; the opened
+  // sheet has the house card.
+  expect((await homeState(page))?.scene).toMatchObject({
+    house: 'hut',
+    houseTile: { q: 1, r: -1 },
+  });
   const shortcut = page.getByTestId('home-house-shortcut');
   await slowExpect(shortcut).toHaveAccessibleName('Your house');
   const peek = (await page.getByTestId('home').boundingBox())!;

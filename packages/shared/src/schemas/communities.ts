@@ -45,8 +45,19 @@ export const CommunityViewSchema = z.object({
    * morning's is still waiting on the square.
    */
   gift: z.object({ items: ItemCountsSchema, ready: z.boolean() }).optional(),
+  /**
+   * The key hunt and the hidden cellar (PR 2c), only on the viewer's own won
+   * village. `hunt`: winning it gave them a map to the cellar key, which
+   * hides at `keyTile` (only ever sent here, rule 6). `key`: they dug it up
+   * and the cellar door on the square is still locked. `open`: the cellar is
+   * open for them to search.
+   */
+  cellar: z
+    .object({ state: z.enum(['hunt', 'key', 'open']), keyTile: HexSchema.optional() })
+    .optional(),
 });
 export type CommunityView = z.infer<typeof CommunityViewSchema>;
+export type CellarState = NonNullable<CommunityView['cellar']>['state'];
 
 /** `POST /maps/:mapId/communities/:communityId/gift`: this morning's gift, collected. */
 export const VillageGiftResponseSchema = z.object({

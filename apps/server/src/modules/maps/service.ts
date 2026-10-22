@@ -25,7 +25,7 @@ import {
   type PublicTile,
   type PvpMode,
 } from '@heartpatch/shared';
-import { hintForGuardians, type GuardianData } from '@heartpatch/shared/server';
+import { CELLAR_RULES, hintForGuardians, type GuardianData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
@@ -406,7 +406,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // secret and never leaves the server (tech spec §8).
       const seed = newSeed();
       const maxPlayers = MAP_MAX_PLAYERS;
-      const generated = generateMap(GAME_DATA, { seed, playerCount: maxPlayers });
+      const generated = generateMap(GAME_DATA, {
+        seed,
+        playerCount: maxPlayers,
+        cellarKeys: CELLAR_RULES.keyFromVillage,
+      });
       const homeSlot = 0;
 
       const mapId = await withFreshCode((code) =>

@@ -615,6 +615,24 @@ await creditCoins(tx, { source: 'milestone', refId: rewardId, userId, mapId: nul
 
 It rolls the source's table (a percent chance, then a weighted pick among pieces that can drop on this tile's terrain in the seasons on now, by the map's local date), grants the piece and appends `clothing.found` (public: who and what). At most one piece per `(source, refId)`, ever, so a retried command can't grant twice. `HP_DEV_DROP_CHANCE` (dev and test only) sets every table's chance.
 
+## Heart Coins
+
+Heart Coins (issue #601) live in `src/modules/heart-coins`. Per player per patch: earned by playing on that patch, spent only there (building upkeep, #601 PR 6), never traded and never for clothes. Patch Coins stay the account's. Nothing is paid on the Tutorial Glade.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/heart-coins` | → `{ heartCoins: { balance, today, caps, resetsAt } }`: my balance on this patch, today's earnings by capped source on the patch's own day, `HEART_COIN_RULES.dailyCaps`, and the patch's next local midnight. Members only (`NOT_FOUND` otherwise) |
+| `POST /api/v1/maps/:mapId/dev/heart-coins` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ amount }` → 201 `{ heartCoins }` |
+
+**Paying and spending Heart Coins, for other modules** (battles and care pay them right after their Patch Coins): call `creditHeartCoins` inside your transaction, after any `creditCoins` and before your events (tech spec §7 step 12b). It pays once per `(source, refId)` and applies the patch-day caps. `spendHeartCoins` takes them (`CONFLICT` if short); `trySpendHeartCoins` returns `null` instead, for upkeep that pauses rather than fails. A repeated spend for the same `(source, refId)` changes nothing:
+
+```ts
+import { creditHeartCoins, trySpendHeartCoins } from '../heart-coins/service.js';
+
+await creditHeartCoins(tx, { source: 'sell', refId: saleId, mapId, userId, amount, at });
+const after = await trySpendHeartCoins(tx, { source: 'upkeep', refId, mapId, userId, amount, at });
+```
+
 ## The Keeper's house
 
 A walk-around dollhouse grown from the Heart Seed (#381, plan on the issue). It has its own level, one named room per level (`HOUSE_DATA` in `@heartpatch/shared`, checked by `checkHouseData`), and the Keeper's Heart Seed level caps it: every level from 2 carries a `heartSeedLevel` requirement.

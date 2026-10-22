@@ -5,6 +5,8 @@ import {
   HOME_BASE_RULES,
   HomeResponseSchema,
   hexKey,
+  houseTile,
+  HOUSE_TILE_ORDER,
   hexSpiral,
   JOB_RULES,
   MapResponseSchema,
@@ -82,8 +84,8 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     clock.setTime(Date.parse(START));
   });
 
-  async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+  async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
+    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, ...env });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
   }
@@ -1148,6 +1150,74 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) }))?.xp,
       ).toBe(66);
       await reconciled(mapId, kid.id);
+    });
+  });
+
+  describe("the house's own tile (#604)", () => {
+    const HOUSE_ON = { HP_HOUSE: 'on' };
+    const houseMessage = 'Your house lives on this tile 🏡. Try another one!';
+
+    it('refuses a building on the house’s tile, and the home reply agrees with the client’s rule', async () => {
+      const server = await start(HOUSE_ON);
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { tiles, seed } = await homeTiles(server, kid, mapId);
+      const at = houseTile(tiles, []);
+      // A new home: the back-right ring tile.
+      expect(at).toEqual({
+        q: seed.q + HOUSE_TILE_ORDER[0]!.q,
+        r: seed.r + HOUSE_TILE_ORDER[0]!.r,
+      });
+      const refused = await place(server, kid, mapId, { buildingId: 'ember-den', ...at!, spot: 2 });
+      expect(refused.statusCode).toBe(409);
+      expect(errorOf(refused).message).toBe(houseMessage);
+      // Every other ring tile still takes a habitat.
+      const next = { q: seed.q + HOUSE_TILE_ORDER[1]!.q, r: seed.r + HOUSE_TILE_ORDER[1]!.r };
+      await placed(server, kid, mapId, { buildingId: 'ember-den', ...next, spot: 2 });
+      const after = await home(server, kid, mapId);
+      expect(houseTile(after.tiles, after.buildings)).toEqual(at);
+    });
+
+    it('gives an older home’s house its first free ring tile, and moves it back when that frees up', async () => {
+      // Built while the house was off: a habitat on what is now the house's first tile.
+      const off = await start();
+      const kid = await player();
+      const mapId = await newMap(off, kid);
+      await give(mapId, kid, PLENTY);
+      const { seed } = await homeTiles(off, kid, mapId);
+      const ring = (i: number) => ({
+        q: seed.q + HOUSE_TILE_ORDER[i]!.q,
+        r: seed.r + HOUSE_TILE_ORDER[i]!.r,
+      });
+      // The house is off: nothing's held back for it.
+      const den = await placed(off, kid, mapId, { buildingId: 'ember-den', ...ring(0), spot: 2 });
+      await off.close();
+      app = undefined;
+
+      const server = await start(HOUSE_ON);
+      const before = await home(server, kid, mapId);
+      expect(before.house).toBeDefined();
+      expect(houseTile(before.tiles, before.buildings)).toEqual(ring(1));
+      expect(
+        errorOf(await place(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(1), spot: 2 }))
+          .message,
+      ).toBe(houseMessage);
+      const move = (body: object) =>
+        call(server, 'POST', `/maps/${mapId}/buildings/${den.id}/move`, kid, body);
+      // The den can't move onto the tile the house stands on…
+      expect(errorOf(await move({ ...ring(1), spot: 3 })).message).toBe(houseMessage);
+      // …but a spot change on its own tile is fine (its tile counts as built).
+      expect((await move({ ...ring(0), spot: 4 })).statusCode).toBe(200);
+      // Moving it further on frees the first tile, so the house goes back there.
+      expect((await move({ ...ring(2), spot: 3 })).statusCode).toBe(200);
+      const moved = await home(server, kid, mapId);
+      expect(houseTile(moved.tiles, moved.buildings)).toEqual(ring(0));
+      expect(
+        errorOf(await place(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(0), spot: 2 }))
+          .message,
+      ).toBe(houseMessage);
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...ring(1), spot: 2 });
     });
   });
 

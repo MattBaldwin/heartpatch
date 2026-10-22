@@ -571,6 +571,42 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
+    it('puts wild squishies back on a restored village tile gone wild again (#306, owner 2026-10-20)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patchWithSquishy(server, kid);
+      const { spawns } = services(); // EVERYWHERE lists every terrain
+      const tiles = await tilesOf(mapId);
+      const [restored, grey] = tiles.filter((t) => t.communityId !== null);
+      // My land touches both village tiles: they're neighbours of the square or each other.
+      const beside = tiles.filter(
+        (t) =>
+          t.communityId === null &&
+          t.homeSlot === null &&
+          t.terrain !== 'trading-post' &&
+          [restored!, grey!].some((v) => hexNeighbors(v).some((n) => n.q === t.q && n.r === t.r)),
+      );
+      for (const t of beside) {
+        await db.execute(`update tiles set owner_user_id = ${id(kid.id)} where id = ${id(t.id)}`);
+      }
+      // Every piece back on one, and nobody holds it: wild again (a fade, the Hollow Man).
+      await db.execute(
+        `update community_tiles set pieces_done = pieces_needed, restored_at = now()
+          where tile_id = ${id(restored!.id)}`,
+      );
+      const hints = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hints).toContainEqual({ q: restored!.q, r: restored!.r });
+      expect(hints).not.toContainEqual({ q: grey!.q, r: grey!.r });
+      const met = await spawns.findWildEncounter({
+        mapId,
+        userId: kid.id,
+        mapKind: 'multiplayer',
+        now: clock,
+        tile: { q: restored!.q, r: restored!.r },
+      });
+      expect(met?.spawn).toMatchObject({ q: restored!.q, r: restored!.r });
+    });
+
     it('hints at tiles with someone on them, with no species', async () => {
       const server = await start();
       const kid = await player();

@@ -7,6 +7,7 @@ import {
   GAME_DATA,
   hexDistance,
   hexKey,
+  HEART_COIN_RULES,
   hexNeighbors,
   HOME_BASE_RULES,
   HOUSE_DATA,
@@ -30,6 +31,7 @@ import { createCareService } from '../modules/care/service.js';
 import { createCoinsRepo } from '../modules/coins/repo.js';
 import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js';
 import { createGatheringService } from '../modules/gathering/service.js';
+import { createHeartCoinsRepo } from '../modules/heart-coins/repo.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHouseRepo } from '../modules/house/repo.js';
@@ -73,6 +75,7 @@ import {
   gameEvents,
   tileExplore,
   gatherJobs,
+  heartCoinLedger,
   houseGifts,
   houseResidents,
   inventories,
@@ -1046,6 +1049,70 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockMapRow(tx, mapId),
     );
     expect((await coinRows(kid.id)).map((r) => r.source).sort()).toEqual(['battle', 'capture']);
+  });
+
+  /*
+   * Heart Coins (#601): the player's `heart_coin_balances` row on the patch
+   * comes after the account's `coin_balances` row and before `maps` (tech
+   * spec §7 step 12b). Paid on the wrong side of either, the command would
+   * hold what the test then asks for, and Postgres would report a deadlock.
+   */
+  const lockHeart = (tx: Transaction, mapId: string, userId: string) =>
+    createHeartCoinsRepo(tx).lockBalance(mapId, userId);
+  const heartRows = (mapId: string, userId: string) =>
+    db
+      .select({ source: heartCoinLedger.source, amount: heartCoinLedger.amount })
+      .from(heartCoinLedger)
+      .where(and(eq(heartCoinLedger.mapId, mapId), eq(heartCoinLedger.userId, userId)));
+
+  it("pays a battle's Heart Coins after its Patch Coins (battles `finish`, #601 step 12 then 12b)", async () => {
+    const { kid, mapId, battle, fights, finishing } = await oneMoveFromWinning('heart-earner');
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockHeart(tx, mapId, kid.id),
+    );
+    expect((await heartRows(mapId, kid.id)).map((r) => r.source).sort()).toEqual([
+      'battle',
+      'capture',
+    ]);
+  });
+
+  it("pays a battle's Heart Coins before its events (battles `finish`, #601 step 12b then 13)", async () => {
+    const { kid, mapId, battle, fights, finishing } = await oneMoveFromWinning('heart-winner');
+    await holdThen(
+      (tx) => lockHeart(tx, mapId, kid.id),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect((await heartRows(mapId, kid.id)).map((r) => r.source).sort()).toEqual([
+      'battle',
+      'capture',
+    ]);
+  });
+
+  it('pays care Heart Coins after its Patch Coins (care `care`, #601 step 12 then 12b)', async () => {
+    const { kid, mapId, petId, care } = await careSetup('heart-petter');
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => care.care(kid, mapId, petId, 'pet'),
+      (tx) => lockHeart(tx, mapId, kid.id),
+    );
+    expect(await heartRows(mapId, kid.id)).toEqual([
+      { source: 'care', amount: HEART_COIN_RULES.care.perFullAction },
+    ]);
+  });
+
+  it('pays care Heart Coins before the event (care `care`, #601 step 12b then 13)', async () => {
+    const { kid, mapId, petId, care } = await careSetup('heart-player');
+    await holdThen(
+      (tx) => lockHeart(tx, mapId, kid.id),
+      () => care.care(kid, mapId, petId, 'pet'),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await heartRows(mapId, kid.id)).toEqual([
+      { source: 'care', amount: HEART_COIN_RULES.care.perFullAction },
+    ]);
   });
 
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {

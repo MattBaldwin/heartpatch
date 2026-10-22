@@ -190,7 +190,7 @@ export const HOUSE_BLANKETS = ['#9fd0ff', '#c9a0ff', '#ffd166', '#9fe0c8', '#ffb
 /** Tree crown colours round the clearing (sRGB): the pastel world palette. */
 export const HOUSE_TREE_CROWNS = ['#9fcf9a', '#b5d89a', '#a7c9b8', '#c8b6dc', '#f0b9c8']; // TUNE
 
-/** The cottage on the Heart Seed tile (`buildCottage`), sRGB. */
+/** The cottage on its home tile (`buildCottage`), sRGB. */
 export const HOUSE_COTTAGE = {
   wall: '#f6e4d2', // TUNE
   roof: '#c86a6a', // TUNE
