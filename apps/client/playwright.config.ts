@@ -44,7 +44,9 @@ const E2E_GROUPS = [
     'smoke',
     'tray-layout',
   ],
-  // ~11.2 iPad, ~10.9 iPhone: tutorial-flow's two runs go side by side.
+  // ~11.2 iPad, ~10.9 iPhone: tutorial-flow's two runs go side by side. Its
+  // WebKit jobs ran 24-29 min (against the job's 30) once hollowed-explore
+  // played a whole Relight win (#306 PR 2b), so that one moved to friendly's group.
   [
     'battle',
     'battle-ui',
@@ -52,7 +54,6 @@ const E2E_GROUPS = [
     'factory',
     'first-session',
     'hollowed-cellar',
-    'hollowed-explore',
     'hollowed-restore',
     'map-hole',
     'perf-report',
@@ -65,10 +66,12 @@ const E2E_GROUPS = [
   // ~13.0 iPad, ~9.6 iPhone. It ran 17-22 min on iPad (the slowest job in every run, 4-6 min over
   // the next) until close-up, explore, fences and squishy-gallery moved out (#429).
   ['accessory-everywhere', 'account-help', 'dress-up', 'hollow', 'house', 'jobs', 'map', 'potions'],
-  // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391). Keep it light.
+  // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391),
+  // and hollowed-explore's Relight win (#306 PR 2b; the WebKit jobs took ~11-12 min before it). Keep it light.
   [
     'cinematic',
     'friendly',
+    'hollowed-explore',
     'inventory',
     'milestones',
     'patch-line',
