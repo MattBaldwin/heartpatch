@@ -25,11 +25,13 @@ import { gathererMark, nameOf, type GathererMark } from './jobs-view.js';
 // shadow), so draw calls grow with the kinds of body and part on the map,
 // never with the number of gatherers (CLAUDE.md rule 8).
 //
-// The public map view says only how many squishies gather on a tile, never
-// which (DECISIONS, squishy jobs: a rival must not learn who gathers where),
-// so a patch-mate's gatherer stands there as a plain squishy in its family's
-// colour. Mine come from my own jobs view (`setMine`) and stand there as
-// themselves. Tapping the tile says who and how they feel (the tile panel's
+// The public map view never says which squishy gathers on a tile (DECISIONS,
+// squishy jobs: a rival must not learn who gathers where), only its species,
+// masked for me (#602, `PublicTile.workerLook`): a patch-mate's gatherer
+// stands there as its species, or, for a secret one I haven't met, as a
+// plain squishy in its family's colour. Its look is seeded by the tile,
+// never by a squishy. Mine come from my own jobs view (`setMine`) and stand
+// there as themselves. Tapping the tile says who and how they feel (the tile panel's
 // worker line, `index.ts`); the only thing drawn over the map is one small
 // mark on a tile of mine that needs me: a gatherer not keen, or napping
 // (`tile-marks.ts`). Nothing over a patch-mate's.
@@ -65,6 +67,8 @@ export interface GathererSquishiesDebug {
   readonly standing: number;
   /** Of those, mine (drawn as their own species). */
   readonly mine: number;
+  /** Of those, plain stand-ins (a patch-mate's secret species I haven't met). */
+  readonly standIns: number;
   /** Marks on screen now, by kind. */
   readonly marks: Readonly<Partial<Record<GathererMark, number>>>;
   /** Each gatherer's tile and its middle on screen (CSS px), for e2e taps; tiles off screen are left out. */
@@ -92,10 +96,26 @@ export interface GathererPlan {
 
 const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 
-/** A patch-mate's gatherer: a plain little squishy in its family's colour. */
+const STAND_IN_ID = 'gatherer-stand-in';
+
+/** A patch-mate's gatherer I may not see: a plain little squishy in its family's colour. */
 export function standInSpecies(color: string): SquishySpecies {
   const { body, belly, parts } = GATHERER_ON_TILE.standIn;
-  return { id: 'gatherer-stand-in', visual: { body, palette: [color, belly], parts: [...parts] } };
+  return { id: STAND_IN_ID, visual: { body, palette: [color, belly], parts: [...parts] } };
+}
+
+/** A gatherer's species as the map view lets me see it (#602), or null for a stand-in. */
+export function lookSpecies(look: PublicTile['workerLook']): SquishySpecies | null {
+  if (!look) return null;
+  const known = SPECIES.get(look.speciesId);
+  if (known) return known;
+  // A secret species I've met: the view brings its look.
+  if (!look.visual) return null;
+  return {
+    id: look.speciesId,
+    visual: look.visual,
+    ...(look.rarity ? { rarity: look.rarity } : {}),
+  };
 }
 
 /**
@@ -122,7 +142,8 @@ export function planGatherers(
       z: p.z + GATHERER_ON_TILE.offset.z,
     };
     const own = myWork.get(key);
-    const species = own ? SPECIES.get(own.squishy.speciesId) : undefined;
+    const looked = lookSpecies(tile.workerLook);
+    const species = own ? (SPECIES.get(own.squishy.speciesId) ?? looked) : null;
     if (own && species) {
       const mark = gathererMark(own, tile);
       plans.push({
@@ -133,6 +154,19 @@ export function planGatherers(
         mine: true,
         mark,
         glum: mark === 'meh',
+        ...at,
+      });
+      continue;
+    }
+    if (looked) {
+      plans.push({
+        key,
+        tile,
+        species: looked,
+        instanceId: key,
+        mine: false,
+        mark: null,
+        glum: false,
         ...at,
       });
       continue;
@@ -288,6 +322,7 @@ export function createGathererSquishies(options: GathererSquishiesOptions): Gath
       return {
         standing: standing.size,
         mine: [...standing.values()].filter((s) => s.plan.mine).length,
+        standIns: [...standing.values()].filter((s) => s.plan.species.id === STAND_IN_ID).length,
         marks: marks.shown,
         tiles,
         meshes: stats?.meshes ?? 0,
