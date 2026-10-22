@@ -75,6 +75,10 @@ export const HOME_FILL = {
   nodeScale: 0.45, // TUNE
   /** Where the pile sits, in hex sizes from the tile's middle (towards the viewer). */
   nodeOffset: { x: 0, z: -0.66 }, // TUNE: past the building's edge, inside the tile
+  /** The glow on a free tile to build on (flat ring and disc, scaled up from their spot size). */
+  glowScale: 2.3, // TUNE: the ring just inside the tile's edge
+  /** The ring round the tile a building will go on, scaled from the building ring. */
+  markScale: 1.7, // TUNE
   /** How far squishies wander round a tile-sized habitat, world units at the home view. */
   wanderRadius: 2.0, // TUNE: round the building, inside its tile
 } as const;
