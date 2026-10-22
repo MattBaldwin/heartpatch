@@ -73,7 +73,7 @@ const ZONE = 'America/Denver';
 
 /*
  * Columns migrations after B add to tables the app writes on every patch
- * (#306's naming columns on `map_members`, migration 0050). Each test adds
+ * (#306's naming columns on `map_members`, migration 0050; #601's on `buildings`). Each test adds
  * them to its database from before B so the app can make its patches, and
  * the migrate step drops them first, for their migration to add for real.
  */
@@ -83,7 +83,15 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['map_members', 'caught_count', 'integer default 0 not null'],
   ['map_members', 'kinds_built', "text[] default '{}'::text[] not null"],
   ['tiles', 'community_id', 'uuid'],
+  // Resource buildings (#601, migration 0054): every `buildings` read names
+  // them, the pack-up's too, so they go only after it (`PACK_READS`).
+  ['buildings', 'produced_since', 'timestamptz'],
+  ['buildings', 'paused_at', 'timestamptz'],
+  ['buildings', 'upkeep_paid_through', 'date'],
+  ['buildings', 'upkeep_rank', 'smallint'],
 ];
+/** Tables of `LATER_COLUMNS` the pack-up reads: their columns are dropped after it. */
+const PACK_READS: ReadonlySet<string> = new Set(['buildings']);
 const START = '2026-10-02T12:00:00Z';
 
 interface Player {
@@ -137,16 +145,25 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
   const dropLaterColumns = async () => {
     if (!laterColumns) return;
     for (const [table, column] of LATER_COLUMNS) {
+      if (PACK_READS.has(table)) continue;
       await db.execute(`alter table "${table}" drop column "${column}"`);
     }
     laterColumns = false;
+  };
+  /** The pack-up, then the columns it read go, for their migration to add. */
+  const packThenDrop = async (d: Database, now: () => Date) => {
+    await packBeforeOneBuildingPerTile(d, now, log);
+    for (const [table, column] of LATER_COLUMNS) {
+      if (PACK_READS.has(table))
+        await d.execute(`alter table "${table}" drop column if exists "${column}"`);
+    }
   };
 
   /** The migrate step, as `pnpm db:migrate` runs it. */
   const migrate = async () => {
     await dropLaterColumns();
     await runMigrations(db, {
-      beforeOneBuildingPerTile: (d) => packBeforeOneBuildingPerTile(d, () => clock, log),
+      beforeOneBuildingPerTile: (d) => packThenDrop(d, () => clock),
     });
   };
 
@@ -471,13 +488,9 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     await expect(
       runMigrations(db, {
         beforeOneBuildingPerTile: (d) =>
-          packBeforeOneBuildingPerTile(
-            d,
-            () => {
-              throw new Error('boom');
-            },
-            log,
-          ),
+          packThenDrop(d, () => {
+            throw new Error('boom');
+          }),
       }),
     ).rejects.toThrow('crowded-tile pack-up failed for 1 player(s)');
     expect(await indexed()).toBe(false);
