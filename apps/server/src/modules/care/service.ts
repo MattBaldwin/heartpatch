@@ -4,10 +4,12 @@ import {
   CARE_RULES,
   careCoins,
   careGain,
+  careHeartCoins,
   evolvingMeter,
   GAME_DATA,
   grantedXp,
   GROWTH_RULES,
+  HEART_COIN_RULES,
   moodFor,
   statsAtLevel,
   xpMultiplier,
@@ -31,6 +33,7 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import type { Clock } from '../../lib/time.js';
 import { accountDay, creditCoins } from '../coins/service.js';
+import { creditHeartCoins } from '../heart-coins/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -525,6 +528,15 @@ export function createCareService(options: CareServiceOptions): CareService {
           userId: user.id,
           mapId,
           amount: coins,
+          at,
+        });
+        // Heart Coins on this patch (#601): after the Patch Coins (step 12b).
+        await creditHeartCoins(tx, {
+          source: 'care',
+          refId: careId,
+          mapId,
+          userId: user.id,
+          amount: careHeartCoins(gain, HEART_COIN_RULES),
           at,
         });
         await repo.setContentment(row.id, contentment, at);

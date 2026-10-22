@@ -1,5 +1,5 @@
 {
-  "id": "e4240833-beb6-4aa8-a426-6d42196556ed",
+  "id": "21960d8f-b201-486c-bc5c-4df1288de566",
   "prevId": "9dbc300d-3151-45ca-90b1-2e7f5146ff26",
   "version": "7",
   "dialect": "postgresql",
@@ -1845,13 +1845,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cellar_searched": {
-          "name": "cellar_searched",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "puzzle_solved_by": {
           "name": "puzzle_solved_by",
           "type": "jsonb",
@@ -2595,6 +2588,214 @@
         "gather_jobs_ready_after_start": {
           "name": "gather_jobs_ready_after_start",
           "value": "\"gather_jobs\".\"ready_at\" >= \"gather_jobs\".\"started_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.heart_coin_balances": {
+      "name": "heart_coin_balances",
+      "schema": "",
+      "columns": {
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "heart_coin_balances_map_id_maps_id_fk": {
+          "name": "heart_coin_balances_map_id_maps_id_fk",
+          "tableFrom": "heart_coin_balances",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "heart_coin_balances_member_fk": {
+          "name": "heart_coin_balances_member_fk",
+          "tableFrom": "heart_coin_balances",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "heart_coin_balances_map_id_user_id_pk": {
+          "name": "heart_coin_balances_map_id_user_id_pk",
+          "columns": ["map_id", "user_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "heart_coin_balances_balance_nonnegative": {
+          "name": "heart_coin_balances_balance_nonnegative",
+          "value": "\"heart_coin_balances\".\"balance\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.heart_coin_ledger": {
+      "name": "heart_coin_ledger",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref_id": {
+          "name": "ref_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "heart_coin_ledger_source_ref_id_key": {
+          "name": "heart_coin_ledger_source_ref_id_key",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ref_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "heart_coin_ledger_map_id_user_id_day_idx": {
+          "name": "heart_coin_ledger_map_id_user_id_day_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "heart_coin_ledger_map_id_maps_id_fk": {
+          "name": "heart_coin_ledger_map_id_maps_id_fk",
+          "tableFrom": "heart_coin_ledger",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "heart_coin_ledger_member_fk": {
+          "name": "heart_coin_ledger_member_fk",
+          "tableFrom": "heart_coin_ledger",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "heart_coin_ledger_amount_nonzero": {
+          "name": "heart_coin_ledger_amount_nonzero",
+          "value": "\"heart_coin_ledger\".\"amount\" <> 0"
         }
       },
       "isRLSEnabled": false
