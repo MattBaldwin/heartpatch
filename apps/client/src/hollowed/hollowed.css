@@ -61,6 +61,12 @@
   color: #4a3150;
 }
 
+/* The key's tile while I hunt for it (#306 PR 2c): an old map's parchment gold. */
+.community-flag-key {
+  background: rgb(255 241 207 / 96%);
+  color: #6b4b1e;
+}
+
 /* The restore sheet and the naming card (#306 PR 3, the plan's screens): the
    explore big-moment card's shape, over the map. Fits or scrolls on a
    375×667 phone with its buttons always reachable (a sticky footer, like the

@@ -2374,7 +2374,8 @@ export const communities = pgTable(
  * One row per village tile of a Hollowed Community (#306): the pieces it
  * needs (`COMMUNITY_RULES.piecesBySize` by the village's size) and has, who
  * finished restoring it and when. `cellar` marks the square's cellar,
- * opened at `cellar_opened_at`. `puzzle_solved_by` is a JSON array of the
+ * opened at `cellar_opened_at`, its spots searched in `cellar_searched` (one
+ * bit a spot, like `tile_explore.searched`; #306 PR 2c). `puzzle_solved_by` is a JSON array of the
  * user ids who solved this tile's puzzle (a set, kept sorted). A tile is
  * in one village at most (`tile_id` unique).
  */
@@ -2393,6 +2394,7 @@ export const communityTiles = pgTable(
     restoredAt: timestamptz('restored_at'),
     cellar: boolean('cellar').notNull().default(false),
     cellarOpenedAt: timestamptz('cellar_opened_at'),
+    cellarSearched: integer('cellar_searched').notNull().default(0),
     puzzleSolvedBy: jsonb('puzzle_solved_by').$type<string[]>().notNull().default([]),
   },
   (t) => [

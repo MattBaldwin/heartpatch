@@ -1,5 +1,11 @@
 import type { Scene } from '@babylonjs/core/scene';
-import { hexKey, type CommunityView, type MapView, type PublicTile } from '@heartpatch/shared';
+import {
+  hexKey,
+  type CommunityView,
+  type Hex,
+  type MapView,
+  type PublicTile,
+} from '@heartpatch/shared';
 import { findHomeBases } from '../map/map-layout.js';
 import { tileScreenRectOf } from '../map/map-scene.js';
 import type { MapLayer } from '../map/map-screen.js';
@@ -10,6 +16,7 @@ import { boxOf } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import type { Rect } from '../ui/geometry.js';
 import { communityFlagLabel } from './community-model.js';
+import { KEY_TEXT, keyFlags } from './key-hunt-view.js';
 import './hollowed.css';
 
 // A flag over every Hollowed village (#306): "🕯️ Bramble Hollow · 1/5
@@ -132,8 +139,16 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
         ? null
         : (findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === mine)?.seed ?? null);
     const byKey = new Map(view.tiles.map((t) => [hexKey(t), t] as const));
-    // Every village, won ones too: "🏡 Bramble Glen" over a won village's ring (#306 PR 3).
-    const wanted = new Map((view.communities ?? []).map((c) => [c.id, c] as const));
+    // Every village, won ones too: "🏡 Bramble Glen" over a won village's ring
+    // (#306 PR 3); and over the key's tile while I hunt for it, "🗺️ The cellar
+    // key is hidden here" (PR 2c, mine only).
+    const wanted = new Map<
+      string,
+      { community: CommunityView; hexes: readonly Hex[]; key: boolean }
+    >((view.communities ?? []).map((c) => [c.id, { community: c, hexes: c.tiles, key: false }]));
+    for (const k of keyFlags(view, mine)) {
+      wanted.set(k.id, { community: k.community, hexes: [k.tile], key: true });
+    }
     for (const [id, flag] of flags) {
       if (!wanted.has(id)) {
         flag.node.remove();
@@ -141,12 +156,12 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       }
     }
     let changed = false;
-    for (const [id, community] of wanted) {
-      const tiles = community.tiles.flatMap((h) => byKey.get(hexKey(h)) ?? []);
+    for (const [id, { community, hexes, key }] of wanted) {
+      const tiles = hexes.flatMap((h) => byKey.get(hexKey(h)) ?? []);
       if (tiles.length === 0) continue;
-      const label = communityFlagLabel(community);
-      const won = community.ownerUserId !== null;
-      const touching = !won && community.reach === 'touching';
+      const label = key ? KEY_TEXT.flag : communityFlagLabel(community);
+      const won = !key && community.ownerUserId !== null;
+      const touching = !key && !won && community.reach === 'touching';
       const flag = flags.get(id);
       if (flag) {
         flag.community = community;
@@ -164,9 +179,9 @@ export function createCommunityFlags(root: HTMLElement, me: () => string | null)
       const node = el(
         'div',
         {
-          class: `post-flag community-flag${touching ? ' community-flag-touching' : ''}${won ? ' community-flag-won' : ''}`,
+          class: `post-flag community-flag${touching ? ' community-flag-touching' : ''}${won ? ' community-flag-won' : ''}${key ? ' community-flag-key' : ''}`,
           'aria-hidden': 'true',
-          'data-testid': 'community-flag',
+          'data-testid': key ? 'key-flag' : 'community-flag',
         },
         label,
       );

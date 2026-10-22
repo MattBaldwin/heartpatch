@@ -3,7 +3,7 @@ export * from './extra-nodes.js';
 export * from './trading-posts.js';
 export * from './communities.js';
 import { extraNodes } from './extra-nodes.js';
-import { placeCommunities, type PlacedCommunity } from './communities.js';
+import { placeCommunities, type CellarKeyRange, type PlacedCommunity } from './communities.js';
 import { placeTradingPosts } from './trading-posts.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
@@ -71,6 +71,12 @@ export interface GenerateMapOptions {
    */
   readonly seed: Seed;
   readonly playerCount: number;
+  /**
+   * Where the villages' cellar keys hide (#306 PR 2c): the server-only
+   * `CELLAR_RULES.keyFromVillage`. The server always passes it; without it
+   * (a client preview) the villages have no key tile.
+   */
+  readonly cellarKeys?: CellarKeyRange;
 }
 
 /** The map size for a player count, or a `RangeError` if none is configured. */
@@ -176,6 +182,7 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     gapTerrain: data.mapGen.gapTerrain,
     rules: data.mapGen.communities,
     seed: options.seed,
+    ...(options.cellarKeys ? { keys: options.cellarKeys } : {}),
   };
   const communities =
     placeCommunities(villageInput) ??

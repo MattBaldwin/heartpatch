@@ -569,6 +569,20 @@ export const GAME_EVENTS = {
     public: z.object({ communityId: z.uuid(), userId: z.uuid() }),
   },
   /**
+   * A won village's Keeper dug up its cellar key on the tile its map
+   * pointed to (#306 PR 2c). Only they hear of it; where it was stays
+   * internal (rule 6).
+   */
+  'key.found': {
+    internal: z.strictObject({ communityId: z.uuid(), userId: z.uuid(), ...coords }),
+    public: z.object({ communityId: z.uuid(), userId: z.uuid() }),
+  },
+  /** They opened the hidden cellar under the square with it (#306 PR 2c). Only they hear of it. */
+  'cellar.opened': {
+    internal: z.strictObject({ communityId: z.uuid(), userId: z.uuid() }),
+    public: z.object({ communityId: z.uuid(), userId: z.uuid() }),
+  },
+  /**
    * A trade offer or a gift was sent at a trading post (#271). What it holds
    * stays internal; only the two players hear of it (`twoPlayerView`).
    */

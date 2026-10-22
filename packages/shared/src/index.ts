@@ -134,6 +134,7 @@ export * from './schemas/buildings.js';
 export * from './schemas/house.js';
 export * from './schemas/fences.js';
 export * from './schemas/explore.js';
+export * from './schemas/cellar.js';
 export * from './schemas/trick-or-treat.js';
 export * from './gathering/index.js';
 export * from './recipe-book/index.js';
