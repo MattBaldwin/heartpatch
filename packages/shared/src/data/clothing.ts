@@ -2870,6 +2870,146 @@ const HALLOWEEN_COSTUMES: ClothingItem[] = [
   },
 ];
 
+// ── Rekindled (#306 PR 5): found only in Hollowed villages ────────────────
+// Lantern-glow trims and ember patches: the joy a village gets back, worn.
+// Year-round, found only by the server's Rekindled tables
+// (`data/server/hollowed-finds.ts`, CLAUDE.md rule 6), and kept, never traded, so the set (and its Rekindler
+// title, `FOUND_SETS`) shows what the Keeper found. The glowing bits are lit
+// from inside (`glow`), like a lantern on a grey street.
+const REKINDLED: ClothingItem[] = [
+  {
+    id: 'lantern-glow-cap',
+    name: 'Lantern-Glow Cap',
+    description: 'A knitted cap with a warm, glowing trim. Grey streets look friendlier already.',
+    slot: 'hat',
+    rarity: 'uncommon',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.04, 0.04], size: [1.02, 0.7, 1.04], color: '#8a5a7a' },
+        {
+          shape: 'ellipsoid',
+          at: [0, -0.28, 0.04],
+          size: [1.06, 0.16, 1.08],
+          color: '#ffd27a',
+          glow: true,
+        },
+        {
+          shape: 'teardrop',
+          at: [0, 0.38, 0.04],
+          size: [0.22, 0.3, 0.22],
+          color: '#ffb347',
+          glow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'ember-patch-jacket',
+    name: 'Ember Patch Jacket',
+    description: 'Patched with little embers that never go out. Toasty!',
+    slot: 'top',
+    rarity: 'rare',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.12, 1.08, 1.12], color: '#6f8fae' },
+        { shape: 'ellipsoid', at: [0, 0.46, 0], size: [0.74, 0.2, 0.76], color: '#ffd27a' },
+        {
+          shape: 'teardrop',
+          at: [-0.24, 0.12, -0.54],
+          size: [0.24, 0.22, 0.06],
+          color: '#ff8a5c',
+          glow: true,
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.26, -0.18, -0.52],
+          size: [0.2, 0.2, 0.06],
+          color: '#ffb347',
+          glow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'ember-patch-trousers',
+    name: 'Ember Patch Trousers',
+    description: 'Comfy trousers with a glowing ember patch on each knee.',
+    slot: 'bottom',
+    rarity: 'uncommon',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.1, 0], size: [1.1, 1.2, 1.08], color: '#7a6a8f' },
+        { shape: 'ellipsoid', at: [0, 0.34, 0], size: [1.08, 0.18, 1.08], color: '#c9a36b' },
+        {
+          shape: 'ellipsoid',
+          at: [-0.26, -0.36, -0.5],
+          size: [0.22, 0.22, 0.06],
+          color: '#ff8a5c',
+          glow: true,
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.26, -0.36, -0.5],
+          size: [0.22, 0.22, 0.06],
+          color: '#ff8a5c',
+          glow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'lantern-glow-boots',
+    name: 'Lantern-Glow Boots',
+    description: 'Every step leaves a tiny warm glow on the path home.',
+    slot: 'shoes',
+    rarity: 'rare',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.1, 0], size: [1.15, 1.2, 1.1], color: '#8a5a3c' },
+        { shape: 'capsule', at: [0, 0.75, 0.15], size: [0.8, 0.9, 0.7], color: '#8a5a3c' },
+        {
+          shape: 'ellipsoid',
+          at: [0, 1.15, 0.15],
+          size: [0.9, 0.2, 0.8],
+          color: '#ffd27a',
+          glow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'joy-lantern-charm',
+    name: 'Joy Lantern Charm',
+    description: 'A tiny lantern with a heart-shaped flame. It brightens any grey place.',
+    slot: 'held',
+    rarity: 'epic',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.38, 0], size: [0.12, 0.5, 0.12], color: '#7a4f2c' },
+        { shape: 'ellipsoid', at: [0, -0.05, 0], size: [0.56, 0.66, 0.56], color: '#ffe0a8' },
+        {
+          shape: 'teardrop',
+          at: [0, -0.02, 0],
+          size: [0.26, 0.34, 0.26],
+          color: '#ff6f91',
+          glow: true,
+        },
+        { shape: 'cone', at: [0, 0.32, 0], size: [0.5, 0.26, 0.5], color: '#7a4f2c' },
+      ],
+    },
+  },
+];
+
 /** Every clothing item, checked by `checkClothingData` in tests. */
 export const CLOTHING: ClothingItem[] = [
   ...STARTER,
@@ -2877,6 +3017,7 @@ export const CLOTHING: ClothingItem[] = [
   ...HALLOWEEN,
   ...HALLOWEEN_COSTUMES,
   ...MILESTONE,
+  ...REKINDLED,
   ...SQUISHY,
   ...SQUISHY_COSTUMES,
 ];

@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { checkClothingDrops, type ClothingDropTable } from '../../schemas/data/clothing-drops.js';
 import { CLOTHING } from '../clothing.js';
+import { FOUND_SETS } from '../found-sets.js';
 import { GAME_DATA } from '../index.js';
 import { CLOTHING_DROPS } from './clothing-drops.js';
 
 const TERRAINS = GAME_DATA.terrains.map((t) => t.id);
 const copy = (): ClothingDropTable[] => structuredClone(CLOTHING_DROPS);
+// Found sets' pieces drop from their own tables (#306 PR 5).
+const SET_PIECES = new Set(FOUND_SETS.flatMap((s) => s.pieces));
 
 describe('clothing drop tables (server-only)', () => {
   it('pass their checks: every found item can drop, from gathers, captures, rescues, wild wins and explore finds', () => {
-    expect(checkClothingDrops(CLOTHING_DROPS, CLOTHING, TERRAINS)).toEqual([]);
+    expect(checkClothingDrops(CLOTHING_DROPS, CLOTHING, TERRAINS, SET_PIECES)).toEqual([]);
     expect(CLOTHING_DROPS.map((t) => t.source).toSorted()).toEqual([
       'battle',
       'capture',
@@ -66,7 +69,7 @@ describe('clothing drop tables (server-only)', () => {
     expect(capture.rivalChance).toBeGreaterThan(capture.chance);
     const tables = copy();
     tables.find((t) => t.source === 'gather')!.rivalChance = 50;
-    expect(checkClothingDrops(tables, CLOTHING, TERRAINS)).toEqual([
+    expect(checkClothingDrops(tables, CLOTHING, TERRAINS, SET_PIECES)).toEqual([
       'drops[0].rivalChance: only captures take land from a rival',
     ]);
   });
@@ -83,7 +86,7 @@ describe('clothing drop tables (server-only)', () => {
       { item: 'heart-clip', weight: 1, terrains: ['moon'] },
     );
     tables[1]!.source = 'gather';
-    const problems = checkClothingDrops(tables.slice(0, 2), CLOTHING, TERRAINS);
+    const problems = checkClothingDrops(tables.slice(0, 2), CLOTHING, TERRAINS, SET_PIECES);
     expect(problems).toContain('drops[0].entries[42].item: unknown clothing "crown-of-doom"');
     expect(problems).toContain('drops[0].entries[43].item: "sunny-cap" isn\'t a found item');
     expect(problems).toContain('drops[0].entries[44].item: "heart-clip" is listed twice');
@@ -94,8 +97,19 @@ describe('clothing drop tables (server-only)', () => {
       ...t,
       entries: t.entries.filter((e) => e.item !== 'witch-hat'),
     }));
-    expect(checkClothingDrops(withoutHat, CLOTHING, TERRAINS)).toEqual([
+    expect(checkClothingDrops(withoutHat, CLOTHING, TERRAINS, SET_PIECES)).toEqual([
       'drops: found item "witch-hat" is in no drop table',
+    ]);
+  });
+
+  it("leave a found set's pieces to the set's own tables (#306 PR 5)", () => {
+    expect(checkClothingDrops(CLOTHING_DROPS, CLOTHING, TERRAINS)).toContain(
+      'drops: found item "lantern-glow-cap" is in no drop table',
+    );
+    const tables = copy();
+    tables[0]!.entries.push({ item: 'lantern-glow-cap', weight: 1 });
+    expect(checkClothingDrops(tables, CLOTHING, TERRAINS, SET_PIECES)).toEqual([
+      'drops[0].entries[42].item: "lantern-glow-cap" drops from its own set\'s tables',
     ]);
   });
 });

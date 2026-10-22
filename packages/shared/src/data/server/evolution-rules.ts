@@ -23,6 +23,7 @@ export const EVOLUTION_RULES: EvolutionRules = {
       pet: { feeling: 'sleepy', points: 2 }, // TUNE:
       play: { feeling: 'silly', points: 2 }, // TUNE:
       'heart-snack': { feeling: 'joy', points: 3 }, // TUNE:
+      'heart-tea': { feeling: 'cozy', points: 3 }, // TUNE: #306 PR 5, a cup of warm tea
     },
     win: { feeling: 'brave', points: 1 }, // TUNE:
     nightWatch: { feeling: 'spooky', points: 2 }, // TUNE:

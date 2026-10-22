@@ -29,7 +29,7 @@ describe('milestone data', () => {
     expect(MILESTONE_RULES.minMembers).toBe(2);
   });
 
-  it('has the Phase 1 tracks, plus The First Patch', () => {
+  it('has the Phase 1 tracks, plus The First Patch and the found sets (#306 PR 5)', () => {
     expect(MILESTONE_TRACKS.map((t) => t.id)).toEqual([
       'first-patch',
       'territory',
@@ -40,6 +40,7 @@ describe('milestone data', () => {
       'rescuer',
       'seeker',
       'halloween',
+      'set-rekindled',
     ]);
     expect(track('halloween').season).toBe('halloween');
     expect(SECRET_MILESTONES.length).toBeGreaterThan(0);

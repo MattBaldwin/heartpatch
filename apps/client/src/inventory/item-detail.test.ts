@@ -26,7 +26,7 @@ describe('the Bag item card (#241)', () => {
     expect(glimmer.chips.map((c) => c.text)).toEqual([
       '🔨 For building Glimmer Rail and Lantern Fence',
       '⬆️ Upgrades Hearthfire, Crafting Factory and more',
-      '🍳 Goes into Lantern',
+      '🍳 Goes into Lantern and Joy Lantern',
     ]);
     expect(glimmer.where).toMatch(/Mountain/);
   });

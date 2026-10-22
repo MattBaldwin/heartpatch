@@ -1532,6 +1532,75 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       });
     });
 
+    /**
+     * A roll that takes each table's first find, and in a Rekindled table
+     * (the one with pieces in it) the entry `want` picks.
+     */
+    const rekindledRng = (want: (entry: Record<string, unknown>) => boolean) =>
+      ({
+        weighted: <T>(items: readonly T[]) =>
+          items.some((e) => 'clothing' in (e as object))
+            ? (items.find((e) => want(e as Record<string, unknown>)) ?? items[0]!)
+            : items[0]!,
+        next: () => 0.5,
+        int: (min: number) => min,
+        chance: () => true,
+        pick: <T>(items: readonly T[]) => items[0]!,
+      }) as unknown as Rng;
+
+    it('finds a Rekindled piece in a grey village: its one piece of clothing (#306 PR 5)', async () => {
+      const server = await start();
+      const me = await player();
+      // Pieces drop where milestones count (two members), so the title can count them.
+      const mapId = await patch(server, me, [await player()]);
+      const square = await reachVillage(server, me, mapId);
+      const { spot } = await handSpot(server, me, mapId, square);
+      const rng = rekindledRng((e) => e['clothing'] === 'ember-patch-jacket');
+      const service = createExploreService({ db, clock: () => clock, rng: () => rng });
+      const found = await service.search(me, mapId, { q: square.q, r: square.r, spot: spot.index });
+      expect(found.clothing).toBe('ember-patch-jacket');
+      expect(found.notable).toBe('cosmetic');
+      const [searched] = await eventsOf(mapId, 'explore.searched');
+      const owned = await db.query.clothingOwned.findMany({
+        where: (c, { eq }) => eq(c.userId, me.id),
+      });
+      expect(owned.map((c) => [c.itemId, c.source, c.refId])).toEqual([
+        ['ember-patch-jacket', 'explore', searched!['searchId']],
+      ]);
+      expect(await eventsOf(mapId, 'clothing.found')).toEqual([
+        {
+          userId: me.id,
+          itemId: 'ember-patch-jacket',
+          source: 'explore',
+          refId: searched!['searchId'],
+        },
+      ]);
+    });
+
+    it('finds a Joy Ember in a grey village, which opens the Joy Lantern page (#306 PR 5)', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const { spot } = await handSpot(server, me, mapId, square);
+      await give(mapId, me, { emberwood: 1, glimmer: 1 });
+      const book = async () =>
+        (await call(server, 'GET', '/recipe-book', me)).json<{ unlocked: string[] }>().unlocked;
+      expect(await book()).not.toContain('recipe:joy-lantern');
+
+      const rng = rekindledRng(
+        (e) => (e['items'] as Record<string, number> | undefined)?.['joy-ember'] !== undefined,
+      );
+      const service = createExploreService({ db, clock: () => clock, rng: () => rng });
+      const found = await service.search(me, mapId, { q: square.q, r: square.r, spot: spot.index });
+      expect(found.found['joy-ember']).toBe(1);
+      expect(found.items['joy-ember']).toBe(1);
+      const [searched] = await eventsOf(mapId, 'explore.searched');
+      expect((searched!['items'] as Record<string, number>)['joy-ember']).toBe(1);
+      expect(await book()).toContain('recipe:joy-lantern');
+      expect(await book()).not.toContain('recipe:heart-tea');
+    });
+
     it('is still only for my own land when the tile isn’t a village', async () => {
       const server = await start();
       const me = await player();

@@ -1,7 +1,8 @@
 /**
  * `pnpm sim:hollowed` (#306): how many days a casual and an engaged kid,
  * alone and with a helper, take to restore their nearest Hollowed
- * Community of each size. Writes `hollowed-report.md` to `reports/sim/`
+ * Community of each size, and how long they search to find the Rekindled
+ * set (#306 PR 5). Writes `hollowed-report.md` to `reports/sim/`
  * (git-ignored), or to `--out <dir>`.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -11,6 +12,7 @@ import { parseArgs } from 'node:util';
 import { HOLLOWED_CONFIG } from './hollowed-config.js';
 import { renderHollowed, runHollowed } from './hollowed.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
+import { runRekindled } from './rekindled.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const { values } = parseArgs({
@@ -20,15 +22,23 @@ const outDir = resolve(values.out);
 
 const started = performance.now();
 const rows = runHollowed(HOLLOWED_CONFIG, PROGRESSION_CONFIG);
+const rekindled = runRekindled(HOLLOWED_CONFIG);
 const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'hollowed-report.md');
-writeFileSync(reportPath, renderHollowed(rows, HOLLOWED_CONFIG, { seconds }));
+writeFileSync(reportPath, renderHollowed(rows, HOLLOWED_CONFIG, { seconds }, rekindled));
 
 console.log(`${String(rows.length)} rows in ${seconds.toFixed(1)} s.`);
 for (const r of rows) {
   const days = [...r.days].map(([n, d]) => `${String(n)} tiles ${String(d)} d`).join(', ');
   console.log(`  ${r.kid.padEnd(7)} ${r.team.padEnd(13)} ${days}`);
+}
+console.log('Rekindled set (days of village searching, median / p90):');
+for (const r of rekindled) {
+  const days = [...r.days]
+    .map(([label, [m, p]]) => `${label} ${String(m)}/${String(p)} d`)
+    .join(', ');
+  console.log(`  ${r.kid.padEnd(7)} ${days}`);
 }
 console.log(`Report: ${reportPath}`);

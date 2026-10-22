@@ -184,9 +184,12 @@ describe('whereToFind', () => {
         where.bonusFrom.length > 0 ||
         where.madeBy.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
-      // Things only a hidden recipe makes aren't anywhere yet either.
+      // Things only a hidden recipe makes aren't anywhere yet either. The
+      // Rekindled finds turn up only in Hollowed villages (#306 PR 5).
       const elsewhere = [
         'heartdust',
+        'joy-ember',
+        'heart-petals',
         'turkey-feathers',
         'presents',
         'fireworks',

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { BUILDINGS } from '../data/buildings.js';
+import { HOME_BASE_RULES } from '../data/home-base.js';
+import { isBuildable } from '../schemas/data/home-base.js';
 import { GAME_DATA } from '../data/index.js';
 import { itemEffects } from './item-effects.js';
 
@@ -63,12 +66,12 @@ describe('itemEffects (#241)', () => {
           'ice-wall',
         ],
       },
-      { kind: 'recipes', recipes: ['lantern'] },
+      { kind: 'recipes', recipes: ['lantern', 'joy-lantern'] },
     ]);
     const ember = itemEffects('emberwood');
     expect(ember).toContainEqual({
       kind: 'fuel',
-      buildings: ['hearthfire', 'jack-o-lantern-hearthfire'],
+      buildings: ['hearthfire', 'jack-o-lantern-hearthfire', 'joy-lantern'],
     });
     expect(ember).toContainEqual(expect.objectContaining({ kind: 'recipes' }));
     expect(itemEffects('heartdust')).toEqual([{ kind: 'care', actions: ['heart-snack'] }]);
@@ -82,6 +85,20 @@ describe('itemEffects (#241)', () => {
     );
     const timber = itemEffects('timber').find((e) => e.kind === 'build-with');
     expect(timber?.kind === 'build-with' && timber.buildings).toContain('hearthfire');
+  });
+
+  it("names no building a player can't build yet (#601's gated resource buildings)", () => {
+    const gated = new Set(
+      BUILDINGS.filter((b) => !isBuildable(HOME_BASE_RULES, b)).map((b) => b.id),
+    );
+    expect(gated.has('woodcutters-hut') && gated.has('warehouse')).toBe(true);
+    for (const { id } of GAME_DATA.resources) {
+      for (const effect of itemEffects(id)) {
+        const named =
+          'buildings' in effect ? effect.buildings : 'building' in effect ? [effect.building] : [];
+        for (const b of named) expect(gated.has(b), `${id} names ${b}`).toBe(false);
+      }
+    }
   });
 
   it('calls a seasonal thing with no use yet a keepsake', () => {

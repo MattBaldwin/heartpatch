@@ -1,0 +1,278 @@
+/* Heart Coins (#601): the 💛 pill (pink, where the Patch Coin pill is gold),
+   its sheet, and the patch list's line. Cards and buttons come from
+   ../ui/auth/auth.css. 44pt+ targets, safe areas. */
+
+.heart-pill {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px var(--hp-pad-x) 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffe1ec;
+  box-shadow:
+    inset 0 0 0 2px #ffc2d8,
+    inset 0 -2px 0 rgb(0 0 0 / 6%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  color: #8a2d5a;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.heart-pill[hidden] {
+  display: none;
+}
+
+/* 44pt to the finger, 32 to the eye. */
+.heart-pill::after {
+  content: '';
+  position: absolute;
+  inset: -6px -2px;
+}
+
+.heart-pill:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 2px;
+}
+
+.heart-pill-icon {
+  font-size: 17px;
+}
+
+/* On the map, at the end of the patch-name card's row: over the legend's
+   whole-row tap (::before), so its own tap opens the Heart Coins sheet. */
+.heart-pill-map {
+  z-index: 1;
+  margin-left: 4px;
+}
+
+/* On Home's peek bar, first in the handle's row (#381: it never grows a
+   row). Only on the peek bar; the opened sheet has room of its own. While
+   the "Name your home!" nudge shows, the nudge needs the whole row on a
+   320pt phone, so the pill steps aside (it's still on the map). */
+.home-sheet:not(.home-sheet-peek) .heart-pill-home,
+.home-handle-row:has(.home-handle-nudge:not([hidden])) .heart-pill-home {
+  display: none;
+}
+
+/* The patch list: a soft pink line on each patch's card. */
+.lobby-heart-coins {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #ffe1ec;
+  font-size: 14px;
+  font-weight: 800;
+  color: #8a2d5a;
+}
+
+.lobby-heart-coins[hidden] {
+  display: none;
+}
+
+/* The sheet: over the map and home (z 6, like the roster). */
+.heart-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 12px)
+    calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
+  background: rgb(253 232 240 / 70%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.heart-sheet[hidden] {
+  display: none;
+}
+
+.heart-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  max-height: 100%;
+  width: min(100%, 460px);
+}
+
+.heart-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.heart-sheet-head .heart-sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.heart-sheet-close-top {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.heart-sheet-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.heart-sheet-balance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  color: #8a2d5a;
+}
+
+.heart-sheet-balance:empty {
+  display: none;
+}
+
+.heart-sheet-lead {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.heart-sheet-subtitle {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #8a5f86;
+}
+
+.heart-sheet-status,
+.heart-sheet-resets {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #6b4a70;
+}
+
+.heart-sheet-status:empty,
+.heart-sheet-resets:empty {
+  display: none;
+}
+
+.heart-sheet-rows {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.heart-sheet-rows:empty {
+  display: none;
+}
+
+/* Emoji, label and "3 / 20" on one line, the bar under them. */
+.heart-sheet-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.heart-sheet-value {
+  font-weight: 800;
+  color: #8a2d5a;
+  white-space: nowrap;
+}
+
+.heart-sheet-row-full .heart-sheet-value {
+  color: #2f6b3d;
+}
+
+.heart-sheet-bar {
+  grid-column: 1 / -1;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f6e3ec;
+}
+
+.heart-sheet-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffb3cf, #f06a9e);
+}
+
+.heart-sheet-row-full .heart-sheet-fill {
+  background: linear-gradient(90deg, #a8e0b0, #5dbb72);
+}
+
+/* Heart Coins beside Patch Coins: two short lines, each with its own coin. */
+.heart-sheet-compare {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #fff6fa;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.heart-sheet-compare li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heart-sheet-compare-icon {
+  flex: none;
+  width: 22px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.heart-sheet-coin {
+  flex: none;
+}
+
+.heart-sheet-actions {
+  margin-top: 0;
+}

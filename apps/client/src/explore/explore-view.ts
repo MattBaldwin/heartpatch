@@ -1,6 +1,7 @@
 import {
   CLOTHING_BY_ID,
   EXPLORE_RULES,
+  FOUND_SETS,
   GAME_DATA,
   TERRAINS,
   type ExploreTileResponse,
@@ -12,7 +13,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
-import { itemIcon } from '../inventory/item-icons.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 import { TOOL_ICONS, TOOL_WORDS } from '../inventory/tool-uses.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 
@@ -42,6 +43,9 @@ export const EXPLORE_TEXT = {
   addedToLorebook: 'Added to your Lorebook 📖',
   openLorebook: 'Open Lorebook 📖',
   clothing: 'Something to wear!',
+  // A found set's own find (#306 PR 5): it goes into a recipe the kid can't get any other way.
+  setFind: (set: string) => `A ${set} find! ✨`,
+  setFindNote: 'It goes into a recipe in your recipe book 📖',
   recipeBook: 'Open recipe book',
   tileExplored: (name: string) => `You explored every spot in this ${name}! ✨`,
   joinedTitle: (name: string) => `${name} joined your home!`,
@@ -247,6 +251,12 @@ export function foundHeadline(interaction: SpotInteraction): string {
   }
 }
 
+/** The found set (#306 PR 5) whose own finds this search turned up, if any. */
+function setOfFinds(found: Pick<SearchSpotResponse, 'found'>): string | null {
+  const set = FOUND_SETS.find((s) => s.finds.some((id) => (found.found[id] ?? 0) > 0));
+  return set?.name ?? null;
+}
+
 /** One line of the find card. */
 export interface FindLine {
   readonly kind: 'item' | 'lore' | 'clothing' | 'none';
@@ -259,7 +269,11 @@ export interface FindLine {
 export function findLines(found: SearchSpotResponse): FindLine[] {
   const lines: FindLine[] = Object.entries(found.found)
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => ({ kind: 'item', text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}` }));
+    .map(([id, n]) => ({
+      kind: 'item' as const,
+      text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}`,
+      ...(FOUND_SETS.some((s) => s.finds.includes(id)) ? { note: EXPLORE_TEXT.setFindNote } : {}),
+    }));
   if (found.lore) {
     lines.push({
       kind: 'lore',
@@ -269,7 +283,9 @@ export function findLines(found: SearchSpotResponse): FindLine[] {
   }
   if (found.clothing) {
     const piece = CLOTHING_BY_ID.get(found.clothing);
-    lines.push({ kind: 'clothing', text: `👒 ${piece?.name ?? EXPLORE_TEXT.clothing}` });
+    // The piece's own slot picture (a jacket's 👕, not a hat's).
+    const icon = piece ? clothingSlotIcon(piece.slot) : '✨';
+    lines.push({ kind: 'clothing', text: `${icon} ${piece?.name ?? EXPLORE_TEXT.clothing}` });
   }
   if (lines.length === 0) lines.push({ kind: 'none', text: EXPLORE_TEXT.worm });
   return lines;
@@ -287,11 +303,18 @@ export function xpLines(
 
 /**
  * A rare find gets the full card (#291, board i): a lore page, something to
- * wear, a notable find, or the search that finished the tile. Everything
- * else is a small toast while the world keeps going.
+ * wear, a notable find, a found set's own find (#306 PR 5), or the search
+ * that finished the tile. Everything else is a small toast while the world
+ * keeps going.
  */
 export function findShowsCard(found: SearchSpotResponse): boolean {
-  return found.lore !== null || found.clothing !== null || found.notable !== null || found.explored;
+  return (
+    found.lore !== null ||
+    found.clothing !== null ||
+    found.notable !== null ||
+    found.explored ||
+    setOfFinds(found) !== null
+  );
 }
 
 /** The find toast (#291, board c): "+2 Timber · +1 Stone", then "Puddlepuff +6 XP". */
@@ -322,6 +345,8 @@ export function rareTitle(found: SearchSpotResponse, terrain: string): string {
   if (found.explored) return EXPLORE_TEXT.tileExplored(terrainName(terrain));
   if (found.lore) return EXPLORE_TEXT.lorePage;
   if (found.clothing) return EXPLORE_TEXT.clothing;
+  const set = setOfFinds(found);
+  if (set) return EXPLORE_TEXT.setFind(set);
   return EXPLORE_TEXT.ta;
 }
 

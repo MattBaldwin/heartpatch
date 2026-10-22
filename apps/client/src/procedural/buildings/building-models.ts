@@ -239,6 +239,41 @@ export function buildBuildingModel(
       part(faceList, sphere(0.26, 10), face, [0, 0.22, -0.28], [1.3, 0.45, 0.35]);
       break;
     }
+    case 'joy-lantern': {
+      // A little open lantern on a stone step: four short posts holding a
+      // rosy ring and, floating above it, a big heart-shaped flame (two lobes
+      // over a point). Open-topped, so the map's high camera sees the heart.
+      part(body, cylinder(0.14, 0.86, 0.92, 16), C.joyBase, [0, 0.07, 0]);
+      around(4, (a) => {
+        part(body, cylinder(0.5, 0.07, 0.08, 8), C.joyFrame, [
+          Math.cos(a + Math.PI / 4) * 0.28,
+          0.39,
+          Math.sin(a + Math.PI / 4) * 0.28,
+        ]);
+      });
+      part(
+        body,
+        CreateTorus(`${name}-ring`, { diameter: 0.6, thickness: 0.09, tessellation: 24 }, scene),
+        C.joyRoof,
+        [0, 0.66, 0],
+      );
+      const heart = look === 'lit' ? glow : body;
+      const lobe = look === 'lit' ? C.joyFlame : C.joyOut;
+      const heartShade = look === 'lit' ? flameShade(0.62, 1.12, C.joyCore, C.joyFlame) : undefined;
+      for (const x of [-0.12, 0.12]) {
+        part(heart, sphere(0.3, 14), lobe, [x, 0.98, 0], [1, 1, 0.85], [0, 0, 0], heartShade);
+      }
+      part(
+        heart,
+        cylinder(0.34, 0.44, 0, 14),
+        lobe,
+        [0, 0.8, 0],
+        [1, 1, 0.75],
+        [0, 0, 0],
+        heartShade,
+      );
+      break;
+    }
     case 'ember-den': {
       part(body, cylinder(0.08, 0.98, 1, 24), C.denTrim, [0, 0.04, 0]);
       part(body, sphere(0.86, 20), C.den, [0, 0.08, 0], [1, 0.82, 1]);

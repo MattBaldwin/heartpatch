@@ -87,8 +87,26 @@ export async function rollFoundDrop(
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);
   if (!itemId) return null;
+  return grantFoundPiece(tx, event, itemId);
+}
 
-  return store.transaction(async (repo, inner) => {
+/** `HP_DEV_DROP_CHANCE` when it's set, else `chance`: found sets use it too (#306 PR 5). */
+export function devDropChanceOr(chance: number): number {
+  return devChance ?? chance;
+}
+
+/**
+ * Grants a found piece and appends `clothing.found`, inside the caller's
+ * transaction (the event is its own; the caller's stay the last writes).
+ * Idempotent per event: one that already found something gets nothing.
+ * Returns the item id, or null.
+ */
+export async function grantFoundPiece(
+  tx: Executor,
+  event: Pick<FoundDropEvent, 'source' | 'refId' | 'userId' | 'mapId' | 'at'>,
+  itemId: string,
+): Promise<string | null> {
+  return createWardrobeRepo(tx).transaction(async (repo, inner) => {
     const granted = await grantClothing(inner, {
       userId: event.userId,
       itemId,

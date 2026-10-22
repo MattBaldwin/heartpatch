@@ -1,8 +1,10 @@
 import { GAME_DATA } from '../data/index.js';
 import type { BuildingPlacement } from '../schemas/data/buildings.js';
 import { CLEARING_RULES } from '../data/clearing.js';
+import { HOME_BASE_RULES } from '../data/home-base.js';
 import type { ClearToolId } from '../schemas/data/clearing.js';
 import type { ToolId } from '../schemas/data/explore.js';
+import { isBuildable } from '../schemas/data/home-base.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isAvailableRecipe } from '../schemas/data/recipes.js';
 import { buildingEffects, type BuildingEffect } from './building-effects.js';
@@ -90,8 +92,10 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
     effects.push({ kind: 'made-from', recipes: makers.map((r) => r.id) });
   }
 
+  // Only buildings a player can build now (a gated kind, #601's, says nothing yet).
+  const buildings = data.buildings.filter((b) => isBuildable(HOME_BASE_RULES, b));
   const firstCost = (b: (typeof data.buildings)[number]) => b.levels[0]?.cost ?? {};
-  const inFirst = data.buildings.filter((b) => (firstCost(b)[item.id] ?? 0) > 0);
+  const inFirst = buildings.filter((b) => (firstCost(b)[item.id] ?? 0) > 0);
   // A made thing that's a building's whole cost (the Jack-o'-Lantern) says
   // what it becomes and what that does; anything else is one material.
   const whole = (b: (typeof data.buildings)[number]) =>
@@ -105,13 +109,13 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
     effects.push({ kind: 'build-with', buildings: materials.map((b) => b.id) });
   }
 
-  const upgrades = data.buildings.filter(
+  const upgrades = buildings.filter(
     (b) =>
       !inFirst.includes(b) && b.levels.slice(1).some((level) => (level.cost[item.id] ?? 0) > 0),
   );
   if (upgrades.length > 0) effects.push({ kind: 'upgrades', buildings: upgrades.map((b) => b.id) });
 
-  const fuel = data.buildings.filter((b) => b.kind === 'hearthfire' && b.fuelResource === item.id);
+  const fuel = buildings.filter((b) => b.kind === 'hearthfire' && b.fuelResource === item.id);
   if (fuel.length > 0) effects.push({ kind: 'fuel', buildings: fuel.map((b) => b.id) });
 
   const recipes = data.recipes.filter((r) => isAvailableRecipe(r) && (r.inputs[item.id] ?? 0) > 0);

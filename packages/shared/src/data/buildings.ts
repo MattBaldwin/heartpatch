@@ -46,6 +46,25 @@ export const BUILDINGS: Building[] = [
     levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 1 }],
   },
   {
+    // Rekindled (#306 PR 5): built from the crafted kit, whose recipe page
+    // opens only with a Joy Ember found in a Hollowed village. A stronger
+    // fire: its light reaches a tile past its ring, like a top-level
+    // Hearthfire, from the start.
+    id: 'joy-lantern',
+    kind: 'hearthfire',
+    name: 'Joy Lantern',
+    description: 'A happy heart flame. Its light reaches one tile further than a new Hearthfire!',
+    placement: 'land', // like every Hearthfire (owner decision 2026-10-07)
+    maxPerTile: 1, // TUNE:
+    slot: 'centre',
+    // The Joy Ember was a lucky find: the kit always comes back whole.
+    refundPercent: 100, // TUNE:
+    fuelResource: 'emberwood',
+    fuelPerNight: 1, // TUNE:
+    maxFuelNights: 8, // TUNE: same as a plain Hearthfire
+    levels: [{ cost: { 'joy-lantern': 1 }, safeRadius: 2 }], // TUNE: a Hearthfire's level 3 light
+  },
+  {
     id: 'ember-den',
     kind: 'habitat',
     name: 'Ember Den',
@@ -249,5 +268,207 @@ export const BUILDINGS: Building[] = [
       { cost: { ice: 8, stone: 3 }, hp: 100, defense: 18 }, // TUNE:
       { cost: { ice: 10, stone: 3, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
     ],
+  },
+  // Resource buildings (#601, owner decisions 2026-10-22): one for each
+  // land, standing on a homestead tile of that land (or land cleared from
+  // it). Each works by itself at 3–4× a squishy gatherer's pace and holds
+  // a day or more of output. Upkeep is about a fifth of what a day's output
+  // sells for (`pnpm sim:patch-economy` guards it). Not buildable yet: their
+  // kind joins `HOME_BASE_RULES.buildableKinds` with their client (PR 7).
+  {
+    id: 'woodcutters-hut',
+    kind: 'resource',
+    name: "Woodcutter's Hut",
+    description: 'Chops Timber all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'forest',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'ember-kiln',
+    kind: 'resource',
+    name: 'Ember Kiln',
+    description: 'Bakes warm Emberwood all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'old-forest',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 10 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 11 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 13,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 13,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'stone-quarry',
+    kind: 'resource',
+    name: 'Stone Quarry',
+    description: 'Digs Stone all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'hills',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'ice-cutter',
+    kind: 'resource',
+    name: 'Ice Cutter',
+    description: 'Saws Ice all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'mountains',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 14 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 17 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 19,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 19,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'water-well',
+    kind: 'resource',
+    name: 'Water Well',
+    description: 'Draws Water all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'lake',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'greenhouse',
+    kind: 'resource',
+    name: 'Greenhouse',
+    description: 'Grows Greens all by itself, much faster than a squishy!',
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'meadow',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'pumpkin-barn',
+    kind: 'resource',
+    name: 'Pumpkin Barn',
+    description: 'Grows Pumpkins all by itself around Halloween!',
+    season: 'halloween', // built around Halloween only; one built stays (dormant out of season)
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    terrain: 'pumpkin-fields',
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 14 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 17 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 19,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 19,
+      }, // TUNE:
+    ],
+  },
+  {
+    // #601: with one paid and standing, level 3+ resource buildings deliver
+    // straight to the bag and never fill up. Expensive on purpose.
+    id: 'warehouse',
+    kind: 'warehouse',
+    name: 'Warehouse',
+    description: 'Your best resource buildings send everything straight to your bag!',
+    maxPerHome: 1, // one per player per patch
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [{ cost: { timber: 600, stone: 450, glimmer: 20 }, upkeep: 30 }], // TUNE:
   },
 ];

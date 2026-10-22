@@ -45,6 +45,8 @@ export function buildingIcon(buildingId: string): string {
       return '🔥';
     case 'jack-o-lantern-hearthfire':
       return '🎃';
+    case 'joy-lantern':
+      return '🕯️';
     case 'ember-den':
       return '🛖';
     case 'cozy-meadow':
