@@ -287,7 +287,7 @@ test('my gatherers show how they feel on the map, and are away from home (#393, 
   }
 
   // At home the gatherers are away (#604): out on their tiles, so home
-  // draws neither them nor a bubble. The badges above say how they feel.
+  // draws neither them nor a bubble. The map above says how they feel.
   // The team member is home, with its bubble (shown, or waiting hidden
   // behind a neighbour), and may bounce.
   await (await trayButton(page, 'home-open')).tap();
