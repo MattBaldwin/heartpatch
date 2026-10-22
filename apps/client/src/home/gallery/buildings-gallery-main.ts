@@ -5,12 +5,14 @@ import {
   type HomeSquishy,
   type MyBuilding,
 } from '@heartpatch/shared';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { boot } from '../../engine/boot.js';
 import { setPerfReports } from '../../engine/perf-report.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { lodFor } from '../../procedural/motion.js';
+import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
 import { HOME_VIEW } from '../home-config.js';
 import { HomeScene } from '../home-scene.js';
 import '../../styles.css';
@@ -29,6 +31,8 @@ setPerfReports(false);
  * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
  * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5),
  * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601).
+ * `&night=1` lights any layout as the map at night (the Hollow layer's
+ * `NIGHT_LOOK`), to judge glowing windows after dark.
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
  * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
  * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
@@ -46,6 +50,7 @@ const show = params.get('show') ?? 'fire1';
 const pitch = ((Number(params.get('pitch')) || 42) * Math.PI) / 180;
 const distance = Number(params.get('dist')) || 18;
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
+const night = params.get('night') === '1';
 
 const NOW = '2026-10-12T18:00:00.000Z';
 const ids = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -263,6 +268,18 @@ await boot(canvas, {
     ),
   onStart: (s) => {
     stage = s;
+    if (night) {
+      // As `HollowLayer` dims the map at nightfall: a lavender sky, moonlight.
+      const { scene } = s;
+      scene.clearColor = Color4.FromHexString(`${NIGHT_LOOK.clear}ff`);
+      scene.environmentIntensity *= NIGHT_LOOK.environment;
+      const sun = scene.getLightByName('sun');
+      if (sun) {
+        sun.intensity *= NIGHT_LOOK.sun;
+        sun.diffuse = new Color3(...NIGHT_LOOK.moon);
+      }
+      s.invalidate();
+    }
     const [q, r] = focus ?? [];
     if (homeScene && q !== undefined && r !== undefined) {
       s.camera.panTo(homeScene.spotAt({ q, r, spot: 0 }), true);
