@@ -91,6 +91,8 @@ import { boutiqueRoutes } from './modules/boutique/routes.js';
 import { createBoutiqueService } from './modules/boutique/service.js';
 import { coinsRoutes } from './modules/coins/routes.js';
 import { createCoinsService } from './modules/coins/service.js';
+import { heartCoinsRoutes } from './modules/heart-coins/routes.js';
+import { createHeartCoinsService } from './modules/heart-coins/service.js';
 import { setDevDropChance } from './modules/wardrobe/drops.js';
 import { wardrobeRoutes } from './modules/wardrobe/routes.js';
 import { createWardrobeService } from './modules/wardrobe/service.js';
@@ -498,6 +500,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Patch Coins and the Boutique (#45): account-level, earned in play.
         await api.register(
           coinsRoutes(createCoinsService({ db, clock }), {
+            hooks: authHooks,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Heart Coins (#601): per player per patch, earned by playing there.
+        await api.register(
+          heartCoinsRoutes(createHeartCoinsService({ db, clock }), {
             hooks: authHooks,
             devGrants: config.HP_DEV_SQUISHY_GRANTS,
           }),
