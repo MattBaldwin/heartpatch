@@ -42,6 +42,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
+import { createTileMarks } from './map/tile-marks.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -386,8 +387,13 @@ const care = createCareSheet({
 // Squishy jobs (owner decisions 2026-10-04): the job board and team picker
 // sheets. Temporary entry points the trays will move: home's "Jobs & team",
 // the tile panel's "Send a gatherer", and Team / Jobs by the battle entry.
+// One quiet mark on my own tiles that need me (#602): my gatherers' now,
+// #601's resource buildings' later. One map layer, handed to each feature.
+const tileMarks = createTileMarks(document.body);
 const jobs = createJobs({
   root: document.body,
+  marks: tileMarks,
+  invalidate: () => stage?.invalidate(),
   isGlade: (mapId) => mapId === glade,
   // Finished work goes straight to the bag (owner decision 2026-10-06): the
   // board settles the map on screen (the bag's) before it reads its view.
@@ -1060,6 +1066,8 @@ const maps = createMapScreen({
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
+    // Who gathers here and how they feel (#602): the map shows only the squishy, so the tap says it.
+    jobs.workerLine,
     inventory.tileActions,
     // A Hollowed village's words and its Explore and Restore (#306).
     communityActions,
@@ -1100,12 +1108,14 @@ const maps = createMapScreen({
   layers: [
     hollowLayer,
     darkLand,
-    jobs.badges,
+    jobs.gatherers,
     land.layer,
     postFlags,
     communityFlags,
     villageWins,
     trickOrTreat.layer,
+    // Last: each frame the marks keep clear of the flags placed just before them.
+    tileMarks,
   ],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },

@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -22,8 +23,12 @@ interface JobsDebug {
     note: string;
   };
   team: { open: boolean; picked: string[]; saved: string[]; note: string };
-  badges: number;
-  badgeMoods: { loves: number; meh: number };
+  gatherers: {
+    standing: number;
+    mine: number;
+    marks: { meh?: number; napping?: number };
+    tiles: { key: string; x: number; y: number }[];
+  };
 }
 
 /** The part of `HomeDebug` (src/home/home-screen.ts) the mood test reads. */
@@ -39,7 +44,8 @@ interface BattleBody {
 }
 
 const jobsState = (page: Page) => hook<JobsDebug>(page, 'jobs');
-const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
+const mapState = (page: Page) =>
+  hook<{ id: string; live: string | null; selected: string | null }>(page, 'map');
 const homeState = (page: Page) => hook<HomeMoodDebug>(page, 'home');
 
 test('a squishy gathers on its own, and the picked team goes to battle', async ({ browser }) => {
@@ -82,8 +88,13 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await picker.getByTestId('jobs-spot').first().tap();
   await expect.poll(async () => (await jobsState(page))?.board.jobs[helperId]).toBe('gatherer');
   await expect(helper).toContainText('Next in');
-  // Live on the map: a 🧺 over the tile it works (a DOM badge from the map's projection).
-  await expect.poll(async () => (await jobsState(page))?.badges, { timeout: 15_000 }).toBe(1);
+  // Live on the map: it stands on the tile it works, as itself (#602), and
+  // nothing floats over the map for a happy gatherer.
+  await expect
+    .poll(async () => (await jobsState(page))?.gatherers.mine, { timeout: 15_000 })
+    .toBe(1);
+  expect((await jobsState(page))!.gatherers.standing).toBe(1);
+  await expect(page.getByTestId('tile-mark')).toHaveCount(0);
 
   // Its work finishes (the dev short timer) and goes straight into the bag
   // when the board opens again (owner decision 2026-10-06): no Collect.
@@ -114,8 +125,10 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await expect(team.getByTestId('team-note')).toContainText('Team saved!');
   expect(findAvoidedWords((await team.textContent()) ?? '')).toEqual([]);
   await team.getByRole('button', { name: 'Close' }).tap();
-  // It left its tile for the team, so its badge went too.
-  await expect.poll(async () => (await jobsState(page))?.badges, { timeout: 15_000 }).toBe(0);
+  // It left its tile for the team, so it went from the map too.
+  await expect
+    .poll(async () => (await jobsState(page))?.gatherers.standing, { timeout: 15_000 })
+    .toBe(0);
 
   // The next battle brings exactly the picked team.
   const fight = await api(page, 'POST', `/maps/${mapId}/dev/battles`, {
@@ -246,13 +259,32 @@ test('my gatherers show how they feel on the map, and are away from home (#393, 
   await sendTo(glumId, 'meh');
   await board.getByRole('button', { name: 'Close' }).tap();
 
-  // On the map, my two 🧺 badges say how each gatherer feels.
+  // On the map (#602): both stand on their tiles, and only the one that
+  // isn't keen gets a quiet 🌧️ mark; the happy one gets none.
   await expect
-    .poll(async () => (await jobsState(page))?.badgeMoods, { timeout: 15_000 })
-    .toEqual({ loves: 1, meh: 1 });
-  const badges = page.locator('.gatherer-badge');
-  await expect(badges.filter({ hasText: '💕' })).toHaveCount(1);
-  await expect(badges.filter({ hasText: '🌧️' })).toHaveCount(1);
+    .poll(async () => (await jobsState(page))?.gatherers.mine, { timeout: 15_000 })
+    .toBe(2);
+  await expect
+    .poll(async () => (await jobsState(page))?.gatherers.marks, { timeout: 15_000 })
+    .toEqual({ meh: 1 });
+  await expect(page.getByTestId('tile-mark')).toHaveCount(1);
+  await expect(page.getByTestId('tile-mark')).toHaveText('🌧️');
+
+  // A tap on a gatherer's tile says who works there and how they feel.
+  const tiles = (await jobsState(page))!.gatherers.tiles;
+  expect(tiles.length).toBeGreaterThan(0);
+  const workers = page.getByTestId('tile-workers');
+  for (const tile of tiles) {
+    // Right after a sheet closes the map can miss a tap: tap again only while it isn't picked.
+    await expect(async () => {
+      if ((await mapState(page))?.selected !== tile.key) await tapCanvas(page, tile.x, tile.y);
+      await expect(workers).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(workers).toContainText('Mossmuffin is gathering here');
+    await expect(workers).toContainText(/Loves it!|Not their thing/);
+    expect(findAvoidedWords((await workers.textContent()) ?? '')).toEqual([]);
+    await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
+  }
 
   // At home the gatherers are away (#604): out on their tiles, so home
   // draws neither them nor a bubble. The badges above say how they feel.

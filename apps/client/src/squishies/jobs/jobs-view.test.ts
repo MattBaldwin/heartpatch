@@ -1,4 +1,5 @@
 import {
+  findAvoidedWords,
   GAME_DATA,
   type JobSquishy,
   type JobsView,
@@ -10,7 +11,6 @@ import { itemName } from '../../inventory/bag-view.js';
 import { itemIcon } from '../../inventory/item-icons.js';
 import { workableByMe } from './index.js';
 import {
-  badgeLabel,
   canTrain,
   groundsLabel,
   trainHintText,
@@ -18,6 +18,8 @@ import {
   countsDown,
   jobLine,
   JOBS_TEXT,
+  gathererMark,
+  workerLine,
   nameOf,
   rarityOf,
   readyTotal,
@@ -26,7 +28,6 @@ import {
   spotLabel,
   teamCost,
   teamSlots,
-  tileMoods,
   toggleTeam,
   workLine,
   workMoods,
@@ -359,24 +360,58 @@ describe('job moods on the map and at home (#393)', () => {
     ]);
   });
 
-  it('marks the tiles my gatherers work, with no mood where a basket is full', () => {
-    const moods = tileMoods({ squishies: [loves, meh, full, squishy(4, { job: 'team' })] });
-    expect([...moods]).toEqual([
-      ['1,2', 'loves'],
-      ['3,4', 'meh'],
-    ]);
+  it('marks only my gatherers that need me: not keen, or napping (#602)', () => {
+    const open = { homestead: null };
+    expect(gathererMark(loves, open)).toBeNull();
+    expect(gathererMark(meh, open)).toBe('meh');
+    expect(gathererMark(full, open)).toBe('napping');
+    // A homestead cut off from home naps its gatherer, however happy.
+    expect(gathererMark(loves, { homestead: 'paused' })).toBe('napping');
+    // Not keen beats napping: it's the one a kid can fix by moving it.
+    const mehFull = squishy(6, { job: 'gatherer', gatherFits: [], work: work({ full: true }) });
+    expect(gathererMark(mehFull, open)).toBe('meh');
+    expect(gathererMark(squishy(4, { job: 'team' }), open)).toBeNull();
   });
 
-  it('says meh for a tile where any of mine is not keen, whatever the order', () => {
-    const both = squishy(6, { job: 'gatherer', gatherFits: [], work: work() });
-    expect(tileMoods({ squishies: [loves, both] }).get('1,2')).toBe('meh');
-    expect(tileMoods({ squishies: [both, loves] }).get('1,2')).toBe('meh');
-  });
-
-  it('labels the badge with the count and the mood', () => {
-    expect(badgeLabel(1, null)).toBe('🧺');
-    expect(badgeLabel(2, null)).toBe('🧺2');
-    expect(badgeLabel(1, 'loves')).toBe('🧺💕');
-    expect(badgeLabel(3, 'meh')).toBe('🧺3🌧️');
+  it("says who gathers here: mine by name and mood, a patch-mate's never which (#602)", () => {
+    const open = { homestead: null };
+    expect(workerLine(1, null, open)).toBe(JOBS_TEXT.gatheringHere(1));
+    expect(workerLine(1, { name: 'Pip', squishy: loves }, open)).toBe(JOBS_TEXT.workerLoves('Pip'));
+    expect(workerLine(1, { name: 'Pip', squishy: meh }, open)).toBe(JOBS_TEXT.workerMeh('Pip'));
+    expect(workerLine(1, { name: 'Pip', squishy: full }, open)).toBe(JOBS_TEXT.workerFull('Pip'));
+    expect(workerLine(1, { name: 'Pip', squishy: loves }, { homestead: 'paused' })).toBe(
+      JOBS_TEXT.workerPaused('Pip'),
+    );
+    // Napping and not keen: the line says both, as the map's 🌧️ mark does.
+    const mehFull = squishy(7, { job: 'gatherer', gatherFits: [], work: work({ full: true }) });
+    expect(gathererMark(mehFull, open)).toBe('meh');
+    expect(workerLine(1, { name: 'Pip', squishy: mehFull }, open)).toBe(
+      `${JOBS_TEXT.workerFull('Pip')} ${JOBS_TEXT.workerNotKeen}`,
+    );
+    expect(gathererMark(meh, { homestead: 'paused' })).toBe('meh');
+    expect(workerLine(1, { name: 'Pip', squishy: meh }, { homestead: 'paused' })).toBe(
+      `${JOBS_TEXT.workerPaused('Pip')} ${JOBS_TEXT.workerNotKeen}`,
+    );
+    // Whatever the mark says, the line says too.
+    for (const s of [loves, meh, full, mehFull]) {
+      for (const tile of [open, { homestead: 'paused' as const }]) {
+        const line = workerLine(1, { name: 'Pip', squishy: s }, tile);
+        const mark = gathererMark(s, tile);
+        if (mark === 'meh') expect(line).toContain('🌧️');
+        if (mark === 'napping') expect(line).toContain('💤');
+      }
+    }
+    for (const line of [
+      JOBS_TEXT.workerHere('Pip'),
+      JOBS_TEXT.workerLoves('Pip'),
+      JOBS_TEXT.workerMeh('Pip'),
+      JOBS_TEXT.workerFull('Pip'),
+      JOBS_TEXT.workerPaused('Pip'),
+      JOBS_TEXT.workerNotKeen,
+      workerLine(1, { name: 'Pip', squishy: mehFull }, open),
+      workerLine(1, { name: 'Pip', squishy: meh }, { homestead: 'paused' }),
+    ]) {
+      expect(findAvoidedWords(line)).toEqual([]);
+    }
   });
 });
