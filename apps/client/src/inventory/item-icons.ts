@@ -26,6 +26,11 @@ const ICONS: Readonly<Record<string, string>> = {
   'brave-brew': '🧪',
   'cozy-cocoa': '☕',
   'hearty-soup': '🍲',
+  // Rekindled finds and makes (#306 PR 5).
+  'joy-ember': '🔆',
+  'heart-petals': '🌸',
+  'joy-lantern': '🕯️',
+  'heart-tea': '🍵',
   // New things to gather (#238).
   water: '💧',
   greens: '🌿',

@@ -291,6 +291,7 @@ describe('build menu', () => {
     expect(rows.map((r) => r.building.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
+      'joy-lantern',
       'ember-den',
       'cozy-meadow',
       'training-grounds',
@@ -312,6 +313,11 @@ describe('build menu', () => {
       note: "Carve a Jack-o'-Lantern first! It's in your recipe book.",
     });
     expect(byId.get('jack-o-lantern-hearthfire')?.needs.map((n) => n.label)).toEqual(['🏮 0/1']);
+    // The Joy Lantern (#306 PR 5) the same way: its kit comes from the recipe book.
+    expect(byId.get('joy-lantern')?.option).toEqual({
+      kind: 'craft',
+      note: "Make a Joy Lantern Kit first! It's in your recipe book.",
+    });
     // One cost line, as have/need chips.
     expect(byId.get('cozy-meadow')).toMatchObject({ option: { kind: 'ready' } });
     expect(byId.get('cozy-meadow')?.needs.map((n) => [n.label, n.ok])).toEqual([
@@ -756,9 +762,9 @@ describe('a home base with no room left (#537)', () => {
     expect(homeBuildReason(home)).toBe(HOME_FULL);
   });
 
-  it('with every den and meadow built, only the lantern card is left', () => {
+  it('with every den and meadow built, only the lantern cards are left', () => {
     const home = homeFilled((i) => (i < 4 ? den : {}), 8, { ...roomy, items: {} });
-    expect(sheetCards(home)).toEqual(['jack-o-lantern-hearthfire']);
+    expect(sheetCards(home)).toEqual(['jack-o-lantern-hearthfire', 'joy-lantern']);
     const rows = new Map(buildRows(home).map((r) => [r.building.id, r.option.kind]));
     expect(rows.get('ember-den')).toBe('built');
     expect(rows.get('cozy-meadow')).toBe('built');

@@ -16,7 +16,11 @@ import {
   type PublicTile,
   type Wardrobe,
 } from '@heartpatch/shared';
-import { CLOTHING_DROPS, type ClothingDropTable } from '@heartpatch/shared/server';
+import {
+  CLOTHING_DROPS,
+  type ClothingDropTable,
+  type FoundSetDropTable,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -28,6 +32,7 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { rollFoundDrop } from './drops.js';
+import { grantRekindledPiece, rekindledDrop } from './rekindled.js';
 import { grantClothing } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -852,6 +857,82 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       ).rejects.toThrow('the collect failed');
       expect(await piecesOf(kid.id)).toEqual([]);
       expect((await eventsOf(mapId)).some((e) => e.type === 'clothing.found')).toBe(false);
+    });
+  });
+
+  describe('the Rekindled set (#306 PR 5)', () => {
+    const tables: FoundSetDropTable[] = [
+      {
+        set: 'rekindled',
+        place: 'puzzle',
+        chance: 100,
+        entries: [{ weight: 1, clothing: 'lantern-glow-cap' }],
+      },
+      {
+        set: 'rekindled',
+        place: 'cellar',
+        chance: 100,
+        entries: [{ weight: 1, items: { 'heart-petals': 2 } }],
+      },
+    ];
+    const drop = (mapId: string, kid: Player, refId: string) => ({
+      source: 'explore' as const,
+      refId,
+      userId: kid.id,
+      mapId,
+      at: clock,
+    });
+
+    it('rolls by place, grants a piece once, and never finds a piece the kid has', async () => {
+      await start();
+      const kid = await player();
+      const mapId = await newMap(app!, kid);
+      const roll = await withTransaction(db, (tx) =>
+        rekindledDrop(tx, { place: 'puzzle', userId: kid.id }, { tables }),
+      );
+      expect(roll).toEqual({ clothing: 'lantern-glow-cap', items: {} });
+      // Rolling writes nothing: the caller grants after its own state writes.
+      expect(await piecesOf(kid.id)).toEqual([]);
+      const refId = '00000000-0000-7000-8000-0000000000e1';
+      const granted = await withTransaction(db, (tx) =>
+        grantRekindledPiece(tx, drop(mapId, kid, refId), roll),
+      );
+      expect(granted).toBe('lantern-glow-cap');
+      expect((await eventsOf(mapId)).filter((e) => e.type === 'clothing.found')).toHaveLength(1);
+      // Owned now: the same roll finds nothing.
+      expect(
+        await withTransaction(db, (tx) =>
+          rekindledDrop(tx, { place: 'puzzle', userId: kid.id }, { tables }),
+        ),
+      ).toEqual({ clothing: null, items: {} });
+    });
+
+    it('hands back the finds for the caller’s own bag grant, and nothing at a place with no table', async () => {
+      await start();
+      const kid = await player();
+      expect(
+        await withTransaction(db, (tx) =>
+          rekindledDrop(tx, { place: 'cellar', userId: kid.id }, { tables }),
+        ),
+      ).toEqual({ clothing: null, items: { 'heart-petals': 2 } });
+      expect(
+        await withTransaction(db, (tx) =>
+          rekindledDrop(tx, { place: 'far-hollow', userId: kid.id }, { tables }),
+        ),
+      ).toEqual({ clothing: null, items: {} });
+      expect(
+        await withTransaction(db, (tx) =>
+          grantRekindledPiece(
+            tx,
+            drop(
+              '00000000-0000-7000-8000-0000000000f0',
+              kid,
+              '00000000-0000-7000-8000-0000000000e2',
+            ),
+            { clothing: null, items: { 'heart-petals': 2 } },
+          ),
+        ),
+      ).toBeNull();
     });
   });
 });

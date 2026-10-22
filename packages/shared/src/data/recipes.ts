@@ -149,4 +149,24 @@ export const RECIPES: Recipe[] = [
     craftSeconds: 60, // TUNE: same as a plain Heart Charm
     season: 'thanksgiving',
   },
+  // Rekindled recipes (#306 PR 5): each page is sealed by an ingredient found
+  // only in Hollowed villages (`joy-ember`, `heart-petals`), so it opens the
+  // first time a kid finds one there, never by gathering.
+  {
+    id: 'joy-lantern',
+    name: 'Joy Lantern',
+    description:
+      'A lantern with a happy heart flame. Built on your land, it shines a whole tile further than a Hearthfire!',
+    inputs: { 'joy-ember': 1, emberwood: 3, glimmer: 1 }, // TUNE:
+    output: { resource: 'joy-lantern', quantity: 1 }, // built into a fire out on your land
+    craftSeconds: 5 * 60, // TUNE: like the Jack-o'-Lantern
+  },
+  {
+    id: 'heart-tea',
+    name: 'Heart Tea',
+    description: 'Steep Heart Petals in warm Water for two cups of cozy tea. Squishies love it!',
+    inputs: { 'heart-petals': 1, water: 2, treats: 1 }, // TUNE:
+    output: { resource: 'heart-tea', quantity: 2 }, // TUNE:
+    craftSeconds: 2 * 60, // TUNE: like the potions
+  },
 ];

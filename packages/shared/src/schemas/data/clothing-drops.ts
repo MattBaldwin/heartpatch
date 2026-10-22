@@ -39,12 +39,15 @@ export type ClothingDropTable = z.infer<typeof ClothingDropTableSchema>;
 /**
  * Validates the drop tables against the catalog and terrains: one table per
  * source, known `found` items only, no item twice in a table, and every
- * `found` item in some table (or it could never be got).
+ * `found` item in some table (or it could never be got). `elsewhere` are
+ * found items another table drops instead: a found set's pieces (#306 PR 5,
+ * `checkFoundSetDrops`), which are in none of these.
  */
 export function checkClothingDrops(
   input: unknown,
   catalog: readonly ClothingItem[],
   terrains: readonly string[],
+  elsewhere: ReadonlySet<string> = new Set(),
 ): string[] {
   const items = new Map(catalog.map((item) => [item.id, item]));
   const knownTerrains = new Set(terrains);
@@ -69,6 +72,9 @@ export function checkClothingDrops(
           report([...path, 'item'], `"${entry.item}" isn't a found item`);
         }
         if (seen.has(entry.item)) report([...path, 'item'], `"${entry.item}" is listed twice`);
+        if (elsewhere.has(entry.item)) {
+          report([...path, 'item'], `"${entry.item}" drops from its own set's tables`);
+        }
         seen.add(entry.item);
         dropped.add(entry.item);
         entry.terrains?.forEach((terrain, k) => {
@@ -77,7 +83,7 @@ export function checkClothingDrops(
       });
     });
     for (const item of catalog) {
-      if (item.sources.includes('found') && !dropped.has(item.id)) {
+      if (item.sources.includes('found') && !dropped.has(item.id) && !elsewhere.has(item.id)) {
         report(['drops'], `found item "${item.id}" is in no drop table`);
       }
     }

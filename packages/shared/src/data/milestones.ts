@@ -1,5 +1,7 @@
+import type { FoundSet } from '../schemas/data/found-sets.js';
 import type { MilestoneRules, MilestoneTrack } from '../schemas/data/milestones.js';
 import { CLOTHING } from './clothing.js';
+import { FOUND_SETS } from './found-sets.js';
 import { SPECIES } from './species.js';
 
 /**
@@ -20,6 +22,38 @@ const HALLOWEEN_SPECIES = SPECIES.filter((s) => s.season === 'halloween').map((s
 const HALLOWEEN_CLOTHING = CLOTHING.filter(
   (c) => c.season === 'halloween' && c.sources.includes('found'),
 ).map((c) => c.id);
+
+/**
+ * A found set's track (#306 PR 5): one step per different piece found, and
+ * the set's title once every piece is in. Finds only (`clothing.found`), so a
+ * piece is never counted twice and never got another way.
+ */
+export function foundSetTrack(set: FoundSet): MilestoneTrack {
+  return {
+    id: `set-${set.id}`,
+    name: set.name,
+    secret: false,
+    progress: {
+      from: 'events',
+      sources: [
+        {
+          eventType: 'clothing.found',
+          where: [{ op: 'oneOf', field: 'itemId', values: set.pieces }],
+          player: 'userId',
+          distinct: 'itemId',
+        },
+      ],
+    },
+    tiers: [
+      {
+        threshold: set.pieces.length,
+        goal: `Find all ${String(set.pieces.length)} ${set.name} pieces ${set.where}.`,
+        title: set.title,
+        coins: set.coins,
+      },
+    ],
+  };
+}
 
 export const MILESTONE_RULES: MilestoneRules = {
   minMembers: 2, // TUNE: design doc §24 [DEFAULT: 2]
@@ -329,4 +363,6 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
       },
     ],
   },
+  // Found sets (#306 PR 5): the Rekindled title, and any later set's.
+  ...FOUND_SETS.map(foundSetTrack),
 ];

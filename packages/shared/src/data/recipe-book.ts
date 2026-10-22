@@ -92,6 +92,19 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:ice-wall',
       line: 'Get Ice from the mountains (a squishy gatherer chips it) or freeze Water, plus some Stone, and this page opens!',
     },
+    // Rekindled (#306 PR 5): sealed by finds only a grey village gives.
+    {
+      page: 'recipe:joy-lantern',
+      line: 'A Joy Ember glows somewhere in a grey village. Search one by day, and this page opens!',
+    },
+    {
+      page: 'building:joy-lantern',
+      line: 'Make a Joy Lantern Kit from your recipe book first. Then this page opens!',
+    },
+    {
+      page: 'recipe:heart-tea',
+      line: 'Heart Petals bloom again in grey villages. Search one by day, and this page opens!',
+    },
     {
       page: 'recipe:shovel',
       line: 'Gather some Timber and Stone, and this page opens!',

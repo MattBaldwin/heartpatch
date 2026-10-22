@@ -22,7 +22,9 @@ import '../../styles.css';
  * `fire3` (one fire at that level with its light on the land around),
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
- * practicing), `ring` (habitats filling ring tiles, #589). Every shot uses one camera: `?pitch=` (degrees, default 42,
+ * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
+ * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5).
+ * Every shot uses one camera: `?pitch=` (degrees, default 42,
  * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
  * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
  * page's `?quality=` and `?renderer=webgpu`.
@@ -140,6 +142,17 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
         building('hearthfire', { q: 0, r: -1 }, 1),
         building('hearthfire', { q: 1, r: -1 }, 2),
         building('hearthfire', { q: 0, r: 1 }, 3),
+      ],
+      squishies: [squishy('puddlepuff')],
+    };
+  }
+  if (show === 'lanterns') {
+    // Every kind of fire side by side: the Joy Lantern next to the others (#306 PR 5).
+    return {
+      buildings: [
+        building('hearthfire', { q: 0, r: -1 }, 1),
+        building('jack-o-lantern-hearthfire', { q: 1, r: -1 }, 1),
+        building('joy-lantern', { q: 0, r: 1 }, 1),
       ],
       squishies: [squishy('puddlepuff')],
     };
