@@ -162,7 +162,14 @@ function clearTap(
       const a = (i / 16) * 2 * Math.PI;
       const to = { x: k.x + Math.cos(a) * reach, z: k.z + Math.sin(a) * reach };
       if (Math.hypot(to.x, to.z) > 0.6) continue; // well clear of the tile's edge
-      if (e.blockers.some((c) => gap(c, to) < c.r + 0.02)) continue;
+      // One the Keeper already stands against (a spot by where it starts)
+      // blocks only the way into it: measured from the Keeper, it blocked
+      // every way, away from it too.
+      const blocked = (c: { x: number; z: number; r: number }) =>
+        Math.hypot(c.x - k.x, c.z - k.z) < c.r + 0.02
+          ? (to.x - k.x) * (c.x - k.x) + (to.z - k.z) * (c.z - k.z) > 0
+          : gap(c, to) < c.r + 0.02;
+      if (e.blockers.some(blocked)) continue;
       // Not so near a spot that the tap picks it (the Keeper would stop beside it).
       if (e.spots.some((p) => !p.done && Math.hypot(p.x - to.x, p.z - to.z) < e.tapPick + 0.02)) {
         continue;
@@ -680,6 +687,9 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
+  // The map itself, as in the test above: the lobby's stage can already be
+  // `data-ready` while the map is still opening (its hook null).
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   reloading = false;
   // Every tool, so the server's own spot (whatever it needs) can be searched.
