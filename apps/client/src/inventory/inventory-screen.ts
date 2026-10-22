@@ -45,6 +45,7 @@ import type { Portraits } from '../procedural/portraits.js';
 import { createAwaySummary, type AwaySummaryDebug } from './away-summary-view.js';
 import type { BuildSource } from '../building/tile-build.js';
 import { CLEAR_CARD_ID, CLEAR_TEXT, clearCards, clearedNote } from './clear-model.js';
+import { producedLines } from '../resource-buildings/resource-model.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
@@ -581,7 +582,14 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       // so the first settle, the one that says "Welcome back!", knows them too.
       const before = state?.gathers ?? (await gathersGoing(id));
       if (at !== generation) return;
-      const { landed, trained, cleared = [], nextAt, ...fresh } = await api.settle(id);
+      const {
+        landed,
+        trained,
+        cleared = [],
+        produced = [],
+        nextAt,
+        ...fresh
+      } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
       // banked still pops up (the server put it in the bag).
@@ -595,7 +603,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       const away = presence.awayMs(id);
       const looks = trained.length > 0 ? await withPortraits(trained) : [];
       if (at !== generation) return;
-      if (landed.length > 0 || trained.length > 0 || cleared.length > 0) {
+      if (landed.length > 0 || trained.length > 0 || cleared.length > 0 || produced.length > 0) {
         landings += 1;
         // After a while away, the Factory's things get their own card (#294).
         const card = showsWelcomeBack(landed, away);
@@ -605,15 +613,21 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         // The card's things are in the Bag too: they count as news. Land
         // that finished clearing (#242) drops its things into the same banner,
         // flying from the cleared tile; the Factory's from its homestead (#461).
+        // What my resource buildings made (#601) flies from their homesteads,
+        // with "Your Stone Quarry made 96 🪨" under the chips.
+        const made = producedLines(produced);
         showLanded(
-          [...popped, ...cleared],
+          [...popped, ...cleared, ...produced],
           looks,
           away >= WELCOME_BACK_MS,
-          [...finished, ...cleared, ...factoryFrom(popped, fresh.factory)],
-          [...landed, ...cleared],
-          clearedNote(cleared),
+          [...finished, ...cleared, ...produced, ...factoryFrom(popped, fresh.factory)],
+          [...landed, ...cleared, ...produced],
+          [clearedNote(cleared), ...made].filter((t) => t !== '').join(' '),
+          made,
         );
-        if (landed.length > 0 || cleared.length > 0) options.onCollected?.();
+        if (landed.length > 0 || cleared.length > 0 || produced.length > 0) {
+          options.onCollected?.();
+        }
       }
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
@@ -712,6 +726,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     inBag: readonly Pick<Landed, 'items'>[] = landed,
     /** A line said first, for screen readers ("Land cleared, ready to build!", #242). */
     note = '',
+    /** Lines shown under the chips and on the card (what resource buildings made, #601). */
+    lines: readonly string[] = [],
   ) => {
     const entries = summaryEntries(landed, trained);
     if (entries.length > 0) {
@@ -721,6 +737,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         entries,
         sentence,
         away,
+        lines,
         // Over the map only: with the Bag or the Factory's card open, it all just appears.
         ...(sheet.hidden && welcome.hidden && options.locate
           ? { from: flyFrom(options.locate, sources) }

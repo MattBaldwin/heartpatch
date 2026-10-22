@@ -271,7 +271,7 @@ describe('home-base data', () => {
     );
   });
 
-  it('lets players build fires, habitats, Training Grounds, the Factory and fences', () => {
+  it('lets players build fires, habitats, Training Grounds, the Factory, fences and resource buildings', () => {
     expect(BUILDINGS.filter((b) => isBuildable(RULES, b)).map((b) => b.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
@@ -288,6 +288,13 @@ describe('home-base data', () => {
       'lantern-fence',
       'bramble-hedge',
       'ice-wall',
+      'woodcutters-hut',
+      'ember-kiln',
+      'stone-quarry',
+      'ice-cutter',
+      'water-well',
+      'greenhouse',
+      'pumpkin-barn',
     ]);
   });
 

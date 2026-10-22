@@ -1,3 +1,4 @@
+import { waitingResourceBuilding } from '../resource-buildings/resource-model.js';
 import {
   CLEARED_TERRAIN,
   CLEARING_RULES,
@@ -213,7 +214,9 @@ export function clearCards(
   if (offer.blocked || !clearsFirst(tile)) return [clear];
   // My one Crafting Factory waits here too until I've built it (#295).
   const factory = state.factory ? undefined : FACTORY;
-  const waiting = [LAND_FIRE, GROUNDS, factory].flatMap((b) =>
+  // And the resource building its land takes (#601 PR 7).
+  const producing = waitingResourceBuilding(tile);
+  const waiting = [LAND_FIRE, GROUNDS, factory, producing].flatMap((b) =>
     b
       ? [
           {

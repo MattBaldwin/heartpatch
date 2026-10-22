@@ -60,6 +60,35 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:crafting-factory',
       line: 'Gather some Timber and Stone, and this page opens!',
     },
+    // Resource buildings (#601): built from Timber and Stone too.
+    {
+      page: 'building:woodcutters-hut',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:ember-kiln',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:stone-quarry',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:ice-cutter',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:water-well',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:greenhouse',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'building:pumpkin-barn',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
     {
       page: 'building:hedge',
       line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',

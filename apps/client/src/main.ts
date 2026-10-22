@@ -781,6 +781,13 @@ const home = createHomeScreen({
       inventory.openFactory();
     });
   },
+  // A resource building's card (#601 PR 7): Collect is a settle (owner
+  // decision Q3); Upkeep is the Heart Coins sheet's order (Q5).
+  onCollect: () => inventory.refresh(),
+  onUpkeep: () => {
+    heartCoins.openUpkeep();
+  },
+  now: () => inventory.gameNow(),
   onJobs: (mapId, at) => {
     void jobs.openJobBoard(mapId, at);
   },

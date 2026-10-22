@@ -1,6 +1,7 @@
 import type { PublicUser } from '@heartpatch/shared';
 import type { GameClock } from '../inventory/game-clock.js';
 import { el } from '../ui/dom.js';
+import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { heartCoinsApi, type HeartCoinsApi } from './heart-coins-api.js';
 import { HEART_COINS_TEXT, type HeartCoinsPage } from './heart-coins-model.js';
 import { createHeartCoinsSheet } from './heart-coins-sheet.js';
@@ -22,6 +23,8 @@ export interface HeartCoinsScreenOptions {
   /** The game clock in ms (the bag's `gameNow`). */
   now: () => number;
   api?: HeartCoinsApi;
+  /** The upkeep order changed (#601): whoever shows buildings may read them again. */
+  onUpkeepOrder?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -41,6 +44,8 @@ export interface HeartCoinsScreen {
   setUser: (user: PublicUser | null) => void;
   /** The patch on screen (the map or home), or null (none, or the Glade): reads its balance. */
   setMap: (mapId: string | null) => void;
+  /** Opens the sheet at its morning upkeep list (a resource building's card, #601). */
+  openUpkeep: () => void;
   /** Reads the balance of the patch on screen again (a failed read keeps the last one). */
   refresh: () => Promise<void>;
   /** A patch-list card's "💛 42", filled in once its balance arrives. */
@@ -58,7 +63,16 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
     root: options.root,
     clock,
     onExpired: () => void store.read(),
+    // The kid's upkeep order (#601 Q5): saved, then the sheet reads it back.
+    onUpkeepOrder: async (ids) => {
+      const mapId = store.mapId;
+      if (mapId === null) return;
+      await api.upkeepOrder(mapId, ids, newIdempotencyKey());
+      void store.read();
+      options.onUpkeepOrder?.();
+    },
   });
+  const api = options.api ?? heartCoinsApi;
   const openSheet = (): void => {
     if (store.mapId === null) return;
     sheet.open();
@@ -67,7 +81,7 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
   const mapPill = createHeartPill('map', openSheet);
   const homePill = createHeartPill('home', openSheet);
   const store = createHeartCoinsStore({
-    api: options.api ?? heartCoinsApi,
+    api,
     onBalance: (balance) => {
       mapPill.set(balance);
       homePill.set(balance);
@@ -94,6 +108,12 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
       void store.setMap(mapId);
     },
     refresh: store.read,
+    openUpkeep: () => {
+      if (store.mapId === null) return;
+      sheet.open();
+      sheet.scrollToUpkeep();
+      void store.read();
+    },
     lobbyLine: (mapId) => {
       const line = el('span', {
         class: 'lobby-heart-coins',

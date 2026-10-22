@@ -23,7 +23,8 @@ import '../../styles.css';
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
  * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
- * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5).
+ * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5),
+ * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601).
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
  * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
  * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
@@ -178,6 +179,41 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
         squishy('emberbun', { trainingId: grounds.id }),
         squishy('puddlepuff'),
       ],
+    };
+  }
+  // A resource building at levels 1–4 (#601 PR 7): `?show=res:stone-quarry`,
+  // `&asleep=1` for its napping look.
+  const resource = /^res:([a-z-]+)$/.exec(show);
+  if (resource?.[1]) {
+    const id = resource[1];
+    const asleep = params.get('asleep') === '1';
+    const at = [
+      { q: 0, r: -1 },
+      { q: 1, r: -1 },
+      { q: -1, r: 1 },
+      { q: 0, r: 1 },
+    ];
+    return {
+      buildings: at.map((tile, i) =>
+        building(id, tile, i + 1, {
+          production: {
+            resource: 'stone',
+            perCycle: 3,
+            cycleSeconds: 600,
+            ready: {},
+            cycles: 0,
+            maxCycles: 144,
+            full: false,
+            nextReadyAt: null,
+            upkeep: 17,
+            paidThrough: null,
+            pausedAt: asleep ? NOW : null,
+            upkeepRank: null,
+            delivering: false,
+          },
+        }),
+      ),
+      squishies: [squishy('puddlepuff')],
     };
   }
   throw new Error(`unknown ?show=${show}`);

@@ -273,8 +273,8 @@ export const BUILDINGS: Building[] = [
   // land, standing on a homestead tile of that land (or land cleared from
   // it). Each works by itself at 3–4× a squishy gatherer's pace and holds
   // a day or more of output. Upkeep is about a fifth of what a day's output
-  // sells for (`pnpm sim:patch-economy` guards it). Not buildable yet: their
-  // kind joins `HOME_BASE_RULES.buildableKinds` with their client (PR 7).
+  // sells for (`pnpm sim:patch-economy` guards it). Buildable since their
+  // client (PR 7) put `resource` in `HOME_BASE_RULES.buildableKinds`.
   {
     id: 'woodcutters-hut',
     kind: 'resource',

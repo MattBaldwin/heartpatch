@@ -297,8 +297,20 @@ describe('build menu', () => {
       'cozy-meadow',
       'training-grounds',
       'crafting-factory',
+      // Resource buildings (#601 PR 7), each on its own land's homestead.
+      'woodcutters-hut',
+      'ember-kiln',
+      'stone-quarry',
+      'ice-cutter',
+      'water-well',
+      'greenhouse',
+      'pumpkin-barn',
     ]);
     const byId = new Map(rows.map((r) => [r.building.id, r]));
+    expect(byId.get('stone-quarry')?.option).toEqual({
+      kind: 'homestead',
+      note: 'Needs Hills land! Explore some next to home, then tap it on the map to build 🏡',
+    });
     // Fires go out on land, never at home (owner decision 2026-10-07): no Build, no cost line.
     expect(byId.get('hearthfire')).toMatchObject({
       option: {

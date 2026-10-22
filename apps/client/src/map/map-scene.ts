@@ -851,6 +851,9 @@ export class MapScene {
       buildingId: building.buildingId,
       level: building.level,
       lit: building.lit,
+      // A resource building napping (#601): unpaid upkeep, or its homestead cut off.
+      asleep:
+        building.kind === 'resource' && (building.paused === true || tile.homestead === 'paused'),
       x: at.x,
       z: at.z,
       y: topOf(tile) + DOME * 0.5,

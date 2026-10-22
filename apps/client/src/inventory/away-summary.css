@@ -64,6 +64,34 @@
   white-space: nowrap;
 }
 
+.away-made {
+  position: absolute;
+  bottom: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff6fb;
+  color: #5a3a5a;
+  box-shadow: 0 2px 6px rgba(90, 58, 90, 0.18);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.away-made:empty {
+  display: none;
+}
+
+.away-made-lines {
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+  font-weight: 700;
+}
+
 .away-tag:empty {
   display: none;
 }

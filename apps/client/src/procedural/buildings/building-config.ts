@@ -50,6 +50,33 @@ export const BUILDING_COLORS = {
   joyFlame: '#ff7aa8', // TUNE: the heart flame, pink
   joyCore: '#ffe1ec', // TUNE: its hot heart, bright enough to bloom
   joyOut: '#9a8f99', // TUNE: a lantern that's out (the fire's ash)
+  // Resource buildings (#601 PR 7): soft vinyl toys, one look per land.
+  windowOut: '#8f7f9a', // TUNE: a napping building's dark window
+  cabin: '#c98e62', // TUNE: the Woodcutter's Hut's log walls
+  cabinRoof: '#6fbf8e', // TUNE: its mossy roof
+  stump: '#a0704c', // TUNE
+  axeHead: '#cfd8e3', // TUNE
+  kiln: '#e58a64', // TUNE: the Ember Kiln's terracotta dome
+  kilnTrim: '#f6c9a8', // TUNE
+  ember: '#ff8a3d', // TUNE: its glowing mouth
+  rock: '#c4bccb', // TUNE: the Stone Quarry's boulders
+  rockDark: '#a69cb0', // TUNE
+  cart: '#7aa9c7', // TUNE: its little cart
+  ice: '#cfeefe', // TUNE: the Ice Cutter's blocks
+  iceDeep: '#9fd6f5', // TUNE
+  iceGlow: '#e9f8ff', // TUNE: its frosty lamp
+  wellStone: '#d7cde2', // TUNE: the Water Well's ring
+  water: '#7cc8f2', // TUNE
+  bucket: '#e8a26a', // TUNE
+  glass: '#cfeee4', // TUNE: the Greenhouse's panes
+  glassFrame: '#fdfbf4', // TUNE
+  leaf: '#7fcf7a', // TUNE
+  leafDark: '#5fae64', // TUNE
+  bloom: '#ffb3d1', // TUNE
+  barn: '#e86f5c', // TUNE: the Pumpkin Barn's walls
+  barnRoof: '#8a4d6e', // TUNE
+  barnTrim: '#fff3e0', // TUNE
+  hay: '#f2d27a', // TUNE
 } as const;
 
 /**
@@ -62,6 +89,8 @@ export const LEVEL_SCALE = [
   { across: 1, up: 1 },
   { across: 1.08, up: 1.3 },
   { across: 1.15, up: 1.6 },
+  // Level 4 (#601 PR 7): resource buildings go one step further.
+  { across: 1.2, up: 1.85 },
 ] as const; // TUNE
 
 /** How strongly glowing parts (flames, a lit grin) shine. */

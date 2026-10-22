@@ -346,6 +346,8 @@ export class HomeScene {
           buildingId: b.buildingId,
           level: b.level,
           lit: b.lit,
+          // A resource building paused for upkeep naps (#601).
+          asleep: b.kind === 'resource' && b.production?.pausedAt != null,
           x: at.x,
           z: at.z,
           y: this.#ground,
