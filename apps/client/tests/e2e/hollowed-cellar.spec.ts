@@ -26,6 +26,7 @@ interface CommunitiesDebug {
   };
   villages: {
     id: string;
+    name: string;
     ownerUserId: string | null;
     cellar: { state: string; keyTile?: Hex } | null;
   }[];
@@ -96,8 +97,12 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
     expect(done.status, JSON.stringify(done.body)).toBe(200);
   }
 
-  // The map to the key pops, and its flag stands on the key's tile.
+  // The joy card comes first; the map to the key waits for it, then pops.
   const card = page.getByTestId('key-map-card');
+  const later = page.getByTestId('village-won-later');
+  await slowExpect(later).toBeVisible();
+  await expect(card).toBeHidden();
+  await later.tap();
   await slowExpect(card).toBeVisible();
   await expect(card.getByRole('heading')).toHaveText('A map to the key! 🗺️');
   await expect
@@ -117,7 +122,7 @@ test('hunts a won village’s cellar key, opens the cellar and searches it (#306
   }).toPass(slow);
   await dig.tap();
   await slowExpect(page.getByTestId('key-said')).toHaveText(
-    `You found the cellar key! 🔑 Open the cellar on ${village.name}'s square.`,
+    `You found the cellar key! 🔑 Open the cellar on ${mine.name}'s square.`,
   );
   await expect
     .poll(
