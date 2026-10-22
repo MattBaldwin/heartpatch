@@ -153,4 +153,8 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
   it("fits the explore header's title with the longest village name (16 letters)", () => {
     expect(KEY_TEXT.title('Bramble Glenwood').length).toBeLessThanOrEqual(30);
   });
+
+  it('keeps the candle on the same line as "cellar"', () => {
+    expect(KEY_TEXT.title('Bramble Glen')).toBe("Bramble Glen's cellar\u00a0🕯️");
+  });
 });

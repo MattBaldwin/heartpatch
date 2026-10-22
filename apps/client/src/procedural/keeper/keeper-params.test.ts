@@ -584,8 +584,16 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
   it('leaves every other item exactly as it was (the model costume changes nothing else)', () => {
     // Fingerprint of every other catalog item on two bases, taken on main
     // before the model costume existed (#261 follow-up). Items added since
-    // (the Rekindled set, #306 PR 5) aren't in it: they can't have changed.
-    const addedSince = new Set<string>(REKINDLED.pieces);
+    // (the Rekindled set, #306 PR 5, and the cellar keepsakes, #306) aren't
+    // in it: they can't have changed.
+    const addedSince = new Set<string>([
+      ...REKINDLED.pieces,
+      'lamplighters-crown',
+      'gearheart-wrench',
+      'wishing-well-cape',
+      'golden-baker-jacket',
+      'lookout-boots',
+    ]);
     const lines: string[] = [];
     for (const id of ['pip', 'bramble']) {
       const base = BASES.find((b) => b.id === id)!;

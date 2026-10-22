@@ -5,6 +5,7 @@ import {
   EXPLORE_RULES,
   hexKey,
   hexNeighbors,
+  isBigChest,
   isSearched,
   isTradingPost,
   keyInReach,
@@ -24,9 +25,12 @@ import {
 } from '@heartpatch/shared';
 import {
   CELLAR_FINDS,
+  CELLAR_RULES,
   LORE_PAGES,
+  NOTHING_FOUND,
   rollExploreFind,
   withFoundItems,
+  type FoundSetRoll,
 } from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
 import type { Database, Executor } from '../../db/client.js';
@@ -42,7 +46,8 @@ import { createLoreRepo } from '../lore/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
-import { rollFoundDrop } from '../wardrobe/drops.js';
+import { grantFoundPiece, rollFoundDrop } from '../wardrobe/drops.js';
+import { createWardrobeRepo } from '../wardrobe/repo.js';
 import { grantRekindledPiece, rekindledDrop } from '../wardrobe/rekindled.js';
 import {
   communitiesTransaction,
@@ -58,10 +63,14 @@ import { communitiesView, villageMorning } from './service.js';
  * where the village squishies hid the cellar key (`CommunityView.cellar`).
  * They find it by exploring that tile once it's theirs (owner decision
  * 2026-10-22: a glinting spot, modules/explore), then open the cellar under
- * the square and search its spots, once each, for better finds than a grey
- * tile's (`CELLAR_FINDS`). The server is the authority (rule 1): the key's
- * tile, the spots' layout (from the village's secret seed) and the finds
- * stay here (rule 6). The key and the cellar are the village's winner's alone.
+ * the square: a stone vault (owner decision of 2026-10-22) whose small
+ * chests each open once for better finds than a grey tile's (`CELLAR_FINDS`),
+ * and whose big chest gives the cellar's best loot, a big pile and the
+ * Hollow kind's keepsake (`CELLAR_RULES.bigChest`). A chest is a cellar spot,
+ * so opening one is a search. The server is the authority (rule 1): the
+ * key's tile, the chests (from the village's secret seed), the finds and the
+ * keepsakes stay here (rule 6). The key and the cellar are the village's
+ * winner's alone.
  *
  * Lock order (tech spec §7): the community row, then the square's
  * `community_tiles` row (step 6); a search then the team's squishies (10)
@@ -75,7 +84,8 @@ const MESSAGES = {
   cellarOpen: 'The cellar is already open! 🕯️',
   cellarShut: 'Open the cellar with its key first! 🔑',
   noSpot: "We couldn't find that spot.",
-  searched: 'You already searched there!',
+  searched: 'You already opened that chest!',
+  smallFirst: 'Open the little chests first! 🗝️',
   noPath: 'No free land between you and the key.',
 } as const;
 
@@ -95,7 +105,7 @@ export interface CellarService {
   open: (user: PublicUser, mapId: string, communityId: string) => Promise<CommunityView>;
   /** The open cellar up close: its spots and which are done. */
   view: (user: PublicUser, mapId: string, communityId: string) => Promise<CellarView>;
-  /** Search one cellar spot. */
+  /** Open one cellar chest (a spot: the big chest is the last). */
   search: (
     user: PublicUser,
     mapId: string,
@@ -126,6 +136,24 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
         ? 'heartdust'
         : null;
   return notable;
+}
+
+/**
+ * A big chest's keepsake (#306): one-of-a-kind, so never a second copy for a
+ * Keeper who has it from another Hollow of the same kind. Returns the item
+ * granted, or null.
+ */
+async function grantKeepsake(
+  tx: Executor,
+  drop: Parameters<typeof grantFoundPiece>[1],
+  itemId: string,
+): Promise<string | null> {
+  // Only read (no lock): the cellar's row lock holds one village, so two
+  // same-kind cellars opened at the same instant on two patches could each
+  // give one. Harmless for an untradable piece (TECH_SPEC lock order).
+  const owned = await createWardrobeRepo(tx).countOwned(drop.userId);
+  if ((owned.get(itemId) ?? 0) > 0) return null;
+  return grantFoundPiece(tx, drop, itemId);
 }
 
 /** The village's square, where its cellar is. */
@@ -251,27 +279,39 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
         if (isSearched(before, spot.index)) throw new AppError('CONFLICT', MESSAGES.searched);
+        const big = isBigChest(spot);
+        const { bigChest } = CELLAR_RULES;
+        if (
+          big &&
+          bigChest.afterSmall &&
+          spots.some((s) => !isBigChest(s) && !isSearched(before, s.index))
+        ) {
+          throw new AppError('CONFLICT', MESSAGES.smallFirst);
+        }
         const searched = withSearched(before, spot.index);
         await repo.setCellarSearched(tileId, searched);
 
-        // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
+        // What it found: the server decides (rule 1). The big chest holds its
+        // fixed pile; a small chest rolls, and a page already found isn't
+        // rolled again.
         const terrain = COMMUNITY_RULES.cellar.terrain;
-        const foundLore = new Set(
-          (await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
-        );
-        const roll = rollExploreFind(
-          CELLAR_FINDS,
-          { kind: spot.kind, terrain },
-          rngFor(),
-          foundLore,
-        );
-        // The Rekindled set's cellar odds (#306 PR 5): rolled now, so its finds
-        // join the one bag grant below. Reads only, so the lock order holds.
-        const rekindled = await rekindledDrop(
-          tx,
-          { place: 'cellar', userId: user.id, mapId, at },
-          { rng: rngFor() },
-        );
+        let roll: { items: ItemCounts; lore: string | null };
+        let rekindled: FoundSetRoll = NOTHING_FOUND;
+        if (big) {
+          roll = { items: { ...bigChest.items }, lore: null };
+        } else {
+          const foundLore = new Set(
+            (await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
+          );
+          roll = rollExploreFind(CELLAR_FINDS, { kind: spot.kind, terrain }, rngFor(), foundLore);
+          // The Rekindled set's cellar odds (#306 PR 5): rolled now, so its finds
+          // join the one bag grant below. Reads only, so the lock order holds.
+          rekindled = await rekindledDrop(
+            tx,
+            { place: 'cellar', userId: user.id, mapId, at },
+            { rng: rngFor() },
+          );
+        }
         const found = withFoundItems(roll.items, rekindled);
 
         // Step 10: the team's XP, plain, as exploring gives it (squishies in id order).
@@ -292,11 +332,14 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
           await grantItems(tx, owner, found, 'explore', searchId);
         }
         // Found clothing appends its own event first; ours stay the last writes.
-        // A Rekindled piece is this search's one piece of clothing.
+        // The big chest's keepsake, or a Rekindled piece, is this search's one
+        // piece of clothing. A keepsake already owned (a second Hollow of the
+        // same kind) isn't given twice: the pile still is.
         const drop = { source: 'explore' as const, refId: searchId, userId: user.id, mapId, at };
-        const clothing =
-          (await grantRekindledPiece(tx, drop, rekindled)) ??
-          (await rollFoundDrop(tx, { ...drop, tileId }));
+        const clothing = big
+          ? await grantKeepsake(tx, drop, bigChest.keepsakes[community.kind])
+          : ((await grantRekindledPiece(tx, drop, rekindled)) ??
+            (await rollFoundDrop(tx, { ...drop, tileId })));
         const notable = notableOf(found, roll.lore, clothing);
         const square = await squareOf(tx, community);
         // An explore search like any other, at the square: the lore pages

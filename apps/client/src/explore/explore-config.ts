@@ -79,6 +79,9 @@ export const EXPLORE_VIEW = {
     reeds: 0.04,
     ledge: 0.046,
     cave: 0.046,
+    // The cellar's chests (#306): a chest is about 1.15 across, the big one 2.
+    chest: 0.072,
+    'big-chest': 0.13,
     // A grey village's broken thing (#306 PR 2b): the Relight puzzle.
     puzzle: 0.05,
   } as Readonly<Record<string, number>>, // TUNE

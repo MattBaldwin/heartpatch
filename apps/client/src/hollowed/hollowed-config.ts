@@ -134,3 +134,45 @@ export const KEY_GLOW = {
   /** Over the tile's top, world units: above a homestead's glow, so the two never z-fight. */
   lift: 0.03,
 } as const; // TUNE
+
+/**
+ * The cellar's camera (#306): a little further back and higher than
+ * exploring a tile, so the row of chests reads as one set, the big one in
+ * the middle. Times the explore shot's distance, plus radians of pitch.
+ */
+export const CELLAR_CAMERA = {
+  distance: 1.4, // TUNE
+  pitch: (5 * Math.PI) / 180, // TUNE
+} as const;
+
+/**
+ * The hidden cellar's chests (#306, owner decision of 2026-10-22): how a lid
+ * pops open and the sparkle it lets out, and the big chest's bigger moment
+ * (a wobble, a slower swing, a fountain of sparkles and a beam of warm
+ * light). Angles are radians, times ms, lengths world units.
+ */
+export const CELLAR_CHESTS = {
+  small: {
+    open: 1.95, // TUNE: how far the lid swings back
+    openMs: 420, // TUNE
+    sparks: 16, // TUNE
+    sparkMs: 1100, // TUNE
+    rise: 1.6, // TUNE
+    spread: 1.2, // TUNE
+    size: 0.32, // TUNE
+  },
+  big: {
+    open: 1.85, // TUNE
+    /** It wobbles first, as if something inside can't wait. */
+    wobbleMs: 650, // TUNE
+    wobble: 0.12, // TUNE: the lid's rattle
+    openMs: 750, // TUNE
+    sparks: 40, // TUNE
+    sparkMs: 2200, // TUNE
+    rise: 3.4, // TUNE
+    spread: 2.2, // TUNE
+    size: 0.5, // TUNE
+    /** The beam of light out of the open chest: how tall and wide, and how long it shows. */
+    beam: { height: 6, width: 1.6, ms: 2600 }, // TUNE
+  },
+} as const;

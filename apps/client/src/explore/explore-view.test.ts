@@ -196,9 +196,9 @@ describe('explore text', () => {
     expect(findShowsCard(found({ clothing: 'pumpkin-hood' }))).toBe(true);
     // Each piece wears its own slot's picture on the card (#306 PR 5).
     expect(findLines(found({ clothing: 'ember-patch-jacket' }))).toEqual([
-      { kind: 'clothing', text: '👕 Ember Patch Jacket' },
+      { kind: 'clothing', text: '🧥 Ember Patch Jacket' },
     ]);
-    expect(findLines(found({ clothing: 'lantern-glow-cap' }))[0]?.text).toBe('🎩 Lantern-Glow Cap');
+    expect(findLines(found({ clothing: 'lantern-glow-cap' }))[0]?.text).toBe('🧶 Lantern-Glow Cap');
     expect(findShowsCard(found({ notable: 'heartdust' }))).toBe(true);
     // A Rekindled find opens a recipe page (#306 PR 5): the card, and where it goes.
     const ember = found({ found: { 'joy-ember': 1, stone: 1 } });

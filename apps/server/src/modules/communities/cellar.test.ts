@@ -2,10 +2,13 @@ import {
   ApiErrorSchema,
   CellarViewSchema,
   COMMUNITY_RULES,
+  CommunityKindIdSchema,
   CommunityViewSchema,
+  BIG_CHEST_KIND,
   ExploreTileResponseSchema,
   hexDistance,
   hexNeighbors,
+  isBigChest,
   KEY_SPOT,
   MapResponseSchema,
   MapViewSchema,
@@ -15,6 +18,7 @@ import {
   type MapDetail,
   type PublicUser,
 } from '@heartpatch/shared';
+import { CELLAR_RULES } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -421,12 +425,14 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
       homestead: null,
       cellar: { communityId },
     });
+    // The small chests, then the big chest (#306).
     const { min, max } = COMMUNITY_RULES.cellar.spots;
-    expect(view.spots.length).toBeGreaterThanOrEqual(min);
-    expect(view.spots.length).toBeLessThanOrEqual(max);
+    expect(view.spots.length).toBeGreaterThanOrEqual(min + 1);
+    expect(view.spots.length).toBeLessThanOrEqual(max + 1);
+    expect(view.spots.at(-1)?.kind).toBe(BIG_CHEST_KIND);
     expect(view.spots.every((s) => s.tool === null && !s.done)).toBe(true);
     // Rule 6: no seed, no odds.
-    expect(res.body).not.toMatch(/seed|weight/i);
+    expect(res.body).not.toMatch(/seed|weight|keepsake/i);
     expect((await call(server, 'GET', path(mapId, communityId, 'cellar'), rival)).statusCode).toBe(
       403,
     );
@@ -446,7 +452,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     expect(done.spots.every((s) => s.done)).toBe(true);
     const again = await call(server, 'POST', search, me, { spot: 0 });
     expect(again.statusCode).toBe(409);
-    expect(errorOf(again).message).toBe('You already searched there!');
+    expect(errorOf(again).message).toBe('You already opened that chest!');
     expect((await call(server, 'POST', search, me, { spot: 99 })).statusCode).toBe(404);
 
     // An explore search at the square, so lore and the Seeker track count it.
@@ -468,7 +474,7 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     // of the set (two members here, so pieces count toward the title).
     setDevDropChance(100);
     try {
-      for (const spot of view.spots) {
+      for (const spot of view.spots.filter((s) => !isBigChest(s))) {
         const res = await call(server, 'POST', path(mapId, communityId, 'cellar/search'), me, {
           spot: spot.index,
         });
@@ -484,6 +490,92 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     } finally {
       setDevDropChance(null);
     }
+  });
+
+  it("opens the big chest last, once, for a big pile and the Hollow kind's keepsake (#306)", async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    await findKey(server, me, mapId, communityId);
+    await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
+    const view = CellarViewSchema.parse(
+      (await call(server, 'GET', path(mapId, communityId, 'cellar'), me)).json(),
+    );
+    const big = view.spots.find(isBigChest)!;
+    const search = path(mapId, communityId, 'cellar/search');
+    const { bigChest } = CELLAR_RULES;
+    const kind = CommunityKindIdSchema.parse((await communityRow(communityId))?.kind);
+    const keepsake = bigChest.keepsakes[kind];
+
+    // Shut until the little chests are open (`afterSmall`).
+    expect(bigChest.afterSmall).toBe(true);
+    const early = await call(server, 'POST', search, me, { spot: big.index });
+    expect(early.statusCode).toBe(409);
+    expect(errorOf(early).message).toBe('Open the little chests first! 🗝️');
+    expect((await cellarRow(communityId)).cellarSearched).toBe(0);
+    for (const spot of view.spots.filter((s) => !isBigChest(s))) {
+      const res = await call(server, 'POST', search, me, { spot: spot.index });
+      expect(res.statusCode, res.body).toBe(200);
+      // A small chest never gives a keepsake.
+      expect(SearchSpotResponseSchema.parse(res.json()).clothing).not.toBe(keepsake);
+    }
+    const before = (await call(server, 'GET', `/maps/${mapId}/inventory`, me)).json<{
+      items: Record<string, number>;
+    }>().items;
+
+    const res = await call(server, 'POST', search, me, { spot: big.index });
+    expect(res.statusCode, res.body).toBe(200);
+    const body = SearchSpotResponseSchema.parse(res.json());
+    expect(body.found).toEqual(bigChest.items);
+    expect(body.clothing).toBe(keepsake);
+    expect(body.notable).toBe('cosmetic');
+    expect(body.lore).toBeNull();
+    for (const [id, n] of Object.entries(bigChest.items)) {
+      expect(body.items[id]).toBe((before[id] ?? 0) + n);
+    }
+    expect(body.progress).toEqual({ searched: view.spots.length, total: view.spots.length });
+    const owned = await db.query.clothingOwned.findMany({
+      where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.itemId, keepsake)),
+    });
+    expect(owned).toHaveLength(1);
+    const found = (await eventsOf(mapId, 'clothing.found')).filter(
+      (e) => (e.payload as { itemId: string }).itemId === keepsake,
+    );
+    expect(found).toHaveLength(1);
+
+    // Once only.
+    const again = await call(server, 'POST', search, me, { spot: big.index });
+    expect(again.statusCode).toBe(409);
+    expect(
+      await db.query.clothingOwned.findMany({
+        where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.itemId, keepsake)),
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('gives the pile but not a second keepsake to a Keeper who has it already (#306)', async () => {
+    const { server, me, mapId, communityId } = await wonVillage();
+    await findKey(server, me, mapId, communityId);
+    await call(server, 'POST', path(mapId, communityId, 'cellar'), me);
+    const kind = CommunityKindIdSchema.parse((await communityRow(communityId))?.kind);
+    const keepsake = CELLAR_RULES.bigChest.keepsakes[kind];
+    const given = await call(server, 'POST', '/dev/wardrobe/items', me, { items: [keepsake] });
+    expect(given.statusCode, given.body).toBe(201);
+    const view = CellarViewSchema.parse(
+      (await call(server, 'GET', path(mapId, communityId, 'cellar'), me)).json(),
+    );
+    const search = path(mapId, communityId, 'cellar/search');
+    for (const spot of view.spots) {
+      const res = await call(server, 'POST', search, me, { spot: spot.index });
+      expect(res.statusCode, res.body).toBe(200);
+      if (!isBigChest(spot)) continue;
+      const body = SearchSpotResponseSchema.parse(res.json());
+      expect(body.found).toEqual(CELLAR_RULES.bigChest.items);
+      expect(body.clothing).toBeNull();
+    }
+    expect(
+      await db.query.clothingOwned.findMany({
+        where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.itemId, keepsake)),
+      }),
+    ).toHaveLength(1);
   });
 
   describe('on a patch with no challenges (owner decision 2026-10-22)', () => {
