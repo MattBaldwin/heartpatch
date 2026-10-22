@@ -45,6 +45,8 @@ import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
 import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
+import { postSellRoutes } from './modules/post-sell/routes.js';
+import { createPostSellService } from './modules/post-sell/service.js';
 import { trickOrTreatRoutes } from './modules/trick-or-treat/routes.js';
 import { createTrickOrTreatService } from './modules/trick-or-treat/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
@@ -91,6 +93,8 @@ import { boutiqueRoutes } from './modules/boutique/routes.js';
 import { createBoutiqueService } from './modules/boutique/service.js';
 import { coinsRoutes } from './modules/coins/routes.js';
 import { createCoinsService } from './modules/coins/service.js';
+import { heartCoinsRoutes } from './modules/heart-coins/routes.js';
+import { createHeartCoinsService } from './modules/heart-coins/service.js';
 import { setDevDropChance } from './modules/wardrobe/drops.js';
 import { wardrobeRoutes } from './modules/wardrobe/routes.js';
 import { createWardrobeService } from './modules/wardrobe/service.js';
@@ -449,6 +453,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
           }),
         );
+        // Selling extras to the trading post for Heart Coins (#601 PR 3).
+        await api.register(
+          postSellRoutes(createPostSellService({ db, clock }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
         // Trick-or-treat at patch-mates' homes (#515).
         await api.register(
           trickOrTreatRoutes(createTrickOrTreatService({ db, clock, ...publish }), {
@@ -498,6 +509,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Patch Coins and the Boutique (#45): account-level, earned in play.
         await api.register(
           coinsRoutes(createCoinsService({ db, clock }), {
+            hooks: authHooks,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Heart Coins (#601): per player per patch, earned by playing there.
+        await api.register(
+          heartCoinsRoutes(createHeartCoinsService({ db, clock }), {
             hooks: authHooks,
             devGrants: config.HP_DEV_SQUISHY_GRANTS,
           }),
