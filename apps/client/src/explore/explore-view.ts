@@ -41,6 +41,12 @@ export const EXPLORE_TEXT = {
   worm: 'Just a wiggly worm! 🪱',
   lorePage: 'A lore page!',
   addedToLorebook: 'Added to your Lorebook 📖',
+  /** A grey village tile's first search: a page of its Hollow's forgotten story (#306). */
+  tornPage: 'A torn page! 📜',
+  tornPageNote: (found: number, total: number) =>
+    found >= total
+      ? 'Every page found! The story waits in the heart of the Hollow.'
+      : `${String(found)} of ${String(total)} pages found`,
   openLorebook: 'Open Lorebook 📖',
   clothing: 'Something to wear!',
   // A found set's own find (#306 PR 5): it goes into a recipe the kid can't get any other way.
@@ -259,7 +265,7 @@ function setOfFinds(found: Pick<SearchSpotResponse, 'found'>): string | null {
 
 /** One line of the find card. */
 export interface FindLine {
-  readonly kind: 'item' | 'lore' | 'clothing' | 'none';
+  readonly kind: 'item' | 'lore' | 'page' | 'clothing' | 'none';
   readonly text: string;
   /** A small line under it: where a lore page went (#307). */
   readonly note?: string;
@@ -279,6 +285,14 @@ export function findLines(found: SearchSpotResponse): FindLine[] {
       kind: 'lore',
       text: `📜 ${EXPLORE_TEXT.lorePage} “${found.lore.title}”`,
       note: EXPLORE_TEXT.addedToLorebook,
+    });
+  }
+  if (found.tornPage) {
+    const { found: pages, total } = found.tornPage;
+    lines.push({
+      kind: 'page',
+      text: EXPLORE_TEXT.tornPage,
+      note: EXPLORE_TEXT.tornPageNote(pages, total),
     });
   }
   if (found.clothing) {
@@ -313,6 +327,7 @@ export function findShowsCard(found: SearchSpotResponse): boolean {
     found.clothing !== null ||
     found.notable !== null ||
     found.explored ||
+    found.tornPage !== undefined ||
     setOfFinds(found) !== null
   );
 }
@@ -345,6 +360,7 @@ export function rareTitle(found: SearchSpotResponse, terrain: string): string {
   if (found.explored) return EXPLORE_TEXT.tileExplored(terrainName(terrain));
   if (found.lore) return EXPLORE_TEXT.lorePage;
   if (found.clothing) return EXPLORE_TEXT.clothing;
+  if (found.tornPage) return EXPLORE_TEXT.tornPage;
   const set = setOfFinds(found);
   if (set) return EXPLORE_TEXT.setFind(set);
   return EXPLORE_TEXT.ta;
@@ -363,9 +379,18 @@ export function afterSearch(
     progress: found.progress,
     homestead: found.homestead,
     tools,
-    // A grey village tile's joy follows the search (#306 2a).
+    // A grey village tile's joy follows the search (#306 2a), and a torn
+    // page counts towards the heart's story (#306).
     ...(tile.community && found.joy !== undefined
-      ? { community: { ...tile.community, joy: found.joy } }
+      ? {
+          community: {
+            ...tile.community,
+            joy: found.joy,
+            ...(found.tornPage && tile.community.puzzle?.kind === 'story'
+              ? { puzzle: { ...tile.community.puzzle, pages: found.tornPage } }
+              : {}),
+          },
+        }
       : {}),
   };
 }

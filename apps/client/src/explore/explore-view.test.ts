@@ -117,13 +117,16 @@ describe('explore text', () => {
       '📖',
       '🌱',
       '🍄', // Emoji 1.0 (#335)
+      '📜', // Emoji 1.0: a torn page (#306)
     ]);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),
       ...Object.values(PLAY_TEXT).map((p) => p.icon),
       HANDS_ICON,
     ];
-    const lines = Object.values(EXPLORE_TEXT).map((t) => (typeof t === 'string' ? t : t('Meadow')));
+    const lines = Object.values(EXPLORE_TEXT).map((t) =>
+      typeof t === 'string' ? t : (t as (...args: unknown[]) => string)('Meadow', 1),
+    );
     for (const text of [...icons.filter((i) => !isIconName(i)), ...lines]) {
       for (const ch of text.match(/\p{Extended_Pictographic}/gu) ?? []) {
         expect(known.has(ch), `${ch} in “${text}”`).toBe(true);
@@ -254,6 +257,38 @@ describe('a search changes the tile on screen', () => {
     };
     const next = afterSearch(tile, found({ progress: { searched: 1, total: 2 }, joy: 50 }));
     expect(next.community).toEqual({ ...tile.community, joy: 50 });
+    // A torn page counts towards the heart's story (#306), and shows the card.
+    const heart: ExploreTileResponse = {
+      ...tile,
+      community: {
+        ...tile.community!,
+        puzzle: {
+          skin: 'music-box',
+          kind: 'story',
+          depth: 'heart',
+          x: 0,
+          z: 0,
+          solved: false,
+          pages: { found: 1, total: 5 },
+        },
+      },
+    };
+    const page = found({
+      progress: { searched: 1, total: 2 },
+      joy: 50,
+      tornPage: { found: 2, total: 5 },
+    });
+    expect(afterSearch(heart, page).community?.puzzle?.pages).toEqual({ found: 2, total: 5 });
+    expect(findShowsCard(page)).toBe(true);
+    expect(rareTitle(page, 'meadow')).toBe('A torn page! 📜');
+    expect(findLines(page).at(-1)).toEqual({
+      kind: 'page',
+      text: 'A torn page! 📜',
+      note: '2 of 5 pages found',
+    });
+    expect(findLines(found({ tornPage: { found: 5, total: 5 } })).at(-1)?.note).toBe(
+      'Every page found! The story waits in the heart of the Hollow.',
+    );
     // My own land has no village to carry.
     const mine: ExploreTileResponse = { ...tile };
     delete mine.community;

@@ -61,6 +61,28 @@ export const HOLLOWED_TEXT = {
     shadow: 'An echo shadow',
     empty: 'An empty slot',
   },
+  // The forgotten story (#306), on the heart tile.
+  story: 'The forgotten story',
+  /** The big button's word while pages are still hidden round the Hollow. */
+  pagesFound: (found: number, total: number) => `${String(found)} of ${String(total)} pages found`,
+  tornPage: (n: number) => `Torn page ${String(n)}`,
+  storyDealing: 'The pages flutter open…',
+  storyPlay: 'Read the torn pages, then tap the moments in the order they happened.',
+  storyReady: 'All in place? Tell the story!',
+  storyTelling: 'Telling the story…',
+  storySmudged: (right: number, total: number) =>
+    `The ink smudges… ${String(right)} of ${String(total)} were in the right place.`,
+  notQuite: 'Not quite…',
+  notQuiteText: 'The pages flutter and the ink shifts: the Hollow tells its day a new way.',
+  newPages: 'Read the new pages',
+  tell: 'Tell the story',
+  clear: 'Clear',
+  storyWhole: 'The story is whole again! 📜',
+  first: 'First',
+  last: 'Last',
+  /** Each place, for screen readers. */
+  place: (n: number, text: string | null) =>
+    text ? `${String(n)}: ${text}. Tap to take it back.` : `${String(n)}: empty`,
   lorePage: (title: string) => `📜 A lore page! “${title}”`,
   thanks: 'The Hollow says thank you!',
   addedToLorebook: 'Added to your Lorebook 📖',
@@ -88,6 +110,17 @@ export function puzzleSpot(
     z: puzzle.z,
     done: puzzle.solved,
   };
+}
+
+/**
+ * The heart's story while torn pages are still hidden round the Hollow: my
+ * pages so far (the big button shows them), or null once it's awake (#306).
+ */
+export function storyAsleep(
+  puzzle: Pick<HollowedPuzzle, 'kind' | 'pages' | 'solved'>,
+): { found: number; total: number } | null {
+  if (puzzle.kind !== 'story' || puzzle.solved || !puzzle.pages) return null;
+  return puzzle.pages.found < puzzle.pages.total ? puzzle.pages : null;
 }
 
 /** A puzzle's skin (its look and words), from `MEMORY_PUZZLES`. */

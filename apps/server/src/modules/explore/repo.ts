@@ -71,6 +71,8 @@ export interface ExploreRow {
   /** A grey village tile's puzzle (#306 PR 2b): my tries so far, and when I relit it. */
   puzzleAttempt: number;
   puzzleSolvedAt: Date | null;
+  /** When I found this tile's torn page of its Hollow's forgotten story (#306), on my first search here. */
+  fragmentFoundAt: Date | null;
   /** Its last write: a grey village's searches count from this morning only (#306 2a). */
   updatedAt: Date;
 }
@@ -105,6 +107,7 @@ const rowColumns = {
   resumedAt: tileExplore.resumedAt,
   puzzleAttempt: tileExplore.puzzleAttempt,
   puzzleSolvedAt: tileExplore.puzzleSolvedAt,
+  fragmentFoundAt: tileExplore.fragmentFoundAt,
   updatedAt: tileExplore.updatedAt,
 };
 
@@ -299,19 +302,39 @@ export function createExploreRepo(db: Executor) {
     },
 
     /**
-     * Writes my row's puzzle tries and when I relit it (#306 PR 2b; the
-     * caller holds its lock). Leaves `updated_at` alone: it dates the
-     * morning's searches.
+     * Writes my row's puzzle tries, when I fixed it and when I found its torn
+     * page (#306 PR 2b; the caller holds its lock). Leaves `updated_at`
+     * alone: it dates the morning's searches.
      */
     setPuzzle: async (
       userId: string,
       tileId: string,
-      puzzle: Partial<Pick<ExploreRow, 'puzzleAttempt' | 'puzzleSolvedAt'>>,
+      puzzle: Partial<Pick<ExploreRow, 'puzzleAttempt' | 'puzzleSolvedAt' | 'fragmentFoundAt'>>,
     ): Promise<void> => {
       await db
         .update(tileExplore)
         .set(puzzle)
         .where(and(eq(tileExplore.userId, userId), eq(tileExplore.tileId, tileId)));
+    },
+
+    /**
+     * How many of a Hollow's torn pages I've found (#306, the forgotten
+     * story): my rows on its tiles with a page found. Read without a lock: a
+     * page once found stays found.
+     */
+    countPages: async (communityId: string, userId: string): Promise<number> => {
+      const [row] = await db
+        .select({ found: sql<number>`count(*)::int` })
+        .from(tileExplore)
+        .innerJoin(communityTiles, eq(communityTiles.tileId, tileExplore.tileId))
+        .where(
+          and(
+            eq(communityTiles.communityId, communityId),
+            eq(tileExplore.userId, userId),
+            isNotNull(tileExplore.fragmentFoundAt),
+          ),
+        );
+      return row?.found ?? 0;
     },
 
     /** Writes who has fixed a tile's puzzle, a sorted set (the caller holds `lockPuzzle`). */

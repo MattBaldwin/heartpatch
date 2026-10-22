@@ -9,6 +9,8 @@ import {
   type RelightMove,
   type SolvePuzzleResponse,
   type StartPuzzleResponse,
+  type StoryStart,
+  type TellStoryResponse,
 } from '@heartpatch/shared';
 import { EXPLORE_TEXT } from '../explore/explore-view.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -22,6 +24,21 @@ import {
   type RelightOutcome,
   type RelightPlay,
 } from './relight-play.js';
+import {
+  clearStory,
+  placeMoment,
+  smudgeStory,
+  startStory,
+  storyPlaces,
+  storyReady,
+  storySlots,
+  storyTray,
+  takeBack,
+  tellStory,
+  untellStory,
+  type StoryOutcome,
+  type StoryPlay,
+} from './story-play.js';
 import './puzzle-sheet.css';
 
 /*
@@ -34,6 +51,11 @@ import './puzzle-sheet.css';
  * draws nothing while it's up (rule 8). Touch-first: every cell is a big
  * button, built once a try and updated in place (a tap never lands on a
  * replaced button).
+ *
+ * The heart tile's broken thing holds "The forgotten story" instead (#306):
+ * the torn pages' clues, the day's places and the moments to put in them.
+ * The order goes to the server, which alone knows the day; a wrong one
+ * shows which places were right, then the ink shifts to the next try's day.
  */
 
 export interface PuzzleSheetOptions {
@@ -43,6 +65,8 @@ export interface PuzzleSheetOptions {
   start: () => Promise<StartPuzzleResponse | null>;
   /** Sends a try's moves; null if the visit moved on. Throws a kid-readable error. */
   solve: (attempt: number, moves: readonly RelightMove[]) => Promise<SolvePuzzleResponse | null>;
+  /** Tells a story try's order; null if the visit moved on. Throws a kid-readable error. */
+  tell: (attempt: number, order: readonly string[]) => Promise<TellStoryResponse | null>;
   /** "Open Lorebook" on the reward card. */
   onLorebook?: (pageId: string) => void;
   /** The card closed: fixed (the reply) or not now (null). */
@@ -62,6 +86,13 @@ export interface PuzzleDebug {
   /** The echo shadow the light touched (the flare), or null. */
   readonly spooked: number | null;
   readonly picked: number | null;
+  /** Which puzzle the try is (null while loading). */
+  readonly kind: 'relight' | 'story' | null;
+  /** The story's places, filled so far, and how a telling went. */
+  readonly places: number;
+  readonly placed: readonly string[];
+  readonly story: StoryOutcome | null;
+  readonly right: number | null;
 }
 
 export interface PuzzleSheet {
@@ -119,6 +150,11 @@ function cellLabel(cell: RelightCell, lit: boolean): string {
 export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
   let skin: PuzzleSkin | null = null;
   let play: RelightPlay | null = null;
+  let story: StoryPlay | null = null;
+  /** Which puzzle the card holds: the tile's, until a try says otherwise. */
+  let mode: 'relight' | 'story' = 'relight';
+  /** After a wrong telling, the next try the server dealt: shown on "Read the new pages". */
+  let nextStory: StoryStart | null = null;
   let fixed: SolvePuzzleResponse | null = null;
   let loading = false;
   let sending = false;
@@ -191,6 +227,203 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
   const row = el('div', { class: 'explore-play-row' }, giveUp, newPath, retry, notNow);
   let cells: HTMLButtonElement[] = [];
 
+  // The forgotten story's parts (#306).
+  const pages = el('ol', {
+    class: 'hollowed-story-pages',
+    'aria-label': HOLLOWED_TEXT.story,
+    'data-testid': 'hollowed-story-pages',
+  });
+  const slots = el('div', { class: 'hollowed-story-slots', 'data-testid': 'hollowed-story-slots' });
+  const tray = el('div', { class: 'hollowed-story-tray', 'data-testid': 'hollowed-story-tray' });
+  const smudged = el('div', {
+    class: 'hollowed-story-end',
+    'data-testid': 'hollowed-story-smudged',
+  });
+  const newPages = button(
+    HOLLOWED_TEXT.newPages,
+    'explore-easy',
+    'hollowed-story-new-pages',
+    () => {
+      const next = nextStory;
+      if (!next) {
+        void begin();
+        return;
+      }
+      nextStory = null;
+      showStory(next);
+      // The new pages, from the top.
+      sheet.scrollTop = 0;
+    },
+  );
+  smudged.append(
+    el('strong', { class: 'hollowed-relight-end-title' }, HOLLOWED_TEXT.notQuite),
+    el('span', {}, HOLLOWED_TEXT.notQuiteText),
+  );
+  const tell = button(HOLLOWED_TEXT.tell, 'explore-easy', 'hollowed-story-tell', () => {
+    void sendStory();
+  });
+  const clear = button(HOLLOWED_TEXT.clear, 'explore-not-now', 'hollowed-story-clear', () => {
+    if (story) story = clearStory(story);
+    render();
+  });
+  const storyParts = [progress, title, pages, line, slots, tray, smudged];
+  // Try again and Not now join whichever row the card shows (`placeShared`).
+  const storyRow = el('div', { class: 'explore-play-row hollowed-story-row' });
+
+  /** The buttons both puzzles share go in the row on show: a node lives in one place. */
+  function placeShared(into: HTMLElement): void {
+    if (!into.contains(notNow)) into.append(retry, notNow);
+  }
+
+  /** A story try: its torn pages, written once a try, and empty places. */
+  function showStory(start: StoryStart): void {
+    story = startStory(start.attempt, start.story);
+    pages.replaceChildren(
+      ...start.story.clues.map((clue, i) =>
+        el(
+          'li',
+          { class: 'hollowed-story-page', style: `--tilt:${String((i % 3) - 1)}deg` },
+          el('span', { class: 'hollowed-story-page-from' }, HOLLOWED_TEXT.tornPage(i + 1)),
+          clue,
+        ),
+      ),
+    );
+    render();
+  }
+
+  /** Tells the story: the server checks the order against its day (rule 1). */
+  async function sendStory(): Promise<void> {
+    const p = story;
+    if (!p || !storyReady(p) || sending) return;
+    const at = visit;
+    story = tellStory(p);
+    sending = true;
+    problem = null;
+    render();
+    try {
+      const reply = await options.tell(p.attempt, p.placed);
+      if (at !== visit) return;
+      if (!reply) {
+        close(null);
+        return;
+      }
+      if (reply.result === 'whole') {
+        fixed = reply;
+      } else {
+        story = smudgeStory(tellStory(p), reply.right, reply.marks);
+        nextStory = reply.next;
+        // How many were right, and which: in view, above the places.
+        render();
+        line.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+    } catch (err) {
+      if (at !== visit) return;
+      story = untellStory(tellStory(p));
+      problem = messageOf(err);
+    } finally {
+      if (at === visit) {
+        sending = false;
+        render();
+      }
+    }
+  }
+
+  function renderStory(k: PuzzleSkin, p: StoryPlay | null): void {
+    if (sheet.firstChild !== progress || !sheet.contains(slots)) {
+      storyRow.replaceChildren(tell, clear, newPages);
+      sheet.replaceChildren(...storyParts, storyRow);
+    }
+    placeShared(storyRow);
+    progress.textContent = HOLLOWED_TEXT.broken(k);
+    title.textContent = HOLLOWED_TEXT.story;
+    pages.hidden = !p;
+    slots.hidden = !p;
+    if (p) {
+      const n = storyPlaces(p);
+      slots.replaceChildren(
+        ...storySlots(p).map((card, i) => {
+          const mark = p.marks?.[i];
+          const b = el(
+            'button',
+            {
+              type: 'button',
+              class: [
+                'hollowed-story-slot',
+                card ? 'hollowed-story-slot-on' : '',
+                mark === true ? 'hollowed-story-slot-right' : '',
+                mark === false ? 'hollowed-story-slot-wrong' : '',
+              ]
+                .filter((c) => c)
+                .join(' '),
+              'aria-label': HOLLOWED_TEXT.place(i + 1, card?.text ?? null),
+            },
+            el(
+              'span',
+              { class: 'hollowed-story-slot-n' },
+              i === 0 ? HOLLOWED_TEXT.first : i === n - 1 ? HOLLOWED_TEXT.last : String(i + 1),
+            ),
+            card
+              ? el(
+                  'span',
+                  { class: 'hollowed-story-card-text' },
+                  el('span', { class: 'hollowed-story-emoji', 'aria-hidden': 'true' }, card.emoji),
+                  card.text,
+                )
+              : el('span', { class: 'hollowed-story-slot-empty' }, '…'),
+          );
+          b.disabled = !card || p.outcome !== 'playing' || sending;
+          b.addEventListener('click', () => {
+            if (!story) return;
+            story = takeBack(story, i);
+            render();
+          });
+          return b;
+        }),
+      );
+      tray.replaceChildren(
+        ...storyTray(p).map((card) => {
+          const b = el(
+            'button',
+            { type: 'button', class: 'hollowed-story-card', 'data-moment': card.id },
+            el('span', { class: 'hollowed-story-emoji', 'aria-hidden': 'true' }, card.emoji),
+            card.text,
+          );
+          b.disabled = p.outcome !== 'playing' || sending;
+          b.addEventListener('click', () => {
+            if (!story) return;
+            story = placeMoment(story, card.id);
+            render();
+          });
+          return b;
+        }),
+      );
+    }
+    tray.hidden = !p || storyTray(p).length === 0;
+    smudged.hidden = p?.outcome !== 'smudged';
+    line.textContent = problem
+      ? problem
+      : loading
+        ? HOLLOWED_TEXT.storyDealing
+        : !p
+          ? ''
+          : p.outcome === 'telling'
+            ? HOLLOWED_TEXT.storyTelling
+            : p.outcome === 'smudged'
+              ? HOLLOWED_TEXT.storySmudged(p.right ?? 0, storyPlaces(p))
+              : storyReady(p)
+                ? HOLLOWED_TEXT.storyReady
+                : HOLLOWED_TEXT.storyPlay;
+    line.hidden = line.textContent === '';
+    const playing = p?.outcome === 'playing' || p?.outcome === 'telling';
+    tell.hidden = problem !== null && !p ? true : !playing;
+    tell.disabled = !p || !storyReady(p) || sending;
+    clear.hidden = !playing;
+    newPages.hidden = p?.outcome !== 'smudged';
+    clear.disabled = !p || p.placed.length === 0 || sending;
+    retry.hidden = problem === null || p !== null;
+    retry.disabled = loading;
+  }
+
   /** The cells' buttons, made once a try (a tap never lands on a replaced button). */
   function buildCells(p: RelightPlay): void {
     grid.style.setProperty('--relight-n', String(p.board.size));
@@ -213,6 +446,8 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     loading = true;
     problem = null;
     play = null;
+    story = null;
+    nextStory = null;
     render();
     try {
       const reply = await options.start();
@@ -221,8 +456,14 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
         close(null);
         return;
       }
-      play = startRelight(reply.attempt, reply.board);
-      buildCells(play);
+      if (reply.kind === 'story') {
+        mode = 'story';
+        showStory(reply);
+      } else {
+        mode = 'relight';
+        play = startRelight(reply.attempt, reply.board);
+        buildCells(play);
+      }
     } catch (err) {
       if (at !== visit) return;
       problem = messageOf(err);
@@ -270,6 +511,9 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     cells = [];
     skin = null;
     play = null;
+    story = null;
+    nextStory = null;
+    pages.replaceChildren();
     fixed = null;
     loading = false;
     sending = false;
@@ -284,7 +528,14 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
       renderReward(k, fixed);
       return;
     }
-    if (sheet.firstChild !== progress) sheet.replaceChildren(...board, row);
+    if (mode === 'story') {
+      renderStory(k, story);
+      return;
+    }
+    if (sheet.firstChild !== progress || !sheet.contains(grid)) {
+      sheet.replaceChildren(...board, row);
+    }
+    placeShared(row);
     progress.textContent = HOLLOWED_TEXT.broken(k);
     title.textContent = HOLLOWED_TEXT.relight;
     const p = play;
@@ -347,7 +598,11 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
 
   function renderReward(k: PuzzleSkin, reply: SolvePuzzleResponse): void {
     const nodes: Node[] = [
-      el('p', { class: 'explore-card-progress' }, HOLLOWED_TEXT.pathLit),
+      el(
+        'p',
+        { class: 'explore-card-progress' },
+        mode === 'story' ? HOLLOWED_TEXT.storyWhole : HOLLOWED_TEXT.pathLit,
+      ),
       el('h3', { class: 'explore-sheet-title', id: 'hollowed-puzzle-title' }, k.fixed),
       el(
         'ul',
@@ -388,6 +643,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     open: (puzzle) => {
       close(null);
       skin = skinOf(puzzle);
+      mode = puzzle.kind;
       sheet.hidden = false;
       void begin();
     },
@@ -401,10 +657,11 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
       if (sheet.hidden) return null;
       const p = play;
       const light = p ? relightLight(p) : null;
+      const t = story;
       return {
-        card: fixed ? ('reward' as const) : p ? ('board' as const) : ('loading' as const),
+        card: fixed ? ('reward' as const) : p || t ? ('board' as const) : ('loading' as const),
         outcome: p?.outcome ?? null,
-        attempt: p?.attempt ?? null,
+        attempt: p?.attempt ?? t?.attempt ?? null,
         size: p?.board.size ?? null,
         moves: p?.moves.length ?? 0,
         limit: p?.board.limit ?? null,
@@ -412,6 +669,11 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
         lanterns: light?.lanterns ?? 0,
         spooked: light?.spooked ?? null,
         picked: p?.picked ?? null,
+        kind: p ? ('relight' as const) : t ? ('story' as const) : null,
+        places: t ? storyPlaces(t) : 0,
+        placed: t?.placed ?? [],
+        story: t?.outcome ?? null,
+        right: t?.right ?? null,
       };
     },
   };
