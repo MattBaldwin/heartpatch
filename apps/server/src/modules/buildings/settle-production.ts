@@ -1,7 +1,14 @@
 import { HOLLOW_RULES, type ItemCounts } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
-import { bankOutput, nextMorningAt, productionAt, upkeepOf, type Produced } from './production.js';
+import {
+  bankOutput,
+  canWorkAt,
+  nextMorningAt,
+  productionAt,
+  upkeepOf,
+  type Produced,
+} from './production.js';
 import { createBuildingsRepo, type BuildingRow } from './repo.js';
 import { chargeUpkeep, resumeUpkeep } from './upkeep.js';
 
@@ -87,6 +94,8 @@ export async function lockProducing(
       events.push(...woken.events);
       const due = [nextMorningAt(at, HOLLOW_RULES.morningMinute, map.timeZone).getTime()];
       for (const row of woken.rows) {
+        // Napping or out of season: nothing to ask again for until that changes.
+        if (!canWorkAt(row, at, map.timeZone)) continue;
         const next = productionAt(row, at, map.timeZone)?.progress.nextReadyMs ?? null;
         if (next !== null) due.push(next);
       }

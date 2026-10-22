@@ -190,6 +190,10 @@ export async function resumeUpkeep(
   for (const { id } of woken) {
     const row = after.get(id);
     if (!row?.pausedAt) continue;
+    // Known edge (bounded by one cycle): a homestead cut off and joined back
+    // within the part-done cycle before the pause is left out by
+    // `resumeSinceMs` and again by `productionAt`, which reads the same
+    // latest cut-off. Only the latest cut-off is kept (`workPauseOf`).
     const producedSince =
       row.producedSince === null
         ? null

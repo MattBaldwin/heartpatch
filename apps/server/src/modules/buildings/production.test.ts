@@ -255,7 +255,7 @@ describe.skipIf(!url)('resource buildings (#601, needs DATABASE_URL)', () => {
         spot: 1,
       });
       expect(wrong.statusCode).toBe(409);
-      expect(errorOf(wrong).message).toBe("A Woodcutter's Hut goes on forest land!");
+      expect(errorOf(wrong).message).toBe("A Woodcutter's Hut needs a Forest tile!");
 
       // Forest with its Timber spot: clear it first (no beside-the-spot exception).
       await setLand(plot, 'forest', 'timber');

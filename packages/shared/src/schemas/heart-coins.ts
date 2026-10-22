@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContentIdSchema } from './data/common.js';
 
 // Heart Coins API (#601): one balance per player per patch, earned by
 // playing there and spent only there. The server pays and caps everything
@@ -37,7 +38,7 @@ export const HeartCoinsSchema = z.object({
       due: z.array(
         z.object({
           buildingRowId: z.uuid(),
-          buildingId: z.string(),
+          buildingId: ContentIdSchema,
           level: z.number().int().min(1),
           q: z.number().int(),
           r: z.number().int(),

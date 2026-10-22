@@ -99,7 +99,7 @@ import {
  */
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
-const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name.toLowerCase()]));
+const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
 const SPECIES_NAMES = new Map(
@@ -148,7 +148,7 @@ const MESSAGES = {
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
   wrongLand: (name: string, terrain: string) =>
-    `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} goes on ${terrain} land!`,
+    `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} needs ${/^[aeiou]/i.test(terrain) ? 'an' : 'a'} ${terrain} tile!`,
   namingLocked: `Build one of each and befriend ${String(NAMING_RULES.caughtToName)} squishies first!`,
   seedFirst: 'Your Heart Seed needs to grow first 🌱',
   noPatch: "We couldn't find that patch.",
