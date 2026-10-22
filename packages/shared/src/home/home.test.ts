@@ -275,6 +275,7 @@ describe('home-base data', () => {
     expect(BUILDINGS.filter((b) => isBuildable(RULES, b)).map((b) => b.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
+      'joy-lantern',
       'ember-den',
       'cozy-meadow',
       'training-grounds',

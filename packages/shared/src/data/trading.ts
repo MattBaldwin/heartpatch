@@ -56,6 +56,9 @@ export const TRADE_VALUES: TradeValues = {
     'brave-brew': 18, // TUNE:
     'cozy-cocoa': 18, // TUNE:
     'hearty-soup': 18, // TUNE:
+    // Rekindled (#306 PR 5): made from finds only Hollowed villages give.
+    'joy-lantern': 45, // TUNE: a bit above the Jack-o'-Lantern
+    'heart-tea': 20, // TUNE: a Heart Snack's Heartdust and change
   },
   clothingRarity: {
     common: 30, // TUNE:

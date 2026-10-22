@@ -4,6 +4,7 @@ import {
   MILESTONE_TRACKS,
   MILESTONE_UNIT,
   MilestonesResponseSchema,
+  REKINDLED,
   type MilestonesResponse,
   type MilestoneTrack,
   type MilestoneTrackView,
@@ -300,6 +301,27 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     return data;
   };
 
+  it('gives the Rekindler title once every Rekindled piece is found, each counted once (#306 PR 5)', async () => {
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    const [last, ...rest] = [...REKINDLED.pieces].reverse();
+    for (const piece of rest) await append(found(mapId, kid, piece));
+    await append(found(mapId, kid, rest[0]!)); // the same piece again: not a new one
+    await run(mapId);
+    let view = await milestones(server, kid);
+    expect(trackOf(view, 'set-rekindled')?.progress).toBe(REKINDLED.pieces.length - 1);
+    expect(earned(view, 'set-rekindled')).toEqual([]);
+
+    await append(found(mapId, kid, last!));
+    await run(mapId);
+    view = await milestones(server, kid);
+    expect(earned(view, 'set-rekindled')).toEqual([1]);
+    expect(view.titles.map((t) => t.id)).toContain('rekindler');
+    expect(await balance(kid.id)).toBe(REKINDLED.coins);
+  });
+
   it('counts each track from its event on a patch with two players', async () => {
     const server = await start();
     const kid = await player();
@@ -332,6 +354,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       rescuer: 1,
       seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
+      'set-rekindled': 0, // found in the Hollows (#306 PR 5)
     });
     expect(earned(view, 'territory')).toEqual([1]);
     expect(earned(view, 'collector')).toEqual([1]);

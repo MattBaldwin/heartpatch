@@ -52,4 +52,18 @@ describe('@heartpatch/shared/server', () => {
       expect(name in publicEntry).toBe(false);
     }
   });
+
+  it("keeps the found sets' drop tables, their schema and the roll server-only (#306 PR 5)", () => {
+    for (const name of [
+      'REKINDLED_DROPS',
+      'FoundSetDropTableSchema',
+      'checkFoundSetDrops',
+      'rollFoundSet',
+      'rollFoundSets',
+    ]) {
+      expect(name in serverEntry).toBe(true);
+      expect(name in publicEntry).toBe(false);
+    }
+    expect('FOUND_SETS' in publicEntry).toBe(true);
+  });
 });

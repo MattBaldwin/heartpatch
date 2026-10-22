@@ -345,6 +345,10 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
       'recipe:brave-brew',
       'recipe:cozy-cocoa',
       'recipe:hearty-soup',
+      // The Rekindled pages (#306 PR 5): sealed by finds only a grey village gives.
+      'recipe:joy-lantern',
+      'recipe:heart-tea',
+      'building:joy-lantern',
     ]);
     expect(await book(server, kid)).toEqual(
       recipeBookPages()

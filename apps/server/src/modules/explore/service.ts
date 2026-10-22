@@ -35,7 +35,9 @@ import {
   EXPLORE_FINDS,
   HOLLOWED_FINDS,
   LORE_PAGES,
+  NOTHING_FOUND,
   rollExploreFind,
+  withFoundItems,
 } from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
 import type { Database, Executor } from '../../db/client.js';
@@ -51,6 +53,7 @@ import { createLoreRepo } from '../lore/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
+import { grantRekindledPiece, rekindledDrop } from '../wardrobe/rekindled.js';
 import { homesteadOf, refreshHomesteads } from './homesteads.js';
 import {
   createExploreRepo,
@@ -391,6 +394,17 @@ export function createExploreService(options: ExploreServiceOptions) {
           foundLore,
         );
 
+        // A grey village search may find some of the Rekindled set too (#306
+        // PR 5): rolled now, so its finds join the one bag grant below.
+        const rekindled = grey
+          ? await rekindledDrop(
+              tx,
+              { place: 'village', userId: user.id, mapId, at },
+              { rng: rngFor() },
+            )
+          : NOTHING_FOUND;
+        const found = withFoundItems(roll.items, rekindled);
+
         // Step 10: the team's XP, plain, like Training Grounds (squishies in id order).
         const team = await createBattlesRepo(tx).listTeam(mapId, user.id, BATTLE_RULES.teamSize);
         const growths: Growth[] = [];
@@ -404,22 +418,19 @@ export function createExploreService(options: ExploreServiceOptions) {
         // Step 11: the bag, every row it spends or grants locked in item order.
         const searchId = uuidv7();
         const wear: ItemCounts = spot.tool ? { [spot.tool]: 1 } : {};
-        await lockGrantRows(tx, mapId, [{ userId: user.id, items: { ...wear, ...roll.items } }]);
+        await lockGrantRows(tx, mapId, [{ userId: user.id, items: { ...wear, ...found } }]);
         if (spot.tool) await consumeItems(tx, owner, wear, 'explore', searchId);
-        if (Object.keys(roll.items).length > 0) {
-          await grantItems(tx, owner, roll.items, 'explore', searchId);
+        if (Object.keys(found).length > 0) {
+          await grantItems(tx, owner, found, 'explore', searchId);
         }
 
         // Found clothing appends its own event first; ours stay the last writes.
-        const clothing = await rollFoundDrop(tx, {
-          source: 'explore',
-          refId: searchId,
-          userId: user.id,
-          mapId,
-          tileId: tile.id,
-          at,
-        });
-        const notable = notableOf(roll.items, roll.lore, clothing);
+        // A Rekindled piece is this search's one piece of clothing.
+        const drop = { source: 'explore' as const, refId: searchId, userId: user.id, mapId, at };
+        const clothing =
+          (await grantRekindledPiece(tx, drop, rekindled)) ??
+          (await rollFoundDrop(tx, { ...drop, tileId: tile.id }));
+        const notable = notableOf(found, roll.lore, clothing);
         const coords = { q: tile.q, r: tile.r };
         const events: NewGameEvent[] = [
           {
@@ -434,7 +445,7 @@ export function createExploreService(options: ExploreServiceOptions) {
               spot: spot.index,
               kind: spot.kind,
               tool: spot.tool,
-              items: roll.items,
+              items: found,
               lorePage: roll.lore,
               notable,
             },
@@ -459,7 +470,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         const progress = { searched: searchedCount(searched, spots.length), total: spots.length };
         return {
           spot: spot.index,
-          found: roll.items,
+          found,
           lore: roll.lore ? { id: roll.lore, title: LORE_TITLES.get(roll.lore) ?? '' } : null,
           clothing,
           notable,

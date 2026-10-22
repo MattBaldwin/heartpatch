@@ -163,6 +163,38 @@ export const RESOURCES: Resource[] = [
     kind: 'crafted',
     battleEffect: { healPercent: 40, shieldPercent: 75 }, // TUNE:
   },
+  // Rekindled (#306 PR 5): found only in Hollowed villages (the server-only
+  // `data/server/hollowed-finds.ts`). Each is the sealed ingredient of a Rekindled recipe, so
+  // finding one opens its recipe book page; they stay with their Keeper, so
+  // a page is only ever opened by finding it.
+  {
+    id: 'joy-ember',
+    name: 'Joy Ember',
+    description: 'A warm little spark of joy, found glowing in a Hollow.',
+    kind: 'gathered',
+    tradable: false,
+  },
+  {
+    id: 'heart-petals',
+    name: 'Heart Petals',
+    description: 'Soft pink petals that bloom again when a Hollow gets happy.',
+    kind: 'gathered',
+    tradable: false,
+  },
+  {
+    // The crafted lantern you build a Joy Lantern from (like the carved
+    // Jack-o'-Lantern): its own name, so the build sheet reads well.
+    id: 'joy-lantern',
+    name: 'Joy Lantern Kit',
+    description: 'Everything a Joy Lantern needs. Build it out on your land!',
+    kind: 'crafted',
+  },
+  {
+    id: 'heart-tea',
+    name: 'Heart Tea',
+    description: 'A warm cup of petal tea. Sip, sip, smile!',
+    kind: 'crafted',
+  },
   // Explore tools (#199): the bag counts each in uses (`EXPLORE_RULES.tools`).
   {
     id: 'shovel',

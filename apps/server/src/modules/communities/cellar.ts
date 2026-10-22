@@ -22,7 +22,12 @@ import {
   type SearchSpotResponse,
   type ToolId,
 } from '@heartpatch/shared';
-import { CELLAR_FINDS, LORE_PAGES, rollExploreFind } from '@heartpatch/shared/server';
+import {
+  CELLAR_FINDS,
+  LORE_PAGES,
+  rollExploreFind,
+  withFoundItems,
+} from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
 import type { Database, Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
@@ -38,6 +43,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
+import { grantRekindledPiece, rekindledDrop } from '../wardrobe/rekindled.js';
 import {
   communitiesTransaction,
   createCommunitiesRepo,
@@ -292,7 +298,14 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
           rngFor(),
           foundLore,
         );
-        // PR 5 (Rekindled rewards) adds its cellar drop here, once its tables are on main.
+        // The Rekindled set's cellar odds (#306 PR 5): rolled now, so its finds
+        // join the one bag grant below. Reads only, so the lock order holds.
+        const rekindled = await rekindledDrop(
+          tx,
+          { place: 'cellar', userId: user.id, mapId, at },
+          { rng: rngFor() },
+        );
+        const found = withFoundItems(roll.items, rekindled);
 
         // Step 10: the team's XP, plain, as exploring gives it (squishies in id order).
         const team = await createBattlesRepo(tx).listTeam(mapId, user.id, BATTLE_RULES.teamSize);
@@ -307,20 +320,17 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
         // Step 11: the bag.
         const owner = { mapId, userId: user.id };
         const searchId = uuidv7();
-        if (Object.keys(roll.items).length > 0) {
-          await lockGrantRows(tx, mapId, [{ userId: user.id, items: roll.items }]);
-          await grantItems(tx, owner, roll.items, 'explore', searchId);
+        if (Object.keys(found).length > 0) {
+          await lockGrantRows(tx, mapId, [{ userId: user.id, items: found }]);
+          await grantItems(tx, owner, found, 'explore', searchId);
         }
         // Found clothing appends its own event first; ours stay the last writes.
-        const clothing = await rollFoundDrop(tx, {
-          source: 'explore',
-          refId: searchId,
-          userId: user.id,
-          mapId,
-          tileId,
-          at,
-        });
-        const notable = notableOf(roll.items, roll.lore, clothing);
+        // A Rekindled piece is this search's one piece of clothing.
+        const drop = { source: 'explore' as const, refId: searchId, userId: user.id, mapId, at };
+        const clothing =
+          (await grantRekindledPiece(tx, drop, rekindled)) ??
+          (await rollFoundDrop(tx, { ...drop, tileId }));
+        const notable = notableOf(found, roll.lore, clothing);
         const square = await squareOf(tx, community);
         // An explore search like any other, at the square: the lore pages
         // and the Seeker track count it the same way.
@@ -338,7 +348,7 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
               spot: spot.index,
               kind: spot.kind,
               tool: null,
-              items: roll.items,
+              items: found,
               lorePage: roll.lore,
               notable,
             },
@@ -350,7 +360,7 @@ export function createCellarService(options: CellarServiceOptions): CellarServic
         const items = await createInventoryRepo(tx).list(owner);
         return {
           spot: spot.index,
-          found: roll.items,
+          found,
           lore: roll.lore ? { id: roll.lore, title: LORE_TITLES.get(roll.lore) ?? '' } : null,
           clothing,
           notable,

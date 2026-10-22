@@ -11,6 +11,7 @@ import { ECONOMY_CONFIG, type EconomyConfig } from './economy-config.js';
 import { runEconomy } from './economy-report.js';
 import type { HollowedConfig } from './hollowed-config.js';
 import type { ProgressionConfig } from './progression-config.js';
+import { renderRekindled, type RekindledRow } from './rekindled.js';
 
 /*
  * What restoring a Hollowed Community costs a kid in days (#306, plan v3).
@@ -184,6 +185,7 @@ export function renderHollowed(
   rows: readonly HollowedRow[],
   config: HollowedConfig,
   meta: { seconds: number },
+  rekindled: readonly RekindledRow[] = [],
 ): string {
   const sizes = villageSizes();
   const lines = [
@@ -213,5 +215,6 @@ export function renderHollowed(
     );
   }
   lines.push('', '## Not modelled', '', ...HOLLOWED_LIMITS.map((l) => `- ${l}`), '');
+  if (rekindled.length > 0) lines.push(...renderRekindled(rekindled, config));
   return lines.join('\n');
 }

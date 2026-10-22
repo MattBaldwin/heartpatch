@@ -10,8 +10,7 @@ import {
   type SellRules,
   type SellView,
 } from '@heartpatch/shared';
-import { itemIcon } from '../inventory/item-icons.js';
-import { clothingIcon } from './trade-model.js';
+import { clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
 
 // The trading post's Sell tab (#601 PR 4; #320 part 1): extras from the bag
 // and spare clothing for 💛 Heart Coins. Prices and lots are shared data
@@ -142,7 +141,7 @@ export function sellRows(view: SellView, rules: SellRules = SELL_RULES): SellRow
       {
         kind: 'clothing',
         itemId: piece.itemId,
-        icon: clothingIcon(item.slot),
+        icon: clothingSlotIcon(item.slot),
         name: item.name,
         have: piece.copies,
         need: 2,

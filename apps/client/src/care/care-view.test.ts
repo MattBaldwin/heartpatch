@@ -120,6 +120,18 @@ describe('careSheet', () => {
     expect(ready.buttons.filter((b) => b.special).map((b) => b.action)).toEqual(['heart-snack']);
   });
 
+  it('shows Heart Tea once there is a cup in the bag (#306 PR 5)', () => {
+    expect(careSheet(squishy(), reply()).buttons.some((b) => b.action === 'heart-tea')).toBe(false);
+    const model = careSheet(squishy(), reply({ items: { 'heart-tea': 2 } }));
+    expect(model.buttons.find((b) => b.action === 'heart-tea')).toMatchObject({
+      label: '🍵 Heart Tea',
+      sub: '🍵 2/1 Heart Tea',
+      note: null,
+      special: true,
+    });
+    expect(CARE_TEXT.done['heart-tea']).toBe('Sip, sip! Warm and cozy all over.');
+  });
+
   it('greys out an action that just happened, and feeding without Treats', () => {
     const model = careSheet(
       squishy({ nextCareAt: { pet: '2026-10-02T12:00:05.000Z' } }),

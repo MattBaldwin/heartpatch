@@ -27,6 +27,7 @@ const DONE_LINES: Readonly<Record<string, string>> = {
   pet: 'So soft! They wiggle happily.',
   play: 'Boop! Giggles all around.',
   'heart-snack': 'Mmm! They feel so loved.',
+  'heart-tea': 'Sip, sip! Warm and cozy all over.',
 };
 
 /**
@@ -112,6 +113,7 @@ const ACTION_ICONS: Readonly<Record<string, string>> = {
   pet: '🤚',
   play: '✨',
   'heart-snack': '💖',
+  'heart-tea': '🍵',
 };
 
 /** Every species the sheet may need to name or colour: public plus the reply's secret rows. */

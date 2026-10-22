@@ -40,4 +40,15 @@ export const CARE_ACTIONS: CareAction[] = [
     cost: { heartdust: 3 }, // TUNE:
     outsideDailyCare: true,
   },
+  {
+    // Rekindled (#306 PR 5): brewed from Heart Petals found in a Hollowed
+    // village. A rare treat like the Heart Snack, and a little cozier.
+    id: 'heart-tea',
+    name: 'Heart Tea',
+    description: 'A warm cup of petal tea. Sip, sip, smile!',
+    contentment: 30, // TUNE: a bit more than a Heart Snack, for a found recipe
+    cooldownSeconds: 10, // TUNE:
+    cost: { 'heart-tea': 1 },
+    outsideDailyCare: true,
+  },
 ];

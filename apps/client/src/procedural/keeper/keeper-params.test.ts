@@ -5,6 +5,7 @@ import {
   hashString,
   isKeeperClothing,
   KEEPER_DATA,
+  REKINDLED,
   STARTER_CLOTHING,
   WARDROBE_SLOTS,
   type KeeperConfig,
@@ -582,7 +583,9 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
 
   it('leaves every other item exactly as it was (the model costume changes nothing else)', () => {
     // Fingerprint of every other catalog item on two bases, taken on main
-    // before the model costume existed (#261 follow-up).
+    // before the model costume existed (#261 follow-up). Items added since
+    // (the Rekindled set, #306 PR 5) aren't in it: they can't have changed.
+    const addedSince = new Set<string>(REKINDLED.pieces);
     const lines: string[] = [];
     for (const id of ['pip', 'bramble']) {
       const base = BASES.find((b) => b.id === id)!;
@@ -592,7 +595,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       delete config.face;
       delete config.body;
       for (const item of CLOTHING.filter(isKeeperClothing)) {
-        if (item.visual.model) continue;
+        if (item.visual.model || addedSince.has(item.id)) continue;
         expect(item.visual.replacesBody, item.id).toBeUndefined();
         const p = keeperParams(config, KEEPER_DATA, keeperItems([item.id]));
         // Naming the base's own face and body draws exactly the same.
