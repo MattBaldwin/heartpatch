@@ -167,13 +167,12 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     class: 'hollowed-relight-end',
     'data-testid': 'hollowed-relight-faded',
   });
-  const newPath = button(HOLLOWED_TEXT.newPath, 'auth-button', 'hollowed-relight-new-path', () => {
+  const newPath = button(HOLLOWED_TEXT.newPath, 'explore-easy', 'hollowed-relight-new-path', () => {
     void begin();
   });
   faded.append(
     el('strong', { class: 'hollowed-relight-end-title' }, HOLLOWED_TEXT.faded),
     el('span', {}, HOLLOWED_TEXT.fadedText),
-    newPath,
   );
   const giveUp = button(HOLLOWED_TEXT.giveUp, 'explore-not-now', 'hollowed-relight-give-up', () => {
     if (play) play = giveUpRelight(play);
@@ -186,8 +185,10 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
   const notNow = button(EXPLORE_TEXT.notNow, 'explore-not-now', 'hollowed-puzzle-not-now', () => {
     close(null);
   });
-  const board = [progress, title, counters, grid, line, faded];
-  const row = el('div', { class: 'explore-play-row' }, giveUp, retry, notNow);
+  // The faded note floats over the board, so the card never grows past the phone.
+  const stage = el('div', { class: 'hollowed-relight-stage' }, grid, faded);
+  const board = [progress, title, counters, stage, line];
+  const row = el('div', { class: 'explore-play-row' }, giveUp, newPath, retry, notNow);
   let cells: HTMLButtonElement[] = [];
 
   /** The cells' buttons, made once a try (a tap never lands on a replaced button). */
@@ -289,7 +290,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     const p = play;
     const light = p ? relightLight(p) : null;
     counters.hidden = !p;
-    grid.hidden = !p;
+    stage.hidden = !p;
     if (p && light) {
       movesLine.textContent = HOLLOWED_TEXT.moves(p.moves.length, p.board.limit);
       movesLine.classList.toggle('hollowed-relight-low', movesLeft(p) <= 3);
@@ -340,6 +341,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     giveUp.hidden = problem !== null || p?.outcome !== 'playing';
     retry.hidden = problem === null;
     retry.disabled = sending || loading;
+    newPath.hidden = problem !== null || p?.outcome !== 'faded';
     newPath.disabled = loading;
   }
 

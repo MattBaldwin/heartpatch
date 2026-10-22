@@ -49,9 +49,18 @@
   display: grid;
   grid-template-columns: repeat(var(--relight-n), minmax(0, 1fr));
   gap: 4px;
-  width: min(100%, 380px, calc(100dvh - 330px));
-  margin: 0 auto 10px;
+  width: min(100%, 380px, calc(100dvh - 360px));
+  margin: 0 auto;
   touch-action: manipulation;
+}
+
+.hollowed-relight-stage {
+  position: relative;
+  margin: 0 0 10px;
+}
+
+.hollowed-relight-stage[hidden] {
+  display: none;
 }
 
 .hollowed-relight-cell {
@@ -120,13 +129,23 @@
   opacity: 1;
 }
 
+/* "The light fades…": over the dimmed board, its New path button in the row below. */
 .hollowed-relight-end {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
   display: grid;
   gap: 6px;
-  margin: 0 0 10px;
-  padding: 12px;
+  padding: 14px 12px;
   border-radius: 18px;
   background: #f6dceb;
+  box-shadow: 0 8px 24px rgb(74 49 80 / 25%);
+  transform: translateY(-50%);
+}
+
+.hollowed-relight-done:has(~ .hollowed-relight-end:not([hidden])) {
+  opacity: 0.45;
 }
 
 .hollowed-relight-end[hidden] {
