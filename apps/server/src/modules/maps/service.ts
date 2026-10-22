@@ -46,6 +46,7 @@ import { requireMember } from './members.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
+import { settleKeys } from '../communities/key-moves.js';
 import { createCommunitiesRepo } from '../communities/repo.js';
 import { communitiesView, storeCommunities, villageMorning } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
@@ -471,6 +472,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
       // Water, Greens and Ice on a map made before them (#238), once.
       await seedExtraNodes(db, mapId);
+      // My hunted keys off claimed land on a patch with no challenges (#306), before I see them.
+      await settleKeys(db, mapId, user.id);
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();

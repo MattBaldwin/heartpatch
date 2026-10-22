@@ -64,6 +64,12 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
       kind: 'key',
       land: 'mine',
     });
+    // No challenges on this patch: the key stayed (no wild land near), so land next to it finds it.
+    const off = (v: MapView): MapView => ({ ...v, map: { ...v.map, pvpMode: 'off' } });
+    expect(keyHuntOn(off(near), theirs, ME)).toMatchObject({ kind: 'key', land: 'next' });
+    const far = owned(userId(2));
+    const lone = far.tiles.find((t) => t.q === key.q && t.r === key.r)!;
+    expect(keyHuntOn(off(far), lone, ME)).toMatchObject({ kind: 'key', land: 'near' });
     // Nobody else sees it (their view never has `cellar`, but even so).
     expect(keyHuntOn(near, theirs, userId(2))).toBeNull();
   });
@@ -72,6 +78,8 @@ describe('the key hunt on the map (#306 PR 2c)', () => {
     expect(glintLine('mine')).toBe(KEY_TEXT.glintMine);
     expect(glintLine('wild')).toContain('Claim');
     expect(glintLine('theirs')).toContain('Challenge');
+    expect(glintLine('next')).toContain('next to it');
+    expect(glintLine('near')).toContain('Claim land next to it');
   });
 
   it('shows the cellar door on my won square in every state, and nothing on others', () => {

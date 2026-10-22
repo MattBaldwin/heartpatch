@@ -50,6 +50,7 @@ import { newSeed } from '../../lib/rng.js';
 import { latestLocalMinute, mapLocalTime, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
+import { settleKeys } from '../communities/key-moves.js';
 import { createCommunitiesRepo } from '../communities/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
@@ -62,6 +63,7 @@ import { homesteadOf, refreshHomesteads } from './homesteads.js';
 import {
   createExploreRepo,
   exploreTransaction,
+  type ExploreKeyHunt,
   type ExploreRepo,
   type ExploreRow,
   type ExploreTxRepo,
@@ -241,10 +243,41 @@ function keyOnly(
 }
 
 /**
+ * The hunt whose cellar key `userId` can find on this tile of theirs (#306,
+ * owner decision 2026-10-22), or null: the key hides on it, or, on a patch
+ * with no challenges, on someone else's land right next to it with no wild
+ * tile near enough to move to (`settleKeys` ran first; `keyInReach`).
+ */
+async function huntOn(
+  repo: ExploreRepo,
+  mapId: string,
+  tile: ExploreTileRow,
+  userId: string,
+): Promise<ExploreKeyHunt | null> {
+  if (tile.ownerUserId !== userId) return null;
+  const hunts = await repo.listKeyHunts(mapId, userId);
+  if (hunts.length === 0) return null;
+  const here = hunts.find((h) => h.keyTileId === tile.id);
+  if (here) return here;
+  const pvpMode = await repo.mapPvpMode(mapId);
+  return (
+    hunts.find((h) =>
+      keyInReach(
+        h,
+        [tile, { q: h.q, r: h.r, ownerUserId: h.ownerUserId, homeSlot: null }],
+        userId,
+        pvpMode,
+      ),
+    ) ?? null
+  );
+}
+
+/**
  * The cellar key's glinting spot on this tile (#306, owner decision
- * 2026-10-22), or null: only on a tile I own that hides the key of a
- * village I won, while I'm still hunting for it. Its place comes from the
- * secret map seed; nobody else exploring the tile ever sees it (rule 6).
+ * 2026-10-22), or null: only on a tile of mine where I can find the key of
+ * a village I won (`huntOn`), while I'm still hunting for it. Its place
+ * comes from the secret map seed; nobody else exploring the tile ever sees
+ * it (rule 6).
  */
 async function keySpotOn(
   repo: ExploreRepo,
@@ -254,9 +287,7 @@ async function keySpotOn(
   userId: string,
   spots: readonly SearchSpot[],
 ): Promise<SearchSpot | null> {
-  if (!keyInReach(tile, [tile], userId)) return null;
-  const hunt = await repo.findKeyHunt(mapId, userId, tile.id);
-  if (!hunt || hunt.found) return null;
+  if (!(await huntOn(repo, mapId, tile, userId))) return null;
   return keySpot(deriveSeed(seed, 'cellar-key', tile.q, tile.r), spots, EXPLORE_RULES);
 }
 
@@ -279,14 +310,20 @@ async function findKey(
   },
 ): Promise<SearchSpotResponse> {
   const { mapId, userId, tile, spots, at } = input;
-  const hunt = keyInReach(tile, [tile], userId)
-    ? await repo.findKeyHunt(mapId, userId, tile.id)
-    : null;
-  if (!hunt) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
+  const hunt = await huntOn(repo, mapId, tile, userId);
+  if (!hunt) {
+    // Found already (a double tap's second search), else no key to find here.
+    const done = (await createCommunitiesRepo(tx).keyTiles(mapId)).some(
+      (k) => k.ownerUserId === userId && k.found && k.keyTileId === tile.id,
+    );
+    throw done
+      ? new AppError('CONFLICT', MESSAGES.keyFound)
+      : new AppError('NOT_FOUND', MESSAGES.noSpot);
+  }
   const communities = createCommunitiesRepo(tx);
   // Under the lock: a double tap's second search finds the key gone.
   const community = await communities.lockCommunity(hunt.id);
-  if (!community || community.ownerUserId !== userId || community.keyTileId !== tile.id) {
+  if (!community || community.ownerUserId !== userId || community.keyTileId !== hunt.keyTileId) {
     throw new AppError('NOT_FOUND', MESSAGES.noSpot);
   }
   if (community.keyRevealedAt !== null) throw new AppError('CONFLICT', MESSAGES.keyFound);
@@ -295,7 +332,7 @@ async function findKey(
     mapId,
     type: 'key.found',
     actorUserId: userId,
-    payload: { communityId: community.id, userId, q: tile.q, r: tile.r },
+    payload: { communityId: community.id, userId, q: hunt.q, r: hunt.r },
   });
   const row = await repo.findRow(userId, tile.id);
   const mask = row ? searchedMask(row, tile, spots) : 0;
@@ -369,6 +406,8 @@ export function createExploreService(options: ExploreServiceOptions) {
     ): Promise<ExploreTileResponse> => {
       const db = options.db;
       await requireMember(db, user, mapId, ['multiplayer']);
+      // My hunted keys off claimed land on a patch with no challenges (#306), before the glint is placed.
+      await settleKeys(db, mapId, user.id);
       const repo = createExploreRepo(db);
       const found = await repo.findTileAt(mapId, at.q, at.r);
       const grey = await greyVillage(repo, mapId, found, user.id, now());
@@ -408,6 +447,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       request: SearchSpotRequest,
     ): Promise<SearchSpotResponse> => {
       const at = now();
+      if (request.spot === KEY_SPOT.index) await settleKeys(options.db, mapId, user.id);
       const result = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);

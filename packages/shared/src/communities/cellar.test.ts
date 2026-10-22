@@ -3,7 +3,8 @@ import { COMMUNITY_RULES } from '../data/communities.js';
 import { EXPLORE_RULES } from '../data/explore.js';
 import { isSearched, searchSpots, withSearched } from '../explore/index.js';
 import { MAX_SEARCH_SPOTS } from '../schemas/data/explore.js';
-import { cellarSpots, KEY_SPOT, keyInReach, keySpot } from './cellar.js';
+import { hexKey } from '../hex/index.js';
+import { cellarSpots, KEY_SPOT, keyInReach, keyMoveTo, keySpot } from './cellar.js';
 
 const tile = (q: number, r: number, ownerUserId: string | null = null) => ({
   q,
@@ -26,6 +27,70 @@ describe('keyInReach (owner decision 2026-10-22: own the key tile itself)', () =
     expect(keyInReach(key, [tile(0, -1, 'me'), tile(0, 0, 'rival')], 'me')).toBe(false);
     expect(keyInReach(key, [tile(2, 0, 'me')], 'me')).toBe(false);
     expect(keyInReach(key, [], 'me')).toBe(false);
+  });
+});
+
+describe('keys on a patch with no challenges (owner decision 2026-10-22)', () => {
+  const key = { q: 0, r: 0 };
+  /** A small patch: every tile within 3 steps, wild meadow unless said. */
+  const patch = (
+    owners: Record<string, string | null> = {},
+    terrain: Record<string, string> = {},
+  ) => {
+    const out = [];
+    for (let q = -3; q <= 3; q++) {
+      for (let r = -3; r <= 3; r++) {
+        if (Math.abs(q + r) > 3) continue;
+        const k = `${String(q)},${String(r)}`;
+        out.push({
+          q,
+          r,
+          terrain: terrain[k] ?? 'meadow',
+          homeSlot: null,
+          communityId: null,
+          ownerUserId: owners[k] ?? null,
+        });
+      }
+    }
+    return out;
+  };
+  const rules = {
+    pvpMode: 'off' as const,
+    range: 2,
+    taken: new Set<`${number},${number}`>(),
+    gapTerrain: 'junipers-gap',
+    excludedTerrains: ['lake'],
+  };
+
+  it("moves a key off another Keeper's land to the nearest wild tile, the same every time", () => {
+    const tiles = patch({ '0,0': 'rival', '1,0': 'rival', '0,1': 'rival' });
+    const to = keyMoveTo(key, tiles, 'me', rules);
+    expect(to).not.toBeNull();
+    expect(Math.max(Math.abs(to!.q), Math.abs(to!.r), Math.abs(to!.q + to!.r))).toBe(1);
+    expect(tiles.find((t) => t.q === to!.q && t.r === to!.r)?.ownerUserId).toBeNull();
+    expect(keyMoveTo(key, tiles, 'me', rules)).toEqual(to);
+    // Never onto another key, a lake, a post or the Gap.
+    const others = keyMoveTo(key, tiles, 'me', { ...rules, taken: new Set([hexKey(to!)]) });
+    expect(others).not.toEqual(to);
+  });
+
+  it('stays on wild land, on my own land, and on patches with challenges', () => {
+    expect(keyMoveTo(key, patch(), 'me', rules)).toBeNull();
+    expect(keyMoveTo(key, patch({ '0,0': 'me' }), 'me', rules)).toBeNull();
+    for (const pvpMode of ['on', 'gentle'] as const) {
+      expect(keyMoveTo(key, patch({ '0,0': 'rival' }), 'me', { ...rules, pvpMode })).toBeNull();
+    }
+  });
+
+  it('stays when no wild tile is near enough, and then land next to it is enough', () => {
+    const owners: Record<string, string> = {};
+    for (const t of patch()) owners[hexKey(t)] = 'rival';
+    owners['1,0'] = 'me';
+    const tiles = patch(owners);
+    expect(keyMoveTo(key, tiles, 'me', rules)).toBeNull();
+    expect(keyInReach(key, tiles, 'me', 'off')).toBe(true);
+    expect(keyInReach(key, tiles, 'me', 'gentle')).toBe(false);
+    expect(keyInReach(key, tiles, 'me', 'on')).toBe(false);
   });
 });
 

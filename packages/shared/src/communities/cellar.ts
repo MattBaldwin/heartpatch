@@ -1,9 +1,10 @@
-import { hexKey, type Hex } from '../hex/index.js';
+import { hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import { extraSpotAt, searchSpots, type SearchSpot } from '../explore/index.js';
 import { deriveSeed, type Seed } from '../rng/index.js';
 import type { CommunityRules } from '../schemas/data/communities.js';
 import { MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
-import type { ReachTile } from '../territory/reach.js';
+import type { PvpMode } from '../schemas/maps.js';
+import { isTradingPost, type ReachTile } from '../territory/reach.js';
 
 // The key hunt and the hidden cellar (#306 PR 2c, owner decision 5): a won
 // village's winner gets a treasure map to the tile where the village
@@ -12,13 +13,82 @@ import type { ReachTile } from '../territory/reach.js';
 // so the server decides with it and the client explains with it.
 
 /**
- * Can `userId` find the key on its tile? Only once the tile is theirs (owner
- * decision 2026-10-22): the key may lie on another Keeper's land, and the
- * Keeper wins that tile first.
+ * Can `userId` find the key on its tile? Once the tile is theirs (owner
+ * decision 2026-10-22): on a patch with challenges, the key may lie on
+ * another Keeper's land, won first in a battle. On a patch with no
+ * challenges (`pvpMode` 'off') the key moves off claimed land (`keyMoveTo`);
+ * only when no wild tile is near enough does it stay there, and then land of
+ * theirs next to it is enough.
  */
-export function keyInReach(keyTile: Hex, tiles: readonly ReachTile[], userId: string): boolean {
+export function keyInReach(
+  keyTile: Hex,
+  tiles: readonly ReachTile[],
+  userId: string,
+  pvpMode?: PvpMode,
+): boolean {
   const at = hexKey(keyTile);
-  return tiles.some((t) => t.ownerUserId === userId && hexKey(t) === at);
+  const tile = tiles.find((t) => hexKey(t) === at);
+  if (tile?.ownerUserId === userId) return true;
+  if (pvpMode !== 'off' || !tile || tile.ownerUserId === null) return false;
+  const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
+  return hexNeighbors(keyTile).some((n) => mine.has(hexKey(n)));
+}
+
+/** A tile as moving a key sees it. */
+export interface KeyMoveTile extends ReachTile {
+  readonly terrain: string;
+  readonly communityId: string | null;
+}
+
+/**
+ * Where a hunt's key moves to on a patch with no challenges (owner decision
+ * 2026-10-22: keys hide only on wild land there), or null when it stays: on
+ * a patch with challenges, on wild land, on the winner's own land, or when
+ * no wild tile is within `range` steps (it then stays, `keyInReach`'s
+ * next-door rule). The nearest wild tile wins, then (q, r) order, so the
+ * same land always gives the same tile; it never lands where a key could
+ * not be placed (`placeCommunities`) or on another village's key (`taken`).
+ */
+export function keyMoveTo(
+  key: Hex,
+  tiles: readonly KeyMoveTile[],
+  winnerUserId: string,
+  input: {
+    readonly pvpMode: PvpMode;
+    readonly range: number;
+    readonly taken: ReadonlySet<HexKey>;
+    readonly gapTerrain: string;
+    readonly excludedTerrains: readonly string[];
+  },
+): Hex | null {
+  if (input.pvpMode !== 'off') return null;
+  const at = tiles.find((t) => hexKey(t) === hexKey(key));
+  if (!at || at.ownerUserId === null || at.ownerUserId === winnerUserId) return null;
+  let best: KeyMoveTile | null = null;
+  let bestSteps = Infinity;
+  for (const t of tiles) {
+    if (
+      t.ownerUserId !== null ||
+      t.homeSlot !== null ||
+      t.communityId !== null ||
+      t.terrain === input.gapTerrain ||
+      input.excludedTerrains.includes(t.terrain) ||
+      isTradingPost(t) ||
+      input.taken.has(hexKey(t))
+    ) {
+      continue;
+    }
+    const steps = hexDistance(key, t);
+    if (steps > input.range) continue;
+    if (
+      steps < bestSteps ||
+      (steps === bestSteps && best && (t.q < best.q || (t.q === best.q && t.r < best.r)))
+    ) {
+      best = t;
+      bestSteps = steps;
+    }
+  }
+  return best ? { q: best.q, r: best.r } : null;
 }
 
 /**

@@ -8,9 +8,11 @@ import {
   hexNeighbors,
   isTradingPost,
   searchSpots,
+  DEFAULT_PVP_MODE,
   type DevHomesteadRequest,
   type Hex,
   type HexKey,
+  type PvpMode,
   type Seed,
 } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
@@ -19,12 +21,13 @@ import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { communities, communityTiles, maps, tileExplore, tiles } from '../../db/schema.js';
 import { pickDevHomestead } from './dev-homestead.js';
 
-/** A won village whose cellar key hides on a tile (#306), by id and the name it wears. */
-export interface ExploreKeyHunt {
+/** A won village whose cellar key its winner still hunts (#306): its name, and the key's tile. */
+export interface ExploreKeyHunt extends Hex {
   id: string;
   name: string;
-  /** Its winner found the key already. */
-  found: boolean;
+  keyTileId: string;
+  /** Who holds the key's tile, or null when it's wild. */
+  ownerUserId: string | null;
 }
 
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
@@ -244,34 +247,39 @@ export function createExploreRepo(db: Executor) {
     },
 
     /**
-     * The village `userId` won whose cellar key hides on this tile (#306,
-     * owner decision 2026-10-22), or null. Server-only: which tile holds a
+     * The villages `userId` won and still hunts the cellar key of (#306), each
+     * with its key's tile and who holds it. Server-only: which tile holds a
      * key never leaves here but as the winner's glinting spot. Read without
      * a lock: a search locks the community row itself.
      */
-    findKeyHunt: async (
-      mapId: string,
-      userId: string,
-      tileId: string,
-    ): Promise<ExploreKeyHunt | null> => {
-      const [row] = await db
+    listKeyHunts: async (mapId: string, userId: string): Promise<ExploreKeyHunt[]> => {
+      const rows = await db
         .select({
           id: communities.id,
           name: communities.name,
           restoredName: communities.restoredName,
-          keyRevealedAt: communities.keyRevealedAt,
+          keyTileId: communities.keyTileId,
+          q: tiles.q,
+          r: tiles.r,
+          ownerUserId: tiles.ownerUserId,
         })
         .from(communities)
+        .innerJoin(tiles, eq(tiles.id, communities.keyTileId))
         .where(
           and(
             eq(communities.mapId, mapId),
-            eq(communities.keyTileId, tileId),
             eq(communities.ownerUserId, userId),
+            isNull(communities.keyRevealedAt),
           ),
-        );
-      return row
-        ? { id: row.id, name: row.restoredName ?? row.name, found: row.keyRevealedAt !== null }
-        : null;
+        )
+        .orderBy(asc(communities.id));
+      return rows.map(({ restoredName, name, ...r }) => ({ ...r, name: restoredName ?? name }));
+    },
+
+    /** Whether the patch has challenges (`maps.pvp_mode`), read without a lock. */
+    mapPvpMode: async (mapId: string): Promise<PvpMode> => {
+      const [row] = await db.select({ pvpMode: maps.pvpMode }).from(maps).where(eq(maps.id, mapId));
+      return row?.pvpMode ?? DEFAULT_PVP_MODE;
     },
 
     /** The map's time zone (its day and night), read without a lock. */

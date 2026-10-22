@@ -30,6 +30,9 @@ export const KEY_TEXT = {
   glintMine: '✨ Something glints here… Explore to look!',
   glintWild: '✨ Something glints here… Claim this land to look!',
   glintTheirs: '✨ Something glints here… Challenge this land to look!',
+  // A patch with no challenges, and no wild land near enough for the key to move to.
+  glintNext: '✨ Something glints here… Explore your land next to it!',
+  glintNear: '✨ Something glints here… Claim land next to it to look!',
   // In explore: the glinting spot, and finding the key there.
   dig: 'Dig it up',
   foundTitle: 'You found the cellar key!',
@@ -46,8 +49,13 @@ export const KEY_TEXT = {
   title: (name: string) => `${name}'s cellar 🕯️`,
 } as const;
 
-/** Whose land the key's tile is, as its panel says it. */
-export type KeyLand = 'mine' | 'wild' | 'theirs';
+/**
+ * Whose land the key's tile is, as its panel says it. On a patch with no
+ * challenges a key stays on someone else's land only with no wild land near
+ * enough to move to: then my land next to it finds it (`next`), else I claim
+ * some (`near`).
+ */
+export type KeyLand = 'mine' | 'wild' | 'theirs' | 'next' | 'near';
 
 /** What the key hunt shows on one tile's panel, or null for none. */
 export type KeyHuntBlock =
@@ -78,11 +86,17 @@ export function keyHuntOn(view: MapView, tile: PublicTile, me: string | null): K
   for (const c of mine) {
     const key = c.cellar?.state === 'hunt' ? c.cellar.keyTile : undefined;
     if (key && same(key, tile)) {
-      const land: KeyLand = keyInReach(key, view.tiles, me)
-        ? 'mine'
-        : tile.ownerUserId === null
-          ? 'wild'
-          : 'theirs';
+      const pvpOff = view.map.pvpMode === 'off';
+      const land: KeyLand =
+        tile.ownerUserId === me
+          ? 'mine'
+          : tile.ownerUserId === null
+            ? 'wild'
+            : !pvpOff
+              ? 'theirs'
+              : keyInReach(key, view.tiles, me, 'off')
+                ? 'next'
+                : 'near';
       return { kind: 'key', community: c, land };
     }
   }
@@ -92,11 +106,13 @@ export function keyHuntOn(view: MapView, tile: PublicTile, me: string | null): K
 
 /** The panel's line on the key's tile: what to do next to find it. */
 export function glintLine(land: KeyLand): string {
-  return land === 'mine'
-    ? KEY_TEXT.glintMine
-    : land === 'wild'
-      ? KEY_TEXT.glintWild
-      : KEY_TEXT.glintTheirs;
+  return {
+    mine: KEY_TEXT.glintMine,
+    wild: KEY_TEXT.glintWild,
+    theirs: KEY_TEXT.glintTheirs,
+    next: KEY_TEXT.glintNext,
+    near: KEY_TEXT.glintNear,
+  }[land];
 }
 
 /** My treasure maps: one for each won Hollow whose key I'm still hunting for, and where it hides. */

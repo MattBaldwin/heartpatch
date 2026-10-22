@@ -486,6 +486,87 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     }
   });
 
+  describe('on a patch with no challenges (owner decision 2026-10-22)', () => {
+    const hexDist = (a: { q: number; r: number }, b: { q: number; r: number }) =>
+      (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+    const viewKey = async (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      (await villageOf(server, who, mapId, id))?.cellar?.keyTile;
+
+    /** A won village on a no-challenge patch with its key on the rival's land. */
+    async function rivalsKey() {
+      const won = await wonVillage();
+      const { mapId, communityId, rival } = won;
+      await db.execute(`update maps set pvp_mode = 'off' where id = '${mapId}'`);
+      const key = await keyTileOf(mapId, communityId);
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${key.id}'`);
+      return { ...won, key };
+    }
+
+    it("moves a key off another Keeper's land to the nearest wild tile, once, and tells nobody", async () => {
+      const { server, me, rival, mapId, communityId, key } = await rivalsKey();
+      const before = (await eventsOf(mapId, 'key.found')).length;
+      const moved = await viewKey(server, me, mapId, communityId);
+      expect(moved).toBeDefined();
+      expect(moved).not.toEqual({ q: key.q, r: key.r });
+      const to = (await tilesOf(mapId)).find((t) => t.q === moved!.q && t.r === moved!.r)!;
+      expect(to.ownerUserId).toBeNull();
+      expect(hexDist(to, key)).toBeLessThanOrEqual(4);
+      expect((await communityRow(communityId))?.keyTileId).toBe(to.id);
+      // Idempotent: another look keeps it there; the rival's land is untouched.
+      expect(await viewKey(server, me, mapId, communityId)).toEqual(moved);
+      expect((await tilesOf(mapId)).find((t) => t.id === key.id)?.ownerUserId).toBe(rival.id);
+      expect(await eventsOf(mapId, 'key.found')).toHaveLength(before);
+      // Someone else claims the new tile: it moves again. My own claim doesn't move it.
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${to.id}'`);
+      const again = await viewKey(server, me, mapId, communityId);
+      expect(again).not.toEqual(moved);
+      const next = (await tilesOf(mapId)).find((t) => t.q === again!.q && t.r === again!.r)!;
+      await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${next.id}'`);
+      expect(await viewKey(server, me, mapId, communityId)).toEqual(again);
+      // And it's found there by exploring, as anywhere.
+      const found = await searchKey(server, me, mapId, next);
+      expect(found.statusCode, found.body).toBe(200);
+    });
+
+    it('keeps "win the key tile" on patches with challenges', async () => {
+      const { server, me, mapId, communityId, key } = await rivalsKey();
+      for (const mode of ['on', 'gentle']) {
+        await db.execute(`update maps set pvp_mode = '${mode}' where id = '${mapId}'`);
+        expect(await viewKey(server, me, mapId, communityId)).toEqual({ q: key.q, r: key.r });
+      }
+    });
+
+    it('stays put with no wild tile near enough, and land next to it finds it', async () => {
+      const { server, me, rival, mapId, communityId, key } = await rivalsKey();
+      // Every wild tile near the key becomes the rival's; one beside it becomes mine.
+      const all = await tilesOf(mapId);
+      const beside = all.find(
+        (t) =>
+          hexDist(t, key) === 1 &&
+          t.homeSlot === null &&
+          t.communityId === null &&
+          !['junipers-gap', 'trading-post', 'clearing'].includes(t.terrain),
+      )!;
+      const near = all.filter(
+        (t) => t.ownerUserId === null && hexDist(t, key) <= 4 && t.id !== beside.id,
+      );
+      for (const t of near) {
+        await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${t.id}'`);
+      }
+      await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${beside.id}'`);
+      expect(await viewKey(server, me, mapId, communityId)).toEqual({ q: key.q, r: key.r });
+      // The glint is on my land next to it.
+      const view = ExploreTileResponseSchema.parse(
+        (await exploreAt(server, me, mapId, beside)).json(),
+      );
+      expect(view.spots.some((s) => s.index === KEY_SPOT.index)).toBe(true);
+      const found = await searchKey(server, me, mapId, beside);
+      expect(found.statusCode, found.body).toBe(200);
+      const [event] = await eventsOf(mapId, 'key.found');
+      expect(event?.payload).toMatchObject({ q: key.q, r: key.r });
+    });
+  });
+
   it('lets a double tap find the key, open or search only once', async () => {
     const { server, me, mapId, communityId } = await wonVillage();
     await call(server, 'POST', `/maps/${mapId}/dev/key-reach`, me, { communityId });
