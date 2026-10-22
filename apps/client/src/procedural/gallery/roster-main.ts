@@ -4,11 +4,15 @@ import { BattleTimeOfDaySchema, GAME_DATA, visualRegistry } from '@heartpatch/sh
 import { BattleScene } from '../../battle/battle-scene.js';
 import { BattleContent } from '../../battle/battle-view.js';
 import { boot } from '../../engine/boot.js';
+import { setPerfReports } from '../../engine/perf-report.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { lodFor } from '../motion.js';
 import '../../styles.css';
+
+// A dev gallery never signs in: its perf reports would only be refused (401).
+setPerfReports(false);
 
 /**
  * Dev-only roster sheet at `/roster.html` (ART BIBLE contact sheets): one

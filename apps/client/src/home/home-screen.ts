@@ -49,9 +49,10 @@ import {
   costText,
   upgradeOffer,
   upgradeReach,
+  HOME_FULL,
   HOME_SAFE_LINE,
   FIRES_ON_LAND,
-  freeHomeSpots,
+  freeHomeTiles,
   fuelAllOffer,
   factoryTileOffer,
   groundsTileOffer,
@@ -224,7 +225,7 @@ export const HOME_TEXT = {
   title: 'Your home base',
   build: 'Build',
   back: 'Back to map',
-  pick: 'Tap a glowing spot!',
+  pick: 'Tap a glowing tile!',
   anywhere: 'Put it anywhere',
   cancel: 'Cancel',
   move: 'Move',
@@ -695,11 +696,13 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
    */
   const buildView = (current: HomeResponse) => {
     const all = buildRows(current);
-    const rows = all.filter(
-      (r) => r.option.kind !== 'built' && r.option.kind !== 'land' && r.option.kind !== 'homestead',
-    );
-    // Home buildings at their cap have no card: say why nothing more goes up (#537).
+    // Home buildings at their cap, and ones with no free tile, have no card:
+    // the line on top says why nothing more goes up (#537), once.
     const reason = homeBuildReason(current, all);
+    const rows = all.filter(
+      (r) =>
+        r.option.kind !== 'built' && !(r.option.kind === 'blocked' && r.option.note === HOME_FULL),
+    );
     const cards: BuildCard[] = rows.map((r) => ({
       id: r.building.id,
       icon: r.icon,
@@ -715,7 +718,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // A blocked card (out of season, no room) shows why, with no spots lit.
     const spots =
       row && row.option.kind !== 'blocked'
-        ? freeHomeSpots(atHome(current), null, row.building.slot)
+        ? freeHomeTiles(atHome(current), null, row.building.slot)
         : [];
     const wanted = mode.kind === 'build' ? mode.spot : null;
     const spot =
@@ -735,8 +738,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (m.kind === 'moving') {
       const moving = home.buildings.find((b) => b.id === m.id);
       const slot = BUILDING_DATA.get(moving?.buildingId ?? '')?.slot;
-      return freeHomeSpots(home, m.id, slot).filter(
-        (s) => !(moving && s.q === moving.q && s.r === moving.r && s.spot === moving.spot),
+      // One entry a tile, so its own tile is out whatever spot it stands on.
+      return freeHomeTiles(home, m.id, slot).filter(
+        (s) => !(moving && s.q === moving.q && s.r === moving.r),
       );
     }
     return [];
@@ -883,10 +887,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           areas: view.spot ? 1 : 0,
           hint:
             view.reason ??
-            (view.spots.length === 0 ? '' : mode.spot ? BUILD_TEXT.spotChosen : BUILD_TEXT.tapSpot),
+            (view.spots.length === 0 ? '' : mode.spot ? BUILD_TEXT.tileChosen : BUILD_TEXT.tapTile),
           allEdges: null,
           working,
-          // The Hearthfire has no card here: it goes out on my land.
+          // Fires have no card here: one line says they go out on my land.
           note: FIRES_ON_LAND,
           onSelect: (id) => {
             setMode({ kind: 'build', buildingId: id, spot: null });

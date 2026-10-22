@@ -1364,6 +1364,13 @@ export const tileExplore = pgTable(
     // earns nothing in between (jobs' `workProgress` pause).
     pausedAt: timestamptz('paused_at'),
     resumedAt: timestamptz('resumed_at'),
+    // A grey village tile's puzzle (#306 PR 2b): my tries so far (each start
+    // makes the next one, a fresh board), when I relit it, and when I found
+    // the tile's torn page (The forgotten story, the next PR). None of these
+    // touch `updated_at`, which dates the morning's searches.
+    puzzleAttempt: smallint('puzzle_attempt').notNull().default(0),
+    puzzleSolvedAt: timestamptz('puzzle_solved_at'),
+    fragmentFoundAt: timestamptz('fragment_found_at'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [

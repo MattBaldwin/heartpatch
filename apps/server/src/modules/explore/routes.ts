@@ -6,6 +6,11 @@ import {
   MapIdParamsSchema,
   SearchSpotRequestSchema,
   SearchSpotResponseSchema,
+  DevRelightAnswerResponseSchema,
+  SolvePuzzleRequestSchema,
+  SolvePuzzleResponseSchema,
+  StartPuzzleRequestSchema,
+  StartPuzzleResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -26,7 +31,7 @@ export interface ExploreRoutesOptions {
   devTools?: boolean;
 }
 
-/** Exploring your land (#199): the explore view of one of my tiles, and searching a spot. */
+/** Exploring your land (#199): the explore view of one of my tiles, searching a spot, and a grey village's Relight puzzle (#306 PR 2b). */
 export const exploreRoutes =
   (service: ExploreService, options: ExploreRoutesOptions): FastifyPluginCallback =>
   (fastify, _options, done) => {
@@ -62,6 +67,35 @@ export const exploreRoutes =
       async (request) => service.search(requireUser(request), request.params.mapId, request.body),
     );
 
+    // A grey village tile's Relight puzzle (#306 PR 2b): a try, then its moves.
+    app.post(
+      '/maps/:mapId/explore/puzzle/start',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: StartPuzzleRequestSchema,
+          response: { 200: StartPuzzleResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('explore')],
+      },
+      async (request) =>
+        service.startPuzzle(requireUser(request), request.params.mapId, request.body),
+    );
+    app.post(
+      '/maps/:mapId/explore/puzzle',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: SolvePuzzleRequestSchema,
+          response: { 200: SolvePuzzleResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('explore'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.solvePuzzle(requireUser(request), request.params.mapId, request.body),
+    );
+
     if (options.devTools) {
       app.post(
         '/maps/:mapId/dev/homestead',
@@ -83,6 +117,20 @@ export const exploreRoutes =
                 request.body ?? {},
               ),
             ),
+      );
+      // My latest Relight try's answer (#306 PR 2b), for e2e and captures only.
+      app.post(
+        '/maps/:mapId/dev/relight-answer',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: StartPuzzleRequestSchema,
+            response: { 200: DevRelightAnswerResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) =>
+          service.devRelightAnswer(requireUser(request), request.params.mapId, request.body),
       );
       app.post(
         '/maps/:mapId/dev/hollowed-reach',

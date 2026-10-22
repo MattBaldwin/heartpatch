@@ -183,18 +183,22 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await sheet.getByTestId('home-handle').tap();
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
 
-  // The Hearthfire isn't built at home (owner decision 2026-10-07): the one
-  // Build sheet (#371) has no card for it, and says where fires go.
+  // Only buildings that go at home have a card (the habitats): fires and
+  // homestead buildings are built out on the land, and one line says so.
   await sheet.getByTestId('home-build').tap();
   await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();
+  await expect(sheet.locator('[data-build]')).toHaveCount(2);
   await expect(sheet.locator('[data-build="hearthfire"]')).toHaveCount(0);
   await expect(sheet.getByTestId('build-note')).toContainText(
-    'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
+    'Fires go out on your land: tap a tile on the map 🔥',
   );
   // Picking a card says what it does and costs, in one line.
   await sheet.locator('[data-build="cozy-meadow"]').tap();
   await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(sheet.getByTestId('build-detail')).toContainText('·');
+  await expect(sheet.getByTestId('build-hint')).toHaveText('Tap a glowing tile!');
+  // Free tiles glow, one each (#589): the ring but the house's tile; the Heart Seed keeps the middle (#604).
+  await expect.poll(async () => (await homeState(page))?.scene?.spots, slow).toBe(5);
   // Build! stays on screen on a phone, and so does the whole row.
   const go = (await sheet.getByTestId('build-go').boundingBox())!;
   expect(go.x + go.width).toBeLessThanOrEqual(view.width);
@@ -235,7 +239,7 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   });
   await page.setViewportSize(view);
 
-  // A Cozy Meadow on the first lit spot, and the squishy moves in.
+  // A Cozy Meadow on the first lit tile, and the squishy moves in.
   await sheet.getByTestId('home-build').tap();
   await sheet.locator('[data-build="cozy-meadow"]').tap();
   await sheet.getByTestId('build-go').tap();
@@ -277,11 +281,11 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   expect(map?.safeTiles).toBeGreaterThanOrEqual(7);
   expect((await homeState(page))?.open).toBe(false);
 
-  // The Heart Seed's tile panel lists them, with a way home.
+  // The Heart Seed's tile panel has a way home (the meadow fills a ring tile, #589).
   const box = (await page.locator('#game').boundingBox())!;
   await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
   const panel = page.getByTestId('tile-panel');
-  await slowExpect(panel).toContainText('Cozy Meadow');
+  await slowExpect(panel).toContainText('Your home base');
   await panel.getByTestId('tile-home').tap();
   await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
 
@@ -311,14 +315,8 @@ async function buildAt(
   );
 }
 
-interface BookDebug {
-  open: boolean;
-}
-
-test('a home base with no room says why, and Recipe book opens the book and comes home (#537)', async ({
-  browser,
-}) => {
-  test.setTimeout(240_000); // two home scene builds (six buildings) and the map between; CI renders in software
+test('a home base with no room says why, and lights no tile (#537)', async ({ browser }) => {
+  test.setTimeout(240_000); // two home scene builds (five buildings) and the map between; CI renders in software
   const page = await newPlayer(browser, uniqueName('full'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -333,9 +331,10 @@ test('a home base with no room says why, and Recipe book opens the book and come
     .toBeGreaterThan(0);
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
-  // Four Ember Dens and two Cozy Meadows (four each may stand, owner
-  // 2026-10-18): one on every home tile but the house's (#604, HP_HOUSE is
-  // on for e2e), so a meadow could go up but has no room.
+  // Four Ember Dens and one Cozy Meadow (four each may stand, owner
+  // 2026-10-18): one on every ring tile but the house's (#604, HP_HOUSE is
+  // on for e2e; the Heart Seed keeps the middle), so a meadow could go up but
+  // has no room.
   expect(
     (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 40, stone: 20 } }))
       .status,
@@ -347,15 +346,12 @@ test('a home base with no room says why, and Recipe book opens the book and come
   );
   expect(home.body.tiles).toHaveLength(7);
   const house = houseTile(home.body.tiles, [])!;
-  const tiles = home.body.tiles
-    .filter((t) => t.q !== house.q || t.r !== house.r)
-    .sort((a, b) => Number(b.heartSeed) - Number(a.heartSeed));
+  const tiles = home.body.tiles.filter((t) => !t.heartSeed && (t.q !== house.q || t.r !== house.r));
   for (const [i, buildingId] of [
     'ember-den',
     'ember-den',
     'ember-den',
     'ember-den',
-    'cozy-meadow',
     'cozy-meadow',
   ].entries()) {
     const tile = tiles[i]!;
@@ -364,16 +360,17 @@ test('a home base with no room says why, and Recipe book opens the book and come
     );
   }
 
-  // Build: no den card, a meadow card with no room, and the sheet says why
+  // Build: no den card, no meadow card (no room), and the sheet says why
   // (the owner saw no reason).
   await (await trayButton(page, 'home-open')).tap();
   const slow = { timeout: 30_000 };
-  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(6);
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(5);
   const sheet = page.getByTestId('home');
   await sheet.getByTestId('home-build').tap();
   await slowExpect(sheet.getByTestId('build-sheet')).toBeVisible();
   await expect(sheet.locator('[data-build="ember-den"]')).toHaveCount(0);
-  await expect(sheet.locator('[data-build="cozy-meadow"]')).toHaveCount(1);
+  // No free tile: the line on top says why, once, and no card repeats it.
+  await expect(sheet.locator('[data-build]')).toHaveCount(0);
   await expect(sheet.getByTestId('build-hint')).toHaveText(
     'Your home base is full! Tap Not now, then tap one to upgrade ⬆️',
   );
@@ -382,24 +379,12 @@ test('a home base with no room says why, and Recipe book opens the book and come
   expect(hint.x + hint.width).toBeLessThanOrEqual(view.width);
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
 
-  // The lantern card: carve one first, in the recipe book. The book opens…
-  await sheet.locator('[data-build="jack-o-lantern-hearthfire"]').tap();
-  await expect(sheet.getByTestId('build-detail')).toContainText('Carve a');
-  await sheet.getByTestId('build-recipe').tap();
-  const book = page.getByTestId('recipe-book');
-  await slowExpect(book).toBeVisible();
-  expect((await hook<BookDebug>(page, 'recipeBook'))?.open).toBe(true);
-  // …and shutting it goes back home, not to the map. A "New page!" card may
-  // come first, now or once the book has asked the server; leave it for later.
-  const later = page.getByTestId('recipe-book-new-page').getByRole('button', { name: 'Later' });
-  await expect(async () => {
-    if (await later.isVisible()) await later.tap();
-    await book.getByTestId('recipe-book-close').tap({ timeout: 2_000 });
-  }).toPass({ timeout: 20_000 });
-  await expect(book).toBeHidden();
-  await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
+  // Full: no tile glows, and no card for the lantern or the fires (they go out on the land).
+  expect((await homeState(page))?.scene?.spots).toBe(0);
+  await expect(sheet.locator('[data-build="jack-o-lantern-hearthfire"]')).toHaveCount(0);
+  await expect(sheet.getByTestId('build-note')).toContainText('Fires go out on your land');
+  await sheet.getByTestId('build-cancel').tap();
   await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
-  await slowExpect(page.getByTestId('map-hud')).toBeHidden();
 
   expect(errors).toEqual([]);
 });

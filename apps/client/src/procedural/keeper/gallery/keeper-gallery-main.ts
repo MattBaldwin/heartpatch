@@ -10,6 +10,7 @@ import {
   type WardrobeSlot,
 } from '@heartpatch/shared';
 import { boot } from '../../../engine/boot.js';
+import { setPerfReports } from '../../../engine/perf-report.js';
 import type { QualityTier } from '../../../engine/config.js';
 import { pickInitialTier } from '../../../engine/quality/tiers.js';
 import { createRenderer, parseRendererPreference } from '../../../engine/renderer.js';
@@ -24,6 +25,9 @@ import { keeperHash, keeperParams } from '../keeper-params.js';
 import { buildKeeperGalleryScene } from './keeper-gallery-scene.js';
 import '../../../styles.css';
 import '../../gallery/gallery.css';
+
+// A dev gallery never signs in: its perf reports would only be refused (401).
+setPerfReports(false);
 
 /**
  * Dev-only Keeper gallery at `/keepers.html` (a separate Vite page, never

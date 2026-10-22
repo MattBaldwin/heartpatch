@@ -152,6 +152,7 @@ const MESSAGES = {
   fenceOnEdge: 'Fences go on the edges of a tile. Tap 🪵 Fences on your land!',
   tileTaken: 'Only one building fits on a tile! Try another one.',
   houseTile: 'Your house lives on this tile 🏡. Try another one!',
+  seedTile: 'Your Heart Seed lives here 💗. Try another tile!',
   clearFirst: 'Clear this land first 🌱. Then you can build here!',
   squishyBusy: 'A squishy is gathering here. Ask your squishy to move first!',
   clearing: "You're clearing this land. Let it finish first!",
@@ -395,7 +396,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
    * `placement` allows, with no other building on it (#295: one building per
    * tile), no resource spot outside home (clear it first, #242), its slot's
    * kind of spot (#204), free, and not the house's tile while the house
-   * stands (#604; `houseStands`). `homestead` is the target's homestead state when
+   * stands (#604; `houseStands`), and not the Heart Seed's. `homestead` is the target's homestead state when
    * it's out on my land.
    */
   function checkSpot(
@@ -465,10 +466,13 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         throw new AppError('CONFLICT', MESSAGES.houseTile);
       }
     }
+    // The Heart Seed keeps the middle (#604): a building fills its tile (#589)
+    // and would bury it. Ones already standing there stay; they can't be put back.
+    const seed = homeTile ? isSeed(homeTile, heartSeedOf(home)) : false;
+    if (seed) throw new AppError('CONFLICT', MESSAGES.seedTile);
     if (!fitsSlot(building.slot, target.spot)) {
       throw new AppError('CONFLICT', MESSAGES.wrongSlot(building));
     }
-    const seed = homeTile ? isSeed(homeTile, heartSeedOf(home)) : false;
     if (isReservedSpot({ heartSeed: seed, nodeResource: mine.nodeResource }, target.spot)) {
       throw new AppError('CONFLICT', MESSAGES.middleTaken);
     }
