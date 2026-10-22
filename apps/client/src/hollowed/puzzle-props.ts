@@ -36,7 +36,7 @@ export function buildPuzzleProp(scene: Scene, skin: string, material: Material):
   for (const mesh of [broken, fixed]) {
     mesh.material = material;
     mesh.isPickable = false;
-    // Placed once; never moves.
+    // Culled by its bounds when it's off screen (the kit's default is always drawn).
     mesh.alwaysSelectAsActiveMesh = false;
   }
   // Mended, it's the village's colour coming back.

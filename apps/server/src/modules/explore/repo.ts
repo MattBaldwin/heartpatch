@@ -269,7 +269,9 @@ export function createExploreRepo(db: Executor) {
     /**
      * The lore pages my memory puzzles on this map already gave (#306 PR 2b),
      * from their events: the lore consumer records them a moment after the
-     * solve commits, so a quick second solve mustn't roll one again. Unlocked.
+     * solve commits, so a quick second solve mustn't roll one again. This
+     * map only: `game_events` has no index by player, and a solve on another
+     * patch within the consumer's moment is too unlikely to scan for. Unlocked.
      */
     listPuzzledPages: async (mapId: string, userId: string): Promise<string[]> => {
       const rows = await db
