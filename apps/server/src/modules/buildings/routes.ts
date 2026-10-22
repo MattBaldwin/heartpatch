@@ -1,5 +1,6 @@
 import {
   BuildingParamsSchema,
+  DevUpkeepDueRequestSchema,
   FuelAllResponseSchema,
   FuelBuildingRequestSchema,
   HomeNameRequestSchema,
@@ -10,6 +11,7 @@ import {
   PlaceBuildingRequestSchema,
   RemoveBuildingResponseSchema,
   SquishyParamsSchema,
+  UpkeepOrderRequestSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -23,6 +25,13 @@ export interface BuildingsRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /**
+   * `HP_DEV_SQUISHY_GRANTS`: also registers the resource-building dev routes
+   * (#601), `POST /maps/:mapId/dev/buildings/ready` and
+   * `POST /maps/:mapId/dev/upkeep/due`. Never in production (`config.ts`
+   * refuses it there).
+   */
+  devTools?: boolean;
 }
 
 export const buildingsRoutes =
@@ -143,6 +152,46 @@ export const buildingsRoutes =
       },
       async (request) => service.name(requireUser(request), request.params.mapId, request.body),
     );
+
+    // The order my upkeep buildings pay in when Heart Coins run short (#601 Q5).
+    app.post(
+      '/maps/:mapId/buildings/upkeep-order',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: UpkeepOrderRequestSchema,
+          response: { 200: HomeResponseSchema },
+        },
+        ...commandHooks,
+      },
+      async (request) =>
+        service.upkeepOrder(requireUser(request), request.params.mapId, request.body),
+    );
+
+    if (options.devTools) {
+      const devHooks = { preHandler: [requireAuth, rateLimit('build')] };
+      app.post(
+        '/maps/:mapId/dev/buildings/ready',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: HomeResponseSchema } },
+          ...devHooks,
+        },
+        async (request) => service.devReady(requireUser(request), request.params.mapId),
+      );
+      app.post(
+        '/maps/:mapId/dev/upkeep/due',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevUpkeepDueRequestSchema,
+            response: { 200: HomeResponseSchema },
+          },
+          ...devHooks,
+        },
+        async (request) =>
+          service.devUpkeepDue(requireUser(request), request.params.mapId, request.body.mornings),
+      );
+    }
 
     app.post(
       '/maps/:mapId/squishies/:squishyId/habitat',

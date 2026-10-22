@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ClothingDropSourceSchema } from './data/clothing.js';
 import { CommunityKindIdSchema } from './data/communities.js';
+import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -730,6 +731,38 @@ export const GAME_EVENTS = {
     }),
   },
   /**
+   * A player relit a grey village tile's path (#306 PR 2b, Relight): once a
+   * tile each. `depth`, `attempt` and `moves` (how many) say which try and
+   * how long it took; the moves themselves were checked by replaying them
+   * on the try's board, rebuilt from the Hollow's seed, and aren't kept.
+   * `lorePage` is the server-only page it gave (the lore consumer grants
+   * it); a Rekindled piece is its own `clothing.found`. Members see who
+   * fixed which kind of thing where, and a `notable` find's kind.
+   */
+  'explore.puzzled': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      communityId: z.uuid(),
+      /** The solve: the ledger's `refId` for its items. */
+      solveId: z.uuid(),
+      skin: ContentIdSchema,
+      depth: RelightDepthSchema,
+      attempt: z.number().int().min(1),
+      moves: z.number().int().min(0),
+      lorePage: ContentIdSchema.nullable(),
+      items: z.record(z.string(), z.number().int().min(1)),
+      notable: ExploreNotableSchema.nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      skin: ContentIdSchema,
+      notable: ExploreNotableSchema.nullable(),
+    }),
+  },
+  /**
    * A player started clearing one of their homesteads (#242): members see
    * "clearing here, ready at …" on the tile. The tool and drop stay internal.
    */
@@ -980,6 +1013,63 @@ export const GAME_EVENTS = {
       cost: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
+  /**
+   * A resource building's output landed in its owner's bag (#601): a settle,
+   * or its take-down. Members see the building was busy; what it made stays
+   * internal.
+   */
+  'building.produced': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      buildingId: ContentIdSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /**
+   * A resource building or the Warehouse fell asleep (#601): its morning's
+   * upkeep wasn't covered. Members see it nap; the coins stay internal.
+   */
+  'building.paused': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      reason: z.enum(['upkeep']),
+      /** The map-local morning it couldn't pay. */
+      day: LocalDateSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /** A napping building woke up (#601): its owner's Heart Coins cover a morning again. Free. */
+  'building.resumed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
   },
   /**
    * A player fenced edges of one of their tiles (#203): one event per

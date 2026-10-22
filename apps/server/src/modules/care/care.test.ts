@@ -639,12 +639,13 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const home = HomeResponseSchema.parse(
         (await call(server, 'GET', `/maps/${mapId}/home`, kid)).json(),
       );
-      const seed = home.tiles.find((t) => t.heartSeed)!;
+      // A ring tile: the Heart Seed keeps the middle (#604).
+      const ring = home.tiles.find((t) => !t.heartSeed)!;
       await give(mapId, kid, { timber: 10, stone: 10 });
       const built = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
         buildingId: 'ember-den',
-        q: seed.q,
-        r: seed.r,
+        q: ring.q,
+        r: ring.r,
         spot: 1,
       });
       expect(built.statusCode, built.body).toBe(201);

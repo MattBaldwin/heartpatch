@@ -116,7 +116,7 @@ export const RECIPES: Recipe[] = [
   {
     id: 'axe',
     name: 'Axe',
-    description: 'A trusty Axe to clear a forest on your homestead. Lasts 3 clears!',
+    description: 'A trusty Axe to clear a forest or old forest on your homestead. Lasts 3 clears!',
     inputs: { timber: 4, stone: 2 }, // TUNE: #295 plan revision 1
     output: { resource: 'axe', quantity: 3 },
     craftSeconds: 60, // TUNE:
@@ -132,7 +132,8 @@ export const RECIPES: Recipe[] = [
   {
     id: 'spade',
     name: 'Spade',
-    description: 'A handy Spade to clear a meadow or hill on your homestead. Lasts 3 clears!',
+    description:
+      'A handy Spade to clear a meadow, hill, lake or pumpkin field on your homestead. Lasts 3 clears!',
     inputs: { timber: 3, stone: 3 }, // TUNE: #295 plan revision 1
     output: { resource: 'spade', quantity: 3 },
     craftSeconds: 60, // TUNE:

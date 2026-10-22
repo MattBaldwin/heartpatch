@@ -53,6 +53,12 @@ export interface ClearState {
   readonly clears?: readonly Clearing[];
   /** My Crafting Factory, if I've built it (one per player, #295). */
   readonly factory?: { readonly buildingId: string } | null;
+  /**
+   * The seasons on today on this map (the bag's `seasons`, from the server):
+   * a seasonal drop out of its season is nothing (#601: Pumpkin Fields after
+   * Halloween), as the server's clear decides.
+   */
+  readonly seasons?: readonly string[];
 }
 
 const TOOL_NAMES = new Map<string, string>(CLEARING_RULES.tools.map((t) => [t.id, t.name]));
@@ -126,7 +132,13 @@ export function clearOffer(
   if (tile.buildings.length > 0 || tile.clearing || clears.some(here)) return null;
   const tool = clearToolFor(tile.terrain, CLEARING_RULES);
   if (!tool) return null;
-  const drop = clearDrop(tile, GAME_DATA.resources, JOB_RULES, CLEARING_RULES);
+  const drop = clearDrop(
+    tile,
+    GAME_DATA.resources,
+    JOB_RULES,
+    CLEARING_RULES,
+    state.seasons ? new Set(state.seasons) : undefined,
+  );
   const needTool = (state.items[tool] ?? 0) < 1;
   const blocked =
     homesteadReason(tile) ??

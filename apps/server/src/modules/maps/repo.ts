@@ -1,4 +1,5 @@
 import {
+  CLEARED_TERRAIN,
   TRADING_POST_TERRAIN,
   type DefenseStance,
   type FeelingId,
@@ -51,9 +52,14 @@ export interface NewTile {
 }
 
 /** A tile for the map view, before the service makes it a `PublicTile`. */
-export type TileViewRow = Omit<PublicTile, 'buildings' | 'guardianHint' | 'post'> & {
+export type TileViewRow = Omit<PublicTile, 'buildings' | 'guardianHint' | 'post' | 'workerLook'> & {
   /** `tiles.guardian_strength`. Secret: it picks the guardian tier (tech spec §8). */
   guardianStrength: number | null;
+  /**
+   * The species of the squishy gathering here, or null. Internal: the
+   * service masks it per viewer into `PublicTile.workerLook` (#602).
+   */
+  workerSpeciesId: string | null;
 };
 
 export interface MapRow {
@@ -699,6 +705,15 @@ function queries(db: Executor): MapsRepo {
               and ${tileClears.endedAt} is null
               and ${tileClears.userId} = ${tiles.ownerUserId}
           )`,
+          // Cleared land remembers its terrain (#601 Q2): its latest finished clear's.
+          clearedFrom: sql<string | null>`(
+            select ${tileClears.fromTerrain} from ${tileClears}
+            where ${tileClears.tileId} = ${tiles.id}
+              and ${tileClears.endReason} = 'cleared'
+              and ${tiles.terrain} = ${CLEARED_TERRAIN}
+            order by ${tileClears.endedAt} desc
+            limit 1
+          )`,
           // The raid cooldown (#15): the latest tile battle's, past or not.
           cooldownUntil: sql<string | null>`(
             select max(${tileAttacks.cooldownUntil}) from ${tileAttacks}
@@ -731,6 +746,16 @@ function queries(db: Executor): MapsRepo {
               and ${squishyAtWork()}
               and ${squishies.state} = 'active'
           )::int`.mapWith(Number),
+          // Its species (#602), for the service to mask per viewer. Only the
+          // species: never which squishy.
+          workerSpeciesId: sql<string | null>`(
+            select ${squishies.speciesId} from ${squishies}
+            where ${squishies.workTileId} = ${tiles.id}
+              and ${squishyAtWork()}
+              and ${squishies.state} = 'active'
+            order by ${squishies.id}
+            limit 1
+          )`,
         })
         .from(tiles)
         // "Gathering here" (#17): only the tile owner's own gather counts.

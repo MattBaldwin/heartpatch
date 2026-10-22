@@ -4,9 +4,10 @@ import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { HomeNameSchema, PublicBuildingSchema } from './buildings.js';
 import { CommunityViewSchema } from './communities.js';
 import { PublicFenceSchema } from './fences.js';
-import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
+import { ContentIdSchema, DisplayNameSchema, RaritySchema } from './data/common.js';
 import { FeelingIdSchema } from './data/elements.js';
 import { PublicKeeperSchema } from './data/keepers.js';
+import { SpeciesVisualSchema } from './data/species.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
 
@@ -300,6 +301,13 @@ export const PublicTileSchema = z.object({
    */
   clearing: z.object({ readyAt: z.iso.datetime() }).nullable().optional(),
   /**
+   * Cleared land (#242) remembers what it was (#601, owner decision Q2):
+   * the terrain its finished clear started from, so the Build sheet offers
+   * the resource building that matches. Null on land that isn't cleared.
+   * Optional so older fixtures and servers parse; the server always sends it.
+   */
+  clearedFrom: z.string().nullable().optional(),
+  /**
    * When the latest battle for this tile stops blocking another (#15, the
    * raid cooldown); null if there's never been one. May be in the past.
    */
@@ -320,6 +328,23 @@ export const PublicTileSchema = z.object({
    * older fixtures parse; the server always sends it.
    */
   workers: z.number().int().min(0).optional(),
+  /**
+   * What the squishy gathering here looks like (#602, owner decision
+   * 2026-10-22): its species, so a patch-mate's gatherer stands on the map
+   * as itself. The server masks it per viewer, like the trading shelf: null
+   * when nobody gathers here or it's a secret species this viewer hasn't
+   * met. `visual` and `rarity` come only with a secret species the viewer
+   * has met, since the client has no row for it. Never which squishy: no
+   * id, name, level or stats. Optional so older fixtures and servers parse.
+   */
+  workerLook: z
+    .object({
+      speciesId: ContentIdSchema,
+      visual: SpeciesVisualSchema.optional(),
+      rarity: RaritySchema.optional(),
+    })
+    .nullable()
+    .optional(),
   /**
    * Neutral land's guardians today (#15's team for the map-local day), as a
    * count and a difficulty word; null on anyone's land, home bases, and land
@@ -362,6 +387,8 @@ export const PublicTileSchema = z.object({
   communityId: z.uuid().nullable().optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
+/** A gatherer's look on a tile (`PublicTile.workerLook`), when the viewer may see it. */
+export type WorkerLook = NonNullable<PublicTile['workerLook']>;
 
 /**
  * How the viewer reaches one trading post (#270): `connected` (their land

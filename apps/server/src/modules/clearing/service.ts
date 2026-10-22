@@ -20,7 +20,7 @@ import { createExploreRepo } from '../explore/repo.js';
 import { createGatheringRepo } from '../gathering/repo.js';
 import { bankGather, gatherFate } from '../gathering/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
+import { consumeItems, grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { toClearing } from './view.js';
 import {
@@ -285,7 +285,7 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
       let result: ClearResponse;
       try {
         result = await store.transaction(async (repo, tx) => {
-          await requireMember(tx, user, mapId);
+          const { map } = await requireMember(tx, user, mapId);
           // Lock order (tech spec §7): the tile (step 6: it can't change hands,
           // and no gather, gatherer or guard starts on it meanwhile), reads of
           // what's on it, the clear's insert, the tool's inventory row (step
@@ -338,7 +338,14 @@ export function createClearingService(options: ClearingServiceOptions): Clearing
             fromTerrain: tile.terrain,
             fromNode: tile.nodeResource,
             tool: toolId,
-            drop: clearDrop(tile, GAME_DATA.resources, JOB_RULES, CLEARING_RULES),
+            // A seasonal drop out of its season is nothing (Pumpkin Fields after Halloween).
+            drop: clearDrop(
+              tile,
+              GAME_DATA.resources,
+              JOB_RULES,
+              CLEARING_RULES,
+              new Set(seasonsOn(at, map.timeZone)),
+            ),
             startedAt: at,
             readyAt: new Date(at.getTime() + CLEARING_RULES.seconds * 1000),
           });

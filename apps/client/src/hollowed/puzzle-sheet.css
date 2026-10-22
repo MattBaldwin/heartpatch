@@ -1,0 +1,166 @@
+/* A grey village tile's Relight card (#306 PR 2b): the explore card
+   (`.explore-sheet`, which fits or scrolls inside 72dvh on an iPhone SE)
+   with a square board of path pieces, the approved mockup's look. */
+
+.hollowed-puzzle {
+  --relight-light: #ffc94d;
+  --relight-pipe: #b9adc4;
+  --relight-pipe-dark: #8c7f99;
+  --relight-lamp-off: #d7cfe0;
+  --relight-echo: #4b3d66;
+  --relight-cell: #efe7f3;
+}
+
+/* The world waits behind it, so the card may use most of the screen below
+   the explore header (beats `.explore-sheet`'s 72dvh). */
+.explore-sheet.hollowed-puzzle {
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
+  padding: 16px 14px;
+}
+
+.hollowed-puzzle > * {
+  min-width: 0;
+}
+
+.hollowed-puzzle .explore-sheet-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.hollowed-relight-counters {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #b4532a;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.hollowed-relight-low {
+  color: #d23b5b;
+}
+
+/* Square cells sized to the card, and short enough to leave the buttons on
+   screen; never under 44px a cell (the touch-target floor), so a short
+   screen (a phone on its side) scrolls the card instead. */
+.hollowed-relight-board {
+  --relight-n: 4;
+
+  display: grid;
+  grid-template-columns: repeat(var(--relight-n), minmax(0, 1fr));
+  gap: 4px;
+  width: min(
+    100%,
+    max(
+      calc(var(--relight-n) * 44px + (var(--relight-n) - 1) * 4px),
+      min(380px, calc(100dvh - 360px))
+    )
+  );
+  margin: 0 auto;
+  touch-action: manipulation;
+}
+
+.hollowed-relight-stage {
+  position: relative;
+  margin: 0 0 10px;
+}
+
+.hollowed-relight-stage[hidden] {
+  display: none;
+}
+
+.hollowed-relight-cell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: var(--relight-cell);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.hollowed-relight-cell:focus-visible {
+  outline: 3px solid var(--relight-light);
+  outline-offset: 2px;
+}
+
+.hollowed-relight-cell:disabled {
+  cursor: default;
+}
+
+.hollowed-relight-cell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Wooden pieces slide and never turn. */
+.hollowed-relight-loose {
+  background: repeating-linear-gradient(135deg, #e9d3b6 0 6px, #e2c7a4 6px 12px);
+  box-shadow: inset 0 0 0 2px #c79f72;
+}
+
+.hollowed-relight-picked {
+  box-shadow: inset 0 0 0 3px #b8487a;
+}
+
+.hollowed-relight-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ead9e3;
+}
+
+.hollowed-echo-body {
+  fill: var(--relight-echo);
+}
+
+/* The echo flare: the shadow the light touched glows, and the line goes dark. */
+.hollowed-relight-flare {
+  box-shadow:
+    0 0 0 3px #d23b5b,
+    0 0 14px rgb(210 59 91 / 60%);
+}
+
+.hollowed-relight-flare .hollowed-echo-body {
+  fill: #6b4f99;
+}
+
+.hollowed-relight-glow {
+  filter: drop-shadow(0 0 6px rgb(255 201 77 / 90%));
+}
+
+.hollowed-relight-done .hollowed-relight-cell:disabled {
+  opacity: 1;
+}
+
+/* "The light fades…": over the dimmed board, its New path button in the row below. */
+.hollowed-relight-end {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  display: grid;
+  gap: 6px;
+  padding: 14px 12px;
+  border-radius: 18px;
+  background: #f6dceb;
+  box-shadow: 0 8px 24px rgb(74 49 80 / 25%);
+  transform: translateY(-50%);
+}
+
+.hollowed-relight-done:has(~ .hollowed-relight-end:not([hidden])) {
+  opacity: 0.45;
+}
+
+.hollowed-relight-end[hidden] {
+  display: none;
+}
+
+.hollowed-relight-end-title {
+  color: #7a2d55;
+  font-size: 18px;
+}

@@ -381,6 +381,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           fires: on('hearthfire'),
           fences: [...fences.values()].reduce((a, b) => a + b, 0),
           trainingGrounds: on('training-grounds'),
+          resourceBuildings: on('resource'),
+          warehouses: on('warehouse'),
         },
       });
       walks.push({ userId, stage: keeper.stage, reclaimed: reclaimedAt, walk });

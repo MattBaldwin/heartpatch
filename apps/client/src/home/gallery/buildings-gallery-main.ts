@@ -6,6 +6,7 @@ import {
   type MyBuilding,
 } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
+import { setPerfReports } from '../../engine/perf-report.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
@@ -13,6 +14,9 @@ import { lodFor } from '../../procedural/motion.js';
 import { HOME_VIEW } from '../home-config.js';
 import { HomeScene } from '../home-scene.js';
 import '../../styles.css';
+
+// A dev gallery never signs in: its perf reports would only be refused (401).
+setPerfReports(false);
 
 /**
  * Dev-only building gallery at `/buildings.html` (a separate Vite page, never

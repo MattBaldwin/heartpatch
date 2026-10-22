@@ -578,7 +578,15 @@ const communityActions = createCommunityActions(() => signedIn?.id ?? null);
 // The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
 // A visit pass ends on the server's clock, so both count it down on the bag's
 // game clock, not the device's (#561), as the recipe book does.
-const postScreen = createPostScreen({ root: document.body, now: () => inventory.gameNow() });
+// A sale at its Sell tab (#601 PR 4) moves the bag and the 💛 pill: both read again.
+const postScreen = createPostScreen({
+  root: document.body,
+  now: () => inventory.gameNow(),
+  onSold: () => {
+    void inventory.refresh();
+    void heartCoins.refresh();
+  },
+});
 const journeys = createJourneyScreen({
   now: () => inventory.gameNow(),
   openBattle: (battle) => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContentIdSchema } from './data/common.js';
 
 // Heart Coins API (#601): one balance per player per patch, earned by
 // playing there and spent only there. The server pays and caps everything
@@ -24,6 +25,29 @@ export const HeartCoinsSchema = z.object({
   caps: HeartCoinsBySourceSchema,
   /** When today's earnings start again: the patch's next local midnight. */
   resetsAt: z.iso.datetime(),
+  /**
+   * Building upkeep (#601): the next morning it's charged, its total, and
+   * each building that would pay it, in charge order. A paused one owes
+   * nothing (owner decision Q6) and shows `paused`. Optional for an older
+   * server; left out when I have no upkeep buildings.
+   */
+  upkeep: z
+    .object({
+      nextMorningAt: z.iso.datetime(),
+      total: amount,
+      due: z.array(
+        z.object({
+          buildingRowId: z.uuid(),
+          buildingId: ContentIdSchema,
+          level: z.number().int().min(1),
+          q: z.number().int(),
+          r: z.number().int(),
+          coins: amount,
+          paused: z.boolean(),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type HeartCoins = z.infer<typeof HeartCoinsSchema>;
 

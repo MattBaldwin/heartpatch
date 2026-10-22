@@ -65,6 +65,9 @@ const StoredOutcomeSchema = z.strictObject({
       fires: z.number().int().min(0),
       fences: z.number().int().min(0),
       trainingGrounds: z.number().int().min(0),
+      // #601; older nights have none.
+      resourceBuildings: z.number().int().min(0).optional(),
+      warehouses: z.number().int().min(0).optional(),
     })
     .optional(),
 });

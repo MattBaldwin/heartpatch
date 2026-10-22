@@ -11,19 +11,15 @@ describe('CLEARING_RULES (#242)', () => {
     expect(checkClearingRules(CLEARING_RULES, GAME_DATA)).toEqual([]);
   });
 
-  it('clears meadows, forests, hills and mountains, and nothing else (owner Q5)', () => {
+  it('clears every land a resource building works, and nothing else (owner Q5, #601 Q1)', () => {
     expect(clearToolFor('forest', CLEARING_RULES)).toBe('axe');
     expect(clearToolFor('mountains', CLEARING_RULES)).toBe('pickaxe');
     expect(clearToolFor('meadow', CLEARING_RULES)).toBe('spade');
     expect(clearToolFor('hills', CLEARING_RULES)).toBe('spade');
-    for (const terrain of [
-      'lake',
-      'junipers-gap',
-      'old-forest',
-      'pumpkin-fields',
-      'trading-post',
-      'clearing',
-    ]) {
+    expect(clearToolFor('lake', CLEARING_RULES)).toBe('spade');
+    expect(clearToolFor('old-forest', CLEARING_RULES)).toBe('axe');
+    expect(clearToolFor('pumpkin-fields', CLEARING_RULES)).toBe('spade');
+    for (const terrain of ['junipers-gap', 'trading-post', 'clearing']) {
       expect(clearToolFor(terrain, CLEARING_RULES)).toBeNull();
     }
   });
@@ -52,8 +48,10 @@ describe('CLEARING_RULES (#242)', () => {
     expect(checkClearingRules(broken, GAME_DATA)).toEqual([
       'terrains[2]: no tool row for "spade"',
       'terrains[3]: no tool row for "spade"',
-      `terrains[4]: "junipers-gap" can't be cleared`,
-      'terrains[5]: "forest" is listed twice',
+      'terrains[4]: no tool row for "spade"',
+      'terrains[6]: no tool row for "spade"',
+      `terrains[7]: "junipers-gap" can't be cleared`,
+      'terrains[8]: "forest" is listed twice',
     ]);
   });
 

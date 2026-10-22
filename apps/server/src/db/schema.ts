@@ -465,6 +465,18 @@ export const buildings = pgTable(
     fuelledThrough: date('fuelled_through', { mode: 'string' }),
     fuelUpdatedAt: timestamptz('fuel_updated_at'),
     placedAt: timestamptz('placed_at').notNull().defaultNow(),
+    // Resource buildings (#601): when counting their output starts (placed,
+    // or the last settle that banked it); null for every other kind.
+    producedSince: timestamptz('produced_since'),
+    // Paused for unpaid upkeep at this morning (#601): output counts only to
+    // here. Null while running, and for kinds without upkeep.
+    pausedAt: timestamptz('paused_at'),
+    // The last map-local morning whose upkeep is settled (paid, paused or
+    // skipped: a napping morning is never charged back, owner decision Q6).
+    upkeepPaidThrough: date('upkeep_paid_through', { mode: 'string' }),
+    // The kid's own upkeep order (#601 owner decision Q5): lower pays first.
+    // Null: the default order (highest level, then oldest, Warehouse last).
+    upkeepRank: smallint('upkeep_rank'),
   },
   (t) => [
     foreignKey({
@@ -1352,6 +1364,13 @@ export const tileExplore = pgTable(
     // earns nothing in between (jobs' `workProgress` pause).
     pausedAt: timestamptz('paused_at'),
     resumedAt: timestamptz('resumed_at'),
+    // A grey village tile's puzzle (#306 PR 2b): my tries so far (each start
+    // makes the next one, a fresh board), when I relit it, and when I found
+    // the tile's torn page (The forgotten story, the next PR). None of these
+    // touch `updated_at`, which dates the morning's searches.
+    puzzleAttempt: smallint('puzzle_attempt').notNull().default(0),
+    puzzleSolvedAt: timestamptz('puzzle_solved_at'),
+    fragmentFoundAt: timestamptz('fragment_found_at'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [

@@ -412,6 +412,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           buildingsRoutes(createBuildingsService({ db, clock, log: app.log, house, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // Fences on the edges of my land (#203).

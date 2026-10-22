@@ -45,14 +45,13 @@ describe('pickDevHomestead (#566)', () => {
     });
   });
 
-  it('clears Old Forest when nothing two steps out is buildable (#429)', () => {
+  it('keeps Old Forest as it is, and clears a lake when nothing else stays spotless (#429, #601 Q1)', () => {
     const old = { q: 1, r: 1, terrain: 'old-forest' };
     const lake = { q: 2, r: 0, terrain: 'lake' };
-    expect(pickDevHomestead([lake, old], {}, SEED)).toEqual({
-      tile: old,
-      terrain: CLEARED_TERRAIN,
-    });
-    expect(pickDevHomestead([lake], {}, SEED)).toBeNull();
+    expect(pickDevHomestead([lake, old], {}, SEED)).toEqual({ tile: old, terrain: 'old-forest' });
+    // Every lake grows its well back: cleared, it never does.
+    expect(pickDevHomestead([lake], {}, SEED)).toEqual({ tile: lake, terrain: CLEARED_TERRAIN });
+    expect(pickDevHomestead([{ q: 3, r: 0, terrain: 'junipers-gap' }], {}, SEED)).toBeNull();
   });
 
   it('with a spot asked for, takes the first tile: the spot is there anyway', () => {

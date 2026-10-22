@@ -249,6 +249,35 @@ export function besideSpot(
   return first ?? clampToTile(from);
 }
 
+/**
+ * Where the Keeper stands to show something off (#306 PR 2b, owner fix
+ * 2026-10-22: a mended broken thing must not hide behind the Keeper). The
+ * follow camera looks from −z, so a stance on the camera's side would put
+ * the Keeper in front of it: try beside it first (east or west, the side
+ * nearer `from` first), a little towards the camera, then further round,
+ * never straight in front. Null when nowhere round it is clear.
+ */
+export function showcaseStance(
+  from: WorldPoint,
+  spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>,
+  colliders: readonly Collider[] = [],
+): WorldPoint | null {
+  const keep =
+    spotRadius(spot.kind) + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach * EXPLORE_VIEW.standOff;
+  // Angles from +x (east); −z is towards the camera.
+  const east = [-0.35, 0, -0.7, 0.4];
+  const sides =
+    from.x >= spot.x ? [east, east.map((a) => Math.PI - a)] : [east.map((a) => Math.PI - a), east];
+  for (let i = 0; i < east.length; i++) {
+    for (const side of sides) {
+      const a = side[i] as number;
+      const p = clampToTile({ x: spot.x + Math.cos(a) * keep, z: spot.z + Math.sin(a) * keep });
+      if (!blocked(p, colliders) && gapTo(p, spot) <= EXPLORE_VIEW.reach) return p;
+    }
+  }
+  return null;
+}
+
 // ── The follow camera ─────────────────────────────────────────────────────
 
 /**

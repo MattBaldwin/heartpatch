@@ -138,12 +138,13 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
   await expect(page.getByTestId('village-name-input')).toHaveValue(name);
   await page.getByTestId('village-name-it').tap();
   await expect(sheet).toBeHidden();
-  // Then the treasure map to its cellar key (PR 2c, hollowed-cellar.spec.ts):
-  // later. It waits its turn, and its buttons arm a moment after it shows.
+  // Then the map to its cellar key (PR 2c, hollowed-cellar.spec.ts): later.
+  // It waits its turn, and its buttons arm a moment after it shows. Put it
+  // away first: while it's up it may cover the village's flag, and a covered
+  // flag isn't shown (`placeFlags`), so a slow runner would never see it.
   await slowExpect(page.getByTestId('key-map-card')).toHaveAttribute('data-armed', 'true');
   await page.getByTestId('key-map-later').tap();
   await expect(page.getByTestId('key-map-card')).toBeHidden();
-  // The flags keep clear of open cards, so the new name shows once the map is put away.
   await expect
     .poll(async () => (await communities(page))?.flags.map((f) => f.label) ?? [], slow)
     .toContain(`🏡 ${name}`);

@@ -26,11 +26,8 @@ export const HEART_COINS_TEXT = {
 /** A source the sheet shows a bar for, in order. */
 export type HeartCoinRowSource = keyof HeartCoinsBySource;
 
-/**
- * The bars, in order. Selling (`sell`) joins when the post's Sell tab ships
- * (#601 PR 4): until then there's no way to earn it, so no bar.
- */
-export const HEART_COIN_ROWS: readonly HeartCoinRowSource[] = ['battle', 'capture', 'care'];
+/** The bars, in order. Selling is the trading post's Sell tab (#601 PR 4). */
+export const HEART_COIN_ROWS: readonly HeartCoinRowSource[] = ['battle', 'capture', 'care', 'sell'];
 
 const ROW_TEXT: Readonly<Record<HeartCoinRowSource, { emoji: string; label: string }>> = {
   battle: { emoji: '🏆', label: 'Battle wins' },

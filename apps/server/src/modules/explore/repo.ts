@@ -15,10 +15,17 @@ import {
   type PvpMode,
   type Seed,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { communities, communityTiles, maps, tileExplore, tiles } from '../../db/schema.js';
+import {
+  communities,
+  communityTiles,
+  gameEvents,
+  maps,
+  tileExplore,
+  tiles,
+} from '../../db/schema.js';
 import { pickDevHomestead } from './dev-homestead.js';
 
 /** A won village whose cellar key its winner still hunts (#306): its name, and the key's tile. */
@@ -51,8 +58,12 @@ export interface ExploreVillage {
   /** Its name as the map shows it. */
   name: string;
   seed: Seed;
-  /** Every village tile, for the reach rule. */
+  /** Every village tile, for the reach rule and how deep a tile is. */
   tiles: Hex[];
+  /** The village square: the Hollow's heart. */
+  square: Hex;
+  /** Who has fixed this tile's Relight puzzle (PR 2b, `community_tiles.puzzle_solved_by`). */
+  puzzleSolvedBy: string[];
 }
 
 /** A player's explore row for one tile (`tile_explore`). */
@@ -68,6 +79,9 @@ export interface ExploreRow {
   joinedAt: Date | null;
   pausedAt: Date | null;
   resumedAt: Date | null;
+  /** A grey village tile's puzzle (#306 PR 2b): my tries so far, and when I relit it. */
+  puzzleAttempt: number;
+  puzzleSolvedAt: Date | null;
   /** Its last write: a grey village's searches count from this morning only (#306 2a). */
   updatedAt: Date;
 }
@@ -100,6 +114,8 @@ const rowColumns = {
   joinedAt: tileExplore.joinedAt,
   pausedAt: tileExplore.pausedAt,
   resumedAt: tileExplore.resumedAt,
+  puzzleAttempt: tileExplore.puzzleAttempt,
+  puzzleSolvedAt: tileExplore.puzzleSolvedAt,
   updatedAt: tileExplore.updatedAt,
 };
 
@@ -232,9 +248,13 @@ export function createExploreRepo(db: Executor) {
           restoredName: communities.restoredName,
           seed: communities.seed,
           restoredAt: communityTiles.restoredAt,
+          puzzleSolvedBy: communityTiles.puzzleSolvedBy,
+          squareQ: tiles.q,
+          squareR: tiles.r,
         })
         .from(communityTiles)
         .innerJoin(communities, eq(communities.id, communityTiles.communityId))
+        .innerJoin(tiles, eq(tiles.id, communities.seedTileId))
         .where(eq(communityTiles.tileId, tileId));
       if (!row || row.restoredAt !== null) return null;
       const village = await db
@@ -243,7 +263,74 @@ export function createExploreRepo(db: Executor) {
         .innerJoin(tiles, eq(tiles.id, communityTiles.tileId))
         .where(eq(communityTiles.communityId, row.id))
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return { id: row.id, name: row.restoredName ?? row.name, seed: row.seed, tiles: village };
+      return {
+        id: row.id,
+        name: row.restoredName ?? row.name,
+        seed: row.seed,
+        tiles: village,
+        square: { q: row.squareQ, r: row.squareR },
+        puzzleSolvedBy: row.puzzleSolvedBy,
+      };
+    },
+
+    /**
+     * Who has fixed a grey village tile's puzzle (#306 PR 2b), row-locked
+     * until commit: the caller holds the tile's lock and its own explore row
+     * first (tech spec §7 step 6: tiles, explore rows, then community rows).
+     * Null when the tile isn't a village tile.
+     */
+    lockPuzzle: async (tileId: string): Promise<string[] | null> => {
+      const [row] = await db
+        .select({ puzzleSolvedBy: communityTiles.puzzleSolvedBy })
+        .from(communityTiles)
+        .where(eq(communityTiles.tileId, tileId))
+        .for('update');
+      return row?.puzzleSolvedBy ?? null;
+    },
+
+    /**
+     * The lore pages my puzzles on this map already gave (#306 PR 2b),
+     * from their events: the lore consumer records them a moment after the
+     * solve commits, so a quick second solve mustn't roll one again. This
+     * map only: `game_events` has no index by player, and a solve on another
+     * patch within the consumer's moment is too unlikely to scan for. Unlocked.
+     */
+    listPuzzledPages: async (mapId: string, userId: string): Promise<string[]> => {
+      const rows = await db
+        .select({ page: sql<string | null>`${gameEvents.payload}->>'lorePage'` })
+        .from(gameEvents)
+        .where(
+          and(
+            eq(gameEvents.mapId, mapId),
+            eq(gameEvents.type, 'explore.puzzled'),
+            eq(gameEvents.actorUserId, userId),
+          ),
+        );
+      return rows.flatMap((r) => (r.page ? [r.page] : []));
+    },
+
+    /**
+     * Writes my row's puzzle tries and when I relit it (#306 PR 2b; the
+     * caller holds its lock). Leaves `updated_at` alone: it dates the
+     * morning's searches.
+     */
+    setPuzzle: async (
+      userId: string,
+      tileId: string,
+      puzzle: Partial<Pick<ExploreRow, 'puzzleAttempt' | 'puzzleSolvedAt'>>,
+    ): Promise<void> => {
+      await db
+        .update(tileExplore)
+        .set(puzzle)
+        .where(and(eq(tileExplore.userId, userId), eq(tileExplore.tileId, tileId)));
+    },
+
+    /** Writes who has fixed a tile's puzzle, a sorted set (the caller holds `lockPuzzle`). */
+    setPuzzleSolvedBy: async (tileId: string, solvedBy: readonly string[]): Promise<void> => {
+      await db
+        .update(communityTiles)
+        .set({ puzzleSolvedBy: [...new Set(solvedBy)].sort() })
+        .where(eq(communityTiles.tileId, tileId));
     },
 
     /**
