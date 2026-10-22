@@ -19,9 +19,15 @@ export interface KeyGlow extends MapLayer {
   readonly glowing: readonly { q: number; r: number }[];
 }
 
+/** Reduced motion, read from one media query (never one per frame). */
+function stillMotion(): () => boolean {
+  const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+  return () => query.matches;
+}
+
 export function createKeyGlow(
   me: () => string | null,
-  still: () => boolean = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  still: () => boolean = stillMotion(),
 ): KeyGlow {
   let scene: Scene | null = null;
   let mesh: Mesh | null = null;

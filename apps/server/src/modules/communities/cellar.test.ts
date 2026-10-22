@@ -289,6 +289,16 @@ describe.skipIf(!url)('the key hunt and the hidden cellar (#306 PR 2c, needs DAT
     expect(blocked.statusCode).toBe(409);
     expect((await communityRow(communityId))?.keyRevealedAt).toBeNull();
 
+    // On any other tile of mine there's no such spot to ask for.
+    const other = (await tilesOf(mapId)).find(
+      (t) =>
+        t.ownerUserId === me.id &&
+        t.id !== next.id &&
+        t.homeSlot === null &&
+        !['clearing', 'junipers-gap', 'trading-post'].includes(t.terrain),
+    )!;
+    expect((await searchKey(server, me, mapId, other)).statusCode).toBe(404);
+
     // I win the tile: the key glints there, past the tile's own spots.
     await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${next.id}'`);
     const view = ExploreTileResponseSchema.parse((await exploreAt(server, me, mapId, next)).json());

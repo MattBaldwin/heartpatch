@@ -39,7 +39,7 @@ describe('keySpot (owner decision 2026-10-22: found by exploring)', () => {
     expect(() => withSearched(0, KEY_SPOT.index)).toThrow(RangeError);
   });
 
-  it("lands in the same place every time, in the open between the tile's own spots", () => {
+  it("lands in the same place every time, as far from the tile's own spots as it can", () => {
     for (const terrain of ['meadow', 'forest', 'lake', 'hills', 'mountains', 'pumpkin-fields']) {
       for (const seed of ['a', 'b', 'map-seed']) {
         const spots = searchSpots(seed, { q: 3, r: -2, terrain }, EXPLORE_RULES) ?? [];

@@ -130,8 +130,10 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
   };
 
   /** The treasure map: the old drawing, the ✕, and the way there. `first`: it just came with the win. */
-  const showCard = (c: CommunityView, first: boolean): void => {
+  const showCard = (waited: CommunityView, first: boolean): void => {
     const view = current;
+    // As the map view has it now: a Hollow named since its win shows its new name.
+    const c = view?.communities?.find((x) => x.id === waited.id) ?? waited;
     const key = c.cellar?.state === 'hunt' ? c.cellar.keyTile : undefined;
     if (!view || !key) return;
     carded = c;
