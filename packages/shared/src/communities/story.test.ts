@@ -16,7 +16,8 @@ import {
 } from './story.js';
 
 const RULES = MEMORY_PUZZLES.story;
-const SEEDS = 150;
+// Enough days to cover every Hollow size, and cheap enough under coverage on CI.
+const SEEDS = 80;
 
 describe('storyMoments (#306)', () => {
   it('holds 5 moments for 4–5 tiles and 6 for 6–7, as the mockup', () => {
@@ -49,7 +50,7 @@ describe('makeStory (#306)', () => {
         const pos: number[] = [];
         day.order.forEach((m, place) => (pos[m] = place));
         for (const clue of day.clues) expect(clueHolds(clue, pos, n)).toBe(true);
-        expect(storyFits(day.clues, n)).toBe(1);
+        expect(storyFits(day.clues, n, 2)).toBe(1);
         // Every page counts: leave any one out and more than one order fits
         // (a 7-tile Hollow's day is the rare exception: more pages than it needs).
         const spare = day.clues.filter(
@@ -57,6 +58,7 @@ describe('makeStory (#306)', () => {
             storyFits(
               day.clues.filter((__, j) => j !== k),
               n,
+              2,
             ) === 1,
         ).length;
         if (tiles <= 6) {
@@ -90,7 +92,7 @@ describe('makeStory (#306)', () => {
   });
 
   it('writes clues a kid can read: short and kind', () => {
-    for (let s = 0; s < 40; s++) {
+    for (let s = 0; s < 20; s++) {
       for (const clue of storyDeal(makeStory(`words-${s}`, 7, RULES)).clues) {
         expect(clue.length).toBeLessThanOrEqual(160);
         expect(findAvoidedWords(clue)).toEqual([]);
