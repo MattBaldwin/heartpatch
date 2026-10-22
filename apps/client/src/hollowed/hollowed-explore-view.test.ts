@@ -15,6 +15,7 @@ import {
   puzzleLines,
   puzzleSpot,
   skinOf,
+  storyAsleep,
   sparkAt,
   spookPush,
   spookReach,
@@ -100,6 +101,7 @@ describe('joy discs and sparks', () => {
 describe('a grey village tile’s Relight puzzle (#306 PR 2b): words', () => {
   const puzzle = {
     skin: 'mural',
+    kind: 'relight' as const,
     depth: 'rim' as const,
     x: 0.2,
     z: -0.1,
@@ -114,6 +116,22 @@ describe('a grey village tile’s Relight puzzle (#306 PR 2b): words', () => {
     expect(HOLLOWED_TEXT.lit(1, 2)).toBe('Lanterns lit 1 of 2');
     // A skin this build doesn't know yet still draws (the default's words).
     expect(skinOf({ skin: 'tea-set' }).id).toBe('music-box');
+  });
+
+  it('keeps the heart’s story asleep until every torn page is found (#306)', () => {
+    const story = { ...puzzle, kind: 'story' as const, depth: 'heart' as const };
+    expect(storyAsleep({ ...story, pages: { found: 3, total: 5 } })).toEqual({
+      found: 3,
+      total: 5,
+    });
+    expect(HOLLOWED_TEXT.pagesFound(3, 5)).toBe('3 of 5 pages found');
+    expect(storyAsleep({ ...story, pages: { found: 5, total: 5 } })).toBeNull();
+    expect(storyAsleep({ ...story, solved: true, pages: { found: 1, total: 5 } })).toBeNull();
+    // A Relight path never sleeps.
+    expect(storyAsleep({ ...puzzle, pages: { found: 0, total: 5 } })).toBeNull();
+    expect(HOLLOWED_TEXT.storySmudged(2, 5)).toBe(
+      'The ink smudges… 2 of 5 were in the right place.',
+    );
   });
 
   it('is one more spot to walk up to, done once mended', () => {

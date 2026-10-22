@@ -9,6 +9,7 @@ import {
   GAME_DATA,
   HOLLOW_RULES,
   HOME_BASE_RULES,
+  hexEquals,
   hollowedOpenAt,
   exploreNeeds,
   isExplorable,
@@ -18,7 +19,9 @@ import {
   keyInReach,
   keySpot,
   checkRelight,
+  checkStory,
   makeRelight,
+  makeStory,
   memoryPuzzle,
   MEMORY_PUZZLES,
   placeEchoes,
@@ -26,6 +29,9 @@ import {
   relightDepth,
   relightSeed,
   Rng,
+  storyAnswer,
+  storyDeal,
+  storySeed,
   searchedCount,
   searchSpots,
   withSearched,
@@ -43,8 +49,13 @@ import {
   type SolvePuzzleRequest,
   type SolvePuzzleResponse,
   type DevRelightAnswerResponse,
+  type DevStoryAnswerResponse,
+  type DevStoryPagesRequest,
   type StartPuzzleRequest,
   type StartPuzzleResponse,
+  type StoryStart,
+  type TellStoryRequest,
+  type TellStoryResponse,
   type ToolId,
 } from '@heartpatch/shared';
 import {
@@ -114,6 +125,13 @@ const MESSAGES = {
   puzzleFixed: 'You already fixed this one! ✨',
   puzzleStale: 'The path has shuffled! Try the new one.',
   puzzleWrong: "The light didn't reach every lantern. Try a new path!",
+  // The forgotten story (#306), on the heart tile.
+  storyPages: (found: number, total: number) =>
+    `Find every torn page first! 📜 ${found} of ${total} found.`,
+  storyMoments: "Those aren't the story's moments. Try again!",
+  storyStale: 'The ink has shifted! Read the new pages.',
+  notStory: 'This one is a lantern path, not a story!',
+  notRelight: 'This one is a story, not a lantern path!',
 } as const;
 
 const TOOL_NAMES = new Map(EXPLORE_RULES.tools.map((t) => [t.id, t.name]));
@@ -234,11 +252,51 @@ function puzzleView(
     echoesOf(grey, tile, spots),
     MEMORY_PUZZLES,
   );
+  const depth = relightDepth(tile, grey.village.square, grey.village.tiles);
   return {
     ...thing,
-    depth: relightDepth(tile, grey.village.square, grey.village.tiles),
+    // The heart tile holds the forgotten story; every other tile a Relight path.
+    kind: depth === 'heart' ? 'story' : 'relight',
+    depth,
     solved: row?.puzzleSolvedAt != null || solvedBy.includes(userId),
   };
+}
+
+/** The story's torn pages I've found in a Hollow, one a tile (#306). */
+async function pagesOf(
+  repo: ExploreRepo,
+  grey: Grey,
+  userId: string,
+): Promise<{ found: number; total: number }> {
+  const total = grey.village.tiles.length;
+  return { found: Math.min(await repo.countPages(grey.village.id, userId), total), total };
+}
+
+/** A puzzle as I see it, with my torn pages when it's the story. */
+async function withPages(
+  repo: ExploreRepo,
+  grey: Grey,
+  userId: string,
+  puzzle: HollowedPuzzle,
+): Promise<HollowedPuzzle> {
+  return puzzle.kind === 'story' ? { ...puzzle, pages: await pagesOf(repo, grey, userId) } : puzzle;
+}
+
+/**
+ * A try's forgotten story: its seed is the Hollow's secret seed, the tile, me
+ * and the try (rule 1); one clue for each of the Hollow's tiles.
+ */
+function storyOf(grey: Grey, tile: ExploreTileRow, userId: string, attempt: number) {
+  return makeStory(
+    storySeed(grey.village.seed, tile, userId, attempt),
+    grey.village.tiles.length,
+    MEMORY_PUZZLES.story,
+  );
+}
+
+/** A story try as the kid gets it: never the order. */
+function storyStart(grey: Grey, tile: ExploreTileRow, userId: string, attempt: number): StoryStart {
+  return { kind: 'story', attempt, story: storyDeal(storyOf(grey, tile, userId, attempt)) };
 }
 
 /** A try's Relight board: its seed is the Hollow's secret seed, the tile, me and the try (rule 1). */
@@ -262,21 +320,26 @@ function relightOf(
  */
 const MAX_ATTEMPT = 32_767;
 
+/** The try after `attempt`. */
+const nextAttempt = (attempt: number) => (attempt >= MAX_ATTEMPT ? 1 : attempt + 1);
+
 /** A grey village tile's explore extras: its name, today's joy, its echoes and its puzzle. */
-function greyView(
+async function greyView(
+  repo: ExploreRepo,
   grey: Grey,
   tile: ExploreTileRow,
   spots: readonly SearchSpot[],
   searched: number,
   row: ExploreRow | null,
   userId: string,
-): HollowedExplore {
+): Promise<HollowedExplore> {
+  const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, userId);
   return {
     id: grey.village.id,
     name: grey.village.name,
     joy: exploreJoy({ searched, total: spots.length }),
     echoes: echoesOf(grey, tile, spots),
-    puzzle: puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, userId),
+    puzzle: await withPages(repo, grey, userId, puzzle),
   };
 }
 
@@ -465,6 +528,90 @@ async function lockPuzzleRow(
   return { grey, tile, spots, row };
 }
 
+/**
+ * Fixing a broken thing (a lit path or a whole story): marks it fixed and
+ * gives what it gives, a page not found yet or else a small thank-you, plus
+ * the Rekindled set's puzzle odds (rule 1, rule 6). The caller holds the
+ * tile, my row and the village row (`lockPuzzle`), and has checked the try.
+ */
+async function fixPuzzle(
+  tx: Executor,
+  repo: ExploreTxRepo,
+  rng: () => Rng,
+  fix: {
+    mapId: string;
+    userId: string;
+    grey: Grey;
+    tile: ExploreTileRow;
+    puzzle: HollowedPuzzle;
+    solvedBy: readonly string[];
+    attempt: number;
+    moves: number;
+    at: Date;
+  },
+): Promise<SolvePuzzleResponse> {
+  const { mapId, userId, tile, puzzle, at } = fix;
+  await repo.setPuzzle(userId, tile.id, { puzzleSolvedAt: at });
+  await repo.setPuzzleSolvedBy(tile.id, [...fix.solvedBy, userId]);
+
+  // What it gives: a page not found yet, else a small thank-you (rule 1, rule 6).
+  const owner = { mapId, userId };
+  // Found, or given by a solve the lore consumer hasn't recorded yet.
+  const foundLore = new Set([
+    ...(await createLoreRepo(tx).listFound(userId)).map((f) => f.pageId),
+    ...(await repo.listPuzzledPages(mapId, userId)),
+  ]);
+  const reward = rollPuzzleReward(PUZZLE_REWARDS, { foundLore }, rng());
+  const lorePage = reward.kind === 'lore' ? reward.id : null;
+  // The Rekindled set's puzzle odds (#306 PR 5): rolled now, so its finds
+  // join the one bag grant below. Reads only, so the lock order holds.
+  const rekindled = await rekindledDrop(tx, { place: 'puzzle', userId, mapId, at }, { rng: rng() });
+  const found = withFoundItems(reward.kind === 'items' ? reward.items : {}, rekindled);
+
+  // Step 11: the bag.
+  const solveId = uuidv7();
+  if (Object.keys(found).length > 0) {
+    await lockGrantRows(tx, mapId, [{ userId, items: found }]);
+    await grantItems(tx, owner, found, 'explore', solveId);
+  }
+  // A Rekindled piece appends its own event first; ours stays the last write.
+  const clothing = await grantRekindledPiece(
+    tx,
+    { source: 'explore', refId: solveId, userId, mapId, at },
+    rekindled,
+  );
+
+  const notable = notableOf(found, lorePage, clothing);
+  await repo.appendEvent({
+    mapId,
+    type: 'explore.puzzled',
+    actorUserId: userId,
+    payload: {
+      userId,
+      q: tile.q,
+      r: tile.r,
+      terrain: tile.terrain,
+      communityId: fix.grey.village.id,
+      solveId,
+      skin: puzzle.skin,
+      depth: puzzle.depth,
+      attempt: fix.attempt,
+      moves: fix.moves,
+      lorePage,
+      items: found,
+      notable,
+    },
+  });
+
+  return {
+    puzzle: { ...puzzle, solved: true },
+    lore: lorePage ? { id: lorePage, title: LORE_TITLES.get(lorePage) ?? '' } : null,
+    clothing,
+    found,
+    items: await createInventoryRepo(tx).list(owner),
+  };
+}
+
 export function createExploreService(options: ExploreServiceOptions) {
   const now = options.clock ?? (() => new Date());
   const rngFor = options.rng ?? (() => Rng.fromSeed(newSeed()));
@@ -549,7 +696,9 @@ export function createExploreService(options: ExploreServiceOptions) {
         progress: { searched, total: spots.length },
         homestead: grey ? null : homesteadOf(row),
         tools: toolUses(items),
-        ...(grey ? { community: greyView(grey, tile, spots, searched, row, user.id) } : {}),
+        ...(grey
+          ? { community: await greyView(repo, grey, tile, spots, searched, row, user.id) }
+          : {}),
       };
     },
 
@@ -650,6 +799,10 @@ export function createExploreService(options: ExploreServiceOptions) {
         // land joined through it is worked out again too.
         const homesteadEvents =
           explored || unjoin ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
+        // My first search on a grey village tile finds its torn page of the
+        // forgotten story (#306): one a tile, found once (my row, locked above).
+        const tornPage = grey !== null && row.fragmentFoundAt === null;
+        if (tornPage) await repo.setPuzzle(user.id, tile.id, { fragmentFoundAt: at });
 
         // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
         const foundLore = new Set(
@@ -749,6 +902,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           homestead,
           items,
           ...(grey ? { joy: exploreJoy(progress) } : {}),
+          ...(grey && tornPage ? { tornPage: await pagesOf(repo, grey, user.id) } : {}),
         } satisfies SearchSpotResponse;
       });
       published(mapId);
@@ -780,9 +934,22 @@ export function createExploreService(options: ExploreServiceOptions) {
         );
         const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
         if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
-        const attempt = row.puzzleAttempt >= MAX_ATTEMPT ? 1 : row.puzzleAttempt + 1;
+        if (puzzle.kind === 'story') {
+          // The story wakes once every torn page is found (one a Hollow tile).
+          const pages = await pagesOf(repo, grey, user.id);
+          if (pages.found < pages.total) {
+            throw new AppError('CONFLICT', MESSAGES.storyPages(pages.found, pages.total));
+          }
+        }
+        const attempt = nextAttempt(row.puzzleAttempt);
         await repo.setPuzzle(user.id, tile.id, { puzzleAttempt: attempt });
-        return { attempt, board: relightBoard(relightOf(grey, tile, puzzle, user.id, attempt)) };
+        return puzzle.kind === 'story'
+          ? storyStart(grey, tile, user.id, attempt)
+          : {
+              kind: 'relight',
+              attempt,
+              board: relightBoard(relightOf(grey, tile, puzzle, user.id, attempt)),
+            };
       }),
 
     /**
@@ -805,8 +972,71 @@ export function createExploreService(options: ExploreServiceOptions) {
       const row = await repo.findRow(user.id, tile.id);
       if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.puzzleStale);
       const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
+      if (puzzle.kind !== 'relight') throw new AppError('CONFLICT', MESSAGES.notRelight);
       const board = relightOf(grey, tile, puzzle, user.id, row.puzzleAttempt);
       return { attempt: row.puzzleAttempt, moves: [...board.solution] };
+    },
+
+    /**
+     * Dev only (`HP_DEV_SQUISHY_GRANTS`, refused in production): my latest
+     * story try's order, so an e2e or a capture can tell it right through the
+     * real card. Read only.
+     */
+    devStoryAnswer: async (
+      user: PublicUser,
+      mapId: string,
+      request: StartPuzzleRequest,
+    ): Promise<DevStoryAnswerResponse> => {
+      const db = options.db;
+      await requireMember(db, user, mapId, ['multiplayer']);
+      const repo = createExploreRepo(db);
+      const found = await repo.findTileAt(mapId, request.q, request.r);
+      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
+      const row = await repo.findRow(user.id, tile.id);
+      if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.storyStale);
+      const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
+      if (puzzle.kind !== 'story') throw new AppError('CONFLICT', MESSAGES.notStory);
+      const day = storyOf(grey, tile, user.id, row.puzzleAttempt);
+      return { attempt: row.puzzleAttempt, order: storyAnswer(day) };
+    },
+
+    /**
+     * Dev only (`HP_DEV_SQUISHY_GRANTS`, refused in production): every torn
+     * page of the Hollow at `q, r` found but `leave` of them (the heart
+     * tile's are the last left), so an e2e or a capture can wake the story
+     * without walking every tile.
+     */
+    devStoryPages: async (
+      user: PublicUser,
+      mapId: string,
+      request: DevStoryPagesRequest,
+    ): Promise<{ found: number; total: number }> => {
+      const at = now();
+      const pages = await exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        const seed = await seedOf(tx, mapId);
+        const first = await repo.findTileAt(mapId, request.q, request.r);
+        const grey = await greyVillage(repo, mapId, first, user.id, at);
+        if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+        const { square } = grey.village;
+        // The heart tile last, so `leave` leaves its page and the ones before it.
+        const order = [...grey.village.tiles].sort(
+          (a, b) => Number(hexEquals(a, square)) - Number(hexEquals(b, square)),
+        );
+        const take = order.slice(0, Math.max(0, order.length - (request.leave ?? 0)));
+        // Tile by tile in (q, r) order, each tile then my row for it (dev only:
+        // lockPuzzleRow's order, repeated, not one statement's tiles-then-rows).
+        for (const hex of take.sort((a, b) => a.q - b.q || a.r - b.r)) {
+          const { row, tile } = await lockPuzzleRow(repo, seed, mapId, hex, user.id, at);
+          if (row.fragmentFoundAt === null) {
+            await repo.setPuzzle(user.id, tile.id, { fragmentFoundAt: at });
+          }
+        }
+        return pagesOf(repo, grey, user.id);
+      });
+      return pages;
     },
 
     /**
@@ -841,73 +1071,95 @@ export function createExploreService(options: ExploreServiceOptions) {
         if (row.puzzleAttempt === 0 || request.attempt !== row.puzzleAttempt) {
           throw new AppError('CONFLICT', MESSAGES.puzzleStale);
         }
+        if (puzzle.kind !== 'relight') throw new AppError('CONFLICT', MESSAGES.notRelight);
         const board = relightOf(grey, tile, puzzle, user.id, row.puzzleAttempt);
         if (!checkRelight(board, request.moves).ok) {
           throw new AppError('CONFLICT', MESSAGES.puzzleWrong);
         }
-        await repo.setPuzzle(user.id, tile.id, { puzzleSolvedAt: at });
-        await repo.setPuzzleSolvedBy(tile.id, [...solvedBy, user.id]);
-
-        // What it gives: a page not found yet, else a small thank-you (rule 1, rule 6).
-        const owner = { mapId, userId: user.id };
-        // Found, or given by a solve the lore consumer hasn't recorded yet.
-        const foundLore = new Set([
-          ...(await createLoreRepo(tx).listFound(user.id)).map((f) => f.pageId),
-          ...(await repo.listPuzzledPages(mapId, user.id)),
-        ]);
-        const reward = rollPuzzleReward(PUZZLE_REWARDS, { foundLore }, rngFor());
-        const lorePage = reward.kind === 'lore' ? reward.id : null;
-        // The Rekindled set's puzzle odds (#306 PR 5): rolled now, so its finds
-        // join the one bag grant below. Reads only, so the lock order holds.
-        const rekindled = await rekindledDrop(
-          tx,
-          { place: 'puzzle', userId: user.id, mapId, at },
-          { rng: rngFor() },
-        );
-        const found = withFoundItems(reward.kind === 'items' ? reward.items : {}, rekindled);
-
-        // Step 11: the bag.
-        const solveId = uuidv7();
-        if (Object.keys(found).length > 0) {
-          await lockGrantRows(tx, mapId, [{ userId: user.id, items: found }]);
-          await grantItems(tx, owner, found, 'explore', solveId);
-        }
-        // A Rekindled piece appends its own event first; ours stays the last write.
-        const clothing = await grantRekindledPiece(
-          tx,
-          { source: 'explore', refId: solveId, userId: user.id, mapId, at },
-          rekindled,
-        );
-
-        const notable = notableOf(found, lorePage, clothing);
-        await repo.appendEvent({
+        return fixPuzzle(tx, repo, rngFor, {
           mapId,
-          type: 'explore.puzzled',
-          actorUserId: user.id,
-          payload: {
-            userId: user.id,
-            q: tile.q,
-            r: tile.r,
-            terrain: tile.terrain,
-            communityId: grey.village.id,
-            solveId,
-            skin: puzzle.skin,
-            depth: puzzle.depth,
-            attempt: row.puzzleAttempt,
-            moves: request.moves.length,
-            lorePage,
-            items: found,
-            notable,
-          },
+          userId: user.id,
+          grey,
+          tile,
+          puzzle,
+          solvedBy,
+          attempt: row.puzzleAttempt,
+          moves: request.moves.length,
+          at,
         });
+      });
+      published(mapId);
+      return result;
+    },
 
-        return {
-          puzzle: { ...puzzle, solved: true },
-          lore: lorePage ? { id: lorePage, title: LORE_TITLES.get(lorePage) ?? '' } : null,
-          clothing,
-          found,
-          items: await createInventoryRepo(tx).list(owner),
-        } satisfies SolvePuzzleResponse;
+    /**
+     * `POST /maps/:mapId/explore/puzzle/story`: tell the heart tile's
+     * forgotten story (#306). Once a tile each. The server rebuilds the try's
+     * day from its seed and checks the order (rule 1). Right, and it gives
+     * what a Relight win gives. Wrong, and the try is spent: the reply says
+     * which places were right, and the ink shifts to the next try's day
+     * (owner decision: a failed attempt reshuffles), so a told order can't be
+     * fixed up and told again.
+     */
+    tellStory: async (
+      user: PublicUser,
+      mapId: string,
+      request: TellStoryRequest,
+    ): Promise<TellStoryResponse> => {
+      const at = now();
+      const result = await exploreTransaction(options.db, async (repo, tx) => {
+        await requireMember(tx, user, mapId, ['multiplayer']);
+        const seed = await seedOf(tx, mapId);
+        const { grey, tile, spots, row } = await lockPuzzleRow(
+          repo,
+          seed,
+          mapId,
+          request,
+          user.id,
+          at,
+        );
+        // Then its village row (step 6, after the explore rows).
+        const solvedBy = await repo.lockPuzzle(tile.id);
+        if (solvedBy === null) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
+        const puzzle = puzzleView(grey, tile, spots, row, solvedBy, user.id);
+        if (puzzle.solved) throw new AppError('CONFLICT', MESSAGES.puzzleFixed);
+        if (puzzle.kind !== 'story') throw new AppError('CONFLICT', MESSAGES.notStory);
+        // The same gate as a start: a try left from before (the heart's old
+        // Relight stand-in) never tells a story whose pages aren't found.
+        const pages = await pagesOf(repo, grey, user.id);
+        if (pages.found < pages.total) {
+          throw new AppError('CONFLICT', MESSAGES.storyPages(pages.found, pages.total));
+        }
+        if (row.puzzleAttempt === 0 || request.attempt !== row.puzzleAttempt) {
+          throw new AppError('CONFLICT', MESSAGES.storyStale);
+        }
+        const day = storyOf(grey, tile, user.id, row.puzzleAttempt);
+        const check = checkStory(day, request.order);
+        if (check.kind === 'not-the-moments') {
+          throw new AppError('BAD_REQUEST', MESSAGES.storyMoments);
+        }
+        if (!check.ok) {
+          const next = nextAttempt(row.puzzleAttempt);
+          await repo.setPuzzle(user.id, tile.id, { puzzleAttempt: next });
+          return {
+            result: 'smudged' as const,
+            right: check.right,
+            marks: [...check.marks],
+            next: storyStart(grey, tile, user.id, next),
+          };
+        }
+        const fixed = await fixPuzzle(tx, repo, rngFor, {
+          mapId,
+          userId: user.id,
+          grey,
+          tile,
+          puzzle: { ...puzzle, pages },
+          solvedBy,
+          attempt: row.puzzleAttempt,
+          moves: request.order.length,
+          at,
+        });
+        return { result: 'whole' as const, ...fixed };
       });
       published(mapId);
       return result;

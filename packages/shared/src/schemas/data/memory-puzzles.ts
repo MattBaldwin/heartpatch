@@ -3,7 +3,8 @@ import { ContentIdSchema } from './common.js';
 
 // Hollow puzzles on grey village tiles (#306 PR 2b, owner decisions
 // 2026-10-22): each tile's broken thing (a music box, a mural, a fountain)
-// holds a "Relight the path" lantern line. Its look comes from the tile's
+// holds a "Relight the path" lantern line, and the heart tile's holds "The
+// forgotten story". Its look comes from the tile's
 // terrain; how hard it is comes from how deep in the Hollow the tile is.
 // What a kid sees lives here (CLAUDE.md rule 5); what solving one gives
 // stays in the server-only data (rule 6).
@@ -56,6 +57,65 @@ export const RelightTierSchema = z
   });
 export type RelightTier = z.infer<typeof RelightTierSchema>;
 
+/**
+ * One moment of the town's last day in "The forgotten story" (#306, owner
+ * decision 2026-10-22). Time-neutral on purpose, so everyday sense ("lanterns
+ * are lit at night") never fights a clue. Its three wordings fill the clue
+ * sentences (`story.ts`).
+ */
+export const StoryMomentSchema = z.strictObject({
+  id: ContentIdSchema,
+  emoji: z.string().min(1).max(8),
+  /** The card: "The bell rang". */
+  did: z.string().min(1).max(40),
+  /** In a clue's sentence: "the bell rang". */
+  act: z.string().min(1).max(40),
+  /** Inside "between … and …": "the bell ringing". */
+  ing: z.string().min(1).max(40),
+});
+export type StoryMoment = z.infer<typeof StoryMomentSchema>;
+
+/** How many moments a day holds for a Hollow of at least `tiles` tiles (one torn page, so one clue, a tile). */
+export const StorySizeSchema = z.strictObject({
+  tiles: z.number().int().min(1),
+  /** At most 6: the generator checks every order (720) for exactly one answer. */
+  moments: z.number().int().min(3).max(6),
+});
+export type StorySize = z.infer<typeof StorySizeSchema>;
+
+/** The forgotten story's rules: the moments, the day's size and how much a clue may give away. */
+export const StoryRulesSchema = z
+  .strictObject({
+    moments: z.array(StoryMomentSchema).min(6),
+    /** By the Hollow's size, smallest first. */
+    sizes: z.array(StorySizeSchema).min(1),
+    /** Clues a day may have that give a place away outright (first or last). */
+    maxPlaceClues: z.number().int().min(0),
+  })
+  .superRefine((story, ctx) => {
+    const ids = new Set<string>();
+    story.moments.forEach((m, i) => {
+      if (ids.has(m.id)) {
+        ctx.addIssue({ code: 'custom', path: ['moments', i, 'id'], message: 'listed twice' });
+      }
+      ids.add(m.id);
+    });
+    story.sizes.forEach((size, i) => {
+      if (size.moments > story.moments.length) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['sizes', i],
+          message: 'more moments than there are',
+        });
+      }
+      const before = story.sizes[i - 1];
+      if (before && before.tiles >= size.tiles) {
+        ctx.addIssue({ code: 'custom', path: ['sizes', i], message: 'sizes go smallest first' });
+      }
+    });
+  });
+export type StoryRules = z.infer<typeof StoryRulesSchema>;
+
 export const MemoryPuzzleRulesSchema = z
   .strictObject({
     skins: z.array(PuzzleSkinSchema).min(1),
@@ -63,6 +123,8 @@ export const MemoryPuzzleRulesSchema = z
     defaultSkin: ContentIdSchema,
     /** Relight's difficulty by depth. */
     relight: z.record(RelightDepthSchema, RelightTierSchema),
+    /** The forgotten story, on each Hollow's heart tile. */
+    story: StoryRulesSchema,
   })
   .superRefine((rules, ctx) => {
     const ids = new Set<string>();

@@ -14,6 +14,7 @@ import {
   type SolvePuzzleResponse,
   type SpotInteraction,
   type StartPuzzleResponse,
+  type TellStoryResponse,
   type ToolId,
   type WorldPoint,
 } from '@heartpatch/shared';
@@ -117,6 +118,7 @@ import {
   PUZZLE_INDEX,
   puzzleSpot,
   skinOf,
+  storyAsleep,
   villageShut,
 } from '../hollowed/hollowed-explore-view.js';
 import { KEY_TEXT, keyHuntOn } from '../hollowed/key-hunt-view.js';
@@ -502,6 +504,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     parent: overlay,
     start: startPuzzle,
     solve: solvePuzzle,
+    tell: tellStory,
     ...(options.onLorebook ? { onLorebook: options.onLorebook } : {}),
     onClosed: (fixed) => {
       scene3d?.nudge(null);
@@ -951,7 +954,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function openPuzzle(): void {
     const puzzle = tile?.community?.puzzle;
     const s = scene3d;
-    if (!puzzle || puzzle.solved || !s || working || playing || card) return;
+    if (!puzzle || puzzle.solved || storyAsleep(puzzle) || !s || working || playing || card) return;
     yaw = yawToward(keeperAt, puzzle);
     walk = null;
     stick = null;
@@ -1026,6 +1029,55 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     } catch (err) {
       if (at !== generation) return null;
       // Fixed or tried again on another device, or the Hollow changed: look again.
+      if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        await reload();
+        puzzleSheet.close();
+        say(messageOf(err));
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Tells the story's order; the server checks it against its own day and
+   * rolls what it gives (CLAUDE.md rule 1). A wrong order comes back
+   * smudged with the next try's day. Null if the visit moved on, or the tile
+   * changed under it (it looks again and the card closes with a word why).
+   */
+  async function tellStory(
+    attempt: number,
+    order: readonly string[],
+  ): Promise<TellStoryResponse | null> {
+    const id = mapId;
+    const t = tile;
+    if (!id || !t?.community) return null;
+    const at = generation;
+    expectHitch();
+    try {
+      const told = await sendCommand(
+        {
+          newKey: newIdempotencyKey,
+          wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          retryAfterMs: COMMAND_RETRY_MS,
+        },
+        (key) => api.story(id, { q: t.q, r: t.r, attempt, order: [...order] }, key),
+        () => at === generation,
+      );
+      if (at !== generation || !told || tile?.q !== t.q || tile.r !== t.r || !tile.community) {
+        return null;
+      }
+      if (told.result === 'smudged') return told;
+      tile = { ...tile, community: { ...tile.community, puzzle: told.puzzle } };
+      bag = told.items;
+      expectHitch();
+      scene3d?.update(tile);
+      scene3d?.cheer(performance.now());
+      options.onFound?.(id);
+      return told;
+    } catch (err) {
+      if (at !== generation) return null;
+      // Told on another device, or the Hollow changed: look again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         await reload();
         puzzleSheet.close();
@@ -1216,11 +1268,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       return;
     }
     if (puzzleFront && t.community?.puzzle) {
-      const skin = skinOf(t.community.puzzle);
-      action.disabled = working;
-      action.classList.add('explore-action-ready');
-      actionIcon.textContent = skin.emoji;
-      actionLabel.textContent = HOLLOWED_TEXT.fix(skin);
+      const puzzle = t.community.puzzle;
+      const skin = skinOf(puzzle);
+      // The heart's story sleeps until every torn page is found (#306).
+      const asleep = storyAsleep(puzzle);
+      action.disabled = working || asleep !== null;
+      action.classList.toggle('explore-action-ready', asleep === null);
+      actionIcon.textContent = asleep ? '📜' : skin.emoji;
+      actionLabel.textContent = asleep
+        ? HOLLOWED_TEXT.pagesFound(asleep.found, asleep.total)
+        : HOLLOWED_TEXT.fix(skin);
       return;
     }
     if (!front) {

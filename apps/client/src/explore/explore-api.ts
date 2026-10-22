@@ -3,12 +3,15 @@ import {
   SearchSpotResponseSchema,
   SolvePuzzleResponseSchema,
   StartPuzzleResponseSchema,
+  TellStoryResponseSchema,
   type ExploreTileResponse,
   type SearchSpotResponse,
   type SolvePuzzleRequest,
   type SolvePuzzleResponse,
   type StartPuzzleRequest,
   type StartPuzzleResponse,
+  type TellStoryRequest,
+  type TellStoryResponse,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -48,6 +51,14 @@ export const exploreApi = {
       method: 'POST',
       body,
       schema: SolvePuzzleResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+  /** Tells the heart tile's forgotten story (#306): whole again, or smudged and dealt anew. */
+  story: (mapId: string, body: TellStoryRequest, key: string): Promise<TellStoryResponse> =>
+    apiCallFor(`/maps/${mapId}/explore/puzzle/story`, {
+      method: 'POST',
+      body,
+      schema: TellStoryResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };
