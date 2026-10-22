@@ -16,7 +16,8 @@ import type { TileInfo } from '../map/tile-info.js';
 // docs/STYLE_GUIDE.md). Pure, so every case is unit-tested. Everything here
 // comes from the map view (`MapView.communities`): the server works out
 // each village's reach for this player with the shared `communityReach`.
-// Nothing secret reaches the client (CLAUDE.md rule 6): no cellar key, no odds.
+// Nothing secret reaches the client (CLAUDE.md rule 6): no odds, and the
+// cellar key's tile only for a won village's winner (key-hunt-view.ts).
 
 /** Player-facing words for a Hollowed village. */
 export const COMMUNITY_TEXT = {

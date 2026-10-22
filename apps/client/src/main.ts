@@ -26,6 +26,7 @@ import { createCommunityActions } from './hollowed/community-actions.js';
 import { createCommunityFlags } from './hollowed/community-flags.js';
 import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
+import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -966,6 +967,27 @@ const restoreSheet = createRestoreSheet({
       wide ? RING_ZOOM : BUILD_ZOOM,
     );
   },
+  // The joy card closed: a won village's key map card shows next (#306 PR 2c).
+  onClose: () => {
+    keyHunt.showWaiting();
+  },
+});
+// A won village's key hunt and hidden cellar (#306 PR 2c): the map card, the
+// key's flag and panel, the cellar door on the square, and down into it.
+const keyHunt = createKeyHunt({
+  root: document.body,
+  me: () => signedIn?.id ?? null,
+  mapId: () => maps.view?.map.id ?? null,
+  showKey: (at) => {
+    const point = maps.focus(at);
+    if (point) stage?.camera.panTo(point, stillPans.matches);
+  },
+  enterCellar: (communityId) => {
+    void explore.openCellar(communityId);
+  },
+  // The joy card's own queue counts too (#592): after a battle the care sheet
+  // may still be fetching before its "Whoa!" or the joy card opens.
+  busy: () => evolutionPending || wonWaiting.length > 0 || restoreSheet.isOpen || care.isOpen,
 });
 communityActions.wire('restore', (community, tile) => {
   restoreSheet.open(community, tile);
@@ -1047,6 +1069,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     restoreSheet.close();
+    keyHunt.close();
     roster.close();
     jobs.close();
     postScreen.close();
@@ -1071,6 +1094,8 @@ const maps = createMapScreen({
     inventory.tileActions,
     // A Hollowed village's words and its Explore and Restore (#306).
     communityActions,
+    // A won village's cellar door, and its key's tile (#306 PR 2c).
+    keyHunt.tileActions,
     // Build sits near the top of a tile's actions, so it's never scrolled away.
     tileBuild.tileActions,
     home.tileActions,
@@ -1113,6 +1138,7 @@ const maps = createMapScreen({
     postFlags,
     communityFlags,
     villageWins,
+    keyHunt.layer,
     trickOrTreat.layer,
     // Last: each frame the marks keep clear of the flags placed just before them.
     tileMarks,
@@ -1849,6 +1875,7 @@ if (import.meta.env.DEV) {
       flags: communityFlags.shown,
       panel: communityActions.debug,
       restore: restoreSheet.debug,
+      keyHunt: keyHunt.debug,
       villages: (maps.view?.communities ?? []).map((c) => ({
         id: c.id,
         name: c.name,
@@ -1856,6 +1883,7 @@ if (import.meta.env.DEV) {
         reach: c.reach,
         restored: c.restored,
         ownerUserId: c.ownerUserId,
+        cellar: c.cellar ?? null,
       })),
     }),
     posts: () => ({

@@ -20,6 +20,8 @@ import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { buildingsRoutes } from './modules/buildings/routes.js';
 import { createBuildingsService } from './modules/buildings/service.js';
+import { cellarRoutes } from './modules/communities/cellar-routes.js';
+import { createCellarService } from './modules/communities/cellar.js';
 import { communityRoutes } from './modules/communities/routes.js';
 import { createRestoreService } from './modules/communities/restore.js';
 import { exploreRoutes } from './modules/explore/routes.js';
@@ -430,6 +432,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Restoring and naming grey villages (#306 PR 3).
         await api.register(
           communityRoutes(createRestoreService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // The key hunt and the hidden cellar of a won village (#306 PR 2c).
+        await api.register(
+          cellarRoutes(createCellarService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,

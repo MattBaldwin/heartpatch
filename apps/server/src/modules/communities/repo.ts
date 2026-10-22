@@ -40,6 +40,24 @@ export interface CommunityViewRow {
   square: Hex;
   /** Square first, then (q, r) order, with whether each is fully restored. */
   tiles: (Hex & { restored: boolean })[];
+  /**
+   * Server-only (rule 6): where the cellar key hides. The view sends it to
+   * the village's winner alone, while they hunt for it (PR 2c).
+   */
+  keyTile: Hex;
+  /** Its winner dug the key up (PR 2c). */
+  keyFound: boolean;
+  /** The cellar under the square is open (PR 2c). */
+  cellarOpen: boolean;
+}
+
+/** A village's hidden cellar (PR 2c): the square's `community_tiles` row. */
+export interface CellarRow {
+  /** The square's tile id. */
+  tileId: string;
+  openedAt: Date | null;
+  /** Its spots searched, one bit a spot. */
+  searched: number;
 }
 
 /** A stored community as the boot pass's placement rule sees it. Server-only (the key tile). */
@@ -69,6 +87,11 @@ export interface CommunityRow {
   kind: CommunityKindId;
   ownerUserId: string | null;
   seedTileId: string;
+  /** Server-only (rule 6): its finds' seed and where its cellar key hides (PR 2c). */
+  seed: string;
+  keyTileId: string;
+  /** When its winner dug the cellar key up (PR 2c), or null. */
+  keyRevealedAt: Date | null;
 }
 
 /** One village tile's restoring progress, with where it is. */
@@ -153,12 +176,25 @@ export interface CommunitiesRepo {
   uproot: (mapId: string, userId: string) => Promise<number>;
   /** Dev only: these tiles one piece short of restored. */
   devAlmost: (tileIds: readonly string[]) => Promise<void>;
+  /** Dev only (PR 2c): these wild tiles become `userId`'s, locked in id order first (step 6). */
+  devClaim: (tileIds: readonly string[], userId: string) => Promise<void>;
   /** Dev only: the village becomes this kind (its perk with it). */
   devKind: (communityId: string, kind: CommunityKindId) => Promise<void>;
   /** The winner typed a name, at their village seed's level. */
   setName: (communityId: string, name: string, level: number) => Promise<void>;
   /** The map's won villages as their perks need them (PR 3b): kind, winner and square. */
   wonVillages: (mapId: string) => Promise<WonVillageRow[]>;
+  // The key hunt and the hidden cellar (PR 2c).
+  /** Where a tile is (the key's, the square's), unlocked: only read. */
+  tileById: (tileId: string) => Promise<(Hex & { id: string }) | null>;
+  /** The key is dug up: when (the community row is locked). */
+  revealKey: (communityId: string, at: Date) => Promise<void>;
+  /** The village's cellar (the square's row); `lock` takes it `FOR UPDATE` (after the community row). */
+  cellarOf: (communityId: string, lock?: boolean) => Promise<CellarRow | null>;
+  /** The cellar opens. */
+  openCellar: (tileId: string, at: Date) => Promise<void>;
+  /** The cellar's searched spots. */
+  setCellarSearched: (tileId: string, searched: number) => Promise<void>;
   /** Of these villages, the ones whose morning gift `userId` has collected since `since`. */
   giftsCollectedSince: (
     mapId: string,
@@ -250,6 +286,7 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
 
     listForView: async (mapId) => {
       const square = alias(tiles, 'square');
+      const keyTile = alias(tiles, 'key_tile');
       const [rows, village] = await Promise.all([
         db
           .select({
@@ -261,9 +298,15 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
             named: sql<boolean>`${communities.namedAtLevel} is not null`,
             q: square.q,
             r: square.r,
+            keyQ: keyTile.q,
+            keyR: keyTile.r,
+            keyFound: sql<boolean>`${communities.keyRevealedAt} is not null`,
+            cellarOpen: sql<boolean>`${communityTiles.cellarOpenedAt} is not null`,
           })
           .from(communities)
           .innerJoin(square, eq(square.id, communities.seedTileId))
+          .innerJoin(keyTile, eq(keyTile.id, communities.keyTileId))
+          .leftJoin(communityTiles, eq(communityTiles.tileId, communities.seedTileId))
           .where(eq(communities.mapId, mapId))
           .orderBy(asc(communities.id)),
         villageTiles(mapId),
@@ -279,6 +322,9 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         tiles: village
           .filter((t) => t.communityId === c.id)
           .map((t) => ({ q: t.q, r: t.r, restored: t.restored })),
+        keyTile: hexOf(c.keyQ, c.keyR),
+        keyFound: c.keyFound,
+        cellarOpen: c.cellarOpen,
       }));
     },
 
@@ -494,15 +540,30 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
             isNotNull(tiles.communityId),
           ),
         );
+      const ids = owned.map((c) => c.id);
+      // The key and the cellar go with the winner too (PR 2c), as the name
+      // does: whoever wins the village next hunts for its key afresh.
       await db
         .update(communities)
-        .set({ ownerUserId: null, claimedAt: null, restoredName: null, namedAtLevel: null })
-        .where(
-          inArray(
-            communities.id,
-            owned.map((c) => c.id),
-          ),
-        );
+        .set({
+          ownerUserId: null,
+          claimedAt: null,
+          restoredName: null,
+          namedAtLevel: null,
+          keyRevealedAt: null,
+        })
+        .where(inArray(communities.id, ids));
+      // Their cellars' rows, in tile id order (step 6, after the community rows).
+      await db
+        .select({ id: communityTiles.tileId })
+        .from(communityTiles)
+        .where(and(inArray(communityTiles.communityId, ids), eq(communityTiles.cellar, true)))
+        .orderBy(asc(communityTiles.tileId))
+        .for('update');
+      await db
+        .update(communityTiles)
+        .set({ cellarOpenedAt: null, cellarSearched: 0 })
+        .where(and(inArray(communityTiles.communityId, ids), eq(communityTiles.cellar, true)));
       return owned.length;
     },
 
@@ -512,6 +573,20 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
         .update(communityTiles)
         .set({ piecesDone: sql`${communityTiles.piecesNeeded} - 1` })
         .where(inArray(communityTiles.tileId, [...tileIds]));
+    },
+
+    devClaim: async (tileIds, userId) => {
+      if (tileIds.length === 0) return;
+      await db
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(inArray(tiles.id, [...tileIds]))
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+      await db
+        .update(tiles)
+        .set({ ownerUserId: userId })
+        .where(and(inArray(tiles.id, [...tileIds]), isNull(tiles.ownerUserId)));
     },
 
     devKind: async (communityId, kind) => {
@@ -548,6 +623,48 @@ export function createCommunitiesRepo(db: Executor): CommunitiesRepo {
       );
     },
 
+    tileById: async (tileId) => {
+      const [row] = await db
+        .select({ id: tiles.id, q: tiles.q, r: tiles.r })
+        .from(tiles)
+        .where(eq(tiles.id, tileId));
+      return row ?? null;
+    },
+
+    revealKey: async (communityId, at) => {
+      await db
+        .update(communities)
+        .set({ keyRevealedAt: at })
+        .where(eq(communities.id, communityId));
+    },
+
+    cellarOf: async (communityId, lock = false) => {
+      const query = db
+        .select({
+          tileId: communityTiles.tileId,
+          openedAt: communityTiles.cellarOpenedAt,
+          searched: communityTiles.cellarSearched,
+        })
+        .from(communityTiles)
+        .where(and(eq(communityTiles.communityId, communityId), eq(communityTiles.cellar, true)));
+      const [row] = lock ? await query.for('update') : await query;
+      return row ?? null;
+    },
+
+    openCellar: async (tileId, at) => {
+      await db
+        .update(communityTiles)
+        .set({ cellarOpenedAt: at })
+        .where(eq(communityTiles.tileId, tileId));
+    },
+
+    setCellarSearched: async (tileId, searched) => {
+      await db
+        .update(communityTiles)
+        .set({ cellarSearched: searched })
+        .where(eq(communityTiles.tileId, tileId));
+    },
+
     giftsCollectedSince: async (mapId, userId, communityIds, since) => {
       if (communityIds.length === 0) return new Set();
       const rows = await db
@@ -575,6 +692,9 @@ const communityColumns = {
   kind: communities.kind,
   ownerUserId: communities.ownerUserId,
   seedTileId: communities.seedTileId,
+  seed: communities.seed,
+  keyTileId: communities.keyTileId,
+  keyRevealedAt: communities.keyRevealedAt,
 };
 
 /** The communities repo inside one transaction, with its events (`maps` last). */

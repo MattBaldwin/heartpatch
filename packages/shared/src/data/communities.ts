@@ -62,4 +62,14 @@ export const COMMUNITY_RULES: CommunityRules = {
   heartdustFindMultiplier: 3, // TUNE: Hollowed searches find Heartdust 3× as often
   echoesPerTile: 1, // TUNE: plan v3, one echo a patch tile (the far Hollow has two)
   restoredSuffixes: ['Glen', 'Meadow', 'Hearth', 'Rise'],
+  // The hidden cellar (PR 2c, plan Q5): a few hands-only spots in the cave's
+  // look. Where its key hides and what it holds are server-only (the cellar rules in `data/server`).
+  cellar: {
+    terrain: 'hills',
+    kinds: [
+      { kind: 'glow-mushrooms', weight: 2 }, // TUNE:
+      { kind: 'rock', weight: 1 }, // TUNE:
+    ],
+    spots: { min: 4, max: 6 }, // TUNE: plan Q5, "4–6 spots"
+  },
 };
