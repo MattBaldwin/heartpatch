@@ -101,8 +101,8 @@ export function createUpkeepList(options: UpkeepListOptions): UpkeepList {
           el(
             'span',
             { class: 'upkeep-name' },
-            `${row.icon} ${row.name} `,
-            el('span', { class: 'upkeep-level' }, `L${String(row.level)}`),
+            `${row.icon} ${row.name}`,
+            el('span', { class: 'upkeep-level' }, `Level ${String(row.level)}`),
           ),
           el('span', { class: 'upkeep-coins' }, row.coins),
           ...(section.canOrder

@@ -104,12 +104,12 @@
 
 .upkeep-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .upkeep-level {
+  display: block;
   font-size: 0.8rem;
   color: var(--hp-ink-soft, #6b5a73);
 }
@@ -125,7 +125,7 @@
 }
 
 .upkeep-arrow {
-  width: 44px;
+  width: 40px;
   height: 44px;
   border: none;
   border-radius: 12px;

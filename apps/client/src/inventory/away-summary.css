@@ -69,7 +69,9 @@
   bottom: -13px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: calc(100% - 24px);
+  /* Wider than a one-chip pill: the whole line shows (#601). */
+  width: max-content;
+  max-width: calc(100vw - 32px);
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 3px 10px;
