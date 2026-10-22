@@ -445,6 +445,60 @@ export const WILD_MARKER = {
 } as const;
 
 /**
+ * A gatherer standing on the tile it works (#602): the squishy itself,
+ * small, off the tile's middle (where the node and props crowd), facing the
+ * camera. Still: no breathing or shadow on the map, like the Keepers.
+ */
+export const GATHERER_ON_TILE = {
+  /** Offset from the tile's middle (world units): left, clear of the night's 🌙 in the middle. */
+  offset: { x: -0.25, z: -0.1 }, // TUNE
+  /** Times the squishy's own size: about a Keeper's height on the map. */
+  scale: 0.5, // TUNE
+  /**
+   * A patch-mate's gatherer, whose species the map view never names: a plain
+   * little squishy in its family's colour (`fallback` before the members
+   * list knows the owner).
+   */
+  standIn: {
+    body: 'bun',
+    belly: '#fff3e2',
+    parts: ['oval-eyes', 'smile', 'blush-cheeks'],
+    fallback: '#c9b8ff',
+  }, // TUNE
+} as const;
+
+/**
+ * The one quiet mark on a tile of mine that needs me (#602): a small round
+ * chip just beside my gatherer's head (or, with nothing to sit by, in the
+ * tile's top right), only for my own gatherers (and #601's resource
+ * buildings). Kinds are listed most pressing first: a tile shows one.
+ */
+export const TILE_MARK = {
+  /**
+   * From the top of what it's about (its head) to the chip's middle, CSS px,
+   * tried in order until one keeps clear of the flags and everything over
+   * the map: up and to the right, up and to the left, then straight above.
+   */
+  beside: [
+    { x: 12, y: -10 },
+    { x: -12, y: -10 },
+    { x: 0, y: -36 },
+  ], // TUNE
+  /** The chip's size, CSS px (as `.tile-mark` in map.css). */
+  size: 24,
+  /** With nothing to sit by: where on the tile's screen box the chip's middle sits (0–1 across, 0–1 down). */
+  across: 0.78, // TUNE
+  down: 0.3, // TUNE
+  /**
+   * What a mark can say, most pressing first: `meh`, a gatherer of mine
+   * that isn't keen on this job (#393's 🌧️); `napping`, a gatherer of mine
+   * with a full basket or on a homestead cut off from home.
+   */
+  kinds: ['meh', 'napping'],
+  glyphs: { meh: '🌧️', napping: '💤' },
+} as const;
+
+/**
  * Wild land (no owner) is drawn soft and grey-ish; claimed land is in full
  * colour (Sprout: "See the grey land? … the color comes back"). `saturation`
  * is the share of colour kept, `shade` dims it a little (grey that keeps its
