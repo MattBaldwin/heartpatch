@@ -120,8 +120,8 @@ test('the wardrobe and the catalog fit a phone on its side', async ({ browser })
       await settled(page);
       const sheet = await boxOf(page, '.catalog-scroll');
       expect(sheet.b - sheet.t, 'room for a row of squishies').toBeGreaterThanOrEqual(120);
-      await expectReachable(page.locator('.catalog-close-top'), 'the round ×');
-      await page.locator('.catalog-close-top').tap();
+      await expectReachable(page.getByTestId('catalog-close-top'), 'the round ×');
+      await page.getByTestId('catalog-close-top').tap();
       await expect(grid).toBeHidden();
     });
   }

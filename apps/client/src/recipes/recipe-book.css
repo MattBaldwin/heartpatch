@@ -51,32 +51,25 @@
   z-index: 1;
 }
 
+/* The book's cover is dark plum, so its buttons are frosted glass, not pink. */
+.rbook-bar,
+.rbook-nav {
+  --hp-secondary: rgb(255 250 252 / 16%);
+  --hp-secondary-lip: rgb(0 0 0 / 22%);
+  --hp-secondary-ink: #fffafc;
+  --hp-gloss: none;
+}
+
+.rbook-search-button {
+  /* The magnifier is a picture, not a label: the size it always had. */
+  font-size: 22px;
+}
+
 .rbook-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 62px;
-}
-
-.rbook-btn {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgb(255 250 252 / 16%);
-  font: inherit;
-  font-size: 22px;
-  color: #fffafc;
-  cursor: pointer;
-}
-
-.rbook-btn-soft {
-  background: #fbeaf2;
-  color: #7a2d55;
 }
 
 .rbook-title {
@@ -729,25 +722,6 @@
   font-size: 14px;
   font-weight: 900;
   color: #ffe9f3;
-}
-
-.rbook-nav-btn {
-  min-width: 44px;
-  min-height: 44px;
-  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 2px);
-  border: 0;
-  border-radius: 999px;
-  background: rgb(255 250 252 / 16%);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 900;
-  color: #fffafc;
-  cursor: pointer;
-}
-
-.rbook-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 .rbook-search,

@@ -348,7 +348,7 @@ button.post-slot {
   gap: 4px;
 }
 
-.post-stepper .post-button {
+.post-stepper .hp-button {
   min-height: 44px;
   min-width: 44px;
   padding: 0 8px;
@@ -462,48 +462,13 @@ button.post-slot {
   outline: 2px solid #b8487a;
 }
 
-.post-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 8px 18px;
-  border: none;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
-  touch-action: manipulation;
+.post-gold {
+  --hp-secondary: #ffc94d;
+  --hp-secondary-lip: #d9a52f;
+  --hp-secondary-ink: #4a3150;
 }
 
-.post-button.wide {
-  width: 100%;
-}
-
-.post-button-primary {
-  background: #b8487a;
-  color: #fff;
-  box-shadow: 0 4px 0 #8f3460;
-}
-
-.post-button-secondary {
-  background: #f6dceb;
-  color: #7a2d55;
-}
-
-.post-button-gold {
-  background: #ffc94d;
-  color: #4a3150;
-  box-shadow: 0 4px 0 #d9a52f;
-}
-
-.post-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.post-button:focus-visible,
+.post-sheet .hp-button:focus-visible,
 .post-tab:focus-visible,
 .post-slot:focus-visible,
 .post-mate:focus-visible,
@@ -533,13 +498,13 @@ button.post-slot {
   gap: 10px;
 }
 
-.post-row > .post-button {
+.post-row > .hp-button {
   flex: 1 1 auto;
   /* "No thanks" on one line. */
   white-space: nowrap;
 }
 
-.post-row > .post-button-primary {
+.post-row > .hp-button-primary {
   flex-grow: 2;
 }
 
@@ -557,7 +522,7 @@ button.post-slot {
   gap: 10px;
 }
 
-.post-stack .post-button {
+.post-stack .hp-button {
   min-height: 44px;
   padding: 6px 14px;
   font-size: 14px;
@@ -932,7 +897,7 @@ button.post-col-head {
   text-align: center;
 }
 
-.post-col .post-stepper .post-button {
+.post-col .post-stepper .hp-button {
   background: #fff;
   color: var(--own-ink);
   border: 1.5px solid var(--own-line);
@@ -1216,7 +1181,7 @@ button.post-col-head {
   font-size: 28px;
 }
 
-.post-swap-card .post-button {
+.post-swap-card .hp-button {
   flex: 0 0 auto;
   min-width: 96px;
   min-height: 44px;

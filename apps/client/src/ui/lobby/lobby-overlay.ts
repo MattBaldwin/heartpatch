@@ -17,6 +17,7 @@ import {
 } from '@heartpatch/shared';
 import { slotIcon } from '../../map/map-legend.js';
 import { updateHold } from '../../pwa/update-hold.js';
+import { hpButton } from '../button/button.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import {
   codeDays,
@@ -123,19 +124,13 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   panel.hidden = true;
   const card = el('div', { class: 'auth-card lobby-card' });
   panel.append(card);
-  const openButton = el(
-    'button',
-    { type: 'button', class: 'auth-button lobby-open', 'data-testid': 'lobby-open' },
-    'My patches',
-  );
+  const openButton = hpButton('My patches', { variant: 'primary', testId: 'lobby-open' });
+  openButton.classList.add('lobby-open');
   openButton.hidden = true;
   // While peeking at the world with no patch open, the way back is big and
   // plain (#212); the corner button still works too.
-  const backPill = el(
-    'button',
-    { type: 'button', class: 'auth-button lobby-back', 'data-testid': 'lobby-back' },
-    LOBBY_PEEK_TEXT.back,
-  );
+  const backPill = hpButton(LOBBY_PEEK_TEXT.back, { variant: 'primary', testId: 'lobby-back' });
+  backPill.classList.add('lobby-back');
   backPill.hidden = true;
   root.append(panel, backPill);
   (options.buttonRoot ?? root).append(openButton);

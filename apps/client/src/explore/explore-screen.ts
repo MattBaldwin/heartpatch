@@ -33,6 +33,7 @@ import { AmbientDriver } from '../map/ambient-driver.js';
 import type { AmbientStatus } from '../map/ambient-layout.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
+import { hpBack } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { iconNode } from '../ui/line-icons.js';
 import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
@@ -349,16 +350,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let spookTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── DOM ───────────────────────────────────────────────────────────────
-  const back = el(
-    'button',
-    {
-      type: 'button',
-      class: 'explore-back',
-      'data-testid': 'explore-back',
-      'aria-label': EXPLORE_TEXT.back,
-    },
-    '‹',
-  );
+  const back = hpBack(EXPLORE_TEXT.back, 'explore-back');
   back.addEventListener('click', () => {
     close();
   });

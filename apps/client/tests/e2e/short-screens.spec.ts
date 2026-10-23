@@ -127,7 +127,7 @@ async function checkTray(page: Page, side: TraySide, screen: Box): Promise<void>
   // buttons stay clear of the tray.
   const controls = await boxes(
     page,
-    `[data-testid="tray-handle-${side}"], [data-testid="tray-${side}"] .tray-close`,
+    `[data-testid="tray-handle-${side}"], [data-testid="tray-${side}"] .hp-close`,
   );
   expectReachable(controls, screen);
   const trayBox = (await boxes(page, `[data-testid="tray-${side}"]`))[0]!;
@@ -136,7 +136,7 @@ async function checkTray(page: Page, side: TraySide, screen: Box): Promise<void>
     '[data-testid="lobby-open"], [data-testid="chat-open"], [data-testid="friendly-open"], [data-testid="keeper-menu"]',
   );
   expect(corners.filter((c) => overlap(c, trayBox)).map(show)).toEqual([]);
-  await tray.locator('.tray-close').tap();
+  await tray.locator('.hp-close').tap();
   await expect.poll(async () => (await traysState(page))?.open).toBeNull();
   await expect(tray).not.toHaveClass(/tray-shown/);
 }

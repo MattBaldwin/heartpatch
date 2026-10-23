@@ -53,7 +53,7 @@ test('tap a rustling tile, Meet it, and the battle opens there', async ({ browse
   await expect(page.locator('.battle-entry-note')).toHaveText(
     `${String(count)} nearby! Or tap a rustle to pick.`,
   );
-  await page.locator('[data-testid="tray-adventure"] .tray-close').tap();
+  await page.locator('[data-testid="tray-adventure"] .hp-close').tap();
 
   // The farthest tuft (the last hint), so Find a squishy would pick another.
   const panel = page.getByTestId('tile-panel');

@@ -1,4 +1,5 @@
 import type { HouseNextLevel, HouseView, RequirementProgress } from '@heartpatch/shared';
+import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import {
   buildLabel,
@@ -22,7 +23,7 @@ import { GROW_TEXT, keepTail } from './house-view.js';
  * sheet, the build and the reply.
  */
 
-/** A button in the house's look: 44pt+ and padded with the shared tokens. */
+/** A button for the house's sheet: the shared kit (primary, or soft for the quieter choice). */
 export function houseButton(
   label: string,
   onTap: () => void,
@@ -34,7 +35,7 @@ export function houseButton(
     'button',
     {
       type: 'button',
-      class: `house-button${soft ? ' house-button-soft' : ''} ${more}`.trim(),
+      class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} ${more}`.trim(),
       ...rest,
     },
     label,
