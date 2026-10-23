@@ -13,6 +13,10 @@
 // Honest captures (#335): every shot is at a tier pinned with the dev-only
 // `?tier=`, which the file name says. Headless Chromium draws with
 // SwiftShader (software WebGL2); frame times here say nothing about a device.
+// Shots are native-size PNGs, with each phone's notch and home bar given as
+// safe-area insets (Chromium's `Emulation.setSafeAreaInsetsOverride`). Each
+// power plays in a fresh browser context: one long 3× session drifts until a
+// reload lands in the lobby.
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -21,11 +25,10 @@ import path from 'node:path';
 const OUT = process.env.OUT ?? path.resolve('.crooked-shots');
 const BASE = process.env.BASE ?? 'http://localhost:5173';
 const SIGNUP_CODE = process.env.HP_SIGNUP_CODE ?? 'heartpatch-dev-family';
-const QUALITY = Number(process.env.JPEG ?? 85);
 const TIER = process.env.TIER ?? 'high';
 const ALL_DEVICES = {
-  iphone: { width: 393, height: 852, dpr: 3 },
-  se: { width: 375, height: 667, dpr: 2 },
+  iphone: { width: 393, height: 852, dpr: 3, insets: { top: 59, bottom: 34 } },
+  se: { width: 375, height: 667, dpr: 2, insets: { top: 20, bottom: 0 } },
 };
 const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
 const DATABASE_URL =
@@ -283,8 +286,8 @@ async function shot(page, device, name, { wait = true } = {}) {
   if (ONLY && !ONLY.has(name)) return;
   if (wait) await settle(page);
   await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
-  const file = path.join(OUT, `${device}-bonus-${name}-${TIER}.jpg`);
-  await page.screenshot({ path: file, type: 'jpeg', quality: QUALITY, timeout: 180_000 });
+  const file = path.join(OUT, `${device}-bonus-${name}-${TIER}.png`);
+  await page.screenshot({ path: file, type: 'png', timeout: 180_000 });
   const h = await house(page);
   const quality = await hook(page, 'quality');
   const row = {
@@ -403,7 +406,8 @@ let friends = {};
 const friendRoom = Object.keys(friends).find((r) => friends[r]) ?? null;
 if (!friendRoom) console.warn(`No chest held a friend in ${String(TRIES)} patches.`);
 
-for (const device of DEVICES) {
+/** A fresh context and page for one phone, signed in, its insets set. */
+async function phonePage(device) {
   const size = ALL_DEVICES[device];
   const context = await browser.newContext({
     storageState: statePath,
@@ -416,12 +420,21 @@ for (const device of DEVICES) {
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   // SwiftShader at 3× loads slowly.
   page.setDefaultNavigationTimeout(120_000);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: { left: 0, right: 0, ...size.insets },
+  });
   // A clock the shots can pause (it runs as usual otherwise).
   await page.clock.install();
+  return { context, page };
+}
+
+for (const device of DEVICES) {
+  // Every phone starts from the same house (the scout's patch and season).
   resetHouse(name);
-  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
   for (const p of POWERS) {
     if (ONLY_POWERS && !ONLY_POWERS.has(p.power)) continue;
+    const { context, page } = await phonePage(device);
     await teamFor(page, mapId, ids, p.power);
     await toDoor(page, mapId, p);
     await shot(page, device, `${p.power}-asleep`);
@@ -473,8 +486,8 @@ for (const device of DEVICES) {
       const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
       if (current.battle) await runAway(page, current.battle.id);
     }
+    await context.close();
   }
-  await context.close();
 }
 await writeFile(path.join(OUT, 'bonus-stats.json'), JSON.stringify(stats, null, 2));
 await browser.close();
