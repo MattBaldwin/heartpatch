@@ -12,7 +12,8 @@ const OLDEST_PILL_AGE = 17;
 /** Birth-year pill values for `thisYear`, newest first: ages 10–17. */
 export function birthYearPills(thisYear: number): string[] {
   const years: string[] = [];
-  for (let age = YOUNGEST_PILL_AGE; age <= OLDEST_PILL_AGE; age++) years.push(String(thisYear - age));
+  for (let age = YOUNGEST_PILL_AGE; age <= OLDEST_PILL_AGE; age++)
+    years.push(String(thisYear - age));
   return years;
 }
 
