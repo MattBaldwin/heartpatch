@@ -99,6 +99,12 @@ export class KeeperPreview {
     const turn = turned ? { lean: -lean, yaw: Math.PI } : { lean, yaw: 0 };
     const { scale, z, x } = this.#fit(height, largest, turn);
     this.#handle = this.#field.add(config, { x, z, scale, ...turn }, items);
+    // The stage moves with the Keeper (it is frozen, so unfreeze to move it).
+    if (this.#floor.position.x !== x) {
+      this.#floor.unfreezeWorldMatrix();
+      this.#floor.position.x = x;
+      this.#floor.freezeWorldMatrix();
+    }
     if (hop) this.#field.play(this.#handle, 'bounce', now);
   }
 
