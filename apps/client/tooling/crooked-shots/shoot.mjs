@@ -220,7 +220,8 @@ for (const device of DEVICES) {
     }
     await page.waitForTimeout(1200);
     await shot(page, device, 'bloom');
-    await page.getByTestId('crooked-card-ok').click();
+    // Every card read (a second key may come with the bloom).
+    while ((await house(page)).card) await page.getByTestId('crooked-card-ok').click();
     await shot(page, device, 'lit');
     await page.getByTestId('crooked-map').click();
     await page.waitForTimeout(1200);
