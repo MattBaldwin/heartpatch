@@ -164,7 +164,7 @@ select {
   font-size: 14px;
 }
 
-/* Buttons: the shared kit, in the console's own colours (set on :root below):
+/* Buttons: the shared kit, in the console's own colours (set on body, above):
    the orange accent is the primary, neutral surfaces are the rest, and a
    danger one sits on the console's soft red. */
 .adm-danger {
@@ -450,6 +450,8 @@ select {
   justify-content: flex-end;
 }
 .adm-code-box {
+  /* Its fill is the secondary buttons' fill, so they sit on the lighter surface. */
+  --hp-secondary: var(--adm-surface);
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;

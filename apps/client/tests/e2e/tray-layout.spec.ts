@@ -79,7 +79,7 @@ async function checkCatalogAndCare(page: Page): Promise<void> {
   const catalog = page.getByTestId('catalog');
   await expect(catalog).toBeVisible();
   await expect(catalog.locator('[data-care-species]').first()).toBeVisible({ timeout: 15_000 });
-  await expectRoomyLabels(page, '.catalog-close-top, [data-testid="catalog-close"]');
+  await expectRoomyLabels(page, '[data-testid="catalog-close"]');
   // The × is in the header, on screen without scrolling the list.
   const close = (await page.getByTestId('catalog-close-top').boundingBox())!;
   expect(close.y + close.height).toBeLessThan(page.viewportSize()!.height / 2);
