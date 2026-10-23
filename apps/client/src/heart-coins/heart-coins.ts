@@ -39,7 +39,8 @@ export interface HeartCoinsScreenOptions {
 export interface UpkeepPaused {
   readonly mapId: string;
   readonly morning: string;
-  readonly buildingIds: readonly string[];
+  /** Each one and its level (from `upkeep.due`), so the card can say its 💛. */
+  readonly buildings: readonly { readonly buildingId: string; readonly level: number }[];
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -66,8 +67,9 @@ export interface HeartCoinsScreen {
   /**
    * The patch on screen's buildings that fell asleep for upkeep this
    * morning, from its latest reply (null: none read yet). The bag's settle
-   * charges the morning and then reads again (`refresh`), so a kid back
-   * after days away sees the morning that settle paid.
+   * charges the morning and then reads again (`refresh`). A pause is stamped
+   * with the first unpaid morning, so after days away an older pause isn't
+   * listed (the "since you were last here" question on #601).
    */
   readonly upkeepPaused: UpkeepPaused | null;
   /** A patch-list card's "💛 42", filled in once its balance arrives. */
@@ -120,7 +122,10 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
           : {
               mapId,
               morning: upkeep.nextMorningAt,
-              buildingIds: (upkeep.pausedThisMorning ?? []).map((p) => p.buildingId),
+              buildings: (upkeep.pausedThisMorning ?? []).map((p) => ({
+                buildingId: p.buildingId,
+                level: upkeep.due.find((d) => d.buildingRowId === p.buildingRowId)?.level ?? 1,
+              })),
             };
       options.onCoins?.();
     },

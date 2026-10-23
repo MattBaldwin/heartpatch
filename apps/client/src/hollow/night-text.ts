@@ -1,6 +1,10 @@
 import {
+  EXPLORE_RULES,
   GAME_DATA,
   HOLLOW_RULES,
+  JOB_RULES,
+  RESOURCE_BUILDING_RULES,
+  economyEffects,
   type HollowRules,
   type HollowStage,
   type MorningReport,
@@ -154,23 +158,40 @@ export function wildLine(reports: readonly MorningReport[]): ReportLine | null {
 
 const BUILDING_NAMES = new Map(GAME_DATA.buildings.map((b) => [b.id, b.name]));
 
+/** A building's morning upkeep at a level, from the shared maths (0 if it has none). */
+function upkeepAt(buildingId: string, level: number): number {
+  const building = GAME_DATA.buildings.find((b) => b.id === buildingId);
+  if (!building) return 0;
+  const effect = economyEffects(building, level, {
+    jobs: JOB_RULES,
+    explore: EXPLORE_RULES,
+    resourceBuildings: RESOURCE_BUILDING_RULES,
+  })[0];
+  return effect?.upkeep ?? 0;
+}
+
 /**
  * The morning card's line for buildings that fell asleep for unpaid upkeep
- * this morning (#601, `HeartCoins.upkeep.pausedThisMorning`), in the upkeep
- * list's own words ("needs 💛"): "Your Stone Quarry needs 💛: this morning's
- * coins ran short. It wakes up as soon as you have enough!" Up to three by
- * name; more, or two of one kind, by count.
+ * this morning (#601, `HeartCoins.upkeep.pausedThisMorning`), in the tile
+ * card's own words ("needs 💛", and the 💛 that wakes it): "Your Warehouse
+ * needs 💛: this morning's coins ran short. It wakes up as soon as you have
+ * 💛 30!" Up to three by name; more, or two of one kind, by count, with the
+ * 💛 that wakes them all.
  */
-export function upkeepPausedLine(buildingIds: readonly string[]): ReportLine | null {
-  if (buildingIds.length === 0) return null;
-  const names = buildingIds.map((id) => BUILDING_NAMES.get(id) ?? 'building');
+export function upkeepPausedLine(
+  buildings: readonly { buildingId: string; level: number }[],
+): ReportLine | null {
+  if (buildings.length === 0) return null;
+  const names = buildings.map((b) => BUILDING_NAMES.get(b.buildingId) ?? 'building');
   const named = new Set(names).size === names.length && names.length <= 3;
-  const one = buildingIds.length === 1;
+  const one = buildings.length === 1;
   const who = named
     ? `Your ${joinNames(names)} ${one ? 'needs' : 'need'}`
     : `${String(names.length)} of your buildings need`;
+  const coins = buildings.reduce((sum, b) => sum + upkeepAt(b.buildingId, b.level), 0);
+  const enough = coins > 0 ? `💛 ${String(coins)}` : 'enough';
   return {
     icon: '💛',
-    text: `${who} 💛: this morning's coins ran short. ${one ? 'It wakes' : 'They wake'} up as soon as you have enough!`,
+    text: `${who} 💛: this morning's coins ran short. ${one ? 'It wakes' : 'They wake'} up as soon as you have ${enough}!`,
   };
 }

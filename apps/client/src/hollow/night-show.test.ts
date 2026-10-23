@@ -205,24 +205,30 @@ describe('the night words', () => {
     );
   });
 
-  it("tells the buildings that need 💛 this morning, in the upkeep list's words (#601 PR 9)", () => {
+  it('tells the buildings that need 💛 this morning, and the 💛 that wakes them (#601 PR 9)', () => {
+    const at = (buildingId: string, level = 1) => ({ buildingId, level });
     expect(upkeepPausedLine([])).toBeNull();
-    expect(upkeepPausedLine(['stone-quarry'])).toEqual({
+    // The Warehouse's 💛 30, as its tile card says.
+    expect(upkeepPausedLine([at('warehouse')])).toEqual({
       icon: '💛',
-      text: "Your Stone Quarry needs 💛: this morning's coins ran short. It wakes up as soon as you have enough!",
+      text: "Your Warehouse needs 💛: this morning's coins ran short. It wakes up as soon as you have 💛 30!",
     });
-    expect(upkeepPausedLine(['stone-quarry', 'warehouse'])?.text).toBe(
-      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have enough!",
+    // A level 3 Stone Quarry's 💛 23 and the Warehouse's 30, together.
+    expect(upkeepPausedLine([at('stone-quarry', 3), at('warehouse')])?.text).toBe(
+      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have 💛 53!",
     );
     // Two of a kind, or more than three, by count.
-    expect(upkeepPausedLine(['stone-quarry', 'stone-quarry'])?.text).toMatch(
+    expect(upkeepPausedLine([at('stone-quarry'), at('stone-quarry')])?.text).toMatch(
       /^2 of your buildings need 💛/,
     );
     expect(
-      upkeepPausedLine(['stone-quarry', 'warehouse', 'water-well', 'greenhouse'])?.text,
+      upkeepPausedLine([at('stone-quarry'), at('warehouse'), at('water-well'), at('greenhouse')])
+        ?.text,
     ).toMatch(/^4 of your buildings need 💛/);
-    for (const ids of [['stone-quarry'], ['warehouse', 'greenhouse']]) {
-      expect(findAvoidedWords(upkeepPausedLine(ids)?.text ?? '')).toEqual([]);
+    // Something with no upkeep in the data never says 💛 0.
+    expect(upkeepPausedLine([at('no-such-building')])?.text).toMatch(/as you have enough!$/);
+    for (const list of [[at('stone-quarry')], [at('warehouse'), at('greenhouse')]]) {
+      expect(findAvoidedWords(upkeepPausedLine(list)?.text ?? '')).toEqual([]);
     }
   });
 

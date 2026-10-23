@@ -42,6 +42,7 @@ import {
   stageNights,
   upkeepPausedLine,
 } from './night-text.js';
+import type { UpkeepPaused } from '../heart-coins/heart-coins.js';
 import type { BeatKind, Narration } from './show-timeline.js';
 import './hollow.css';
 
@@ -110,11 +111,7 @@ export interface HollowScreenOptions {
    * the morning card says so once a morning. Call `upkeepChanged` when it
    * may have changed.
    */
-  upkeepPaused?: () => {
-    readonly mapId: string;
-    readonly morning: string;
-    readonly buildingIds: readonly string[];
-  } | null;
+  upkeepPaused?: () => UpkeepPaused | null;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -438,7 +435,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   // Once per device per morning: the morning is its mark.
   const upkeepNote = oneTimeNote(() => {
     const paused = options.upkeepPaused?.() ?? null;
-    return paused && paused.mapId === mapId && paused.buildingIds.length > 0
+    return paused && paused.mapId === mapId && paused.buildings.length > 0
       ? { ...paused, at: paused.morning }
       : null;
   }, upkeepKey);
@@ -756,8 +753,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const crowded = crowdedNote.note();
     const treated = trickNote.note();
     const upkeep = upkeepNote.note();
-    upkeepToldBefore = upkeep ? `${upkeep.at}:${upkeep.buildingIds.join(',')}` : null;
-    const upkeepLine = upkeep ? upkeepPausedLine(upkeep.buildingIds) : null;
+    upkeepToldBefore = upkeep
+      ? `${upkeep.at}:${upkeep.buildings.map((b) => b.buildingId).join(',')}`
+      : null;
+    const upkeepLine = upkeep ? upkeepPausedLine(upkeep.buildings) : null;
     renderChips();
     reportBox.hidden =
       !on ||
@@ -1187,7 +1186,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     upkeepChanged: () => {
       // Only a change redraws (as `otherReportChanged`): a redraw rebuilds the report's buttons.
       const upkeep = upkeepNote.note();
-      const told = upkeep ? `${upkeep.at}:${upkeep.buildingIds.join(',')}` : null;
+      const told = upkeep
+        ? `${upkeep.at}:${upkeep.buildings.map((b) => b.buildingId).join(',')}`
+        : null;
       if (mapId && status && told !== upkeepToldBefore) render();
     },
 

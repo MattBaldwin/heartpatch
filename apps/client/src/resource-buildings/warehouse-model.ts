@@ -34,7 +34,7 @@ export const WAREHOUSE_TEXT = {
     `📦 Open! Get a building to level ${String(fromLevel)} and it sends everything straight to your bag.`,
   deliveringFor: (n: number) => `Delivering for ${String(n)} ${n === 1 ? 'building' : 'buildings'}`,
   paused: (coins: number) =>
-    `⏸️ Warehouse needs 💛: huts back to their own storage. It opens again as soon as you have 💛 ${String(coins)}!`,
+    `⏸️ Warehouse needs 💛: huts back to their own storage. It wakes up as soon as you have 💛 ${String(coins)}!`,
   napping:
     'zZ Warehouse napping: huts back to their own storage. It wakes up when this homestead joins home again.',
   // The 📦 mark on a level 3+ resource building's card.
