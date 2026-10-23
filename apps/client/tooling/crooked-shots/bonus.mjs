@@ -446,19 +446,17 @@ async function phonePage(device) {
   return { context, page };
 }
 
-for (const device of DEVICES) {
-  // Every phone starts from the same house (the scout's patch and season).
-  resetHouse(name);
-  for (const p of POWERS) {
-    if (ONLY_POWERS && !ONLY_POWERS.has(p.power)) continue;
-    const { context, page } = await phonePage(device);
-    await teamFor(page, mapId, ids, p.power);
-    await toDoor(page, mapId, p);
-    await shot(page, device, `${p.power}-asleep`);
-    await page.getByTestId('crooked-action').dispatchEvent('click');
-    await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
-    // The pictures come from the portrait renderer: every face drawn.
-    await until(page, () => {
+/** One power on one phone: its door, the picker, the moment, the room and its chest. */
+async function playPower(page, device, p) {
+  await teamFor(page, mapId, ids, p.power);
+  await toDoor(page, mapId, p);
+  await shot(page, device, `${p.power}-asleep`);
+  await page.getByTestId('crooked-action').dispatchEvent('click');
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
+  // The pictures come from the portrait renderer: every face drawn.
+  await until(
+    page,
+    () => {
       const faces = [...document.querySelectorAll('.crooked-helper-face')];
       return (
         faces.length > 0 &&
@@ -467,53 +465,73 @@ for (const device of DEVICES) {
           return img?.complete && img.naturalWidth > 0;
         })
       );
-    });
-    await page.waitForTimeout(300);
-    await shot(page, device, `${p.power}-picker`);
-    await moment(
-      page,
-      async () => {
-        await page.getByTestId(`crooked-helper-${ids[p.power]}`).dispatchEvent('click');
-        await until(page, () => window.__heartpatch?.farHollowHouse?.()?.powering);
-      },
-      850,
-      () => shot(page, device, `${p.power}-power`, { wait: false }),
-    );
-    await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
-    // The payoff card (what the friend did), then the woken door itself.
-    await page.getByTestId('crooked-card').waitFor();
-    await shot(page, device, `${p.power}-woke`);
+    },
+    undefined,
+    60_000,
+  );
+  await page.waitForTimeout(300);
+  await shot(page, device, `${p.power}-picker`);
+  await moment(
+    page,
+    async () => {
+      await page.getByTestId(`crooked-helper-${ids[p.power]}`).dispatchEvent('click');
+      await until(page, () => window.__heartpatch?.farHollowHouse?.()?.powering);
+    },
+    850,
+    () => shot(page, device, `${p.power}-power`, { wait: false }),
+  );
+  await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
+  // The payoff card (what the friend did), then the woken door itself.
+  await page.getByTestId('crooked-card').waitFor();
+  await shot(page, device, `${p.power}-woke`);
+  await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+  await page.waitForTimeout(900);
+  await shot(page, device, `${p.power}-open`);
+  await walkInto(page, p.dx, p.dz, p.room);
+  await page.waitForTimeout(600);
+  await shot(page, device, `${p.power}-room`);
+  const kind = p.room === friendRoom ? 'friend' : 'common';
+  await openChest(page, device, `${p.power}-${kind}`);
+  if (kind === 'friend') {
     await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-    await page.waitForTimeout(900);
-    await shot(page, device, `${p.power}-open`);
-    await walkInto(page, p.dx, p.dz, p.room);
-    await page.waitForTimeout(600);
-    await shot(page, device, `${p.power}-room`);
-    const kind = p.room === friendRoom ? 'friend' : 'common';
-    await openChest(page, device, `${p.power}-${kind}`);
-    if (kind === 'friend') {
-      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-      await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'friend');
-      await page.waitForTimeout(1500);
-      await shot(page, device, 'friend-card');
-      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-      await until(
-        page,
-        () => window.__heartpatch?.battle?.()?.phase === 'turn',
-        undefined,
-        120_000,
-      );
-      await page.waitForTimeout(4000);
-      await shot(page, device, 'friend-battle');
-      const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
-      if (current.battle) await runAway(page, current.battle.id);
-    } else {
-      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-      // This chest held a friend too (only one is shot): run from its battle, or it resumes on the next load.
-      const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
-      if (current.battle) await runAway(page, current.battle.id);
+    await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'friend');
+    await page.waitForTimeout(1500);
+    await shot(page, device, 'friend-card');
+    await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+    await until(page, () => window.__heartpatch?.battle?.()?.phase === 'turn', undefined, 120_000);
+    await page.waitForTimeout(4000);
+    await shot(page, device, 'friend-battle');
+    const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
+    if (current.battle) await runAway(page, current.battle.id);
+  } else {
+    await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+    // This chest held a friend too (only one is shot): run from its battle, or it resumes on the next load.
+    const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
+    if (current.battle) await runAway(page, current.battle.id);
+  }
+}
+
+for (const device of DEVICES) {
+  for (const p of POWERS) {
+    if (ONLY_POWERS && !ONLY_POWERS.has(p.power)) continue;
+    // Each power from the same house (the scout's patch and season), in a fresh
+    // context; headless SwiftShader now and then drops a page to the lobby, so a
+    // power that goes wobbly is shot again from the start.
+    for (let attempt = 1; ; attempt++) {
+      resetHouse(name);
+      const { context, page } = await phonePage(device);
+      try {
+        const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
+        if (current.battle) await runAway(page, current.battle.id);
+        await playPower(page, device, p);
+        break;
+      } catch (error) {
+        if (attempt >= 3) throw error;
+        console.error(`[retry] ${device} ${p.power}: ${String(error).slice(0, 200)}`);
+      } finally {
+        await context.close();
+      }
     }
-    await context.close();
   }
 }
 await writeFile(
