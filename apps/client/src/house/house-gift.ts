@@ -1,7 +1,7 @@
 import type { HouseGift } from '@heartpatch/shared';
 import { itemIconNode } from '../inventory/item-icons.js';
 import { el } from '../ui/dom.js';
-import { houseButton } from './house-grow.js';
+import { houseButton, houseClose } from './house-grow.js';
 import { giftCard } from './house-gift-view.js';
 import { GIFT_TEXT } from './house-view.js';
 
@@ -29,18 +29,9 @@ export function giftPanel(gift: HouseGift, busy: boolean, on: GiftHandlers): HTM
     { class: 'house-gift-yes', 'data-testid': 'house-gift-yes' },
   );
   if (busy) yes.setAttribute('aria-disabled', 'true');
-  const close = houseButton(
-    GIFT_TEXT.closeIcon,
-    () => {
-      if (!busy) on.onClose();
-    },
-    {
-      class: 'house-grow-close',
-      'data-testid': 'house-gift-close',
-      'aria-label': GIFT_TEXT.close,
-    },
-    true,
-  );
+  const close = houseClose(GIFT_TEXT.close, 'house-gift-close', () => {
+    if (!busy) on.onClose();
+  });
   const header = el(
     'header',
     { class: 'house-grow-head house-gift-head' },

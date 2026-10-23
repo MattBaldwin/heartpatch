@@ -60,7 +60,6 @@ export const GROW_TEXT = {
   /** Under it: the new room and the beds it adds. */
   room: (room: string, n: number) => `${room} · +${String(n)}\u00A0${n === 1 ? 'bed' : 'beds'}`,
   close: 'Close',
-  closeIcon: '✕',
   /** One heading per kind of "getting better", with its picture. */
   groups: {
     seed: { icon: '🌱', title: 'Heart Seed' },
@@ -185,7 +184,6 @@ export const GIFT_TEXT = {
   open: 'Open it!',
   opening: 'Opening…',
   close: 'Close',
-  closeIcon: '✕',
   /** What's inside, on the card: "3 Timber". */
   item: (count: number, name: string) => `${String(count)}\u00A0${name}`,
   /** The toast once it's open: "+3 Timber 🎁". */

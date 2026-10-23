@@ -236,21 +236,6 @@
   display: none;
 }
 
-.tile-panel-close {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 999px;
-  background: #f6e3ee;
-  font: inherit;
-  font-size: 24px;
-  line-height: 1;
-  color: #8a5f86;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
 .tile-panel-owner {
   margin: 2px 0 0;
   font-size: 14px;

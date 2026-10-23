@@ -70,7 +70,7 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
 const HUD_CONTROLS = [
   '.battle-plate',
   '.battle-plate-status',
-  '.battle-leave',
+  '.battle-top > .hp-close',
   '[data-testid="battle-sheet"] .hp-button',
   '.battle-caption',
   '.battle-hint',

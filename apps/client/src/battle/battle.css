@@ -250,21 +250,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   }
 }
 
-.battle-leave {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: 2px solid rgb(255 255 255 / 80%);
-  border-radius: 999px;
-  background: rgb(255 250 240 / 94%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
-  padding: 0;
-  font: inherit;
-  font-size: 22px;
-  line-height: 1;
-  color: #8a5f86;
-  cursor: pointer;
-  touch-action: manipulation;
+/* The ✕ is the kit's; the overlay passes taps through, so turn them back on. */
+.battle-top > .hp-close {
   pointer-events: auto;
 }
 
@@ -386,7 +373,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   gap: 8px;
 }
 
-.battle-item {
+/* Compound (.hp-button.battle-item), so these beat the kit by specificity, not by
+   which sheet loads last. */
+.hp-button.battle-item {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -761,7 +750,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
    Name, then a kind chip (icon + word + tint, never colour alone), the
    number worth a glance, a strong/weak mark, and one plain line. */
 
-.battle-move {
+.hp-button.battle-move {
   --hp-secondary: var(--move-bg, #ffc9d7);
   --hp-secondary-lip: var(--move-edge, #f2a4bb);
   --hp-secondary-ink: #5a3a5d;

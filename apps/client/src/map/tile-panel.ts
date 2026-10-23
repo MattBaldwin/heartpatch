@@ -1,3 +1,4 @@
+import { hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import type { TileInfo } from './tile-info.js';
 
@@ -61,11 +62,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   // A trading post (#269): how I reach it.
   const postReachText = el('p', { class: 'tile-panel-post', 'data-testid': 'tile-panel-post' });
   const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': 'Close' },
-    '×',
-  );
+  const close = hpClose('Close');
   close.addEventListener('click', onClose);
   const panel = el(
     'section',

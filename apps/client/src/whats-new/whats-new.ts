@@ -6,6 +6,7 @@ import {
   type ChangeAreaId,
   type ChangeEntryView,
 } from '@heartpatch/shared';
+import { hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import {
   createSeenStore,
@@ -129,11 +130,7 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
     { type: 'button', class: 'whats-new-copy', 'aria-live': 'polite' },
     WHATS_NEW_TEXT.copy,
   );
-  const closeX = el(
-    'button',
-    { type: 'button', class: 'whats-new-x', 'aria-label': WHATS_NEW_TEXT.close },
-    '×',
-  );
+  const closeX = hpClose(WHATS_NEW_TEXT.close);
   const list = el('div', { class: 'whats-new-list', 'data-testid': 'whats-new-list' });
   const done = el(
     'button',

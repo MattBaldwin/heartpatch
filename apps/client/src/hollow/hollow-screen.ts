@@ -19,6 +19,7 @@ import {
 import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { hollowApi, type HollowApi } from './hollow-api.js';
 import { VISIT_FRESH_MS } from './hollow-config.js';
@@ -666,10 +667,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         'div',
         { class: 'hollow-row' },
         button(NIGHT_TEXT.lightFire, answer(true), { 'data-testid': 'night-nudge-light' }),
-        button(NIGHT_TEXT.showMe, answer(false), {
-          class: 'auth-button-soft',
-          'data-testid': 'night-nudge-show',
-        }),
+        button(NIGHT_TEXT.showMe, answer(false), { 'data-testid': 'night-nudge-show' }, true),
       ),
     );
   }
@@ -719,11 +717,21 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     );
   }
 
-  const button = (label: string, onClick: () => void, attrs: Record<string, string> = {}) => {
+  const button = (
+    label: string,
+    onClick: () => void,
+    attrs: Record<string, string> = {},
+    soft = false,
+  ) => {
     const { class: more = '', ...rest } = attrs;
     const b = el(
       'button',
-      { type: 'button', class: `auth-button hollow-button ${more}`.trim(), ...rest },
+      {
+        type: 'button',
+        class:
+          `${buttonClass({ variant: soft ? 'secondary' : 'primary', small: true })} ${more}`.trim(),
+        ...rest,
+      },
       label,
     );
     b.disabled = working;
@@ -852,15 +860,15 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
                   dismissReport();
                   options.showTile?.(darkFirst, true);
                 },
-                {
-                  class: rescueFirst ? 'auth-button-soft' : '',
-                  'data-testid': 'hollow-report-light',
-                },
+                { 'data-testid': 'hollow-report-light' },
+                rescueFirst !== undefined,
               )
-            : button(HOLLOW_TEXT.ok, dismissReport, {
-                class: rescueFirst ? 'auth-button-soft' : '',
-                'data-testid': 'hollow-report-ok',
-              }),
+            : button(
+                HOLLOW_TEXT.ok,
+                dismissReport,
+                { 'data-testid': 'hollow-report-ok' },
+                rescueFirst !== undefined,
+              ),
         ),
       );
     }
@@ -910,10 +918,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           { class: 'hollow-row' },
           ...(options.devTools
             ? [
-                button(HOLLOW_TEXT.devNightfall, () => void devNightfall(), {
-                  class: 'auth-button-soft',
-                  'data-testid': 'hollow-dev-nightfall',
-                }),
+                button(
+                  HOLLOW_TEXT.devNightfall,
+                  () => void devNightfall(),
+                  { 'data-testid': 'hollow-dev-nightfall' },
+                  true,
+                ),
               ]
             : []),
           button(
@@ -922,7 +932,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               sheetOpen = false;
               render();
             },
-            { class: 'auth-button-soft', 'data-testid': 'hollow-back' },
+            { 'data-testid': 'hollow-back' },
+            true,
           ),
         ),
       );

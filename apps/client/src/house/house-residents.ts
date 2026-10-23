@@ -2,7 +2,7 @@ import { moodHeartsEl } from '../care/mood-hearts.js';
 import type { Portraits } from '../procedural/portraits.js';
 import type { RosterRow } from '../squishies/roster/roster-view.js';
 import { el } from '../ui/dom.js';
-import { houseButton } from './house-grow.js';
+import { houseButton, houseClose } from './house-grow.js';
 import {
   portraitStep,
   type BedChip,
@@ -282,20 +282,7 @@ function pageHead(
       el('p', { class: 'house-grow-eyebrow' }, eyebrow),
       el('h3', { class: 'house-grow-title house-page-title', 'data-testid': testid }, title),
     ),
-    ...(onClose
-      ? [
-          houseButton(
-            '✕',
-            onClose,
-            {
-              class: 'house-grow-close',
-              'data-testid': 'house-picker-close',
-              'aria-label': RESIDENT_TEXT.close,
-            },
-            true,
-          ),
-        ]
-      : []),
+    ...(onClose ? [houseClose(RESIDENT_TEXT.close, 'house-picker-close', onClose)] : []),
   );
 }
 

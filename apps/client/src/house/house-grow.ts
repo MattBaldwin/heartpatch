@@ -1,5 +1,5 @@
 import type { HouseNextLevel, HouseView, RequirementProgress } from '@heartpatch/shared';
-import { buttonClass } from '../ui/button/button.js';
+import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import {
   buildLabel,
@@ -40,6 +40,13 @@ export function houseButton(
     },
     label,
   );
+  b.addEventListener('click', onTap);
+  return b;
+}
+
+/** The round ✕ for a house sheet's top right (the shared close, wired to `onTap`). */
+export function houseClose(label: string, testId: string, onTap: () => void): HTMLButtonElement {
+  const b = hpClose(label, testId);
   b.addEventListener('click', onTap);
   return b;
 }
@@ -125,20 +132,7 @@ function cost(view: HouseView, next: HouseNextLevel): HTMLElement[] {
 function head(view: HouseView, next: HouseNextLevel, onClose: (() => void) | null): HTMLElement {
   const { levels, room } = growHeader(view, next);
   // The confirm has one way out ("Not now"), so no ✕ there.
-  const close = onClose
-    ? [
-        houseButton(
-          GROW_TEXT.closeIcon,
-          onClose,
-          {
-            class: 'house-grow-close',
-            'data-testid': 'house-grow-close',
-            'aria-label': GROW_TEXT.close,
-          },
-          true,
-        ),
-      ]
-    : [];
+  const close = onClose ? [houseClose(GROW_TEXT.close, 'house-grow-close', onClose)] : [];
   return el(
     'header',
     { class: 'house-grow-head' },

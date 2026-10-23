@@ -64,8 +64,7 @@
   margin-top: 12px;
 }
 
-.hollow-button {
-  min-height: 44px;
+.hollow-row > .hp-button {
   flex: 1 1 auto;
 }
 
@@ -89,7 +88,7 @@
   color: #8a8199;
 }
 
-.hollow-list-row .hollow-button {
+.hollow-list-row .hp-button {
   flex: 0 0 auto;
   margin-left: auto;
 }
@@ -322,11 +321,13 @@
   text-align: center;
 }
 
-.hollow-button.hollow-replay {
+/* Gold, by the kit's own tokens (the colour means "watch the story"). */
+.hp-button.hollow-replay {
+  --hp-primary: #ffc94d;
+  --hp-primary-lip: #d9a21f;
+  --hp-primary-ink: #4a3150;
   width: 100%;
   margin-bottom: 12px;
-  background: #ffc94d;
-  color: #4a3150;
 }
 
 /* "He gets bolder": four moon stages, tonight's lit up (mockup screen 7). */

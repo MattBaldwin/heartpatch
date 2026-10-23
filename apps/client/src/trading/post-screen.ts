@@ -17,7 +17,7 @@ import {
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { slotIcon } from '../map/map-legend.js';
-import { hpButton } from '../ui/button/button.js';
+import { hpButton, hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
@@ -178,16 +178,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     retryAfterMs: COMMAND_RETRY_MS,
   };
 
-  const closeButton = el(
-    'button',
-    {
-      type: 'button',
-      class: 'tile-panel-close',
-      'aria-label': TRADE_TEXT.close,
-      'data-testid': 'post-close',
-    },
-    '✕',
-  );
+  const closeButton = hpClose(TRADE_TEXT.close, 'post-close');
   closeButton.addEventListener('click', () => {
     close();
   });
