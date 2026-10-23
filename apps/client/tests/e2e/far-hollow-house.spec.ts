@@ -285,8 +285,14 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
     .toBeGreaterThan(0);
   expect((await house(page))!).toMatchObject({ room: 'front-hall', lit: true });
 
-  // The stair echo drifts in the Stair Hall next door: drawn, and its eyes peek in.
-  await expect.poll(async () => (await house(page))?.scene?.echoes ?? 0).toBeGreaterThan(0);
+  // The stair echo drifts in the Stair Hall next door: drawn, or (under the top HUD) its eyes peek in.
+  await expect
+    .poll(async () => {
+      const h = await house(page);
+      const eyes = h?.echoes.some((e) => e.loop === 'stair-echo' && e.mark !== 'off') ?? false;
+      return (h?.scene?.echoes ?? 0) > 0 || eyes;
+    })
+    .toBe(true);
   await place(page, 0.2, 1.6);
   await expect.poll(async () => (await house(page))?.echoHint?.room).toBe('stair-hall');
 
