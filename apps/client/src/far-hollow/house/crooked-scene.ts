@@ -7,6 +7,7 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
@@ -50,6 +51,7 @@ import {
   litRooms,
   roomOf,
   roomsOn,
+  thingPoint,
   type CrookedShot,
   type FloorPoint,
 } from './crooked-plan.js';
@@ -67,6 +69,15 @@ import type { EchoSpot } from './crooked-echoes.js';
 
 /** How many point lights each tier draws (the lantern counts). */
 const LIGHTS_BY_TIER: Record<QualityTier, number> = { low: 2, medium: 3, high: 4 }; // TUNE
+
+/** A Relight board's flare where its thing stands (#306 6f). */
+const RELIT = {
+  ms: 1800, // TUNE
+  /** How far past its size it swells as it lights. */
+  swell: 1.2, // TUNE
+  /** Metres over the floor. */
+  height: 0.95, // TUNE
+} as const;
 
 const BLOOM = {
   /** The bloom rolls in over this long, ms (instant with reduced motion). */
@@ -127,6 +138,8 @@ export class CrookedScene {
   readonly #lanternFrame: Mesh;
   readonly #lanternGlass: Mesh;
   readonly #key: Mesh;
+  /** Each Relight board's glow over its thing, by room (#306 6f). */
+  readonly #relit = new Map<string, { mesh: Mesh; at: FloorPoint; thing: string }>();
   readonly #instrumentation: SceneInstrumentation;
   readonly #echoMat: StandardMaterial;
   /** The echo meshes, by loop id (#306 6d): made as an echo first comes near. */
@@ -141,6 +154,8 @@ export class CrookedScene {
   #goal: CrookedShot = this.#shot;
   #bloom: { room: string; from: number } | null = null;
   #keyShown: { at: FloorPoint; from: number } | null = null;
+  /** A board just relit: its glow swells, then settles. */
+  #relitShown: { room: string; from: number } | null = null;
   #drawCalls = 0;
   #triangles = 0;
   readonly #look = new Vector3();
@@ -191,6 +206,22 @@ export class CrookedScene {
     this.#key = kitMesh(scene, 'crooked-key', () => merged(keyShape()));
     this.#key.material = this.#keyMat;
     this.#key.setEnabled(false);
+    // The lantern's own glow, so a relit board compiles nothing new as it plays.
+    for (const room of CROOKED_HOUSE.rooms) {
+      for (const thing of room.things.filter((t) => t.kind === 'relight')) {
+        const mesh = CreateSphere(
+          `crooked-relit-${room.id}`,
+          { diameter: 0.4, segments: 8 },
+          scene,
+        );
+        mesh.material = this.#glowMat;
+        mesh.isPickable = false;
+        mesh.setEnabled(false);
+        const at = thingPoint(room, thing);
+        mesh.position.set(at.x, RELIT.height, at.z);
+        this.#relit.set(room.id, { mesh, at, thing: thing.id });
+      }
+    }
     // The echoes glow on their own (emissive, never another light: the tier caps lights).
     this.#echoMat = glow(scene, 'crooked-echo', '#ffffff', 1);
     this.#echoMat.alpha = 0.88;
@@ -251,6 +282,11 @@ export class CrookedScene {
       this.#rooms.set(id, { mesh, key, lit: joy >= 1 || lit.has(id) });
     }
     this.#lightRooms();
+    // A relit board glows in its dark room (once the room is lit, it's in colour anyway).
+    for (const [id, glow] of this.#relit) {
+      const fixed = view.rooms.find((r) => r.id === id)?.fixed.includes(glow.thing) ?? false;
+      glow.mesh.setEnabled(wanted.has(id) && fixed && !lit.has(id));
+    }
   }
 
   /** Which meshes each fill lights, and the lamps of the lit rooms nearest the Keeper. */
@@ -289,6 +325,18 @@ export class CrookedScene {
   showKey(at: FloorPoint): void {
     this.#keyShown = { at, from: performance.now() };
     this.#key.setEnabled(true);
+  }
+
+  /**
+   * A Relight board solved (#306 6f): a warm glow swells where its thing
+   * stands, then settles and stays while the room is dark (its lamps are lit
+   * now). No swell under reduced motion.
+   */
+  relit(room: string): void {
+    const glow = this.#relit.get(room);
+    if (!glow || this.#options.reducedMotion) return;
+    glow.mesh.scaling.setAll(0);
+    this.#relitShown = { room, from: performance.now() };
   }
 
   hideKey(): void {
@@ -377,6 +425,18 @@ export class CrookedScene {
         this.#bloom = null;
         this.show(this.#view, [...this.#rooms.keys()]);
       } else moving = true;
+    }
+    if (this.#relitShown) {
+      const glow = this.#relit.get(this.#relitShown.room);
+      const t = (now - this.#relitShown.from) / RELIT.ms;
+      if (!glow || t >= 1 || this.#options.reducedMotion) {
+        this.#relitShown = null;
+        glow?.mesh.scaling.setAll(1);
+      } else {
+        // Up from nothing, past its size, and back to it.
+        glow.mesh.scaling.setAll(Math.min(1, t * 4) + Math.sin(Math.PI * t) * RELIT.swell);
+        moving = true;
+      }
     }
     if (this.#keyShown) {
       const t = (now - this.#keyShown.from) / 1000;

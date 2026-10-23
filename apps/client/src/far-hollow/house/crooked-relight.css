@@ -39,3 +39,8 @@
     transform: none;
   }
 }
+
+/* The board is the explore card: its words take explore's ink, not the house HUD's light text. */
+.crooked .hollowed-puzzle {
+  color: #4a3150;
+}

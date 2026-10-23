@@ -12,6 +12,11 @@
 // moment), waits on the real clock for the server to catch me, and stops
 // the peekaboo's clock at each frame (`peekAt`).
 //
+// The Relight boards and the story scraps (#306 6f) are `PUZZLES=1`'s run:
+// the dev route puts the house right but the Library's board, the board is
+// won through its real buttons with the server's dev answer, and the Music
+// Room's board is relit with its room still to put right.
+//
 // Honest captures (#335): every shot is at a tier pinned with the dev-only
 // `?tier=`, which the file name says. Headless Chromium draws with
 // SwiftShader (software WebGL2); frame times here say nothing about a device.
@@ -34,6 +39,7 @@ const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 const ECHOES = process.env.ECHOES === '1';
+const PUZZLES = process.env.PUZZLES === '1';
 
 async function until(page, fn, arg, timeout = 180_000) {
   const end = Date.now() + timeout;
@@ -327,10 +333,101 @@ async function echoShots(page, device, mapId, calm) {
   await shot(page, device, calm ? 'calm-back' : 'back-in-light');
 }
 
+/** The board's cells, as the card draws them. */
+const cell = (page, at) => page.getByTestId('hollowed-relight-board').locator('button').nth(at);
+
+/** Plays `moves` (the server's dev answer) through the board's real buttons. */
+async function playBoard(page, moves) {
+  const before = (await house(page)).board?.moves ?? 0;
+  for (const [i, move] of moves.entries()) {
+    await cell(page, move.at).click();
+    const picked = (await house(page)).board?.picked;
+    if (move.type === 'slide' && picked === move.at) await cell(page, move.to).click();
+    if (i < moves.length - 1) {
+      await until(
+        page,
+        (n) => window.__heartpatch?.farHollowHouse?.()?.board?.moves === n,
+        before + i + 1,
+      );
+    }
+  }
+}
+
+/** Reads away any lore page a bloom found (the Lorebook's own card), so it covers nothing. */
+async function dismissLore(page) {
+  for (let i = 0; i < 5; i++) {
+    const close = page.getByTestId('lore-close');
+    if (!(await close.isVisible().catch(() => false))) return;
+    await close.click();
+    await page.waitForTimeout(300);
+  }
+}
+
+/** Opens the Relight thing's board in the room I'm in (its big button), shooting it as it opens. */
+async function openBoard(page, device, prefix) {
+  await page.waitForTimeout(1500);
+  await dismissLore(page);
+  const thing = (await house(page)).crooked.find((t) => t.kind === 'relight');
+  await place(page, thing.x, thing.z + 0.9);
+  await until(page, (id) => window.__heartpatch?.farHollowHouse?.()?.target?.id === id, thing.id);
+  await shot(page, device, `${prefix}-enter`);
+  await page.getByTestId('crooked-action').click();
+  await shot(page, device, `${prefix}-board-opens`, 120);
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.board?.card === 'board');
+  await shot(page, device, `${prefix}-board`);
+  return thing.id;
+}
+
+/** The Relight boards and the story scraps (#306 6f), from the same state on every phone. */
+async function puzzleShots(page, device, mapId) {
+  // The whole house right but the Library's reading lamps.
+  const jump = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, {
+    room: 'library',
+    nearlyDone: true,
+  });
+  if (jump.status !== 201) throw new Error(JSON.stringify(jump));
+  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+  await goInside(page);
+  const lamps = await openBoard(page, device, 'library');
+  const answer = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow/relight-answer`, {
+    room: 'library',
+    thing: lamps,
+  });
+  const half = Math.ceil(answer.body.moves.length / 2);
+  await playBoard(page, answer.body.moves.slice(0, half));
+  await shot(page, device, 'library-mid');
+  await playBoard(page, answer.body.moves.slice(half));
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'bloom');
+  await shot(page, device, 'library-bloom-opens', 120);
+  await page.waitForTimeout(1200);
+  await shot(page, device, 'library-bloom');
+  await page.getByTestId('crooked-card-ok').click();
+  await page.waitForTimeout(1500);
+  await dismissLore(page);
+  await shot(page, device, 'library-lit');
+
+  // The Music Room's music box, 6×6, with the room still to put right.
+  resetHouse(name);
+  const music = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'music-room' });
+  if (music.status !== 201) throw new Error(JSON.stringify(music));
+  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+  await goInside(page);
+  const box = await openBoard(page, device, 'music');
+  const tune = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow/relight-answer`, {
+    room: 'music-room',
+    thing: box,
+  });
+  await playBoard(page, tune.body.moves.slice(0, Math.ceil(tune.body.moves.length / 2)));
+  await shot(page, device, 'music-mid');
+  await playBoard(page, tune.body.moves.slice(Math.ceil(tune.body.moves.length / 2)));
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.board === null);
+  await shot(page, device, 'music-relit', 100);
+}
+
 const stats = [];
-async function shot(page, device, name) {
+async function shot(page, device, name, wait) {
   if (ONLY && !ONLY.has(name)) return;
-  await settle(page);
+  await settle(page, wait);
   await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
   const file = path.join(OUT, `${device}-${name}-${TIER}.jpg`);
   await page.screenshot({ path: file, type: 'jpeg', quality: QUALITY, timeout: 180_000 });
@@ -378,6 +475,7 @@ for (const device of DEVICES) {
   const size = ALL_DEVICES[device];
   for (const motion of ['no-preference', 'reduce']) {
     if (motion === 'reduce' && ONLY && !ONLY.has('reduced') && !ECHOES) continue;
+    if (motion === 'reduce' && PUZZLES) continue;
     const context = await browser.newContext({
       storageState: statePath,
       viewport: { width: size.width, height: size.height },
@@ -392,6 +490,11 @@ for (const device of DEVICES) {
     await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
     if (ECHOES) {
       await echoShots(page, device, mapId, motion === 'reduce');
+      await context.close();
+      continue;
+    }
+    if (PUZZLES) {
+      await puzzleShots(page, device, mapId);
       await context.close();
       continue;
     }

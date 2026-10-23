@@ -862,7 +862,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     if (!reply.key && !reply.bloom) {
       if (thing.kind === 'relight') {
-        // A board relit: its lamps light up where it stands, with a twinkle.
+        // A board relit: a warm flare where it stands, with a twinkle.
+        scene3d?.relit(room.id);
         options.cue?.('twinkle');
         say(RT.relit(thing.name));
       } else say(T.fixed(thing.name));

@@ -134,6 +134,11 @@ test('relights the Library’s reading lamps on the Hollow’s board and blooms 
   expect(done).toMatchObject({ board: null, lit: true, putRight: 13 });
   expect(done.scrap).toMatch(/lamp/i);
   await expect(page.getByTestId('crooked-scrap')).toContainText(done.scrap!);
+  // A bloom may find a lore page too: its card comes over everything, so read it away first.
+  await page
+    .getByTestId('lore-close')
+    .tap({ timeout: 3_000 })
+    .catch(() => undefined);
   await page.getByTestId('crooked-card-ok').tap();
   await expect.poll(async () => (await house(page))?.card).toBeNull();
   const saved = await api<{ house: { rooms: { id: string; bloomed: boolean }[] } }>(
