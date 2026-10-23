@@ -165,3 +165,21 @@
   cursor: pointer;
   touch-action: manipulation;
 }
+
+/* A phone on its side (controls D, ../ui/breakpoints.ts): the card takes the
+   whole height, and the round × at its top is the one way out, so the grid
+   gets the room the bottom Close used to take. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .catalog {
+    padding-top: calc(env(safe-area-inset-top) + 12px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+  }
+
+  .catalog-card {
+    gap: 8px;
+  }
+
+  .catalog-card .catalog-actions {
+    display: none;
+  }
+}

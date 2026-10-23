@@ -326,17 +326,18 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   };
 
   /**
-   * On a phone on its side the card (or the Boutique's) takes the right of the
-   * screen, so the Keeper stands in the room left of it; otherwise it stays
+   * On a phone on its side the card (or the Boutique's) takes the left of the
+   * screen, so the Keeper stands in the room right of it; otherwise it stays
    * where it always stood, above a bottom card (controls D).
    */
   const fitPreview = (): void => {
     if (!isOpen || !preview) return;
     const shown = panel.querySelector<HTMLElement>('.wardrobe-card:not([hidden])');
-    const left = shown?.getBoundingClientRect().left ?? 0;
+    const edge = shown?.getBoundingClientRect().right ?? 0;
+    // Under the "Log out" chip, in the room right of the card.
     preview.setBand(
-      isLandscapePhone() && left > 0
-        ? { top: 12, bottom: window.innerHeight - 12, left: 0, right: left }
+      isLandscapePhone() && edge > 0
+        ? { top: 56, bottom: window.innerHeight - 12, left: edge, right: window.innerWidth }
         : null,
     );
     options.invalidate();
