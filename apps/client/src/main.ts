@@ -655,11 +655,9 @@ const showFarHollowArrival = (): void => {
     () => undefined,
   );
 };
-let mapNight = false;
 const farHollowSheet = createFarHollowSheet({
   root: document.body,
   mapId: () => maps.view?.map.id ?? null,
-  night: () => mapNight,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
@@ -719,7 +717,6 @@ const hollow = createHollowScreen({
   // The night loop plays while it's night on the map, and his visit hushes it.
   layer: {
     setNight: (night) => {
-      mapNight = night;
       hollowLayer.setNight(night);
       maps.setNight(night);
       communityActions.setNight(night);

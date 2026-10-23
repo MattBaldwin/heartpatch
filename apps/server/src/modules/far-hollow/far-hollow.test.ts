@@ -223,10 +223,11 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     const before = await view(server, kid, mapId);
     expect(before).toMatchObject({
       name: COMMUNITY_RULES.farHollow.name,
-      season: { id: 'thanksgiving', name: 'Thanksgiving' },
+      // Halloween 2026 holds to Nov 9, though Thanksgiving's window starts Nov 3.
+      season: { id: 'halloween', name: 'Halloween' },
       arrived: false,
       completedAt: null,
-      nextSeason: { id: 'christmas', startsOn: '2026-12-01' },
+      nextSeason: { id: 'thanksgiving', startsOn: '2026-11-10' },
       road: { distance: COMMUNITY_RULES.farHollow.distance, ...road },
     });
     expect(await stateOf(kid)).toHaveLength(0);
@@ -275,7 +276,7 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     const entered = events.at(-1)!;
     expect(parseGameEventPayload('journey.arrived', entered.payload)).toMatchObject({
       userId: kid.id,
-      season: 'thanksgiving',
+      season: 'halloween',
       year: 2026,
     });
     // Only I hear that I arrived.
@@ -303,7 +304,7 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
     expect(errorOf(again).message).toMatch(/already in the far Hollow/);
   });
 
-  it('refuses the far road after dark', async () => {
+  it('takes the far road at any hour, night too (owner decision of 2026-10-23)', async () => {
     const server = await start();
     const kid = await player();
     const mapId = await patch(server, kid, 10);
@@ -318,8 +319,34 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
       q: near.q,
       r: near.r,
     });
-    expect(res.statusCode).toBe(403);
-    expect(errorOf(res).message).toMatch(/after dark/);
+    expect(res.statusCode, res.body).toBe(201);
+    expect(battleOf(res).kind).toBe('journey');
+  });
+
+  it('keeps Halloween 2026’s far Hollow to Nov 9, then Thanksgiving’s is fresh (#306 6b)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid, 10);
+    await call(server, 'POST', `/maps/${mapId}/dev/far-hollow`, kid, {});
+    const [halloween] = await stateOf(kid);
+    // Nov 9, 23:00 in Denver: still Halloween's house, still arrived.
+    clock.setTime(Date.parse('2026-11-10T06:00:00Z'));
+    expect(await view(server, kid, mapId)).toMatchObject({
+      season: { id: 'halloween' },
+      arrived: true,
+    });
+    // Nov 10: Thanksgiving's far Hollow, a fresh seed, not yet reached.
+    clock.setTime(Date.parse('2026-11-10T17:00:00Z'));
+    expect(await view(server, kid, mapId)).toMatchObject({
+      season: { id: 'thanksgiving' },
+      arrived: false,
+      house: null,
+      nextSeason: { id: 'christmas', startsOn: '2026-12-01' },
+    });
+    await call(server, 'POST', `/maps/${mapId}/dev/far-hollow`, kid, {});
+    const rows = await stateOf(kid);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.seasonSeed).not.toBe(halloween!.seasonSeed);
   });
 
   it('stays open after dark once I’ve arrived (owner decision 1), and needs a member', async () => {
@@ -360,7 +387,8 @@ describe.skipIf(!url)('the far Hollow (#306 PR 6, needs DATABASE_URL)', () => {
       season: { id: 'christmas', name: 'Christmas' },
       arrived: false,
       completedAt: null,
-      nextSeason: { id: 'new-year', startsOn: '2026-12-31' },
+      // Christmas keeps Dec 31; New Year takes over on the 1st.
+      nextSeason: { id: 'new-year', startsOn: '2027-01-01' },
     });
 
     // Arriving clears last season's rows, state and rooms alike.

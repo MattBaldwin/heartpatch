@@ -12,16 +12,13 @@ import {
   GAME_DATA,
   GROWTH_RULES,
   hasBit,
-  HOLLOW_RULES,
-  HOME_BASE_RULES,
-  hollowedOpenAt,
   houseReach,
   JOURNEY_RULES,
   journeyFor,
-  latestSeasonRun,
   nextSeasonRun,
   doorLeadsTo,
   Rng,
+  seasonRunAt,
   withBit,
   type DevFarHollowRequest,
   type ExploreNotable,
@@ -59,7 +56,7 @@ import type { Database, Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
-import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
+import { localDate, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import type { BattlesService } from '../battles/service.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
@@ -97,7 +94,6 @@ import {
 // Kid-readable messages (style guide §6).
 export const FAR_HOLLOW_MESSAGES = {
   notArrived: 'Take the far road from a trading post first! 🧭',
-  night: 'Too spooky after dark! Come back in the morning 🌙',
   noMap: "We couldn't find that patch.",
   noRoom: "We couldn't find that room.",
   noThing: "We couldn't find that.",
@@ -213,8 +209,9 @@ export interface FarHollowSeason {
 }
 
 /**
- * The season's far Hollow on the map at `at`: the season whose window
- * started last (`latestSeasonRun`) and its seed.
+ * The season's far Hollow on the map at `at`: the season the map-local date
+ * belongs to (`seasonRunAt`: a running season holds until its window ends,
+ * so Halloween 2026 runs to Nov 9) and its seed.
  */
 export async function farHollowSeasonAt(
   tx: Executor,
@@ -223,7 +220,7 @@ export async function farHollowSeasonAt(
 ): Promise<FarHollowSeason> {
   const map = await createFarHollowRepo(tx).findMap(mapId);
   if (!map) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noMap);
-  const run = latestSeasonRun(GAME_DATA.seasons, localDate(at, map.timeZone));
+  const run = seasonRunAt(GAME_DATA.seasons, localDate(at, map.timeZone));
   if (!run) throw new Error('farHollowSeasonAt: no seasons in the data');
   // A hand-authored map has no seed: derive one, as territory does.
   const mapSeed = map.seed ?? deriveSeed('hand-authored-map', mapId);
@@ -234,11 +231,6 @@ export async function farHollowSeasonAt(
 export function farRoad(): FarHollowView['road'] {
   const { level, teamSize } = journeyFor(RULES.distance, JOURNEY_RULES, GROWTH_RULES.maxLevel);
   return { distance: RULES.distance, level, teamSize };
-}
-
-/** Is it day on the map, so the far road is open (the Hollowed places' hours)? */
-export function farHollowOpen(at: Date, timeZone: string): boolean {
-  return hollowedOpenAt(mapLocalTime(at, timeZone), { ...HOME_BASE_RULES, ...HOLLOW_RULES });
 }
 
 export interface FarHollowServiceOptions {
@@ -310,7 +302,7 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
       season: { id: season.run.id, name: season.run.name },
       arrived: rows !== null,
       completedAt: rows?.state.completedAt?.toISOString() ?? null,
-      nextSeason: next ? { id: next.id, name: next.name, startsOn: next.startsOn } : null,
+      nextSeason: next ? { id: next.id, name: next.name, startsOn: next.takesOverOn } : null,
       road: farRoad(),
       house: rows ? houseViewOf(rows, crookedHouseSecrets(season.seed), at) : null,
     };

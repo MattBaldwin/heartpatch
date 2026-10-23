@@ -58,7 +58,7 @@ export const FarHollowViewSchema = z.object({
   season: FarHollowSeasonSchema,
   arrived: z.boolean(),
   completedAt: z.iso.datetime().nullable(),
-  /** When a fresh far Hollow comes: the next season's first day, map-local. */
+  /** When a fresh far Hollow comes: the first day the next season takes over (`nextSeasonRun`), map-local. */
   nextSeason: FarHollowSeasonSchema.extend({ startsOn: LocalDateSchema }).nullable(),
   /** The far road's trail, as a journey preview shows it. */
   road: z.object({
@@ -83,7 +83,10 @@ export const CrookedFindSchema = z.object({
 export type CrookedFind = z.infer<typeof CrookedFindSchema>;
 
 /** `POST /maps/:mapId/far-hollow/fix`: put a crooked thing right in the room I'm in. */
-export const CrookedFixRequestSchema = z.strictObject({ room: ContentIdSchema, thing: ContentIdSchema });
+export const CrookedFixRequestSchema = z.strictObject({
+  room: ContentIdSchema,
+  thing: ContentIdSchema,
+});
 export type CrookedFixRequest = z.infer<typeof CrookedFixRequestSchema>;
 
 export const CrookedFixResponseSchema = z.object({

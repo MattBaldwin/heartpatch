@@ -50,9 +50,9 @@ const TEST_KEEPER = {
   mouth: 'smile',
   extras: [],
 };
-// 10:00 in Denver (MDT, UTC−6), in the Thanksgiving season's window.
-const START = '2026-11-04T16:00:00Z';
-const SEASON = { id: 'thanksgiving', year: 2026 };
+// 10:00 in Denver (MST, UTC−7) on Nov 4: Halloween 2026's far Hollow (it holds to Nov 9).
+const START = '2026-11-04T17:00:00Z';
+const SEASON = { id: 'halloween', year: 2026 };
 const HERO = STARTERS.speciesIds[0]!;
 const speciesOf = (element: string) =>
   GAME_DATA.species.find((s) => s.element === element && s.rarity === 'common')!;
@@ -619,6 +619,22 @@ describe.skipIf(!url)('the Crooked House (#306 6b, needs DATABASE_URL)', () => {
       });
     },
   );
+
+  it('works at night (owner decisions of 2026-10-23)', SLOW, async () => {
+    const server = await start();
+    const kid = await player();
+    const { mapId } = await house(
+      server,
+      kid,
+      seedWhere(() => true),
+    );
+    // 21:00 in Denver.
+    clock.setTime(Date.parse('2026-11-05T04:00:00Z'));
+    expect((await enter(server, kid, mapId, 'parlour')).view.house!.room).toBe('parlour');
+    expect((await fix(server, kid, mapId, 'parlour', 'picture')).view.house!.rooms).toContainEqual(
+      expect.objectContaining({ id: 'parlour', fixed: ['picture'] }),
+    );
+  });
 
   it('refuses a Relight board until #306 6f wakes it', SLOW, async () => {
     const server = await start();

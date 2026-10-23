@@ -16,7 +16,6 @@ export const FAR_HOLLOW_TEXT = {
   roadStakes: "Tuckered out? Nothing's lost. Just try again.",
   start: 'Take the far road 🧭',
   fromPost: 'The far road starts at any trading post you can visit. 🏮',
-  night: 'Too spooky after dark! Come back in the morning 🌙',
   arrivedLead: 'The Crooked House! Its rooms are dark and a bit wonky. Bring the light back!',
   goInside: 'Go inside 🕯️',
   stuck: "The front door's stuck! It opens very soon 🔑",
