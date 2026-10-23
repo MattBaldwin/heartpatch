@@ -1,6 +1,7 @@
 import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '@heartpatch/shared';
 import { CARE_TEXT, evolvingBar } from '../care/care-view.js';
 import { evolvingMeterEl } from '../care/evolving-meter.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
@@ -360,9 +361,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     onClick: () => void,
     extra: { soft?: boolean; testId?: string; small?: boolean } = {},
   ) => {
-    const classes = ['battle-button'];
-    if (extra.soft) classes.push('battle-button-soft');
-    if (extra.small) classes.push('battle-button-small');
+    const classes = [buttonClass({ small: extra.small === true })];
+    if (extra.soft) classes.push('battle-cream');
     const node = el(
       'button',
       {
@@ -407,7 +407,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         'button',
         {
           type: 'button',
-          class: `battle-button battle-item${tile.state === 'ready' ? '' : ' battle-button-empty'}`,
+          class: `${buttonClass()} battle-item${tile.state === 'ready' ? '' : ' battle-button-empty'}`,
           'data-testid': 'battle-item-pick',
           'data-item': tile.id,
           'data-state': tile.state,
@@ -498,7 +498,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             'button',
             {
               type: 'button',
-              class: `battle-button battle-move battle-move-${info.kind}`,
+              class: `${buttonClass()} battle-move battle-move-${info.kind}`,
               'data-testid': 'battle-move',
               'data-kind': info.kind,
               ...(info.style && { 'data-style': info.style }),
@@ -835,7 +835,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       keepGoingButton = null;
       if (doneButton) {
         doneButton.textContent = ok;
-        doneButton.classList.remove('battle-button-soft');
+        doneButton.classList.remove('battle-cream');
       }
     },
     setKeepGoingBusy: (busy) => {

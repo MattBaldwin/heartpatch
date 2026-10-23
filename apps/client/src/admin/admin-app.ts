@@ -30,7 +30,10 @@ import {
 /** The classes for a console button: the shared kit, `danger` tinting its ink red. */
 function admBtn(flags: string): string {
   const has = (flag: string) => flags.split(' ').includes(flag);
-  const kit = buttonClass({ variant: has('primary') ? 'primary' : 'secondary', small: has('small') });
+  const kit = buttonClass({
+    variant: has('primary') ? 'primary' : 'secondary',
+    small: has('small'),
+  });
   return has('danger') ? `${kit} adm-danger` : kit;
 }
 

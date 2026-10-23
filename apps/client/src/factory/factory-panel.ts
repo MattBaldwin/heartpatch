@@ -107,7 +107,8 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
       'button',
       {
         type: 'button',
-        class: `${buttonClass({ variant: soft ? 'secondary' : 'primary', small: true })} ${more}`.trim(),
+        class:
+          `${buttonClass({ variant: soft ? 'secondary' : 'primary', small: true })} ${more}`.trim(),
         ...rest,
       },
       label,

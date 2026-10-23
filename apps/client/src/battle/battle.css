@@ -326,58 +326,25 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   gap: 8px;
 }
 
-.battle-button {
-  min-height: 52px;
-  padding: var(--hp-pad-y) 14px;
-  border: 0;
-  border-radius: 16px;
-  background: #ffc9d7;
-  box-shadow: 0 3px 0 #f2a4bb;
-  font: inherit;
-  font-size: 17px;
-  font-weight: 800;
-  color: #5a3a5d;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.battle-button:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #f2a4bb;
-}
-
-.battle-button-small {
-  /* 44 pt both ways (style guide §3), even for the compact 🧪 alone (#214). */
-  min-width: 44px;
-  min-height: 44px;
-  padding: var(--hp-pad-y) var(--hp-pad-x);
-  border-radius: 999px;
-  font-size: 14px;
-}
-
-.battle-button-soft {
-  background: #f6e9df;
-  box-shadow: 0 3px 0 #e2cfc1;
-}
-
-.battle-button-soft:active {
-  box-shadow: 0 1px 0 #e2cfc1;
+/* Battle buttons are the shared kit (ui/button). The cream ones are the
+   quieter choices (ⓘ, Swap, Run away). */
+.battle-cream {
+  --hp-secondary: #f6e9df;
+  --hp-secondary-lip: #e2cfc1;
+  --hp-secondary-ink: #5a3a5d;
 }
 
 /* A potion sipped for this turn (#403): mint and glowing, so the sip is
    felt before the move goes out. Tap it to put the potion back. */
 .battle-button-sipped {
-  background: #c9f2df;
+  --hp-secondary: #c9f2df;
+  --hp-secondary-lip: #94d8b8;
+  --hp-secondary-ink: #2f5a48;
   box-shadow:
-    0 3px 0 #94d8b8,
+    0 var(--hp-lip) 0 #94d8b8,
     0 0 0 3px rgb(255 255 255 / 80%),
     0 0 14px 2px rgb(150 230 200 / 85%);
-  color: #2f5a48;
   animation: battle-sipped-pop 420ms ease-out;
-}
-
-.battle-button-sipped:active {
-  box-shadow: 0 1px 0 #94d8b8;
 }
 
 @keyframes battle-sipped-pop {
@@ -723,9 +690,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   grid-column: 1 / -1;
 }
 
-.battle-sheet:has(> .battle-live:not([hidden]))
-  > .battle-controls[data-view='pick']
-  .battle-button {
+.battle-sheet:has(> .battle-live:not([hidden])) > .battle-controls[data-view='pick'] .hp-button {
   min-width: 0;
   padding: 6px 8px;
   font-size: 15px;
@@ -779,6 +744,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
    number worth a glance, a strong/weak mark, and one plain line. */
 
 .battle-move {
+  --hp-secondary: var(--move-bg, #ffc9d7);
+  --hp-secondary-lip: var(--move-edge, #f2a4bb);
+  --hp-secondary-ink: #5a3a5d;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -789,12 +757,6 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   padding: 10px;
   text-align: left;
   line-height: 1.15;
-  background: var(--move-bg, #ffc9d7);
-  box-shadow: 0 3px 0 var(--move-edge, #f2a4bb);
-}
-
-.battle-move:active {
-  box-shadow: 0 1px 0 var(--move-edge, #f2a4bb);
 }
 
 .battle-move-boop {
@@ -976,6 +938,6 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 /* The live pick's compact buttons keep the same air around their text. */
 .battle-sheet:has(> .battle-live:not([hidden]))
   > .battle-controls[data-view='pick']
-  .battle-button.battle-move {
+  .hp-button.battle-move {
   padding: var(--hp-pad-y) 8px calc(var(--hp-pad-y) + 1px);
 }
