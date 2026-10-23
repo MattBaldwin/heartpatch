@@ -1639,3 +1639,80 @@ _Owner answers to the coordinator on 2026-10-12 and 2026-10-13, plus coordinator
   - Watch list: the map-fill tests "never takes land from kids who keep playing" and "keeps Gentle's cap".
   - #505 fixes the house.spec:331 race in the test itself: a fixed 2 s hold on the build reply was overrun on slow CI. The app wasn't at fault, because the confirm panel updates its label and disabled state in one render.
 - **A dev-only request body is added to shared (#504).** `DevHomesteadRequestSchema` is used by `POST /maps/:id/dev/homestead`. It is additive and changes no existing contract.
+
+## 2026-10-22/23 — Owner decisions
+
+_Owner decisions on issues #601, #306, #602 and #621 and in the `## Decisions` sections of merged PRs #614–#623 and #627, 2026-10-22 and 2026-10-23. Each item cites its source. "Coordinator call" marks a call the supervisor made inside an owner-approved design._
+
+**Resource buildings and Heart Coins (#601)**
+- **Lakes, old forest and pumpkin fields can be cleared (#601 comment 6330218514, PR #617).** Owner: they clear like other land, removing their spot, so the Water Well, Ember Kiln and Pumpkin Barn stand on cleared tiles. This overrides "can't be cleared" (owner Q5 of #242, 2026-10-11) and changes `CLEARING_RULES.terrains`. They clear with Spade, Axe and Spade.
+- **A cleared tile remembers its land (#601 comment 6330268841 Q2, PR #617).** `from_terrain` is served as `PublicTile.clearedFrom`, so the Build sheet offers the one resource building that matches.
+- **Collection is automatic (Q3).** It happens in the settle on opening the patch. The card's Collect button settles now.
+- **Only buildings that can work pay upkeep (Q4).** A running or full building pays. A napping, cut-off building and an out-of-season Pumpkin Barn pay nothing (PR #617: a full-storage building still pays).
+- **The kid picks the upkeep order (Q5).** When Heart Coins run short, charging follows a player-set order, stored on the server. Until the kid sets one, the default is highest level first, then oldest, Warehouse last.
+- **No debt (Q6).** A paused building owes nothing and resumes once the balance covers a morning.
+- **What sells (Q7).** Resources, crafted items and duplicate clothing. Account-bound and milestone clothing, tools and the last copy of a piece stay out. Every sale has a confirm step and no undo window (PR #616).
+- **No Heart Coins on the Tutorial Glade (Q8).**
+- **Screens approved:** Heart Coins (PR #611), the Sell tab (PR #616) and the resource buildings (PR #620), on #601 comments 6339045519, 6344533718 and 6351457853.
+- **The morning-card line for a paused building moves to PR 8 and PR 9 (PR #620).** Coordinator call: the night report carries no upkeep pauses, because they happen in the morning settle. PR 7 shows the pause on the tile card, the map and the upkeep list. Also PR #620: `NAMING_RULES.kindsToName` (data) decides what naming your home needs, so homestead-only kinds never join it.
+- **Upkeep and the sell cap come from the sim (PR #615).** The Heart Coin sell cap is set by `pnpm sim:patch-economy` to cover a kid's upkeep (120 a day now). Upkeep is set per building at about 1/5 of what that building's day sells for (a 15–25 % guard in CI).
+- **Upkeep charging (PRs #615, #617).**
+  - A morning the balance can't cover pauses the building, and a later one in the order still pays if it can.
+  - Waking paused buildings is free, in charge order, while the balance covers each morning.
+  - `upkeep_paid_through` is the last morning settled (paid, paused or skipped), so a napping or paused morning is never charged back.
+  - Upkeep is charged at the building's level when settled, and an upgrade charges the owed mornings first at the old level.
+
+**Patch-mates' gatherers (#602)**
+- **Patch-mates' gatherers show as their real squishy (#602 comment 6330428752, PR #614).** A species the viewer hasn't met (`species_seen`), and any unmet secret species, shows as a plain stand-in, with the same masking as the trading shelf. `PublicTile.workerLook` is an additive field (coordinator-approved) that carries no squishy id, name, level or stats. It amends "Routes are POST commands" for this one field.
+- **Screens approved:** the quiet patch map (PR #608, comment 6331086557) and PR #614 (comment 6344230005).
+
+**Hollows, puzzles and the cellar (#306)**
+- **Hollow puzzles have no easy way (#306 comment 6331137106).** No hint, peek, skip or auto-solve. Two types: Relight the path and The forgotten story. A failed attempt reshuffles to a new puzzle of the same difficulty. Every puzzle is seeded, solvable by construction and checked by the server. Rewards are unchanged.
+- **Puzzle sizes (comment 6339106260, PR #605).**
+  - Relight the path runs on every Hollow tile except the heart: rim 4×4, inner 5×5, heart-sized 6×6 where used. The move limit is work plus slack.
+  - The forgotten story is on each Hollow's heart tile only, with one torn page per tile found on its first search. Coordinator call (comment 6339992959): a ring tile flanked by Hollow tiles on both sides is inner, otherwise rim, and a 6×6 Relight stands in at the heart until the story ships.
+- **The forgotten story (PR #622).** A restored tile's page counts as found. A kid who already fixed the heart's 6×6 stand-in sees the heart as fixed.
+- **The key is dug up from the key tile's panel; cellars give rare finds (comment 6338992100, PR 2c #606).** Cellars are never empty and give Heartdust and lore about 2.4× as often, not rare squishies. Each cellar spot gives one find, ever. If the winner leaves the patch, the next winner hunts afresh. Restored tiles that go wild spawn wild squishies again.
+- **Rekindled (comment 6344249547, PR #607).** Five Hollow-only pieces, the "Rekindler" title for all five, and the Joy Lantern and Heart Tea recipes. The Joy Lantern lights one whole tile further all round. Pieces drop only on patches with 2+ kids; recipe ingredients drop everywhere.
+- **The key hunt is reworked (comment 6344578563, PR #618).**
+  - Restoring a Hollow gives the Keeper a treasure map of the pre-Hollow world with the key's tile marked, kept in the bag.
+  - The key's tile glows on the world map for the winner only, with no text.
+  - The key is found by a glinting spot in explore, and the map panel's Dig button goes (the dig route is removed).
+  - To win the key the Keeper must own the key tile itself, even on another player's land (player vs player).
+  - On a patch with challenges off (comment 6347457925), the key hides only on wild, unclaimed land, and a key on claimed land moves to a nearby wild tile, at most `keyMoveRange` = 4 steps (PR #618). Patches with challenges on keep "win the key tile".
+  - The treasure map shows the land within 3 steps of both the Hollow's square and the key (PR #618).
+- **The cellar is a stone vault (comments 6344687073, 6347441004, PR #619).**
+  - The look is an ancient stone basement with small chests along the back wall and a big chest in the middle.
+  - The big chest waits until every small chest is open ("Open the little chests first! 🗝️").
+  - It holds a one-of-a-kind keepsake for each Hollow kind, all Legendary, found-only and untradable: Lamplighter's Crown (Lantern Tower), Gearheart Wrench (Workshop), Wishing Well Cape (Old Well), Golden Baker Jacket (Bakery) and Lookout Boots (Watchtower). It also holds 10 Heartdust and 25 Glimmer.
+  - A repeat Hollow kind gives the pile but no second keepsake.
+- **Screens approved:** Relight the path (PR #605, comment 6344534069), the key hunt (PR #618, comment 6347602923), the cellar (PR #619, comment 6349538793) and The forgotten story (PR #622, comment 6351418769).
+
+**The far Hollow and the Crooked House (#306)**
+- **The far Hollow is reimagined (comment 6353970019).** The PR #624 screens were not approved. The far Hollow can't look or play like the other tiles: each season gets a new format. The first is the Crooked House for Halloween, a haunted house explored top-down. Later ideas are the Broken Road, a Fog Maze and a Clock Tower climb. It stays per player, fresh each season, reached by the far-road journey battle.
+  - The lantern's circle of light shows the room. Doors are locked and their keys hide in other rooms. Echoes drift through the halls. Each room put right fills with colour.
+  - Squishy powers open bonus rooms (Fire, Leaf, Water, Light) and are never needed to finish.
+  - Caught by an echo, the kid gets a friendly jump-scare and goes back to the last lit room, losing nothing.
+  - It has about 12 rooms on 2 floors plus an attic, takes about 2–3 hours over several sessions, and saves room by room.
+- **The Crooked House design is approved (comment 6354512341), with these answers:**
+  - Tiptoe stays, and holding it shrinks the light.
+  - Peekaboo is spookier, with a sound sting and a screen shake on the eyes and the "Peekaboo!". The reduced-motion setting gets a gentle fade with no shake. It stays friendly afterwards ("Whoops! Back to the light", nothing lost).
+  - The attic chest holds the season's lore page, a Legendary found-only keepsake unique to the house (the Lantern Keeper's Cloak), the title "Lantern Keeper", 10 Heartdust and 25 Glimmer, and the far Hollow completion gift.
+  - Two Relight rooms: the Library 5×5 and the Music Room 6×6.
+  - Each bonus-room chest has a chance of a rare squishy friend, decided by server-side spawn rules (rule 6), plus small loot.
+  - A power needs any squishy of the right element on the battle team, any level, free, every time.
+  - Rooms and doors are fixed. Keys, fixes, echo paths and bonus loot shuffle per patch and season.
+- **The far road is open at any hour (comment 6355703541).** Owner: as the house is. This replaces the day-only part of answer 1 and ships in 6b.
+- **The far-Hollow season holds Halloween 2026 until Nov 9 (comment 6354531305).** Halloween's 2026 window ends Nov 9. The far-Hollow season does not reset when Thanksgiving starts on Nov 3. (Relayed by the supervisor; the plan states the Nov 9 window.)
+- **Shared-contract changes for the house (PR #627).** Coordinator-signed. 6a lands `FarHollowView` without `tiles`, migration 0056 regenerated as `far_hollow_rooms` and `far_hollow_state` (expand-only), and `COMMUNITY_RULES.farHollow` trimmed to `{ name, distance }`. 6b lands the `house` view field, the fix, enter, unlock, power and chest schemas, `CROOKED_HOUSE` data, one `LORE_PAGES` entry, one keepsake, the "Lantern Keeper" title, and a `house` payload field on `explore.searched`.
+
+**Town and Hollow wording (PR #623)**
+- **A restored Hollow is still called a Hollow in player text.** "Town" is reserved for a Keeper's home plus homesteads.
+
+**Weather (#621)**
+- **Weather is visible and moves (#621 comment 6349820349).** Storms, rain clouds and fog banks drift across the island over a few hours, and different parts of the island get different weather at different times.
+  - The server plans each front's path and timing from the patch seed and stores timestamps (rule 4). Weather at a tile is a pure function of the fronts and the time, in `packages/shared`.
+  - A forecast shows tomorrow's fronts ("A storm will cross the east coast tomorrow afternoon").
+  - Damage, Hollow Man reach and farming effects apply per tile while a front covers it, resolved lazily plus a scheduled job for damage. Rare and secret rolls stay server-side.
+  - Clouds, rain and fog are instanced or shader effects, with a lighter version on older iPads, and they need the mobile budget check.
+  - Wave 1 includes the moving fronts and their effects. Hollow Man storm nights stay in Wave 2.
