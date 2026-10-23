@@ -1,7 +1,6 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
   CROOKED_HOUSE,
-  houseReach,
   type CrookedDoor,
   type CrookedFind,
   type CrookedHouseView,
@@ -33,6 +32,7 @@ import {
   floors,
   litRooms,
   nearestTarget,
+  reachableRooms,
   roomOf,
   roomStart,
   roomsOn,
@@ -124,7 +124,7 @@ export interface CrookedScreen {
 }
 
 /** The HUD's top and bottom, as shares of the screen's height, kept clear of the fitted room. */
-const HUD = { top: 110, bottom: 190, mapTop: 150, mapBottom: 110 } as const; // TUNE: CSS px
+const HUD = { top: 110, bottom: 240, mapTop: 150, mapBottom: 110 } as const; // TUNE: CSS px
 /** A lift's hold, ms (the design: hold to lift). */
 const HOLD_MS = 650; // TUNE
 /** A small word (a fix, a door) shows this long, ms. */
@@ -296,7 +296,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   // off again (a visible button for the gesture, style guide §3.3).
   let tiptoeDown = 0;
   let tiptoeLatched = false;
-  tiptoeButton.addEventListener('pointerdown', () => {
+  tiptoeButton.addEventListener('pointerdown', (e) => {
+    try {
+      // A release off the button (a mouse) still lets go.
+      tiptoeButton.setPointerCapture(e.pointerId);
+    } catch {
+      // Synthetic pointers can't be captured.
+    }
     if (tiptoeLatched) {
       tiptoeLatched = false;
       tiptoeDown = 0;
@@ -323,7 +329,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   });
 
   function setTiptoe(on: boolean): void {
-    if (tiptoe === on) return;
     tiptoe = on;
     tiptoeButton.setAttribute('aria-pressed', String(on));
     tiptoeButton.classList.toggle('crooked-on', on);
@@ -345,7 +350,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     clearTimeout(hold.timer);
     hold = null;
     action.classList.remove('crooked-holding');
-    if (target && targetWords(target).hold) say(T.hold);
+    if (isOpen && target && targetWords(target).hold) say(T.hold);
   };
   action.addEventListener('pointerup', endHold);
   action.addEventListener('pointercancel', endHold);
@@ -585,8 +590,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const room = here();
     if (!room) return;
     const name = room.things.find((t) => t.id === thing);
+    if (!name) return;
     const reply = await command((id, key) => api.fix(id, { room: room.id, thing }, key));
-    if (!reply || !name) return;
+    if (!reply) return;
     apply(reply.view);
     if (reply.key) {
       scene3d?.showKey(thingPoint(room, name));
@@ -655,7 +661,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       (r) => Math.abs(p.x - r.box.x) <= r.box.w / 2 && Math.abs(p.z - r.box.z) <= r.box.d / 2,
     );
     if (!room) return;
-    if (!litRooms(h).has(room.id) || !reachable(h).has(room.id)) {
+    if (!litRooms(h).has(room.id) || !reachableRooms(h).has(room.id)) {
       say(T.mapDark);
       return;
     }
@@ -747,12 +753,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     return h !== null && litRooms(h).has(h.room);
   };
 
-  function reachable(h: CrookedHouseView): Set<string> {
-    const bits = (ids: readonly string[]) =>
-      CROOKED_HOUSE.doors.reduce((m, d, i) => (ids.includes(d.id) ? m | (1 << i) : m), 0);
-    return houseReach(CROOKED_HOUSE, { unlocked: bits(h.unlocked), bonusOpen: bits(h.bonusOpen) });
-  }
-
   function render(): void {
     const h = house();
     const room = here();
@@ -768,7 +768,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     mapButton.setAttribute('aria-pressed', String(mapShown));
     mapHint.hidden = !mapShown;
     // Floors are tabs on the map; the attic once its ladder's open.
-    const shown = floors().filter((f) => f < 2 || reachable(h).has('attic'));
+    const shown = floors().filter((f) => f < 2 || reachableRooms(h).has('attic'));
     tabs.hidden = !mapShown || shown.length < 2;
     tabs.replaceChildren(
       ...shown.map((f) => {
@@ -796,7 +796,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   function renderAction(): void {
-    const words = target && !mapShown ? targetWords(target) : null;
+    // A card (a key, a bloom) has the bottom of the screen to itself.
+    const words = target && !mapShown && cards.length === 0 ? targetWords(target) : null;
     const show = words !== null && words.action !== '';
     action.hidden = !show;
     action.disabled = working;
@@ -807,7 +808,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     // The bubble: a word just said, else what's in front (a shut door says which key, never where).
     const said =
       noteText || (target?.kind === 'door' && bumped === target.door ? (words?.bubble ?? '') : '');
-    const about = target?.kind === 'thing' && !mapShown ? T.crooked : '';
+    const about = words && target?.kind === 'thing' ? T.crooked : '';
     bubbleText(said || about || null, false);
   }
 
@@ -929,7 +930,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       yaw = 0;
       floor = floorOf(fresh.house.room);
       mapShown = false;
-      tiptoe = false;
       cards = [];
       target = null;
       bumped = null;
@@ -963,10 +963,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (noteTimer !== null) clearTimeout(noteTimer);
     noteTimer = null;
     noteText = '';
-    if (hold) clearTimeout(hold.timer);
-    hold = null;
+    endHold();
+    tiptoeLatched = false;
+    tiptoeDown = 0;
+    setTiptoe(false);
     press = null;
     stick = null;
+    showStick();
     walk = null;
     working = false;
     cards = [];

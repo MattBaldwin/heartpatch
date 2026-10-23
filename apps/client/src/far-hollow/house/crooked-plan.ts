@@ -2,6 +2,7 @@ import {
   CROOKED_HOUSE,
   doorOpen,
   doorsOf,
+  houseReach,
   type CrookedDoor,
   type CrookedHouse,
   type CrookedHouseView,
@@ -69,11 +70,28 @@ export function floors(): number[] {
   return [...new Set(HOUSE.rooms.map((r) => r.floor))].sort((a, b) => a - b);
 }
 
-/** The lit rooms (as the server lights them): the bonus rooms, the attic, and every main room that bloomed. */
-export function litRooms(view: Pick<CrookedHouseView, 'rooms'>): Set<string> {
+/** The rooms I can reach now, through doors my keys and powers have opened (`houseReach`). */
+export function reachableRooms(
+  view: Pick<CrookedHouseView, 'unlocked' | 'bonusOpen'>,
+): Set<string> {
+  return houseReach(HOUSE, { unlocked: bitsOf(view.unlocked), bonusOpen: bitsOf(view.bonusOpen) });
+}
+
+/**
+ * The rooms drawn lit: every main room that bloomed (the start is bloomed),
+ * and a bonus room or the attic once its door is open (the server counts
+ * them lit from the start, so an echo never catches there; they show in
+ * colour only once they can be reached).
+ */
+export function litRooms(
+  view: Pick<CrookedHouseView, 'rooms' | 'unlocked' | 'bonusOpen'>,
+): Set<string> {
   const bloomed = new Set(view.rooms.filter((r) => r.bloomed).map((r) => r.id));
+  const reach = reachableRooms(view);
   return new Set(
-    HOUSE.rooms.filter((r) => r.kind !== 'main' || bloomed.has(r.id)).map((r) => r.id),
+    HOUSE.rooms
+      .filter((r) => (r.kind === 'main' ? bloomed.has(r.id) : reach.has(r.id)))
+      .map((r) => r.id),
   );
 }
 

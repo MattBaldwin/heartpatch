@@ -6,7 +6,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
@@ -217,9 +217,11 @@ export class CrookedScene {
       const had = this.#rooms.get(id);
       if (had?.key === key) continue;
       had?.mesh.dispose();
-      const mesh = kitMesh(this.#scene, `crooked-room-${key}`, () =>
-        merged(roomParts(room, view, joy)),
-      );
+      // One-off scene geometry (not the page-lifetime kit cache): a room
+      // has many looks over a season, and dispose() must free each.
+      const mesh = new Mesh(`crooked-room-${key}`, this.#scene);
+      merged(roomParts(room, view, joy)).data.applyToMesh(mesh);
+      mesh.isPickable = false;
       mesh.material = this.#roomMat;
       mesh.position.set(room.box.x, 0, room.box.z);
       this.#rooms.set(id, { mesh, key, lit: joy >= 1 || lit.has(id) });

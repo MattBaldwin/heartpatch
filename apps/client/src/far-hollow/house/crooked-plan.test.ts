@@ -48,12 +48,13 @@ function arrived(over: Partial<CrookedHouseView> = {}): CrookedHouseView {
 }
 
 describe('the Crooked House as the screen walks it (#306 6c)', () => {
-  it('lights the rooms the server lights: the start, the bloomed ones, bonus rooms and the attic', () => {
+  it('lights the start and the bloomed rooms, and a bonus room or the attic once its door is open', () => {
     const lit = litRooms(arrived());
     expect(lit.has('front-hall')).toBe(true);
     expect(lit.has('parlour')).toBe(false);
-    expect(lit.has('inglenook')).toBe(true);
-    expect(lit.has('attic')).toBe(true);
+    expect(lit.has('inglenook')).toBe(false);
+    expect(lit.has('attic')).toBe(false);
+    expect(litRooms(arrived({ bonusOpen: ['inglenook-door'] })).has('inglenook')).toBe(true);
   });
 
   it('says how each door stands: open, locked (key held or not), or asleep behind a power', () => {
