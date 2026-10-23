@@ -134,6 +134,19 @@ async function fixRoom(page, stop) {
 }
 
 /** Out of the Front Hall's west door on the joystick, into the dark Parlour. */
+/** Stands at (x, z) and steers `dx` (−1 west, 1 east) on the joystick until the server says I'm in `room`. */
+async function walkThrough(page, x, z, dx, room) {
+  await place(page, x, z);
+  const stick = await page.getByTestId('crooked-stick').boundingBox();
+  const sx = stick.x + stick.width / 2;
+  const sy = stick.y + stick.height / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + dx * 40, sy, { steps: 3 });
+  await until(page, (r) => window.__heartpatch?.farHollowHouse?.()?.room === r, room, 60_000);
+  await page.mouse.up();
+}
+
 async function walkToParlour(page) {
   await place(page, -1.2, 0.3);
   const stick = await page.getByTestId('crooked-stick').boundingBox();
@@ -267,7 +280,11 @@ for (const device of DEVICES) {
     await shot(page, device, 'tiptoe');
     await page.getByTestId('crooked-tiptoe').dispatchEvent('click');
     // Put the Parlour right: a key may turn up on the way, and the last thing blooms it.
-    await toBloom(page, () => shot(page, device, 'key'));
+    let keyShot = false;
+    await toBloom(page, async () => {
+      await shot(page, device, 'key');
+      keyShot = true;
+    });
     await page.waitForTimeout(1200);
     await shot(page, device, 'bloom');
     // Every card read (a second key may come with the bloom).
@@ -276,6 +293,15 @@ for (const device of DEVICES) {
     await page.getByTestId('crooked-map').click();
     await page.waitForTimeout(1200);
     await shot(page, device, 'map');
+    if (!keyShot && (!ONLY || ONLY.has('key'))) {
+      // The Brass Key hides in the Parlour or the Conservatory: this season, the Conservatory.
+      await page.getByTestId('crooked-back').click();
+      await walkThrough(page, -3.4, 0.3, 1, 'front-hall');
+      await walkThrough(page, 1.2, -0.2, 1, 'conservatory');
+      await fixRoom(page, (x) => x.card === 'key');
+      await page.waitForTimeout(1200);
+      await shot(page, device, 'key');
+    }
     await context.close();
   }
 }
