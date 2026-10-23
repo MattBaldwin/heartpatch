@@ -304,6 +304,14 @@ async function shot(page, device, name, { wait = true } = {}) {
 /** Into the room before a power door, standing at it. */
 async function toDoor(page, mapId, p, tries = 2) {
   await ok(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: p.from });
+  // Land on this patch, even if a slow load made the lobby forget it (its resume threw).
+  const { user } = await ok(page, 'GET', '/me');
+  await page.evaluate(
+    ({ userId, id }) => {
+      window.localStorage.setItem(`heartpatch.lastPatch.v1.${userId}`, id);
+    },
+    { userId: user.id, id: mapId },
+  );
   await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
   try {
     await goInside(page);
