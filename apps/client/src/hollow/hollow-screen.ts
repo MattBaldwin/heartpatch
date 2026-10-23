@@ -844,7 +844,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
                 ),
               ]
             : []),
-          darkFirst
+          // A morning with no night to tell but buildings that need 💛 (#601
+          // PR 9) isn't about fires: it's an Okay.
+          darkFirst && (report.length > 0 || !upkeepLine)
             ? button(
                 NIGHT_TEXT.lightMyLand,
                 () => {
