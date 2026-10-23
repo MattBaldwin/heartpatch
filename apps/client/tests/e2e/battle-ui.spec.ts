@@ -307,22 +307,40 @@ test('the fight keeps its safe band when the phone turns (#263)', async ({ brows
 });
 
 /** Phones and a tablet the battle sheet must hold every control and the prompt on. */
-const SHEET_SCREENS = [
+const SHEET_SCREENS: readonly { name: string; width: number; height: number; inset?: Inset }[] = [
   { name: 'iPhone SE', width: 375, height: 667 },
   { name: 'iPhone 15', width: 393, height: 852 },
+  {
+    name: 'iPhone 15 with its island and home bar',
+    width: 393,
+    height: 852,
+    inset: { top: 59, bottom: 34 },
+  },
   { name: 'iPhone Pro Max', width: 430, height: 932 },
   { name: 'iPad portrait', width: 768, height: 1024 },
+  { name: 'iPad with its home bar', width: 834, height: 1194, inset: { top: 0, bottom: 20 } },
   { name: 'iPhone landscape', width: 844, height: 390 },
-] as const;
+];
+
+/** A device's safe-area insets in px, simulated through Chromium (WebKit has no such switch, so those cases only run there). */
+interface Inset {
+  top: number;
+  bottom: number;
+}
 
 /** Run away, the prompt and every control in the sheet sit inside the screen, tall enough to tap. */
-async function expectSheetFits(page: Page, label: string): Promise<void> {
+async function expectSheetFits(
+  page: Page,
+  label: string,
+  inset: Inset = { top: 0, bottom: 0 },
+): Promise<void> {
   const { width, height } = page.viewportSize()!;
   await still(page, '[data-testid="battle-sheet"], .battle-plate');
   const inside = '[data-testid="battle-caption"], [data-testid="battle-sheet"] .hp-button';
   const boxes = await page.evaluate((selector) => {
     const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
     return {
+      plateTop: document.querySelector('.battle-plate')!.getBoundingClientRect().top,
       scrolls: sheet.scrollHeight - sheet.clientHeight,
       items: [...document.querySelectorAll<HTMLElement>(selector)].map((node) => {
         const b = node.getBoundingClientRect();
@@ -341,12 +359,15 @@ async function expectSheetFits(page: Page, label: string): Promise<void> {
   expect(ids, label).toContain('battle-caption');
   expect(ids, label).toContain('battle-run');
   expect(boxes.scrolls, `${label}: the sheet scrolls`).toBeLessThanOrEqual(0);
+  expect(boxes.plateTop, `${label}: the pills start below the top inset`).toBeGreaterThanOrEqual(
+    inset.top,
+  );
   for (const item of boxes.items) {
     const where = `${label}: ${item.id}`;
     expect(item.l, where).toBeGreaterThanOrEqual(0);
     expect(item.t, where).toBeGreaterThanOrEqual(0);
     expect(item.r, where).toBeLessThanOrEqual(width);
-    expect(item.b, where).toBeLessThanOrEqual(height);
+    expect(item.b, where).toBeLessThanOrEqual(height - inset.bottom);
     if (item.id !== 'battle-caption') expect(item.b - item.t, where).toBeGreaterThanOrEqual(44);
   }
 }
@@ -370,10 +391,20 @@ for (const bench of [false, true]) {
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     await settled(page);
+    const chromium = page.context().browser()?.browserType().name() === 'chromium';
+    const cdp = chromium ? await page.context().newCDPSession(page) : null;
     for (const screen of SHEET_SCREENS) {
+      if (screen.inset && !cdp) continue;
+      const { top, bottom } = screen.inset ?? { top: 0, bottom: 0 };
+      await cdp?.send(
+        'Emulation.setSafeAreaInsetsOverride' as never,
+        {
+          insets: { top, bottom, left: 0, right: 0 },
+        } as never,
+      );
       await page.setViewportSize({ width: screen.width, height: screen.height });
       await freshResize(page);
-      await expectSheetFits(page, screen.name);
+      await expectSheetFits(page, screen.name, screen.inset);
     }
   });
 }
