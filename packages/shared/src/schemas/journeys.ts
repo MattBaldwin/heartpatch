@@ -11,3 +11,10 @@ export const StartJourneyRequestSchema = z.strictObject({
   r: HexSchema.shape.r,
 });
 export type StartJourneyRequest = z.infer<typeof StartJourneyRequestSchema>;
+
+/**
+ * What a journey is for (#306 PR 6): a trading post's visit pass (`post`,
+ * #270), or the far road from a post to the far Hollow (`far-hollow`).
+ */
+export const JourneyKindSchema = z.enum(['post', 'far-hollow']);
+export type JourneyKind = z.infer<typeof JourneyKindSchema>;

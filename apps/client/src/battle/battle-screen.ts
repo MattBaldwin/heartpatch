@@ -164,6 +164,8 @@ export interface BattleScreenOptions {
   journey?: {
     postName: (battleId: string) => string | null;
     ended: (battleId: string, won: boolean) => void;
+    /** Is this the far road to the far Hollow (#306 PR 6)? Its win card says so. */
+    farHollow?: (battleId: string) => boolean;
   };
   /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
   onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
@@ -870,11 +872,19 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               ? { title: MESSAGES.resultScooted, subtitle: resultLine(b.kind, 'scooted', glade) }
               : { title: MESSAGES.resultLost, subtitle: resultLine(b.kind, 'lost', glade) };
     // A journey (#270, the mockup's screen c): made it, or nothing lost.
+    // Where to: the far road or a post this device started, else not known (#306 PR 6).
+    const journeyTo = (id: string): 'post' | 'far-hollow' | 'unknown' =>
+      options.journey?.farHollow?.(id)
+        ? 'far-hollow'
+        : options.journey?.postName(id) != null
+          ? 'post'
+          : 'unknown';
     const journey =
       b.kind === 'journey' && b.status !== 'no-contest' && result && result.winner !== 'draw'
         ? journeyResult(
             result.winner === b.mySide ? 'won' : result.reason === 'forfeit' ? 'scooted' : 'lost',
             options.journey?.postName(b.id) ?? null,
+            { to: journeyTo(b.id) },
           )
         : null;
     if (b.kind === 'journey') options.journey?.ended(b.id, result?.winner === b.mySide);

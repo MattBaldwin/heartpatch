@@ -393,6 +393,13 @@
       "when": 1792692727071,
       "tag": "0055_tile_explore_puzzle",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792716572840,
+      "tag": "0056_far_hollow",
+      "breakpoints": true
     }
   ]
 }

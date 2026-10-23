@@ -30,6 +30,7 @@ export { EXPLORE_FINDS } from './explore-finds.js';
 export {
   CELLAR_FINDS,
   cellarFinds,
+  FAR_HOLLOW_FINDS,
   HOLLOWED_FINDS,
   HOLLOWED_HELPER_GIFT,
   hollowedFinds,
@@ -37,6 +38,8 @@ export {
 } from './hollowed-finds.js';
 export * from '../../schemas/data/cellar.js';
 export { CELLAR_RULES } from './cellar.js';
+export * from '../../schemas/data/far-hollow.js';
+export { FAR_HOLLOW_SECRETS } from './far-hollow.js';
 export * from './puzzle-rewards.js';
 export * from '../../schemas/data/found-set-drops.js';
 export * from '../../wardrobe/found-set-drops.js';
