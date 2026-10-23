@@ -1,12 +1,21 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
   CROOKED_HOUSE,
+  GAME_DATA,
+  rareFindTier,
   type CrookedDoor,
   type CrookedFind,
   type CrookedHouseView,
+  type CrookedRoom,
   type FarHollowView,
+  type JobsView,
   type KeeperConfig,
 } from '@heartpatch/shared';
+import type { CueName } from '../../audio/cues.js';
+import { findCue } from '../../audio/cues.js';
+import { itemName } from '../../inventory/bag-view.js';
+import type { Portraits } from '../../procedural/portraits.js';
+import { jobsApi } from '../../squishies/jobs/jobs-api.js';
 import type { QualityTier } from '../../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../../engine/stage.js';
 import { EXPLORE_VIEW } from '../../explore/explore-config.js';
@@ -20,6 +29,14 @@ import { lodFor } from '../../procedural/motion.js';
 import { hpBack, hpButton } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { farHollowApi, type FarHollowApi } from '../../hollowed/far-hollow-api.js';
+import {
+  chestTarget,
+  helpersFor,
+  keepOffChest,
+  type ChestTarget,
+  type Helper,
+} from './crooked-bonus.js';
+import { CrookedBonusFx, type CrookedBonusFxStats } from './crooked-bonus-fx.js';
 import {
   arrivalSpot,
   CROOKED_CAMERA,
@@ -50,13 +67,18 @@ import {
   type CrookedSceneStats,
 } from './crooked-scene.js';
 import {
+  BONUS_TEXT as B,
   CROOKED_TEXT as T,
+  elementWords,
   floorWords,
+  lootWords,
+  powerDone,
   progressWords,
   roomWords,
   targetWords,
 } from './crooked-text.js';
 import './crooked.css';
+import './crooked-bonus.css';
 
 // The Crooked House screen (#306 6c, the owner-approved design): my own
 // haunted house this season, room by room. The camera fits the room I'm in
@@ -76,7 +98,18 @@ export interface CrookedScreenOptions {
   readonly tier: () => QualityTier;
   readonly keeper: () => KeeperConfig | null;
   readonly keeperWearing?: () => readonly string[];
-  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock'>;
+  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock' | 'power' | 'chest'>;
+  /** My squishies' jobs and team, for "Who can help?" (#306 6e); the real API by default. */
+  readonly jobs?: (mapId: string) => Promise<JobsView>;
+  /** Squishy pictures for the picker and the chest's friend. */
+  readonly portraits?: Portraits;
+  /** A moment that has a sound (a chest, a door woken, a friend). */
+  readonly cue?: (name: CueName) => void;
+  /**
+   * A bonus chest's rare friend: its wild battle has started (#306 6e). The
+   * house steps aside quietly (no sheet) and the caller opens the battle.
+   */
+  readonly onFriend?: (mapId: string, battleId: string) => void;
   readonly reducedMotion?: () => boolean;
   /** The house took the screen: everything else steps aside. */
   readonly onOpen: (mapId: string) => void;
@@ -100,7 +133,7 @@ export interface CrookedDebug {
   readonly dark: boolean;
   readonly tiptoe: boolean;
   readonly keeper: FloorPoint;
-  readonly target: { kind: 'thing' | 'door'; id: string; state?: string } | null;
+  readonly target: { kind: 'thing' | 'door' | 'chest'; id: string; state?: string } | null;
   readonly action: string | null;
   readonly bubble: string | null;
   readonly card: string | null;
@@ -110,6 +143,11 @@ export interface CrookedDebug {
   /** The room's things still crooked, and where they stand. */
   readonly crooked: readonly { id: string; kind: string; x: number; z: number }[];
   readonly scene: CrookedSceneStats | null;
+  /** "Who can help?" (#306 6e): its door and team rows (null while it loads), or null when shut. */
+  readonly picker: { door: string; helpers: { id: string; helps: boolean }[] | null } | null;
+  /** A friend's moment is playing (the door wakes at its end). */
+  readonly powering: boolean;
+  readonly bonus: CrookedBonusFxStats | null;
 }
 
 export interface CrookedScreen {
@@ -132,11 +170,18 @@ const HOLD_MS = 650; // TUNE
 const NOTE_MS = 2600; // TUNE
 /** A press on Tiptoe shorter than this is a tap (it stays on); longer is a hold (off on release). */
 const TIPTOE_TAP_MS = 350; // TUNE
+/** A chest's card waits this long, ms, so the lid and its sparkles are seen first. */
+const CHEST_CARD_MS = 750; // TUNE
 
 type Card =
   | { kind: 'key'; title: string; line: string }
   | { kind: 'bloom'; title: string; line: string }
-  | { kind: 'caught' };
+  | { kind: 'caught' }
+  | { kind: 'chest'; title: string; line: string }
+  | { kind: 'friend'; name: string; speciesId: string; battleId: string; cued: boolean };
+
+/** What's in front: a crooked thing or a shut door (6c), or a bonus chest (6e). */
+type Target = CrookedTarget | ChestTarget;
 
 export function createCrookedScreen(options: CrookedScreenOptions): CrookedScreen {
   const api = options.api ?? farHollowApi;
@@ -161,7 +206,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let mapShown = false;
   let tiptoe = false;
   let working = false;
-  let target: CrookedTarget | null = null;
+  let target: Target | null = null;
   let cards: Card[] = [];
   let noteText = '';
   let noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -174,6 +219,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let darkPaint: DarkPaint | null = null;
   /** The door the Keeper last bumped (its bubble says why it's shut). */
   let bumped: CrookedDoor | null = null;
+  let bonusFx: CrookedBonusFx | null = null;
+  /** "Who can help?": the sleeping door, and my team's rows once read. */
+  let picker: { door: CrookedDoor; helpers: Helper[] | null } | null = null;
+  /** A team friend's moment is playing: the door wakes at its end. */
+  let powering = false;
+  const loadJobs = options.jobs ?? ((id: string) => jobsApi.view(id));
 
   const house = (): CrookedHouseView | null => view?.house ?? null;
   const here = () => {
@@ -265,6 +316,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     'data-testid': 'crooked-card',
   });
   sheet.hidden = true;
+  const pickerSheet = el('section', {
+    class: 'crooked-card crooked-picker',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-labelledby': 'crooked-picker-title',
+    'data-testid': 'crooked-picker',
+  });
+  pickerSheet.hidden = true;
   const overlay = el(
     'div',
     { class: 'crooked', 'data-testid': 'crooked' },
@@ -279,11 +338,16 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     tiptoeButton,
     mapButton,
     sheet,
+    pickerSheet,
   );
   overlay.hidden = true;
   options.root.append(overlay);
 
   back.addEventListener('click', () => {
+    if (picker) {
+      closePicker();
+      return;
+    }
     if (mapShown) {
       showMap(false);
       return;
@@ -342,8 +406,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   // The big button: a tap, or a hold for a lift (the design's gestures, as buttons).
   action.addEventListener('pointerdown', (e) => {
     const t = target;
-    if (!t || working || cards.length > 0) return;
-    if (!targetWords(t).hold) return;
+    if (!t || working || cards.length > 0 || picker || powering) return;
+    if (!wordsFor(t).hold) return;
     e.preventDefault();
     startHold();
   });
@@ -352,7 +416,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     clearTimeout(hold.timer);
     hold = null;
     action.classList.remove('crooked-holding');
-    if (isOpen && target && targetWords(target).hold) say(T.hold);
+    if (isOpen && target && wordsFor(target).hold) say(T.hold);
   };
   action.addEventListener('pointerup', endHold);
   action.addEventListener('pointercancel', endHold);
@@ -361,7 +425,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const t = target;
     if (!t) return;
     // A hold's button is done by holding; a click with no press (keyboard, VoiceOver) does it.
-    if (targetWords(t).hold && e.detail !== 0) return;
+    if (wordsFor(t).hold && e.detail !== 0) return;
     act(t);
   });
 
@@ -396,7 +460,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   ground.addEventListener('pointerdown', (e) => {
-    if (!isOpen || press || cards.length > 0) return;
+    if (!isOpen || press || cards.length > 0 || picker || powering) return;
     const p = local(e);
     press = { id: e.pointerId, x: p.x, y: p.y, moved: false };
     try {
@@ -488,7 +552,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     let want: FloorPoint | null = null;
     let heading: number | undefined;
     const speed = (tiptoe ? CROOKED_WALK.tiptoeSpeed : CROOKED_WALK.speed) * dt;
-    if (!mapShown && !working && cards.length === 0) {
+    if (!mapShown && !working && cards.length === 0 && !picker && !powering) {
       if (stick) {
         // The camera looks north: up the screen is north, right is east.
         const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
@@ -516,7 +580,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       moved = r.at.x !== keeperAt.x || r.at.z !== keeperAt.z;
       // A tap-walk that a wall stopped is done.
       if (walk && !moved) walk = null;
-      keeperAt = r.at;
+      keeperAt = keepOffChest(room, r.at);
       if (r.bumped !== bumped) {
         bumped = r.bumped;
         if (bumped) findTarget(true);
@@ -528,7 +592,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       s.moveKeeper(keeperAt, yaw);
     }
     findTarget(false);
-    const animating = s.step(dt, now);
+    const sceneMoving = s.step(dt, now);
+    const bonusMoving = bonusFx?.step(now) ?? false;
+    const animating = sceneMoving || bonusMoving;
     renderDark();
     if (moved || heading !== undefined || animating) options.invalidate();
     if (walking || animating) frame = requestAnimationFrame(tick);
@@ -539,14 +605,18 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function findTarget(force: boolean): void {
     const h = house();
     const room = here();
-    const next = h && room && !mapShown ? nearestTarget(room, h, keeperAt) : null;
+    const next = h && room && !mapShown ? nearerTarget(room, h, keeperAt) : null;
     if (!force && sameTarget(next, target)) return;
     target = next;
     renderAction();
   }
 
-  function act(t: CrookedTarget): void {
-    if (working || cards.length > 0) return;
+  function act(t: Target): void {
+    if (working || cards.length > 0 || picker || powering) return;
+    if (t.kind === 'chest') {
+      void openChest(t.room);
+      return;
+    }
     if (t.kind === 'thing') {
       if (t.thing.kind === 'relight') {
         say(T.puzzle);
@@ -560,11 +630,16 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       void unlock(t.door);
       return;
     }
+    // A sleeping door: who on my team can help (#306 6e)?
+    if (s.kind === 'sleeping') {
+      void openPicker(t.door);
+      return;
+    }
     // A shut door rattles and its bubble says why (never where the key is).
     action.classList.remove('crooked-rattle');
     action.getBoundingClientRect(); // a reflow, so the rattle plays again
     action.classList.add('crooked-rattle');
-    bubbleText(targetWords(t).bubble);
+    bubbleText(wordsFor(t).bubble);
   }
 
   /** Runs a command for this visit: a reply after Back (or another visit) is dropped. */
@@ -616,6 +691,189 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     apply(reply.view);
     say(T.opened);
     redraw();
+  }
+
+  // ── Bonus rooms (#306 6e) ─────────────────────────────────────────────
+
+  /** "Who can help?": my battle team, the door's element first (the server checks again). */
+  async function openPicker(door: CrookedDoor): Promise<void> {
+    const id = mapId;
+    if (!id || picker) return;
+    const at = generation;
+    const asked: { door: CrookedDoor; helpers: Helper[] | null } = { door, helpers: null };
+    picker = asked;
+    renderPicker();
+    try {
+      const jobs = await loadJobs(id);
+      // Closed (Not now, Back) or another visit: drop it.
+      if (at !== generation || picker !== asked) return;
+      picker = { door, helpers: helpersFor(door, jobs) };
+    } catch (err) {
+      if (at !== generation) return;
+      picker = null;
+      say(messageOf(err));
+    }
+    renderPicker();
+  }
+
+  function closePicker(): void {
+    picker = null;
+    renderPicker();
+    findTarget(true);
+  }
+
+  function renderPicker(): void {
+    const p = picker;
+    pickerSheet.hidden = p === null;
+    if (!p) {
+      pickerSheet.replaceChildren();
+      renderAction();
+      return;
+    }
+    const e = elementWords(p.door.power ?? '');
+    const list = el('div', { class: 'crooked-helpers', role: 'list' });
+    if (p.helpers === null) {
+      list.append(el('p', { class: 'crooked-card-line' }, B.pickerLoading));
+    } else if (!p.helpers.some((h) => h.helps)) {
+      list.append(
+        el(
+          'p',
+          { class: 'crooked-card-line', 'data-testid': 'crooked-nobody' },
+          B.nobody(e.name, e.icon),
+        ),
+      );
+    }
+    for (const h of p.helpers ?? []) {
+      const face = el('span', { class: 'crooked-helper-face', 'aria-hidden': 'true' });
+      void portraitInto(face, h.speciesId, h.id, h.accessory);
+      const words = el(
+        'span',
+        { class: 'crooked-helper-words' },
+        el('span', { class: 'crooked-helper-name' }, `${h.name} ${elementWords(h.element).icon}`),
+      );
+      if (!h.helps) words.append(el('span', { class: 'crooked-helper-not' }, B.notThisOne(e.name)));
+      if (h.helps) {
+        const row = hpButton(el('span', { class: 'crooked-helper-row' }, face, words), {
+          variant: 'secondary',
+          testId: `crooked-helper-${h.id}`,
+        });
+        row.classList.add('crooked-helper');
+        row.setAttribute('role', 'listitem');
+        row.addEventListener('click', () => {
+          picker = null;
+          renderPicker();
+          void wakeDoor(p.door, h);
+        });
+        list.append(row);
+      } else {
+        list.append(
+          el(
+            'div',
+            { class: 'crooked-helper crooked-helper-off', role: 'listitem' },
+            el('span', { class: 'crooked-helper-row' }, face, words),
+          ),
+        );
+      }
+    }
+    const notNow = hpButton(B.notNow, { variant: 'quiet', testId: 'crooked-picker-close' });
+    notNow.addEventListener('click', closePicker);
+    pickerSheet.replaceChildren(
+      el('h3', { class: 'crooked-card-title', id: 'crooked-picker-title' }, B.pickerTitle(e.icon)),
+      el('p', { class: 'crooked-card-line' }, B.pickerLine(p.door.sleeper ?? 'This door', e.name)),
+      list,
+      notNow,
+    );
+    renderAction();
+  }
+
+  /** A squishy's picture into `into` (nothing without portraits, or before the engine). */
+  async function portraitInto(
+    into: HTMLElement,
+    speciesId: string,
+    instanceId: string,
+    accessory: string | null,
+    size?: number,
+  ): Promise<void> {
+    const species = GAME_DATA.species.find((sp) => sp.id === speciesId);
+    if (!options.portraits || !species) return;
+    const url = await options.portraits
+      .get({ species, instanceId, accessory, ...(size ? { size } : {}) })
+      .catch(() => null);
+    if (url) into.replaceChildren(el('img', { src: url, alt: '' }));
+  }
+
+  /** The chosen friend wakes the door: the server opens it, then its moment plays and the door wakes. */
+  async function wakeDoor(door: CrookedDoor, helper: Helper): Promise<void> {
+    const room = here();
+    const end = room ? doorEnd(door, room.id) : null;
+    const reply = await command((id, key) =>
+      api.power(id, { door: door.id, squishyId: helper.id }, key),
+    );
+    if (!reply) return;
+    const at = generation;
+    powering = true;
+    stick = null;
+    walk = null;
+    showStick();
+    options.cue?.('pop');
+    const woke = () => {
+      if (at !== generation) return;
+      powering = false;
+      apply(reply.view);
+      options.cue?.('twinkle');
+      say(powerDone(door.power ?? '', helper.name));
+      redraw();
+      findTarget(true);
+    };
+    const fx = bonusFx;
+    // Out of the scene's step, so the redraw never runs inside a frame.
+    if (fx && end) {
+      fx.power(helper, keeperAt, end.point, () => {
+        queueMicrotask(woke);
+      });
+    } else woke();
+    renderAction();
+    wake();
+  }
+
+  /** Opens the bonus room's chest: the lid, the sparkles, the loot's card, and maybe a friend. */
+  async function openChest(room: CrookedRoom): Promise<void> {
+    const reply = await command((id, key) => api.chest(id, room.id, key));
+    if (!reply) return;
+    apply(reply.view);
+    const friend = reply.friend;
+    const species = friend ? GAME_DATA.species.find((sp) => sp.id === friend.speciesId) : null;
+    options.cue?.('pop');
+    bonusFx?.openChest(
+      room.id,
+      friend ? { speciesId: friend.speciesId, instanceId: friend.battleId } : null,
+    );
+    const things = lootWords(reply.find.found, itemName);
+    const line = things ? B.chestLine(things) : B.chestEmpty;
+    cards.push({
+      kind: 'chest',
+      title: B.chestTitle,
+      line: reply.find.clothing ? `${line} ${B.chestWear}` : line,
+    });
+    if (friend) {
+      cards.push({
+        kind: 'friend',
+        name: species?.name ?? B.friendSomeone,
+        speciesId: friend.speciesId,
+        battleId: friend.battleId,
+        cued: false,
+      });
+    }
+    redraw();
+    renderAction();
+    const at = generation;
+    const show = () => {
+      if (at !== generation) return;
+      options.cue?.('twinkle');
+      renderCard();
+    };
+    if (reducedMotion()) show();
+    else setTimeout(show, CHEST_CARD_MS);
   }
 
   /** Walked into an open doorway: the server moves me (and checks the echoes, #306 6d). */
@@ -709,7 +967,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const h = house();
     const s = scene3d;
     if (!h || !s) return;
-    s.show(h, mapShown ? roomsOnFloor(floor) : roomsAround(h.room));
+    const rooms = mapShown ? roomsOnFloor(floor) : roomsAround(h.room);
+    s.show(h, rooms);
+    bonusFx?.show(h, rooms);
     s.setKeeperShown(floorOf(h.room) === floor);
     s.setLantern(!roomLit() && !mapShown, tiptoe);
     render();
@@ -817,12 +1077,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function renderAction(): void {
     // A card (a key, a bloom) has the bottom of the screen to itself.
-    const words = target && !mapShown && cards.length === 0 ? targetWords(target) : null;
+    const words =
+      target && !mapShown && cards.length === 0 && !picker && !powering ? wordsFor(target) : null;
     const show = words !== null && words.action !== '';
     // Idle, the big button keeps its place (the fitted room is measured round it).
     action.classList.toggle('crooked-idle', !show);
     action.hidden = mapShown;
-    action.disabled = working;
+    action.disabled = working || powering;
     actionLabel.textContent = show ? words.action : '';
     action.classList.toggle('crooked-hold', show && words.hold);
     stickBase.hidden = mapShown;
@@ -830,7 +1091,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     // The bubble: a word just said, else what's in front (a shut door says which key, never where).
     const said =
       noteText || (target?.kind === 'door' && bumped === target.door ? (words?.bubble ?? '') : '');
-    const about = words && target?.kind === 'thing' ? T.crooked : '';
+    const about =
+      words && target?.kind === 'thing'
+        ? T.crooked
+        : words && target?.kind === 'chest'
+          ? B.chestBubble
+          : '';
     bubbleText(said || about || null, false);
   }
 
@@ -889,6 +1155,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       sheet.replaceChildren();
       return;
     }
+    if (card.kind === 'friend') {
+      renderFriendCard(card);
+      return;
+    }
     const title = card.kind === 'caught' ? T.caught : card.title;
     const line = card.kind === 'caught' ? T.caughtLine : card.line;
     const ok = hpButton(card.kind === 'key' ? T.keepIt : T.yay, {
@@ -897,16 +1167,56 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     });
     ok.addEventListener('click', () => {
       if (cards[0]?.kind === 'key') scene3d?.hideKey();
-      cards = cards.slice(1);
-      renderCard();
-      findTarget(true);
-      wake();
+      nextCard();
     });
     sheet.dataset['kind'] = card.kind;
     sheet.replaceChildren(
       el('h3', { class: 'crooked-card-title', id: 'crooked-card-title' }, title),
       el('p', { class: 'crooked-card-line' }, line),
       ok,
+    );
+    action.classList.add('crooked-idle');
+    bubble.hidden = true;
+    wake();
+  }
+
+  function nextCard(): void {
+    cards = cards.slice(1);
+    renderCard();
+    findTarget(true);
+    wake();
+  }
+
+  /**
+   * The chest's rare friend (#306 6e): its picture in a glow, a chime, and
+   * "Say hello!", which takes me to its battle (a Heart Charm befriends it).
+   */
+  function renderFriendCard(card: Extract<Card, { kind: 'friend' }>): void {
+    if (!card.cued) {
+      card.cued = true;
+      const species = GAME_DATA.species.find((sp) => sp.id === card.speciesId);
+      options.cue?.(findCue(species ? (rareFindTier(species.rarity)?.scale ?? 1) : 1));
+    }
+    const face = el('div', { class: 'crooked-friend-face', 'aria-hidden': 'true' });
+    void portraitInto(face, card.speciesId, card.battleId, null, 128);
+    const go = hpButton(B.friendGo, { variant: 'primary', testId: 'crooked-card-ok' });
+    go.addEventListener('click', () => {
+      const id = mapId;
+      bonusFx?.clearFriend();
+      if (id && options.onFriend) {
+        // The house steps aside without its sheet; the battle takes the screen.
+        hide();
+        options.onFriend(id, card.battleId);
+        return;
+      }
+      nextCard();
+    });
+    sheet.dataset['kind'] = card.kind;
+    sheet.replaceChildren(
+      face,
+      el('h3', { class: 'crooked-card-title', id: 'crooked-card-title' }, B.friendTitle),
+      el('p', { class: 'crooked-card-line' }, B.friendLine(card.name)),
+      go,
     );
     action.classList.add('crooked-idle');
     bubble.hidden = true;
@@ -927,9 +1237,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       reducedMotion: reducedMotion(),
     });
     scene3d = built;
+    const fx = new CrookedBonusFx(scene, {
+      lod: lodFor('closeUp', tier),
+      reducedMotion: reducedMotion(),
+    });
+    bonusFx = fx;
     scene.onAfterRenderObservable.add(renderDark);
     scene.onDisposeObservable.addOnce(() => {
       if (scene3d === built) scene3d = null;
+      if (bonusFx === fx) bonusFx = null;
     });
     // A rebuilt scene (a lost context) shows where I am now.
     enterShown(true);
@@ -957,6 +1273,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       cards = [];
       target = null;
       bumped = null;
+      picker = null;
+      powering = false;
       darkPaint = null;
       isOpen = true;
       overlay.hidden = false;
@@ -997,8 +1315,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     walk = null;
     working = false;
     cards = [];
+    picker = null;
+    powering = false;
+    pickerSheet.hidden = true;
+    pickerSheet.replaceChildren();
     view = null;
     scene3d = null;
+    bonusFx = null;
     mapId = null;
     overlay.hidden = true;
     sheet.hidden = true;
@@ -1021,7 +1344,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       const room = here();
       if (!h || !room || !isOpen) return;
       walk = null;
-      keeperAt = walkStep(room, h, { x, z }).at;
+      keeperAt = keepOffChest(room, walkStep(room, h, { x, z }).at);
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();
@@ -1046,7 +1369,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         target: t
           ? t.kind === 'thing'
             ? { kind: 'thing', id: t.thing.id }
-            : { kind: 'door', id: t.door.id, state: t.state.kind }
+            : t.kind === 'chest'
+              ? { kind: 'chest', id: t.room.id }
+              : { kind: 'door', id: t.door.id, state: t.state.kind }
           : null,
         action:
           action.hidden || action.classList.contains('crooked-idle')
@@ -1066,20 +1391,45 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
               }))
             : [],
         scene: scene3d?.stats ?? null,
+        picker: picker
+          ? {
+              door: picker.door.id,
+              helpers: picker.helpers?.map((x) => ({ id: x.id, helps: x.helps })) ?? null,
+            }
+          : null,
+        powering,
+        bonus: bonusFx?.stats ?? null,
       };
     },
   };
 }
 
-function sameTarget(a: CrookedTarget | null, b: CrookedTarget | null): boolean {
+function sameTarget(a: Target | null, b: Target | null): boolean {
   if (a === null || b === null) return a === b;
+  if (a.kind === 'chest' && b.kind === 'chest') return a.room.id === b.room.id;
   if (a.kind === 'thing' && b.kind === 'thing') return a.thing.id === b.thing.id;
   if (a.kind === 'door' && b.kind === 'door')
     return a.door.id === b.door.id && a.state.kind === b.state.kind && keyHeld(a) === keyHeld(b);
   return false;
 }
 
-const keyHeld = (t: CrookedTarget): boolean =>
+/** The big button's words for what's in front (a chest is #306 6e's). */
+function wordsFor(t: Target): { action: string; bubble: string | null; hold: boolean } {
+  return t.kind === 'chest'
+    ? { action: B.chestAction, bubble: B.chestBubble, hold: false }
+    : targetWords(t);
+}
+
+/** The nearer of the nearest crooked thing or shut door and a bonus room's chest. */
+function nearerTarget(room: CrookedRoom, view: CrookedHouseView, at: FloorPoint): Target | null {
+  const near = nearestTarget(room, view, at);
+  const chest = chestTarget(room, view, at);
+  if (!near || !chest) return near ?? chest;
+  const d = (p: FloorPoint) => Math.hypot(p.x - at.x, p.z - at.z);
+  return d(chest.at) < d(near.at) ? chest : near;
+}
+
+const keyHeld = (t: Target): boolean =>
   t.kind === 'door' && t.state.kind === 'locked' && t.state.held;
 
 /** The bloom card's line: the colour came back, and anything it gave. */

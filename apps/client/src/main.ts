@@ -8,6 +8,7 @@ import { setSlowFrames } from './engine/perf-report.js';
 import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
+import { battleApi } from './battle/battle-api.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
@@ -1056,9 +1057,35 @@ const explore = createExploreScreen({
 // The Crooked House (#306 6c): my own far Hollow this season, from its
 // sheet's "Go inside". Like explore it owns the screen while open; Back
 // returns to the map and the far Hollow sheet, the house already saved.
+/** A Crooked House chest's rare friend is being met: its battle closes back into the house (#306 6e). */
+let houseFriendMap: string | null = null;
+const backToTheHouse = (mapId: string): void => {
+  if (houseFriendMap !== mapId) return;
+  houseFriendMap = null;
+  void crookedHouse.open(mapId);
+};
 const crookedHouse = createCrookedScreen({
   root: document.body,
   showScene,
+  portraits,
+  cue: (name) => {
+    audio.cue(name);
+  },
+  // "Say hello!": the house stepped aside; the friend's battle takes the
+  // screen, and Back from it comes home to the house (the bonus room).
+  onFriend: (mapId, battleId) => {
+    houseFriendMap = mapId;
+    battleApi.get(battleId).then(
+      (battle) => {
+        battles.open(battle);
+      },
+      (err: unknown) => {
+        houseFriendMap = null;
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+        void crookedHouse.open(mapId);
+      },
+    );
+  },
   invalidate: () => stage?.invalidate(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
@@ -1558,6 +1585,7 @@ const battles = createBattleScreen({
           evolutionPending = false;
           showWonVillages();
           showFarHollowArrival();
+          backToTheHouse(mapId);
         });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();

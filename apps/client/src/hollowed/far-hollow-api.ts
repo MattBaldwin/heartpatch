@@ -1,9 +1,11 @@
 import {
   BattleResponseSchema,
+  CrookedChestResponseSchema,
   CrookedEnterResponseSchema,
   CrookedFixResponseSchema,
   CrookedViewResponseSchema,
   FarHollowViewSchema,
+  type CrookedChestResponse,
   type CrookedEnterResponse,
   type CrookedFixResponse,
   type CrookedViewResponse,
@@ -75,6 +77,28 @@ export const farHollowApi = {
       method: 'POST',
       body: { door },
       schema: CrookedViewResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** A team squishy of the door's element wakes a sleeping door of the room I'm in (#306 6e). */
+  power: (
+    mapId: string,
+    body: { door: string; squishyId: string },
+    key: string,
+  ): Promise<CrookedViewResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/power`, {
+      method: 'POST',
+      body,
+      schema: CrookedViewResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Opens the chest of the bonus room I'm in (#306 6e): its loot, and maybe a rare friend's battle. */
+  chest: (mapId: string, room: string, key: string): Promise<CrookedChestResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/chest`, {
+      method: 'POST',
+      body: { room },
+      schema: CrookedChestResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

@@ -104,6 +104,7 @@ const E2E_GROUPS = [
     'care',
     'close-up',
     'explore',
+    'far-hollow-bonus',
     'keeper',
     'keeper-gallery',
     'raids',
