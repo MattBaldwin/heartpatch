@@ -1,5 +1,5 @@
-// Rate limits for the far Hollow (#306 PR 6, tech spec §5): searching is
-// exploring, so it shares exploring's numbers.
+// Rate limits for the far Hollow (#306 PR 6, tech spec §5): the Crooked
+// House's commands are short touch play like exploring, so they share its numbers.
 import type { RateLimitTable } from '../../lib/rate-limit.js';
 import { EXPLORE_RATE_LIMITS } from '../explore/limits.js';
 

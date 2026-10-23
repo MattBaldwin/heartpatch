@@ -1609,8 +1609,10 @@ export const journeys = pgTable(
  * them).
  *
  * `far_hollow_state`: one row per Keeper per season, written when they
- * arrive (the far road won). `keys` one bit a key found, `bonus_open` one
- * bit a bonus door opened by a power, `chests_opened` one bit a chest;
+ * arrive (the far road won). `keys` one bit a key found (`CROOKED_HOUSE.keys`
+ * order), `unlocked` one bit a key door its key opened and `bonus_open` one
+ * bit a power door a squishy opened (both `doors` order), `chests_opened`
+ * one bit a chest (`rooms` order);
  * `current_room` where they stand (null: at the front door) and
  * `last_lit_room` where a reload or a catch takes them back to.
  */
@@ -1623,6 +1625,7 @@ export const farHollowState = pgTable(
       .references(() => maps.id, { onDelete: 'cascade' }),
     seasonSeed: text('season_seed').notNull(),
     keys: integer('keys').notNull().default(0),
+    unlocked: integer('unlocked').notNull().default(0),
     currentRoom: text('current_room'),
     lastLitRoom: text('last_lit_room'),
     bonusOpen: integer('bonus_open').notNull().default(0),
@@ -1635,7 +1638,7 @@ export const farHollowState = pgTable(
     primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed] }),
     check(
       'far_hollow_state_bits',
-      sql`${t.keys} >= 0 and ${t.bonusOpen} >= 0 and ${t.chestsOpened} >= 0`,
+      sql`${t.keys} >= 0 and ${t.bonusOpen} >= 0 and ${t.chestsOpened} >= 0 and ${t.unlocked} >= 0`,
     ),
   ],
 );

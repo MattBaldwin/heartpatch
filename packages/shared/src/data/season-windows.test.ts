@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Season } from '../schemas/data/seasons.js';
-import { activeSeasons, latestSeasonRun, nextSeasonRun } from './season-windows.js';
+import { activeSeasons, nextSeasonRun, seasonRunAt } from './season-windows.js';
 import { SEASONS } from './seasons.js';
 
 const active = (date: string) => activeSeasons(SEASONS, date).map((s) => s.id);
@@ -76,42 +76,58 @@ describe('activeSeasons', () => {
   });
 });
 
-describe('latestSeasonRun and nextSeasonRun (#306 PR 6)', () => {
-  const latest = (date: string) => {
-    const run = latestSeasonRun(SEASONS, date);
+describe('seasonRunAt and nextSeasonRun (#306 PR 6)', () => {
+  const at = (date: string) => {
+    const run = seasonRunAt(SEASONS, date);
     return run ? `${run.id} ${String(run.year)}` : null;
   };
-  const next = (date: string) => nextSeasonRun(SEASONS, date)?.startsOn ?? null;
+  const next = (date: string) => {
+    const run = nextSeasonRun(SEASONS, date);
+    return run ? `${run.id} ${run.takesOverOn}` : null;
+  };
 
-  it('is the season running now, its first day included', () => {
-    expect(latest('2026-10-01')).toBe('halloween 2026');
-    expect(latest('2026-10-22')).toBe('halloween 2026');
-    expect(latest('2026-12-15')).toBe('christmas 2026');
+  it('is the season running now, its first and last day included', () => {
+    expect(at('2026-10-01')).toBe('halloween 2026');
+    expect(at('2026-10-22')).toBe('halloween 2026');
+    expect(at('2026-12-15')).toBe('christmas 2026');
+    expect(seasonRunAt(SEASONS, '2026-10-22')).toMatchObject({
+      startsOn: '2026-10-01',
+      endsOn: '2026-11-09',
+    });
   });
 
-  it('moves to the later start when windows overlap', () => {
-    // Halloween 2026 runs to Nov 9, but Thanksgiving started Nov 3.
-    expect(latest('2026-11-03')).toBe('thanksgiving 2026');
-    expect(latest('2026-12-31')).toBe('new-year 2026');
+  it('holds a running season until its own window ends when windows overlap (#306 6b)', () => {
+    // Halloween 2026 runs to Nov 9 though Thanksgiving starts Nov 3: the far
+    // Hollow's house doesn't reset mid-playtest.
+    for (const day of ['03', '05', '09']) expect(at(`2026-11-${day}`)).toBe('halloween 2026');
+    expect(at('2026-11-10')).toBe('thanksgiving 2026');
+    // Christmas keeps Dec 31; New Year takes the 1st.
+    expect(at('2026-12-31')).toBe('christmas 2026');
+    expect(at('2027-01-01')).toBe('new-year 2026');
+    // Without the override, Halloween ends Nov 2 and Thanksgiving takes Nov 3.
+    expect(at('2027-11-02')).toBe('halloween 2027');
+    expect(at('2027-11-03')).toBe('thanksgiving 2027');
   });
 
   it('keeps the last season between seasons, across the new year', () => {
-    expect(latest('2027-01-02')).toBe('new-year 2026');
-    expect(latest('2027-07-04')).toBe('new-year 2026');
-    expect(latest('2027-09-30')).toBe('new-year 2026');
-    expect(latest('2027-10-01')).toBe('halloween 2027');
+    expect(at('2027-01-02')).toBe('new-year 2026');
+    expect(at('2027-07-04')).toBe('new-year 2026');
+    expect(at('2027-09-30')).toBe('new-year 2026');
+    expect(at('2027-10-01')).toBe('halloween 2027');
   });
 
-  it('finds the next start, this year or the next', () => {
-    expect(next('2026-10-22')).toBe('2026-11-03');
-    expect(next('2026-11-03')).toBe('2026-12-01');
-    expect(next('2026-12-31')).toBe('2027-10-01');
-    expect(next('2027-07-04')).toBe('2027-10-01');
+  it('finds the day the next season takes over, this year or the next', () => {
+    expect(next('2026-10-22')).toBe('thanksgiving 2026-11-10');
+    expect(next('2026-11-09')).toBe('thanksgiving 2026-11-10');
+    expect(next('2026-11-10')).toBe('christmas 2026-12-01');
+    expect(next('2026-12-15')).toBe('new-year 2027-01-01');
+    expect(next('2027-01-01')).toBe('halloween 2027-10-01');
+    expect(next('2027-07-04')).toBe('halloween 2027-10-01');
   });
 
   it('is null with no seasons, and refuses a bad date', () => {
-    expect(latestSeasonRun([], '2026-10-22')).toBeNull();
+    expect(seasonRunAt([], '2026-10-22')).toBeNull();
     expect(nextSeasonRun([], '2026-10-22')).toBeNull();
-    expect(() => latestSeasonRun(SEASONS, '2026-10-1')).toThrow();
+    expect(() => seasonRunAt(SEASONS, '2026-10-1')).toThrow();
   });
 });

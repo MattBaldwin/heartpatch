@@ -454,11 +454,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         // The far Hollow, each Keeper's own every season (#306 PR 6).
         await api.register(
-          farHollowRoutes(createFarHollowService({ db, clock, ...publish }), {
-            hooks: authHooks,
-            idempotency,
-            devTools: config.HP_DEV_SQUISHY_GRANTS,
-          }),
+          farHollowRoutes(
+            createFarHollowService({
+              db,
+              clock,
+              battles,
+              ...publish,
+              log: (message, error) => {
+                app.log.error({ err: error }, message);
+              },
+            }),
+            {
+              hooks: authHooks,
+              idempotency,
+              devTools: config.HP_DEV_SQUISHY_GRANTS,
+            },
+          ),
         );
         await api.register(
           tradesRoutes(trades, {

@@ -22,12 +22,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { spawnWindowId } from '../../lib/time.js';
 import type { BattlesService, JourneyBattlePort, StartResult } from '../battles/service.js';
-import {
-  arriveInFarHollow,
-  farHollowOpen,
-  farHollowSeasonAt,
-  FAR_HOLLOW_MESSAGES,
-} from '../far-hollow/service.js';
+import { arriveInFarHollow, farHollowSeasonAt } from '../far-hollow/service.js';
 import { createFarHollowRepo } from '../far-hollow/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createJourneysRepo } from './repo.js';
@@ -152,10 +147,8 @@ export function createJourneysService(options: JourneysServiceOptions): Journeys
         const repo = createJourneysRepo(tx);
         // Read without locks, as a post command checks (#30 contract §6).
         await requirePostAccess(tx, { mapId, userId: user.id, post: request, at });
+        // Open at any hour, like the house (owner decision, 2026-10-23).
         const season = await farHollowSeasonAt(tx, mapId, at);
-        if (!farHollowOpen(at, season.timeZone)) {
-          throw new AppError('FORBIDDEN', FAR_HOLLOW_MESSAGES.night);
-        }
         const arrived = await createFarHollowRepo(tx).findState({
           userId: user.id,
           mapId,

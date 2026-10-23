@@ -64,7 +64,13 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
-  await expect.poll(async () => (await loreState(page))?.total, slow).toBe(15);
+  // The book's size is the server's (lore pages are server-only data), so
+  // adding a page never breaks this spec.
+  const book0 = await api<{ total: number }>(page, 'GET', '/lore');
+  expect(book0.status).toBe(200);
+  const total = book0.body.total;
+  expect(total).toBeGreaterThan(1);
+  await expect.poll(async () => (await loreState(page))?.total, slow).toBe(total);
   expect((await loreState(page))?.found).toBe(0);
 
   // A page is found while exploring; the next map open shows its card. Wait
@@ -92,14 +98,16 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   await expect(bag).toBeVisible();
   const tile = bag.getByTestId('bag-lorebook');
   await expect(tile).toBeVisible();
-  await expect(tile.getByTestId('bag-lorebook-count')).toHaveText('1 of 15 pages found');
+  await expect(tile.getByTestId('bag-lorebook-count')).toHaveText(
+    `1 of ${String(total)} pages found`,
+  );
   await expect(tile.getByTestId('bag-lorebook-new')).toHaveText('1 new');
 
   // The tile opens the book at its contents.
   await tile.tap();
   const book = page.getByTestId('lorebook');
   await expect(book).toBeVisible();
-  await expect(book.getByTestId('lorebook-count')).toHaveText('Pages found: 1 of 15');
+  await expect(book.getByTestId('lorebook-count')).toHaveText(`Pages found: 1 of ${String(total)}`);
   await expect(book.getByTestId('lorebook-chapter')).toHaveCount(5);
   expect((await loreState(page))?.bookAt).toBeNull();
 

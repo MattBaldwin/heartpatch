@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
@@ -13,6 +13,7 @@ import {
 /** My progress through a season's far Hollow (#306 PR 6): its state row. */
 export interface FarHollowStateRow {
   keys: number;
+  unlocked: number;
   currentRoom: string | null;
   lastLitRoom: string | null;
   bonusOpen: number;
@@ -21,6 +22,28 @@ export interface FarHollowStateRow {
   atticOpenedAt: Date | null;
   completedAt: Date | null;
 }
+
+/** A room's progress (#306 6b): the things put right (bits, the data's order) and its bloom. */
+export interface FarHollowRoomRow {
+  roomId: string;
+  fixed: number;
+  bloomedAt: Date | null;
+}
+
+/** What a house command changes on the state row. */
+export type FarHollowStatePatch = Partial<
+  Pick<
+    FarHollowStateRow,
+    | 'keys'
+    | 'unlocked'
+    | 'currentRoom'
+    | 'lastLitRoom'
+    | 'bonusOpen'
+    | 'chestsOpened'
+    | 'atticOpenedAt'
+    | 'completedAt'
+  >
+>;
 
 /** Whose far Hollow, in which season (its seed). */
 export interface FarHollowKey {
@@ -43,6 +66,17 @@ export interface FarHollowRepo {
   findState: (key: FarHollowKey) => Promise<FarHollowStateRow | null>;
   /** The same row, row-locked until commit (step 6, first). */
   lockState: (key: FarHollowKey) => Promise<FarHollowStateRow | null>;
+  /** Changes my state row (lock it first). */
+  setState: (key: FarHollowKey, patch: FarHollowStatePatch) => Promise<void>;
+  /** My room rows this season (rooms I've fixed something in). */
+  listRooms: (key: FarHollowKey) => Promise<FarHollowRoomRow[]>;
+  /**
+   * My rows for `roomIds`, made if missing and row-locked until commit, in
+   * room id order (step 6, after the state row).
+   */
+  lockRooms: (key: FarHollowKey, roomIds: readonly string[]) => Promise<FarHollowRoomRow[]>;
+  /** Changes a room row (lock it first). */
+  setRoom: (key: FarHollowKey, row: FarHollowRoomRow) => Promise<void>;
   /**
    * I arrived in a season's far Hollow: its state row (a row already there
    * stays as it is) and last season's rows gone. True when this was the
@@ -63,6 +97,7 @@ export interface FarHollowRepo {
 
 const stateColumns = {
   keys: farHollowState.keys,
+  unlocked: farHollowState.unlocked,
   currentRoom: farHollowState.currentRoom,
   lastLitRoom: farHollowState.lastLitRoom,
   bonusOpen: farHollowState.bonusOpen,
@@ -77,6 +112,19 @@ const whereKey = (key: FarHollowKey) =>
     eq(farHollowState.userId, key.userId),
     eq(farHollowState.mapId, key.mapId),
     eq(farHollowState.seasonSeed, key.seasonSeed),
+  );
+
+const roomColumns = {
+  roomId: farHollowRooms.roomId,
+  fixed: farHollowRooms.fixed,
+  bloomedAt: farHollowRooms.bloomedAt,
+};
+
+const whereRoomKey = (key: FarHollowKey) =>
+  and(
+    eq(farHollowRooms.userId, key.userId),
+    eq(farHollowRooms.mapId, key.mapId),
+    eq(farHollowRooms.seasonSeed, key.seasonSeed),
   );
 
 export function createFarHollowRepo(db: Executor): FarHollowRepo {
@@ -101,6 +149,41 @@ export function createFarHollowRepo(db: Executor): FarHollowRepo {
         .where(whereKey(key))
         .for('update');
       return row ?? null;
+    },
+
+    setState: async (key, patch) => {
+      if (Object.keys(patch).length === 0) return;
+      await db.update(farHollowState).set(patch).where(whereKey(key));
+    },
+
+    listRooms: async (key) =>
+      db
+        .select(roomColumns)
+        .from(farHollowRooms)
+        .where(whereRoomKey(key))
+        .orderBy(asc(farHollowRooms.roomId)),
+
+    lockRooms: async (key, roomIds) => {
+      const ids = [...new Set(roomIds)].sort();
+      if (ids.length === 0) return [];
+      // Missing rows first (an insert's new rows are its own), then the lock in id order.
+      await db
+        .insert(farHollowRooms)
+        .values(ids.map((roomId) => ({ ...key, roomId })))
+        .onConflictDoNothing();
+      return db
+        .select(roomColumns)
+        .from(farHollowRooms)
+        .where(and(whereRoomKey(key), inArray(farHollowRooms.roomId, ids)))
+        .orderBy(asc(farHollowRooms.roomId))
+        .for('update');
+    },
+
+    setRoom: async (key, row) => {
+      await db
+        .update(farHollowRooms)
+        .set({ fixed: row.fixed, bloomedAt: row.bloomedAt })
+        .where(and(whereRoomKey(key), eq(farHollowRooms.roomId, row.roomId)));
     },
 
     arrive: async (key, at) => {

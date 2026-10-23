@@ -13,16 +13,14 @@ import './hollowed.css';
 
 // The far Hollow's sheet (#306 PR 6, plan Q7): my own far Hollow this
 // season, opened from a trading post's panel. Away: the far road's trail and
-// "Take the far road" (by day only). There: the Crooked House and "Go
-// inside", open at any hour (owner decision 1; the house screen is #306 6c).
+// "Take the far road". There: the Crooked House and "Go inside" (the house
+// screen is #306 6c). Both at any hour (owner decisions of 2026-10-23).
 // Done: when a fresh one comes. The server decides everything (rule 1).
 
 export interface FarHollowSheetOptions {
   root: HTMLElement;
   api?: Pick<FarHollowApi, 'view' | 'road'>;
   mapId: () => string | null;
-  /** It's night on the map: the far road is shut till morning, like every Hollow. */
-  night: () => boolean;
   /** The far road started (or one going came back): the battle screen takes over. */
   openBattle: (battle: PlayerBattle) => void;
   /** "Go inside" tapped: the house screen (#306 6c). Until there is one, the door's stuck. */
@@ -150,7 +148,7 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
       const go = button(working ? '…' : T.start, 'far-hollow-road', false, () => {
         void setOff();
       });
-      go.disabled = working || options.night();
+      go.disabled = working;
       sheet.replaceChildren(
         kicker,
         title,
@@ -161,11 +159,7 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
           `🧭 ${T.road(v.road.teamSize, v.road.level)}`,
         ),
         ...said,
-        el(
-          'p',
-          { class: 'hollowed-note' },
-          options.night() ? T.night : post ? T.roadStakes : T.fromPost,
-        ),
+        el('p', { class: 'hollowed-note' }, post ? T.roadStakes : T.fromPost),
         el('div', { class: 'hollowed-actions' }, ...(post ? [go] : []), closeButton),
       );
     } else if (state === 'arrived') {

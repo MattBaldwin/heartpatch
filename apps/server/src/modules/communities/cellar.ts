@@ -127,7 +127,7 @@ function toolUses(items: ItemCounts): Record<ToolId, number> {
 }
 
 /** The find worth telling the patch about, as explore tells it. */
-function notableOf(items: ItemCounts, lore: string | null, clothing: string | null) {
+export function notableOf(items: ItemCounts, lore: string | null, clothing: string | null) {
   const notable: ExploreNotable | null = lore
     ? 'lore'
     : clothing
@@ -143,7 +143,7 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
  * Keeper who has it from another Hollow of the same kind. Returns the item
  * granted, or null.
  */
-async function grantKeepsake(
+export async function grantKeepsake(
   tx: Executor,
   drop: Parameters<typeof grantFoundPiece>[1],
   itemId: string,
