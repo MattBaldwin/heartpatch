@@ -80,7 +80,12 @@ const CAMERA_EASE = 6; // TUNE
 /** An echo floats and bobs (still with reduced motion), and grows a little when it notices me. TUNE */
 const ECHO_FLOAT = { up: 0.18, bob: 0.08, hz: 0.6, notice: 1.14, scale: 0.95 } as const;
 
-/** The lantern swings a little ahead of the Keeper's right hand. */
+/**
+ * The Keeper in the house: smaller than on the map, so it sits right
+ * beside the lamps and pots, and upright (owner playtest, #306 6d).
+ */
+const HOUSE_KEEPER = { scale: 0.72, lean: 0.12 } as const; // TUNE
+/** The lantern swings a little ahead of the Keeper's right hand (at the Keeper's full size). */
 const LANTERN_AT = { side: 0.42, up: 0.95, ahead: 0.12 } as const; // TUNE
 
 export interface CrookedSceneOptions {
@@ -180,6 +185,9 @@ export class CrookedScene {
     this.#lanternFrame.material = room;
     this.#lanternGlass = kitMesh(scene, 'crooked-lantern-glass', () => merged(lanternGlass()));
     this.#lanternGlass.material = this.#glowMat;
+    // The lantern is the Keeper's size.
+    this.#lanternFrame.scaling.setAll(HOUSE_KEEPER.scale);
+    this.#lanternGlass.scaling.setAll(HOUSE_KEEPER.scale);
     this.#key = kitMesh(scene, 'crooked-key', () => merged(keyShape()));
     this.#key.material = this.#keyMat;
     this.#key.setEnabled(false);
@@ -296,11 +304,13 @@ export class CrookedScene {
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     // Yaw 0 faces −z: the Keeper's right hand is −x, ahead is −z.
-    const lx = at.x - c * LANTERN_AT.side - s * LANTERN_AT.ahead;
-    const lz = at.z + s * LANTERN_AT.side - c * LANTERN_AT.ahead;
-    this.#lanternFrame.position.set(lx, LANTERN_AT.up, lz);
-    this.#lanternGlass.position.set(lx, LANTERN_AT.up, lz);
-    this.#lantern.position.set(lx, LANTERN_AT.up + 0.3, lz);
+    const k = HOUSE_KEEPER.scale;
+    const lx = at.x - (c * LANTERN_AT.side + s * LANTERN_AT.ahead) * k;
+    const lz = at.z + (s * LANTERN_AT.side - c * LANTERN_AT.ahead) * k;
+    const ly = LANTERN_AT.up * k;
+    this.#lanternFrame.position.set(lx, ly, lz);
+    this.#lanternGlass.position.set(lx, ly, lz);
+    this.#lantern.position.set(lx, ly + 0.3, lz);
   }
 
   /** The Keeper shows on its own floor only (the map may show another). */
@@ -315,7 +325,14 @@ export class CrookedScene {
   #placement() {
     // Off the floor's edge while another floor shows: the field has no hide.
     const away = this.#keeperShown ? 0 : 1000;
-    return { x: this.#at.x + away, z: this.#at.z, y: 0, yaw: this.#yaw, lean: 0.3 };
+    return {
+      x: this.#at.x + away,
+      z: this.#at.z,
+      y: 0,
+      yaw: this.#yaw,
+      lean: HOUSE_KEEPER.lean,
+      scale: HOUSE_KEEPER.scale,
+    };
   }
 
   /** The lantern's light: brighter in the dark, softer in a lit room. */
