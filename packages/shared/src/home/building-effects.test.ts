@@ -102,7 +102,7 @@ describe('economyEffects (#601)', () => {
       {
         kind: 'delivers',
         fromLevel: RESOURCE_BUILDING_RULES.warehouseDeliversFromLevel,
-        upkeep: 30,
+        upkeep: 20,
       },
     ]);
   });

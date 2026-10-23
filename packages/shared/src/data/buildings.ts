@@ -460,7 +460,10 @@ export const BUILDINGS: Building[] = [
   },
   {
     // #601: with one paid and standing, level 3+ resource buildings deliver
-    // straight to the bag and never fill up. Expensive on purpose.
+    // straight to the bag and never fill up. Costly to build on purpose. A
+    // month of its upkeep is about what one 5-day trip's saved output is
+    // worth at sell price; the daily sell cap means it isn't cashed
+    // (`pnpm sim:patch-economy`).
     id: 'warehouse',
     kind: 'warehouse',
     name: 'Warehouse',
@@ -469,6 +472,6 @@ export const BUILDINGS: Building[] = [
     placement: 'homestead',
     maxPerTile: 1,
     slot: 'ring',
-    levels: [{ cost: { timber: 600, stone: 450, glimmer: 20 }, upkeep: 30 }], // TUNE:
+    levels: [{ cost: { timber: 600, stone: 450, glimmer: 20 }, upkeep: 20 }], // TUNE:
   },
 ];

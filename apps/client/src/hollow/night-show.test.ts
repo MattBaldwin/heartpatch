@@ -208,14 +208,14 @@ describe('the night words', () => {
   it('tells the buildings that need 💛 this morning, and the 💛 that wakes them (#601 PR 9)', () => {
     const at = (buildingId: string, level = 1) => ({ buildingId, level });
     expect(upkeepPausedLine([])).toBeNull();
-    // The Warehouse's 💛 30, as its tile card says.
+    // The Warehouse's 💛 20, as its tile card says.
     expect(upkeepPausedLine([at('warehouse')])).toEqual({
       icon: '💛',
-      text: "Your Warehouse needs 💛: this morning's coins ran short. It wakes up as soon as you have 💛 30!",
+      text: "Your Warehouse needs 💛: this morning's coins ran short. It wakes up as soon as you have 💛 20!",
     });
-    // A level 3 Stone Quarry's 💛 23 and the Warehouse's 30, together.
+    // A level 3 Stone Quarry's 💛 23 and the Warehouse's 20, together.
     expect(upkeepPausedLine([at('stone-quarry', 3), at('warehouse')])?.text).toBe(
-      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have 💛 53!",
+      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have 💛 43!",
     );
     // Two of a kind, or more than three, by count.
     expect(upkeepPausedLine([at('stone-quarry'), at('stone-quarry')])?.text).toMatch(
