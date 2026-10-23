@@ -21,6 +21,7 @@ export const KIND_NAMES: Readonly<Record<BuildableKind, string>> = {
   fence: 'Fence',
   factory: 'Crafting Factory',
   resource: 'Resource building',
+  warehouse: 'Warehouse',
 };
 
 export const HOME_NAME_TEXT = {

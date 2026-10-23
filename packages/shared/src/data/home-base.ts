@@ -7,6 +7,14 @@ export const HOME_BASE_RULES: HomeBaseRules = {
   removeRefundPercent: 50, // TUNE:
   // Training Grounds: owner decision 2026-10-06. Fences (#203) go on edges,
   // from the tile's panel, not the home build sheet. The Crafting Factory: #294.
-  // Resource buildings: #601 PR 7 (the Warehouse joins with its client, PR 9).
-  buildableKinds: ['hearthfire', 'habitat', 'training-grounds', 'fence', 'factory', 'resource'],
+  // Resource buildings: #601 PR 7. The Warehouse: #601 PR 9.
+  buildableKinds: [
+    'hearthfire',
+    'habitat',
+    'training-grounds',
+    'fence',
+    'factory',
+    'resource',
+    'warehouse',
+  ],
 };

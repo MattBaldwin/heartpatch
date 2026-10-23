@@ -17,9 +17,9 @@ const file = readdirSync(migrationsFolder).find((f) => f.endsWith('_home_names.s
 const tag = (file ?? 'missing.sql').replace(/\.sql$/, '');
 const migrationSql = readFileSync(join(migrationsFolder, file ?? 'missing.sql'), 'utf8');
 
-/** The kinds buildable when 0050 ran; resource buildings joined later (#601 PR 7). */
+/** The kinds buildable when 0050 ran; resource buildings and the Warehouse joined later (#601). */
 const BUILDABLE = new Set<string>(
-  HOME_BASE_RULES.buildableKinds.filter((kind) => kind !== 'resource'),
+  HOME_BASE_RULES.buildableKinds.filter((kind) => kind !== 'resource' && kind !== 'warehouse'),
 );
 /**
  * Buildings added after 0050: none was placed before it, so its back-fill

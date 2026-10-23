@@ -377,6 +377,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       deselect();
       return;
     }
+    // Another tile opens at its title, not where the last one was scrolled to.
+    const another = selected === null || hexKey(selected) !== hexKey(h);
     selected = h;
     scene3d?.select(h);
     // A Hollowed village's tile says so in its head (#306).
@@ -394,6 +396,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       ),
     );
     options.tileActions?.show(panel.actions, tile, state.view);
+    if (another) panel.toTop();
     options.invalidate();
   };
 

@@ -836,6 +836,86 @@ export function buildBuildingModel(
       }
       break;
     }
+    case 'warehouse': {
+      // The Warehouse (#601 PR 9): one level, so it's already the biggest
+      // toy on the patch. A wide periwinkle storehouse with an arched honey
+      // roller door, a heart sign over it, a loading dock stacked with
+      // crates and ribboned parcels, a chute down one side with a parcel on
+      // it, a lamp by the door and a little parcel cupola on the ridge. Its
+      // windows, lamp and heart glow while it delivers and go dark while it
+      // naps (paused for upkeep, or its homestead cut off).
+      part(body, box(0.84, 0.42, 0.56), C.store, [0, 0.21, 0.04]);
+      for (const x of [-0.42, 0.42]) {
+        for (const z of [-0.24, 0.32]) {
+          part(body, cylinder(0.42, 0.1, 0.1, 10), C.store, [x, 0.21, z]);
+        }
+      }
+      part(
+        body,
+        cylinder(0.98, 0.56, 0.56, 3),
+        C.storeRoof,
+        [0, 0.54, 0.04],
+        [1, 1, 1.3],
+        [0, 0, Math.PI / 2],
+      );
+      // The cupola: a parcel with a ribbon, on the ridge.
+      part(body, box(0.16, 0.14, 0.16), C.parcel, [0, 0.86, 0.04]);
+      part(body, box(0.17, 0.03, 0.04), C.ribbon, [0, 0.86, -0.04]);
+      part(body, box(0.04, 0.15, 0.17), C.ribbon, [0, 0.86, 0.04]);
+      // The arched roller door on the front (−z), with its slats.
+      part(body, box(0.32, 0.24, 0.04), C.storeDoor, [0, 0.12, -0.25]);
+      part(
+        body,
+        cylinder(0.04, 0.32, 0.32, 18),
+        C.storeDoor,
+        [0, 0.24, -0.25],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      for (const y of [0.07, 0.14, 0.21, 0.28]) {
+        part(body, box(y > 0.25 ? 0.24 : 0.3, 0.015, 0.045), C.storeTrim, [0, y, -0.255]);
+      }
+      // The heart sign over the door.
+      const heart = awake ? glow : body;
+      const heartColor = awake ? C.ribbon : C.windowOut;
+      part(
+        body,
+        cylinder(0.03, 0.2, 0.2, 18),
+        C.storeTrim,
+        [0, 0.48, -0.27],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      part(heart, sphere(0.06, 8), heartColor, [-0.025, 0.495, -0.29], [1, 1, 0.5]);
+      part(heart, sphere(0.06, 8), heartColor, [0.025, 0.495, -0.29], [1, 1, 0.5]);
+      part(
+        heart,
+        box(0.06, 0.06, 0.02),
+        heartColor,
+        [0, 0.465, -0.29],
+        [1, 1, 1],
+        [0, 0, Math.PI / 4],
+      );
+      // Two windows either side of the door.
+      for (const x of [-0.29, 0.29]) {
+        part(windowList, box(0.12, 0.12, 0.03), windowColor, [x, 0.27, -0.25]);
+      }
+      // The loading dock out front, right, with crates and parcels.
+      part(body, box(0.36, 0.06, 0.22), C.post, [0.3, 0.03, -0.42]);
+      part(body, box(0.12, 0.12, 0.12), C.crate, [0.2, 0.12, -0.42]);
+      part(body, box(0.12, 0.12, 0.12), C.crateMint, [0.34, 0.12, -0.4]);
+      part(body, box(0.11, 0.11, 0.11), C.hay, [0.27, 0.235, -0.41]);
+      part(body, box(0.1, 0.08, 0.1), C.parcel, [0.45, 0.1, -0.46]);
+      part(body, box(0.105, 0.02, 0.03), C.ribbon, [0.45, 0.1, -0.505]);
+      // The chute down the left side, with a parcel sliding along it.
+      part(body, box(0.12, 0.03, 0.46), C.cart, [-0.56, 0.24, -0.06], [1, 1, 1], [-0.55, 0, 0]);
+      part(body, box(0.09, 0.07, 0.09), C.parcel, [-0.56, 0.31, -0.08], [1, 1, 1], [-0.55, 0, 0]);
+      part(body, cylinder(0.08, 0.2, 0.18, 14), C.hay, [-0.56, 0.04, -0.34]);
+      // A lamp by the door.
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.3, 0.21, -0.42]);
+      part(windowList, sphere(0.09, 8), lampColor, [-0.3, 0.46, -0.42]);
+      break;
+    }
     default:
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
   }

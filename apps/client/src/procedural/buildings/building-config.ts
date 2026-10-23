@@ -77,6 +77,14 @@ export const BUILDING_COLORS = {
   barnRoof: '#8a4d6e', // TUNE
   barnTrim: '#fff3e0', // TUNE
   hay: '#f2d27a', // TUNE
+  // The Warehouse (#601 PR 9): a big soft storehouse with crates and parcels.
+  store: '#cfdcf5', // TUNE: periwinkle walls
+  storeRoof: '#8f9fe0', // TUNE: its deeper roof
+  storeDoor: '#f2c48a', // TUNE: the honey roller door
+  storeTrim: '#fdfbf4', // TUNE: door slats and the sign
+  parcel: '#e8b27a', // TUNE: cardboard parcels
+  ribbon: '#ff7aa8', // TUNE: their pink ribbons, and the sign's heart
+  crateMint: '#9fe3c8', // TUNE
 } as const;
 
 /**

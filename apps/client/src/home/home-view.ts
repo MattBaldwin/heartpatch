@@ -75,6 +75,9 @@ export function buildingIcon(buildingId: string): string {
       return '🥬';
     case 'pumpkin-barn':
       return '🥧';
+    // The Warehouse (#601 PR 9): it delivers to your bag.
+    case 'warehouse':
+      return '📦';
     default:
       return '🏠';
   }

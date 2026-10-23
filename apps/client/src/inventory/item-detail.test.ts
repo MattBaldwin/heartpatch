@@ -24,7 +24,8 @@ describe('the Bag item card (#241)', () => {
     const glimmer = itemDetail('glimmer', 2);
     expect(glimmer.purpose).not.toBe('');
     expect(glimmer.chips.map((c) => c.text)).toEqual([
-      '🔨 For building Glimmer Rail and Lantern Fence',
+      // Glimmer Rail, Lantern Fence and the Warehouse (#601 PR 9).
+      '🔨 For building Glimmer Rail, Lantern Fence and more',
       '⬆️ Upgrades Hearthfire, Crafting Factory and more',
       '🍳 Goes into Lantern and Joy Lantern',
     ]);
