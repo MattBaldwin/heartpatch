@@ -40,6 +40,11 @@ export function audioSettingsView(options: AudioSettingsViewOptions): Node[] {
       'data-testid': id,
     });
     slider.value = String(Math.round(options.current()[kind] * STEPS));
+    /** The pink part of the track follows the thumb. */
+    const paint = () => {
+      slider.style.setProperty('--fill', `${(Number(slider.value) / STEPS) * 100}%`);
+    };
+    paint();
     const toggle = el('button', {
       type: 'button',
       class: 'auth-button auth-button-soft auth-button-small audio-toggle',
@@ -56,6 +61,7 @@ export function audioSettingsView(options: AudioSettingsViewOptions): Node[] {
       options.change({ ...options.current(), [kind]: Number(slider.value) / STEPS }, save);
     };
     slider.addEventListener('input', () => {
+      paint();
       level(false);
     });
     slider.addEventListener('change', () => {
