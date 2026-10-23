@@ -166,20 +166,26 @@
   touch-action: manipulation;
 }
 
-/* A phone on its side (controls D, ../ui/breakpoints.ts): the card takes the
-   whole height, and the round × at its top is the one way out, so the grid
-   gets the room the bottom Close used to take. */
+/* A phone on its side (controls D, ../ui/breakpoints.ts): the card still
+   starts under the map's top bar, but takes the rest of the height, and the
+   round × at its top is the one way out, so the grid gets the room the bottom
+   Close used to take. */
 @media (max-height: 520px) and (min-width: 640px) {
   .catalog {
-    padding-top: calc(env(safe-area-inset-top) + 12px);
     padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   }
 
   .catalog-card {
-    gap: 8px;
+    gap: 6px;
+    padding-block: 10px;
   }
 
   .catalog-card .catalog-actions {
     display: none;
+  }
+
+  .catalog-entry {
+    min-height: 100px;
+    padding-block: 8px 6px;
   }
 }
