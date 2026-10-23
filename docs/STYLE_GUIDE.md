@@ -36,36 +36,45 @@ Applies to every client PR.
 ## 4. Naming
 
 ### Squishies
+
 - Squishy, cute and **pun-friendly**; easy for a kid to say out loud and remember (2–3 syllables is ideal).
-- Name hints at element or feeling: *Puddlepuff* (Water/Silly), *Pebblesnooze* (Stone/Sleepy).
-- Evolutions sound like a bigger, sparklier version of the same name: *Puddlepuff → Splashmallow*.
+- Name hints at element or feeling: _Puddlepuff_ (Water/Silly), _Pebblesnooze_ (Stone/Sleepy).
+- Evolutions sound like a bigger, sparklier version of the same name: _Puddlepuff → Splashmallow_.
 - No existing franchise names or near-copies (no "-mon", no recognisable characters).
 
 ### Seasonal squishies
+
 - Each one has a **seasonal reason to exist** and a **seasonal activity that draws it**: found in pumpkin fields while gathering Pumpkins, drawn to Jack-o'-Lantern Hearthfires, appearing near Witch Dust nodes at dusk.
-- Halloween ones are *sweet-spooky*: a ghost who's afraid of the dark, a pumpkin with a lopsided grin, a bat that hangs the wrong way up.
+- Halloween ones are _sweet-spooky_: a ghost who's afraid of the dark, a pumpkin with a lopsided grin, a bat that hangs the wrong way up.
 
 ### Moves
-- Silly or sweet verbs, never violent: *Tickle Tackle*, *Belly Flop*, *Giggle Drizzle*, *Rock-a-Bye*, *Peekaboo!* (Avoided words: §9.)
+
+- Silly or sweet verbs, never violent: _Tickle Tackle_, _Belly Flop_, _Giggle Drizzle_, _Rock-a-Bye_, _Peekaboo!_ (Avoided words: §9.)
 
 ### Clothing, titles and items
-- Descriptive and fun: *Pumpkin Hood*, *Ghost Cape*, *Cozy Apron*, *Heart Mittens*.
+
+- Descriptive and fun: _Pumpkin Hood_, _Ghost Cape_, _Cozy Apron_, _Heart Mittens_.
 - Titles feel earned and kind: "Keeper of the Gap", "Hollow Rescuer", "Friend to All Squishies".
 
 ### Places
+
 - Use the established names: **Juniper's Gap**, **the Hollow**, **the Heartpatch**, **Heart Seed**, **Hearthfire**, **Tutorial Glade**. Don't invent alternates.
 
 ## 5. Characters
 
 ### Sprout (tutorial guide)
+
 The tiny glowing spirit of your Heart Seed. Upbeat, curious, easily delighted, a little dramatic, always encouraging.
+
 - Speaks in short bursts with the occasional "Ooh!" or "Ta-da!"
-- Notices funny details: *"Ooh, a wild squishy! It looks friendly… and a little bit sticky."*
-- Gentle urgency, never panic: *"Brrr, it's getting dark. Quick, let's get everyone near the fire!"*
+- Notices funny details: _"Ooh, a wild squishy! It looks friendly… and a little bit sticky."_
+- Gentle urgency, never panic: _"Brrr, it's getting dark. Quick, let's get everyone near the fire!"_
 - Celebrates the player, not itself.
 
 ### The Hollow Man
+
 **Spooky-tense** (owner decision 2026-10-04, replacing "spooky stays soft"): a tall, thin, dark silhouette with a ragged cloak, long reaching arms and glowing eyes. A little scary, never gory, and fine for ages 10–17.
+
 - He **never speaks**, never threatens, never chases on screen, and never rushes at the camera. No jump-scares, no mouth, no claws, no blood.
 - Present it through what changes around him: colour drains, music drops out, firelight flickers, squishies huddle.
 - When he wants something, he reaches for it with his long arms and his eyes flare. In the opening story he pulls the glow (joy) out of the squishies as little lights, and a cold wind scatters them; a low rumbling sting and a short camera shake mark the Heartpatch breaking. That's the most frightening he ever gets.
@@ -74,21 +83,23 @@ The tiny glowing spirit of your Heart Seed. Upbeat, curious, easily delighted, a
 - Taken squishies turn grey and drift away gently; text always reminds the player they can be rescued.
 
 ### The forest chihuahuas
+
 Lore only (see design doc §16). Never NPCs, never explained outright. Glimpses, paw prints, distant barking.
 
 ### Squishies
+
 Sincere, expressive, never mean. Feelings drive personality: Joy bounces, Cozy snuggles, Brave puffs up, Silly spins, Sleepy nods off, Spooky goes "boo!" and then giggles.
 
 ## 6. Writing for each surface
 
-| Surface | Guidance |
-|---|---|
-| Buttons | 1–2 words, verb first: "Feed", "Capture", "Light fire" |
-| Toasts | One short line, upbeat: "Gourdon joined your patch!" |
-| Errors | Friendly, say what to do next. Shared error codes map to kid-readable messages. |
-| Sprout bubbles | ≤ 2 short sentences per bubble; tap to continue |
-| Captions (cinematic) | Large, rounded type; stay up long enough to read; tap to advance |
-| Morning report | Calm and reassuring: "The Hollow Man came by last night, but your fire kept everyone safe!" |
+| Surface              | Guidance                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Buttons              | 1–2 words, verb first: "Feed", "Capture", "Light fire"                                      |
+| Toasts               | One short line, upbeat: "Gourdon joined your patch!"                                        |
+| Errors               | Friendly, say what to do next. Shared error codes map to kid-readable messages.             |
+| Sprout bubbles       | ≤ 2 short sentences per bubble; tap to continue                                             |
+| Captions (cinematic) | Large, rounded type; stay up long enough to read; tap to advance                            |
+| Morning report       | Calm and reassuring: "The Hollow Man came by last night, but your fire kept everyone safe!" |
 
 ## 7. Visual and audio feel
 
@@ -105,39 +116,51 @@ Visuals follow design doc §19 (soft vinyl toy, glossy, rounded, never pixelated
 ## 9. Words to use and avoid
 
 ### Glossary
+
 Player-facing words for game actions. The code can use technical names; the UI uses these.
 
-| Mechanic (code) | Say in the UI |
-|---|---|
-| attack a tile | **Claim** (neutral tile), **Challenge** (rival tile) |
-| raid on your tile | **"Someone challenged your land!"** (the sheet is the **Challenge report**) |
-| battle | **Battle** or **Squishy showdown** |
-| squishy at 0 HP | **Tuckered out** |
-| damage / HP | **Energy** (the bar), "lost some energy" |
-| capture | **Befriend** (button: "Use Heart Charm") |
-| hollowed | **Taken to the Hollow** (always followed by "you can rescue them!") |
-| defense stance | **Defense style** (Bold, Careful, Balanced) |
-| the lore's glowing field; the game | **Heartpatch**: only for the story ("The Heartpatch shattered") and the game's name. Never a place the player owns |
-| a map (one shared world, up to 6 players; older patches 4) | **patch** ("Make a patch", "Join a patch", "Your patches") |
-| tiles a player owns | **land** ("Claim some land", "Someone challenged your land!") |
-| a player's home base, and its tray | **home** (the right-hand tray is **My Home**: "Your home is on the right!") |
+| Mechanic (code)                                            | Say in the UI                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| attack a tile                                              | **Claim** (neutral tile), **Challenge** (rival tile)                                                               |
+| raid on your tile                                          | **"Someone challenged your land!"** (the sheet is the **Challenge report**)                                        |
+| battle                                                     | **Battle** or **Squishy showdown**                                                                                 |
+| squishy at 0 HP                                            | **Tuckered out**                                                                                                   |
+| damage / HP                                                | **Energy** (the bar), "lost some energy"                                                                           |
+| capture                                                    | **Befriend** (button: "Use Heart Charm")                                                                           |
+| hollowed                                                   | **Taken to the Hollow** (always followed by "you can rescue them!")                                                |
+| defense stance                                             | **Defense style** (Bold, Careful, Balanced)                                                                        |
+| the lore's glowing field; the game                         | **Heartpatch**: only for the story ("The Heartpatch shattered") and the game's name. Never a place the player owns |
+| a map (one shared world, up to 6 players; older patches 4) | **patch** ("Make a patch", "Join a patch", "Your patches")                                                         |
+| tiles a player owns                                        | **land** ("Claim some land", "Someone challenged your land!")                                                      |
+| a player's home base, and its tray                         | **home** (the right-hand tray is **My Home**: "Your home is on the right!")                                        |
 
 ### Places glossary: Patch › Town › Hollow
+
 Owner decision (#602). Big to small, these are the only place words a player reads.
 
-| Say | It means |
-|---|---|
-| **Patch** | The whole shared map. |
-| **Town** | A Keeper's home plus their homesteads. |
-| **Hollow** | A ruined town to restore. Grey until you bring it back. |
-| **Home** | A Keeper's home base, where the Heart Seed lives. |
-| **Homestead** | A tile you explored all of, joined up to your home. |
+| Say            | It means                                                                   |
+| -------------- | -------------------------------------------------------------------------- |
+| **Patch**      | The whole shared map.                                                      |
+| **Town**       | A Keeper's home plus their homesteads.                                     |
+| **Hollow**     | A ruined town to restore. Grey until you bring it back.                    |
+| **Home**       | A Keeper's home base, where the Heart Seed lives.                          |
+| **Homestead**  | A tile you explored all of, joined up to your home.                        |
 | **Heart Seed** | The glowing seed at the middle of a home. A restored Hollow grows its own. |
 
-**Don't say:** *village*, *villages*, *community* or *communities*, in any case. They are code names only (`communities` stays in code, tables and routes). `apps/client/tooling/words/player-words.test.ts` fails if a client text table or a `changes/` entry uses them.
+**Don't say:** _village_, _villages_, _community_ or _communities_, in any case. They are code names only (`communities` stays in code, tables and routes). `apps/client/tooling/words/player-words.test.ts` fails if a client text table or a `changes/` entry uses them.
 
 ### Avoided words
+
 One list, so tests can scan the **player-facing string fields** in data files (names, descriptions, lines, captions; not keys like `baseStats.attack`). Don't use these in player-facing text:
 
 `die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
 
+## 10. Buttons
+
+New screens use the shared button in `apps/client/src/ui/button/` instead of a new per-feature button class.
+
+- `hpButton(label, { variant })`: **primary** (pink, the one obvious next step on a screen; one per screen), **secondary** (soft pink, everything else, the default) or **quiet** (text only, for "Not now"). `small: true` makes it 44 px tall for rows of small choices; the default is 52 px.
+- `hpClose(label)`: the round ✕ in a sheet's corner. `label` is read aloud ("Close the Bag").
+- `hpBack()`: the "‹ Back" pill at a screen's top left. Every full screen has one; a gesture never replaces it (§3.3).
+- For markup built elsewhere, `buttonClass({ variant, small })` gives the classes. Colours, sizes and the press timing are CSS tokens (`--hp-*`) in `button.css`.
+- **Press feel:** every button squishes a little under the finger and springs back (`press.css`); under reduced motion it only darkens. Don't add your own `:active` squish. A button that has one is listed in `press.css` so it doesn't squish twice.

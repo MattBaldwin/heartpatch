@@ -1,0 +1,137 @@
+/* The shared button (Controls A): one vinyl-toy button, a close and a back,
+   for every screen (style guide §10). A soft, rounded, glossy toy that sits
+   on a little lip and squishes when pressed (design doc §19). Per-feature
+   button classes move onto these in Controls B. */
+:root {
+  /* Sizes: every one clears the 44 pt tap target (style guide §3.2). */
+  --hp-tap: 44px;
+  --hp-button-h: 52px;
+  --hp-button-h-small: 44px;
+  --hp-radius: 18px;
+  --hp-lip: 3px;
+  /* Colours: the lobby's and sign-in's plum and soft pink (white on plum is
+     about 5:1, readable at a glance). */
+  --hp-primary: #b8487a;
+  --hp-primary-lip: #8f3360;
+  --hp-primary-ink: #fff;
+  --hp-secondary: #f6dceb;
+  --hp-secondary-lip: #e4b9d0;
+  --hp-secondary-ink: #7a2d55;
+  --hp-quiet-ink: #7a2d55;
+  --hp-quiet-press: rgb(122 45 85 / 10%);
+  --hp-gloss: linear-gradient(rgb(255 255 255 / 35%), rgb(255 255 255 / 0%) 55%);
+  --hp-font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  /* The press (press.css): how far it squishes and how it springs back. */
+  --hp-press-scale: 0.94;
+  --hp-press-in: 70ms ease-out;
+  --hp-press-out: 260ms cubic-bezier(0.34, 1.56, 0.64, 1); /* TUNE: the springy release */
+}
+
+.hp-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: var(--hp-tap);
+  min-height: var(--hp-button-h);
+  padding: var(--hp-pad-y) 20px;
+  border: 0;
+  border-radius: var(--hp-radius);
+  background: var(--hp-gloss), var(--hp-secondary);
+  box-shadow: 0 var(--hp-lip) 0 var(--hp-secondary-lip);
+  color: var(--hp-secondary-ink);
+  font-family: var(--hp-font);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.hp-button-primary {
+  background: var(--hp-gloss), var(--hp-primary);
+  box-shadow: 0 var(--hp-lip) 0 var(--hp-primary-lip);
+  color: var(--hp-primary-ink);
+}
+
+.hp-button-quiet {
+  background: transparent;
+  box-shadow: none;
+  color: var(--hp-quiet-ink);
+}
+
+.hp-button-small {
+  min-height: var(--hp-button-h-small);
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 14px;
+  font-size: 15px;
+}
+
+/* Pressed: the lip sinks a little too, as if the toy were pushed in. */
+.hp-button:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--hp-secondary-lip);
+}
+.hp-button-primary:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--hp-primary-lip);
+}
+.hp-button-quiet:active:not(:disabled) {
+  box-shadow: none;
+  background: var(--hp-quiet-press);
+}
+
+.hp-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The round ✕ in a sheet's corner, and the "‹ Back" pill at a screen's top. */
+.hp-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--hp-tap);
+  height: var(--hp-tap);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hp-secondary);
+  color: var(--hp-secondary-ink);
+  cursor: pointer;
+}
+
+.hp-close svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.hp-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 88px;
+  min-height: 48px;
+  padding: var(--hp-pad-y) 18px var(--hp-pad-y) 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hp-secondary);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  color: var(--hp-secondary-ink);
+  font-family: var(--hp-font);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hp-back-chevron {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.hp-close:active,
+.hp-back:active {
+  background: var(--hp-secondary-lip);
+}

@@ -43,7 +43,6 @@ import {
   clampZoom,
   entryGlide,
   glidePose,
-  pinchedOut,
   pinchZoom,
   residentBoxes,
   project,
@@ -132,7 +131,7 @@ import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
 // or a tap on the cottage, lifts the roof off and settles above the whole
-// dollhouse. Back (or Escape, or a pinch out past the dollhouse) goes home.
+// dollhouse. Back (or Escape) goes home: a pinch only zooms, as on the map.
 // Like the close-up, it owns the screen while open and swaps its scene onto
 // the one shared stage.
 
@@ -1878,10 +1877,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     }
     if (pinch && pointers.size < 2) {
       pinch = null;
-      if (pinchedOut(zoom)) {
-        close();
-        return;
-      }
       zoom = clampZoom(zoom);
       draw();
     }
@@ -1895,12 +1890,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       skipGlide();
       dropWalkInput();
       walk = null;
-      zoom -= e.deltaY / HOUSE_CAMERA.wheelPerZoom;
-      if (pinchedOut(zoom)) {
-        close();
-        return;
-      }
-      zoom = clampZoom(zoom);
+      zoom = clampZoom(zoom - e.deltaY / HOUSE_CAMERA.wheelPerZoom);
       draw();
     },
     { passive: false },

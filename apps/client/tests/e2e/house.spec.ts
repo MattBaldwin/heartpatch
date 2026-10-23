@@ -194,6 +194,14 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await walk.tap();
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
 
+  // Zooming out (a pinch, here the wheel) stops at the dollhouse: only Back
+  // leaves (Controls A; a pinch zooms on the map and in the house alike).
+  await page.mouse.move(vw.width * 0.5, vw.height * 0.5);
+  await page.mouse.wheel(0, 400);
+  await page.mouse.wheel(0, 400);
+  await expect(page.getByTestId('house')).toBeVisible();
+  expect(await houseState(page)).toMatchObject({ open: true, zoom: 0 });
+
   await page.getByTestId('house-back').tap();
   await expect(page.getByTestId('house')).toBeHidden();
   await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);

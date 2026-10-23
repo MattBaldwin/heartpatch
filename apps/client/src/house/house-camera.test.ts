@@ -12,7 +12,6 @@ import {
   panPose,
   panRange,
   isPhone,
-  pinchedOut,
   pinchZoom,
   project,
   roofAt,
@@ -392,13 +391,11 @@ describe('walking in: kid height', () => {
 });
 
 describe('pinch', () => {
-  it('pinches by the finger spread, and a pinch out past the dollhouse goes home', () => {
+  it('pinches by the finger spread, held between the dollhouse and kid height', () => {
     expect(pinchZoom(0, 100, 100)).toBe(0);
     expect(pinchZoom(0, 100, 200)).toBeGreaterThan(0);
     expect(pinchZoom(0.5, 200, 100)).toBeLessThan(0.5);
     expect(pinchZoom(0.3, 0, 100)).toBe(0.3);
-    expect(pinchedOut(-0.05)).toBe(false);
-    expect(pinchedOut(-HOUSE_CAMERA.exitOvershoot)).toBe(true);
     expect(clampZoom(-2)).toBe(0);
     expect(clampZoom(3)).toBe(1);
   });
