@@ -45,6 +45,20 @@
   }
 }
 
+/* The shared button kit (ui/button) in the console's colours, both schemes.
+   On body, not :root, so it wins over the kit's own :root values whichever
+   sheet loads last. */
+body {
+  --hp-primary: var(--adm-accent);
+  --hp-primary-lip: color-mix(in srgb, var(--adm-accent) 65%, black);
+  --hp-primary-ink: var(--adm-accent-ink);
+  --hp-secondary: var(--adm-sunk);
+  --hp-secondary-lip: var(--adm-line);
+  --hp-secondary-ink: var(--adm-fg);
+  --hp-quiet-ink: var(--adm-fg);
+  --hp-gloss: none;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -150,19 +164,13 @@ select {
   font-size: 14px;
 }
 
-/* Buttons: the shared kit; a danger one only turns its ink red. */
+/* Buttons: the shared kit, in the console's own colours (set on :root below):
+   the orange accent is the primary, neutral surfaces are the rest, and a
+   danger one sits on the console's soft red. */
 .adm-danger {
+  --hp-secondary: var(--adm-bad-soft);
+  --hp-secondary-lip: color-mix(in srgb, var(--adm-bad) 35%, var(--adm-surface));
   --hp-secondary-ink: var(--adm-bad);
-}
-
-/* Dark: the kit's pink would wash out the light red ink, so a danger button
-   sits on the console's dark red instead. */
-@media (prefers-color-scheme: dark) {
-  .adm-danger {
-    --hp-secondary: var(--adm-bad-soft);
-    --hp-secondary-lip: #1e0e12;
-    --hp-gloss: none;
-  }
 }
 
 /* Shell */
