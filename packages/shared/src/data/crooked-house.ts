@@ -5,7 +5,7 @@ import type { CrookedHouse, CrookedThing } from '../schemas/data/crooked-house.j
  * owner-approved design (2026-10-23). Rooms and doors are fixed so kids can
  * learn the house (owner decision 8); which thing hides which key, each
  * echo's phase and the bonus chests shuffle per patch and season
- * (`crookedHouseSecrets`, server-only). Ids and list order are stored as
+ * (the server-only secrets). Ids and list order are stored as
  * bits: never rename or reorder, only append.
  *
  * Boxes are metres on each floor (x east, z north), from the design's
