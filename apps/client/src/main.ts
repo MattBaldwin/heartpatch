@@ -31,6 +31,7 @@ import { createRestoreSheet } from './hollowed/restore-sheet.js';
 import { createFarHollowSheet } from './hollowed/far-hollow-sheet.js';
 import { farHollowApi } from './hollowed/far-hollow-api.js';
 import { justArrived } from './hollowed/far-hollow-model.js';
+import { createCrookedScreen } from './far-hollow/house/crooked-screen.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
@@ -626,7 +627,7 @@ const journeys = createJourneyScreen({
 });
 // The far Hollow (#306 PR 6): my own far Hollow each season, from any open
 // trading post's panel. The far road is a journey (the battle screen's card
-// says "Let's see"); the house screen is #306 6c.
+// says "Let's see"); "Go inside" opens the Crooked House (#306 6c).
 let farHollowPost: { q: number; r: number } | null = null;
 /** A far road won, waiting for the map to come back to open the sheet. */
 let farHollowArrived = false;
@@ -663,6 +664,10 @@ const farHollowSheet = createFarHollowSheet({
   },
   onOpen: () => {
     maps.deselect();
+  },
+  goInside: () => {
+    const mapId = maps.view?.map.id;
+    if (mapId) void crookedHouse.open(mapId);
   },
 });
 // Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
@@ -1045,6 +1050,67 @@ const explore = createExploreScreen({
     lorebook.openAt(pageId);
   },
 });
+// The Crooked House (#306 6c): my own far Hollow this season, from its
+// sheet's "Go inside". Like explore it owns the screen while open; Back
+// returns to the map and the far Hollow sheet, the house already saved.
+const crookedHouse = createCrookedScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
+  onOpen: () => {
+    roster.close();
+    maps.close();
+    catalog.close();
+    care.close();
+    jobs.close();
+    farHollowSheet.close();
+    void inventory.setMap(null);
+    void territory.setMap(null);
+    void hollow.setMap(null);
+    void land.setMap(null);
+    void socialSetMap(null);
+    void battles.setMap(null);
+    home.setMap(null);
+    explore.setMap(null);
+    lobby.stepOut();
+  },
+  onClosed: (mapId) => {
+    // The map shows its own scene; until then the house's stays (#501 G).
+    const swaps = sceneSwaps;
+    sceneBuilder = testScene;
+    const noScene = (): void => {
+      if (sceneSwaps === swaps) showScene(null);
+    };
+    maps
+      .open(mapId)
+      .then(() => {
+        noScene();
+        void inventory.setMap(mapId);
+        void territory.setMap(mapId);
+        void hollow.setMap(mapId);
+        void land.setMap(mapId);
+        void socialSetMap(chatFor(mapId));
+        void battles.setMap(mapId);
+        home.setMap(mapId);
+        explore.setMap(mapId);
+        // A bloom's find or the house's lore page shows now.
+        lorebook.check();
+        milestones.check();
+        void farHollowSheet.open(farHollowPost);
+      })
+      .catch((err: unknown) => {
+        noScene();
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      });
+    lobby.hide();
+  },
+  onProblem: (message) => {
+    lobby.showMessage(message);
+  },
+});
 // A grey village tile's Explore (#306 2a): the same explore view, on a tile my land touches.
 communityActions.wire('explore', (_community, tile) => {
   void explore.open(tile);
@@ -1189,6 +1255,7 @@ const maps = createMapScreen({
     void socialSetMap(null);
     home.setMap(null);
     explore.setMap(null);
+    crookedHouse.setMap(null);
     lobby.showMessage(message);
   },
   // Meet it first (#209): the tuft the player tapped is what they came for.
@@ -1989,6 +2056,15 @@ if (import.meta.env.DEV) {
     roster: () => roster.debug,
     journey: () => journeys.debug,
     farHollow: () => farHollowSheet.debug,
+    farHollowHouse: () => crookedHouse.debug,
+    farHollowDev: () => ({
+      openSheet: () => {
+        void farHollowSheet.open(null);
+      },
+      place: (x: number, z: number) => {
+        crookedHouse.devPlace(x, z);
+      },
+    }),
     trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
     communities: () => ({

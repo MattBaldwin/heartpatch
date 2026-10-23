@@ -1,0 +1,431 @@
+/* The Crooked House (#306 6c, the owner-approved design). One thumb on an
+   iPhone: Back, the room and the keys at the top; the joystick bottom left,
+   Tiptoe and the map bottom right, the big button between them, just above.
+   Every target 44pt or more, inside the safe area. Dark ink on cream for
+   the pills and cards, so they read over a dark room. */
+
+.crooked[hidden],
+.crooked [hidden] {
+  display: none !important;
+}
+
+.crooked {
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #fff6ea;
+}
+
+/* The house owns the screen: the "Hi, name!" chip steps aside, as explore's. */
+body:has(.crooked:not([hidden])) .auth-chip {
+  display: none;
+}
+
+.crooked-ground {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The lantern's dark (explore's layer, lantern-dark.ts): painted once and
+   moved by a composited transform. It closes in over half a second. */
+.crooked-dark {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  contain: strict;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.crooked-dark-on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-dark {
+    transition: opacity 500ms ease-out;
+  }
+}
+
+.crooked-dark-light {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle var(--light-r, 0) at 50% 50%,
+    rgb(255 214 150 / 0%) 0%,
+    rgb(255 214 150 / 4%) 55%,
+    rgb(20 14 30 / 72%) 100%,
+    rgb(11 9 18 / 88%) 170%
+  );
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* ── Top: Back, the room, the keys ─────────────────────────────────────── */
+
+.crooked-top {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.crooked-top > * {
+  pointer-events: auto;
+}
+
+.crooked-back {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(28 21 40 / 88%);
+  color: #fff6ea;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.crooked-names {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.crooked-pill {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 4px);
+  border-radius: 999px;
+  background: rgb(28 21 40 / 88%);
+  display: inline-flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crooked-put-right {
+  min-height: 32px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #e6dcff;
+}
+
+.crooked-keys {
+  flex: none;
+}
+
+/* ── The map's floor tabs and its hint ─────────────────────────────────── */
+
+.crooked-tabs {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 104px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.crooked-tab {
+  min-width: 88px;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 2px solid rgb(255 246 234 / 40%);
+  border-radius: 999px;
+  background: rgb(28 21 40 / 88%);
+  color: #fff6ea;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.crooked-tab[aria-selected='true'] {
+  background: #ffd98a;
+  border-color: #ffd98a;
+  color: #3a2a1a;
+}
+
+.crooked-map-hint {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 96px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 24px);
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 10px 14px;
+  border-radius: 20px;
+  background: rgb(28 21 40 / 88%);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Bottom: the joystick, the big button, Tiptoe and the map ─────────── */
+
+.crooked-stick {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 20px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 20px);
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: rgb(255 246 234 / 16%);
+  box-shadow: inset 0 0 0 3px rgb(255 246 234 / 55%);
+  pointer-events: none;
+}
+
+.crooked-stick-knob {
+  position: absolute;
+  left: 34px;
+  top: 34px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffb866;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 35%);
+  transition: transform 120ms ease-out;
+}
+
+.crooked-stick-on .crooked-stick-knob {
+  transition: none;
+}
+
+.crooked-round {
+  position: fixed;
+  z-index: 5;
+  right: calc(env(safe-area-inset-right) + 20px);
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgb(28 21 40 / 90%);
+  color: #fff6ea;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 35%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.crooked-round-word {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.crooked-tiptoe {
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 20px);
+}
+
+.crooked-map {
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 96px);
+}
+
+.crooked-round.crooked-on {
+  background: #ffd98a;
+  color: #3a2a1a;
+  box-shadow:
+    0 0 0 4px rgb(255 217 138 / 35%),
+    0 6px 16px rgb(0 0 0 / 35%);
+}
+
+/* The big button: bottom middle, just above the joystick's row. */
+.crooked-action {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 176px);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(300px, calc(100vw - 48px));
+  min-height: 60px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 8px);
+  overflow: hidden;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(#ffe2a6, #ffc768);
+  color: #3a2a1a;
+  box-shadow:
+    0 0 24px rgb(255 199 104 / 45%),
+    0 8px 18px rgb(0 0 0 / 35%);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 900;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.crooked-action:disabled {
+  opacity: 0.7;
+}
+
+.crooked-action-label {
+  position: relative;
+}
+
+/* A hold fills the button from the left while it's held. */
+.crooked-action-fill {
+  position: absolute;
+  inset: 0;
+  background: rgb(255 255 255 / 55%);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.crooked-holding .crooked-action-fill {
+  transform: scaleX(1);
+  transition: transform 650ms linear;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-rattle {
+    animation: crooked-rattle 320ms ease-in-out;
+  }
+}
+
+@keyframes crooked-rattle {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  25% {
+    transform: translateX(calc(-50% - 6px));
+  }
+  75% {
+    transform: translateX(calc(-50% + 6px));
+  }
+}
+
+.crooked-bubble {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 24px);
+  right: calc(env(safe-area-inset-right) + 24px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 248px);
+  max-width: 300px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  border-radius: 22px;
+  background: #f6eee4;
+  color: #3a2a1a;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+}
+
+.crooked-bubble:empty {
+  display: none;
+}
+
+/* The map hides the walking controls. */
+.crooked-mapping .crooked-bubble {
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 110px);
+}
+
+/* ── The cards: a key, a room put right, a peekaboo ───────────────────── */
+
+.crooked-card {
+  position: fixed;
+  z-index: 6;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  box-sizing: border-box;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 22px 20px 20px;
+  border-radius: 28px;
+  background: #fff8ef;
+  color: #3a2a1a;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 40%);
+  text-align: center;
+}
+
+.crooked-card-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.crooked-card-line {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.crooked-card-button {
+  min-width: 160px;
+  min-height: 52px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 12px);
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(#ffe2a6, #ffc768);
+  color: #3a2a1a;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+/* iPhone SE and other short screens: everything a little closer. */
+@media (max-height: 700px) {
+  .crooked-stick {
+    width: 100px;
+    height: 100px;
+  }
+  .crooked-stick-knob {
+    left: 28px;
+    top: 28px;
+  }
+  .crooked-action {
+    bottom: calc(max(env(safe-area-inset-bottom), 8px) + 162px);
+    min-height: 54px;
+    font-size: 18px;
+  }
+  .crooked-map {
+    bottom: calc(max(env(safe-area-inset-bottom), 8px) + 90px);
+  }
+  .crooked-bubble {
+    bottom: calc(max(env(safe-area-inset-bottom), 8px) + 226px);
+    font-size: 15px;
+  }
+  .crooked-pill {
+    font-size: 16px;
+  }
+}
