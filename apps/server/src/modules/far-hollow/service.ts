@@ -1,6 +1,7 @@
 import {
   allBits,
   BATTLE_RULES,
+  checkRelight,
   COMMUNITY_RULES,
   CROOKED_HOUSE,
   deriveSeed,
@@ -15,12 +16,16 @@ import {
   houseReach,
   JOURNEY_RULES,
   journeyFor,
+  makeRelight,
+  MEMORY_PUZZLES,
   nextSeasonRun,
+  relightBoard,
   doorLeadsTo,
   Rng,
   seasonRunAt,
   withBit,
   type DevFarHollowRequest,
+  type DevRelightAnswerResponse,
   type FarHollowView,
   type CrookedChestRequest,
   type CrookedChestResponse,
@@ -30,7 +35,10 @@ import {
   type CrookedFixRequest,
   type CrookedFixResponse,
   type CrookedPowerRequest,
+  type CrookedRelightRequest,
+  type CrookedRelightResponse,
   type CrookedRoom,
+  type CrookedThing,
   type CrookedUnlockRequest,
   type CrookedHouseView,
   type CrookedViewResponse,
@@ -102,7 +110,11 @@ export const FAR_HOLLOW_MESSAGES = {
   noWay: 'No door from here goes there!',
   locked: 'That door is locked tight! 🔒',
   fixed: "That's already put right! ✨",
-  puzzle: 'This one is a puzzle! It wakes up very soon 🧩',
+  // A Relight board (#306 6f), as the Hollow's say it.
+  needsBoard: 'Relight it on its board! 🧩',
+  notRelight: "That one isn't a puzzle!",
+  puzzleStale: 'The path has shuffled! Try the new one.',
+  puzzleWrong: "The light didn't reach every lantern. Try a new path!",
   notKeyDoor: "That door doesn't need a key.",
   noKey: (name: string) => `Locked tight! The ${name} is somewhere in this house… 🗝️`,
   notPowerDoor: "That door doesn't need a squishy's help.",
@@ -182,6 +194,30 @@ function houseViewOf(rows: HouseRows, season: CrookedHouseSeason, at: Date): Cro
   };
 }
 
+/**
+ * `relight_attempt` is a smallint: past this the count starts again at 1
+ * (a fresh try is still a new puzzle, as the Hollow's `tile_explore` does).
+ */
+const MAX_RELIGHT_ATTEMPT = 32_767;
+const nextRelightAttempt = (attempt: number) => (attempt >= MAX_RELIGHT_ATTEMPT ? 1 : attempt + 1);
+
+/**
+ * A try's Relight board (#306 6f): from the season's secret seed, me, the
+ * thing and the try, so every try is its own puzzle of the thing's size
+ * (owner decision 5) and the same one when its moves come back (rule 1).
+ */
+function relightOf(
+  seasonSeed: string,
+  userId: string,
+  room: CrookedRoom,
+  thing: CrookedThing,
+  attempt: number,
+) {
+  if (!thing.puzzle) throw new Error(`relightOf: ${room.id}/${thing.id} has no board`);
+  const seed = deriveSeed(seasonSeed, 'crooked-relight', userId, room.id, thing.id, attempt);
+  return makeRelight(seed, MEMORY_PUZZLES.relight[thing.puzzle]);
+}
+
 /** A room of the house, or a kid-readable 404. */
 function roomNamed(id: string): CrookedRoom {
   const room = ROOMS.get(id);
@@ -239,6 +275,12 @@ export interface FarHollowService {
   view: (user: PublicUser, mapId: string) => Promise<FarHollowView>;
   /** Put a crooked thing right in the room I'm in; the room's last one blooms it. */
   fix: (user: PublicUser, mapId: string, request: CrookedFixRequest) => Promise<CrookedFixResponse>;
+  /** A fresh try at the Relight board of a thing in the room I'm in (#306 6f). */
+  relight: (
+    user: PublicUser,
+    mapId: string,
+    request: CrookedRelightRequest,
+  ) => Promise<CrookedRelightResponse>;
   /** Step into a room (echoes checked on the server's clock). */
   enter: (
     user: PublicUser,
@@ -272,6 +314,15 @@ export interface FarHollowService {
     mapId: string,
     request?: DevFarHollowRequest,
   ) => Promise<FarHollowView>;
+  /**
+   * Dev and e2e only (`HP_DEV_SQUISHY_GRANTS`): my latest Relight try's
+   * answer, so an e2e or a capture can win through the real board. Read only.
+   */
+  devRelightAnswer: (
+    user: PublicUser,
+    mapId: string,
+    request: CrookedRelightRequest,
+  ) => Promise<DevRelightAnswerResponse>;
 }
 
 export function createFarHollowService(options: FarHollowServiceOptions): FarHollowService {
@@ -347,6 +398,14 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
       throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notThisRoom);
     }
     return door;
+  };
+
+  /** A thing of a room, or a kid-readable 404. */
+  const thingOf = (room: CrookedRoom, id: string) => {
+    const bit = index(room.things, id);
+    const thing = room.things[bit];
+    if (!thing) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noThing);
+    return { bit, thing };
   };
 
   /**
@@ -444,15 +503,28 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
       const result = await farHollowTransaction(db, async (repo, tx) => {
         const { season, key, state, secrets } = await openHouse(repo, tx, user, mapId, at);
         const room = roomNamed(request.room);
-        const bit = index(room.things, request.thing);
-        const thing = room.things[bit];
-        if (!thing) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noThing);
+        const { bit, thing } = thingOf(room, request.thing);
         requireIn(state, room.id);
-        // The Relight boards are #306 6f's.
-        if (thing.kind === 'relight') throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.puzzle);
+        if (thing.kind !== 'relight' && request.relight) {
+          throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notRelight);
+        }
+        if (thing.kind === 'relight' && !request.relight) {
+          throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.needsBoard);
+        }
         const [row] = await repo.lockRooms(key, [room.id]);
         if (!row) throw new Error('fix: the room row was not made');
         if (hasBit(row.fixed, bit)) throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.fixed);
+        if (request.relight) {
+          // The board is rebuilt from the try's seed and every move replayed (rule 1).
+          const { attempt, moves } = request.relight;
+          if (row.relightAttempt === 0 || attempt !== row.relightAttempt) {
+            throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.puzzleStale);
+          }
+          const board = relightOf(season.seed, user.id, room, thing, attempt);
+          if (!checkRelight(board, moves).ok) {
+            throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.puzzleWrong);
+          }
+        }
 
         const fixed = withBit(row.fixed, bit);
         const patch: FarHollowStatePatch = {};
@@ -499,11 +571,34 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
           view: await afterWrites(tx, season, key, at),
           key: hidden ? { id: hidden.id, name: hidden.name } : null,
           bloom,
+          scrap: blooms ? (CROOKED_HOUSE_SECRETS.scraps[room.id] ?? null) : null,
         } satisfies CrookedFixResponse;
       });
       published(mapId);
       return result;
     },
+
+    relight: async (user, mapId, request) =>
+      farHollowTransaction(db, async (repo, tx) => {
+        const at = now();
+        const { season, key, state } = await openHouse(repo, tx, user, mapId, at);
+        const room = roomNamed(request.room);
+        const { bit, thing } = thingOf(room, request.thing);
+        requireIn(state, room.id);
+        if (thing.kind !== 'relight')
+          throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notRelight);
+        const [row] = await repo.lockRooms(key, [room.id]);
+        if (!row) throw new Error('relight: the room row was not made');
+        if (hasBit(row.fixed, bit)) throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.fixed);
+        // Every try a new puzzle of the same size: a faded one reshuffles.
+        const attempt = nextRelightAttempt(row.relightAttempt);
+        await repo.setRelightAttempt(key, room.id, attempt);
+        return {
+          kind: 'relight',
+          attempt,
+          board: relightBoard(relightOf(season.seed, user.id, room, thing, attempt)),
+        } satisfies CrookedRelightResponse;
+      }),
 
     enter: async (user, mapId, request) =>
       farHollowTransaction(db, async (repo, tx) => {
@@ -737,8 +832,10 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
               });
               continue;
             }
-            // Its last thing that isn't a puzzle stays to put right.
-            const leave = room.things.findLastIndex((t) => t.kind !== 'relight');
+            // Its Relight board stays to put right if it has one (#306 6f),
+            // else its last thing.
+            const board = room.things.findIndex((t) => t.kind === 'relight');
+            const leave = board >= 0 ? board : room.things.length - 1;
             const all = allBits(room.things.length);
             const fixed = leave < 0 ? all : all & ~(1 << leave);
             await repo.setRoom(key, { roomId: room.id, fixed, bloomedAt: null });
@@ -752,6 +849,20 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
       });
       published(mapId);
       return result;
+    },
+
+    devRelightAnswer: async (user, mapId, request) => {
+      await requireMember(db, user, mapId, ['multiplayer']);
+      const { season, key } = await mine(db, user.id, mapId, now());
+      const room = roomNamed(request.room);
+      const { thing } = thingOf(room, request.thing);
+      if (thing.kind !== 'relight') throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notRelight);
+      const row = (await readRows(db, key))?.rooms.get(room.id);
+      if (!row || row.relightAttempt === 0) {
+        throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.puzzleStale);
+      }
+      const board = relightOf(season.seed, user.id, room, thing, row.relightAttempt);
+      return { attempt: row.relightAttempt, moves: [...board.solution] };
     },
   };
 }

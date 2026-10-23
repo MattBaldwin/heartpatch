@@ -25,6 +25,10 @@ describe('CROOKED_HOUSE_SECRETS (#306 6b)', () => {
         .map((r) => r.id)
         .sort(),
     );
+    // A story scrap for every room that blooms (#306 6f), and no other.
+    expect(Object.keys(CROOKED_HOUSE_SECRETS.scraps).sort()).toEqual(
+      Object.keys(CROOKED_HOUSE_SECRETS.blooms).sort(),
+    );
     for (const spot of Object.values(CROOKED_HOUSE_SECRETS.blooms)) {
       expect(exploreFindTable(FAR_HOLLOW_FINDS, spot.kind, spot.terrain)).toBeDefined();
     }

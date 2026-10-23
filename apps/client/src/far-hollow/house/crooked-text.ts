@@ -21,7 +21,6 @@ export const CROOKED_TEXT = {
   walkHint: 'Drag to walk, or tap the floor',
   hold: 'Keep holding…',
   fixed: (thing: string) => `You put ${thing} right! ✨`,
-  puzzle: 'This one is a puzzle! It wakes up soon 🧩',
   locked: (key: string) => `Locked tight! The ${key} is somewhere in this house…`,
   useKey: (key: string) => `Use the ${key} 🗝️`,
   tryDoor: 'Try the door 🔒',
@@ -129,6 +128,35 @@ export function roomWords(room: CrookedRoom, lit: boolean): string {
 export function floorWords(floor: number): string {
   return CROOKED_TEXT.floors[floor] ?? `Floor ${String(floor + 1)}`;
 }
+
+// ── The Relight boards and the story scraps (#306 6f) ───────────────────
+
+export const CROOKED_RELIGHT_TEXT = {
+  /** Over the board: which thing, in which room. */
+  heading: (thing: string, room: string) => `${capital(thing)} in the ${room}`,
+  /** A board solved, the room not yet right. */
+  relit: (thing: string) => `You relit ${thing}! ✨`,
+  /** On a bloom's card, over the room's scrap of the house's story. */
+  scrap: 'A scrap of the house’s story 📜',
+} as const;
+
+export const CROOKED_ATTIC_TEXT = {
+  action: 'Open the big chest 🎁',
+  /** Near the chest with the house all put right. */
+  ready: `The story page is ready to read!${KEEP}📜`,
+  /** …and with rooms still dark (the server says the same, rule 1). */
+  faint: (left: number) =>
+    `The page is too faint to read! Put ${String(left)} more ${left === 1 ? 'room' : 'rooms'} right first 🕯️`,
+  cardTitle: `The Crooked House is all put right!${KEEP}🏠`,
+  page: (title: string) => `📜 The house’s story: “${title}”`,
+  cloak: (name: string) => `🧥 ${name.replace(/'/g, '’')} to wear`,
+  /** The milestone grants it on `journey.completed`; a later season's Keeper already has it. */
+  titleLine: '🏅 Your title: Lantern Keeper',
+  /** The chest's pile and the far Hollow's gift, summed (the server gives them as one find). */
+  pile: (things: readonly string[]) =>
+    `🎁 ${things.length > 1 ? `${things.slice(0, -1).join(', ')} and ${things.at(-1) ?? ''}` : (things[0] ?? '')}, from the chest and the far Hollow’s gift`,
+  ok: 'Hooray!',
+} as const;
 
 // ── The echoes and the peekaboo (#306 6d) ───────────────────────────────
 

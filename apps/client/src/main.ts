@@ -2083,6 +2083,9 @@ if (import.meta.env.DEV) {
       echoesAt: (ms: number | null) => {
         crookedHouse.devEchoesAt(ms);
       },
+      momentAt: (ms: number | null) => {
+        crookedHouse.devMomentAt(ms);
+      },
       step: (doorId: string) => {
         crookedHouse.devStep(doorId);
       },

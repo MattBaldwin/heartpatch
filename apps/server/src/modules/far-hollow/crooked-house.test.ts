@@ -5,12 +5,15 @@ import {
   CrookedChestResponseSchema,
   CrookedEnterResponseSchema,
   CrookedFixResponseSchema,
+  CrookedRelightResponseSchema,
   CrookedViewResponseSchema,
   deriveSeed,
+  DevRelightAnswerResponseSchema,
   echoCatch,
   farHollowSeed,
   FarHollowViewSchema,
   GAME_DATA,
+  lightOf,
   MapResponseSchema,
   parseGameEventPayload,
   STARTERS,
@@ -30,6 +33,7 @@ import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from '../../db/client.js';
 import { keepers, sessions, squishies, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
+import { FAR_HOLLOW_MESSAGES } from './service.js';
 import { newSessionToken } from '../auth/secrets.js';
 
 const url = inject('testDatabaseUrl');
@@ -640,18 +644,171 @@ describe.skipIf(!url)('the Crooked House (#306 6b, needs DATABASE_URL)', () => {
     );
   });
 
-  it('refuses a Relight board until #306 6f wakes it', SLOW, async () => {
+  describe('the Relight boards (#306 6f, owner decision 5)', () => {
+    const relight = async (s: FastifyInstance, kid: Player, mapId: string, room: string) => {
+      const thing = CROOKED_HOUSE.rooms
+        .find((r) => r.id === room)!
+        .things.find((t) => t.kind === 'relight')!;
+      const res = await post(s, kid, mapId, 'relight', { room, thing: thing.id });
+      expect(res.statusCode, res.body).toBe(200);
+      return { thing: thing.id, start: CrookedRelightResponseSchema.parse(res.json()) };
+    };
+    const answer = async (s: FastifyInstance, kid: Player, mapId: string, body: object) => {
+      const res = await call(s, 'POST', `/maps/${mapId}/dev/far-hollow/relight-answer`, kid, body);
+      expect(res.statusCode, res.body).toBe(200);
+      return DevRelightAnswerResponseSchema.parse(res.json());
+    };
+
+    it(
+      'deals a 5×5 in the Library and a 6×6 in the Music Room, a new one every try',
+      SLOW,
+      async () => {
+        const server = await start();
+        const kid = await player();
+        const { mapId } = await house(
+          server,
+          kid,
+          seedWhere(() => true),
+          { room: 'library' },
+        );
+        const first = await relight(server, kid, mapId, 'library');
+        expect(first.start).toMatchObject({ kind: 'relight', attempt: 1, board: { size: 5 } });
+        // A fresh try is a new puzzle of the same size (owner decision: a fail reshuffles).
+        const second = await relight(server, kid, mapId, 'library');
+        expect(second.start).toMatchObject({ attempt: 2, board: { size: 5 } });
+        expect(second.start.board.cells).not.toEqual(first.start.board.cells);
+        // The board's openings are as dealt, never the answer: it isn't lit yet.
+        expect(lightOf(second.start.board).litLanterns).toBeLessThan(
+          lightOf(second.start.board).lanterns,
+        );
+        // Only in the room I'm in, and only a Relight thing.
+        const away = await post(server, kid, mapId, 'relight', {
+          room: 'music-room',
+          thing: 'music-box',
+        });
+        expect(away.statusCode).toBe(409);
+        expect(errorOf(away).message).toBe(FAR_HOLLOW_MESSAGES.notHere);
+        const notBoard = await post(server, kid, mapId, 'relight', {
+          room: 'library',
+          thing: 'globe',
+        });
+        expect(notBoard.statusCode).toBe(409);
+        expect(errorOf(notBoard).message).toBe(FAR_HOLLOW_MESSAGES.notRelight);
+      },
+    );
+
+    it(
+      "relights only with the try's own winning moves, replayed on the server (rule 1)",
+      SLOW,
+      async () => {
+        const server = await start();
+        const kid = await player();
+        const { mapId } = await house(
+          server,
+          kid,
+          seedWhere(() => true),
+          { room: 'music-room' },
+        );
+        const fixBoard = (relightTry: object) =>
+          post(server, kid, mapId, 'fix', {
+            room: 'music-room',
+            thing: 'music-box',
+            relight: relightTry,
+          });
+        // No board, no fix.
+        const bare = await post(server, kid, mapId, 'fix', {
+          room: 'music-room',
+          thing: 'music-box',
+        });
+        expect(bare.statusCode).toBe(409);
+        expect(errorOf(bare).message).toBe(FAR_HOLLOW_MESSAGES.needsBoard);
+        // Before any try: stale.
+        expect(errorOf(await fixBoard({ attempt: 1, moves: [] })).message).toBe(
+          FAR_HOLLOW_MESSAGES.puzzleStale,
+        );
+        const { start: first } = await relight(server, kid, mapId, 'music-room');
+        expect(first.board.size).toBe(6);
+        const won = await answer(server, kid, mapId, { room: 'music-room', thing: 'music-box' });
+        expect(won.attempt).toBe(1);
+        // Not lit: refused, and nothing written.
+        const wrong = await fixBoard({ attempt: 1, moves: [] });
+        expect(wrong.statusCode).toBe(409);
+        expect(errorOf(wrong).message).toBe(FAR_HOLLOW_MESSAGES.puzzleWrong);
+        // An old try's answer after a reshuffle: stale.
+        await relight(server, kid, mapId, 'music-room');
+        expect(errorOf(await fixBoard({ attempt: 1, moves: won.moves })).message).toBe(
+          FAR_HOLLOW_MESSAGES.puzzleStale,
+        );
+        const now = await answer(server, kid, mapId, { room: 'music-room', thing: 'music-box' });
+        const res = await fixBoard({ attempt: now.attempt, moves: now.moves });
+        expect(res.statusCode, res.body).toBe(200);
+        const fixed = CrookedFixResponseSchema.parse(res.json());
+        expect(fixed.view.house!.rooms).toContainEqual(
+          expect.objectContaining({ id: 'music-room', fixed: ['music-box'], bloomed: false }),
+        );
+        // Not a key's hiding place, and no scrap until the room blooms.
+        expect(fixed).toMatchObject({ key: null, bloom: null, scrap: null });
+        // Once relit, it stays: no new try, no second fix.
+        const again = await post(server, kid, mapId, 'relight', {
+          room: 'music-room',
+          thing: 'music-box',
+        });
+        expect(errorOf(again).message).toBe(FAR_HOLLOW_MESSAGES.fixed);
+        // A plain thing takes no board.
+        const plain = await post(server, kid, mapId, 'fix', {
+          room: 'music-room',
+          thing: 'piano-lid',
+          relight: { attempt: 1, moves: [] },
+        });
+        expect(errorOf(plain).message).toBe(FAR_HOLLOW_MESSAGES.notRelight);
+      },
+    );
+
+    it('blooms the Library on its board, with its story scrap', SLOW, async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await house(
+        server,
+        kid,
+        seedWhere(() => true),
+        { room: 'library', nearlyDone: true },
+      );
+      // Every room right but the Library's board.
+      const library = (await stateOf(kid)).currentRoom;
+      expect(library).toBe('library');
+      const { thing } = await relight(server, kid, mapId, 'library');
+      const won = await answer(server, kid, mapId, { room: 'library', thing });
+      const res = await post(server, kid, mapId, 'fix', {
+        room: 'library',
+        thing,
+        relight: won,
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      const fixed = CrookedFixResponseSchema.parse(res.json());
+      expect(fixed.bloom).not.toBeNull();
+      expect(fixed.scrap).toBe(CROOKED_HOUSE_SECRETS.scraps['library']);
+      expect(fixed.view.house!.rooms.every((r) => r.bloomed)).toBe(true);
+      expect((await stateOf(kid)).lastLitRoom).toBe('library');
+    });
+  });
+
+  it('gives each room its scrap as it blooms, and only then', SLOW, async () => {
     const server = await start();
     const kid = await player();
     const { mapId } = await house(
       server,
       kid,
       seedWhere(() => true),
-      { room: 'library' },
+      { room: 'scullery' },
     );
-    const res = await post(server, kid, mapId, 'fix', { room: 'library', thing: 'reading-lamps' });
-    expect(res.statusCode).toBe(409);
-    expect(errorOf(res).message).toMatch(/puzzle/);
+    const things = thingsOf('scullery');
+    for (const thing of things.slice(0, -1)) {
+      expect((await fix(server, kid, mapId, 'scullery', thing.id)).scrap).toBeNull();
+    }
+    const bloomed = await fix(server, kid, mapId, 'scullery', things.at(-1)!.id);
+    expect(bloomed.scrap).toBe(CROOKED_HOUSE_SECRETS.scraps['scullery']);
+    // The scraps are server-side story, never in the view (rule 6).
+    expect(JSON.stringify(bloomed.view)).not.toContain(CROOKED_HOUSE_SECRETS.scraps['parlour']!);
   });
 
   it('replays a retried fix (Idempotency-Key): one write, one key', SLOW, async () => {

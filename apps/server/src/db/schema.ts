@@ -1647,7 +1647,8 @@ export const farHollowState = pgTable(
  * `far_hollow_rooms`: one row per room of a Keeper's house per season,
  * written the first time they fix something in it. `fixed` one bit per
  * crooked thing in the room (the data's order); `bloomed_at` once every one
- * is fixed and the room's colour came back.
+ * is fixed and the room's colour came back; `relight_attempt` the room's
+ * Relight board try (#306 6f: each try is its own puzzle, 0 before the first).
  */
 export const farHollowRooms = pgTable(
   'far_hollow_rooms',
@@ -1660,10 +1661,12 @@ export const farHollowRooms = pgTable(
     roomId: text('room_id').notNull(),
     fixed: integer('fixed').notNull().default(0),
     bloomedAt: timestamptz('bloomed_at'),
+    relightAttempt: smallint('relight_attempt').notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed, t.roomId] }),
     check('far_hollow_rooms_fixed_range', sql`${t.fixed} >= 0`),
+    check('far_hollow_rooms_relight_attempt_range', sql`${t.relightAttempt} >= 0`),
   ],
 );
 
