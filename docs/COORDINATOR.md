@@ -22,7 +22,7 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
    - issue-specific guidance
    - build checks, PR rules, and a review loop capped at 4 rounds (a round caused only by merging `main` doesn't count)
 3. **Start it** with `create_session` (source = repo, `outcome_branch` = `issue-<n>-<slug>`, tags `heartpatch:phase-1` and `heartpatch:batch-<k>`). Pick the model per §6.
-4. **Subscribe** to the PR as soon as the session reports `PR #<n> opened`.
+4. **Don't subscribe** to the PR (§5). The lane subscribes to its own PR; pick the PR up from its `opened` report or the next sweep.
 
 **Full send for Phase 1 (owner, 2026-10-11):** the 4-lane cap is lifted until Phase 1 ships (due Oct 31). The separate-folders rule in step 1 still holds. **Every PR gets a fresh lane session**; don't reuse a lane for its next PR.
 
@@ -174,7 +174,7 @@ Post the verdict comment summarizing each round. Don't merge.
 
 ## 8. Supervisor handoff
 
-1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to, and subscribe the new supervisor to their PRs. Their `@parent` reports and PR subscriptions belong to the session that started them.
+1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to. Their `@parent` reports belong to the session that started them; the lanes keep their own PR subscriptions.
    - **The new supervisor owns re-routing (hard rule).** At every check-in until each lane has confirmed the switch, it reads each lane's recent events (`list_events`, kinds `assistant`) for a `send_message` to `@parent` or to the old supervisor. Any lane that still reports there gets the correction again, and the new supervisor re-checks GitHub for whatever that report said (opened PRs, verdicts, blockers), because the old supervisor may already be archived. Lessons from the supervisor 5 → 6 handoff: two lanes kept reporting to `@parent` after being told, and one report was a deploy blocker.
 2. Make sure everything durable is in the repo: DECISIONS.md, this playbook, and the briefs' carry-over notes (§9).
 3. Start the new supervisor with a compact prompt:
