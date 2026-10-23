@@ -36,9 +36,9 @@ describe('resource buildings and the Warehouse (#601)', () => {
     expect(economy.filter((b) => b.kind === 'warehouse').map((b) => b.id)).toEqual(['warehouse']);
   });
 
-  it('builds the resource buildings now (PR 7); the Warehouse waits for its client (PR 9)', () => {
+  it('builds the resource buildings (PR 7) and the Warehouse (PR 9)', () => {
     for (const b of economy) {
-      expect(isBuildable(HOME_BASE_RULES, b), b.id).toBe(b.kind === 'resource');
+      expect(isBuildable(HOME_BASE_RULES, b), b.id).toBe(true);
     }
   });
 });

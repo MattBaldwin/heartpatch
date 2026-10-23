@@ -271,7 +271,7 @@ describe('home-base data', () => {
     );
   });
 
-  it('lets players build fires, habitats, Training Grounds, the Factory, fences and resource buildings', () => {
+  it('lets players build fires, habitats, Training Grounds, the Factory, fences, resource buildings and the Warehouse', () => {
     expect(BUILDINGS.filter((b) => isBuildable(RULES, b)).map((b) => b.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
@@ -295,6 +295,7 @@ describe('home-base data', () => {
       'water-well',
       'greenhouse',
       'pumpkin-barn',
+      'warehouse',
     ]);
   });
 

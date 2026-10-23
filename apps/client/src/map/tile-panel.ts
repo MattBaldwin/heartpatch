@@ -11,6 +11,8 @@ import type { TileInfo } from './tile-info.js';
 export interface TilePanel {
   show: (info: TileInfo) => void;
   hide: () => void;
+  /** Back to the panel's top (another tile was picked: it opens at its title). */
+  toTop: () => void;
   readonly open: boolean;
   /** Where features draw their buttons for the tile on show. */
   readonly actions: HTMLElement;
@@ -109,6 +111,9 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     hide: () => {
       panel.hidden = true;
       setDetails(false);
+    },
+    toTop: () => {
+      panel.scrollTop = 0;
     },
     get open() {
       return !panel.hidden;

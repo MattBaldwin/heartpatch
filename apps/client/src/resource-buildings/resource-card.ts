@@ -7,8 +7,11 @@ import './resource-buildings.css';
 // standing card around it adds Upgrade and Take down, as for the Training
 // Grounds and the Factory.
 
-/** The card's lines for one state (`resourceCard`). */
-export function resourceCardLines(card: ResourceCard): Node[] {
+/**
+ * The card's lines for one state (`resourceCard`), with the Warehouse's 📦
+ * mark under the meter when it has one (`deliveryMark`, #601 PR 9).
+ */
+export function resourceCardLines(card: ResourceCard, mark: string | null = null): Node[] {
   const fill = el('span', { class: 'resource-meter-fill' });
   fill.style.width = `${String(card.percent)}%`;
   const asleep = card.state === 'paused' || card.state === 'napping' || card.state === 'dormant';
@@ -37,6 +40,18 @@ export function resourceCardLines(card: ResourceCard): Node[] {
       card.line,
     ),
     meter,
+    ...(mark
+      ? [
+          el(
+            'p',
+            {
+              class: `resource-delivery${card.max === null ? '' : ' resource-delivery-off'}`,
+              'data-testid': 'tile-resource-delivery',
+            },
+            mark,
+          ),
+        ]
+      : []),
     el(
       'p',
       { class: 'resource-facts' },

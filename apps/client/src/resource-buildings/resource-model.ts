@@ -83,6 +83,8 @@ export const RESOURCE_TEXT = {
     `zZ Asleep till ${SEASON_NAMES.get(season) ?? 'its season'} comes back. It costs nothing while it sleeps 🎃`,
   upkeep: (coins: number) => `💛 ${String(coins)} each morning`,
   upkeepFree: 'Free while it sleeps',
+  /** A seasonal building's last day in season: it owes nothing from the next morning (#601). */
+  freeFromTomorrow: 'Free from tomorrow 🎃',
   collect: '🧺 Collect',
   coins: '💛 Upkeep',
   /** The welcome-back line: "Your Stone Quarry made 96 🪨". */
@@ -278,8 +280,12 @@ export function resourceCard(
             ? 'full'
             : 'running';
   const icon = itemIcon(p.resource);
-  const stored = p.ready[p.resource] ?? 0;
   const max = p.maxCycles === null ? null : p.maxCycles * p.perCycle;
+  // Right after the Warehouse stops, what it delivered but nobody banked yet
+  // can sit past the storage (#601 PR 8): the meter stops at full, and the
+  // next settle banks it all.
+  const ready = p.ready[p.resource] ?? 0;
+  const stored = max === null ? ready : Math.min(ready, max);
   const percent = max === null || max === 0 ? 0 : Math.min(100, Math.round((stored / max) * 100));
   const line =
     state === 'napping'
@@ -299,6 +305,13 @@ export function resourceCard(
       : null;
   // A napping or sleeping building owes nothing (owner decisions Q4, Q6).
   const free = state === 'napping' || state === 'dormant';
+  // Its season's last day: the next morning finds it out of season, so free.
+  const lastDay =
+    !free &&
+    state !== 'paused' &&
+    p.seasonEndsAt != null &&
+    p.nextMorningAt !== undefined &&
+    Date.parse(p.seasonEndsAt) <= Date.parse(p.nextMorningAt);
   return {
     state,
     resource: p.resource,
@@ -311,8 +324,12 @@ export function resourceCard(
         : RESOURCE_TEXT.stored(stored, max, icon),
     line,
     next,
-    upkeep: free ? RESOURCE_TEXT.upkeepFree : RESOURCE_TEXT.upkeep(p.upkeep),
-    collect: stored > 0 || Object.values(p.ready).some((n) => n > 0),
+    upkeep: free
+      ? RESOURCE_TEXT.upkeepFree
+      : lastDay
+        ? RESOURCE_TEXT.freeFromTomorrow
+        : RESOURCE_TEXT.upkeep(p.upkeep),
+    collect: Object.values(p.ready).some((n) => n > 0),
   };
 }
 
