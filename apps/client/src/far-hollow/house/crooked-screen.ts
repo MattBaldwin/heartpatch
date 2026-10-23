@@ -17,6 +17,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { faceYaw } from '../../procedural/face-yaw.js';
 import { lodFor } from '../../procedural/motion.js';
+import { hpBack, hpButton } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { farHollowApi, type FarHollowApi } from '../../hollowed/far-hollow-api.js';
 import {
@@ -185,11 +186,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   const dark = el('div', { class: 'crooked-dark', 'aria-hidden': 'true' });
   const darkLight = el('div', { class: 'crooked-dark-light' });
   dark.append(darkLight);
-  const back = el(
-    'button',
-    { type: 'button', class: 'crooked-back', 'data-testid': 'crooked-back', 'aria-label': T.back },
-    '‹',
-  );
+  // The shared "‹ Back" pill and button (Controls A, style guide §10).
+  const back = hpBack(T.back, 'crooked-back');
   const roomPill = el('span', {
     class: 'crooked-pill crooked-room',
     'data-testid': 'crooked-room',
@@ -892,11 +890,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     const title = card.kind === 'caught' ? T.caught : card.title;
     const line = card.kind === 'caught' ? T.caughtLine : card.line;
-    const ok = el(
-      'button',
-      { type: 'button', class: 'crooked-card-button', 'data-testid': 'crooked-card-ok' },
-      card.kind === 'key' ? T.keepIt : T.yay,
-    );
+    const ok = hpButton(card.kind === 'key' ? T.keepIt : T.yay, {
+      variant: 'primary',
+      testId: 'crooked-card-ok',
+    });
     ok.addEventListener('click', () => {
       if (cards[0]?.kind === 'key') scene3d?.hideKey();
       cards = cards.slice(1);

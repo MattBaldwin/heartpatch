@@ -86,19 +86,6 @@ body:has(.crooked:not([hidden])) .auth-chip {
   pointer-events: auto;
 }
 
-.crooked-back {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border: none;
-  border-radius: 50%;
-  background: rgb(28 21 40 / 88%);
-  color: #fff6ea;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
-  font-size: 30px;
-  line-height: 1;
-}
-
 .crooked-names {
   flex: 1 1 auto;
   min-width: 0;
@@ -394,27 +381,17 @@ body:has(.crooked:not([hidden])) .auth-chip {
 
 .crooked-card-title {
   margin: 0 0 8px;
+  /* Balanced lines: "The Parlour is / put right! 🌈", never a lone "right!". */
+  text-wrap: balance;
   font-size: 24px;
   font-weight: 900;
 }
 
 .crooked-card-line {
   margin: 0 0 16px;
+  text-wrap: pretty;
   font-size: 17px;
   font-weight: 700;
-}
-
-.crooked-card-button {
-  min-width: 160px;
-  min-height: 52px;
-  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 12px);
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(#ffe2a6, #ffc768);
-  color: #3a2a1a;
-  font: inherit;
-  font-size: 19px;
-  font-weight: 900;
 }
 
 /* iPhone SE and other short screens: everything a little closer. */
