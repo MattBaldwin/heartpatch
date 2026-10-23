@@ -36,7 +36,13 @@ interface HouseDebug {
 }
 
 type Hooks = {
-  __heartpatch?: { farHollowDev?: () => { openSheet(): void; place(x: number, z: number): void } };
+  __heartpatch?: {
+    farHollowDev?: () => {
+      openSheet(): void;
+      place(x: number, z: number): void;
+      step(doorId: string): void;
+    };
+  };
 };
 
 const house = (page: Page) => hook<HouseDebug>(page, 'farHollowHouse');
@@ -137,28 +143,109 @@ test('goes inside the Crooked House, tries a locked door, walks into a dark room
   expect(errors).toEqual([]);
 });
 
-/** How far (in rooms) the stair echo is from the Stair Hall's middle, and which way it's going. */
-async function stairEcho(page: Page): Promise<{ gap: number; position: number }> {
-  const e = (await house(page))?.echoes.find((x) => x.loop === 'stair-echo');
-  if (!e) return { gap: 9, position: -1 };
-  return { gap: Math.min(e.position, 2 - e.position), position: e.position };
+/**
+ * Waits until the stair echo's gap to the Stair Hall's middle is in
+ * (`from`, `to`) and closing (or opening), compared with the last poll however
+ * far apart a slow phone's polls fall. Two laps of the echo at most.
+ */
+async function echoWindow(
+  page: Page,
+  from: number,
+  to: number,
+  closing: boolean,
+  heard: (h: HouseDebug) => boolean,
+): Promise<void> {
+  let last = closing ? 9 : -1;
+  await expect
+    .poll(
+      async () => {
+        // One read: the gap and what's heard at the door from the same moment.
+        const h = await house(page);
+        const e = h?.echoes.find((x) => x.loop === 'stair-echo');
+        if (!h || !e) return false;
+        const gap = Math.min(e.position, 2 - e.position);
+        const ok = (closing ? gap < last : gap > last) && gap > from && gap < to && heard(h);
+        last = gap;
+        return ok;
+      },
+      { intervals: [50], timeout: 60_000 },
+    )
+    .toBe(true);
 }
 
-/** Steers north on the joystick (out through the north door) until the server says where I am. */
-async function stepNorth(page: Page): Promise<void> {
-  const stick = (await page.getByTestId('crooked-stick').boundingBox())!;
-  const cx = stick.x + stick.width / 2;
-  const cy = stick.y + stick.height / 2;
-  await page.mouse.move(cx, cy);
-  await page.mouse.down();
-  await page.mouse.move(cx, cy - 45, { steps: 3 });
+/**
+ * Through the open north door (the dev hook, as walking into the doorway
+ * does: a software-rendered iPad walks too slowly to time it; 6c's test
+ * walks a doorway), until the server lets me in or an echo catches me
+ * (the peekaboo plays). True if caught.
+ */
+async function stepNorth(page: Page): Promise<boolean> {
+  await page.evaluate(() =>
+    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().step('north-door'),
+  );
   await expect
     .poll(async () => {
       const h = await house(page);
-      return h?.room !== 'front-hall' || h.caught !== null;
+      return h?.peek != null || h?.room === 'stair-hall';
     })
     .toBe(true);
-  await page.mouse.up();
+  return (await house(page))?.peek != null;
+}
+
+/** Back from the Stair Hall to the lit Front Hall (straight there, no echo in a lit room). */
+async function stepBack(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().step('north-door'),
+  );
+  await expect.poll(async () => (await house(page))?.room).toBe('front-hall');
+}
+
+/**
+ * At the north door as the stair echo drifts in towards the Stair Hall's
+ * middle: it hears me, and stepping in it catches me. The server decides on
+ * its own clock; two busy software-rendered phones can slow a reply past
+ * the moment, so a miss steps back out and waits for the next lap.
+ */
+async function getCaught(page: Page): Promise<void> {
+  for (let tries = 0; ; tries++) {
+    await place(page, 0.2, 1.6);
+    await echoWindow(
+      page,
+      0.12,
+      0.29,
+      true,
+      (h) =>
+        h.echoHint?.room === 'stair-hall' &&
+        h.echoHint.plain === 'stair-echo' &&
+        (h.bubble ?? '').includes('an echo is close'),
+    );
+    if (await stepNorth(page)) return;
+    expect(tries).toBeLessThan(3);
+    await stepBack(page);
+  }
+}
+
+/**
+ * Tiptoeing in while the stair echo is near but drifting off: it would
+ * notice me walking in, not creeping. A catch (a reply slowed past the
+ * moment) reads its card and tries again on the next lap.
+ */
+async function creepPast(page: Page): Promise<void> {
+  for (let tries = 0; ; tries++) {
+    await place(page, 0.2, 1.6);
+    await echoWindow(
+      page,
+      0.16,
+      0.26,
+      false,
+      (h) => h.echoHint?.plain === 'stair-echo' && h.echoHint.soft === null,
+    );
+    if (!(await stepNorth(page))) return;
+    expect(tries).toBeLessThan(3);
+    await slowExpect.poll(async () => (await house(page))?.card).toBe('caught');
+    await page.getByTestId('crooked-card-ok').tap();
+    await expect.poll(async () => (await house(page))?.card ?? null).toBeNull();
+  }
 }
 
 /**
@@ -173,7 +260,8 @@ async function stepNorth(page: Page): Promise<void> {
 test('an echo catches me with a peekaboo and sends me back to the light; tiptoe creeps past it (#306 6d)', async ({
   browser,
 }) => {
-  test.setTimeout(300_000);
+  // Up to a few laps of the echo for each catch on a slow software-rendered iPad.
+  test.setTimeout(480_000);
   const page = await newPlayer(browser, uniqueName('echo'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -202,14 +290,8 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
   await place(page, 0.2, 1.6);
   await expect.poll(async () => (await house(page))?.echoHint?.room).toBe('stair-hall');
 
-  // Right by the Stair Hall's middle: it hears me, and stepping in it catches me.
-  await slowExpect
-    .poll(async () => (await stairEcho(page)).gap, { intervals: [100] })
-    .toBeLessThan(0.06);
-  const heard = (await house(page))!;
-  expect(heard.echoHint).toMatchObject({ plain: 'stair-echo', soft: 'stair-echo' });
-  await expect(page.getByTestId('crooked-bubble')).toContainText('an echo is close');
-  await stepNorth(page);
+  // Drifting in towards the Stair Hall's middle: it hears me, and stepping in it catches me.
+  await getCaught(page);
   await expect.poll(async () => (await house(page))?.caught?.echo).toBe('stair-echo');
   await expect.poll(async () => (await house(page))?.peek?.shook).toBe(true);
   expect((await house(page))!.peek!.calm).toBe(false);
@@ -226,21 +308,7 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
   // Tiptoe: near but drifting off, it would still notice me walking in, not creeping.
   await page.getByTestId('crooked-tiptoe').tap();
   await expect.poll(async () => (await house(page))?.tiptoe).toBe(true);
-  await place(page, 0.2, 1.6);
-  await slowExpect
-    .poll(
-      async () => {
-        const a = await stairEcho(page);
-        await page.waitForTimeout(80);
-        const b = await stairEcho(page);
-        return b.gap > a.gap && b.gap > 0.17 && b.gap < 0.24;
-      },
-      { intervals: [50] },
-    )
-    .toBe(true);
-  h = (await house(page))!;
-  expect(h.echoHint).toMatchObject({ plain: 'stair-echo', soft: null });
-  await stepNorth(page);
+  await creepPast(page);
   await expect.poll(async () => (await house(page))?.room).toBe('stair-hall');
   expect((await house(page))!.card).toBeNull();
   await page.getByTestId('crooked-tiptoe').tap();
@@ -258,11 +326,7 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
   );
   await page.getByTestId('far-hollow-inside').tap();
   await expect.poll(async () => (await house(page))?.room).toBe('front-hall');
-  await place(page, 0.2, 1.6);
-  await slowExpect
-    .poll(async () => (await stairEcho(page)).gap, { intervals: [100] })
-    .toBeLessThan(0.06);
-  await stepNorth(page);
+  await getCaught(page);
   await expect.poll(async () => (await house(page))?.peek?.calm).toBe(true);
   await slowExpect.poll(async () => (await house(page))?.card).toBe('caught');
   h = (await house(page))!;

@@ -1065,6 +1065,7 @@ const crookedHouse = createCrookedScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
@@ -2081,6 +2082,9 @@ if (import.meta.env.DEV) {
       },
       echoesAt: (ms: number | null) => {
         crookedHouse.devEchoesAt(ms);
+      },
+      step: (doorId: string) => {
+        crookedHouse.devStep(doorId);
       },
     }),
     trickOrTreat: () => trickOrTreat.debug,

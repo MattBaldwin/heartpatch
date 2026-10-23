@@ -39,7 +39,6 @@ export const CROOKED_TEXT = {
   notYet: 'Take the far road first! The Crooked House waits at the end 🕯️',
   yay: 'Yay!',
   caught: `Peekaboo!${KEEP}👻`,
-  caughtLine: 'Whoops! Back to the light 🕯️',
   mapTitle: (floor: string) => `🗺️ ${floor}`,
   /** The map's legend, one idea a line. */
   mapHint: [

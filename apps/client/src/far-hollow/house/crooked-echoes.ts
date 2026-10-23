@@ -195,7 +195,8 @@ export function echoHint(
 /**
  * The server's clock as the client keeps it: the gap between the view's
  * `serverTime` and the moment it arrived, so echoes drift where the server
- * sees them.
+ * sees them. It runs behind by the reply's trip (a tenth of a second or
+ * so, a hundredth of a room): fine, as the hint is only advice.
  */
 export function serverClock(serverTime: string, receivedAt: number): (now: number) => number {
   const skew = Date.parse(serverTime) - receivedAt;

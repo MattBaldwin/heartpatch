@@ -88,9 +88,9 @@ export function peekFrame(ms: number, calm: boolean): PeekFrame {
     const [b0, b1] = MOTION.blink;
     const blink = ms > b0 && ms < b1 ? Math.abs((ms - (b0 + b1) / 2) / ((b1 - b0) / 2)) : 1;
     lids = Math.min(opening, blink);
-    // "Peekaboo!" pops in big and settles.
+    // "Peekaboo!" pops in a little big and settles.
     const pop = ramp(ms, MOTION.boo, MOTION.boo + MOTION.wordIn);
-    wordScale = pop >= 1 ? 1 : 1.4 - 0.4 * pop;
+    wordScale = pop >= 1 ? 1 : 1.25 - 0.25 * pop;
     const s = (ms - MOTION.boo) / MOTION.shake.ms;
     if (s >= 0 && s < 1) {
       const fall = (1 - s) ** 2;
@@ -202,6 +202,8 @@ export function createPeekaboo(root: HTMLElement): Peekaboo {
     last = f;
     if (f.shake.x !== 0 || f.shake.y !== 0) shook = true;
     layer.dataset['phase'] = f.phase;
+    // The dark takes every touch (Back, Map, Tiptoe…); once friendly, the card's are its own.
+    layer.style.pointerEvents = f.phase === 'friendly' ? 'none' : 'auto';
     darkLayer.style.opacity = String(f.dark);
     eyes.style.opacity = String(f.eyes);
     eyes.style.setProperty('--lids', String(f.lids));

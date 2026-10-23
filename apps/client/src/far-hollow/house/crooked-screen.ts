@@ -28,6 +28,7 @@ import {
   CROOKED_WALK,
   crookedThings,
   doorEnd,
+  doorState,
   fitShot,
   floorBox,
   floorOf,
@@ -86,6 +87,8 @@ export interface CrookedScreenOptions {
   readonly root: HTMLElement;
   readonly showScene: (build: SceneBuilder | null) => void;
   readonly invalidate: () => void;
+  /** One more frame, no settle frames: the drifting echoes pace themselves with it (#306 6d). */
+  readonly requestFrame?: () => void;
   readonly tier: () => QualityTier;
   readonly keeper: () => KeeperConfig | null;
   readonly keeperWearing?: () => readonly string[];
@@ -156,6 +159,11 @@ export interface CrookedScreen {
   devPeek: (ms: number | null) => void;
   /** Dev only (captures): draws the echoes at server time `ms`, or on the clock again (`null`). */
   devEchoesAt: (ms: number | null) => void;
+  /**
+   * Dev only (e2e): steps through an open door of the room I'm in, as walking
+   * into its doorway does (a software-rendered phone walks too slowly to time it).
+   */
+  devStep: (doorId: string) => void;
 }
 
 /** A fitted room keeps this clear of the HUD, CSS px. */
@@ -166,8 +174,10 @@ const HOLD_MS = 650; // TUNE
 const NOTE_MS = 2600; // TUNE
 /** A press on Tiptoe shorter than this is a tap (it stays on); longer is a hold (off on release). */
 const TIPTOE_TAP_MS = 350; // TUNE
-/** The echoes drift on explore's 30 fps cap while nothing else moves. */
+/** The echoes drift at 30 fps (explore's cap) while nothing else moves. */
 const ECHO_FRAME_MS = 33; // TUNE
+/** With no echo on screen, look again this often (one may drift into view), ms. */
+const ECHO_IDLE_MS = { near: 250, far: 1000 } as const; // TUNE
 
 type Card =
   | { kind: 'key'; title: string; line: string }
@@ -215,6 +225,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let spots: EchoSpot[] = [];
   let hint: EchoHint | null = null;
   let lastEchoDraw = 0;
+  let echoState = { near: false, shown: false, drawn: false };
+  /** A catch's view, held until the peekaboo's dark is full (the room changes unseen). */
+  let pendingCatch: FarHollowView | null = null;
+  let echoTimer: ReturnType<typeof setTimeout> | null = null;
   let caught: { echo: string; backTo: string } | null = null;
   /** Dev only: the echoes drawn at this server time (captures). */
   let echoesPinned: number | null = null;
@@ -533,6 +547,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   function wake(): void {
+    if (echoTimer !== null) clearTimeout(echoTimer);
+    echoTimer = null;
     if (frame === 0 && isOpen) {
       lastFrame = performance.now();
       frame = requestAnimationFrame(tick);
@@ -592,25 +608,36 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     findTarget(false);
     const animating = s.step(dt, now);
-    const echoing = drawEchoes(now);
-    renderDark();
-    if (moved || heading !== undefined || animating) {
-      options.invalidate();
+    const busy = moved || heading !== undefined || animating;
+    // The echoes move with any frame that draws, else on their own 30 fps beat.
+    if (busy || now - lastEchoDraw >= ECHO_FRAME_MS) {
+      echoState = drawEchoes(now);
       lastEchoDraw = now;
-    } else if (echoing && now - lastEchoDraw >= ECHO_FRAME_MS) {
-      options.invalidate();
-      lastEchoDraw = now;
+      if (!busy && echoState.drawn) {
+        if (options.requestFrame) options.requestFrame();
+        else options.invalidate();
+      }
     }
-    if (walking || animating || echoing) frame = requestAnimationFrame(tick);
+    renderDark();
+    if (busy) options.invalidate();
+    if (walking || animating || echoState.shown) frame = requestAnimationFrame(tick);
+    else if (spots.some((p) => !p.gone)) {
+      // Nothing on screen moves: look again in a while, drawing nothing till then.
+      echoTimer = setTimeout(wake, echoState.near ? ECHO_IDLE_MS.near : ECHO_IDLE_MS.far);
+    }
   }
 
   // ── The echoes (#306 6d) ──────────────────────────────────────────────
 
-  /** Moves the echoes to where they drift now and listens at the nearest dark doorway; true while any is near. */
-  function drawEchoes(now: number): boolean {
+  /**
+   * Moves the echoes to where they drift now and listens at the nearest dark
+   * doorway. `shown`: one is on screen, drawn (`drawn`) or as eyes (keep
+   * moving them); `near`: one could drift into view soon.
+   */
+  function drawEchoes(now: number): { near: boolean; shown: boolean; drawn: boolean } {
     const s = scene3d;
     const h = house();
-    if (!s || !h) return false;
+    if (!s || !h) return { near: false, shown: false, drawn: false };
     const at = echoesPinned ?? clock(Date.now());
     spots = echoSpots(h, at);
     const heard = mapShown || peekaboo.active ? null : echoHint(h, keeperAt, at, tiptoe);
@@ -618,9 +645,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       hint = heard;
       renderAction();
     } else hint = heard;
-    const near = s.setEchoes(spots, hint?.watching ?? null, now);
+    const state = s.setEchoes(spots, hint?.watching ?? null, now);
     renderMarks();
-    return near;
+    // An echo's eyes over the dark or at the edge are on screen too.
+    const marked = [...marks.values()].some((m) => !m.hidden);
+    return { near: state.near, shown: state.shown || marked, drawn: state.shown };
   }
 
   /**
@@ -679,14 +708,17 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   /** The peekaboo, then back in the last lit room (the server already put me there). */
-  function peek(by: { echo: string; backTo: string }): void {
+  function peek(by: { echo: string; backTo: string }, fresh: FarHollowView): void {
     caught = by;
+    pendingCatch = fresh;
     const at = generation;
     peekaboo.play({
       calm: reducedMotion(),
       cue: options.cue,
       onSwap: () => {
         if (at !== generation) return;
+        if (pendingCatch) apply(pendingCatch);
+        pendingCatch = null;
         const backTo = roomOf(by.backTo);
         if (backTo) keeperAt = roomStart(backTo);
         yaw = 0;
@@ -807,12 +839,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       options.invalidate();
       return;
     }
-    apply(reply.view);
-    const now = house();
     if (reply.caught) {
-      peek(reply.caught);
+      // The old room stays until the dark is full; then the last lit room.
+      peek(reply.caught, reply.view);
       return;
     }
+    apply(reply.view);
+    const now = house();
     if (now) {
       keeperAt = arrivalSpot(door, now.room) ?? keeperAt;
       const end = doorEnd(door, now.room);
@@ -1120,7 +1153,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         return;
       }
       mapId = id;
-      view = fresh;
+      // The server's clock comes with the view: the echoes drift on it from the first frame.
+      apply(fresh);
       const room = roomOf(fresh.house.room) ?? roomOf(CROOKED_HOUSE.start);
       keeperAt = room ? roomStart(room) : { x: 0, z: 0 };
       yaw = 0;
@@ -1173,6 +1207,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     working = false;
     cards = [];
     peekaboo.stop();
+    pendingCatch = null;
+    if (echoTimer !== null) clearTimeout(echoTimer);
+    echoTimer = null;
     for (const mark of marks.values()) mark.hidden = true;
     view = null;
     scene3d = null;
@@ -1206,6 +1243,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     },
     devPeek: (ms) => {
       peekaboo.hold(ms);
+    },
+    devStep: (doorId) => {
+      const door = CROOKED_HOUSE.doors.find((d) => d.id === doorId);
+      const h = house();
+      if (!door || !h || !isOpen || doorState(door, h).kind !== 'open') return;
+      if (door.a.room !== h.room && door.b.room !== h.room) return;
+      void stepThrough(door);
     },
     devEchoesAt: (ms) => {
       echoesPinned = ms;

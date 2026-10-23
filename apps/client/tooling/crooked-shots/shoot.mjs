@@ -285,20 +285,23 @@ async function echoShots(page, device, mapId, calm) {
     await shot(page, device, 'tiptoe-past');
     await dev(page, 'echoesAt', null);
     await page.getByTestId('crooked-tiptoe').dispatchEvent('click');
-    // Back into the Stair Hall (walking, it's past) for the catch.
-    for (;;) {
-      const g = await gap(page, 'stair-echo', 0);
-      if (g > 0.45) break;
-      await page.waitForTimeout(150);
-    }
-    await steer(page, 1, 0);
+    // Back in the Stair Hall for the catch (the dev route again: the same start on every phone).
+    await page.getByTestId('crooked-back').click();
+    const again = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'stair-hall' });
+    if (again.status !== 201) throw new Error(JSON.stringify(again));
+    await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+    await goInside(page);
   }
   // The catch: at the Stair Hall's west door, stepping into the Dining Room just as the echo's there.
-  await place(page, -1.3, 5.0);
+  // Right at the doorway, as the echo drifts in towards the room's middle (software
+  // rendering is slow, so the step takes a while).
+  await place(page, -1.8, 5.0);
   await dev(page, 'peekAt', 0);
   for (;;) {
-    if ((await gap(page, 'stair-echo', 1)) < 0.05) break;
-    await page.waitForTimeout(100);
+    const a = await gap(page, 'stair-echo', 1);
+    await page.waitForTimeout(80);
+    const b = await gap(page, 'stair-echo', 1);
+    if (b < a && b > 0.04 && b < 0.18) break;
   }
   await steer(page, -1, 0);
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.peek);
@@ -309,8 +312,8 @@ async function echoShots(page, device, mapId, calm) {
       ]
     : [
         [560, 'peek-eyes'],
-        [770, 'peek-boo'],
-        [905, 'peek-shake'],
+        [860, 'peek-boo'],
+        [960, 'peek-shake'],
       ];
   for (const [ms, name] of frames) {
     await dev(page, 'peekAt', ms);

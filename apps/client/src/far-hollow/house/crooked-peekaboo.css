@@ -2,7 +2,8 @@
    word and its shake, then the friendly echo waving over the card. Driven
    frame by frame from a pure timeline (opacity and transforms only, so it
    stays on the compositor); reduced motion gets the calm timeline from the
-   script and no waving here. Never takes a touch: the card under it does. */
+   script and no waving here. The dark takes the touches while it plays
+   (the script sets it); the friendly part never does, so the card works. */
 
 .crooked-peek[hidden] {
   display: none !important;
@@ -58,7 +59,8 @@
 .crooked-peek-word {
   margin: 0;
   color: #fff6ea;
-  font-size: 46px;
+  /* Fits a 375 pt phone even at the pop's biggest. */
+  font-size: clamp(30px, 9.5vw, 46px);
   font-weight: 900;
   letter-spacing: 0.5px;
   text-shadow:
@@ -174,9 +176,6 @@
   .crooked-peek-eye {
     width: 54px;
     height: 70px;
-  }
-  .crooked-peek-word {
-    font-size: 40px;
   }
   .crooked-peek-friend {
     top: calc(env(safe-area-inset-top) + 12%);

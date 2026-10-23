@@ -19,7 +19,7 @@ import {
   type CrookedRoom,
   type KeeperConfig,
 } from '@heartpatch/shared';
-import type { QualityTier } from '../../engine/config.js';
+import { FRAME_CAP_30, type QualityTier } from '../../engine/config.js';
 import type { SceneContent } from '../../engine/stage.js';
 import { kitMesh, merged, type Part } from '../../explore/kit-mesh.js';
 import { KeeperField, type KeeperHandle } from '../../procedural/keeper/keeper-field.js';
@@ -205,6 +205,8 @@ export class CrookedScene {
       bounds: { minX: all.x - 30, maxX: all.x + 30, minZ: all.z - 30, maxZ: all.z + 30 },
       start: { x: all.x, z: all.z },
       maxDistance: 80,
+      // Explore's cap: walking and the drifting echoes draw at most 30 a second (#306 6d).
+      frameCap: FRAME_CAP_30,
     };
   }
 
@@ -380,10 +382,16 @@ export class CrookedScene {
   /**
    * Draws the echoes in the rooms shown now, where `spots` says they drift
    * (fading as one drifts into the light), the one `watching` turned to me
-   * and a little bigger. True while any echo is near (keep drawing).
+   * and a little bigger. `near`: an echo could show in the rooms drawn
+   * (check again soon); `shown`: one is on screen now (keep drawing).
    */
-  setEchoes(spots: readonly EchoSpot[], watching: string | null, now: number): boolean {
+  setEchoes(
+    spots: readonly EchoSpot[],
+    watching: string | null,
+    now: number,
+  ): { near: boolean; shown: boolean } {
     let near = false;
+    let shown = false;
     for (const spot of spots) {
       const there =
         !spot.gone &&
@@ -401,6 +409,7 @@ export class CrookedScene {
         this.#echoes.set(spot.loop, mesh);
       }
       mesh.setEnabled(spot.shown > 0.02);
+      if (spot.shown > 0.02) shown = true;
       mesh.visibility = spot.shown;
       const t = now / 1000;
       const bob = this.#options.reducedMotion
@@ -413,7 +422,7 @@ export class CrookedScene {
         : spot.heading;
       mesh.scaling.setAll(ECHO_FLOAT.scale * (noticed ? ECHO_FLOAT.notice : 1));
     }
-    return near;
+    return { near, shown };
   }
 
   /** An echo shows on the floor drawn now. */
