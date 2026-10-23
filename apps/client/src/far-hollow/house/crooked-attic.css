@@ -1,0 +1,17 @@
+/* The attic's big chest card (#306 6f): what it gave, a line each. */
+.crooked-attic-lines {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.crooked-attic-lines li {
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fbf0d8;
+  font-size: 16px;
+  font-weight: 700;
+  text-wrap: pretty;
+}

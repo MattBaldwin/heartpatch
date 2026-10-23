@@ -1,0 +1,2 @@
+ALTER TABLE "far_hollow_rooms" ADD COLUMN "relight_attempt" smallint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "far_hollow_rooms" ADD CONSTRAINT "far_hollow_rooms_relight_attempt_range" CHECK ("far_hollow_rooms"."relight_attempt" >= 0);

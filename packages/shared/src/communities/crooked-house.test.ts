@@ -126,6 +126,16 @@ describe('CROOKED_HOUSE (#306 6b)', () => {
     expect(broken((h) => delete h.doors[doorBit('pantry-door')]!.power)).toBe(false);
     expect(broken((h) => (h.echoLoops[0]!.rooms = ['front-hall', 'parlour']))).toBe(false);
     expect(broken((h) => (h.start = 'attic'))).toBe(false);
+    // One Relight board a room (#306 6f): its tries live on the room's row.
+    const library = (h: CrookedHouse) => h.rooms.find((r) => r.id === 'library')!;
+    expect(
+      broken((h) =>
+        library(h).things.push({
+          ...library(h).things.find((t) => t.kind === 'relight')!,
+          id: 'x',
+        }),
+      ),
+    ).toBe(false);
   });
 });
 

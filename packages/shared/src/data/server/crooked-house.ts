@@ -18,6 +18,21 @@ export const CROOKED_HOUSE_SECRETS: CrookedHouseSecrets = {
     'sewing-room': { kind: 'reeds', terrain: 'meadow' },
   },
   // Owner decision 6: small loot plus a rare friend now and then, of the room's element.
+  // Kid-readable lines from the family who lived here (style guide §2).
+  scraps: {
+    parlour: '“Every evening we lit the lanterns, one in every room.”',
+    conservatory: '“The little ones grew sunflowers taller than the door!”',
+    'stair-hall': '“Seven creaky steps. The little ones counted them every night.”',
+    'dining-room': '“Soup on Sundays, and a seat for whoever knocked.”',
+    library: '“Read by the lamp, never in the dark. That was the rule.”',
+    kitchen: '“Cocoa for anyone still awake after the lanterns were lit.”',
+    scullery: '“Mind the puddles, and say hello to the frogs.”',
+    landing: '“From up here you could see every lantern glow at once.”',
+    'blue-bedroom': '“A little lamp by the bed, in case of bad dreams.”',
+    nursery: '“Hush now. The lanterns will watch over you.”',
+    'music-room': '“The music box played the goodnight song, and the house hummed along.”',
+    'sewing-room': '“A cloak for whoever keeps the lanterns lit next. Wear it warmly.”',
+  },
   chests: {
     inglenook: {
       loot: [
