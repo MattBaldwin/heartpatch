@@ -17,6 +17,7 @@ import {
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { slotIcon } from '../map/map-legend.js';
+import { hpButton } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
@@ -378,11 +379,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     onClick: () => void,
     disabled = false,
   ) => {
-    const b = el(
-      'button',
-      { type: 'button', class: `post-button post-button-${kind}`, 'data-testid': testId },
-      label,
-    );
+    // Gold is the secondary look with the post's own gold tokens (trading.css).
+    const b = hpButton(label, { variant: kind === 'primary' ? 'primary' : 'secondary', testId });
+    if (kind === 'gold') b.classList.add('post-gold');
     b.disabled = disabled || working;
     b.addEventListener('click', onClick);
     return b;

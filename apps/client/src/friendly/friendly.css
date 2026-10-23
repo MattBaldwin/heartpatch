@@ -185,16 +185,12 @@
   gap: 8px;
 }
 
-.friendly-button {
-  min-height: 52px;
-}
-
 .friendly-answers {
   display: flex;
   gap: 10px;
 }
 
-.friendly-answers .friendly-button {
+.friendly-answers > .hp-button {
   flex: 1;
 }
 

@@ -7,6 +7,7 @@ import {
   type AdminPlayerDetail,
 } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { adminApi } from './admin-api.js';
 import {
@@ -25,6 +26,13 @@ import {
   shortDate,
   waitingLong,
 } from './admin-format.js';
+
+/** The classes for a console button: the shared kit, `danger` tinting its ink red. */
+function admBtn(flags: string): string {
+  const has = (flag: string) => flags.split(' ').includes(flag);
+  const kit = buttonClass({ variant: has('primary') ? 'primary' : 'secondary', small: has('small') });
+  return has('danger') ? `${kit} adm-danger` : kit;
+}
 
 // The operator admin console (#196, mockup approved 2026-10-07): a plain DOM
 // page, not the game canvas. The server is the gate; this page only shows
@@ -171,10 +179,10 @@ export function startAdmin(root: HTMLElement): void {
   }) {
     const okButton = el(
       'button',
-      { class: `adm-btn ${options.danger ? 'danger' : 'primary'}`, 'data-autofocus': '' },
+      { class: admBtn(options.danger ? 'danger' : 'primary'), 'data-autofocus': '' },
       options.ok,
     );
-    const cancel = el('button', { class: 'adm-btn' }, 'Cancel');
+    const cancel = el('button', { class: admBtn('') }, 'Cancel');
     cancel.addEventListener('click', closeDialog);
     okButton.addEventListener('click', () => {
       okButton.disabled = true;
@@ -201,7 +209,7 @@ export function startAdmin(root: HTMLElement): void {
     after: string,
     done: string,
   ) {
-    const close = el('button', { class: 'adm-btn primary', 'data-autofocus': '' }, done);
+    const close = el('button', { class: admBtn('primary'), 'data-autofocus': '' }, done);
     close.addEventListener('click', () => {
       closeDialog();
       render();
@@ -254,7 +262,7 @@ export function startAdmin(root: HTMLElement): void {
       required: '',
     });
     const error = el('p', { class: 'adm-error', role: 'alert', hidden: '' });
-    const submit = el('button', { class: 'adm-btn primary', type: 'submit' }, 'Sign in');
+    const submit = el('button', { class: admBtn('primary'), type: 'submit' }, 'Sign in');
     const form = el(
       'form',
       { class: 'adm-login-card' },
@@ -303,7 +311,7 @@ export function startAdmin(root: HTMLElement): void {
   const who = el('strong', {});
 
   function showConsole() {
-    const signOut = el('button', { class: 'adm-btn small' }, 'Sign out');
+    const signOut = el('button', { class: admBtn('small') }, 'Sign out');
     signOut.addEventListener('click', () => {
       void adminApi.logout().finally(() => {
         showLogin('Signed out.');
@@ -407,8 +415,8 @@ export function startAdmin(root: HTMLElement): void {
 
   function pager(page: number, pageSize: number, total: number): HTMLElement {
     const pages = Math.max(1, Math.ceil(total / pageSize));
-    const prev = el('button', { class: 'adm-btn small' }, 'Previous');
-    const next = el('button', { class: 'adm-btn small' }, 'Next');
+    const prev = el('button', { class: admBtn('small') }, 'Previous');
+    const next = el('button', { class: admBtn('small') }, 'Next');
     prev.disabled = page <= 1;
     next.disabled = page >= pages;
     prev.addEventListener('click', () => {
@@ -593,7 +601,7 @@ export function startAdmin(root: HTMLElement): void {
       'div',
       { class: 'adm-list' },
       ...detail.members.map((m) => {
-        const open = el('button', { class: 'adm-btn small' }, 'Open player');
+        const open = el('button', { class: admBtn('small') }, 'Open player');
         open.addEventListener('click', () => {
           openPlayer(m.userId);
         });
@@ -623,8 +631,8 @@ export function startAdmin(root: HTMLElement): void {
         'div',
         { class: 'adm-list' },
         ...detail.requests.map((r) => {
-          const approve = el('button', { class: 'adm-btn small' }, 'Approve');
-          const decline = el('button', { class: 'adm-btn small danger' }, 'Decline');
+          const approve = el('button', { class: admBtn('small') }, 'Approve');
+          const decline = el('button', { class: admBtn('small danger') }, 'Decline');
           approve.addEventListener('click', () => {
             confirmAction({
               title: `Let ${r.username} in?`,
@@ -692,7 +700,7 @@ export function startAdmin(root: HTMLElement): void {
     }
     const make = el(
       'button',
-      { class: 'adm-btn small' },
+      { class: admBtn('small') },
       detail.invite ? 'New code' : 'Make a code',
     );
     make.addEventListener('click', () => {
@@ -728,7 +736,7 @@ export function startAdmin(root: HTMLElement): void {
       );
     }
     const code = el('span', { class: 'adm-code', id: 'adm-invite' }, '••••-••••');
-    const reveal = el('button', { class: 'adm-btn small' }, 'Show code');
+    const reveal = el('button', { class: admBtn('small') }, 'Show code');
     reveal.addEventListener('click', () => {
       confirmAction({
         title: 'Show the invite code?',
@@ -827,10 +835,10 @@ export function startAdmin(root: HTMLElement): void {
     const detail = await call(() => adminApi.player(userId));
     if (!detail || !current()) return;
     const { player } = detail;
-    const reset = el('button', { class: 'adm-btn', id: 'adm-reset' }, 'Reset password');
+    const reset = el('button', { class: admBtn(''), id: 'adm-reset' }, 'Reset password');
     const logout = el(
       'button',
-      { class: 'adm-btn danger', id: 'adm-logout-all' },
+      { class: admBtn('danger'), id: 'adm-logout-all' },
       'Log out everywhere',
     );
     reset.addEventListener('click', () => {
@@ -941,7 +949,7 @@ export function startAdmin(root: HTMLElement): void {
   async function renderCodes(current: () => boolean) {
     const list = await call(() => adminApi.signupCodes());
     if (!list || !current()) return;
-    const make = el('button', { class: 'adm-btn primary' }, 'Make a family code');
+    const make = el('button', { class: admBtn('primary') }, 'Make a family code');
     make.addEventListener('click', makeCodeDialog);
     const tone: Record<string, string> = { live: 'ok', revoked: 'bad' };
     main.replaceChildren(
@@ -955,7 +963,7 @@ export function startAdmin(root: HTMLElement): void {
         list.codes.map((c) => {
           const actions = el('div', { class: 'adm-actions' });
           if (c.status === 'live' || c.status === 'expired') {
-            const extend = el('button', { class: 'adm-btn small' }, 'Extend 7 days');
+            const extend = el('button', { class: admBtn('small') }, 'Extend 7 days');
             extend.addEventListener('click', () => {
               confirmAction({
                 title: `Extend "${c.label}"?`,
@@ -972,7 +980,7 @@ export function startAdmin(root: HTMLElement): void {
             actions.append(extend);
           }
           if (c.status !== 'revoked') {
-            const off = el('button', { class: 'adm-btn small danger' }, 'Turn off');
+            const off = el('button', { class: admBtn('small danger') }, 'Turn off');
             off.addEventListener('click', () => {
               confirmAction({
                 title: `Turn off "${c.label}"?`,
@@ -1028,9 +1036,9 @@ export function startAdmin(root: HTMLElement): void {
       ].map(([v, t]) => el('option', { value: v ?? '' }, t ?? '')),
     );
     days.value = '14';
-    const cancel = el('button', { class: 'adm-btn', type: 'button' }, 'Cancel');
+    const cancel = el('button', { class: admBtn(''), type: 'button' }, 'Cancel');
     cancel.addEventListener('click', closeDialog);
-    const ok = el('button', { class: 'adm-btn primary', type: 'submit' }, 'Make code');
+    const ok = el('button', { class: admBtn('primary'), type: 'submit' }, 'Make code');
     const form = el(
       'form',
       { class: 'adm-form' },
@@ -1080,7 +1088,7 @@ export function startAdmin(root: HTMLElement): void {
     from.value = week.from;
     to.value = week.to;
     const results = el('div', { class: 'adm-results', 'aria-live': 'polite' });
-    const submit = el('button', { class: 'adm-btn primary', type: 'submit' }, 'Look up');
+    const submit = el('button', { class: admBtn('primary'), type: 'submit' }, 'Look up');
     const form = el(
       'form',
       { class: 'adm-panel adm-narrow' },
@@ -1112,7 +1120,7 @@ export function startAdmin(root: HTMLElement): void {
             table(
               ['Username', 'Patch', 'Since', 'Status', ''],
               found.matches.map((m) => {
-                const open = el('button', { class: 'adm-btn small' }, 'Open player');
+                const open = el('button', { class: admBtn('small') }, 'Open player');
                 open.addEventListener('click', () => {
                   openPlayer(m.userId);
                 });
