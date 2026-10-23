@@ -45,6 +45,8 @@ export interface PatchEconomyConfig {
   readonly upkeepShare: { readonly min: number; readonly max: number };
   /** The casual kid pays at most this percent of their Heart Coins in upkeep, playing daily. */
   readonly casualUpkeepMaxPercent: number;
+  /** The engaged kid, once the Warehouse stands: upkeep is at most this percent of what they earn, leaving room to skip a sale. */
+  readonly engagedUpkeepMaxPercent: number;
   /**
    * A first level-1 hut by this day. The model assumes a free homestead of
    * the right land, so this checks the build cost against early income only.
@@ -90,5 +92,6 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
   warehouseAwayDays: [24, 25, 26, 27, 28],
   upkeepShare: { min: 15, max: 25 },
   casualUpkeepMaxPercent: 60,
+  engagedUpkeepMaxPercent: 70, // TUNE: a third of a full day's earning is slack
   firstHutByDay: { casual: 10, engaged: 5 },
 };

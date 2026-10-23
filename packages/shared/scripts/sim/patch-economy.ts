@@ -6,7 +6,7 @@ import { GAME_DATA } from '../../src/data/index.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
 import { RESOURCE_BUILDING_RULES } from '../../src/data/resource-buildings.js';
 import { RESOURCES } from '../../src/data/resources.js';
-import { SELL_RULES } from '../../src/data/trading.js';
+import { GLIMMER_SWAP, SELL_RULES } from '../../src/data/trading.js';
 import { hexKey, type HexKey } from '../../src/hex/index.js';
 import {
   planResume,
@@ -46,6 +46,7 @@ import { modelData, runProgression } from './progression.js';
 /** What the model leaves out, for the report. */
 export const PATCH_ECONOMY_LIMITS = [
   "build income before the first hut is the fuel model's (#277), the share not kept for fires",
+  'the Glimmer swap is used for exactly the Glimmer the next build step is short of, up to its daily cap',
   'the kid always has a homestead of the right land free (clearing, #242, is not modelled)',
   'battles, captures and care earn the same each day; nothing else spends Heart Coins',
   'matches, fences, the Factory, trades and captures between kids',
@@ -277,6 +278,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
     const playing = !input.away.includes(day);
     let played = 0;
     let sold = 0;
+    let swappedToday = 0;
     let output = 0;
 
     // The morning: each building placed before it owes one, in charge order.
@@ -317,8 +319,23 @@ export function runKid(input: RunInput): PatchEconomyRun {
         balance += played;
       }
 
-      // Sell the surplus over the next step's cost, up to the day's cap.
+      // Swap spare everyday resources at the post for the Glimmer the next
+      // step is short of, up to the day's swap cap (`GLIMMER_SWAP`).
       const keep = next < plan.length ? stepCost(plan[next] as Step) : {};
+      const wantGlimmer = Math.max(0, (keep['glimmer'] ?? 0) - (bag['glimmer'] ?? 0));
+      let swapped = 0;
+      for (const resource of GLIMMER_SWAP.accepts) {
+        const room = Math.min(wantGlimmer - swapped, GLIMMER_SWAP.dailyCap - swappedToday);
+        const spare = (bag[resource] ?? 0) - (keep[resource] ?? 0);
+        const times = Math.min(room, Math.floor(spare / GLIMMER_SWAP.give));
+        if (times <= 0) continue;
+        bag[resource] = (bag[resource] ?? 0) - times * GLIMMER_SWAP.give;
+        swapped += times;
+        swappedToday += times;
+      }
+      bag['glimmer'] = (bag['glimmer'] ?? 0) + swapped * GLIMMER_SWAP.get;
+
+      // Sell the surplus over the next step's cost, up to the day's cap.
       for (const [resource, item] of Object.entries(SELL_RULES.items)) {
         if (kid.neverSell.includes(resource)) continue;
         const room = HEART_COIN_RULES.dailyCaps.sell - sold;
@@ -494,6 +511,29 @@ export function pausedWhilePlaying(run: PatchEconomyRun, fromDay = 1): number {
     .reduce((a, d) => a + d.pausedMornings, 0);
 }
 
+/**
+ * What the Warehouse's upkeep costs over `days` against what one trip's extra
+ * output sells for: the engaged kid's huts sell at their resources' lots, so
+ * the value is the extra items over the average lot, times the coin price.
+ */
+export function warehouseTrip(
+  withIt: PatchEconomyRun,
+  without: PatchEconomyRun,
+  kid: PatchEconomyKid,
+  days: number,
+): { extraItems: number; extraWorth: number; upkeep: number } {
+  const out = (r: PatchEconomyRun) => awayWindow(r).reduce((a, d) => a + d.output, 0);
+  const prices = kid.huts.flatMap((id) => {
+    const b = BUILDINGS.find((x) => x.id === id);
+    const item = b?.kind === 'resource' ? SELL_RULES.items[sourceOf(b).resource] : undefined;
+    return item ? [item.coins / item.lot] : [];
+  });
+  const perItem = prices.reduce((a, n) => a + n, 0) / Math.max(1, prices.length);
+  const extraItems = out(withIt) - out(without);
+  const upkeep = levelOf(warehouseData().levels, 1).upkeep * days;
+  return { extraItems, extraWorth: Math.floor(extraItems * perItem), upkeep };
+}
+
 /** A run's away window: its away days and the first day back. */
 export function awayWindow(run: PatchEconomyRun): DayRecord[] {
   const first = run.away[0];
@@ -565,6 +605,29 @@ export function renderPatchEconomy(
     )
       .map(([k, d]) => `${String(d)} (${k})`)
       .join(', ')}; away three days, everything runs again by the end of the first day back.`,
+    '',
+    '## Warehouse payback',
+    '',
+    `A ${String(config.warehouseAwayDays.length)}-day trip: the extra output the Warehouse delivers (what the huts would have wasted at full storage), sold, against a month of its upkeep (guard: one trip a month repays it).`,
+    '',
+    '| Seats | Extra items | Sold for 💛 | A month of upkeep 💛 |',
+    '|---|---|---|---|',
+    ...config.seats.flatMap((seats) => {
+      const kid = config.kids.find((k) => k.warehouse);
+      const trip = runs.filter(
+        (r) =>
+          r.seats === seats &&
+          r.kid === kid?.id &&
+          r.away.length === config.warehouseAwayDays.length &&
+          r.away[0] === config.warehouseAwayDays[0],
+      );
+      const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
+      if (!kid || !withIt || !without) return [];
+      const t = warehouseTrip(withIt, without, kid, 30);
+      return [
+        `| ${String(seats)} | ${String(t.extraItems)} | ${String(t.extraWorth)} | ${String(t.upkeep)} |`,
+      ];
+    }),
     '',
     '## Not modelled',
     '',

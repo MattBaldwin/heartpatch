@@ -11,6 +11,7 @@ import {
   runKid,
   runPatchEconomy,
   upkeepPercent,
+  warehouseTrip,
   type PatchEconomyRun,
 } from './patch-economy.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
@@ -98,6 +99,9 @@ describe('runPatchEconomy guards (#601)', () => {
       expect(run.warehouseDay).not.toBeNull();
       expect(pausedWhilePlaying(run, run.warehouseDay ?? 0)).toBe(0);
       expect(run.days.at(-1)?.pausedNow).toBe(0);
+      expect(upkeepPercent(run, run.warehouseDay ?? 0)).toBeLessThanOrEqual(
+        CONFIG.engagedUpkeepMaxPercent,
+      );
     }
   });
 
@@ -124,6 +128,19 @@ describe('runPatchEconomy guards (#601)', () => {
       if (!withIt || !without) throw new Error('no Warehouse runs');
       const out = (r: PatchEconomyRun) => awayWindow(r).reduce((a, d) => a + d.output, 0);
       expect(out(withIt)).toBeGreaterThan(out(without));
+    }
+  });
+
+  it("repays a month of the Warehouse's upkeep with one long trip's extra output", () => {
+    const engaged = kid('engaged');
+    for (const seats of CONFIG.seats) {
+      const trip = runs.filter(
+        (r) => r.seats === seats && r.kid === 'engaged' && away(r, CONFIG.warehouseAwayDays),
+      );
+      const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
+      if (!withIt || !without) throw new Error('no Warehouse runs');
+      const t = warehouseTrip(withIt, without, engaged, CONFIG.days);
+      expect(t.extraWorth, `${String(seats)} seats`).toBeGreaterThanOrEqual(t.upkeep);
     }
   });
 });
