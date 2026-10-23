@@ -4,7 +4,8 @@ import { noise, tone } from './synth.js';
 // The sound effects (#25), each a tiny synth recipe: squishy squeaks and
 // giggles, boops, pops and chimes (style guide §7: soft, round and bouncy).
 // The Hollow Man's arrival on the map is a low, quiet hush; only the opening
-// cinematic has a low rumbling sting as he reaches (owner decision 2026-10-04). `pitch` and
+// cinematic has a low rumbling sting as he reaches (owner decision 2026-10-04), and the
+// Crooked House's peekaboo a short one (#306 6d). `pitch` and
 // `gain` carry the per-play variation, so repeats never sound copied.
 
 export interface SfxKit {
@@ -464,6 +465,58 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       });
     }
     return 2.2;
+  },
+
+  peekaboo: (kit, out, at, pitch, gain) => {
+    // The Crooked House's boo (#306 6d, owner decision 3: spookier than the
+    // rest, still playful): a sudden soft low thump with a breathy rush up
+    // behind it, two close bell notes that don't quite agree, and a falling
+    // ghostly "ooo". About a second; no scream, no crash.
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.45,
+      freq: 110 * pitch,
+      to: 46 * pitch,
+      glide: 0.3,
+      gain: gain * 0.7,
+      attack: 0.006,
+    });
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.5,
+      gain: gain * 0.16,
+      filter: 'bandpass',
+      freq: 380 * pitch,
+      to: 2200 * pitch,
+      q: 1.4,
+      attack: 0.02,
+    });
+    // A minor second, bright but soft: the eyes' "ting".
+    for (const semis of [0, 1]) {
+      tone(kit.ctx, out, {
+        type: 'triangle',
+        at: at + 0.03,
+        dur: 0.9,
+        freq: 622 * pitch * 2 ** (semis / 12),
+        gain: gain * 0.13,
+        attack: 0.005,
+        lowpass: 2000,
+      });
+    }
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at: at + 0.12,
+      dur: 0.95,
+      freq: 520 * pitch,
+      to: 250 * pitch,
+      glide: 0.8,
+      gain: gain * 0.22,
+      attack: 0.05,
+      hold: 0.2,
+      vibrato: [6, 0.025],
+    });
+    return 1.1;
   },
 
   'cold-wind': (kit, out, at, pitch, gain) => {

@@ -1065,9 +1065,14 @@ const crookedHouse = createCrookedScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  // The peekaboo's sting and the friendly echo's giggle (#306 6d).
+  cue: (name) => {
+    audio.cue(name);
+  },
   onOpen: () => {
     roster.close();
     maps.close();
@@ -2071,6 +2076,15 @@ if (import.meta.env.DEV) {
       },
       place: (x: number, z: number) => {
         crookedHouse.devPlace(x, z);
+      },
+      peekAt: (ms: number | null) => {
+        crookedHouse.devPeek(ms);
+      },
+      echoesAt: (ms: number | null) => {
+        crookedHouse.devEchoesAt(ms);
+      },
+      step: (doorId: string) => {
+        crookedHouse.devStep(doorId);
       },
     }),
     trickOrTreat: () => trickOrTreat.debug,

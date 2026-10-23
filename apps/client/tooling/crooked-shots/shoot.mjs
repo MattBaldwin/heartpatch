@@ -6,6 +6,12 @@
 // the far Hollow through the dev route, goes inside from the sheet, and puts
 // rooms right through the real action button.
 //
+// The echoes and the peekaboo (#306 6d) are `ECHOES=1`'s own run: it
+// jumps into the Stair Hall with every key turned (the dev route), pins
+// where the echoes are drawn (`echoesAt`, so every phone shows the same
+// moment), waits on the real clock for the server to catch me, and stops
+// the peekaboo's clock at each frame (`peekAt`).
+//
 // Honest captures (#335): every shot is at a tier pinned with the dev-only
 // `?tier=`, which the file name says. Headless Chromium draws with
 // SwiftShader (software WebGL2); frame times here say nothing about a device.
@@ -27,6 +33,7 @@ const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
 const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
+const ECHOES = process.env.ECHOES === '1';
 
 async function until(page, fn, arg, timeout = 180_000) {
   const end = Date.now() + timeout;
@@ -191,6 +198,135 @@ async function toBloom(page, onFirstKey) {
   }
 }
 
+const dev = (page, name, ...args) =>
+  page.evaluate(({ name, args }) => window.__heartpatch?.farHollowDev?.()[name](...args), {
+    name,
+    args,
+  });
+
+/** The server time at which `loop` is `rooms` along its loop (a few laps on from now). */
+async function echoTime(page, mapId, loop, rooms) {
+  const view = await api(page, 'GET', `/maps/${mapId}/far-hollow`);
+  const echo = view.body.house.echoes.find((e) => e.loop === loop);
+  // CROOKED_HOUSE.echoLoops: [periodSeconds, rooms on the loop].
+  const [period, n] = { 'stair-echo': [24, 2], 'bedroom-echo': [20, 2], 'music-echo': [28, 2] }[
+    loop
+  ];
+  const laps = (rooms / n - echo.offset) * echo.direction;
+  const now = Date.parse(view.body.house.serverTime);
+  const base = Math.ceil(now / 1000 / period) * period;
+  return (base + laps * period) * 1000;
+}
+
+/** How far the stair echo is from `room` (index on its loop, 0 or 1) on the real clock. */
+async function gap(page, loop, index) {
+  const e = (await house(page)).echoes.find((x) => x.loop === loop);
+  const d = Math.abs(e.position - index) % 2;
+  return Math.min(d, 2 - d);
+}
+
+/** Steers on the joystick (`dx`, `dy` of −1/0/1) until the server says I'm somewhere else or caught. */
+async function steer(page, dx, dy) {
+  const before = await house(page);
+  const stick = await page.getByTestId('crooked-stick').boundingBox();
+  const sx = stick.x + stick.width / 2;
+  const sy = stick.y + stick.height / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + dx * 40, sy + dy * 40, { steps: 3 });
+  await until(
+    page,
+    (b) => {
+      const h = window.__heartpatch?.farHollowHouse?.();
+      return h && (h.room !== b.room || (h.caught && h.caught !== b.caught) || h.peek);
+    },
+    { room: before.room, caught: before.caught },
+    60_000,
+  );
+  await page.mouse.up();
+}
+
+/** The echoes and the peekaboo (#306 6d), from the same state on every phone. */
+async function echoShots(page, device, mapId, calm) {
+  const jump = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'stair-hall' });
+  if (jump.status !== 201) throw new Error(JSON.stringify(jump));
+  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+  await goInside(page);
+  if (!calm) {
+    // Idle: the stair echo hovers in the middle of the dark Stair Hall, its eyes over the dark.
+    await place(page, 0.1, 3.4);
+    await dev(page, 'echoesAt', await echoTime(page, mapId, 'stair-echo', 0.08));
+    await shot(page, device, 'echo-idle');
+    // Moving: halfway to the Dining Room, drifting through the doorway.
+    await dev(page, 'echoesAt', await echoTime(page, mapId, 'stair-echo', 0.42));
+    await shot(page, device, 'echo-moving');
+    // At the Dining Room door: an echo close by past it, and Tiptoe would get me by.
+    await place(page, -1.2, 5.0);
+    await dev(page, 'echoesAt', await echoTime(page, mapId, 'stair-echo', 0.78));
+    await shot(page, device, 'echo-hint');
+    await dev(page, 'echoesAt', null);
+    // Tiptoe past it for real: on, and in while it's near but drifting off.
+    await page.getByTestId('crooked-tiptoe').dispatchEvent('click');
+    for (;;) {
+      const a = await gap(page, 'stair-echo', 1);
+      await page.waitForTimeout(80);
+      const b = await gap(page, 'stair-echo', 1);
+      if (b > a && b > 0.17 && b < 0.24) break;
+    }
+    await steer(page, -1, 0);
+    await until(
+      page,
+      () => window.__heartpatch?.farHollowHouse?.()?.room === 'dining-room',
+      undefined,
+      20_000,
+    );
+    await place(page, -3.6, 5.2);
+    await dev(page, 'echoesAt', await echoTime(page, mapId, 'stair-echo', 0.86));
+    await shot(page, device, 'tiptoe-past');
+    await dev(page, 'echoesAt', null);
+    await page.getByTestId('crooked-tiptoe').dispatchEvent('click');
+    // Back in the Stair Hall for the catch (the dev route again: the same start on every phone).
+    await page.getByTestId('crooked-back').click();
+    const again = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'stair-hall' });
+    if (again.status !== 201) throw new Error(JSON.stringify(again));
+    await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+    await goInside(page);
+  }
+  // The catch: at the Stair Hall's west door, stepping into the Dining Room just as the echo's there.
+  // Right at the doorway, as the echo drifts in towards the room's middle (software
+  // rendering is slow, so the step takes a while).
+  await place(page, -1.8, 5.0);
+  await dev(page, 'peekAt', 0);
+  for (;;) {
+    const a = await gap(page, 'stair-echo', 1);
+    await page.waitForTimeout(80);
+    const b = await gap(page, 'stair-echo', 1);
+    if (b < a && b > 0.04 && b < 0.18) break;
+  }
+  await steer(page, -1, 0);
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.peek);
+  const frames = calm
+    ? [
+        [350, 'calm-fade'],
+        [1300, 'calm-boo'],
+      ]
+    : [
+        [480, 'peek-eyes'],
+        [860, 'peek-boo'],
+        [960, 'peek-shake'],
+      ];
+  for (const [ms, name] of frames) {
+    await dev(page, 'peekAt', ms);
+    await shot(page, device, name);
+  }
+  await dev(page, 'peekAt', 3200);
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'caught');
+  await shot(page, device, calm ? 'calm-friendly' : 'peek-friendly');
+  await dev(page, 'peekAt', null);
+  await page.getByTestId('crooked-card-ok').click();
+  await shot(page, device, calm ? 'calm-back' : 'back-in-light');
+}
+
 const stats = [];
 async function shot(page, device, name) {
   if (ONLY && !ONLY.has(name)) return;
@@ -241,7 +377,7 @@ let mapId;
 for (const device of DEVICES) {
   const size = ALL_DEVICES[device];
   for (const motion of ['no-preference', 'reduce']) {
-    if (motion === 'reduce' && ONLY && !ONLY.has('reduced')) continue;
+    if (motion === 'reduce' && ONLY && !ONLY.has('reduced') && !ECHOES) continue;
     const context = await browser.newContext({
       storageState: statePath,
       viewport: { width: size.width, height: size.height },
@@ -254,6 +390,11 @@ for (const device of DEVICES) {
     page.on('pageerror', (e) => console.error('[pageerror]', e.message));
     resetHouse(name);
     await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+    if (ECHOES) {
+      await echoShots(page, device, mapId, motion === 'reduce');
+      await context.close();
+      continue;
+    }
     const arrived = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, {});
     if (arrived.status !== 201) throw new Error(JSON.stringify(arrived));
     await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });

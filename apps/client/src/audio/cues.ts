@@ -5,7 +5,8 @@ import type { CloseUpTouch } from '../close-up/close-up-view.js';
 // (a battle step, a touch, a care squish); this maps it to a cue, so the
 // screens never know about sound. Style guide §7: soft, round and bouncy;
 // spooky is a low hush. The one exception is the opening cinematic's low
-// rumbling sting as the Hollow Man reaches (owner decision 2026-10-04).
+// rumbling sting as the Hollow Man reaches (owner decision 2026-10-04), and
+// the Crooked House's peekaboo has a short sting of its own (#306 6d).
 
 export type CueName =
   /** UI: any button. */
@@ -49,6 +50,12 @@ export type CueName =
    * sting (owner decision 2026-10-04, "spooky-tense"). Never a scream or a crash.
    */
   | 'hollow-sting'
+  /**
+   * The Crooked House's peekaboo (#306 6d, owner decision 3: spookier, a
+   * deliberate exception to "no jump scares"): a sudden low "boo" under two
+   * uneasy bell notes, over in about a second. Never a scream.
+   */
+  | 'peekaboo'
   /** The Heartpatch breaks into Heart Seeds: a soft glassy sparkle, never a crash. */
   | 'shatter'
   /** The cold wind that blows the joy and the squishies away across the land. */
@@ -84,6 +91,7 @@ export const CUE_NAMES: readonly CueName[] = [
   'nightfall',
   'bloom',
   'hollow-sting',
+  'peekaboo',
   'shatter',
   'cold-wind',
   'seed-land',
@@ -99,6 +107,7 @@ export function isCueName(name: string): name is CueName {
 export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'nightfall',
   'hollow-sting',
+  'peekaboo',
   'charm',
   'evolve',
   'yay',

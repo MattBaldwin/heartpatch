@@ -39,7 +39,6 @@ export const CROOKED_TEXT = {
   notYet: 'Take the far road first! The Crooked House waits at the end 🕯️',
   yay: 'Yay!',
   caught: `Peekaboo!${KEEP}👻`,
-  caughtLine: 'Whoops! Back to the light 🕯️',
   mapTitle: (floor: string) => `🗺️ ${floor}`,
   /** The map's legend, one idea a line. */
   mapHint: [
@@ -130,3 +129,17 @@ export function roomWords(room: CrookedRoom, lit: boolean): string {
 export function floorWords(floor: number): string {
   return CROOKED_TEXT.floors[floor] ?? `Floor ${String(floor + 1)}`;
 }
+
+// ── The echoes and the peekaboo (#306 6d) ───────────────────────────────
+
+export const CROOKED_ECHO_TEXT = {
+  /** At a doorway, an echo close by in the dark room past it. */
+  near: 'Shh… an echo is close 👀 Wait for it to drift off',
+  /** …and Tiptoe would get me past it. */
+  tiptoe: 'Shh… an echo is close 👀 Tiptoe past it?',
+  /** The friendly echo after the peekaboo. */
+  giggle: 'Hee hee! Got you! 👋',
+  caughtTitle: 'Whoops! Back to the light 🕯️',
+  caughtLine: 'The echo only wanted to play. You still have everything!',
+  caughtOk: 'Phew!',
+} as const;
