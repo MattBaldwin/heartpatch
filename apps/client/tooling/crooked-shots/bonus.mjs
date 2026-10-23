@@ -1,4 +1,4 @@
-/* global process, console, window, setTimeout, fetch, crypto */
+/* global process, console, window, document, setTimeout, fetch, crypto */
 // Captures the Crooked House's bonus rooms (#306 6e) from the real game at
 // iPhone sizes, for the owner: a sleeping door, "Who can help?", each of the
 // four powers mid-moment and the room it opens, a chest opening (common and
@@ -67,7 +67,8 @@ const POWERS = [
     power: 'water',
     species: 'puddlepuff',
     from: 'scullery',
-    door: [0.9, 11.3],
+    // By the east wall: further out, a crooked thing is nearer than the door.
+    door: [1.6, 11.3],
     dx: 1,
     dz: 0,
     room: 'pantry',
@@ -76,7 +77,8 @@ const POWERS = [
     power: 'light',
     species: 'glowboo',
     from: 'blue-bedroom',
-    door: [-7.4, 3.5],
+    // By the west wall: further out, the crooked bed is nearer than the door.
+    door: [-8.1, 3.2],
     dx: -1,
     dz: 0,
     room: 'lantern-closet',
@@ -455,8 +457,18 @@ for (const device of DEVICES) {
     await shot(page, device, `${p.power}-asleep`);
     await page.getByTestId('crooked-action').dispatchEvent('click');
     await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
-    // The pictures come from the portrait renderer.
-    await page.waitForTimeout(1500);
+    // The pictures come from the portrait renderer: every face drawn.
+    await until(page, () => {
+      const faces = [...document.querySelectorAll('.crooked-helper-face')];
+      return (
+        faces.length > 0 &&
+        faces.every((f) => {
+          const img = f.querySelector('img');
+          return img?.complete && img.naturalWidth > 0;
+        })
+      );
+    });
+    await page.waitForTimeout(300);
     await shot(page, device, `${p.power}-picker`);
     await moment(
       page,
