@@ -723,6 +723,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         bottom: (mapShown ? HUD.mapBottom : HUD.bottom) / h,
       },
       mapShown ? CROOKED_CAMERA.mapPitch : CROOKED_CAMERA.pitch,
+      mapShown ? CROOKED_CAMERA.mapMargin : CROOKED_CAMERA.margin,
     );
     s.frame(shot, cut);
     options.invalidate();

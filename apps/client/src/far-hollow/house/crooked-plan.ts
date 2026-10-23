@@ -329,6 +329,8 @@ export const CROOKED_CAMERA = {
   mapPitch: (72 * Math.PI) / 180, // TUNE
   /** Room round a fitted room, metres. */
   margin: 0.5, // TUNE
+  /** …and round the whole floor on the map (its near rooms look wider than its middle). */
+  mapMargin: 2.6, // TUNE
   /** The far wall's height shows above the floor. */
   wallHeight: 2.3,
 } as const;
