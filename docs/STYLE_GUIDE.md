@@ -11,6 +11,8 @@
 - Spooky through **atmosphere and absence** (dimming light, silence, a flicker at the edge of the screen), never through threats, gore, injury, jump scares or cruelty.
 - Nobody is ever hurt. Squishies get **tuckered out**, **sleepy**, **dizzy** or **taken to the Hollow** (and always rescuable). Words to avoid are listed in §9.
 
+*Exception: the Crooked House's peekaboo (#306).* When an echo catches the Keeper, a playful jump-scare is allowed: the screen goes dark, two round eyes blink open, a short low sting plays and the screen gives a brief shake with "Peekaboo! 👻". It always turns friendly at once: the echo waves and giggles, the card reassures ("Whoops! Back to the light 🕯️ … You still have everything!"), and nothing is ever lost. It stays a boo, never a threat: no teeth, mouth, claws or gore, no lunge at the camera, no scream, and over in about two seconds. Reduced motion gets a gentle fade with no blink, pop or shake. No other screen uses jump-scares.
+
 ## 2. Reading level and length
 
 Players are 10–17; write so a 10-year-old reads it at a glance.

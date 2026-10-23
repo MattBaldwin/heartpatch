@@ -103,10 +103,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.factory-button {
-  min-height: 44px;
-}
-
 .factory-empty {
   width: 100%;
   border: 2px dashed #e7b7cf;

@@ -1,6 +1,6 @@
 /* The operator admin console (#196, mockup approved 2026-10-07): a plain,
-   desktop-friendly page that still works on an iPad. Its own tokens, so the
-   game's styles never leak in. System fonts only (the CSP allows no font host). */
+   desktop-friendly page that still works on an iPad. Its own colour tokens (buttons
+   are the game's shared kit, see ui/button). System fonts only (the CSP allows no font host). */
 
 :root {
   --adm-bg: #f6f5f8;
@@ -43,6 +43,20 @@
     --adm-bad-soft: #3d1c24;
     color-scheme: dark;
   }
+}
+
+/* The shared button kit (ui/button) in the console's colours, both schemes.
+   On body, not :root, so it wins over the kit's own :root values whichever
+   sheet loads last. */
+body {
+  --hp-primary: var(--adm-accent);
+  --hp-primary-lip: color-mix(in srgb, var(--adm-accent) 65%, black);
+  --hp-primary-ink: var(--adm-accent-ink);
+  --hp-secondary: var(--adm-sunk);
+  --hp-secondary-lip: var(--adm-line);
+  --hp-secondary-ink: var(--adm-fg);
+  --hp-quiet-ink: var(--adm-fg);
+  --hp-gloss: none;
 }
 
 * {
@@ -150,44 +164,13 @@ select {
   font-size: 14px;
 }
 
-/* Buttons */
-.adm-btn {
-  border: 1px solid var(--adm-line);
-  background: var(--adm-surface);
-  border-radius: 6px;
-  padding: 8px 14px;
-  min-height: 44px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.adm-btn:hover:not(:disabled) {
-  background: var(--adm-sunk);
-}
-.adm-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.adm-btn.primary {
-  background: var(--adm-accent);
-  border-color: var(--adm-accent);
-  color: var(--adm-accent-ink);
-}
-.adm-btn.primary:hover:not(:disabled) {
-  background: var(--adm-accent);
-  filter: brightness(1.06);
-}
-.adm-btn.danger {
-  color: var(--adm-bad);
-  border-color: color-mix(in srgb, var(--adm-bad) 45%, var(--adm-line));
-}
-.adm-btn.danger:hover:not(:disabled) {
-  background: var(--adm-bad-soft);
-}
-.adm-btn.small {
-  min-height: 36px;
-  padding: 4px 10px;
-  font-size: 13px;
+/* Buttons: the shared kit, in the console's own colours (set on body, above):
+   the orange accent is the primary, neutral surfaces are the rest, and a
+   danger one sits on the console's soft red. */
+.adm-danger {
+  --hp-secondary: var(--adm-bad-soft);
+  --hp-secondary-lip: color-mix(in srgb, var(--adm-bad) 35%, var(--adm-surface));
+  --hp-secondary-ink: var(--adm-bad);
 }
 
 /* Shell */
@@ -467,6 +450,8 @@ select {
   justify-content: flex-end;
 }
 .adm-code-box {
+  /* Its fill is the secondary buttons' fill, so they sit on the lighter surface. */
+  --hp-secondary: var(--adm-surface);
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;

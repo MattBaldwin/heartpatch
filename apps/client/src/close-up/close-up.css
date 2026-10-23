@@ -40,21 +40,6 @@
   gap: 12px;
 }
 
-.close-up-back {
-  flex: none;
-  min-width: 88px;
-  min-height: 44px;
-  padding: 0 16px;
-  border: none;
-  border-radius: 999px;
-  background: #fde8f0;
-  color: #7a2d55;
-  font: inherit;
-  font-size: 17px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 /* Name over its rarity chip (#240); shrinks so Back keeps its room. */
 .close-up-titles {
   display: flex;

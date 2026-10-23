@@ -24,6 +24,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { accessoryItem } from '../procedural/accessory.js';
 import type { SquishyDetail } from '../procedural/config.js';
 import { heroLodFor } from '../procedural/motion.js';
+import { hpBack } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { rarityChip, rarityClass } from '../ui/rarity/rarity.js';
 import { wardrobeApi, type WardrobeApi } from '../ui/wardrobe/wardrobe-api.js';
@@ -211,12 +212,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const layer = el('div', { class: 'close-up-touch', 'data-testid': 'close-up-touch' });
-  const back = el(
-    'button',
-    { type: 'button', class: 'close-up-back', 'data-testid': 'close-up-back' },
-    el('span', { 'aria-hidden': 'true' }, '⌄'),
-    ` ${CLOSE_UP_TEXT.back}`,
-  );
+  const back = hpBack(CLOSE_UP_TEXT.back, 'close-up-back');
   const title = el('h1', { class: 'close-up-name', id: 'close-up-title' });
   // Name and Back sit at the top of the bottom card: reachable one-handed
   // (style guide §3.2), and clear of the account chip at the top right.

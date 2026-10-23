@@ -1,4 +1,6 @@
 import { el } from '../dom.js';
+import { hpClose } from '../button/button.js';
+import { CLOSE_ICON_PATH, strokeIcon } from '../stroke-icon.js';
 import {
   handleBadge,
   INITIAL_TRAYS,
@@ -73,28 +75,11 @@ export const TRAY_TEXT = {
 } as const;
 
 /** Stroke icons for the handles (vector, never pixelated; design doc §19). */
-const ICONS: Record<TraySide | 'close', string> = {
+const ICONS: Record<TraySide, string> = {
   adventure: 'M12 3a9 9 0 1 0 0.01 0Z M15.5 8.5l-2 5-5 2 2-5Z',
   heartpatch:
     'M4 11l8-7 8 7v9H4Z M12 17.5s-3.2-1.9-3.2-3.9a1.7 1.7 0 0 1 3.2-.8 1.7 1.7 0 0 1 3.2.8c0 2-3.2 3.9-3.2 3.9Z',
-  close: 'M6 6l12 12 M18 6L6 18',
 };
-
-const SVG = 'http://www.w3.org/2000/svg';
-
-/** A 24px stroke icon. */
-export function strokeIcon(path: string): SVGSVGElement {
-  const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '24');
-  svg.setAttribute('height', '24');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('tray-icon');
-  const p = document.createElementNS(SVG, 'path');
-  p.setAttribute('d', path);
-  svg.append(p);
-  return svg;
-}
 
 const HINT_KEY = (accountId: string) => `heartpatch.trays.hint.${accountId}`;
 
@@ -143,11 +128,7 @@ export function createTrays(options: TraysOptions): Trays {
   // ── One tray and its handle ───────────────────────────────────────────
   const side = (which: TraySide, title: string, short: string, body: HTMLElement[]) => {
     const id = `tray-${which}`;
-    const close = el(
-      'button',
-      { type: 'button', class: 'tray-close', 'aria-label': TRAY_TEXT.close(title) },
-      strokeIcon(ICONS.close),
-    );
+    const close = hpClose(TRAY_TEXT.close(title));
     close.addEventListener('click', () => {
       dispatch({ type: 'close' });
     });
@@ -387,7 +368,7 @@ export function createTrays(options: TraysOptions): Trays {
         s.tray.setAttribute('aria-hidden', open ? 'false' : 'true');
         s.handle.classList.toggle('tray-handle-open', open);
         s.handle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        s.icon.replaceChildren(strokeIcon(open ? ICONS.close : ICONS[s.which]));
+        s.icon.replaceChildren(strokeIcon(open ? CLOSE_ICON_PATH : ICONS[s.which]));
       }
       if (state.open !== null) setHidden(s.peek, true);
     }

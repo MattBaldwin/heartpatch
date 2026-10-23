@@ -1,6 +1,7 @@
 import type { FactoryView, ItemCounts } from '@heartpatch/shared';
 import { GAME_DATA } from '@heartpatch/shared';
 import { formatTimeLeft } from '../inventory/game-clock.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import {
   batchPlanLine,
@@ -106,7 +107,8 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
       'button',
       {
         type: 'button',
-        class: `auth-button factory-button${soft ? ' auth-button-soft' : ''} ${more}`.trim(),
+        class:
+          `${buttonClass({ variant: soft ? 'secondary' : 'primary', small: true })} ${more}`.trim(),
         ...rest,
       },
       label,

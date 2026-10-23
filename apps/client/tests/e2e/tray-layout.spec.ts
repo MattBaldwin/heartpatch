@@ -15,7 +15,7 @@ const TRAY_CONTROLS = [
   '.tray-section > button',
   '.tray-section > .battle-entry-box > button',
   '.tray-jobs .jobs-entry > button',
-  '.tray-close',
+  '.hp-close',
   '.tray-top-left > button',
 ].join(', ');
 
@@ -79,7 +79,7 @@ async function checkCatalogAndCare(page: Page): Promise<void> {
   const catalog = page.getByTestId('catalog');
   await expect(catalog).toBeVisible();
   await expect(catalog.locator('[data-care-species]').first()).toBeVisible({ timeout: 15_000 });
-  await expectRoomyLabels(page, '.catalog-close-top, [data-testid="catalog-close"]');
+  await expectRoomyLabels(page, '[data-testid="catalog-close"]');
   // The × is in the header, on screen without scrolling the list.
   const close = (await page.getByTestId('catalog-close-top').boundingBox())!;
   expect(close.y + close.height).toBeLessThan(page.viewportSize()!.height / 2);
@@ -100,9 +100,9 @@ async function checkBook(page: Page): Promise<void> {
   await expect(book).toBeVisible();
   const later = book.getByRole('button', { name: 'Later' });
   if (await later.isVisible()) await later.tap();
-  await expectRoomyLabels(page, '.rbook-open, .rbook-btn');
+  await expectRoomyLabels(page, '.rbook-open, .rbook-bar .hp-button, .rbook-bar .hp-close');
   await turnTo(page, page.getByTestId('recipe-book-cover-open'), 'contents');
-  await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav-btn');
+  await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav .hp-button');
   await turnTo(
     page,
     book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]'),

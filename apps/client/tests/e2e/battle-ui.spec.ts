@@ -71,7 +71,7 @@ const HUD_CONTROLS = [
   '.battle-plate',
   '.battle-plate-status',
   '.battle-leave',
-  '.battle-button',
+  '[data-testid="battle-sheet"] .hp-button',
   '.battle-caption',
   '.battle-hint',
 ].join(', ');
@@ -210,13 +210,13 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   // Run away asks first; one real tap on each.
   if (state.phase === 'turn') {
     await realTap(page.getByTestId('battle-run'));
-    await expectRoomyLabels(page, '.battle-button, .battle-ask');
+    await expectRoomyLabels(page, '[data-testid="battle-sheet"] .hp-button, .battle-ask');
     await realTap(page.getByTestId('battle-run-confirm'));
     state = await settled(page);
     expect(state.status).toBe('finished');
     const result = page.getByTestId('battle-result');
     await expect(result).toBeVisible();
-    await expectRoomyLabels(page, '.battle-result .battle-button, .battle-xp li');
+    await expectRoomyLabels(page, '.battle-result .hp-button, .battle-xp li');
     // The card fits the phone with its gutters (#133).
     const card = (await result.boundingBox())!;
     expect(card.x).toBeGreaterThanOrEqual(16);

@@ -3,6 +3,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { rarityChip } from '../ui/rarity/rarity.js';
 import { catalogApi } from './catalog-api.js';
 import { catalogPage, type CatalogPage } from './catalog-view.js';
+import { hpClose } from '../ui/button/button.js';
 import './catalog.css';
 
 // The squishy catalog (#14, design doc §21): every squishy the player has
@@ -56,16 +57,7 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
     hide();
   });
   // An × up top too (#150): a long list shouldn't need scrolling to leave.
-  const closeTop = el(
-    'button',
-    {
-      type: 'button',
-      class: 'catalog-close-top',
-      'aria-label': 'Close',
-      'data-testid': 'catalog-close-top',
-    },
-    '×',
-  );
+  const closeTop = hpClose('Close', 'catalog-close-top');
   closeTop.addEventListener('click', () => {
     hide();
   });

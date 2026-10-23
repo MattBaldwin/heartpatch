@@ -1,3 +1,4 @@
+import { hpButton } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { DOOR_TEXT, sceneLines, type DoorBeat, type DoorScene } from './door-view.js';
 import './door-scene.css';
@@ -281,15 +282,8 @@ export function createDoorScene(options: DoorSceneOptions): DoorSceneView {
     { type: 'button', class: 'auth-button door-knock', 'data-testid': 'door-knock' },
     DOOR_TEXT.knockButton,
   );
-  const notNow = el(
-    'button',
-    {
-      type: 'button',
-      class: 'auth-button auth-button-soft door-close',
-      'data-testid': 'door-close',
-    },
-    'Not now',
-  );
+  const notNow = hpButton('Not now', { testId: 'door-close' });
+  notNow.classList.add('door-close');
   const actions = el('div', { class: 'door-actions' }, knock, notNow);
   const overlay = el(
     'section',
