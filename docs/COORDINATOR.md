@@ -192,6 +192,8 @@ The supervisor keeps this list current. Remove items as they land.
 - **State (supervisor 13, 2026-10-23):** main `41749cc` (#644), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-23 — Owner decisions and coordinator calls (supervisor 13)". Merged 2026-10-23 under supervisor 13: #643 (Crooked House 6f) and #644 (battle controls fit small phones).
 - **Lanes in flight** (report to supervisor 13 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
   - **Crooked House 6e2** `session_01HB4mCER7TnzGxgrQFRFHrR` (Opus, #306): finishes PR #641 from 6e's `Lane handoff` (#306 comment 6374647088). Bonus rooms, merge main, Light and SE captures, then owner screens at https://claude.ai/artifact/QjXvPv2wbHMVjkVFGEnVyP.
+    - **Owner playtest (2026-10-23):** on main, the power doors say "A Fire friend could help 🔥" and a "Who can help?" button does nothing. #641 ships the team picker and the wake flow.
+    - Once #641's screens pass the render-check, offer the owner an optional bubble wording: "A Fire friend on your team could help 🔥". The approved rule is any squishy of that element on the battle team.
   - **Controls B2a** `session_01SJu4vA2UJP5x9rq3RUwrna` (Sonnet): every leftover control except `.auth-button*`, including the house ✕s.
   - In-flight lanes' folders are off-limits to the others. Tell a lane when a folder frees up after a merge.
 - **Queue (start in this order as lanes free up):**
