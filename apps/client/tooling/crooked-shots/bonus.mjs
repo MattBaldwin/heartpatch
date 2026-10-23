@@ -19,7 +19,7 @@
 // reload lands in the lobby.
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const OUT = process.env.OUT ?? path.resolve('.crooked-shots');
@@ -37,6 +37,8 @@ const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 const TRIES = Number(process.env.TRIES ?? 6);
 /** Only these powers' rooms through the screen (all four by default; the scout still opens every chest). */
 const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) : null;
+/** Shoot the last run's scouted patch again (the same season), e.g. one phone at a time. */
+const REUSE = process.env.REUSE === '1';
 
 /**
  * The four bonus doors: the element's friend, the room I stand in, where I
@@ -88,6 +90,13 @@ async function until(page, fn, arg, timeout = 180_000) {
     if (value) return value;
     if (Date.now() > end) {
       await page.screenshot({ path: path.join(OUT, 'timed-out.png') }).catch(() => undefined);
+      const seen = await page
+        .evaluate(() => ({
+          map: window.__heartpatch?.map?.()?.id ?? null,
+          house: window.__heartpatch?.farHollowHouse?.() ?? null,
+        }))
+        .catch(() => null);
+      console.error('[timed out]', JSON.stringify(seen)?.slice(0, 2000));
       throw new Error(`timed out: ${fn.toString().slice(0, 80)}`);
     }
     await new Promise((r) => setTimeout(r, 250));
@@ -366,11 +375,14 @@ const browser = await chromium.launch({
 
 // The scout: one player, new patches until a chest holds a friend.
 const statePath = path.join(OUT, '.bonus-state.json');
-const name = `bonus_${Date.now().toString(36)}`;
+const scoutPath = path.join(OUT, '.bonus-scout.json');
+let name = `bonus_${Date.now().toString(36)}`;
 let mapId;
 let ids;
 let friends = {};
-{
+if (REUSE) {
+  ({ name, mapId, ids, friends, patchName } = JSON.parse(await readFile(scoutPath, 'utf8')));
+} else {
   const first = ALL_DEVICES[DEVICES[0]];
   const context = await browser.newContext({
     viewport: { width: first.width, height: first.height },
@@ -401,6 +413,7 @@ let friends = {};
     }, mapId);
   }
   await context.storageState({ path: statePath });
+  await writeFile(scoutPath, JSON.stringify({ name, mapId, ids, friends, patchName }));
   await context.close();
 }
 const friendRoom = Object.keys(friends).find((r) => friends[r]) ?? null;
@@ -491,5 +504,8 @@ for (const device of DEVICES) {
     await context.close();
   }
 }
-await writeFile(path.join(OUT, 'bonus-stats.json'), JSON.stringify(stats, null, 2));
+await writeFile(
+  path.join(OUT, `bonus-stats-${Date.now().toString(36)}.json`),
+  JSON.stringify(stats, null, 2),
+);
 await browser.close();
