@@ -92,6 +92,7 @@ const E2E_GROUPS = [
     'chat',
     'fences',
     'homestead-colour',
+    'landscape-phone',
     'lobby',
     'pwa',
     'taps',
