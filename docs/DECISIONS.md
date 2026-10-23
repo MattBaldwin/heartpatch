@@ -1703,7 +1703,7 @@ _Owner decisions on issues #601, #306, #602 and #621 and in the `## Decisions` s
   - A power needs any squishy of the right element on the battle team, any level, free, every time.
   - Rooms and doors are fixed. Keys, fixes, echo paths and bonus loot shuffle per patch and season.
 - **The far road is open at any hour (comment 6355703541).** Owner: as the house is. This replaces the day-only part of answer 1 and ships in 6b.
-- **The far-Hollow season holds Halloween 2026 until Nov 9 (comment 6354531305).** Halloween's 2026 window ends Nov 9. The far-Hollow season does not reset when Thanksgiving starts on Nov 3. (Relayed by the supervisor; the plan states the Nov 9 window.)
+- **The far-Hollow season holds Halloween 2026 until Nov 9, with no reset on Nov 3.** Coordinator call (supervisor 10's brief; no owner comment found on the issues). Halloween's 2026 window ends Nov 9 (#306 plan, comment 6354531305), and the far-Hollow season does not roll over when Thanksgiving starts on Nov 3.
 - **Shared-contract changes for the house (PR #627).** Coordinator-signed. 6a lands `FarHollowView` without `tiles`, migration 0056 regenerated as `far_hollow_rooms` and `far_hollow_state` (expand-only), and `COMMUNITY_RULES.farHollow` trimmed to `{ name, distance }`. 6b lands the `house` view field, the fix, enter, unlock, power and chest schemas, `CROOKED_HOUSE` data, one `LORE_PAGES` entry, one keepsake, the "Lantern Keeper" title, and a `house` payload field on `explore.searched`.
 
 **Town and Hollow wording (PR #623)**
