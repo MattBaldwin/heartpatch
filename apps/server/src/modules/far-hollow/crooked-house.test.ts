@@ -529,33 +529,37 @@ describe.skipIf(!url)('the Crooked House (#306 6b, needs DATABASE_URL)', () => {
     },
   );
 
-  it('waits on a battle before a bonus chest, so a friend is never lost', SLOW, async () => {
-    const server = await start();
-    const kid = await player();
-    const seed = seedWhere(() => true);
-    const { mapId } = await house(server, kid, seed, { room: 'parlour' });
-    const fire = speciesOf('fire');
-    const [ember] = await db
-      .insert(squishies)
-      .values({
-        mapId,
-        ownerUserId: kid.id,
-        speciesId: fire.id,
-        element: fire.element,
-        feeling: fire.feeling,
-        level: 1,
-        teamSlot: 1,
-      })
-      .returning({ id: squishies.id });
-    await post(server, kid, mapId, 'power', { door: 'inglenook-door', squishyId: ember!.id });
-    await enter(server, kid, mapId, 'inglenook');
-    const fight = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {});
-    expect([200, 201]).toContain(fight.statusCode);
-    const res = await post(server, kid, mapId, 'chest', { room: 'inglenook' });
-    expect(res.statusCode).toBe(409);
-    expect(errorOf(res).message).toMatch(/Finish your battle/);
-    expect((await stateOf(kid)).chestsOpened).toBe(0);
-  });
+  it(
+    'refuses a bonus chest while a battle is going, so a friend has a free team to meet',
+    SLOW,
+    async () => {
+      const server = await start();
+      const kid = await player();
+      const seed = seedWhere(() => true);
+      const { mapId } = await house(server, kid, seed, { room: 'parlour' });
+      const fire = speciesOf('fire');
+      const [ember] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: fire.id,
+          element: fire.element,
+          feeling: fire.feeling,
+          level: 1,
+          teamSlot: 1,
+        })
+        .returning({ id: squishies.id });
+      await post(server, kid, mapId, 'power', { door: 'inglenook-door', squishyId: ember!.id });
+      await enter(server, kid, mapId, 'inglenook');
+      const fight = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {});
+      expect([200, 201]).toContain(fight.statusCode);
+      const res = await post(server, kid, mapId, 'chest', { room: 'inglenook' });
+      expect(res.statusCode).toBe(409);
+      expect(errorOf(res).message).toMatch(/Finish your battle/);
+      expect((await stateOf(kid)).chestsOpened).toBe(0);
+    },
+  );
 
   it(
     'opens the attic chest once every room is right: page, cloak, pile, gift and completion, once (owner decision 4)',

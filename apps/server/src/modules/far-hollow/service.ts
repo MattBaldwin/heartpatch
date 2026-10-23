@@ -21,7 +21,6 @@ import {
   seasonRunAt,
   withBit,
   type DevFarHollowRequest,
-  type ExploreNotable,
   type FarHollowView,
   type CrookedChestRequest,
   type CrookedChestResponse,
@@ -60,7 +59,7 @@ import { localDate, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import type { BattlesService } from '../battles/service.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
-import { grantKeepsake } from '../communities/cellar.js';
+import { grantKeepsake, notableOf } from '../communities/cellar.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createLoreRepo } from '../lore/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -99,6 +98,7 @@ export const FAR_HOLLOW_MESSAGES = {
   noThing: "We couldn't find that.",
   noDoor: "We couldn't find that door.",
   notHere: 'Walk into that room first! 🕯️',
+  notThisRoom: "That door isn't in this room!",
   noWay: 'No door from here goes there!',
   locked: 'That door is locked tight! 🔒',
   fixed: "That's already put right! ✨",
@@ -187,18 +187,6 @@ function roomNamed(id: string): CrookedRoom {
   const room = ROOMS.get(id);
   if (!room) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noRoom);
   return room;
-}
-
-/** The find worth telling the patch about, as explore tells it. */
-function notableOf(items: ItemCounts, lore: string | null, clothing: string | null) {
-  const notable: ExploreNotable | null = lore
-    ? 'lore'
-    : clothing
-      ? 'cosmetic'
-      : (items[COMMUNITY_RULES.joyResource] ?? 0) > 0
-        ? 'heartdust'
-        : null;
-  return notable;
 }
 
 /** This season's far Hollow on a map, as the server works it out (its seed never leaves). */
@@ -355,8 +343,9 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
     if (!door) throw new AppError('NOT_FOUND', FAR_HOLLOW_MESSAGES.noDoor);
     const here = roomOf(state);
     requireIn(state, here);
-    if (doorLeadsTo(door, here) === null)
-      throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notHere);
+    if (doorLeadsTo(door, here) === null) {
+      throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notThisRoom);
+    }
     return door;
   };
 
@@ -750,7 +739,8 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
             }
             // Its last thing that isn't a puzzle stays to put right.
             const leave = room.things.findLastIndex((t) => t.kind !== 'relight');
-            const fixed = allBits(room.things.length) & ~(1 << leave);
+            const all = allBits(room.things.length);
+            const fixed = leave < 0 ? all : all & ~(1 << leave);
             await repo.setRoom(key, { roomId: room.id, fixed, bloomedAt: null });
           }
           patch.currentRoom = target?.id ?? last.id;

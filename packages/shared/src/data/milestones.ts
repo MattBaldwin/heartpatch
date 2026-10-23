@@ -370,7 +370,8 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
   },
   {
     // The far Hollow (#306 6b, owner decision 4): the Crooked House's attic
-    // chest puts it all right (`journey.completed`, once a season). Public,
+    // chest puts it all right (`journey.completed`, once a season; only
+    // Halloween's far Hollow is the Crooked House, a lantern house). Public,
     // not secret: its title shares its words with the attic's cloak, which
     // the catalog ships to every client.
     id: 'lantern-keeper',
@@ -378,12 +379,18 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     secret: false,
     progress: {
       from: 'events',
-      sources: [{ eventType: 'journey.completed', where: [], player: 'userId' }],
+      sources: [
+        {
+          eventType: 'journey.completed',
+          where: [{ op: 'equals', field: 'season', value: 'halloween' }],
+          player: 'userId',
+        },
+      ],
     },
     tiers: [
       {
         threshold: 1,
-        goal: 'Put every room of the far Hollow right.',
+        goal: 'Put every room of the Crooked House right.',
         title: { id: 'lantern-keeper', name: 'Lantern Keeper' },
         coins: 50,
       },

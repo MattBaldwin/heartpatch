@@ -127,7 +127,7 @@ function toolUses(items: ItemCounts): Record<ToolId, number> {
 }
 
 /** The find worth telling the patch about, as explore tells it. */
-function notableOf(items: ItemCounts, lore: string | null, clothing: string | null) {
+export function notableOf(items: ItemCounts, lore: string | null, clothing: string | null) {
   const notable: ExploreNotable | null = lore
     ? 'lore'
     : clothing
