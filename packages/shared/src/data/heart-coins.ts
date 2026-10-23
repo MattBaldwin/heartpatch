@@ -16,6 +16,8 @@ export const HEART_COIN_RULES: HeartCoinRules = {
   // TUNE: per player per patch day, on that patch only. Selling is how a
   // kid pays for their buildings (upkeep is a fifth of a day's output
   // sold), so its cap covers an engaged kid's four level-4 buildings and
-  // the Warehouse (`pnpm sim:patch-economy`; 30 couldn't pay for two).
-  dailyCaps: { battle: 20, capture: 15, care: 10, sell: 120 },
+  // the Warehouse with room to spare: they pay about two thirds of what
+  // they can earn (`pnpm sim:patch-economy`; 30 couldn't pay for two, 120
+  // left an engaged kid at three quarters).
+  dailyCaps: { battle: 20, capture: 15, care: 10, sell: 150 },
 };
