@@ -435,8 +435,9 @@ async function puzzleShots(page, device, mapId) {
   await page.getByTestId('crooked-action').click();
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.scene?.attic?.open);
   await shot(page, device, 'attic-opens', 100);
-  await until(page, () => !document.querySelector('[data-testid="crooked-card"]')?.hidden);
+  // The card comes once the lid is up, on the moment's own clock.
   await dev(page, 'momentAt', 1900);
+  await until(page, () => !document.querySelector('[data-testid="crooked-card"]')?.hidden);
   await shot(page, device, 'attic-card-opens');
   await dev(page, 'momentAt', null);
   await page.waitForTimeout(3500);

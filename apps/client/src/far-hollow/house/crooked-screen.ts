@@ -65,7 +65,6 @@ import {
 import { createPeekaboo, type PeekPhase } from './crooked-peekaboo.js';
 import { createCrookedRelight } from './crooked-relight.js';
 import {
-  ATTIC_CARD_MS,
   atticLines,
   atticTarget,
   keepOffAtticChest,
@@ -239,8 +238,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let tiptoe = false;
   let working = false;
   let target: HouseTarget | null = null;
-  /** The attic's reward card waits for the lid (#306 6f). */
-  let atticTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The attic's reward card waits for the lid, on the chest moment's clock (#306 6f). */
+  let atticCardWaiting = false;
+  /** Dev only: a moment pinned for captures (#306 6f); a word said stays up with it. */
+  let momentPinned = false;
   let cards: Card[] = [];
   let noteText = '';
   let noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -660,6 +661,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     findTarget(false);
     const animating = s.step(dt, now);
+    showAtticCard();
     const busy = moved || heading !== undefined || animating;
     // The echoes move with any frame that draws, else on their own 30 fps beat.
     if (busy || now - lastEchoDraw >= ECHO_FRAME_MS) {
@@ -1058,16 +1060,18 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         clothing: (id) => CLOTHING_BY_ID.get(id)?.name ?? id,
       }),
     });
+    // The card comes when the lid is up (`tick`, on the moment's own clock).
+    atticCardWaiting = true;
     redraw();
-    const at = generation;
-    const show = () => {
-      atticTimer = null;
-      if (at !== generation || !isOpen) return;
-      options.cue?.('twinkle');
-      renderCard();
-    };
-    if (reducedMotion()) show();
-    else atticTimer = setTimeout(show, ATTIC_CARD_MS);
+    showAtticCard();
+  }
+
+  /** The attic's card, once the chest's lid is up. */
+  function showAtticCard(): void {
+    if (!atticCardWaiting || (scene3d && !scene3d.atticCardDue())) return;
+    atticCardWaiting = false;
+    options.cue?.('twinkle');
+    renderCard();
   }
 
   // ── Showing it ────────────────────────────────────────────────────────
@@ -1230,11 +1234,18 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (keep && text) {
       noteText = text;
       if (noteTimer !== null) clearTimeout(noteTimer);
-      noteTimer = setTimeout(() => {
+      // Dev only: a word said while a moment is pinned for a capture stays with it.
+      const held = momentPinned;
+      const fade = () => {
+        if (held && momentPinned) {
+          noteTimer = setTimeout(fade, NOTE_MS);
+          return;
+        }
         noteTimer = null;
         noteText = '';
         renderAction();
-      }, NOTE_MS);
+      };
+      noteTimer = setTimeout(fade, NOTE_MS);
     }
     // VoiceOver reads words said (a fix, a door, a key), not the idle hint as the
     // Keeper walks. The region turns live before its words change, so they're read.
@@ -1276,6 +1287,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function renderCard(): void {
     const card = cards[0];
+    // The attic's card waits for the chest's lid (`showAtticCard`).
+    if (card?.kind === 'attic' && atticCardWaiting) {
+      sheet.hidden = true;
+      return;
+    }
     sheet.hidden = card === undefined;
     if (!card) {
       sheet.replaceChildren();
@@ -1430,8 +1446,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     cards = [];
     relight.close();
     overlay.classList.remove('crooked-boarded');
-    if (atticTimer !== null) clearTimeout(atticTimer);
-    atticTimer = null;
+    atticCardWaiting = false;
     peekaboo.stop();
     pendingCatch = null;
     if (echoTimer !== null) clearTimeout(echoTimer);
@@ -1478,6 +1493,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       void stepThrough(door);
     },
     devMomentAt: (ms) => {
+      momentPinned = ms !== null;
       scene3d?.devMomentAt(ms);
       wake();
     },

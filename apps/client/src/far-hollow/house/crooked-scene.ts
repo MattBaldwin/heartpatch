@@ -58,7 +58,13 @@ import {
   type FloorPoint,
 } from './crooked-plan.js';
 import { echoShape } from './crooked-echo-kit.js';
-import { atticChestPoint, atticParts, atticRoom, scrapsLeft } from './crooked-attic.js';
+import {
+  ATTIC_CARD_MS,
+  atticChestPoint,
+  atticParts,
+  atticRoom,
+  scrapsLeft,
+} from './crooked-attic.js';
 import { buildBigChest } from '../../hollowed/cellar-kit.js';
 import { CellarChests } from '../../hollowed/cellar-chests.js';
 import { overlayMaterial, vinyl } from '../../map/map-scene.js';
@@ -174,6 +180,8 @@ export class CrookedScene {
   #pin: number | null = null;
   /** The moments' clock: the frame's time, or the pinned one. */
   #clock = 0;
+  /** When the attic's chest began to open (its card waits for the lid). */
+  #atticFrom: number | null = null;
   #drawCalls = 0;
   #triangles = 0;
   readonly #look = new Vector3();
@@ -335,7 +343,19 @@ export class CrookedScene {
   openAtticChest(): void {
     const at = performance.now();
     this.#momentFrom = at;
+    this.#atticFrom = at;
+    this.#clock = at;
     this.#attic?.chests.update([atticSpot(true)], this.#options.reducedMotion ? null : at);
+  }
+
+  /**
+   * The attic's card may come up: the chest's lid is up, on the moment's own
+   * clock (a slow frame never shows the card over the lid), at once under
+   * reduced motion.
+   */
+  atticCardDue(): boolean {
+    if (this.#atticFrom === null || this.#options.reducedMotion) return true;
+    return this.#clock - this.#atticFrom >= ATTIC_CARD_MS;
   }
 
   /** The attic's chest shows only with the attic, open as the house says. */
