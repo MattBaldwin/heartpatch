@@ -100,9 +100,9 @@ async function checkBook(page: Page): Promise<void> {
   await expect(book).toBeVisible();
   const later = book.getByRole('button', { name: 'Later' });
   if (await later.isVisible()) await later.tap();
-  await expectRoomyLabels(page, '.rbook-open, .rbook-btn');
+  await expectRoomyLabels(page, '.rbook-open, .rbook-bar .hp-button, .rbook-bar .hp-close');
   await turnTo(page, page.getByTestId('recipe-book-cover-open'), 'contents');
-  await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav-btn');
+  await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav .hp-button');
   await turnTo(
     page,
     book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]'),

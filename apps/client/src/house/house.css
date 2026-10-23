@@ -248,42 +248,8 @@
   gap: 10px;
 }
 
-.house-sheet-row > .house-button {
+.house-sheet-row > .hp-button {
   flex: 1 1 8em;
-}
-
-/* Buttons in the house's sheet: the home sheet's pink pill, 44pt+. */
-.house-button {
-  min-width: 44px;
-  min-height: 48px;
-  padding: var(--hp-pad-y) 18px;
-  border: none;
-  border-radius: 999px;
-  background: #b8487a;
-  box-shadow: 0 3px 8px rgb(74 49 80 / 14%);
-  color: #fff;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.25;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.house-button:active {
-  transform: scale(0.97);
-}
-
-.house-button:disabled,
-.house-button[aria-disabled='true'] {
-  cursor: default;
-  transform: none;
-}
-
-.house-button-soft {
-  background: #f6dceb;
-  box-shadow: none;
-  color: #7a2d55;
 }
 
 .house-all-grown {
@@ -982,11 +948,11 @@
 /* ✕ and the other sheet buttons: one focus ring, the house's pink, only when
    the keyboard moved focus (`.house-keys`, set by the screen), so a page a tap
    opened looks the same every time. */
-.house-button:focus {
+.house-sheet-body .hp-button:focus {
   outline: none;
 }
 
-.house-keys .house-button:focus {
+.house-keys .house-sheet-body .hp-button:focus {
   outline: 3px solid #b8487a;
   outline-offset: 2px;
 }
