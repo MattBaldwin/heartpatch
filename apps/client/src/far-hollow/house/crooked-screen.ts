@@ -1,5 +1,6 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  CLOTHING_BY_ID,
   CROOKED_HOUSE,
   type CrookedDoor,
   type CrookedFind,
@@ -63,8 +64,18 @@ import {
 } from './crooked-echoes.js';
 import { createPeekaboo, type PeekPhase } from './crooked-peekaboo.js';
 import { createCrookedRelight } from './crooked-relight.js';
+import {
+  ATTIC_CARD_MS,
+  atticLines,
+  atticTarget,
+  keepOffAtticChest,
+  scrapsLeft,
+  type AtticTarget,
+} from './crooked-attic.js';
+import { itemName } from '../../inventory/bag-view.js';
 import type { PuzzleDebug } from '../../hollowed/puzzle-sheet.js';
 import {
+  CROOKED_ATTIC_TEXT as A,
   CROOKED_ECHO_TEXT as E,
   CROOKED_RELIGHT_TEXT as RT,
   CROOKED_TEXT as T,
@@ -75,6 +86,7 @@ import {
 } from './crooked-text.js';
 import './crooked.css';
 import './crooked-echoes.css';
+import './crooked-attic.css';
 
 // The Crooked House screen (#306 6c, the owner-approved design): my own
 // haunted house this season, room by room. The camera fits the room I'm in
@@ -89,7 +101,8 @@ import './crooked-echoes.css';
 // close by notices me stepping in, and the server says so with a peekaboo
 // (`crooked-peekaboo.ts`) and back to the last lit room, nothing lost.
 // Two things are Relight boards (#306 6f, `crooked-relight.ts`), and each
-// room's bloom brings a scrap of the house's story.
+// room's bloom brings a scrap of the house's story. The attic's big chest
+// (`crooked-attic.ts`) opens once every room is right.
 
 export interface CrookedScreenOptions {
   readonly root: HTMLElement;
@@ -100,7 +113,7 @@ export interface CrookedScreenOptions {
   readonly tier: () => QualityTier;
   readonly keeper: () => KeeperConfig | null;
   readonly keeperWearing?: () => readonly string[];
-  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock' | 'relight'>;
+  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock' | 'relight' | 'chest'>;
   readonly reducedMotion?: () => boolean;
   /** The house took the screen: everything else steps aside. */
   readonly onOpen: (mapId: string) => void;
@@ -121,7 +134,7 @@ export interface CrookedDebug {
   readonly dark: boolean;
   readonly tiptoe: boolean;
   readonly keeper: FloorPoint;
-  readonly target: { kind: 'thing' | 'door'; id: string; state?: string } | null;
+  readonly target: { kind: 'thing' | 'door' | 'attic'; id: string; state?: string } | null;
   readonly action: string | null;
   readonly bubble: string | null;
   readonly card: string | null;
@@ -194,7 +207,11 @@ const ECHO_IDLE_MS = { near: 250, far: 1000 } as const; // TUNE
 type Card =
   | { kind: 'key'; title: string; line: string }
   | { kind: 'bloom'; title: string; line: string; scrap: string | null }
-  | { kind: 'caught' };
+  | { kind: 'caught' }
+  | { kind: 'attic'; title: string; lines: readonly string[] };
+
+/** What's in front: a crooked thing or a shut door (6c), or the attic's big chest (6f). */
+type HouseTarget = CrookedTarget | AtticTarget;
 
 export function createCrookedScreen(options: CrookedScreenOptions): CrookedScreen {
   const api = options.api ?? farHollowApi;
@@ -219,7 +236,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let mapShown = false;
   let tiptoe = false;
   let working = false;
-  let target: CrookedTarget | null = null;
+  let target: HouseTarget | null = null;
+  /** The attic's reward card waits for the lid (#306 6f). */
+  let atticTimer: ReturnType<typeof setTimeout> | null = null;
   let cards: Card[] = [];
   let noteText = '';
   let noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -451,7 +470,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   action.addEventListener('pointerdown', (e) => {
     const t = target;
     if (!t || working || cards.length > 0) return;
-    if (!targetWords(t).hold) return;
+    if (!wordsFor(t).hold) return;
     e.preventDefault();
     startHold();
   });
@@ -460,7 +479,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     clearTimeout(hold.timer);
     hold = null;
     action.classList.remove('crooked-holding');
-    if (isOpen && target && targetWords(target).hold) say(T.hold);
+    if (isOpen && target && wordsFor(target).hold) say(T.hold);
   };
   action.addEventListener('pointerup', endHold);
   action.addEventListener('pointercancel', endHold);
@@ -469,7 +488,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const t = target;
     if (!t) return;
     // A hold's button is done by holding; a click with no press (keyboard, VoiceOver) does it.
-    if (targetWords(t).hold && e.detail !== 0) return;
+    if (wordsFor(t).hold && e.detail !== 0) return;
     act(t);
   });
 
@@ -626,7 +645,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       moved = r.at.x !== keeperAt.x || r.at.z !== keeperAt.z;
       // A tap-walk that a wall stopped is done.
       if (walk && !moved) walk = null;
-      keeperAt = r.at;
+      keeperAt = keepOffAtticChest(room, r.at);
       if (r.bumped !== bumped) {
         bumped = r.bumped;
         if (bumped) findTarget(true);
@@ -784,14 +803,35 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function findTarget(force: boolean): void {
     const h = house();
     const room = here();
-    const next = h && room && !mapShown ? nearestTarget(room, h, keeperAt) : null;
+    const next = h && room && !mapShown ? nearest(room, h) : null;
     if (!force && sameTarget(next, target)) return;
     target = next;
     renderAction();
   }
 
-  function act(t: CrookedTarget): void {
+  /** The nearer of the nearest crooked thing or shut door and the attic's chest. */
+  function nearest(room: CrookedRoom, h: CrookedHouseView): HouseTarget | null {
+    const near = nearestTarget(room, h, keeperAt);
+    const chest = atticTarget(room, h, keeperAt);
+    if (!near || !chest) return near ?? chest;
+    const d = (p: FloorPoint) => Math.hypot(p.x - keeperAt.x, p.z - keeperAt.z);
+    return d(chest.at) < d(near.at) ? chest : near;
+  }
+
+  /** The big button and its bubble for what's in front. */
+  function wordsFor(t: HouseTarget): { action: string; bubble: string | null; hold: boolean } {
+    if (t.kind !== 'attic') return targetWords(t);
+    const h = house();
+    const left = h ? scrapsLeft(h) : 0;
+    return { action: A.action, bubble: left > 0 ? A.faint(left) : A.ready, hold: false };
+  }
+
+  function act(t: HouseTarget): void {
     if (working || cards.length > 0) return;
+    if (t.kind === 'attic') {
+      void openAttic(t);
+      return;
+    }
     if (t.kind === 'thing') {
       if (t.thing.kind === 'relight') {
         openBoard(t.thing);
@@ -809,7 +849,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     action.classList.remove('crooked-rattle');
     action.getBoundingClientRect(); // a reflow, so the rattle plays again
     action.classList.add('crooked-rattle');
-    bubbleText(targetWords(t).bubble);
+    bubbleText(wordsFor(t).bubble);
   }
 
   /** Runs a command for this visit: a reply after Back (or another visit) is dropped. */
@@ -984,6 +1024,50 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     return reply && still() ? reply : null;
   }
 
+  // ── The attic (#306 6f) ───────────────────────────────────────────────
+
+  /**
+   * The big chest: the page needs every room put right first (the server
+   * checks too, rule 1). Then the cellar's moment, the lid swinging back with
+   * sparkles and a beam, and the card once the lid is up.
+   */
+  async function openAttic(t: AtticTarget): Promise<void> {
+    const h = house();
+    if (!h) return;
+    const left = scrapsLeft(h);
+    if (left > 0) {
+      action.classList.remove('crooked-rattle');
+      action.getBoundingClientRect(); // a reflow, so the rattle plays again
+      action.classList.add('crooked-rattle');
+      bubbleText(A.faint(left));
+      return;
+    }
+    const reply = await command((id, key) => api.chest(id, t.room.id, key));
+    if (!reply) return;
+    // The moment starts before the view that shows the chest open.
+    scene3d?.openAtticChest();
+    options.cue?.('pop');
+    apply(reply.view);
+    cards.push({
+      kind: 'attic',
+      title: A.cardTitle,
+      lines: atticLines(reply, {
+        item: itemName,
+        clothing: (id) => CLOTHING_BY_ID.get(id)?.name ?? id,
+      }),
+    });
+    redraw();
+    const at = generation;
+    const show = () => {
+      atticTimer = null;
+      if (at !== generation || !isOpen) return;
+      options.cue?.('twinkle');
+      renderCard();
+    };
+    if (reducedMotion()) show();
+    else atticTimer = setTimeout(show, ATTIC_CARD_MS);
+  }
+
   // ── Showing it ────────────────────────────────────────────────────────
 
   function apply(fresh: FarHollowView): void {
@@ -1116,7 +1200,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function renderAction(): void {
     // A card (a key, a bloom) has the bottom of the screen to itself.
-    const words = target && !mapShown && cards.length === 0 ? targetWords(target) : null;
+    const words = target && !mapShown && cards.length === 0 ? wordsFor(target) : null;
     const show = words !== null && words.action !== '';
     // Idle, the big button keeps its place (the fitted room is measured round it).
     action.classList.toggle('crooked-idle', !show);
@@ -1129,7 +1213,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     // The bubble: a word just said, else what's in front (a shut door says which key, never where).
     const said =
       noteText || (target?.kind === 'door' && bumped === target.door ? (words?.bubble ?? '') : '');
-    const about = words && target?.kind === 'thing' ? T.crooked : '';
+    const about =
+      words && target?.kind === 'thing'
+        ? T.crooked
+        : target?.kind === 'attic'
+          ? (words?.bubble ?? '')
+          : '';
     // At a dark doorway, an echo close by past it (#306 6d).
     const echo = hint && !mapShown && cards.length === 0 ? echoWords(hint, tiptoe) : '';
     bubbleText(said || echo || about || null, false);
@@ -1191,8 +1280,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       return;
     }
     const title = card.kind === 'caught' ? E.caughtTitle : card.title;
-    const line = card.kind === 'caught' ? E.caughtLine : card.line;
-    const label = card.kind === 'key' ? T.keepIt : card.kind === 'caught' ? E.caughtOk : T.yay;
+    const label =
+      card.kind === 'key'
+        ? T.keepIt
+        : card.kind === 'caught'
+          ? E.caughtOk
+          : card.kind === 'attic'
+            ? A.ok
+            : T.yay;
     const ok = hpButton(label, {
       variant: 'primary',
       testId: 'crooked-card-ok',
@@ -1219,9 +1314,22 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
             ),
           ]
         : [];
+    // The attic's chest: what it gave, a line each (#306 6f).
+    const body =
+      card.kind === 'attic'
+        ? el(
+            'ul',
+            { class: 'crooked-attic-lines', 'data-testid': 'crooked-attic-lines' },
+            ...card.lines.map((l) => el('li', {}, l)),
+          )
+        : el(
+            'p',
+            { class: 'crooked-card-line' },
+            card.kind === 'caught' ? E.caughtLine : card.line,
+          );
     sheet.replaceChildren(
       el('h3', { class: 'crooked-card-title', id: 'crooked-card-title' }, title),
-      el('p', { class: 'crooked-card-line' }, line),
+      body,
       ...scrap,
       ok,
     );
@@ -1320,6 +1428,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     cards = [];
     relight.close();
     overlay.classList.remove('crooked-boarded');
+    if (atticTimer !== null) clearTimeout(atticTimer);
+    atticTimer = null;
     peekaboo.stop();
     pendingCatch = null;
     if (echoTimer !== null) clearTimeout(echoTimer);
@@ -1349,7 +1459,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       const room = here();
       if (!h || !room || !isOpen) return;
       walk = null;
-      keeperAt = walkStep(room, h, { x, z }).at;
+      keeperAt = keepOffAtticChest(room, walkStep(room, h, { x, z }).at);
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();
@@ -1388,7 +1498,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         target: t
           ? t.kind === 'thing'
             ? { kind: 'thing', id: t.thing.id }
-            : { kind: 'door', id: t.door.id, state: t.state.kind }
+            : t.kind === 'attic'
+              ? { kind: 'attic', id: t.room.id }
+              : { kind: 'door', id: t.door.id, state: t.state.kind }
           : null,
         action:
           action.hidden || action.classList.contains('crooked-idle')
@@ -1433,8 +1545,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   };
 }
 
-function sameTarget(a: CrookedTarget | null, b: CrookedTarget | null): boolean {
+function sameTarget(a: HouseTarget | null, b: HouseTarget | null): boolean {
   if (a === null || b === null) return a === b;
+  if (a.kind === 'attic' && b.kind === 'attic') return a.room.id === b.room.id;
   if (a.kind === 'thing' && b.kind === 'thing') return a.thing.id === b.thing.id;
   if (a.kind === 'door' && b.kind === 'door')
     return a.door.id === b.door.id && a.state.kind === b.state.kind && keyHeld(a) === keyHeld(b);

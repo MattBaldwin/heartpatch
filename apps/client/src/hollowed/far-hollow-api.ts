@@ -1,10 +1,12 @@
 import {
   BattleResponseSchema,
+  CrookedChestResponseSchema,
   CrookedEnterResponseSchema,
   CrookedFixResponseSchema,
   CrookedRelightResponseSchema,
   CrookedViewResponseSchema,
   FarHollowViewSchema,
+  type CrookedChestResponse,
   type CrookedEnterResponse,
   type CrookedFixResponse,
   type CrookedRelightResponse,
@@ -76,6 +78,15 @@ export const farHollowApi = {
       method: 'POST',
       body,
       schema: CrookedRelightResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Opens the chest of the room I'm in: the attic's big chest (#306 6f). */
+  chest: (mapId: string, room: string, key: string): Promise<CrookedChestResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/chest`, {
+      method: 'POST',
+      body: { room },
+      schema: CrookedChestResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 

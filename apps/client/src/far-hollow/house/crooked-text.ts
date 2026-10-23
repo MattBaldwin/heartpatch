@@ -140,6 +140,22 @@ export const CROOKED_RELIGHT_TEXT = {
   scrap: 'A scrap of the house’s story 📜',
 } as const;
 
+export const CROOKED_ATTIC_TEXT = {
+  action: 'Open the big chest 🎁',
+  /** Near the chest with the house all put right. */
+  ready: 'The story page is ready to read! 📜',
+  /** …and with rooms still dark (the server says the same, rule 1). */
+  faint: (left: number) =>
+    `The page is too faint to read! Put ${String(left)} more ${left === 1 ? 'room' : 'rooms'} right first 🕯️`,
+  cardTitle: `The Crooked House is all put right!${KEEP}🏠`,
+  page: (title: string) => `📜 The house's story: “${title}”`,
+  cloak: (name: string) => `🧥 ${name} to wear`,
+  /** The milestone grants it on `journey.completed`; a later season's Keeper already has it. */
+  titleLine: '🏅 Your title: Lantern Keeper',
+  pile: (things: readonly string[]) => `🎁 ${things.join(', ')}`,
+  ok: 'Hooray!',
+} as const;
+
 // ── The echoes and the peekaboo (#306 6d) ───────────────────────────────
 
 export const CROOKED_ECHO_TEXT = {

@@ -15,7 +15,8 @@
 // The Relight boards and the story scraps (#306 6f) are `PUZZLES=1`'s run:
 // the dev route puts the house right but the Library's board, the board is
 // won through its real buttons with the server's dev answer, and the Music
-// Room's board is relit with its room still to put right.
+// Room's board is relit with its room still to put right. With the Library
+// the whole house is right, so the attic's big chest opens too.
 //
 // Honest captures (#335): every shot is at a tier pinned with the dev-only
 // `?tier=`, which the file name says. Headless Chromium draws with
@@ -186,6 +187,13 @@ function resetHouse(name) {
     input: [
       "DELETE FROM far_hollow_rooms WHERE user_id IN (SELECT id FROM users WHERE username = :'name');",
       "DELETE FROM far_hollow_state WHERE user_id IN (SELECT id FROM users WHERE username = :'name');",
+      // The attic's run (#306 6f): its page and the cloak found afresh on every phone.
+      ...(PUZZLES
+        ? [
+            "DELETE FROM lore_found WHERE user_id IN (SELECT id FROM users WHERE username = :'name');",
+            "DELETE FROM clothing_owned WHERE item_id = 'lantern-keepers-cloak' AND user_id IN (SELECT id FROM users WHERE username = :'name');",
+          ]
+        : []),
     ].join('\n'),
   });
 }
@@ -405,6 +413,28 @@ async function puzzleShots(page, device, mapId) {
   await page.waitForTimeout(1500);
   await dismissLore(page);
   await shot(page, device, 'library-lit');
+
+  // The whole house is right: up to the attic (the dev route, as the map walks to a lit room).
+  await page.getByTestId('crooked-back').click();
+  const up = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'attic' });
+  if (up.status !== 201) throw new Error(JSON.stringify(up));
+  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
+  await goInside(page);
+  await page.waitForTimeout(1500);
+  await dismissLore(page);
+  await shot(page, device, 'attic-enter');
+  // Up to the big chest: its bubble says the page is ready.
+  await place(page, 0, 5.0);
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.target?.kind === 'attic');
+  await shot(page, device, 'attic-chest');
+  await page.getByTestId('crooked-action').click();
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.scene?.attic?.open);
+  await shot(page, device, 'attic-opens', 100);
+  await until(page, () => !document.querySelector('[data-testid="crooked-card"]')?.hidden);
+  await shot(page, device, 'attic-card-opens', 100);
+  await page.waitForTimeout(1500);
+  await dismissLore(page);
+  await shot(page, device, 'attic-card');
 
   // The Music Room's music box, 6×6, with the room still to put right.
   resetHouse(name);
