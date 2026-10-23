@@ -394,6 +394,18 @@ body:has(.crooked:not([hidden])) .auth-chip {
   font-weight: 700;
 }
 
+/* Narrow phones (iPhone SE): a long room name fits beside Back and the keys, with room between. */
+@media (max-width: 380px) {
+  .crooked-top {
+    gap: 10px;
+  }
+  /* Beats the short-screen size below (an SE is both). */
+  .crooked-top .crooked-pill {
+    padding-inline: var(--hp-pad-x);
+    font-size: 15px;
+  }
+}
+
 /* iPhone SE and other short screens: everything a little closer. */
 @media (max-height: 700px) {
   .crooked-stick {

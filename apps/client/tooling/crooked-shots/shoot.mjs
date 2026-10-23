@@ -311,7 +311,7 @@ async function echoShots(page, device, mapId, calm) {
         [1300, 'calm-boo'],
       ]
     : [
-        [560, 'peek-eyes'],
+        [480, 'peek-eyes'],
         [860, 'peek-boo'],
         [960, 'peek-shake'],
       ];

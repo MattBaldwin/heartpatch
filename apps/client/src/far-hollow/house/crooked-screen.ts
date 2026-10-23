@@ -225,6 +225,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let spots: EchoSpot[] = [];
   let hint: EchoHint | null = null;
   let lastEchoDraw = 0;
+  /** The bottom of the top HUD, CSS px (from the last fit): no echo is drawn under it. */
+  let hudTop = 0;
   let echoState = { near: false, shown: false, drawn: false };
   /** A catch's view, held until the peekaboo's dark is full (the room changes unseen). */
   let pendingCatch: FarHollowView | null = null;
@@ -645,7 +647,16 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       hint = heard;
       renderAction();
     } else hint = heard;
-    const state = s.setEchoes(spots, hint?.watching ?? null, now);
+    // An echo under the top HUD would read as a stray blob in it: its eyes peek in below instead.
+    const under = new Set(
+      spots
+        .filter((p) => {
+          const at = mapShown ? null : s.screenOf(p.at, 1.35);
+          return at !== null && at.y < hudTop;
+        })
+        .map((p) => p.loop),
+    );
+    const state = s.setEchoes(spots, hint?.watching ?? null, now, under);
     renderMarks();
     // An echo's eyes over the dark or at the edge are on screen too.
     const marked = [...marks.values()].some((m) => !m.hidden);
@@ -686,12 +697,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       let y = 0;
       if (p && spot) {
         const pad = 28;
-        const off = p.x < pad || p.x > w - pad || p.y < pad || p.y > hgt - pad;
+        // Under the top HUD counts as off screen: the eyes peek in just below it.
+        const top = Math.max(pad, hudTop + 14);
+        const off = p.x < pad || p.x > w - pad || p.y < top || p.y > hgt - pad;
         const inLight = lantern !== null && Math.hypot(p.x - lantern.x, p.y - lantern.y) < lightR;
         if (off) {
           state = 'edge';
           x = Math.min(w - pad, Math.max(pad, p.x));
-          y = Math.min(hgt - pad, Math.max(pad, p.y));
+          y = Math.min(hgt - pad, Math.max(top, p.y));
         } else if (inDark && !inLight) {
           state = 'on';
           x = p.x;
@@ -925,6 +938,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const h = Math.max(1, window.innerHeight);
     const box = mapShown ? floorBox(floor) : room.box;
     const bands = hudBands(h);
+    hudTop = mapShown ? 0 : bands.top;
     const shot = fitShot(
       box,
       { aspect: w / h, fov: s.fov, top: bands.top / h, bottom: bands.bottom / h },

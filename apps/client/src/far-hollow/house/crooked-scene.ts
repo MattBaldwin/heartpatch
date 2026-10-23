@@ -399,13 +399,15 @@ export class CrookedScene {
   /**
    * Draws the echoes in the rooms shown now, where `spots` says they drift
    * (fading as one drifts into the light), the one `watching` turned to me
-   * and a little bigger. `near`: an echo could show in the rooms drawn
+   * and a little bigger; one `under` the HUD isn't drawn (its eyes peek in
+   * below it instead). `near`: an echo could show in the rooms drawn
    * (check again soon); `shown`: one is on screen now (keep drawing).
    */
   setEchoes(
     spots: readonly EchoSpot[],
     watching: string | null,
     now: number,
+    under: ReadonlySet<string> = new Set(),
   ): { near: boolean; shown: boolean } {
     let near = false;
     let shown = false;
@@ -425,8 +427,9 @@ export class CrookedScene {
         mesh.material = this.#echoMat;
         this.#echoes.set(spot.loop, mesh);
       }
-      mesh.setEnabled(spot.shown > 0.02);
-      if (spot.shown > 0.02) shown = true;
+      const drawn = spot.shown > 0.02 && !under.has(spot.loop);
+      mesh.setEnabled(drawn);
+      if (drawn) shown = true;
       mesh.visibility = spot.shown;
       const t = now / 1000;
       const bob = this.#options.reducedMotion
