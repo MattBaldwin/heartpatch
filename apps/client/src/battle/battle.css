@@ -1,7 +1,8 @@
 /* The battle HUD (tech spec §6; owner decision 2026-10-05: the Storybook
    Diorama's HUD): compact cream pills in the top corners, each over its own
-   squishy, a bottom sheet of at most 35% of the screen for the caption and
-   the moves, the result card in the middle. 44pt+ targets, safe areas, the
+   squishy, a bottom sheet of 37% of the screen (more on a short phone, so
+   every control and the prompt fit) for the caption and the moves, the
+   result card in the middle. 44pt+ targets, safe areas, the
    shared padding tokens (--hp-pad-x/-y) so text never touches an edge.
    Above the map HUD (3), below the lobby (4). */
 
@@ -278,7 +279,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   flex-direction: column;
   gap: 10px;
   box-sizing: border-box;
-  max-height: 35vh; /* = SHEET_SHARE in battle-hud.ts: the camera keeps this clear */
+  /* The camera keeps this clear (it reads the computed value). The home
+     indicator's inset comes on top, so the controls get the full share. */
+  max-height: calc(var(--battle-sheet-vh, 37) * 1vh + env(safe-area-inset-bottom));
   overflow-y: auto;
   padding: 12px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 14px)
     calc(env(safe-area-inset-left) + 16px);
@@ -887,8 +890,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 /* An iPhone (SE 667 px to Pro 852 px): the buttons shrink so the four moves,
-   ⓘ, Heart Charm and Swap fit inside the 35% sheet. On the shortest, the
-   intro line steps aside and Run away may scroll, as it did before. */
+   ⓘ, Heart Charm, Swap and Run away fit the sheet, which takes a bigger share
+   of a shorter screen (--battle-sheet-vh) so nothing scrolls or drops. */
 @media (max-height: 880px) {
   .battle-move {
     gap: 1px;
@@ -922,9 +925,25 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   }
 }
 
+@media (max-height: 840px) {
+  .battle-sheet {
+    --battle-sheet-vh: 42;
+  }
+}
+
 @media (max-height: 700px) {
+  .battle-sheet {
+    --battle-sheet-vh: 46;
+    gap: 6px;
+    padding-top: 8px;
+  }
+
   .battle-sheet[data-mode='choose'] > .battle-caption {
-    display: none;
+    font-size: 14px;
+  }
+
+  .battle-controls {
+    gap: 6px;
   }
 
   /* ⓘ is a fourth button on the Heart Charm row: a tighter gap keeps Swap on it at 375 px. */
@@ -956,4 +975,27 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   > .battle-controls[data-view='pick']
   .hp-button.battle-move {
   padding: var(--hp-pad-y) 8px calc(var(--hp-pad-y) + 1px);
+}
+
+@media (max-height: 600px) {
+  .battle-sheet {
+    --battle-sheet-vh: 52;
+  }
+}
+
+/* A phone on its side: the width is there, the height is not. The four moves
+   go side by side and Run away joins the one row under them, so every
+   control and the prompt fit a sheet that is no taller than a portrait one. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .battle-sheet {
+    --battle-sheet-vh: 46;
+  }
+
+  .battle-sheet .battle-moves {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .battle-sheet .battle-row {
+    flex-wrap: nowrap;
+  }
 }
