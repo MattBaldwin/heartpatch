@@ -1,8 +1,13 @@
-import type { BuildingProduction, HeartCoins, MyBuilding } from '@heartpatch/shared';
+import {
+  tileLand,
+  type BuildingProduction,
+  type HeartCoins,
+  type MyBuilding,
+} from '@heartpatch/shared';
+import { CLEAR_TEXT } from '../inventory/clear-model.js';
 import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_BUILDINGS,
-  RESOURCE_TEXT,
   moveInOrder,
   outOfSeason,
   producedLines,
@@ -10,7 +15,6 @@ import {
   resourceBuildingFor,
   resourceCard,
   resourceEffect,
-  tileLand,
   upkeepSection,
   type ResourceTile,
 } from './resource-model.js';
@@ -136,7 +140,7 @@ describe('resourceBuildCards: the Build sheet (#601 PR 7)', () => {
     (_name, b) => {
       const spot = tile({ terrain: b.terrain, nodeResource: 'something' });
       expect(resourceBuildCards(spot, { seasons: HALLOWEEN }, me)).toEqual([
-        expect.objectContaining({ id: b.id, blocked: RESOURCE_TEXT.clearFirst }),
+        expect.objectContaining({ id: b.id, blocked: CLEAR_TEXT.firstLine }),
       ]);
       const cleared = tile({ terrain: 'clearing', clearedFrom: b.terrain });
       expect(resourceBuildCards(cleared, { seasons: HALLOWEEN }, me)).toEqual([
@@ -152,7 +156,7 @@ describe('resourceBuildCards: the Build sheet (#601 PR 7)', () => {
     expect(cards).toEqual([
       expect.objectContaining({
         id: 'woodcutters-hut',
-        blocked: 'Clear this land first 🌱. Then you can build here!',
+        blocked: CLEAR_TEXT.firstLine,
         cost: { timber: 20, stone: 15 },
       }),
     ]);

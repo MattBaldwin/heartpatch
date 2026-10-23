@@ -76,7 +76,8 @@ export const CLEAR_TEXT = {
   started: 'Clearing! 🌱 It takes a couple of minutes.',
   clearing: (left: string) => `🌱 Clearing… ready in ${left}`,
   clearingDone: '🌱 Clearing… nearly done!',
-  firstLine: 'Clear this land first 🌱',
+  // The server's own line for a build on a spot (`MESSAGES.clearFirst`).
+  firstLine: 'Clear this land first 🌱. Then you can build here!',
   // Clearing is for homesteads (#242, #295); the server says the same.
   notHomestead:
     'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',

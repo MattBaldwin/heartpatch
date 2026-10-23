@@ -17,6 +17,7 @@ import {
   type SettleResponse,
 } from '@heartpatch/shared';
 import type { BuildCard } from '../building/build-model.js';
+import { CLEAR_TEXT } from '../inventory/clear-model.js';
 import { formatWait } from '../inventory/game-clock.js';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
@@ -36,10 +37,6 @@ export const RESOURCE_BUILDINGS: readonly ResourceBuilding[] = GAME_DATA.buildin
 const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
 const RESOURCE_SEASONS = new Map(GAME_DATA.resources.map((r) => [r.id, r.season ?? null]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
-
-// What a tile's land is (cleared land counts as what it was, owner decision
-// Q2, `PublicTile.clearedFrom`): the same rule the server places by.
-export { tileLand };
 
 /** The resource building that stands on this land, if any. */
 export function resourceBuildingFor(land: string): ResourceBuilding | undefined {
@@ -70,8 +67,6 @@ export const RESOURCE_TEXT = {
     `${itemIcon(e.resource)} ${String(e.perHour)} ${itemName(e.resource)} an hour, all by itself`,
   /** "Needs Forest land 🌲" on land that takes no resource building. */
   needsLand: (terrain: string) => `Needs ${TERRAIN_NAMES.get(terrain) ?? 'the right'} land!`,
-  /** On a homestead with a spot: what the server says too (`MESSAGES.clearFirst`). */
-  clearFirst: 'Clear this land first 🌱. Then you can build here!',
   outOfSeason: (season: string) =>
     `${SEASON_NAMES.get(season) ?? 'Its season'} only! Come back then 🎃`,
   built: (name: string) => `Built! Your ${name} is getting to work 🔨`,
@@ -204,7 +199,7 @@ export function resourceBuildCards(
     // Where it goes once the spot is gone (it's only shown till then).
     const spot = homesteadSpot({ ...tile, nodeResource: null }, match);
     if (spot === undefined) return [];
-    return [buildCard(match, spot, outOfSeason(match) ?? RESOURCE_TEXT.clearFirst)];
+    return [buildCard(match, spot, outOfSeason(match) ?? CLEAR_TEXT.firstLine)];
   }
   if (match) {
     const spot = spotOf(match);
