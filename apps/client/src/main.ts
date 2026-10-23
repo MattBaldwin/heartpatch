@@ -28,6 +28,9 @@ import { COMMUNITY_TEXT } from './hollowed/community-model.js';
 import { restoreApi } from './hollowed/restore-api.js';
 import { createKeyHunt } from './hollowed/key-hunt.js';
 import { createRestoreSheet } from './hollowed/restore-sheet.js';
+import { createFarHollowSheet } from './hollowed/far-hollow-sheet.js';
+import { farHollowApi } from './hollowed/far-hollow-api.js';
+import { justArrived } from './hollowed/far-hollow-model.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
@@ -405,6 +408,8 @@ const care = createCareSheet({
     void heartCoins.refresh();
     // A village won in the same battle waited for the evolution to be seen (#592).
     showWonVillages();
+    // So did the far Hollow's sheet after the far road (#306 PR 6).
+    showFarHollowArrival();
   },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
@@ -614,6 +619,53 @@ const journeys = createJourneyScreen({
     maps.deselect();
     postScreen.open(post, view);
   },
+  openFarHollow: (post) => {
+    farHollowPost = post;
+    void farHollowSheet.open(post);
+  },
+});
+// The far Hollow (#306 PR 6): my own far Hollow each season, from any open
+// trading post's panel. The far road is a journey (the battle screen's card
+// says "Let's see"); the house screen is #306 6c.
+let farHollowPost: { q: number; r: number } | null = null;
+/** A far road won, waiting for the map to come back to open the sheet. */
+let farHollowArrived = false;
+/**
+ * A journey won that this device didn't start (a reload mid-battle): it may
+ * have been the far road. The map's live events stop while a battle is open,
+ * so once it closes we ask (#306 PR 6).
+ */
+let farHollowMaybe = false;
+/** Made it to the far Hollow ("Let's see"): its sheet, once an evolution's "Whoa!" is seen (#592). */
+const showFarHollowArrival = (): void => {
+  if (evolutionPending || care.isOpen) return;
+  if (farHollowArrived) {
+    farHollowArrived = false;
+    farHollowMaybe = false;
+    void farHollowSheet.open(farHollowPost);
+    return;
+  }
+  const mapId = maps.view?.map.id;
+  if (!farHollowMaybe || !mapId) return;
+  farHollowMaybe = false;
+  farHollowApi.view(mapId).then(
+    (view) => {
+      if (justArrived(view) && maps.view?.map.id === mapId) void farHollowSheet.open(null);
+    },
+    () => undefined,
+  );
+};
+let mapNight = false;
+const farHollowSheet = createFarHollowSheet({
+  root: document.body,
+  mapId: () => maps.view?.map.id ?? null,
+  night: () => mapNight,
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
+  },
+  onOpen: () => {
+    maps.deselect();
+  },
 });
 // Trick-or-treat (#515): a patch-mate's home tile gets a "Trick or treat!"
 // button, and a lit home a porch lantern. A treat may be Heartdust: the bag
@@ -667,6 +719,7 @@ const hollow = createHollowScreen({
   // The night loop plays while it's night on the map, and his visit hushes it.
   layer: {
     setNight: (night) => {
+      mapNight = night;
       hollowLayer.setNight(night);
       maps.setNight(night);
       communityActions.setNight(night);
@@ -1123,6 +1176,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     restoreSheet.close();
+    farHollowSheet.close();
     keyHunt.close();
     roster.close();
     jobs.close();
@@ -1387,7 +1441,12 @@ const battles = createBattleScreen({
   isGlade: (mapId) => mapId === glade,
   journey: {
     postName: (battleId) => journeys.postFor(battleId)?.name ?? null,
-    ended: journeys.ended,
+    ended: (battleId, won) => {
+      journeys.ended(battleId, won);
+      if (won && farHollowSheet.isRoad(battleId)) farHollowArrived = true;
+      else if (won && journeys.postFor(battleId) === null) farHollowMaybe = true;
+    },
+    farHollow: (battleId) => farHollowSheet.isRoad(battleId),
   },
   onWildHints: (mapId, tiles) => {
     wildPicker.setHints(mapId, tiles);
@@ -1431,6 +1490,7 @@ const battles = createBattleScreen({
         void care.celebrateNews(mapId).finally(() => {
           evolutionPending = false;
           showWonVillages();
+          showFarHollowArrival();
         });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
@@ -1931,6 +1991,7 @@ if (import.meta.env.DEV) {
     jobs: () => jobs.debug,
     roster: () => roster.debug,
     journey: () => journeys.debug,
+    farHollow: () => farHollowSheet.debug,
     trickOrTreat: () => trickOrTreat.debug,
     post: () => postScreen.debug,
     communities: () => ({

@@ -1,3 +1,4 @@
+import { FAR_HOLLOW_TEXT } from '../hollowed/far-hollow-model.js';
 import {
   GROWTH_RULES,
   JOURNEY_RULES,
@@ -30,6 +31,9 @@ export const JOURNEY_TEXT = {
   wonTitle: (post: string) => `You made it to ${post}!`,
   wonSub: (minutes: number) => `The post is open for you for ${String(minutes)} minutes.`,
   wonDone: 'Open the post 🏮',
+  // A won journey this device didn't start (after a reload): where it went is on the map.
+  wonSomewhereTitle: 'You made it! 🧭',
+  wonSomewhereSub: 'Back to the map to see where your journey took you.',
   lostTitle: 'Phew, tuckered out!',
   lostSub: "Rest up and try again. You didn't lose a thing.",
   scootedTitle: 'You headed home.',
@@ -125,9 +129,29 @@ export function journeyChance(team: readonly number[], journey: JourneyPreview):
 export function journeyResult(
   outcome: 'won' | 'lost' | 'scooted',
   post: string | null,
-  rules: JourneyRules = JOURNEY_RULES,
+  options: {
+    rules?: JourneyRules;
+    /**
+     * Where the journey went (#306 PR 6): a post's (the default), the far
+     * road, or not known here (a battle this device didn't start, after a
+     * reload), whose win card promises nothing either way.
+     */
+    to?: 'post' | 'far-hollow' | 'unknown';
+  } = {},
 ): { title: string; subtitle: string; done?: string } {
+  const { rules = JOURNEY_RULES, to = 'post' } = options;
+  const farHollow = to === 'far-hollow';
+  if (outcome === 'won' && to === 'unknown') {
+    return { title: JOURNEY_TEXT.wonSomewhereTitle, subtitle: JOURNEY_TEXT.wonSomewhereSub };
+  }
   const name = post ?? JOURNEY_TEXT.somePost;
+  if (outcome === 'won' && farHollow) {
+    return {
+      title: FAR_HOLLOW_TEXT.wonTitle,
+      subtitle: FAR_HOLLOW_TEXT.wonSub,
+      done: FAR_HOLLOW_TEXT.wonDone,
+    };
+  }
   if (outcome === 'won') {
     return {
       title: JOURNEY_TEXT.wonTitle(name),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Season } from '../schemas/data/seasons.js';
-import { activeSeasons } from './season-windows.js';
+import { activeSeasons, latestSeasonRun, nextSeasonRun } from './season-windows.js';
 import { SEASONS } from './seasons.js';
 
 const active = (date: string) => activeSeasons(SEASONS, date).map((s) => s.id);
@@ -73,5 +73,45 @@ describe('activeSeasons', () => {
     for (const bad of ['2026-13-01', '2027-02-29', '2026-10-1', '10-31', '2026-10-31T00:00']) {
       expect(() => activeSeasons(SEASONS, bad)).toThrow();
     }
+  });
+});
+
+describe('latestSeasonRun and nextSeasonRun (#306 PR 6)', () => {
+  const latest = (date: string) => {
+    const run = latestSeasonRun(SEASONS, date);
+    return run ? `${run.id} ${String(run.year)}` : null;
+  };
+  const next = (date: string) => nextSeasonRun(SEASONS, date)?.startsOn ?? null;
+
+  it('is the season running now, its first day included', () => {
+    expect(latest('2026-10-01')).toBe('halloween 2026');
+    expect(latest('2026-10-22')).toBe('halloween 2026');
+    expect(latest('2026-12-15')).toBe('christmas 2026');
+  });
+
+  it('moves to the later start when windows overlap', () => {
+    // Halloween 2026 runs to Nov 9, but Thanksgiving started Nov 3.
+    expect(latest('2026-11-03')).toBe('thanksgiving 2026');
+    expect(latest('2026-12-31')).toBe('new-year 2026');
+  });
+
+  it('keeps the last season between seasons, across the new year', () => {
+    expect(latest('2027-01-02')).toBe('new-year 2026');
+    expect(latest('2027-07-04')).toBe('new-year 2026');
+    expect(latest('2027-09-30')).toBe('new-year 2026');
+    expect(latest('2027-10-01')).toBe('halloween 2027');
+  });
+
+  it('finds the next start, this year or the next', () => {
+    expect(next('2026-10-22')).toBe('2026-11-03');
+    expect(next('2026-11-03')).toBe('2026-12-01');
+    expect(next('2026-12-31')).toBe('2027-10-01');
+    expect(next('2027-07-04')).toBe('2027-10-01');
+  });
+
+  it('is null with no seasons, and refuses a bad date', () => {
+    expect(latestSeasonRun([], '2026-10-22')).toBeNull();
+    expect(nextSeasonRun([], '2026-10-22')).toBeNull();
+    expect(() => latestSeasonRun(SEASONS, '2026-10-1')).toThrow();
   });
 });

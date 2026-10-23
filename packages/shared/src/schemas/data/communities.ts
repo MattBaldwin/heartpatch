@@ -139,5 +139,16 @@ export const CommunityRulesSchema = z.strictObject({
     /** How far back the big chest stands. */
     big: z.number().min(0).max(0.95),
   }),
+  /**
+   * The far Hollow (#306 PR 6, plan Q7, owner decision 7): a place of a
+   * kid's own, fresh every season, reached by the far road from any trading
+   * post. What it holds is server-only (the far-Hollow tables, rule 6).
+   */
+  farHollow: z.strictObject({
+    /** Its name on the sheet and the journey cards (fits the 16-character header). */
+    name: z.string().min(1).max(16),
+    /** The far road's trail: a journey this many tiles long (`journeyFor`). */
+    distance: z.number().int().min(1),
+  }),
 });
 export type CommunityRules = z.infer<typeof CommunityRulesSchema>;

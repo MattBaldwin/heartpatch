@@ -80,4 +80,10 @@ export const COMMUNITY_RULES: CommunityRules = {
     curve: 0.07, // TUNE
     big: 0.62, // TUNE
   },
+  // The far Hollow (PR 6, plan Q7): a kid's own place past the last post
+  // each season (Halloween 2026: the Crooked House, #306 6b).
+  farHollow: {
+    name: 'The far Hollow',
+    distance: 6, // TUNE: plan Q7, the far road's trail is a distance-6 journey
+  },
 };

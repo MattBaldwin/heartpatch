@@ -17,7 +17,7 @@ export interface JourneysRoutesOptions {
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
 }
 
-/** Journeys to trading posts (#270). */
+/** Journeys to trading posts (#270), and the far road to the far Hollow (#306 PR 6). */
 export const journeysRoutes =
   (service: JourneysService, options: JourneysRoutesOptions): FastifyPluginCallback =>
   (fastify, _options, done) => {
@@ -39,6 +39,28 @@ export const journeysRoutes =
       },
       async (request, reply) => {
         const result = await service.start(
+          requireUser(request),
+          request.params.mapId,
+          request.body,
+        );
+        return reply.code(result.created ? 201 : 200).send({ battle: result.battle });
+      },
+    );
+
+    // The far road from a post to this season's far Hollow (#306 PR 6).
+    app.post(
+      '/maps/:mapId/far-hollow/journey',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: StartJourneyRequestSchema,
+          response: { 200: BattleResponseSchema, 201: BattleResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('start'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request, reply) => {
+        const result = await service.startFarHollow(
           requireUser(request),
           request.params.mapId,
           request.body,

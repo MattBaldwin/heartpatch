@@ -42,6 +42,8 @@ import { createSettleService } from './modules/settle/service.js';
 import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
+import { farHollowRoutes } from './modules/far-hollow/routes.js';
+import { createFarHollowService } from './modules/far-hollow/service.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
 import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
@@ -446,9 +448,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
-        // Journeys to trading posts (#270).
+        // Journeys to trading posts (#270), and the far road (#306 PR 6).
         await api.register(
           journeysRoutes(createJourneysService({ battles }), { hooks: authHooks, idempotency }),
+        );
+        // The far Hollow, each Keeper's own every season (#306 PR 6).
+        await api.register(
+          farHollowRoutes(createFarHollowService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
         );
         await api.register(
           tradesRoutes(trades, {
