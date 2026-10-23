@@ -87,6 +87,7 @@ import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } fr
 import type { WildMarker } from './wild-markers.js';
 import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
+import { outOfSeason } from '../resource-buildings/resource-model.js';
 
 // Prop builders moved to map-props.ts; re-exported here, where other screens
 // (home, cinematic, battle) import them from.
@@ -459,9 +460,12 @@ export class MapScene {
   /** The wild-squishy tufts (#209): one mesh, a thin instance per marked tile. */
   private readonly wildMesh: Mesh;
   private wild: readonly WildMarker[] = [];
+  /** The seasons on today, for a resource building asleep out of season (#601). */
+  private readonly seasons: readonly string[];
 
   constructor(scene: Scene, view: MapView, options: MapSceneOptions = {}) {
     this.scene = scene;
+    this.seasons = options.seasons ?? [];
     this.halloween = options.halloween === true;
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
@@ -851,6 +855,13 @@ export class MapScene {
       buildingId: building.buildingId,
       level: building.level,
       lit: building.lit,
+      // A resource building napping (#601): unpaid upkeep, its homestead cut
+      // off, or out of season (a Pumpkin Barn after Halloween).
+      asleep:
+        building.kind === 'resource' &&
+        (building.paused === true ||
+          tile.homestead === 'paused' ||
+          outOfSeason(building.buildingId, this.seasons)),
       x: at.x,
       z: at.z,
       y: topOf(tile) + DOME * 0.5,

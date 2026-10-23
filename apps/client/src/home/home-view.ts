@@ -1,6 +1,10 @@
 import {
   buildCost,
+  EXPLORE_RULES,
+  JOB_RULES,
+  RESOURCE_BUILDING_RULES,
   buildingEffects,
+  economyEffects,
   CLEARING_RULES,
   clearToolFor,
   fuelCost,
@@ -19,6 +23,7 @@ import {
   type Building,
   type BuildingEffect,
   type BuildingSlot,
+  type EconomyEffect,
   type HomeResponse,
   type HomeSquishy,
   type MyBuilding,
@@ -55,6 +60,21 @@ export function buildingIcon(buildingId: string): string {
       return '🎯';
     case 'crafting-factory':
       return '🏭';
+    // Resource buildings (#601): what each one works.
+    case 'woodcutters-hut':
+      return '🌲';
+    case 'ember-kiln':
+      return '🏺';
+    case 'stone-quarry':
+      return '🧱';
+    case 'ice-cutter':
+      return '🏔️';
+    case 'water-well':
+      return '⛲';
+    case 'greenhouse':
+      return '🥬';
+    case 'pumpkin-barn':
+      return '🥧';
     default:
       return '🏠';
   }
@@ -450,7 +470,26 @@ export function effectChip(effect: BuildingEffect): string {
 
 /** A building's chips at a level (1: just built), for the build menu and the fire sheet. */
 export function effectChips(building: Building, level = 1): string[] {
-  return buildingEffects(building, level).map(effectChip);
+  return [
+    ...buildingEffects(building, level).map(effectChip),
+    ...economyEffects(building, level, ECONOMY_RULES).flatMap(economyChips),
+  ];
+}
+
+const ECONOMY_RULES = {
+  jobs: JOB_RULES,
+  explore: EXPLORE_RULES,
+  resourceBuildings: RESOURCE_BUILDING_RULES,
+};
+
+/** A resource building's or the Warehouse's chips (#601): what it makes, and its morning upkeep. */
+export function economyChips(effect: EconomyEffect): string[] {
+  const upkeep = `💛 ${String(effect.upkeep)} each morning`;
+  if (effect.kind === 'delivers') return ['📦 Delivers to your Bag', upkeep];
+  return [
+    `${itemIcon(effect.resource)} ${String(effect.perHour)} ${itemName(effect.resource)} an hour`,
+    upkeep,
+  ];
 }
 
 /** Where a building goes on a tile, in a line (#204). */

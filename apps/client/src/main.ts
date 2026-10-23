@@ -43,6 +43,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
+import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
@@ -285,6 +286,11 @@ const inventory = createInventoryScreen({
   onCollected: () => {
     void recipeBook.check();
   },
+  // A settle charges the morning's upkeep (#601): the 💛 pill reads after it,
+  // not alongside it (its own read on coming back can beat the charge).
+  onSettled: () => {
+    void heartCoins.refresh();
+  },
   // The welcome-back card's "See Factory" (#294): its batches, wherever it
   // stands (on a homestead since #295).
   onSeeFactory: () => {
@@ -373,8 +379,19 @@ const roster = createRosterSheet({
 const heartCoins = createHeartCoinsScreen({
   root: document.body,
   now: () => inventory.gameNow(),
+  // By the sheet's own patch's date, as the map dresses its seasons (#583).
+  // Its zone is remembered: Home closes the map, but the sheet opens there too.
+  seasons: (at) => {
+    const zone = heartCoinsZone;
+    return zone === null ? null : seasonsOn(zone, at);
+  },
 });
+/** The time zone of the patch the Heart Coins sheet shows, or null if not known. */
+let heartCoinsZone: string | null = null;
 const heartCoinsOn = (mapId: string): void => {
+  const view = maps.view;
+  if (view?.map.id === mapId) heartCoinsZone = view.map.timeZone;
+  else if (heartCoins.debug.mapId !== mapId) heartCoinsZone = null;
   heartCoins.setMap(mapId === glade ? null : mapId);
 };
 const care = createCareSheet({
@@ -784,6 +801,13 @@ const home = createHomeScreen({
       inventory.openFactory();
     });
   },
+  // A resource building's card (#601 PR 7): Collect is a settle (owner
+  // decision Q3); Upkeep is the Heart Coins sheet's order (Q5).
+  onCollect: () => inventory.refresh(),
+  onUpkeep: () => {
+    heartCoins.openUpkeep();
+  },
+  now: () => inventory.gameNow(),
   onJobs: (mapId, at) => {
     void jobs.openJobBoard(mapId, at);
   },

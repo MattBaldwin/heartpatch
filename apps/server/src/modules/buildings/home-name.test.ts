@@ -162,7 +162,7 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       expect((await home(server, kid, mapId)).naming).toEqual({
         name: null,
         unlocked: false,
-        kinds: HOME_BASE_RULES.buildableKinds.map((kind) => ({ kind, built: kind === 'habitat' })),
+        kinds: NAMING_RULES.kindsToName.map((kind) => ({ kind, built: kind === 'habitat' })),
         caught: 3,
         need: NAMING_RULES.caughtToName,
         renameOpen: false,
@@ -174,7 +174,7 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       // Every kind but one is still locked, however many are caught.
       await setFacts(mapId, kid, {
         caughtCount: 99,
-        kindsBuilt: HOME_BASE_RULES.buildableKinds.slice(1),
+        kindsBuilt: NAMING_RULES.kindsToName.slice(1),
       });
       expect((await name(server, kid, mapId, 'Pumpkin Hollow')).statusCode).toBe(403);
       expect((await memberRow(mapId, kid)).homeName).toBeNull();
@@ -384,7 +384,7 @@ describe.skipIf(!url)('naming your home (#306, needs DATABASE_URL)', () => {
       expect((await home(server, kid, mapId)).naming).toMatchObject({
         caught: 2,
         unlocked: false,
-        kinds: HOME_BASE_RULES.buildableKinds.map((kind) => ({
+        kinds: NAMING_RULES.kindsToName.map((kind) => ({
           kind,
           built: ['fence', 'habitat', 'training-grounds'].includes(kind),
         })),

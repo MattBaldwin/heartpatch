@@ -1,0 +1,140 @@
+/* Resource buildings (#601 PR 7): the tile card's meter, and the Heart Coins sheet's upkeep list. */
+
+.resource-line-asleep {
+  color: var(--hp-ink-soft, #6b5a73);
+}
+
+.resource-line-full {
+  font-weight: 700;
+}
+
+.resource-meter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.resource-meter-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(120, 90, 140, 0.16);
+  overflow: hidden;
+}
+
+.resource-meter-fill {
+  display: block;
+  height: 100%;
+  min-width: 6px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9fe3c8, #6cc9a4);
+  transition: width 300ms ease;
+}
+
+.resource-meter-full .resource-meter-fill {
+  background: linear-gradient(90deg, #ffd27a, #ff9b3d);
+}
+
+.resource-meter-paused .resource-meter-fill,
+.resource-meter-napping .resource-meter-fill,
+.resource-meter-dormant .resource-meter-fill {
+  background: #c9bcd4;
+}
+
+.resource-meter-text {
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.resource-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 2px 0 6px;
+  font-size: 0.85rem;
+  color: var(--hp-ink-soft, #6b5a73);
+}
+
+/* The Heart Coins sheet's morning upkeep (#601, owner decision Q5). */
+.upkeep-section {
+  margin-top: 14px;
+}
+
+.upkeep-total {
+  margin: 4px 0;
+  font-weight: 700;
+}
+
+.upkeep-hint {
+  margin: 2px 0 8px;
+  font-size: 0.85rem;
+  color: var(--hp-ink-soft, #6b5a73);
+}
+
+.upkeep-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.upkeep-row {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.upkeep-row-paused {
+  opacity: 0.75;
+}
+
+.upkeep-place {
+  font-weight: 800;
+  text-align: center;
+  color: #b0508a;
+}
+
+.upkeep-name {
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.upkeep-level {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--hp-ink-soft, #6b5a73);
+}
+
+.upkeep-coins {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.upkeep-arrows {
+  display: flex;
+  gap: 4px;
+}
+
+.upkeep-arrow {
+  width: 40px;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: #fde8f0;
+  font-size: 1.1rem;
+  color: #8a3d6a;
+  touch-action: manipulation;
+}
+
+.upkeep-arrow:disabled {
+  opacity: 0.35;
+}

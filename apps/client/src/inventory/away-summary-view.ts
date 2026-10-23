@@ -51,6 +51,11 @@ export interface AwaySummaryShow {
   readonly away: boolean;
   /** Where each chip flies in from (its tile on screen), or null to just appear. */
   readonly from?: (entry: SummaryEntry) => ScreenPoint | null;
+  /**
+   * Lines said under the chips, and listed on the card: what my resource
+   * buildings made ("Your Stone Quarry made 96 🪨", #601).
+   */
+  readonly lines?: readonly string[];
 }
 
 /** Read-only state for the dev hook. */
@@ -141,6 +146,11 @@ export function createAwaySummary(
   let bar = el('span', { class: 'away-bar', 'aria-hidden': 'true' });
   // The words a screen reader says, and what the e2e reads ("+5 Timber").
   const sentence = el('span', { class: 'away-sr' });
+  const made = el('span', {
+    class: 'away-made',
+    'aria-hidden': 'true',
+    'data-testid': 'landed-made',
+  });
   // Kept: the e2e watch this node's words (`landed-toast`, as the pop-up was).
   const banner = el(
     'button',
@@ -149,6 +159,7 @@ export function createAwaySummary(
     chips,
     more,
     bar,
+    made,
     sentence,
   );
   banner.hidden = true;
@@ -157,6 +168,8 @@ export function createAwaySummary(
   const grid = el('ul', { class: 'away-grid' });
   const trainingTitle = el('h3', { class: 'away-card-section' }, `🎯 ${AWAY_TEXT.training}`);
   const trainingList = el('ul', { class: 'away-training' });
+  const madeTitle = el('h3', { class: 'away-card-section' }, `🔨 ${AWAY_TEXT.buildings}`);
+  const madeList = el('ul', { class: 'away-made-lines', 'data-testid': 'away-made-lines' });
   const nice = el('button', { type: 'button', class: 'auth-button away-nice' }, AWAY_TEXT.nice);
   const card = el(
     'section',
@@ -171,6 +184,8 @@ export function createAwaySummary(
     grid,
     trainingTitle,
     trainingList,
+    madeTitle,
+    madeList,
     nice,
   );
   const layer = el('div', { class: 'away-card-layer', 'data-testid': 'away-card' }, card);
@@ -354,6 +369,10 @@ export function createAwaySummary(
       ),
     );
     grid.hidden = items.length === 0;
+    const lines = what.lines ?? [];
+    madeTitle.hidden = lines.length === 0;
+    madeList.hidden = lines.length === 0;
+    madeList.replaceChildren(...lines.map((line) => el('li', {}, line)));
     const trained = what.entries.find((e) => e.kind === 'trained');
     trainingTitle.hidden = !trained;
     trainingList.hidden = !trained;
@@ -468,6 +487,9 @@ export function createAwaySummary(
       if (what.entries.length === 0) return;
       current = what;
       sentence.textContent = what.sentence;
+      const lines = what.lines ?? [];
+      made.textContent =
+        lines.length > 1 ? AWAY_TEXT.madeMore(lines[0] ?? '', lines.length - 1) : (lines[0] ?? '');
       const one = what.entries.length === 1 ? what.entries[0] : undefined;
       banner.classList.toggle('away-one', one !== undefined);
       stopFlights();

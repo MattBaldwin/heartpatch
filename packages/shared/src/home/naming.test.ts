@@ -5,14 +5,14 @@ import { HomeNameSchema } from '../schemas/buildings.js';
 import { NamingRulesSchema } from '../schemas/data/naming.js';
 import { namingGate, type NamingFacts } from './naming.js';
 
-const kinds = HOME_BASE_RULES.buildableKinds;
+const kinds = NAMING_RULES.kindsToName;
 const all: NamingFacts = {
   kindsBuilt: [...kinds],
   caughtCount: NAMING_RULES.caughtToName,
   heartSeedLevel: 1,
   homeNamedAtLevel: null,
 };
-const gate = (facts: Partial<NamingFacts>) => namingGate({ ...all, ...facts }, NAMING_RULES, kinds);
+const gate = (facts: Partial<NamingFacts>) => namingGate({ ...all, ...facts }, NAMING_RULES);
 
 describe('NAMING_RULES', () => {
   it('passes its schema', () => {
@@ -42,6 +42,23 @@ describe('namingGate', () => {
       caught: NAMING_RULES.caughtToName,
       need: NAMING_RULES.caughtToName,
     });
+  });
+
+  it('needs exactly the home kinds: homestead-only ones never gate naming (#601 PR 7)', () => {
+    // Today's set unlocks naming without a resource building or the Warehouse.
+    const homeKinds = ['hearthfire', 'habitat', 'training-grounds', 'fence', 'factory'];
+    expect(kinds).toEqual(homeKinds);
+    expect(gate({ kindsBuilt: homeKinds }).unlocked).toBe(true);
+    // Building one changes nothing, and they're buildable but not on the list.
+    expect(HOME_BASE_RULES.buildableKinds).toContain('resource');
+    expect(kinds).not.toContain('resource');
+    expect(gate({ kindsBuilt: [...homeKinds, 'resource'] }).kinds).toEqual(
+      gate({ kindsBuilt: homeKinds }).kinds,
+    );
+  });
+
+  it('only lists buildable kinds', () => {
+    for (const kind of kinds) expect(HOME_BASE_RULES.buildableKinds).toContain(kind);
   });
 
   it('ignores kinds that are not buildable', () => {

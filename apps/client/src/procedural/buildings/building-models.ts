@@ -20,7 +20,10 @@ export interface BuildingModel {
   readonly glow: Mesh | null;
 }
 
-/** Which look a building shows: lit or out for fires; one look for the rest. */
+/**
+ * Which look a building shows: lit or out for fires; for a resource building
+ * `plain` while it works and `out` while it naps (#601); one look for the rest.
+ */
 export type BuildingLook = 'lit' | 'out' | 'plain';
 
 /** The model key for a building, its look and its level (each level has its own model). */
@@ -108,6 +111,19 @@ export function buildBuildingModel(
       { height: h, diameterTop: top, diameterBottom: bottom, tessellation },
       scene,
     );
+  const box = (width: number, height: number, depth: number) =>
+    CreateBox(`${name}-part`, { width, height, depth }, scene);
+  // A resource building's windows and lamps (#601): lit while it works,
+  // dark while it naps (`out`).
+  const awake = look !== 'out';
+  const windowList = awake ? glow : body;
+  const windowColor = awake ? C.window : C.windowOut;
+  const lampColor = awake ? C.lantern : C.windowOut;
+  const emberColor = awake ? C.ember : C.ash;
+  const iceLampColor = awake ? C.iceGlow : C.windowOut;
+  // The Greenhouse's panes are part of its body (they're seen, not lights).
+  const glassList = body;
+  const glassColor = awake ? C.glass : C.windowOut;
   /** Calls `make` for `count` angles evenly around a circle. */
   const around = (count: number, make: (angle: number, i: number) => void) => {
     for (let i = 0; i < count; i++) make((i / count) * Math.PI * 2, i);
@@ -475,6 +491,347 @@ export function buildBuildingModel(
         part(glow, sphere(0.12, 10), C.lantern, [0, 0.82, -0.04]);
         for (const x of [-0.3, -0.1, 0.1, 0.3]) {
           part(glow, sphere(0.05, 8), C.lantern, [x, 0.4, -0.31]);
+        }
+      }
+      break;
+    }
+    // Resource buildings (#601 PR 7): one soft toy per land, each level
+    // adding a piece (L2, L3, L4). Their windows and lamps glow while they
+    // work; asleep (paused for upkeep, a napping homestead) they go dark.
+    case 'woodcutters-hut': {
+      // A log cabin with a mossy roof, a chopping stump with its axe, and a
+      // log pile. L2: a chimney and a bigger pile. L3: a lean-to and a
+      // lantern. L4: a saw wheel and a pennant.
+      part(body, box(0.56, 0.36, 0.44), C.cabin, [0, 0.18, 0.04]);
+      for (const y of [0.08, 0.2, 0.32]) {
+        part(
+          body,
+          cylinder(0.6, 0.07, 0.07, 10),
+          C.stump,
+          [0, y, -0.18],
+          [1, 1, 1],
+          [0, 0, Math.PI / 2],
+        );
+      }
+      part(
+        body,
+        cylinder(0.7, 0.5, 0.5, 3),
+        C.cabinRoof,
+        [0, 0.46, 0.04],
+        [1, 1, 1.15],
+        [0, 0, Math.PI / 2],
+      );
+      part(body, box(0.14, 0.2, 0.04), C.door, [0.1, 0.1, -0.2]);
+      part(windowList, box(0.12, 0.1, 0.03), windowColor, [-0.14, 0.22, -0.2]);
+      part(body, cylinder(0.14, 0.2, 0.22, 14), C.stump, [-0.36, 0.07, -0.3]);
+      part(body, box(0.04, 0.18, 0.04), C.post, [-0.36, 0.22, -0.3], [1, 1, 1], [0, 0, 0.5]);
+      part(body, box(0.1, 0.07, 0.03), C.axeHead, [-0.32, 0.3, -0.3], [1, 1, 1], [0, 0, 0.5]);
+      const logs = l >= 2 ? 3 : 2;
+      for (let i = 0; i < logs; i++) {
+        part(
+          body,
+          cylinder(0.34, 0.1, 0.1, 10),
+          C.log,
+          [0.42, 0.06 + i * 0.09, 0.2 - i * 0.02],
+          [1, 1, 1],
+          [Math.PI / 2, 0, 0],
+        );
+      }
+      if (l >= 2) {
+        part(body, box(0.1, 0.24, 0.1), C.stoneDark, [0.16, 0.62, 0.14]);
+        part(body, sphere(0.08, 8), C.puff, [0.16, 0.8, 0.14]);
+      }
+      if (l >= 3) {
+        part(body, box(0.26, 0.22, 0.34), C.cabin, [-0.4, 0.11, 0.12]);
+        part(body, box(0.3, 0.04, 0.38), C.cabinRoof, [-0.4, 0.25, 0.12], [1, 1, 1], [0, 0, 0.25]);
+        part(body, cylinder(0.36, 0.03, 0.03, 6), C.post, [0.3, 0.18, -0.3]);
+        part(windowList, sphere(0.08, 8), lampColor, [0.3, 0.38, -0.3]);
+      }
+      if (l >= 4) {
+        part(
+          body,
+          CreateTorus(`${name}-saw`, { diameter: 0.26, thickness: 0.05, tessellation: 16 }, scene),
+          C.axeHead,
+          [0.42, 0.3, -0.12],
+          [1, 1, 1],
+          [Math.PI / 2, 0, 0],
+        );
+        part(body, cylinder(0.5, 0.025, 0.025, 6), C.post, [-0.2, 0.86, 0.14]);
+        part(body, box(0.16, 0.1, 0.02), C.flag, [-0.12, 1.04, 0.14]);
+      }
+      break;
+    }
+    case 'ember-kiln': {
+      // A round terracotta kiln with a glowing mouth and a chimney, by a
+      // stack of Emberwood. L2: a second chimney. L3: a bigger stack and a
+      // trim ring. L4: a crown of little lamps.
+      part(body, cylinder(0.08, 0.86, 0.9, 24), C.kilnTrim, [0, 0.04, 0]);
+      part(body, sphere(0.72, 20), C.kiln, [0, 0.08, 0.04], [1, 0.85, 1]);
+      part(windowList, sphere(0.26, 12), emberColor, [0, 0.16, -0.27], [1, 0.9, 0.35]);
+      part(body, cylinder(0.3, 0.12, 0.14, 10), C.kilnTrim, [0.16, 0.5, 0.12]);
+      part(body, sphere(0.09, 8), C.puff, [0.16, 0.7, 0.12]);
+      if (l >= 2) part(body, cylinder(0.24, 0.1, 0.12, 10), C.kilnTrim, [-0.18, 0.46, 0.16]);
+      const stack = l >= 3 ? 3 : 2;
+      for (let i = 0; i < stack; i++) {
+        part(
+          body,
+          cylinder(0.28, 0.08, 0.08, 8),
+          C.log,
+          [0.44, 0.05 + i * 0.075, -0.12 + (i % 2) * 0.04],
+          [1, 1, 1],
+          [Math.PI / 2, 0.3, 0],
+        );
+      }
+      if (l >= 3) {
+        part(
+          body,
+          CreateTorus(`${name}-trim`, { diameter: 0.7, thickness: 0.05, tessellation: 24 }, scene),
+          C.kilnTrim,
+          [0, 0.28, 0.04],
+        );
+      }
+      if (l >= 4) {
+        around(5, (a) => {
+          part(windowList, sphere(0.06, 8), lampColor, [
+            Math.cos(a) * 0.2,
+            0.42,
+            0.04 + Math.sin(a) * 0.2,
+          ]);
+        });
+      }
+      break;
+    }
+    case 'stone-quarry': {
+      // A heap of soft boulders with a pickaxe stuck in, and a lamp post.
+      // L2: a little cart. L3: a crane with a hanging stone. L4: a second
+      // heap and a pennant.
+      for (const [x, z, d, c] of [
+        [0, 0.08, 0.46, C.rock],
+        [-0.22, -0.06, 0.3, C.rockDark],
+        [0.22, -0.02, 0.34, C.rock],
+        [0.04, -0.18, 0.24, C.rockDark],
+        [0.02, 0.06, 0.26, C.rockDark],
+      ] as const) {
+        part(body, sphere(d, 10), c, [x, d * 0.36, z], [1, 0.8, 1]);
+      }
+      part(body, box(0.04, 0.3, 0.04), C.post, [0.1, 0.42, 0.06], [1, 1, 1], [0, 0, -0.4]);
+      part(body, box(0.2, 0.05, 0.04), C.axeHead, [0.15, 0.56, 0.06], [1, 1, 1], [0, 0, -0.4]);
+      part(body, cylinder(0.5, 0.03, 0.03, 6), C.post, [-0.4, 0.25, -0.24]);
+      part(windowList, sphere(0.09, 8), lampColor, [-0.4, 0.52, -0.24]);
+      if (l >= 2) {
+        part(body, box(0.24, 0.1, 0.16), C.cart, [0.36, 0.1, -0.3]);
+        for (const x of [0.28, 0.44]) {
+          part(
+            body,
+            cylinder(0.03, 0.08, 0.08, 10),
+            C.stoneDark,
+            [x, 0.05, -0.39],
+            [1, 1, 1],
+            [Math.PI / 2, 0, 0],
+          );
+        }
+        part(body, sphere(0.1, 8), C.rock, [0.36, 0.17, -0.3]);
+      }
+      if (l >= 3) {
+        part(body, cylinder(0.8, 0.04, 0.05, 8), C.post, [-0.36, 0.4, 0.24]);
+        part(body, box(0.5, 0.04, 0.04), C.post, [-0.16, 0.8, 0.24]);
+        part(body, cylinder(0.24, 0.01, 0.01, 4), C.stoneDark, [0.06, 0.66, 0.24]);
+        part(body, sphere(0.12, 8), C.rockDark, [0.06, 0.5, 0.24]);
+      }
+      if (l >= 4) {
+        part(body, sphere(0.3, 10), C.rock, [0.42, 0.1, 0.3], [1, 0.75, 1]);
+        part(body, cylinder(0.4, 0.025, 0.025, 6), C.post, [0, 0.62, 0.08]);
+        part(body, box(0.14, 0.09, 0.02), C.flag, [0.07, 0.78, 0.08]);
+      }
+      break;
+    }
+    case 'ice-cutter': {
+      // A round igloo of icy blocks with a frosty lamp in its doorway, and
+      // cut blocks stacked by it. L2: more blocks. L3: a sled. L4: an
+      // icicle crown that glows.
+      part(body, cylinder(0.06, 0.9, 0.94, 24), C.iceDeep, [0, 0.03, 0]);
+      part(body, sphere(0.7, 18), C.ice, [0, 0.06, 0.06], [1, 0.82, 1]);
+      part(
+        body,
+        cylinder(0.22, 0.26, 0.28, 14),
+        C.ice,
+        [0, 0.12, -0.24],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      part(windowList, sphere(0.16, 10), iceLampColor, [0, 0.13, -0.36], [1, 1, 0.4]);
+      const blocks = l >= 2 ? 4 : 2;
+      for (let i = 0; i < blocks; i++) {
+        part(body, box(0.14, 0.12, 0.14), i % 2 ? C.iceDeep : C.ice, [
+          0.4 - (i % 2) * 0.05,
+          0.06 + Math.floor(i / 2) * 0.12,
+          -0.2 + (i % 2) * 0.16,
+        ]);
+      }
+      if (l >= 3) {
+        part(body, box(0.3, 0.04, 0.14), C.cart, [-0.4, 0.08, -0.26]);
+        for (const z of [-0.32, -0.2]) {
+          part(body, box(0.34, 0.03, 0.02), C.post, [-0.4, 0.03, z]);
+        }
+        part(body, box(0.12, 0.1, 0.1), C.ice, [-0.42, 0.15, -0.26]);
+      }
+      if (l >= 4) {
+        around(6, (a) => {
+          part(
+            windowList,
+            cylinder(0.14, 0.05, 0, 6),
+            iceLampColor,
+            [Math.cos(a) * 0.16, 0.56, 0.06 + Math.sin(a) * 0.16],
+            [1, 1, 1],
+            [Math.PI, 0, 0],
+          );
+        });
+      }
+      break;
+    }
+    case 'water-well': {
+      // A round stone well with water inside, a little roof on two posts and
+      // a bucket on its rope, by a lamp. L2: a trough. L3: a bench and a second bucket.
+      // L4: a little water tower.
+      part(body, cylinder(0.3, 0.56, 0.6, 20), C.wellStone, [0, 0.15, 0]);
+      part(body, cylinder(0.04, 0.44, 0.44, 20), C.water, [0, 0.29, 0]);
+      for (const x of [-0.26, 0.26]) part(body, box(0.05, 0.5, 0.05), C.post, [x, 0.5, 0]);
+      part(
+        body,
+        cylinder(0.7, 0.34, 0.34, 3),
+        C.workshopRoof,
+        [0, 0.8, 0],
+        [1, 1, 1.4],
+        [0, 0, Math.PI / 2],
+      );
+      part(
+        body,
+        cylinder(0.5, 0.03, 0.03, 8),
+        C.post,
+        [0, 0.66, 0],
+        [1, 1, 1],
+        [0, 0, Math.PI / 2],
+      );
+      part(body, cylinder(0.12, 0.12, 0.09, 10), C.bucket, [0.06, 0.48, 0]);
+      if (l >= 2) {
+        part(body, box(0.36, 0.1, 0.14), C.log, [0.48, 0.05, -0.2]);
+        part(body, box(0.3, 0.02, 0.09), C.water, [0.48, 0.1, -0.2]);
+      }
+      part(body, cylinder(0.44, 0.03, 0.03, 6), C.post, [-0.44, 0.22, -0.24]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.44, 0.47, -0.24]);
+      if (l >= 3) {
+        part(body, box(0.3, 0.06, 0.1), C.log, [-0.36, 0.14, 0.3]);
+        part(body, cylinder(0.12, 0.12, 0.09, 10), C.bucket, [-0.4, 0.06, 0.24]);
+      }
+      if (l >= 4) {
+        for (const [x, z] of [
+          [0.38, 0.22],
+          [0.54, 0.22],
+          [0.46, 0.36],
+        ] as const) {
+          part(body, cylinder(0.5, 0.025, 0.025, 6), C.post, [x, 0.25, z]);
+        }
+        part(body, cylinder(0.22, 0.24, 0.24, 14), C.water, [0.46, 0.6, 0.27]);
+        part(body, cylinder(0.12, 0, 0.28, 14), C.workshopRoof, [0.46, 0.77, 0.27]);
+      }
+      break;
+    }
+    case 'greenhouse': {
+      // A little glasshouse with a white frame and plants inside, the roof
+      // panes glowing softly. L2: planters outside. L3: a second wing. L4: a
+      // glass dome and a blooming arch.
+      part(body, box(0.66, 0.08, 0.46), C.glassFrame, [0, 0.04, 0.04]);
+      for (const [x, z, d] of [
+        [-0.18, 0.1, 0.22],
+        [0.08, 0, 0.26],
+        [0.22, 0.14, 0.18],
+      ] as const) {
+        part(body, sphere(d, 10), C.leaf, [x, 0.14 + d * 0.3, z]);
+      }
+      part(body, sphere(0.08, 8), C.bloom, [0.08, 0.32, -0.06]);
+      // A warm grow-lamp hanging inside.
+      part(windowList, sphere(0.09, 8), lampColor, [-0.06, 0.4, 0.04]);
+      part(glassList, box(0.62, 0.34, 0.42), glassColor, [0, 0.25, 0.04]);
+      part(
+        glassList,
+        cylinder(0.64, 0.42, 0.42, 3),
+        glassColor,
+        [0, 0.5, 0.04],
+        [1, 1, 1.05],
+        [0, 0, Math.PI / 2],
+      );
+      for (const x of [-0.31, 0, 0.31])
+        part(body, box(0.03, 0.4, 0.03), C.glassFrame, [x, 0.26, -0.17]);
+      part(body, box(0.66, 0.03, 0.03), C.glassFrame, [0, 0.43, -0.17]);
+      if (l >= 2) {
+        for (const x of [-0.24, 0.24]) {
+          part(body, box(0.18, 0.1, 0.12), C.log, [x, 0.05, -0.34]);
+          part(body, sphere(0.14, 8), C.leafDark, [x, 0.14, -0.34], [1, 0.7, 1]);
+        }
+      }
+      if (l >= 3) {
+        part(glassList, box(0.24, 0.26, 0.3), glassColor, [0.46, 0.15, 0.12]);
+        part(body, sphere(0.14, 8), C.leaf, [0.46, 0.12, 0.12]);
+      }
+      if (l >= 4) {
+        part(glassList, sphere(0.26, 12), glassColor, [-0.16, 0.66, 0.04], [1, 0.8, 1]);
+        part(
+          body,
+          CreateTorus(`${name}-arch`, { diameter: 0.3, thickness: 0.04, tessellation: 16 }, scene),
+          C.leafDark,
+          [-0.42, 0.14, -0.26],
+          [1, 1, 1],
+          [Math.PI / 2, Math.PI / 2, 0],
+        );
+        for (const y of [0.22, 0.3]) part(body, sphere(0.06, 8), C.bloom, [-0.42, y, -0.26]);
+      }
+      break;
+    }
+    case 'pumpkin-barn': {
+      // A red barn with a cream trim cross on its doors, a big pumpkin by
+      // the door and a hay bale. L2: a row of pumpkins. L3: a silo. L4: a
+      // glowing grin on the big pumpkin and lanterns.
+      part(body, box(0.6, 0.38, 0.46), C.barn, [0, 0.19, 0.06]);
+      part(
+        body,
+        cylinder(0.66, 0.5, 0.5, 3),
+        C.barnRoof,
+        [0, 0.5, 0.06],
+        [1, 1, 1.15],
+        [0, 0, Math.PI / 2],
+      );
+      part(body, box(0.24, 0.26, 0.03), C.barnTrim, [0, 0.13, -0.18]);
+      part(body, box(0.2, 0.22, 0.035), C.barn, [0, 0.13, -0.18]);
+      for (const turn of [0.8, -0.8])
+        part(body, box(0.03, 0.28, 0.04), C.barnTrim, [0, 0.13, -0.19], [1, 1, 1], [0, 0, turn]);
+      part(windowList, box(0.12, 0.08, 0.03), windowColor, [0, 0.43, -0.18]);
+      part(body, sphere(0.22, 12), C.pumpkin, [0.38, 0.1, -0.24], [1.1, 0.85, 1.1]);
+      part(body, cylinder(0.06, 0.03, 0.04), C.stem, [0.38, 0.22, -0.24]);
+      part(
+        body,
+        cylinder(0.18, 0.13, 0.13, 12),
+        C.hay,
+        [-0.38, 0.09, -0.24],
+        [1, 1, 1],
+        [0, 0, Math.PI / 2],
+      );
+      if (l >= 2) {
+        for (const x of [-0.2, 0, 0.2])
+          part(body, sphere(0.12, 10), C.pumpkinDark, [x, 0.05, -0.38], [1.1, 0.8, 1.1]);
+      }
+      if (l >= 3) {
+        part(body, cylinder(0.6, 0.2, 0.2, 16), C.barnTrim, [-0.42, 0.3, 0.24]);
+        part(body, sphere(0.2, 12), C.barnRoof, [-0.42, 0.6, 0.24]);
+      }
+      if (l >= 4) {
+        const grin = look === 'out' ? body : glow;
+        const g = look === 'out' ? C.faceOut : C.face;
+        part(grin, sphere(0.06, 8), g, [0.33, 0.13, -0.335], [1, 1.1, 0.3]);
+        part(grin, sphere(0.06, 8), g, [0.43, 0.13, -0.335], [1, 1.1, 0.3]);
+        part(grin, sphere(0.12, 8), g, [0.38, 0.06, -0.335], [1.2, 0.4, 0.3]);
+        for (const x of [-0.24, 0.24]) {
+          part(body, cylinder(0.3, 0.025, 0.025, 6), C.post, [x, 0.15, -0.3]);
+          part(windowList, sphere(0.06, 8), lampColor, [x, 0.33, -0.3]);
         }
       }
       break;
