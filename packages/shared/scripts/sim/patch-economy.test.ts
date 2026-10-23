@@ -12,6 +12,7 @@ import {
   runPatchEconomy,
   upkeepPercent,
   warehouseTrip,
+  warehouseTripRuns,
   type PatchEconomyRun,
 } from './patch-economy.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
@@ -121,25 +122,19 @@ describe('runPatchEconomy guards (#601)', () => {
 
   it('the Warehouse keeps level 3+ buildings delivering on a long trip', () => {
     for (const seats of CONFIG.seats) {
-      const trip = runs.filter(
-        (r) => r.seats === seats && r.kid === 'engaged' && away(r, CONFIG.warehouseAwayDays),
-      );
-      const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
-      if (!withIt || !without) throw new Error('no Warehouse runs');
+      const found = warehouseTripRuns(runs, CONFIG, seats);
+      if (!found) throw new Error('no Warehouse runs');
+      const { withIt, without } = found;
       const out = (r: PatchEconomyRun) => awayWindow(r).reduce((a, d) => a + d.output, 0);
       expect(out(withIt)).toBeGreaterThan(out(without));
     }
   });
 
   it("saves a month of the Warehouse's upkeep's worth of output, at sell price, on one long trip", () => {
-    const engaged = kid('engaged');
     for (const seats of CONFIG.seats) {
-      const trip = runs.filter(
-        (r) => r.seats === seats && r.kid === 'engaged' && away(r, CONFIG.warehouseAwayDays),
-      );
-      const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
-      if (!withIt || !without) throw new Error('no Warehouse runs');
-      const t = warehouseTrip(withIt, without, engaged, CONFIG.days);
+      const found = warehouseTripRuns(runs, CONFIG, seats);
+      if (!found) throw new Error('no Warehouse runs');
+      const t = warehouseTrip(found.withIt, found.without, found.kid, CONFIG.days);
       expect(t.extraWorth, `${String(seats)} seats`).toBeGreaterThanOrEqual(t.upkeep);
     }
   });

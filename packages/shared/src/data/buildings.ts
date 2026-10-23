@@ -460,9 +460,10 @@ export const BUILDINGS: Building[] = [
   },
   {
     // #601: with one paid and standing, level 3+ resource buildings deliver
-    // straight to the bag and never fill up. Expensive on purpose; its
-    // upkeep is worth about what one 5-day trip's saved output sells for,
-    // though the daily sell cap means it isn't cashed (`pnpm sim:patch-economy`).
+    // straight to the bag and never fill up. Costly to build on purpose. A
+    // month of its upkeep is about what one 5-day trip's saved output is
+    // worth at sell price; the daily sell cap means it isn't cashed
+    // (`pnpm sim:patch-economy`).
     id: 'warehouse',
     kind: 'warehouse',
     name: 'Warehouse',

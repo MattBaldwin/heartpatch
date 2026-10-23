@@ -516,10 +516,29 @@ export function pausedWhilePlaying(run: PatchEconomyRun, fromDay = 1): number {
     .reduce((a, d) => a + d.pausedMornings, 0);
 }
 
+/** The engaged kid's long-trip runs on a map size, with and without the Warehouse. */
+export function warehouseTripRuns(
+  runs: readonly PatchEconomyRun[],
+  config: PatchEconomyConfig,
+  seats: number,
+): { withIt: PatchEconomyRun; without: PatchEconomyRun; kid: PatchEconomyKid } | null {
+  const kid = config.kids.find((k) => k.warehouse);
+  const trip = runs.filter(
+    (r) =>
+      r.seats === seats &&
+      r.kid === kid?.id &&
+      r.away.length === config.warehouseAwayDays.length &&
+      r.away.every((d, i) => d === config.warehouseAwayDays[i]),
+  );
+  const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
+  return kid && withIt && without ? { withIt, without, kid } : null;
+}
+
 /**
- * What the Warehouse's upkeep costs over `days` against what one trip's extra
- * output sells for: the engaged kid's huts sell at their resources' lots, so
- * the value is the extra items over the average lot, times the coin price.
+ * What `days` of the Warehouse's upkeep cost against what one trip's extra
+ * output is worth at sell price. A price, not earnings: the daily sell cap is
+ * full for this kid, so the items are not cashed. The price is the plain
+ * average of the kid's huts' resources (equal today at 0.2 💛 an item).
  */
 export function warehouseTrip(
   withIt: PatchEconomyRun,
@@ -613,22 +632,14 @@ export function renderPatchEconomy(
     '',
     '## Warehouse payback',
     '',
-    `A ${String(config.warehouseAwayDays.length)}-day trip: the extra output the Warehouse delivers (what the huts would have wasted at full storage), sold, against a month of its upkeep. The daily sell cap is already full for this kid, so the saved items are not cashed inside the month: this prices what the Warehouse saves, not Heart Coins it earns (guard: worth at least a month of upkeep at sell price).`,
+    `A ${String(config.warehouseAwayDays.length)}-day trip: the extra output the Warehouse delivers (what the huts would have wasted at full storage), priced at sell price, against a month of its upkeep. The daily sell cap is already full for this kid, so the saved items are not cashed inside the month: this prices what the Warehouse saves, not Heart Coins it earns (guard: worth at least a month of upkeep at sell price).`,
     '',
-    '| Seats | Extra items | Sold for 💛 | A month of upkeep 💛 |',
+    '| Seats | Extra items | Worth at sell price 💛 | A month of upkeep 💛 |',
     '|---|---|---|---|',
     ...config.seats.flatMap((seats) => {
-      const kid = config.kids.find((k) => k.warehouse);
-      const trip = runs.filter(
-        (r) =>
-          r.seats === seats &&
-          r.kid === kid?.id &&
-          r.away.length === config.warehouseAwayDays.length &&
-          r.away[0] === config.warehouseAwayDays[0],
-      );
-      const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
-      if (!kid || !withIt || !without) return [];
-      const t = warehouseTrip(withIt, without, kid, config.days);
+      const found = warehouseTripRuns(runs, config, seats);
+      if (!found) return [];
+      const t = warehouseTrip(found.withIt, found.without, found.kid, config.days);
       return [
         `| ${String(seats)} | ${String(t.extraItems)} | ${String(t.extraWorth)} | ${String(t.upkeep)} |`,
       ];
