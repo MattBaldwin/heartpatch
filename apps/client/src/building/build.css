@@ -110,6 +110,11 @@
   overflow: hidden;
 }
 
+.build-card-name-long {
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+
 .build-detail {
   margin: 0;
   font-size: 14px;
