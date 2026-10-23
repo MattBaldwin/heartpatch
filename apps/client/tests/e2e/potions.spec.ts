@@ -89,7 +89,10 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   await expect(
     page.locator('[data-testid="battle-item-pick"][data-item="hearty-soup"]'),
   ).toHaveAttribute('data-state', 'empty');
-  await expectRoomyLabels(page, '.battle-item, .battle-button, .battle-ask');
+  await expectRoomyLabels(
+    page,
+    '.battle-item, [data-testid="battle-sheet"] .hp-button, .battle-ask',
+  );
   // Back is fully in view, inside the sheet (it clips what overflows).
   await expect(page.getByTestId('battle-item-back')).toBeInViewport({ ratio: 1 });
   const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
@@ -123,7 +126,7 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
     .toBeGreaterThan(sparkles);
   // The sip rides with a move: the Heart Charm and Swap wait.
   await expect(page.getByTestId('battle-capture')).toBeHidden();
-  await expectRoomyLabels(page, '.battle-button');
+  await expectRoomyLabels(page, '[data-testid="battle-sheet"] .hp-button');
 
   // Forgiving: tap "Sipped ✓" to put it back, then sip it again.
   await realTap(sippedButton);
@@ -213,12 +216,12 @@ test('a full team at 375 px: Heart Charm, potions and Swap share the first line,
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
-  await expectRoomyLabels(page, '.battle-button');
+  await expectRoomyLabels(page, '[data-testid="battle-sheet"] .hp-button');
 
   // One Swap for the whole bench: it asks who comes out.
   await realTap(page.getByTestId('battle-swap'));
   await expect(page.getByTestId('battle-swap-pick')).toHaveCount(2);
-  await expectRoomyLabels(page, '.battle-button, .battle-ask');
+  await expectRoomyLabels(page, '[data-testid="battle-sheet"] .hp-button, .battle-ask');
   await realTap(page.getByTestId('battle-swap-back'));
   await expect(page.getByTestId('battle-swap')).toBeVisible();
 });

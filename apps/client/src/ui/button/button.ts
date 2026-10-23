@@ -1,5 +1,5 @@
 import { el, type Attrs } from '../dom.js';
-import { strokeIcon } from '../trays/trays.js';
+import { CLOSE_ICON_PATH, strokeIcon } from '../stroke-icon.js';
 import './button.css';
 import './press.css';
 
@@ -42,14 +42,12 @@ export function hpButton(label: Node | string, options: ButtonOptions = {}): HTM
   );
 }
 
-const CLOSE_PATH = 'M6 6l12 12 M18 6L6 18';
-
 /** The round ✕ for a sheet's corner; `label` is what it reads aloud ("Close the Bag"). */
 export function hpClose(label: string, testId?: string): HTMLButtonElement {
   return el(
     'button',
     { type: 'button', class: 'hp-close', 'aria-label': label, ...testAttr(testId) },
-    strokeIcon(CLOSE_PATH),
+    strokeIcon(CLOSE_ICON_PATH),
   );
 }
 

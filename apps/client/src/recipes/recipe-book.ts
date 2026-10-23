@@ -9,6 +9,7 @@ import { createFactoryStrip } from '../factory/factory-strip.js';
 import { FACTORY_TEXT, recipeIcon } from '../factory/factory-view.js';
 import { formatTimeLeft } from '../inventory/game-clock.js';
 import { itemIconNode } from '../inventory/item-icons.js';
+import { hpButton, hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   bookOrder,
@@ -205,16 +206,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   (options.entryRoot ?? options.root).append(entry);
 
   // ── The book ──────────────────────────────────────────────────────────
-  const closeButton = el(
-    'button',
-    {
-      type: 'button',
-      class: 'rbook-btn',
-      'aria-label': RECIPE_BOOK_TEXT.close,
-      'data-testid': 'recipe-book-close',
-    },
-    '×',
-  );
+  const closeButton = hpClose(RECIPE_BOOK_TEXT.close, 'recipe-book-close');
   closeButton.addEventListener('click', () => {
     shutBook();
   });
@@ -235,16 +227,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     at = 'contents';
     render('none');
   });
-  const searchButton = el(
-    'button',
-    {
-      type: 'button',
-      class: 'rbook-btn',
-      'aria-label': RECIPE_BOOK_TEXT.search,
-      'data-testid': 'recipe-book-search',
-    },
-    '🔍',
-  );
+  const searchButton = hpButton('🔍', { small: true, testId: 'recipe-book-search' });
+  searchButton.classList.add('rbook-search-button');
+  searchButton.setAttribute('aria-label', RECIPE_BOOK_TEXT.search);
   searchButton.addEventListener('click', () => {
     searching = true;
     render('none');
@@ -254,26 +239,10 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   const tabs = el('div', { class: 'rbook-tabs', role: 'group' });
   const stage = el('div', { class: 'rbook-stage' });
-  const prev = el(
-    'button',
-    {
-      type: 'button',
-      class: 'rbook-nav-btn',
-      'aria-label': RECIPE_BOOK_TEXT.prevPage,
-      'data-testid': 'recipe-book-prev',
-    },
-    `‹ ${RECIPE_BOOK_TEXT.back}`,
-  );
-  const next = el(
-    'button',
-    {
-      type: 'button',
-      class: 'rbook-nav-btn',
-      'aria-label': RECIPE_BOOK_TEXT.nextPage,
-      'data-testid': 'recipe-book-next',
-    },
-    `${RECIPE_BOOK_TEXT.next} ›`,
-  );
+  const prev = hpButton(`‹ ${RECIPE_BOOK_TEXT.back}`, { small: true, testId: 'recipe-book-prev' });
+  prev.setAttribute('aria-label', RECIPE_BOOK_TEXT.prevPage);
+  const next = hpButton(`${RECIPE_BOOK_TEXT.next} ›`, { small: true, testId: 'recipe-book-next' });
+  next.setAttribute('aria-label', RECIPE_BOOK_TEXT.nextPage);
   const pageLabel = el('span', { class: 'rbook-page-label' });
   const sayLine = el('p', { class: 'rbook-say', role: 'status', 'data-testid': 'recipe-book-say' });
   prev.addEventListener('click', () => {
@@ -295,15 +264,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     query = searchInput.value;
     renderSearch();
   });
-  const searchClose = el(
-    'button',
-    {
-      type: 'button',
-      class: 'rbook-btn rbook-btn-soft',
-      'aria-label': RECIPE_BOOK_TEXT.closeSearch,
-    },
-    '×',
-  );
+  const searchClose = hpClose(RECIPE_BOOK_TEXT.closeSearch);
   searchClose.addEventListener('click', () => {
     searching = false;
     render('none');

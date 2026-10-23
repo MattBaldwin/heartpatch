@@ -13,6 +13,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { friendlyApi, type FriendlyApi } from './friendly-api.js';
 import { challengeEventFor, FRIENDLY_TEXT, gapLine, waitLeft } from './friendly-model.js';
+import { buttonClass, hpClose } from '../ui/button/button.js';
 import './friendly.css';
 
 // Friendly battles (#29, the owner-approved mockup's frames 1–5): a Friends
@@ -149,7 +150,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       'button',
       {
         type: 'button',
-        class: `auth-button friendly-button${extra.soft ? ' auth-button-soft' : ''}`,
+        class: buttonClass({ variant: extra.soft ? 'secondary' : 'primary' }),
         ...(extra.testId ? { 'data-testid': extra.testId } : {}),
         ...(extra.disabled ? { disabled: '' } : {}),
       },
@@ -360,15 +361,8 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         note,
       );
       noteLine.hidden = note === '';
-      const close = el(
-        'button',
-        {
-          type: 'button',
-          class: 'tile-panel-close friendly-close',
-          'aria-label': FRIENDLY_TEXT.close,
-        },
-        '×',
-      );
+      const close = hpClose(FRIENDLY_TEXT.close);
+      close.classList.add('friendly-close');
       close.addEventListener('click', closeSheet);
       sheet.replaceChildren(close, ...body, noteLine);
       if (mode.type === 'list') {

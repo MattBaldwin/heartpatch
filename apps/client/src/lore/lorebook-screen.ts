@@ -1,4 +1,5 @@
 import type { FoundLoreSlot, LorebookResponse, LoreSlot } from '@heartpatch/shared';
+import { hpButton, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import {
   bookChapters,
@@ -64,22 +65,13 @@ export function createLorebookScreen(options: LorebookScreenOptions): LorebookSc
   /** Pages that were new when the book opened: they keep their ribbon while it's open. */
   let newThisOpen = new Set<string>();
 
-  const contentsButton = el(
-    'button',
-    { type: 'button', class: 'lbook-btn', 'data-testid': 'lorebook-contents' },
-    `‹ ${LORE_TEXT.contents}`,
-  );
+  const contentsButton = hpButton(`‹ ${LORE_TEXT.contents}`, {
+    small: true,
+    testId: 'lorebook-contents',
+  });
   const title = el('h2', { class: 'lbook-title', id: 'lbook-title' }, LORE_TEXT.title);
-  const closeButton = el(
-    'button',
-    {
-      type: 'button',
-      class: 'lbook-close',
-      'aria-label': LORE_TEXT.closeBook,
-      'data-testid': 'lorebook-close',
-    },
-    '✕',
-  );
+  const closeButton = hpClose(LORE_TEXT.closeBook, 'lorebook-close');
+  closeButton.classList.add('lbook-close');
   const tabs = el('div', { class: 'lbook-tabs', role: 'group', 'aria-label': LORE_TEXT.contents });
   const stage = el('div', { class: 'lbook-stage', 'data-testid': 'lorebook-stage' });
   const nav = el('div', { class: 'lbook-nav' });

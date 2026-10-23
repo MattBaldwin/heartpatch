@@ -1,3 +1,4 @@
+import { hpButton } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { INSTALL_GUIDE_SEEN_KEY } from './config.js';
 import { keepOne } from './keep-one.js';
@@ -63,11 +64,8 @@ export function createInstallGuide(): InstallGuide {
     );
   // One card, kept while it's up: a lobby re-render re-appends it, so a tap on "Got it!" mid-refresh still lands (#423).
   const card = keepOne((drop) => {
-    const close = el(
-      'button',
-      { type: 'button', class: 'auth-button auth-button-small pwa-guide-close' },
-      'Got it!',
-    );
+    const close = hpButton('Got it!', { variant: 'primary', small: true });
+    close.classList.add('pwa-guide-close');
     const node = el(
       'section',
       {

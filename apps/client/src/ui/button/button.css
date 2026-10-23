@@ -34,7 +34,7 @@
   gap: 8px;
   min-width: var(--hp-tap);
   min-height: var(--hp-button-h);
-  padding: var(--hp-pad-y) 20px;
+  padding: var(--hp-pad-y, 8px) 20px;
   border: 0;
   border-radius: var(--hp-radius);
   background: var(--hp-gloss), var(--hp-secondary);
@@ -61,7 +61,7 @@
 
 .hp-button-small {
   min-height: var(--hp-button-h-small);
-  padding: var(--hp-pad-y) var(--hp-pad-x);
+  padding: var(--hp-pad-y, 8px) var(--hp-pad-x, 12px);
   border-radius: 14px;
   font-size: 15px;
 }
@@ -115,7 +115,7 @@
   gap: 2px;
   min-width: 88px;
   min-height: 48px;
-  padding: var(--hp-pad-y) 18px var(--hp-pad-y) 12px;
+  padding: var(--hp-pad-y, 8px) 18px var(--hp-pad-y, 8px) 12px;
   border: 0;
   border-radius: 999px;
   background: var(--hp-gloss), var(--hp-secondary);

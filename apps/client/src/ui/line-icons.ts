@@ -1,4 +1,4 @@
-import { strokeIcon } from './trays/trays.js';
+import { strokeIcon } from './stroke-icon.js';
 
 // Drawn line icons (#291, like the boards' button icons), shared by explore
 // and the Bag (#308). The shovel emoji (U+1FA8F) is Emoji 16.0, which iOS
