@@ -91,8 +91,12 @@ describe('CROOKED_HOUSE (#306 6b)', () => {
     expect(doorOpen(house, open, none)).toBe(true);
     expect(doorOpen(house, pantry, none)).toBe(false);
     expect(doorOpen(house, pantry, { unlocked: allBits(31), bonusOpen: 0 })).toBe(false);
-    expect(doorOpen(house, pantry, { unlocked: 0, bonusOpen: withBit(0, doorBit('pantry-door')) })).toBe(true);
-    expect(doorOpen(house, north, { unlocked: withBit(0, doorBit('north-door')), bonusOpen: 0 })).toBe(true);
+    expect(
+      doorOpen(house, pantry, { unlocked: 0, bonusOpen: withBit(0, doorBit('pantry-door')) }),
+    ).toBe(true);
+    expect(
+      doorOpen(house, north, { unlocked: withBit(0, doorBit('north-door')), bonusOpen: 0 }),
+    ).toBe(true);
     expect(doorBetween(house, 'parlour', 'front-hall')).toBe(open);
     expect(doorBetween(house, 'parlour', 'kitchen')).toBeNull();
     expect(doorLeadsTo(open, 'front-hall')).toBe('parlour');
@@ -151,7 +155,11 @@ describe('echoes', () => {
     const back = echoAt(loop, { offset: 0, direction: -1 }, lap / 4);
     expect(back).toBeCloseTo(1.5, 10);
     for (let t = 0; t < 3 * lap; t += 997) {
-      const p = echoAt(loop, { offset: 0.9, direction: -1 }, Date.parse('2026-10-31T00:00:00Z') + t);
+      const p = echoAt(
+        loop,
+        { offset: 0.9, direction: -1 },
+        Date.parse('2026-10-31T00:00:00Z') + t,
+      );
       expect(p).toBeGreaterThanOrEqual(0);
       expect(p).toBeLessThan(loop.rooms.length);
     }

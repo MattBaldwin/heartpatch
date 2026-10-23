@@ -27,7 +27,9 @@ export const CrookedHouseSecretsSchema = z.strictObject({
   chests: z.record(
     ContentIdSchema,
     z.strictObject({
-      loot: z.array(z.strictObject({ weight: z.number().int().min(1), items: ItemPileSchema })).min(1),
+      loot: z
+        .array(z.strictObject({ weight: z.number().int().min(1), items: ItemPileSchema }))
+        .min(1),
       friend: z.strictObject({
         chance: z.number().int().min(0).max(100),
         level: z

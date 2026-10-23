@@ -20,21 +20,28 @@ describe('CROOKED_HOUSE_SECRETS (#306 6b)', () => {
     const rooms = CROOKED_HOUSE.rooms;
     // A bloom table for exactly the rooms that bloom, each one real.
     expect(Object.keys(CROOKED_HOUSE_SECRETS.blooms).sort()).toEqual(
-      rooms.filter((r) => r.things.length > 0).map((r) => r.id).sort(),
+      rooms
+        .filter((r) => r.things.length > 0)
+        .map((r) => r.id)
+        .sort(),
     );
     for (const spot of Object.values(CROOKED_HOUSE_SECRETS.blooms)) {
       expect(exploreFindTable(FAR_HOLLOW_FINDS, spot.kind, spot.terrain)).toBeDefined();
     }
     // A chest for exactly the bonus rooms.
     expect(Object.keys(CROOKED_HOUSE_SECRETS.chests).sort()).toEqual(
-      rooms.filter((r) => r.kind === 'bonus').map((r) => r.id).sort(),
+      rooms
+        .filter((r) => r.kind === 'bonus')
+        .map((r) => r.id)
+        .sort(),
     );
     const resources = new Set(RESOURCES.map((r) => r.id));
     const piles = [
       CROOKED_HOUSE_SECRETS.attic.items,
       ...Object.values(CROOKED_HOUSE_SECRETS.chests).flatMap((c) => c.loot.map((l) => l.items)),
     ];
-    for (const pile of piles) for (const id of Object.keys(pile)) expect(resources.has(id), id).toBe(true);
+    for (const pile of piles)
+      for (const id of Object.keys(pile)) expect(resources.has(id), id).toBe(true);
   });
 
   it('give friends that spawn in the wild, of their room’s element', () => {

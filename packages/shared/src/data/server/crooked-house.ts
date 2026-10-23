@@ -24,7 +24,11 @@ export const CROOKED_HOUSE_SECRETS: CrookedHouseSecrets = {
         { weight: 2, items: { treats: 4, heartdust: 1 } }, // TUNE: every pile and weight
         { weight: 1, items: { emberwood: 3, heartdust: 2 } },
       ],
-      friend: { chance: 20, level: { min: 6, max: 10 }, species: [{ species: 'candlekit', weight: 1 }] }, // TUNE
+      friend: {
+        chance: 20,
+        level: { min: 6, max: 10 },
+        species: [{ species: 'candlekit', weight: 1 }],
+      }, // TUNE
     },
     'hanging-garden': {
       loot: [
@@ -59,7 +63,11 @@ export const CROOKED_HOUSE_SECRETS: CrookedHouseSecrets = {
         { weight: 2, items: { glimmer: 4, heartdust: 1 } },
         { weight: 1, items: { treats: 3, heartdust: 2 } },
       ],
-      friend: { chance: 20, level: { min: 6, max: 10 }, species: [{ species: 'glowboo', weight: 1 }] }, // TUNE
+      friend: {
+        chance: 20,
+        level: { min: 6, max: 10 },
+        species: [{ species: 'glowboo', weight: 1 }],
+      }, // TUNE
     },
   },
   // Owner decision 4: the cellar's pile, and the Lantern Keeper's Cloak.

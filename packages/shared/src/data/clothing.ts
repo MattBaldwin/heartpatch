@@ -3206,7 +3206,8 @@ const FAR_HOLLOW_KEEPSAKES: ClothingItem[] = [
     // The Crooked House's: a deep plum cape with a glowing lantern-gold hem.
     id: 'lantern-keepers-cloak',
     name: "Lantern Keeper's Cloak",
-    description: 'A cosy plum cape with a hem that glows like a lantern. No room stays dark for long.',
+    description:
+      'A cosy plum cape with a hem that glows like a lantern. No room stays dark for long.',
     slot: 'back',
     rarity: 'legendary',
     sources: ['found'],
