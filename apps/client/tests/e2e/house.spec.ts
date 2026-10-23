@@ -4,6 +4,7 @@ import { hook } from './dev-hook.js';
 import { expectRoomyLabels } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { closeRoster, openRoster } from './roster.js';
+import { touch } from './touch.js';
 import { grantItems } from './trading.js';
 import { trayButton } from './trays.js';
 
@@ -193,6 +194,22 @@ test('enter the house from home, walk in and step out, and go back home', async 
   expect(again.z).toBeCloseTo(walked.z, 3);
   await walk.tap();
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
+
+  // A pinch only zooms: apart sinks toward kid height, together comes back
+  // up and stops at the dollhouse. Only Back leaves (Controls A; a pinch
+  // zooms on the map and in the house alike).
+  const mid = { x: vw.width * 0.5, y: vw.height * 0.5 };
+  const spread = (from: number, to: number) =>
+    Array.from({ length: 9 }, (_, i) => {
+      const half = from + ((to - from) * i) / 8;
+      return { 1: { x: mid.x - half, y: mid.y }, 2: { x: mid.x + half, y: mid.y } };
+    });
+  await touch(page, spread(40, 160), { hitTest: true });
+  await expect.poll(async () => (await houseState(page))?.zoom, slow).toBeGreaterThan(0);
+  await touch(page, spread(160, 10), { hitTest: true });
+  await expect.poll(async () => (await houseState(page))?.zoom, slow).toBe(0);
+  await expect(page.getByTestId('house')).toBeVisible();
+  expect((await houseState(page))?.open).toBe(true);
 
   await page.getByTestId('house-back').tap();
   await expect(page.getByTestId('house')).toBeHidden();
