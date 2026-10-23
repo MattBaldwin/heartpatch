@@ -58,6 +58,29 @@
   color: var(--hp-ink-soft, #6b5a73);
 }
 
+/* The Warehouse's 📦 mark on a level 3+ card, and its own card (#601 PR 9). */
+.resource-delivery {
+  display: inline-block;
+  margin: 4px 0 2px;
+  padding: var(--hp-pad-y, 8px) var(--hp-pad-x, 12px);
+  border-radius: 999px;
+  background: #fff1d6;
+  color: #8a5a1f;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.resource-delivery-off {
+  background: rgba(120, 90, 140, 0.12);
+  color: var(--hp-ink-soft, #6b5a73);
+  font-weight: 600;
+}
+
+.warehouse-line-asleep {
+  color: var(--hp-ink-soft, #6b5a73);
+}
+
 /* The Heart Coins sheet's morning upkeep (#601, owner decision Q5). */
 .upkeep-section {
   margin-top: 14px;

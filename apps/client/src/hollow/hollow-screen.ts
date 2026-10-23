@@ -34,7 +34,15 @@ import {
 } from './hollow-report.js';
 import { placeOf } from './dark-land.js';
 import { createNightShow, domCaption, type NightShowDebug, type ShowWalk } from './night-show.js';
-import { NIGHT_TEXT, reachText, STAGE_ORDER, STAGES, stageNights } from './night-text.js';
+import {
+  NIGHT_TEXT,
+  reachText,
+  STAGE_ORDER,
+  STAGES,
+  stageNights,
+  upkeepPausedLine,
+} from './night-text.js';
+import type { UpkeepPaused } from '../heart-coins/heart-coins.js';
 import type { BeatKind, Narration } from './show-timeline.js';
 import './hollow.css';
 
@@ -97,6 +105,13 @@ export interface HollowScreenOptions {
    * it opens or goes away.
    */
   otherReportOpen?: () => boolean;
+  /**
+   * My buildings that fell asleep for unpaid upkeep at a patch's latest
+   * morning (#601 PR 9, the Heart Coins reply after the bag's settle):
+   * the morning card says so once a morning. Call `upkeepChanged` when it
+   * may have changed.
+   */
+  upkeepPaused?: () => UpkeepPaused | null;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -137,6 +152,8 @@ export interface HollowScreen {
   liveEvent: (event: WsEventMessage) => void;
   /** Another card opened or closed (see `otherReportOpen`). */
   otherReportChanged: () => void;
+  /** A fresh Heart Coins reply came in (see `upkeepPaused`). */
+  upkeepChanged: () => void;
   /** The map on screen redrew (my dark land may have changed): the chips and the nudge follow. */
   viewChanged: () => void;
   /** He won this land of mine back on `night` (#277): his report tells it. */
@@ -165,6 +182,9 @@ const trickKey = (userId: string, mapId: string) =>
 const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
 /** The last night whose dark-land nudge was answered on this device (#277). */
 const nudgeKey = (userId: string, mapId: string) => `heartpatch.hollow.nudge.${userId}.${mapId}`;
+/** The last morning whose upkeep pauses were told (#601 PR 9). */
+const upkeepKey = (userId: string, mapId: string) =>
+  `heartpatch.hollow.upkeep-paused.${userId}.${mapId}`;
 /** The live show's prowl: he strikes this long after nightfall. */
 const PROWL_MS = HOLLOW_RULES.show.prowlMinutes * 60_000;
 /** How often the night's cards look whether something else is up over the map. */
@@ -410,6 +430,15 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     (s) => (s.trickOrTreat ? { ...s.trickOrTreat, at: s.trickOrTreat.day } : null),
     trickKey,
   );
+  /** What the morning card last told of upkeep pauses, so only a change redraws it. */
+  let upkeepToldBefore: string | null = null;
+  // Once per device per morning: the morning is its mark.
+  const upkeepNote = oneTimeNote(() => {
+    const paused = options.upkeepPaused?.() ?? null;
+    return paused && paused.mapId === mapId && paused.buildings.length > 0
+      ? { ...paused, at: paused.morning }
+      : null;
+  }, upkeepKey);
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -723,6 +752,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const tidyLines = tidy ? tileUseLines(tidy) : [];
     const crowded = crowdedNote.note();
     const treated = trickNote.note();
+    const upkeep = upkeepNote.note();
+    upkeepToldBefore = upkeep
+      ? `${upkeep.at}:${upkeep.buildings.map((b) => b.buildingId).join(',')}`
+      : null;
+    const upkeepLine = upkeep ? upkeepPausedLine(upkeep.buildings) : null;
     renderChips();
     reportBox.hidden =
       !on ||
@@ -731,7 +765,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         !packedGrounds &&
         tidyLines.length === 0 &&
         !crowded &&
-        !treated) ||
+        !treated &&
+        !upkeepLine) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -752,6 +787,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ...(tidy && tidy.packed.length > 0 ? [describeItems(tidy.refund)] : []),
         ...(crowded ? [...HOLLOW_TEXT.packedCrowded, describeItems(crowded.refund)] : []),
         ...(treated ? trickOrTreatLines(treated) : []),
+        ...(upkeepLine ? [upkeepLine] : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -807,7 +843,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
                 ),
               ]
             : []),
-          darkFirst
+          // A morning with no night to tell but buildings that need 💛 (#601
+          // PR 9) isn't about fires: it's an Okay.
+          darkFirst && (report.length > 0 || !upkeepLine)
             ? button(
                 NIGHT_TEXT.lightMyLand,
                 () => {
@@ -917,6 +955,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     tidyNote.markSeen();
     crowdedNote.markSeen();
     trickNote.markSeen();
+    upkeepNote.markSeen();
     report = [];
     render();
   }
@@ -1142,6 +1181,15 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       if (!mapId || !status) return;
       renderChips();
       renderNight();
+    },
+
+    upkeepChanged: () => {
+      // Only a change redraws (as `otherReportChanged`): a redraw rebuilds the report's buttons.
+      const upkeep = upkeepNote.note();
+      const told = upkeep
+        ? `${upkeep.at}:${upkeep.buildings.map((b) => b.buildingId).join(',')}`
+        : null;
+      if (mapId && status && told !== upkeepToldBefore) render();
     },
 
     otherReportChanged: () => {

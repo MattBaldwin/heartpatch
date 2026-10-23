@@ -415,3 +415,57 @@ describe('the Heart Coins sheet upkeep and its order (#601 Q5)', () => {
     expect(moveInOrder(['a', 'b'], 'z', 1)).toEqual(['a', 'b']);
   });
 });
+
+describe('resourceCard with the Warehouse and the seasons (#601 PR 9)', () => {
+  it('stops the meter at full when undelivered output sits past the storage', () => {
+    // Right after the Warehouse stops: 450 waiting, 432 fit. The next settle banks it all.
+    const over = resourceCard(
+      quarry({ ready: { stone: 450 }, cycles: 150, full: true, nextReadyAt: null }),
+      { homestead: 'joined' },
+      [],
+      NOW,
+    );
+    expect(over).toMatchObject({ stored: 432, max: 432, percent: 100, meter: '🪨 432 of 432' });
+    expect(over?.collect).toBe(true);
+  });
+
+  it('says "Free from tomorrow" on a seasonal building\'s last day in season', () => {
+    const barn = (seasonEndsAt: string | null) =>
+      quarry(
+        {
+          resource: 'pumpkins',
+          ready: {},
+          nextMorningAt: '2026-11-10T11:00:00Z',
+          seasonEndsAt,
+        },
+        'pumpkin-barn',
+      );
+    const lastDay = resourceCard(
+      barn('2026-11-10T05:00:00Z'),
+      { homestead: 'joined' },
+      HALLOWEEN,
+      NOW,
+    );
+    expect(lastDay).toMatchObject({ state: 'running', upkeep: 'Free from tomorrow 🎃' });
+    // Any other day it pays as usual.
+    expect(
+      resourceCard(barn('2026-11-12T05:00:00Z'), { homestead: 'joined' }, HALLOWEEN, NOW)?.upkeep,
+    ).toBe('💛 17 each morning');
+    expect(resourceCard(barn(null), { homestead: 'joined' }, HALLOWEEN, NOW)?.upkeep).toBe(
+      '💛 17 each morning',
+    );
+    // Paused for upkeep still says what it needs.
+    const paused = quarry(
+      {
+        resource: 'pumpkins',
+        pausedAt: '2026-11-09T11:00:00Z',
+        nextMorningAt: '2026-11-10T11:00:00Z',
+        seasonEndsAt: '2026-11-10T05:00:00Z',
+      },
+      'pumpkin-barn',
+    );
+    expect(resourceCard(paused, { homestead: 'joined' }, HALLOWEEN, NOW)?.upkeep).toBe(
+      '💛 17 each morning',
+    );
+  });
+});

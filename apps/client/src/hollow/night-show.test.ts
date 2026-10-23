@@ -18,7 +18,15 @@ import { createDarkLand, darkTiles, dashedHexRing, heartSeedOf, placeOf } from '
 import { SHOW } from './hollow-config.js';
 import { HollowLayer, standOf, stepPose } from './hollow-layer.js';
 import { createNightShow, type ShowStage } from './night-show.js';
-import { firesLine, NIGHT_TEXT, reachText, STAGES, stageNights, wildLine } from './night-text.js';
+import {
+  firesLine,
+  NIGHT_TEXT,
+  reachText,
+  STAGES,
+  stageNights,
+  upkeepPausedLine,
+  wildLine,
+} from './night-text.js';
 import { beatIndexAt, joinNames, narrate, showBeats, SHOW_TEXT } from './show-timeline.js';
 
 const ME = userId(1);
@@ -195,6 +203,33 @@ describe('the night words', () => {
     ).toBe(
       '2 bits of your dark land went wild again. Your fire, buildings and Warehouse there came back to your bag. What your buildings made came home too!',
     );
+  });
+
+  it('tells the buildings that need 💛 this morning, and the 💛 that wakes them (#601 PR 9)', () => {
+    const at = (buildingId: string, level = 1) => ({ buildingId, level });
+    expect(upkeepPausedLine([])).toBeNull();
+    // The Warehouse's 💛 30, as its tile card says.
+    expect(upkeepPausedLine([at('warehouse')])).toEqual({
+      icon: '💛',
+      text: "Your Warehouse needs 💛: this morning's coins ran short. It wakes up as soon as you have 💛 30!",
+    });
+    // A level 3 Stone Quarry's 💛 23 and the Warehouse's 30, together.
+    expect(upkeepPausedLine([at('stone-quarry', 3), at('warehouse')])?.text).toBe(
+      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have 💛 53!",
+    );
+    // Two of a kind, or more than three, by count.
+    expect(upkeepPausedLine([at('stone-quarry'), at('stone-quarry')])?.text).toMatch(
+      /^2 of your buildings need 💛/,
+    );
+    expect(
+      upkeepPausedLine([at('stone-quarry'), at('warehouse'), at('water-well'), at('greenhouse')])
+        ?.text,
+    ).toMatch(/^4 of your buildings need 💛/);
+    // Something with no upkeep in the data never says 💛 0.
+    expect(upkeepPausedLine([at('no-such-building')])?.text).toMatch(/as you have enough!$/);
+    for (const list of [[at('stone-quarry')], [at('warehouse'), at('greenhouse')]]) {
+      expect(findAvoidedWords(upkeepPausedLine(list)?.text ?? '')).toEqual([]);
+    }
   });
 
   it('uses kind words only (style guide §9) and keeps the chips short', () => {

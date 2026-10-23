@@ -189,14 +189,18 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 10, 2026-10-23):** main `9710aad` (#625), migrations through 0056. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-22/23 — Owner decisions".
-- **Lanes in flight** (report to supervisor 10; each lane subscribes to its own PR):
-  - **#628 Crooked House 6b** (#306).
-  - **Merged 2026-10-23:** #625 (Woodcutter's Hut on cleared forest, `9710aad`) and #626 (Warehouse server, `7cd38b4`).
+- **State (supervisor 11, 2026-10-23):** main `c27dbaa` (#635), migrations through 0057. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-22/23 — Owner decisions". Merged 2026-10-23: #630, #634 (Controls A, the shared `.hp-button`), #632 (Controls C), #633 (Crooked House 6c), #631 (Warehouse client), #635 (e2e timeout stopgap).
+- **Lanes in flight** (report to supervisor 11 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
+  - **Controls B** `session_019vPYe1dqw1Ne2YDUBFUFcR` (Sonnet): migrates the per-feature buttons onto `.hp-button` (#634's PR body lists them) and fixes the lobby's "My patches" serif fallback font. Owner approves before/after screens.
+  - **Controls D** `session_012xMg2bYHr19Af8X7rAMrAD` (Sonnet): the landscape-phone pass with shared breakpoint tokens, starting with the wardrobe's zero rows. Owner approves screens.
+  - **Crooked House 6d** `session_01X5fzJjhUozUUkjdiL9xKg9` (Opus): echoes and the peekaboo (a spookier sting and shake, a reduced-motion fade, friendly afterwards). Its PR body carries the "no jump scares" exception wording for a STYLE_GUIDE docs PR after merge. It posts the 6f `Lane handoff` on #306.
+  - **Crooked House 6e** `session_0116jmmC6njAhrbzsZML1gHk` (Opus): bonus rooms, powers, chests with a server-rolled rare-friend chance. It shares the house folder with 6d under a lane split set in both briefs.
+  - **#601 PR 10** `session_01CB7kdR4Z1cLZ4Nyc7GLwHc` (Sonnet): the economy sim retune, data only.
+  - In-flight lanes' folders are off-limits to the others. Tell B and D when a folder frees up after a merge.
 - **Queue (start in this order as lanes free up):**
-  - **Crooked House 6c → 6d (+6e alongside) → 6f**, per #306 comment 6354531305. Each needs the owner's screens, and the house lands by Nov 6 for a playtest before Nov 9.
-  - **#601 PR 9 Warehouse client**, including the morning-card upkeep-pause line and "Free from tomorrow 🎃" on a seasonal building's last day.
-  - **#601 PR 10 economy sim retune** (data only).
+  - **Crooked House 6f** (Relight boards, the one migration, story scraps, the attic, `changes/306-crooked-house.md`) after 6d merges, from 6d's handoff. The house lands by Nov 6.
+  - **Docs PR:** add the peekaboo exception to STYLE_GUIDE (wording from 6d's `## Decisions`).
+  - **E2E_GROUPS rebalance** (Sonnet, small): ipad-webkit group 2 has grown to 26–28.5 min against about 10 for the others. #635 raised the e2e job timeout to 40 as a stopgap (`TUNE`); take it back toward 30 after the rebalance.
   - **Wild Isle #621:** a big feature. Fable plans first, then two waves.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
@@ -230,6 +234,14 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-23, supervisor 11):**
+  - **Put the artifact link in the question text itself (owner, 2026-10-23).** The owner didn't see an opened artifact beside an AskUserQuestion. Every approval question names its artifact URL inline, as well as opening it.
+  - **Container restarts drop a pending AskUserQuestion.** The tool call is closed unanswered and nobody refused it. Re-ask it on the next turn: open the artifact and ask in the same response, before slower work.
+  - **Render-check results survive a restart in the subagent transcript.** Read the `SubagentHandback` input with `jq` from `~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl` instead of re-running the check.
+  - **Re-shoots cost lanes a cycle each.** Briefs for visual lanes now say: shoot every phone from the same game state, put the tier in every caption, and give an "as it opens" frame as well as a whole-card frame. Two re-shoots turned up a real bug already on main (the tile panel kept the last tile's scroll).
+  - **A timed-out e2e job with every test passed is still red**, and nobody here can re-run it (403). The fix is a real push (a main merge when main has moved), never an empty commit, plus #635's longer timeout until the groups are rebalanced.
+  - **Pace sweeps to the work.** While every lane only waits on the owner, stretch check-ins (60 → 120 → 240 min) and stop after three empty ones; go back to 20 min when he answers.
+  - **Lane costs today:** Controls C $4.38, Controls A $14.94, Warehouse client $38.72, Crooked House 6c $53.46. The house and warehouse lanes ran long on CI fixes and re-shoots.
 - **Lessons (2026-10-22):**
   - **Long lanes are expensive.** Lanes past ~200k context cost $50–66.
   - **Reviewers fix only blockers.** 5–7 review rounds were spent on nits. Nits are logged as follow-ups, not fixed in the PR.
