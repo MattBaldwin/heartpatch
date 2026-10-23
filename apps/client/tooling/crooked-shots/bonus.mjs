@@ -437,6 +437,9 @@ for (const device of DEVICES) {
       if (current.battle) await runAway(page, current.battle.id);
     } else {
       await page.getByTestId('crooked-card-ok').click();
+      // This chest held a friend too (only one is shot): run from its battle, or it resumes on the next load.
+      const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
+      if (current.battle) await runAway(page, current.battle.id);
     }
   }
   await context.close();
