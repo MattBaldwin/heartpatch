@@ -7,6 +7,7 @@ import {
   nextMorningAt,
   productionAt,
   upkeepOf,
+  warehouseIn,
   type Produced,
 } from './production.js';
 import { createBuildingsRepo, type BuildingRow } from './repo.js';
@@ -64,8 +65,10 @@ export async function lockProducing(
   const rows = (await createBuildingsRepo(tx).lockUpkeepBuildings(map.id, userId)).filter((r) =>
     lockedTiles.has(r.tileId),
   );
+  // Before the mornings are charged: a Warehouse that pauses only makes less.
+  const warehouse = warehouseIn(rows);
   const grants = rows.flatMap((row) => {
-    const items = productionAt(row, at, map.timeZone)?.ready ?? {};
+    const items = productionAt(row, at, map.timeZone, warehouse)?.ready ?? {};
     return Object.keys(items).length > 0 ? [{ userId, items }] : [];
   });
   return {
@@ -77,8 +80,13 @@ export async function lockProducing(
       const events: NewGameEvent[] = [...charged.events];
       const produced: Produced[] = [];
       const banked: BuildingRow[] = [];
+      // The Warehouse as the mornings left it: one that paused stops
+      // delivering at that morning, and its level 3+ buildings are capped
+      // from there (PR 8). Every one of them banks here, so its wake-up
+      // below starts a fresh stretch.
+      const warehouse = warehouseIn(charged.rows);
       for (const row of charged.rows) {
-        const made = productionAt(row, at, map.timeZone);
+        const made = productionAt(row, at, map.timeZone, warehouse);
         const bank = made ? await bankOutput(tx, row, made) : null;
         if (bank) {
           produced.push(bank.produced);
@@ -93,10 +101,11 @@ export async function lockProducing(
       const woken = await resumeUpkeep(tx, banked, charged.balance, at);
       events.push(...woken.events);
       const due = [nextMorningAt(at, HOLLOW_RULES.morningMinute, map.timeZone).getTime()];
+      const awake = warehouseIn(woken.rows);
       for (const row of woken.rows) {
         // Napping or out of season: nothing to ask again for until that changes.
         if (!canWorkAt(row, at, map.timeZone)) continue;
-        const next = productionAt(row, at, map.timeZone)?.progress.nextReadyMs ?? null;
+        const next = productionAt(row, at, map.timeZone, awake)?.progress.nextReadyMs ?? null;
         if (next !== null) due.push(next);
       }
       return { produced, events, due };

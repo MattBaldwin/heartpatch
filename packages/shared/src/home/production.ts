@@ -196,6 +196,93 @@ export function warehouseDelivers(
   );
 }
 
+/** A stretch the Warehouse delivered in (epoch ms): from `fromMs` until `toMs`, or still going. */
+export interface DeliveryWindow {
+  fromMs: number;
+  toMs: number | null;
+}
+
+/**
+ * When a Warehouse delivered (owner decision 2026-10-22): from when it was
+ * placed until it paused for unpaid upkeep (or still going), less the
+ * stretch its homestead was cut off from home. Only its homestead's latest
+ * cut-off is known (`workPauseOf`), as for gatherers; every settle banks
+ * its owner's buildings, so an older one is long settled.
+ */
+export function warehouseWindows(facts: {
+  placedAtMs: number;
+  pausedAtMs: number | null;
+  homesteadPause: WorkPause | null;
+}): DeliveryWindow[] {
+  const end = facts.pausedAtMs ?? Infinity;
+  const cut = facts.homesteadPause;
+  const spans: [number, number][] = cut
+    ? [
+        [facts.placedAtMs, Math.min(end, cut.fromMs)],
+        [Math.max(facts.placedAtMs, cut.toMs ?? Infinity), end],
+      ]
+    : [[facts.placedAtMs, end]];
+  return spans
+    .filter(([from, to]) => from < to)
+    .map(([fromMs, to]) => ({ fromMs, toMs: Number.isFinite(to) ? to : null }));
+}
+
+/** Is `ms` inside one of the windows? */
+export const deliveringAt = (windows: readonly DeliveryWindow[], ms: number): boolean =>
+  windows.some((w) => w.fromMs <= ms && (w.toMs === null || ms < w.toMs));
+
+/**
+ * `productionProgress` with the Warehouse (owner decision 2026-10-22): the
+ * stretch from `sinceMs` to `nowMs` is cut where the Warehouse started or
+ * stopped delivering, and each piece is worked out on its own, the part-done
+ * cycle carried across. While it delivers, nothing caps the count (it goes
+ * straight to the bag); otherwise the building's own storage (`maxCycles`)
+ * does, starting empty, since what came before was delivered. So a Warehouse
+ * pausing caps from that instant, and one built uncaps from then. With no
+ * windows it's `productionProgress` itself.
+ */
+export function deliveredProgress(
+  facts: ProductionFacts,
+  windows: readonly DeliveryWindow[],
+  rules: Pick<JobRules, 'work'>,
+): WorkProgress {
+  const cuts = [
+    ...new Set(
+      windows
+        .flatMap((w) => [w.fromMs, w.toMs])
+        .filter((ms): ms is number => ms !== null && ms > facts.sinceMs && ms < facts.nowMs),
+    ),
+  ].sort((a, b) => a - b);
+  // One piece, from `fromMs` to `nowMs`, counting from `sinceMs`.
+  const piece = (sinceMs: number, fromMs: number, nowMs: number) =>
+    productionProgress(
+      {
+        ...facts,
+        sinceMs,
+        nowMs,
+        maxCycles: deliveringAt(windows, fromMs) ? null : facts.maxCycles,
+      },
+      rules,
+    );
+  let sinceMs = facts.sinceMs;
+  let fromMs = facts.sinceMs;
+  const finishedMs: number[] = [];
+  let cycles = 0;
+  for (const nowMs of cuts) {
+    const p = piece(sinceMs, fromMs, nowMs);
+    cycles += p.cycles;
+    finishedMs.push(...p.finishedMs);
+    sinceMs = p.nextSinceMs;
+    fromMs = nowMs;
+  }
+  const end = piece(sinceMs, fromMs, facts.nowMs);
+  return {
+    ...end,
+    cycles: cycles + end.cycles,
+    finishedMs: [...finishedMs, ...end.finishedMs],
+  };
+}
+
 /** A map-local moment: a date and the minute of that day (0–1439). */
 export interface LocalMoment {
   date: LocalDate;

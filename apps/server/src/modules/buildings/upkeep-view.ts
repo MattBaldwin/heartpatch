@@ -1,14 +1,16 @@
-import { HOLLOW_RULES, upkeepOrder, type HeartCoins } from '@heartpatch/shared';
+import { HOLLOW_RULES, latestMorning, upkeepOrder, type HeartCoins } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
-import { canWorkAt, nextMorningAt, upkeepOf } from './production.js';
+import { mapLocalTime } from '../../lib/time.js';
+import { canWorkAt, morningAt, nextMorningAt, upkeepOf } from './production.js';
 import { createBuildingsRepo } from './repo.js';
 
 /**
  * My building upkeep on a patch for the Heart Coins sheet (#601): the next
  * morning it's charged, each upkeep building in charge order with what it
  * pays then (nothing while paused, napping or out of season, owner
- * decisions Q4, Q6), and the total. Undefined when I have none. A read: it
- * charges nothing (the settle does).
+ * decisions Q4, Q6), and the total; and the ones that fell asleep for
+ * unpaid upkeep at the latest morning, for the morning card (PR 8).
+ * Undefined when I have none. A read: it charges nothing (the settle does).
  */
 export async function upkeepView(
   tx: Executor,
@@ -48,9 +50,24 @@ export async function upkeepView(
       paused,
     };
   });
+  // A pause is stamped with the morning it happened (`chargeUpkeep`).
+  const minute = HOLLOW_RULES.morningMinute;
+  const thisMorning = morningAt(
+    latestMorning(mapLocalTime(at, map.timeZone), minute),
+    minute,
+    map.timeZone,
+  ).getTime();
   return {
     nextMorningAt: morning.toISOString(),
     total: due.reduce((sum, d) => sum + d.coins, 0),
     due,
+    pausedThisMorning: ordered
+      .filter(({ row }) => row.pausedAt?.getTime() === thisMorning)
+      .map(({ row }) => ({
+        buildingRowId: row.id,
+        buildingId: row.buildingId,
+        q: row.q,
+        r: row.r,
+      })),
   };
 }

@@ -171,6 +171,13 @@ export interface BuildingsRepo {
   ) => Promise<{ home: HomeTileRow[]; target: TargetTileRow | null }>;
   /** Locks every building on these tiles, in id order (step 8): land changing hands (#202). */
   lockOnTiles: (tileIds: readonly string[]) => Promise<BuildingRow[]>;
+  /**
+   * `lockOnTiles` for lost land (#601 PR 8): also the upkeep buildings
+   * (resource, Warehouse) elsewhere of each owner who has one on these
+   * tiles, so a lost Warehouse can bank what it delivered and a lost hut can
+   * read its owner's Warehouse. One statement, id order (step 8).
+   */
+  lockOnTilesWithUpkeep: (tileIds: readonly string[]) => Promise<BuildingRow[]>;
   /** Every building's spot, by map, owner and id: the #204 re-layout's scan (no locks). */
   listPlacements: () => Promise<
     {
@@ -476,6 +483,31 @@ function queries(db: Executor): BuildingsRepo {
               .orderBy(asc(buildings.id))
               .for('update', { of: buildings })
           ).map(toBuilding),
+
+    lockOnTilesWithUpkeep: async (tileIds) => {
+      if (tileIds.length === 0) return [];
+      const ids = sql.join(
+        tileIds.map((id) => sql`${id}`),
+        sql`, `,
+      );
+      const upkeepKinds = inArray(buildings.kind, ['resource', 'warehouse']);
+      return (
+        await selectBuildings()
+          .where(
+            or(
+              inArray(buildings.tileId, [...tileIds]),
+              and(
+                upkeepKinds,
+                sql`(${buildings.mapId}, ${buildings.ownerUserId}) in (
+                  select lost.map_id, lost.owner_user_id from buildings lost
+                  where lost.tile_id in (${ids}) and lost.kind in ('resource', 'warehouse'))`,
+              ),
+            ),
+          )
+          .orderBy(asc(buildings.id))
+          .for('update', { of: buildings })
+      ).map(toBuilding);
+    },
 
     listPlacements: () =>
       db

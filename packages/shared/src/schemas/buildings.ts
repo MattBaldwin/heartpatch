@@ -92,8 +92,22 @@ export const BuildingProductionSchema = z.object({
   pausedAt: z.iso.datetime().nullable(),
   /** The kid's place for it in the upkeep order (lower first), or null for the default. */
   upkeepRank: z.number().int().min(0).nullable(),
-  /** The Warehouse delivers its output straight to the bag (#601 PR 8). */
+  /**
+   * The Warehouse delivers its output straight to the bag (#601 PR 8): it's
+   * level 3+, working (not paused for upkeep or napping), and my Warehouse
+   * stands, paid and joined. `maxCycles` is null whenever my Warehouse
+   * covers it, even while it sleeps.
+   */
   delivering: z.boolean(),
+  /** The next morning its upkeep is charged (#601). Optional for an older server. */
+  nextMorningAt: z.iso.datetime().optional(),
+  /**
+   * When its resource's season ends in the patch's time zone (a Pumpkin
+   * Barn's Halloween), or null for a resource with no season or one out of
+   * season now (#601). At or before `nextMorningAt`, it owes nothing from
+   * tomorrow. Optional for an older server.
+   */
+  seasonEndsAt: z.iso.datetime().nullable().optional(),
 });
 export type BuildingProduction = z.infer<typeof BuildingProductionSchema>;
 
@@ -116,6 +130,30 @@ export const MyBuildingSchema = z.object({
    * for other kinds and by an older server.
    */
   production: BuildingProductionSchema.nullable().optional(),
+  /**
+   * The Warehouse (#601 PR 8): whether it delivers for my level 3+
+   * resource buildings now, and its morning upkeep. Left out for other kinds
+   * and by an older server.
+   */
+  warehouse: z
+    .object({
+      /** Standing, paid and joined: level `fromLevel`+ buildings send straight to the bag. */
+      delivering: z.boolean(),
+      /** The level resource buildings deliver from. */
+      fromLevel: z.number().int().min(1),
+      /** Its homestead is cut off from home: it doesn't deliver until it's joined again. */
+      napping: z.boolean(),
+      /** Heart Coins each morning. */
+      upkeep: z.number().int().min(0),
+      /** The last map-local morning settled (paid, paused or skipped), or null. */
+      paidThrough: LocalDateSchema.nullable(),
+      /** Paused for unpaid upkeep since this morning, or null. */
+      pausedAt: z.iso.datetime().nullable(),
+      /** The kid's place for it in the upkeep order (lower first), or null for the default (last). */
+      upkeepRank: z.number().int().min(0).nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type MyBuilding = z.infer<typeof MyBuildingSchema>;
 

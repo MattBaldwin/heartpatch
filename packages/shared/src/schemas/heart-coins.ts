@@ -46,6 +46,21 @@ export const HeartCoinsSchema = z.object({
           paused: z.boolean(),
         }),
       ),
+      /**
+       * The buildings that fell asleep for unpaid upkeep at the latest
+       * morning (#601 PR 8), for the morning card. A read, so it shows what
+       * the last settle charged. Optional for an older server.
+       */
+      pausedThisMorning: z
+        .array(
+          z.object({
+            buildingRowId: z.uuid(),
+            buildingId: ContentIdSchema,
+            q: z.number().int(),
+            r: z.number().int(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });
