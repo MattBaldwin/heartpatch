@@ -426,6 +426,8 @@ async function phonePage(device) {
   });
   // A clock the shots can pause (it runs as usual otherwise).
   await page.clock.install();
+  // On the game's origin before any API call (about:blank has no fetch to it).
+  await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
   return { context, page };
 }
 
