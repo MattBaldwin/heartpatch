@@ -12,6 +12,7 @@ import { AUTH_HELP_TEXT, nameList } from './auth-help-text.js';
 import { forgetNames, rememberedNames, rememberName } from './remembered-names.js';
 import { PRIVACY_TEXT, privacyLink } from '../privacy/privacy-link.js';
 import { saveCodePanel } from './save-code.js';
+import { birthYearPills, pillPicker } from './auth-pill-picker.js';
 import './auth.css';
 
 // Sign up, log in and recovery as a DOM overlay over the canvas (tech spec §6).
@@ -24,6 +25,8 @@ interface FieldSpec {
   /** Attributes for the `<input>`; ignored when `options` makes it a `<select>`. */
   input?: Attrs;
   options?: { value: string; label: string }[];
+  /** With `options`: these values are big pills, and the list opens for the rest. */
+  pills?: { values: string[]; moreLabel: string };
   /**
    * A tick box the form can't be sent without (the grown-up checkbox, #593):
    * the submit button sleeps until it's on. Its value is `'yes'` or `''`.
@@ -128,11 +131,13 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     {
       type: 'button',
       class: 'auth-chip-toggle',
-      'aria-label': 'Keeper menu',
+      // The visible "Me" leads the name (label in name); the menu holds Settings and Wardrobe.
+      'aria-label': 'Me, Keeper menu',
       'aria-expanded': 'false',
       'data-testid': 'keeper-menu',
     },
     el('span', { class: 'auth-chip-face', 'aria-hidden': 'true' }),
+    el('span', { class: 'auth-chip-me', 'aria-hidden': 'true' }, 'Me'),
   );
   const chip = el(
     'div',
@@ -242,10 +247,14 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         continue;
       }
       let control: HTMLInputElement | HTMLSelectElement;
+      let picker: HTMLElement | undefined;
       if (field.options) {
         control = el('select', { id, name: field.name, class: 'auth-input' });
         for (const option of field.options) {
           control.append(el('option', { value: option.value }, option.label));
+        }
+        if (field.pills) {
+          picker = pillPicker(control, `${id}-label`, field.pills.values, field.pills.moreLabel);
         }
       } else {
         control = el('input', { id, name: field.name, class: 'auth-input', ...field.input });
@@ -255,8 +264,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         el(
           'div',
           { class: 'auth-field' },
-          el('label', { for: id }, field.label),
-          control,
+          el('label', { for: id, id: `${id}-label` }, field.label),
+          picker ?? control,
           ...(field.hint ? [el('p', { class: 'auth-hint' }, field.hint)] : []),
           ...(field.extra ?? []),
         ),
@@ -543,7 +552,15 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
             hint: 'At least 8 characters.',
             input: { type: 'password', autocomplete: 'new-password' },
           },
-          { name: 'birthYear', label: 'Year you were born', options: birthYearOptions() },
+          {
+            name: 'birthYear',
+            label: 'Year you were born',
+            options: birthYearOptions(),
+            pills: {
+              values: birthYearPills(new Date().getFullYear()),
+              moreLabel: 'Another year',
+            },
+          },
           {
             name: 'grownUpOk',
             label: PRIVACY_TEXT.grownUpOk,
