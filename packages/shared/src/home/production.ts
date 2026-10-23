@@ -13,6 +13,7 @@ import type {
   ResourceBuildingLevel,
   ResourceBuildingRules,
 } from '../schemas/data/buildings.js';
+import { CLEARED_TERRAIN } from '../schemas/data/clearing.js';
 import type { ExploreRules } from '../schemas/data/explore.js';
 import type { JobRules } from '../schemas/data/jobs.js';
 import type { Resource } from '../schemas/data/resources.js';
@@ -32,6 +33,27 @@ export interface ProductionSource {
   perCycle: number;
   /** The Keeper-equivalent gather time of the land yield. */
   seconds: number;
+}
+
+/**
+ * What a tile's land is, for its resource building (#601, owner decision Q2):
+ * cleared land counts as what it was cleared from, else its terrain. The
+ * client's Build sheet and the server's place check both ask this.
+ */
+export function tileLand(tile: { terrain: string; clearedFrom?: string | null }): string {
+  return tile.terrain === CLEARED_TERRAIN ? (tile.clearedFrom ?? tile.terrain) : tile.terrain;
+}
+
+/**
+ * Does a resource building's land suit it (#601, owner decisions Q1, Q2)?
+ * Its own terrain, or land cleared from it. (A spot on the tile still needs
+ * clearing first: there is no beside-the-spot exception.)
+ */
+export function suitsLand(
+  building: Pick<ResourceBuilding, 'terrain'>,
+  land: { terrain: string; clearedFrom?: string | null } | null,
+): boolean {
+  return land !== null && tileLand(land) === building.terrain;
 }
 
 /**

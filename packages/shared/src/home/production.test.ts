@@ -17,6 +17,8 @@ import {
   productionYield,
   resumeSinceMs,
   storageCycles,
+  suitsLand,
+  tileLand,
   upkeepMornings,
   upkeepOrder,
   warehouseDelivers,
@@ -38,6 +40,28 @@ const level = (id: string, n: number) => {
   if (!l) throw new Error(`no level ${String(n)}`);
   return l;
 };
+
+describe('the land a resource building stands on (#601 Q1, Q2)', () => {
+  it('is cleared land as what it was cleared from, else the terrain', () => {
+    expect(tileLand({ terrain: 'clearing', clearedFrom: 'old-forest' })).toBe('old-forest');
+    expect(tileLand({ terrain: 'clearing', clearedFrom: null })).toBe('clearing');
+    expect(tileLand({ terrain: 'meadow' })).toBe('meadow');
+    // Only cleared land remembers: a stray `clearedFrom` on other land is ignored.
+    expect(tileLand({ terrain: 'meadow', clearedFrom: 'forest' })).toBe('meadow');
+  });
+
+  it('suits the building of that land, and no other', () => {
+    const woodcutter = hut('woodcutters-hut');
+    expect(suitsLand(woodcutter, { terrain: 'forest', clearedFrom: null })).toBe(true);
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: 'forest' })).toBe(true);
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: 'old-forest' })).toBe(false);
+    expect(suitsLand(hut('ember-kiln'), { terrain: 'clearing', clearedFrom: 'old-forest' })).toBe(
+      true,
+    );
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: null })).toBe(false);
+    expect(suitsLand(woodcutter, null)).toBe(false);
+  });
+});
 
 describe('what a resource building works (#601)', () => {
   it("is its terrain's land yield, with the homestead's +1 a cycle", () => {

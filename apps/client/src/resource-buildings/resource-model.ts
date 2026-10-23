@@ -1,11 +1,14 @@
 import {
+  CLEARING_RULES,
   EXPLORE_RULES,
   GAME_DATA,
   JOB_RULES,
   RESOURCE_BUILDING_RULES,
   buildCost,
+  clearToolFor,
   economyEffects,
   inSeason,
+  tileLand,
   type HeartCoins,
   type HomeResponse,
   type ItemCounts,
@@ -34,13 +37,9 @@ const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
 const RESOURCE_SEASONS = new Map(GAME_DATA.resources.map((r) => [r.id, r.season ?? null]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 
-/**
- * What a tile's land is, for the matching building: cleared land counts as
- * what it was (owner decision Q2, `PublicTile.clearedFrom`), else its terrain.
- */
-export function tileLand(tile: { terrain: string; clearedFrom?: string | null }): string {
-  return tile.clearedFrom ?? tile.terrain;
-}
+// What a tile's land is (cleared land counts as what it was, owner decision
+// Q2, `PublicTile.clearedFrom`): the same rule the server places by.
+export { tileLand };
 
 /** The resource building that stands on this land, if any. */
 export function resourceBuildingFor(land: string): ResourceBuilding | undefined {
@@ -71,6 +70,8 @@ export const RESOURCE_TEXT = {
     `${itemIcon(e.resource)} ${String(e.perHour)} ${itemName(e.resource)} an hour, all by itself`,
   /** "Needs Forest land 🌲" on land that takes no resource building. */
   needsLand: (terrain: string) => `Needs ${TERRAIN_NAMES.get(terrain) ?? 'the right'} land!`,
+  /** On a homestead with a spot: what the server says too (`MESSAGES.clearFirst`). */
+  clearFirst: 'Clear this land first 🌱. Then you can build here!',
   outOfSeason: (season: string) =>
     `${SEASON_NAMES.get(season) ?? 'Its season'} only! Come back then 🎃`,
   built: (name: string) => `Built! Your ${name} is getting to work 🔨`,
@@ -179,9 +180,10 @@ function buildCard(b: ResourceBuilding, spot: number, blocked: string | null): R
  * land: only the building that matches the land (or what it was cleared
  * from), out of its season blocked. On land no building matches (a clear
  * from before it was remembered), every one shows with the land it needs,
- * so the kid learns where each goes. None on a tile that isn't an empty,
- * joined homestead of mine, or that still has a spot to clear (Clear land's
- * cards say "Clear this land first" there).
+ * so the kid learns where each goes. With a spot still to clear, the
+ * matching one shows held back with "Clear this land first", whether or not
+ * Clear land can start just now (owner bug: a squishy on the spot hid it).
+ * None on a tile that isn't an empty, joined homestead of mine.
  */
 export function resourceBuildCards(
   tile: ResourceTile,
@@ -190,32 +192,29 @@ export function resourceBuildCards(
 ): ResourceBuildCard[] {
   if (me === null || tile.ownerUserId !== me || tile.homeSlot !== null) return [];
   if (tile.homestead !== 'joined' || tile.clearing) return [];
-  if (tile.buildings.length > 0 || tile.nodeResource !== null) return [];
+  if (tile.buildings.length > 0) return [];
   const seasons = new Set(home.seasons);
   const match = resourceBuildingFor(tileLand(tile));
   const spotOf = (b: ResourceBuilding) => homesteadSpot(tile, b);
+  const outOfSeason = (b: ResourceBuilding) =>
+    inSeason(b, seasons) || !b.season ? null : RESOURCE_TEXT.outOfSeason(b.season);
+  if (tile.nodeResource !== null) {
+    // Land no tool clears keeps its spot: nothing goes up there.
+    if (!match || !clearToolFor(tile.terrain, CLEARING_RULES)) return [];
+    // Where it goes once the spot is gone (it's only shown till then).
+    const spot = homesteadSpot({ ...tile, nodeResource: null }, match);
+    if (spot === undefined) return [];
+    return [buildCard(match, spot, outOfSeason(match) ?? RESOURCE_TEXT.clearFirst)];
+  }
   if (match) {
     const spot = spotOf(match);
     if (spot === undefined) return [];
-    const blocked =
-      inSeason(match, seasons) || !match.season ? null : RESOURCE_TEXT.outOfSeason(match.season);
-    return [buildCard(match, spot, blocked)];
+    return [buildCard(match, spot, outOfSeason(match))];
   }
   return RESOURCE_BUILDINGS.filter((b) => inSeason(b, seasons)).flatMap((b) => {
     const spot = spotOf(b);
     return spot === undefined ? [] : [buildCard(b, spot, RESOURCE_TEXT.needsLand(b.terrain))];
   });
-}
-
-/**
- * The resource building waiting on a homestead with a spot to clear first
- * (Clear land's waiting cards, #242): the one that matches its land.
- */
-export function waitingResourceBuilding(tile: {
-  terrain: string;
-  clearedFrom?: string | null;
-}): ResourceBuilding | undefined {
-  return resourceBuildingFor(tileLand(tile));
 }
 
 /** The five states of a resource building's tile card. */
