@@ -322,7 +322,7 @@ async function openChest(page, device, name) {
   await moment(
     page,
     async () => {
-      await page.getByTestId('crooked-action').click();
+      await page.getByTestId('crooked-action').dispatchEvent('click');
       await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card !== null);
     },
     // Mid-swing: the lid on its hinges, the coins showing.
@@ -406,7 +406,7 @@ for (const device of DEVICES) {
     await teamFor(page, mapId, ids, p.power);
     await toDoor(page, mapId, p);
     await shot(page, device, `${p.power}-asleep`);
-    await page.getByTestId('crooked-action').click();
+    await page.getByTestId('crooked-action').dispatchEvent('click');
     await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
     // The pictures come from the portrait renderer.
     await page.waitForTimeout(1500);
@@ -414,7 +414,7 @@ for (const device of DEVICES) {
     await moment(
       page,
       async () => {
-        await page.getByTestId(`crooked-helper-${ids[p.power]}`).click();
+        await page.getByTestId(`crooked-helper-${ids[p.power]}`).dispatchEvent('click');
         await until(page, () => window.__heartpatch?.farHollowHouse?.()?.powering);
       },
       850,
@@ -424,7 +424,7 @@ for (const device of DEVICES) {
     // The payoff card (what the friend did), then the woken door itself.
     await page.getByTestId('crooked-card').waitFor();
     await shot(page, device, `${p.power}-woke`);
-    await page.getByTestId('crooked-card-ok').click();
+    await page.getByTestId('crooked-card-ok').dispatchEvent('click');
     await page.waitForTimeout(900);
     await shot(page, device, `${p.power}-open`);
     await walkInto(page, p.dx, p.dz, p.room);
@@ -433,11 +433,11 @@ for (const device of DEVICES) {
     const kind = p.room === friendRoom ? 'friend' : 'common';
     await openChest(page, device, `${p.power}-${kind}`);
     if (kind === 'friend') {
-      await page.getByTestId('crooked-card-ok').click();
+      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
       await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'friend');
       await page.waitForTimeout(1500);
       await shot(page, device, 'friend-card');
-      await page.getByTestId('crooked-card-ok').click();
+      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
       await until(
         page,
         () => window.__heartpatch?.battle?.()?.phase === 'turn',
@@ -449,7 +449,7 @@ for (const device of DEVICES) {
       const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
       if (current.battle) await runAway(page, current.battle.id);
     } else {
-      await page.getByTestId('crooked-card-ok').click();
+      await page.getByTestId('crooked-card-ok').dispatchEvent('click');
       // This chest held a friend too (only one is shot): run from its battle, or it resumes on the next load.
       const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
       if (current.battle) await runAway(page, current.battle.id);
