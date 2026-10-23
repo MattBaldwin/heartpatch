@@ -589,7 +589,7 @@ describe.skipIf(!url)('the Crooked House (#306 6b, needs DATABASE_URL)', () => {
         completed: true,
         friend: null,
         find: {
-          lore: { id: 'the-crooked-house', title: 'The Crooked House' },
+          lore: { id: 'the-crooked-house', title: 'A Lantern in Every Room' },
           clothing: 'lantern-keepers-cloak',
           notable: 'lore',
         },

@@ -368,6 +368,27 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
       },
     ],
   },
+  {
+    // The far Hollow (#306 6b, owner decision 4): the Crooked House's attic
+    // chest puts it all right (`journey.completed`, once a season). Public,
+    // not secret: its title shares its words with the attic's cloak, which
+    // the catalog ships to every client.
+    id: 'lantern-keeper',
+    name: 'Lantern Keeper',
+    secret: false,
+    progress: {
+      from: 'events',
+      sources: [{ eventType: 'journey.completed', where: [], player: 'userId' }],
+    },
+    tiers: [
+      {
+        threshold: 1,
+        goal: 'Put every room of the far Hollow right.',
+        title: { id: 'lantern-keeper', name: 'Lantern Keeper' },
+        coins: 50,
+      },
+    ],
+  },
   // Found sets (#306 PR 5): the Rekindled title, and any later set's.
   ...FOUND_SETS.map(foundSetTrack),
 ];

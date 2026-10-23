@@ -109,23 +109,4 @@ export const SECRET_MILESTONES: MilestoneTrack[] = [
       },
     ],
   },
-  {
-    // The Crooked House's attic (#306 6b, owner decision 4): bring the far
-    // Hollow's joy all back (`journey.completed`, once a season).
-    id: 'lantern-keeper',
-    name: 'Lantern Keeper',
-    secret: true,
-    progress: {
-      from: 'events',
-      sources: [{ eventType: 'journey.completed', where: [], player: 'userId' }],
-    },
-    tiers: [
-      {
-        threshold: 1,
-        goal: 'Put every room of the far Hollow right.',
-        title: { id: 'lantern-keeper', name: 'Lantern Keeper' },
-        coins: 50,
-      },
-    ],
-  },
 ];

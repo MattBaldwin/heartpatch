@@ -259,7 +259,7 @@ export const LORE_PAGES: LoreEntry[] = [
     id: 'the-crooked-house',
     chapter: 'hollows',
     order: 4,
-    title: 'The Crooked House',
+    title: 'A Lantern in Every Room',
     text: 'Pinned to the attic beam: “We left one lantern in every room, so the little ones would never be scared. When the lights went out, the house leaned to look for them. Thank you for coming back.”',
     hint: 'A crooked old house keeps its story up high.',
     trigger: {
