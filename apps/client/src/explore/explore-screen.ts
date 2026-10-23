@@ -122,7 +122,7 @@ import {
   villageShut,
 } from '../hollowed/hollowed-explore-view.js';
 import { KEY_TEXT, keyHuntOn } from '../hollowed/key-hunt-view.js';
-import { createPuzzleSheet, type PuzzleDebug } from '../hollowed/puzzle-sheet.js';
+import { createPuzzleSheet, hollowReward, type PuzzleDebug } from '../hollowed/puzzle-sheet.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -505,6 +505,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     start: startPuzzle,
     solve: solvePuzzle,
     tell: tellStory,
+    reward: hollowReward,
     ...(options.onLorebook ? { onLorebook: options.onLorebook } : {}),
     onClosed: (fixed) => {
       scene3d?.nudge(null);

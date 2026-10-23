@@ -181,6 +181,10 @@ export const CrookedHouseSchema = z
           issue(`${room.id}/${thing.id}: a relight thing (only) has a puzzle size`);
         }
       }
+      // One board a room: its tries are counted on the room's row (`relight_attempt`).
+      if (room.things.filter((t) => t.kind === 'relight').length > 1) {
+        issue(`${room.id} has more than one relight thing`);
+      }
     }
     for (const door of house.doors) {
       for (const side of [door.a, door.b]) {

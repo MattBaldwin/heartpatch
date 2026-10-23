@@ -20,6 +20,12 @@ export const CrookedHouseSecretsSchema = z.strictObject({
     z.strictObject({ kind: ContentIdSchema, terrain: ContentIdSchema }),
   ),
   /**
+   * Each blooming room's scrap of the house's story (#306 6f): one line,
+   * given when the room blooms. Twelve rooms, twelve scraps, and the attic's
+   * page needs them all. Story text stays server-side, as the lore pages do.
+   */
+  scraps: z.record(ContentIdSchema, z.string().min(1).max(120)),
+  /**
    * Each bonus room's chest (owner decision 6): small loot, one pile picked
    * by the season's seed, and a chance (percent) of a rare squishy friend to
    * befriend, picked by weight at a level in `level`.

@@ -21,7 +21,6 @@ export const CROOKED_TEXT = {
   walkHint: 'Drag to walk, or tap the floor',
   hold: 'Keep holding…',
   fixed: (thing: string) => `You put ${thing} right! ✨`,
-  puzzle: 'This one is a puzzle! It wakes up soon 🧩',
   locked: (key: string) => `Locked tight! The ${key} is somewhere in this house…`,
   useKey: (key: string) => `Use the ${key} 🗝️`,
   tryDoor: 'Try the door 🔒',
@@ -129,6 +128,17 @@ export function roomWords(room: CrookedRoom, lit: boolean): string {
 export function floorWords(floor: number): string {
   return CROOKED_TEXT.floors[floor] ?? `Floor ${String(floor + 1)}`;
 }
+
+// ── The Relight boards and the story scraps (#306 6f) ───────────────────
+
+export const CROOKED_RELIGHT_TEXT = {
+  /** Over the board: which thing, in which room. */
+  heading: (thing: string, room: string) => `${capital(thing)} in the ${room}`,
+  /** A board solved, the room not yet right. */
+  relit: (thing: string) => `You relit ${thing}! ✨`,
+  /** On a bloom's card, over the room's scrap of the house's story. */
+  scrap: 'A scrap of the house’s story 📜',
+} as const;
 
 // ── The echoes and the peekaboo (#306 6d) ───────────────────────────────
 

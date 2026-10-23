@@ -3,7 +3,10 @@ import {
   CROOKED_HOUSE,
   type CrookedDoor,
   type CrookedFind,
+  type CrookedFixResponse,
   type CrookedHouseView,
+  type CrookedRoom,
+  type CrookedThing,
   type FarHollowView,
   type KeeperConfig,
 } from '@heartpatch/shared';
@@ -59,8 +62,11 @@ import {
   type EchoSpot,
 } from './crooked-echoes.js';
 import { createPeekaboo, type PeekPhase } from './crooked-peekaboo.js';
+import { createCrookedRelight } from './crooked-relight.js';
+import type { PuzzleDebug } from '../../hollowed/puzzle-sheet.js';
 import {
   CROOKED_ECHO_TEXT as E,
+  CROOKED_RELIGHT_TEXT as RT,
   CROOKED_TEXT as T,
   floorWords,
   progressWords,
@@ -82,6 +88,8 @@ import './crooked-echoes.css';
 // Echoes drift through the dark rooms (#306 6d, `crooked-echoes.ts`); one
 // close by notices me stepping in, and the server says so with a peekaboo
 // (`crooked-peekaboo.ts`) and back to the last lit room, nothing lost.
+// Two things are Relight boards (#306 6f, `crooked-relight.ts`), and each
+// room's bloom brings a scrap of the house's story.
 
 export interface CrookedScreenOptions {
   readonly root: HTMLElement;
@@ -92,7 +100,7 @@ export interface CrookedScreenOptions {
   readonly tier: () => QualityTier;
   readonly keeper: () => KeeperConfig | null;
   readonly keeperWearing?: () => readonly string[];
-  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock'>;
+  readonly api?: Pick<FarHollowApi, 'view' | 'fix' | 'enter' | 'unlock' | 'relight'>;
   readonly reducedMotion?: () => boolean;
   /** The house took the screen: everything else steps aside. */
   readonly onOpen: (mapId: string) => void;
@@ -143,6 +151,10 @@ export interface CrookedDebug {
   readonly peek: { phase: PeekPhase; calm: boolean; shook: boolean; friend: boolean } | null;
   /** The last catch: which echo, and the room it sent me back to. */
   readonly caught: { echo: string; backTo: string } | null;
+  /** A Relight board open (#306 6f): the Hollow card's own debug. */
+  readonly board: PuzzleDebug | null;
+  /** The card's scrap of the house's story, on a bloom (#306 6f). */
+  readonly scrap: string | null;
 }
 
 export interface CrookedScreen {
@@ -181,7 +193,7 @@ const ECHO_IDLE_MS = { near: 250, far: 1000 } as const; // TUNE
 
 type Card =
   | { kind: 'key'; title: string; line: string }
-  | { kind: 'bloom'; title: string; line: string }
+  | { kind: 'bloom'; title: string; line: string; scrap: string | null }
   | { kind: 'caught' };
 
 export function createCrookedScreen(options: CrookedScreenOptions): CrookedScreen {
@@ -361,8 +373,23 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   overlay.hidden = true;
   options.root.append(overlay);
   const peekaboo = createPeekaboo(overlay);
+  const relight = createCrookedRelight({
+    parent: overlay,
+    start: (room, thing) => boardCommand((id, key) => api.relight(id, { room, thing }, key)),
+    solve: (room, thing, attempt, moves) =>
+      boardCommand((id, key) => api.fix(id, { room, thing, relight: { attempt, moves } }, key)),
+    onClosed: (room, thing, fixed) => {
+      boardShown(false);
+      if (fixed) showFix(fixed, room, thing);
+    },
+  });
 
   back.addEventListener('click', () => {
+    // A Relight board first (its try simply fades), then the map, then the house.
+    if (relight.isOpen) {
+      relight.close();
+      return;
+    }
     if (mapShown) {
       showMap(false);
       return;
@@ -571,7 +598,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     let want: FloorPoint | null = null;
     let heading: number | undefined;
     const speed = (tiptoe ? CROOKED_WALK.tiptoeSpeed : CROOKED_WALK.speed) * dt;
-    if (!mapShown && !working && cards.length === 0 && !peekaboo.active) {
+    if (!mapShown && !working && cards.length === 0 && !peekaboo.active && !relight.isOpen) {
       if (stick) {
         // The camera looks north: up the screen is north, right is east.
         const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
@@ -767,7 +794,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (working || cards.length > 0) return;
     if (t.kind === 'thing') {
       if (t.thing.kind === 'relight') {
-        say(T.puzzle);
+        openBoard(t.thing);
         return;
       }
       void fix(t.thing.id);
@@ -814,16 +841,32 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (!name) return;
     const reply = await command((id, key) => api.fix(id, { room: room.id, thing }, key));
     if (!reply) return;
+    showFix(reply, room, name);
+  }
+
+  /** What a fix did: the thing put right, maybe a key, maybe the room's bloom and its scrap. */
+  function showFix(reply: CrookedFixResponse, room: CrookedRoom, thing: CrookedThing): void {
     apply(reply.view);
     if (reply.key) {
-      scene3d?.showKey(thingPoint(room, name));
-      cards.push({ kind: 'key', title: T.keyTitle(reply.key.name), line: T.keyLine(name.name) });
+      scene3d?.showKey(thingPoint(room, thing));
+      cards.push({ kind: 'key', title: T.keyTitle(reply.key.name), line: T.keyLine(thing.name) });
     }
     if (reply.bloom) {
       scene3d?.bloom(room.id);
-      cards.push({ kind: 'bloom', title: T.bloomTitle(room.name), line: bloomLine(reply.bloom) });
+      cards.push({
+        kind: 'bloom',
+        title: T.bloomTitle(room.name),
+        line: bloomLine(reply.bloom),
+        scrap: reply.scrap,
+      });
     }
-    if (!reply.key && !reply.bloom) say(T.fixed(name.name));
+    if (!reply.key && !reply.bloom) {
+      if (thing.kind === 'relight') {
+        // A board relit: its lamps light up where it stands, with a twinkle.
+        options.cue?.('twinkle');
+        say(RT.relit(thing.name));
+      } else say(T.fixed(thing.name));
+    }
     redraw();
     renderCard();
   }
@@ -903,6 +946,41 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       mapShown = false;
       enterShown(true);
     })();
+  }
+
+  // ── The Relight boards (#306 6f) ──────────────────────────────────────
+
+  /** Opens a Relight thing's board over the room; the house waits behind it. */
+  function openBoard(thing: CrookedThing): void {
+    const room = here();
+    if (!room || working) return;
+    stick = null;
+    walk = null;
+    showStick();
+    boardShown(true);
+    relight.open(room, thing);
+  }
+
+  function boardShown(on: boolean): void {
+    // The board has the screen to itself: the house's controls step aside.
+    overlay.classList.toggle('crooked-boarded', on);
+    if (!isOpen) return;
+    findTarget(true);
+    renderAction();
+    wake();
+  }
+
+  /**
+   * A board's command for this visit: errors reach the card (it says them),
+   * and a reply after Back or another visit is dropped (null).
+   */
+  async function boardCommand<R>(send: (id: string, key: string) => Promise<R>): Promise<R | null> {
+    const id = mapId;
+    if (!id) return null;
+    const at = generation;
+    const still = () => at === generation && isOpen && mapId === id;
+    const reply = await sendCommand(sendDeps, (key) => send(id, key), still);
+    return reply && still() ? reply : null;
   }
 
   // ── Showing it ────────────────────────────────────────────────────────
@@ -1128,9 +1206,22 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       wake();
     });
     sheet.dataset['kind'] = card.kind;
+    // A bloom's scrap of the house's story (#306 6f), like a note found in the room.
+    const scrap =
+      card.kind === 'bloom' && card.scrap
+        ? [
+            el(
+              'figure',
+              { class: 'crooked-scrap', 'data-testid': 'crooked-scrap' },
+              el('figcaption', { class: 'crooked-scrap-label' }, RT.scrap),
+              el('blockquote', { class: 'crooked-scrap-text' }, card.scrap),
+            ),
+          ]
+        : [];
     sheet.replaceChildren(
       el('h3', { class: 'crooked-card-title', id: 'crooked-card-title' }, title),
       el('p', { class: 'crooked-card-line' }, line),
+      ...scrap,
       ok,
     );
     action.classList.add('crooked-idle');
@@ -1226,6 +1317,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     walk = null;
     working = false;
     cards = [];
+    relight.close();
+    overlay.classList.remove('crooked-boarded');
     peekaboo.stop();
     pendingCatch = null;
     if (echoTimer !== null) clearTimeout(echoTimer);
@@ -1332,6 +1425,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
           : null,
         peek: peekaboo.debug,
         caught,
+        board: relight.debug,
+        scrap: cards[0]?.kind === 'bloom' ? cards[0].scrap : null,
       };
     },
   };

@@ -4,7 +4,6 @@ import {
   RELIGHT_S,
   RELIGHT_W,
   type HollowedPuzzle,
-  type PuzzleSkin,
   type RelightCell,
   type RelightMove,
   type SolvePuzzleResponse,
@@ -56,21 +55,45 @@ import './puzzle-sheet.css';
  * the torn pages' clues, the day's places and the moments to put in them.
  * The order goes to the server, which alone knows the day; a wrong one
  * shows which places were right, then the ink shifts to the next try's day.
+ *
+ * The Crooked House's Relight boards (#306 6f) use the same card: `R` is
+ * the house's reply, and with no `reward` a win closes the card with it (the
+ * house shows its own bloom).
  */
 
-export interface PuzzleSheetOptions {
+/** The card's lines above the board: what's broken, and its title once fixed. */
+export interface PuzzleHeading {
+  readonly progress: string;
+  readonly fixed: string;
+}
+
+/** The reward card's lines and its lore page, from a fix's reply. */
+export interface PuzzleReward {
+  readonly lines: readonly { text: string; note?: string }[];
+  readonly lore: { id: string; title: string } | null;
+}
+
+/** A grey village tile's reward card (#306 PR 2b). */
+export const hollowReward = (reply: SolvePuzzleResponse): PuzzleReward => ({
+  lines: puzzleLines(reply),
+  lore: reply.lore,
+});
+
+export interface PuzzleSheetOptions<R = SolvePuzzleResponse> {
   /** Where the card goes (the explore overlay). */
   parent: HTMLElement;
   /** A new try; null if the visit moved on. Throws a kid-readable error. */
   start: () => Promise<StartPuzzleResponse | null>;
   /** Sends a try's moves; null if the visit moved on. Throws a kid-readable error. */
-  solve: (attempt: number, moves: readonly RelightMove[]) => Promise<SolvePuzzleResponse | null>;
+  solve: (attempt: number, moves: readonly RelightMove[]) => Promise<R | null>;
   /** Tells a story try's order; null if the visit moved on. Throws a kid-readable error. */
-  tell: (attempt: number, order: readonly string[]) => Promise<TellStoryResponse | null>;
+  tell?: (attempt: number, order: readonly string[]) => Promise<TellStoryResponse | null>;
+  /** The reward card after a fix; without it, a fix closes the card with its reply. */
+  reward?: (reply: R) => PuzzleReward;
   /** "Open Lorebook" on the reward card. */
   onLorebook?: (pageId: string) => void;
   /** The card closed: fixed (the reply) or not now (null). */
-  onClosed: (fixed: SolvePuzzleResponse | null) => void;
+  onClosed: (fixed: R | null) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it). */
@@ -97,7 +120,9 @@ export interface PuzzleDebug {
 
 export interface PuzzleSheet {
   /** Opens the card for a puzzle and asks for a fresh try. */
-  open: (puzzle: HollowedPuzzle) => void;
+  open: (puzzle: Pick<HollowedPuzzle, 'skin' | 'kind'>) => void;
+  /** Opens the card for a Relight board under its own heading (#306 6f) and asks for a fresh try. */
+  openRelight: (heading: PuzzleHeading) => void;
   /** Closes it at once (leaving the tile, nightfall). */
   close: () => void;
   readonly isOpen: boolean;
@@ -147,15 +172,17 @@ function cellLabel(cell: RelightCell, lit: boolean): string {
   }
 }
 
-export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
-  let skin: PuzzleSkin | null = null;
+export function createPuzzleSheet<R = SolvePuzzleResponse>(
+  options: PuzzleSheetOptions<R>,
+): PuzzleSheet {
+  let heading: PuzzleHeading | null = null;
   let play: RelightPlay | null = null;
   let story: StoryPlay | null = null;
   /** Which puzzle the card holds: the tile's, until a try says otherwise. */
   let mode: 'relight' | 'story' = 'relight';
   /** After a wrong telling, the next try the server dealt: shown on "Read the new pages". */
   let nextStory: StoryStart | null = null;
-  let fixed: SolvePuzzleResponse | null = null;
+  let fixed: R | null = null;
   let loading = false;
   let sending = false;
   let problem: string | null = null;
@@ -301,14 +328,15 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     problem = null;
     render();
     try {
-      const reply = await options.tell(p.attempt, p.placed);
+      const reply = (await options.tell?.(p.attempt, p.placed)) ?? null;
       if (at !== visit) return;
       if (!reply) {
         close(null);
         return;
       }
       if (reply.result === 'whole') {
-        fixed = reply;
+        // A story is a grey village tile's: its reply is the Hollow's.
+        fixed = reply as R;
       } else {
         story = smudgeStory(tellStory(p), reply.right, reply.marks);
         nextStory = reply.next;
@@ -328,13 +356,13 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     }
   }
 
-  function renderStory(k: PuzzleSkin, p: StoryPlay | null): void {
+  function renderStory(k: PuzzleHeading, p: StoryPlay | null): void {
     if (sheet.firstChild !== progress || !sheet.contains(slots)) {
       storyRow.replaceChildren(tell, clear, newPages);
       sheet.replaceChildren(...storyParts, storyRow);
     }
     placeShared(storyRow);
-    progress.textContent = HOLLOWED_TEXT.broken(k);
+    progress.textContent = k.progress;
     title.textContent = HOLLOWED_TEXT.story;
     pages.hidden = !p;
     slots.hidden = !p;
@@ -490,6 +518,11 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
         close(null);
         return;
       }
+      if (!options.reward) {
+        // The caller shows what fixing it did (the Crooked House's bloom).
+        close(reply);
+        return;
+      }
       fixed = reply;
     } catch (err) {
       if (at !== visit) return;
@@ -502,14 +535,14 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     }
   }
 
-  function close(reply: SolvePuzzleResponse | null): void {
+  function close(reply: R | null): void {
     visit += 1;
     const was = !sheet.hidden;
     sheet.hidden = true;
     sheet.replaceChildren();
     grid.replaceChildren();
     cells = [];
-    skin = null;
+    heading = null;
     play = null;
     story = null;
     nextStory = null;
@@ -522,10 +555,10 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
   }
 
   function render(): void {
-    const k = skin;
+    const k = heading;
     if (!k || sheet.hidden) return;
-    if (fixed) {
-      renderReward(k, fixed);
+    if (fixed !== null && options.reward) {
+      renderReward(k, fixed, options.reward(fixed));
       return;
     }
     if (mode === 'story') {
@@ -536,7 +569,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
       sheet.replaceChildren(...board, row);
     }
     placeShared(row);
-    progress.textContent = HOLLOWED_TEXT.broken(k);
+    progress.textContent = k.progress;
     title.textContent = HOLLOWED_TEXT.relight;
     const p = play;
     const light = p ? relightLight(p) : null;
@@ -596,7 +629,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
     newPath.disabled = loading;
   }
 
-  function renderReward(k: PuzzleSkin, reply: SolvePuzzleResponse): void {
+  function renderReward(k: PuzzleHeading, reply: R, reward: PuzzleReward): void {
     const nodes: Node[] = [
       el(
         'p',
@@ -607,7 +640,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
       el(
         'ul',
         { class: 'explore-finds', 'data-testid': 'hollowed-puzzle-finds' },
-        ...puzzleLines(reply).map((l) =>
+        ...reward.lines.map((l) =>
           el(
             'li',
             { class: 'explore-find' },
@@ -617,7 +650,7 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
         ),
       ),
     ];
-    const lore = reply.lore;
+    const lore = reward.lore;
     if (lore && options.onLorebook) {
       nodes.push(
         button(
@@ -642,8 +675,16 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
   return {
     open: (puzzle) => {
       close(null);
-      skin = skinOf(puzzle);
+      const k = skinOf(puzzle);
+      heading = { progress: HOLLOWED_TEXT.broken(k), fixed: k.fixed };
       mode = puzzle.kind;
+      sheet.hidden = false;
+      void begin();
+    },
+    openRelight: (h) => {
+      close(null);
+      heading = h;
+      mode = 'relight';
       sheet.hidden = false;
       void begin();
     },
@@ -659,7 +700,8 @@ export function createPuzzleSheet(options: PuzzleSheetOptions): PuzzleSheet {
       const light = p ? relightLight(p) : null;
       const t = story;
       return {
-        card: fixed ? ('reward' as const) : p || t ? ('board' as const) : ('loading' as const),
+        card:
+          fixed !== null ? ('reward' as const) : p || t ? ('board' as const) : ('loading' as const),
         outcome: p?.outcome ?? null,
         attempt: p?.attempt ?? t?.attempt ?? null,
         size: p?.board.size ?? null,
