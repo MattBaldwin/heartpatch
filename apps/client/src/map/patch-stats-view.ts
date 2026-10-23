@@ -60,7 +60,7 @@ function keeperCard(k: KeeperStats, userId: string | null): KeeperCard {
       { emoji: '🏮', label: 'Lit tiles', value: count(k.lit) },
       { emoji: '🐾', label: 'Befriended', value: count(k.befriended) },
       { emoji: '🌈', label: 'Kinds', value: count(k.species) },
-      { emoji: '🏘️', label: 'Villages', value: count(k.villages) },
+      { emoji: '🏘️', label: 'Hollows', value: count(k.villages) },
     ],
     buildings: k.buildings.map((b) => `${buildingName(b.buildingId)} ×${String(b.count)}`),
   };
@@ -74,7 +74,7 @@ export function statsPage(stats: PatchStats, userId: string | null): StatsPage {
       { emoji: '🏡', label: 'Claimed', value: count(totals.claimed) },
       { emoji: '🌿', label: 'Wild left', value: count(totals.wild) },
       { emoji: '🏮', label: 'Lit', value: count(totals.lit) },
-      { emoji: '🏘️', label: 'Villages restored', value: count(totals.villages) },
+      { emoji: '🏘️', label: 'Hollows restored', value: count(totals.villages) },
     ],
     keepers: stats.keepers.map((k) => keeperCard(k, userId)),
   };

@@ -236,6 +236,19 @@ export class MapState {
         // the map redraws them (and their glow) at once.
         return this.putBuilding(parsed.data.building) ? 'redraw' : 'none';
       }
+      case 'building.paused':
+      case 'building.resumed': {
+        // A resource building fell asleep for its upkeep, or woke (#601):
+        // its windows go dark or light again.
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const paused = event.type === 'building.paused';
+        return this.editTile(hexKey(parsed.data), (tile) =>
+          tile.buildings.map((b) => (b.id === parsed.data.buildingRowId ? { ...b, paused } : b)),
+        )
+          ? 'redraw'
+          : 'none';
+      }
       case 'building.moved': {
         const parsed = GAME_EVENTS['building.moved'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';

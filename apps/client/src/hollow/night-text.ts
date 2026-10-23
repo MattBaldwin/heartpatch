@@ -126,18 +126,27 @@ export function wildLine(reports: readonly MorningReport[]): ReportLine | null {
       fires: sum.fires + r.lostBuildings.fires,
       fences: sum.fences + r.lostBuildings.fences,
       grounds: sum.grounds + r.lostBuildings.trainingGrounds,
+      // Resource buildings and the Warehouse (#601): what they'd stored lands too.
+      makers: sum.makers + (r.lostBuildings.resourceBuildings ?? 0),
+      warehouses: sum.warehouses + (r.lostBuildings.warehouses ?? 0),
     }),
-    { fires: 0, fences: 0, grounds: 0 },
+    { fires: 0, fences: 0, grounds: 0, makers: 0, warehouses: 0 },
   );
   const things = [
     ...(lost.fences > 0 ? [lost.fences === 1 ? 'fence' : 'fences'] : []),
     ...(lost.fires > 0 ? [lost.fires === 1 ? 'fire' : 'fires'] : []),
     ...(lost.grounds > 0 ? ['Training Grounds'] : []),
+    ...(lost.makers > 0 ? [lost.makers === 1 ? 'building' : 'buildings'] : []),
+    ...(lost.warehouses > 0 ? ['Warehouse'] : []),
   ];
   const land =
     tiles === 1
       ? 'A bit of your dark land went wild again.'
       : `${String(tiles)} bits of your dark land went wild again.`;
   const back = things.length > 0 ? ` Your ${joinNames(things)} there came back to your bag.` : '';
-  return { icon: '🌿', text: `${land}${back}` };
+  const made =
+    lost.makers > 0
+      ? ` What your ${lost.makers === 1 ? 'building' : 'buildings'} made came home too!`
+      : '';
+  return { icon: '🌿', text: `${land}${back}${made}` };
 }

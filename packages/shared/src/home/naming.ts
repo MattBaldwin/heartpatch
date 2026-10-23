@@ -16,7 +16,7 @@ export interface NamingFacts {
 export interface NamingGate {
   /** One of each kind built and enough squishies caught. */
   unlocked: boolean;
-  /** `buildableKinds` in data order, each with whether it's been built. */
+  /** `kindsToName` in data order, each with whether it's been built. */
   kinds: { kind: BuildableKind; built: boolean }[];
   /** Caught so far, capped at `need` for the meter. */
   caught: number;
@@ -32,13 +32,9 @@ export interface NamingGate {
  * The naming gate (#306 PR 0), shared so the server's refusal and the
  * client's card never disagree.
  */
-export function namingGate(
-  facts: NamingFacts,
-  rules: NamingRules,
-  buildableKinds: readonly BuildableKind[],
-): NamingGate {
+export function namingGate(facts: NamingFacts, rules: NamingRules): NamingGate {
   const built = new Set(facts.kindsBuilt);
-  const kinds = buildableKinds.map((kind) => ({ kind, built: built.has(kind) }));
+  const kinds = rules.kindsToName.map((kind) => ({ kind, built: built.has(kind) }));
   const unlocked = kinds.every((k) => k.built) && facts.caughtCount >= rules.caughtToName;
   const renameOpen =
     unlocked && (facts.homeNamedAtLevel === null || facts.heartSeedLevel > facts.homeNamedAtLevel);

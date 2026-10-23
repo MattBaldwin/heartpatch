@@ -32,6 +32,8 @@ export interface BuildingPlacement {
   readonly level?: number;
   /** Hearthfires: lit or out. Null for buildings that are never lit. */
   readonly lit: boolean | null;
+  /** A resource building napping (unpaid upkeep, a cut-off homestead, #601): its windows go dark. */
+  readonly asleep?: boolean;
   readonly x: number;
   readonly z: number;
   /** Ground height. */
@@ -53,7 +55,7 @@ export interface BuildingFieldStats {
 const POOL_LIFT = 0.06; // TUNE: clears the home tiles' dome
 
 const lookOf = (p: BuildingPlacement): BuildingLook =>
-  p.lit === null ? 'plain' : p.lit ? 'lit' : 'out';
+  p.lit === null ? (p.asleep ? 'out' : 'plain') : p.lit ? 'lit' : 'out';
 
 export class BuildingField {
   readonly #scene: Scene;

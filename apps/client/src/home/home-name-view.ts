@@ -20,6 +20,7 @@ export const KIND_NAMES: Readonly<Record<BuildableKind, string>> = {
   'training-grounds': 'Training Grounds',
   fence: 'Fence',
   factory: 'Crafting Factory',
+  resource: 'Resource building',
 };
 
 export const HOME_NAME_TEXT = {

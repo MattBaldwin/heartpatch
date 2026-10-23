@@ -373,6 +373,8 @@ describe('ribbon tabs', () => {
       'recipe:pumpkin-treats',
       'recipe:jack-o-lantern-hearthfire',
       'building:jack-o-lantern-hearthfire',
+      // The Pumpkin Barn goes up in Halloween too (#601).
+      'building:pumpkin-barn',
     ]);
   });
 

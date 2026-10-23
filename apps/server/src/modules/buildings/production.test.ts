@@ -81,9 +81,6 @@ describe.skipIf(!url)('resource buildings (#601, needs DATABASE_URL)', () => {
   let app: FastifyInstance | undefined;
   const clock = new Date(START);
   let counter = 0;
-  // The gate opens in PR 7 (`buildableKinds`); until then a test opens it
-  // only for refusals, since the home reply's naming lists buildable kinds.
-  const kinds = HOME_BASE_RULES.buildableKinds as string[];
 
   beforeAll(() => {
     client = createDbClient(url!, { max: 10 });
@@ -239,37 +236,27 @@ describe.skipIf(!url)('resource buildings (#601, needs DATABASE_URL)', () => {
   it('stands only on its own land: that terrain, or land cleared from it (#601 Q1, Q2)', async () => {
     const { server, kid, mapId } = await patch();
     const plot = await forest(mapId, kid, 0, 'meadow');
-    const gated = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
+    // The gate is open since PR 7 (`buildableKinds` has `resource`).
+    expect(HOME_BASE_RULES.buildableKinds).toContain('resource');
+    const wrong = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
       buildingId: HUT.id,
       q: plot.q,
       r: plot.r,
       spot: 1,
     });
-    expect(errorOf(gated).message).toMatch(/isn't ready to build yet/);
-    kinds.push('resource');
-    try {
-      const wrong = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
-        buildingId: HUT.id,
-        q: plot.q,
-        r: plot.r,
-        spot: 1,
-      });
-      expect(wrong.statusCode).toBe(409);
-      expect(errorOf(wrong).message).toBe("A Woodcutter's Hut needs a Forest tile!");
+    expect(wrong.statusCode).toBe(409);
+    expect(errorOf(wrong).message).toBe("A Woodcutter's Hut needs a Forest tile!");
 
-      // Forest with its Timber spot: clear it first (no beside-the-spot exception).
-      await setLand(plot, 'forest', 'timber');
-      const spot = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
-        buildingId: HUT.id,
-        q: plot.q,
-        r: plot.r,
-        spot: 1,
-      });
-      expect(spot.statusCode).toBe(409);
-      expect(errorOf(spot).message).toMatch(/Clear this land first/);
-    } finally {
-      kinds.splice(kinds.indexOf('resource'), 1);
-    }
+    // Forest with its Timber spot: clear it first (no beside-the-spot exception).
+    await setLand(plot, 'forest', 'timber');
+    const spot = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
+      buildingId: HUT.id,
+      q: plot.q,
+      r: plot.r,
+      spot: 1,
+    });
+    expect(spot.statusCode).toBe(409);
+    expect(errorOf(spot).message).toMatch(/Clear this land first/);
     expect(suitsLand(HUT, { terrain: 'forest', clearedFrom: null })).toBe(true);
     expect(suitsLand(HUT, { terrain: 'clearing', clearedFrom: 'forest' })).toBe(true);
     expect(suitsLand(HUT, { terrain: 'clearing', clearedFrom: 'meadow' })).toBe(false);

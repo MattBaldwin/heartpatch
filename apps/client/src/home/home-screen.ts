@@ -81,6 +81,13 @@ import {
   ringTerrains,
 } from './home-name-view.js';
 import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
+import { resourceCardLines } from '../resource-buildings/resource-card.js';
+import {
+  RESOURCE_TEXT,
+  resourceBuildCards,
+  resourceCard,
+  resourceHere,
+} from '../resource-buildings/resource-model.js';
 import './home.css';
 
 // The home base (#18, design doc §13–14): a Home button over the map opens
@@ -121,6 +128,12 @@ export interface HomeScreenOptions {
   onJobs?: (mapId: string, at?: { q: number; r: number }) => void;
   /** "Open" on my Crafting Factory's tile card (#295): its batches sheet. */
   onOpenFactory?: () => void;
+  /** "Collect" on a resource building's tile card (#601 Q3): runs a settle, which banks it. */
+  onCollect?: () => Promise<void>;
+  /** "Upkeep" on a resource building's tile card (#601 Q5): the Heart Coins sheet's upkeep order. */
+  onUpkeep?: () => void;
+  /** The game clock in ms (the bag's `gameNow`), for a resource building's next batch. */
+  now?: () => number;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
@@ -1479,7 +1492,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   type TileMode = 'card' | 'upgrade' | 'confirm';
   let tileMode: TileMode = 'card';
   /** Whose card a step is for: the tile's fire, its Training Grounds (#277) or Crafting Factory (#295). */
-  type TileTarget = 'fire' | 'grounds' | 'factory';
+  type TileTarget = 'fire' | 'grounds' | 'factory' | 'resource';
   let tileTarget: TileTarget = 'fire';
   let tileNote = '';
   let tileWorking = false;
@@ -1587,6 +1600,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // it's the tile's only card.
     const factory = factoryTileOffer(tile, home);
     if (factory?.kind === 'factory') return factoryNodes(factory.factory);
+    // A resource building (#601) fills its homestead the same way.
+    const producing = resourceHere(home, tile);
+    if (producing) return resourceNodes(tile, producing);
     const grounds = groundsTileOffer(tile, home);
     if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
       return groundsNodes(tile, grounds);
@@ -1688,6 +1704,42 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ],
       [open],
     );
+  }
+
+  /**
+   * My resource building on its homestead (#601 PR 7): running with its
+   * storage meter, full, paused for upkeep, napping, or a sleeping Pumpkin
+   * Barn out of season. Collect runs a settle (owner decision Q3); Upkeep
+   * opens the Heart Coins sheet's order (Q5).
+   */
+  function resourceNodes(tile: PublicTile, b: MyBuilding): Node[] {
+    const current = home;
+    if (!current) return [];
+    const now = options.now?.() ?? Date.parse(current.now);
+    const card = resourceCard(b, tile, current.seasons, now);
+    const actions: Node[] = [];
+    if (card?.collect && options.onCollect) {
+      const collect = options.onCollect;
+      actions.push(
+        tileButton(
+          RESOURCE_TEXT.collect,
+          () => {
+            void collect().then(() => {
+              home = null;
+              void loadForPanel();
+            });
+          },
+          'tile-resource-collect',
+          'small',
+        ),
+      );
+    }
+    if (options.onUpkeep) {
+      actions.push(
+        tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-resource-upkeep-order', 'small'),
+      );
+    }
+    return standingNodes(b, 'resource', 'resource', card ? resourceCardLines(card) : [], actions);
   }
 
   /**
@@ -2009,6 +2061,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const fire = landTileOffer(tile, home);
       const grounds = groundsTileOffer(tile, home);
       const factory = factoryTileOffer(tile, home);
+      // The one resource building this homestead's land takes (#601 PR 7).
+      const producing = resourceBuildCards(tile, home, user.id);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
         ...(fire.kind === 'build'
@@ -2040,6 +2094,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               ),
             ]
           : []),
+        ...producing,
       ];
     },
     build: async (card, tile) => {
@@ -2051,7 +2106,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const factory = factoryTileOffer(tile, current);
       const isGrounds = grounds?.kind === 'build' && grounds.building.id === card.id;
       const isFactory = factory?.kind === 'build' && factory.building.id === card.id;
-      const spot = isGrounds ? grounds.spot : isFactory ? factory.spot : 0;
+      const producing =
+        user && resourceBuildCards(tile, current, user.id).find((c) => c.id === card.id);
+      const spot = isGrounds
+        ? grounds.spot
+        : isFactory
+          ? factory.spot
+          : producing
+            ? producing.spot
+            : 0;
       try {
         const next = await sendCommand(
           sendDeps,
@@ -2066,7 +2129,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           ? HOME_TEXT.groundsBuilt
           : isFactory
             ? HOME_TEXT.factoryBuilt
-            : HOME_TEXT.fireBuilt;
+            : producing
+              ? RESOURCE_TEXT.built(producing.name)
+              : HOME_TEXT.fireBuilt;
       } catch (err) {
         if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
           home = null;

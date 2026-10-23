@@ -176,8 +176,11 @@ describe('clearCards (#242)', () => {
       'hearthfire',
       'training-grounds',
       'crafting-factory',
+      // The forest's own resource building waits too (#601 PR 7).
+      'woodcutters-hut',
     ]);
     expect(cards.slice(1).map((c) => c.blocked)).toEqual([
+      CLEAR_TEXT.firstLine,
       CLEAR_TEXT.firstLine,
       CLEAR_TEXT.firstLine,
       CLEAR_TEXT.firstLine,
@@ -188,6 +191,7 @@ describe('clearCards (#242)', () => {
       CLEAR_CARD_ID,
       'hearthfire',
       'training-grounds',
+      'woodcutters-hut',
     ]);
     // Land with no spot is built on as it is.
     expect(ids(clearCards(tile(), me, bag(), NOW))).toEqual([CLEAR_CARD_ID]);

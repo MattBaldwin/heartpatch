@@ -7,7 +7,7 @@ import type { Building } from './buildings.js';
 
 /**
  * Building kinds a player can put up today (Training Grounds: owner decision
- * 2026-10-06; the Crafting Factory: #294).
+ * 2026-10-06; the Crafting Factory: #294; resource buildings: #601 PR 7).
  */
 export const BuildableKindSchema = z.enum([
   'hearthfire',
@@ -15,6 +15,7 @@ export const BuildableKindSchema = z.enum([
   'training-grounds',
   'fence',
   'factory',
+  'resource',
 ]);
 export type BuildableKind = z.infer<typeof BuildableKindSchema>;
 

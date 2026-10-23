@@ -1,6 +1,7 @@
 import type { HeartCoins } from '@heartpatch/shared';
 import type { GameClock } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
+import { createUpkeepList } from '../resource-buildings/upkeep-list.js';
 import {
   HEART_COINS_TEXT,
   heartCoinsPage,
@@ -16,6 +17,8 @@ import {
 export interface HeartCoinsSheet {
   /** Shows the sheet, "Counting…" until `show` or `fail` fills it. */
   open: () => void;
+  /** Once filled, brings the morning upkeep list into view (a resource building's card, #601). */
+  scrollToUpkeep: () => void;
   /** Fills it from a fresh reply. */
   show: (coins: HeartCoins) => void;
   /** The read failed: says so kindly (a balance already shown stays). */
@@ -32,6 +35,10 @@ export interface HeartCoinsSheetOptions {
   clock: Pick<GameClock, 'msUntil'>;
   /** The patch's midnight came while open: read the balance again (once per midnight). */
   onExpired: () => void;
+  /** The seasons on at an instant, for the upkeep list (#601). */
+  seasons?: (at: Date) => readonly string[] | null;
+  /** Saves the kid's upkeep order (#601 Q5); without it the upkeep list shows no arrows' effect. */
+  onUpkeepOrder?: (buildingIds: readonly string[]) => Promise<void>;
 }
 
 /** How often the "More to earn in …" line counts down while open (territory's pace). */
@@ -67,6 +74,16 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   const resets = el('p', { class: 'heart-sheet-resets', 'data-testid': 'heart-coins-resets' });
   const status = el('p', { class: 'heart-sheet-status', role: 'status' });
   const problem = el('p', { class: 'auth-error', role: 'alert' });
+  // Morning upkeep for my resource buildings, and the order they pay in (#601).
+  const upkeep = createUpkeepList({
+    onOrder: options.onUpkeepOrder ?? (() => Promise.resolve()),
+    ...(options.seasons ? { seasons: options.seasons } : {}),
+    onError: (err) => {
+      problem.textContent = messageOf(err);
+    },
+  });
+  /** Scroll to the upkeep list once the next reply draws it. */
+  let wantUpkeep = false;
   const closeTop = el(
     'button',
     {
@@ -129,6 +146,7 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
         status,
         rows,
         resets,
+        upkeep.element,
         problem,
         compare,
       ),
@@ -167,6 +185,11 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
     balance.setAttribute('aria-label', HEART_COINS_TEXT.label(view.balance));
     rows.replaceChildren(...view.rows.map(rowItem));
     resets.textContent = view.resets;
+    upkeep.show(coins, coins.upkeep ? options.clock.msUntil(coins.upkeep.nextMorningAt) : 0);
+    if (wantUpkeep && !upkeep.element.hidden) {
+      wantUpkeep = false;
+      upkeep.element.scrollIntoView({ block: 'start' });
+    }
   }
 
   function stopTicking(): void {
@@ -183,7 +206,12 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   closeTop.addEventListener('click', hide);
 
   return {
+    scrollToUpkeep: () => {
+      wantUpkeep = true;
+    },
     open: () => {
+      wantUpkeep = false;
+      upkeep.element.hidden = true;
       coins = null;
       page = null;
       balance.replaceChildren();

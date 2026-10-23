@@ -40,7 +40,7 @@ describe('statsPage (#573)', () => {
       ['Claimed', '14'],
       ['Wild left', '30'],
       ['Lit', '3'],
-      ['Villages restored', SOON],
+      ['Hollows restored', SOON],
     ]);
   });
 

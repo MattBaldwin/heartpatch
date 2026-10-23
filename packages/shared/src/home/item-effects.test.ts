@@ -64,6 +64,14 @@ describe('itemEffects (#241)', () => {
           'stone-wall',
           'emberwood-palisade',
           'ice-wall',
+          // Resource buildings go up to L3 and L4 with it (#601).
+          'woodcutters-hut',
+          'ember-kiln',
+          'stone-quarry',
+          'ice-cutter',
+          'water-well',
+          'greenhouse',
+          'pumpkin-barn',
         ],
       },
       { kind: 'recipes', recipes: ['lantern', 'joy-lantern'] },
@@ -87,11 +95,11 @@ describe('itemEffects (#241)', () => {
     expect(timber?.kind === 'build-with' && timber.buildings).toContain('hearthfire');
   });
 
-  it("names no building a player can't build yet (#601's gated resource buildings)", () => {
+  it("names no building a player can't build yet (#601's gated Warehouse)", () => {
     const gated = new Set(
       BUILDINGS.filter((b) => !isBuildable(HOME_BASE_RULES, b)).map((b) => b.id),
     );
-    expect(gated.has('woodcutters-hut') && gated.has('warehouse')).toBe(true);
+    expect(gated.has('warehouse') && !gated.has('woodcutters-hut')).toBe(true);
     for (const { id } of GAME_DATA.resources) {
       for (const effect of itemEffects(id)) {
         const named =

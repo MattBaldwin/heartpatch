@@ -37,7 +37,7 @@ export const RESTORE_TEXT = {
   notNow: 'Not now',
   done: 'Done',
   problem: {
-    won: 'This village is already restored! 🌈',
+    won: 'This Hollow is already restored! 🌈',
     restored: 'This spot is all fixed up! Try another grey tile 🛠️',
     night: 'Too spooky after dark! Come back in the morning 🌙',
     away: 'Claim land next to it to restore it!',
@@ -48,7 +48,7 @@ export const RESTORE_TEXT = {
   wonKicker: (name: string, total: number) =>
     `${name.toUpperCase()} · ${String(total)} of ${String(total)} restored ✨`,
   wonTitle: 'The joy is back! 🌈',
-  wonLine: 'You brought this village back to life. What will you call it?',
+  wonLine: 'You brought this Hollow back to life. What will you call it?',
   wonSeed: '🌱 A new Heart Seed! It and the tiles around it are yours for keeps.',
   later: 'Later',
   label: 'Its new name',

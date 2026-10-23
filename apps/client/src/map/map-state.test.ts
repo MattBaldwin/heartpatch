@@ -316,6 +316,35 @@ describe('MapState', () => {
     expect(state.apply(event('building.placed', { userId: userId(1) }, 7))).toBe('resync');
   });
 
+  it('naps and wakes a resource building on its tile (#601)', () => {
+    const state = new MapState(testView(1));
+    const tile = state.view.tiles.find((t) => t.homeSlot === null)!;
+    const tileOf = () => state.tileAt(hexKey(tile))!;
+    const hut = {
+      id: '0190a8c4-0000-7000-8000-000000000201',
+      buildingId: 'woodcutters-hut',
+      kind: 'resource',
+      level: 1,
+      spot: 1,
+      lit: null,
+      safeRadius: null,
+      paused: false,
+    };
+    state.apply(
+      event(
+        'building.placed',
+        { userId: userId(1), building: { ...hut, q: tile.q, r: tile.r } },
+        2,
+      ),
+    );
+    const at = { userId: userId(1), buildingRowId: hut.id, q: tile.q, r: tile.r };
+    expect(state.apply(event('building.paused', at, 3))).toBe('redraw');
+    expect(tileOf().buildings[0]?.paused).toBe(true);
+    expect(state.apply(event('building.resumed', at, 4))).toBe('redraw');
+    expect(tileOf().buildings[0]?.paused).toBe(false);
+    expect(state.apply(event('building.paused', { userId: userId(1) }, 5))).toBe('resync');
+  });
+
   it('applies fence events to the tile they stand on (#203)', () => {
     const state = new MapState(testView(1));
     const tile = state.view.tiles.find((t) => t.homeSlot === null)!;

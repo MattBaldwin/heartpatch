@@ -50,6 +50,10 @@ export const AWAY_TEXT = {
   cardTagNow: 'Into your Bag!',
   cardTitle: 'Your patch kept busy!',
   training: 'Training Grounds',
+  /** The card's section for what resource buildings made (#601). */
+  buildings: 'Your buildings',
+  /** Under the banner when several buildings made things. */
+  madeMore: (first: string, more: number) => `${first} + ${String(more)} more`,
   xp: (n: number) => `+${String(n)} XP`,
   nice: 'Nice!',
   /**
