@@ -1254,7 +1254,7 @@
 }
 
 /* A phone held sideways: a smaller ring, as explore's. */
-@media (max-height: 500px) {
+@media (max-height: 520px) and (min-width: 640px) {
   .house-stick {
     width: 104px;
     height: 104px;
