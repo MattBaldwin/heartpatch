@@ -27,6 +27,7 @@ import {
 import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
 import { el, messageOf } from '../dom.js';
 import { RARITY_NAMES, rarityClass } from '../rarity/rarity.js';
+import { isLandscapePhone } from '../breakpoints.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
 import { watchScrollEdges } from './scroll-edges.js';
@@ -324,10 +325,31 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     options.invalidate();
   };
 
+  /**
+   * On a phone on its side the card (or the Boutique's) takes the right of the
+   * screen, so the Keeper stands in the room left of it; otherwise it stays
+   * where it always stood, above a bottom card (controls D).
+   */
+  const fitPreview = (): void => {
+    if (!isOpen || !preview) return;
+    const shown = panel.querySelector<HTMLElement>('.wardrobe-card:not([hidden])');
+    const left = shown?.getBoundingClientRect().left ?? 0;
+    preview.setBand(
+      isLandscapePhone() && left > 0
+        ? { top: 12, bottom: window.innerHeight - 12, left: 0, right: left }
+        : null,
+    );
+    options.invalidate();
+  };
+  window.addEventListener('resize', () => {
+    requestAnimationFrame(fitPreview);
+  });
+
   const build = (scene: Scene): SceneContent => {
     const built = new KeeperPreview(scene, lodFor('closeUp', options.tier()));
     lastTier = options.tier();
     preview = built;
+    requestAnimationFrame(fitPreview);
     showLook(false);
     scene.onDisposeObservable.addOnce(() => {
       if (preview === built) preview = null;

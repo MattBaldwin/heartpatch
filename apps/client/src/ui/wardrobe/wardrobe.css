@@ -297,3 +297,40 @@ div.wardrobe-item {
   color: #4a3150;
   pointer-events: none;
 }
+
+/* A phone on its side (controls D, ../breakpoints.ts): the card is a panel on
+   the right, as tall as the screen, and the Keeper stands in the room on its
+   left (wardrobe-screen.ts fits it). The card scrolls if its rows still don't
+   fit, but the clothes always get at least a row and a half. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .wardrobe {
+    align-items: flex-end;
+    padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px)
+      calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+  }
+
+  .wardrobe-card {
+    grid-template-rows: auto auto auto minmax(104px, 1fr) auto auto;
+    gap: 4px;
+    width: min(58%, 520px);
+    height: 100%;
+    margin: 0 0 0 auto;
+    padding: 8px 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .wardrobe-header {
+    gap: 4px 8px;
+  }
+
+  .wardrobe-header .auth-title {
+    font-size: 20px;
+  }
+
+  .wardrobe-save,
+  .wardrobe-note {
+    font-size: 14px;
+  }
+}

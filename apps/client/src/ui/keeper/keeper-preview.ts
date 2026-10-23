@@ -23,6 +23,13 @@ const FIT_PAD = { top: 24, bottom: 10 }; // TUNE
 export interface PreviewBand {
   readonly top: number;
   readonly bottom: number;
+  /**
+   * The free width (CSS px from the left of the viewport), when a card takes
+   * a side of the screen (a phone on its side, controls D): the Keeper stands
+   * in the middle of it. Without it the Keeper stands in the middle of the screen.
+   */
+  readonly left?: number;
+  readonly right?: number;
 }
 
 const FEET = new Vector3();
@@ -90,8 +97,8 @@ export class KeeperPreview {
     const cap = this.#band ? 1 : Math.min(1, fitHeight / height);
     const largest = KEEPER_PLACES.preview.scale * cap;
     const turn = turned ? { lean: -lean, yaw: Math.PI } : { lean, yaw: 0 };
-    const { scale, z } = this.#fit(height, largest, turn);
-    this.#handle = this.#field.add(config, { x: 0, z, scale, ...turn }, items);
+    const { scale, z, x } = this.#fit(height, largest, turn);
+    this.#handle = this.#field.add(config, { x, z, scale, ...turn }, items);
     if (hop) this.#field.play(this.#handle, 'bounce', now);
   }
 
@@ -110,6 +117,8 @@ export class KeeperPreview {
       this.#band &&
       band.top === this.#band.top &&
       band.bottom === this.#band.bottom &&
+      band.left === this.#band.left &&
+      band.right === this.#band.right &&
       canvas === this.#bandCanvas;
     if (same || (!band && !this.#band)) return;
     this.#band = band;
@@ -123,19 +132,21 @@ export class KeeperPreview {
     height: number,
     largest: number,
     turn: { lean: number; yaw: number },
-  ): { scale: number; z: number } {
+  ): { scale: number; z: number; x: number } {
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     const band = this.#band;
     this.#fitted = null;
-    if (!band || !camera || !canvas) return { scale: largest, z: 0 };
+    if (!band || !camera || !canvas) return { scale: largest, z: 0, x: 0 };
     const box = canvas.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0) return { scale: largest, z: 0 };
+    if (box.width <= 0 || box.height <= 0) return { scale: largest, z: 0, x: 0 };
     const viewport = camera.viewport.toGlobal(box.width, box.height);
     const transform = camera.getViewMatrix(true).multiply(camera.getProjectionMatrix(true));
     Quaternion.RotationYawPitchRollToRef(turn.yaw, turn.lean, 0, TURN);
     const screenY = (p: Vector3) =>
       box.top + Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, transform, viewport, PROJECTED).y;
+    const screenX = (p: Vector3) =>
+      box.left + Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, transform, viewport, PROJECTED).x;
     const feetY = (z: number) => screenY(FEET.set(0, 0, z));
     const headY = (scale: number, z: number) => {
       UP.set(0, height * scale, 0).rotateByQuaternionToRef(TURN, HEAD);
@@ -161,7 +172,15 @@ export class KeeperPreview {
     let scale = largest;
     for (let i = 0; i < 30 && headY(scale, z) < ceiling; i++) scale *= 0.96;
     this.#fitted = { feet: feetY(z), head: headY(scale, z), top: band.top, bottom: band.bottom };
-    return { scale, z };
+    // Beside a card: slide along the stage to the middle of the free width.
+    // The view is nearly linear across a unit, so two probes find it.
+    let x = 0;
+    if (band.left !== undefined && band.right !== undefined) {
+      const at0 = screenX(FEET.set(0, 0, z));
+      const per = screenX(FEET.set(1, 0, z)) - at0;
+      if (Math.abs(per) > 1e-3) x = ((band.left + band.right) / 2 - at0) / per;
+    }
+    return { scale, z, x };
   }
 
   /** Advances the hop; true while it plays (keep drawing). */
