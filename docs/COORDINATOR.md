@@ -95,7 +95,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **Sessions can't run WebKit** (only CI can). Client e2e tests assert on the game's own signals (counters, state), never pixel-exact screenshots.
 
-**Check-ins:** the earlier "don't schedule check-ins to poll sessions" rule is superseded by the owner's request for active supervision (2026-10-23): sweep every ~20 min while lanes are active (§9, "Check-in"). Between sweeps, still rely on reports, GitHub events, and session-failure notifications.
+**Check-ins:** the earlier "don't schedule check-ins to poll sessions" rule is superseded by the owner's request for active supervision (2026-10-23): sweep GitHub every ~20 min while lanes are active (§9, "Check-in"). **The supervisor does not subscribe to lane PRs** (owner, 2026-10-23): a PR's events go to one session, and each cost the supervisor about 4k tokens of context. Lanes own their PR subscriptions and report to the supervisor; the supervisor merges on the gates from the sweep.
 
 ## 6. Usage and models (owner decision)
 
@@ -189,18 +189,17 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 10, 2026-10-23):** main `4c4bcc6` (#627), migrations through 0056. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-22/23 — Owner decisions".
-- **Lanes in flight** (report to supervisor 10; subscribe to every open PR):
-  - **#625 factory fix:** prod-impacting (Woodcutter's Hut on cleared forest). The owner screens before merge.
-  - **#626 Warehouse server** (#601 PR 8).
+- **State (supervisor 10, 2026-10-23):** main `9710aad` (#625), migrations through 0056. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-22/23 — Owner decisions".
+- **Lanes in flight** (report to supervisor 10; each lane subscribes to its own PR):
   - **#628 Crooked House 6b** (#306).
+  - **Merged 2026-10-23:** #625 (Woodcutter's Hut on cleared forest, `9710aad`) and #626 (Warehouse server, `7cd38b4`).
 - **Queue (start in this order as lanes free up):**
   - **Crooked House 6c → 6d (+6e alongside) → 6f**, per #306 comment 6354531305. Each needs the owner's screens, and the house lands by Nov 6 for a playtest before Nov 9.
   - **#601 PR 9 Warehouse client**, including the morning-card upkeep-pause line and "Free from tomorrow 🎃" on a seasonal building's last day.
   - **#601 PR 10 economy sim retune** (data only).
   - **Wild Isle #621:** a big feature. Fable plans first, then two waves.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
-- **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: subscribe to every open PR, merge on the gates, nudge stuck lanes, and start the next queued lane.
+- **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first. **Show the screens before asking (2026-10-11, relayed by the coordinator):** always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link. **Features must be felt (2026-10-11, relayed by the coordinator):** a feature needs visible feedback, not just correct text, and the home must be personal and personalizable. **Squishies are the most important visual part (2026-10-11, relayed by the coordinator):** every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones.
 - **Merge gates as practised:** reviewer APPROVE on the exact head; all checks green on it; `git merge-tree --write-tree origin/main <head>` clean; squash via `gh api -X PUT repos/MattBaldwin/heartpatch/pulls/N/merge -f merge_method=squash -f sha=<full sha>`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
 - **After a merge:** check the other open PRs for conflicts (`git merge-tree --name-only`); delete the lane's own one-shot triggers (`list_triggers` with `recurring:false`, filter by `persistent_session_id`); archive the lane. Never archive a supervisor.
