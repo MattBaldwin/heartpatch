@@ -94,6 +94,7 @@ import {
 import {
   RESOURCE_TEXT,
   resourceBuildCards,
+  resourceCardsFirst,
   resourceCard,
   resourceHere,
 } from '../resource-buildings/resource-model.js';
@@ -2104,36 +2105,38 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const store = warehouseBuildCard(tile, home, user.id);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
-        ...(fire.kind === 'build'
-          ? [
-              card(fire.building, effectChips(fire.building)[0] ?? fire.building.description),
-              ...(fire.lantern
-                ? [
-                    card(
-                      fire.lantern.building,
-                      effectChips(fire.lantern.building)[0] ?? fire.lantern.building.description,
-                    ),
-                  ]
-                : []),
-            ]
-          : []),
-        ...(grounds?.kind === 'build'
-          ? [
-              card(
-                grounds.building,
-                effectChips(grounds.building)[0] ?? grounds.building.description,
-              ),
-            ]
-          : []),
-        ...(factory?.kind === 'build'
-          ? [
-              card(
-                factory.building,
-                effectChips(factory.building)[0] ?? factory.building.description,
-              ),
-            ]
-          : []),
-        ...producing,
+        ...resourceCardsFirst(producing, [
+          ...(fire.kind === 'build'
+            ? [
+                card(fire.building, effectChips(fire.building)[0] ?? fire.building.description),
+                ...(fire.lantern
+                  ? [
+                      card(
+                        fire.lantern.building,
+                        effectChips(fire.lantern.building)[0] ?? fire.lantern.building.description,
+                      ),
+                    ]
+                  : []),
+              ]
+            : []),
+          ...(grounds?.kind === 'build'
+            ? [
+                card(
+                  grounds.building,
+                  effectChips(grounds.building)[0] ?? grounds.building.description,
+                ),
+              ]
+            : []),
+          ...(factory?.kind === 'build'
+            ? [
+                card(
+                  factory.building,
+                  effectChips(factory.building)[0] ?? factory.building.description,
+                ),
+              ]
+            : []),
+        ]),
+        // The Warehouse goes on any land, so it waits at the end of the row.
         ...(store ? [store] : []),
       ];
     },

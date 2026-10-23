@@ -24,6 +24,16 @@ export interface BuildCard {
   readonly craft: string | null;
 }
 
+/**
+ * A name with a word this long ("Woodcutter's") gets a tighter font step, so
+ * it wraps at the space and still fits the card without breaking mid-word.
+ */
+const LONG_WORD = 10;
+
+export function hasLongWord(name: string): boolean {
+  return name.split(' ').some((w) => w.length > LONG_WORD);
+}
+
 /** A cost times `n` (fencing several edges at once). */
 export function times(cost: ItemCounts, n: number): ItemCounts {
   return Object.fromEntries(Object.entries(cost).map(([id, k]) => [id, k * n]));
