@@ -124,19 +124,6 @@
   color: #7a2d55;
 }
 
-.tray-close {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border: 0;
-  border-radius: 50%;
-  background: #fbeaf2;
-  color: #7a2d55;
-  cursor: pointer;
-}
-
 .tray-body {
   flex: 1;
   overflow: auto;

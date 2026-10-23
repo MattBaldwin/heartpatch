@@ -97,19 +97,6 @@ body:has(.explore:not([hidden])) .auth-chip {
   pointer-events: auto;
 }
 
-.explore-back {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border: none;
-  border-radius: 50%;
-  background: #fffafc;
-  color: #4a3150;
-  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
-  font-size: 30px;
-  line-height: 1;
-}
-
 .explore-names {
   /* The tile's name and progress come first: the chip beside them stays small. */
   flex: 0 1 auto;

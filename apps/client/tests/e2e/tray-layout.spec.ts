@@ -15,7 +15,7 @@ const TRAY_CONTROLS = [
   '.tray-section > button',
   '.tray-section > .battle-entry-box > button',
   '.tray-jobs .jobs-entry > button',
-  '.tray-close',
+  '.hp-close',
   '.tray-top-left > button',
 ].join(', ');
 

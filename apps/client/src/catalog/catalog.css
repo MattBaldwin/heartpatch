@@ -40,27 +40,6 @@
   text-align: left;
 }
 
-/* The round × (like a tray's close): 44pt, text well inside its edge. */
-.catalog-close-top {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: #fbeaf2;
-  font: inherit;
-  /* 22 px: the glyph's box stays 8 px inside the 44 px circle (style guide §3). */
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  color: #7a2d55;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
 .catalog-scroll {
   flex: 1 1 auto;
   min-height: 0;

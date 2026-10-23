@@ -3,6 +3,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { slotIcon } from './map-legend.js';
 import { mapApi } from './map-api.js';
 import { statsPage, type KeeperCard, type StatLine, type StatsPage } from './patch-stats-view.js';
+import { hpClose } from '../ui/button/button.js';
 import './patch-stats.css';
 
 // Patch stats (#573): who's winning what, a crown per category. A DOM sheet
@@ -84,16 +85,7 @@ export function createPatchStatsScreen(options: PatchStatsOptions): PatchStatsSc
   const list = el('ul', { class: 'patch-stats-list' });
   const status = el('p', { class: 'patch-stats-status', role: 'status' });
   const problem = el('p', { class: 'auth-error', role: 'alert' });
-  const closeTop = el(
-    'button',
-    {
-      type: 'button',
-      class: 'patch-stats-close-top',
-      'aria-label': 'Close',
-      'data-testid': 'patch-stats-close-top',
-    },
-    '×',
-  );
+  const closeTop = hpClose('Close', 'patch-stats-close-top');
   const close = el(
     'button',
     { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'patch-stats-close' },

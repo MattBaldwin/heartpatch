@@ -94,6 +94,11 @@ body:has(.lbook:not([hidden])) .auth-chip {
 }
 
 .lbook-bar {
+  /* The book is dark, so its buttons are cream-tinted glass instead of pink. */
+  --hp-secondary: rgb(255 248 236 / 16%);
+  --hp-secondary-lip: rgb(0 0 0 / 22%);
+  --hp-secondary-ink: #fff8ec;
+  --hp-gloss: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -101,31 +106,8 @@ body:has(.lbook:not([hidden])) .auth-chip {
   padding: 8px 10px 4px;
 }
 
-.lbook-btn {
-  flex: none;
-  min-height: 44px;
-  padding: var(--hp-pad-y) var(--hp-pad-x);
-  border: 0;
-  border-radius: 999px;
-  background: rgb(255 248 236 / 14%);
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff8ec;
-  white-space: nowrap;
-}
-
 .lbook-close {
-  flex: none;
-  width: 44px;
-  height: 44px;
   margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgb(255 248 236 / 14%);
-  font-size: 18px;
-  font-weight: 800;
-  color: #fff8ec;
 }
 
 .lbook-title {
