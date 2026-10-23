@@ -1716,3 +1716,33 @@ _Owner decisions on issues #601, #306, #602 and #621 and in the `## Decisions` s
   - Damage, Hollow Man reach and farming effects apply per tile while a front covers it, resolved lazily plus a scheduled job for damage. Rare and secret rolls stay server-side.
   - Clouds, rain and fog are instanced or shader effects, with a lighter version on older iPads, and they need the mobile budget check.
   - Wave 1 includes the moving fronts and their effects. Hollow Man storm nights stay in Wave 2.
+
+## 2026-10-23 — Owner decisions and coordinator calls (supervisor 12)
+
+_Owner decisions from the 2026-10-23 playtest and screen approvals, and the `## Decisions` sections of merged PRs #637, #639 and #640. Each item cites its source. "Coordinator call" marks a call the supervisor made inside an owner-approved design. Controls B (#638) was still open when this was written; its decisions are recorded after it merges._
+
+**Controls: landscape phones (PR #637)**
+- **Landscape phone is `(max-height: 520px) and (min-width: 640px)`.** `apps/client/src/ui/breakpoints.ts` is the one list of landscape-phone and short-height values, with a TS mirror (`LANDSCAPE_PHONE_QUERY`, `isLandscapePhone()`). CSS can't read variables inside `@media`, so `breakpoints.test.ts` fails any stylesheet whose `max-height`, `min-height` or `orientation` query uses a value that isn't listed, or any variant of the landscape-phone query. A new height or orientation query must use a listed value.
+- **On a landscape phone the wardrobe card sits on the left,** because the Log out chip is top right. The Keeper stands on the right. Boutique and Milestones follow the same layout.
+- **Left for later (other lanes' files):** home (the bottom card takes about half the screen at 844×390; the heart-coins pill is 32 px and the map legend button 14 px), the roster and team two-column pass, and the chat strip at 667×375. The other `max-height` steps (600/700/740/840/880) stay as listed until each has a visual check.
+
+**The Crooked House: echoes and peekaboo (#306, PR #639)**
+- **The peekaboo is a deliberate exception to "no jump scares" (owner decision 3, #306 comment 6354512341).** The wording is in STYLE_GUIDE §1. It always turns friendly at once and nothing is ever lost.
+- **The house has one sting, `peekaboo`,** beside the opening cinematic's `hollow-sting`. It dips the music (TECH_SPEC §15). The friendly echo reuses the existing `giggle` cue.
+- **Echoes are drawn on the server's clock.** The client keeps the skew between `serverTime` and when each reply arrived, catches included. The doorway hint runs the server's own `echoCatch`, so the hint and the catch agree up to the reply's trip time, about a hundredth of a room. The server always decides, and a catch never loses anything.
+- **The house Keeper (owner playtest, 2026-10-23, PR #639).** In the Crooked House the Keeper is drawn smaller and nearly upright (`HOUSE_KEEPER = { scale: 0.72, lean: 0.12 }`), and the rug rim lies flat so nothing clips through the Keeper. It is house-only; other scenes are unchanged.
+
+**Patch economy retune (#601, PR #640)**
+- **The sell cap is 150 a day and Warehouse upkeep is 20 (from `pnpm sim:patch-economy`).** This corrects "120 a day now" under "Upkeep and the sell cap come from the sim" in 2026-10-22/23 above, which is left as written. The cap was 120 and the Warehouse 30 before. The cap binds an engaged kid, and 150 leaves them at 57–59 % upkeep daily and 69–71 % across the trip runs. 20 is a level-2 hut's upkeep, below a level-3/4 hut's 23. The new Warehouse payback guard binds it at 22 at most, not the 70 % upkeep guard.
+- **The sim now uses the Glimmer swap.** A kid with huts swaps spare Timber, Stone, Greens, Water and Ice for the Glimmer the next step is short of, up to `GLIMMER_SWAP.dailyCap`. Two new guards: an engaged kid's upkeep is at most 70 % of what they earn once the Warehouse stands, and a long trip's saved output, priced at sell price, is worth at least a month of Warehouse upkeep.
+- **The Warehouse's value is items, and items are cap-bound.** An engaged kid sells the full cap every day, so the extra output can't become 💛, and on the 5-day trip run the kid with a Warehouse ends day 30 with 320–400 💛 less than the one without. Open for the owner: a second sink or sell channel for the surplus, or a cheaper Warehouse. Whether CI should encode the sell-price valuation at all is also the owner's call.
+- **Heart Coin hoarding is capacity, not a bug, but bigger now.** A casual kid with two huts can end day 30 with 3213 💛, and 💛 has no sink besides upkeep. If the owner wants less, the cheap lever is a 💛 sink in a later issue, not a lower cap, because an engaged kid needs the room. A cap of 120 would put engaged kids at 73–92 %.
+- **Level 4 adds only storage (96 h against 72 h) over level 3,** and the Warehouse makes storage moot. Left as is. A pace bump at level 4 (400 % to 450 %, upkeep 23 to 26) is a one-line follow-up, costing an engaged kid about 12 💛 a day.
+
+**Screens approved (2026-10-23, via supervisor 12)**
+- **Controls D landscape (PR #637, comment 6368546120),** v3 of the screens.
+- **6d echoes and peekaboo (PR #639, comment 6370666921),** v3: echoes, the spookier peekaboo with sting and shake, the friendly card, the reduced-motion fade and the Keeper fix.
+- **Controls B buttons (PR #638, comment 6371460041),** v4, including the soft-danger "Reset password" in the admin console. The owner checks the lobby's serif fallback on iPhone after merge.
+
+**Coordinator calls**
+- **Controls B got a fifth, delta-only review round (PR #638).** The supervisor allowed it for one scoped token fix (the admin invite-code box shared the new secondary buttons' fill), because the merge gate needs an APPROVE naming the head.

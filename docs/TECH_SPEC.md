@@ -459,5 +459,6 @@ All sound is synthesised in the browser with Web Audio. There are no audio files
 - **Mix:** music, SFX and UI buses into a master gain and a limiter. Music dips under key moments (his visit, a new friend, an evolution, a win). Up to 10 voices at once; repeats within 50 ms are dropped; each play varies pitch and volume a little.
 - **Settings:** per device, in `localStorage` (read in try/catch). A slider and an On/Off switch each for Music and Sounds. Music drives the music bus; Sounds drives SFX and UI.
 - **iOS:** nothing is made or played before the first tap. Create, prime and resume the `AudioContext` inside that gesture, then load the engine chunk. Resume on `visibilitychange` and when `statechange` reports `interrupted`. Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so the silent switch mutes the game and other apps keep playing.
+- **Stings:** the Crooked House's peekaboo has the house's one sting, the `peekaboo` cue, beside the opening cinematic's `hollow-sting`. It dips the music like `hollow-sting` does.
 - **Sound gallery:** the dev-only `/sounds.html` page plays every cue and loop, so a human can judge quality by ear.
 - **Budget:** the engine is lazy-loaded after the first tap and counts toward the 15 MB first load (about 11 KB).
