@@ -302,12 +302,23 @@ async function shot(page, device, name, { wait = true } = {}) {
 }
 
 /** Into the room before a power door, standing at it. */
-async function toDoor(page, mapId, p) {
+async function toDoor(page, mapId, p, tries = 2) {
   await ok(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: p.from });
   await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
-  await goInside(page);
-  await place(page, p.door[0], p.door[1]);
-  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.target?.state === 'sleeping');
+  try {
+    await goInside(page);
+    await place(page, p.door[0], p.door[1]);
+    await until(
+      page,
+      () => window.__heartpatch?.farHollowHouse?.()?.target?.state === 'sleeping',
+      undefined,
+      60_000,
+    );
+  } catch (error) {
+    // A reload now and then lands in the lobby (headless SwiftShader is slow): once more, fresh.
+    if (tries <= 1) throw error;
+    await toDoor(page, mapId, p, tries - 1);
+  }
 }
 
 /** Opens the bonus room's chest from beside it, and shoots the lid, the card and any friend. */
