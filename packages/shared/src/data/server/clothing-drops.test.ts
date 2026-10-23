@@ -5,14 +5,17 @@ import { FOUND_SETS } from '../found-sets.js';
 import { GAME_DATA } from '../index.js';
 import { CELLAR_RULES } from './cellar.js';
 import { CLOTHING_DROPS } from './clothing-drops.js';
+import { CROOKED_HOUSE_SECRETS } from './crooked-house.js';
 
 const TERRAINS = GAME_DATA.terrains.map((t) => t.id);
 const copy = (): ClothingDropTable[] => structuredClone(CLOTHING_DROPS);
 // Found sets' pieces drop from their own tables (#306 PR 5), and the cellar
-// keepsakes only from a cellar's big chest (#306).
+// keepsakes only from a cellar's big chest (#306), the Crooked House's only
+// from its attic (#306 6b).
 const SET_PIECES = new Set([
   ...FOUND_SETS.flatMap((s) => s.pieces),
   ...Object.values(CELLAR_RULES.bigChest.keepsakes),
+  CROOKED_HOUSE_SECRETS.attic.keepsake,
 ]);
 
 describe('clothing drop tables (server-only)', () => {

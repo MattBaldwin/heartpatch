@@ -3196,6 +3196,44 @@ const CELLAR_KEEPSAKES: ClothingItem[] = [
   },
 ];
 
+/**
+ * The far Hollow's keepsakes (#306 6b, owner decision 4): one a house,
+ * found in its attic's big chest. Found-only, untradable Legendaries, as the
+ * cellars' are.
+ */
+const FAR_HOLLOW_KEEPSAKES: ClothingItem[] = [
+  {
+    // The Crooked House's: a deep plum cape with a glowing lantern-gold hem.
+    id: 'lantern-keepers-cloak',
+    name: "Lantern Keeper's Cloak",
+    description: 'A cosy plum cape with a hem that glows like a lantern. No room stays dark for long.',
+    slot: 'back',
+    rarity: 'legendary',
+    sources: ['found'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.4, 0.5], size: [1.3, 1.75, 0.22], color: '#5b3f8a' },
+        { shape: 'ellipsoid', at: [0, 0.42, 0], size: [1.14, 0.22, 1.14], color: '#7a5bb0' },
+        {
+          shape: 'ellipsoid',
+          at: [0, -1.2, 0.52],
+          size: [1.34, 0.18, 0.26],
+          color: '#ffc75a',
+          glow: true,
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0, 0.3, -0.52],
+          size: [0.24, 0.24, 0.12],
+          color: '#ffc75a',
+          glow: true,
+        },
+      ],
+    },
+  },
+];
+
 /** Every clothing item, checked by `checkClothingData` in tests. */
 export const CLOTHING: ClothingItem[] = [
   ...STARTER,
@@ -3205,6 +3243,7 @@ export const CLOTHING: ClothingItem[] = [
   ...MILESTONE,
   ...REKINDLED,
   ...CELLAR_KEEPSAKES,
+  ...FAR_HOLLOW_KEEPSAKES,
   ...SQUISHY,
   ...SQUISHY_COSTUMES,
 ];
