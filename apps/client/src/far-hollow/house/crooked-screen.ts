@@ -348,6 +348,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       closePicker();
       return;
     }
+    // A chest's friend is waiting in its battle: Back goes to meet it too.
+    const card = cards[0];
+    if (card?.kind === 'friend') {
+      meetFriend(card);
+      return;
+    }
     if (mapShown) {
       showMap(false);
       return;
@@ -709,7 +715,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       if (at !== generation || picker !== asked) return;
       picker = { door, helpers: helpersFor(door, jobs) };
     } catch (err) {
-      if (at !== generation) return;
+      if (at !== generation || picker !== asked) return;
       picker = null;
       say(messageOf(err));
     }
@@ -758,13 +764,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
           testId: `crooked-helper-${h.id}`,
         });
         row.classList.add('crooked-helper');
-        row.setAttribute('role', 'listitem');
         row.addEventListener('click', () => {
           picker = null;
           renderPicker();
           void wakeDoor(p.door, h);
         });
-        list.append(row);
+        // The row is the list item; the button inside keeps its role for VoiceOver.
+        list.append(el('div', { role: 'listitem' }, row));
       } else {
         list.append(
           el(
@@ -1188,6 +1194,22 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   /**
+   * "Say hello!" (or Back: its battle has started either way). The house
+   * steps aside without its sheet and the battle takes the screen; closing
+   * it comes back here.
+   */
+  function meetFriend(card: Extract<Card, { kind: 'friend' }>): void {
+    const id = mapId;
+    bonusFx?.clearFriend();
+    if (id && options.onFriend) {
+      hide();
+      options.onFriend(id, card.battleId);
+      return;
+    }
+    nextCard();
+  }
+
+  /**
    * The chest's rare friend (#306 6e): its picture in a glow, a chime, and
    * "Say hello!", which takes me to its battle (a Heart Charm befriends it).
    */
@@ -1201,15 +1223,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     void portraitInto(face, card.speciesId, card.battleId, null, 128);
     const go = hpButton(B.friendGo, { variant: 'primary', testId: 'crooked-card-ok' });
     go.addEventListener('click', () => {
-      const id = mapId;
-      bonusFx?.clearFriend();
-      if (id && options.onFriend) {
-        // The house steps aside without its sheet; the battle takes the screen.
-        hide();
-        options.onFriend(id, card.battleId);
-        return;
-      }
-      nextCard();
+      meetFriend(card);
     });
     sheet.dataset['kind'] = card.kind;
     sheet.replaceChildren(

@@ -152,7 +152,8 @@ export const BONUS_TEXT = {
   chestWear: 'And something to wear! 🧥',
   friendSomeone: 'squishy',
   friendTitle: `Someone’s in the chest!${KEEP}👀`,
-  friendLine: (name: string) => `A shy ${name} was napping inside. Say hello?`,
+  friendLine: (name: string) =>
+    `A shy ${name} was napping inside. Use a Heart Charm to befriend it!`,
   friendGo: 'Say hello! 💛',
 } as const;
 

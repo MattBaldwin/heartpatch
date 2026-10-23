@@ -64,6 +64,8 @@ const MOTES = { power: 18, pop: 8, wake: 12, chest: 16, perColour: 32 } as const
 const POP_FX = ['#ffffff', '#ffd27a'] as const;
 /** A squishy in the house stands about this tall, metres (the Keeper is about 1.2). */
 const SQUISHY_HEIGHT = 0.75; // TUNE
+/** A squishy drawn off stage for the first frames, so the field's program is compiled before a moment needs it. */
+const WARM_SPECIES = 'puddlepuff';
 /** The squishies' material (the field's own; the Keeper's is `keeper-vinyl`). */
 const SQUISHY_MATERIAL = 'squishy-vinyl';
 /** The lid's open angle (radians, back over the hinge). */
@@ -141,6 +143,8 @@ export class CrookedBonusFx {
     start: number;
   } | null = null;
   #view: CrookedHouseView | null = null;
+  /** The field's squishies changed: the fill's list is rebuilt once their meshes exist. */
+  #lightDirty = false;
 
   constructor(scene: Scene, options: CrookedBonusFxOptions) {
     this.#scene = scene;
@@ -156,14 +160,73 @@ export class CrookedBonusFx {
     this.#fill.diffuse = Color3.FromHexString('#fff1dc');
     this.#fill.groundColor = Color3.FromHexString('#4a3a55');
     this.#fill.intensity = 0.85;
-    this.#fill.includedOnlyMeshes = [];
+    this.#fill.setEnabled(false);
     this.#field = new SquishyField(scene, {
       registry: visualRegistry(GAME_DATA),
       lod: options.lod,
       breathing: false,
     });
     scene.onDisposeObservable.addOnce(() => {
+      // A lost context mid-moment still opens its door (the screen rebuilds the scene).
+      const h = this.#helper;
+      this.#helper = null;
+      h?.woke?.();
       this.#field.dispose();
+    });
+    this.#warm();
+  }
+
+  /**
+   * Builds every mote colour and the chest, and puts a squishy far off
+   * stage for the first frames, then compiles them all, one at a time, so a
+   * power or a chest compiles nothing as it plays (#501 D1, as the cellar's
+   * chests and explore's props do).
+   */
+  #warm(): void {
+    const scene = this.#scene;
+    const colours: [string, boolean][] = [
+      ...Object.values(POWER_FX).flatMap((fx) =>
+        fx.colours.map((c): [string, boolean] => [c, fx.leaf ?? false]),
+      ),
+      ...[...OTHER_FX.colours, ...POP_FX, ...CHEST_FX].map((c): [string, boolean] => [c, false]),
+    ];
+    const motes = colours.map(([hex, leaf]) => this.#mote(hex, leaf).mesh);
+    const probe = this.#kit('crooked-chest-base', chestBase);
+    probe.position.set(0, -50, 0);
+    const species = speciesOf(WARM_SPECIES);
+    const warm = species
+      ? this.#field.add(species, 'crooked-warm', { x: 0, y: -50, z: 0, scale: 0.01 })
+      : null;
+    void (async () => {
+      for (const mesh of motes) {
+        try {
+          await mesh.material?.forceCompilationAsync(mesh, { useInstances: true });
+        } catch {
+          // Compiled on first draw instead, as before.
+        }
+        if (scene.isDisposed) return;
+      }
+      this.#fill.includedOnlyMeshes = [probe];
+      this.#fill.setEnabled(true);
+      try {
+        await this.#chestMat.forceCompilationAsync(probe);
+      } catch {
+        // As above.
+      }
+      if (scene.isDisposed) return;
+      probe.dispose();
+      this.#light();
+    })();
+    if (!warm) return;
+    // The squishies' program compiles on the frames that draw it, off stage.
+    this.#lightDirty = true;
+    let frames = 0;
+    const observer = scene.onAfterRenderObservable.add(() => {
+      const drawn = scene.meshes.filter((m) => m.material?.name === SQUISHY_MATERIAL);
+      if (++frames < 240 && !(drawn.length > 0 && drawn.every((m) => m.isReady(true)))) return;
+      scene.onAfterRenderObservable.remove(observer);
+      this.#field.remove(warm);
+      this.#lightDirty = true;
     });
   }
 
@@ -195,12 +258,18 @@ export class CrookedBonusFx {
     this.#light();
   }
 
-  /** The soft fill lights the chests and the field's squishies, never the rooms. */
+  /**
+   * The soft fill lights the chests and the field's squishies, never the
+   * rooms. With nothing to light it's off: an empty `includedOnlyMeshes`
+   * would mean every mesh.
+   */
   #light(): void {
-    this.#fill.includedOnlyMeshes = [
+    const meshes = [
       ...[...this.#chests.values()].flatMap((c) => [c.base, c.lid]),
       ...this.#scene.meshes.filter((m) => m.material?.name === SQUISHY_MATERIAL),
     ];
+    this.#fill.includedOnlyMeshes = meshes;
+    this.#fill.setEnabled(meshes.length > 0);
   }
 
   #sizeOf(handle: SquishyHandle): number {
@@ -242,6 +311,7 @@ export class CrookedBonusFx {
     if (species) {
       const yaw = yawTo(at, door);
       const handle = this.#field.add(species, helper.id, { x: at.x, z: at.z, yaw, scale: 0.01 });
+      this.#lightDirty = true;
       this.#helper = {
         handle,
         id: helper.id,
@@ -308,6 +378,7 @@ export class CrookedBonusFx {
       const to = { x: p.x + 0.35, z: p.z - CHEST_SIZE.d - 0.45 };
       const still = this.#options.reducedMotion;
       const from = still ? to : { x: p.x, z: p.z };
+      this.#lightDirty = true;
       const handle = this.#field.add(species, friend.instanceId, {
         x: from.x,
         z: from.z,
@@ -337,7 +408,7 @@ export class CrookedBonusFx {
   #clearFriend(): void {
     if (this.#friend) this.#field.remove(this.#friend.handle);
     this.#friend = null;
-    this.#light();
+    this.#lightDirty = true;
   }
 
   #clearHelper(): void {
@@ -345,6 +416,7 @@ export class CrookedBonusFx {
     if (!h) return;
     this.#field.remove(h.handle);
     this.#helper = null;
+    this.#lightDirty = true;
     // A moment cut short still opens its door.
     h.woke?.();
   }
@@ -403,7 +475,10 @@ export class CrookedBonusFx {
     let moving = false;
     // The motes: each colour's thin instances, rewritten in place.
     for (const source of this.#moteSources.values()) source.count = 0;
-    this.#motes = this.#motes.filter((m) => now < m.start + m.life * 1000);
+    // Spent motes drop out in place (no array a frame).
+    let live = 0;
+    for (const m of this.#motes) if (now < m.start + m.life * 1000) this.#motes[live++] = m;
+    this.#motes.length = live;
     for (const m of this.#motes) {
       moving = true;
       const t = (now - m.start) / (m.life * 1000);
@@ -442,6 +517,7 @@ export class CrookedBonusFx {
       if (now >= h.end) {
         this.#field.remove(h.handle);
         this.#helper = null;
+        this.#lightDirty = true;
       } else {
         const out = Math.max(0, (now - (h.end - 250)) / 250);
         const grow = this.#options.reducedMotion ? 1 : Math.min(1, s / TIMING.popIn);
@@ -477,7 +553,12 @@ export class CrookedBonusFx {
       moving = true;
     }
     moving = this.#field.update(now) || moving;
-    if (this.#helper || this.#friend) this.#light();
+    // The field makes its meshes as it draws: the fill's list follows once they exist.
+    if (this.#lightDirty) {
+      this.#lightDirty = false;
+      this.#light();
+      moving = true;
+    }
     return moving;
   }
 

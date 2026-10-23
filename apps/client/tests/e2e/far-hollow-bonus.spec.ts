@@ -23,7 +23,14 @@ interface HouseDebug {
   scene: { rooms: string[] } | null;
   picker: { door: string; helpers: { id: string; helps: boolean }[] | null } | null;
   powering: boolean;
-  bonus: { chests: { room: string; open: boolean; x: number; z: number }[] } | null;
+  bonus: {
+    chests: { room: string; open: boolean; x: number; z: number }[];
+    friend: string | null;
+  } | null;
+}
+
+interface BattleDebug {
+  phase: string;
 }
 
 type Hooks = {
@@ -123,6 +130,23 @@ test('a Fire friend lights the cold fireplace and the Inglenook’s chest opens 
   await slowExpect.poll(async () => (await house(page))?.room).toBe('inglenook');
   await page.mouse.up();
 
+  // Whether this chest holds a friend is the season's secret (rule 6): when
+  // the server's roll gave none, its reply gets one, whose wild battle the
+  // dev route starts, so the friend's path always plays.
+  await page.route('**/api/v1/maps/*/far-hollow/chest', async (route) => {
+    const real = await route.fetch();
+    const body = (await real.json()) as { friend: { speciesId: string; battleId: string } | null };
+    if (!body.friend) {
+      const started = await page.request.post(`/api/v1/maps/${mapId}/dev/battles`, {
+        headers: { 'x-requested-with': 'heartpatch' },
+        data: { opponent: { speciesId: 'glowboo', level: 6 } },
+      });
+      const { battle } = (await started.json()) as { battle: { id: string } };
+      body.friend = { speciesId: 'glowboo', battleId: battle.id };
+    }
+    await route.fulfill({ response: real, json: body });
+  });
+
   // The chest: shut, then opened once, its card and the server agreeing.
   const chest = (await house(page))!.bonus!.chests.find((c) => c.room === 'inglenook')!;
   expect(chest.open).toBe(false);
@@ -143,19 +167,21 @@ test('a Fire friend lights the cold fireplace and the Inglenook’s chest opens 
   expect(opened.body.house.chestsOpened).toContain('inglenook');
   await page.getByTestId('crooked-card-ok').tap();
 
-  // A rare friend now and then (the season's secret): "Say hello!" takes me to its battle.
-  if ((await house(page))?.card === 'friend') {
-    await page.getByTestId('crooked-card-ok').tap();
-    await slowExpect.poll(async () => (await house(page))?.open).toBe(false);
-    const current = await api<{ battle: { id: string } | null }>(
-      page,
-      'GET',
-      `/maps/${mapId}/battles/current`,
-    );
-    expect(current.body.battle).not.toBeNull();
-  } else {
-    // Opened: the chest is no longer something to do.
-    await expect.poll(async () => (await house(page))?.target?.kind ?? null).not.toBe('chest');
-  }
+  // The rare friend: its card, then "Say hello!" opens its battle (the house steps aside).
+  await expect(page.getByTestId('crooked-card')).toHaveAttribute('data-kind', 'friend');
+  await expect(page.getByTestId('crooked-card').getByRole('heading')).toHaveText(
+    'Someone’s in the chest! 👀',
+  );
+  expect((await house(page))?.bonus?.friend).toBeTruthy();
+  await page.getByTestId('crooked-card-ok').tap();
+  await slowExpect.poll(async () => (await house(page))?.open).toBe(false);
+  await slowExpect.poll(async () => (await hook<BattleDebug>(page, 'battle'))?.phase).toBe('turn');
+
+  // Scoot away from it: closing the battle comes back into the Inglenook, not the map.
+  await page.getByTestId('battle-run').tap();
+  await page.getByTestId('battle-run-confirm').tap();
+  await page.getByTestId('battle-done').tap({ timeout: 60_000 });
+  await slowExpect.poll(async () => (await house(page))?.open).toBe(true);
+  expect((await house(page))?.room).toBe('inglenook');
   expect(errors).toEqual([]);
 });

@@ -419,6 +419,8 @@ const care = createCareSheet({
     showWonVillages();
     // So did the far Hollow's sheet after the far road (#306 PR 6).
     showFarHollowArrival();
+    // And the Crooked House after a chest friend's battle (#306 6e).
+    backToTheHouse();
   },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
@@ -1062,12 +1064,20 @@ const explore = createExploreScreen({
 // The Crooked House (#306 6c): my own far Hollow this season, from its
 // sheet's "Go inside". Like explore it owns the screen while open; Back
 // returns to the map and the far Hollow sheet, the house already saved.
-/** A Crooked House chest's rare friend is being met: its battle closes back into the house (#306 6e). */
-let houseFriendMap: string | null = null;
-const backToTheHouse = (mapId: string): void => {
-  if (houseFriendMap !== mapId) return;
-  houseFriendMap = null;
-  void crookedHouse.open(mapId);
+/**
+ * A Crooked House chest's rare friend (#306 6e): its battle, which closes
+ * back into the house. Any other battle opening forgets it (a patch switch
+ * or sign-out closes a battle without `onClosed`).
+ */
+let houseFriend: { mapId: string; battleId: string } | null = null;
+/** The friend's battle closed on this patch: back into the house once nothing else is showing. */
+let houseReturn: string | null = null;
+/** Into the house after the friend's battle, once an evolution's "Whoa!" is seen (as the far road's sheet waits, #592). */
+const backToTheHouse = (): void => {
+  const mapId = houseReturn;
+  if (mapId === null || evolutionPending || care.isOpen) return;
+  houseReturn = null;
+  if (maps.view?.map.id === mapId) void crookedHouse.open(mapId);
 };
 const crookedHouse = createCrookedScreen({
   root: document.body,
@@ -1079,13 +1089,13 @@ const crookedHouse = createCrookedScreen({
   // "Say hello!": the house stepped aside; the friend's battle takes the
   // screen, and Back from it comes home to the house (the bonus room).
   onFriend: (mapId, battleId) => {
-    houseFriendMap = mapId;
+    houseFriend = { mapId, battleId };
     battleApi.get(battleId).then(
       (battle) => {
         battles.open(battle);
       },
       (err: unknown) => {
-        houseFriendMap = null;
+        houseFriend = null;
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
         void crookedHouse.open(mapId);
       },
@@ -1559,6 +1569,7 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: (mapId, live) => {
     battleMapId = mapId;
+    if (houseFriend && battles.debug?.id !== houseFriend.battleId) houseFriend = null;
     heartCoins.close();
     // A live battle (#29) keeps following the patch underneath: the other
     // Keeper's picks and cheers arrive on it, and it keeps me "here".
@@ -1579,6 +1590,10 @@ const battles = createBattleScreen({
   },
   onClosed: (mapId) => {
     battleMapId = null;
+    if (houseFriend?.mapId === mapId) {
+      houseReturn = mapId;
+      houseFriend = null;
+    }
     evolutionPending = true;
     maps.open(mapId).then(
       () => {
@@ -1590,7 +1605,7 @@ const battles = createBattleScreen({
           evolutionPending = false;
           showWonVillages();
           showFarHollowArrival();
-          backToTheHouse(mapId);
+          backToTheHouse();
         });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
