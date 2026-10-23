@@ -57,8 +57,9 @@ describe('the press feel (Controls A)', () => {
       .flatMap((f) => rules(readFileSync(f, 'utf8')))
       .filter((r) => /(^|[\s;])(transform|scale)\s*:/.test(r.body))
       .flatMap((r) => r.selectors)
-      .filter((s) => s.endsWith(':active'))
-      .map((s) => s.slice(0, -':active'.length));
+      // `.x:active`, and `.x:active:not(:disabled)` too: the button is `.x`.
+      .filter((s) => s.includes(':active'))
+      .map((s) => s.slice(0, s.indexOf(':active')));
     expect(own.length).toBeGreaterThan(10); // the scan itself found them
     // A modifier of an opted-out button (.house-pick-dim) is that button too.
     const missing = own.filter(

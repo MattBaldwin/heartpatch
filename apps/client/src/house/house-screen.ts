@@ -1804,7 +1804,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     t: e.timeStamp,
   });
   touch.addEventListener('pointerdown', (e) => {
-    touch.setPointerCapture(e.pointerId);
+    try {
+      touch.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic or already-released pointer can't be captured; harmless.
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
     panner.down(e.clientX, e.pointerId);
@@ -1854,7 +1858,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       }
     }
     if (pinch && pointers.size === 2) {
-      zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
+      // Held between the dollhouse and kid height: a pinch out never leaves.
+      zoom = clampZoom(pinchZoom(pinch.zoom, pinch.spread, spread()));
       renderWalk();
       draw();
     }
