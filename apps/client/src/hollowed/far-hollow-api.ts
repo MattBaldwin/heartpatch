@@ -1,6 +1,12 @@
 import {
   BattleResponseSchema,
+  CrookedEnterResponseSchema,
+  CrookedFixResponseSchema,
+  CrookedViewResponseSchema,
   FarHollowViewSchema,
+  type CrookedEnterResponse,
+  type CrookedFixResponse,
+  type CrookedViewResponse,
   type FarHollowView,
   type PlayerBattle,
 } from '@heartpatch/shared';
@@ -36,6 +42,41 @@ export const farHollowApi = {
     });
     return { battle: res.battle, created };
   },
+
+  /** Puts a crooked thing right in the room I'm in (#306 6c): maybe a key, maybe the bloom. */
+  fix: (
+    mapId: string,
+    body: { room: string; thing: string },
+    key: string,
+  ): Promise<CrookedFixResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/fix`, {
+      method: 'POST',
+      body,
+      schema: CrookedFixResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Steps into a room through an open door, or to a lit room I can reach (the dollhouse map). */
+  enter: (
+    mapId: string,
+    body: { room: string; tiptoe: boolean },
+    key: string,
+  ): Promise<CrookedEnterResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/enter`, {
+      method: 'POST',
+      body,
+      schema: CrookedEnterResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Turns a found key in a door of the room I'm in. */
+  unlock: (mapId: string, door: string, key: string): Promise<CrookedViewResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/unlock`, {
+      method: 'POST',
+      body: { door },
+      schema: CrookedViewResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
 };
 
 export type FarHollowApi = typeof farHollowApi;

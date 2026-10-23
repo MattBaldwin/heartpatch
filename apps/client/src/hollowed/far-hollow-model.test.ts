@@ -16,10 +16,31 @@ describe('the far Hollow sheet model (#306 PR 6)', () => {
     );
   });
 
-  it('knows I may only just have arrived, so a journey of unknown origin may be the far road', () => {
-    expect(justArrived({ arrived: true, completedAt: null })).toBe(true);
-    expect(justArrived({ arrived: false, completedAt: null })).toBe(false);
-    expect(justArrived({ arrived: true, completedAt: '2026-11-04T16:00:00.000Z' })).toBe(false);
+  it('knows I may only just have arrived: there, and nothing in the house found yet (#306 6c)', () => {
+    const room = (id: string, fixed: string[] = []) => ({ id, fixed, bloomed: false });
+    const house = (keys: string[], fixed: string[]) => ({
+      room: 'front-hall',
+      lastLitRoom: 'front-hall',
+      keys,
+      unlocked: [],
+      bonusOpen: [],
+      chestsOpened: [],
+      rooms: [room('front-hall'), room('parlour', fixed)],
+      echoes: [],
+      serverTime: '2026-10-30T16:00:00.000Z',
+    });
+    expect(justArrived({ arrived: true, completedAt: null, house: null })).toBe(true);
+    expect(justArrived({ arrived: true, completedAt: null, house: house([], []) })).toBe(true);
+    expect(justArrived({ arrived: true, completedAt: null, house: house([], ['picture']) })).toBe(
+      false,
+    );
+    expect(justArrived({ arrived: true, completedAt: null, house: house(['brass-key'], []) })).toBe(
+      false,
+    );
+    expect(justArrived({ arrived: false, completedAt: null, house: null })).toBe(false);
+    expect(
+      justArrived({ arrived: true, completedAt: '2026-11-04T16:00:00.000Z', house: house([], []) }),
+    ).toBe(false);
   });
 
   it('says when a fresh one comes', () => {

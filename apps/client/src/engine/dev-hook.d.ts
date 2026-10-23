@@ -15,6 +15,7 @@ import type { HouseDebug } from '../house/house-screen.js';
 import type { CommunityActions } from '../hollowed/community-actions.js';
 import type { RestoreSheetDebug } from '../hollowed/restore-sheet.js';
 import type { FarHollowSheetDebug } from '../hollowed/far-hollow-sheet.js';
+import type { CrookedDebug } from '../far-hollow/house/crooked-screen.js';
 import type { CommunityFlags } from '../hollowed/community-flags.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
@@ -149,6 +150,10 @@ declare global {
       journey?(): JourneyDebug;
       /** The far Hollow's sheet (#306 PR 6). */
       farHollow?(): FarHollowSheetDebug;
+      /** The Crooked House screen (#306 6c). */
+      farHollowHouse?(): CrookedDebug;
+      /** Opens the far Hollow sheet without a trading post (e2e: its "Go inside"). */
+      farHollowDev?(): { openSheet(): void; place(x: number, z: number): void };
       /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */
       trickOrTreat?(): TrickOrTreatDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */

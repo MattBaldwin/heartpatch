@@ -52,6 +52,7 @@ const E2E_GROUPS = [
     'battle-ui',
     'clear-land',
     'factory',
+    'far-hollow-house',
     'first-session',
     'heart-coins',
     'hollowed-cellar',
