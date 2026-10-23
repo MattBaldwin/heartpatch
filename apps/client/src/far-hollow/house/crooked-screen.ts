@@ -666,12 +666,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       (r) => Math.abs(p.x - r.box.x) <= r.box.w / 2 && Math.abs(p.z - r.box.z) <= r.box.d / 2,
     );
     if (!room) return;
-    if (!litRooms(h).has(room.id) || !reachableRooms(h).has(room.id)) {
-      say(T.mapDark);
-      return;
-    }
+    // My own room, dark or lit: back to it.
     if (room.id === h.room) {
       showMap(false);
+      return;
+    }
+    if (!litRooms(h).has(room.id) || !reachableRooms(h).has(room.id)) {
+      say(T.mapDark);
       return;
     }
     void (async () => {
@@ -847,6 +848,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     bubble.textContent = text ?? '';
     bubble.hidden = !text;
+    // VoiceOver reads words said (a fix, a door, a key), not the idle hint as the Keeper walks.
+    bubble.setAttribute('aria-live', noteText !== '' && text === noteText ? 'polite' : 'off');
   }
 
   const say = (text: string) => {

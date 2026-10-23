@@ -262,6 +262,8 @@ for (const device of DEVICES) {
       // Reduced motion: a cut to the Parlour, and its bloom at once (no roll of colour).
       await walkToParlour(page);
       await toBloom(page, async () => {});
+      // The room in colour at once, the card read (its find is the server's roll, so it varies).
+      while ((await house(page)).card) await page.getByTestId('crooked-card-ok').click();
       await shot(page, device, 'reduced');
       await context.close();
       continue;
