@@ -191,6 +191,8 @@ export function createPeekaboo(root: HTMLElement): Peekaboo {
       else if (b.kind === 'giggle') r.cue?.('giggle');
       else r.onCard();
     }
+    // By the timeline, not by frames: a slow phone may draw none inside the shake.
+    if (!r.calm && ms >= MOTION.boo) shook = true;
     draw(peekFrame(ms, r.calm));
     // On to the card's beat; after it, the friendly echo just waits with the card.
     if (beat < beats.length || ms < (beats.at(-1)?.at ?? 0) + 600) {

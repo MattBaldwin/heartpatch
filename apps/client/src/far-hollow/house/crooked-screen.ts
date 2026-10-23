@@ -416,6 +416,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     scene3d?.setLantern(!roomLit(), on);
     renderDark();
     options.invalidate();
+    // What's heard at a doorway changes with Tiptoe: listen again now.
+    wake();
   }
 
   // The big button: a tap, or a hold for a lift (the design's gestures, as buttons).
@@ -613,9 +615,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const busy = moved || heading !== undefined || animating;
     // The echoes move with any frame that draws, else on their own 30 fps beat.
     if (busy || now - lastEchoDraw >= ECHO_FRAME_MS) {
+      const wasDrawn = echoState.drawn;
       echoState = drawEchoes(now);
       lastEchoDraw = now;
-      if (!busy && echoState.drawn) {
+      // One more frame as an echo goes, so its last spot doesn't stay on screen.
+      if (!busy && (echoState.drawn || wasDrawn)) {
         if (options.requestFrame) options.requestFrame();
         else options.invalidate();
       }
@@ -724,13 +728,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function peek(by: { echo: string; backTo: string }, fresh: FarHollowView): void {
     caught = by;
     pendingCatch = fresh;
+    // The server's clock as the reply arrives, not at the swap a moment later.
+    if (fresh.house) clock = serverClock(fresh.house.serverTime, Date.now());
     const at = generation;
     peekaboo.play({
       calm: reducedMotion(),
       cue: options.cue,
       onSwap: () => {
         if (at !== generation) return;
-        if (pendingCatch) apply(pendingCatch);
+        if (pendingCatch) view = pendingCatch;
         pendingCatch = null;
         const backTo = roomOf(by.backTo);
         if (backTo) keeperAt = roomStart(backTo);
