@@ -131,7 +131,7 @@ describe('runPatchEconomy guards (#601)', () => {
     }
   });
 
-  it("repays a month of the Warehouse's upkeep with one long trip's extra output", () => {
+  it("saves a month of the Warehouse's upkeep's worth of output, at sell price, on one long trip", () => {
     const engaged = kid('engaged');
     for (const seats of CONFIG.seats) {
       const trip = runs.filter(

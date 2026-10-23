@@ -322,10 +322,15 @@ export function runKid(input: RunInput): PatchEconomyRun {
       // Swap spare everyday resources at the post for the Glimmer the next
       // step is short of, up to the day's swap cap (`GLIMMER_SWAP`).
       const keep = next < plan.length ? stepCost(plan[next] as Step) : {};
-      const wantGlimmer = Math.max(0, (keep['glimmer'] ?? 0) - (bag['glimmer'] ?? 0));
+      const wantSwaps = Math.ceil(
+        Math.max(0, (keep['glimmer'] ?? 0) - (bag['glimmer'] ?? 0)) / GLIMMER_SWAP.get,
+      );
+      const swapRoom = Math.floor(
+        (GLIMMER_SWAP.dailyCap - swappedToday * GLIMMER_SWAP.get) / GLIMMER_SWAP.get,
+      );
       let swapped = 0;
       for (const resource of GLIMMER_SWAP.accepts) {
-        const room = Math.min(wantGlimmer - swapped, GLIMMER_SWAP.dailyCap - swappedToday);
+        const room = Math.min(wantSwaps - swapped, swapRoom - swapped);
         const spare = (bag[resource] ?? 0) - (keep[resource] ?? 0);
         const times = Math.min(room, Math.floor(spare / GLIMMER_SWAP.give));
         if (times <= 0) continue;
@@ -600,7 +605,7 @@ export function renderPatchEconomy(
           `| ${String(r.seats)} | ${label(r)} | ${String(awayOutput(r))} | ${String(back(r)?.pausedNow ?? '-')} | ${String(back(r)?.balance ?? '-')} |`,
       ),
     '',
-    `Daily runs: ${String(daily.length)}. Guards: upkeep ${String(config.upkeepShare.min)}–${String(config.upkeepShare.max)} % of a day's output sold at every level; the casual kid never pauses a morning while playing and pays at most ${String(config.casualUpkeepMaxPercent)} % of their Heart Coins in upkeep; the engaged kid runs every hut and the Warehouse with no paused morning; a first hut by day ${Object.entries(
+    `Daily runs: ${String(daily.length)}. Guards: upkeep ${String(config.upkeepShare.min)}–${String(config.upkeepShare.max)} % of a day's output sold at every level; the casual kid never pauses a morning while playing and pays at most ${String(config.casualUpkeepMaxPercent)} % of their Heart Coins in upkeep; the engaged kid runs every hut and the Warehouse with no paused morning, paying at most ${String(config.engagedUpkeepMaxPercent)} % of their Heart Coins in upkeep once it stands; a long trip's saved output is worth a month of Warehouse upkeep at sell price; a first hut by day ${Object.entries(
       config.firstHutByDay,
     )
       .map(([k, d]) => `${String(d)} (${k})`)
@@ -608,7 +613,7 @@ export function renderPatchEconomy(
     '',
     '## Warehouse payback',
     '',
-    `A ${String(config.warehouseAwayDays.length)}-day trip: the extra output the Warehouse delivers (what the huts would have wasted at full storage), sold, against a month of its upkeep (guard: one trip a month repays it).`,
+    `A ${String(config.warehouseAwayDays.length)}-day trip: the extra output the Warehouse delivers (what the huts would have wasted at full storage), sold, against a month of its upkeep. The daily sell cap is already full for this kid, so the saved items are not cashed inside the month: this prices what the Warehouse saves, not Heart Coins it earns (guard: worth at least a month of upkeep at sell price).`,
     '',
     '| Seats | Extra items | Sold for 💛 | A month of upkeep 💛 |',
     '|---|---|---|---|',
@@ -623,7 +628,7 @@ export function renderPatchEconomy(
       );
       const [withIt, without] = [trip.find((r) => r.warehouse), trip.find((r) => !r.warehouse)];
       if (!kid || !withIt || !without) return [];
-      const t = warehouseTrip(withIt, without, kid, 30);
+      const t = warehouseTrip(withIt, without, kid, config.days);
       return [
         `| ${String(seats)} | ${String(t.extraItems)} | ${String(t.extraWorth)} | ${String(t.upkeep)} |`,
       ];
