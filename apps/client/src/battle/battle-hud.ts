@@ -361,7 +361,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     onClick: () => void,
     extra: { soft?: boolean; testId?: string; small?: boolean } = {},
   ) => {
-    const classes = [buttonClass({ small: extra.small === true })];
+    const classes = [buttonClass({ small: extra.small === true }), 'battle-pink'];
     if (extra.soft) classes.push('battle-cream');
     const node = el(
       'button',
@@ -407,7 +407,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         'button',
         {
           type: 'button',
-          class: `${buttonClass()} battle-item${tile.state === 'ready' ? '' : ' battle-button-empty'}`,
+          class: `${buttonClass()} battle-pink battle-item${tile.state === 'ready' ? '' : ' battle-button-empty'}`,
           'data-testid': 'battle-item-pick',
           'data-item': tile.id,
           'data-state': tile.state,

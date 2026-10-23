@@ -60,6 +60,11 @@
   --hp-gloss: none;
 }
 
+.rbook-search-button {
+  /* The magnifier is a picture, not a label: the size it always had. */
+  font-size: 22px;
+}
+
 .rbook-bar {
   display: flex;
   align-items: center;

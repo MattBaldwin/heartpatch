@@ -326,8 +326,14 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   gap: 8px;
 }
 
-/* Battle buttons are the shared kit (ui/button). The cream ones are the
-   quieter choices (ⓘ, Swap, Run away). */
+/* Battle buttons are the shared kit (ui/button) in the battle's own pink; the
+   cream ones are the quieter choices (ⓘ, Swap, Run away). */
+.battle-pink {
+  --hp-secondary: #ffc9d7;
+  --hp-secondary-lip: #f2a4bb;
+  --hp-secondary-ink: #5a3a5d;
+}
+
 .battle-cream {
   --hp-secondary: #f6e9df;
   --hp-secondary-lip: #e2cfc1;

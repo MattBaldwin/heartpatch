@@ -228,6 +228,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     render('none');
   });
   const searchButton = hpButton('🔍', { small: true, testId: 'recipe-book-search' });
+  searchButton.classList.add('rbook-search-button');
   searchButton.setAttribute('aria-label', RECIPE_BOOK_TEXT.search);
   searchButton.addEventListener('click', () => {
     searching = true;
