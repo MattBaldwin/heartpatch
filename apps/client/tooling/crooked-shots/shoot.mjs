@@ -1,4 +1,4 @@
-/* global process, console, window, setTimeout, fetch */
+/* global process, console, window, document, setTimeout, fetch */
 // Captures the Crooked House screen (#306 6c) from the real game at iPhone
 // sizes, for the owner to judge against the approved design. Dev tooling
 // only: `node tooling/crooked-shots/shoot.mjs` with the dev servers running

@@ -5,7 +5,11 @@ import type {
   CrookedThing,
   RelightMove,
 } from '@heartpatch/shared';
-import { createPuzzleSheet, type PuzzleDebug } from '../../hollowed/puzzle-sheet.js';
+import {
+  createPuzzleSheet,
+  type PuzzleDebug,
+  type PuzzleSheet,
+} from '../../hollowed/puzzle-sheet.js';
 import { CROOKED_RELIGHT_TEXT as R } from './crooked-text.js';
 import '../../explore/explore.css';
 import './crooked-relight.css';
@@ -48,35 +52,44 @@ export interface CrookedRelight {
 }
 
 export function createCrookedRelight(options: CrookedRelightOptions): CrookedRelight {
-  let board: { room: CrookedRoom; thing: CrookedThing } | null = null;
-  const sheet = createPuzzleSheet<CrookedFixResponse>({
-    parent: options.parent,
-    start: async () => (board ? options.start(board.room.id, board.thing.id) : null),
-    solve: async (attempt, moves) =>
-      board ? options.solve(board.room.id, board.thing.id, attempt, moves) : null,
-    onClosed: (fixed) => {
-      const was = board;
-      board = null;
-      if (was) options.onClosed(was.room, was.thing, fixed);
-    },
-  });
+  /**
+   * The open board's card: made on open and taken out of the page on close,
+   * so the Hollow's own card is the only one in the page the rest of the time.
+   */
+  let board: { room: CrookedRoom; thing: CrookedThing; sheet: PuzzleSheet } | null = null;
+  const done = (fixed: CrookedFixResponse | null) => {
+    const was = board;
+    board = null;
+    if (!was) return;
+    // After this turn: the card is still finishing its own close.
+    queueMicrotask(() => {
+      was.sheet.dispose();
+    });
+    options.onClosed(was.room, was.thing, fixed);
+  };
   return {
     open: (room, thing) => {
-      sheet.close();
-      board = { room, thing };
+      board?.sheet.close();
+      const sheet = createPuzzleSheet<CrookedFixResponse>({
+        parent: options.parent,
+        start: async () => options.start(room.id, thing.id),
+        solve: async (attempt, moves) => options.solve(room.id, thing.id, attempt, moves),
+        onClosed: done,
+      });
+      board = { room, thing, sheet };
       sheet.openRelight({
         progress: R.heading(thing.name, room.name),
         fixed: R.relit(thing.name),
       });
     },
     close: () => {
-      sheet.close();
+      board?.sheet.close();
     },
     get isOpen() {
-      return sheet.isOpen;
+      return board?.sheet.isOpen ?? false;
     },
     get debug() {
-      return sheet.debug;
+      return board?.sheet.debug ?? null;
     },
   };
 }

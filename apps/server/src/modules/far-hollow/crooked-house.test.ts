@@ -801,9 +801,9 @@ describe.skipIf(!url)('the Crooked House (#306 6b, needs DATABASE_URL)', () => {
       seedWhere(() => true),
       { room: 'scullery' },
     );
-    const [first, last] = thingsOf('scullery') as [{ id: string }, { id: string }];
-    expect((await fix(server, kid, mapId, 'scullery', first.id)).scrap).toBeNull();
-    const bloomed = await fix(server, kid, mapId, 'scullery', last.id);
+    const [first, last] = thingsOf('scullery');
+    expect((await fix(server, kid, mapId, 'scullery', first!.id)).scrap).toBeNull();
+    const bloomed = await fix(server, kid, mapId, 'scullery', last!.id);
     expect(bloomed.scrap).toBe(CROOKED_HOUSE_SECRETS.scraps['scullery']);
     // The scraps are server-side story, never in the view (rule 6).
     expect(JSON.stringify(bloomed.view)).not.toContain(CROOKED_HOUSE_SECRETS.scraps['parlour']!);

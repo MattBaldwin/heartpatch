@@ -125,6 +125,8 @@ export interface PuzzleSheet {
   openRelight: (heading: PuzzleHeading) => void;
   /** Closes it at once (leaving the tile, nightfall). */
   close: () => void;
+  /** Closes it and takes the card out of the page, for a screen that makes one per board (#306 6f). */
+  dispose: () => void;
   readonly isOpen: boolean;
   readonly debug: PuzzleDebug | null;
 }
@@ -690,6 +692,10 @@ export function createPuzzleSheet<R = SolvePuzzleResponse>(
     },
     close: () => {
       close(null);
+    },
+    dispose: () => {
+      close(null);
+      sheet.remove();
     },
     get isOpen() {
       return !sheet.hidden;
