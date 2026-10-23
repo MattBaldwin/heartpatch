@@ -24,11 +24,11 @@ export function birthYearPills(thisYear: number): string[] {
  */
 export function pillPicker(
   select: HTMLSelectElement,
-  labelId: string,
+  groupLabel: string,
   values: string[],
   moreLabel: string,
 ): HTMLElement {
-  const group = el('div', { class: 'auth-pills', role: 'radiogroup', 'aria-labelledby': labelId });
+  const group = el('div', { class: 'auth-pills', role: 'radiogroup', 'aria-label': groupLabel });
   const radios = values.map((value) => {
     const radio = el('input', {
       type: 'radio',

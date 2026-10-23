@@ -26,7 +26,7 @@ interface FieldSpec {
   input?: Attrs;
   options?: { value: string; label: string }[];
   /** With `options`: these values are big pills, and the list opens for the rest. */
-  pills?: { values: string[]; moreLabel: string };
+  pills?: { values: string[]; moreLabel: string; groupLabel: string };
   /**
    * A tick box the form can't be sent without (the grown-up checkbox, #593):
    * the submit button sleeps until it's on. Its value is `'yes'` or `''`.
@@ -254,7 +254,12 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           control.append(el('option', { value: option.value }, option.label));
         }
         if (field.pills) {
-          picker = pillPicker(control, `${id}-label`, field.pills.values, field.pills.moreLabel);
+          picker = pillPicker(
+            control,
+            field.pills.groupLabel,
+            field.pills.values,
+            field.pills.moreLabel,
+          );
         }
       } else {
         control = el('input', { id, name: field.name, class: 'auth-input', ...field.input });
@@ -264,7 +269,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         el(
           'div',
           { class: 'auth-field' },
-          el('label', { for: id, id: `${id}-label` }, field.label),
+          el('label', { for: id }, field.label),
           picker ?? control,
           ...(field.hint ? [el('p', { class: 'auth-hint' }, field.hint)] : []),
           ...(field.extra ?? []),
@@ -564,6 +569,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
             pills: {
               values: birthYearPills(new Date().getFullYear()),
               moreLabel: 'Another year',
+              // Not the field's label: the select keeps that one to itself.
+              groupLabel: 'Pick your birth year',
             },
           },
           {
