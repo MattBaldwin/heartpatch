@@ -141,7 +141,6 @@ One list, so tests can scan the **player-facing string fields** in data files (n
 
 `die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
 
-
 ## 10. Buttons
 
 New screens use the shared button in `apps/client/src/ui/button/` instead of a new per-feature button class.

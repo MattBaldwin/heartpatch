@@ -42,6 +42,7 @@
     )
 ) {
   scale: var(--hp-press-scale);
+  filter: brightness(0.96);
   transition: scale var(--hp-press-in);
 }
 

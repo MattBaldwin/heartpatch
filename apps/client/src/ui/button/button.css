@@ -22,7 +22,7 @@
   --hp-gloss: linear-gradient(rgb(255 255 255 / 35%), rgb(255 255 255 / 0%) 55%);
   --hp-font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   /* The press (press.css): how far it squishes and how it springs back. */
-  --hp-press-scale: 0.94;
+  --hp-press-scale: 0.92; /* TUNE: felt on a phone, not just seen */
   --hp-press-in: 70ms ease-out;
   --hp-press-out: 260ms cubic-bezier(0.34, 1.56, 0.64, 1); /* TUNE: the springy release */
 }
@@ -93,7 +93,8 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--hp-secondary);
+  background: var(--hp-gloss), var(--hp-secondary);
+  box-shadow: 0 var(--hp-lip) 0 var(--hp-secondary-lip);
   color: var(--hp-secondary-ink);
   cursor: pointer;
 }
@@ -117,8 +118,10 @@
   padding: var(--hp-pad-y) 18px var(--hp-pad-y) 12px;
   border: 0;
   border-radius: 999px;
-  background: var(--hp-secondary);
-  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  background: var(--hp-gloss), var(--hp-secondary);
+  box-shadow:
+    0 var(--hp-lip) 0 var(--hp-secondary-lip),
+    0 4px 12px rgb(74 49 80 / 16%);
   color: var(--hp-secondary-ink);
   font-family: var(--hp-font);
   font-size: 18px;
@@ -131,7 +134,12 @@
   line-height: 1;
 }
 
-.hp-close:active,
+.hp-close:active {
+  box-shadow: 0 1px 0 var(--hp-secondary-lip);
+}
+
 .hp-back:active {
-  background: var(--hp-secondary-lip);
+  box-shadow:
+    0 1px 0 var(--hp-secondary-lip),
+    0 2px 6px rgb(74 49 80 / 16%);
 }

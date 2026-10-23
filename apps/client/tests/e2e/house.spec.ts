@@ -207,7 +207,6 @@ test('enter the house from home, walk in and step out, and go back home', async 
   await touch(page, spread(40, 160), { hitTest: true });
   await expect.poll(async () => (await houseState(page))?.zoom, slow).toBeGreaterThan(0);
   await touch(page, spread(160, 10), { hitTest: true });
-  await touch(page, spread(160, 10), { hitTest: true });
   await expect.poll(async () => (await houseState(page))?.zoom, slow).toBe(0);
   await expect(page.getByTestId('house')).toBeVisible();
   expect((await houseState(page))?.open).toBe(true);

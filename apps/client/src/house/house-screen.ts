@@ -127,6 +127,7 @@ import {
   roomBeds,
   roomFor,
 } from './house-residents-view.js';
+import { hpBack } from '../ui/button/button.js';
 import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
@@ -475,11 +476,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
-  const back = el(
-    'button',
-    { type: 'button', class: 'house-back', 'data-testid': 'house-back' },
-    `‹ ${HOUSE_TEXT.back}`,
-  );
+  // The shared Back (ui/button), as every screen's will be (Controls A).
+  const back = hpBack(HOUSE_TEXT.back, 'house-back');
+  back.classList.add('house-back');
   const pill = el('span', { class: 'house-pill', 'data-testid': 'house-pill' });
   const top = el('div', { class: 'house-top' }, back, pill);
   const walkButton = el('button', {
