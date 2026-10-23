@@ -212,6 +212,20 @@ export function resourceBuildCards(
   });
 }
 
+/**
+ * The home source's Build row: the one resource building the land takes
+ * leads it (on cleared land that is the whole point of clearing, and the
+ * Hearthfire, Training Grounds and Factory used to push it off the edge of
+ * a small phone). The "needs this land" list for land no building matches
+ * comes after the others, as before.
+ */
+export function resourceCardsFirst<R extends BuildCard, O extends BuildCard>(
+  resource: readonly R[],
+  others: readonly O[],
+): (R | O)[] {
+  return resource.length === 1 ? [...resource, ...others] : [...others, ...resource];
+}
+
 /** The five states of a resource building's tile card. */
 export type ResourceState = 'running' | 'full' | 'paused' | 'napping' | 'dormant';
 

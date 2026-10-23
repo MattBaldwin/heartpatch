@@ -6,6 +6,7 @@ import {
   buildStatus,
   cardTappable,
   detailLine,
+  hasLongWord,
   pickCard,
   type BuildCard,
   type BuildStatus,
@@ -100,7 +101,15 @@ export function createBuildSheet(): BuildSheet {
               { class: 'build-card-icon', 'aria-hidden': 'true' },
               iconNode(card.icon, 'build-card-line-icon'),
             ),
-            el('span', { class: 'build-card-name' }, card.name),
+            el(
+              'span',
+              {
+                class: hasLongWord(card.name)
+                  ? 'build-card-name build-card-name-long'
+                  : 'build-card-name',
+              },
+              card.name,
+            ),
           );
           b.disabled = !cardTappable(props.working);
           b.addEventListener('click', () => {

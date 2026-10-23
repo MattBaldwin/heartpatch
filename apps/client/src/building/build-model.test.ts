@@ -6,6 +6,7 @@ import {
   buildTotal,
   cardTappable,
   detailLine,
+  hasLongWord,
   pickCard,
   times,
   type BuildCard,
@@ -98,5 +99,14 @@ describe('a blocked card says why (review of #450)', () => {
       kind: 'blocked',
       note: "You're gathering here. Let it finish first!",
     });
+  });
+});
+
+describe('long card names', () => {
+  it('tightens only names with a word too long for the card', () => {
+    expect(hasLongWord("Woodcutter's Hut")).toBe(true);
+    for (const name of ['Hearthfire', 'Greenhouse', 'Training Grounds', 'Emberwood Palisade']) {
+      expect(hasLongWord(name)).toBe(false);
+    }
   });
 });
