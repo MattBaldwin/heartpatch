@@ -269,6 +269,8 @@ async function moment(page, start, ms, take) {
     await start();
     await page.clock.runFor(ms);
     await take();
+    // The rest of the moment (and a card's timer) runs on the paused clock before it flows again.
+    await page.clock.runFor(2_000);
   } finally {
     await page.clock.resume();
   }

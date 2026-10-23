@@ -1622,6 +1622,7 @@ const battles = createBattleScreen({
       },
       (err: unknown) => {
         evolutionPending = false;
+        houseReturn = null;
         // No map to go back to: no battle button over the lobby either.
         void battles.setMap(null);
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');

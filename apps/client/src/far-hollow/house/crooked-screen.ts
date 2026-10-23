@@ -348,10 +348,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       closePicker();
       return;
     }
-    // A chest's friend is waiting in its battle: Back goes to meet it too.
-    const card = cards[0];
-    if (card?.kind === 'friend') {
-      meetFriend(card);
+    // A chest's friend is waiting in its battle (even behind the treasure card): Back goes to meet it too.
+    const friend = cards.find((c) => c.kind === 'friend');
+    if (friend?.kind === 'friend') {
+      meetFriend(friend);
       return;
     }
     if (mapShown) {

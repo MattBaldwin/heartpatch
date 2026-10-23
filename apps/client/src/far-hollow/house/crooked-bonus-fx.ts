@@ -145,6 +145,8 @@ export class CrookedBonusFx {
   #view: CrookedHouseView | null = null;
   /** The field's squishies changed: the fill's list is rebuilt once their meshes exist. */
   #lightDirty = false;
+  /** A chest drawn off stage while its program compiles with the fill (`#warm`). */
+  #probe: Mesh | null = null;
 
   constructor(scene: Scene, options: CrookedBonusFxOptions) {
     this.#scene = scene;
@@ -166,7 +168,16 @@ export class CrookedBonusFx {
       lod: options.lod,
       breathing: false,
     });
+    // The field makes its meshes as it flushes, before each draw (its own
+    // observer, added first, runs first): the fill's list follows right after,
+    // so a new squishy is lit, and compiled lit, from its first frame.
+    const lighting = scene.onBeforeRenderObservable.add(() => {
+      if (!this.#lightDirty) return;
+      this.#lightDirty = false;
+      this.#light();
+    });
     scene.onDisposeObservable.addOnce(() => {
+      scene.onBeforeRenderObservable.remove(lighting);
       // A lost context mid-moment still opens its door (the screen rebuilds the scene).
       const h = this.#helper;
       this.#helper = null;
@@ -193,10 +204,13 @@ export class CrookedBonusFx {
     const motes = colours.map(([hex, leaf]) => this.#mote(hex, leaf).mesh);
     const probe = this.#kit('crooked-chest-base', chestBase);
     probe.position.set(0, -50, 0);
+    this.#probe = probe;
     const species = speciesOf(WARM_SPECIES);
     const warm = species
       ? this.#field.add(species, 'crooked-warm', { x: 0, y: -50, z: 0, scale: 0.01 })
       : null;
+    // The probe (and the warm squishy, once flushed) are lit by the fill, as in a moment.
+    this.#lightDirty = true;
     void (async () => {
       for (const mesh of motes) {
         try {
@@ -206,20 +220,18 @@ export class CrookedBonusFx {
         }
         if (scene.isDisposed) return;
       }
-      this.#fill.includedOnlyMeshes = [probe];
-      this.#fill.setEnabled(true);
       try {
         await this.#chestMat.forceCompilationAsync(probe);
       } catch {
         // As above.
       }
       if (scene.isDisposed) return;
+      this.#probe = null;
       probe.dispose();
-      this.#light();
+      this.#lightDirty = true;
     })();
     if (!warm) return;
-    // The squishies' program compiles on the frames that draw it, off stage.
-    this.#lightDirty = true;
+    // The squishies' program compiles, lit by the fill, on the frames that draw it off stage.
     let frames = 0;
     const observer = scene.onAfterRenderObservable.add(() => {
       const drawn = scene.meshes.filter((m) => m.material?.name === SQUISHY_MATERIAL);
@@ -266,10 +278,16 @@ export class CrookedBonusFx {
   #light(): void {
     const meshes = [
       ...[...this.#chests.values()].flatMap((c) => [c.base, c.lid]),
+      ...(this.#probe ? [this.#probe] : []),
       ...this.#scene.meshes.filter((m) => m.material?.name === SQUISHY_MATERIAL),
     ];
+    if (meshes.length === 0) {
+      // Off first: setting an empty list on a live light would light everything for a moment.
+      this.#fill.setEnabled(false);
+      return;
+    }
     this.#fill.includedOnlyMeshes = meshes;
-    this.#fill.setEnabled(meshes.length > 0);
+    this.#fill.setEnabled(true);
   }
 
   #sizeOf(handle: SquishyHandle): number {
@@ -553,12 +571,8 @@ export class CrookedBonusFx {
       moving = true;
     }
     moving = this.#field.update(now) || moving;
-    // The field makes its meshes as it draws: the fill's list follows once they exist.
-    if (this.#lightDirty) {
-      this.#lightDirty = false;
-      this.#light();
-      moving = true;
-    }
+    // A squishy came or went: draw again, so the fill's list follows (before that draw).
+    if (this.#lightDirty) moving = true;
     return moving;
   }
 
