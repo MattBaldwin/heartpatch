@@ -1774,9 +1774,18 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     const current = home;
     if (!current) return [];
     const card = warehouseCard(b, tile, current);
-    const actions: Node[] = options.onUpkeep
-      ? [tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-warehouse-upkeep-order', 'small')]
-      : [];
+    // Napping, it owes nothing: no Upkeep to open.
+    const actions: Node[] =
+      options.onUpkeep && card?.state !== 'napping'
+        ? [
+            tileButton(
+              RESOURCE_TEXT.coins,
+              options.onUpkeep,
+              'tile-warehouse-upkeep-order',
+              'small',
+            ),
+          ]
+        : [];
     return standingNodes(b, 'resource', 'warehouse', card ? warehouseCardLines(card) : [], actions);
   }
 
