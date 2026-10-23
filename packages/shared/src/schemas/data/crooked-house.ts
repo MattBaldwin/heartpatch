@@ -6,7 +6,7 @@ import { ElementIdSchema } from './elements.js';
  * The Crooked House (#306 6b, owner decision 8 of 2026-10-23): Halloween
  * 2026's far Hollow, a fixed house of rooms and doors whose details (which
  * thing hides which key, each echo's phase, the bonus chests) shuffle per
- * patch and season (`crookedHouseSecrets`, server-only). Rule 5: adding a
+ * patch and season (the server-only secrets). Rule 5: adding a
  * room, a thing or an echo loop is a data edit; the engine never names a
  * room. State is bitmasks over these lists' order (`far_hollow_state`,
  * `far_hollow_rooms`), so an id or an order never changes once shipped.

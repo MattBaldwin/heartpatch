@@ -89,6 +89,11 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:pumpkin-barn',
       line: 'Gather some Timber and Stone, and this page opens!',
     },
+    // The Warehouse (#601 PR 9): lots of Timber and Stone, and some Glimmer.
+    {
+      page: 'building:warehouse',
+      line: 'Gather some Timber, Stone and Glimmer, and this page opens!',
+    },
     {
       page: 'building:hedge',
       line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',

@@ -43,11 +43,17 @@ export function farHollowState(
 /**
  * Did I only just arrive (not finished yet)? The far road is once a season,
  * so a won journey of unknown origin (a reload mid-battle) may have been the
- * far road when this holds. #306 6b's `house` progress lets 6c tighten it to
- * "nothing found yet".
+ * far road when this holds: arrived, and nothing in the house found or put
+ * right yet (#306 6c).
  */
-export function justArrived(view: Pick<FarHollowView, 'arrived' | 'completedAt'>): boolean {
-  return view.arrived && view.completedAt === null;
+export function justArrived(
+  view: Pick<FarHollowView, 'arrived' | 'completedAt' | 'house'>,
+): boolean {
+  if (!view.arrived || view.completedAt !== null) return false;
+  const house = view.house;
+  return (
+    house === null || (house.keys.length === 0 && house.rooms.every((r) => r.fixed.length === 0))
+  );
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

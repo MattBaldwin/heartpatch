@@ -89,7 +89,7 @@ export function reachWithKeys(house: CrookedHouse, held: number): Set<string> {
 /**
  * A season's echo on its loop: where it starts (`offset`, a fraction of a
  * lap) and which way round it goes. From the season's seed
- * (`crookedHouseSecrets`), and sent to the client so it can draw it.
+ * (the server-only secrets), and sent to the client so it can draw it.
  */
 export interface EchoPhase {
   readonly offset: number;

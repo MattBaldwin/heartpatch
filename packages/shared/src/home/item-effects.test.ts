@@ -49,11 +49,11 @@ describe('itemEffects (#241)', () => {
   });
 
   it('lists what a gathered thing goes into', () => {
-    // Glimmer builds two fences and takes the others (the fire and the
-    // Factory too, #294) to their top level (#203), and goes into the
-    // explorer's Lantern (#199).
+    // Glimmer builds two fences and the Warehouse (#601 PR 9), takes the
+    // others (the fire and the Factory too, #294) to their top level (#203),
+    // and goes into the explorer's Lantern (#199).
     expect(itemEffects('glimmer')).toEqual([
-      { kind: 'build-with', buildings: ['glimmer-rail', 'lantern-fence'] },
+      { kind: 'build-with', buildings: ['glimmer-rail', 'lantern-fence', 'warehouse'] },
       {
         kind: 'upgrades',
         buildings: [
@@ -95,11 +95,11 @@ describe('itemEffects (#241)', () => {
     expect(timber?.kind === 'build-with' && timber.buildings).toContain('hearthfire');
   });
 
-  it("names no building a player can't build yet (#601's gated Warehouse)", () => {
+  it("names no building a player can't build yet (the Warehouse's gate opened in #601 PR 9)", () => {
     const gated = new Set(
       BUILDINGS.filter((b) => !isBuildable(HOME_BASE_RULES, b)).map((b) => b.id),
     );
-    expect(gated.has('warehouse') && !gated.has('woodcutters-hut')).toBe(true);
+    expect(gated.has('warehouse') || gated.has('woodcutters-hut')).toBe(false);
     for (const { id } of GAME_DATA.resources) {
       for (const effect of itemEffects(id)) {
         const named =

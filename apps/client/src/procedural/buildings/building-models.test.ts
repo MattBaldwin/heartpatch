@@ -63,6 +63,17 @@ describe('resource building models (#601 PR 7)', () => {
     }
   });
 
+  it('draws the Warehouse (PR 9) as its own toy that glows awake and goes dark asleep', () => {
+    const scene = new Scene(engine);
+    const marker = vertices(scene, 'no-such-building', 1).body;
+    expect(vertices(scene, 'warehouse', 1).body).toBeGreaterThan(marker);
+    expect(vertices(scene, 'warehouse', 1, 'plain').glow).toBeGreaterThan(0);
+    expect(vertices(scene, 'warehouse', 1, 'out').glow).toBe(0);
+    const before = scene.meshes.length;
+    buildBuildingModel(scene, 'warehouse', 'plain', 1);
+    expect(scene.meshes.length - before).toBeLessThanOrEqual(2);
+  });
+
   it('is one body mesh and at most one glow mesh, so a kind is one or two draw calls', () => {
     const scene = new Scene(engine);
     const before = scene.meshes.length;
