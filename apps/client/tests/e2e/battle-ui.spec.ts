@@ -136,7 +136,8 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await expectRoomyLabels(page, HUD_CONTROLS);
   const sheet = (await page.getByTestId('battle-sheet').boundingBox())!;
   const viewport = page.viewportSize()!;
-  expect(sheet.height).toBeLessThanOrEqual(viewport.height * 0.35 + 1);
+  // The camera keeps clear exactly the share the sheet may take.
+  expect(sheet.y).toBeGreaterThanOrEqual(viewport.height * state.safe.bottom - 1);
   const mine = (await page.getByTestId('battle-plate-mine').boundingBox())!;
   const theirs = (await page.getByTestId('battle-plate-theirs').boundingBox())!;
   expect(mine.y + mine.height).toBeLessThan(sheet.y);
@@ -304,3 +305,75 @@ test('the fight keeps its safe band when the phone turns (#263)', async ({ brows
   // The pills take a bigger share of a short screen: the band did move.
   expect(fresh.top).not.toBeCloseTo(before.top, 2);
 });
+
+/** Phones and a tablet the battle sheet must hold every control and the prompt on. */
+const SHEET_SCREENS = [
+  { name: 'iPhone SE', width: 375, height: 667 },
+  { name: 'iPhone 15', width: 393, height: 852 },
+  { name: 'iPhone Pro Max', width: 430, height: 932 },
+  { name: 'iPad portrait', width: 768, height: 1024 },
+  { name: 'iPhone landscape', width: 844, height: 390 },
+] as const;
+
+/** Run away, the prompt and every control in the sheet sit inside the screen, tall enough to tap. */
+async function expectSheetFits(page: Page, label: string): Promise<void> {
+  const { width, height } = page.viewportSize()!;
+  await still(page, '[data-testid="battle-sheet"], .battle-plate');
+  const inside = '[data-testid="battle-caption"], [data-testid="battle-sheet"] .hp-button';
+  const boxes = await page.evaluate((selector) => {
+    const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
+    return {
+      scrolls: sheet.scrollHeight - sheet.clientHeight,
+      items: [...document.querySelectorAll<HTMLElement>(selector)].map((node) => {
+        const b = node.getBoundingClientRect();
+        return {
+          id: node.dataset['testid'] ?? node.className,
+          l: b.left,
+          t: b.top,
+          r: b.right,
+          b: b.bottom,
+        };
+      }),
+    };
+  }, inside);
+  // The prompt line is there, not dropped, and so is Run away.
+  const ids = boxes.items.map((item) => item.id);
+  expect(ids, label).toContain('battle-caption');
+  expect(ids, label).toContain('battle-run');
+  expect(boxes.scrolls, `${label}: the sheet scrolls`).toBeLessThanOrEqual(0);
+  for (const item of boxes.items) {
+    const where = `${label}: ${item.id}`;
+    expect(item.l, where).toBeGreaterThanOrEqual(0);
+    expect(item.t, where).toBeGreaterThanOrEqual(0);
+    expect(item.r, where).toBeLessThanOrEqual(width);
+    expect(item.b, where).toBeLessThanOrEqual(height);
+    if (item.id !== 'battle-caption') expect(item.b - item.t, where).toBeGreaterThanOrEqual(44);
+  }
+}
+
+for (const bench of [false, true]) {
+  test(`a plain wild battle's controls fit small phones${bench ? ' with a Swap button' : ''}`, async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000); // a map build and a battle; CI renders in software
+    const page = await newPlayer(browser, uniqueName(bench ? 'sheetsw' : 'sheetfit'));
+    await holdResizes(page);
+    const lobby = page.getByTestId('lobby');
+    await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+    await lobby.getByLabel('Patch name').fill('Sheet Patch');
+    await lobby.getByRole('button', { name: 'Make it!' }).tap();
+    await visitPatch(lobby);
+    if (bench) {
+      await realTap(await trayButton(page, 'battle-dev-grant'));
+      await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+    }
+    await realTap(await trayButton(page, 'battle-dev-fight'));
+    await expect(page.getByTestId('battle-hud')).toBeVisible();
+    await settled(page);
+    for (const screen of SHEET_SCREENS) {
+      await page.setViewportSize({ width: screen.width, height: screen.height });
+      await freshResize(page);
+      await expectSheetFits(page, screen.name);
+    }
+  });
+}
