@@ -164,6 +164,20 @@ function resetHouse(name) {
   });
 }
 
+/**
+ * Puts the room right up to its bloom card, reading each key card on the way
+ * (a room may hide two). `onFirstKey` shoots the first one.
+ */
+async function toBloom(page, onFirstKey) {
+  let keys = 0;
+  for (;;) {
+    const h = await fixRoom(page, (x) => x.card !== null);
+    if (h.card !== 'key') return;
+    if (keys++ === 0) await onFirstKey();
+    await page.getByTestId('crooked-card-ok').click();
+  }
+}
+
 const stats = [];
 async function shot(page, device, name) {
   if (ONLY && !ONLY.has(name)) return;
@@ -234,7 +248,7 @@ for (const device of DEVICES) {
     if (motion === 'reduce') {
       // Reduced motion: a cut to the Parlour, and its bloom at once (no roll of colour).
       await walkToParlour(page);
-      await fixRoom(page, (h) => h.card === 'bloom');
+      await toBloom(page, async () => {});
       await shot(page, device, 'reduced');
       await context.close();
       continue;
@@ -253,12 +267,7 @@ for (const device of DEVICES) {
     await shot(page, device, 'tiptoe');
     await page.getByTestId('crooked-tiptoe').dispatchEvent('click');
     // Put the Parlour right: a key may turn up on the way, and the last thing blooms it.
-    const h = await fixRoom(page, (x) => x.card !== null);
-    if (h.card === 'key') {
-      await shot(page, device, 'key');
-      await page.getByTestId('crooked-card-ok').click();
-      await fixRoom(page, (x) => x.card === 'bloom');
-    }
+    await toBloom(page, () => shot(page, device, 'key'));
     await page.waitForTimeout(1200);
     await shot(page, device, 'bloom');
     // Every card read (a second key may come with the bloom).
