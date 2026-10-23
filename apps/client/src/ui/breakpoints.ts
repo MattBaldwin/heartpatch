@@ -33,7 +33,7 @@ export const MIN_HEIGHT_STEPS = [
   900, // an iPad (the house's big layout)
 ] as const;
 
-/** The `orientation` values a stylesheet may use, always with a width, never alone for a phone. */
+/** The `orientation` values a stylesheet may use (a phone on its side is the query above, not this alone). */
 export const ORIENTATIONS = ['landscape'] as const;
 
 /** True while the screen is a phone on its side. */

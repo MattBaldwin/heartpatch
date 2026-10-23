@@ -25,9 +25,9 @@ import {
   type MilestonesCardDebug,
 } from '../../milestones/milestones-card.js';
 import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
+import { isLandscapePhone } from '../breakpoints.js';
 import { el, messageOf } from '../dom.js';
 import { RARITY_NAMES, rarityClass } from '../rarity/rarity.js';
-import { isLandscapePhone } from '../breakpoints.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
 import { watchScrollEdges } from './scroll-edges.js';
@@ -334,17 +334,30 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     if (!isOpen || !preview) return;
     const shown = panel.querySelector<HTMLElement>('.wardrobe-card:not([hidden])');
     const edge = shown?.getBoundingClientRect().right ?? 0;
-    // Under the "Log out" chip, in the room right of the card.
+    const room = panel.getBoundingClientRect();
+    const pad = getComputedStyle(panel);
+    // In the room right of the card, under the "Log out" chip (44 px) and
+    // above the screen's bottom padding, which the panel's own padding holds.
     preview.setBand(
       isLandscapePhone() && edge > 0
-        ? { top: 56, bottom: window.innerHeight - 12, left: edge, right: window.innerWidth }
+        ? {
+            top: room.top + (parseFloat(pad.paddingTop) || 0) + 44,
+            bottom: room.bottom - (parseFloat(pad.paddingBottom) || 0),
+            left: edge,
+            right: room.right,
+          }
         : null,
     );
     options.invalidate();
   };
-  window.addEventListener('resize', () => {
+  // iOS sends `resize` before a turned layout settles and none after (#251),
+  // so the card's own box is watched too, as the Keeper picker does.
+  const refit = (): void => {
     requestAnimationFrame(fitPreview);
-  });
+  };
+  window.addEventListener('resize', refit);
+  new ResizeObserver(refit).observe(panel);
+  new ResizeObserver(refit).observe(card);
 
   const build = (scene: Scene): SceneContent => {
     const built = new KeeperPreview(scene, lodFor('closeUp', options.tier()));

@@ -84,9 +84,27 @@ test('the wardrobe and the catalog fit a phone on its side', async ({ browser })
       await expectReachable(page.getByTestId('wardrobe-done'), 'Done');
       await expectReachable(page.getByTestId('wardrobe-boutique'), 'Boutique');
       await expectReachable(page.getByTestId('wardrobe-turn'), 'Turn around');
-      // The card and the Keeper's room don't overlap: the "Log out" chip stays clear of Done.
+      // The card leaves the right of the screen for the Keeper and the "Log out" chip.
       const card = await boxOf(page, '.wardrobe-card');
       expect(card.r, 'card leaves the right of the screen').toBeLessThan(size.width * 0.7);
+      // The Boutique and Milestones cards take the same panel: their way back
+      // is reachable and their lists keep some room.
+      await page.getByTestId('wardrobe-boutique').tap();
+      await expectReachable(page.getByTestId('boutique-back'), 'Boutique Back');
+      const racks = await boxOf(page, '[data-testid="boutique-racks"]');
+      expect(racks.b - racks.t, 'room for racks').toBeGreaterThanOrEqual(88);
+      await page.getByTestId('boutique-back').tap();
+      await page.getByTestId('wardrobe-milestones').tap();
+      await expectReachable(page.getByTestId('milestones-back'), 'Milestones Back');
+      const list = await boxOf(page, '[data-testid="milestones-list"]');
+      expect(list.b - list.t, 'room for milestones').toBeGreaterThanOrEqual(88);
+      await page.getByTestId('milestones-back').tap();
+      // Turning the phone with the wardrobe open: back to portrait and on its side again.
+      await page.setViewportSize({ width: size.height, height: size.width });
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await settled(page);
+      const again = await boxOf(page, '[data-testid="wardrobe-items"]');
+      expect(again.b - again.t, 'room for clothes after turning').toBeGreaterThanOrEqual(64);
       await page.getByTestId('wardrobe-done').tap();
       await expect(wardrobe).toBeHidden();
     });
