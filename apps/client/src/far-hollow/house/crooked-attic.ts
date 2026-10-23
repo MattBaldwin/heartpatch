@@ -7,7 +7,7 @@ import {
 import type { Part } from '../../explore/kit-mesh.js';
 import { CELLAR_CHESTS } from '../../hollowed/hollowed-config.js';
 import { ball, blk, joyed, ring, tube } from './crooked-kit.js';
-import { CROOKED_WALK, type FloorPoint } from './crooked-plan.js';
+import { CROOKED_WALK, walkStep, type FloorPoint, type WalkResult } from './crooked-plan.js';
 import { CROOKED_ATTIC_TEXT as A } from './crooked-text.js';
 
 // The Crooked House's attic (#306 6f, owner decision 4), pure so every case
@@ -79,6 +79,20 @@ export function keepOffAtticChest(room: CrookedRoom, at: FloorPoint): FloorPoint
   return hx - Math.abs(dx) < hz - Math.abs(dz)
     ? { x: p.x + Math.sign(dx || 1) * hx, z: at.z }
     : { x: at.x, z: p.z + Math.sign(dz || -1) * hz };
+}
+
+/**
+ * One step of the walk with the attic's chest solid: the walls and doors'
+ * step (`walkStep`), then out of the chest. The walk compares this point, so
+ * a walk into the chest stops beside it instead of pressing on every frame.
+ */
+export function houseStep(
+  room: CrookedRoom,
+  view: Pick<CrookedHouseView, 'unlocked' | 'bonusOpen' | 'keys'>,
+  to: FloorPoint,
+): WalkResult {
+  const r = walkStep(room, view, to);
+  return { ...r, at: keepOffAtticChest(room, r.at) };
 }
 
 /** The big chest's reward card: one line each for the page, the cloak, the title and the pile. */

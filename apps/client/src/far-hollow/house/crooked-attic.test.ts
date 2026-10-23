@@ -6,6 +6,7 @@ import {
   atticRoom,
   atticTarget,
   CROOKED_ATTIC,
+  houseStep,
   keepOffAtticChest,
   scrapsLeft,
 } from './crooked-attic.js';
@@ -81,5 +82,24 @@ describe('the Crooked House’s attic (#306 6f)', () => {
     );
     expect(CROOKED_ATTIC_TEXT.faint(1)).toMatch(/1 more room right/);
     expect(CROOKED_ATTIC_TEXT.faint(3)).toMatch(/3 more rooms right/);
+  });
+
+  it('ends a tap-walk into the chest beside it, so the walk stops (no frame after frame)', () => {
+    const view = { unlocked: [], bonusOpen: [], keys: [] };
+    // Walk from the ladder straight at the chest's middle, as a tap on it does.
+    let at = { x: chest.x, z: attic.box.z - 1.6 };
+    let steps = 0;
+    for (; steps < 600; steps++) {
+      const d = Math.hypot(chest.x - at.x, chest.z - at.z);
+      const k = Math.min(1, 0.05 / d);
+      const next = houseStep(attic, view, {
+        x: at.x + (chest.x - at.x) * k,
+        z: at.z + (chest.z - at.z) * k,
+      }).at;
+      if (next.x === at.x && next.z === at.z) break;
+      at = next;
+    }
+    expect(steps).toBeLessThan(600);
+    expect(chest.z - at.z).toBeGreaterThanOrEqual(CROOKED_ATTIC.half.z);
   });
 });

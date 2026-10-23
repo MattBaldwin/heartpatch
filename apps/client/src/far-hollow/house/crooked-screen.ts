@@ -45,7 +45,6 @@ import {
   roomsOn,
   tapGoal,
   thingPoint,
-  walkStep,
   type CrookedTarget,
   type FloorPoint,
 } from './crooked-plan.js';
@@ -67,7 +66,7 @@ import { createCrookedRelight } from './crooked-relight.js';
 import {
   atticLines,
   atticTarget,
-  keepOffAtticChest,
+  houseStep,
   scrapsLeft,
   type AtticTarget,
 } from './crooked-attic.js';
@@ -644,11 +643,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     let moved = false;
     if (want) {
-      const r = walkStep(room, h, want);
+      // The walls, the doors and the attic's chest (a walk into it stops beside it).
+      const r = houseStep(room, h, want);
       moved = r.at.x !== keeperAt.x || r.at.z !== keeperAt.z;
       // A tap-walk that a wall stopped is done.
       if (walk && !moved) walk = null;
-      keeperAt = keepOffAtticChest(room, r.at);
+      keeperAt = r.at;
       if (r.bumped !== bumped) {
         bumped = r.bumped;
         if (bumped) findTarget(true);
@@ -1476,7 +1476,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       const room = here();
       if (!h || !room || !isOpen) return;
       walk = null;
-      keeperAt = keepOffAtticChest(room, walkStep(room, h, { x, z }).at);
+      keeperAt = houseStep(room, h, { x, z }).at;
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();
