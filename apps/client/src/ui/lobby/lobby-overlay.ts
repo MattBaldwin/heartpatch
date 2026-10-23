@@ -124,11 +124,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   panel.hidden = true;
   const card = el('div', { class: 'auth-card lobby-card' });
   panel.append(card);
-  const openButton = el(
-    'button',
-    { type: 'button', class: 'auth-button lobby-open', 'data-testid': 'lobby-open' },
-    'My patches',
-  );
+  const openButton = hpButton('My patches', { variant: 'primary', testId: 'lobby-open' });
+  openButton.classList.add('lobby-open');
   openButton.hidden = true;
   // While peeking at the world with no patch open, the way back is big and
   // plain (#212); the corner button still works too.

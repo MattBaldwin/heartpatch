@@ -40,10 +40,6 @@
   gap: 12px;
 }
 
-.lobby-open {
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-}
-
 .lobby-notice {
   margin: 0;
   padding: 10px 14px;
