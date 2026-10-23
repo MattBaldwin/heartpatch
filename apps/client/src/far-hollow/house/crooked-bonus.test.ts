@@ -207,6 +207,8 @@ describe('bonus words', () => {
       BONUS_TEXT.friendTitle,
       BONUS_TEXT.friendLine('Glowboo'),
       BONUS_TEXT.friendGo,
+      BONUS_TEXT.wokeLine('Hanging Garden'),
+      BONUS_TEXT.wokeLineAny,
       ...['fire', 'leaf', 'water', 'light'].map((p) => powerDone(p, 'Glowboo')),
     ];
     for (const line of lines) {

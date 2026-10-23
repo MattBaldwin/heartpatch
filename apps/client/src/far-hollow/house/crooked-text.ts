@@ -144,6 +144,9 @@ export const BONUS_TEXT = {
   nobody: (element: string, icon: string) =>
     `Put a ${element} friend on your team, then come back! ${icon}`,
   notNow: 'Not now',
+  /** A woken door's card: where it leads now. */
+  wokeLine: (room: string) => `The way to the ${room} is open! Step through 🚪`,
+  wokeLineAny: 'A new way is open! Step through 🚪',
   chestAction: 'Open the chest 🎁',
   chestBubble: 'A little chest! What’s inside? ✨',
   chestTitle: `Treasure!${KEEP}🎁`,

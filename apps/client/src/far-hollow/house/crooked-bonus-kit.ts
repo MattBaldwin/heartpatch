@@ -7,7 +7,14 @@ import { ball, blk, flames, joyed, ring, tube, type V3 } from './crooked-kit.js'
 // sleeping doors' things (the design: a cold fireplace, a cracked window,
 // cosy cartoon flames and a closet too dark to light). Room-local metres.
 
-const CHEST = { wood: '#b8744a', band: '#f2b84b', lid: '#c98a5a', inside: '#5a3a5a' } as const; // TUNE
+const CHEST = {
+  wood: '#b8744a',
+  band: '#f2b84b',
+  lid: '#c98a5a',
+  inside: '#e9b54a',
+  coin: '#ffd27a',
+  hinge: '#6b4a2a',
+} as const; // TUNE
 
 /** The chest's size: wide, deep, and the base's height (the lid's hinge is at its back top). */
 export const CHEST_SIZE = { w: 1.0, d: 0.66, h: 0.5, lid: 0.26 } as const; // TUNE
@@ -17,7 +24,18 @@ export function chestBase(): Part {
   const { w, d, h } = CHEST_SIZE;
   return merged([
     blk(w, h, d, [0, h / 2, 0], CHEST.wood, { round: 0.35, foot: '#8a5a3c' }),
+    // Full to the brim: gold inside, a heap of coins that shines once the lid swings back.
     blk(w * 0.84, 0.04, d * 0.84, [0, h - 0.01, 0], CHEST.inside),
+    ...[
+      [-0.22, -0.08],
+      [0.05, 0.06],
+      [0.24, -0.05],
+      [-0.05, -0.12],
+      [0.12, 0.1],
+    ].map(([x, z]) => ball(0.2, [x ?? 0, h + 0.02, z ?? 0], CHEST.coin, [1, 0.45, 1])),
+    // The hinges at the back, so the lid reads as one that swings.
+    tube(0.16, 0.07, 0.07, [-w * 0.3, h, d / 2], CHEST.hinge, [0, 0, Math.PI / 2]),
+    tube(0.16, 0.07, 0.07, [w * 0.3, h, d / 2], CHEST.hinge, [0, 0, Math.PI / 2]),
     blk(0.12, h * 1.02, d * 1.04, [-w * 0.3, h / 2, 0], CHEST.band, { round: 0.4 }),
     blk(0.12, h * 1.02, d * 1.04, [w * 0.3, h / 2, 0], CHEST.band, { round: 0.4 }),
     // The clasp, gold: the chest reads from across a dim room.
@@ -41,6 +59,38 @@ export function chestLid(): Part {
   ]);
 }
 
+/** A glowing pad under a friend while it helps (a glowing material), 1 m across. */
+export const halo = (): Part => merged([tube(0.03, 1, 1, [0, 0.02, 0], '#ffffff')]);
+
+/**
+ * What glows once a friend has woken a door, door-local like the sleepers
+ * (a glowing material, one colour a power): the fire in the hearth, the
+ * blossoms on the vine, the puddle's shine, the closet's little lantern.
+ */
+export function wokenGlow(power: string): Part | null {
+  const parts = WOKEN[power]?.();
+  return parts && parts.length > 0 ? merged(parts) : null;
+}
+
+const WOKEN: Readonly<Record<string, () => Part[]>> = {
+  fire: () => [...flames([0, 0.08, -0.5], 1.35), ...flames([0.32, 0.08, -0.62], 0.7)],
+  leaf: () => [
+    ball(0.2, [-0.3, 0.32, -0.3], '#ffffff'),
+    ball(0.16, [0.3, 0.3, -0.6], '#ffffff'),
+    ball(0.18, [0, 0.34, 0.3], '#ffffff'),
+  ],
+  water: () => [tube(0.02, 0.9, 0.9, [0, 0.05, -0.45], '#ffffff')],
+  light: () => [ball(0.3, [0.8, 1.62, -0.15], '#ffffff')],
+};
+
+/** Each power's glow colour once woken. */
+export const WOKEN_COLOUR: Readonly<Record<string, string>> = {
+  fire: '#ffa33a',
+  leaf: '#ff9ec4',
+  water: '#9fd4ff',
+  light: '#ffe08a',
+}; // TUNE
+
 /** A sparkle mote for the bursts (a glowing material). */
 export const mote = (): Part => merged([ball(0.24, [0, 0, 0], '#ffffff')]);
 
@@ -54,6 +104,9 @@ const FACING: Record<CrookedSide, number> = {
   e: Math.PI / 2,
   w: -Math.PI / 2,
 };
+
+/** The turn that faces a door-local part into the room from its wall. */
+export const doorFacing = (side: CrookedSide): number => FACING[side];
 
 /**
  * A sleeping door's thing, on its main room's side of the wall: what the
@@ -86,13 +139,15 @@ const SLEEPERS: Readonly<Record<string, SleeperBuilder>> = {
     blk(0.36, 1.5, 0.4, [-0.86, 0.75, -0.2], stone(j), { round: 0.4 }),
     blk(0.36, 1.5, 0.4, [0.86, 0.75, -0.2], stone(j), { round: 0.4 }),
     blk(2.2, 0.26, 0.5, [0, 1.6, -0.22], joyed('#8a5a3c', j), { round: 0.5 }),
-    ...(asleep
-      ? [
-          // Grey ash logs, cold: nothing glows until a Fire friend helps.
-          tube(0.9, 0.16, 0.16, [0, 0.12, -0.35], joyed('#6b5a52', 0), [0, 0, Math.PI / 2]),
-          tube(0.8, 0.14, 0.14, [0.05, 0.27, -0.38], joyed('#6b5a52', 0), [0, 0.4, Math.PI / 2]),
-        ]
-      : [...flames([-0.95, 1.73, -0.22], 0.28), ...flames([0.95, 1.73, -0.22], 0.28)]),
+    // The hearth on the floor in front: what the camera above sees best.
+    blk(2.0, 0.08, 1.0, [0, 0.04, -0.55], joyed('#8f8178', j), { round: 0.3 }),
+    // The logs: grey ash while cold; brown, with the fire's glow on them, once lit.
+    tube(1.0, 0.2, 0.2, [0, 0.18, -0.5], asleep ? '#5e5450' : '#7a4a2a', [0, 0.25, Math.PI / 2]),
+    tube(0.9, 0.18, 0.18, [0.05, 0.18, -0.62], asleep ? '#6b605a' : '#8a5a3c', [
+      0,
+      -0.3,
+      Math.PI / 2,
+    ]),
   ],
   // Leaf: the Conservatory's cracked window. Opened, a vine grows through it into a bridge.
   leaf: (asleep, j) =>

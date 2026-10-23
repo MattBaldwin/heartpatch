@@ -44,6 +44,7 @@ import {
   CROOKED_WALK,
   crookedThings,
   doorEnd,
+  farEnd,
   fitShot,
   floorBox,
   floorOf,
@@ -170,6 +171,8 @@ const HOLD_MS = 650; // TUNE
 const NOTE_MS = 2600; // TUNE
 /** A press on Tiptoe shorter than this is a tap (it stays on); longer is a hold (off on release). */
 const TIPTOE_TAP_MS = 350; // TUNE
+/** As a friend helps, the Keeper steps this far back from the door, metres. */
+const STEP_BACK = 1.35; // TUNE: the lantern still lights what the friend wakes
 /** A chest's card waits this long, ms, so the lid and its sparkles are seen first. */
 const CHEST_CARD_MS = 750; // TUNE
 
@@ -178,6 +181,7 @@ type Card =
   | { kind: 'bloom'; title: string; line: string }
   | { kind: 'caught' }
   | { kind: 'chest'; title: string; line: string }
+  | { kind: 'power'; title: string; line: string }
   | { kind: 'friend'; name: string; speciesId: string; battleId: string; cued: boolean };
 
 /** What's in front: a crooked thing or a shut door (6c), or a bonus chest (6e). */
@@ -558,7 +562,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     let want: FloorPoint | null = null;
     let heading: number | undefined;
     const speed = (tiptoe ? CROOKED_WALK.tiptoeSpeed : CROOKED_WALK.speed) * dt;
-    if (!mapShown && !working && cards.length === 0 && !picker && !powering) {
+    // While a friend helps, only its step back (a walk, never the stick) moves the Keeper.
+    const free = !powering || (walk !== null && stick === null);
+    if (!mapShown && !working && cards.length === 0 && !picker && free) {
       if (stick) {
         // The camera looks north: up the screen is north, right is east.
         const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
@@ -819,22 +825,35 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const at = generation;
     powering = true;
     stick = null;
-    walk = null;
     showStick();
+    // The Keeper steps back from the door, so the friend's moment plays in view.
+    const back = end
+      ? {
+          x: end.point.x + end.inward.x * STEP_BACK,
+          z: end.point.z + end.inward.z * STEP_BACK,
+        }
+      : null;
+    walk = back;
     options.cue?.('pop');
     const woke = () => {
       if (at !== generation) return;
       powering = false;
       apply(reply.view);
       options.cue?.('twinkle');
-      say(powerDone(door.power ?? '', helper.name));
+      // What the friend did, and where it leads, on a card (the moment's payoff).
+      const beyond = room ? farEnd(door, room.id)?.room.name : undefined;
+      cards.push({
+        kind: 'power',
+        title: powerDone(door.power ?? '', helper.name),
+        line: beyond ? B.wokeLine(beyond) : B.wokeLineAny,
+      });
       redraw();
-      findTarget(true);
+      renderCard();
     };
     const fx = bonusFx;
     // Out of the scene's step, so the redraw never runs inside a frame.
     if (fx && end) {
-      fx.power(helper, keeperAt, end.point, () => {
+      fx.power(helper, back ?? keeperAt, end.point, end.inward, () => {
         queueMicrotask(woke);
       });
     } else woke();

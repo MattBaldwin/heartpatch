@@ -6,13 +6,29 @@ import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { GAME_DATA, visualRegistry, type CrookedHouseView, type Species } from '@heartpatch/shared';
+import {
+  CROOKED_HOUSE,
+  GAME_DATA,
+  visualRegistry,
+  type CrookedHouseView,
+  type Species,
+} from '@heartpatch/shared';
 import { kitMesh } from '../../explore/kit-mesh.js';
 import type { SquishyLod } from '../../procedural/config.js';
 import { SquishyField, type SquishyHandle } from '../../procedural/squishy-field.js';
-import { chestBase, chestLid, CHEST_SIZE, leafMote, mote } from './crooked-bonus-kit.js';
+import {
+  chestBase,
+  chestLid,
+  CHEST_SIZE,
+  doorFacing,
+  halo,
+  leafMote,
+  mote,
+  WOKEN_COLOUR,
+  wokenGlow,
+} from './crooked-bonus-kit.js';
 import { chestOpened, chestPoint, chestRooms } from './crooked-bonus.js';
-import { roomOf, type FloorPoint } from './crooked-plan.js';
+import { doorEnd, roomOf, type FloorPoint } from './crooked-plan.js';
 
 // The bonus rooms' moments (#306 6e), drawn beside the house's own scene:
 // each bonus room's chest (its lid swings open), the team friend who pops in
@@ -27,15 +43,17 @@ interface PowerFx {
   readonly path: Path;
   /** Leaves, not round motes. */
   readonly leaf?: boolean;
+  /** Its motes' size (a dark friend's flourish needs to carry the moment). */
+  readonly size: number;
 }
 
 const POWER_FX: Readonly<Record<string, PowerFx>> = {
-  fire: { colours: ['#ffb347', '#ff7a3d', '#ffd27a'], path: 'flicker' }, // TUNE: all of them
-  leaf: { colours: ['#7fd09b', '#4f9d6b', '#c8f0a0'], path: 'twirl', leaf: true },
-  water: { colours: ['#7bbcf2', '#cfe9ff', '#ffffff'], path: 'arc' },
-  light: { colours: ['#fff6c7', '#f2d05a', '#ffffff'], path: 'beam' },
+  fire: { colours: ['#ffb347', '#ff7a3d', '#ffd27a'], path: 'flicker', size: 1.7 }, // TUNE: all of them
+  leaf: { colours: ['#7fd09b', '#4f9d6b', '#c8f0a0'], path: 'twirl', leaf: true, size: 1.2 },
+  water: { colours: ['#7bbcf2', '#cfe9ff', '#ffffff'], path: 'arc', size: 1.2 },
+  light: { colours: ['#fff6c7', '#f2d05a', '#ffffff'], path: 'beam', size: 1.2 },
 };
-const OTHER_FX: PowerFx = { colours: ['#ffffff', '#ffd27a'], path: 'arc' };
+const OTHER_FX: PowerFx = { colours: ['#ffffff', '#ffd27a'], path: 'arc', size: 1.2 };
 /** A chest's burst. */
 const CHEST_FX = ['#ffd27a', '#f7a1c4', '#ffffff', '#8ecae6'] as const;
 
@@ -80,6 +98,7 @@ interface Mote {
   readonly life: number;
   readonly path: Path;
   readonly phase: number;
+  readonly size: number;
 }
 
 interface MoteSource {
@@ -117,6 +136,10 @@ export class CrookedBonusFx {
   readonly #field: SquishyField;
   readonly #moteSources = new Map<string, MoteSource>();
   readonly #chests = new Map<string, Chest>();
+  /** The glow of each woken power door shown, by door id. */
+  readonly #woken = new Map<string, Mesh>();
+  /** One glowing material a colour. */
+  readonly #glowMats = new Map<string, StandardMaterial>();
   #motes: Mote[] = [];
   #helper: {
     handle: SquishyHandle;
@@ -132,6 +155,8 @@ export class CrookedBonusFx {
     /** Where its flourish lands (the door), and the element's look. */
     door: Vector3;
     fx: PowerFx;
+    /** The glowing pad under it, in its element's colour (a dark friend still shows). */
+    halo: Mesh;
   } | null = null;
   #friend: {
     handle: SquishyHandle;
@@ -201,7 +226,21 @@ export class CrookedBonusFx {
       ),
       ...[...OTHER_FX.colours, ...POP_FX, ...CHEST_FX].map((c): [string, boolean] => [c, false]),
     ];
-    const motes = colours.map(([hex, leaf]) => this.#mote(hex, leaf).mesh);
+    const motes: Mesh[] = colours.map(([hex, leaf]) => this.#mote(hex, leaf).mesh);
+    // The friends' pads and the woken doors' glows, off stage while they compile.
+    const glows = [
+      ...[...Object.values(POWER_FX), OTHER_FX].map((fx) =>
+        this.#glowMesh('crooked-halo', halo, fx.colours[0] ?? '#ffffff'),
+      ),
+      ...Object.keys(WOKEN_COLOUR).map((power) =>
+        this.#glowMesh(
+          `crooked-woken-${power}`,
+          () => wokenGlow(power) ?? halo(),
+          WOKEN_COLOUR[power] ?? '#ffffff',
+        ),
+      ),
+    ];
+    for (const g of glows) g.position.set(0, -50, 0);
     const probe = this.#kit('crooked-chest-base', chestBase);
     probe.position.set(0, -50, 0);
     this.#probe = probe;
@@ -212,9 +251,9 @@ export class CrookedBonusFx {
     // The probe (and the warm squishy, once flushed) are lit by the fill, as in a moment.
     this.#lightDirty = true;
     void (async () => {
-      for (const mesh of motes) {
+      for (const mesh of [...motes, ...glows]) {
         try {
-          await mesh.material?.forceCompilationAsync(mesh, { useInstances: true });
+          await mesh.material?.forceCompilationAsync(mesh, { useInstances: mesh.hasThinInstances });
         } catch {
           // Compiled on first draw instead, as before.
         }
@@ -226,6 +265,7 @@ export class CrookedBonusFx {
         // As above.
       }
       if (scene.isDisposed) return;
+      for (const g of glows) g.dispose();
       this.#probe = null;
       probe.dispose();
       this.#lightDirty = true;
@@ -267,6 +307,7 @@ export class CrookedBonusFx {
       const r = roomOf(chest.room);
       chest.lid.rotation.x = r && chestOpened(r, view) ? LID_OPEN : 0;
     }
+    this.#showWoken(view, wanted);
     this.#light();
   }
 
@@ -301,6 +342,56 @@ export class CrookedBonusFx {
     return mesh;
   }
 
+  /** A glowing kit shape in `hex` (lighting off: it shows in the dark). */
+  #glowMesh(name: string, build: () => ReturnType<typeof halo>, hex: string): Mesh {
+    const mesh = kitMesh(this.#scene, name, build);
+    mesh.material = this.#glow(hex);
+    return mesh;
+  }
+
+  #glow(hex: string): StandardMaterial {
+    let m = this.#glowMats.get(hex);
+    if (!m) {
+      m = new StandardMaterial(`crooked-glow-${hex}`, this.#scene);
+      m.disableLighting = true;
+      m.emissiveColor = Color3.FromHexString(hex).toLinearSpace().scale(1.8);
+      this.#glowMats.set(hex, m);
+    }
+    return m;
+  }
+
+  /** The glow on each woken power door among `rooms`, on its main room's side. */
+  #showWoken(view: CrookedHouseView, rooms: ReadonlySet<string>): void {
+    const want = new Map<
+      string,
+      { power: string; at: FloorPoint; side: Parameters<typeof doorFacing>[0] }
+    >();
+    for (const door of CROOKED_HOUSE.doors) {
+      if (door.power === undefined || !view.bonusOpen.includes(door.id)) continue;
+      const main = roomOf(door.a.room)?.kind === 'main' ? door.a.room : door.b.room;
+      if (!rooms.has(main)) continue;
+      const end = doorEnd(door, main);
+      if (end) want.set(door.id, { power: door.power, at: end.point, side: end.side });
+    }
+    for (const [id, mesh] of this.#woken) {
+      if (want.has(id)) continue;
+      mesh.dispose();
+      this.#woken.delete(id);
+    }
+    for (const [id, w] of want) {
+      if (this.#woken.has(id)) continue;
+      const build = () => wokenGlow(w.power) ?? halo();
+      const mesh = this.#glowMesh(
+        `crooked-woken-${w.power}`,
+        build,
+        WOKEN_COLOUR[w.power] ?? '#ffffff',
+      );
+      mesh.position.set(w.at.x, 0, w.at.z);
+      mesh.rotation.y = doorFacing(w.side);
+      this.#woken.set(id, mesh);
+    }
+  }
+
   /**
    * A team friend wakes a sleeping door: it pops in beside the Keeper, its
    * element's flourish flies to the door, and `woke` runs as it lands (the
@@ -310,6 +401,7 @@ export class CrookedBonusFx {
     helper: { id: string; speciesId: string; element: string },
     keeper: FloorPoint,
     door: FloorPoint,
+    inward: FloorPoint,
     woke: () => void,
   ): void {
     this.#clearHelper();
@@ -325,7 +417,8 @@ export class CrookedBonusFx {
     const wake = now + (still ? TIMING.still : TIMING.popIn + TIMING.flourish) * 1000;
     const fx = POWER_FX[helper.element] ?? OTHER_FX;
     const from = new Vector3(at.x, 0.55, at.z);
-    const to = new Vector3(door.x, 1.0, door.z);
+    // It lands on what's asleep, in front of the door (the hearth, the window's sill…), where the camera sees it.
+    const to = new Vector3(door.x + inward.x * 0.5, 0.45, door.z + inward.z * 0.5);
     if (species) {
       const yaw = yawTo(at, door);
       const handle = this.#field.add(species, helper.id, { x: at.x, z: at.z, yaw, scale: 0.01 });
@@ -342,7 +435,10 @@ export class CrookedBonusFx {
         woke,
         door: to,
         fx,
+        halo: this.#glowMesh('crooked-halo', halo, fx.colours[0] ?? '#ffffff'),
       };
+      this.#helper.halo.position.set(at.x, 0, at.z);
+      this.#helper.halo.scaling.setAll(0.001);
     } else {
       // A species this client doesn't know: the door still wakes.
       this.#helper = null;
@@ -365,6 +461,7 @@ export class CrookedBonusFx {
         life: TIMING.flourish * 0.7,
         path: fx.path,
         phase: i * 2.399,
+        size: fx.size,
       });
     }
   }
@@ -433,6 +530,7 @@ export class CrookedBonusFx {
     const h = this.#helper;
     if (!h) return;
     this.#field.remove(h.handle);
+    h.halo.dispose();
     this.#helper = null;
     this.#lightDirty = true;
     // A moment cut short still opens its door.
@@ -460,6 +558,7 @@ export class CrookedBonusFx {
         life,
         path: path === 'beam' ? 'beam' : 'arc',
         phase: a,
+        size: 1,
       });
     }
   }
@@ -534,6 +633,7 @@ export class CrookedBonusFx {
       }
       if (now >= h.end) {
         this.#field.remove(h.handle);
+        h.halo.dispose();
         this.#helper = null;
         this.#lightDirty = true;
       } else {
@@ -549,6 +649,8 @@ export class CrookedBonusFx {
           scale: Math.max(0.01, backOut(grow) * (1 - out) * h.size),
           yaw: h.yaw,
         });
+        h.halo.position.set(h.at.x, 0, h.at.z);
+        h.halo.scaling.setAll(Math.max(0.001, backOut(grow) * (1 - out) * 0.95));
         moving = true;
       }
     }
@@ -632,7 +734,7 @@ function placeMote(m: Mote, t: number, out: Float32Array, offset: number): void 
     p.y += swell * 0.3;
     turn = t * 6 + m.phase;
   }
-  MOTE_SIZE.setAll(Math.max(0.001, swell * (m.path === 'beam' ? 1.3 : 1)));
+  MOTE_SIZE.setAll(Math.max(0.001, swell * m.size * (m.path === 'beam' ? 1.3 : 1)));
   Quaternion.RotationYawPitchRollToRef(turn, 0, 0, MOTE_TURN);
   Matrix.ComposeToRef(MOTE_SIZE, MOTE_TURN, p, MOTE_MATRIX);
   MOTE_MATRIX.copyToArray(out, offset);

@@ -110,6 +110,12 @@ test('a Fire friend lights the cold fireplace and the Inglenook’s chest opens 
   // Its moment plays, then the door wakes: open, and saved on the server.
   await expect(picker).toBeHidden();
   await slowExpect.poll(async () => (await house(page))?.powering).toBe(false);
+  // The payoff: a card says what the friend did and where it leads.
+  await expect(page.getByTestId('crooked-card')).toHaveAttribute('data-kind', 'power');
+  await expect(page.getByTestId('crooked-card').getByRole('heading')).toContainText(
+    'lit the fireplace',
+  );
+  await page.getByTestId('crooked-card-ok').tap();
   // The door is open: nothing left to do at it (its words are unit-tested; the bubble fades).
   await expect.poll(async () => (await house(page))?.target?.id ?? null).not.toBe('inglenook-door');
   const woke = await api<{ house: { bonusOpen: string[] } }>(

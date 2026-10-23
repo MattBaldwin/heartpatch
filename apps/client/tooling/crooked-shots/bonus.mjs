@@ -32,6 +32,8 @@ const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 const TRIES = Number(process.env.TRIES ?? 6);
+/** Only these powers' rooms through the screen (all four by default; the scout still opens every chest). */
+const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) : null;
 
 /**
  * The four bonus doors: the element's friend, the room I stand in, where I
@@ -42,7 +44,7 @@ const POWERS = [
     power: 'fire',
     species: 'candlekit',
     from: 'parlour',
-    door: [-7.9, 0.2],
+    door: [-7.4, 0.2],
     dx: -1,
     dz: 0,
     room: 'inglenook',
@@ -51,7 +53,7 @@ const POWERS = [
     power: 'leaf',
     species: 'mossmuffin',
     from: 'conservatory',
-    door: [7.8, -0.1],
+    door: [7.3, -0.1],
     dx: 1,
     dz: 0,
     room: 'hanging-garden',
@@ -60,7 +62,7 @@ const POWERS = [
     power: 'water',
     species: 'puddlepuff',
     from: 'scullery',
-    door: [1.4, 11.3],
+    door: [0.9, 11.3],
     dx: 1,
     dz: 0,
     room: 'pantry',
@@ -69,7 +71,7 @@ const POWERS = [
     power: 'light',
     species: 'glowboo',
     from: 'blue-bedroom',
-    door: [-7.9, 3.5],
+    door: [-7.4, 3.5],
     dx: -1,
     dz: 0,
     room: 'lantern-closet',
@@ -323,7 +325,8 @@ async function openChest(page, device, name) {
       await page.getByTestId('crooked-action').click();
       await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card !== null);
     },
-    550,
+    // Mid-swing: the lid on its hinges, the coins showing.
+    280,
     () => shot(page, device, `${name}-chest-opening`, { wait: false }),
   );
   await page.getByTestId('crooked-card').waitFor();
@@ -399,6 +402,7 @@ for (const device of DEVICES) {
   resetHouse(name);
   await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
   for (const p of POWERS) {
+    if (ONLY_POWERS && !ONLY_POWERS.has(p.power)) continue;
     await teamFor(page, mapId, ids, p.power);
     await toDoor(page, mapId, p);
     await shot(page, device, `${p.power}-asleep`);
@@ -417,6 +421,10 @@ for (const device of DEVICES) {
       () => shot(page, device, `${p.power}-power`, { wait: false }),
     );
     await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
+    // The payoff card (what the friend did), then the woken door itself.
+    await page.getByTestId('crooked-card').waitFor();
+    await shot(page, device, `${p.power}-woke`);
+    await page.getByTestId('crooked-card-ok').click();
     await page.waitForTimeout(900);
     await shot(page, device, `${p.power}-open`);
     await walkInto(page, p.dx, p.dz, p.room);
@@ -430,11 +438,14 @@ for (const device of DEVICES) {
       await page.waitForTimeout(1500);
       await shot(page, device, 'friend-card');
       await page.getByTestId('crooked-card-ok').click();
-      await until(page, () => window.__heartpatch?.battle?.()?.open, undefined, 60_000).catch(
-        () => null,
+      await until(
+        page,
+        () => window.__heartpatch?.battle?.()?.phase === 'turn',
+        undefined,
+        120_000,
       );
-      await page.waitForTimeout(3000);
-      await shot(page, device, 'friend-battle', { wait: false });
+      await page.waitForTimeout(4000);
+      await shot(page, device, 'friend-battle');
       const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
       if (current.battle) await runAway(page, current.battle.id);
     } else {
