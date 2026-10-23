@@ -190,11 +190,12 @@ export const plateSideOf = (mySide: BattleSideId, side: BattleSideId): 'mine' | 
 const CALLOUT_MS = 1100; // TUNE: long enough to read "Super cozy!"
 
 /**
- * The sheet's share of the screen is reserved even while only the caption
- * shows, so the fight never jumps. Keep it equal to `.battle-sheet`'s
- * `max-height` in battle.css (35vh): this is what the camera keeps clear.
+ * The sheet's share of the screen on a tall screen, reserved even while only
+ * the caption shows, so the fight never jumps. A shorter phone needs more
+ * (battle.css raises `--battle-sheet-vh` there); the camera reads the sheet's
+ * real `max-height` and falls back to this where there is no layout.
  */
-export const SHEET_SHARE = 0.35; // TUNE
+export const SHEET_SHARE = 0.37; // TUNE
 
 const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
 const FEELING_NAMES = new Map<string, string>(FEELINGS.map((f) => [f.id, f.name]));
@@ -850,7 +851,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       );
       // The pills aren't laid out yet (hidden): a sensible guess until they are.
       const top = pillBottom > 0 ? (pillBottom + 10) / h : 0.14;
-      safe = { top: Math.min(0.4, top), bottom: 1 - SHEET_SHARE };
+      const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
+      const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
+      safe = { top: Math.min(0.4, top), bottom: 1 - share };
       return safe;
     },
     sheetTop: () => {
