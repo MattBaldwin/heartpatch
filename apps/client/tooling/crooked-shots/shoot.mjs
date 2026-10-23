@@ -379,8 +379,8 @@ async function openBoard(page, device, prefix) {
   await place(page, thing.x, thing.z + 0.9);
   await until(page, (id) => window.__heartpatch?.farHollowHouse?.()?.target?.id === id, thing.id);
   await shot(page, device, `${prefix}-enter`);
+  // The board's card opens in one frame, as every house card does: no "as it opens" frame.
   await page.getByTestId('crooked-action').click();
-  await shot(page, device, `${prefix}-board-opens`, 120);
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.board?.card === 'board');
   await shot(page, device, `${prefix}-board`);
   return thing.id;
@@ -404,10 +404,13 @@ async function puzzleShots(page, device, mapId) {
   const half = Math.ceil(answer.body.moves.length / 2);
   await playBoard(page, answer.body.moves.slice(0, half));
   await shot(page, device, 'library-mid');
+  // The bloom's colour roll, pinned halfway (`momentAt`), so every phone shoots the same instant.
+  await dev(page, 'momentAt', 450);
   await playBoard(page, answer.body.moves.slice(half));
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'bloom');
-  await shot(page, device, 'library-bloom-opens', 120);
-  await page.waitForTimeout(1200);
+  await shot(page, device, 'library-bloom-opens');
+  await dev(page, 'momentAt', null);
+  await page.waitForTimeout(1500);
   await shot(page, device, 'library-bloom');
   await page.getByTestId('crooked-card-ok').click();
   await page.waitForTimeout(1500);
@@ -427,12 +430,16 @@ async function puzzleShots(page, device, mapId) {
   await place(page, 0, 5.0);
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.target?.kind === 'attic');
   await shot(page, device, 'attic-chest');
+  // The cellar's moment, pinned: the lid mid-swing, then the card as it comes with the sparkles and beam still up.
+  await dev(page, 'momentAt', 1000);
   await page.getByTestId('crooked-action').click();
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.scene?.attic?.open);
   await shot(page, device, 'attic-opens', 100);
   await until(page, () => !document.querySelector('[data-testid="crooked-card"]')?.hidden);
-  await shot(page, device, 'attic-card-opens', 100);
-  await page.waitForTimeout(1500);
+  await dev(page, 'momentAt', 1900);
+  await shot(page, device, 'attic-card-opens');
+  await dev(page, 'momentAt', null);
+  await page.waitForTimeout(3500);
   await dismissLore(page);
   await shot(page, device, 'attic-card');
 
@@ -449,9 +456,12 @@ async function puzzleShots(page, device, mapId) {
   });
   await playBoard(page, tune.body.moves.slice(0, Math.ceil(tune.body.moves.length / 2)));
   await shot(page, device, 'music-mid');
+  // The glow swelling over the music box, pinned at its height.
+  await dev(page, 'momentAt', 700);
   await playBoard(page, tune.body.moves.slice(Math.ceil(tune.body.moves.length / 2)));
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.board === null);
   await shot(page, device, 'music-relit', 100);
+  await dev(page, 'momentAt', null);
 }
 
 const stats = [];

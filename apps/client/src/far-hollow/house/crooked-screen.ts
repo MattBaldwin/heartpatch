@@ -189,6 +189,8 @@ export interface CrookedScreen {
    * into its doorway does (a software-rendered phone walks too slowly to time it).
    */
   devStep: (doorId: string) => void;
+  /** Dev only (captures, #306 6f): draws the last bloom, glow or chest moment `ms` in, or on the clock (`null`). */
+  devMomentAt: (ms: number | null) => void;
 }
 
 /** A fitted room keeps this clear of the HUD, CSS px. */
@@ -1474,6 +1476,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       if (!door || !h || !isOpen || doorState(door, h).kind !== 'open') return;
       if (door.a.room !== h.room && door.b.room !== h.room) return;
       void stepThrough(door);
+    },
+    devMomentAt: (ms) => {
+      scene3d?.devMomentAt(ms);
+      wake();
     },
     devEchoesAt: (ms) => {
       echoesPinned = ms;

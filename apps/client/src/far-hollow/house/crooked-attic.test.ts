@@ -71,6 +71,14 @@ describe('the Crooked House’s attic (#306 6f)', () => {
       CROOKED_ATTIC_TEXT.titleLine,
       CROOKED_ATTIC_TEXT.pile(['13 HEARTDUST', '25 GLIMMER', '5 TREATS']),
     ]);
+    // The chest's 10 Heartdust and 25 Glimmer and the gift's 3 Heartdust and 5 Treats, summed
+    // (the server's attic test checks the grant itself).
+    expect(lines.at(-1)).toBe(
+      '🎁 13 HEARTDUST, 25 GLIMMER and 5 TREATS, from the chest and the far Hollow’s gift',
+    );
+    expect(CROOKED_ATTIC_TEXT.cloak("Lantern Keeper's Cloak")).toBe(
+      '🧥 Lantern Keeper’s Cloak to wear',
+    );
     expect(CROOKED_ATTIC_TEXT.faint(1)).toMatch(/1 more room right/);
     expect(CROOKED_ATTIC_TEXT.faint(3)).toMatch(/3 more rooms right/);
   });

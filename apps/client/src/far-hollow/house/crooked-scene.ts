@@ -7,7 +7,8 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import type { Scene } from '@babylonjs/core/scene';
@@ -60,7 +61,7 @@ import { echoShape } from './crooked-echo-kit.js';
 import { atticChestPoint, atticParts, atticRoom, scrapsLeft } from './crooked-attic.js';
 import { buildBigChest } from '../../hollowed/cellar-kit.js';
 import { CellarChests } from '../../hollowed/cellar-chests.js';
-import { vinyl } from '../../map/map-scene.js';
+import { overlayMaterial, vinyl } from '../../map/map-scene.js';
 import type { EchoSpot } from './crooked-echoes.js';
 
 // The Crooked House's 3D view (#306 6c): the rooms of one floor, each one
@@ -78,8 +79,10 @@ const LIGHTS_BY_TIER: Record<QualityTier, number> = { low: 2, medium: 3, high: 4
 /** A Relight board's flare where its thing stands (#306 6f). */
 const RELIT = {
   ms: 1800, // TUNE
+  /** Its size, metres. */
+  radius: 0.55, // TUNE
   /** How far past its size it swells as it lights. */
-  swell: 1.2, // TUNE
+  swell: 0.5, // TUNE
   /** Metres over the floor. */
   height: 0.95, // TUNE
 } as const;
@@ -165,6 +168,12 @@ export class CrookedScene {
   #keyShown: { at: FloorPoint; from: number } | null = null;
   /** A board just relit: its glow swells, then settles. */
   #relitShown: { room: string; from: number } | null = null;
+  /** When the last moment (a bloom, a relit board, the attic's chest) began, for `devMomentAt`. */
+  #momentFrom: number | null = null;
+  /** Dev only (captures, #306 6f): the moments drawn this long after they began, or on the clock (null). */
+  #pin: number | null = null;
+  /** The moments' clock: the frame's time, or the pinned one. */
+  #clock = 0;
   #drawCalls = 0;
   #triangles = 0;
   readonly #look = new Vector3();
@@ -234,15 +243,15 @@ export class CrookedScene {
       chests.setEnabled(false);
       this.#attic = { room: attic.id, body, chests };
     }
-    // The lantern's own glow, so a relit board compiles nothing new as it plays.
+    // A soft warm glow: a disc that always faces the camera, bright in the
+    // middle and fading to nothing at its rim (vertex alpha, the overlay
+    // material the cellar's sparkles use). Built with the scene, so a relit
+    // board compiles nothing as it plays.
+    const relitMat = overlayMaterial(scene, 'crooked-relit');
     for (const room of CROOKED_HOUSE.rooms) {
       for (const thing of room.things.filter((t) => t.kind === 'relight')) {
-        const mesh = CreateSphere(
-          `crooked-relit-${room.id}`,
-          { diameter: 0.4, segments: 8 },
-          scene,
-        );
-        mesh.material = this.#glowMat;
+        const mesh = relitDisc(scene, `crooked-relit-${room.id}`);
+        mesh.material = relitMat;
         mesh.isPickable = false;
         mesh.setEnabled(false);
         const at = thingPoint(room, thing);
@@ -324,10 +333,9 @@ export class CrookedScene {
    * motion. Call it before the view that opened it is shown.
    */
   openAtticChest(): void {
-    this.#attic?.chests.update(
-      [atticSpot(true)],
-      this.#options.reducedMotion ? null : performance.now(),
-    );
+    const at = performance.now();
+    this.#momentFrom = at;
+    this.#attic?.chests.update([atticSpot(true)], this.#options.reducedMotion ? null : at);
   }
 
   /** The attic's chest shows only with the attic, open as the house says. */
@@ -365,11 +373,12 @@ export class CrookedScene {
   bloom(room: string): void {
     if (this.#options.reducedMotion) return;
     this.#bloom = { room, from: performance.now() };
+    this.#momentFrom = this.#bloom.from;
   }
 
   #bloomJoy(): number {
     if (!this.#bloom) return 1;
-    const t = Math.min(1, (performance.now() - this.#bloom.from) / BLOOM.ms);
+    const t = Math.min(1, Math.max(0, (this.#clock - this.#bloom.from) / BLOOM.ms));
     return Math.round(t * BLOOM.steps) / BLOOM.steps;
   }
 
@@ -389,6 +398,7 @@ export class CrookedScene {
     if (!glow || this.#options.reducedMotion) return;
     glow.mesh.scaling.setAll(0);
     this.#relitShown = { room, from: performance.now() };
+    this.#momentFrom = this.#relitShown.from;
   }
 
   hideKey(): void {
@@ -448,8 +458,22 @@ export class CrookedScene {
   }
 
   /** Steps the camera, the bloom and the key; true while anything still moves (keep drawing). */
-  step(dt: number, now: number): boolean {
+  /**
+   * Dev only (captures, #306 6f): draws the last moment (a bloom's colour
+   * roll, a relit board's glow, the attic chest's lid and sparkles) `ms`
+   * after it began, so every phone shoots the same instant; null runs it on
+   * the clock again.
+   */
+  devMomentAt(ms: number | null): void {
+    this.#pin = ms;
+  }
+
+  step(dt: number, frameNow: number): boolean {
     let moving = false;
+    // The moments run on the frame's clock, or a pinned instant (captures).
+    const now =
+      this.#pin !== null && this.#momentFrom !== null ? this.#momentFrom + this.#pin : frameNow;
+    this.#clock = now;
     const g = this.#goal;
     const s = this.#shot;
     if (s !== g) {
@@ -672,6 +696,19 @@ function roomKey(room: CrookedRoom, view: CrookedHouseView, joy: number): string
   // The attic's page brightens once every scrap is found (#306 6f).
   const page = room.kind === 'attic' ? `-p${String(scrapsLeft(view) === 0)}` : '';
   return `${room.id}-j${String(Math.round(joy * 100))}-${fixed}-${doors}${page}`;
+}
+
+/** A relit board's glow: a camera-facing disc, warm and opaque in the middle, clear at the rim. */
+function relitDisc(scene: Scene, name: string): Mesh {
+  const mesh = CreateDisc(name, { radius: RELIT.radius, tessellation: 28 }, scene);
+  const n = mesh.getTotalVertices();
+  const colors: number[] = [];
+  // The disc's first vertex is its middle; the rest are its rim.
+  for (let i = 0; i < n; i++) colors.push(1, 0.74, 0.36, i === 0 ? 0.9 : 0);
+  mesh.setVerticesData(VertexBuffer.ColorKind, colors);
+  mesh.hasVertexAlpha = true;
+  mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  return mesh;
 }
 
 /** The attic's big chest as a cellar spot, so `CellarChests` draws its lid and moment. */
