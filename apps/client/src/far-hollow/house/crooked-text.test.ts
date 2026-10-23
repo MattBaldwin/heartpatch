@@ -71,10 +71,16 @@ describe('the Crooked House’s words (#306 6c)', () => {
     expect([...named].filter((p) => !drawn.has(p))).toEqual([]);
   });
 
+  it('keeps a title’s emoji on the line with its last word', () => {
+    expect(CROOKED_TEXT.bloomTitle('Parlour')).toBe('The Parlour is put right!\u00a0🌈');
+    expect(CROOKED_TEXT.keyTitle('Brass Key')).toMatch(/!\u00a0🗝️$/);
+  });
+
   it('keeps the words kind and short', () => {
     const lines = [
       ...Object.values(CROOKED_TEXT).flatMap((w) => (typeof w === 'string' ? [w] : [])),
       CROOKED_TEXT.locked('Brass Key'),
+      ...CROOKED_TEXT.mapHint,
       CROOKED_TEXT.bloomTitle('Sewing Room'),
       CROOKED_TEXT.keyLine('the sewing basket'),
       CROOKED_TEXT.sleeping('the dark closet', 'Light', '✨'),

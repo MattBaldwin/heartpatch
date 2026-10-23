@@ -211,7 +211,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     keysPill,
   );
   const tabs = el('div', { class: 'crooked-tabs', role: 'tablist', 'data-testid': 'crooked-tabs' });
-  const mapHint = el('p', { class: 'crooked-map-hint' }, T.mapHint);
+  const mapHint = el(
+    'p',
+    { class: 'crooked-map-hint', 'data-testid': 'crooked-map-hint' },
+    ...T.mapHint.map((line) => el('span', { class: 'crooked-map-hint-line' }, line)),
+  );
   const stickBase = el('div', {
     class: 'crooked-stick',
     'aria-hidden': 'true',

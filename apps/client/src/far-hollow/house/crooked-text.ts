@@ -4,6 +4,9 @@ import type { CrookedTarget } from './crooked-plan.js';
 
 // The Crooked House's words (#306 6c), style guide: cozy, short, kind. Pure.
 
+/** A no-break space: a title's emoji never wraps onto a line of its own. */
+const KEEP = '\u00a0';
+
 export const CROOKED_TEXT = {
   back: 'Back',
   map: 'Map',
@@ -26,20 +29,25 @@ export const CROOKED_TEXT = {
   sleeping: (sleeper: string, element: string, icon: string) =>
     `${capital(sleeper)} won't budge. A ${element} friend could help ${icon}`,
   sleepingAction: (icon: string) => `Who can help? ${icon}`,
-  keyTitle: (name: string) => `You found the ${name}! 🗝️`,
+  keyTitle: (name: string) => `You found the ${name}!${KEEP}🗝️`,
   keyLine: (thing: string) => `It was in ${thing} all along.`,
   keepIt: 'Keep it',
-  bloomTitle: (room: string) => `The ${room} is put right! 🌈`,
+  bloomTitle: (room: string) => `The ${room} is put right!${KEEP}🌈`,
   bloomLine: 'The colour came back. Your lantern will always burn here now.',
   bloomFound: (n: number) =>
     n === 1 ? 'You found something too! 🎒' : `You found ${String(n)} things too! 🎒`,
   notYet: 'Take the far road first! The Crooked House waits at the end 🕯️',
   yay: 'Yay!',
-  caught: 'Peekaboo! 👻',
+  caught: `Peekaboo!${KEEP}👻`,
   caughtLine: 'Whoops! Back to the light 🕯️',
   stepping: 'Tiptoe, tiptoe…',
   mapTitle: (floor: string) => `🗺️ ${floor}`,
-  mapHint: 'Colour = put right · Grey = still dark · Tap a lit room to go there',
+  /** The map's legend, one idea a line. */
+  mapHint: [
+    'Colour = put right',
+    'Grey = still dark',
+    'Tap a lit room to go there',
+  ] as readonly string[],
   mapDark: 'That room is still dark. Walk there with your lantern! 🕯️',
   mapClose: 'Back to the room',
   floors: ['Ground', 'Upstairs', 'Attic'] as readonly string[],

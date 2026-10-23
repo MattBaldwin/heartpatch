@@ -167,6 +167,10 @@ body:has(.crooked:not([hidden])) .auth-chip {
   color: #3a2a1a;
 }
 
+.crooked-map-hint-line {
+  display: block;
+}
+
 .crooked-map-hint {
   position: fixed;
   z-index: 5;

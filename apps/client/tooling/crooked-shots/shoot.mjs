@@ -10,6 +10,7 @@
 // `?tier=`, which the file name says. Headless Chromium draws with
 // SwiftShader (software WebGL2); frame times here say nothing about a device.
 import { chromium } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -23,6 +24,8 @@ const ALL_DEVICES = {
   se: { width: 375, height: 667, dpr: 2 },
 };
 const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 
 async function until(page, fn, arg, timeout = 180_000) {
@@ -91,7 +94,13 @@ async function signUpAndMakePatch(page, name) {
 
 /** The sheet's "Go inside", into the house. */
 async function goInside(page) {
-  await until(page, () => window.__heartpatch?.map?.()?.id);
+  // Back on the patch after a reload (the game lands on the last one), or from the lobby.
+  await until(page, () => window.__heartpatch?.map?.()?.id, undefined, 20_000).catch(async () => {
+    const lobby = page.getByTestId('lobby');
+    await lobby.getByRole('button', { name: /Crooked Patch/ }).click();
+    await lobby.getByRole('button', { name: 'Visit patch' }).click();
+    await until(page, () => window.__heartpatch?.map?.()?.id);
+  });
   await page.evaluate(() => window.__heartpatch?.farHollowDev?.().openSheet());
   await page.getByTestId('far-hollow-inside').click({ timeout: 60_000 });
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.scene?.rooms?.length > 0);
@@ -142,6 +151,19 @@ async function walkToParlour(page) {
   await page.mouse.up();
 }
 
+/**
+ * A fresh house for `name` on its patch (dev database only): every device
+ * plays the same patch's season, so every capture shows the same state.
+ */
+function resetHouse(name) {
+  execFileSync('psql', [DATABASE_URL, '-v', `name=${name}`, '-f', '-'], {
+    input: [
+      "DELETE FROM far_hollow_rooms WHERE user_id IN (SELECT id FROM users WHERE username = :'name');",
+      "DELETE FROM far_hollow_state WHERE user_id IN (SELECT id FROM users WHERE username = :'name');",
+    ].join('\n'),
+  });
+}
+
 const stats = [];
 async function shot(page, device, name) {
   if (ONLY && !ONLY.has(name)) return;
@@ -172,11 +194,29 @@ const browser = await chromium.launch({
   executablePath: process.env.PW_CHROMIUM_EXECUTABLE ?? '/opt/pw-browsers/chromium',
   args,
 });
+// One player and one patch for every device (sign up at the first device's size).
+const statePath = path.join(OUT, '.state.json');
+const name = `crook_${Date.now().toString(36)}`;
+let mapId;
+{
+  const first = ALL_DEVICES[DEVICES[0]];
+  const context = await browser.newContext({
+    viewport: { width: first.width, height: first.height },
+    deviceScaleFactor: first.dpr,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  mapId = await signUpAndMakePatch(page, name);
+  await context.storageState({ path: statePath });
+  await context.close();
+}
 for (const device of DEVICES) {
   const size = ALL_DEVICES[device];
   for (const motion of ['no-preference', 'reduce']) {
     if (motion === 'reduce' && ONLY && !ONLY.has('reduced')) continue;
     const context = await browser.newContext({
+      storageState: statePath,
       viewport: { width: size.width, height: size.height },
       deviceScaleFactor: size.dpr,
       isMobile: true,
@@ -185,7 +225,8 @@ for (const device of DEVICES) {
     });
     const page = await context.newPage();
     page.on('pageerror', (e) => console.error('[pageerror]', e.message));
-    const mapId = await signUpAndMakePatch(page, `crook_${Date.now().toString(36)}${device[0]}`);
+    resetHouse(name);
+    await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
     const arrived = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, {});
     if (arrived.status !== 201) throw new Error(JSON.stringify(arrived));
     await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
