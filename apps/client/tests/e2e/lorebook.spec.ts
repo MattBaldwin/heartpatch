@@ -1,9 +1,9 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { nearestFirst, walkTo } from './explore-walk.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { realTapAt } from './touch.js';
 import { closeTrays, trayButton } from './trays.js';
 
 /**
@@ -190,11 +190,13 @@ test("explore's find card says where a page went and opens it in the Lorebook", 
   });
 
   // Explore the home tile (as explore.spec.ts does) and search a hand spot.
+  // The tap is dispatched in the page, as there: a Playwright press during a
+  // slow WebKit frame lifts late and the map takes it for a long press.
   const box = (await page.locator('#game').boundingBox())!;
   const explore = page.getByTestId('tile-explore');
   await expect(async () => {
     if ((await hook<{ selected: string | null }>(page, 'map'))?.selected == null) {
-      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
     }
     await expect(explore).toBeVisible({ timeout: 5_000 });
   }).toPass(slow);
