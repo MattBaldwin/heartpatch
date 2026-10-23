@@ -123,8 +123,8 @@ export interface CrookedScreen {
   devPlace: (x: number, z: number) => void;
 }
 
-/** The HUD's top and bottom, as shares of the screen's height, kept clear of the fitted room. */
-const HUD = { top: 110, bottom: 240, mapTop: 150, mapBottom: 110 } as const; // TUNE: CSS px
+/** A fitted room keeps this clear of the HUD, CSS px. */
+const HUD_GAP = 8; // TUNE
 /** A lift's hold, ms (the design: hold to lift). */
 const HOLD_MS = 650; // TUNE
 /** A small word (a fix, a door) shows this long, ms. */
@@ -369,13 +369,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function startHold(): void {
     action.classList.add('crooked-holding');
-    const since = performance.now();
+    // The hold puts right the thing it started on, or nothing (the Keeper walked on).
+    const on = target;
     hold = {
-      since,
+      since: performance.now(),
       timer: setTimeout(() => {
         hold = null;
         action.classList.remove('crooked-holding');
-        if (target) act(target);
+        if (on && sameTarget(on, target)) act(on);
       }, HOLD_MS),
     };
   }
@@ -724,20 +725,36 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const box = mapShown ? floorBox(floor) : room.box;
+    const bands = hudBands(h);
     const shot = fitShot(
       box,
-      {
-        aspect: w / h,
-        fov: s.fov,
-        top: (mapShown ? HUD.mapTop : HUD.top) / h,
-        bottom: (mapShown ? HUD.mapBottom : HUD.bottom) / h,
-      },
+      { aspect: w / h, fov: s.fov, top: bands.top / h, bottom: bands.bottom / h },
       mapShown ? CROOKED_CAMERA.mapPitch : CROOKED_CAMERA.pitch,
       mapShown ? CROOKED_CAMERA.mapMargin : CROOKED_CAMERA.margin,
     );
     s.frame(shot, cut);
     options.invalidate();
     wake();
+  }
+
+  /**
+   * The HUD's bands at the top and the bottom, CSS px, measured from the
+   * screen as the Keeper's house does (the safe area and a phone's size
+   * included). The big button keeps its place while idle (hidden, not
+   * removed), so the room doesn't jump as it comes and goes.
+   */
+  function hudBands(height: number): { top: number; bottom: number } {
+    const bottomOf = (e: HTMLElement) => (e.hidden ? 0 : e.getBoundingClientRect().bottom);
+    const topOf = (e: HTMLElement) => (e.hidden ? height : e.getBoundingClientRect().top);
+    const top = Math.max(
+      bottomOf(roomPill),
+      bottomOf(putRight),
+      bottomOf(keysPill),
+      bottomOf(tabs),
+    );
+    const below = mapShown ? [mapHint, mapButton] : [action, stickBase, mapButton];
+    const bottom = height - Math.min(...below.map(topOf));
+    return { top: Math.max(0, top + HUD_GAP), bottom: Math.max(0, bottom + HUD_GAP) };
   }
 
   function showMap(on: boolean): void {
@@ -803,7 +820,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     // A card (a key, a bloom) has the bottom of the screen to itself.
     const words = target && !mapShown && cards.length === 0 ? targetWords(target) : null;
     const show = words !== null && words.action !== '';
-    action.hidden = !show;
+    // Idle, the big button keeps its place (the fitted room is measured round it).
+    action.classList.toggle('crooked-idle', !show);
+    action.hidden = mapShown;
     action.disabled = working;
     actionLabel.textContent = show ? words.action : '';
     action.classList.toggle('crooked-hold', show && words.hold);
@@ -888,7 +907,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       el('p', { class: 'crooked-card-line' }, line),
       ok,
     );
-    action.hidden = true;
+    action.classList.add('crooked-idle');
     bubble.hidden = true;
     wake();
   }
@@ -993,6 +1012,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     close,
     setMap: (id) => {
       if (isOpen && id !== mapId) hide();
+      // An open still waiting on its read never lands on a patch that went away.
+      else if (!isOpen && id === null) generation += 1;
     },
     devPlace: (x, z) => {
       const h = house();
@@ -1026,7 +1047,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
             ? { kind: 'thing', id: t.thing.id }
             : { kind: 'door', id: t.door.id, state: t.state.kind }
           : null,
-        action: action.hidden ? null : actionLabel.textContent,
+        action:
+          action.hidden || action.classList.contains('crooked-idle')
+            ? null
+            : actionLabel.textContent,
         bubble: bubble.hidden ? null : bubble.textContent,
         card: cards[0]?.kind ?? null,
         keys: h?.keys.length ?? 0,

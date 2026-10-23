@@ -1,5 +1,6 @@
 import type { CrookedHouseView, CrookedRoom, CrookedThingKind } from '@heartpatch/shared';
-import { CROOKED_HOUSE } from '@heartpatch/shared';
+import { CROOKED_HOUSE, GAME_DATA } from '@heartpatch/shared';
+import { ELEMENT_GLYPH } from '../../ui/glyphs.js';
 import type { CrookedTarget } from './crooked-plan.js';
 
 // The Crooked House's words (#306 6c), style guide: cozy, short, kind. Pure.
@@ -12,7 +13,6 @@ export const CROOKED_TEXT = {
   map: 'Map',
   mapOpen: 'The dollhouse map',
   tiptoe: 'Tiptoe',
-  tiptoeOn: 'Tiptoeing… 🤫',
   keysLabel: (n: number, total: number) => `${String(n)} of ${String(total)} keys found`,
   keys: (n: number, total: number) => `${String(n)} of ${String(total)}`,
   putRight: (n: number, total: number) => `${String(n)} of ${String(total)} put right`,
@@ -40,7 +40,6 @@ export const CROOKED_TEXT = {
   yay: 'Yay!',
   caught: `Peekaboo!${KEEP}👻`,
   caughtLine: 'Whoops! Back to the light 🕯️',
-  stepping: 'Tiptoe, tiptoe…',
   mapTitle: (floor: string) => `🗺️ ${floor}`,
   /** The map's legend, one idea a line. */
   mapHint: [
@@ -49,7 +48,6 @@ export const CROOKED_TEXT = {
     'Tap a lit room to go there',
   ] as readonly string[],
   mapDark: 'That room is still dark. Walk there with your lantern! 🕯️',
-  mapClose: 'Back to the room',
   floors: ['Ground', 'Upstairs', 'Attic'] as readonly string[],
 } as const;
 
@@ -70,16 +68,11 @@ export function thingAction(kind: CrookedThingKind): { label: string; hold: bool
   return ACTIONS[kind];
 }
 
-/** An element's name and icon, for a sleeping door. */
-const ELEMENTS: Record<string, { name: string; icon: string }> = {
-  fire: { name: 'Fire', icon: '🔥' },
-  leaf: { name: 'Leaf', icon: '🌿' },
-  water: { name: 'Water', icon: '💧' },
-  light: { name: 'Light', icon: '✨' },
-};
+const ELEMENT_NAMES = new Map<string, string>(GAME_DATA.elements.map((e) => [e.id, e.name]));
 
+/** An element's name and icon (the game's own), for a sleeping door. */
 export function elementWords(power: string): { name: string; icon: string } {
-  return ELEMENTS[power] ?? { name: capital(power), icon: '✨' };
+  return { name: ELEMENT_NAMES.get(power) ?? capital(power), icon: ELEMENT_GLYPH[power] ?? '✨' };
 }
 
 /** A key's name by id. */

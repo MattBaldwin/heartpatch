@@ -212,7 +212,12 @@ body:has(.crooked:not([hidden])) .auth-chip {
   border-radius: 50%;
   background: #ffb866;
   box-shadow: 0 4px 10px rgb(0 0 0 / 35%);
-  transition: transform 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-stick-knob {
+    transition: transform 120ms ease-out;
+  }
 }
 
 .crooked-stick-on .crooked-stick-knob {
@@ -292,6 +297,11 @@ body:has(.crooked:not([hidden])) .auth-chip {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+.crooked-action.crooked-idle {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .crooked-action:disabled {
