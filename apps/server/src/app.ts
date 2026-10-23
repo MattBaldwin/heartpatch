@@ -460,7 +460,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
               clock,
               battles,
               ...publish,
-              log: (message, error) => app.log.error({ err: error }, message),
+              log: (message, error) => {
+                app.log.error({ err: error }, message);
+              },
             }),
             {
               hooks: authHooks,

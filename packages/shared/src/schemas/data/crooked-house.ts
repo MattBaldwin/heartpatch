@@ -24,7 +24,13 @@ export type CrookedSide = z.infer<typeof CrookedSideSchema>;
  * with a button): drag to straighten, hold to lift, stroke to dust, tap to
  * a rhythm, or a Relight board (#306 6f).
  */
-export const CrookedThingKindSchema = z.enum(['straighten', 'lift', 'rub', 'tap-rhythm', 'relight']);
+export const CrookedThingKindSchema = z.enum([
+  'straighten',
+  'lift',
+  'rub',
+  'tap-rhythm',
+  'relight',
+]);
 export type CrookedThingKind = z.infer<typeof CrookedThingKindSchema>;
 
 /** A point in a room, metres from its centre (x east, z north). */
@@ -136,17 +142,35 @@ export const CrookedHouseSchema = z
     echoLoops: z.array(EchoLoopSchema),
   })
   .superRefine((house, ctx) => {
-    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+    const issue = (message: string) => {
+      ctx.addIssue({ code: 'custom', message });
+    };
     const rooms = new Map(house.rooms.map((r) => [r.id, r]));
     const keyIds = new Set(house.keys.map((k) => k.id));
     const unique = (what: string, ids: readonly string[]) => {
       if (new Set(ids).size !== ids.length) issue(`duplicate ${what} id`);
     };
-    unique('room', house.rooms.map((r) => r.id));
-    unique('door', house.doors.map((d) => d.id));
-    unique('key', house.keys.map((k) => k.id));
-    unique('echo loop', house.echoLoops.map((l) => l.id));
-    for (const room of house.rooms) unique(`${room.id} thing`, room.things.map((t) => t.id));
+    unique(
+      'room',
+      house.rooms.map((r) => r.id),
+    );
+    unique(
+      'door',
+      house.doors.map((d) => d.id),
+    );
+    unique(
+      'key',
+      house.keys.map((k) => k.id),
+    );
+    unique(
+      'echo loop',
+      house.echoLoops.map((l) => l.id),
+    );
+    for (const room of house.rooms)
+      unique(
+        `${room.id} thing`,
+        room.things.map((t) => t.id),
+      );
     const start = rooms.get(house.start);
     if (!start || start.kind !== 'main') issue(`start "${house.start}" must be a main room`);
     if (house.rooms.filter((r) => r.kind === 'attic').length !== 1) issue('exactly one attic');

@@ -127,8 +127,7 @@ const ROOMS = new Map(HOUSE.rooms.map((r) => [r.id, r]));
 const BLOOMING = HOUSE.rooms.filter((r) => r.kind === 'main' && r.things.length > 0);
 const LORE_TITLES = new Map(LORE_PAGES.map((p) => [p.id, p.title]));
 const ELEMENT_NAMES = new Map(GAME_DATA.elements.map((e) => [e.id, e.name]));
-const index = <T extends { id: string }>(list: readonly T[], id: string) =>
-  list.findIndex((x) => x.id === id);
+const index = (list: readonly { id: string }[], id: string) => list.findIndex((x) => x.id === id);
 
 /** My progress through the house, as stored. */
 interface HouseRows {
@@ -160,7 +159,7 @@ function litRooms(rooms: ReadonlyMap<string, FarHollowRoomRow>): Set<string> {
 /** My house as the client sees it: never where a key still hides, never a chest's odds. */
 function houseViewOf(rows: HouseRows, season: CrookedHouseSeason, at: Date): CrookedHouseView {
   const { state, rooms } = rows;
-  const ids = <T extends { id: string }>(list: readonly T[], mask: number) =>
+  const ids = (list: readonly { id: string }[], mask: number) =>
     list.filter((_, i) => hasBit(mask, i)).map((x) => x.id);
   return {
     room: roomOf(state),
@@ -179,7 +178,10 @@ function houseViewOf(rows: HouseRows, season: CrookedHouseSeason, at: Date): Cro
           bloomed: r.id === HOUSE.start || (row?.bloomedAt ?? null) !== null,
         };
       }),
-    echoes: HOUSE.echoLoops.map((loop) => ({ loop: loop.id, ...season.echoes[loop.id]! })),
+    echoes: HOUSE.echoLoops.flatMap((loop) => {
+      const phase = season.echoes[loop.id];
+      return phase ? [{ loop: loop.id, ...phase }] : [];
+    }),
     serverTime: at.toISOString(),
   };
 }
@@ -566,7 +568,8 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
         const door = doorHere(state, request.door);
         if (door.key === undefined) throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.notKeyDoor);
         const keyBit = index(HOUSE.keys, door.key);
-        const houseKey = HOUSE.keys[keyBit]!;
+        const houseKey = HOUSE.keys[keyBit];
+        if (!houseKey) throw new Error(`unlock: no key ${door.key}`);
         if (!hasBit(state.keys, keyBit)) {
           throw new AppError('CONFLICT', FAR_HOLLOW_MESSAGES.noKey(houseKey.name));
         }
@@ -734,16 +737,17 @@ export function createFarHollowService(options: FarHollowServiceOptions): FarHol
         const patch: FarHollowStatePatch = { keys, unlocked };
         if (request.nearlyDone) {
           // Every room right but the last thing of one (the target, or the last to bloom).
+          const fallback = BLOOMING.at(-1);
+          if (!fallback) throw new Error('devArrive: no room blooms');
           const last =
-            target && target.kind === 'main' && target.things.length > 0
-              ? target
-              : BLOOMING[BLOOMING.length - 1]!;
+            target && target.kind === 'main' && target.things.length > 0 ? target : fallback;
           const rows = await repo.lockRooms(
             key,
             BLOOMING.map((r) => r.id),
           );
           for (const row of rows) {
-            const room = ROOMS.get(row.roomId)!;
+            const room = ROOMS.get(row.roomId);
+            if (!room) continue;
             if (room.id !== last.id) {
               await repo.setRoom(key, {
                 roomId: room.id,

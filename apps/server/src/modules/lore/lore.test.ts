@@ -224,9 +224,12 @@ describe.skipIf(!url)('the Lorebook (needs DATABASE_URL)', () => {
       'little-guardians',
       'hollows',
     ]);
-    expect(body.total).toBe(15);
+    expect(body.total).toBe(16);
+    // Three a chapter, and the Hollows' fourth: the Crooked House's (#306 6b).
     expect(body.slots.map((s) => `${s.chapter}#${String(s.order)}`)).toEqual(
-      body.chapters.flatMap((c) => [1, 2, 3].map((n) => `${c.id}#${String(n)}`)),
+      body.chapters.flatMap((c) =>
+        (c.id === 'hollows' ? [1, 2, 3, 4] : [1, 2, 3]).map((n) => `${c.id}#${String(n)}`),
+      ),
     );
     const mossy = LORE_PAGES.find((p) => p.id === 'under-a-mossy-rock')!;
     expect(body.slots.find((s) => s.id === mossy.id)).toEqual({

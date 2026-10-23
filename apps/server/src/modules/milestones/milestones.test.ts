@@ -243,6 +243,13 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     actorUserId: who.id,
     payload: { userId: who.id, itemId, source: 'gather', refId: randomUUID() },
   });
+  /** The Crooked House's attic chest opened (#306 6b): the far Hollow put right this season. */
+  const houseDone = (mapId: string, who: Player): NewGameEvent => ({
+    mapId,
+    type: 'journey.completed',
+    actorUserId: who.id,
+    payload: { userId: who.id, season: 'halloween', year: 2026, lorePage: null },
+  });
   const gathered = (mapId: string, who: Player): NewGameEvent => ({
     mapId,
     type: 'resource.gathered',
@@ -405,6 +412,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     await append(dressed(mapId, kid, ['a', 'b', 'c', 'd', 'e', 'f', 'g']));
     await append(found(mapId, kid, 'cloud-onesie'));
     await append(captured(mapId, kid, 'heartlet'));
+    await append(houseDone(mapId, kid));
     await run(mapId);
     const after = await milestones(server, kid);
     expect(after.tracks.filter((t) => t.hidden)).toHaveLength(0);
