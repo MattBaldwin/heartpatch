@@ -20,6 +20,9 @@ import {
   upkeepMornings,
   upkeepOrder,
   warehouseDelivers,
+  warehouseWindows,
+  deliveredProgress,
+  deliveringAt,
   type UpkeepPlanEntry,
 } from './production.js';
 
@@ -200,6 +203,82 @@ describe('warehouseDelivers (#601)', () => {
     expect(warehouseDelivers(from, { ...standing, cutOff: true }, RESOURCE_BUILDING_RULES)).toBe(
       false,
     );
+  });
+});
+
+describe('warehouseWindows (#601 PR 8)', () => {
+  it('delivers from when it was placed until it paused, less a cut-off homestead', () => {
+    const placed = { placedAtMs: T0, pausedAtMs: null, homesteadPause: null };
+    expect(warehouseWindows(placed)).toEqual([{ fromMs: T0, toMs: null }]);
+    expect(warehouseWindows({ ...placed, pausedAtMs: T0 + HOUR })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+    ]);
+    // Cut off and joined again: two stretches.
+    const cut = { fromMs: T0 + HOUR, toMs: T0 + 3 * HOUR };
+    expect(warehouseWindows({ ...placed, homesteadPause: cut })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+      { fromMs: T0 + 3 * HOUR, toMs: null },
+    ]);
+    // Still cut off: only before it.
+    expect(warehouseWindows({ ...placed, homesteadPause: { ...cut, toMs: null } })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+    ]);
+    // A cut-off from before it stood changes nothing; a pause before the cut-off ends it.
+    expect(
+      warehouseWindows({ ...placed, homesteadPause: { fromMs: T0 - 2 * HOUR, toMs: T0 - HOUR } }),
+    ).toEqual([{ fromMs: T0, toMs: null }]);
+    expect(warehouseWindows({ ...placed, pausedAtMs: T0 + 30 * MIN, homesteadPause: cut })).toEqual(
+      [{ fromMs: T0, toMs: T0 + 30 * MIN }],
+    );
+    expect(deliveringAt([{ fromMs: T0, toMs: T0 + HOUR }], T0 + HOUR)).toBe(false);
+    expect(deliveringAt([{ fromMs: T0, toMs: T0 + HOUR }], T0)).toBe(true);
+  });
+});
+
+describe('deliveredProgress (#601 PR 8)', () => {
+  // 10-minute cycles, 6 of them stored (an hour).
+  const base = {
+    sinceMs: T0,
+    nowMs: T0 + 3 * HOUR,
+    pausedAtMs: null,
+    cycleSeconds: 600,
+    maxCycles: 6,
+    homesteadPause: null,
+  };
+
+  it('is productionProgress without a Warehouse', () => {
+    expect(deliveredProgress(base, [], JOB_RULES)).toEqual(productionProgress(base, JOB_RULES));
+  });
+
+  it('never fills while the Warehouse delivers', () => {
+    const p = deliveredProgress(base, [{ fromMs: T0 - HOUR, toMs: null }], JOB_RULES);
+    expect(p).toMatchObject({ cycles: 18, full: false, nextReadyMs: T0 + 3 * HOUR + 10 * MIN });
+  });
+
+  it('caps from the instant it stops delivering, starting empty', () => {
+    // Delivered for 1 h 25 min: 8 cycles, the part-done one carried on. Then
+    // capped at 6 from there: full long before now, so it waits.
+    const stop = T0 + HOUR + 25 * MIN;
+    const p = deliveredProgress(base, [{ fromMs: T0 - HOUR, toMs: stop }], JOB_RULES);
+    expect(p.cycles).toBe(8 + 6);
+    expect(p).toMatchObject({ full: true, nextReadyMs: null, nextSinceMs: base.nowMs });
+    expect(p.finishedMs.slice(7, 9)).toEqual([T0 + 80 * MIN, T0 + 90 * MIN]);
+  });
+
+  it('uncaps from when it was built: what was full stays, then it all comes', () => {
+    // Full (6) an hour in; built at 2 h: time past full never pays, then an hour delivered.
+    const p = deliveredProgress(base, [{ fromMs: T0 + 2 * HOUR, toMs: null }], JOB_RULES);
+    expect(p).toMatchObject({ cycles: 6 + 6, full: false });
+    expect(p.finishedMs.at(-1)).toBe(T0 + 3 * HOUR);
+  });
+
+  it('still stops at an upkeep pause of its own', () => {
+    const p = deliveredProgress(
+      { ...base, pausedAtMs: T0 + 30 * MIN },
+      [{ fromMs: T0 - HOUR, toMs: null }],
+      JOB_RULES,
+    );
+    expect(p).toMatchObject({ cycles: 3, nextReadyMs: null });
   });
 });
 
