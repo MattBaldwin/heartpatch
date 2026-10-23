@@ -318,7 +318,12 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         .then((result) => {
           if (!result) return;
           error.textContent = result.error;
-          if (result.field) controls.get(result.field)?.focus();
+          const target = result.field ? controls.get(result.field) : undefined;
+          // A tucked select can't show focus; the first pill stands in for it.
+          (target?.classList.contains('auth-pill-select-tucked')
+            ? form.querySelector<HTMLElement>('.auth-pill-input')
+            : target
+          )?.focus();
         })
         .finally(() => {
           busy = false;
