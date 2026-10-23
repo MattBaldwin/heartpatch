@@ -116,7 +116,7 @@ The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every
 - Batch tool calls.
 - Don't re-read large files.
 - **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session, capped at about 200k tokens of context, with a handoff comment when work is left (§2, "Lane size and handoffs").
-- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8).
+- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8). **A supervisor must never reach context compaction** (owner, 2026-10-23): hand off well before it. Supervisor 9 reached 735k context and cost $719.
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
@@ -234,7 +234,7 @@ The supervisor keeps this list current. Remove items as they land.
 - **Lessons (2026-10-22):**
   - **Long lanes are expensive.** Lanes past ~200k context cost $50–66.
   - **Reviewers fix only blockers.** 5–7 review rounds were spent on nits. Nits are logged as follow-ups, not fixed in the PR.
-  - **Hand off the supervisor near 400k.** Supervisor 9 ran 11 days to 700k+.
+  - **Hand off the supervisor near 400k, and never reach compaction (owner, 2026-10-23).** Supervisor 9 ran 11 days to 735k context and cost $719.
   - **Owner questions:** ask ONE at a time, recommended option first. Open the artifact and render-check images before asking. Never ask the owner for perf or flag tests. Flag any lane over ~$20.
 - **Lessons (2026-10-11):**
   - **Superseded runs look like failures.** A run replaced by a newer one can show as red or stopped. Check whether it was superseded before treating it as broken.
