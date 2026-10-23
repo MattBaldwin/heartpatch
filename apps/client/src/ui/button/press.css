@@ -1,0 +1,60 @@
+/* The press feel (Controls A): every button squishes a little under the
+   finger and springs back on release, so a tap is felt on a silent iPhone
+   too (no haptics in iOS Safari, and the tick is muted by the ring switch).
+   Every selector sits wholly inside :where(), at zero specificity, so any
+   feature rule still wins.
+
+   It uses `scale`, not `transform`, so a button positioned with a transform
+   (translate(-50%), say) doesn't jump. Buttons that already squish with
+   their own :active transform are left out, so nothing presses twice;
+   `press.test.ts` fails if a new one isn't listed here. Controls B removes
+   them as those buttons move onto .hp-button. */
+:where(button, [role='button']) {
+  transition: scale var(--hp-press-out);
+}
+
+:where(
+  :is(button, [role='button']):active:not(
+      :disabled,
+      [aria-disabled='true'],
+      .auth-button,
+      .battle-button,
+      .battle-move,
+      .chat-pick,
+      .gallery-panel button,
+      .house-bed,
+      .house-button,
+      .house-floor,
+      .house-gift-line,
+      .house-pick,
+      .house-walk,
+      .keeper-style,
+      .keeper-swatch,
+      .keeper-tile,
+      .land-chip-visit,
+      .lobby-back,
+      .lobby-map,
+      .starter-choice,
+      .tray-row,
+      .tray-section > button,
+      .wardrobe-chip,
+      .wardrobe-item
+    )
+) {
+  scale: var(--hp-press-scale);
+  filter: brightness(0.96);
+  transition: scale var(--hp-press-in);
+}
+
+/* Reduced motion: no squish, only a soft darken while pressed. */
+@media (prefers-reduced-motion: reduce) {
+  :where(button, [role='button']),
+  :where(:is(button, [role='button']):active) {
+    scale: none;
+    transition: none;
+  }
+
+  :where(:is(button, [role='button']):active:not(:disabled, [aria-disabled='true'])) {
+    filter: brightness(0.92);
+  }
+}

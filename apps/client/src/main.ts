@@ -65,6 +65,7 @@ import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { createHeartCoinsScreen } from './heart-coins/heart-coins.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
+import { installPressFeel } from './ui/button/button.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/wardrobe-return.js';
 import { createTrays, trayRow } from './ui/trays/trays.js';
@@ -114,6 +115,8 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 // A tap sticks to the button it landed on, even one still sliding in (ui/sticky-taps.ts).
 installStickyTaps(document);
+// Every button squishes under the finger (ui/button/press.css).
+installPressFeel(document);
 
 const params = new URLSearchParams(window.location.search);
 // `?rareglow=0` turns the rare glow off for a device frame-rate check with `?fps=1` (#391).

@@ -44,21 +44,8 @@
 }
 
 .house-back {
-  flex: none;
-  min-width: 88px;
-  min-height: 48px;
-  padding: var(--hp-pad-y) 18px;
-  border: none;
-  border-radius: 999px;
-  background: #fde8f0;
-  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
-  color: #7a2d55;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
+  /* The look is the shared .hp-back (ui/button); this only places it. */
   pointer-events: auto;
-  touch-action: manipulation;
 }
 
 .house-pill {
