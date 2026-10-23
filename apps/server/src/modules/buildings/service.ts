@@ -25,6 +25,7 @@ import {
   planFuelAll,
   removeRefund,
   spentOn,
+  suitsLand,
   upgradeCost,
   type Building,
   type FuelAllResponse,
@@ -61,6 +62,7 @@ import {
 } from '../inventory/service.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { clearGoingOn } from '../clearing/repo.js';
+import { settleTileLeftovers } from '../clearing/service.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createFactoryRepo } from '../factory/repo.js';
 import { applyBatchPlans, planGrants, stopPlan, type BatchPlan } from '../factory/service.js';
@@ -77,7 +79,6 @@ import {
   productionAt,
   productionBeforeUnpaid,
   productionView,
-  suitsLand,
   upkeepOf,
   warehouseIn,
   warehouseView,
@@ -608,11 +609,15 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       return homeView(store, db, mapId, user, now(), map);
     },
 
-    place: (user, mapId, request) => {
+    place: async (user, mapId, request) => {
       const building = requireBuildingData(request.buildingId);
       // Fences go on a tile's edges, through the fences module (#203).
       if (building.kind === 'fence') throw new AppError('CONFLICT', MESSAGES.fenceOnEdge);
       if (!isBuildable(HOME_BASE_RULES, building)) throw new AppError('CONFLICT', MESSAGES.notYet);
+      // A clear that's done but not settled yet finishes first, as before a
+      // clear starts (#242): the kid saw it done, so the land is cleared
+      // land when the build reads it, and stays so even if the build is refused.
+      if (await settleTileLeftovers(db, user, mapId, request, now())) published(mapId);
       return command(
         user,
         mapId,

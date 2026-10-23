@@ -1,4 +1,10 @@
-import type { BuildingProduction, HeartCoins, MyBuilding } from '@heartpatch/shared';
+import {
+  tileLand,
+  type BuildingProduction,
+  type HeartCoins,
+  type MyBuilding,
+} from '@heartpatch/shared';
+import { CLEAR_TEXT } from '../inventory/clear-model.js';
 import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_BUILDINGS,
@@ -9,9 +15,7 @@ import {
   resourceBuildingFor,
   resourceCard,
   resourceEffect,
-  tileLand,
   upkeepSection,
-  waitingResourceBuilding,
   type ResourceTile,
 } from './resource-model.js';
 
@@ -129,9 +133,58 @@ describe('resourceBuildCards: the Build sheet (#601 PR 7)', () => {
     expect(none({ homestead: 'paused' })).toEqual([]);
     expect(none({ buildings: [{ spot: 0 }] })).toEqual([]);
     expect(none({ clearing: { readyAt: '2026-10-22T13:00:00Z' } })).toEqual([]);
-    // A spot to clear first: Clear land's cards show it waiting instead.
-    expect(none({ nodeResource: 'stone' })).toEqual([]);
-    expect(waitingResourceBuilding({ terrain: 'hills' })?.id).toBe('stone-quarry');
+  });
+
+  it.each(RESOURCE_BUILDINGS.map((b) => [b.name, b] as const))(
+    '%s waits on its own land with a spot, and goes up once that land is cleared',
+    (_name, b) => {
+      const spot = tile({ terrain: b.terrain, nodeResource: 'something' });
+      expect(resourceBuildCards(spot, { seasons: HALLOWEEN }, me)).toEqual([
+        expect.objectContaining({ id: b.id, blocked: CLEAR_TEXT.firstLine }),
+      ]);
+      const cleared = tile({ terrain: 'clearing', clearedFrom: b.terrain });
+      expect(resourceBuildCards(cleared, { seasons: HALLOWEEN }, me)).toEqual([
+        expect.objectContaining({ id: b.id, blocked: null }),
+      ]);
+    },
+  );
+
+  it('shows the matching one held back on a spot to clear first (owner bug)', () => {
+    // The owner's tile: forest with its Timber spot.
+    const spot = tile({ terrain: 'forest', nodeResource: 'timber' });
+    const cards = resourceBuildCards(spot, { seasons: [] }, me);
+    expect(cards).toEqual([
+      expect.objectContaining({
+        id: 'woodcutters-hut',
+        blocked: CLEAR_TEXT.firstLine,
+        cost: { timber: 20, stone: 15 },
+      }),
+    ]);
+    expect(cards[0]?.effect).toMatch(/^🪵 \d+ Timber an hour/);
+    // Old forest waits for its Ember Kiln, not the Hut.
+    expect(
+      resourceBuildCards(
+        tile({ terrain: 'old-forest', nodeResource: 'emberwood' }),
+        { seasons: [] },
+        me,
+      ).map((c) => c.id),
+    ).toEqual(['ember-kiln']);
+    // Out of season says so first: clearing wouldn't help yet.
+    const fields = tile({ terrain: 'pumpkin-fields', nodeResource: 'pumpkins' });
+    expect(resourceBuildCards(fields, { seasons: [] }, me)[0]?.blocked).toMatch(/only!/);
+    expect(resourceBuildCards(fields, { seasons: HALLOWEEN }, me)[0]?.blocked).toMatch(
+      /Clear this land first/,
+    );
+    // Land no tool clears keeps its spot: nothing.
+    expect(
+      resourceBuildCards(
+        tile({ terrain: 'junipers-gap', nodeResource: 'stone' }),
+        { seasons: [] },
+        me,
+      ),
+    ).toEqual([]);
+    // Still nothing off my joined homestead.
+    expect(resourceBuildCards({ ...spot, homestead: 'paused' }, { seasons: [] }, me)).toEqual([]);
   });
 });
 
