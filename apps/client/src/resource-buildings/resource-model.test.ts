@@ -2,6 +2,7 @@ import type { BuildingProduction, HeartCoins, MyBuilding } from '@heartpatch/sha
 import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_BUILDINGS,
+  RESOURCE_TEXT,
   moveInOrder,
   outOfSeason,
   producedLines,
@@ -129,6 +130,20 @@ describe('resourceBuildCards: the Build sheet (#601 PR 7)', () => {
     expect(none({ buildings: [{ spot: 0 }] })).toEqual([]);
     expect(none({ clearing: { readyAt: '2026-10-22T13:00:00Z' } })).toEqual([]);
   });
+
+  it.each(RESOURCE_BUILDINGS.map((b) => [b.name, b] as const))(
+    '%s waits on its own land with a spot, and goes up once that land is cleared',
+    (_name, b) => {
+      const spot = tile({ terrain: b.terrain, nodeResource: 'something' });
+      expect(resourceBuildCards(spot, { seasons: HALLOWEEN }, me)).toEqual([
+        expect.objectContaining({ id: b.id, blocked: RESOURCE_TEXT.clearFirst }),
+      ]);
+      const cleared = tile({ terrain: 'clearing', clearedFrom: b.terrain });
+      expect(resourceBuildCards(cleared, { seasons: HALLOWEEN }, me)).toEqual([
+        expect.objectContaining({ id: b.id, blocked: null }),
+      ]);
+    },
+  );
 
   it('shows the matching one held back on a spot to clear first (owner bug)', () => {
     // The owner's tile: forest with its Timber spot.
