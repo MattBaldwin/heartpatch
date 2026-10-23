@@ -94,7 +94,9 @@ export const BuildingProductionSchema = z.object({
   upkeepRank: z.number().int().min(0).nullable(),
   /**
    * The Warehouse delivers its output straight to the bag (#601 PR 8): it's
-   * level 3+ and my Warehouse stands, paid and joined. `maxCycles` is null then.
+   * level 3+, working (not paused for upkeep or napping), and my Warehouse
+   * stands, paid and joined. `maxCycles` is null whenever my Warehouse
+   * covers it, even while it sleeps.
    */
   delivering: z.boolean(),
   /** The next morning its upkeep is charged (#601). Optional for an older server. */

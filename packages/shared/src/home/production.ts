@@ -253,13 +253,9 @@ export function deliveredProgress(
         .filter((ms): ms is number => ms !== null && ms > facts.sinceMs && ms < facts.nowMs),
     ),
   ].sort((a, b) => a - b);
-  let sinceMs = facts.sinceMs;
-  let fromMs = facts.sinceMs;
-  const finishedMs: number[] = [];
-  let cycles = 0;
-  let last: WorkProgress | null = null;
-  for (const nowMs of [...cuts, facts.nowMs]) {
-    last = productionProgress(
+  // One piece, from `fromMs` to `nowMs`, counting from `sinceMs`.
+  const piece = (sinceMs: number, fromMs: number, nowMs: number) =>
+    productionProgress(
       {
         ...facts,
         sinceMs,
@@ -268,14 +264,23 @@ export function deliveredProgress(
       },
       rules,
     );
-    cycles += last.cycles;
-    finishedMs.push(...last.finishedMs);
-    sinceMs = last.nextSinceMs;
+  let sinceMs = facts.sinceMs;
+  let fromMs = facts.sinceMs;
+  const finishedMs: number[] = [];
+  let cycles = 0;
+  for (const nowMs of cuts) {
+    const p = piece(sinceMs, fromMs, nowMs);
+    cycles += p.cycles;
+    finishedMs.push(...p.finishedMs);
+    sinceMs = p.nextSinceMs;
     fromMs = nowMs;
   }
-  // The loop runs at least once (for `nowMs`).
-  const end = last as WorkProgress;
-  return { ...end, cycles, finishedMs };
+  const end = piece(sinceMs, fromMs, facts.nowMs);
+  return {
+    ...end,
+    cycles: cycles + end.cycles,
+    finishedMs: [...finishedMs, ...end.finishedMs],
+  };
 }
 
 /** A map-local moment: a date and the minute of that day (0–1439). */

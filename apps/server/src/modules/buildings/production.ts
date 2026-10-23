@@ -208,7 +208,8 @@ export function productionView(
     paidThrough: row.upkeepPaidThrough,
     pausedAt: row.pausedAt?.toISOString() ?? null,
     upkeepRank: row.upkeepRank,
-    delivering: made.maxCycles === null,
+    // Only while it works: one asleep for its own upkeep or cut off sends nothing.
+    delivering: made.maxCycles === null && row.pausedAt === null && !napping,
     nextMorningAt: nextMorningAt(at, HOLLOW_RULES.morningMinute, timeZone).toISOString(),
     seasonEndsAt: seasonEnd?.toISOString() ?? null,
   };

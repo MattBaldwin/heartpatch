@@ -350,6 +350,48 @@ describe.skipIf(!url)('the Warehouse (#601 PR 8, needs DATABASE_URL)', () => {
     expect((await coins(server, kid, mapId)).upkeep?.pausedThisMorning).toEqual([]);
   });
 
+  it('a Warehouse woken by a top-up delivers again from the wake', async () => {
+    const { server, kid, mapId, warehouse, hut } = await stocked(3);
+    // Asleep from Oct 7's morning, as above.
+    await grantCoins(server, kid, mapId, 4 * (L3.upkeep + WAREHOUSE_UPKEEP) + L3.upkeep);
+    clock.setTime(Date.parse('2026-10-07T16:00:00Z'));
+    await settle(server, kid, mapId);
+    expect((await row(warehouse.id)).pausedAt).not.toBeNull();
+    // Topped up: the next settle wakes it, free.
+    await grantCoins(server, kid, mapId, WAREHOUSE_UPKEEP);
+    await settle(server, kid, mapId);
+    expect((await row(warehouse.id)).pausedAt).toBeNull();
+    expect(mine(await home(server, kid, mapId), hut.id).production).toMatchObject({
+      delivering: true,
+      maxCycles: null,
+    });
+    // Four more days, all paid: past the hut's storage again, and nothing
+    // was ever full, so every cycle since it was built has landed.
+    await grantCoins(server, kid, mapId, 4 * (L3.upkeep + WAREHOUSE_UPKEEP));
+    clock.setTime(Date.parse('2026-10-11T16:00:00Z'));
+    const done = await settle(server, kid, mapId);
+    expect(timberOf(done, hut.id)).toBeGreaterThan(L3.storage * SOURCE.perCycle);
+    expect(await producedTimber(hut.id)).toBe(
+      cyclesIn(clock.getTime() - Date.parse(START), L3) * SOURCE.perCycle,
+    );
+  });
+
+  it("a hut asleep for its own upkeep isn't delivering", async () => {
+    const { server, kid, mapId, hut } = await stocked(3);
+    // Ranked last and short: the Warehouse pays, the hut falls asleep.
+    const ordered = await call(server, 'POST', `/maps/${mapId}/buildings/upkeep-order`, kid, {
+      buildingIds: [(await home(server, kid, mapId)).buildings.find((b) => b.warehouse)!.id],
+    });
+    expect(ordered.statusCode, ordered.body).toBe(200);
+    await grantCoins(server, kid, mapId, WAREHOUSE_UPKEEP);
+    clock.setTime(Date.parse('2026-10-03T16:00:00Z'));
+    await settle(server, kid, mapId);
+    expect(mine(await home(server, kid, mapId), hut.id).production).toMatchObject({
+      delivering: false,
+      pausedAt: morning('2026-10-03'),
+    });
+  });
+
   it('lost Warehouse: half back, L3 huts keep running capped', async () => {
     const { server, kid, mapId, warehouse, hut } = await stocked(3);
     // Its mornings are paid through Oct 6; lost that evening, 102 hours in.
