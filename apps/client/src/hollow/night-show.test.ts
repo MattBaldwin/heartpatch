@@ -18,7 +18,15 @@ import { createDarkLand, darkTiles, dashedHexRing, heartSeedOf, placeOf } from '
 import { SHOW } from './hollow-config.js';
 import { HollowLayer, standOf, stepPose } from './hollow-layer.js';
 import { createNightShow, type ShowStage } from './night-show.js';
-import { firesLine, NIGHT_TEXT, reachText, STAGES, stageNights, wildLine } from './night-text.js';
+import {
+  firesLine,
+  NIGHT_TEXT,
+  reachText,
+  STAGES,
+  stageNights,
+  upkeepPausedLine,
+  wildLine,
+} from './night-text.js';
 import { beatIndexAt, joinNames, narrate, showBeats, SHOW_TEXT } from './show-timeline.js';
 
 const ME = userId(1);
@@ -195,6 +203,27 @@ describe('the night words', () => {
     ).toBe(
       '2 bits of your dark land went wild again. Your fire, buildings and Warehouse there came back to your bag. What your buildings made came home too!',
     );
+  });
+
+  it("tells the buildings that need 💛 this morning, in the upkeep list's words (#601 PR 9)", () => {
+    expect(upkeepPausedLine([])).toBeNull();
+    expect(upkeepPausedLine(['stone-quarry'])).toEqual({
+      icon: '💛',
+      text: "Your Stone Quarry needs 💛: this morning's coins ran short. It wakes up as soon as you have enough!",
+    });
+    expect(upkeepPausedLine(['stone-quarry', 'warehouse'])?.text).toBe(
+      "Your Stone Quarry and Warehouse need 💛: this morning's coins ran short. They wake up as soon as you have enough!",
+    );
+    // Two of a kind, or more than three, by count.
+    expect(upkeepPausedLine(['stone-quarry', 'stone-quarry'])?.text).toMatch(
+      /^2 of your buildings need 💛/,
+    );
+    expect(
+      upkeepPausedLine(['stone-quarry', 'warehouse', 'water-well', 'greenhouse'])?.text,
+    ).toMatch(/^4 of your buildings need 💛/);
+    for (const ids of [['stone-quarry'], ['warehouse', 'greenhouse']]) {
+      expect(findAvoidedWords(upkeepPausedLine(ids)?.text ?? '')).toEqual([]);
+    }
   });
 
   it('uses kind words only (style guide §9) and keeps the chips short', () => {

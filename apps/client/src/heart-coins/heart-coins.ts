@@ -27,6 +27,19 @@ export interface HeartCoinsScreenOptions {
   onUpkeepOrder?: () => void;
   /** The seasons on at an instant on the patch on screen (the upkeep list's sleeping Pumpkin Barn). */
   seasons?: (at: Date) => readonly string[] | null;
+  /** A fresh reply came in (`pausedThisMorning` may have changed: the morning card reads it). */
+  onCoins?: () => void;
+}
+
+/**
+ * The buildings that fell asleep for unpaid upkeep at a patch's latest
+ * morning (#601 PR 9), for the morning card. `morning` names that morning
+ * (the reply's next one), so the card tells it once.
+ */
+export interface UpkeepPaused {
+  readonly mapId: string;
+  readonly morning: string;
+  readonly buildingIds: readonly string[];
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -50,6 +63,13 @@ export interface HeartCoinsScreen {
   openUpkeep: () => void;
   /** Reads the balance of the patch on screen again (a failed read keeps the last one). */
   refresh: () => Promise<void>;
+  /**
+   * The patch on screen's buildings that fell asleep for upkeep this
+   * morning, from its latest reply (null: none read yet). The bag's settle
+   * charges the morning and then reads again (`refresh`), so a kid back
+   * after days away sees the morning that settle paid.
+   */
+  readonly upkeepPaused: UpkeepPaused | null;
   /** A patch-list card's "💛 42", filled in once its balance arrives. */
   lobbyLine: (mapId: string) => HTMLElement;
   close: () => void;
@@ -81,6 +101,7 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
     sheet.open();
     void store.read();
   };
+  let upkeepPaused: UpkeepPaused | null = null;
   const mapPill = createHeartPill('map', openSheet);
   const homePill = createHeartPill('home', openSheet);
   const store = createHeartCoinsStore({
@@ -89,7 +110,20 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
       mapPill.set(balance);
       homePill.set(balance);
     },
-    onCoins: sheet.show,
+    onCoins: (coins) => {
+      sheet.show(coins);
+      const mapId = store.mapId;
+      const upkeep = coins.upkeep;
+      upkeepPaused =
+        mapId === null || !upkeep
+          ? null
+          : {
+              mapId,
+              morning: upkeep.nextMorningAt,
+              buildingIds: (upkeep.pausedThisMorning ?? []).map((p) => p.buildingId),
+            };
+      options.onCoins?.();
+    },
     // Offline or logged out: the pill keeps the last balance; the sheet says why.
     onError: sheet.fail,
   });
@@ -104,10 +138,14 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
     homePill: homePill.node,
     setUser: (user) => {
       sheet.close();
+      upkeepPaused = null;
       store.setUser(user?.id ?? null);
     },
     setMap: (mapId) => {
-      if (mapId !== store.mapId) sheet.close();
+      if (mapId !== store.mapId) {
+        sheet.close();
+        upkeepPaused = null;
+      }
       void store.setMap(mapId);
     },
     refresh: store.read,
@@ -132,6 +170,9 @@ export function createHeartCoinsScreen(options: HeartCoinsScreenOptions): HeartC
       return line;
     },
     close: sheet.close,
+    get upkeepPaused() {
+      return upkeepPaused;
+    },
     get isOpen() {
       return sheet.isOpen;
     },

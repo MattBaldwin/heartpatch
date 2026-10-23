@@ -82,6 +82,15 @@ import {
 } from './home-name-view.js';
 import { HOUSE_TEXT, houseCard } from '../house/house-view.js';
 import { resourceCardLines } from '../resource-buildings/resource-card.js';
+import { warehouseCardLines } from '../resource-buildings/warehouse-card.js';
+import {
+  WAREHOUSE_TEXT,
+  deliveryMark,
+  myWarehouse,
+  warehouseBuildCard,
+  warehouseCard,
+  warehouseHere,
+} from '../resource-buildings/warehouse-model.js';
 import {
   RESOURCE_TEXT,
   resourceBuildCards,
@@ -1603,6 +1612,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // A resource building (#601) fills its homestead the same way.
     const producing = resourceHere(home, tile);
     if (producing) return resourceNodes(tile, producing);
+    // So does my Warehouse (#601 PR 9).
+    const store = warehouseHere(home, tile);
+    if (store) return warehouseNodes(tile, store);
     const grounds = groundsTileOffer(tile, home);
     if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
       return groundsNodes(tile, grounds);
@@ -1739,7 +1751,32 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-resource-upkeep-order', 'small'),
       );
     }
-    return standingNodes(b, 'resource', 'resource', card ? resourceCardLines(card) : [], actions);
+    // The Warehouse's 📦 mark on a level 3+ building (#601 PR 9).
+    const asleep =
+      card?.state === 'paused' || card?.state === 'napping' || card?.state === 'dormant';
+    const mark = deliveryMark(b, myWarehouse(current)?.warehouse, asleep);
+    return standingNodes(
+      b,
+      'resource',
+      'resource',
+      card ? resourceCardLines(card, mark) : [],
+      actions,
+    );
+  }
+
+  /**
+   * My Warehouse on its homestead (#601 PR 9): delivering for my level 3+
+   * resource buildings, paused for upkeep, or napping. Upkeep opens the
+   * Heart Coins sheet's order (owner decision Q5); it has no levels to upgrade.
+   */
+  function warehouseNodes(tile: PublicTile, b: MyBuilding): Node[] {
+    const current = home;
+    if (!current) return [];
+    const card = warehouseCard(b, tile, current);
+    const actions: Node[] = options.onUpkeep
+      ? [tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-warehouse-upkeep-order', 'small')]
+      : [];
+    return standingNodes(b, 'resource', 'warehouse', card ? warehouseCardLines(card) : [], actions);
   }
 
   /**
@@ -2063,6 +2100,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const factory = factoryTileOffer(tile, home);
       // The one resource building this homestead's land takes (#601 PR 7).
       const producing = resourceBuildCards(tile, home, user.id);
+      // And my one Warehouse, till I have it (#601 PR 9).
+      const store = warehouseBuildCard(tile, home, user.id);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
       return [
         ...(fire.kind === 'build'
@@ -2095,6 +2134,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ]
           : []),
         ...producing,
+        ...(store ? [store] : []),
       ];
     },
     build: async (card, tile) => {
@@ -2108,13 +2148,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       const isFactory = factory?.kind === 'build' && factory.building.id === card.id;
       const producing =
         user && resourceBuildCards(tile, current, user.id).find((c) => c.id === card.id);
+      const store = user ? warehouseBuildCard(tile, current, user.id) : null;
+      const isStore = store?.id === card.id;
       const spot = isGrounds
         ? grounds.spot
         : isFactory
           ? factory.spot
           : producing
             ? producing.spot
-            : 0;
+            : isStore
+              ? store.spot
+              : 0;
       try {
         const next = await sendCommand(
           sendDeps,
@@ -2131,7 +2175,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ? HOME_TEXT.factoryBuilt
             : producing
               ? RESOURCE_TEXT.built(producing.name)
-              : HOME_TEXT.fireBuilt;
+              : isStore
+                ? WAREHOUSE_TEXT.built
+                : HOME_TEXT.fireBuilt;
       } catch (err) {
         if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
           home = null;

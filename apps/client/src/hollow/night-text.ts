@@ -1,4 +1,5 @@
 import {
+  GAME_DATA,
   HOLLOW_RULES,
   type HollowRules,
   type HollowStage,
@@ -149,4 +150,27 @@ export function wildLine(reports: readonly MorningReport[]): ReportLine | null {
       ? ` What your ${lost.makers === 1 ? 'building' : 'buildings'} made came home too!`
       : '';
   return { icon: '🌿', text: `${land}${back}${made}` };
+}
+
+const BUILDING_NAMES = new Map(GAME_DATA.buildings.map((b) => [b.id, b.name]));
+
+/**
+ * The morning card's line for buildings that fell asleep for unpaid upkeep
+ * this morning (#601, `HeartCoins.upkeep.pausedThisMorning`), in the upkeep
+ * list's own words ("needs 💛"): "Your Stone Quarry needs 💛: this morning's
+ * coins ran short. It wakes up as soon as you have enough!" Up to three by
+ * name; more, or two of one kind, by count.
+ */
+export function upkeepPausedLine(buildingIds: readonly string[]): ReportLine | null {
+  if (buildingIds.length === 0) return null;
+  const names = buildingIds.map((id) => BUILDING_NAMES.get(id) ?? 'building');
+  const named = new Set(names).size === names.length && names.length <= 3;
+  const one = buildingIds.length === 1;
+  const who = named
+    ? `Your ${joinNames(names)} ${one ? 'needs' : 'need'}`
+    : `${String(names.length)} of your buildings need`;
+  return {
+    icon: '💛',
+    text: `${who} 💛: this morning's coins ran short. ${one ? 'It wakes' : 'They wake'} up as soon as you have enough!`,
+  };
 }

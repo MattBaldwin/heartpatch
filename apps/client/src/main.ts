@@ -388,6 +388,10 @@ const heartCoins = createHeartCoinsScreen({
     const zone = heartCoinsZone;
     return zone === null ? null : seasonsOn(zone, at);
   },
+  // Buildings paused for upkeep this morning (#601 PR 9): the morning card says so.
+  onCoins: () => {
+    hollow.upkeepChanged();
+  },
 });
 /** The time zone of the patch the Heart Coins sheet shows, or null if not known. */
 let heartCoinsZone: string | null = null;
@@ -800,6 +804,7 @@ const hollow = createHollowScreen({
     lorebook.debug.showing !== null ||
     lorebook.isOpen ||
     milestones.debug.showing !== null,
+  upkeepPaused: () => heartCoins.upkeepPaused,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },

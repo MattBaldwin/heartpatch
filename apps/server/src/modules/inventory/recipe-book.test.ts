@@ -339,6 +339,8 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
       'building:water-well',
       'building:greenhouse',
       'building:pumpkin-barn',
+      // The Warehouse (#601 PR 9) needs Stone and Glimmer.
+      'building:warehouse',
       'recipe:cook-treats',
       'recipe:freeze-water',
       'building:hedge',

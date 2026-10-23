@@ -855,10 +855,10 @@ export class MapScene {
       buildingId: building.buildingId,
       level: building.level,
       lit: building.lit,
-      // A resource building napping (#601): unpaid upkeep, its homestead cut
-      // off, or out of season (a Pumpkin Barn after Halloween).
+      // A resource building or the Warehouse napping (#601): unpaid upkeep,
+      // its homestead cut off, or out of season (a Pumpkin Barn after Halloween).
       asleep:
-        building.kind === 'resource' &&
+        (building.kind === 'resource' || building.kind === 'warehouse') &&
         (building.paused === true ||
           tile.homestead === 'paused' ||
           outOfSeason(building.buildingId, this.seasons)),
