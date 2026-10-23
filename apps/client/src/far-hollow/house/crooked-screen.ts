@@ -844,10 +844,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         renderAction();
       }, NOTE_MS);
     }
+    // VoiceOver reads words said (a fix, a door, a key), not the idle hint as the
+    // Keeper walks. The region turns live before its words change, so they're read.
+    bubble.setAttribute('aria-live', noteText !== '' && text === noteText ? 'polite' : 'off');
     bubble.textContent = text ?? '';
     bubble.hidden = !text;
-    // VoiceOver reads words said (a fix, a door, a key), not the idle hint as the Keeper walks.
-    bubble.setAttribute('aria-live', noteText !== '' && text === noteText ? 'polite' : 'off');
   }
 
   const say = (text: string) => {
