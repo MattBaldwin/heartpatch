@@ -17,9 +17,14 @@ import {
   productionYield,
   resumeSinceMs,
   storageCycles,
+  suitsLand,
+  tileLand,
   upkeepMornings,
   upkeepOrder,
   warehouseDelivers,
+  warehouseWindows,
+  deliveredProgress,
+  deliveringAt,
   type UpkeepPlanEntry,
 } from './production.js';
 
@@ -38,6 +43,28 @@ const level = (id: string, n: number) => {
   if (!l) throw new Error(`no level ${String(n)}`);
   return l;
 };
+
+describe('the land a resource building stands on (#601 Q1, Q2)', () => {
+  it('is cleared land as what it was cleared from, else the terrain', () => {
+    expect(tileLand({ terrain: 'clearing', clearedFrom: 'old-forest' })).toBe('old-forest');
+    expect(tileLand({ terrain: 'clearing', clearedFrom: null })).toBe('clearing');
+    expect(tileLand({ terrain: 'meadow' })).toBe('meadow');
+    // Only cleared land remembers: a stray `clearedFrom` on other land is ignored.
+    expect(tileLand({ terrain: 'meadow', clearedFrom: 'forest' })).toBe('meadow');
+  });
+
+  it('suits the building of that land, and no other', () => {
+    const woodcutter = hut('woodcutters-hut');
+    expect(suitsLand(woodcutter, { terrain: 'forest', clearedFrom: null })).toBe(true);
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: 'forest' })).toBe(true);
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: 'old-forest' })).toBe(false);
+    expect(suitsLand(hut('ember-kiln'), { terrain: 'clearing', clearedFrom: 'old-forest' })).toBe(
+      true,
+    );
+    expect(suitsLand(woodcutter, { terrain: 'clearing', clearedFrom: null })).toBe(false);
+    expect(suitsLand(woodcutter, null)).toBe(false);
+  });
+});
 
 describe('what a resource building works (#601)', () => {
   it("is its terrain's land yield, with the homestead's +1 a cycle", () => {
@@ -200,6 +227,82 @@ describe('warehouseDelivers (#601)', () => {
     expect(warehouseDelivers(from, { ...standing, cutOff: true }, RESOURCE_BUILDING_RULES)).toBe(
       false,
     );
+  });
+});
+
+describe('warehouseWindows (#601 PR 8)', () => {
+  it('delivers from when it was placed until it paused, less a cut-off homestead', () => {
+    const placed = { placedAtMs: T0, pausedAtMs: null, homesteadPause: null };
+    expect(warehouseWindows(placed)).toEqual([{ fromMs: T0, toMs: null }]);
+    expect(warehouseWindows({ ...placed, pausedAtMs: T0 + HOUR })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+    ]);
+    // Cut off and joined again: two stretches.
+    const cut = { fromMs: T0 + HOUR, toMs: T0 + 3 * HOUR };
+    expect(warehouseWindows({ ...placed, homesteadPause: cut })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+      { fromMs: T0 + 3 * HOUR, toMs: null },
+    ]);
+    // Still cut off: only before it.
+    expect(warehouseWindows({ ...placed, homesteadPause: { ...cut, toMs: null } })).toEqual([
+      { fromMs: T0, toMs: T0 + HOUR },
+    ]);
+    // A cut-off from before it stood changes nothing; a pause before the cut-off ends it.
+    expect(
+      warehouseWindows({ ...placed, homesteadPause: { fromMs: T0 - 2 * HOUR, toMs: T0 - HOUR } }),
+    ).toEqual([{ fromMs: T0, toMs: null }]);
+    expect(warehouseWindows({ ...placed, pausedAtMs: T0 + 30 * MIN, homesteadPause: cut })).toEqual(
+      [{ fromMs: T0, toMs: T0 + 30 * MIN }],
+    );
+    expect(deliveringAt([{ fromMs: T0, toMs: T0 + HOUR }], T0 + HOUR)).toBe(false);
+    expect(deliveringAt([{ fromMs: T0, toMs: T0 + HOUR }], T0)).toBe(true);
+  });
+});
+
+describe('deliveredProgress (#601 PR 8)', () => {
+  // 10-minute cycles, 6 of them stored (an hour).
+  const base = {
+    sinceMs: T0,
+    nowMs: T0 + 3 * HOUR,
+    pausedAtMs: null,
+    cycleSeconds: 600,
+    maxCycles: 6,
+    homesteadPause: null,
+  };
+
+  it('is productionProgress without a Warehouse', () => {
+    expect(deliveredProgress(base, [], JOB_RULES)).toEqual(productionProgress(base, JOB_RULES));
+  });
+
+  it('never fills while the Warehouse delivers', () => {
+    const p = deliveredProgress(base, [{ fromMs: T0 - HOUR, toMs: null }], JOB_RULES);
+    expect(p).toMatchObject({ cycles: 18, full: false, nextReadyMs: T0 + 3 * HOUR + 10 * MIN });
+  });
+
+  it('caps from the instant it stops delivering, starting empty', () => {
+    // Delivered for 1 h 25 min: 8 cycles, the part-done one carried on. Then
+    // capped at 6 from there: full long before now, so it waits.
+    const stop = T0 + HOUR + 25 * MIN;
+    const p = deliveredProgress(base, [{ fromMs: T0 - HOUR, toMs: stop }], JOB_RULES);
+    expect(p.cycles).toBe(8 + 6);
+    expect(p).toMatchObject({ full: true, nextReadyMs: null, nextSinceMs: base.nowMs });
+    expect(p.finishedMs.slice(7, 9)).toEqual([T0 + 80 * MIN, T0 + 90 * MIN]);
+  });
+
+  it('uncaps from when it was built: what was full stays, then it all comes', () => {
+    // Full (6) an hour in; built at 2 h: time past full never pays, then an hour delivered.
+    const p = deliveredProgress(base, [{ fromMs: T0 + 2 * HOUR, toMs: null }], JOB_RULES);
+    expect(p).toMatchObject({ cycles: 6 + 6, full: false });
+    expect(p.finishedMs.at(-1)).toBe(T0 + 3 * HOUR);
+  });
+
+  it('still stops at an upkeep pause of its own', () => {
+    const p = deliveredProgress(
+      { ...base, pausedAtMs: T0 + 30 * MIN },
+      [{ fromMs: T0 - HOUR, toMs: null }],
+      JOB_RULES,
+    );
+    expect(p).toMatchObject({ cycles: 3, nextReadyMs: null });
   });
 });
 

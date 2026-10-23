@@ -259,6 +259,22 @@ async function settleLeftovers(
   });
 }
 
+/**
+ * `settleLeftovers` for another command on the tile, run before its own
+ * transaction: placing a building (#601) finishes the player's clear that's
+ * done but not settled yet, so the land is already cleared when the build
+ * reads it. True when anything changed (the caller publishes).
+ */
+export function settleTileLeftovers(
+  db: Executor,
+  user: PublicUser,
+  mapId: string,
+  at: { q: number; r: number },
+  now: Date,
+): Promise<boolean> {
+  return settleLeftovers(createClearingRepo(db), user, mapId, at.q, at.r, now);
+}
+
 export interface ClearingService {
   /** Starts clearing a homestead the player owns. */
   start: (user: PublicUser, mapId: string, at: StartClearRequest) => Promise<ClearResponse>;

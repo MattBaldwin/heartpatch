@@ -1938,6 +1938,22 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect(locked).toEqual(fireIds);
   });
 
+  it("locks lost land's buildings and their owner's other upkeep buildings in id order (#601 PR 8)", async () => {
+    const { tileIds, fireIds } = await fires();
+    // Make them the owner's upkeep buildings: losing one tile locks all three.
+    await db
+      .update(buildings)
+      .set({ buildingId: 'woodcutters-hut', kind: 'resource' })
+      .where(inArray(buildings.id, fireIds));
+    let locked: string[] = [];
+    await rowsAgainst(lockBuildingRow, fireIds, async () => {
+      locked = (
+        await unplanned((tx) => createBuildingsRepo(tx).lockOnTilesWithUpkeep([tileIds[0]!]))
+      ).map((b) => b.id);
+    });
+    expect(locked).toEqual(fireIds);
+  });
+
   it('locks the fence segments on lost land in id order (fences `lockOnTiles`, #203)', async () => {
     const { mapId, userId, tileIds } = await fires();
     const fenceIds = [randomUUID(), randomUUID(), randomUUID()].sort();
