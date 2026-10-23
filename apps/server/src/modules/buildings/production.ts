@@ -3,7 +3,6 @@ import {
   GAME_DATA,
   JOB_RULES,
   RESOURCE_BUILDING_RULES,
-  activeSeasons,
   inSeason,
   addDays,
   HOLLOW_RULES,
@@ -171,7 +170,7 @@ export function seasonEndsAt(resourceId: string, at: Date, timeZone: string): Da
   if (!resource?.season) return null;
   const today = localDate(at, timeZone);
   const onDay = (day: LocalDate) =>
-    inSeason(resource, new Set(activeSeasons(GAME_DATA.seasons, day).map((x) => x.id)));
+    inSeason(resource, new Set(seasonsOn(morningAt(day, 12 * 60, timeZone), timeZone)));
   if (!onDay(today)) return null;
   // A season runs at most a year.
   for (let n = 1; n <= 366; n += 1) {
@@ -208,8 +207,9 @@ export function productionView(
     paidThrough: row.upkeepPaidThrough,
     pausedAt: row.pausedAt?.toISOString() ?? null,
     upkeepRank: row.upkeepRank,
-    // Only while it works: one asleep for its own upkeep or cut off sends nothing.
-    delivering: made.maxCycles === null && row.pausedAt === null && !napping,
+    // Only while it works: one asleep for its own upkeep, cut off or out of
+    // season sends nothing.
+    delivering: made.maxCycles === null && row.pausedAt === null && canWorkAt(row, at, timeZone),
     nextMorningAt: nextMorningAt(at, HOLLOW_RULES.morningMinute, timeZone).toISOString(),
     seasonEndsAt: seasonEnd?.toISOString() ?? null,
   };
@@ -279,6 +279,12 @@ export interface Produced {
   items: ItemCounts;
 }
 
+/** What `bankOutput` landed, and its event to append. */
+export interface Banked {
+  produced: Produced;
+  event: NewGameEvent<'building.produced'>;
+}
+
 /**
  * Banks a resource building's finished output into its owner's bag (ledger
  * reason `produced`, ref the row) inside the caller's transaction, after the
@@ -291,7 +297,7 @@ export async function bankOutput(
   tx: Executor,
   row: BuildingRow,
   made: ProductionAt,
-): Promise<{ produced: Produced; event: NewGameEvent<'building.produced'> } | null> {
+): Promise<Banked | null> {
   if (made.progress.cycles === 0) return null;
   const producedSince = new Date(made.progress.nextSinceMs);
   await createBuildingsRepo(tx).setProduction(row.id, { producedSince });

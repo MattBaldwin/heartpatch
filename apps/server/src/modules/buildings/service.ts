@@ -81,6 +81,7 @@ import {
   upkeepOf,
   warehouseIn,
   warehouseView,
+  type Banked,
   type ProductionAt,
 } from './production.js';
 import { chargeUpkeep } from './upkeep.js';
@@ -790,7 +791,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           } = await chargeFirst(tx, { id: mapId, timeZone }, user.id, upkeepRows, locked, at);
           const after = warehouseIn(charged);
           const toBank = [row, ...charged.filter((r) => delivered.some((d) => d.id === r.id))];
-          const banks: NonNullable<Awaited<ReturnType<typeof bankOutput>>>[] = [];
+          const banks: Banked[] = [];
           for (const r of toBank) {
             const made = productionAt(r, at, timeZone, after);
             const bank = made ? await bankOutput(tx, r, made) : null;

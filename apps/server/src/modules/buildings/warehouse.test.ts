@@ -445,6 +445,42 @@ describe.skipIf(!url)('the Warehouse (#601 PR 8, needs DATABASE_URL)', () => {
     expect(timberOf(await settle(server, kid, mapId), hut.id)).toBe(L3.storage * SOURCE.perCycle);
   });
 
+  it('an L3 hut lost while its Warehouse stands banks uncapped, then half back', async () => {
+    const { mapId, warehouse, hut } = await stocked(3);
+    await db.execute(
+      `update buildings set upkeep_paid_through = '2026-10-06' where map_id = '${mapId}'`,
+    );
+    clock.setTime(Date.parse('2026-10-06T22:00:00Z'));
+    const plot = (await row(hut.id)).tileId;
+    await withTransaction(db, async (tx) => {
+      const lost = await takeDownOnLostLand(tx, mapId, [plot], clock, ZONE, 'captured');
+      expect(lost.map((l) => [l.event.payload.buildingId, l.delivered.length])).toEqual([
+        [HUT.id, 0],
+      ]);
+      await lockGrantRows(tx, mapId, [
+        ...lost.map((l) => ({ userId: l.ownerUserId, items: l.refund })),
+        ...lostOutputGrants(lost),
+      ]);
+      for (const l of lost) {
+        await grantItems(tx, { mapId, userId: l.ownerUserId }, l.refund, 'build-refund', hut.id);
+      }
+      for (const event of await finishLostBuildings(tx, mapId, lost, clock)) {
+        await appendGameEvent(tx, event);
+      }
+    });
+    const delivered = cyclesIn(clock.getTime() - Date.parse(START), L3);
+    expect(delivered).toBeGreaterThan(L3.storage);
+    expect(await producedTimber(hut.id)).toBe(delivered * SOURCE.perCycle);
+    const refunds = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq }) => and(eq(t.refId, hut.id), eq(t.reason, 'build-refund')),
+    });
+    expect(Object.fromEntries(refunds.map((l) => [l.itemId, l.delta]))).toEqual(
+      removeRefund(HUT, 3, HOME_BASE_RULES),
+    );
+    // The Warehouse stays, untouched.
+    expect((await row(warehouse.id)).pausedAt).toBeNull();
+  });
+
   it('taking the Warehouse down banks what it delivered, then half back', async () => {
     const { server, kid, mapId, warehouse, hut } = await stocked(3);
     await grantCoins(server, kid, mapId, 4 * (L3.upkeep + WAREHOUSE_UPKEEP));
@@ -548,5 +584,16 @@ describe.skipIf(!url)('the Warehouse (#601 PR 8, needs DATABASE_URL)', () => {
     expect(Date.parse(last.seasonEndsAt!)).toBeLessThanOrEqual(Date.parse(last.nextMorningAt!));
     clock.setTime(Date.parse('2026-11-10T17:00:00Z'));
     expect(mine(await home(server, kid, mapId), barn.id).production?.seasonEndsAt).toBeNull();
+  });
+
+  it('a level 3 Pumpkin Barn asleep out of season is not delivering', async () => {
+    const { server, kid, mapId } = await patch();
+    await build(server, kid, mapId, await forest(mapId, kid, 0), { buildingId: WAREHOUSE.id });
+    clock.setTime(Date.parse('2026-11-12T17:00:00Z'));
+    const barn = await build(server, kid, mapId, await forest(mapId, kid, 1, BARN.terrain), {
+      buildingId: BARN.id,
+      level: 3,
+    });
+    expect(barn.production).toMatchObject({ delivering: false, seasonEndsAt: null });
   });
 });
