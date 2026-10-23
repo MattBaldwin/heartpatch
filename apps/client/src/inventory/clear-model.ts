@@ -1,4 +1,3 @@
-import { waitingResourceBuilding } from '../resource-buildings/resource-model.js';
 import {
   CLEARED_TERRAIN,
   CLEARING_RULES,
@@ -77,7 +76,8 @@ export const CLEAR_TEXT = {
   started: 'Clearing! 🌱 It takes a couple of minutes.',
   clearing: (left: string) => `🌱 Clearing… ready in ${left}`,
   clearingDone: '🌱 Clearing… nearly done!',
-  firstLine: 'Clear this land first 🌱',
+  // The server's own line for a build on a spot (`MESSAGES.clearFirst`).
+  firstLine: 'Clear this land first 🌱. Then you can build here!',
   // Clearing is for homesteads (#242, #295); the server says the same.
   notHomestead:
     'Clear land works on homesteads: land that touches your home 🏡. Explore the land between to join it up!',
@@ -212,11 +212,11 @@ export function clearCards(
   // On land with no spot, Clear land comes after the buildings that can go
   // up as it is (the home source's cards come first).
   if (offer.blocked || !clearsFirst(tile)) return [clear];
-  // My one Crafting Factory waits here too until I've built it (#295).
+  // My one Crafting Factory waits here too until I've built it (#295). The
+  // resource building its land takes says so itself (`resourceBuildCards`),
+  // even while Clear land can't start.
   const factory = state.factory ? undefined : FACTORY;
-  // And the resource building its land takes (#601 PR 7).
-  const producing = waitingResourceBuilding(tile);
-  const waiting = [LAND_FIRE, GROUNDS, factory, producing].flatMap((b) =>
+  const waiting = [LAND_FIRE, GROUNDS, factory].flatMap((b) =>
     b
       ? [
           {

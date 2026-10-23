@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   BUILDINGS,
+  CLEARING_RULES,
   EXPLORE_RULES,
   HeartCoinsResponseSchema,
   HOME_BASE_RULES,
@@ -14,6 +15,8 @@ import {
   productionSource,
   removeRefund,
   storageCycles,
+  suitsLand,
+  TERRAINS,
   type HomeResponse,
   type MyBuilding,
   type ResourceBuilding,
@@ -31,7 +34,6 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { finishLostBuildings, lostOutputGrants, takeDownOnLostLand } from './service.js';
-import { suitsLand } from './production.js';
 import { upkeepRefId } from './upkeep.js';
 
 /*
@@ -289,6 +291,132 @@ describe.skipIf(!url)('resource buildings (#601, needs DATABASE_URL)', () => {
     const tile = view.tiles.find((t) => t.q === plot.q && t.r === plot.r)!;
     expect(tile.clearedFrom).toBe('forest');
     expect(tile.buildings[0]).toMatchObject({ id: hut.id, paused: false });
+  });
+
+  describe('on forest the kid cleared through the clear sheet (owner bug, #601)', () => {
+    const AXE_USES = CLEARING_RULES.tools.find((t) => t.id === 'axe')!.uses;
+    const CLEAR_MS = CLEARING_RULES.seconds * 1000;
+
+    const place = (
+      server: FastifyInstance,
+      kid: Player,
+      mapId: string,
+      plot: HomesteadTile,
+      buildingId = HUT.id,
+    ) =>
+      call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
+        buildingId,
+        q: plot.q,
+        r: plot.r,
+        spot: 1,
+      });
+
+    /** A forest (or old forest) homestead with its spot, cleared with an Axe. */
+    async function clearedForest(terrain = 'forest', node = 'timber') {
+      const { server, kid, mapId } = await patch();
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      await setLand(plot, terrain, node);
+      await give(mapId, kid, { axe: AXE_USES });
+      const res = await call(server, 'POST', `/maps/${mapId}/clears`, kid, {
+        q: plot.q,
+        r: plot.r,
+      });
+      expect(res.statusCode, res.body).toBe(201);
+      return { server, kid, mapId, plot };
+    }
+
+    it('builds the moment the clear is ready, with no settle between', async () => {
+      const { server, kid, mapId, plot } = await clearedForest();
+      clock.setTime(Date.parse(START) + CLEAR_MS);
+      const res = await place(server, kid, mapId, plot);
+      expect(res.statusCode, res.body).toBe(201);
+      // The clear finished on the way: its drop banked, its event went out once.
+      const tile = MapViewSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/view`, kid)).json(),
+      ).tiles.find((t) => t.q === plot.q && t.r === plot.r)!;
+      expect(tile).toMatchObject({ terrain: 'clearing', clearedFrom: 'forest', clearing: null });
+      expect(tile.buildings).toHaveLength(1);
+      expect(await eventsOf(mapId, 'tile.cleared')).toHaveLength(1);
+    });
+
+    it('builds on a clear finished long ago', async () => {
+      const { server, kid, mapId, plot } = await clearedForest();
+      clock.setTime(Date.parse(START) + CLEAR_MS);
+      await settle(server, kid, mapId);
+      clock.setTime(Date.parse(START) + 30 * DAY_MS);
+      const res = await place(server, kid, mapId, plot);
+      expect(res.statusCode, res.body).toBe(201);
+    });
+
+    // Every resource building (owner: "all factories, not forest or lake"):
+    // its own cleared land and its own land as it is take it; land cleared
+    // from another terrain doesn't.
+    const TERRAIN_NAMES = new Map(TERRAINS.map((t) => [t.id, t.name]));
+    const FACTORIES = BUILDINGS.filter((b): b is ResourceBuilding => b.kind === 'resource');
+    const otherThan = (b: ResourceBuilding) =>
+      FACTORIES[(FACTORIES.indexOf(b) + 1) % FACTORIES.length]!.terrain;
+    const nodeOf = (terrain: string) =>
+      JOB_RULES.terrainYields.find((y) => y.terrain === terrain)?.resource ?? null;
+
+    it('has a building for every clearable terrain to test', () => {
+      expect(FACTORIES).toHaveLength(7);
+      for (const b of FACTORIES) {
+        expect(CLEARING_RULES.terrains.map((t) => t.terrain)).toContain(b.terrain);
+      }
+    });
+
+    it.each(FACTORIES.map((b) => [b.name, b] as const))(
+      '%s: its own cleared land and its own land yes, land cleared from another no',
+      async (_name, factory) => {
+        const { server, kid, mapId } = await patch();
+        await give(mapId, kid, Object.fromEntries(CLEARING_RULES.tools.map((t) => [t.id, t.uses])));
+        const clearAs = async (nth: number, terrain: string) => {
+          const plot = await makeHomestead(db, mapId, kid.id, clock, nth);
+          await setLand(plot, terrain, nodeOf(terrain));
+          const res = await call(server, 'POST', `/maps/${mapId}/clears`, kid, {
+            q: plot.q,
+            r: plot.r,
+          });
+          expect(res.statusCode, res.body).toBe(201);
+          clock.setTime(clock.getTime() + CLEAR_MS);
+          await settle(server, kid, mapId);
+          return plot;
+        };
+        const own = await clearAs(0, factory.terrain);
+        const other = await clearAs(1, otherThan(factory));
+        const plain = await forest(mapId, kid, 2, factory.terrain);
+
+        const refused = await place(server, kid, mapId, other, factory.id);
+        expect(refused.statusCode, refused.body).toBe(409);
+        // "A Woodcutter's Hut needs a Forest tile!": its own land, by name.
+        const land = TERRAIN_NAMES.get(factory.terrain)!;
+        expect(errorOf(refused).message).toMatch(` ${factory.name} needs a`);
+        expect(errorOf(refused).message).toMatch(` ${land} tile!`);
+        expect((await place(server, kid, mapId, own, factory.id)).statusCode).toBe(201);
+        const asIs = await place(server, kid, mapId, plain, factory.id);
+        expect(asIs.statusCode, asIs.body).toBe(201);
+      },
+    );
+
+    it('builds an Ember Kiln on cleared old forest', async () => {
+      const { server, kid, mapId, plot } = await clearedForest('old-forest', 'emberwood');
+      clock.setTime(Date.parse(START) + CLEAR_MS);
+      await settle(server, kid, mapId);
+      const res = await place(server, kid, mapId, plot, 'ember-kiln');
+      expect(res.statusCode, res.body).toBe(201);
+    });
+
+    it('still refuses the wrong kind on cleared forest', async () => {
+      const { server, kid, mapId, plot } = await clearedForest();
+      clock.setTime(Date.parse(START) + CLEAR_MS);
+      for (const wrong of ['ember-kiln', BARN.id]) {
+        const res = await place(server, kid, mapId, plot, wrong);
+        expect(res.statusCode, res.body).toBe(409);
+        expect(errorOf(res).message).toMatch(/needs an? .+ tile!/);
+      }
+      // The refusals still finished the clear: the land stays cleared, and the Hut goes up.
+      expect((await place(server, kid, mapId, plot)).statusCode).toBe(201);
+    });
   });
 
   it('output lands with the settle and its event, once', async () => {

@@ -354,6 +354,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       rescuer: 1,
       seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
+      'lantern-keeper': 0, // the far Hollow's attic (#306 6b)
       'set-rekindled': 0, // found in the Hollows (#306 PR 5)
     });
     expect(earned(view, 'territory')).toEqual([1]);

@@ -598,9 +598,10 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), season: ContentIdSchema }),
   },
   /**
-   * They searched every spot in this season's far Hollow (#306 PR 6): the
-   * joy is all back. `lorePage` is the season's guaranteed page, found by
-   * that last search's `explore.searched` (null when they had every one).
+   * They opened the Crooked House's attic chest (#306 6b), every room put
+   * right: the joy is all back, once a season. `lorePage` is the season's
+   * guaranteed page, found by the chest's `explore.searched` (null when they
+   * had every one).
    * Members hear who did it.
    */
   'journey.completed': {
@@ -757,6 +758,11 @@ export const GAME_EVENTS = {
       items: z.record(z.string(), z.number().int().min(1)),
       lorePage: ContentIdSchema.nullable(),
       notable: ExploreNotableSchema.nullable(),
+      /**
+       * A search in the Crooked House (#306 6b): a room's bloom or a chest,
+       * placed at the far road's post. Absent everywhere else.
+       */
+      house: z.strictObject({ room: ContentIdSchema }).optional(),
     }),
     public: z.object({
       userId: z.uuid(),

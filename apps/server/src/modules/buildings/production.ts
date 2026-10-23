@@ -62,20 +62,6 @@ export function upkeepOf(row: Pick<BuildingRow, 'buildingId' | 'level'>): number
   return levelOf<{ upkeep: number }>(building.levels, row.level)?.upkeep ?? null;
 }
 
-/**
- * Does a resource building's land suit it (#601, owner decisions Q1, Q2)?
- * Its own terrain, or land cleared from it. (A spot on the tile still needs
- * clearing first: there is no beside-the-spot exception.)
- */
-export function suitsLand(
-  building: Pick<ResourceBuilding, 'terrain'>,
-  land: { terrain: string; clearedFrom: string | null } | null,
-): boolean {
-  return (
-    land !== null && (land.terrain === building.terrain || land.clearedFrom === building.terrain)
-  );
-}
-
 /** A homestead's pause to leave out of the count (#199), or null. */
 export const homesteadPauseOf = (row: Pick<BuildingRow, 'homestead'>): WorkPause | null =>
   row.homestead ? workPauseOf(row.homestead) : null;

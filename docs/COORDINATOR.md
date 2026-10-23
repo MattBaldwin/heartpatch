@@ -22,7 +22,7 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
    - issue-specific guidance
    - build checks, PR rules, and a review loop capped at 4 rounds (a round caused only by merging `main` doesn't count)
 3. **Start it** with `create_session` (source = repo, `outcome_branch` = `issue-<n>-<slug>`, tags `heartpatch:phase-1` and `heartpatch:batch-<k>`). Pick the model per §6.
-4. **Subscribe** to the PR as soon as the session reports `PR #<n> opened`.
+4. **Don't subscribe** to the PR (§5). The lane subscribes to its own PR; pick the PR up from its `opened` report or the next sweep.
 
 **Full send for Phase 1 (owner, 2026-10-11):** the 4-lane cap is lifted until Phase 1 ships (due Oct 31). The separate-folders rule in step 1 still holds. **Every PR gets a fresh lane session**; don't reuse a lane for its next PR.
 
@@ -95,7 +95,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **Sessions can't run WebKit** (only CI can). Client e2e tests assert on the game's own signals (counters, state), never pixel-exact screenshots.
 
-**Don't schedule check-ins to poll sessions** (owner decision). Rely on reports, GitHub events, and session-failure notifications.
+**Check-ins:** the earlier "don't schedule check-ins to poll sessions" rule is superseded by the owner's request for active supervision (2026-10-23): sweep GitHub every ~20 min while lanes are active (§9, "Check-in"). **The supervisor does not subscribe to lane PRs** (owner, 2026-10-23): a PR's events go to one session, and each cost the supervisor about 4k tokens of context. Lanes own their PR subscriptions and report to the supervisor; the supervisor merges on the gates from the sweep.
 
 ## 6. Usage and models (owner decision)
 
@@ -116,7 +116,7 @@ The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every
 - Batch tool calls.
 - Don't re-read large files.
 - **Why lanes are short and fresh:** cache reads cost the same on Opus and Sonnet and dominate lane cost. Every PR gets a fresh lane session, capped at about 200k tokens of context, with a handoff comment when work is left (§2, "Lane size and handoffs").
-- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8).
+- When the supervisor's context gets large (about **400k tokens**, owner decision 2026-10-11), **hand off** to a fresh supervisor session (§8). **A supervisor must never reach context compaction** (owner, 2026-10-23): hand off well before it. Supervisor 9 reached 735k context and cost $719.
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
@@ -174,7 +174,7 @@ Post the verdict comment summarizing each round. Don't merge.
 
 ## 8. Supervisor handoff
 
-1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to, and subscribe the new supervisor to their PRs. Their `@parent` reports and PR subscriptions belong to the session that started them.
+1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to. Their `@parent` reports belong to the session that started them; the lanes keep their own PR subscriptions.
    - **The new supervisor owns re-routing (hard rule).** At every check-in until each lane has confirmed the switch, it reads each lane's recent events (`list_events`, kinds `assistant`) for a `send_message` to `@parent` or to the old supervisor. Any lane that still reports there gets the correction again, and the new supervisor re-checks GitHub for whatever that report said (opened PRs, verdicts, blockers), because the old supervisor may already be archived. Lessons from the supervisor 5 → 6 handoff: two lanes kept reporting to `@parent` after being told, and one report was a deploy blocker.
 2. Make sure everything durable is in the repo: DECISIONS.md, this playbook, and the briefs' carry-over notes (§9).
 3. Start the new supervisor with a compact prompt:
@@ -189,22 +189,19 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 6 handoff, 2026-10-10 ~02:30 UTC):** main `334bcc0`, deployed. Family playtest Oct 16–18 on the live server; Phase 1 due Oct 31. DECISIONS is current through "2026-10-10 — Owner decisions (coordinator)".
-- **Lanes in flight** (each was told to report to supervisor 6; their PRs need a fresh subscription):
-
-  | Lane (session) | PRs and state | What's next |
-  |---|---|---|
-  | #335 explore `session_01S5SgffGk7tXi6bj6dZC1xx` | #339 per-terrain layout: 14/14 green, waiting on its reviewer verdict. #345 sky (owner: "merge it now"): CI finishing at `122162e`. #346 underwater, #350 trail and cave: **on hold, should be drafts.** #347 (Fix: a tile's buildings never draw in explore, because `maps.close()` runs before `options.mapTile()`; `main.ts:531`, `explore-screen.ts:1141/1205`): no PR yet. | Merge #339, #345 and #347 on gates. Owes the BIOME RULES design artifact and answers on capture GPU, tier and DPR. |
-  | #335 art reset `session_01PueHb7QTFgUkvjQGsoJ4QN` | Hero meadow on a shared art kit, plus the dev-only `?tier=` pin. | Render-check its captures (tier labelled), then take them to the owner. Lake, trail and cave (cave second room and tunnel) follow. Unapproved biomes by Oct 15 keep today's explore. |
-  | #340 accessories `session_01FhjFBqdVYSEjZ85QkX4Dit` | #349 dress-up client (owner-approved): went red, fix at `a1be585`; now `51547f8`. | Merge on gates, then archive. If the iPad recipe-book craft timeout repeats, check whether main fails too. |
-  | #29 PvP `session_018USpwEubBSKfGQcHxxV5xJ` | #351 live turn flow (server) with migration 0040: **holds the migration slot.** | Merge on gates. Client PRs need owner-approved shots first (the PvP mockup is approved). |
-  | #32 branching `session_01Kf247AXgxDsoE2ctTWq5UG` | #353 engine, then #354 batch 1, then #355 batch 2 (stacked). Both batches owner-approved; the shot pages' "PR #PRNUM" text is a nit to fix. | Merge in stack order on gates. Its migration waits for #351. More batches follow. |
-  | Polish `session_01MKvSweAoVa4ugJSFk8nHgz` | #348 trading post flags (#310, owner-approved): CI running. | Merge on gates, then archive. |
-- **Owner waits / asks:** iPhone checks of the zoom fix (#330) and the book page turns (#334); a backups check (`ls -lh /opt/heartpatch/backups/`). Share the family signup code only in person.
-- **Filed, no lane yet:** #352 (Chore: nothing prunes `game_events`; add retention), #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
-- **Check-in:** a supervisor check-in every ~45 min via a self-bound trigger. Supervisor 5's `trig_01VMZ5PUHUGUozUZAoUQepRd` was deleted at handoff; arm your own.
+- **State (supervisor 10, 2026-10-23):** main `9710aad` (#625), migrations through 0056. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-22/23 — Owner decisions".
+- **Lanes in flight** (report to supervisor 10; each lane subscribes to its own PR):
+  - **#628 Crooked House 6b** (#306).
+  - **Merged 2026-10-23:** #625 (Woodcutter's Hut on cleared forest, `9710aad`) and #626 (Warehouse server, `7cd38b4`).
+- **Queue (start in this order as lanes free up):**
+  - **Crooked House 6c → 6d (+6e alongside) → 6f**, per #306 comment 6354531305. Each needs the owner's screens, and the house lands by Nov 6 for a playtest before Nov 9.
+  - **#601 PR 9 Warehouse client**, including the morning-card upkeep-pause line and "Free from tomorrow 🎃" on a seasonal building's last day.
+  - **#601 PR 10 economy sim retune** (data only).
+  - **Wild Isle #621:** a big feature. Fable plans first, then two waves.
+- **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
+- **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first. **Show the screens before asking (2026-10-11, relayed by the coordinator):** always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link. **Features must be felt (2026-10-11, relayed by the coordinator):** a feature needs visible feedback, not just correct text, and the home must be personal and personalizable. **Squishies are the most important visual part (2026-10-11, relayed by the coordinator):** every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones.
-- **Merge gates as practised:** reviewer APPROVE on the exact head; CI green on it; base current, or a merge-only delta verified with `git merge-tree`; squash with `expectedHeadSha`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
+- **Merge gates as practised:** reviewer APPROVE on the exact head; all checks green on it; `git merge-tree --write-tree origin/main <head>` clean; squash via `gh api -X PUT repos/MattBaldwin/heartpatch/pulls/N/merge -f merge_method=squash -f sha=<full sha>`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
 - **After a merge:** check the other open PRs for conflicts (`git merge-tree --name-only`); delete the lane's own one-shot triggers (`list_triggers` with `recurring:false`, filter by `persistent_session_id`); archive the lane. Never archive a supervisor.
 - **Brief notes:**
   - **Coins (#45):** credits are keyed on `(source, ref_id)`. Care must never spend a Heart Charm without reordering locks (TECH_SPEC §7).
@@ -225,7 +222,6 @@ The supervisor keeps this list current. Remove items as they land.
   - `keeper.spec` timed out once under a full local run.
   - #9's `squishy-gallery.spec.ts:168` (jiggle to idle) should wait on a signal, not on timing.
   - The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise the timeout, or lower the Argon2 cost in tests.
-- **Docs drift:** #22 may be closed but still open on GitHub. Confirm and close.
 - **Earlier follow-ups still open:**
   - #9: count real draw calls in the "flat draw calls" e2e; NullEngine tests for `SquishyField.move` and `remove`; partial buffer updates; rebase `squishTime`; forward part taps to the body; the crypto ban misses `globalThis.crypto`.
   - #7: a FORBIDDEN resync for map A while the player opens map B lands them in the lobby; a doc comment on `generation`.
@@ -234,6 +230,11 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-22):**
+  - **Long lanes are expensive.** Lanes past ~200k context cost $50–66.
+  - **Reviewers fix only blockers.** 5–7 review rounds were spent on nits. Nits are logged as follow-ups, not fixed in the PR.
+  - **Hand off the supervisor near 400k, and never reach compaction (owner, 2026-10-23).** Supervisor 9 ran 11 days to 735k context and cost $719.
+  - **Owner questions:** ask ONE at a time, recommended option first. Open the artifact and render-check images before asking. Never ask the owner for perf or flag tests. Flag any lane over ~$20.
 - **Lessons (2026-10-11):**
   - **Superseded runs look like failures.** A run replaced by a newer one can show as red or stopped. Check whether it was superseded before treating it as broken.
   - **There are no required checks on main.** Branch protection requires none (#349 showed `mergeable_state: clean` with zero check runs). The §3 gates are the only guard, so read CI on the head yourself.

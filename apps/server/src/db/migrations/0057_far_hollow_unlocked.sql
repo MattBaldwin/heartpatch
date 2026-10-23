@@ -1,0 +1,3 @@
+ALTER TABLE "far_hollow_state" DROP CONSTRAINT "far_hollow_state_bits";--> statement-breakpoint
+ALTER TABLE "far_hollow_state" ADD COLUMN "unlocked" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "far_hollow_state" ADD CONSTRAINT "far_hollow_state_bits" CHECK ("far_hollow_state"."keys" >= 0 and "far_hollow_state"."bonus_open" >= 0 and "far_hollow_state"."chests_opened" >= 0 and "far_hollow_state"."unlocked" >= 0);

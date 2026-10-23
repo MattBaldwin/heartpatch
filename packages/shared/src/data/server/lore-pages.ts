@@ -253,4 +253,20 @@ export const LORE_PAGES: LoreEntry[] = [
       finder: 'actor',
     },
   },
+  {
+    // The Crooked House's attic (#306 6b, owner decision 4): Halloween
+    // 2026's far-Hollow page, given by the attic's big chest.
+    id: 'the-crooked-house',
+    chapter: 'hollows',
+    order: 4,
+    title: 'A Lantern in Every Room',
+    text: 'Pinned to the attic beam: “We left one lantern in every room, so the little ones would never be scared. When the lights went out, the house leaned to look for them. Thank you for coming back.”',
+    hint: 'A crooked old house keeps its story up high.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.searched',
+      where: [{ op: 'equals', field: 'lorePage', value: 'the-crooked-house' }],
+      finder: 'actor',
+    },
+  },
 ];

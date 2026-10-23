@@ -778,12 +778,16 @@ function queries(db: Executor): BuildingsRepo {
       ).map(toBuilding),
 
     landOf: async (tileId) => {
+      // `tileId` is bound as a value, not a correlated `tiles.id`: a
+      // one-table select writes its columns without the table's name, so
+      // `"id"` inside the subquery would be the clear's own id (the bug that
+      // refused every resource building on cleared land).
       const [row] = await db
         .select({
           terrain: tiles.terrain,
           clearedFrom: sql<string | null>`(
             select ${tileClears.fromTerrain} from ${tileClears}
-            where ${tileClears.tileId} = ${tiles.id} and ${tileClears.endReason} = 'cleared'
+            where ${tileClears.tileId} = ${tileId} and ${tileClears.endReason} = 'cleared'
             order by ${tileClears.endedAt} desc
             limit 1
           )`,
