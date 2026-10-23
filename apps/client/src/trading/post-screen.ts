@@ -623,7 +623,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       },
       to === null || problem !== null || passOver(),
     );
-    b.classList.add('wide');
     const hint =
       to === null
         ? ''
@@ -1028,7 +1027,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         composing = true;
         render();
       });
-      make.classList.add('wide');
       return [...offers, make, ...offersFromMe(view, my, 'trade').map(outgoing)];
     }
     const picked = myMeter();
@@ -1221,7 +1219,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             ),
           ]
         : [];
-    for (const b of all) b.classList.add('wide');
     return [
       ...(entries.length === 0
         ? [

@@ -1,6 +1,6 @@
 /* The operator admin console (#196, mockup approved 2026-10-07): a plain,
-   desktop-friendly page that still works on an iPad. Its own tokens, so the
-   game's styles never leak in. System fonts only (the CSP allows no font host). */
+   desktop-friendly page that still works on an iPad. Its own colour tokens (buttons
+   are the game's shared kit, see ui/button). System fonts only (the CSP allows no font host). */
 
 :root {
   --adm-bg: #f6f5f8;
@@ -153,6 +153,16 @@ select {
 /* Buttons: the shared kit; a danger one only turns its ink red. */
 .adm-danger {
   --hp-secondary-ink: var(--adm-bad);
+}
+
+/* Dark: the kit's pink would wash out the light red ink, so a danger button
+   sits on the console's dark red instead. */
+@media (prefers-color-scheme: dark) {
+  .adm-danger {
+    --hp-secondary: var(--adm-bad-soft);
+    --hp-secondary-lip: #1e0e12;
+    --hp-gloss: none;
+  }
 }
 
 /* Shell */
