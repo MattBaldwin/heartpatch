@@ -43,7 +43,6 @@ import {
   clampZoom,
   entryGlide,
   glidePose,
-  pinchedOut,
   pinchZoom,
   residentBoxes,
   project,
@@ -128,11 +127,12 @@ import {
   roomBeds,
   roomFor,
 } from './house-residents-view.js';
+import { hpBack } from '../ui/button/button.js';
 import './house.css';
 
 // The Keeper's house (#381 plan §10): "Go inside" on the home's house card,
 // or a tap on the cottage, lifts the roof off and settles above the whole
-// dollhouse. Back (or Escape, or a pinch out past the dollhouse) goes home.
+// dollhouse. Back (or Escape) goes home: a pinch only zooms, as on the map.
 // Like the close-up, it owns the screen while open and swaps its scene onto
 // the one shared stage.
 
@@ -476,11 +476,9 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const touch = el('div', { class: 'house-touch', 'data-testid': 'house-touch' });
-  const back = el(
-    'button',
-    { type: 'button', class: 'house-back', 'data-testid': 'house-back' },
-    `‹ ${HOUSE_TEXT.back}`,
-  );
+  // The shared Back (ui/button), as every screen's will be (Controls A).
+  const back = hpBack(HOUSE_TEXT.back, 'house-back');
+  back.classList.add('house-back');
   const pill = el('span', { class: 'house-pill', 'data-testid': 'house-pill' });
   const top = el('div', { class: 'house-top' }, back, pill);
   const walkButton = el('button', {
@@ -1805,7 +1803,11 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     t: e.timeStamp,
   });
   touch.addEventListener('pointerdown', (e) => {
-    touch.setPointerCapture(e.pointerId);
+    try {
+      touch.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic or already-released pointer can't be captured; harmless.
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     taps.pointerDown(sample(e));
     panner.down(e.clientX, e.pointerId);
@@ -1855,7 +1857,8 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       }
     }
     if (pinch && pointers.size === 2) {
-      zoom = pinchZoom(pinch.zoom, pinch.spread, spread());
+      // Held between the dollhouse and kid height: a pinch out never leaves.
+      zoom = clampZoom(pinchZoom(pinch.zoom, pinch.spread, spread()));
       renderWalk();
       draw();
     }
@@ -1878,10 +1881,6 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
     }
     if (pinch && pointers.size < 2) {
       pinch = null;
-      if (pinchedOut(zoom)) {
-        close();
-        return;
-      }
       zoom = clampZoom(zoom);
       draw();
     }
@@ -1895,12 +1894,7 @@ export function createHouseScreen(options: HouseScreenOptions): HouseScreen {
       skipGlide();
       dropWalkInput();
       walk = null;
-      zoom -= e.deltaY / HOUSE_CAMERA.wheelPerZoom;
-      if (pinchedOut(zoom)) {
-        close();
-        return;
-      }
-      zoom = clampZoom(zoom);
+      zoom = clampZoom(zoom - e.deltaY / HOUSE_CAMERA.wheelPerZoom);
       draw();
     },
     { passive: false },

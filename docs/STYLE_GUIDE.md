@@ -141,3 +141,12 @@ One list, so tests can scan the **player-facing string fields** in data files (n
 
 `die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
 
+## 10. Buttons
+
+New screens use the shared button in `apps/client/src/ui/button/` instead of a new per-feature button class.
+
+- `hpButton(label, { variant })`: **primary** (plum, the one obvious next step on a screen; one per screen), **secondary** (soft pink, everything else, the default) or **quiet** (text only, for "Not now"). `small: true` makes it 44 px tall for rows of small choices; the default is 52 px.
+- `hpClose(label)`: the round ✕ in a sheet's corner. `label` is read aloud ("Close the Bag").
+- `hpBack()`: the "‹ Back" pill at a screen's top left. Every full screen has one; a gesture never replaces it (§3, rule 3).
+- For markup built elsewhere, `buttonClass({ variant, small })` gives the classes. Colours, sizes and the press timing are CSS tokens (`--hp-*`) in `button.css`. Every size clears the 44 pt tap target (§3, rule 2).
+- **Press feel:** every button squishes a little under the finger and springs back (`press.css`); under reduced motion it only darkens. Don't add your own `:active` squish. A button that has one is listed in `press.css` so it doesn't squish twice.

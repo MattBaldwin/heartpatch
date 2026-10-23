@@ -9,8 +9,8 @@ import type { HouseBounds } from './house-layout.js';
  * about what's in the rooms, only the house's box, so it scales by data as
  * the house grows. The dollhouse pose fits the whole house between the HUD's
  * top bar and its bottom controls; a pinch (or Walk in) sinks to kid height
- * with the walls in the way fading, and a pinch out past the dollhouse goes
- * back home. The roof-off entry glide is a shot on
+ * with the walls in the way fading; a pinch out stops at the dollhouse (Back
+ * goes home, as everywhere). The roof-off entry glide is a shot on
  * the cinematic `Timeline` (`cameraAt`), so reduced motion cuts to the end.
  */
 
@@ -531,9 +531,6 @@ export function pinchZoom(startZoom: number, startSpread: number, spread: number
   if (startSpread <= 0 || spread <= 0) return startZoom;
   return startZoom + Math.log(spread / startSpread) / HOUSE_CAMERA.pinchPerZoom;
 }
-
-/** A pinch released this far out of the dollhouse goes back home. */
-export const pinchedOut = (zoom: number): boolean => zoom <= -HOUSE_CAMERA.exitOvershoot;
 
 const vec = (v: Vec3): [number, number, number] => [v.x, v.y, v.z];
 

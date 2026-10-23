@@ -250,8 +250,6 @@ export const HOUSE_CAMERA = {
   edgeClear: 0.04, // TUNE
   /** How deep the front yard is (path, lanterns, bushes, fence), metres: kept in frame when there's room. */
   yard: 3.7, // TUNE: frontYard's fence and last stepping stone
-  /** Pinch out past the dollhouse by this much (zoom units) and you're back home. */
-  exitOvershoot: 0.18, // TUNE
   /** A mouse wheel's travel (px; a notch is about 100) that moves zoom by 1. */
   wheelPerZoom: 400, // TUNE
   /** How much pinch (log of the finger spread ratio) moves zoom by 1. */
