@@ -85,6 +85,7 @@ import { resourceCardLines } from '../resource-buildings/resource-card.js';
 import {
   RESOURCE_TEXT,
   resourceBuildCards,
+  resourceCardsFirst,
   resourceCard,
   resourceHere,
 } from '../resource-buildings/resource-model.js';
@@ -2064,7 +2065,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       // The one resource building this homestead's land takes (#601 PR 7).
       const producing = resourceBuildCards(tile, home, user.id);
       // A homestead spot's buildings wait beside Clear land (`clearCards`, #242).
-      return [
+      return resourceCardsFirst(producing, [
         ...(fire.kind === 'build'
           ? [
               card(fire.building, effectChips(fire.building)[0] ?? fire.building.description),
@@ -2094,8 +2095,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               ),
             ]
           : []),
-        ...producing,
-      ];
+      ]);
     },
     build: async (card, tile) => {
       const id = mapId;

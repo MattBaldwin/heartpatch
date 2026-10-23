@@ -4,6 +4,7 @@ import {
   type HeartCoins,
   type MyBuilding,
 } from '@heartpatch/shared';
+import type { BuildCard } from '../building/build-model.js';
 import { CLEAR_TEXT } from '../inventory/clear-model.js';
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,6 +15,7 @@ import {
   resourceBuildCards,
   resourceBuildingFor,
   resourceCard,
+  resourceCardsFirst,
   resourceEffect,
   upkeepSection,
   type ResourceTile,
@@ -98,6 +100,43 @@ describe('resourceBuildCards: the Build sheet (#601 PR 7)', () => {
     expect(resourceBuildCards(cleared, { seasons: [] }, me).map((c) => c.id)).toEqual([
       'water-well',
     ]);
+  });
+
+  it('leads the Build row with the matching building on every cleared land', () => {
+    const others = ['hearthfire', 'training-grounds', 'crafting-factory'].map((id) => ({
+      id,
+      icon: '',
+      name: id,
+      effect: '',
+      cost: {},
+      area: 'spot' as const,
+      blocked: null,
+      craft: null,
+    }));
+    for (const b of RESOURCE_BUILDINGS) {
+      const cleared = tile({ terrain: 'clearing', clearedFrom: b.terrain });
+      const row = resourceCardsFirst(
+        resourceBuildCards(cleared, { seasons: HALLOWEEN }, me),
+        others,
+      );
+      expect(row.map((c) => c.id)).toEqual([b.id, ...others.map((o) => o.id)]);
+    }
+  });
+
+  it('keeps the held-back card first on a spot, and the needs-land list last', () => {
+    const others = [{ id: 'hearthfire' }] as unknown as BuildCard[];
+    const spot = tile({ terrain: 'forest', nodeResource: 'timber' });
+    const held = resourceBuildCards(spot, { seasons: [] }, me);
+    expect(resourceCardsFirst(held, others).map((c) => c.id)).toEqual([
+      'woodcutters-hut',
+      'hearthfire',
+    ]);
+    const none = resourceBuildCards(
+      tile({ terrain: 'clearing', clearedFrom: null }),
+      { seasons: HALLOWEEN },
+      me,
+    );
+    expect(resourceCardsFirst(none, others)[0]?.id).toBe('hearthfire');
   });
 
   it('shows every building with the land it needs where none matches', () => {
