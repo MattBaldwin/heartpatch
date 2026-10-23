@@ -19,17 +19,95 @@
   font-weight: 700;
 }
 
+/* A vinyl-toy slider (game design §19): a fat glossy track that fills as the
+   level rises and a chunky 44pt thumb. --fill (0–100%) is set from the view. */
 .audio-slider {
+  --fill: 50%;
+  --track: 18px;
+  --thumb: 44px;
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  min-height: 44px;
+  height: var(--thumb);
   margin: 0;
-  accent-color: #c2508a;
+  padding: 0;
+  background: none;
+  cursor: pointer;
   /* The lobby scrolls vertically; a sideways drag belongs to the slider. */
   touch-action: pan-y;
 }
 
+.audio-slider:focus {
+  outline: none;
+}
+
+.audio-slider::-webkit-slider-runnable-track {
+  height: var(--track);
+  border-radius: 999px;
+  background:
+    linear-gradient(rgb(255 255 255 / 45%), rgb(255 255 255 / 0%) 55%),
+    linear-gradient(90deg, #d9689f var(--fill), #eadbe4 var(--fill));
+  box-shadow: inset 0 2px 4px rgb(107 75 110 / 25%);
+}
+
+.audio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: calc((var(--track) - var(--thumb)) / 2);
+  border: 4px solid #fffafc;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffb3d4 0 18%, #d9689f 19% 100%);
+  box-shadow: 0 3px 8px rgb(74 49 80 / 35%);
+}
+
+.audio-slider::-moz-range-track {
+  height: var(--track);
+  border-radius: 999px;
+  background: #eadbe4;
+  box-shadow: inset 0 2px 4px rgb(107 75 110 / 25%);
+}
+
+.audio-slider::-moz-range-progress {
+  height: var(--track);
+  border-radius: 999px;
+  background: #d9689f;
+}
+
+.audio-slider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--thumb);
+  height: var(--thumb);
+  border: 4px solid #fffafc;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffb3d4 0 18%, #d9689f 19% 100%);
+  box-shadow: 0 3px 8px rgb(74 49 80 / 35%);
+}
+
+.audio-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px rgb(184 72 122 / 45%),
+    0 3px 8px rgb(74 49 80 / 35%);
+}
+
+.audio-slider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 3px rgb(184 72 122 / 45%),
+    0 3px 8px rgb(74 49 80 / 35%);
+}
+
+.audio-slider:active::-webkit-slider-thumb {
+  background: radial-gradient(circle at 35% 30%, #ffc6de 0 18%, #e277a9 19% 100%);
+}
+
+.audio-slider:active::-moz-range-thumb {
+  background: radial-gradient(circle at 35% 30%, #ffc6de 0 18%, #e277a9 19% 100%);
+}
+
 .audio-slider:disabled {
   opacity: 0.4;
+  cursor: default;
 }
 
 .audio-toggle {

@@ -240,25 +240,47 @@
   background: none;
 }
 
+.hp-trays-on {
+  /* The corner button's width; Chat (trays.css) sits left of it. */
+  --hp-me-width: 84px;
+}
+
 .hp-trays-on .auth-chip-toggle {
-  display: grid;
-  place-items: center;
-  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: var(--hp-me-width);
   height: 48px;
-  padding: 0;
+  padding: 0 12px 0 6px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgb(255 250 252 / 94%);
   box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font: inherit;
+  color: #4a3150;
   cursor: pointer;
 }
 
+.hp-trays-on .tray-top-right {
+  right: calc(env(safe-area-inset-right) + 8px + var(--hp-me-width) + 8px);
+}
+
 .auth-chip-face {
+  flex: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   background: linear-gradient(#6b4b6e 0 36%, #f6d2b8 36%);
   box-shadow: inset 0 0 0 2px #fffafc;
+}
+
+/* "Me" beside the face: the one short word that says whose menu this is. */
+.auth-chip-me {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .hp-trays-on .auth-chip-body {
@@ -423,11 +445,117 @@
 }
 
 .auth-tick input {
+  -webkit-appearance: none;
+  appearance: none;
   flex: none;
+  box-sizing: border-box;
   width: 28px;
   height: 28px;
   margin: 0;
-  accent-color: #b8487a;
+  border: 2px solid #d9b6cb;
+  border-radius: 10px;
+  background: #fff center / 18px no-repeat;
+}
+
+.auth-tick input:checked {
+  border-color: #b8487a;
+  background-color: #b8487a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M3.5 9.5l3.7 3.7 7.3-8' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.auth-tick input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(184 72 122 / 35%);
+}
+
+/* Big pill choices over a form select (auth-pill-picker.ts). */
+.auth-pills {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 8px;
+}
+
+.auth-pill {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.auth-pill-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.auth-pill-face,
+.auth-pill-more {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 2px solid #ecd3e2;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: #7a2d55;
+}
+
+.auth-pill-input:checked + .auth-pill-face {
+  border-color: #b8487a;
+  background: #b8487a;
+  color: #fff;
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    0 0 0 3px rgb(184 72 122 / 30%);
+}
+
+/* A tick as well as the colour, so the pick reads without colour (a11y). */
+.auth-pill-input:checked + .auth-pill-face::before {
+  content: '✓';
+  font-weight: 900;
+}
+
+.auth-pill-input:focus-visible + .auth-pill-face,
+.auth-pill-more:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(184 72 122 / 35%);
+}
+
+.auth-pill-more {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-style: dashed;
+  font-size: 16px;
+}
+
+.auth-pill-more[hidden] {
+  display: none;
+}
+
+/* Still the field's control (found by its label), just not seen until opened. */
+.auth-pill-select-tucked {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-pills .auth-input:not(.auth-pill-select-tucked) {
+  grid-column: 1 / -1;
 }
 
 .auth-picture {
