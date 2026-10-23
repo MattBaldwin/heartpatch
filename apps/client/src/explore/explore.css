@@ -766,7 +766,7 @@ body:has(.explore:not([hidden])) .auth-chip {
 
 /* ── Short screens (a phone held sideways) ────────────────────────────── */
 
-@media (max-height: 500px) {
+@media (max-height: 520px) and (min-width: 640px) {
   .explore-stick {
     bottom: calc(env(safe-area-inset-bottom) + 30px);
     width: 104px;

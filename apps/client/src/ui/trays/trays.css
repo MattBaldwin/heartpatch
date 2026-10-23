@@ -636,7 +636,7 @@
 }
 
 /* A short landscape screen: keep it between the handles instead. */
-@media (max-height: 520px) {
+@media (max-height: 520px) and (min-width: 640px) {
   .tray-hint {
     width: min(
       300px,
