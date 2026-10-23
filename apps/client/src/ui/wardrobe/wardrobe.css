@@ -311,10 +311,9 @@ div.wardrobe-item {
 
   .wardrobe-card {
     /* Rows that scroll sideways would squeeze to nothing as `auto`. */
-    grid-template-rows: max-content max-content max-content minmax(
-        104px,
-        1fr
-      ) max-content max-content;
+    grid-template-rows:
+      max-content max-content max-content minmax(104px, 1fr)
+      max-content max-content;
     gap: 4px;
     width: min(58%, 520px);
     height: 100%;
