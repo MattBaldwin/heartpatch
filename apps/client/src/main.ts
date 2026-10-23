@@ -624,22 +624,19 @@ const journeys = createJourneyScreen({
     void farHollowSheet.open(post);
   },
 });
-// The far Hollow (#306 PR 6): my own grey Hollow each season, from any open
+// The far Hollow (#306 PR 6): my own far Hollow each season, from any open
 // trading post's panel. The far road is a journey (the battle screen's card
-// says "Explore it"); its tiles open in the explore view, and back from one
-// is back to its sheet.
+// says "Let's see"); the house screen is #306 6c.
 let farHollowPost: { q: number; r: number } | null = null;
 /** A far road won, waiting for the map to come back to open the sheet. */
 let farHollowArrived = false;
-/** Back from a far-Hollow tile, waiting for the map to come back to open the sheet. */
-let farHollowBack = false;
 /**
  * A journey won that this device didn't start (a reload mid-battle): it may
  * have been the far road. The map's live events stop while a battle is open,
  * so once it closes we ask (#306 PR 6).
  */
 let farHollowMaybe = false;
-/** Made it to the far Hollow ("Explore it"): its sheet, once an evolution's "Whoa!" is seen (#592). */
+/** Made it to the far Hollow ("Let's see"): its sheet, once an evolution's "Whoa!" is seen (#592). */
 const showFarHollowArrival = (): void => {
   if (evolutionPending || care.isOpen) return;
   if (farHollowArrived) {
@@ -665,9 +662,6 @@ const farHollowSheet = createFarHollowSheet({
   night: () => mapNight,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
-  },
-  explore: (index) => {
-    void explore.openFarHollow(index);
   },
   onOpen: () => {
     maps.deselect();
@@ -1006,9 +1000,6 @@ const explore = createExploreScreen({
     home.setMap(null);
     lobby.stepOut();
   },
-  onFarHollowClosed: () => {
-    farHollowBack = true;
-  },
   onClosed: (mapId) => {
     exploreSquishies.hidden = true;
     roster.close();
@@ -1035,11 +1026,6 @@ const explore = createExploreScreen({
         // A page or a milestone found while exploring shows now (#129).
         lorebook.check();
         milestones.check();
-        // Back from a far-Hollow tile (#306 PR 6): to its sheet.
-        if (farHollowBack) {
-          farHollowBack = false;
-          void farHollowSheet.open(farHollowPost);
-        }
       })
       .catch((err: unknown) => {
         noScene();

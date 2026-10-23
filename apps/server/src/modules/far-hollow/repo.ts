@@ -1,12 +1,24 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { farHollowExplore, gameEvents, journeys, maps, tiles } from '../../db/schema.js';
+import {
+  farHollowRooms,
+  farHollowState,
+  gameEvents,
+  journeys,
+  maps,
+  tiles,
+} from '../../db/schema.js';
 
-/** My progress on one tile of a season's far Hollow (#306 PR 6). */
-export interface FarHollowRow {
-  tileIndex: number;
-  searched: number;
+/** My progress through a season's far Hollow (#306 PR 6): its state row. */
+export interface FarHollowStateRow {
+  keys: number;
+  currentRoom: string | null;
+  lastLitRoom: string | null;
+  bonusOpen: number;
+  chestsOpened: number;
+  arrivedAt: Date;
+  atticOpenedAt: Date | null;
   completedAt: Date | null;
 }
 
@@ -19,31 +31,27 @@ export interface FarHollowKey {
 
 /**
  * Storage for the far Hollow (#306 PR 6). Plain queries; the service
- * decides. Its rows are tech spec §7 step 6, after `tile_explore`: a search
- * locks all of the season's rows (tile order), and the far road's finish
- * writes them after the battle and its `journeys` row (5b).
+ * decides. Its rows are tech spec §7 step 6, after `tile_explore`: the
+ * season's state row, then its room rows in room id order (#306 6b), and
+ * the far road's finish writes the state row after the battle and its
+ * `journeys` row (5b).
  */
 export interface FarHollowRepo {
   /** The map's secret seed (null on hand-authored maps) and its time zone. Server-only. */
   findMap: (mapId: string) => Promise<{ seed: string | null; timeZone: string } | null>;
-  /** My rows for a season's far Hollow, in tile order (none until I arrive). */
-  listRows: (key: FarHollowKey) => Promise<FarHollowRow[]>;
-  /** The same rows, row-locked until commit (step 6, tile order). */
-  lockRows: (key: FarHollowKey) => Promise<FarHollowRow[]>;
+  /** My state row for a season's far Hollow (none until I arrive). */
+  findState: (key: FarHollowKey) => Promise<FarHollowStateRow | null>;
+  /** The same row, row-locked until commit (step 6, first). */
+  lockState: (key: FarHollowKey) => Promise<FarHollowStateRow | null>;
   /**
-   * I arrived in a season's far Hollow: a row for each of its tiles (rows
-   * already there stay as they are) and last season's rows gone. True when
-   * this was the arrival (no rows were there yet).
+   * I arrived in a season's far Hollow: its state row (a row already there
+   * stays as it is) and last season's rows gone. True when this was the
+   * arrival (no row was there yet).
    */
-  arrive: (key: FarHollowKey, tileCount: number) => Promise<boolean>;
-  setProgress: (
-    key: FarHollowKey,
-    tileIndex: number,
-    progress: { searched: number; completedAt: Date | null },
-  ) => Promise<void>;
+  arrive: (key: FarHollowKey, at: Date) => Promise<boolean>;
   /**
    * Did I already bring a season's far Hollow all back (`journey.completed`)?
-   * Read only on a last spot, so it may scan the map's events.
+   * Read only on the last step, so it may scan the map's events.
    */
   completedBefore: (
     key: Omit<FarHollowKey, 'seasonSeed'>,
@@ -53,17 +61,22 @@ export interface FarHollowRepo {
   roadPost: (mapId: string, userId: string) => Promise<{ q: number; r: number } | null>;
 }
 
-const rowColumns = {
-  tileIndex: farHollowExplore.tileIndex,
-  searched: farHollowExplore.searched,
-  completedAt: farHollowExplore.completedAt,
+const stateColumns = {
+  keys: farHollowState.keys,
+  currentRoom: farHollowState.currentRoom,
+  lastLitRoom: farHollowState.lastLitRoom,
+  bonusOpen: farHollowState.bonusOpen,
+  chestsOpened: farHollowState.chestsOpened,
+  arrivedAt: farHollowState.arrivedAt,
+  atticOpenedAt: farHollowState.atticOpenedAt,
+  completedAt: farHollowState.completedAt,
 };
 
 const whereKey = (key: FarHollowKey) =>
   and(
-    eq(farHollowExplore.userId, key.userId),
-    eq(farHollowExplore.mapId, key.mapId),
-    eq(farHollowExplore.seasonSeed, key.seasonSeed),
+    eq(farHollowState.userId, key.userId),
+    eq(farHollowState.mapId, key.mapId),
+    eq(farHollowState.seasonSeed, key.seasonSeed),
   );
 
 export function createFarHollowRepo(db: Executor): FarHollowRepo {
@@ -76,46 +89,40 @@ export function createFarHollowRepo(db: Executor): FarHollowRepo {
       return row ?? null;
     },
 
-    listRows: (key) =>
-      db
-        .select(rowColumns)
-        .from(farHollowExplore)
-        .where(whereKey(key))
-        .orderBy(asc(farHollowExplore.tileIndex)),
-
-    lockRows: (key) =>
-      db
-        .select(rowColumns)
-        .from(farHollowExplore)
-        .where(whereKey(key))
-        .orderBy(asc(farHollowExplore.tileIndex))
-        .for('update'),
-
-    arrive: async (key, tileCount) => {
-      // Last season's rows first (only this player's own searches write them,
-      // and a search needs this season's), so the table keeps one season each.
-      await db
-        .delete(farHollowExplore)
-        .where(
-          and(
-            eq(farHollowExplore.userId, key.userId),
-            eq(farHollowExplore.mapId, key.mapId),
-            ne(farHollowExplore.seasonSeed, key.seasonSeed),
-          ),
-        );
-      const inserted = await db
-        .insert(farHollowExplore)
-        .values(Array.from({ length: tileCount }, (_, tileIndex) => ({ ...key, tileIndex })))
-        .onConflictDoNothing()
-        .returning({ tileIndex: farHollowExplore.tileIndex });
-      return inserted.length === tileCount;
+    findState: async (key) => {
+      const [row] = await db.select(stateColumns).from(farHollowState).where(whereKey(key));
+      return row ?? null;
     },
 
-    setProgress: async (key, tileIndex, progress) => {
-      await db
-        .update(farHollowExplore)
-        .set(progress)
-        .where(and(whereKey(key), eq(farHollowExplore.tileIndex, tileIndex)));
+    lockState: async (key) => {
+      const [row] = await db
+        .select(stateColumns)
+        .from(farHollowState)
+        .where(whereKey(key))
+        .for('update');
+      return row ?? null;
+    },
+
+    arrive: async (key, at) => {
+      // Last season's rows first (only this player's own commands write them,
+      // and a command needs this season's), so the tables keep one season each.
+      for (const table of [farHollowRooms, farHollowState]) {
+        await db
+          .delete(table)
+          .where(
+            and(
+              eq(table.userId, key.userId),
+              eq(table.mapId, key.mapId),
+              ne(table.seasonSeed, key.seasonSeed),
+            ),
+          );
+      }
+      const inserted = await db
+        .insert(farHollowState)
+        .values({ ...key, arrivedAt: at })
+        .onConflictDoNothing()
+        .returning({ keys: farHollowState.keys });
+      return inserted.length > 0;
     },
 
     completedBefore: async (key, season) => {

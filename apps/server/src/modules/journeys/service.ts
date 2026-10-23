@@ -156,12 +156,12 @@ export function createJourneysService(options: JourneysServiceOptions): Journeys
         if (!farHollowOpen(at, season.timeZone)) {
           throw new AppError('FORBIDDEN', FAR_HOLLOW_MESSAGES.night);
         }
-        const arrived = await createFarHollowRepo(tx).listRows({
+        const arrived = await createFarHollowRepo(tx).findState({
           userId: user.id,
           mapId,
           seasonSeed: season.seed,
         });
-        if (arrived.length > 0) throw new AppError('CONFLICT', MESSAGES.arrived);
+        if (arrived) throw new AppError('CONFLICT', MESSAGES.arrived);
         const post = await createTerritoryRepo(tx).findTile(mapId, request.q, request.r);
         if (!post) throw new AppError('NOT_FOUND', MESSAGES.notAPost);
         const distance = COMMUNITY_RULES.farHollow.distance;

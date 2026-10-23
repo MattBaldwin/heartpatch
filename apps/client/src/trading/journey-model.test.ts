@@ -118,8 +118,8 @@ describe('journeyResult', () => {
   it('says the far road (#306 PR 6) arrives in the far Hollow, and loses nothing otherwise', () => {
     expect(journeyResult('won', 'Lantern Post', { to: 'far-hollow' })).toEqual({
       title: 'You made it to the far Hollow!',
-      subtitle: "It's yours to explore all season.",
-      done: 'Explore it 🕯️',
+      subtitle: 'A crooked old house waits for you all season.',
+      done: "Let's see 🕯️",
     });
     // A journey this device didn't start (a reload): the win card promises neither a pass nor the far Hollow.
     const somewhere = journeyResult('won', null, { to: 'unknown' });

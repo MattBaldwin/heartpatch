@@ -1601,30 +1601,66 @@ export const journeys = pgTable(
 
 /**
  * The far Hollow (#306 PR 6, plan Q7, owner decision 7): each player's own
- * grey village, fresh every season. Its layout is worked out from the map's
- * secret seed and the season (`farHollowLayout`), so only progress is stored:
- * one row per tile of a player's far Hollow, written when they arrive (the
- * far road won), keyed by the season's seed (`farHollowSeed`), so a new
+ * place past the last post, fresh every season; Halloween 2026's is the
+ * Crooked House (#306 6b). The house itself is data (`CROOKED_HOUSE`) and
+ * what hides where comes from the season's seed (`farHollowSeed`, server
+ * only, rule 6), so only progress is stored, keyed by that seed: a new
  * season simply stops matching last season's rows (the next arrival clears
- * them). `searched` is one bit per search spot; `completed_at` once every
- * spot on the tile is searched. Server-only: the seed never leaves (rule 6).
+ * them).
+ *
+ * `far_hollow_state`: one row per Keeper per season, written when they
+ * arrive (the far road won). `keys` one bit a key found, `bonus_open` one
+ * bit a bonus door opened by a power, `chests_opened` one bit a chest;
+ * `current_room` where they stand (null: at the front door) and
+ * `last_lit_room` where a reload or a catch takes them back to.
  */
-export const farHollowExplore = pgTable(
-  'far_hollow_explore',
+export const farHollowState = pgTable(
+  'far_hollow_state',
   {
     userId: uuid('user_id').notNull(),
     mapId: uuid('map_id')
       .notNull()
       .references(() => maps.id, { onDelete: 'cascade' }),
     seasonSeed: text('season_seed').notNull(),
-    tileIndex: smallint('tile_index').notNull(),
-    searched: integer('searched').notNull().default(0),
+    keys: integer('keys').notNull().default(0),
+    currentRoom: text('current_room'),
+    lastLitRoom: text('last_lit_room'),
+    bonusOpen: integer('bonus_open').notNull().default(0),
+    chestsOpened: integer('chests_opened').notNull().default(0),
+    arrivedAt: timestamptz('arrived_at').notNull().defaultNow(),
+    atticOpenedAt: timestamptz('attic_opened_at'),
     completedAt: timestamptz('completed_at'),
   },
   (t) => [
-    primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed, t.tileIndex] }),
-    check('far_hollow_explore_tile_index_range', sql`${t.tileIndex} between 0 and 31`),
-    check('far_hollow_explore_searched_range', sql`${t.searched} >= 0`),
+    primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed] }),
+    check(
+      'far_hollow_state_bits',
+      sql`${t.keys} >= 0 and ${t.bonusOpen} >= 0 and ${t.chestsOpened} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * `far_hollow_rooms`: one row per room of a Keeper's house per season,
+ * written the first time they fix something in it. `fixed` one bit per
+ * crooked thing in the room (the data's order); `bloomed_at` once every one
+ * is fixed and the room's colour came back.
+ */
+export const farHollowRooms = pgTable(
+  'far_hollow_rooms',
+  {
+    userId: uuid('user_id').notNull(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    seasonSeed: text('season_seed').notNull(),
+    roomId: text('room_id').notNull(),
+    fixed: integer('fixed').notNull().default(0),
+    bloomedAt: timestamptz('bloomed_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.mapId, t.seasonSeed, t.roomId] }),
+    check('far_hollow_rooms_fixed_range', sql`${t.fixed} >= 0`),
   ],
 );
 

@@ -1,10 +1,6 @@
 import {
   BattleResponseSchema,
-  FarHollowSearchResponseSchema,
-  FarHollowTileViewSchema,
   FarHollowViewSchema,
-  type FarHollowSearchResponse,
-  type FarHollowTileView,
   type FarHollowView,
   type PlayerBattle,
 } from '@heartpatch/shared';
@@ -40,26 +36,6 @@ export const farHollowApi = {
     });
     return { battle: res.battle, created };
   },
-
-  /** One of its tiles up close, as the explore view of a grey Hollow tile. */
-  tile: (mapId: string, index: number): Promise<FarHollowTileView> =>
-    apiCallFor(`/maps/${mapId}/far-hollow/tiles/${String(index)}`, {
-      method: 'GET',
-      schema: FarHollowTileViewSchema,
-    }),
-
-  /** Searches one spot; the server rolls what's found (CLAUDE.md rule 1). */
-  search: (
-    mapId: string,
-    at: { tile: number; spot: number },
-    key: string,
-  ): Promise<FarHollowSearchResponse> =>
-    apiCallFor(`/maps/${mapId}/far-hollow/search`, {
-      method: 'POST',
-      body: at,
-      schema: FarHollowSearchResponseSchema,
-      headers: { 'idempotency-key': key },
-    }),
 };
 
 export type FarHollowApi = typeof farHollowApi;

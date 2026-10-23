@@ -1,36 +1,32 @@
 import { COMMUNITY_RULES, type FarHollowView, type PlayerBattle } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
-import { terrainName } from '../explore/explore-view.js';
 import { el, messageOf } from '../ui/dom.js';
 import { farHollowApi, type FarHollowApi } from './far-hollow-api.js';
 import {
-  FAR_HOLLOW_TERRAIN_EMOJI,
   FAR_HOLLOW_TEXT as T,
-  farHollowProgress,
-  farHollowSpots,
   farHollowState,
   freshLine,
   type FarHollowState,
 } from './far-hollow-model.js';
 import './hollowed.css';
 
-// The far Hollow's sheet (#306 PR 6, plan Q7): my own grey Hollow this
+// The far Hollow's sheet (#306 PR 6, plan Q7): my own far Hollow this
 // season, opened from a trading post's panel. Away: the far road's trail and
-// "Take the far road". There: its tiles as a little hex map, each greyer the
-// less of it I've searched; a tap explores it. Done: every tile glowing, and
-// when a fresh one comes. The server decides everything (CLAUDE.md rule 1).
+// "Take the far road" (by day only). There: the Crooked House and "Go
+// inside", open at any hour (owner decision 1; the house screen is #306 6c).
+// Done: when a fresh one comes. The server decides everything (rule 1).
 
 export interface FarHollowSheetOptions {
   root: HTMLElement;
   api?: Pick<FarHollowApi, 'view' | 'road'>;
   mapId: () => string | null;
-  /** It's night on the map: the far Hollow is shut till morning, like every Hollow. */
+  /** It's night on the map: the far road is shut till morning, like every Hollow. */
   night: () => boolean;
   /** The far road started (or one going came back): the battle screen takes over. */
   openBattle: (battle: PlayerBattle) => void;
-  /** A tile tapped: explore it up close. */
-  explore: (index: number) => void;
+  /** "Go inside" tapped: the house screen (#306 6c). Until there is one, the door's stuck. */
+  goInside?: () => void;
   /** The sheet opened: the map's tile panel steps aside. */
   onOpen?: () => void;
 }
@@ -39,15 +35,12 @@ export interface FarHollowSheetOptions {
 export interface FarHollowSheetDebug {
   readonly open: boolean;
   readonly state: FarHollowState | null;
-  readonly tiles: number;
-  readonly searched: number;
-  readonly total: number;
 }
 
 export interface FarHollowSheet {
   /** Opens the sheet; `post` is the trading post it was opened from (the far road starts there). */
   open: (post: { q: number; r: number } | null) => Promise<void>;
-  /** Reads it again if it's open (a search landed, the season turned). */
+  /** Reads it again if it's open (the season turned). */
   refresh: () => Promise<void>;
   close: () => void;
   /** The far road battle a tap here started: its result card says where to. */
@@ -133,56 +126,6 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
     }
   }
 
-  /** The tiles as a little hex map: greyer the less of each I've searched. */
-  const tileMap = (v: FarHollowView, tappable: boolean) => {
-    const { spots, aspect, tile } = farHollowSpots(v.tiles);
-    const map = el('div', {
-      class: 'far-hollow-map',
-      'data-testid': 'far-hollow-map',
-      style: `aspect-ratio: ${String(aspect)}`,
-    });
-    for (const t of v.tiles) {
-      const spot = spots.find((s) => s.index === t.index);
-      if (!spot) continue;
-      const joy = t.total > 0 ? t.searched / t.total : 0;
-      const done = t.total > 0 && t.searched >= t.total;
-      const b = el(
-        'button',
-        {
-          type: 'button',
-          class: `far-hollow-tile far-hollow-${t.terrain}${done ? ' far-hollow-tile-done' : ''}`,
-          'data-testid': 'far-hollow-tile',
-          'data-index': String(t.index),
-          'aria-label': T.tileLabel(terrainName(t.terrain), t.searched, t.total),
-          style: [
-            `left: ${String(spot.left)}%`,
-            `top: ${String(spot.top)}%`,
-            `width: ${String(tile.width)}%`,
-            `height: ${String(tile.height)}%`,
-            `--joy: ${String(Math.round(joy * 100) / 100)}`,
-          ].join('; '),
-        },
-        el(
-          'span',
-          { class: 'far-hollow-tile-art', 'aria-hidden': 'true' },
-          FAR_HOLLOW_TERRAIN_EMOJI[t.terrain] ?? '🌫️',
-        ),
-        el(
-          'span',
-          { class: 'far-hollow-tile-count', 'aria-hidden': 'true' },
-          done ? '✨' : `${String(t.searched)}/${String(t.total)}`,
-        ),
-      );
-      b.disabled = !tappable;
-      b.addEventListener('click', () => {
-        close();
-        options.explore(t.index);
-      });
-      map.append(b);
-    }
-    return map;
-  };
-
   function render(): void {
     const v = view;
     if (!v) return;
@@ -203,7 +146,6 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
         ]
       : [];
     const closeButton = button(T.close, 'far-hollow-close', true, close);
-    const progress = farHollowProgress(v.tiles);
     if (state === 'away') {
       const go = button(working ? '…' : T.start, 'far-hollow-road', false, () => {
         void setOff();
@@ -226,23 +168,34 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
         ),
         el('div', { class: 'hollowed-actions' }, ...(post ? [go] : []), closeButton),
       );
-    } else {
-      const night = options.night();
+    } else if (state === 'arrived') {
+      const inside = options.goInside;
+      const go = button(T.goInside, 'far-hollow-inside', false, () => {
+        if (!inside) return;
+        close();
+        inside();
+      });
+      go.disabled = !inside;
       sheet.replaceChildren(
         kicker,
         title,
-        el('p', { class: 'hollowed-line' }, state === 'complete' ? T.doneLead : T.arrivedLead),
-        tileMap(v, state === 'arrived' && !night),
-        el(
-          'p',
-          { class: 'hollowed-line far-hollow-progress', 'data-testid': 'far-hollow-progress' },
-          T.progress(progress.searched, progress.total),
-        ),
+        el('p', { class: 'hollowed-line' }, T.arrivedLead),
+        ...said,
+        ...(inside
+          ? []
+          : [el('p', { class: 'hollowed-note', 'data-testid': 'far-hollow-next' }, T.stuck)]),
+        el('div', { class: 'hollowed-actions' }, go, closeButton),
+      );
+    } else {
+      sheet.replaceChildren(
+        kicker,
+        title,
+        el('p', { class: 'hollowed-line' }, T.doneLead),
         ...said,
         el(
           'p',
           { class: 'hollowed-note', 'data-testid': 'far-hollow-next' },
-          state === 'complete' ? freshLine(v.nextSeason) : night ? T.night : T.tapTile,
+          freshLine(v.nextSeason),
         ),
         el('div', { class: 'hollowed-actions' }, closeButton),
       );
@@ -296,13 +249,7 @@ export function createFarHollowSheet(options: FarHollowSheetOptions): FarHollowS
       return !sheet.hidden;
     },
     get debug() {
-      const progress = view ? farHollowProgress(view.tiles) : { searched: 0, total: 0 };
-      return {
-        open: !sheet.hidden,
-        state: view ? farHollowState(view) : null,
-        tiles: view?.tiles.length ?? 0,
-        ...progress,
-      };
+      return { open: !sheet.hidden, state: view ? farHollowState(view) : null };
     },
   };
 }

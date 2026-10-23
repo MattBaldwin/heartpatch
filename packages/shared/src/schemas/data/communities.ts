@@ -140,28 +140,15 @@ export const CommunityRulesSchema = z.strictObject({
     big: z.number().min(0).max(0.95),
   }),
   /**
-   * The far Hollow (#306 PR 6, plan Q7, owner decision 7): a grey village of
-   * a kid's own, fresh every season, reached by the far road from any
-   * trading post. Explore only: no restoring, owners or perks. What its
-   * spots hold is server-only (the far-Hollow find tables, rule 6).
+   * The far Hollow (#306 PR 6, plan Q7, owner decision 7): a place of a
+   * kid's own, fresh every season, reached by the far road from any trading
+   * post. What it holds is server-only (the far-Hollow tables, rule 6).
    */
-  farHollow: z
-    .strictObject({
-      /** Its name in the explore header and the sheet (fits the 16-character header). */
-      name: z.string().min(1).max(16),
-      /** The far road's trail: a journey this many tiles long (`journeyFor`). */
-      distance: z.number().int().min(1),
-      /** How many tiles it has: the middle, its 6 neighbours, then a few past them. */
-      tiles: z
-        .strictObject({ min: z.number().int().min(1), max: z.number().int().max(12) })
-        .refine((t) => t.min <= t.max, 'tiles.min must not exceed tiles.max'),
-      /** Hollow echoes drifting on each of its tiles: client feel only. */
-      echoesPerTile: z.number().int().min(0).max(3),
-      /** What its tiles are, by weight (explorable terrains, checked by the data test). */
-      terrains: z
-        .array(z.strictObject({ terrain: ContentIdSchema, weight: z.number().int().positive() }))
-        .min(1),
-    })
-    .refine((f) => f.tiles.min >= 7, 'a far Hollow has its middle and all 6 neighbours'),
+  farHollow: z.strictObject({
+    /** Its name on the sheet and the journey cards (fits the 16-character header). */
+    name: z.string().min(1).max(16),
+    /** The far road's trail: a journey this many tiles long (`journeyFor`). */
+    distance: z.number().int().min(1),
+  }),
 });
 export type CommunityRules = z.infer<typeof CommunityRulesSchema>;

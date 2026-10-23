@@ -1,5 +1,5 @@
 {
-  "id": "369f8c2e-9edb-45f3-8f8a-76b020f0d935",
+  "id": "2388dd06-8b1a-447b-b98a-ef15e37fc0a5",
   "prevId": "5683a6df-c69e-4e5e-9bb0-3be50edaf066",
   "version": "7",
   "dialect": "postgresql",
@@ -2252,8 +2252,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.far_hollow_explore": {
-      "name": "far_hollow_explore",
+    "public.far_hollow_rooms": {
+      "name": "far_hollow_rooms",
       "schema": "",
       "columns": {
         "user_id": {
@@ -2274,18 +2274,121 @@
           "primaryKey": false,
           "notNull": true
         },
-        "tile_index": {
-          "name": "tile_index",
-          "type": "smallint",
+        "room_id": {
+          "name": "room_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "searched": {
-          "name": "searched",
+        "fixed": {
+          "name": "fixed",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "bloomed_at": {
+          "name": "bloomed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "far_hollow_rooms_map_id_maps_id_fk": {
+          "name": "far_hollow_rooms_map_id_maps_id_fk",
+          "tableFrom": "far_hollow_rooms",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "far_hollow_rooms_user_id_map_id_season_seed_room_id_pk": {
+          "name": "far_hollow_rooms_user_id_map_id_season_seed_room_id_pk",
+          "columns": ["user_id", "map_id", "season_seed", "room_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "far_hollow_rooms_fixed_range": {
+          "name": "far_hollow_rooms_fixed_range",
+          "value": "\"far_hollow_rooms\".\"fixed\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.far_hollow_state": {
+      "name": "far_hollow_state",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "season_seed": {
+          "name": "season_seed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "keys": {
+          "name": "keys",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "current_room": {
+          "name": "current_room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_lit_room": {
+          "name": "last_lit_room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bonus_open": {
+          "name": "bonus_open",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "chests_opened": {
+          "name": "chests_opened",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "arrived_at": {
+          "name": "arrived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "attic_opened_at": {
+          "name": "attic_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "completed_at": {
           "name": "completed_at",
@@ -2296,9 +2399,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "far_hollow_explore_map_id_maps_id_fk": {
-          "name": "far_hollow_explore_map_id_maps_id_fk",
-          "tableFrom": "far_hollow_explore",
+        "far_hollow_state_map_id_maps_id_fk": {
+          "name": "far_hollow_state_map_id_maps_id_fk",
+          "tableFrom": "far_hollow_state",
           "tableTo": "maps",
           "columnsFrom": ["map_id"],
           "columnsTo": ["id"],
@@ -2307,21 +2410,17 @@
         }
       },
       "compositePrimaryKeys": {
-        "far_hollow_explore_user_id_map_id_season_seed_tile_index_pk": {
-          "name": "far_hollow_explore_user_id_map_id_season_seed_tile_index_pk",
-          "columns": ["user_id", "map_id", "season_seed", "tile_index"]
+        "far_hollow_state_user_id_map_id_season_seed_pk": {
+          "name": "far_hollow_state_user_id_map_id_season_seed_pk",
+          "columns": ["user_id", "map_id", "season_seed"]
         }
       },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "far_hollow_explore_tile_index_range": {
-          "name": "far_hollow_explore_tile_index_range",
-          "value": "\"far_hollow_explore\".\"tile_index\" between 0 and 31"
-        },
-        "far_hollow_explore_searched_range": {
-          "name": "far_hollow_explore_searched_range",
-          "value": "\"far_hollow_explore\".\"searched\" >= 0"
+        "far_hollow_state_bits": {
+          "name": "far_hollow_state_bits",
+          "value": "\"far_hollow_state\".\"keys\" >= 0 and \"far_hollow_state\".\"bonus_open\" >= 0 and \"far_hollow_state\".\"chests_opened\" >= 0"
         }
       },
       "isRLSEnabled": false
