@@ -3,14 +3,17 @@ import {
   CrookedChestResponseSchema,
   CrookedEnterResponseSchema,
   CrookedFixResponseSchema,
+  CrookedRelightResponseSchema,
   CrookedViewResponseSchema,
   FarHollowViewSchema,
   type CrookedChestResponse,
   type CrookedEnterResponse,
   type CrookedFixResponse,
+  type CrookedRelightResponse,
   type CrookedViewResponse,
   type FarHollowView,
   type PlayerBattle,
+  type RelightMove,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -45,16 +48,48 @@ export const farHollowApi = {
     return { battle: res.battle, created };
   },
 
-  /** Puts a crooked thing right in the room I'm in (#306 6c): maybe a key, maybe the bloom. */
+  /**
+   * Puts a crooked thing right in the room I'm in (#306 6c): maybe a key,
+   * maybe the bloom. A Relight thing sends its try's moves (#306 6f).
+   */
   fix: (
     mapId: string,
-    body: { room: string; thing: string },
+    body: {
+      room: string;
+      thing: string;
+      relight?: { attempt: number; moves: readonly RelightMove[] };
+    },
     key: string,
   ): Promise<CrookedFixResponse> =>
     apiCallFor(`/maps/${mapId}/far-hollow/fix`, {
       method: 'POST',
       body,
       schema: CrookedFixResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** A fresh try at a Relight board in the room I'm in (#306 6f): a new puzzle every time. */
+  relight: (
+    mapId: string,
+    body: { room: string; thing: string },
+    key: string,
+  ): Promise<CrookedRelightResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/relight`, {
+      method: 'POST',
+      body,
+      schema: CrookedRelightResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /**
+   * Opens the chest of the room I'm in: a bonus room's (#306 6e), with maybe a
+   * rare friend's battle, or the attic's big chest (6f).
+   */
+  chest: (mapId: string, room: string, key: string): Promise<CrookedChestResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/chest`, {
+      method: 'POST',
+      body: { room },
+      schema: CrookedChestResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 
@@ -90,15 +125,6 @@ export const farHollowApi = {
       method: 'POST',
       body,
       schema: CrookedViewResponseSchema,
-      headers: { 'idempotency-key': key },
-    }),
-
-  /** Opens the chest of the bonus room I'm in (#306 6e): its loot, and maybe a rare friend's battle. */
-  chest: (mapId: string, room: string, key: string): Promise<CrookedChestResponse> =>
-    apiCallFor(`/maps/${mapId}/far-hollow/chest`, {
-      method: 'POST',
-      body: { room },
-      schema: CrookedChestResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

@@ -407,6 +407,13 @@
       "when": 1792719480358,
       "tag": "0057_far_hollow_unlocked",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792779754372,
+      "tag": "0058_far_hollow_relight",
+      "breakpoints": true
     }
   ]
 }

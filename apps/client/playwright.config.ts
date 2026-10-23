@@ -90,6 +90,7 @@ const E2E_GROUPS = [
     'capture',
     'care-layout',
     'chat',
+    'far-hollow-relight',
     'fences',
     'homestead-colour',
     'landscape-phone',

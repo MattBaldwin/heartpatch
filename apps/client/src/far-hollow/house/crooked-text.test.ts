@@ -2,6 +2,7 @@ import { CROOKED_HOUSE, type CrookedThingKind } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { propNames } from './crooked-kit.js';
 import {
+  CROOKED_RELIGHT_TEXT,
   CROOKED_TEXT,
   elementWords,
   keyName,
@@ -84,10 +85,30 @@ describe('the Crooked House’s words (#306 6c)', () => {
       CROOKED_TEXT.bloomTitle('Sewing Room'),
       CROOKED_TEXT.keyLine('the sewing basket'),
       CROOKED_TEXT.sleeping('the dark closet', 'Light', '✨'),
+      CROOKED_RELIGHT_TEXT.scrap,
     ];
     for (const line of lines) {
       expect(line).not.toMatch(/village|community|scary|dead|kill|hurt/i);
       expect(line.length).toBeLessThan(90);
+    }
+  });
+
+  it('names each Relight board where it stands, and says so when it glows (#306 6f)', () => {
+    const boards = CROOKED_HOUSE.rooms.flatMap((r) =>
+      r.things.filter((t) => t.kind === 'relight').map((t) => ({ room: r, thing: t })),
+    );
+    expect(boards.map((b) => b.room.id)).toEqual(['library', 'music-room']);
+    expect(CROOKED_RELIGHT_TEXT.heading('the reading lamps', 'Library')).toBe(
+      'The reading lamps in the Library',
+    );
+    expect(CROOKED_RELIGHT_TEXT.relit('the music box')).toBe('You relit the music box! ✨');
+    for (const { room, thing } of boards) {
+      for (const line of [
+        CROOKED_RELIGHT_TEXT.heading(thing.name, room.name),
+        CROOKED_RELIGHT_TEXT.relit(thing.name),
+      ]) {
+        expect(line.length).toBeLessThan(40);
+      }
     }
   });
 });

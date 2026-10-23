@@ -23,11 +23,15 @@ export interface FarHollowStateRow {
   completedAt: Date | null;
 }
 
-/** A room's progress (#306 6b): the things put right (bits, the data's order) and its bloom. */
+/**
+ * A room's progress (#306 6b): the things put right (bits, the data's
+ * order), its bloom, and its Relight board's try (#306 6f, 0 before the first).
+ */
 export interface FarHollowRoomRow {
   roomId: string;
   fixed: number;
   bloomedAt: Date | null;
+  relightAttempt: number;
 }
 
 /** What a house command changes on the state row. */
@@ -76,7 +80,9 @@ export interface FarHollowRepo {
    */
   lockRooms: (key: FarHollowKey, roomIds: readonly string[]) => Promise<FarHollowRoomRow[]>;
   /** Changes a room row (lock it first). */
-  setRoom: (key: FarHollowKey, row: FarHollowRoomRow) => Promise<void>;
+  setRoom: (key: FarHollowKey, row: Omit<FarHollowRoomRow, 'relightAttempt'>) => Promise<void>;
+  /** Writes a room's Relight try (the caller holds `lockRooms` for it). */
+  setRelightAttempt: (key: FarHollowKey, roomId: string, attempt: number) => Promise<void>;
   /**
    * I arrived in a season's far Hollow: its state row (a row already there
    * stays as it is) and last season's rows gone. True when this was the
@@ -118,6 +124,7 @@ const roomColumns = {
   roomId: farHollowRooms.roomId,
   fixed: farHollowRooms.fixed,
   bloomedAt: farHollowRooms.bloomedAt,
+  relightAttempt: farHollowRooms.relightAttempt,
 };
 
 const whereRoomKey = (key: FarHollowKey) =>
@@ -184,6 +191,13 @@ export function createFarHollowRepo(db: Executor): FarHollowRepo {
         .update(farHollowRooms)
         .set({ fixed: row.fixed, bloomedAt: row.bloomedAt })
         .where(and(whereRoomKey(key), eq(farHollowRooms.roomId, row.roomId)));
+    },
+
+    setRelightAttempt: async (key, roomId, attempt) => {
+      await db
+        .update(farHollowRooms)
+        .set({ relightAttempt: attempt })
+        .where(and(whereRoomKey(key), eq(farHollowRooms.roomId, roomId)));
     },
 
     arrive: async (key, at) => {

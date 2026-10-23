@@ -98,6 +98,9 @@ export class CellarChests {
     big.thinInstanceSetBuffer('matrix', this.#lidMatrices.big, 16, false);
     small.thinInstanceCount = count(false);
     big.thinInstanceCount = count(true);
+    // A lid with no chests stays off: with no thin instances Babylon draws the plain mesh.
+    small.setEnabled(count(false) > 0);
+    big.setEnabled(count(true) > 0);
     this.#lids = { small, big };
 
     // Sparkles: the joy spark (so kids know it), unlit, the big burst's count.
@@ -160,6 +163,24 @@ export class CellarChests {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Shows or hides the lids, and any moment playing (a place that draws its
+   * chest only some of the time: the Crooked House's attic, #306 6f).
+   */
+  setEnabled(on: boolean): void {
+    this.#lids.small.setEnabled(on && this.#lids.small.thinInstanceCount > 0);
+    this.#lids.big.setEnabled(on && this.#lids.big.thinInstanceCount > 0);
+    if (!on) {
+      this.#sparks.setEnabled(false);
+      this.#beam.setEnabled(false);
+    }
+  }
+
+  /** The lids, for a scene whose lights light only the meshes they name. */
+  get lidMeshes(): readonly Mesh[] {
+    return [this.#lids.small, this.#lids.big];
   }
 
   get stats(): CellarStats {

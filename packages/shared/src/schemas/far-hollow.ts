@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './data/seasons.js';
 import { ExploreNotableSchema } from './events.js';
+import { RelightBoardSchema, RelightMoveSchema } from './explore.js';
 import { ItemCountsSchema } from './inventory.js';
 
 // The far Hollow (#306 PR 6, plan Q7, owner decision 7): each kid's own
@@ -82,10 +83,20 @@ export const CrookedFindSchema = z.object({
 });
 export type CrookedFind = z.infer<typeof CrookedFindSchema>;
 
-/** `POST /maps/:mapId/far-hollow/fix`: put a crooked thing right in the room I'm in. */
+/**
+ * `POST /maps/:mapId/far-hollow/fix`: put a crooked thing right in the room
+ * I'm in. A Relight thing (#306 6f) is put right by its board: `relight` is
+ * the try (`/far-hollow/relight`) and its moves, which the server replays.
+ */
 export const CrookedFixRequestSchema = z.strictObject({
   room: ContentIdSchema,
   thing: ContentIdSchema,
+  relight: z
+    .strictObject({
+      attempt: z.number().int().min(1),
+      moves: z.array(RelightMoveSchema).max(200),
+    })
+    .optional(),
 });
 export type CrookedFixRequest = z.infer<typeof CrookedFixRequestSchema>;
 
@@ -95,8 +106,28 @@ export const CrookedFixResponseSchema = z.object({
   key: z.object({ id: ContentIdSchema, name: z.string() }).nullable(),
   /** The room's last thing: it bloomed, and this is what it gave. */
   bloom: CrookedFindSchema.nullable(),
+  /** A bloom's scrap of the house's story (#306 6f: twelve rooms, twelve scraps). */
+  scrap: z.string().nullable(),
 });
 export type CrookedFixResponse = z.infer<typeof CrookedFixResponseSchema>;
+
+/**
+ * `POST /maps/:mapId/far-hollow/relight`: a fresh try at the Relight board of
+ * a thing in the room I'm in (#306 6f, owner decision 5). Every try is its
+ * own puzzle of the thing's size, so a faded one reshuffles.
+ */
+export const CrookedRelightRequestSchema = z.strictObject({
+  room: ContentIdSchema,
+  thing: ContentIdSchema,
+});
+export type CrookedRelightRequest = z.infer<typeof CrookedRelightRequestSchema>;
+
+export const CrookedRelightResponseSchema = z.object({
+  kind: z.literal('relight'),
+  attempt: z.number().int().min(1),
+  board: RelightBoardSchema,
+});
+export type CrookedRelightResponse = z.infer<typeof CrookedRelightResponseSchema>;
 
 /**
  * `POST /maps/:mapId/far-hollow/enter`: step into a room through an open
@@ -157,10 +188,17 @@ export type CrookedChestResponse = z.infer<typeof CrookedChestResponseSchema>;
  * Dev only: `POST /maps/:mapId/dev/far-hollow`. Arrives without the far
  * road; `room` jumps there with every key door it needs open; `nearlyDone`
  * puts the whole house right but one thing (in `room`, or the last main
- * room), so one fix and the attic finish it.
+ * room: its Relight board if it has one), so one fix and the attic finish it.
  */
 export const DevFarHollowRequestSchema = z.strictObject({
   room: ContentIdSchema.optional(),
   nearlyDone: z.boolean().optional(),
 });
 export type DevFarHollowRequest = z.infer<typeof DevFarHollowRequestSchema>;
+
+/**
+ * Dev only: `POST /maps/:mapId/dev/far-hollow/relight-answer { room, thing }`,
+ * my latest try's answer (`DevRelightAnswerResponse`), so an e2e or a capture
+ * can win through the real board.
+ */
+export const DevCrookedRelightAnswerRequestSchema = CrookedRelightRequestSchema;

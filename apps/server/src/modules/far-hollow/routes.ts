@@ -6,9 +6,13 @@ import {
   CrookedFixRequestSchema,
   CrookedFixResponseSchema,
   CrookedPowerRequestSchema,
+  CrookedRelightRequestSchema,
+  CrookedRelightResponseSchema,
   CrookedUnlockRequestSchema,
   CrookedViewResponseSchema,
+  DevCrookedRelightAnswerRequestSchema,
   DevFarHollowRequestSchema,
+  DevRelightAnswerResponseSchema,
   FarHollowViewSchema,
   MapIdParamsSchema,
 } from '@heartpatch/shared';
@@ -65,6 +69,20 @@ export const farHollowRoutes =
         ...command,
       },
       async (request) => service.fix(requireUser(request), request.params.mapId, request.body),
+    );
+
+    // A Relight board's fresh try (#306 6f); its moves go to `fix`.
+    app.post(
+      '/maps/:mapId/far-hollow/relight',
+      {
+        schema: {
+          params: MapIdParamsSchema,
+          body: CrookedRelightRequestSchema,
+          response: { 200: CrookedRelightResponseSchema },
+        },
+        ...command,
+      },
+      async (request) => service.relight(requireUser(request), request.params.mapId, request.body),
     );
 
     app.post(
@@ -136,6 +154,20 @@ export const farHollowRoutes =
             .send(
               await service.devArrive(requireUser(request), request.params.mapId, request.body),
             ),
+      );
+
+      app.post(
+        '/maps/:mapId/dev/far-hollow/relight-answer',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevCrookedRelightAnswerRequestSchema,
+            response: { 200: DevRelightAnswerResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) =>
+          service.devRelightAnswer(requireUser(request), request.params.mapId, request.body),
       );
     }
 
