@@ -334,6 +334,14 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   --hp-secondary-ink: #5a3a5d;
 }
 
+/* The compact row (ⓘ, Heart Charm, potions, Swap) has to fit one line on a
+   375 px phone (#214), so its small buttons keep the old 14 px text and a
+   little less side padding than the kit's. */
+.battle-row .hp-button-small {
+  padding-inline: 10px;
+  font-size: 14px;
+}
+
 /* A potion sipped for this turn (#403): mint and glowing, so the sip is
    felt before the move goes out. Tap it to put the potion back. */
 .battle-button-sipped {
