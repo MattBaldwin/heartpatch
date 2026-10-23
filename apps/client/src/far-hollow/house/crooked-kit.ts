@@ -245,7 +245,8 @@ export function rug(at: V3, r: number, joy: number): Part[] {
       0,
       1,
     ),
-    ring(r * 1.9, 0.12, [at[0], 0.05, at[2]], joyed(FLOOR.rug2, joy), [Math.PI / 2, 0, 0]),
+    // A thin rim lying flat on the rug (an inlay the Keeper stands on, never in).
+    ring(r * 1.9, 0.05, [at[0], 0.05, at[2]], joyed(FLOOR.rug2, joy)),
   ];
 }
 

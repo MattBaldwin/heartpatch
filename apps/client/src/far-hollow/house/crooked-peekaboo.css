@@ -1,0 +1,187 @@
+/* The peekaboo (#306 6d, crooked-peekaboo.ts): the dark, two eyes, the
+   word and its shake, then the friendly echo waving over the card. Driven
+   frame by frame from a pure timeline (opacity and transforms only, so it
+   stays on the compositor); reduced motion gets the calm timeline from the
+   script and no waving here. The dark takes the touches while it plays
+   (the script sets it); the friendly part never does, so the card works. */
+
+.crooked-peek[hidden] {
+  display: none !important;
+}
+
+.crooked-peek {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+/* A little past the edges, so the shake never shows the room behind. */
+.crooked-peek-dark {
+  position: absolute;
+  inset: -40px;
+  background: radial-gradient(circle at 50% 42%, #1b1430 0%, #07050d 70%);
+  opacity: 0;
+}
+
+.crooked-peek-shake {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding-bottom: 12vh;
+  will-change: transform;
+}
+
+/* Padded past the eyes' glow, so the faded layer never clips it to a box. */
+.crooked-peek-eyes {
+  display: flex;
+  gap: 34px;
+  padding: 90px;
+  margin: -90px;
+  opacity: 0;
+}
+
+/* Big round glowing eyes with a soft pupil: spooky, never mean (no brows, no teeth). */
+.crooked-peek-eye {
+  position: relative;
+  width: 64px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 58%, #2a1f3d 0 22%, #f6ffc4 24% 62%, #d4ff7a 100%);
+  box-shadow:
+    0 0 24px 6px rgb(214 255 140 / 55%),
+    0 0 70px 18px rgb(170 255 120 / 22%);
+  transform: scaleY(var(--lids, 1));
+}
+
+.crooked-peek-word {
+  margin: 0;
+  color: #fff6ea;
+  /* Fits a 375 pt phone even at the pop's biggest. */
+  font-size: clamp(30px, 9.5vw, 46px);
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-shadow:
+    0 3px 0 #3c2a5c,
+    0 0 26px rgb(214 255 140 / 45%);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+/* After: the echo, friendly, waving above the card. */
+.crooked-peek-friend {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Below the top HUD (the room and put-right pills), above the card. */
+  top: calc(env(safe-area-inset-top) + max(18%, 132px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+}
+
+.crooked-peek-ghost {
+  position: relative;
+  width: 96px;
+  height: 112px;
+  border-radius: 48px 48px 30px 30px;
+  background: linear-gradient(#f4efff, #d9cdfb);
+  box-shadow:
+    inset 0 -10px 0 rgb(170 150 230 / 45%),
+    0 0 30px 6px rgb(220 210 255 / 45%);
+}
+
+.crooked-peek-ghost-eye {
+  position: absolute;
+  top: 38px;
+  width: 14px;
+  height: 20px;
+  border-radius: 50%;
+  background: #2b2340;
+}
+.crooked-peek-ghost-eye:nth-child(1) {
+  left: 28px;
+}
+.crooked-peek-ghost-eye:nth-child(2) {
+  right: 28px;
+}
+
+.crooked-peek-ghost-cheek {
+  position: absolute;
+  top: 62px;
+  width: 16px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffa8c8;
+}
+.crooked-peek-ghost-cheek:nth-child(3) {
+  left: 16px;
+}
+.crooked-peek-ghost-cheek:nth-child(4) {
+  right: 16px;
+}
+
+/* A little round arm, up in a wave. */
+.crooked-peek-ghost-arm {
+  position: absolute;
+  top: 34px;
+  right: -20px;
+  width: 30px;
+  height: 22px;
+  border-radius: 14px;
+  background: #ebe4ff;
+  transform-origin: 4px 50%;
+  transform: rotate(-35deg);
+}
+
+.crooked-peek-giggle {
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #fff8ef;
+  color: #3a2a1a;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 30%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-peek:not(.crooked-peek-calm) .crooked-peek-friend-on .crooked-peek-ghost {
+    animation: crooked-peek-bob 1.6s ease-in-out infinite;
+  }
+  .crooked-peek:not(.crooked-peek-calm) .crooked-peek-friend-on .crooked-peek-ghost-arm {
+    animation: crooked-peek-wave 0.5s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes crooked-peek-bob {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes crooked-peek-wave {
+  from {
+    transform: rotate(-55deg);
+  }
+  to {
+    transform: rotate(-10deg);
+  }
+}
+
+@media (max-height: 700px) {
+  .crooked-peek-eye {
+    width: 54px;
+    height: 70px;
+  }
+  .crooked-peek-friend {
+    top: calc(env(safe-area-inset-top) + 126px);
+  }
+}

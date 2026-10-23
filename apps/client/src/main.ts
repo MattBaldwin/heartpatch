@@ -1083,9 +1083,6 @@ const crookedHouse = createCrookedScreen({
   root: document.body,
   showScene,
   portraits,
-  cue: (name) => {
-    audio.cue(name);
-  },
   // "Say hello!": the house stepped aside; the friend's battle takes the
   // screen, and Back from it comes home to the house (the bonus room).
   onFriend: (mapId, battleId) => {
@@ -1102,9 +1099,15 @@ const crookedHouse = createCrookedScreen({
     );
   },
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  // The peekaboo's sting and the friendly echo's giggle (#306 6d); a chest,
+  // a door woken and a chest's friend (#306 6e).
+  cue: (name) => {
+    audio.cue(name);
+  },
   onOpen: () => {
     roster.close();
     maps.close();
@@ -2115,6 +2118,15 @@ if (import.meta.env.DEV) {
       },
       place: (x: number, z: number) => {
         crookedHouse.devPlace(x, z);
+      },
+      peekAt: (ms: number | null) => {
+        crookedHouse.devPeek(ms);
+      },
+      echoesAt: (ms: number | null) => {
+        crookedHouse.devEchoesAt(ms);
+      },
+      step: (doorId: string) => {
+        crookedHouse.devStep(doorId);
       },
     }),
     trickOrTreat: () => trickOrTreat.debug,
