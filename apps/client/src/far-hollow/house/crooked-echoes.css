@@ -1,0 +1,42 @@
+/* The echoes seen through the dark (#306 6d): two faint eyes over the
+   lantern's dark where an echo drifts, or peeking in at the screen's edge
+   from the room next door. Brighter and rounder when one is close enough
+   to notice me stepping in (Tiptoe halves how close that is). Placed with a
+   composited transform each frame. */
+
+.crooked-echo-mark {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  gap: 9px;
+  margin: -9px 0 0 -21px;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.crooked-echo-mark[hidden] {
+  display: none;
+}
+
+.crooked-echo-mark span {
+  width: 16px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, #2a1f3d 0 24%, #eef7d0 28% 70%, #c8f08a 100%);
+  box-shadow: 0 0 12px 3px rgb(214 255 140 / 40%);
+  transform: scaleY(0.55);
+}
+
+.crooked-echo-watching span {
+  transform: scale(1.2);
+  box-shadow: 0 0 16px 6px rgb(214 255 140 / 65%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-echo-mark span {
+    transition: transform 200ms ease-out;
+  }
+}

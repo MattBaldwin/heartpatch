@@ -27,7 +27,12 @@ interface HouseDebug {
   bubble: string | null;
   busy: boolean;
   crooked: { id: string; kind: string; x: number; z: number }[];
-  scene: { rooms: string[] } | null;
+  scene: { rooms: string[]; echoes: number } | null;
+  card: string | null;
+  echoes: { loop: string; room: string; position: number; shown: number; mark: string }[];
+  echoHint: { door: string; room: string; plain: string | null; soft: string | null } | null;
+  peek: { phase: string; calm: boolean; shook: boolean; friend: boolean } | null;
+  caught: { echo: string; backTo: string } | null;
 }
 
 type Hooks = {
@@ -129,5 +134,141 @@ test('goes inside the Crooked House, tries a locked door, walks into a dark room
   await page.getByTestId('crooked-back').tap();
   await expect.poll(async () => (await house(page))?.open).toBe(false);
   await slowExpect(page.getByTestId('far-hollow-sheet')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+/** How far (in rooms) the stair echo is from the Stair Hall's middle, and which way it's going. */
+async function stairEcho(page: Page): Promise<{ gap: number; position: number }> {
+  const e = (await house(page))?.echoes.find((x) => x.loop === 'stair-echo');
+  if (!e) return { gap: 9, position: -1 };
+  return { gap: Math.min(e.position, 2 - e.position), position: e.position };
+}
+
+/** Steers north on the joystick (out through the north door) until the server says where I am. */
+async function stepNorth(page: Page): Promise<void> {
+  const stick = (await page.getByTestId('crooked-stick').boundingBox())!;
+  const cx = stick.x + stick.width / 2;
+  const cy = stick.y + stick.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx, cy - 45, { steps: 3 });
+  await expect
+    .poll(async () => {
+      const h = await house(page);
+      return h?.room !== 'front-hall' || h.caught !== null;
+    })
+    .toBe(true);
+  await page.mouse.up();
+}
+
+/**
+ * The echoes (#306 6d): with every key turned (the dev route), the stair
+ * echo drifts between the Stair Hall and the Dining Room. Waiting at the
+ * open north door, I hear it when it's close; stepping in right then, the
+ * server catches me: the peekaboo plays (dark, eyes, the boo with its shake)
+ * and I'm back in the lit Front Hall with a friendly card, nothing lost.
+ * Tiptoe gets me past it when it's near but not right there. Reduced motion
+ * plays the calm peekaboo, with no shake. Game signals, not pixels.
+ */
+test('an echo catches me with a peekaboo and sends me back to the light; tiptoe creeps past it (#306 6d)', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const page = await newPlayer(browser, uniqueName('echo'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Echo Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await slowExpect(lobby.getByRole('button', { name: 'Visit patch' })).toBeVisible();
+  const maps = await api<{ maps: { id: string; name: string }[] }>(page, 'GET', '/maps');
+  const mapId = maps.body.maps.find((m) => m.name === 'Echo Patch')!.id;
+  const jump = await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'front-hall' });
+  expect(jump.status).toBe(201);
+  await visitPatch(lobby);
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() =>
+    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
+  );
+  await page.getByTestId('far-hollow-inside').tap();
+  await slowExpect
+    .poll(async () => (await house(page))?.scene?.rooms.length ?? 0)
+    .toBeGreaterThan(0);
+  expect((await house(page))!).toMatchObject({ room: 'front-hall', lit: true });
+
+  // The stair echo drifts in the Stair Hall next door: drawn, and its eyes peek in.
+  await expect.poll(async () => (await house(page))?.scene?.echoes ?? 0).toBeGreaterThan(0);
+  await place(page, 0.2, 1.6);
+  await expect.poll(async () => (await house(page))?.echoHint?.room).toBe('stair-hall');
+
+  // Right by the Stair Hall's middle: it hears me, and stepping in it catches me.
+  await slowExpect
+    .poll(async () => (await stairEcho(page)).gap, { intervals: [100] })
+    .toBeLessThan(0.06);
+  const heard = (await house(page))!;
+  expect(heard.echoHint).toMatchObject({ plain: 'stair-echo', soft: 'stair-echo' });
+  await expect(page.getByTestId('crooked-bubble')).toContainText('an echo is close');
+  await stepNorth(page);
+  await expect.poll(async () => (await house(page))?.caught?.echo).toBe('stair-echo');
+  await expect.poll(async () => (await house(page))?.peek?.shook).toBe(true);
+  expect((await house(page))!.peek!.calm).toBe(false);
+  await slowExpect.poll(async () => (await house(page))?.card).toBe('caught');
+  let h = (await house(page))!;
+  expect(h).toMatchObject({ room: 'front-hall', lit: true, caught: { backTo: 'front-hall' } });
+  expect(h.peek?.friend).toBe(true);
+  await expect(page.getByTestId('crooked-card')).toContainText('Back to the light');
+  await expect(page.getByTestId('crooked-keys')).toHaveText('🗝️ 6 of 6');
+  await page.getByTestId('crooked-card-ok').tap();
+  await expect.poll(async () => (await house(page))?.card ?? null).toBeNull();
+  expect((await house(page))!.peek).toBeNull();
+
+  // Tiptoe: near but drifting off, it would still notice me walking in, not creeping.
+  await page.getByTestId('crooked-tiptoe').tap();
+  await expect.poll(async () => (await house(page))?.tiptoe).toBe(true);
+  await place(page, 0.2, 1.6);
+  await slowExpect
+    .poll(
+      async () => {
+        const a = await stairEcho(page);
+        await page.waitForTimeout(80);
+        const b = await stairEcho(page);
+        return b.gap > a.gap && b.gap > 0.17 && b.gap < 0.24;
+      },
+      { intervals: [50] },
+    )
+    .toBe(true);
+  h = (await house(page))!;
+  expect(h.echoHint).toMatchObject({ plain: 'stair-echo', soft: null });
+  await stepNorth(page);
+  await expect.poll(async () => (await house(page))?.room).toBe('stair-hall');
+  expect((await house(page))!.card).toBeNull();
+  await page.getByTestId('crooked-tiptoe').tap();
+  await expect.poll(async () => (await house(page))?.tiptoe).toBe(false);
+
+  // Reduced motion: from the Front Hall again (Back, the dev route, Go inside), caught calmly.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByTestId('crooked-back').tap();
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'front-hall' })).status,
+  ).toBe(201);
+  await expect.poll(async () => (await house(page))?.open).toBe(false);
+  await page.evaluate(() =>
+    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
+  );
+  await page.getByTestId('far-hollow-inside').tap();
+  await expect.poll(async () => (await house(page))?.room).toBe('front-hall');
+  await place(page, 0.2, 1.6);
+  await slowExpect
+    .poll(async () => (await stairEcho(page)).gap, { intervals: [100] })
+    .toBeLessThan(0.06);
+  await stepNorth(page);
+  await expect.poll(async () => (await house(page))?.peek?.calm).toBe(true);
+  await slowExpect.poll(async () => (await house(page))?.card).toBe('caught');
+  h = (await house(page))!;
+  expect(h.peek).toMatchObject({ calm: true, shook: false, friend: true });
+  expect(h.room).toBe('front-hall');
+  await page.getByTestId('crooked-card-ok').tap();
+  await expect.poll(async () => (await house(page))?.card ?? null).toBeNull();
   expect(errors).toEqual([]);
 });

@@ -24,6 +24,7 @@ import type { SceneContent } from '../../engine/stage.js';
 import { kitMesh, merged, type Part } from '../../explore/kit-mesh.js';
 import { KeeperField, type KeeperHandle } from '../../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../../procedural/keeper/keeper-items.js';
+import { faceYaw } from '../../procedural/face-yaw.js';
 import type { SquishyLod } from '../../procedural/config.js';
 import {
   blk,
@@ -52,6 +53,8 @@ import {
   type CrookedShot,
   type FloorPoint,
 } from './crooked-plan.js';
+import { echoShape } from './crooked-echo-kit.js';
+import type { EchoSpot } from './crooked-echoes.js';
 
 // The Crooked House's 3D view (#306 6c): the rooms of one floor, each one
 // merged vertex-coloured mesh (grey while dark, full colour once put
@@ -74,6 +77,9 @@ const BLOOM = {
 
 /** The camera eases to a new shot at this rate, a share a second (a cut with reduced motion). */
 const CAMERA_EASE = 6; // TUNE
+/** An echo floats and bobs (still with reduced motion), and grows a little when it notices me. TUNE */
+const ECHO_FLOAT = { up: 0.18, bob: 0.08, hz: 0.6, notice: 1.14, scale: 0.95 } as const;
+
 /** The lantern swings a little ahead of the Keeper's right hand. */
 const LANTERN_AT = { side: 0.42, up: 0.95, ahead: 0.12 } as const; // TUNE
 
@@ -92,6 +98,8 @@ export interface CrookedSceneStats {
   readonly drawCalls: number;
   readonly triangles: number;
   readonly bloom: string | null;
+  /** The echoes drawn now (#306 6d). */
+  readonly echoes: number;
 }
 
 const SCREEN_FROM = new Vector3();
@@ -115,6 +123,9 @@ export class CrookedScene {
   readonly #lanternGlass: Mesh;
   readonly #key: Mesh;
   readonly #instrumentation: SceneInstrumentation;
+  readonly #echoMat: StandardMaterial;
+  /** The echo meshes, by loop id (#306 6d): made as an echo first comes near. */
+  readonly #echoes = new Map<string, Mesh>();
   /** The room meshes drawn now, by room id, and the state each was built for. */
   readonly #rooms = new Map<string, { mesh: Mesh; key: string; lit: boolean }>();
   #view: CrookedHouseView | null = null;
@@ -172,6 +183,9 @@ export class CrookedScene {
     this.#key = kitMesh(scene, 'crooked-key', () => merged(keyShape()));
     this.#key.material = this.#keyMat;
     this.#key.setEnabled(false);
+    // The echoes glow on their own (emissive, never another light: the tier caps lights).
+    this.#echoMat = glow(scene, 'crooked-echo', '#ffffff', 1);
+    this.#echoMat.alpha = 0.88;
 
     this.#instrumentation = new SceneInstrumentation(scene);
     const before = scene.onBeforeRenderObservable.add(() => {
@@ -361,6 +375,53 @@ export class CrookedScene {
     return moving;
   }
 
+  // ── The echoes (#306 6d) ────────────────────────────────────────────
+
+  /**
+   * Draws the echoes in the rooms shown now, where `spots` says they drift
+   * (fading as one drifts into the light), the one `watching` turned to me
+   * and a little bigger. True while any echo is near (keep drawing).
+   */
+  setEchoes(spots: readonly EchoSpot[], watching: string | null, now: number): boolean {
+    let near = false;
+    for (const spot of spots) {
+      const there =
+        !spot.gone &&
+        this.#onShownFloor(spot) &&
+        (this.#rooms.has(spot.between[0]) || this.#rooms.has(spot.between[1]));
+      let mesh = this.#echoes.get(spot.loop);
+      if (!there) {
+        mesh?.setEnabled(false);
+        continue;
+      }
+      near = true;
+      if (!mesh) {
+        mesh = kitMesh(this.#scene, 'crooked-echo', echoShape);
+        mesh.material = this.#echoMat;
+        this.#echoes.set(spot.loop, mesh);
+      }
+      mesh.setEnabled(spot.shown > 0.02);
+      mesh.visibility = spot.shown;
+      const t = now / 1000;
+      const bob = this.#options.reducedMotion
+        ? 0
+        : Math.sin(t * Math.PI * 2 * ECHO_FLOAT.hz) * ECHO_FLOAT.bob;
+      mesh.position.set(spot.at.x, ECHO_FLOAT.up + bob, spot.at.z);
+      const noticed = watching === spot.loop;
+      mesh.rotation.y = noticed
+        ? faceYaw(this.#at.x - spot.at.x, this.#at.z - spot.at.z)
+        : spot.heading;
+      mesh.scaling.setAll(ECHO_FLOAT.scale * (noticed ? ECHO_FLOAT.notice : 1));
+    }
+    return near;
+  }
+
+  /** An echo shows on the floor drawn now. */
+  #onShownFloor(spot: EchoSpot): boolean {
+    const any = this.#rooms.keys().next();
+    return any.done !== true && roomOf(any.value)?.floor === spot.floor;
+  }
+
   #applyCamera(): void {
     const camera = this.#scene.activeCamera;
     if (!(camera instanceof TargetCamera)) return;
@@ -422,6 +483,7 @@ export class CrookedScene {
       drawCalls: this.#drawCalls,
       triangles: this.#triangles,
       bloom: this.#bloom?.room ?? null,
+      echoes: [...this.#echoes.values()].filter((m) => m.isEnabled()).length,
     };
   }
 }

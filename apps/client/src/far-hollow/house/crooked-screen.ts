@@ -7,6 +7,7 @@ import {
   type FarHollowView,
   type KeeperConfig,
 } from '@heartpatch/shared';
+import type { CueName } from '../../audio/cues.js';
 import type { QualityTier } from '../../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../../engine/stage.js';
 import { EXPLORE_VIEW } from '../../explore/explore-config.js';
@@ -50,6 +51,15 @@ import {
   type CrookedSceneStats,
 } from './crooked-scene.js';
 import {
+  echoHint,
+  echoSpots,
+  serverClock,
+  type EchoHint,
+  type EchoSpot,
+} from './crooked-echoes.js';
+import { createPeekaboo, type PeekPhase } from './crooked-peekaboo.js';
+import {
+  CROOKED_ECHO_TEXT as E,
   CROOKED_TEXT as T,
   floorWords,
   progressWords,
@@ -57,6 +67,7 @@ import {
   targetWords,
 } from './crooked-text.js';
 import './crooked.css';
+import './crooked-echoes.css';
 
 // The Crooked House screen (#306 6c, the owner-approved design): my own
 // haunted house this season, room by room. The camera fits the room I'm in
@@ -67,7 +78,9 @@ import './crooked.css';
 // shrinks the light; the map is the dollhouse view; Back goes to the far
 // Hollow sheet. Every change is a server command (rule 1): the server says
 // which room I'm in, what's fixed, which keys I hold and which doors open.
-// The echoes and their peekaboo are #306 6d (`onCaught`).
+// Echoes drift through the dark rooms (#306 6d, `crooked-echoes.ts`); one
+// close by notices me stepping in, and the server says so with a peekaboo
+// (`crooked-peekaboo.ts`) and back to the last lit room, nothing lost.
 
 export interface CrookedScreenOptions {
   readonly root: HTMLElement;
@@ -83,11 +96,8 @@ export interface CrookedScreenOptions {
   /** Back: the far Hollow sheet again (progress is already saved). */
   readonly onClosed: (mapId: string) => void;
   readonly onProblem: (message: string) => void;
-  /**
-   * An echo caught me stepping in (#306 6d's peekaboo: the eyes, the sting,
-   * the shake). Until it's built, a friendly card says so.
-   */
-  readonly onCaught?: (caught: { echo: string; backTo: string }) => void;
+  /** A sound for a moment (the audio cue system, #25): the peekaboo's sting and giggle. */
+  readonly cue?: (name: CueName) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -110,6 +120,26 @@ export interface CrookedDebug {
   /** The room's things still crooked, and where they stand. */
   readonly crooked: readonly { id: string; kind: string; x: number; z: number }[];
   readonly scene: CrookedSceneStats | null;
+  /** The echoes (#306 6d): where each drifts, and its eyes over the dark (`mark`). */
+  readonly echoes: readonly {
+    loop: string;
+    room: string;
+    position: number;
+    shown: number;
+    mark: 'off' | 'on' | 'edge';
+  }[];
+  /** At a doorway into a dark room: an echo that would notice me stepping in, with Tiptoe as it is and without. */
+  readonly echoHint: {
+    door: string;
+    room: string;
+    watching: string | null;
+    plain: string | null;
+    soft: string | null;
+  } | null;
+  /** The peekaboo playing: its phase, the calm one (reduced motion) or not, and whether it shook. */
+  readonly peek: { phase: PeekPhase; calm: boolean; shook: boolean; friend: boolean } | null;
+  /** The last catch: which echo, and the room it sent me back to. */
+  readonly caught: { echo: string; backTo: string } | null;
 }
 
 export interface CrookedScreen {
@@ -122,6 +152,10 @@ export interface CrookedScreen {
   readonly debug: CrookedDebug;
   /** Dev only (captures, e2e): stands the Keeper at a floor point of the room I'm in. */
   devPlace: (x: number, z: number) => void;
+  /** Dev only (captures): stops the peekaboo's clock at `ms` from a catch, or lets it run (`null`). */
+  devPeek: (ms: number | null) => void;
+  /** Dev only (captures): draws the echoes at server time `ms`, or on the clock again (`null`). */
+  devEchoesAt: (ms: number | null) => void;
 }
 
 /** A fitted room keeps this clear of the HUD, CSS px. */
@@ -132,6 +166,8 @@ const HOLD_MS = 650; // TUNE
 const NOTE_MS = 2600; // TUNE
 /** A press on Tiptoe shorter than this is a tap (it stays on); longer is a hold (off on release). */
 const TIPTOE_TAP_MS = 350; // TUNE
+/** The echoes drift on explore's 30 fps cap while nothing else moves. */
+const ECHO_FRAME_MS = 33; // TUNE
 
 type Card =
   | { kind: 'key'; title: string; line: string }
@@ -174,6 +210,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let darkPaint: DarkPaint | null = null;
   /** The door the Keeper last bumped (its bubble says why it's shut). */
   let bumped: CrookedDoor | null = null;
+  /** The server's clock, from the last view (the echoes drift on it). */
+  let clock: (now: number) => number = (now) => now;
+  let spots: EchoSpot[] = [];
+  let hint: EchoHint | null = null;
+  let lastEchoDraw = 0;
+  let caught: { echo: string; backTo: string } | null = null;
+  /** Dev only: the echoes drawn at this server time (captures). */
+  let echoesPinned: number | null = null;
 
   const house = (): CrookedHouseView | null => view?.house ?? null;
   const here = () => {
@@ -265,11 +309,29 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     'data-testid': 'crooked-card',
   });
   sheet.hidden = true;
+  // An echo's eyes over the dark, one per loop (#306 6d).
+  const marks = new Map(
+    CROOKED_HOUSE.echoLoops.map((loop) => {
+      const mark = el(
+        'div',
+        {
+          class: 'crooked-echo-mark',
+          'aria-hidden': 'true',
+          'data-testid': `crooked-echo-${loop.id}`,
+        },
+        el('span'),
+        el('span'),
+      );
+      mark.hidden = true;
+      return [loop.id, mark] as const;
+    }),
+  );
   const overlay = el(
     'div',
     { class: 'crooked', 'data-testid': 'crooked' },
     ground,
     dark,
+    ...marks.values(),
     top,
     tabs,
     mapHint,
@@ -282,6 +344,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   );
   overlay.hidden = true;
   options.root.append(overlay);
+  const peekaboo = createPeekaboo(overlay);
 
   back.addEventListener('click', () => {
     if (mapShown) {
@@ -396,7 +459,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   ground.addEventListener('pointerdown', (e) => {
-    if (!isOpen || press || cards.length > 0) return;
+    if (!isOpen || press || cards.length > 0 || peekaboo.active) return;
     const p = local(e);
     press = { id: e.pointerId, x: p.x, y: p.y, moved: false };
     try {
@@ -488,7 +551,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     let want: FloorPoint | null = null;
     let heading: number | undefined;
     const speed = (tiptoe ? CROOKED_WALK.tiptoeSpeed : CROOKED_WALK.speed) * dt;
-    if (!mapShown && !working && cards.length === 0) {
+    if (!mapShown && !working && cards.length === 0 && !peekaboo.active) {
       if (stick) {
         // The camera looks north: up the screen is north, right is east.
         const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
@@ -529,9 +592,113 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }
     findTarget(false);
     const animating = s.step(dt, now);
+    const echoing = drawEchoes(now);
     renderDark();
-    if (moved || heading !== undefined || animating) options.invalidate();
-    if (walking || animating) frame = requestAnimationFrame(tick);
+    if (moved || heading !== undefined || animating) {
+      options.invalidate();
+      lastEchoDraw = now;
+    } else if (echoing && now - lastEchoDraw >= ECHO_FRAME_MS) {
+      options.invalidate();
+      lastEchoDraw = now;
+    }
+    if (walking || animating || echoing) frame = requestAnimationFrame(tick);
+  }
+
+  // ── The echoes (#306 6d) ──────────────────────────────────────────────
+
+  /** Moves the echoes to where they drift now and listens at the nearest dark doorway; true while any is near. */
+  function drawEchoes(now: number): boolean {
+    const s = scene3d;
+    const h = house();
+    if (!s || !h) return false;
+    const at = echoesPinned ?? clock(Date.now());
+    spots = echoSpots(h, at);
+    const heard = mapShown || peekaboo.active ? null : echoHint(h, keeperAt, at, tiptoe);
+    if (heardKey(heard) !== heardKey(hint)) {
+      hint = heard;
+      renderAction();
+    } else hint = heard;
+    const near = s.setEchoes(spots, hint?.watching ?? null, now);
+    renderMarks();
+    return near;
+  }
+
+  /**
+   * An echo's eyes over the lantern's dark (the 3D echo shows inside the
+   * light, and in a lit room's view), or peeking in at the screen's edge
+   * from the room next door.
+   */
+  function renderMarks(): void {
+    const s = scene3d;
+    const drawn = new Set(s?.stats.rooms ?? []);
+    const inDark = dark.classList.contains('crooked-dark-on');
+    const lantern = inDark && s ? s.screenOf(keeperAt, 0.6) : null;
+    const edge = s?.screenOf(
+      { x: keeperAt.x + CROOKED_LANTERN[tiptoe ? 'tiptoe' : 'radius'], z: keeperAt.z },
+      0.6,
+    );
+    const lightR = lantern && edge ? Math.hypot(edge.x - lantern.x, edge.y - lantern.y) : 0;
+    const w = window.innerWidth;
+    const hgt = window.innerHeight;
+    for (const [loop, mark] of marks) {
+      const spot = spots.find((p) => p.loop === loop);
+      const p =
+        s &&
+        spot &&
+        !spot.gone &&
+        !mapShown &&
+        !peekaboo.active &&
+        spot.shown > 0.05 &&
+        (drawn.has(spot.between[0]) || drawn.has(spot.between[1]))
+          ? s.screenOf(spot.at, 1.35)
+          : null;
+      let state: 'off' | 'on' | 'edge' = 'off';
+      let x = 0;
+      let y = 0;
+      if (p && spot) {
+        const pad = 28;
+        const off = p.x < pad || p.x > w - pad || p.y < pad || p.y > hgt - pad;
+        const inLight = lantern !== null && Math.hypot(p.x - lantern.x, p.y - lantern.y) < lightR;
+        if (off) {
+          state = 'edge';
+          x = Math.min(w - pad, Math.max(pad, p.x));
+          y = Math.min(hgt - pad, Math.max(pad, p.y));
+        } else if (inDark && !inLight) {
+          state = 'on';
+          x = p.x;
+          y = p.y;
+        }
+      }
+      mark.hidden = state === 'off';
+      mark.dataset['state'] = state;
+      if (state === 'off' || !spot) continue;
+      mark.style.opacity = String(Math.min(1, spot.shown) * (state === 'edge' ? 0.7 : 0.9));
+      mark.style.transform = `translate(${String(Math.round(x))}px, ${String(Math.round(y))}px)`;
+      mark.classList.toggle('crooked-echo-watching', hint?.watching === loop);
+    }
+  }
+
+  /** The peekaboo, then back in the last lit room (the server already put me there). */
+  function peek(by: { echo: string; backTo: string }): void {
+    caught = by;
+    const at = generation;
+    peekaboo.play({
+      calm: reducedMotion(),
+      cue: options.cue,
+      onSwap: () => {
+        if (at !== generation) return;
+        const backTo = roomOf(by.backTo);
+        if (backTo) keeperAt = roomStart(backTo);
+        yaw = 0;
+        enterShown(true);
+      },
+      onCard: () => {
+        if (at !== generation) return;
+        cards.push({ kind: 'caught' });
+        renderCard();
+      },
+    });
+    renderAction();
   }
 
   // ── What's in front, and doing it ─────────────────────────────────────
@@ -643,11 +810,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     apply(reply.view);
     const now = house();
     if (reply.caught) {
-      const backTo = roomOf(reply.caught.backTo);
-      if (backTo) keeperAt = roomStart(backTo);
-      if (options.onCaught) options.onCaught(reply.caught);
-      else cards.push({ kind: 'caught' });
-    } else if (now) {
+      peek(reply.caught);
+      return;
+    }
+    if (now) {
       keeperAt = arrivalSpot(door, now.room) ?? keeperAt;
       const end = doorEnd(door, now.room);
       if (end) yaw = faceYaw(end.inward.x, end.inward.z);
@@ -691,6 +857,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function apply(fresh: FarHollowView): void {
     view = fresh;
+    if (fresh.house) clock = serverClock(fresh.house.serverTime, Date.now());
   }
 
   /** Shows the room I'm in (and its floor), and fits the camera to it. */
@@ -831,7 +998,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const said =
       noteText || (target?.kind === 'door' && bumped === target.door ? (words?.bubble ?? '') : '');
     const about = words && target?.kind === 'thing' ? T.crooked : '';
-    bubbleText(said || about || null, false);
+    // At a dark doorway, an echo close by past it (#306 6d).
+    const echo = hint && !mapShown && cards.length === 0 ? echoWords(hint, tiptoe) : '';
+    bubbleText(said || echo || about || null, false);
   }
 
   function bubbleText(text: string | null, keep = true): void {
@@ -889,14 +1058,17 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       sheet.replaceChildren();
       return;
     }
-    const title = card.kind === 'caught' ? T.caught : card.title;
-    const line = card.kind === 'caught' ? T.caughtLine : card.line;
-    const ok = hpButton(card.kind === 'key' ? T.keepIt : T.yay, {
+    const title = card.kind === 'caught' ? E.caughtTitle : card.title;
+    const line = card.kind === 'caught' ? E.caughtLine : card.line;
+    const label = card.kind === 'key' ? T.keepIt : card.kind === 'caught' ? E.caughtOk : T.yay;
+    const ok = hpButton(label, {
       variant: 'primary',
       testId: 'crooked-card-ok',
     });
     ok.addEventListener('click', () => {
       if (cards[0]?.kind === 'key') scene3d?.hideKey();
+      // The friendly echo waves goodbye with the card.
+      if (cards[0]?.kind === 'caught') peekaboo.done();
       cards = cards.slice(1);
       renderCard();
       findTarget(true);
@@ -958,6 +1130,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       target = null;
       bumped = null;
       darkPaint = null;
+      hint = null;
+      spots = [];
+      caught = null;
       isOpen = true;
       overlay.hidden = false;
       options.onOpen(id);
@@ -997,6 +1172,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     walk = null;
     working = false;
     cards = [];
+    peekaboo.stop();
+    for (const mark of marks.values()) mark.hidden = true;
     view = null;
     scene3d = null;
     mapId = null;
@@ -1025,6 +1202,13 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();
+      wake();
+    },
+    devPeek: (ms) => {
+      peekaboo.hold(ms);
+    },
+    devEchoesAt: (ms) => {
+      echoesPinned = ms;
       wake();
     },
     get isOpen() {
@@ -1066,6 +1250,24 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
               }))
             : [],
         scene: scene3d?.stats ?? null,
+        echoes: spots.map((p) => ({
+          loop: p.loop,
+          room: p.room,
+          position: p.position,
+          shown: p.shown,
+          mark: (marks.get(p.loop)?.dataset['state'] ?? 'off') as 'off' | 'on' | 'edge',
+        })),
+        echoHint: hint
+          ? {
+              door: hint.door.id,
+              room: hint.room,
+              watching: hint.watching,
+              plain: hint.plain,
+              soft: hint.soft,
+            }
+          : null,
+        peek: peekaboo.debug,
+        caught,
       };
     },
   };
@@ -1081,6 +1283,16 @@ function sameTarget(a: CrookedTarget | null, b: CrookedTarget | null): boolean {
 
 const keyHeld = (t: CrookedTarget): boolean =>
   t.kind === 'door' && t.state.kind === 'locked' && t.state.held;
+
+/** What's heard at a dark doorway: wait, or Tiptoe would get me past. */
+function echoWords(hint: EchoHint, tiptoe: boolean): string {
+  if (hint.soft) return E.near;
+  if (hint.plain && !tiptoe) return E.tiptoe;
+  return '';
+}
+
+const heardKey = (h: EchoHint | null): string =>
+  h ? `${h.door.id}:${h.watching ?? ''}:${h.plain ?? ''}:${h.soft ?? ''}` : '';
 
 /** The bloom card's line: the colour came back, and anything it gave. */
 function bloomLine(find: CrookedFind): string {
