@@ -87,7 +87,7 @@ function caption(d, door, state, r) {
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces that same doorway, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : up} ${door.sparkle[up === 1 ? 0 : 1]} ${up === 1 ? 'is' : 'are'} drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces that same doorway, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
     : '';
   const shut =
     state === 'asleep'
@@ -101,6 +101,10 @@ function caption(d, door, state, r) {
     state !== 'asleep' && bubble.startsWith('Shh')
       ? ' The bubble is the game’s hint about the dark room through the newly opened door.'
       : '';
+  const blossoms =
+    state !== 'asleep' && door.power === 'leaf'
+      ? ' Inside the open doorway, the vine’s blossoms glow faintly, pale round discs through the dark (the game’s own art for a woken Leaf door).'
+      : '';
   const lantern =
     state !== 'asleep' && door.power === 'light'
       ? ' Near the top of the open doorway, the closet’s little lantern glows faintly, a pale crescent through the dark (the game’s own art for a woken Light door).'
@@ -113,7 +117,7 @@ function caption(d, door, state, r) {
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (they wander; their clock is pinned to the same moment on both phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${lantern}${keeper}${ghost}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${blossoms}${lantern}${keeper}${ghost}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {
