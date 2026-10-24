@@ -433,6 +433,9 @@ async function phonePage(device) {
   });
   const page = await context.newPage();
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') console.error(`[${m.type()}]`, m.text());
+  });
   // SwiftShader at 3× loads slowly.
   page.setDefaultNavigationTimeout(120_000);
   const cdp = await context.newCDPSession(page);
