@@ -97,6 +97,10 @@ function caption(d, door, state, r) {
     state !== 'asleep' && door.power === 'water'
       ? ' At the foot of the door, the doused flames leave a pale blue shining puddle (the game’s own art for a woken Water door).'
       : '';
+  const hint =
+    state !== 'asleep' && bubble.startsWith('Shh')
+      ? ' The bubble is the game’s hint about the dark room through the newly opened door.'
+      : '';
   const ghosts = r.ghosts?.length ?? 0;
   const ghost = ghosts
     ? ` ${ghosts === 1 ? 'A wandering echo shows' : 'Wandering echoes show'} as a pale spotted ghost near the Keeper.`
@@ -105,7 +109,7 @@ function caption(d, door, state, r) {
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (they wander; their clock is pinned to the same moment on both phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${keeper}${ghost} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${keeper}${ghost}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {

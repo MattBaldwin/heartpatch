@@ -300,17 +300,30 @@ async function bump(page, p) {
 }
 
 /**
- * Stands the Keeper back from the woken door, at the first spot where no
- * crooked thing is in reach, so no other bubble or button pulls the eye.
- * The spots are the same on every phone; the last one is kept if none is clear.
+ * Stands the Keeper back from the woken door so no other bubble or button
+ * pulls the eye: at the first spot where nothing is in reach and nothing is
+ * said, else the first with no crooked thing in reach (an echo hint about the
+ * room through the newly opened door can't be walked away from). The spots are
+ * the same on every phone.
  */
 async function clearSpot(page, p) {
-  for (const [back, side] of SPOTS) {
+  const at = ([back, side]) => [
     // `side` runs along the wall: square to the way I walked into the door.
-    await place(page, p.door[0] - p.dx * back + p.dz * side, p.door[1] - p.dz * back + p.dx * side);
+    p.door[0] - p.dx * back + p.dz * side,
+    p.door[1] - p.dz * back + p.dx * side,
+  ];
+  let fallback = null;
+  for (const spot of SPOTS) {
+    await place(page, ...at(spot));
     await page.waitForTimeout(500);
-    const target = (await house(page))?.target;
-    if (!target || target.kind === 'door') return;
+    const h = await house(page);
+    const free = !h?.target || h.target.kind === 'door';
+    if (free && !h?.bubble) return;
+    if (free) fallback ??= spot;
+  }
+  if (fallback) {
+    await place(page, ...at(fallback));
+    await page.waitForTimeout(500);
   }
 }
 
