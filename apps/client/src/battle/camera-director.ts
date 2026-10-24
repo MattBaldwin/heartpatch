@@ -67,8 +67,10 @@ export function battleScale(height: number, config = FIGHTER): number {
  * the headroom under the pills, each judged at its own depth along the view.
  * The fight's box backs off no further than the arena reaches (`arenaReach`,
  * #652), but the fighters always fit: nothing covers them on any screen
- * (#142). Tall squishies are drawn smaller (`battleScale`), so on a portrait
- * phone or a tablet they fit inside the arena too (camera-director.test.ts).
+ * (#142). On a portrait phone the reach is far beyond what any fight needs;
+ * there `battleScale` and the ground's size keep the camera over the arena
+ * (camera-director.test.ts), and the reach binds only where the ground shows
+ * to the screen's bottom (a wide iPad).
  */
 export function frameDistance(
   aspect: number,
