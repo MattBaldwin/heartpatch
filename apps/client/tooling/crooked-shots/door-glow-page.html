@@ -1,0 +1,127 @@
+<title>Door Glow Screens</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<style>
+  /* Layout: one section per door; frames in a grid: three columns from 1200px so a phone's asleep, just-woken and a-moment-later frames share a row, two from 600px, one column under 600px. */
+  :root {
+    --bg: #f6f4f8;
+    --fg: #2a2233;
+    --muted: #6b6075;
+    --line: #ddd5e6;
+    --card: #ffffff;
+    --accent: #a8456f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #14101b;
+      --fg: #efe9f6;
+      --muted: #a79bb5;
+      --line: #2e2540;
+      --card: #1d1727;
+      --accent: #f08fb4;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #14101b;
+    --fg: #efe9f6;
+    --muted: #a79bb5;
+    --line: #2e2540;
+    --card: #1d1727;
+    --accent: #f08fb4;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font:
+      15px/1.5 system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.1rem;
+    margin: 32px 0 12px;
+    color: var(--accent);
+  }
+  p.lede {
+    color: var(--muted);
+    max-width: 65ch;
+    margin: 0 0 8px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+  @media (min-width: 1200px) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 599px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  figure {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    min-width: 0;
+  }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 0 auto 10px;
+  }
+  figure img[width='393'] {
+    max-width: 393px;
+  }
+  figure img[width='375'] {
+    max-width: 375px;
+  }
+  figcaption {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  figcaption b {
+    color: var(--fg);
+  }
+  .pin {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+</style>
+<main>
+  <h1>Woken power doors light up</h1>
+  <p class="lede">
+    Each of the four sleeping doors in the Crooked House, asleep, just woken and a moment later, on
+    iPhone 15 and iPhone SE from the same saved state. A woken door gets a glowing outline in its
+    element's colour, with its sparkles drifting up from it. Every frame is at ?tier=high, pinned,
+    with simulated safe-area insets, shot on the real clock in headless Chromium (software
+    rendering). Each phone's woken frames are taken with the Keeper at the same spot in the room.
+    The glowing eyes and any pale squishy are wandering echoes and ghosts; they move on their own
+    and can differ between the two phones.
+  </p>
+  @@SECTIONS@@
+</main>

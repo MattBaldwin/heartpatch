@@ -2119,6 +2119,9 @@ if (import.meta.env.DEV) {
       place: (x: number, z: number) => {
         crookedHouse.devPlace(x, z);
       },
+      look: (doorId: string) => {
+        crookedHouse.devLook(doorId);
+      },
       peekAt: (ms: number | null) => {
         crookedHouse.devPeek(ms);
       },

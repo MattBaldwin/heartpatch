@@ -153,7 +153,11 @@ declare global {
       /** The Crooked House screen (#306 6c). */
       farHollowHouse?(): CrookedDebug;
       /** Opens the far Hollow sheet without a trading post (e2e: its "Go inside"). */
-      farHollowDev?(): { openSheet(): void; place(x: number, z: number): void };
+      farHollowDev?(): {
+        openSheet(): void;
+        place(x: number, z: number): void;
+        look(doorId: string): void;
+      };
       /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */
       trickOrTreat?(): TrickOrTreatDebug;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */

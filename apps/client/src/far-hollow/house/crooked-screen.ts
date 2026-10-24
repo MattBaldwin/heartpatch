@@ -39,6 +39,7 @@ import {
   type ChestTarget,
   type Helper,
 } from './crooked-bonus.js';
+import { createDoorLights, doorLightLayout, doorLightPoints } from './crooked-door-light.js';
 import { CrookedBonusFx, type CrookedBonusFxStats } from './crooked-bonus-fx.js';
 import {
   arrivalSpot,
@@ -50,6 +51,7 @@ import {
   farEnd,
   doorState,
   fitShot,
+  focusShot,
   floorBox,
   floorOf,
   floors,
@@ -61,6 +63,8 @@ import {
   roomsOn,
   tapGoal,
   thingPoint,
+  WAKE_LOOK,
+  type CrookedShot,
   type CrookedTarget,
   type FloorPoint,
 } from './crooked-plan.js';
@@ -167,6 +171,15 @@ export interface CrookedDebug {
   readonly dark: boolean;
   readonly tiptoe: boolean;
   readonly keeper: FloorPoint;
+  /** Each woken door's cue on screen (CSS px), over the dark: its foot, height and sparkles. */
+  readonly doorLights: readonly {
+    door: string;
+    power: string;
+    at: FloorPoint;
+    foot: { x: number; y: number };
+    height: number;
+    sparkles: number;
+  }[];
   readonly target: {
     kind: 'thing' | 'door' | 'chest' | 'attic';
     id: string;
@@ -222,6 +235,8 @@ export interface CrookedScreen {
   readonly debug: CrookedDebug;
   /** Dev only (captures, e2e): stands the Keeper at a floor point of the room I'm in. */
   devPlace: (x: number, z: number) => void;
+  /** Dev only (captures): the camera looks at a door of the room I'm in from a fixed shot (the same asleep and woken), for good. */
+  devLook: (doorId: string) => void;
   /** Dev only (captures): stops the peekaboo's clock at `ms` from a catch, or lets it run (`null`). */
   devPeek: (ms: number | null) => void;
   /** Dev only (captures): draws the echoes at server time `ms`, or on the clock again (`null`). */
@@ -321,6 +336,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** A catch's view, held until the peekaboo's dark is full (the room changes unseen). */
   let pendingCatch: FarHollowView | null = null;
   let echoTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Eases the camera back to the room after a woken door's look. */
+  let lookTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The door the camera is looking at, while it does. */
+  let lookAt: { door: FloorPoint; shot: CrookedShot; fixed: FloorPoint | null } | null = null;
   let caught: { echo: string; backTo: string } | null = null;
   /** Dev only: the echoes drawn at this server time (captures). */
   let echoesPinned: number | null = null;
@@ -440,11 +459,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       return [loop.id, mark] as const;
     }),
   );
+  const doorLights = createDoorLights();
+  // Reduced motion keeps the outline and drops the sparkles' drift.
+  doorLights.root.classList.toggle('crooked-door-calm', reducedMotion());
   const overlay = el(
     'div',
     { class: 'crooked', 'data-testid': 'crooked' },
     ground,
     dark,
+    doorLights.root,
     ...marks.values(),
     top,
     tabs,
@@ -1165,6 +1188,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         line: beyond ? B.wokeLine(beyond) : B.wokeLineAny,
       });
       redraw();
+      if (end) lookAtDoor(end.point);
       renderCard();
     };
     const fx = bonusFx;
@@ -1401,22 +1425,68 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     wake();
   }
 
-  function refit(cut: boolean): void {
+  /** The shot that fits the room (or the floor, on the map) in the free band. */
+  function fitted(): CrookedShot | null {
     const s = scene3d;
     const room = here();
-    if (!s || !room) return;
+    if (!s || !room) return null;
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const box = mapShown ? floorBox(floor) : room.box;
     const bands = hudBands(h);
     hudTop = mapShown ? 0 : bands.top;
-    const shot = fitShot(
+    return fitShot(
       box,
       { aspect: w / h, fov: s.fov, top: bands.top / h, bottom: bands.bottom / h },
       mapShown ? CROOKED_CAMERA.mapPitch : CROOKED_CAMERA.pitch,
       mapShown ? CROOKED_CAMERA.mapMargin : CROOKED_CAMERA.margin,
     );
-    s.frame(shot, cut);
+  }
+
+  function refit(cut: boolean): void {
+    const shot = fitted();
+    if (!shot || !scene3d) return;
+    if (lookTimer !== null) clearTimeout(lookTimer);
+    lookTimer = null;
+    lookAt = null;
+    scene3d.frame(shot, cut);
+    options.invalidate();
+    wake();
+  }
+
+  /** The look's shot: the door near the middle, the Keeper still in frame (it follows as the Keeper moves). */
+  function lookFrame(): void {
+    if (!lookAt || !scene3d) return;
+    const { door, shot, fixed } = lookAt;
+    if (fixed) {
+      scene3d.frame(focusShot(shot, fixed), false);
+      return;
+    }
+    const k = WAKE_LOOK.towardsKeeper;
+    scene3d.frame(
+      focusShot(shot, {
+        x: door.x + (keeperAt.x - door.x) * k,
+        z: door.z + (keeperAt.z - door.z) * k,
+      }),
+      false,
+    );
+  }
+
+  /** A door just woke: the camera eases in to it (its light is the payoff), then back to the room. */
+  function lookAtDoor(
+    at: FloorPoint,
+    fixed: FloorPoint | null = null,
+    holdMs: number = WAKE_LOOK.holdMs,
+  ): void {
+    const shot = fitted();
+    if (!shot || !scene3d || mapShown || (reducedMotion() && fixed === null)) return;
+    if (lookTimer !== null) clearTimeout(lookTimer);
+    lookAt = { door: at, shot, fixed };
+    lookFrame();
+    lookTimer = setTimeout(() => {
+      lookTimer = null;
+      refit(false);
+    }, holdMs);
     options.invalidate();
     wake();
   }
@@ -1557,8 +1627,39 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     bubbleText(text);
   };
 
-  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
+  /** The woken doors' cues (an outline and sparkles), over the dark, where each door stands in the wall now. */
+  function renderDoorLights(): void {
+    const s = scene3d;
+    const doors = isOpen && !mapShown && s ? (bonusFx?.wokenDoors() ?? []) : [];
+    doorLights.set(
+      doors.map((door) => {
+        const points = doorLightPoints(door.at, door.inward);
+        const at = (k: keyof typeof points) => s?.screenOf(points[k][0], points[k][1]) ?? null;
+        const layout = doorLightLayout({
+          footLeft: at('footLeft'),
+          footRight: at('footRight'),
+          topLeft: at('topLeft'),
+          topRight: at('topRight'),
+        });
+        return { id: door.id, power: door.power, at: door.at, layout, fresh: door.fresh };
+      }),
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+  }
+
   function renderDark(): void {
+    // The look at a woken door ends once the Keeper walks off: its dark must stay on screen.
+    if (lookAt) {
+      const { door } = lookAt;
+      if (Math.hypot(keeperAt.x - door.x, keeperAt.z - door.z) > WAKE_LOOK.keeperMax) refit(false);
+      else lookFrame();
+    }
+    renderDoorLights();
+    paintDark();
+  }
+
+  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
+  function paintDark(): void {
     const s = scene3d;
     const on = isOpen && !mapShown && !roomLit();
     dark.classList.toggle('crooked-dark-on', on);
@@ -1787,10 +1888,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function hide(): void {
     generation += 1;
+    lookAt = null;
     isOpen = false;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     if (noteTimer !== null) clearTimeout(noteTimer);
+    if (lookTimer !== null) clearTimeout(lookTimer);
     noteTimer = null;
     noteText = '';
     endHold();
@@ -1834,6 +1937,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       if (isOpen && id !== mapId) hide();
       // An open still waiting on its read never lands on a patch that went away.
       else if (!isOpen && id === null) generation += 1;
+    },
+    devLook: (doorId) => {
+      const room = here();
+      const door = CROOKED_HOUSE.doors.find((d) => d.id === doorId);
+      const end = room && door ? doorEnd(door, room.id) : null;
+      if (!end) return;
+      // The door a little off the middle, the Keeper's side of the room in view.
+      const aim = { x: end.point.x + end.inward.x * 0.6, z: end.point.z + end.inward.z * 0.6 };
+      lookAtDoor(end.point, aim, 60 * 60 * 1000);
     },
     devPlace: (x, z) => {
       const h = house();
@@ -1916,6 +2028,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
           : null,
         powering,
         bonus: bonusFx?.stats ?? null,
+        doorLights: doorLights.debug(),
         echoes: spots.map((p) => ({
           loop: p.loop,
           room: p.room,

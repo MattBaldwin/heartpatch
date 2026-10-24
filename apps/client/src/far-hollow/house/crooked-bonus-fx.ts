@@ -115,6 +115,19 @@ interface Chest {
   opening: number | null;
 }
 
+/** How bright the motes' and pads' glowing material is, and a woken door's (it must read in a dark room). */
+const GLOW_GAIN = 1.8; // TUNE
+const WOKEN_GAIN = 2.8; // TUNE
+
+/** A woken power door in the wall: its power, where it stands, which way is into the room, and whether it woke just now. */
+export interface WokenDoor {
+  readonly id: string;
+  readonly power: string;
+  readonly at: FloorPoint;
+  readonly inward: FloorPoint;
+  readonly fresh: boolean;
+}
+
 export interface CrookedBonusFxOptions {
   readonly lod: SquishyLod;
   readonly reducedMotion: boolean;
@@ -126,6 +139,8 @@ export interface CrookedBonusFxStats {
   readonly helper: string | null;
   readonly friend: string | null;
   readonly motes: number;
+  /** The woken power doors shown (their light is the screen's, `crooked-door-light.ts`). */
+  readonly woken: readonly string[];
 }
 
 export class CrookedBonusFx {
@@ -138,6 +153,10 @@ export class CrookedBonusFx {
   readonly #chests = new Map<string, Chest>();
   /** The glow of each woken power door shown, by door id. */
   readonly #woken = new Map<string, Mesh>();
+  /** Where each woken power door shown stands, by door id (the screen lights it, over the dark). */
+  readonly #wokenDoors = new Map<string, WokenDoor>();
+  /** When the last door woke, ms: a door shown just after wakes with a pulse. */
+  #wokeAt = -Infinity;
   /** One glowing material a colour. */
   readonly #glowMats = new Map<string, StandardMaterial>();
   #motes: Mote[] = [];
@@ -237,6 +256,7 @@ export class CrookedBonusFx {
           `crooked-woken-${power}`,
           () => wokenGlow(power) ?? halo(),
           WOKEN_COLOUR[power] ?? '#ffffff',
+          WOKEN_GAIN,
         ),
       ),
     ];
@@ -343,41 +363,59 @@ export class CrookedBonusFx {
   }
 
   /** A glowing kit shape in `hex` (lighting off: it shows in the dark). */
-  #glowMesh(name: string, build: () => ReturnType<typeof halo>, hex: string): Mesh {
+  #glowMesh(
+    name: string,
+    build: () => ReturnType<typeof halo>,
+    hex: string,
+    gain = GLOW_GAIN,
+  ): Mesh {
     const mesh = kitMesh(this.#scene, name, build);
-    mesh.material = this.#glow(hex);
+    mesh.material = this.#glow(hex, gain);
     return mesh;
   }
 
-  #glow(hex: string): StandardMaterial {
-    let m = this.#glowMats.get(hex);
+  #glow(hex: string, gain: number): StandardMaterial {
+    const key = `${hex}:${String(gain)}`;
+    let m = this.#glowMats.get(key);
     if (!m) {
-      m = new StandardMaterial(`crooked-glow-${hex}`, this.#scene);
+      m = new StandardMaterial(`crooked-glow-${key}`, this.#scene);
       m.disableLighting = true;
-      m.emissiveColor = Color3.FromHexString(hex).toLinearSpace().scale(1.8);
-      this.#glowMats.set(hex, m);
+      m.emissiveColor = Color3.FromHexString(hex).toLinearSpace().scale(gain);
+      this.#glowMats.set(key, m);
     }
     return m;
+  }
+
+  /** The woken power doors shown, for the screen to light over the dark. */
+  wokenDoors(): readonly WokenDoor[] {
+    return [...this.#wokenDoors.values()];
   }
 
   /** The glow on each woken power door among `rooms`, on its main room's side. */
   #showWoken(view: CrookedHouseView, rooms: ReadonlySet<string>): void {
     const want = new Map<
       string,
-      { power: string; at: FloorPoint; side: Parameters<typeof doorFacing>[0] }
+      {
+        power: string;
+        at: FloorPoint;
+        inward: FloorPoint;
+        side: Parameters<typeof doorFacing>[0];
+      }
     >();
     for (const door of CROOKED_HOUSE.doors) {
       if (door.power === undefined || !view.bonusOpen.includes(door.id)) continue;
       const main = roomOf(door.a.room)?.kind === 'main' ? door.a.room : door.b.room;
       if (!rooms.has(main)) continue;
       const end = doorEnd(door, main);
-      if (end) want.set(door.id, { power: door.power, at: end.point, side: end.side });
+      if (end)
+        want.set(door.id, { power: door.power, at: end.point, inward: end.inward, side: end.side });
     }
     for (const [id, mesh] of this.#woken) {
       if (want.has(id)) continue;
       mesh.dispose();
       this.#woken.delete(id);
     }
+    for (const id of this.#wokenDoors.keys()) if (!want.has(id)) this.#wokenDoors.delete(id);
     for (const [id, w] of want) {
       if (this.#woken.has(id)) continue;
       const build = () => wokenGlow(w.power) ?? halo();
@@ -385,10 +423,13 @@ export class CrookedBonusFx {
         `crooked-woken-${w.power}`,
         build,
         WOKEN_COLOUR[w.power] ?? '#ffffff',
+        WOKEN_GAIN,
       );
       mesh.position.set(w.at.x, 0, w.at.z);
       mesh.rotation.y = doorFacing(w.side);
       this.#woken.set(id, mesh);
+      const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
+      this.#wokenDoors.set(id, { id, power: w.power, at: w.at, inward: w.inward, fresh });
     }
   }
 
@@ -624,6 +665,7 @@ export class CrookedBonusFx {
       if (h.woke && now >= h.wake) {
         const woke = h.woke;
         h.woke = null;
+        this.#wokeAt = now;
         woke();
         this.#field.play(h.handle, 'bounce', now);
         // The door wakes in its element's colours.
@@ -689,6 +731,7 @@ export class CrookedBonusFx {
       helper: this.#helper?.id ?? null,
       friend: this.#friend?.species ?? null,
       motes: this.#motes.length,
+      woken: [...this.#wokenDoors.keys()],
     };
   }
 }

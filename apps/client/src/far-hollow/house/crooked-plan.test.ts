@@ -9,12 +9,14 @@ import {
   doorState,
   fitShot,
   floorBox,
+  focusShot,
   litRooms,
   nearestTarget,
   roomOf,
   roomStart,
   tapGoal,
   thingPoint,
+  WAKE_LOOK,
   walkStep,
 } from './crooked-plan.js';
 
@@ -170,5 +172,15 @@ describe('the Crooked House as the screen walks it (#306 6c)', () => {
     expect(ground.w).toBeGreaterThan(20);
     const up = floorBox(1);
     expect(up.w).toBeLessThanOrEqual(ground.w + 1);
+  });
+});
+
+describe('the look at a woken door (#306)', () => {
+  it('aims at the point, closer, at the same pitch', () => {
+    const shot = { target: { x: 0, z: 0 }, pitch: 1, distance: 20 };
+    const look = focusShot(shot, { x: -5, z: 2 });
+    expect(look.target).toEqual({ x: -5, z: 2 });
+    expect(look.pitch).toBe(1);
+    expect(look.distance).toBeCloseTo(20 * WAKE_LOOK.zoom);
   });
 });

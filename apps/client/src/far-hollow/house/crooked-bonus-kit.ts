@@ -1,4 +1,5 @@
 import type { CrookedSide } from '@heartpatch/shared';
+import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { merged, type Part } from '../../explore/kit-mesh.js';
 import { ball, blk, flames, joyed, ring, tube, type V3 } from './crooked-kit.js';
 
@@ -83,13 +84,42 @@ const WOKEN: Readonly<Record<string, () => Part[]>> = {
   light: () => [ball(0.3, [0.8, 1.62, -0.15], '#ffffff')],
 };
 
-/** Each power's glow colour once woken. */
-export const WOKEN_COLOUR: Readonly<Record<string, string>> = {
-  fire: '#ffa33a',
-  leaf: '#ff9ec4',
-  water: '#9fd4ff',
-  light: '#ffe08a',
-}; // TUNE
+/** How far each element colour is lightened towards white, so it reads as light. */
+const LIGHTEN = 0.35; // TUNE
+
+/** `hex` mixed `by` of the way to `to`. */
+function mixed(hex: string, to: string, by: number): string {
+  const rgb = (h: string) => {
+    const n = Number.parseInt(h.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255] as const;
+  };
+  const [a, b] = [rgb(hex), rgb(to)];
+  const out = a.map((c, i) => Math.round(c + ((b[i] ?? c) - c) * by));
+  return `#${out.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Each power's glow colour once woken: the element's own (the battle's palette), lightened. */
+export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries(
+  ['fire', 'leaf', 'water', 'light'].map((power) => [
+    power,
+    mixed(ELEMENT_FX[power]?.colors[0] ?? '#ffffff', '#ffffff', LIGHTEN),
+  ]),
+);
+
+/**
+ * The light a woken door puts out, on screen over the dark: a clear colour and
+ * a hotter middle. Light's is a warm yellow (the element's own is pale cream,
+ * which read as white in the dark).
+ */
+export const WOKEN_LIGHT: Readonly<Record<string, { glow: string; hot: string }>> = {
+  fire: { glow: '#ff8a3d', hot: '#ffc27a' },
+  leaf: { glow: '#4fd078', hot: '#b6f5a8' },
+  water: { glow: '#3fb2f7', hot: '#a9e4ff' },
+  light: { glow: '#ffc928', hot: '#ffe98a' },
+}; // TUNE: all of them
+
+/** How far a woken door's own colours are pulled towards its light, so the door itself looks lit. */
+const WOKEN_TINT = 0.5; // TUNE
 
 /** A sparkle mote for the bursts (a glowing material). */
 export const mote = (): Part => merged([ball(0.24, [0, 0, 0], '#ffffff')]);
@@ -121,7 +151,9 @@ export function sleeperParts(
   side: CrookedSide,
   joy: number,
 ): Part | null {
-  const parts = SLEEPERS[power]?.(asleep, joy);
+  const tint = WOKEN_LIGHT[power]?.glow;
+  const lit = (hex: string) => (asleep || !tint ? hex : mixed(hex, tint, WOKEN_TINT));
+  const parts = SLEEPERS[power]?.(asleep, joy, lit);
   if (!parts || parts.length === 0) return null;
   const one = merged(parts);
   one.position.set(...at);
@@ -129,31 +161,35 @@ export function sleeperParts(
   return one;
 }
 
-type SleeperBuilder = (asleep: boolean, joy: number) => Part[];
+type SleeperBuilder = (asleep: boolean, joy: number, lit: (hex: string) => string) => Part[];
 
 const stone = (joy: number) => joyed('#b9aaa0', joy);
 
 const SLEEPERS: Readonly<Record<string, SleeperBuilder>> = {
   // Fire: the Parlour's cold fireplace. Lit, its back swung open into the Inglenook.
-  fire: (asleep, j) => [
-    blk(0.36, 1.5, 0.4, [-0.86, 0.75, -0.2], stone(j), { round: 0.4 }),
-    blk(0.36, 1.5, 0.4, [0.86, 0.75, -0.2], stone(j), { round: 0.4 }),
-    blk(2.2, 0.26, 0.5, [0, 1.6, -0.22], joyed('#8a5a3c', j), { round: 0.5 }),
+  fire: (asleep, j, lit) => [
+    blk(0.36, 1.5, 0.4, [-0.86, 0.75, -0.2], lit(stone(j)), { round: 0.4 }),
+    blk(0.36, 1.5, 0.4, [0.86, 0.75, -0.2], lit(stone(j)), { round: 0.4 }),
+    blk(2.2, 0.26, 0.5, [0, 1.6, -0.22], lit(joyed('#8a5a3c', j)), { round: 0.5 }),
     // The hearth on the floor in front: what the camera above sees best.
-    blk(2.0, 0.08, 1.0, [0, 0.04, -0.55], joyed('#8f8178', j), { round: 0.3 }),
+    blk(2.0, 0.08, 1.0, [0, 0.04, -0.55], lit(joyed('#8f8178', j)), { round: 0.3 }),
     // The logs: grey ash while cold; brown, with the fire's glow on them, once lit.
-    tube(1.0, 0.2, 0.2, [0, 0.18, -0.5], asleep ? '#5e5450' : '#7a4a2a', [0, 0.25, Math.PI / 2]),
-    tube(0.9, 0.18, 0.18, [0.05, 0.18, -0.62], asleep ? '#6b605a' : '#8a5a3c', [
+    tube(1.0, 0.2, 0.2, [0, 0.18, -0.5], lit(asleep ? '#5e5450' : '#7a4a2a'), [
+      0,
+      0.25,
+      Math.PI / 2,
+    ]),
+    tube(0.9, 0.18, 0.18, [0.05, 0.18, -0.62], lit(asleep ? '#6b605a' : '#8a5a3c'), [
       0,
       -0.3,
       Math.PI / 2,
     ]),
   ],
   // Leaf: the Conservatory's cracked window. Opened, a vine grows through it into a bridge.
-  leaf: (asleep, j) =>
+  leaf: (asleep, j, lit) =>
     asleep
       ? [
-          blk(1.2, 1.2, 0.08, [0, 1.1, -0.1], joyed('#fff1e8', j), { round: 0.3 }),
+          blk(1.2, 1.2, 0.08, [0, 1.1, -0.1], lit(joyed('#fff1e8', j)), { round: 0.3 }),
           blk(1.0, 1.0, 0.1, [0, 1.1, -0.11], '#bfe0ef'),
           // The crack: a zigzag of dark slivers across the glass.
           blk(0.5, 0.05, 0.12, [-0.2, 1.3, -0.12], '#4a5a6a', { rot: [0, 0, 0.7] }),
@@ -161,14 +197,14 @@ const SLEEPERS: Readonly<Record<string, SleeperBuilder>> = {
           blk(0.35, 0.05, 0.12, [0.05, 0.85, -0.12], '#4a5a6a', { rot: [0, 0, 0.8] }),
         ]
       : [
-          tube(1.8, 0.14, 0.18, [0, 0.12, 0], joyed('#4f9d6b', j), [Math.PI / 2, 0, 0]),
+          tube(1.8, 0.14, 0.18, [0, 0.12, 0], lit(joyed('#4f9d6b', j)), [Math.PI / 2, 0, 0]),
           ...[-0.5, 0, 0.5].map((z) =>
-            ball(0.3, [z * 0.6, 0.24, z], joyed('#7fd09b', j), [1, 0.4, 0.7]),
+            ball(0.3, [z * 0.6, 0.24, z], lit(joyed('#7fd09b', j)), [1, 0.4, 0.7]),
           ),
-          ball(0.18, [0.3, 0.3, -0.6], joyed('#f7a1c4', j)),
+          ball(0.18, [0.3, 0.3, -0.6], lit(joyed('#f7a1c4', j))),
         ],
   // Water: the Scullery's cosy cartoon flames (no heat). Put out, a puddle and a wisp of steam.
-  water: (asleep, j) =>
+  water: (asleep, j, lit) =>
     asleep
       ? [
           ...flames([0, 0, -0.35], 1.25),
@@ -176,11 +212,11 @@ const SLEEPERS: Readonly<Record<string, SleeperBuilder>> = {
           ...flames([0.45, 0, -0.2], 0.9),
         ]
       : [
-          tube(0.04, 1.3, 1.3, [0, 0.02, -0.45], joyed('#7bbcf2', j)),
-          ball(0.26, [-0.2, 0.9, -0.4], joyed('#f1f4f8', j), [1, 0.7, 1]),
+          tube(0.04, 1.3, 1.3, [0, 0.02, -0.45], lit(joyed('#7bbcf2', j))),
+          ball(0.26, [-0.2, 0.9, -0.4], lit(joyed('#f1f4f8', j)), [1, 0.7, 1]),
         ],
   // Light: a closet too dark even for the lantern. Opened, a little lantern hangs by the door.
-  light: (asleep, j) =>
+  light: (asleep, j, lit) =>
     asleep
       ? [
           blk(1.2, 1.95, 0.1, [0, 1.0, -0.1], '#1a1426', { round: 0.3 }),
@@ -189,7 +225,7 @@ const SLEEPERS: Readonly<Record<string, SleeperBuilder>> = {
           ball(0.08, [0.14, 1.3, -0.17], '#5a4f78'),
         ]
       : [
-          ring(0.2, 0.04, [0.8, 1.9, -0.15], joyed('#3b2a22', j), [Math.PI / 2, 0, 0]),
-          blk(0.2, 0.28, 0.2, [0.8, 1.65, -0.15], '#ffd27a', { round: 0.6 }),
+          ring(0.2, 0.04, [0.8, 1.9, -0.15], lit(joyed('#3b2a22', j)), [Math.PI / 2, 0, 0]),
+          blk(0.2, 0.28, 0.2, [0.8, 1.65, -0.15], lit('#ffd27a'), { round: 0.6 }),
         ],
 };
