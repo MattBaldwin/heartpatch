@@ -32,7 +32,7 @@ const DATABASE_URL =
 const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) : null;
 /** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
 /** How far into the room the Keeper stands for the woken shot, m. */
-const AWAY = Number(process.env.AWAY ?? 3.5);
+const AWAY = Number(process.env.AWAY ?? 1.8);
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
 
 /** The four power doors: the element's friend, the room I stand in, and where I stand to face the sleeping door. */
@@ -228,6 +228,9 @@ async function shot(page, device, name) {
     ),
     keeper: h?.keeper ?? null,
     bonus: h?.bonus,
+    doorLights: h?.doorLights,
+    echoes: h?.echoes?.filter((e) => e.mark !== 'off').map((e) => ({ loop: e.loop, mark: e.mark })),
+    viewport: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight })),
   };
   stats.push(row);
   console.log(JSON.stringify(row));

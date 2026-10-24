@@ -1,0 +1,70 @@
+/* A woken power door's light (#306), over the house's dark: a glow filling
+   the doorway and a soft spill hugging the wall at its foot, in the power's
+   colour (`--glow`, with a lighter `--hot` middle). Screen-blended, so it adds
+   light and never greys the dark. Placed by `crooked-door-light.ts`. */
+
+.crooked-door-lights {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  contain: strict;
+  pointer-events: none;
+}
+
+.crooked-door-light[hidden] {
+  display: none;
+}
+
+.crooked-door-spill,
+.crooked-door-glow {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.crooked-door-spill {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--glow) 88%, transparent) 0%,
+    color-mix(in srgb, var(--glow) 58%, transparent) 45%,
+    transparent 100%
+  );
+}
+
+.crooked-door-glow {
+  background: radial-gradient(
+    closest-side,
+    var(--hot) 0%,
+    color-mix(in srgb, var(--glow) 90%, transparent) 40%,
+    color-mix(in srgb, var(--glow) 40%, transparent) 75%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-door-light-fresh .crooked-door-spill,
+  .crooked-door-light-fresh .crooked-door-glow {
+    animation: crooked-door-wake var(--pulse, 2.4s) ease-out;
+  }
+}
+
+@keyframes crooked-door-wake {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  25%,
+  70% {
+    transform: scale(var(--swell, 1.3));
+    opacity: 1;
+  }
+
+  45% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+}

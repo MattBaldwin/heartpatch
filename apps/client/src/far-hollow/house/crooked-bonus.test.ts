@@ -6,7 +6,8 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { ELEMENT_FX } from '../../battle/element-fx.js';
-import { spillPulse, WOKEN_COLOUR, WOKEN_SPILL } from './crooked-bonus-kit.js';
+import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
+import { DOOR_LIGHT, doorLightLayout, doorLightPoints } from './crooked-door-light.js';
 import {
   chestPoint,
   chestRooms,
@@ -178,15 +179,60 @@ describe('who can help', () => {
 });
 
 describe('woken door light', () => {
-  it('pulses on wake, then settles still', () => {
-    const mid = spillPulse(300, false);
-    expect(mid.scale).toBeGreaterThan(1);
-    expect(mid.wave).toBeGreaterThan(0);
-    expect(spillPulse(WOKEN_SPILL.seconds * 1000, false)).toEqual({ scale: 1, wave: 0 });
+  const at = (x: number, y: number) => ({ x, y });
+
+  it('lays a glow in the doorway and a spill at its foot, from the door’s own points', () => {
+    const layout = doorLightLayout({
+      foot: at(200, 500),
+      top: at(200, 300),
+      left: at(160, 400),
+      right: at(240, 400),
+      reach: at(200, 560),
+      sideA: at(110, 530),
+      sideB: at(290, 530),
+    });
+    expect(layout?.doorway).toMatchObject({ cx: 200, cy: 400 });
+    // The spill hugs the wall's foot: its middle is between the foot and its reach.
+    expect(layout?.spill.cy).toBeGreaterThan(500);
+    expect(layout?.spill.cy).toBeLessThan(560);
   });
 
-  it('stays still under reduced motion', () => {
-    expect(spillPulse(300, true)).toEqual({ scale: 1, wave: 0 });
+  it('keeps an edge-on doorway (a side wall) wide enough to see', () => {
+    const layout = doorLightLayout({
+      foot: at(100, 500),
+      top: at(100, 300),
+      left: at(100, 400),
+      right: at(100, 400),
+      reach: at(160, 500),
+      sideA: at(100, 450),
+      sideB: at(100, 550),
+    });
+    expect(layout?.doorway.rx).toBeCloseTo(
+      layout?.doorway.ry ? layout.doorway.ry * DOOR_LIGHT.slim : 0,
+    );
+  });
+
+  it('draws nothing while a point of the door is off screen', () => {
+    expect(
+      doorLightLayout({
+        foot: null,
+        top: at(0, 0),
+        left: at(0, 0),
+        right: at(0, 0),
+        reach: at(0, 0),
+        sideA: at(0, 0),
+        sideB: at(0, 0),
+      }),
+    ).toBeNull();
+  });
+
+  it('puts the spill into the room and its ends along the wall', () => {
+    // A door in the west wall, the room towards +x.
+    const p = doorLightPoints({ x: -9, z: 0 }, { x: 1, z: 0 });
+    expect(p.reach[0].x).toBeCloseTo(-9 + DOOR_LIGHT.spill.reach);
+    expect(p.sideA[0].x).toBeCloseTo(-9 + DOOR_LIGHT.spill.reach / 2);
+    expect(Math.abs(p.sideA[0].z - p.sideB[0].z)).toBeCloseTo(DOOR_LIGHT.spill.half * 2);
+    expect(p.top[1]).toBe(DOOR_LIGHT.doorway.height);
   });
 
   it('takes each power’s colour from the element palette, lightened', () => {

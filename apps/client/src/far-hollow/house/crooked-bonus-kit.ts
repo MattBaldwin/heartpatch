@@ -70,22 +70,8 @@ export const halo = (): Part => merged([tube(0.03, 1, 1, [0, 0.02, 0], '#ffffff'
  */
 export function wokenGlow(power: string): Part | null {
   const parts = WOKEN[power]?.();
-  // Every woken door's opening is lit: a block of light filling the doorway, its top seen from the camera.
-  return parts && parts.length > 0 ? merged([...OPENING(), ...parts]) : null;
+  return parts && parts.length > 0 ? merged(parts) : null;
 }
-
-/** The lit opening: the doorway's width, wall-high, a little proud of the wall (door-local, room towards −z). */
-const OPENING = (): Part[] => [
-  blk(
-    OPENING_SIZE.w,
-    OPENING_SIZE.h,
-    OPENING_SIZE.d,
-    [0, OPENING_SIZE.h / 2, -OPENING_SIZE.d / 2],
-    '#ffffff',
-    { round: 0.2 },
-  ),
-];
-const OPENING_SIZE = { w: 1.2, h: 1.9, d: 0.45 } as const; // TUNE
 
 const WOKEN: Readonly<Record<string, () => Part[]>> = {
   fire: () => [...flames([0, 0.08, -0.5], 1.35), ...flames([0.32, 0.08, -0.62], 0.7)],
@@ -98,7 +84,6 @@ const WOKEN: Readonly<Record<string, () => Part[]>> = {
   light: () => [ball(0.3, [0.8, 1.62, -0.15], '#ffffff')],
 };
 
-/** Each power's glow colour once woken: the element's own (the battle's palette). */
 /** How far each element colour is lightened towards white, so it reads as light. */
 const LIGHTEN = 0.35; // TUNE
 
@@ -110,38 +95,13 @@ function lightened(hex: string, by: number): string {
   return `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
+/** Each power's glow colour once woken: the element's own (the battle's palette), lightened. */
 export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries(
   ['fire', 'leaf', 'water', 'light'].map((power) => [
     power,
     lightened(ELEMENT_FX[power]?.colors[0] ?? '#ffffff', LIGHTEN),
   ]),
 );
-
-/**
- * The light from a woken power door, in the power's colour, tied to the
- * door's own spot in the wall (no lights): the opening itself is a block of
- * light (`wokenGlow`), and a thin pool hugs the wall in front of it. The pool
- * is [half width along the wall, reach into the room, middle's distance from
- * the wall, opacity settled], in metres. Both swell and settle on wake, then
- * stay still: an idle house draws nothing.
- */
-export const WOKEN_SPILL = {
-  pool: [1.2, 1.0, 0.15, 0.85],
-  /** The wake pulse: this many beats over this long, s, growing by this much. */
-  beats: 2,
-  seconds: 2.4,
-  swell: 0.3,
-} as const; // TUNE: all of them
-
-/** How strong the wake pulse is `ms` after the door woke: 0 once settled (and always, under reduced motion), up to 1. */
-export function spillPulse(ms: number, reduced: boolean): { scale: number; wave: number } {
-  const { seconds, beats, swell } = WOKEN_SPILL;
-  const t = ms / 1000 / seconds;
-  if (reduced || t >= 1 || t < 0) return { scale: 1, wave: 0 };
-  // Beats that die away: a sine hump per beat, fading over the whole pulse.
-  const wave = Math.abs(Math.sin(t * beats * Math.PI)) * (1 - t);
-  return { scale: 1 + swell * wave, wave };
-}
 
 /** A sparkle mote for the bursts (a glowing material). */
 export const mote = (): Part => merged([ball(0.24, [0, 0, 0], '#ffffff')]);

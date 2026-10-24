@@ -3,9 +3,7 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
-import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import {
@@ -17,7 +15,6 @@ import {
 } from '@heartpatch/shared';
 import { kitMesh } from '../../explore/kit-mesh.js';
 import type { SquishyLod } from '../../procedural/config.js';
-import { overlayMaterial } from '../../map/map-scene.js';
 import { SquishyField, type SquishyHandle } from '../../procedural/squishy-field.js';
 import {
   chestBase,
@@ -27,9 +24,7 @@ import {
   halo,
   leafMote,
   mote,
-  spillPulse,
   WOKEN_COLOUR,
-  WOKEN_SPILL,
   wokenGlow,
 } from './crooked-bonus-kit.js';
 import { chestOpened, chestPoint, chestRooms } from './crooked-bonus.js';
@@ -124,29 +119,13 @@ interface Chest {
 const GLOW_GAIN = 1.8; // TUNE
 const WOKEN_GAIN = 2.8; // TUNE
 
-/** A spill disc's opacity from its middle out: [fraction of the radius, opacity], clear at the rim. */
-const SPILL_PROFILE: readonly (readonly [number, number])[] = [
-  [0.3, 1],
-  [0.55, 0.85],
-  [0.8, 0.45],
-  [1, 0],
-]; // TUNE
-const SPILL_CENTRE = 1;
-const SPILL_SEGMENTS = 24;
-
-/** One soft disc of a woken door's light, its middle's colours kept to pulse in place. */
-interface SpillPart {
-  readonly mesh: Mesh;
-  readonly colors: Float32Array;
-  /** Each vertex's opacity when settled. */
-  readonly base: Float32Array;
-  readonly scale: readonly [number, number, number];
-}
-
-/** A woken door's light: the doorway's glow and the floor's pool, and when its wake pulse began (null once settled). */
-interface Spill {
-  readonly parts: readonly SpillPart[];
-  since: number | null;
+/** A woken power door in the wall: its power, where it stands, which way is into the room, and whether it woke just now. */
+export interface WokenDoor {
+  readonly id: string;
+  readonly power: string;
+  readonly at: FloorPoint;
+  readonly inward: FloorPoint;
+  readonly fresh: boolean;
 }
 
 export interface CrookedBonusFxOptions {
@@ -160,11 +139,8 @@ export interface CrookedBonusFxStats {
   readonly helper: string | null;
   readonly friend: string | null;
   readonly motes: number;
-  /** Each woken door's light: where each disc hangs, and whether it draws. */
-  readonly spills: readonly {
-    door: string;
-    parts: readonly { x: number; y: number; z: number; on: boolean }[];
-  }[];
+  /** The woken power doors shown (their light is the screen's, `crooked-door-light.ts`). */
+  readonly woken: readonly string[];
 }
 
 export class CrookedBonusFx {
@@ -177,10 +153,9 @@ export class CrookedBonusFx {
   readonly #chests = new Map<string, Chest>();
   /** The glow of each woken power door shown, by door id. */
   readonly #woken = new Map<string, Mesh>();
-  /** The light from each woken power door shown, by door id. */
-  readonly #spills = new Map<string, Spill>();
-  readonly #spillMat: StandardMaterial;
-  /** When the last door woke, ms: a spill drawn just after pulses. */
+  /** Where each woken power door shown stands, by door id (the screen lights it, over the dark). */
+  readonly #wokenDoors = new Map<string, WokenDoor>();
+  /** When the last door woke, ms: a door shown just after wakes with a pulse. */
   #wokeAt = -Infinity;
   /** One glowing material a colour. */
   readonly #glowMats = new Map<string, StandardMaterial>();
@@ -227,8 +202,6 @@ export class CrookedBonusFx {
     m.roughness = 0.55;
     m.maxSimultaneousLights = 6;
     this.#chestMat = m;
-    this.#spillMat = overlayMaterial(scene, 'crooked-spill');
-    this.#spillMat.backFaceCulling = false;
     this.#fill = new HemisphericLight('crooked-chest-fill', new Vector3(0.2, 1, -0.4), scene);
     this.#fill.diffuse = Color3.FromHexString('#fff1dc');
     this.#fill.groundColor = Color3.FromHexString('#4a3a55');
@@ -413,6 +386,11 @@ export class CrookedBonusFx {
     return m;
   }
 
+  /** The woken power doors shown, for the screen to light over the dark. */
+  wokenDoors(): readonly WokenDoor[] {
+    return [...this.#wokenDoors.values()];
+  }
+
   /** The glow on each woken power door among `rooms`, on its main room's side. */
   #showWoken(view: CrookedHouseView, rooms: ReadonlySet<string>): void {
     const want = new Map<
@@ -437,11 +415,7 @@ export class CrookedBonusFx {
       mesh.dispose();
       this.#woken.delete(id);
     }
-    for (const [id, spill] of this.#spills) {
-      if (want.has(id)) continue;
-      for (const part of spill.parts) part.mesh.dispose();
-      this.#spills.delete(id);
-    }
+    for (const id of this.#wokenDoors.keys()) if (!want.has(id)) this.#wokenDoors.delete(id);
     for (const [id, w] of want) {
       if (this.#woken.has(id)) continue;
       const build = () => wokenGlow(w.power) ?? halo();
@@ -454,88 +428,9 @@ export class CrookedBonusFx {
       mesh.position.set(w.at.x, 0, w.at.z);
       mesh.rotation.y = doorFacing(w.side);
       this.#woken.set(id, mesh);
-      this.#spills.set(id, this.#spill(w.power, w.at, w.inward));
+      const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
+      this.#wokenDoors.set(id, { id, power: w.power, at: w.at, inward: w.inward, fresh });
     }
-  }
-
-  /**
-   * The light on the floor from a woken door, at the door's own spot in the
-   * wall: a thin pool hugging the wall, a flat disc in the power's colour,
-   * bright in the middle and clear at the rim. A door that woke just now
-   * pulses once; one met later simply glows.
-   */
-  #spill(power: string, at: FloorPoint, into: FloorPoint): Spill {
-    const hex = WOKEN_COLOUR[power] ?? '#ffffff';
-    const lay = ([halfWidth, reach, inward, alpha]: readonly [number, number, number, number]) => {
-      const part = this.#spillDisc(hex, 1, alpha, [halfWidth, reach, 1]);
-      // Flat on the floor; its local y runs along `into` once turned.
-      part.mesh.rotation.set(Math.PI / 2, Math.atan2(into.x, into.z), 0);
-      part.mesh.position.set(at.x + into.x * inward, 0.6, at.z + into.z * inward);
-      return part;
-    };
-    const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
-    return {
-      parts: [lay(WOKEN_SPILL.pool)],
-      since: fresh ? this.#wokeAt : null,
-    };
-  }
-
-  /**
-   * One soft disc: rings from a bright middle to a clear rim, opacity
-   * following `SPILL_PROFILE` (a curve, so the glow holds up before it fades).
-   * `alpha` scales the middle; every vertex's settled opacity is kept to pulse in place.
-   */
-  #spillDisc(
-    hex: string,
-    radius: number,
-    alpha: number,
-    scale: readonly [number, number, number],
-  ): SpillPart {
-    const c = Color3.FromHexString(hex);
-    const rings = SPILL_PROFILE.length;
-    const count = 1 + rings * SPILL_SEGMENTS;
-    const positions = new Float32Array(count * 3);
-    const normals = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 4);
-    const base = new Float32Array(count);
-    const indices: number[] = [];
-    for (let i = 0; i < count; i++) {
-      normals[i * 3 + 2] = -1;
-      colors.set([c.r, c.g, c.b, 0], i * 4);
-    }
-    base[0] = alpha * SPILL_CENTRE;
-    colors[3] = base[0];
-    for (let r = 0; r < rings; r++) {
-      const [at, level] = SPILL_PROFILE[r] ?? [1, 0];
-      for (let k = 0; k < SPILL_SEGMENTS; k++) {
-        const v = 1 + r * SPILL_SEGMENTS + k;
-        const turn = (k / SPILL_SEGMENTS) * Math.PI * 2;
-        positions[v * 3] = Math.cos(turn) * radius * at;
-        positions[v * 3 + 1] = Math.sin(turn) * radius * at;
-        base[v] = alpha * level;
-        colors[v * 4 + 3] = base[v] ?? 0;
-        const next = (k + 1) % SPILL_SEGMENTS;
-        const here = 1 + r * SPILL_SEGMENTS;
-        // The first ring fans from the middle; each further ring is a band of quads.
-        if (r === 0) indices.push(0, here + k, here + next);
-        else {
-          const inner = 1 + (r - 1) * SPILL_SEGMENTS;
-          indices.push(inner + k, here + k, here + next, inner + k, here + next, inner + next);
-        }
-      }
-    }
-    const mesh = new Mesh('crooked-spill', this.#scene);
-    const data = new VertexData();
-    data.positions = positions;
-    data.normals = normals;
-    data.colors = colors;
-    data.indices = indices;
-    data.applyToMesh(mesh, true);
-    mesh.hasVertexAlpha = true;
-    mesh.material = this.#spillMat;
-    mesh.isPickable = false;
-    mesh.scaling.set(...scale);
-    return { mesh, colors, base, scale };
   }
 
   /**
@@ -755,22 +650,6 @@ export class CrookedBonusFx {
       source.mesh.thinInstanceCount = source.count;
       if (source.count > 0) source.mesh.thinInstanceBufferUpdated('matrix');
     }
-    // The woken doors' light: a pulse on wake, then still.
-    for (const spill of this.#spills.values()) {
-      if (spill.since === null) continue;
-      const ms = now - spill.since;
-      const p = spillPulse(ms, this.#options.reducedMotion);
-      for (const part of spill.parts) {
-        part.mesh.scaling.set(part.scale[0] * p.scale, part.scale[1] * p.scale, part.scale[2]);
-        for (let i = 0; i < part.base.length; i++) {
-          const settled = part.base[i] ?? 0;
-          part.colors[i * 4 + 3] = settled + (1 - settled) * p.wave;
-        }
-        part.mesh.updateVerticesData(VertexBuffer.ColorKind, part.colors);
-      }
-      if (ms >= WOKEN_SPILL.seconds * 1000) spill.since = null;
-      else moving = true;
-    }
     // The chests' lids.
     for (const chest of this.#chests.values()) {
       if (chest.opening === null) continue;
@@ -852,15 +731,7 @@ export class CrookedBonusFx {
       helper: this.#helper?.id ?? null,
       friend: this.#friend?.species ?? null,
       motes: this.#motes.length,
-      spills: [...this.#spills].map(([door, spill]) => ({
-        door,
-        parts: spill.parts.map((p) => ({
-          x: p.mesh.position.x,
-          y: p.mesh.position.y,
-          z: p.mesh.position.z,
-          on: p.mesh.isEnabled() && p.mesh.isVisible,
-        })),
-      })),
+      woken: [...this.#wokenDoors.keys()],
     };
   }
 }
