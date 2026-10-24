@@ -120,6 +120,10 @@ interface Chest {
   opening: number | null;
 }
 
+/** How bright the motes' and pads' glowing material is, and a woken door's (it must read in a dark room). */
+const GLOW_GAIN = 1.8; // TUNE
+const WOKEN_GAIN = 2.8; // TUNE
+
 /** A spill disc's opacity from its middle out: [fraction of the radius, opacity], clear at the rim. */
 const SPILL_PROFILE: readonly (readonly [number, number])[] = [
   [0.3, 1],
@@ -279,6 +283,7 @@ export class CrookedBonusFx {
           `crooked-woken-${power}`,
           () => wokenGlow(power) ?? halo(),
           WOKEN_COLOUR[power] ?? '#ffffff',
+          WOKEN_GAIN,
         ),
       ),
     ];
@@ -385,19 +390,25 @@ export class CrookedBonusFx {
   }
 
   /** A glowing kit shape in `hex` (lighting off: it shows in the dark). */
-  #glowMesh(name: string, build: () => ReturnType<typeof halo>, hex: string): Mesh {
+  #glowMesh(
+    name: string,
+    build: () => ReturnType<typeof halo>,
+    hex: string,
+    gain = GLOW_GAIN,
+  ): Mesh {
     const mesh = kitMesh(this.#scene, name, build);
-    mesh.material = this.#glow(hex);
+    mesh.material = this.#glow(hex, gain);
     return mesh;
   }
 
-  #glow(hex: string): StandardMaterial {
-    let m = this.#glowMats.get(hex);
+  #glow(hex: string, gain: number): StandardMaterial {
+    const key = `${hex}:${String(gain)}`;
+    let m = this.#glowMats.get(key);
     if (!m) {
-      m = new StandardMaterial(`crooked-glow-${hex}`, this.#scene);
+      m = new StandardMaterial(`crooked-glow-${key}`, this.#scene);
       m.disableLighting = true;
-      m.emissiveColor = Color3.FromHexString(hex).toLinearSpace().scale(1.8);
-      this.#glowMats.set(hex, m);
+      m.emissiveColor = Color3.FromHexString(hex).toLinearSpace().scale(gain);
+      this.#glowMats.set(key, m);
     }
     return m;
   }
@@ -438,6 +449,7 @@ export class CrookedBonusFx {
         `crooked-woken-${w.power}`,
         build,
         WOKEN_COLOUR[w.power] ?? '#ffffff',
+        WOKEN_GAIN,
       );
       mesh.position.set(w.at.x, 0, w.at.z);
       mesh.rotation.y = doorFacing(w.side);
