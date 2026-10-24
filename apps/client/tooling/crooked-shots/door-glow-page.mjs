@@ -87,7 +87,7 @@ function caption(d, door, state, r) {
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} soft glow stands on each side of that same doorway (centred on its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up beside it (they loop, so how many show at once varies); the rest of the room stays dark.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} soft glow stands on each side of that same doorway (centred on its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall), and ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up beside it (they loop, so how many show at once varies); the rest of the room stays dark apart from the Keeper’s lantern.`
     : '';
   const shut =
     state === 'asleep'
@@ -109,15 +109,11 @@ function caption(d, door, state, r) {
     state !== 'asleep' && door.power === 'light'
       ? ' Near the top of the open doorway, the closet’s little lantern glows faintly, a pale crescent through the dark (the game’s own art for a woken Light door).'
       : '';
-  const ghosts = r.ghosts?.length ?? 0;
-  const ghost = ghosts
-    ? ` ${ghosts === 1 ? 'A wandering echo shows' : 'Wandering echoes show'} as a pale spotted ghost near the Keeper.`
-    : '';
   const keeper = away ? ` The Keeper stands ${away} m from the door.` : '';
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (they wander; their clock is pinned to the same moment on both phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${blossoms}${lantern}${keeper}${ghost}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${blossoms}${lantern}${keeper}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {
