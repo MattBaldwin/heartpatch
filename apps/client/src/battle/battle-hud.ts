@@ -344,7 +344,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     tipDismissed = false;
     tip.hidden = false;
     tip.style.animation = 'none';
-    void tip.offsetWidth; // a style flush, so the animation below runs from its start
+    tip.getBoundingClientRect(); // a style flush, so the animation below runs from its start
     tip.style.animation = '';
   };
   // The tip sits `--battle-sheet-h` above the bottom edge: the sheet's own height.

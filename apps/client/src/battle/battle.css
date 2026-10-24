@@ -439,9 +439,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 /* The craft tip floats over the fight just above the sheet (--battle-sheet-h,
-   set by the HUD), inside the safe area at the sides. Tap puts it away; it
-   also fades after a while (visibility keeps its box and its words for
-   screen readers). */
+   set by the HUD), inside the safe area at the sides. A tap puts it away; it
+   also fades after a while, and the button still points at it
+   (aria-describedby) once it has. */
 .battle-hint.battle-tip {
   position: absolute;
   right: calc(env(safe-area-inset-right) + 16px);
