@@ -205,11 +205,15 @@ async function toDoor(page, mapId, p) {
 
 const hashes = new Map();
 const stats = [];
-async function shot(page, device, name, extra = {}) {
-  await settle(page);
+/** One frame; `bubble` retakes it from the start (a throw) unless the bubble was up both before and after the shot. */
+async function shot(page, device, name, extra = {}, { bubble = false, settleMs = 900 } = {}) {
+  await settle(page, settleMs);
   await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
   const file = path.join(OUT, `${device}-glow-${name}-${TIER}.png`);
+  const up = async () => Boolean((await house(page))?.bubble);
+  if (bubble && !(await up())) throw new Error(`${name}: the bubble faded before the shot`);
   const png = await page.screenshot({ path: file, type: 'png', timeout: 180_000 });
+  if (bubble && !(await up())) throw new Error(`${name}: the bubble faded during the shot`);
   const sha = createHash('sha256').update(png).digest('hex');
   const twin = hashes.get(sha);
   if (twin) throw new Error(`${path.basename(file)} duplicates ${twin}`);
@@ -292,8 +296,7 @@ async function shootPower(page, device, mapId, ids, p) {
   // Bumped once the camera has settled, so the bubble (2.6 s) is still up for the shot.
   await bump(page, p);
   // The bubble fades on its own: a frame without it is shot again from the start.
-  if (!(await house(page))?.bubble) throw new Error(`${p.power}: the bubble faded before the shot`);
-  await shot(page, device, `${p.power}-asleep`);
+  await shot(page, device, `${p.power}-asleep`, {}, { bubble: true, settleMs: 200 });
   await page.getByTestId('crooked-action').dispatchEvent('click');
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
   await page.getByTestId(`crooked-helper-${ids[p.power]}`).dispatchEvent('click');
