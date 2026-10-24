@@ -1,6 +1,7 @@
 import type { JobsView } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
+import { hpClose } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { rarityDot } from '../../ui/rarity/rarity.js';
 import { blobFor } from './job-board.js';
@@ -53,11 +54,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
   let working = false;
   let ticket = 0;
 
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': JOBS_TEXT.close },
-    '×',
-  );
+  const close = hpClose(JOBS_TEXT.close);
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'team-note' });
   const hint = el('p', { class: 'jobs-small' }, JOBS_TEXT.teamHint(3));
   const slots = el('ol', { class: 'team-slots', 'data-testid': 'team-slots' });

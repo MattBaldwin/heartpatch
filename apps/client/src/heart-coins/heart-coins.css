@@ -121,25 +121,6 @@
   text-align: left;
 }
 
-.heart-sheet-close-top {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: #fbeaf2;
-  font: inherit;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  color: #7a2d55;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
 .heart-sheet-scroll {
   display: flex;
   flex-direction: column;

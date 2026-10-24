@@ -245,18 +245,20 @@
   gap: 10px;
 }
 
-.door-knock {
+/* Bigger than a kit button; compound selectors so the kit sheet's order doesn't matter. */
+.hp-button.door-knock {
+  --hp-lip: 6px;
   min-width: 180px;
   min-height: 58px;
   font-size: 22px;
   font-weight: 900;
-  box-shadow: 0 6px 0 #8a3a66;
 }
 
-.door-knock:disabled {
+/* Waiting for the door: a pale button, not a faded one. */
+.hp-button.door-knock:disabled {
+  --hp-primary: #d9a1bd;
+  --hp-primary-lip: #b9809c;
   opacity: 1;
-  background: #d9a1bd;
-  box-shadow: 0 6px 0 #b9809c;
 }
 
 .door-close[hidden] {

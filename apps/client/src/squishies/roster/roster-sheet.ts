@@ -23,6 +23,7 @@ import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
+import { hpClose } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { rarityChip } from '../../ui/rarity/rarity.js';
 import {
@@ -198,11 +199,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   /** Each working row's status chip, so the countdown updates its text and nothing else. */
   let chips = new Map<string, { row: RosterRow; node: HTMLElement }>();
 
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': ROSTER_TEXT.close },
-    '×',
-  );
+  const close = hpClose(ROSTER_TEXT.close);
   // Focus moves here when the roster opens (#433), so VoiceOver starts at the top.
   const title = el('h2', { id: 'roster-title', tabindex: '-1' }, ROSTER_TEXT.title);
   /** What had focus before the roster opened; it gets it back on close. */

@@ -3,6 +3,7 @@ import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
+import { hpClose } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
 import {
@@ -93,11 +94,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /** A finished countdown already asked the server once (reset by every render). */
   let askedAgain = false;
 
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': JOBS_TEXT.close },
-    '×',
-  );
+  const close = hpClose(JOBS_TEXT.close);
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'jobs-note' });
   /** Why Train is switched off, while there are no Training Grounds yet. */
   const trainHint = el('p', { class: 'jobs-hint', 'data-testid': 'jobs-train-hint' });

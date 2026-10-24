@@ -3,6 +3,7 @@ import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import type { TerritoryScreen } from '../territory/territory-screen.js';
+import { hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   RAID_TEXT,
@@ -84,11 +85,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
     badge,
   );
   button.hidden = true;
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': RAID_TEXT.close },
-    '×',
-  );
+  const close = hpClose(RAID_TEXT.close);
   const body = el('div', { class: 'raid-body' });
   const sheet = el(
     'section',

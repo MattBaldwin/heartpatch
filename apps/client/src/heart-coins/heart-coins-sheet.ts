@@ -1,5 +1,6 @@
 import type { HeartCoins } from '@heartpatch/shared';
 import type { GameClock } from '../inventory/game-clock.js';
+import { hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { createUpkeepList } from '../resource-buildings/upkeep-list.js';
 import {
@@ -84,16 +85,7 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   });
   /** Scroll to the upkeep list once the next reply draws it. */
   let wantUpkeep = false;
-  const closeTop = el(
-    'button',
-    {
-      type: 'button',
-      class: 'heart-sheet-close-top',
-      'aria-label': HEART_COINS_TEXT.close,
-      'data-testid': 'heart-coins-close-top',
-    },
-    '×',
-  );
+  const closeTop = hpClose(HEART_COINS_TEXT.close, 'heart-coins-close-top');
   const close = el(
     'button',
     { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'heart-coins-close' },

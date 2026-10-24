@@ -1,4 +1,4 @@
-import { hpButton } from '../ui/button/button.js';
+import { buttonClass, hpButton } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { DOOR_TEXT, sceneLines, type DoorBeat, type DoorScene } from './door-view.js';
 import './door-scene.css';
@@ -279,7 +279,11 @@ export function createDoorScene(options: DoorSceneOptions): DoorSceneView {
   const say = el('div', { class: 'door-say', role: 'status' }, title, sub);
   const knock = el(
     'button',
-    { type: 'button', class: 'auth-button door-knock', 'data-testid': 'door-knock' },
+    {
+      type: 'button',
+      class: `${buttonClass({ variant: 'primary' })} door-knock`,
+      'data-testid': 'door-knock',
+    },
     DOOR_TEXT.knockButton,
   );
   const notNow = hpButton('Not now', { testId: 'door-close' });
