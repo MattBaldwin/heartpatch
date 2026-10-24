@@ -447,10 +447,10 @@ export class CrookedBonusFx {
   }
 
   /**
-   * The light from a woken door, at the door's own spot in the wall: a bright
-   * strip across the opening and a short pool on the floor in front of it,
-   * both flat discs in the power's colour, bright in the middle and clear at
-   * the rim. A door that woke just now pulses once; one met later simply glows.
+   * The light on the floor from a woken door, at the door's own spot in the
+   * wall: a thin pool hugging the wall, a flat disc in the power's colour,
+   * bright in the middle and clear at the rim. A door that woke just now
+   * pulses once; one met later simply glows.
    */
   #spill(power: string, at: FloorPoint, into: FloorPoint): Spill {
     const hex = WOKEN_COLOUR[power] ?? '#ffffff';
@@ -461,15 +461,9 @@ export class CrookedBonusFx {
       part.mesh.position.set(at.x + into.x * inward, 0.6, at.z + into.z * inward);
       return part;
     };
-    // The opening itself: a disc that always faces the camera, hung in the doorway
-    // (a flat one would be edge-on to the camera, or hidden by the wall's foot).
-    const [halfWidth, height, inward, alpha] = WOKEN_SPILL.opening;
-    const opening = this.#spillDisc(hex, 1, alpha, [halfWidth, halfWidth, 1]);
-    opening.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    opening.mesh.position.set(at.x + into.x * inward, height, at.z + into.z * inward);
     const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
     return {
-      parts: [lay(WOKEN_SPILL.pool), opening],
+      parts: [lay(WOKEN_SPILL.pool)],
       since: fresh ? this.#wokeAt : null,
     };
   }

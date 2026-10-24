@@ -70,8 +70,22 @@ export const halo = (): Part => merged([tube(0.03, 1, 1, [0, 0.02, 0], '#ffffff'
  */
 export function wokenGlow(power: string): Part | null {
   const parts = WOKEN[power]?.();
-  return parts && parts.length > 0 ? merged(parts) : null;
+  // Every woken door's opening is lit: a block of light filling the doorway, its top seen from the camera.
+  return parts && parts.length > 0 ? merged([...OPENING(), ...parts]) : null;
 }
+
+/** The lit opening: the doorway's width, wall-high, a little proud of the wall (door-local, room towards −z). */
+const OPENING = (): Part[] => [
+  blk(
+    OPENING_SIZE.w,
+    OPENING_SIZE.h,
+    OPENING_SIZE.d,
+    [0, OPENING_SIZE.h / 2, -OPENING_SIZE.d / 2],
+    '#ffffff',
+    { round: 0.2 },
+  ),
+];
+const OPENING_SIZE = { w: 1.2, h: 1.9, d: 0.45 } as const; // TUNE
 
 const WOKEN: Readonly<Record<string, () => Part[]>> = {
   fire: () => [...flames([0, 0.08, -0.5], 1.35), ...flames([0.32, 0.08, -0.62], 0.7)],
@@ -104,17 +118,15 @@ export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries
 );
 
 /**
- * The light that spills from a woken power door, tied to the door's own spot
- * in the wall (no lights): a glow hung in the opening (a camera-facing disc)
- * and a pool on the floor in front of it, in the power's colour. They swell
- * and settle on wake, then stay still: an idle house draws nothing.
- * `opening` is [radius, height, distance from the wall, opacity settled]; `pool`
+ * The light from a woken power door, in the power's colour, tied to the
+ * door's own spot in the wall (no lights): the opening itself is a block of
+ * light (`wokenGlow`), and a thin pool hugs the wall in front of it. The pool
  * is [half width along the wall, reach into the room, middle's distance from
- * the wall, opacity settled], all in metres.
+ * the wall, opacity settled], in metres. Both swell and settle on wake, then
+ * stay still: an idle house draws nothing.
  */
 export const WOKEN_SPILL = {
-  opening: [1.5, 1.2, 0.3, 1],
-  pool: [1.3, 1.8, 0.3, 1],
+  pool: [1.2, 1.0, 0.15, 0.85],
   /** The wake pulse: this many beats over this long, s, growing by this much. */
   beats: 2,
   seconds: 2.4,
