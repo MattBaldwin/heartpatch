@@ -11,6 +11,15 @@ import type { CameraCue } from './choreography.js';
 // unit tested; the scene writes the result into the stage camera before each
 // frame.
 
+type Widen<T> = T extends number
+  ? number
+  : T extends object
+    ? { readonly [K in keyof T]: Widen<T[K]> }
+    : T;
+
+/** The camera's tunables (`BATTLE_CAMERA`), any numbers (tests try others). */
+export type CameraConfig = Widen<typeof BATTLE_CAMERA>;
+
 export interface Point3 {
   x: number;
   y: number;
@@ -76,7 +85,7 @@ export function frameDistance(
   aspect: number,
   safe: SafeRegion,
   fit: readonly FitPoint[],
-  config = BATTLE_CAMERA,
+  config: CameraConfig = BATTLE_CAMERA,
 ): { distance: number; shift: number } {
   const tan = Math.tan(config.fov / 2);
   const feetY = Math.min(config.feetY, safe.bottom - 0.08);
@@ -113,7 +122,7 @@ export function arenaReach(
   aspect: number,
   floor: number,
   shift: number,
-  config = BATTLE_CAMERA,
+  config: CameraConfig = BATTLE_CAMERA,
   groundRadius: number = ARENA_STAGE.groundRadius,
 ): number {
   const tan = Math.tan(config.fov / 2);
@@ -152,7 +161,7 @@ const NO_SHAKE = { x: 0, y: 0 } as const;
 export function shakeOffset(
   amount: number,
   age: number,
-  config = BATTLE_CAMERA,
+  config: CameraConfig = BATTLE_CAMERA,
 ): { x: number; y: number } {
   if (amount <= 0 || age < 0) return NO_SHAKE;
   const t = age / 1000;
@@ -163,7 +172,7 @@ export function shakeOffset(
 }
 
 export class CameraDirector {
-  readonly #config: typeof BATTLE_CAMERA;
+  readonly #config: CameraConfig;
   readonly #reduced: boolean;
   /** Where each fighter stands (ground points), to lean towards. */
   readonly #homes: Readonly<Record<'a' | 'b', { x: number; z: number }>>;
@@ -186,7 +195,7 @@ export class CameraDirector {
   constructor(
     homes: Readonly<Record<'a' | 'b', { x: number; z: number }>>,
     reduced: boolean,
-    config = BATTLE_CAMERA,
+    config: CameraConfig = BATTLE_CAMERA,
   ) {
     this.#homes = homes;
     this.#reduced = reduced;
