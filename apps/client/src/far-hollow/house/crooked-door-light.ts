@@ -243,6 +243,20 @@ export function createDoorLights(): DoorLights {
             lanes.push({ node: lane, share: s.x });
             sparks.append(lane);
           }
+          // The wake burst: a puff of the same sparkles, shown only while the door is fresh (CSS).
+          sparkles(door.power).forEach((s, i) => {
+            const bit = el('span', {
+              class: `crooked-door-spark crooked-door-burst crooked-door-spark-${shape}`,
+            });
+            bit.style.setProperty('--y', `${r1(-s.y * PIECE * 0.5)}px`);
+            bit.style.setProperty('--sway', `${r1(s.sway * 2)}px`);
+            bit.style.setProperty('--size', `${r1(s.size * 1.5)}px`);
+            bit.style.setProperty('--burst-delay', `${r1(i * 0.06)}s`);
+            bit.style.setProperty('--spark', s.colour);
+            const lane = el('span', { class: 'crooked-door-lane' }, bit);
+            lanes.push({ node: lane, share: s.x });
+            sparks.append(lane);
+          });
           const node = el(
             'div',
             { class: 'crooked-door-light', 'data-testid': `crooked-door-light-${door.id}` },
@@ -295,7 +309,9 @@ export function createDoorLights(): DoorLights {
         at: p.at,
         foot: p.layout.foot,
         height: p.layout.height,
-        sparkles: lights.get(door)?.sparks.querySelectorAll('.crooked-door-spark').length ?? 0,
+        sparkles:
+          lights.get(door)?.sparks.querySelectorAll('.crooked-door-spark:not(.crooked-door-burst)')
+            .length ?? 0,
       })),
   };
 }
