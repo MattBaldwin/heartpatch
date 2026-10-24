@@ -1746,3 +1746,36 @@ _Owner decisions from the 2026-10-23 playtest and screen approvals, and the `## 
 
 **Coordinator calls**
 - **Controls B got a fifth, delta-only review round (PR #638).** The supervisor allowed it for one scoped token fix (the admin invite-code box shared the new secondary buttons' fill), because the merge gate needs an APPROVE naming the head.
+
+## 2026-10-23 — Owner decisions and coordinator calls (supervisor 13)
+
+_Owner decisions and screen approvals from 2026-10-23, and the `## Decisions` sections and verdict comments of merged PRs #638, #643 and #644 (supervisor 12's section left #638's for after it merged). Each item cites its source. "Coordinator call" marks a call the supervisor made inside an owner-approved design._
+
+**Controls: shared buttons everywhere (PR #638)**
+- **Own colour stays only where it means something,** as `--hp-*` token overrides on the shared kit: trading gold, battle cream and sipped-mint and per-type moves, the dark lorebook and recipe-book bars, and the admin console's danger button (with a dark-mode variant).
+- **One ✕ path.** `CLOSE_ICON_PATH` and `strokeIcon` live in `ui/stroke-icon.ts`, used by `button.ts` and `trays.ts`. The tray's close is `hpClose`.
+- **Battle's compact row keeps 14 px text and 10 px side padding,** so ⓘ, Heart Charm, potions and Swap still share a line at 375 px.
+- **Door "Not now" uses the secondary look,** because the quiet look is unreadable on the dark door scene.
+- **CSS order matters.** The kit sheet loads before `battle.css` and other same-specificity overrides. It does today: the shared chunk is linked first in the built `index.html` and `admin.html`.
+
+**The Crooked House: puzzles and attic (#306, PR #643)**
+- **The attic card shows one summed line.** It reads "13 Heartdust, 25 Glimmer and 5 Treats, from the chest and the far Hollow's gift": the chest's 10 Heartdust and 25 Glimmer plus the gift's 3 Heartdust and 5 Treats.
+- **"N of 13 put right" counts rooms.** That's the 12 rooms to put right plus the lit Front Hall. Relighting a thing inside a room doesn't move the count; the room's bloom does.
+- **House moment timing.** A card that follows an animation waits on that moment's own clock, not a timer, so the reward card never covers the chest lid on a slow device.
+- **A relit thing's glow stays lit in its dark room** (`RELIT` in `crooked-scene.ts`, `// TUNE:`), so a solve is felt before the room blooms.
+- **The attic's chest stands just north of the room's middle,** under the moon window, with the lectern to the west (`CROOKED_ATTIC`, `// TUNE:`). It is the cellar's own big chest and moment, not 6e's bonus chest.
+- **The house's cards open in one frame,** as 6c's do. No opening animation was added.
+- **Story scraps are lines on the bloom card,** kept server-side in `CROOKED_HOUSE_SECRETS.scraps`. There is no new view state.
+- **A `relight` command and the `relight_attempt` column (migration 0058)** deal and count each try, so a faded try really reshuffles, as the Hollow's `puzzle_attempt` does.
+
+**Controls: battle sheet on small phones (PR #644)**
+- **The battle sheet takes a larger share of shorter screens** (37, 42, 46 and 52 vh, and 46 vh on a landscape phone) instead of squeezing buttons below 44 pt or dropping text. The camera reads the sheet's real `max-height`, so the two can't drift.
+
+**Screens approved (2026-10-23, via supervisor 13)**
+- **6f puzzles and attic (PR #643, verdict comment 6375751751),** v3: https://claude.ai/artifact/4spiU63xu6mH7WyiPTHYpy.
+- **Battle controls (PR #644, verdict comment 6376491393),** v4: https://claude.ai/artifact/MMUKadNvKV8Vf1ZYh6hYU6.
+- **Controls B (PR #638)** was approved earlier, v4 (comment 6371460041, recorded under supervisor 12).
+
+**Coordinator calls**
+- **Controls B2 splits into B2a and B2b.** B2a is every leftover control except `.auth-button*`. B2b is `.auth-button*`, which has about 60 call sites.
+- **The house ✕s are in the player's home.** `house-grow-close` is in `apps/client/src/house/`, not the Crooked House, so B2a takes them. They don't wait for 6e.

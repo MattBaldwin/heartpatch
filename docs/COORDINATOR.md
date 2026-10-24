@@ -189,17 +189,20 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 12, 2026-10-23):** main `a466485` (#639), migrations through 0057. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-23 — Owner decisions and coordinator calls (supervisor 12)". Merged 2026-10-23 under supervisor 12: #636, #637 (Controls D), #640 (#601 PR 10), #639 (Crooked House 6d).
-- **Lanes in flight** (report to supervisor 12 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
-  - **Crooked House 6e** `session_0116jmmC6njAhrbzsZML1gHk` (Opus): bonus rooms PR #641. Merging main after 6d and fixing render-check items. The house lands by Nov 6, for a playtest before Nov 9.
-  - **Crooked House 6f** `session_0188PBs4paWFjw9cT1XcmY8q` (Opus): puzzles and the attic. Started from 6d's `Lane handoff` (#306 comment 6371277570), under a lane split with 6e: 6f keeps out of the bonus, power and chest sections and out of `HOUSE_KEEPER` and `rug()`.
-  - **Controls B** `session_019vPYe1dqw1Ne2YDUBFUFcR` (Sonnet): PR #638, still open. Reviewer APPROVE on 9259afb, owner approved the screens; it waits on green CI.
+- **State (supervisor 13, 2026-10-23):** main `41749cc` (#644), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-23 — Owner decisions and coordinator calls (supervisor 13)". Merged 2026-10-23 under supervisor 13: #643 (Crooked House 6f) and #644 (battle controls fit small phones).
+- **Lanes in flight** (report to supervisor 13 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
+  - **Crooked House 6e2** `session_01HB4mCER7TnzGxgrQFRFHrR` (Opus, #306): finishes PR #641 from 6e's `Lane handoff` (#306 comment 6374647088). Bonus rooms, merge main, Light and SE captures, then owner screens at https://claude.ai/artifact/QjXvPv2wbHMVjkVFGEnVyP.
+    - **Owner playtest (2026-10-23):** on main, the power doors say "A Fire friend could help 🔥" and a "Who can help?" button does nothing. #641 ships the team picker and the wake flow.
+    - Once #641's screens pass the render-check, offer the owner an optional bubble wording: "A Fire friend on your team could help 🔥". The approved rule is any squishy of that element on the battle team.
+  - **Controls B2a** `session_01SJu4vA2UJP5x9rq3RUwrna` (Sonnet): every leftover control except `.auth-button*`, including the house ✕s.
   - In-flight lanes' folders are off-limits to the others. Tell a lane when a folder frees up after a merge.
 - **Queue (start in this order as lanes free up):**
-  - **Controls B2** (Sonnet, small): `.auth-button*`, `.sound-button`, `.tile-panel-close`, `.hollow-button`, `.heart-sheet-close-top` and `door-knock` onto `.hp-button`. Also from #638's review: `.battle-leave`, `.whats-new-x` and the house sheet ✕s (`house-grow-close`, which became a rounded square and should use `hpClose`); the house folder waits for 6e and 6f.
-  - **E2E_GROUPS rebalance** (Sonnet, small): ipad/iphone-webkit group 2 runs 24–28 min against about 10 for the others. #635's 40-minute timeout is a stopgap (`TUNE`); take it back toward 30 after the rebalance.
-  - **Controls D "Left for later"** (from PR #637's body): home, heart-coins, the roster and team two-column pass, and the chat strip.
-  - **Wild Isle #621:** a big feature. Fable plans first, then two waves. The house (6e, 6f) comes before the controls work if time is short.
+  1. **Controls B2b:** `.auth-button*`, about 60 call sites.
+  2. **E2E_GROUPS rebalance** (Sonnet, small): ipad/iphone-webkit group 2 runs 24–28 min against about 10 for the others. Take #635's 40-minute timeout (`TUNE`) back toward 30 afterwards.
+  3. **Controls D "Left for later"** (from PR #637's body): home, heart-coins, the roster and team two-column pass, and the chat strip.
+  4. **Wild Isle #621:** a big feature. Fable plans first, then two waves.
+  5. After #641 merges, any 6e/6f nits logged in those PRs' Coordinator notes.
+- **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first. **Show the screens before asking (2026-10-11, relayed by the coordinator):** always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link. **Features must be felt (2026-10-11, relayed by the coordinator):** a feature needs visible feedback, not just correct text, and the home must be personal and personalizable. **Squishies are the most important visual part (2026-10-11, relayed by the coordinator):** every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones.
@@ -232,6 +235,11 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-23, supervisor 13):**
+  - **Render-check every round.** The first two checks of 6f's screens came back FIX on real bugs: "as it opens" frames byte-identical to the whole frames, and a reward card that could cover the chest lid on slow devices because it waited on real time while the scene ran its own clock. The Run-away fix needed simulated safe-area insets (Chromium `Emulation.setSafeAreaInsetsOverride`), because Chromium's insets are 0. The artifact page itself must stack below 600px and use native-size PNGs.
+  - **Long house lanes still cost the most.** 6e cost $58 (737k context), 6f $43 (649k), 6d $38. Most of it was re-shoot cycles at high context. Finishing work goes to a fresh lane (6e2) with a `Lane handoff`.
+  - **Lane costs today under supervisor 13:** Run-away fix $5.74 (Sonnet). Supervisor 13 about $12 at handoff.
+  - **The supervisor re-routing message to 6f was blocked once by the auto-mode classifier.** A reworded message got through. Re-check each lane's confirmation.
 - **Lessons (2026-10-23, supervisor 12):**
   - **Every first render-check of a lane's owner screens came back FIX,** mostly from capture slips: the dev HUD or "(dev)" buttons showing, different players before and after, "Reconnecting…", tips covering half a pair. Briefs now list those as rules. The check also caught real layout bugs: safe-area insets, a modal covering the top bar, a disc left behind, an inverted button hierarchy. Keep checking every round.
   - **Lanes kept reporting to `@parent` after a handoff until told three times.** The retired supervisor forwarding their reports kept anything from being lost.
