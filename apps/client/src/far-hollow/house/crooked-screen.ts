@@ -1012,6 +1012,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** What a fix did: the thing put right, maybe a key, maybe the room's bloom and its scrap. */
   function showFix(reply: CrookedFixResponse, room: CrookedRoom, thing: CrookedThing): void {
     apply(reply.view);
+    if (reply.key || reply.bloom) options.cue?.(reply.bloom ? 'room-bloom' : 'key-found');
     if (reply.key) {
       scene3d?.showKey(thingPoint(room, thing));
       cards.push({ kind: 'key', title: T.keyTitle(reply.key.name), line: T.keyLine(thing.name) });
@@ -1179,7 +1180,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       if (at !== generation) return;
       powering = false;
       apply(reply.view);
-      options.cue?.('twinkle');
+      options.cue?.('door-wake');
       // What the friend did, and where it leads, on a card (the moment's payoff).
       const beyond = room ? farEnd(door, room.id)?.room.name : undefined;
       cards.push({
@@ -1209,7 +1210,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     apply(reply.view);
     const friend = reply.friend;
     const species = friend ? GAME_DATA.species.find((sp) => sp.id === friend.speciesId) : null;
-    options.cue?.('pop');
+    options.cue?.('chest');
     bonusFx?.openChest(
       room.id,
       friend ? { speciesId: friend.speciesId, instanceId: friend.battleId } : null,
@@ -1235,7 +1236,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const at = generation;
     const show = () => {
       if (at !== generation) return;
-      options.cue?.('twinkle');
       renderCard();
     };
     if (reducedMotion()) show();
@@ -1368,7 +1368,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (!reply) return;
     // The moment starts before the view that shows the chest open.
     scene3d?.openAtticChest();
-    options.cue?.('pop');
+    options.cue?.('chest');
     apply(reply.view);
     cards.push({
       kind: 'attic',
@@ -1388,7 +1388,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function showAtticCard(): void {
     if (!atticCardWaiting || (scene3d && !scene3d.atticCardDue())) return;
     atticCardWaiting = false;
-    options.cue?.('twinkle');
     renderCard();
   }
 

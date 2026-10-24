@@ -1,5 +1,6 @@
-// Tunable numbers for sound and music (#25, tech spec §15). Everything is
-// synthesised in the browser (Web Audio), so there are no files to license.
+// Tunable numbers for sound and music (#25, tech spec §15). Most sound is
+// synthesised in the browser (Web Audio); the big moments layer a few CC0
+// recorded hits (#653, ASSETS.md).
 
 /** Bus levels at full slider, before the player's own volume. Quiet by default. */
 export const MIX = {
@@ -8,6 +9,10 @@ export const MIX = {
   ui: 0.3, // TUNE: button ticks are a whisper
   /** The limiter on the master bus (a hard-knee compressor). */
   limiterThresholdDb: -8, // TUNE
+  /** A light room reverb (#653): its length, and how much SFX and UI send into it. */
+  reverbS: 1.4, // TUNE
+  sfxReverb: 0.22, // TUNE: cozy, not a cathedral
+  uiReverb: 0.08, // TUNE: button ticks stay dry and close
 } as const;
 
 /** What a new device starts with (sliders are 0–1). */
@@ -35,6 +40,8 @@ export const SFX = {
   minRepeatS: 0.05, // TUNE
   /** Random pitch spread per play (± fraction), so repeats don't sound copied. */
   pitchJitter: 0.06, // TUNE
+  /** The big moments' tunes vary less, so they stay in tune with the music. */
+  recordedPitchJitter: 0.015, // TUNE
   /** Random volume spread per play (fraction off the top). */
   gainJitter: 0.15, // TUNE
 } as const;

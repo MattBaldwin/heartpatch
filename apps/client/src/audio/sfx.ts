@@ -1,5 +1,5 @@
 import type { CueName } from './cues.js';
-import { noise, tone } from './synth.js';
+import { bell, noise, tone } from './synth.js';
 
 // The sound effects (#25), each a tiny synth recipe: squishy squeaks and
 // giggles, boops, pops and chimes (style guide §7: soft, round and bouncy).
@@ -7,6 +7,10 @@ import { noise, tone } from './synth.js';
 // cinematic has a low rumbling sting as he reaches (owner decision 2026-10-04), and the
 // Crooked House's peekaboo a short one (#306 6d). `pitch` and
 // `gain` carry the per-play variation, so repeats never sound copied.
+// The sound pass (#653) layered the small sounds (a body under each click, a
+// puff of air in each pop, bells that shimmer) and the engine adds a soft
+// room reverb. The big moments play recorded CC0 hits (`recorded.ts`) once
+// they've loaded; their recipes here are the synth stand-ins until then.
 
 export interface SfxKit {
   readonly ctx: BaseAudioContext;
@@ -61,10 +65,9 @@ function chime(
   steps.forEach((semis, i) => {
     const freq = root * 2 ** (semis / 12);
     const t = at + i * step;
-    tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.7, freq, gain, attack: 0.004 });
-    tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.25, freq: freq * 2.76, gain: gain * 0.2 });
+    bell(kit.ctx, out, t, freq, gain * 1.15, 0.75);
   });
-  return steps.length * step + 0.7;
+  return steps.length * step + 0.75;
 }
 
 /** Pentatonic steps up from the find chime's root (#391). */
@@ -106,17 +109,36 @@ function findGlimmer(
 
 export const RECIPES: Readonly<Record<CueName, Recipe>> = {
   tick: (kit, out, at, pitch, gain) => {
+    // A soft wooden "tok": a bright top, a rounder body and a whisper of click.
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.035,
+      freq: 1800 * pitch,
+      to: 1250 * pitch,
+      gain: gain * 0.32,
+      attack: 0.001,
+    });
     tone(kit.ctx, out, {
       type: 'triangle',
       at,
-      dur: 0.045,
-      freq: 1500 * pitch,
-      to: 1100 * pitch,
-      gain: gain * 0.5,
+      dur: 0.06,
+      freq: 900 * pitch,
+      to: 760 * pitch,
+      gain: gain * 0.22,
       attack: 0.002,
-      lowpass: 3000,
+      lowpass: 2400,
     });
-    return 0.05;
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.015,
+      gain: gain * 0.06,
+      filter: 'bandpass',
+      freq: 3600,
+      q: 2,
+      attack: 0.001,
+    });
+    return 0.06;
   },
 
   boop: (kit, out, at, pitch, gain) => {
@@ -127,8 +149,27 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       freq: 620 * pitch,
       to: 330 * pitch,
       glide: 0.12,
-      gain: gain * 0.8,
+      gain: gain * 0.7,
       attack: 0.004,
+    });
+    // A soft overtone and a puff of felt, like poking a plush nose.
+    tone(kit.ctx, out, {
+      type: 'triangle',
+      at,
+      dur: 0.1,
+      freq: 1240 * pitch,
+      to: 660 * pitch,
+      glide: 0.08,
+      gain: gain * 0.1,
+      lowpass: 2000,
+    });
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.05,
+      gain: gain * 0.12,
+      filter: 'lowpass',
+      freq: 700,
+      attack: 0.003,
     });
     return 0.16;
   },
@@ -152,8 +193,18 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
         dur: 0.1,
         freq: f * pitch,
         to: f * pitch * 0.7,
-        gain: gain * 0.8,
+        gain: gain * 0.7,
         attack: 0.004,
+      });
+      // A little lip smack on each "nom".
+      noise(kit.ctx, out, kit.noise, {
+        at: at + i * 0.13,
+        dur: 0.035,
+        gain: gain * 0.1,
+        filter: 'bandpass',
+        freq: 1100 * pitch,
+        q: 1.5,
+        attack: 0.002,
       });
     }
     return 0.25;
@@ -192,7 +243,18 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       q: 1.4,
       attack: 0.08,
     });
-    return 0.28;
+    // A rounder, lower breath under it, so it swooshes rather than hisses.
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.3,
+      gain: gain * 0.6,
+      filter: 'bandpass',
+      freq: 260 * pitch,
+      to: 900 * pitch,
+      q: 1,
+      attack: 0.1,
+    });
+    return 0.3;
   },
 
   bonk: (kit, out, at, pitch, gain) => {
@@ -214,7 +276,19 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       filter: 'lowpass',
       freq: 1200,
     });
-    return 0.2;
+    // The beanbag's low wobble as it settles.
+    tone(kit.ctx, out, {
+      type: 'triangle',
+      at: at + 0.02,
+      dur: 0.26,
+      freq: 140 * pitch,
+      to: 110 * pitch,
+      gain: gain * 0.18,
+      attack: 0.01,
+      lowpass: 500,
+      vibrato: [14, 0.04],
+    });
+    return 0.28;
   },
 
   thwack: (kit, out, at, pitch, gain) => {
@@ -278,6 +352,16 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       hold: 0.3,
       vibrato: [6, 0.03],
     });
+    noise(kit.ctx, out, kit.noise, {
+      at: at + 0.05,
+      dur: 0.7,
+      gain: gain * 0.05,
+      filter: 'bandpass',
+      freq: 900 * pitch,
+      to: 400 * pitch,
+      q: 1.2,
+      attack: 0.2,
+    });
     return 0.8;
   },
 
@@ -289,8 +373,27 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       freq: 400 * pitch,
       to: 900 * pitch,
       glide: 0.05,
-      gain: gain * 0.7,
+      gain: gain * 0.6,
       attack: 0.002,
+    });
+    // A cork's puff of air and a bright little top.
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.03,
+      gain: gain * 0.2,
+      filter: 'bandpass',
+      freq: 1400 * pitch,
+      q: 2.5,
+      attack: 0.001,
+    });
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at: at + 0.02,
+      dur: 0.06,
+      freq: 900 * pitch,
+      to: 1500 * pitch,
+      glide: 0.04,
+      gain: gain * 0.12,
     });
     return 0.1;
   },
@@ -311,6 +414,15 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
         gain: gain * 0.4,
         vibrato: [18, 0.05],
         lowpass: 1800,
+      });
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: at + i * 0.16,
+        dur: 0.08,
+        freq: 180 * pitch,
+        to: 120 * pitch,
+        gain: gain * 0.25,
+        attack: 0.003,
       });
     }
     return 0.32;
@@ -376,6 +488,16 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
         attack: 0.02,
         hold: 0.1,
         lowpass: 1600,
+      });
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: at + i * 0.22,
+        dur: 0.4,
+        freq: (f / 2) * pitch,
+        to: (f / 2) * pitch * 0.94,
+        gain: gain * 0.16,
+        attack: 0.03,
+        hold: 0.1,
       });
     }
     return 0.6;
@@ -613,4 +735,65 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       chime(kit, out, at, 523 * pitch, [0, 7, 12, 16, 19, 24], 0.12, gain * 0.3),
       chime(kit, out, at + 0.06, 262 * pitch, [0, 12], 0.36, gain * 0.2),
     ),
+
+  // Synth stand-ins for the big moments (#653), heard only until the
+  // recorded hits load (or if they can't): `recorded.ts` has the real ones.
+  chest: (kit, out, at, pitch, gain) => {
+    tone(kit.ctx, out, {
+      type: 'triangle',
+      at,
+      dur: 1.3,
+      freq: 262 * pitch,
+      to: 523 * pitch,
+      glide: 1.1,
+      gain: gain * 0.12,
+      attack: 1,
+      lowpass: 2000,
+    });
+    const run = [0, 2, 4, 7, 9, 12, 14, 16];
+    const times = [0.15, 0.38, 0.58, 0.74, 0.87, 0.98, 1.07, 1.14];
+    run.forEach((semis, i) => {
+      bell(kit.ctx, out, at + (times[i] ?? 0), 523 * pitch * 2 ** (semis / 12), gain * 0.2, 0.5);
+    });
+    for (const semis of [0, 4, 7, 12]) {
+      bell(kit.ctx, out, at + 1.28, 1046 * pitch * 2 ** (semis / 12), gain * 0.2, 1.3);
+    }
+    return 2.6;
+  },
+
+  'door-wake': (kit, out, at, pitch, gain) => {
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 1,
+      freq: 98 * pitch,
+      to: 196 * pitch,
+      glide: 0.8,
+      gain: gain * 0.2,
+      attack: 0.3,
+    });
+    return 0.5 + chime(kit, out, at + 0.5, 392 * pitch, [0, 7, 12, 19], 0.12, gain * 0.28);
+  },
+
+  'key-found': (kit, out, at, pitch, gain) =>
+    chime(kit, out, at, 1318 * pitch, [0, 5, 12], 0.12, gain * 0.28),
+
+  'room-bloom': (kit, out, at, pitch, gain) => {
+    for (const f of [131, 196, 330]) {
+      tone(kit.ctx, out, {
+        type: 'triangle',
+        at,
+        dur: 2,
+        freq: f * pitch,
+        gain: gain * 0.07,
+        attack: 0.5,
+        hold: 0.6,
+        lowpass: 1400,
+      });
+    }
+    return Math.max(
+      2,
+      0.3 + chime(kit, out, at + 0.3, 523 * pitch, [4, 7, 12, 16], 0.12, gain * 0.28),
+    );
+  },
 };
