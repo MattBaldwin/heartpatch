@@ -882,7 +882,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
    ⓘ, Heart Charm, Swap and Run away fit the sheet, which takes a bigger share
    of a shorter screen (--battle-sheet-vh) so nothing scrolls or drops. */
 @media (max-height: 880px) {
-  .battle-move {
+  .hp-button.battle-move {
     gap: 1px;
     min-height: 0;
     padding: var(--hp-pad-y) 10px calc(var(--hp-pad-y) + 1px);
