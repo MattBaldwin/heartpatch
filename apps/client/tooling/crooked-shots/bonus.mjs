@@ -305,8 +305,16 @@ async function walkInto(page, dx, dz, room) {
 async function moment(page, start, ms, take) {
   if (!stepped.has(page)) {
     // Far enough ahead that the page's clock can't pass it before the pause lands.
-    const now = await page.evaluate(() => Date.now());
-    await page.clock.pauseAt(now + 1_000);
+    // A slow frame can still overrun it ("fast-forward to the past"): read the time again with a longer lead.
+    for (let lead = 1_000; ; lead *= 2) {
+      const now = await page.evaluate(() => Date.now());
+      try {
+        await page.clock.pauseAt(now + lead);
+        break;
+      } catch (error) {
+        if (lead >= 16_000 || !/to the past/.test(String(error))) throw error;
+      }
+    }
   }
   // The tap and what it waits on (a server reply) on the held clock, so the moment starts at 0.
   stepped.delete(page);
@@ -522,16 +530,7 @@ async function playPower(page, device, p) {
   await cardUp(page);
   await shot(page, device, `${p.power}-woke`);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-  // The door is open once the house says so; then its swing settles. The frame's caption says what it shows.
-  await until(
-    page,
-    () => {
-      const t = window.__heartpatch?.farHollowHouse?.()?.target;
-      return t?.kind === 'door' && t.state === 'open';
-    },
-    undefined,
-    20_000,
-  ).catch(() => console.error(`[note] ${device} ${p.power}: target never read 'open' door`));
+  // The door stays where it was; its swing settles while the lantern's light shows only what is near the Keeper.
   await wait(page, 900);
   await shot(page, device, `${p.power}-open`);
   await walkInto(page, p.dx, p.dz, p.room);
