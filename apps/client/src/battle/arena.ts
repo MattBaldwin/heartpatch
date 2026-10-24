@@ -367,7 +367,7 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
   // ── Water (lakes) ────────────────────────────────────────────────────
   const water = waterColor(plan);
   if (water) {
-    const r = ARENA_STAGE.groundRadius;
+    const r = ARENA_STAGE.lakeRadius;
     const pool = keep(
       CreateCylinder('arena-water', { diameter: r * 1.6, height: 0.1, tessellation: 64 }, scene),
     );

@@ -17,6 +17,13 @@ export const FIGHTER = {
   /** Extra scale on the squishies (a close-up, like the gallery's). */
   scale: 2.7, // TUNE
   /**
+   * Big squishies are drawn a little smaller in battle (#652), so the camera
+   * never backs off to fit them: above `knee` (battle units, hat included)
+   * only `keep` of the extra height stays, and nobody stands taller than
+   * `maxHeight`. Most species (about 5 or less) are drawn as they are.
+   */
+  tall: { knee: 5, keep: 0.25, maxHeight: 5.6 }, // TUNE
+  /**
    * Three-quarter facing: each face turns between "at the other fighter" (1)
    * and "at the camera" (0), so both faces always show.
    */
@@ -122,6 +129,16 @@ export const BATTLE_CAMERA = {
   /** The fight's box that must always fit in the safe region: half width and height. */
   fitHalfWidth: 3.9, // TUNE
   fitHeight: 3.6, // TUNE
+  /**
+   * The camera never backs off past the arena (#652): the bottom of the
+   * screen stays this far inside the ground's rim (room for the lean and a
+   * shake), and the distance stays within these bounds whatever it frames.
+   */
+  rimMargin: 2, // TUNE
+  minDistance: 10, // TUNE
+  /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
+  narrowSheetFrom: 900,
+  maxDistance: 90, // TUNE: a sanity bound; `arenaReach` is the limit that binds
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */
   hitPush: 0.1, // TUNE
   followPush: 0.04, // TUNE

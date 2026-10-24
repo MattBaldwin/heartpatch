@@ -42,7 +42,7 @@ import { buildArena, type Arena, type ArenaStats } from './arena.js';
 import { BATTLE_CAMERA, CHOREO, FIGHTER, HOMES, SHIELD_BUBBLE } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
-import { CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
+import { battleScale, CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
 import {
   actPose,
   actRunning,
@@ -142,6 +142,8 @@ interface Fighter {
   readonly handle: SquishyHandle;
   readonly species: Species;
   readonly feeling: FeelingId;
+  /** Drawn at this scale (`battleScale`: a tall one a little smaller, #652). */
+  readonly scale: number;
   readonly height: number;
   readonly radius: number;
 }
@@ -230,6 +232,11 @@ export class BattleScene {
     { x: 0, z: 0, r: 0, h: 0 },
     { x: 0, z: 0, r: 0, h: 0 },
   ];
+  /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
+  readonly #framing = { top: 0, bottom: 1, floor: 1 };
+  /** The canvas width the sheet's shape was last read at (a layout read only when it changes). */
+  #framedWidth = -1;
+  #narrowSheet = false;
   readonly #instrumentation: SceneInstrumentation;
   readonly #beforeRender: Observer<Scene>;
   readonly #afterRender: Observer<Scene>;
@@ -423,13 +430,16 @@ export class BattleScene {
     rig.field.setAccessory(handle, accessoryItem(accessory));
     const body = this.#options.registry.bodies.get(handle.params.body.id);
     const [sx, , sz] = handle.params.body.scale;
+    // Hat included, so plates and the camera clear it.
+    const tall = rig.field.heightOf(handle);
+    const scale = battleScale(tall);
     const fighter: Fighter = {
       handle,
       species,
       feeling: species.feeling,
-      // Hat included, so plates and the camera clear it.
-      height: rig.field.heightOf(handle) * FIGHTER.scale,
-      radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * FIGHTER.scale) / 2,
+      scale,
+      height: tall * scale,
+      radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale) / 2,
     };
     rig.bench.set(instanceId, fighter);
     return fighter;
@@ -480,7 +490,7 @@ export class BattleScene {
     rig.fence = fence;
     fence?.mesh.setEnabled(true);
     rig.down = false;
-    if (next) rig.field.move(next.handle, { x: 0, z: 0, yaw: 0, scale: FIGHTER.scale });
+    if (next) rig.field.move(next.handle, { x: 0, z: 0, yaw: 0, scale: next.scale });
     rig.act = null;
     rig.pose = REST;
     this.#apply(rig, REST);
@@ -1002,7 +1012,7 @@ export class BattleScene {
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }
-    const shot = this.#camera.shot(this.#now, aspect, this.#options.safe(), this.#fit);
+    const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit);
     camera.fov = shot.fov;
     camera.minZ = BATTLE_CAMERA.minZ;
     camera.maxZ = BATTLE_CAMERA.maxZ;
@@ -1027,5 +1037,26 @@ export class BattleScene {
     Vector3.CrossToRef(this.#forward, this.#right, this.#up);
     this.#up.normalize();
     this.#effects.setCamera(this.#right, this.#up, this.#forward);
+  }
+
+  /**
+   * The safe region for the camera: the HUD's, with the lowest row the stage
+   * shows (#652). On a wide window the sheet is a centred card, so the ground
+   * at the screen's bottom corners shows beside it; elsewhere the opaque
+   * sheet's top edge is the lowest row.
+   */
+  #framed(): SafeRegion {
+    const safe = this.#options.safe();
+    const width = this.#scene.getEngine().getRenderWidth();
+    if (width !== this.#framedWidth) {
+      this.#framedWidth = width;
+      const canvas = this.#scene.getEngine().getRenderingCanvas();
+      this.#narrowSheet = (canvas?.clientWidth ?? 0) >= BATTLE_CAMERA.narrowSheetFrom;
+    }
+    const framing = this.#framing;
+    framing.top = safe.top;
+    framing.bottom = safe.bottom;
+    framing.floor = this.#narrowSheet ? 1 : safe.bottom;
+    return framing;
   }
 }

@@ -175,7 +175,7 @@ export const FALLBACK_ARENA = 'meadow';
 /** Sizes of the diorama, world units. */
 export const ARENA_STAGE = {
   /** Radius of the ground disc. */
-  groundRadius: 20, // TUNE
+  groundRadius: 26, // TUNE: room for the camera on a wide iPad, where the ground shows to the screen's bottom (#652)
   /** Thickness of the ground slab (its edge shows: it's a little diorama). */
   groundDepth: 1.1, // TUNE
   /** Props stay this far from the arena's middle (the fight between the fighters). */
@@ -188,6 +188,8 @@ export const ARENA_STAGE = {
   cameraLane: { z: -2, halfWidth: 7 }, // TUNE
   /** Where the lake's water starts behind the fighters (+z, away from the camera). */
   waterFrom: 5.5, // TUNE
+  /** The lake's size: its pool is 1.6 × this across (its own, so a bigger ground doesn't widen it). */
+  lakeRadius: 20, // TUNE
   /** Sky dome radius (well inside the camera's far plane). */
   skyRadius: 95, // TUNE
   /** Far hills: how many, how far, their size. */
