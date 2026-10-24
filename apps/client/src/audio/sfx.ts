@@ -1,3 +1,4 @@
+import { CHEST_BUILD_S } from './audio-config.js';
 import type { CueName } from './cues.js';
 import { bell, noise, tone } from './synth.js';
 
@@ -105,6 +106,38 @@ function findGlimmer(
     tone(kit.ctx, out, { type: 'sine', at: t, dur: 0.15, freq: freq * 5.4, gain: gain * 0.04 });
   });
   return 0.18 + steps.length * 0.065 + 0.9;
+}
+
+/** A chest's synth stand-in (#653): bells up the pentatonic over a swell, then a chord `build` s in. */
+function chestStandIn(
+  kit: SfxKit,
+  out: AudioNode,
+  at: number,
+  pitch: number,
+  gain: number,
+  build: number,
+): number {
+  tone(kit.ctx, out, {
+    type: 'triangle',
+    at,
+    dur: build,
+    freq: 262 * pitch,
+    to: 523 * pitch,
+    glide: build * 0.85,
+    gain: gain * 0.12,
+    attack: build * 0.75,
+    lowpass: 2000,
+  });
+  const run = [0, 2, 4, 7, 9, 12, 14, 16];
+  const shares = [0.12, 0.3, 0.45, 0.58, 0.68, 0.77, 0.84, 0.89];
+  run.forEach((semis, i) => {
+    const t = at + (shares[i] ?? 0) * build;
+    bell(kit.ctx, out, t, 523 * pitch * 2 ** (semis / 12), gain * 0.2, 0.5);
+  });
+  for (const semis of [0, 4, 7, 12]) {
+    bell(kit.ctx, out, at + build, 1046 * pitch * 2 ** (semis / 12), gain * 0.2, 1.3);
+  }
+  return build + 1.3;
 }
 
 export const RECIPES: Readonly<Record<CueName, Recipe>> = {
@@ -738,28 +771,10 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
 
   // Synth stand-ins for the big moments (#653), heard only until the
   // recorded hits load (or if they can't): `recorded.ts` has the real ones.
-  chest: (kit, out, at, pitch, gain) => {
-    tone(kit.ctx, out, {
-      type: 'triangle',
-      at,
-      dur: 1.3,
-      freq: 262 * pitch,
-      to: 523 * pitch,
-      glide: 1.1,
-      gain: gain * 0.12,
-      attack: 1,
-      lowpass: 2000,
-    });
-    const run = [0, 2, 4, 7, 9, 12, 14, 16];
-    const times = [0.15, 0.38, 0.58, 0.74, 0.87, 0.98, 1.07, 1.14];
-    run.forEach((semis, i) => {
-      bell(kit.ctx, out, at + (times[i] ?? 0), 523 * pitch * 2 ** (semis / 12), gain * 0.2, 0.5);
-    });
-    for (const semis of [0, 4, 7, 12]) {
-      bell(kit.ctx, out, at + 1.28, 1046 * pitch * 2 ** (semis / 12), gain * 0.2, 1.3);
-    }
-    return 2.6;
-  },
+  chest: (kit, out, at, pitch, gain) =>
+    chestStandIn(kit, out, at, pitch, gain, CHEST_BUILD_S.chest),
+  'chest-big': (kit, out, at, pitch, gain) =>
+    chestStandIn(kit, out, at, pitch, gain, CHEST_BUILD_S['chest-big']),
 
   'door-wake': (kit, out, at, pitch, gain) => {
     tone(kit.ctx, out, {

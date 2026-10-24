@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPlay, RECORDED } from './recorded.js';
+import { canPlay, RECORDED, recordingFor } from './recorded.js';
 import { loadSamples, SAMPLE_IDS, SAMPLES, type SampleId } from './samples.js';
 
 /** A stand-in context: decodes any bytes into a tagged buffer, or fails on 'bad'. */
@@ -46,10 +46,11 @@ describe('recorded big moments (#653)', () => {
     expect([...bank.keys()].sort()).toEqual(['glint', 'thrum']);
   });
 
-  it('records the chest, door, key, room, evolution, new friend and win', () => {
+  it('records both chests, the door, key, room, evolution, new friend and win', () => {
     expect(Object.keys(RECORDED).sort()).toEqual([
       'charm',
       'chest',
+      'chest-big',
       'door-wake',
       'evolve',
       'key-found',
@@ -65,5 +66,16 @@ describe('recorded big moments (#653)', () => {
     expect(canPlay(chest, some)).toBe(false);
     const all = new Map(SAMPLE_IDS.map((id) => [id, {} as AudioBuffer] as const));
     for (const recording of Object.values(RECORDED)) expect(canPlay(recording, all)).toBe(true);
+  });
+
+  it('picks the recording once its hits are in, and the synth for everything else', () => {
+    const none = new Map<SampleId, AudioBuffer>();
+    const all = new Map(SAMPLE_IDS.map((id) => [id, {} as AudioBuffer] as const));
+    expect(recordingFor('chest', none)).toBeNull();
+    expect(recordingFor('chest', all)).toBe(RECORDED.chest);
+    expect(recordingFor('chest-big', all)).toBe(RECORDED['chest-big']);
+    // Small sounds stay synthesised even with every hit loaded.
+    expect(recordingFor('tick', all)).toBeNull();
+    expect(recordingFor('boop', all)).toBeNull();
   });
 });

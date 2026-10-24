@@ -1368,7 +1368,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (!reply) return;
     // The moment starts before the view that shows the chest open.
     scene3d?.openAtticChest();
-    options.cue?.('chest');
+    options.cue?.('chest-big');
     apply(reply.view);
     cards.push({
       kind: 'attic',

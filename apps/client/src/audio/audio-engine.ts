@@ -1,7 +1,7 @@
 import { MIX, MUSIC, SFX } from './audio-config.js';
 import { DUCKING_CUES, UI_CUES, type CueName } from './cues.js';
 import { loopSeconds, SCORES, type Score, type TrackId } from './music-score.js';
-import { canPlay, RECORDED } from './recorded.js';
+import { recordingFor } from './recorded.js';
 import { fetchBytes, loadSamples, type FetchBytes, type SampleId } from './samples.js';
 import { RECIPES } from './sfx.js';
 import { noiseBuffer, playNote, roomImpulse } from './synth.js';
@@ -214,13 +214,12 @@ export function createEngine(
       }
     }
     if (slot < 0) return false;
-    const recording = RECORDED[cue];
-    const recorded = recording !== undefined && canPlay(recording, samples);
-    const jitter = recorded ? SFX.recordedPitchJitter : SFX.pitchJitter;
+    const recording = recordingFor(cue, samples);
+    const jitter = recording ? SFX.recordedPitchJitter : SFX.pitchJitter;
     const pitch = 1 + (Math.random() * 2 - 1) * jitter;
     const gain = 1 - Math.random() * SFX.gainJitter;
     const out = UI_CUES.has(cue) ? uiBus : sfxBus;
-    const length = recorded
+    const length = recording
       ? recording.play(kit, out, now, pitch, gain)
       : RECIPES[cue](kit, out, now, pitch, gain);
     voiceEnds[slot] = now + length;

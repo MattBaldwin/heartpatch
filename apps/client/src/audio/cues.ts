@@ -66,10 +66,12 @@ export type CueName =
   | 'title'
   /**
    * Big moments in the Crooked House (#653): a chest opens (a crescendo:
-   * build, swell, sparkle), a power door wakes, a key turns up, a room is put
-   * right. Recorded CC0 hits layered with the synth (`recorded.ts`).
+   * build, swell, sparkle; the bonus room's quick, the attic's big one slower,
+   * each landing on its lid), a power door wakes, a key turns up, a room is
+   * put right. Recorded CC0 hits layered with the synth (`recorded.ts`).
    */
   | 'chest'
+  | 'chest-big'
   | 'door-wake'
   | 'key-found'
   | 'room-bloom';
@@ -106,6 +108,7 @@ export const CUE_NAMES: readonly CueName[] = [
   'seed-land',
   'title',
   'chest',
+  'chest-big',
   'door-wake',
   'key-found',
   'room-bloom',
@@ -131,6 +134,7 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'friend-fanfare',
   'title',
   'chest',
+  'chest-big',
   'door-wake',
   'key-found',
   'room-bloom',

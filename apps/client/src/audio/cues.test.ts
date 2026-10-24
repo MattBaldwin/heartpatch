@@ -73,6 +73,7 @@ describe('cues', () => {
     expect([...DUCKING_CUES].sort()).toEqual([
       'charm',
       'chest',
+      'chest-big',
       'door-wake',
       'evolve',
       'find-1',

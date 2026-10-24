@@ -1,3 +1,4 @@
+import { CHEST_BUILD_S } from './audio-config.js';
 import type { CueName } from './cues.js';
 import { SAMPLES, type SampleBank, type SampleId } from './samples.js';
 import type { SfxKit } from './sfx.js';
@@ -58,21 +59,24 @@ function hit(
   return buffer.duration / rate;
 }
 
-/** A run of glints, `times` (from `at`) paired with `notes`, getting a little louder. */
+/** A run of glints, each `[seconds after at, MIDI note]`, getting a little louder. */
 function run(
   kit: RecordedKit,
   out: AudioNode,
   at: number,
-  times: readonly number[],
-  notes: readonly number[],
+  notes: readonly (readonly [t: number, midi: number])[],
   pitch: number,
   gain: number,
 ): void {
-  times.forEach((t, i) => {
-    const lift = 0.6 + (0.4 * i) / Math.max(1, times.length - 1);
-    hit(kit, out, 'glint', at + t, notes[i] ?? 60, pitch, gain * lift);
+  notes.forEach(([t, midi], i) => {
+    const lift = 0.6 + (0.4 * i) / Math.max(1, notes.length - 1);
+    hit(kit, out, 'glint', at + t, midi, pitch, gain * lift);
   });
 }
+
+/** Notes `step` seconds apart, from `from`. */
+const evenly = (notes: readonly number[], from: number, step: number) =>
+  notes.map((midi, i) => [from + i * step, midi] as const);
 
 /** The payoff: glints on a chord, bells an octave and two up, and coin sparkles after. */
 function payoff(
@@ -135,29 +139,42 @@ function swell(
   }
 }
 
-export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
-  // The chest (#653): click-clack of the latch, a run up the C pentatonic that
-  // speeds up over a swell, then a bright C chord with sparkles. About 2.3 s.
-  chest: {
+/** The chest's run up the C pentatonic, speeding up: when each note falls, as a share of the build. */
+const CHEST_RUN = [
+  [0.15, 60],
+  [0.33, 62],
+  [0.48, 64],
+  [0.61, 67],
+  [0.7, 69],
+  [0.79, 72],
+  [0.86, 74],
+  [0.91, 76],
+] as const;
+
+/**
+ * A chest's crescendo (#653): click-clack of the latch, the run speeding up
+ * over a swell, then a bright C chord with sparkles `build` seconds in, timed
+ * to land as the lid comes up and the treasure shows.
+ */
+function chestCrescendo(build: number): Recording {
+  return {
     needs: ['glint', 'coin', 'knock'],
     play: (kit, out, at, pitch, gain) => {
       hit(kit, out, 'knock', at, 74, pitch, gain * 0.5);
       hit(kit, out, 'knock', at + 0.09, 79, pitch, gain * 0.35);
-      swell(kit, out, at + 0.12, 1.15, 262 * pitch, 523 * pitch, gain);
-      run(
-        kit,
-        out,
-        at,
-        [0.2, 0.44, 0.64, 0.8, 0.93, 1.04, 1.13, 1.2],
-        [60, 62, 64, 67, 69, 72, 74, 76],
-        pitch,
-        gain * 0.5,
-      );
+      swell(kit, out, at + 0.12, build - 0.17, 262 * pitch, 523 * pitch, gain);
+      const notes = CHEST_RUN.map(([share, midi]) => [share * build, midi] as const);
+      run(kit, out, at, notes, pitch, gain * 0.5);
       return (
-        1.32 + payoff(kit, out, at + 1.32, [60, 64, 67, 72], pitch, gain, [96, 91, 100, 93, 98])
+        build + payoff(kit, out, at + build, [60, 64, 67, 72], pitch, gain, [96, 91, 100, 93, 98])
       );
     },
-  },
+  };
+}
+
+export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
+  chest: chestCrescendo(CHEST_BUILD_S.chest),
+  'chest-big': chestCrescendo(CHEST_BUILD_S['chest-big']),
 
   // A power door wakes (#306): a low thump as it stirs, a hum rising, glints
   // up in fifths, then a G chord. About 2 s.
@@ -176,7 +193,19 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
         attack: 0.3,
         hold: 0.3,
       });
-      run(kit, out, at, [0.25, 0.45, 0.6, 0.72], [55, 62, 67, 74], pitch, gain * 0.45);
+      run(
+        kit,
+        out,
+        at,
+        [
+          [0.25, 55],
+          [0.45, 62],
+          [0.6, 67],
+          [0.72, 74],
+        ],
+        pitch,
+        gain * 0.45,
+      );
       return 0.85 + payoff(kit, out, at + 0.85, [55, 59, 62, 67], pitch, gain * 0.9, [91, 95, 98]);
     },
   },
@@ -186,16 +215,7 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
     needs: ['glint', 'coin'],
     play: (kit, out, at, pitch, gain) => {
       swell(kit, out, at, 1.1, 300 * pitch, 900 * pitch, gain * 1.1);
-      const notes = [60, 62, 64, 67, 69, 72, 74, 76, 79];
-      run(
-        kit,
-        out,
-        at,
-        notes.map((_, i) => 0.3 + i * 0.09),
-        notes,
-        pitch,
-        gain * 0.4,
-      );
+      run(kit, out, at, evenly([60, 62, 64, 67, 69, 72, 74, 76, 79], 0.3, 0.09), pitch, gain * 0.4);
       return 1.2 + payoff(kit, out, at + 1.2, [60, 64, 67, 72], pitch, gain, [96, 100, 103]);
     },
   },
@@ -206,7 +226,7 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
     needs: ['glint', 'coin', 'knock'],
     play: (kit, out, at, pitch, gain) => {
       hit(kit, out, 'knock', at, 67, pitch, gain * 0.3);
-      run(kit, out, at, [0.06, 0.15, 0.24], [55, 59, 62], pitch, gain * 0.45);
+      run(kit, out, at, evenly([55, 59, 62], 0.06, 0.09), pitch, gain * 0.45);
       return 0.33 + payoff(kit, out, at + 0.33, [55, 59, 62, 67], pitch, gain * 0.8, [94, 98]);
     },
   },
@@ -215,16 +235,7 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
   yay: {
     needs: ['glint', 'coin'],
     play: (kit, out, at, pitch, gain) => {
-      const notes = [60, 64, 67, 72, 67, 72];
-      run(
-        kit,
-        out,
-        at,
-        notes.map((_, i) => i * 0.085),
-        notes,
-        pitch,
-        gain * 0.45,
-      );
+      run(kit, out, at, evenly([60, 64, 67, 72, 67, 72], 0, 0.085), pitch, gain * 0.45);
       return 0.55 + payoff(kit, out, at + 0.55, [60, 64, 67, 76], pitch, gain * 0.85, [96, 100]);
     },
   },
@@ -261,7 +272,7 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
           lowpass: 1400,
         });
       }
-      run(kit, out, at, [0.2, 0.32, 0.44], [64, 67, 72], pitch, gain * 0.45);
+      run(kit, out, at, evenly([64, 67, 72], 0.2, 0.12), pitch, gain * 0.45);
       return 0.6 + payoff(kit, out, at + 0.6, [60, 64, 67, 71], pitch, gain * 0.8, [96, 91]);
     },
   },
@@ -270,4 +281,10 @@ export const RECORDED: Readonly<Partial<Record<CueName, Recording>>> = {
 /** True when every hit a recording needs has loaded. */
 export function canPlay(recording: Recording, samples: SampleBank): boolean {
   return recording.needs.every((id) => samples.has(id));
+}
+
+/** The recording to play for a cue, once its hits are in; null: play the synth recipe. */
+export function recordingFor(cue: CueName, samples: SampleBank): Recording | null {
+  const recording = RECORDED[cue];
+  return recording && canPlay(recording, samples) ? recording : null;
 }

@@ -46,5 +46,16 @@ export const SFX = {
   gainJitter: 0.15, // TUNE
 } as const;
 
+/**
+ * How long a chest's crescendo builds before its chord, in seconds (#653), so
+ * each lands as its own lid comes up and the treasure shows.
+ */
+export const CHEST_BUILD_S = {
+  /** The bonus room's chest: its lid is up in 0.5 s and its card shows at 0.75 s. */
+  chest: 0.62, // TUNE
+  /** The attic's big chest: it wobbles for 0.65 s, then its lid swings open until 1.4 s. */
+  'chest-big': 1.32, // TUNE
+} as const;
+
 /** localStorage key for this device's volumes. */
 export const AUDIO_SETTINGS_KEY = 'heartpatch.audio.v1';
