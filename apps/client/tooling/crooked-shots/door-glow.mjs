@@ -31,6 +31,8 @@ const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) : null;
 /** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
+/** How far into the room the Keeper stands for the woken shot, m. */
+const AWAY = Number(process.env.AWAY ?? 3.5);
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
 
 /** The four power doors: the element's friend, the room I stand in, and where I stand to face the sleeping door. */
@@ -221,6 +223,10 @@ async function shot(page, device, name) {
     card: h?.card,
     target: h?.target,
     bubble: h?.bubble,
+    action: await page.evaluate(
+      () => document.querySelector('[data-testid="crooked-action"]')?.textContent ?? null,
+    ),
+    keeper: h?.keeper ?? null,
     bonus: h?.bonus,
   };
   stats.push(row);
@@ -273,6 +279,8 @@ async function shootPower(page, device, mapId, ids, p) {
   await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
   await until(page, () => document.querySelector('[data-testid="crooked-card"]') !== null);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+  // The Keeper walks off to the same spot on every phone: the woken door stays in view, not under the lantern.
+  await place(page, p.door[0] - p.dx * AWAY, p.door[1] - p.dz * AWAY);
   await page.waitForTimeout(AFTER_WAKE);
   await shot(page, device, `${p.power}-woke`);
 }

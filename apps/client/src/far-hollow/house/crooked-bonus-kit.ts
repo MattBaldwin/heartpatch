@@ -1,4 +1,5 @@
 import type { CrookedSide } from '@heartpatch/shared';
+import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { merged, type Part } from '../../explore/kit-mesh.js';
 import { ball, blk, flames, joyed, ring, tube, type V3 } from './crooked-kit.js';
 
@@ -83,42 +84,44 @@ const WOKEN: Readonly<Record<string, () => Part[]>> = {
   light: () => [ball(0.3, [0.8, 1.62, -0.15], '#ffffff')],
 };
 
-/** Each power's glow colour once woken. */
-export const WOKEN_COLOUR: Readonly<Record<string, string>> = {
-  fire: '#ffa33a',
-  leaf: '#ff9ec4',
-  water: '#9fd4ff',
-  light: '#ffe08a',
-}; // TUNE
+/** Each power's glow colour once woken: the element's own (the battle's palette). */
+export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries(
+  ['fire', 'leaf', 'water', 'light'].map((power) => [
+    power,
+    ELEMENT_FX[power]?.colors[0] ?? '#ffffff',
+  ]),
+);
 
 /**
- * The light that spills through a woken power door (one soft disc a door,
- * in the power's colour). It swells and settles on wake, then stays still:
- * an idle house draws nothing.
+ * The light that spills from a woken power door: a glow in the doorway
+ * itself and a pool on the floor in front of it, in the power's colour (two
+ * soft discs a door, no lights). They swell and settle on wake, then stay
+ * still: an idle house draws nothing.
  */
 export const WOKEN_SPILL = {
-  /** The disc's radius, m, and how high its middle hangs. */
-  radius: 2.8,
-  height: 0.9,
-  /** Its middle's opacity when settled, and at the pulse's peak (1 = solid). */
-  alpha: 0.75,
-  peakAlpha: 1,
-  /** How far into the room it sits from the wall, m. */
-  inward: 1.1,
+  /** The doorway's glow: radius and height of its middle, m, and its opacity settled. */
+  doorRadius: 1.5,
+  doorHeight: 1.0,
+  doorAlpha: 0.85,
+  /** The floor's pool: radius across, how far it reaches into the room, its middle's distance from the wall (m), and its opacity settled. */
+  floorRadius: 1.4,
+  floorReach: 1.7,
+  floorInward: 1.6,
+  floorAlpha: 0.6,
   /** The wake pulse: this many beats over this long, s, growing by this much. */
   beats: 2,
   seconds: 2.4,
-  swell: 0.35,
+  swell: 0.3,
 } as const; // TUNE: all of them
 
-/** The spill's size and brightness `ms` after the door woke: a gentle pulse, then still. */
-export function spillPulse(ms: number, reduced: boolean): { scale: number; alpha: number } {
-  const { seconds, beats, swell, alpha, peakAlpha } = WOKEN_SPILL;
+/** How strong the wake pulse is `ms` after the door woke: 0 once settled (and always, under reduced motion), up to 1. */
+export function spillPulse(ms: number, reduced: boolean): { scale: number; wave: number } {
+  const { seconds, beats, swell } = WOKEN_SPILL;
   const t = ms / 1000 / seconds;
-  if (reduced || t >= 1 || t < 0) return { scale: 1, alpha };
+  if (reduced || t >= 1 || t < 0) return { scale: 1, wave: 0 };
   // Beats that die away: a sine hump per beat, fading over the whole pulse.
   const wave = Math.abs(Math.sin(t * beats * Math.PI)) * (1 - t);
-  return { scale: 1 + swell * wave, alpha: alpha + (peakAlpha - alpha) * wave };
+  return { scale: 1 + swell * wave, wave };
 }
 
 /** A sparkle mote for the bursts (a glowing material). */

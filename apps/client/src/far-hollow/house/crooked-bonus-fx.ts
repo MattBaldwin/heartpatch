@@ -120,6 +120,21 @@ interface Chest {
   opening: number | null;
 }
 
+/** One soft disc of a woken door's light, its middle's colours kept to pulse in place. */
+interface SpillPart {
+  readonly mesh: Mesh;
+  readonly colors: Float32Array;
+  /** The middle's opacity when settled. */
+  readonly alpha: number;
+  readonly scale: readonly [number, number, number];
+}
+
+/** A woken door's light: the doorway's glow and the floor's pool, and when its wake pulse began (null once settled). */
+interface Spill {
+  readonly parts: readonly SpillPart[];
+  since: number | null;
+}
+
 export interface CrookedBonusFxOptions {
   readonly lod: SquishyLod;
   readonly reducedMotion: boolean;
@@ -143,8 +158,8 @@ export class CrookedBonusFx {
   readonly #chests = new Map<string, Chest>();
   /** The glow of each woken power door shown, by door id. */
   readonly #woken = new Map<string, Mesh>();
-  /** The light spilling through each woken power door shown, by door id. */
-  readonly #spills = new Map<string, { mesh: Mesh; colors: Float32Array; since: number | null }>();
+  /** The light from each woken power door shown, by door id. */
+  readonly #spills = new Map<string, Spill>();
   readonly #spillMat: StandardMaterial;
   /** When the last door woke, ms: a spill drawn just after pulses. */
   #wokeAt = -Infinity;
@@ -397,7 +412,7 @@ export class CrookedBonusFx {
     }
     for (const [id, spill] of this.#spills) {
       if (want.has(id)) continue;
-      spill.mesh.dispose();
+      for (const part of spill.parts) part.mesh.dispose();
       this.#spills.delete(id);
     }
     for (const [id, w] of want) {
@@ -416,28 +431,48 @@ export class CrookedBonusFx {
   }
 
   /**
-   * The light through a woken door: a camera-facing disc in the power's
-   * colour, warm in the middle and clear at the rim, in the doorway. A door
-   * that woke just now pulses once; one met later simply glows.
+   * The light from a woken door: a glow in the doorway itself (a
+   * camera-facing disc) and a pool on the floor in front of it, both in the
+   * power's colour, bright in the middle and clear at the rim. A door that
+   * woke just now pulses once; one met later simply glows.
    */
-  #spill(power: string, at: FloorPoint, into: FloorPoint) {
+  #spill(power: string, at: FloorPoint, into: FloorPoint): Spill {
     const hex = WOKEN_COLOUR[power] ?? '#ffffff';
-    const { radius, height, inward, alpha } = WOKEN_SPILL;
+    const S = WOKEN_SPILL;
+    const doorway = this.#spillDisc(hex, S.doorRadius, S.doorAlpha, [1, 1, 1]);
+    doorway.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    doorway.mesh.position.set(at.x, S.doorHeight, at.z);
+    // The pool lies flat, longer into the room (its local y runs along `into` once turned).
+    const floor = this.#spillDisc(hex, S.floorRadius, S.floorAlpha, [
+      1,
+      S.floorReach / S.floorRadius,
+      1,
+    ]);
+    floor.mesh.rotation.set(Math.PI / 2, Math.atan2(into.x, into.z), 0);
+    floor.mesh.position.set(at.x + into.x * S.floorInward, 0.04, at.z + into.z * S.floorInward);
+    const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
+    return { parts: [doorway, floor], since: fresh ? this.#wokeAt : null };
+  }
+
+  /** One soft disc: its middle's opacity `alpha`, clear at the rim (vertex alpha, the overlay material). */
+  #spillDisc(
+    hex: string,
+    radius: number,
+    alpha: number,
+    scale: readonly [number, number, number],
+  ): SpillPart {
     const mesh = CreateDisc('crooked-spill', { radius, tessellation: 28 }, this.#scene);
     const c = Color3.FromHexString(hex);
     const n = mesh.getTotalVertices();
-    const colors: number[] = [];
+    const colors = new Float32Array(n * 4);
     // The disc's first vertex is its middle; the rest are its rim.
-    for (let i = 0; i < n; i++) colors.push(c.r, c.g, c.b, i === 0 ? alpha : 0);
-    const data = new Float32Array(colors);
-    mesh.setVerticesData(VertexBuffer.ColorKind, data, true);
+    for (let i = 0; i < n; i++) colors.set([c.r, c.g, c.b, i === 0 ? alpha : 0], i * 4);
+    mesh.setVerticesData(VertexBuffer.ColorKind, colors, true);
     mesh.hasVertexAlpha = true;
-    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
     mesh.material = this.#spillMat;
     mesh.isPickable = false;
-    mesh.position.set(at.x + into.x * inward, height, at.z + into.z * inward);
-    const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
-    return { mesh, colors: data, since: fresh ? this.#wokeAt : null };
+    mesh.scaling.set(...scale);
+    return { mesh, colors, alpha, scale };
   }
 
   /**
@@ -662,9 +697,11 @@ export class CrookedBonusFx {
       if (spill.since === null) continue;
       const ms = now - spill.since;
       const p = spillPulse(ms, this.#options.reducedMotion);
-      spill.mesh.scaling.setAll(p.scale);
-      spill.colors[3] = p.alpha;
-      spill.mesh.updateVerticesData(VertexBuffer.ColorKind, spill.colors);
+      for (const part of spill.parts) {
+        part.mesh.scaling.set(part.scale[0] * p.scale, part.scale[1] * p.scale, part.scale[2]);
+        part.colors[3] = part.alpha + (1 - part.alpha) * p.wave;
+        part.mesh.updateVerticesData(VertexBuffer.ColorKind, part.colors);
+      }
       if (ms >= WOKEN_SPILL.seconds * 1000) spill.since = null;
       else moving = true;
     }

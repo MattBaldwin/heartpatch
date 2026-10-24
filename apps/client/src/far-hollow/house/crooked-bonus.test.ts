@@ -5,6 +5,7 @@ import {
   type JobsView,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { spillPulse, WOKEN_COLOUR, WOKEN_SPILL } from './crooked-bonus-kit.js';
 import {
   chestPoint,
@@ -180,17 +181,18 @@ describe('woken door light', () => {
   it('pulses on wake, then settles still', () => {
     const mid = spillPulse(300, false);
     expect(mid.scale).toBeGreaterThan(1);
-    expect(mid.alpha).toBeGreaterThan(WOKEN_SPILL.alpha);
-    const done = spillPulse(WOKEN_SPILL.seconds * 1000, false);
-    expect(done).toEqual({ scale: 1, alpha: WOKEN_SPILL.alpha });
+    expect(mid.wave).toBeGreaterThan(0);
+    expect(spillPulse(WOKEN_SPILL.seconds * 1000, false)).toEqual({ scale: 1, wave: 0 });
   });
 
   it('stays still under reduced motion', () => {
-    expect(spillPulse(300, true)).toEqual({ scale: 1, alpha: WOKEN_SPILL.alpha });
+    expect(spillPulse(300, true)).toEqual({ scale: 1, wave: 0 });
   });
 
-  it('has a colour for every power', () => {
-    for (const p of ['fire', 'leaf', 'water', 'light']) expect(WOKEN_COLOUR[p]).toBeDefined();
+  it('takes each power’s colour from the element palette', () => {
+    for (const p of ['fire', 'leaf', 'water', 'light']) {
+      expect(WOKEN_COLOUR[p]).toBe(ELEMENT_FX[p]?.colors[0]);
+    }
   });
 });
 

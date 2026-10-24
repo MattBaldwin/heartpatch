@@ -26,7 +26,7 @@ export const CROOKED_TEXT = {
   tryDoor: 'Try the door 🔒',
   opened: 'Clunk! The door swings open 🚪',
   sleeping: (sleeper: string, element: string, icon: string) =>
-    `${capital(sleeper)} won't budge. A ${element} friend on your team could help ${icon}`,
+    `${capital(sleeper)} won't budge. A${KEEP}${element} friend on your team could help${KEEP}${icon}`,
   sleepingAction: (icon: string) => `Who can help? ${icon}`,
   keyTitle: (name: string) => `You found the ${name}!${KEEP}🗝️`,
   keyLine: (thing: string) => `It was in ${thing} all along.`,
