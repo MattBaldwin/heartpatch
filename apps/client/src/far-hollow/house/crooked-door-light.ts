@@ -295,7 +295,7 @@ export function createDoorLights(): DoorLights {
         at: p.at,
         foot: p.layout.foot,
         height: p.layout.height,
-        sparkles: lights.get(door)?.sparks.childElementCount ?? 0,
+        sparkles: lights.get(door)?.sparks.querySelectorAll('.crooked-door-spark').length ?? 0,
       })),
   };
 }
