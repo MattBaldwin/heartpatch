@@ -171,13 +171,14 @@ export interface CrookedDebug {
   readonly dark: boolean;
   readonly tiptoe: boolean;
   readonly keeper: FloorPoint;
-  /** Each woken door's light on screen (CSS px), over the dark. */
+  /** Each woken door's cue on screen (CSS px), over the dark: its foot, height and sparkles. */
   readonly doorLights: readonly {
     door: string;
     power: string;
     at: FloorPoint;
-    doorway: { cx: number; cy: number; rx: number; ry: number };
-    spill: { cx: number; cy: number; rx: number; ry: number };
+    foot: { x: number; y: number };
+    height: number;
+    sparkles: number;
   }[];
   readonly target: {
     kind: 'thing' | 'door' | 'chest' | 'attic';
@@ -459,6 +460,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }),
   );
   const doorLights = createDoorLights();
+  // Reduced motion keeps the outline and drops the sparkles' drift.
+  doorLights.root.classList.toggle('crooked-door-calm', reducedMotion());
   const overlay = el(
     'div',
     { class: 'crooked', 'data-testid': 'crooked' },
@@ -1624,7 +1627,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     bubbleText(text);
   };
 
-  /** The woken doors' light, over the dark, where each door stands in the wall now. */
+  /** The woken doors' cues (an outline and sparkles), over the dark, where each door stands in the wall now. */
   function renderDoorLights(): void {
     const s = scene3d;
     const doors = isOpen && !mapShown && s ? (bonusFx?.wokenDoors() ?? []) : [];
@@ -1633,23 +1636,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         const points = doorLightPoints(door.at, door.inward);
         const at = (k: keyof typeof points) => s?.screenOf(points[k][0], points[k][1]) ?? null;
         const layout = doorLightLayout({
-          foot: at('foot'),
-          top: at('top'),
-          left: at('left'),
-          right: at('right'),
-          reach: at('reach'),
-          sideA: at('sideA'),
-          sideB: at('sideB'),
+          footLeft: at('footLeft'),
+          footRight: at('footRight'),
+          topLeft: at('topLeft'),
+          topRight: at('topRight'),
         });
         return { id: door.id, power: door.power, at: door.at, layout, fresh: door.fresh };
       }),
+      { width: window.innerWidth, height: window.innerHeight },
     );
-    // The dark is cut away round each lit door, so the real door shows through.
-    const mask = doorLights.mask();
-    for (const name of ['mask-image', '-webkit-mask-image']) {
-      if (mask) dark.style.setProperty(name, mask);
-      else dark.style.removeProperty(name);
-    }
   }
 
   function renderDark(): void {

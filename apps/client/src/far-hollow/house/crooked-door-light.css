@@ -1,7 +1,10 @@
-/* A woken power door's light (#306), over the house's dark: a glow filling
-   the doorway and a soft spill hugging the wall at its foot, in the power's
-   colour (`--glow`, with a lighter `--hot` middle). Screen-blended, so it adds
-   light and never greys the dark. Placed by `crooked-door-light.ts`. */
+/* A woken power door's cue (#306), over the house's dark: a soft bright
+   outline of the door in its power's colour (`--glow`, with a lighter `--hot`
+   rim), and the power's sparkles drifting up from it. Placed by
+   `crooked-door-light.ts` with composited transforms only; the outline box is
+   mapped onto the door's corners, so it leans with the wall. Screen-blended,
+   so it adds light and never greys the dark. Reduced motion keeps the outline
+   and drops the drift and the pulse. */
 
 .crooked-door-lights {
   position: fixed;
@@ -16,37 +19,112 @@
   display: none;
 }
 
-.crooked-door-spill,
-.crooked-door-glow {
+.crooked-door-outline,
+.crooked-door-sparks {
   position: absolute;
-  border-radius: 50%;
-  mix-blend-mode: screen;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
   pointer-events: none;
 }
 
-.crooked-door-spill {
-  background: radial-gradient(
-    closest-side,
-    color-mix(in srgb, var(--glow) 88%, transparent) 0%,
-    color-mix(in srgb, var(--glow) 58%, transparent) 45%,
-    transparent 100%
-  );
+.crooked-door-outline {
+  width: var(--box-w, 64px);
+  height: var(--box-h, 100px);
 }
 
-.crooked-door-glow {
-  background: radial-gradient(
-    closest-side,
-    color-mix(in srgb, var(--hot) 70%, transparent) 0%,
-    color-mix(in srgb, var(--glow) 55%, transparent) 40%,
-    color-mix(in srgb, var(--glow) 25%, transparent) 75%,
-    transparent 100%
-  );
+/* The ring itself: rounded like a doorway, a hot rim with the glow either side. */
+.crooked-door-outline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid color-mix(in srgb, var(--hot) 92%, transparent);
+  border-radius: 34% 34% 8% 8% / 22% 22% 4% 4%;
+  box-shadow:
+    0 0 6px 2px color-mix(in srgb, var(--glow) 95%, transparent),
+    0 0 18px 6px color-mix(in srgb, var(--glow) 55%, transparent),
+    inset 0 0 8px 2px color-mix(in srgb, var(--glow) 70%, transparent),
+    inset 0 0 22px 4px color-mix(in srgb, var(--glow) 22%, transparent);
+  mix-blend-mode: screen;
+}
+
+/* The sparkles' anchor: the door's foot middle, scaled to the door's height. */
+.crooked-door-sparks {
+  width: 0;
+  height: 0;
+}
+
+.crooked-door-spark {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  display: none;
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  margin: calc(var(--size, 8px) / -2) 0 0 calc(var(--size, 8px) / -2);
+  background: var(--spark);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--spark) 70%, transparent);
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+/* Fire's embers: soft round puffs with a hot middle. */
+.crooked-door-spark-puff {
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3c4 0 25%, var(--spark) 60%);
+}
+
+/* Leaf's little leaves. */
+.crooked-door-spark-leaf {
+  border-radius: 0 100%;
+}
+
+/* Water's droplets, round end down. */
+.crooked-door-spark-drop {
+  border-radius: 50% 0 50% 50%;
+  rotate: -45deg;
+}
+
+/* Light's motes: little four-point stars. */
+.crooked-door-spark-star {
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .crooked-door-light-fresh .crooked-door-spill,
-  .crooked-door-light-fresh .crooked-door-glow {
+  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-spark {
+    display: block;
+    animation: crooked-door-drift var(--life, 4s) linear var(--delay, 0s) infinite;
+  }
+
+  .crooked-door-light-fresh .crooked-door-outline::before {
     animation: crooked-door-wake var(--pulse, 2.4s) ease-out;
+  }
+}
+
+/* Up and away, swaying a little, fading in and out (transform and opacity only). */
+@keyframes crooked-door-drift {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.95;
+  }
+
+  50% {
+    transform: translate(var(--sway, 6px), -28px) scale(1);
+  }
+
+  80% {
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: translate(0, -58px) scale(0.7);
+    opacity: 0;
   }
 }
 
@@ -57,14 +135,13 @@
     opacity: 1;
   }
 
-  25%,
-  70% {
-    transform: scale(var(--swell, 1.3));
+  30% {
+    transform: scale(var(--swell, 1.12));
     opacity: 1;
   }
 
-  45% {
+  60% {
     transform: scale(1);
-    opacity: 0.75;
+    opacity: 0.7;
   }
 }

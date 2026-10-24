@@ -1,8 +1,9 @@
 /* global process, console, window, document, setTimeout, fetch, crypto */
-// Captures the woken power doors' glow (#306 door glow) from the real game at
+// Captures the woken power doors' cue (#306 door glow) from the real game at
 // iPhone sizes, for the owner: each of the four doors asleep (with its "who
-// can help" bubble), then just woken. Dev tooling only, beside `bonus.mjs`
-// (whose helpers it repeats, short): `node tooling/crooked-shots/door-glow.mjs`
+// can help" bubble), then just woken, then a moment later (the sparkles
+// drift). Dev tooling only, beside `bonus.mjs` (whose helpers it repeats,
+// short): `node tooling/crooked-shots/door-glow.mjs`
 // with the dev servers running (`pnpm dev`, `HP_DEV_SQUISHY_GRANTS=true`).
 //
 // Honest captures (#335): every shot is at a `?tier=` pinned (`high` by
@@ -30,10 +31,12 @@ const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
 const DATABASE_URL =
   process.env.DATABASE_URL ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) : null;
-/** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
 /** How far into the room the Keeper stands for the woken shot, m. */
 const AWAY = Number(process.env.AWAY ?? 1.8);
+/** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
+/** Real ms between the "just woken" shot and the "a moment later" one, so the sparkles' drift shows. */
+const LATER = Number(process.env.LATER ?? 1400);
 
 /** The four power doors: the element's friend, the room I stand in, and where I stand to face the sleeping door. */
 const POWERS = [
@@ -202,7 +205,7 @@ async function toDoor(page, mapId, p) {
 
 const hashes = new Map();
 const stats = [];
-async function shot(page, device, name) {
+async function shot(page, device, name, extra = {}) {
   await settle(page);
   await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
   const file = path.join(OUT, `${device}-glow-${name}-${TIER}.png`);
@@ -229,6 +232,14 @@ async function shot(page, device, name) {
     keeper: h?.keeper ?? null,
     bonus: h?.bonus,
     doorLights: h?.doorLights,
+    // The sparkles showing in this frame (their drift runs on the real clock, so this varies a little).
+    sparklesUp: await page.evaluate(
+      () =>
+        [
+          ...document.querySelectorAll('.crooked-door-light:not([hidden]) .crooked-door-spark'),
+        ].filter((n) => Number(window.getComputedStyle(n).opacity) > 0.15).length,
+    ),
+    ...extra,
     echoes: h?.echoes?.filter((e) => e.mark !== 'off').map((e) => ({ loop: e.loop, mark: e.mark })),
     viewport: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight })),
   };
@@ -289,11 +300,15 @@ async function shootPower(page, device, mapId, ids, p) {
   await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
   await until(page, () => document.querySelector('[data-testid="crooked-card"]') !== null);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+  const woke = Date.now();
   // The Keeper walks off to the same spot on every phone: the woken door stays in view, not under the lantern.
   await place(page, p.door[0] - p.dx * AWAY, p.door[1] - p.dz * AWAY);
   await look();
   await page.waitForTimeout(AFTER_WAKE + 1500);
-  await shot(page, device, `${p.power}-woke`);
+  await shot(page, device, `${p.power}-woke`, { msAfterWake: Date.now() - woke });
+  // A moment later, from the same view: the sparkles have drifted on.
+  await page.waitForTimeout(LATER);
+  await shot(page, device, `${p.power}-later`, { msAfterWake: Date.now() - woke });
 }
 
 const args = process.env.PW_CHROMIUM_ARGS

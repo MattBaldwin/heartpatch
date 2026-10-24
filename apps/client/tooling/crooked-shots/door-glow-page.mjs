@@ -22,10 +22,38 @@ const stats = new Map(
 );
 
 const DOORS = [
-  { power: 'fire', room: 'Parlour', thing: 'cold fireplace', elem: 'Fire', colour: 'orange' },
-  { power: 'leaf', room: 'Conservatory', thing: 'cracked window', elem: 'Leaf', colour: 'green' },
-  { power: 'water', room: 'Scullery', thing: 'cosy flames', elem: 'Water', colour: 'blue' },
-  { power: 'light', room: 'Blue Bedroom', thing: 'dark closet', elem: 'Light', colour: 'yellow' },
+  {
+    power: 'fire',
+    room: 'Parlour',
+    thing: 'cold fireplace',
+    elem: 'Fire',
+    colour: 'orange',
+    sparkle: ['ember', 'embers'],
+  },
+  {
+    power: 'leaf',
+    room: 'Conservatory',
+    thing: 'cracked window',
+    elem: 'Leaf',
+    colour: 'green',
+    sparkle: ['little leaf', 'little leaves'],
+  },
+  {
+    power: 'water',
+    room: 'Scullery',
+    thing: 'cosy flames',
+    elem: 'Water',
+    colour: 'blue',
+    sparkle: ['droplet', 'droplets'],
+  },
+  {
+    power: 'light',
+    room: 'Blue Bedroom',
+    thing: 'dark closet',
+    elem: 'Light',
+    colour: 'yellow',
+    sparkle: ['star mote', 'star motes'],
+  },
 ];
 const DEVICES = {
   iphone: ['iPhone 15', 393, '393 × 852 pt, insets 59 top / 34 bottom'],
@@ -54,15 +82,18 @@ function caption(d, door, state, r) {
   const lead =
     state === 'asleep'
       ? `${door.room}, the ${door.thing} door still asleep, the Keeper at it.`
-      : `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend.`;
-  const glow = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glow lights the door, centred ${Math.round((light.doorway.cx / r.viewport.w) * 100)}% across and ${Math.round((light.doorway.cy / r.viewport.h) * 100)}% down the screen, with a soft spill at the foot of the wall; the dark is cut away round it so the door shows, and the rest of the room stays dark.`
+      : state === 'woke'
+        ? `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend.`
+        : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
+  const up = r.sparklesUp ?? 0;
+  const cue = light
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces the door, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : up} ${door.sparkle[up === 1 ? 0 : 1]} ${up === 1 ? 'is' : 'are'} drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
     : '';
   const keeper = away ? ` The Keeper stands ${away} m from the door.` : '';
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (random; they can differ between phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame.${glow}${keeper} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${cue}${keeper} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {
@@ -70,7 +101,7 @@ function figure(d, door, state) {
   const file = `${d}-glow-${door.power}-${state}-high.png`;
   const r = stats.get(file);
   if (!r) throw new Error(`no stats for ${file}`);
-  const label = state === 'asleep' ? 'Asleep' : 'Just woken';
+  const label = { asleep: 'Asleep', woke: 'Just woken', later: 'A moment later' }[state];
   return (
     `<figure><img src="img/${file}" width="${width}" alt="${esc(name)}: ${door.power} door ${state}">` +
     `<figcaption><b>${label}</b> · ${esc(caption(d, door, state, r))} ` +
@@ -80,7 +111,7 @@ function figure(d, door, state) {
 
 const sections = DOORS.map((door) => {
   const row = Object.keys(DEVICES)
-    .flatMap((d) => ['asleep', 'woke'].map((state) => figure(d, door, state)))
+    .flatMap((d) => ['asleep', 'woke', 'later'].map((state) => figure(d, door, state)))
     .join('');
   return `<section><h2>${door.elem} · ${door.room}</h2><div class="grid">${row}</div></section>`;
 }).join('');

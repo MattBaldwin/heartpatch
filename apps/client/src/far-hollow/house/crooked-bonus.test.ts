@@ -9,10 +9,15 @@ import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
 import {
   DOOR_LIGHT,
-  doorHoleMask,
+  MAX_SPARKLES,
+  OUTLINE_BOX,
   doorLightColours,
   doorLightLayout,
   doorLightPoints,
+  offScreen,
+  quadTransform,
+  sparkleShape,
+  sparkles,
 } from './crooked-door-light.js';
 import {
   chestPoint,
@@ -184,51 +189,113 @@ describe('who can help', () => {
   });
 });
 
-describe('woken door light', () => {
+describe('woken door cue', () => {
   const at = (x: number, y: number) => ({ x, y });
+  /** Where the matrix3d puts a box point (column-major, with the perspective divide). */
+  const apply = (m: string, x: number, y: number) => {
+    const v = (m.match(/-?[\d.e-]+/g) ?? []).slice(1).map(Number);
+    const [a = 0, d = 0, , g = 0, b = 0, e = 0, , k = 0, , , , , c = 0, f = 0] = v;
+    const w = g * x + k * y + 1;
+    return { x: (a * x + b * y + c) / w, y: (d * x + e * y + f) / w };
+  };
 
-  it('lays a glow in the doorway and a spill at its foot, from the door’s own points', () => {
-    const layout = doorLightLayout({
-      foot: at(200, 500),
-      top: at(200, 300),
-      left: at(160, 400),
-      right: at(240, 400),
-      reach: at(200, 560),
-      sideA: at(110, 530),
-      sideB: at(290, 530),
-    });
-    expect(layout?.doorway).toMatchObject({ cx: 200, cy: 400 });
-    // The spill hugs the wall's foot: its middle is between the foot and its reach.
-    expect(layout?.spill.cy).toBeGreaterThan(500);
-    expect(layout?.spill.cy).toBeLessThan(560);
+  it('maps the outline box exactly onto the door’s four corners, even in perspective', () => {
+    const [tl, tr, br, bl] = [at(110, 300), at(190, 310), at(200, 500), at(100, 495)];
+    const m = quadTransform(OUTLINE_BOX.w, OUTLINE_BOX.h, tl, tr, br, bl);
+    expect(m.startsWith('matrix3d(')).toBe(true);
+    const hits = [
+      [apply(m, 0, 0), tl],
+      [apply(m, OUTLINE_BOX.w, 0), tr],
+      [apply(m, OUTLINE_BOX.w, OUTLINE_BOX.h), br],
+      [apply(m, 0, OUTLINE_BOX.h), bl],
+    ] as const;
+    for (const [got, want] of hits) {
+      expect(got.x).toBeCloseTo(want.x, 2);
+      expect(got.y).toBeCloseTo(want.y, 2);
+    }
   });
 
-  it('keeps an edge-on doorway (a side wall) wide enough to see', () => {
+  it('outlines the door from its corners, with the sparkles anchored at its foot', () => {
     const layout = doorLightLayout({
-      foot: at(100, 500),
-      top: at(100, 300),
-      left: at(100, 400),
-      right: at(100, 400),
-      reach: at(160, 500),
-      sideA: at(100, 450),
-      sideB: at(100, 550),
+      footLeft: at(160, 500),
+      footRight: at(240, 500),
+      topLeft: at(160, 300),
+      topRight: at(240, 300),
     });
-    expect(layout?.doorway.rx).toBeCloseTo(
-      layout?.doorway.ry ? layout.doorway.ry * DOOR_LIGHT.slim : 0,
-    );
+    expect(layout?.foot).toEqual({ x: 200, y: 500 });
+    expect(layout?.height).toBeCloseTo(200);
+    expect(layout?.corners).toHaveLength(4);
   });
 
-  it('cuts the dark away round each lit door, one soft hole a door', () => {
-    const layout = {
-      doorway: { cx: 100, cy: 300, rx: 20, ry: 40 },
-      spill: { cx: 130, cy: 340, rx: 40, ry: 30 },
-    };
-    expect(doorHoleMask([])).toBeNull();
-    const mask = doorHoleMask([layout, layout]) ?? '';
-    expect(mask.match(/radial-gradient/g)).toHaveLength(2);
-    // Clear in the middle, the dark (opaque) at the rim.
-    expect(mask).toContain('transparent');
-    expect(mask).toContain('#000 100%');
+  it('keeps an edge-on door (a side wall) wide enough to see', () => {
+    const layout = doorLightLayout({
+      footLeft: at(100, 500),
+      footRight: at(100, 500),
+      topLeft: at(100, 300),
+      topRight: at(100, 300),
+    });
+    const [fl, fr] = layout?.corners ?? [at(0, 0), at(0, 0)];
+    expect(fr.x - fl.x).toBeCloseTo(200 * DOOR_LIGHT.slim);
+    // Widened about its middle.
+    expect((fr.x + fl.x) / 2).toBeCloseTo(100);
+  });
+
+  it('draws nothing while a corner of the door is off screen', () => {
+    expect(
+      doorLightLayout({
+        footLeft: null,
+        footRight: at(0, 0),
+        topLeft: at(0, 0),
+        topRight: at(0, 0),
+      }),
+    ).toBeNull();
+  });
+
+  it('hides a door well past the screen’s edge, so its sparkles stop', () => {
+    const view = { width: 393, height: 852 };
+    const door = (x: number) =>
+      doorLightLayout({
+        footLeft: at(x, 500),
+        footRight: at(x + 80, 500),
+        topLeft: at(x, 300),
+        topRight: at(x + 80, 300),
+      });
+    const onScreen = door(150);
+    const offRight = door(393 + DOOR_LIGHT.offscreen + 10);
+    const peeking = door(-30);
+    expect(onScreen && offScreen(onScreen, view)).toBe(false);
+    expect(offRight && offScreen(offRight, view)).toBe(true);
+    expect(peeking && offScreen(peeking, view)).toBe(false);
+  });
+
+  it('puts the outline round the door slab in the wall, just in front of it', () => {
+    // A door in the west wall, the room towards +x.
+    const p = doorLightPoints({ x: -9, z: 0 }, { x: 1, z: 0 });
+    expect(p.footLeft[0].x).toBeCloseTo(-9 + DOOR_LIGHT.lift);
+    expect(Math.abs(p.footLeft[0].z - p.footRight[0].z)).toBeCloseTo(DOOR_LIGHT.doorway.half * 2);
+    expect(p.topLeft[1]).toBe(DOOR_LIGHT.doorway.height);
+    expect(p.footRight[1]).toBe(0);
+  });
+
+  it('gives each power its own sparkles: embers, leaves, droplets and star motes', () => {
+    expect(['fire', 'leaf', 'water', 'light'].map(sparkleShape)).toEqual([
+      'puff',
+      'leaf',
+      'drop',
+      'star',
+    ]);
+  });
+
+  it('keeps a few sparkles a door, staggered, in the door’s own colours', () => {
+    const bits = sparkles('fire');
+    expect(bits.length).toBeGreaterThan(0);
+    expect(bits.length).toBeLessThanOrEqual(MAX_SPARKLES);
+    // Staggered: no two start at the same moment of their loop.
+    expect(new Set(bits.map((b) => (b.delay / b.seconds).toFixed(3))).size).toBe(bits.length);
+    const { glow, hot } = doorLightColours('fire');
+    expect(bits.some((b) => b.colour === glow || b.colour === hot)).toBe(true);
+    // The same every time (captures match).
+    expect(sparkles('fire')).toEqual(bits);
   });
 
   it('keeps Light’s glow a clear yellow, not the element’s pale cream', () => {
@@ -237,29 +304,6 @@ describe('woken door light', () => {
     expect(r).toBeGreaterThan(200);
     expect(b ?? 255).toBeLessThan(100);
     expect(g).toBeGreaterThan(150);
-  });
-
-  it('draws nothing while a point of the door is off screen', () => {
-    expect(
-      doorLightLayout({
-        foot: null,
-        top: at(0, 0),
-        left: at(0, 0),
-        right: at(0, 0),
-        reach: at(0, 0),
-        sideA: at(0, 0),
-        sideB: at(0, 0),
-      }),
-    ).toBeNull();
-  });
-
-  it('puts the spill into the room and its ends along the wall', () => {
-    // A door in the west wall, the room towards +x.
-    const p = doorLightPoints({ x: -9, z: 0 }, { x: 1, z: 0 });
-    expect(p.reach[0].x).toBeCloseTo(-9 + DOOR_LIGHT.spill.reach);
-    expect(p.sideA[0].x).toBeCloseTo(-9 + DOOR_LIGHT.spill.reach / 2);
-    expect(Math.abs(p.sideA[0].z - p.sideB[0].z)).toBeCloseTo(DOOR_LIGHT.spill.half * 2);
-    expect(p.top[1]).toBe(DOOR_LIGHT.doorway.height);
   });
 
   it('takes each power’s colour from the element palette, lightened', () => {
