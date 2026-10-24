@@ -5,16 +5,19 @@ import { WOKEN_LIGHT } from './crooked-bonus-kit.js';
 
 import './crooked-door-light.css';
 
+const SVG = 'http://www.w3.org/2000/svg';
+
 // A woken power door's cue (#306, owner 2026-10-24): a soft bright outline of
 // the doorway in its power's colour, with the power's sparkles (embers,
 // leaves, droplets, motes) drifting up from it. The house's dark is a DOM
 // layer over the whole 3D view, so the cue is drawn over it, like the echoes'
 // eyes, at the door's own place in the wall. A frame only moves nodes with
-// transforms: the outline is an upright doorway fitted round the door's
+// transforms, bar the outline: an upright doorway fitted round the door's
 // projected corners (a side wall's door, seen edge-on from above, stays a
-// slim door, not a crack), built from glowing pieces that only stretch along
-// their length so the glow keeps its width; the sparkles ride one
-// translate-and-scale per door. Pure maths here; the screen projects the points.
+// slim door, not a crack), drawn as one continuous SVG path so its glow is
+// even all round (its `d` is only rewritten when the door moves on screen);
+// the sparkles ride one translate-and-scale per door. Pure maths here; the
+// screen projects the points.
 
 /** The door's cue, metres, px and counts. */
 export const DOOR_LIGHT = {
@@ -24,9 +27,8 @@ export const DOOR_LIGHT = {
   lift: 0.1,
   /** The outline is never narrower than this share of its height on screen (a side wall's door is edge-on). */
   slim: 0.36,
-  /** The outline's rounded top corners, and how thick its bright rim is, px. */
+  /** The outline's rounded top corners, px. */
   round: 12,
-  thick: 3,
   /** The wake pulse: how long it lasts, s. */
   pulse: { seconds: 2.4 },
   /** Sparkles a door, and how long one takes to drift up, s (each a little different). */
@@ -38,7 +40,7 @@ export const DOOR_LIGHT = {
 /** Never more sparkles a door than this, whatever the tuning says (older iPads). */
 export const MAX_SPARKLES = 8;
 
-/** The outline pieces' own length (and the sparkles' reference door height), CSS px; a frame scales them from it. */
+/** The sparkles' reference door height, CSS px: a frame scales them from it. */
 export const PIECE = 100;
 
 interface Pt {
@@ -106,39 +108,23 @@ export function doorLightLayout(p: DoorPoints): DoorLightLayout | null {
   };
 }
 
-/** The outline's pieces: two sides, a top, its two round corners, and a soft fill. */
-export type OutlinePiece = 'left' | 'right' | 'top' | 'cornerLeft' | 'cornerRight' | 'fill';
-
-export const OUTLINE_PIECES: readonly OutlinePiece[] = [
-  'fill',
-  'left',
-  'right',
-  'top',
-  'cornerLeft',
-  'cornerRight',
-];
-
 /**
- * Each piece's CSS transform for a doorway `box` (transform-origin 0 0). The
- * sides are `thick` px wide and PIECE px long, stretched only along their
- * length; the corners (`round` + `thick` px square) only move; the fill
- * (PIECE square) stretches both ways, being only a soft gradient. Pure.
+ * The doorway's outline as one SVG path: up the left side, round the top
+ * corners, down the right side, open at the floor. `closed` shuts it along
+ * the floor, for the soft fill inside. Pure.
  */
-export function outlineTransforms(box: Box, thick: number): Record<OutlinePiece, string> {
-  const r = Math.max(0, Math.min(DOOR_LIGHT.round, box.width / 2, box.height / 2));
+export function outlinePath(box: Box, closed = false): string {
+  const r = Math.max(0, Math.min(DOOR_LIGHT.round, box.width / 2, box.height));
   const n = (v: number) => String(Math.round(v * 10) / 10);
-  const k = (v: number) => String(Math.round(Math.max(v, 0) * 1000) / 1000);
-  const half = thick / 2;
+  const left = box.left;
   const right = box.left + box.width;
-  const at = (x: number, y: number) => `translate(${n(x)}px, ${n(y)}px)`;
-  return {
-    fill: `${at(box.left, box.top)} scale(${k(box.width / PIECE)}, ${k(box.height / PIECE)})`,
-    left: `${at(box.left - half, box.top + r)} scale(1, ${k((box.height - r) / PIECE)})`,
-    right: `${at(right - half, box.top + r)} scale(1, ${k((box.height - r) / PIECE)})`,
-    top: `${at(box.left + r, box.top - half)} scale(${k((box.width - 2 * r) / PIECE)}, 1)`,
-    cornerLeft: at(box.left - half, box.top - half),
-    cornerRight: at(right - r - half, box.top - half),
-  };
+  const top = box.top;
+  const foot = box.top + box.height;
+  const arc = `A${n(r)} ${n(r)} 0 0 1`;
+  return (
+    `M${n(left)} ${n(foot)}V${n(top + r)}${arc} ${n(left + r)} ${n(top)}` +
+    `H${n(right - r)}${arc} ${n(right)} ${n(top + r)}V${n(foot)}${closed ? 'Z' : ''}`
+  );
 }
 
 /** True when a door's cue is well clear of the screen, so it is hidden and its sparkles stop. */
@@ -203,7 +189,8 @@ export function sparkles(power: string): Sparkle[] {
 
 interface Light {
   readonly root: HTMLElement;
-  readonly pieces: Record<OutlinePiece, HTMLElement>;
+  /** The outline's paths: the soft fill, then the glow and rim strokes (all one shape). */
+  readonly paths: readonly SVGPathElement[];
   readonly sparks: HTMLElement;
   /** Each sparkle's lane (moved across the doorway's width) and its share of that width. */
   readonly lanes: readonly { node: HTMLElement; share: number }[];
@@ -254,15 +241,15 @@ export function createDoorLights(): DoorLights {
       for (const door of doors) {
         let light = lights.get(door.id);
         if (!light) {
-          const pieces = Object.fromEntries(
-            OUTLINE_PIECES.map((name) => [
-              name,
-              el('span', {
-                class: `crooked-door-piece crooked-door-${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`,
-              }),
-            ]),
-          ) as Record<OutlinePiece, HTMLElement>;
-          const outline = el('div', { class: 'crooked-door-outline' }, ...Object.values(pieces));
+          const svg = document.createElementNS(SVG, 'svg');
+          svg.setAttribute('class', 'crooked-door-outline');
+          const paths = ['fill', 'halo', 'glow', 'rim'].map((name) => {
+            const path = document.createElementNS(SVG, 'path');
+            path.setAttribute('class', `crooked-door-${name}`);
+            svg.append(path);
+            return path;
+          });
+          const outline = svg;
           const sparks = el('div', { class: 'crooked-door-sparks' });
           const shape = sparkleShape(door.power);
           const lanes: { node: HTMLElement; share: number }[] = [];
@@ -289,9 +276,7 @@ export function createDoorLights(): DoorLights {
           node.style.setProperty('--glow', glow);
           node.style.setProperty('--hot', hot);
           node.style.setProperty('--pulse', `${String(DOOR_LIGHT.pulse.seconds)}s`);
-          node.style.setProperty('--thick', `${String(DOOR_LIGHT.thick)}px`);
-          node.style.setProperty('--round', `${String(DOOR_LIGHT.round)}px`);
-          light = { root: node, pieces, sparks, lanes, key: '' };
+          light = { root: node, paths, sparks, lanes, key: '' };
           lights.set(door.id, light);
           root.append(node);
           // A door that woke just now pulses and settles (CSS; never under reduced motion).
@@ -314,13 +299,16 @@ export function createDoorLights(): DoorLights {
         }
         placed.set(door.id, { power: door.power, at: door.at, layout: door.layout });
         const { box, foot, height } = door.layout;
-        const outline = outlineTransforms(box, DOOR_LIGHT.thick);
+        const open = outlinePath(box);
         const scale = Math.round((height / PIECE) * 100) / 100;
         const sparks = `translate(${r1(foot.x)}px, ${r1(foot.y)}px) scale(${String(scale)})`;
-        const key = `${Object.values(outline).join('|')}|${sparks}`;
+        const key = `${open}|${sparks}`;
         if (key === light.key) continue;
         light.key = key;
-        for (const name of OUTLINE_PIECES) light.pieces[name].style.transform = outline[name];
+        const shut = outlinePath(box, true);
+        light.paths.forEach((path, i) => {
+          path.setAttribute('d', i === 0 ? shut : open);
+        });
         light.sparks.style.transform = sparks;
         // The lanes sit inside the scaled anchor: their place across is the doorway's width over that scale.
         const across = box.width / Math.max(scale, 0.01);

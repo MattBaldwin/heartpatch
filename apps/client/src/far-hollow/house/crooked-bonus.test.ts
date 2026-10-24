@@ -10,13 +10,11 @@ import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
 import {
   DOOR_LIGHT,
   MAX_SPARKLES,
-  OUTLINE_PIECES,
-  PIECE,
   doorLightColours,
   doorLightLayout,
   doorLightPoints,
   offScreen,
-  outlineTransforms,
+  outlinePath,
   sparkleShape,
   sparkles,
 } from './crooked-door-light.js';
@@ -218,24 +216,23 @@ describe('woken door cue', () => {
     expect((layout?.box.left ?? 0) + (layout?.box.width ?? 0) / 2).toBeCloseTo(202.5);
   });
 
-  it('builds the outline from pieces that only stretch along their length', () => {
+  it('draws the outline as one path: up a side, round the top, down the other, open at the floor', () => {
     const box = { left: 100, top: 300, width: 80, height: 200 };
-    const t = outlineTransforms(box, 4);
-    expect(Object.keys(t).sort()).toEqual([...OUTLINE_PIECES].sort());
     const r = DOOR_LIGHT.round;
-    // The sides stand on the box's edges (centred on the rim), stretched only in height.
-    expect(t.left).toBe(
-      `translate(98px, ${String(300 + r)}px) scale(1, ${String((200 - r) / PIECE)})`,
-    );
-    expect(t.right).toContain('translate(178px,');
-    // The top spans between the round corners, stretched only in width.
-    expect(t.top).toBe(
-      `translate(${String(100 + r)}px, 298px) scale(${String((80 - 2 * r) / PIECE)}, 1)`,
-    );
-    // The corners only move; the fill covers the doorway.
-    expect(t.cornerLeft).toBe('translate(98px, 298px)');
-    expect(t.cornerRight).not.toContain('scale');
-    expect(t.fill).toBe('translate(100px, 300px) scale(0.8, 2)');
+    const d = outlinePath(box);
+    // One shape, so the glow is even with no brighter joins.
+    expect(d.match(/M/g)).toHaveLength(1);
+    expect(d.startsWith('M100 500V')).toBe(true);
+    expect(d).toContain(`H${String(180 - r)}`);
+    expect(d.endsWith('V500')).toBe(true);
+    expect(d.match(/A/g)).toHaveLength(2);
+    // The fill is the same shape shut along the floor.
+    expect(outlinePath(box, true)).toBe(`${d}Z`);
+  });
+
+  it('keeps a narrow doorway’s round top no wider than the doorway', () => {
+    const d = outlinePath({ left: 0, top: 0, width: 10, height: 40 });
+    expect(d).toContain('A5 5');
   });
 
   it('draws nothing while a corner of the door is off screen', () => {

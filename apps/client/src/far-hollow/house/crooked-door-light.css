@@ -1,9 +1,9 @@
 /* A woken power door's cue (#306), over the house's dark: a soft bright
    outline of the door in its power's colour (`--glow`, with a lighter `--hot`
    rim), and the power's sparkles drifting up from it. Placed by
-   `crooked-door-light.ts` with composited transforms only; the outline is an
-   upright doorway round the door, built from pieces. Screen-blended,
-   so it adds light and never greys the dark. Reduced motion keeps the outline
+   `crooked-door-light.ts`: the outline is an upright doorway round the door,
+   one SVG path redrawn only when the door moves; the sparkles move by
+   composited transforms. Reduced motion keeps the outline
    and drops the drift and the pulse. */
 
 .crooked-door-lights {
@@ -19,7 +19,46 @@
   display: none;
 }
 
-.crooked-door-piece,
+/* The outline: one SVG over the whole screen, one path drawn four times
+   (a soft fill, a wide faint halo, a glow and a hot rim), so the line is
+   even all the way round, with no brighter joins. */
+.crooked-door-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.crooked-door-outline path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.crooked-door-outline .crooked-door-fill {
+  fill: var(--glow);
+  fill-opacity: 0.12;
+}
+
+.crooked-door-halo {
+  stroke: var(--glow);
+  stroke-width: 14px;
+  stroke-opacity: 0.18;
+}
+
+.crooked-door-glow {
+  stroke: var(--glow);
+  stroke-width: 7px;
+  stroke-opacity: 0.55;
+}
+
+.crooked-door-rim {
+  stroke: var(--hot);
+  stroke-width: 2.5px;
+}
+
 .crooked-door-sparks {
   position: absolute;
   top: 0;
@@ -27,65 +66,6 @@
   transform-origin: 0 0;
   will-change: transform;
   pointer-events: none;
-}
-
-/* The bright rim: a hot core with the glow round it. The sides and top only
-   stretch along their length (100px long), so the glow keeps its width. */
-.crooked-door-piece {
-  box-sizing: border-box;
-  mix-blend-mode: screen;
-}
-
-.crooked-door-left,
-.crooked-door-right,
-.crooked-door-top {
-  background: color-mix(in srgb, var(--hot) 92%, transparent);
-  box-shadow:
-    0 0 5px 2px color-mix(in srgb, var(--glow) 95%, transparent),
-    0 0 14px 5px color-mix(in srgb, var(--glow) 50%, transparent);
-}
-
-.crooked-door-left,
-.crooked-door-right {
-  width: var(--thick, 3px);
-  height: 100px;
-}
-
-.crooked-door-top {
-  width: 100px;
-  height: var(--thick, 3px);
-}
-
-/* The round top corners: a quarter ring each, only ever moved. */
-.crooked-door-corner-left,
-.crooked-door-corner-right {
-  width: calc(var(--round, 12px) + var(--thick, 3px));
-  height: calc(var(--round, 12px) + var(--thick, 3px));
-  border-top: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
-  filter: drop-shadow(0 0 3px var(--glow)) drop-shadow(0 0 7px var(--glow));
-}
-
-.crooked-door-corner-left {
-  border-left: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
-  border-top-left-radius: 100%;
-}
-
-.crooked-door-corner-right {
-  border-right: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
-  border-top-right-radius: 100%;
-}
-
-/* A soft wash of the power's colour inside the doorway, brightest at the foot. */
-.crooked-door-fill {
-  width: 100px;
-  height: 100px;
-  border-radius: 12% 12% 0 0;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--glow) 34%, transparent),
-    color-mix(in srgb, var(--glow) 12%, transparent) 70%,
-    transparent
-  );
 }
 
 /* The sparkles' anchor: the door's foot middle, scaled to the door's height. */
@@ -111,7 +91,6 @@
   background: var(--spark);
   box-shadow: 0 0 6px 1px color-mix(in srgb, var(--spark) 70%, transparent);
   opacity: 0;
-  mix-blend-mode: screen;
 }
 
 /* Fire's embers: soft round puffs with a hot middle. */
