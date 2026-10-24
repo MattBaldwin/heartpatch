@@ -189,9 +189,14 @@ describe('woken door light', () => {
     expect(spillPulse(300, true)).toEqual({ scale: 1, wave: 0 });
   });
 
-  it('takes each power’s colour from the element palette', () => {
+  it('takes each power’s colour from the element palette, lightened', () => {
     for (const p of ['fire', 'leaf', 'water', 'light']) {
-      expect(WOKEN_COLOUR[p]).toBe(ELEMENT_FX[p]?.colors[0]);
+      const own = Number.parseInt((ELEMENT_FX[p]?.colors[0] ?? '#000000').slice(1), 16);
+      const woken = Number.parseInt((WOKEN_COLOUR[p] ?? '#000000').slice(1), 16);
+      // Each channel is at least the element's own, never beyond white.
+      for (const shift of [16, 8, 0]) {
+        expect((woken >> shift) & 255).toBeGreaterThanOrEqual((own >> shift) & 255);
+      }
     }
   });
 });

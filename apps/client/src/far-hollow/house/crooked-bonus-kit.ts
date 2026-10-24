@@ -85,29 +85,36 @@ const WOKEN: Readonly<Record<string, () => Part[]>> = {
 };
 
 /** Each power's glow colour once woken: the element's own (the battle's palette). */
+/** How far each element colour is lightened towards white, so it reads as light. */
+const LIGHTEN = 0.35; // TUNE
+
+/** `hex` mixed `by` of the way to white. */
+function lightened(hex: string, by: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * by);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(mix);
+  return `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
 export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries(
   ['fire', 'leaf', 'water', 'light'].map((power) => [
     power,
-    ELEMENT_FX[power]?.colors[0] ?? '#ffffff',
+    lightened(ELEMENT_FX[power]?.colors[0] ?? '#ffffff', LIGHTEN),
   ]),
 );
 
 /**
- * The light that spills from a woken power door: a glow in the doorway
- * itself and a pool on the floor in front of it, in the power's colour (two
- * soft discs a door, no lights). They swell and settle on wake, then stay
- * still: an idle house draws nothing.
+ * The light that spills from a woken power door, tied to the door's own spot
+ * in the wall (no lights): a glow hung in the opening (a camera-facing disc)
+ * and a pool on the floor in front of it, in the power's colour. They swell
+ * and settle on wake, then stay still: an idle house draws nothing.
+ * `opening` is [radius, height, distance from the wall, opacity settled]; `pool`
+ * is [half width along the wall, reach into the room, middle's distance from
+ * the wall, opacity settled], all in metres.
  */
 export const WOKEN_SPILL = {
-  /** The doorway's glow: radius and height of its middle, m, and its opacity settled. */
-  doorRadius: 2.8,
-  doorHeight: 1.2,
-  doorAlpha: 1,
-  /** The floor's pool: radius across, how far it reaches into the room, its middle's distance from the wall (m), and its opacity settled. */
-  floorRadius: 2.6,
-  floorReach: 3.6,
-  floorInward: 0.9,
-  floorAlpha: 1,
+  opening: [1.6, 1.2, 0.5, 1],
+  pool: [1.3, 3.0, 0.6, 1],
   /** The wake pulse: this many beats over this long, s, growing by this much. */
   beats: 2,
   seconds: 2.4,

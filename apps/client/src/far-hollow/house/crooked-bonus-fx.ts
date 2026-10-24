@@ -156,6 +156,11 @@ export interface CrookedBonusFxStats {
   readonly helper: string | null;
   readonly friend: string | null;
   readonly motes: number;
+  /** Each woken door's light: where each disc hangs, and whether it draws. */
+  readonly spills: readonly {
+    door: string;
+    parts: readonly { x: number; y: number; z: number; on: boolean }[];
+  }[];
 }
 
 export class CrookedBonusFx {
@@ -442,27 +447,31 @@ export class CrookedBonusFx {
   }
 
   /**
-   * The light from a woken door: a glow in the doorway itself (a
-   * camera-facing disc) and a pool on the floor in front of it, both in the
-   * power's colour, bright in the middle and clear at the rim. A door that
-   * woke just now pulses once; one met later simply glows.
+   * The light from a woken door, at the door's own spot in the wall: a bright
+   * strip across the opening and a short pool on the floor in front of it,
+   * both flat discs in the power's colour, bright in the middle and clear at
+   * the rim. A door that woke just now pulses once; one met later simply glows.
    */
   #spill(power: string, at: FloorPoint, into: FloorPoint): Spill {
     const hex = WOKEN_COLOUR[power] ?? '#ffffff';
-    const S = WOKEN_SPILL;
-    const doorway = this.#spillDisc(hex, S.doorRadius, S.doorAlpha, [1, 1, 1]);
-    doorway.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    doorway.mesh.position.set(at.x + into.x * 0.7, S.doorHeight, at.z + into.z * 0.7);
-    // The pool lies flat, longer into the room (its local y runs along `into` once turned).
-    const floor = this.#spillDisc(hex, S.floorRadius, S.floorAlpha, [
-      1,
-      S.floorReach / S.floorRadius,
-      1,
-    ]);
-    floor.mesh.rotation.set(Math.PI / 2, Math.atan2(into.x, into.z), 0);
-    floor.mesh.position.set(at.x + into.x * S.floorInward, 0.2, at.z + into.z * S.floorInward);
+    const lay = ([halfWidth, reach, inward, alpha]: readonly [number, number, number, number]) => {
+      const part = this.#spillDisc(hex, 1, alpha, [halfWidth, reach, 1]);
+      // Flat on the floor; its local y runs along `into` once turned.
+      part.mesh.rotation.set(Math.PI / 2, Math.atan2(into.x, into.z), 0);
+      part.mesh.position.set(at.x + into.x * inward, 0.6, at.z + into.z * inward);
+      return part;
+    };
+    // The opening itself: a disc that always faces the camera, hung in the doorway
+    // (a flat one would be edge-on to the camera, or hidden by the wall's foot).
+    const [halfWidth, height, inward, alpha] = WOKEN_SPILL.opening;
+    const opening = this.#spillDisc(hex, 1, alpha, [halfWidth, halfWidth, 1]);
+    opening.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    opening.mesh.position.set(at.x + into.x * inward, height, at.z + into.z * inward);
     const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
-    return { parts: [doorway, floor], since: fresh ? this.#wokeAt : null };
+    return {
+      parts: [lay(WOKEN_SPILL.pool), opening],
+      since: fresh ? this.#wokeAt : null,
+    };
   }
 
   /**
@@ -837,6 +846,15 @@ export class CrookedBonusFx {
       helper: this.#helper?.id ?? null,
       friend: this.#friend?.species ?? null,
       motes: this.#motes.length,
+      spills: [...this.#spills].map(([door, spill]) => ({
+        door,
+        parts: spill.parts.map((p) => ({
+          x: p.mesh.position.x,
+          y: p.mesh.position.y,
+          z: p.mesh.position.z,
+          on: p.mesh.isEnabled() && p.mesh.isVisible,
+        })),
+      })),
     };
   }
 }
