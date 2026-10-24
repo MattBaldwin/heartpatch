@@ -89,11 +89,23 @@ function caption(d, door, state, r) {
   const cue = light
     ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces the door, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : up} ${door.sparkle[up === 1 ? 0 : 1]} ${up === 1 ? 'is' : 'are'} drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
     : '';
+  const shut =
+    state === 'asleep'
+      ? ' The sleeping door is shut tight: the dark slab in the wall is the door itself, and it swings open once woken.'
+      : ' The door has swung open, and the outline traces that same doorway.';
+  const puddle =
+    state !== 'asleep' && door.power === 'water'
+      ? ' At the foot of the door, the doused flames leave a pale blue shining puddle (the game’s own art for a woken Water door).'
+      : '';
+  const ghosts = r.ghosts?.length ?? 0;
+  const ghost = ghosts
+    ? ` ${ghosts === 1 ? 'A wandering echo shows' : 'Wandering echoes show'} as a pale spotted ghost near the Keeper.`
+    : '';
   const keeper = away ? ` The Keeper stands ${away} m from the door.` : '';
   const echoes = r.echoes?.length
-    ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (random; they can differ between phones).`
+    ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (they wander; their clock is pinned to the same moment on both phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${cue}${keeper} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${keeper}${ghost} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {

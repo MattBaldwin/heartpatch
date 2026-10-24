@@ -205,6 +205,8 @@ interface Light {
   readonly root: HTMLElement;
   readonly pieces: Record<OutlinePiece, HTMLElement>;
   readonly sparks: HTMLElement;
+  /** Each sparkle's lane (moved across the doorway's width) and its share of that width. */
+  readonly lanes: readonly { node: HTMLElement; share: number }[];
   /** The last layout written, so a still door costs nothing. */
   key: string;
 }
@@ -263,16 +265,19 @@ export function createDoorLights(): DoorLights {
           const outline = el('div', { class: 'crooked-door-outline' }, ...Object.values(pieces));
           const sparks = el('div', { class: 'crooked-door-sparks' });
           const shape = sparkleShape(door.power);
+          const lanes: { node: HTMLElement; share: number }[] = [];
           for (const s of sparkles(door.power)) {
             const bit = el('span', { class: `crooked-door-spark crooked-door-spark-${shape}` });
-            bit.style.setProperty('--x', `${r1(s.x * PIECE * 0.6)}px`);
             bit.style.setProperty('--y', `${r1(-s.y * PIECE)}px`);
             bit.style.setProperty('--sway', `${r1(s.sway)}px`);
             bit.style.setProperty('--size', `${r1(s.size)}px`);
             bit.style.setProperty('--delay', `${r1(s.delay)}s`);
             bit.style.setProperty('--life', `${r1(s.seconds)}s`);
             bit.style.setProperty('--spark', s.colour);
-            sparks.append(bit);
+            // In a lane of its own, so it starts across the doorway's width (a slim side-wall door too).
+            const lane = el('span', { class: 'crooked-door-lane' }, bit);
+            lanes.push({ node: lane, share: s.x });
+            sparks.append(lane);
           }
           const node = el(
             'div',
@@ -286,11 +291,19 @@ export function createDoorLights(): DoorLights {
           node.style.setProperty('--pulse', `${String(DOOR_LIGHT.pulse.seconds)}s`);
           node.style.setProperty('--thick', `${String(DOOR_LIGHT.thick)}px`);
           node.style.setProperty('--round', `${String(DOOR_LIGHT.round)}px`);
-          light = { root: node, pieces, sparks, key: '' };
+          light = { root: node, pieces, sparks, lanes, key: '' };
           lights.set(door.id, light);
           root.append(node);
           // A door that woke just now pulses and settles (CSS; never under reduced motion).
-          if (door.fresh) node.classList.add('crooked-door-light-fresh');
+          if (door.fresh) {
+            node.classList.add('crooked-door-light-fresh');
+            // Once only: a door shown again after scrolling off doesn't flare again.
+            const settle = () => {
+              node.classList.remove('crooked-door-light-fresh');
+            };
+            outline.addEventListener('animationend', settle, { once: true });
+            outline.addEventListener('animationcancel', settle, { once: true });
+          }
         }
         // Off screen, the door is hidden: display none stops its sparkles' animations.
         const shown = door.layout !== null && !offScreen(door.layout, view);
@@ -309,6 +322,11 @@ export function createDoorLights(): DoorLights {
         light.key = key;
         for (const name of OUTLINE_PIECES) light.pieces[name].style.transform = outline[name];
         light.sparks.style.transform = sparks;
+        // The lanes sit inside the scaled anchor: their place across is the doorway's width over that scale.
+        const across = box.width / Math.max(scale, 0.01);
+        for (const lane of light.lanes) {
+          lane.node.style.transform = `translateX(${r1(lane.share * across)}px)`;
+        }
       }
     },
     debug: () =>

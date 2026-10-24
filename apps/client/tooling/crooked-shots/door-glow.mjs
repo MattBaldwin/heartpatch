@@ -37,6 +37,19 @@ const AWAY = Number(process.env.AWAY ?? 1.8);
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
 /** Real ms between the "just woken" shot and the "a moment later" one, so the sparkles' drift shows. */
 const LATER = Number(process.env.LATER ?? 1400);
+/** The echoes' clock, pinned (ms), so both phones show them at the same places. */
+const ECHOES_AT = Number(process.env.ECHOES_AT ?? 0);
+/** Where the Keeper may stand once the door wakes: [m back into the room, m along the wall], tried in turn. */
+const SPOTS = [
+  [AWAY, 0],
+  [AWAY, 1.2],
+  [AWAY, -1.2],
+  [2.6, 0],
+  [2.6, 1.6],
+  [2.6, -1.6],
+  [1.2, 1.6],
+  [1.2, -1.6],
+];
 
 /** The four power doors: the element's friend, the room I stand in, and where I stand to face the sleeping door. */
 const POWERS = [
@@ -245,6 +258,8 @@ async function shot(page, device, name, extra = {}, { bubble = false, settleMs =
     ),
     ...extra,
     echoes: h?.echoes?.filter((e) => e.mark !== 'off').map((e) => ({ loop: e.loop, mark: e.mark })),
+    // Echoes seen as a ghost in this room (in the lantern's light).
+    ghosts: h?.echoes?.filter((e) => e.room === h?.room && e.shown > 0.2).map((e) => e.loop) ?? [],
     viewport: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight })),
   };
   stats.push(row);
@@ -284,10 +299,26 @@ async function bump(page, p) {
   await page.mouse.up();
 }
 
+/**
+ * Stands the Keeper back from the woken door, at the first spot where no
+ * crooked thing is in reach, so no other bubble or button pulls the eye.
+ * The spots are the same on every phone; the last one is kept if none is clear.
+ */
+async function clearSpot(page, p) {
+  for (const [back, side] of SPOTS) {
+    // `side` runs along the wall: square to the way I walked into the door.
+    await place(page, p.door[0] - p.dx * back + p.dz * side, p.door[1] - p.dz * back + p.dx * side);
+    await page.waitForTimeout(500);
+    const target = (await house(page))?.target;
+    if (!target || target.kind === 'door') return;
+  }
+}
+
 /** One power on one phone: asleep (with its bubble), then just woken. */
 async function shootPower(page, device, mapId, ids, p) {
   await teamFor(page, mapId, ids, p.power);
   await toDoor(page, mapId, p);
+  await page.evaluate((ms) => window.__heartpatch?.farHollowDev?.().echoesAt(ms), ECHOES_AT);
   const doorId = (await house(page))?.target?.id;
   // The same fixed shot of the door, asleep and woken, so the pair shows the change.
   const look = () => page.evaluate((id) => window.__heartpatch?.farHollowDev?.().look(id), doorId);
@@ -306,7 +337,7 @@ async function shootPower(page, device, mapId, ids, p) {
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
   const woke = Date.now();
   // The Keeper walks off to the same spot on every phone: the woken door stays in view, not under the lantern.
-  await place(page, p.door[0] - p.dx * AWAY, p.door[1] - p.dz * AWAY);
+  await clearSpot(page, p);
   await look();
   await page.waitForTimeout(AFTER_WAKE + 1500);
   await shot(page, device, `${p.power}-woke`, { msAfterWake: Date.now() - woke });
