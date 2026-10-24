@@ -129,6 +129,61 @@ export function floorWords(floor: number): string {
   return CROOKED_TEXT.floors[floor] ?? `Floor ${String(floor + 1)}`;
 }
 
+// ── Bonus rooms (#306 6e) ──────────────────────────────────────────────
+
+/** "the flames" is plural, "the cold fireplace" and "the glass" aren't: a trailing single "s" means plural. */
+function isPlural(thing: string): boolean {
+  return /[^s]s$/i.test(thing.trim());
+}
+
+export const BONUS_TEXT = {
+  pickerTitle: (icon: string) => `Who can help?${KEEP}${icon}`,
+  pickerLine: (sleeper: string, element: string) =>
+    `${capital(sleeper)} ${isPlural(sleeper) ? 'need' : 'needs'} a ${element} friend.`,
+  pickerLoading: 'Calling your team… 🐾',
+  /** A team squishy of another element, on its row. */
+  notThisOne: (element: string) => `Not a ${element} friend`,
+  /** Nobody on the team has the element: say how to fix it, kindly. */
+  nobody: (element: string, icon: string) =>
+    `Put a ${element} friend on your team, then come back! ${icon}`,
+  notNow: 'Not now',
+  /** A woken door's card: where it leads now. */
+  wokeLine: (room: string) => `The way to the ${room} is open! Step through 🚪`,
+  wokeLineAny: 'A new way is open! Step through 🚪',
+  chestAction: 'Open the chest 🎁',
+  chestBubble: 'A little chest! What’s inside? ✨',
+  chestTitle: `Treasure!${KEEP}🎁`,
+  chestLine: (things: string) => `You found ${things}!`,
+  chestEmpty: 'Just dust and a happy sparkle ✨',
+  chestWear: 'And something to wear! 🧥',
+  friendSomeone: 'squishy',
+  friendTitle: `Someone’s in the chest!${KEEP}👀`,
+  friendLine: (name: string) =>
+    `A shy ${name} was napping inside. Use a Heart Charm to befriend it!`,
+  friendGo: 'Say hello! 💛',
+} as const;
+
+/** What each element's friend does to a sleeping door, said as the door wakes. */
+const POWER_DONE: Readonly<Record<string, (name: string) => string>> = {
+  fire: (name) => `${name} lit the fireplace! 🔥`,
+  leaf: (name) => `${name} grew a vine through the window! 🌿`,
+  water: (name) => `${name} put out the flames! 💧`,
+  light: (name) => `${name} chased the dark away! ✨`,
+};
+
+export function powerDone(power: string, name: string): string {
+  return POWER_DONE[power]?.(name) ?? `${name} opened the way! ✨`;
+}
+
+/** A chest's loot as words: "4 Treats and 1 Heartdust". */
+export function lootWords(found: Readonly<Record<string, number>>, nameOf: (id: string) => string) {
+  const parts = Object.entries(found)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => `${String(n)} ${nameOf(id)}`);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1] ?? ''}`;
+}
+
 // ── The Relight boards and the story scraps (#306 6f) ───────────────────
 
 export const CROOKED_RELIGHT_TEXT = {

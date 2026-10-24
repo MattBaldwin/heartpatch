@@ -84,6 +84,7 @@ const E2E_GROUPS = [
     'clear-land',
     'explore',
     'factory',
+    'far-hollow-bonus',
     'first-session',
     'hollowed-explore',
     'homestead-colour',

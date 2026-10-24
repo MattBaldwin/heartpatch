@@ -43,6 +43,7 @@ import {
   shell,
   type WallGap,
 } from './crooked-kit.js';
+import { sleeperParts } from './crooked-bonus-kit.js';
 import {
   CROOKED_WALK,
   crookedThings,
@@ -759,6 +760,17 @@ function roomParts(room: CrookedRoom, view: CrookedHouseView, joy: number): Part
       if (state.kind === 'locked') {
         parts.push(...padlock([local.x + end.inward.x * 0.2, 0.95, local.z + end.inward.z * 0.2]));
       }
+    }
+    // A power door's thing, on its main room's side (#306 6e): asleep, then woken by a friend.
+    if (door.power !== undefined && room.kind === 'main') {
+      const sleeper = sleeperParts(
+        door.power,
+        state.kind !== 'open',
+        [local.x, 0, local.z],
+        end.side,
+        joy,
+      );
+      if (sleeper) parts.push(sleeper);
     }
     // Stairs (a door to another floor): steps up into the gap.
     const there = farEnd(door, room.id);

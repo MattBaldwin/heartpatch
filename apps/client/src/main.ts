@@ -8,6 +8,7 @@ import { setSlowFrames } from './engine/perf-report.js';
 import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
+import { battleApi } from './battle/battle-api.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
@@ -418,6 +419,8 @@ const care = createCareSheet({
     showWonVillages();
     // So did the far Hollow's sheet after the far road (#306 PR 6).
     showFarHollowArrival();
+    // And the Crooked House after a chest friend's battle (#306 6e).
+    backToTheHouse();
   },
   onSquish: (kind) => {
     audio.cue(careCue(kind));
@@ -1061,15 +1064,47 @@ const explore = createExploreScreen({
 // The Crooked House (#306 6c): my own far Hollow this season, from its
 // sheet's "Go inside". Like explore it owns the screen while open; Back
 // returns to the map and the far Hollow sheet, the house already saved.
+/**
+ * A Crooked House chest's rare friend (#306 6e): its battle, which closes
+ * back into the house. Any other battle opening forgets it (a patch switch
+ * or sign-out closes a battle without `onClosed`).
+ */
+let houseFriend: { mapId: string; battleId: string } | null = null;
+/** The friend's battle closed on this patch: back into the house once nothing else is showing. */
+let houseReturn: string | null = null;
+/** Into the house after the friend's battle, once an evolution's "Whoa!" is seen (as the far road's sheet waits, #592). */
+const backToTheHouse = (): void => {
+  const mapId = houseReturn;
+  if (mapId === null || evolutionPending || care.isOpen) return;
+  houseReturn = null;
+  if (maps.view?.map.id === mapId) void crookedHouse.open(mapId);
+};
 const crookedHouse = createCrookedScreen({
   root: document.body,
   showScene,
+  portraits,
+  // "Say hello!": the house stepped aside; the friend's battle takes the
+  // screen, and Back from it comes home to the house (the bonus room).
+  onFriend: (mapId, battleId) => {
+    houseFriend = { mapId, battleId };
+    battleApi.get(battleId).then(
+      (battle) => {
+        battles.open(battle);
+      },
+      (err: unknown) => {
+        houseFriend = null;
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+        void crookedHouse.open(mapId);
+      },
+    );
+  },
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  // The peekaboo's sting and the friendly echo's giggle (#306 6d).
+  // The peekaboo's sting and the friendly echo's giggle (#306 6d); a chest,
+  // a door woken and a chest's friend (#306 6e).
   cue: (name) => {
     audio.cue(name);
   },
@@ -1537,6 +1572,7 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: (mapId, live) => {
     battleMapId = mapId;
+    if (houseFriend && battles.debug?.id !== houseFriend.battleId) houseFriend = null;
     heartCoins.close();
     // A live battle (#29) keeps following the patch underneath: the other
     // Keeper's picks and cheers arrive on it, and it keeps me "here".
@@ -1557,6 +1593,10 @@ const battles = createBattleScreen({
   },
   onClosed: (mapId) => {
     battleMapId = null;
+    if (houseFriend?.mapId === mapId) {
+      houseReturn = mapId;
+      houseFriend = null;
+    }
     evolutionPending = true;
     maps.open(mapId).then(
       () => {
@@ -1568,6 +1608,7 @@ const battles = createBattleScreen({
           evolutionPending = false;
           showWonVillages();
           showFarHollowArrival();
+          backToTheHouse();
         });
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
@@ -1584,6 +1625,7 @@ const battles = createBattleScreen({
       },
       (err: unknown) => {
         evolutionPending = false;
+        houseReturn = null;
         // No map to go back to: no battle button over the lobby either.
         void battles.setMap(null);
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');

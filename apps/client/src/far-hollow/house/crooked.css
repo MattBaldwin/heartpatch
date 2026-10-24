@@ -111,6 +111,12 @@ body:has(.crooked:not([hidden])) .auth-chip {
   text-overflow: ellipsis;
 }
 
+/* text-overflow only works on a block, not on the pill's inline-flex: the longest room name ends in "…". */
+.crooked-room {
+  display: block;
+  line-height: 28px;
+}
+
 .crooked-put-right {
   min-height: 32px;
   font-size: 13px;

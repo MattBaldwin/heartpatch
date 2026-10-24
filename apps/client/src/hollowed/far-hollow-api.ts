@@ -81,7 +81,10 @@ export const farHollowApi = {
       headers: { 'idempotency-key': key },
     }),
 
-  /** Opens the chest of the room I'm in: the attic's big chest (#306 6f). */
+  /**
+   * Opens the chest of the room I'm in: a bonus room's (#306 6e), with maybe a
+   * rare friend's battle, or the attic's big chest (6f).
+   */
   chest: (mapId: string, room: string, key: string): Promise<CrookedChestResponse> =>
     apiCallFor(`/maps/${mapId}/far-hollow/chest`, {
       method: 'POST',
@@ -108,6 +111,19 @@ export const farHollowApi = {
     apiCallFor(`/maps/${mapId}/far-hollow/unlock`, {
       method: 'POST',
       body: { door },
+      schema: CrookedViewResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** A team squishy of the door's element wakes a sleeping door of the room I'm in (#306 6e). */
+  power: (
+    mapId: string,
+    body: { door: string; squishyId: string },
+    key: string,
+  ): Promise<CrookedViewResponse> =>
+    apiCallFor(`/maps/${mapId}/far-hollow/power`, {
+      method: 'POST',
+      body,
       schema: CrookedViewResponseSchema,
       headers: { 'idempotency-key': key },
     }),

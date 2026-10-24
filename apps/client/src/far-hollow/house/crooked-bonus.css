@@ -1,0 +1,93 @@
+/* The Crooked House's bonus rooms (#306 6e): "Who can help?" and the chest's friend. */
+
+.crooked-picker {
+  /* Above the house's own card (a key, a bloom), which never shows with it. */
+  z-index: 7;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 120px);
+  overflow-y: auto;
+}
+
+.crooked-helpers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.crooked-helper {
+  width: 100%;
+  text-align: left;
+}
+
+.crooked-helper-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.crooked-helper-face {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f3e6f7;
+  overflow: hidden;
+}
+
+.crooked-helper-face img,
+.crooked-friend-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.crooked-helper-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.crooked-helper-name {
+  font-size: 17px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.crooked-helper-not {
+  font-size: 14px;
+  font-weight: 700;
+  color: #7a6a7a;
+}
+
+/* A team friend of another element: shown, so the team reads whole, but not a button. */
+.crooked-helper-off {
+  box-sizing: border-box;
+  padding: var(--hp-pad-y, 8px) var(--hp-pad-x, 12px);
+  border-radius: 18px;
+  background: #f1e8e2;
+  opacity: 0.7;
+}
+
+/* The chest's friend: its picture in a warm glow. */
+.crooked-friend-face {
+  width: 128px;
+  height: 128px;
+  margin: -64px auto 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6c7 0%, #ffd27a 55%, rgb(255 210 122 / 0%) 72%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-friend-face {
+    animation: crooked-friend-pop 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes crooked-friend-pop {
+    from {
+      transform: scale(0.3);
+      opacity: 0;
+    }
+  }
+}
