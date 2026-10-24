@@ -308,7 +308,7 @@ test('the fight keeps its safe band when the phone turns (#263)', async ({ brows
 
 /** Phones and a tablet the battle sheet must hold every control and the prompt on. */
 const SHEET_SCREENS: readonly { name: string; width: number; height: number; inset?: Inset }[] = [
-  { name: 'iPhone SE', width: 375, height: 667 },
+  { name: 'iPhone SE', width: 375, height: 667, inset: { top: 20, bottom: 0 } },
   { name: 'iPhone 15', width: 393, height: 852 },
   {
     name: 'iPhone 15 with its island and home bar',
@@ -333,31 +333,45 @@ async function expectSheetFits(
   page: Page,
   label: string,
   inset: Inset = { top: 0, bottom: 0 },
+  tipShows = false,
 ): Promise<void> {
   const { width, height } = page.viewportSize()!;
-  await still(page, '[data-testid="battle-sheet"], .battle-plate');
-  const inside = '[data-testid="battle-caption"], [data-testid="battle-sheet"] .hp-button';
+  await still(
+    page,
+    '[data-testid="battle-sheet"], [data-testid="battle-capture-hint"], .battle-plate',
+  );
+  const inside =
+    '[data-testid="battle-caption"], [data-testid="battle-capture-hint"], [data-testid="battle-sheet"] .hp-button';
   const boxes = await page.evaluate((selector) => {
     const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
     return {
       plateTop: document.querySelector('.battle-plate')!.getBoundingClientRect().top,
+      plateBottom: document.querySelector('.battle-plate')!.getBoundingClientRect().bottom,
+      sheetTop: sheet.getBoundingClientRect().top,
       scrolls: sheet.scrollHeight - sheet.clientHeight,
-      items: [...document.querySelectorAll<HTMLElement>(selector)].map((node) => {
-        const b = node.getBoundingClientRect();
-        return {
-          id: node.dataset['testid'] ?? node.className,
-          l: b.left,
-          t: b.top,
-          r: b.right,
-          b: b.bottom,
-        };
-      }),
+      // The tip is always in the page; only a drawn one has a box.
+      items: [...document.querySelectorAll<HTMLElement>(selector)]
+        .filter((node) => node.getClientRects().length > 0)
+        .map((node) => {
+          const b = node.getBoundingClientRect();
+          return {
+            id: node.dataset['testid'] ?? node.className,
+            // A line of words that doesn't fit its own box has its end cut off.
+            cut: node.scrollHeight - node.clientHeight,
+            l: b.left,
+            t: b.top,
+            r: b.right,
+            b: b.bottom,
+          };
+        }),
     };
   }, inside);
   // The prompt line is there, not dropped, and so is Run away.
   const ids = boxes.items.map((item) => item.id);
   expect(ids, label).toContain('battle-caption');
   expect(ids, label).toContain('battle-run');
+  // The tip is measured when the bag is empty (and only then), so a missed mock can't pass.
+  expect(ids.includes('battle-capture-hint'), `${label}: the craft tip`).toBe(tipShows);
   expect(boxes.scrolls, `${label}: the sheet scrolls`).toBeLessThanOrEqual(0);
   expect(boxes.plateTop, `${label}: the pills start below the top inset`).toBeGreaterThanOrEqual(
     inset.top,
@@ -368,17 +382,37 @@ async function expectSheetFits(
     expect(item.t, where).toBeGreaterThanOrEqual(0);
     expect(item.r, where).toBeLessThanOrEqual(width);
     expect(item.b, where).toBeLessThanOrEqual(height - inset.bottom);
-    if (item.id !== 'battle-caption') expect(item.b - item.t, where).toBeGreaterThanOrEqual(44);
+    expect(item.cut, `${where} is cut off`).toBeLessThanOrEqual(0);
+    if (item.id === 'battle-capture-hint') {
+      // The tip floats over the fight, clear of the sheet's controls and the pills.
+      expect(item.b, `${where} stays above the sheet`).toBeLessThanOrEqual(boxes.sheetTop + 1);
+      expect(item.t, `${where} stays below the pills`).toBeGreaterThanOrEqual(boxes.plateBottom);
+    } else if (item.id !== 'battle-caption') {
+      expect(item.b - item.t, where).toBeGreaterThanOrEqual(44);
+    }
   }
 }
 
-for (const bench of [false, true]) {
-  test(`a plain wild battle's controls fit small phones${bench ? ' with a Swap button' : ''}`, async ({
-    browser,
-  }) => {
+const SHEET_CASES = [
+  { name: '', bench: false, noCharms: false },
+  { name: ' with a Swap button', bench: true, noCharms: false },
+  { name: ' with no Heart Charms (the craft tip shows)', bench: false, noCharms: true },
+] as const;
+
+for (const { name, bench, noCharms } of SHEET_CASES) {
+  test(`a plain wild battle's controls fit small phones${name}`, async ({ browser }) => {
     test.setTimeout(240_000); // a map build and a battle; CI renders in software
     const page = await newPlayer(browser, uniqueName(bench ? 'sheetsw' : 'sheetfit'));
     await holdResizes(page);
+    if (noCharms) {
+      // The bag as it is once the starter's 3 are spent: the count the HUD reads.
+      await page.route('**/api/v1/maps/*/inventory', async (route) => {
+        const reply = await route.fetch();
+        const body = (await reply.json()) as { items: Record<string, number> };
+        delete body.items['heart-charm'];
+        await route.fulfill({ response: reply, json: body });
+      });
+    }
     const lobby = page.getByTestId('lobby');
     await lobby.getByRole('button', { name: 'Make a patch' }).tap();
     await lobby.getByLabel('Patch name').fill('Sheet Patch');
@@ -391,6 +425,17 @@ for (const bench of [false, true]) {
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     await settled(page);
+    if (noCharms) {
+      await expect(page.getByTestId('battle-capture-hint')).toContainText('No Heart Charms!');
+      // A tap on the tip puts it away; a tap on the dimmed button brings it back,
+      // and neither adds a line to the sheet.
+      await page.getByTestId('battle-capture-hint').tap();
+      await expect(page.getByTestId('battle-capture-hint')).toBeHidden();
+      await page.getByTestId('battle-capture').tap();
+      await expect(page.getByTestId('battle-capture-hint')).toBeVisible();
+      await expect(page.locator('.battle-problem')).toBeEmpty();
+      await settled(page);
+    }
     const chromium = page.context().browser()?.browserType().name() === 'chromium';
     const cdp = chromium ? await page.context().newCDPSession(page) : null;
     for (const screen of SHEET_SCREENS) {
@@ -404,7 +449,7 @@ for (const bench of [false, true]) {
       );
       await page.setViewportSize({ width: screen.width, height: screen.height });
       await freshResize(page);
-      await expectSheetFits(page, screen.name, screen.inset);
+      await expectSheetFits(page, screen.name, screen.inset, noCharms);
     }
   });
 }

@@ -189,19 +189,19 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 13, 2026-10-23):** main `41749cc` (#644), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-23 — Owner decisions and coordinator calls (supervisor 13)". Merged 2026-10-23 under supervisor 13: #643 (Crooked House 6f) and #644 (battle controls fit small phones).
-- **Lanes in flight** (report to supervisor 13 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
-  - **Crooked House 6e2** `session_01HB4mCER7TnzGxgrQFRFHrR` (Opus, #306): finishes PR #641 from 6e's `Lane handoff` (#306 comment 6374647088). Bonus rooms, merge main, Light and SE captures, then owner screens at https://claude.ai/artifact/QjXvPv2wbHMVjkVFGEnVyP.
-    - **Owner playtest (2026-10-23):** on main, the power doors say "A Fire friend could help 🔥" and a "Who can help?" button does nothing. #641 ships the team picker and the wake flow.
-    - Once #641's screens pass the render-check, offer the owner an optional bubble wording: "A Fire friend on your team could help 🔥". The approved rule is any squishy of that element on the battle team.
-  - **Controls B2a** `session_01SJu4vA2UJP5x9rq3RUwrna` (Sonnet): every leftover control except `.auth-button*`, including the house ✕s.
+- **State (supervisor 14, 2026-10-24):** main `f5cbf09` (#641), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-24 — Owner decisions and coordinator calls (supervisor 14)". Merged under supervisor 14: #647, #646, #641.
+- **Lanes in flight** (report to supervisor 14 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
+  - **#306 door glow + bubble** `session_01CxhiQ3oYabvTKwn7wD2PQM` (Sonnet, branch `issue-306-door-glow`): owner screens required.
+  - **Battle safe areas** `session_01Y6HVnjXqD9YFS1rPkzhzPH` (Sonnet, branch `fix-battle-safe-areas`): the Heart Charm tip and "Run away" clip on iPhone 15/SE. Owner screens required.
+  - **Wild Isle planner** `session_01PdqoGSArLRgVrdshJnaZvq` (Fable, idle): keep it for plan questions during Wave 1.
   - In-flight lanes' folders are off-limits to the others. Tell a lane when a folder frees up after a merge.
 - **Queue (start in this order as lanes free up):**
-  1. **Controls B2b:** `.auth-button*`, about 60 call sites.
-  2. **E2E_GROUPS rebalance** (Sonnet, small): ipad/iphone-webkit group 2 runs 24–28 min against about 10 for the others. Take #635's 40-minute timeout (`TUNE`) back toward 30 afterwards.
+  1. **Wild Isle Wave 1** at 8 PM ET Oct 24 (the supervisor's one-shot reminder; a new supervisor recreates it).
+  2. **Controls B2b:** `.auth-button*`, about 60 call sites.
   3. **Controls D "Left for later"** (from PR #637's body): home, heart-coins, the roster and team two-column pass, and the chat strip.
-  4. **Wild Isle #621:** a big feature. Fable plans first, then two waves.
-  5. After #641 merges, any 6e/6f nits logged in those PRs' Coordinator notes.
+  4. **Coordinator CI change:** e2e job timeout 40 → 35 (the slowest group measured 24.9 min on #647), plus refreshed `E2E_GROUPS` minute comments including far-hollow-bonus.
+  5. **#501 frame-rate check** (still open after #562).
+  6. **Logged nits:** the What's new date wraps on iPhone SE (no-wrap the date); the `isPlural` heuristic in `crooked-text.ts`; the 6e/6f nits (a long `changes/` line, a `nearest()` comment over 100 chars, a tap-walk into a bonus chest that keeps pressing); the Water echo near the iPhone 15 home indicator.
 - **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
@@ -235,6 +235,15 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-24, supervisor 14):**
+  - **Playwright's fake clock starves Babylon rendering.** `page.clock.install()` fakes rAF, so each fake 16 ms costs a whole SwiftShader frame: portraits took 156 s, and the Water picker faces never drew. Shoot "asleep" and picker frames without the fake clock (6e3's finding).
+  - **Render-checks caught real bugs every round:** a room pill truncated with no ellipsis, "The flames needs", the battle tip in the home-indicator area, a different random state between phones, captions describing things not on screen, and swapped titles on the artifact page. Keep checking every round, including page-only changes.
+  - **Briefs must not over-specify a capture.** A brief that named a specific rare friend and pickers for all powers produced false FIX items. Name what must be shown, not the random outcome.
+  - **Random rolls differ between phones:** chest opens roll a random extra. Seed them, or reuse one saved state, and caption anything random.
+  - **A Sonnet lane can run past the 200k cap when its local state is expensive to rebuild.** 6e4 hit 248k for $4.90, which beat a fresh lane re-scouting for 75 min.
+  - **Fable planning costs:** the Wild Isle plan was $19.95 and hit 262k context in its first 4 minutes, because its helpers returned whole files. Brief planners to have helpers return short summaries.
+  - **Container restarts closed pending AskUserQuestions about five times today.** Re-ask at once with the artifact opened in the same response.
+  - **Lane costs today:** 6e2 $10.13, 6e3 $8.48, 6e4 $4.90, B2a $11.29, E2E rebalance $3.22, Wild Isle plan ~$20; supervisor 14 ~$13 at 295k.
 - **Lessons (2026-10-23, supervisor 13):**
   - **Render-check every round.** The first two checks of 6f's screens came back FIX on real bugs: "as it opens" frames byte-identical to the whole frames, and a reward card that could cover the chest lid on slow devices because it waited on real time while the scene ran its own clock. The Run-away fix needed simulated safe-area insets (Chromium `Emulation.setSafeAreaInsetsOverride`), because Chromium's insets are 0. The artifact page itself must stack below 600px and use native-size PNGs.
   - **Long house lanes still cost the most.** 6e cost $58 (737k context), 6f $43 (649k), 6d $38. Most of it was re-shoot cycles at high context. Finishing work goes to a fresh lane (6e2) with a `Lane handoff`.
