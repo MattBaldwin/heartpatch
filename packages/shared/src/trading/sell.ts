@@ -117,7 +117,7 @@ export function basketProblem(
   for (const line of lines) {
     if (line.kind === 'item') {
       const stack = view.items.find((s) => s.itemId === line.itemId);
-      const lot = rules.items[line.itemId]!.lot;
+      const lot = rules.items[line.itemId]?.lot ?? 1; // priced: `basketTotal` checked it
       if (!stack || line.lots > sellableLots(stack.have, stack.keep, lot)) return 'keep';
     } else {
       const piece = view.clothing.find((c) => c.itemId === line.itemId);
