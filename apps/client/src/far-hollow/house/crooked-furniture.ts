@@ -1,4 +1,4 @@
-import type { CrookedHouseView, CrookedRoom } from '@heartpatch/shared';
+import type { CrookedHouseView, CrookedRoom, CrookedThing } from '@heartpatch/shared';
 import { CHEST_SIZE } from './crooked-bonus-kit.js';
 import { chestPoint } from './crooked-bonus.js';
 import { atticChestPoint, CROOKED_ATTIC } from './crooked-attic.js';
@@ -21,16 +21,14 @@ import {
 // it by the nearer edge, so walking into furniture slides along it as the
 // walls do. A tap-walk goes round furniture on a coarse grid, and a tap on
 // furniture walks to the nearest spot the Keeper can stand. Rugs, the
-// runner, small things and low knocked-over things a kid steps over stay
-// walkable.
+// runner and small things a kid steps over stay walkable. A knocked-over
+// thing is solid too, lying the way `TOPPLE_TURNS` keeps it out of doorways.
 
 export const CROOKED_BODY = {
   /** The Keeper's body on the floor, a circle this wide (metres, at the house's size). */
   radius: 0.24, // TUNE
   /** Kept this much further off furniture than its drawn edge. */
   pad: 0.05, // TUNE
-  /** A knocked-over thing lying lower than this (metres) is stepped over (a chair, the mop). */
-  stepOver: 0.6, // TUNE
   /** A tap-walk's grid, metres a cell. */
   cell: 0.1, // TUNE
 } as const;
@@ -127,6 +125,26 @@ const box = (id: string, at: FloorPoint, e: PropExtent, yaw = 0): Footprint => (
 /** A knocked-over thing lies on its side: its height runs out west, then it's turned (`prop`). */
 const toppled = (e: PropExtent): PropExtent => [-e[4], e[1], 0, e[3], e[4]];
 
+/** The prop's footprint, or null for a walkable one. */
+const extentOf = (thing: CrookedThing): PropExtent | null =>
+  thing.prop in PROP_FOOTPRINTS ? (PROP_FOOTPRINTS[thing.prop] ?? null) : FALLBACK_FOOTPRINT;
+
+/**
+ * Which way a knocked-over thing lies, by its id, where the kit's
+ * `TOPPLED_YAW` would put it across a doorway or wall in a neighbour (the
+ * flood-fill test finds those). The kit draws it so (`prop`), so the walk and
+ * the picture agree.
+ */
+export const TOPPLE_TURNS: Readonly<Record<string, number>> = {
+  // TUNE: mirrored, so the Dining Room's kitchen door and the Landing's nursery door stay clear.
+  'chair-3': -TOPPLED_YAW,
+  'hat-stand': -TOPPLED_YAW,
+};
+
+/** The turn round the floor a knocked-over thing lies at. */
+export const toppledYaw = (thing: Pick<CrookedThing, 'id'>): number =>
+  TOPPLE_TURNS[thing.id] ?? TOPPLED_YAW;
+
 /** Built once per room and per set of fixed things (a fix stands a toppled thing up). */
 const CACHE = new Map<string, { fixed: readonly string[] | undefined; list: Footprint[] }>();
 
@@ -141,14 +159,12 @@ export function roomFootprints(
   const list: Footprint[] = [];
   const crooked = new Set(crookedThings(room, view).map((t) => t.id));
   for (const thing of room.things) {
-    const e = thing.prop in PROP_FOOTPRINTS ? PROP_FOOTPRINTS[thing.prop] : FALLBACK_FOOTPRINT;
+    const e = extentOf(thing);
     if (!e) continue;
     const at = thingPoint(room, thing);
     // A tilted thing (straighten) keeps its standing footprint; its lean is above the Keeper's knees.
     if (thing.kind === 'lift' && crooked.has(thing.id)) {
-      // Lying on its side, its width is its height.
-      if (e[2] - e[0] > CROOKED_BODY.stepOver)
-        list.push(box(thing.id, at, toppled(e), TOPPLED_YAW));
+      list.push(box(thing.id, at, toppled(e), toppledYaw(thing)));
     } else list.push(box(thing.id, at, e));
   }
   // The room's own lamp, unless a crooked thing is its lamp (`roomParts`).

@@ -10,7 +10,11 @@
 // Every phone gets its own player, sent to each room by the dev route (every
 // key turned, nothing put right), so every phone shows the same state. The
 // Keeper is placed by the dev hook, then walks on the real joystick for the
-// same time on every phone; the shot is taken with the stick still held.
+// same time on every phone (the shot is taken with the stick still held), or
+// on a real tap at the same spot on screen (the camera fits the room the same
+// on both builds), shot partway and once it has arrived. Shots are
+// native-size PNGs, with each phone's notch and home bar given as safe-area
+// insets (Chromium's `Emulation.setSafeAreaInsetsOverride`).
 //
 // Honest captures (#335): every shot is at a tier pinned with the dev-only
 // `?tier=`, which the file name says. Headless Chromium draws with
@@ -25,12 +29,15 @@ const LABEL = process.env.LABEL ?? 'after';
 const SIGNUP_CODE = process.env.HP_SIGNUP_CODE ?? 'heartpatch-dev-family';
 const TIER = process.env.TIER ?? 'high';
 const ALL_DEVICES = {
-  iphone: { width: 393, height: 852, dpr: 3 },
-  se: { width: 375, height: 667, dpr: 2 },
+  iphone: { width: 393, height: 852, dpr: 3, insets: { top: 59, bottom: 34 } },
+  se: { width: 375, height: 667, dpr: 2, insets: { top: 20, bottom: 0 } },
 };
 const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
 /** How long the joystick is held north before each walking shot, ms. */
 const WALK_MS = Number(process.env.WALK_MS ?? 3000);
+/** A tap-walk is shot this long after the tap, then again once it has arrived, ms. */
+const TAP_MID_MS = Number(process.env.TAP_MID_MS ?? 1400);
+const TAP_END_MS = Number(process.env.TAP_END_MS ?? 6000);
 
 /**
  * The shots: the room the dev route sends me to, where the Keeper is
@@ -39,10 +46,18 @@ const WALK_MS = Number(process.env.WALK_MS ?? 3000);
 const SHOTS = [
   // South of the Kitchen's tap counter (`tap` at the room's middle + [0.4, 2.1]).
   { name: 'kitchen-counter', room: 'kitchen', x: -5.2, z: 12.2, walk: true },
-  // South of the Dining Room's table, clear of the chairs knocked over beside it.
-  { name: 'dining-table', room: 'dining-room', x: -6.1, z: 4.3, walk: true },
+  // South of the Dining Room's table's east end, clear of the chairs knocked over in front of it.
+  { name: 'dining-table', room: 'dining-room', x: -4.4, z: 4.3, walk: true },
   // In the Dining Room's doorway to the Kitchen (its north wall, 0.5 m west of the middle).
   { name: 'doorway', room: 'dining-room', x: -6.2, z: 8.5, walk: false },
+  // South of the table's middle, then a tap on the floor behind it (CSS px, per phone).
+  {
+    name: 'tap-round-table',
+    room: 'dining-room',
+    x: -5.7,
+    z: 4.3,
+    tap: { iphone: { x: 170, y: 250 }, se: { x: 156, y: 198 } },
+  },
 ];
 
 async function until(page, fn, arg, timeout = 180_000) {
@@ -148,6 +163,10 @@ for (const device of DEVICES) {
     hasTouch: true,
   });
   const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: { left: 0, right: 0, ...size.insets },
+  });
   const mapId = await signUpAndMakePatch(
     page,
     `fu_${LABEL[0]}${device[0]}${Date.now().toString(36)}`,
@@ -173,14 +192,24 @@ for (const device of DEVICES) {
       await page.mouse.move(sx, sy - 40, { steps: 3 });
       await page.waitForTimeout(WALK_MS);
     }
-    await drawn(page);
-    const file = path.join(OUT, `${LABEL}-${device}-${s.name}-${TIER}.png`);
-    await page.screenshot({ path: file });
-    const h = await house(page);
+    const frames = [s.name];
+    if (s.tap) {
+      const at = s.tap[device];
+      await page.getByTestId('crooked-ground').tap({ position: at });
+      await page.waitForTimeout(TAP_MID_MS);
+      frames.push(`${s.name}-end`);
+    }
+    for (const name of frames) {
+      if (name.endsWith('-end')) await page.waitForTimeout(TAP_END_MS - TAP_MID_MS);
+      await drawn(page);
+      const file = path.join(OUT, `${LABEL}-${device}-${name}-${TIER}.png`);
+      await page.screenshot({ path: file });
+      const h = await house(page);
+      const row = { file: path.basename(file), device, room: h?.room, keeper: h?.keeper };
+      rows.push(row);
+      console.log(JSON.stringify(row));
+    }
     if (s.walk) await page.mouse.up();
-    const row = { file: path.basename(file), device, room: h?.room, keeper: h?.keeper };
-    rows.push(row);
-    console.log(JSON.stringify(row));
   }
   await context.close();
 }

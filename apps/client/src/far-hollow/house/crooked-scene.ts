@@ -59,6 +59,7 @@ import {
   type FloorPoint,
 } from './crooked-plan.js';
 import { echoShape } from './crooked-echo-kit.js';
+import { toppledYaw } from './crooked-furniture.js';
 import {
   ATTIC_CARD_MS,
   atticChestPoint,
@@ -802,7 +803,8 @@ function roomParts(room: CrookedRoom, view: CrookedHouseView, joy: number): Part
     parts.push(lamp);
   }
   for (const thing of room.things) {
-    parts.push(prop(thing.prop, thing.kind, !crooked.has(thing.id), joy, thing.at));
+    const yaw = toppledYaw(thing);
+    parts.push(prop(thing.prop, thing.kind, !crooked.has(thing.id), joy, thing.at, yaw));
   }
   return parts;
 }

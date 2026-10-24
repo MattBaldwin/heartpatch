@@ -17,6 +17,8 @@ import {
   roomFootprints,
   settle,
   tapWalk,
+  TOPPLE_TURNS,
+  toppledYaw,
   walkPath,
   type Footprint,
 } from './crooked-furniture.js';
@@ -87,10 +89,9 @@ describe('the Crooked House’s furniture footprints (#651)', () => {
         for (const fixed of states) {
           const v = viewOf(() => (fixed ? [t.id] : []), true);
           const f = roomFootprints(r, v).find((x) => x.id === t.id);
-          const low = !fixed && e[2] - e[0] <= CROOKED_BODY.stepOver;
-          expect(f === undefined, t.id).toBe(low);
+          expect(f, t.id).toBeDefined();
           if (!f) continue;
-          const part = prop(t.prop, t.kind, fixed || t.kind !== 'lift', 1, t.at);
+          const part = prop(t.prop, t.kind, fixed || t.kind !== 'lift', 1, t.at, toppledYaw(t));
           part.bakeCurrentTransformIntoVertices();
           const pos = part.data.positions ?? [];
           for (let i = 0; i < pos.length; i += 3) {
@@ -102,6 +103,18 @@ describe('the Crooked House’s furniture footprints (#651)', () => {
           }
         }
       }
+    }
+  });
+
+  it('turns only things that are knocked over, each named once in the house', () => {
+    const lifts = CROOKED_HOUSE.rooms.flatMap((r) => r.things.filter((t) => t.kind === 'lift'));
+    const ids = CROOKED_HOUSE.rooms.flatMap((r) => r.things.map((t) => t.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of Object.keys(TOPPLE_TURNS)) {
+      expect(
+        lifts.some((t) => t.id === id),
+        id,
+      ).toBe(true);
     }
   });
 
