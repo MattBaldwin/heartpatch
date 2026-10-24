@@ -87,12 +87,12 @@ function caption(d, door, state, r) {
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces the door, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : up} ${door.sparkle[up === 1 ? 0 : 1]} ${up === 1 ? 'is' : 'are'} drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces that same doorway, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : up} ${door.sparkle[up === 1 ? 0 : 1]} ${up === 1 ? 'is' : 'are'} drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
     : '';
   const shut =
     state === 'asleep'
       ? ' The sleeping door is shut tight: the dark slab in the wall is the door itself, and it swings open once woken.'
-      : ' The door has swung open, and the outline traces that same doorway.';
+      : ' The door has swung open.';
   const puddle =
     state !== 'asleep' && door.power === 'water'
       ? ' At the foot of the door, the doused flames leave a pale blue shining puddle (the game’s own art for a woken Water door).'
