@@ -338,9 +338,16 @@ async function shootPower(page, device, mapId, ids, p) {
   await look();
   await page.waitForTimeout(900);
   // Bumped once the camera has settled, so the bubble (2.6 s) is still up for the shot.
-  await bump(page, p);
-  // The bubble fades on its own: a frame without it is shot again from the start.
-  await shot(page, device, `${p.power}-asleep`, {}, { bubble: true, settleMs: 200 });
+  // The bubble fades on its own (2.6 s): a frame without it is retaken after another bump.
+  for (let tries = 1; ; tries++) {
+    await bump(page, p);
+    try {
+      await shot(page, device, `${p.power}-asleep`, {}, { bubble: true, settleMs: 200 });
+      break;
+    } catch (error) {
+      if (tries >= 5 || !String(error).includes('bubble faded')) throw error;
+    }
+  }
   await page.getByTestId('crooked-action').dispatchEvent('click');
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
   await page.getByTestId(`crooked-helper-${ids[p.power]}`).dispatchEvent('click');
