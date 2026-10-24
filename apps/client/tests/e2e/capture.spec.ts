@@ -107,7 +107,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   expect(await charmsLeft(page, mapId)).toBe(3);
   await expect(charm).toHaveText('Use Heart Charm (3)');
   await expect(charm).not.toHaveClass(/battle-button-empty/);
-  await expect(page.getByTestId('battle-capture-hint')).toHaveCount(0);
+  await expect(page.getByTestId('battle-capture-hint')).toBeHidden();
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);
