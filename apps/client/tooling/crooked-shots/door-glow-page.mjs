@@ -87,7 +87,7 @@ function caption(d, door, state, r) {
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces that same doorway, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} soft glow stands on each side of that same doorway (centred on its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up beside it (they loop, so how many show at once varies); the rest of the room stays dark.`
     : '';
   const shut =
     state === 'asleep'
