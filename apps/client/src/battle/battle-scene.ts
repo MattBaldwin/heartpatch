@@ -234,9 +234,6 @@ export class BattleScene {
   ];
   /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
   readonly #framing = { top: 0, bottom: 1, floor: 1 };
-  /** The canvas width the sheet's shape was last read at (a layout read only when it changes). */
-  #framedWidth = -1;
-  #narrowSheet = false;
   readonly #instrumentation: SceneInstrumentation;
   readonly #beforeRender: Observer<Scene>;
   readonly #afterRender: Observer<Scene>;
@@ -1047,16 +1044,12 @@ export class BattleScene {
    */
   #framed(): SafeRegion {
     const safe = this.#options.safe();
-    const width = this.#scene.getEngine().getRenderWidth();
-    if (width !== this.#framedWidth) {
-      this.#framedWidth = width;
-      const canvas = this.#scene.getEngine().getRenderingCanvas();
-      this.#narrowSheet = (canvas?.clientWidth ?? 0) >= BATTLE_CAMERA.narrowSheetFrom;
-    }
     const framing = this.#framing;
     framing.top = safe.top;
     framing.bottom = safe.bottom;
-    framing.floor = this.#narrowSheet ? 1 : safe.bottom;
+    // The window's width, like the breakpoint in battle.css (no layout read).
+    const wide = typeof window !== 'undefined' && window.innerWidth >= BATTLE_CAMERA.narrowSheetFrom;
+    framing.floor = wide ? 1 : safe.bottom;
     return framing;
   }
 }

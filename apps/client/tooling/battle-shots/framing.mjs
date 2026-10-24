@@ -28,10 +28,14 @@ const OUT = process.env.OUT ?? path.resolve('.battle-shots/framing');
 const STEP = process.env.STEP ?? 'shoot';
 const LABEL = process.env.LABEL ?? 'now';
 const TIER = process.env.TIER ?? 'high';
-/** Both at DPR 2: the game caps its DPR there (CLAUDE.md rule 8). */
+/**
+ * Both at DPR 2 (the game caps its DPR there, CLAUDE.md rule 8), with each
+ * phone's safe-area insets (the Dynamic Island and home indicator; the SE's
+ * status bar), as #649's captures emulate them.
+ */
 const PHONES = {
-  'iphone-15': { width: 393, height: 852, dpr: 2 },
-  'iphone-se': { width: 375, height: 667, dpr: 2 },
+  'iphone-15': { width: 393, height: 852, dpr: 2, insets: { top: 59, bottom: 34 } },
+  'iphone-se': { width: 375, height: 667, dpr: 2, insets: { top: 20, bottom: 0 } },
 };
 /** The idle face-off, a little way in, so the ready stance is mid-bob. */
 const AT = 700;
@@ -92,7 +96,11 @@ if (STEP === 'start') {
     const context = await contextFor(sessions[pairing.id]);
     const page = await context.newPage();
     page.on('pageerror', (e) => console.error('[pageerror]', e.message));
+    const cdp = await context.newCDPSession(page);
     for (const [name, size] of Object.entries(PHONES)) {
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { left: 0, right: 0, ...size.insets },
+      });
       await page.setViewportSize({ width: size.width, height: size.height });
       await showBattle(page, pairing.arena, { tier: TIER });
       await battleDev(page, 'set', AT);

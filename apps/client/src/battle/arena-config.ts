@@ -175,7 +175,7 @@ export const FALLBACK_ARENA = 'meadow';
 /** Sizes of the diorama, world units. */
 export const ARENA_STAGE = {
   /** Radius of the ground disc. */
-  groundRadius: 26, // TUNE: room for the camera on a wide iPad, where the ground shows to the screen's bottom (#652)
+  groundRadius: 32, // TUNE: room for the camera (#652): an iPhone SE mid-turn, a wide iPad's corners
   /** Thickness of the ground slab (its edge shows: it's a little diorama). */
   groundDepth: 1.1, // TUNE
   /** Props stay this far from the arena's middle (the fight between the fighters). */
@@ -200,6 +200,8 @@ export const ARENA_STAGE = {
   stars: 80, // TUNE
   /** The ground's mottling (value noise) and how dark it gets towards the rim. */
   ground: { rimDarken: 0.26, mottle: 0.22 }, // TUNE
+  /** The ground darkens to its rim colour this far out, however big the disc (#652 grew it past here). */
+  shadeRadius: 20, // TUNE
   /** How much of the terrain's haze colour tints the horizon. */
   hazeMix: 0.35, // TUNE
   /** On the low quality tier, scatter this share of the props (and draw no shadow map). */

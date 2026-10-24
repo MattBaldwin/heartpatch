@@ -130,15 +130,16 @@ export const BATTLE_CAMERA = {
   fitHalfWidth: 3.9, // TUNE
   fitHeight: 3.6, // TUNE
   /**
-   * The camera never backs off past the arena (#652): the bottom of the
-   * screen stays this far inside the ground's rim (room for the lean and a
-   * shake), and the distance stays within these bounds whatever it frames.
+   * The arena's reach (#652, `arenaReach`): the lowest row of the stage stays
+   * `rimMargin` inside the ground's rim (room for the lean and a shake).
+   * `minDistance` and `maxDistance` only bound it (a row that never meets the
+   * ground has no reach of its own).
    */
   rimMargin: 2, // TUNE
   minDistance: 10, // TUNE
+  maxDistance: 90, // TUNE
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
-  maxDistance: 90, // TUNE: a sanity bound; `arenaReach` is the limit that binds
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */
   hitPush: 0.1, // TUNE
   followPush: 0.04, // TUNE

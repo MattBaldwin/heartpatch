@@ -159,15 +159,74 @@ const fitFor = (f: { height: number; radius: number }, home: { x: number; z: num
   h: f.height * 1.25 + 0.3,
 });
 
-/** Screens and the HUD's safe regions on them (pills under the notch; the sheet's share, battle.css). */
-const SCREENS: { name: string; aspect: number; safe: SafeRegion }[] = [
-  { name: 'iPhone 15', aspect: 393 / 852, safe: { top: 0.24, bottom: 0.59 } },
-  { name: 'iPhone SE', aspect: 375 / 667, safe: { top: 0.25, bottom: 0.54 } },
-  { name: '320 px phone', aspect: 320 / 568, safe: { top: 0.25, bottom: 0.48 } },
-  { name: 'iPad portrait', aspect: 820 / 1180, safe: { top: 0.1, bottom: 0.63 } },
-  // From 900 px wide the sheet is a centred card: the ground shows to the screen's bottom.
-  { name: 'iPad Pro portrait', aspect: 1024 / 1366, safe: { top: 0.08, bottom: 0.63, floor: 1 } },
-  { name: 'iPad landscape', aspect: 1180 / 820, safe: { top: 0.15, bottom: 0.63, floor: 1 } },
+/**
+ * Screens and the HUD's safe regions on them: pills under the notch, the
+ * sheet's share (battle.css). `playing` is the lowest row the stage shows
+ * while a turn plays and the sheet shrinks to its caption (about 152 px on an
+ * iPhone SE, measured; plus the home indicator); on a 320 px phone even an
+ * ordinary pair shows past the rim there, as before #652, so it has none.
+ * From 900 px wide the sheet is a centred card, so the ground shows to the
+ * screen's bottom (`floor: 1`). On a landscape phone the pills and sheet leave
+ * the fight a thin band (pill bottoms estimated from the CSS): even ordinary
+ * squishies need the camera past the rim, as before #652 (`arena: false`), so
+ * there the arena's reach must never pull the camera in on a fighter.
+ */
+const SCREENS: {
+  name: string;
+  aspect: number;
+  safe: SafeRegion;
+  playing?: number;
+  arena?: false;
+}[] = [
+  {
+    name: 'iPhone 15',
+    aspect: 393 / 852,
+    safe: { top: 0.24, bottom: 0.59 },
+    playing: 1 - 186 / 852,
+  },
+  {
+    name: 'iPhone SE',
+    aspect: 375 / 667,
+    safe: { top: 0.25, bottom: 0.54 },
+    playing: 1 - 152 / 667,
+  },
+  {
+    name: '320 px phone',
+    aspect: 320 / 568,
+    safe: { top: 0.25, bottom: 0.48 },
+  },
+  {
+    name: 'iPad portrait',
+    aspect: 820 / 1180,
+    safe: { top: 0.1, bottom: 0.63 },
+    playing: 1 - 152 / 1180,
+  },
+  {
+    name: 'iPad Pro portrait',
+    aspect: 1024 / 1366,
+    safe: { top: 0.08, bottom: 0.63, floor: 1 },
+    playing: 1,
+  },
+  {
+    name: 'iPad landscape',
+    aspect: 1180 / 820,
+    safe: { top: 0.15, bottom: 0.63, floor: 1 },
+    playing: 1,
+  },
+  {
+    name: 'landscape phone',
+    aspect: 844 / 390,
+    safe: { top: 0.4, bottom: 0.54 },
+    playing: 1 - 152 / 390,
+    arena: false,
+  },
+  {
+    name: 'small landscape phone',
+    aspect: 667 / 375,
+    safe: { top: 0.41, bottom: 0.54 },
+    playing: 1 - 152 / 375,
+    arena: false,
+  },
 ];
 
 /** A world point's place on screen for `shot`: x in NDC, y as a fraction of the height from the top. */
@@ -285,14 +344,24 @@ describe('framing every species (#652)', () => {
           const label = `${mine.id} vs ${theirs.id}`;
           const framed = frameUp(screen, mine, theirs);
           const frame = frameDistance(aspect, safe, framed.fit);
-          // Inside the arena, and never clamped for real squishies: everything fits.
-          expect(frame.distance, label).toBeLessThan(BATTLE_CAMERA.maxDistance);
+          if (screen.arena === false) {
+            // At least as far back as the fighters themselves need (only the box is trimmed).
+            const fightersOnly = { ...BATTLE_CAMERA, fitHeight: 0, fitHalfWidth: 0 };
+            const need = frameDistance(aspect, safe, framed.fit, fightersOnly).distance;
+            expect(frame.distance, label).toBeGreaterThanOrEqual(need - 1e-9);
+            continue;
+          }
+          // The lowest rows of the stage that show land on the ground, both ends:
+          // the sheet's top while choosing, its caption's top while a turn plays.
           const floor = safe.floor ?? safe.bottom;
-          expect(frame.distance, label).toBeLessThan(arenaReach(aspect, floor, frame.shift));
-          // The lowest row of the stage that shows lands on the ground, both ends.
-          for (const x of [-1, 1]) {
-            const g = groundAt(framed.shot, aspect, x, floor);
-            expect(Math.hypot(g.x, g.z), label).toBeLessThan(ARENA_STAGE.groundRadius);
+          for (const row of [floor, ...(screen.playing === undefined ? [] : [screen.playing])]) {
+            expect(frame.distance, label).toBeLessThan(arenaReach(aspect, row, frame.shift));
+            for (const x of [-1, 1]) {
+              const g = groundAt(framed.shot, aspect, x, row);
+              expect(Math.hypot(g.x, g.z), `${label} (row ${row.toFixed(2)})`).toBeLessThan(
+                ARENA_STAGE.groundRadius,
+              );
+            }
           }
           for (const side of ['mine', 'theirs'] as const) {
             const looks = framed[side];
@@ -311,14 +380,25 @@ describe('framing every species (#652)', () => {
     });
   }
 
-  it('never backs off past the arena, however big a fit point gets', () => {
-    for (const screen of SCREENS) {
-      const huge = [{ x: HOMES.mine.x, z: HOMES.mine.z, r: 6, h: 40 }];
-      const frame = frameDistance(screen.aspect, screen.safe, huge);
-      expect(frame.distance).toBeLessThanOrEqual(BATTLE_CAMERA.maxDistance);
-      expect(frame.distance).toBeLessThanOrEqual(
-        arenaReach(screen.aspect, screen.safe.floor ?? screen.safe.bottom, frame.shift) + 1e-9,
+  it('keeps the fight box inside the arena but never cuts a fighter (#142)', () => {
+    for (const screen of SCREENS.filter((s) => s.arena !== false)) {
+      const { aspect, safe } = screen;
+      const floor = safe.floor ?? safe.bottom;
+      // Nobody to fit: the fight's box alone backs off no further than the arena reaches.
+      const empty = frameDistance(aspect, safe, []);
+      expect(empty.distance).toBeLessThanOrEqual(arenaReach(aspect, floor, empty.shift) + 1e-9);
+      // A giant still fits whole, rim or no rim.
+      const giant = { x: HOMES.mine.x, z: HOMES.mine.z, r: 6, h: 40 };
+      const frame = frameDistance(aspect, safe, [giant]);
+      const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true).shot(
+        0,
+        aspect,
+        safe,
+        [giant],
       );
+      const head = project(shot, aspect, { x: giant.x, y: giant.h, z: giant.z });
+      expect(frame.distance).toBeGreaterThan(arenaReach(aspect, floor, frame.shift));
+      expect(head.y, screen.name).toBeGreaterThan(safe.top - 1e-6);
     }
   });
 

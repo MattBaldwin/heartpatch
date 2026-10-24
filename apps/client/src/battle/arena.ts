@@ -292,7 +292,10 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
       ),
     );
     wall.position.y = -ARENA_STAGE.groundDepth / 2;
-    const top = keep(mottledDisc(scene, r, 40, 120, (x, z, d) => groundShade(x, z, d, seed)));
+    // Shaded by distance from the middle, so the fight's ground looks the same on a bigger disc.
+    const shadeAt = (x: number, z: number, d: number) =>
+      groundShade(x, z, Math.min(1, (d * r) / ARENA_STAGE.shadeRadius), seed);
+    const top = keep(mottledDisc(scene, r, 40, 120, shadeAt));
     top.position.y = 0.004;
     const mat = vinyl(scene, 'arena-ground-mat', {
       ...plan.look,

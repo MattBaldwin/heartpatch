@@ -133,6 +133,9 @@ export async function showBattle(page, arena, { base = BASE, tier = 'high' } = {
   }
   await hud.waitFor({ timeout: 120_000 });
   await page.waitForSelector('canvas[data-ready="true"]', { timeout: 180_000 });
+  // A new What's new entry opens its sheet over the battle: close it (it remembers).
+  const whatsNew = page.getByTestId('whats-new');
+  if (await whatsNew.isVisible()) await whatsNew.getByRole('button', { name: 'Yay!' }).click();
   await page.waitForFunction(
     () => {
       const b = window.__heartpatch?.battle?.();

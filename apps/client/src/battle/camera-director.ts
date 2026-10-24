@@ -65,9 +65,10 @@ export function battleScale(height: number, config = FIGHTER): number {
  * How far back the camera sits so the fight's box and every fit point fit
  * the safe region: sideways within the screen (with a margin), upwards within
  * the headroom under the pills, each judged at its own depth along the view.
- * It never backs off past `maxDistance`, nor so far that the ground's rim
- * shows (`arenaReach`, #652): if a fit point is still too
- * big there, it's the one cut, not the arena.
+ * The fight's box backs off no further than the arena reaches (`arenaReach`,
+ * #652), but the fighters always fit: nothing covers them on any screen
+ * (#142). Tall squishies are drawn smaller (`battleScale`), so on a portrait
+ * phone or a tablet they fit inside the arena too (camera-director.test.ts).
  */
 export function frameDistance(
   aspect: number,
@@ -82,7 +83,8 @@ export function frameDistance(
   const ys = Math.sin(config.yaw);
   const cp = Math.cos(config.pitch);
   const wide = tan * Math.max(0.3, aspect);
-  let distance = Math.max(config.fitHeight / (tan * headroom), config.fitHalfWidth / (wide * 0.95));
+  const box = Math.max(config.fitHeight / (tan * headroom), config.fitHalfWidth / (wide * 0.95));
+  let distance = 0;
   for (const f of fit) {
     const dx = f.x - config.aim.x;
     const dz = f.z - config.aim.z;
@@ -94,7 +96,7 @@ export function frameDistance(
   }
   const shift = 1 - 2 * feetY;
   const reach = arenaReach(aspect, safe.floor ?? safe.bottom, shift, config);
-  return { distance: Math.min(distance, reach), shift };
+  return { distance: Math.max(distance, Math.min(box, reach)), shift };
 }
 
 /**
