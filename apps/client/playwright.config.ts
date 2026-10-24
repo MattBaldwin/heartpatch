@@ -11,9 +11,12 @@ const testDir = './tests/e2e';
  * on iPad). These are balanced by measured WebKit time on both devices (#408:
  * per-test medians of six CI runs' list-reporter durations), simulating how
  * the 2 workers pull spec files in name order (a `parallel`-mode file,
- * friendly and tutorial-flow, hands out each test on its own). Each group
- * should take about 11-13 min on iPad (friendly's lighter) and 6-13 on
- * iPhone.
+ * friendly and tutorial-flow, hands out each test on its own). The minutes
+ * above each group are that simulation on the median per-test durations of
+ * three green main runs (2026-10-23/24): the specs had grown
+ * to ~120 min of iPad time in total, so six groups can't go under ~18 min each
+ * and nine would be ~12. Add job time (about 3 min of image pull, install,
+ * build and server start) to get a job's wall clock.
  *
  * Two specs need room beyond their own time (#408):
  * - friendly runs its two-phone tests side by side, so it fills both workers
@@ -33,86 +36,91 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // hollow-dusk's group: ~11.6 min with its whole dusk wait.
+  // ~17.3 iPhone, ~18.4 iPad. tutorial-flow's two runs go side by side.
   [
+    'accessory-everywhere',
     'admin',
-    'hollow-dusk',
-    'home',
-    'lorebook',
-    'recipe-book',
-    'short-screens',
-    'smoke',
-    'tray-layout',
-  ],
-  // ~11.2 iPad, ~10.9 iPhone: tutorial-flow's two runs go side by side. Its
-  // WebKit jobs ran 24-29 min (against the job's 30) once hollowed-explore
-  // played a whole Relight win (#306 PR 2b), so that one moved to friendly's group.
-  [
-    'battle',
-    'battle-ui',
-    'clear-land',
-    'factory',
-    'far-hollow-house',
-    'first-session',
-    'heart-coins',
-    'hollowed-cellar',
-    'hollowed-restore',
-    'map-hole',
-    'perf-report',
-    'quality-budget',
-    'territory',
-    'trick-or-treat',
-    'tutorial-flow',
-    'whats-new',
-  ],
-  // ~13.0 iPad, ~9.6 iPhone. It ran 17-22 min on iPad (the slowest job in every run, 4-6 min over
-  // the next) until close-up, explore, fences and squishy-gallery moved out (#429).
-  ['accessory-everywhere', 'account-help', 'dress-up', 'hollow', 'house', 'jobs', 'map', 'potions'],
-  // friendly's group: ~7.6 iPad, ~6.1 iPhone with its slowdown counted, plus rare-reveal and patch-line (#391),
-  // and hollowed-explore's story win (#306; a wrong telling and a right one, lighter than PR 2b's Relight win). Keep it light.
-  [
-    'cinematic',
-    'friendly',
-    'hollowed-explore',
-    'inventory',
-    'milestones',
-    'patch-line',
-    'rare-reveal',
-    'renderer-error',
-    'roster',
-    'starter',
-    'version',
-  ],
-  // ~12.9 iPad, ~9.5 iPhone: taps alone is ~4.5-6.5.
-  [
     'auth',
+    'care',
+    'dress-up',
+    'hollow',
+    'hollowed-restore',
+    'landscape-phone',
+    'lorebook',
+    'map-hole',
+    'recipe-book',
+    'squishy-gallery',
+    'taps',
+    'tutorial-flow',
+  ],
+  // ~16.8 iPhone, ~18.2 iPad.
+  [
+    'battle-ui',
     'boutique',
     'capture',
     'care-layout',
-    'chat',
-    'far-hollow-relight',
-    'fences',
-    'homestead-colour',
-    'landscape-phone',
+    'hollowed-cellar',
+    'house',
     'lobby',
+    'patch-line',
+    'perf-report',
     'pwa',
-    'taps',
-    'trading-posts',
+    'roster',
+  ],
+  // friendly's group: ~15.7 iPhone, ~16.0 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
+  [
+    'battle',
+    'friendly',
+    'hollow-dusk',
+    'jobs',
+    'rare-reveal',
+    'renderer-error',
+    'trade-split',
+    'tray-layout',
     'wild-picker',
   ],
-  // ~13.0 iPad, ~8.7 iPhone: tutorial alone is ~5-7.
+  // ~16.5 iPhone, ~17.4 iPad (a first attempt of trick-or-treat that times out adds a few more).
+  [
+    'clear-land',
+    'explore',
+    'factory',
+    'first-session',
+    'hollowed-explore',
+    'homestead-colour',
+    'keeper-gallery',
+    'milestones',
+    'potions',
+    'quality-budget',
+    'smoke',
+    'trick-or-treat',
+    'whats-new',
+  ],
+  // ~15.7 iPhone, ~18.3 iPad.
+  [
+    'account-help',
+    'chat',
+    'cinematic',
+    'close-up',
+    'far-hollow-house',
+    'heart-coins',
+    'map',
+    'raids',
+    'territory',
+    'wardrobe',
+  ],
+  // ~17.5 iPhone, ~18.4 iPad.
   [
     'audio',
-    'care',
-    'close-up',
-    'explore',
+    'far-hollow-relight',
+    'fences',
+    'home',
+    'inventory',
     'keeper',
-    'keeper-gallery',
-    'raids',
-    'squishy-gallery',
-    'trade-split',
+    'short-screens',
+    'starter',
+    'trading-posts',
     'tutorial',
-    'wardrobe',
+    'version',
   ],
 ];
 
