@@ -392,8 +392,8 @@ async function openChest(page, device, name) {
       await page.getByTestId('crooked-action').dispatchEvent('click');
       await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card !== null);
     },
-    // Mid-swing: the lid on its hinges, the coins showing.
-    280,
+    // Early in the swing (it runs 500 ms from the tap and eases past open): the lid about 40% up.
+    100,
     () => shot(page, device, `${name}-chest-opening`, { wait: false }),
   );
   await cardUp(page);
