@@ -1048,7 +1048,8 @@ export class BattleScene {
     framing.top = safe.top;
     framing.bottom = safe.bottom;
     // The window's width, like the breakpoint in battle.css (no layout read).
-    const wide = typeof window !== 'undefined' && window.innerWidth >= BATTLE_CAMERA.narrowSheetFrom;
+    const wide =
+      typeof window !== 'undefined' && window.innerWidth >= BATTLE_CAMERA.narrowSheetFrom;
     framing.floor = wide ? 1 : safe.bottom;
     return framing;
   }
