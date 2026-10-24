@@ -17,6 +17,15 @@
 // safe-area insets (Chromium's `Emulation.setSafeAreaInsetsOverride`). Each
 // power plays in a fresh browser context: one long 3× session drifts until a
 // reload lands in the lobby.
+//
+// The sleeping door and "Who can help?" are shot in a context of their own
+// with the real clock. Playwright's clock fakes `requestAnimationFrame` too:
+// while an echo keeps the house drawing every frame (the Scullery's), each
+// 16 ms of page time costs a whole SwiftShader frame, so page time crawls and
+// the portraits' ready wait never ends (no game timer runs late on a device).
+// For the same reason, once a moment has paused the clock it stays paused and
+// the script steps it while it waits (`stepped`), so the page never falls
+// behind real time.
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -101,9 +110,23 @@ async function until(page, fn, arg, timeout = 180_000) {
       console.error('[timed out]', JSON.stringify(seen)?.slice(0, 2000));
       throw new Error(`timed out: ${fn.toString().slice(0, 80)}`);
     }
-    await new Promise((r) => setTimeout(r, 250));
+    if (stepped.has(page)) await page.clock.runFor(100);
+    else await new Promise((r) => setTimeout(r, 250));
   }
 }
+
+/** Pages whose clock a moment paused: from then on the script steps it. */
+const stepped = new WeakSet();
+
+/** `ms` of page time: stepped on a paused clock, else waited. */
+async function wait(page, ms) {
+  if (stepped.has(page)) await page.clock.runFor(ms);
+  else await page.waitForTimeout(ms);
+}
+
+/** Until the card is up (on a paused clock its timers only run when stepped). */
+const cardUp = (page) =>
+  until(page, () => document.querySelector('[data-testid="crooked-card"]') !== null);
 
 const hook = (page, name) => page.evaluate((n) => window.__heartpatch?.[n]?.() ?? null, name);
 const house = (page) => hook(page, 'farHollowHouse');
@@ -252,7 +275,7 @@ async function goInside(page) {
 }
 
 async function settle(page, ms = 900) {
-  await page.waitForTimeout(ms);
+  await wait(page, ms);
   const before = await page.evaluate(() => window.__heartpatch?.draws?.() ?? 0);
   await page.evaluate(() => window.__heartpatch?.invalidate?.());
   await until(page, (n) => (window.__heartpatch?.draws?.() ?? 0) >= n, before + 2);
@@ -276,20 +299,21 @@ async function walkInto(page, dx, dz, room) {
 /**
  * Shoots a moment `ms` after `start` (a tap) and whatever it waits on: the
  * page's clock is paused first, stepped exactly `ms`, held for the shot (a
- * screenshot at 3× takes longer than the moment itself), then runs on.
+ * screenshot at 3× takes longer than the moment itself), and stays paused:
+ * the script steps it from then on (`stepped`).
  */
 async function moment(page, start, ms, take) {
-  const now = await page.evaluate(() => Date.now());
-  await page.clock.pauseAt(now + 50);
-  try {
-    await start();
-    await page.clock.runFor(ms);
-    await take();
-    // The rest of the moment (and a card's timer) runs on the paused clock before it flows again.
-    await page.clock.runFor(2_000);
-  } finally {
-    await page.clock.resume();
+  if (!stepped.has(page)) {
+    // Far enough ahead that the page's clock can't pass it before the pause lands.
+    const now = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(now + 1_000);
   }
+  // The tap and what it waits on (a server reply) on the held clock, so the moment starts at 0.
+  stepped.delete(page);
+  await start();
+  stepped.add(page);
+  await page.clock.runFor(ms);
+  await take();
 }
 
 const stats = [];
@@ -362,7 +386,7 @@ async function openChest(page, device, name) {
     280,
     () => shot(page, device, `${name}-chest-opening`, { wait: false }),
   );
-  await page.getByTestId('crooked-card').waitFor();
+  await cardUp(page);
   await shot(page, device, `${name}-chest-card`);
 }
 
@@ -421,8 +445,8 @@ if (REUSE) {
 const friendRoom = Object.keys(friends).find((r) => friends[r]) ?? null;
 if (!friendRoom) console.warn(`No chest held a friend in ${String(TRIES)} patches.`);
 
-/** A fresh context and page for one phone, signed in, its insets set. */
-async function phonePage(device) {
+/** A fresh context and page for one phone, signed in, its insets set (`clock`: one the shots can pause). */
+async function phonePage(device, { clock = true } = {}) {
   const size = ALL_DEVICES[device];
   const context = await browser.newContext({
     storageState: statePath,
@@ -443,14 +467,14 @@ async function phonePage(device) {
     insets: { left: 0, right: 0, ...size.insets },
   });
   // A clock the shots can pause (it runs as usual otherwise).
-  await page.clock.install();
+  if (clock) await page.clock.install();
   // On the game's origin before any API call (about:blank has no fetch to it).
   await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
   return { context, page };
 }
 
-/** One power on one phone: its door, the picker, the moment, the room and its chest. */
-async function playPower(page, device, p) {
+/** One power's sleeping door and "Who can help?" on one phone (on the real clock), every face drawn. */
+async function shootPicker(page, device, p) {
   await teamFor(page, mapId, ids, p.power);
   await toDoor(page, mapId, p);
   await shot(page, device, `${p.power}-asleep`);
@@ -474,6 +498,14 @@ async function playPower(page, device, p) {
   );
   await page.waitForTimeout(300);
   await shot(page, device, `${p.power}-picker`);
+}
+
+/** One power on one phone, from its picker: the moment, the room and its chest. */
+async function playPower(page, device, p) {
+  await teamFor(page, mapId, ids, p.power);
+  await toDoor(page, mapId, p);
+  await page.getByTestId('crooked-action').dispatchEvent('click');
+  await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
   await moment(
     page,
     async () => {
@@ -485,24 +517,24 @@ async function playPower(page, device, p) {
   );
   await until(page, () => !window.__heartpatch?.farHollowHouse?.()?.powering);
   // The payoff card (what the friend did), then the woken door itself.
-  await page.getByTestId('crooked-card').waitFor();
+  await cardUp(page);
   await shot(page, device, `${p.power}-woke`);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
-  await page.waitForTimeout(900);
+  await wait(page, 900);
   await shot(page, device, `${p.power}-open`);
   await walkInto(page, p.dx, p.dz, p.room);
-  await page.waitForTimeout(600);
+  await wait(page, 600);
   await shot(page, device, `${p.power}-room`);
   const kind = p.room === friendRoom ? 'friend' : 'common';
   await openChest(page, device, `${p.power}-${kind}`);
   if (kind === 'friend') {
     await page.getByTestId('crooked-card-ok').dispatchEvent('click');
     await until(page, () => window.__heartpatch?.farHollowHouse?.()?.card === 'friend');
-    await page.waitForTimeout(1500);
+    await wait(page, 1500);
     await shot(page, device, 'friend-card');
     await page.getByTestId('crooked-card-ok').dispatchEvent('click');
     await until(page, () => window.__heartpatch?.battle?.()?.phase === 'turn', undefined, 120_000);
-    await page.waitForTimeout(4000);
+    await wait(page, 4000);
     await shot(page, device, 'friend-battle');
     const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
     if (current.battle) await runAway(page, current.battle.id);
@@ -522,10 +554,13 @@ for (const device of DEVICES) {
     // power that goes wobbly is shot again from the start.
     for (let attempt = 1; ; attempt++) {
       resetHouse(name);
-      const { context, page } = await phonePage(device);
+      let { context, page } = await phonePage(device, { clock: false });
       try {
         const current = await ok(page, 'GET', `/maps/${mapId}/battles/current`);
         if (current.battle) await runAway(page, current.battle.id);
+        await shootPicker(page, device, p);
+        await context.close();
+        ({ context, page } = await phonePage(device));
         await playPower(page, device, p);
         break;
       } catch (error) {
