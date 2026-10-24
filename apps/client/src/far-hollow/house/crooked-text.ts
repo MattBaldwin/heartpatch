@@ -131,10 +131,15 @@ export function floorWords(floor: number): string {
 
 // ── Bonus rooms (#306 6e) ──────────────────────────────────────────────
 
+/** "the flames" is plural, "the cold fireplace" and "the glass" aren't: a trailing single "s" means plural. */
+function isPlural(thing: string): boolean {
+  return /[^s]s$/i.test(thing.trim());
+}
+
 export const BONUS_TEXT = {
   pickerTitle: (icon: string) => `Who can help?${KEEP}${icon}`,
   pickerLine: (sleeper: string, element: string) =>
-    `${capital(sleeper)} needs a ${element} friend.`,
+    `${capital(sleeper)} ${isPlural(sleeper) ? 'need' : 'needs'} a ${element} friend.`,
   pickerLoading: 'Calling your team… 🐾',
   /** A team squishy of another element, on its row. */
   notThisOne: (element: string) => `Not a ${element} friend`,

@@ -218,5 +218,10 @@ describe('bonus words', () => {
     expect(BONUS_TEXT.pickerLine('the cold fireplace', 'Fire')).toBe(
       'The cold fireplace needs a Fire friend.',
     );
+    expect(BONUS_TEXT.pickerLine('the flames', 'Water')).toBe('The flames need a Water friend.');
+    expect(BONUS_TEXT.pickerLine('the dark closet', 'Light')).toBe(
+      'The dark closet needs a Light friend.',
+    );
+    expect(BONUS_TEXT.pickerLine('the glass', 'Leaf')).toBe('The glass needs a Leaf friend.');
   });
 });

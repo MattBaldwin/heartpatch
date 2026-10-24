@@ -332,6 +332,8 @@ async function shot(page, device, name, { wait = true } = {}) {
     pinned: quality?.pinned,
     room: h?.room,
     card: h?.card,
+    target: h?.target,
+    bubble: h?.bubble,
     ...h?.scene,
     bonus: h?.bonus,
   };
@@ -520,6 +522,16 @@ async function playPower(page, device, p) {
   await cardUp(page);
   await shot(page, device, `${p.power}-woke`);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
+  // The door is open once the house says so; then its swing settles. The frame's caption says what it shows.
+  await until(
+    page,
+    () => {
+      const t = window.__heartpatch?.farHollowHouse?.()?.target;
+      return t?.kind === 'door' && t.state === 'open';
+    },
+    undefined,
+    20_000,
+  ).catch(() => console.error(`[note] ${device} ${p.power}: target never read 'open' door`));
   await wait(page, 900);
   await shot(page, device, `${p.power}-open`);
   await walkInto(page, p.dx, p.dz, p.room);
