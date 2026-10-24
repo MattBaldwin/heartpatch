@@ -281,6 +281,9 @@ export function lampStand(joy: number, lit: boolean): Part[] {
 // `posed` turns it crooked by how it's put right: tilted for straighten,
 // knocked over for lift, dusty for rub, dark for tap-rhythm and relight.
 
+/** A knocked-over thing lies on its side, turned this far round (the walk's footprint follows it). */
+export const TOPPLED_YAW = 0.6;
+
 type PropBuilder = (joy: number) => Part[];
 
 const c = (hex: string, joy: number) => joyed(hex, joy);
@@ -525,7 +528,7 @@ export function prop(
   if (!fixed && kind === 'straighten') one.rotation.set(0, 0, 0.32);
   if (!fixed && kind === 'lift') {
     // Knocked over onto its side, lying on the floor.
-    one.rotation.set(0, 0.6, Math.PI / 2);
+    one.rotation.set(0, TOPPLED_YAW, Math.PI / 2);
     one.position.y = 0.3;
   }
   return one;
