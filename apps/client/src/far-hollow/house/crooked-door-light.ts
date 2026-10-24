@@ -27,8 +27,9 @@ export const DOOR_LIGHT = {
   lift: 0.1,
   /** The outline is never narrower than this share of its height on screen (a side wall's door is edge-on). */
   slim: 0.36,
-  /** The outline's rounded top corners, px. */
+  /** The outline's rounded top corners, and how soft its glow is (a blur), px. */
   round: 12,
+  blur: 3,
   /** The wake pulse: how long it lasts, s. */
   pulse: { seconds: 2.4 },
   /** Sparkles a door, and how long one takes to drift up, s (each a little different). */
@@ -243,9 +244,28 @@ export function createDoorLights(): DoorLights {
         if (!light) {
           const svg = document.createElementNS(SVG, 'svg');
           svg.setAttribute('class', 'crooked-door-outline');
+          // A soft blur for the halo and glow, bounded by the path (cheap: it only re-rasters when the door moves).
+          const blur = `crooked-door-blur-${door.id}`;
+          const defs = document.createElementNS(SVG, 'defs');
+          const filter = document.createElementNS(SVG, 'filter');
+          for (const [k, v] of [
+            ['id', blur],
+            ['x', '-60%'],
+            ['y', '-20%'],
+            ['width', '220%'],
+            ['height', '140%'],
+          ] as const) {
+            filter.setAttribute(k, v);
+          }
+          const gauss = document.createElementNS(SVG, 'feGaussianBlur');
+          gauss.setAttribute('stdDeviation', String(DOOR_LIGHT.blur));
+          filter.append(gauss);
+          defs.append(filter);
+          svg.append(defs);
           const paths = ['fill', 'halo', 'glow', 'rim'].map((name) => {
             const path = document.createElementNS(SVG, 'path');
             path.setAttribute('class', `crooked-door-${name}`);
+            if (name === 'halo' || name === 'glow') path.setAttribute('filter', `url(#${blur})`);
             svg.append(path);
             return path;
           });

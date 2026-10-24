@@ -20,8 +20,8 @@
 }
 
 /* The outline: one SVG over the whole screen, one path drawn four times
-   (a soft fill, a wide faint halo, a glow and a hot rim), so the line is
-   even all the way round, with no brighter joins. */
+   (a soft fill, a wide blurred halo, a blurred glow and a hot rim), so the
+   line is even all the way round, with no brighter joins. */
 .crooked-door-outline {
   position: absolute;
   inset: 0;
@@ -44,14 +44,14 @@
 
 .crooked-door-halo {
   stroke: var(--glow);
-  stroke-width: 14px;
-  stroke-opacity: 0.18;
+  stroke-width: 12px;
+  stroke-opacity: 0.5;
 }
 
 .crooked-door-glow {
   stroke: var(--glow);
-  stroke-width: 7px;
-  stroke-opacity: 0.55;
+  stroke-width: 5px;
+  stroke-opacity: 0.9;
 }
 
 .crooked-door-rim {
