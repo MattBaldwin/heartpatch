@@ -284,12 +284,13 @@ async function bump(page, p) {
 async function shootPower(page, device, mapId, ids, p) {
   await teamFor(page, mapId, ids, p.power);
   await toDoor(page, mapId, p);
-  await bump(page, p);
   const doorId = (await house(page))?.target?.id;
   // The same fixed shot of the door, asleep and woken, so the pair shows the change.
   const look = () => page.evaluate((id) => window.__heartpatch?.farHollowDev?.().look(id), doorId);
   await look();
   await page.waitForTimeout(900);
+  // Bumped once the camera has settled, so the bubble (2.6 s) is still up for the shot.
+  await bump(page, p);
   // The bubble fades on its own: a frame without it is shot again from the start.
   if (!(await house(page))?.bubble) throw new Error(`${p.power}: the bubble faded before the shot`);
   await shot(page, device, `${p.power}-asleep`);
