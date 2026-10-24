@@ -438,6 +438,36 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #6b4b6e;
 }
 
+/* The craft tip floats over the fight just above the sheet (--battle-sheet-h,
+   set by the HUD), inside the safe area at the sides. Tap puts it away; it
+   also fades after a while (visibility keeps its box and its words for
+   screen readers). */
+.battle-hint.battle-tip {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 16px);
+  bottom: calc(var(--battle-sheet-h, 0px) + 10px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  box-sizing: border-box;
+  max-width: 420px;
+  margin-inline: auto;
+  /* Text over the scene: more opaque than the plain hint's 85%. */
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 18%);
+  pointer-events: auto;
+  animation: battle-tip-out 0.5s ease 10s forwards; /* TUNE: long enough to read twice */
+}
+
+.battle-hint.battle-tip[hidden] {
+  display: none;
+}
+
+@keyframes battle-tip-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 .battle-ask {
   margin: 0;
   padding: var(--hp-pad-y) var(--hp-pad-x);

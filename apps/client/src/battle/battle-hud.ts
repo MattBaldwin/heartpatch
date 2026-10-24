@@ -321,6 +321,25 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     controls,
     problem,
   );
+  // The craft tip for an empty bag floats over the fight just above the sheet,
+  // so it never takes height from the sheet (and with it from the fight). A
+  // tap puts it away; it also fades by itself (battle.css).
+  const tip = el('p', {
+    class: 'battle-hint battle-tip',
+    id: 'battle-capture-hint',
+    role: 'note',
+    'data-testid': 'battle-capture-hint',
+  });
+  tip.hidden = true;
+  let tipDismissed = false;
+  tip.addEventListener('click', () => {
+    tipDismissed = true;
+    tip.hidden = true;
+  });
+  // The tip sits `--battle-sheet-h` above the bottom edge: the sheet's own height.
+  const placeTip = () => {
+    hud.style.setProperty('--battle-sheet-h', `${String(sheet.offsetHeight)}px`);
+  };
   // The shield takes every touch, drag, pinch and wheel on the fight itself,
   // so none reaches the canvas and the map camera's gestures underneath: the
   // director alone moves the battle camera. The controls sit on top of it.
@@ -338,6 +357,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     shield,
     top,
     sheet,
+    tip,
     hearts,
     result,
   );
@@ -351,6 +371,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   const forget = () => {
     safe = null;
   };
+  const stopWatchingSheet = watchLayout([sheet], placeTip);
   const stopWatching = watchLayout([hud, plates.mine.node, plates.theirs.node], forget);
 
   const button = (
@@ -476,6 +497,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
 
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
+    let tipText = '';
     // Back from the potion picker: the caption returns.
     caption.hidden = caption.textContent === '';
     controls.hidden = mode.type === 'hidden';
@@ -562,7 +584,6 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         moreButton.setAttribute('aria-label', 'More about these moves');
         moreButton.setAttribute('aria-pressed', String(moreMoves));
         row.append(moreButton);
-        let hint: HTMLElement | null = null;
         if (mode.capture && sipped === null) {
           // Always there in a wild battle, so a player learns befriending
           // exists; with none in the bag it stays, dimmed, and explains.
@@ -578,13 +599,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           if (charm.empty) {
             node.classList.add('battle-button-empty');
             // Still tappable (not `disabled`): a tap explains, and checks the bag again.
-            hint = el(
-              'p',
-              { class: 'battle-hint', 'data-testid': 'battle-capture-hint' },
-              noCharmsLine(),
-            );
+            tipText = noCharmsLine();
             node.setAttribute('aria-describedby', 'battle-capture-hint');
-            hint.id = 'battle-capture-hint';
           }
           row.append(node);
         }
@@ -663,7 +679,6 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           );
         if (run) row.append(run);
         controls.append(moves, row);
-        if (hint) controls.append(hint);
         if (mode.fence) {
           controls.append(
             el(
@@ -698,6 +713,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       case 'hidden':
         break;
     }
+    // A tip already shown (or put away) stays so while the same words stand,
+    // so a redraw of the buttons doesn't bring it back.
+    if (tipText === '') tipDismissed = false;
+    else if (tip.textContent !== tipText) {
+      tipDismissed = false;
+      tip.textContent = tipText;
+    }
+    tip.hidden = tipText === '' || tipDismissed;
+    placeTip();
   };
 
   return {
@@ -861,6 +885,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     },
     dispose: () => {
       stopWatching();
+      stopWatchingSheet();
       for (const p of Object.values(plates)) window.clearTimeout(p.timer);
       hud.remove();
     },
