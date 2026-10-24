@@ -164,7 +164,13 @@ const place = (page, x, z) =>
   page.evaluate(({ x, z }) => window.__heartpatch?.farHollowDev?.().place(x, z), { x, z });
 
 async function goInside(page) {
-  await until(page, () => window.__heartpatch?.map?.()?.id, undefined, 30_000);
+  // Back on the patch after a reload (the game now and then lands in the lobby): from there if not.
+  await until(page, () => window.__heartpatch?.map?.()?.id, undefined, 30_000).catch(async () => {
+    const lobby = page.getByTestId('lobby');
+    await lobby.getByRole('button', { name: /Glow Patch/ }).click();
+    await lobby.getByRole('button', { name: 'Visit patch' }).click();
+    await until(page, () => window.__heartpatch?.map?.()?.id);
+  });
   await page.evaluate(() => window.__heartpatch?.farHollowDev?.().openSheet());
   await page.getByTestId('far-hollow-inside').click({ timeout: 60_000 });
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.scene?.rooms?.length > 0);
@@ -316,7 +322,7 @@ for (const device of DEVICES) {
         await shootPower(page, device, mapId, ids, p);
         break;
       } catch (error) {
-        if (attempt >= 3) throw error;
+        if (attempt >= 4) throw error;
         console.error(`[retry] ${device} ${p.power}: ${String(error).slice(0, 200)}`);
       } finally {
         await context.close();
