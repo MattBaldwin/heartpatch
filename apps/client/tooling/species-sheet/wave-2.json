@@ -1,0 +1,14 @@
+{
+  "wave": 2,
+  "lines": [
+    { "kind": "slipwaddle", "kid": "sledwaddle", "teen": "blizzwaddle", "nearest": "snoozicle" },
+    { "kind": "oinkle", "kid": "snortle", "teen": "tuskoink", "nearest": "bubbletub" },
+    { "kind": "cubbun", "kid": "brambun", "teen": "grizzbun", "nearest": "crunchkin" },
+    { "kind": "spudsy", "kid": "tatertot", "teen": "hashbrawn", "nearest": "pebblesnooze" },
+    { "kind": "cloudlamb", "kid": "cumulamb", "teen": "fluffasus", "nearest": "moondrop" },
+    { "kind": "glimbug", "kid": "glimmerbug", "teen": "beaconfly", "nearest": "moonmoth" },
+    { "kind": "dragofruit", "kid": "drakeberry", "teen": "dragonbloom", "nearest": "thistlepip" },
+    { "kind": "shinybeet", "kid": "gleambeet", "teen": "gleamhorn", "nearest": "shellnap" },
+    { "kind": "lampfin", "kid": "lanternfin", "teen": "nightfin", "nearest": "puddlepuff" }
+  ]
+}

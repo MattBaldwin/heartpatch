@@ -168,6 +168,80 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
 
+  // Wave 2 (#382): biome, daylight and night kinds, on top of the tables above.
+  // Common 4, uncommon 2, rare 1. TUNE: every weight.
+  {
+    id: 'wave-2-meadow',
+    terrains: ['meadow'],
+    entries: [
+      { species: 'oinkle', weight: 4 },
+      { species: 'dragofruit', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-2-forest',
+    terrains: ['forest', 'old-forest'],
+    entries: [
+      { species: 'cubbun', weight: 4 },
+      { species: 'shinybeet', weight: 4 },
+    ],
+  },
+  {
+    id: 'wave-2-hills',
+    terrains: ['hills'],
+    entries: [
+      { species: 'spudsy', weight: 4 },
+      { species: 'slipwaddle', weight: 2 },
+      { species: 'dragofruit', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-2-mountains',
+    terrains: ['mountains'],
+    entries: [{ species: 'slipwaddle', weight: 4 }],
+  },
+  {
+    id: 'wave-2-pumpkin-fields',
+    terrains: ['pumpkin-fields'],
+    entries: [
+      { species: 'oinkle', weight: 4 },
+      { species: 'spudsy', weight: 4 },
+    ],
+  },
+  {
+    // Piglets wade in at the water's edge.
+    id: 'wave-2-lake',
+    terrains: ['lake'],
+    entries: [{ species: 'oinkle', weight: 2 }],
+  },
+  {
+    // Cloudlamb only drifts down on sunny days.
+    id: 'wave-2-sunny-days',
+    terrains: ['hills', 'mountains'],
+    timeOfDay: 'day',
+    entries: [{ species: 'cloudlamb', weight: 4 }],
+  },
+  {
+    // Glimbug lights the way from dusk, in the woods and on the meadow.
+    id: 'wave-2-dusk-lights',
+    terrains: ['meadow', 'forest', 'old-forest'],
+    timeOfDay: 'dusk',
+    entries: [{ species: 'glimbug', weight: 2 }],
+  },
+  {
+    id: 'wave-2-night-lights',
+    terrains: ['meadow', 'forest', 'old-forest'],
+    timeOfDay: 'night',
+    entries: [{ species: 'glimbug', weight: 2 }],
+  },
+  {
+    // The lake's one rare after dark: Lampfin blinks its light on and off.
+    id: 'wave-2-lake-nights',
+    terrains: ['lake'],
+    timeOfDay: 'night',
+    entries: [{ species: 'lampfin', weight: 1 }],
+  },
+
   // Times of day.
   {
     // Dawndrop hums good morning on sunny open land.

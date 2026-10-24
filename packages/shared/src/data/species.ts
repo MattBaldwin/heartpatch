@@ -1,6 +1,7 @@
 import type { Move } from '../schemas/data/moves.js';
 import type { Species } from '../schemas/data/species.js';
 import { WAVE_1_SPECIES } from './species-wave-1.js';
+import { WAVE_2_SPECIES } from './species-wave-2.js';
 
 /*
  * The Phase 1 launch roster (design doc §4, issue #10): 14 base lines plus 4
@@ -3787,4 +3788,6 @@ export const SPECIES: Species[] = [
 
   // Wave 1 of the 500-squishy plan (#382): its own file, so waves don't crowd this one.
   ...WAVE_1_SPECIES,
+  // Wave 2 (#382): hand-designed kinds from the owner-approved brief.
+  ...WAVE_2_SPECIES,
 ];
