@@ -274,6 +274,13 @@ async function shootPower(page, device, mapId, ids, p) {
   await teamFor(page, mapId, ids, p.power);
   await toDoor(page, mapId, p);
   await bump(page, p);
+  const doorId = (await house(page))?.target?.id;
+  // The same fixed shot of the door, asleep and woken, so the pair shows the change.
+  const look = () => page.evaluate((id) => window.__heartpatch?.farHollowDev?.().look(id), doorId);
+  await look();
+  await page.waitForTimeout(900);
+  // The bubble fades on its own: a frame without it is shot again from the start.
+  if (!(await house(page))?.bubble) throw new Error(`${p.power}: the bubble faded before the shot`);
   await shot(page, device, `${p.power}-asleep`);
   await page.getByTestId('crooked-action').dispatchEvent('click');
   await until(page, () => window.__heartpatch?.farHollowHouse?.()?.picker?.helpers?.length > 0);
@@ -284,7 +291,8 @@ async function shootPower(page, device, mapId, ids, p) {
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
   // The Keeper walks off to the same spot on every phone: the woken door stays in view, not under the lantern.
   await place(page, p.door[0] - p.dx * AWAY, p.door[1] - p.dz * AWAY);
-  await page.waitForTimeout(AFTER_WAKE);
+  await look();
+  await page.waitForTimeout(AFTER_WAKE + 1500);
   await shot(page, device, `${p.power}-woke`);
 }
 

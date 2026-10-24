@@ -1,7 +1,6 @@
-import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { el } from '../../ui/dom.js';
 import type { FloorPoint } from './crooked-plan.js';
-import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
+import { WOKEN_LIGHT } from './crooked-bonus-kit.js';
 
 import './crooked-door-light.css';
 
@@ -20,6 +19,8 @@ export const DOOR_LIGHT = {
   spill: { reach: 1.1, half: 1.1 },
   /** The doorway glow is never thinner than this share of its height on screen (a side wall's door is edge-on). */
   slim: 0.42,
+  /** The hole in the dark round a lit door: its size over the glows' own, and how soft its edge is (a share of the radius). */
+  hole: { margin: 1.35, soft: 0.6 },
   /** The wake pulse: how long it lasts, s, and how much each glow swells. */
   pulse: { seconds: 2.4, swell: 0.3 },
 } as const; // TUNE: all of them
@@ -98,12 +99,32 @@ export function doorLightPoints(
   };
 }
 
-/** A power's colours: the element's own for the glow, lightened for its hot middle. */
+/** A power's colours: its glow, and a hotter middle. */
 export function doorLightColours(power: string): { glow: string; hot: string } {
-  return {
-    glow: ELEMENT_FX[power]?.colors[0] ?? '#ffffff',
-    hot: WOKEN_COLOUR[power] ?? '#ffffff',
-  };
+  return WOKEN_LIGHT[power] ?? { glow: '#ffffff', hot: '#ffffff' };
+}
+
+/**
+ * The dark layer's holes, as a CSS mask: one soft-edged ellipse a door, round
+ * its doorway and the spill at its foot, so the real door shows through
+ * the dark (lit by the glow over it). `null` when no door is lit.
+ */
+export function doorHoleMask(layouts: readonly DoorLightLayout[]): string | null {
+  if (layouts.length === 0) return null;
+  const { margin, soft } = DOOR_LIGHT.hole;
+  return layouts
+    .map(({ doorway, spill }) => {
+      const left = Math.min(doorway.cx - doorway.rx, spill.cx - spill.rx);
+      const right = Math.max(doorway.cx + doorway.rx, spill.cx + spill.rx);
+      const top = Math.min(doorway.cy - doorway.ry, spill.cy - spill.ry);
+      const bottom = Math.max(doorway.cy + doorway.ry, spill.cy + spill.ry);
+      const rx = ((right - left) / 2) * margin;
+      const ry = ((bottom - top) / 2) * margin;
+      const at = `${(left + right) / 2}px ${(top + bottom) / 2}px`;
+      // Clear inside, opaque (the dark) out past the rim; `soft` is how much of the radius the edge takes.
+      return `radial-gradient(ellipse ${rx}px ${ry}px at ${at}, transparent ${(1 - soft) * 100}%, #000 100%)`;
+    })
+    .join(', ');
 }
 
 interface Light {
@@ -127,6 +148,8 @@ export interface DoorLights {
       fresh: boolean;
     }[],
   ): void;
+  /** The CSS mask that cuts the dark away round every lit door (null when none). */
+  readonly mask: () => string | null;
   /** Where each door's light is now, for the dev hook. */
   readonly debug: () => readonly {
     door: string;
@@ -195,6 +218,7 @@ export function createDoorLights(): DoorLights {
         put(light.doorway, door.layout.doorway);
       }
     },
+    mask: () => doorHoleMask([...placed.values()].map((p) => p.layout)),
     debug: () =>
       [...placed].map(([door, p]) => ({
         door,

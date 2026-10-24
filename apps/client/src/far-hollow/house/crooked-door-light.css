@@ -36,9 +36,9 @@
 .crooked-door-glow {
   background: radial-gradient(
     closest-side,
-    var(--hot) 0%,
-    color-mix(in srgb, var(--glow) 90%, transparent) 40%,
-    color-mix(in srgb, var(--glow) 40%, transparent) 75%,
+    color-mix(in srgb, var(--hot) 70%, transparent) 0%,
+    color-mix(in srgb, var(--glow) 55%, transparent) 40%,
+    color-mix(in srgb, var(--glow) 25%, transparent) 75%,
     transparent 100%
   );
 }

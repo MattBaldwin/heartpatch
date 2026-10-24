@@ -234,6 +234,8 @@ export interface CrookedScreen {
   readonly debug: CrookedDebug;
   /** Dev only (captures, e2e): stands the Keeper at a floor point of the room I'm in. */
   devPlace: (x: number, z: number) => void;
+  /** Dev only (captures): the camera looks at a door of the room I'm in from a fixed shot (the same asleep and woken), for good. */
+  devLook: (doorId: string) => void;
   /** Dev only (captures): stops the peekaboo's clock at `ms` from a catch, or lets it run (`null`). */
   devPeek: (ms: number | null) => void;
   /** Dev only (captures): draws the echoes at server time `ms`, or on the clock again (`null`). */
@@ -336,7 +338,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** Eases the camera back to the room after a woken door's look. */
   let lookTimer: ReturnType<typeof setTimeout> | null = null;
   /** The door the camera is looking at, while it does. */
-  let lookAt: { door: FloorPoint; shot: CrookedShot } | null = null;
+  let lookAt: { door: FloorPoint; shot: CrookedShot; fixed: FloorPoint | null } | null = null;
   let caught: { echo: string; backTo: string } | null = null;
   /** Dev only: the echoes drawn at this server time (captures). */
   let echoesPinned: number | null = null;
@@ -1452,7 +1454,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** The look's shot: the door near the middle, the Keeper still in frame (it follows as the Keeper moves). */
   function lookFrame(): void {
     if (!lookAt || !scene3d) return;
-    const { door, shot } = lookAt;
+    const { door, shot, fixed } = lookAt;
+    if (fixed) {
+      scene3d.frame(focusShot(shot, fixed), false);
+      return;
+    }
     const k = WAKE_LOOK.towardsKeeper;
     scene3d.frame(
       focusShot(shot, {
@@ -1464,16 +1470,20 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   }
 
   /** A door just woke: the camera eases in to it (its light is the payoff), then back to the room. */
-  function lookAtDoor(at: FloorPoint): void {
+  function lookAtDoor(
+    at: FloorPoint,
+    fixed: FloorPoint | null = null,
+    holdMs: number = WAKE_LOOK.holdMs,
+  ): void {
     const shot = fitted();
-    if (!shot || !scene3d || mapShown) return;
+    if (!shot || !scene3d || mapShown || (reducedMotion() && fixed === null)) return;
     if (lookTimer !== null) clearTimeout(lookTimer);
-    lookAt = { door: at, shot };
+    lookAt = { door: at, shot, fixed };
     lookFrame();
     lookTimer = setTimeout(() => {
       lookTimer = null;
       refit(false);
-    }, WAKE_LOOK.holdMs);
+    }, holdMs);
     options.invalidate();
     wake();
   }
@@ -1614,7 +1624,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     bubbleText(text);
   };
 
-  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
   /** The woken doors' light, over the dark, where each door stands in the wall now. */
   function renderDoorLights(): void {
     const s = scene3d;
@@ -1635,6 +1644,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         return { id: door.id, power: door.power, at: door.at, layout, fresh: door.fresh };
       }),
     );
+    // The dark is cut away round each lit door, so the real door shows through.
+    const mask = doorLights.mask();
+    for (const name of ['mask-image', '-webkit-mask-image']) {
+      if (mask) dark.style.setProperty(name, mask);
+      else dark.style.removeProperty(name);
+    }
   }
 
   function renderDark(): void {
@@ -1648,6 +1663,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     paintDark();
   }
 
+  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
   function paintDark(): void {
     const s = scene3d;
     const on = isOpen && !mapShown && !roomLit();
@@ -1877,6 +1893,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function hide(): void {
     generation += 1;
+    lookAt = null;
     isOpen = false;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
@@ -1925,6 +1942,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       if (isOpen && id !== mapId) hide();
       // An open still waiting on its read never lands on a patch that went away.
       else if (!isOpen && id === null) generation += 1;
+    },
+    devLook: (doorId) => {
+      const room = here();
+      const door = CROOKED_HOUSE.doors.find((d) => d.id === doorId);
+      const end = room && door ? doorEnd(door, room.id) : null;
+      if (!end) return;
+      // The door a little off the middle, the Keeper's side of the room in view.
+      const aim = { x: end.point.x + end.inward.x * 0.6, z: end.point.z + end.inward.z * 0.6 };
+      lookAtDoor(end.point, aim, 60 * 60 * 1000);
     },
     devPlace: (x, z) => {
       const h = house();

@@ -7,7 +7,13 @@ import {
 import { describe, expect, it } from 'vitest';
 import { ELEMENT_FX } from '../../battle/element-fx.js';
 import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
-import { DOOR_LIGHT, doorLightLayout, doorLightPoints } from './crooked-door-light.js';
+import {
+  DOOR_LIGHT,
+  doorHoleMask,
+  doorLightColours,
+  doorLightLayout,
+  doorLightPoints,
+} from './crooked-door-light.js';
 import {
   chestPoint,
   chestRooms,
@@ -210,6 +216,27 @@ describe('woken door light', () => {
     expect(layout?.doorway.rx).toBeCloseTo(
       layout?.doorway.ry ? layout.doorway.ry * DOOR_LIGHT.slim : 0,
     );
+  });
+
+  it('cuts the dark away round each lit door, one soft hole a door', () => {
+    const layout = {
+      doorway: { cx: 100, cy: 300, rx: 20, ry: 40 },
+      spill: { cx: 130, cy: 340, rx: 40, ry: 30 },
+    };
+    expect(doorHoleMask([])).toBeNull();
+    const mask = doorHoleMask([layout, layout]) ?? '';
+    expect(mask.match(/radial-gradient/g)).toHaveLength(2);
+    // Clear in the middle, the dark (opaque) at the rim.
+    expect(mask).toContain('transparent');
+    expect(mask).toContain('#000 100%');
+  });
+
+  it('keeps Light’s glow a clear yellow, not the element’s pale cream', () => {
+    const { glow } = doorLightColours('light');
+    const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(glow.slice(i, i + 2), 16));
+    expect(r).toBeGreaterThan(200);
+    expect(b ?? 255).toBeLessThan(100);
+    expect(g).toBeGreaterThan(150);
   });
 
   it('draws nothing while a point of the door is off screen', () => {

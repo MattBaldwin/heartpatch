@@ -53,16 +53,16 @@ function caption(d, door, state, r) {
       : null;
   const lead =
     state === 'asleep'
-      ? `${door.room}, the ${door.thing} door still asleep.`
+      ? `${door.room}, the ${door.thing} door still asleep, the Keeper at it.`
       : `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend.`;
   const glow = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glow fills the doorway, centred ${Math.round((light.doorway.cx / r.viewport.w) * 100)}% across the screen, with a soft spill at the foot of the wall.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glow lights the door, centred ${Math.round((light.doorway.cx / r.viewport.w) * 100)}% across and ${Math.round((light.doorway.cy / r.viewport.h) * 100)}% down the screen, with a soft spill at the foot of the wall; the dark is cut away round it so the door shows, and the rest of the room stays dark.`
     : '';
   const keeper = away ? ` The Keeper stands ${away} m from the door.` : '';
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (random; they can differ between phones).`
     : '';
-  return `${name}. ${lead}${glow}${keeper} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame.${glow}${keeper} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {
