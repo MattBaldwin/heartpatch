@@ -10,12 +10,13 @@ import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
 import {
   DOOR_LIGHT,
   MAX_SPARKLES,
-  OUTLINE_BOX,
+  OUTLINE_PIECES,
+  PIECE,
   doorLightColours,
   doorLightLayout,
   doorLightPoints,
   offScreen,
-  quadTransform,
+  outlineTransforms,
   sparkleShape,
   sparkles,
 } from './crooked-door-light.js';
@@ -191,53 +192,50 @@ describe('who can help', () => {
 
 describe('woken door cue', () => {
   const at = (x: number, y: number) => ({ x, y });
-  /** Where the matrix3d puts a box point (column-major, with the perspective divide). */
-  const apply = (m: string, x: number, y: number) => {
-    const v = (m.match(/-?[\d.e-]+/g) ?? []).slice(1).map(Number);
-    const [a = 0, d = 0, , g = 0, b = 0, e = 0, , k = 0, , , , , c = 0, f = 0] = v;
-    const w = g * x + k * y + 1;
-    return { x: (a * x + b * y + c) / w, y: (d * x + e * y + f) / w };
-  };
-
-  it('maps the outline box exactly onto the door’s four corners, even in perspective', () => {
-    const [tl, tr, br, bl] = [at(110, 300), at(190, 310), at(200, 500), at(100, 495)];
-    const m = quadTransform(OUTLINE_BOX.w, OUTLINE_BOX.h, tl, tr, br, bl);
-    expect(m.startsWith('matrix3d(')).toBe(true);
-    const hits = [
-      [apply(m, 0, 0), tl],
-      [apply(m, OUTLINE_BOX.w, 0), tr],
-      [apply(m, OUTLINE_BOX.w, OUTLINE_BOX.h), br],
-      [apply(m, 0, OUTLINE_BOX.h), bl],
-    ] as const;
-    for (const [got, want] of hits) {
-      expect(got.x).toBeCloseTo(want.x, 2);
-      expect(got.y).toBeCloseTo(want.y, 2);
-    }
-  });
-
-  it('outlines the door from its corners, with the sparkles anchored at its foot', () => {
+  it('fits an upright doorway round the door’s corners, its sparkles anchored at its foot', () => {
     const layout = doorLightLayout({
       footLeft: at(160, 500),
       footRight: at(240, 500),
-      topLeft: at(160, 300),
-      topRight: at(240, 300),
+      topLeft: at(162, 300),
+      topRight: at(238, 300),
     });
+    expect(layout?.box).toEqual({ left: 160, top: 300, width: 80, height: 200 });
     expect(layout?.foot).toEqual({ x: 200, y: 500 });
-    expect(layout?.height).toBeCloseTo(200);
-    expect(layout?.corners).toHaveLength(4);
+    expect(layout?.height).toBe(200);
   });
 
-  it('keeps an edge-on door (a side wall) wide enough to see', () => {
+  it('keeps an edge-on door (a side wall seen from above) a slim door, not a crack', () => {
+    // The wall runs up the screen and the door's height does too: a 5 px sliver.
     const layout = doorLightLayout({
-      footLeft: at(100, 500),
-      footRight: at(100, 500),
-      topLeft: at(100, 300),
-      topRight: at(100, 300),
+      footLeft: at(200, 520),
+      footRight: at(204, 400),
+      topLeft: at(201, 460),
+      topRight: at(205, 340),
     });
-    const [fl, fr] = layout?.corners ?? [at(0, 0), at(0, 0)];
-    expect(fr.x - fl.x).toBeCloseTo(200 * DOOR_LIGHT.slim);
-    // Widened about its middle.
-    expect((fr.x + fl.x) / 2).toBeCloseTo(100);
+    expect(layout?.box.height).toBe(180);
+    expect(layout?.box.width).toBeCloseTo(180 * DOOR_LIGHT.slim);
+    // About its own middle.
+    expect((layout?.box.left ?? 0) + (layout?.box.width ?? 0) / 2).toBeCloseTo(202.5);
+  });
+
+  it('builds the outline from pieces that only stretch along their length', () => {
+    const box = { left: 100, top: 300, width: 80, height: 200 };
+    const t = outlineTransforms(box, 4);
+    expect(Object.keys(t).sort()).toEqual([...OUTLINE_PIECES].sort());
+    const r = DOOR_LIGHT.round;
+    // The sides stand on the box's edges (centred on the rim), stretched only in height.
+    expect(t.left).toBe(
+      `translate(98px, ${String(300 + r)}px) scale(1, ${String((200 - r) / PIECE)})`,
+    );
+    expect(t.right).toContain('translate(178px,');
+    // The top spans between the round corners, stretched only in width.
+    expect(t.top).toBe(
+      `translate(${String(100 + r)}px, 298px) scale(${String((80 - 2 * r) / PIECE)}, 1)`,
+    );
+    // The corners only move; the fill covers the doorway.
+    expect(t.cornerLeft).toBe('translate(98px, 298px)');
+    expect(t.cornerRight).not.toContain('scale');
+    expect(t.fill).toBe('translate(100px, 300px) scale(0.8, 2)');
   });
 
   it('draws nothing while a corner of the door is off screen', () => {

@@ -6,24 +6,29 @@ import { WOKEN_LIGHT } from './crooked-bonus-kit.js';
 import './crooked-door-light.css';
 
 // A woken power door's cue (#306, owner 2026-10-24): a soft bright outline of
-// the door in its power's colour, with the power's sparkles (embers, leaves,
-// droplets, motes) drifting up from it. The house's dark is a DOM layer over
-// the whole 3D view, so the cue is drawn over it, like the echoes' eyes, at
-// the door's own place in the wall. A frame only moves nodes with transforms:
-// the outline is a fixed-size box mapped onto the door's four projected
-// corners, and the sparkles ride one translate-and-scale per door. Pure maths
-// here; the screen projects the door's points.
+// the doorway in its power's colour, with the power's sparkles (embers,
+// leaves, droplets, motes) drifting up from it. The house's dark is a DOM
+// layer over the whole 3D view, so the cue is drawn over it, like the echoes'
+// eyes, at the door's own place in the wall. A frame only moves nodes with
+// transforms: the outline is an upright doorway fitted round the door's
+// projected corners (a side wall's door, seen edge-on from above, stays a
+// slim door, not a crack), built from glowing pieces that only stretch along
+// their length so the glow keeps its width; the sparkles ride one
+// translate-and-scale per door. Pure maths here; the screen projects the points.
 
-/** The door's cue, metres and counts. */
+/** The door's cue, metres, px and counts. */
 export const DOOR_LIGHT = {
   /** The outline's height and half width: just round the door slab (2.0 × 1.3). */
   doorway: { height: 2.15, half: 0.72 },
   /** How far in front of the wall the outline sits, so the slab never pokes through. */
   lift: 0.1,
-  /** The outline is never thinner than this share of its height on screen (a side wall's door is edge-on). */
-  slim: 0.32,
-  /** The wake pulse: how long it lasts, s, and how much the outline swells. */
-  pulse: { seconds: 2.4, swell: 0.12 },
+  /** The outline is never narrower than this share of its height on screen (a side wall's door is edge-on). */
+  slim: 0.36,
+  /** The outline's rounded top corners, and how thick its bright rim is, px. */
+  round: 12,
+  thick: 3,
+  /** The wake pulse: how long it lasts, s. */
+  pulse: { seconds: 2.4 },
   /** Sparkles a door, and how long one takes to drift up, s (each a little different). */
   sparkles: { count: 6, seconds: 4.2 },
   /** A door this far (px) past the screen's edge is hidden, so its sparkles stop. */
@@ -33,8 +38,8 @@ export const DOOR_LIGHT = {
 /** Never more sparkles a door than this, whatever the tuning says (older iPads). */
 export const MAX_SPARKLES = 8;
 
-/** The outline box's own size, CSS px: about a door's size on a phone, so its border barely stretches. */
-export const OUTLINE_BOX = { w: 64, h: 100 } as const;
+/** The outline pieces' own length (and the sparkles' reference door height), CSS px; a frame scales them from it. */
+export const PIECE = 100;
 
 interface Pt {
   readonly x: number;
@@ -49,12 +54,17 @@ export interface DoorPoints {
   readonly topRight: Pt | null;
 }
 
-/** A door's cue on screen: its (widened) corners, the outline's CSS transform, and the sparkles' anchor. */
+/** An upright box on screen, CSS px. */
+export interface Box {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A door's cue on screen: the doorway's box, and the sparkles' anchor (its foot middle) and scale (its height). */
 export interface DoorLightLayout {
-  readonly corners: readonly [Pt, Pt, Pt, Pt];
-  /** `matrix3d(…)` mapping the OUTLINE_BOX onto the corners (transform-origin 0 0). */
-  readonly outline: string;
-  /** The door's foot middle and its height on screen, px: the sparkles rise from here at this scale. */
+  readonly box: Box;
   readonly foot: Pt;
   readonly height: number;
 }
@@ -78,73 +88,56 @@ export function doorLightPoints(
   };
 }
 
-const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-
-/**
- * The corners widened about their middles so the outline is at least
- * `slim` of its height across (an edge-on door stays a slim door, not a line).
- */
-function widened(fl: Pt, fr: Pt, tl: Pt, tr: Pt): [Pt, Pt, Pt, Pt] {
-  const foot = mid(fl, fr);
-  const height = Math.hypot(mid(tl, tr).x - foot.x, mid(tl, tr).y - foot.y);
-  const across = Math.hypot(fr.x - fl.x, fr.y - fl.y);
-  const least = height * DOOR_LIGHT.slim;
-  if (across >= least) return [fl, fr, tl, tr];
-  // Grow both edges to the least width along the foot's own direction (flat if it has none).
-  const dir =
-    across > 1e-6 ? { x: (fr.x - fl.x) / across, y: (fr.y - fl.y) / across } : { x: 1, y: 0 };
-  const grow = (a: Pt, b: Pt): [Pt, Pt] => {
-    const m = mid(a, b);
-    const half = least / 2;
-    return [
-      { x: m.x - dir.x * half, y: m.y - dir.y * half },
-      { x: m.x + dir.x * half, y: m.y + dir.y * half },
-    ];
-  };
-  const [l, r] = grow(fl, fr);
-  const [tl2, tr2] = grow(tl, tr);
-  return [l, r, tl2, tr2];
-}
-
-/**
- * The CSS `matrix3d` taking a `w`×`h` box (origin top left) onto a quad:
- * its top left to `tl`, top right to `tr`, bottom right to `br`, bottom left
- * to `bl` (the square-to-quad projective map). Pure.
- */
-export function quadTransform(w: number, h: number, tl: Pt, tr: Pt, br: Pt, bl: Pt): string {
-  const [x0, y0, x1, y1, x2, y2, x3, y3] = [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y];
-  const dx1 = x1 - x2;
-  const dx2 = x3 - x2;
-  const dx3 = x0 - x1 + x2 - x3;
-  const dy1 = y1 - y2;
-  const dy2 = y3 - y2;
-  const dy3 = y0 - y1 + y2 - y3;
-  const det = dx1 * dy2 - dx2 * dy1;
-  const affine = Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9;
-  const g = affine || det === 0 ? 0 : (dx3 * dy2 - dx2 * dy3) / det;
-  const k = affine || det === 0 ? 0 : (dx1 * dy3 - dx3 * dy1) / det;
-  const a = x1 - x0 + g * x1;
-  const b = x3 - x0 + k * x3;
-  const d = y1 - y0 + g * y1;
-  const e = y3 - y0 + k * y3;
-  const n = (v: number) => String(Number(v.toPrecision(7)));
-  // Column-major: u = x / w and v = y / h feed the map.
-  return `matrix3d(${[a / w, d / w, 0, g / w, b / h, e / h, 0, k / h, 0, 0, 1, 0, x0, y0, 0, 1].map(n).join(',')})`;
-}
-
 /** The door's cue from its projected corners, or null while any is off screen. Pure. */
 export function doorLightLayout(p: DoorPoints): DoorLightLayout | null {
   const { footLeft, footRight, topLeft, topRight } = p;
   if (!footLeft || !footRight || !topLeft || !topRight) return null;
-  const corners = widened(footLeft, footRight, topLeft, topRight);
-  const [fl, fr, tl, tr] = corners;
-  const foot = mid(fl, fr);
-  const top = mid(tl, tr);
+  const xs = [footLeft.x, footRight.x, topLeft.x, topRight.x];
+  const ys = [footLeft.y, footRight.y, topLeft.y, topRight.y];
+  const top = Math.min(...ys);
+  const height = Math.max(...ys) - top;
+  const middle = (Math.min(...xs) + Math.max(...xs)) / 2;
+  // Never thinner than a slim door, about its own middle.
+  const width = Math.max(Math.max(...xs) - Math.min(...xs), height * DOOR_LIGHT.slim);
   return {
-    corners,
-    outline: quadTransform(OUTLINE_BOX.w, OUTLINE_BOX.h, tl, tr, fr, fl),
-    foot,
-    height: Math.hypot(top.x - foot.x, top.y - foot.y),
+    box: { left: middle - width / 2, top, width, height },
+    foot: { x: middle, y: top + height },
+    height,
+  };
+}
+
+/** The outline's pieces: two sides, a top, its two round corners, and a soft fill. */
+export type OutlinePiece = 'left' | 'right' | 'top' | 'cornerLeft' | 'cornerRight' | 'fill';
+
+export const OUTLINE_PIECES: readonly OutlinePiece[] = [
+  'fill',
+  'left',
+  'right',
+  'top',
+  'cornerLeft',
+  'cornerRight',
+];
+
+/**
+ * Each piece's CSS transform for a doorway `box` (transform-origin 0 0). The
+ * sides are `thick` px wide and PIECE px long, stretched only along their
+ * length; the corners (`round` + `thick` px square) only move; the fill
+ * (PIECE square) stretches both ways, being only a soft gradient. Pure.
+ */
+export function outlineTransforms(box: Box, thick: number): Record<OutlinePiece, string> {
+  const r = Math.max(0, Math.min(DOOR_LIGHT.round, box.width / 2, box.height / 2));
+  const n = (v: number) => String(Math.round(v * 10) / 10);
+  const k = (v: number) => String(Math.round(Math.max(v, 0) * 1000) / 1000);
+  const half = thick / 2;
+  const right = box.left + box.width;
+  const at = (x: number, y: number) => `translate(${n(x)}px, ${n(y)}px)`;
+  return {
+    fill: `${at(box.left, box.top)} scale(${k(box.width / PIECE)}, ${k(box.height / PIECE)})`,
+    left: `${at(box.left - half, box.top + r)} scale(1, ${k((box.height - r) / PIECE)})`,
+    right: `${at(right - half, box.top + r)} scale(1, ${k((box.height - r) / PIECE)})`,
+    top: `${at(box.left + r, box.top - half)} scale(${k((box.width - 2 * r) / PIECE)}, 1)`,
+    cornerLeft: at(box.left - half, box.top - half),
+    cornerRight: at(right - r - half, box.top - half),
   };
 }
 
@@ -154,14 +147,8 @@ export function offScreen(
   view: { readonly width: number; readonly height: number },
 ): boolean {
   const m = DOOR_LIGHT.offscreen;
-  const xs = layout.corners.map((c) => c.x);
-  const ys = layout.corners.map((c) => c.y);
-  return (
-    Math.max(...xs) < -m ||
-    Math.min(...xs) > view.width + m ||
-    Math.max(...ys) < -m ||
-    Math.min(...ys) > view.height + m
-  );
+  const { left, top, width, height } = layout.box;
+  return left + width < -m || left > view.width + m || top + height < -m || top > view.height + m;
 }
 
 /** A power's colours: its outline glow, and a hotter middle. */
@@ -216,7 +203,7 @@ export function sparkles(power: string): Sparkle[] {
 
 interface Light {
   readonly root: HTMLElement;
-  readonly outline: HTMLElement;
+  readonly pieces: Record<OutlinePiece, HTMLElement>;
   readonly sparks: HTMLElement;
   /** The last layout written, so a still door costs nothing. */
   key: string;
@@ -265,13 +252,21 @@ export function createDoorLights(): DoorLights {
       for (const door of doors) {
         let light = lights.get(door.id);
         if (!light) {
-          const outline = el('div', { class: 'crooked-door-outline' });
+          const pieces = Object.fromEntries(
+            OUTLINE_PIECES.map((name) => [
+              name,
+              el('span', {
+                class: `crooked-door-piece crooked-door-${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`,
+              }),
+            ]),
+          ) as Record<OutlinePiece, HTMLElement>;
+          const outline = el('div', { class: 'crooked-door-outline' }, ...Object.values(pieces));
           const sparks = el('div', { class: 'crooked-door-sparks' });
           const shape = sparkleShape(door.power);
           for (const s of sparkles(door.power)) {
             const bit = el('span', { class: `crooked-door-spark crooked-door-spark-${shape}` });
-            bit.style.setProperty('--x', `${r1(s.x * OUTLINE_BOX.w)}px`);
-            bit.style.setProperty('--y', `${r1(-s.y * OUTLINE_BOX.h)}px`);
+            bit.style.setProperty('--x', `${r1(s.x * PIECE * 0.6)}px`);
+            bit.style.setProperty('--y', `${r1(-s.y * PIECE)}px`);
             bit.style.setProperty('--sway', `${r1(s.sway)}px`);
             bit.style.setProperty('--size', `${r1(s.size)}px`);
             bit.style.setProperty('--delay', `${r1(s.delay)}s`);
@@ -289,10 +284,9 @@ export function createDoorLights(): DoorLights {
           node.style.setProperty('--glow', glow);
           node.style.setProperty('--hot', hot);
           node.style.setProperty('--pulse', `${String(DOOR_LIGHT.pulse.seconds)}s`);
-          node.style.setProperty('--swell', String(1 + DOOR_LIGHT.pulse.swell));
-          node.style.setProperty('--box-w', `${String(OUTLINE_BOX.w)}px`);
-          node.style.setProperty('--box-h', `${String(OUTLINE_BOX.h)}px`);
-          light = { root: node, outline, sparks, key: '' };
+          node.style.setProperty('--thick', `${String(DOOR_LIGHT.thick)}px`);
+          node.style.setProperty('--round', `${String(DOOR_LIGHT.round)}px`);
+          light = { root: node, pieces, sparks, key: '' };
           lights.set(door.id, light);
           root.append(node);
           // A door that woke just now pulses and settles (CSS; never under reduced motion).
@@ -306,13 +300,14 @@ export function createDoorLights(): DoorLights {
           continue;
         }
         placed.set(door.id, { power: door.power, at: door.at, layout: door.layout });
-        const { outline, foot, height } = door.layout;
-        const scale = height / OUTLINE_BOX.h;
-        const sparks = `translate(${r1(foot.x)}px, ${r1(foot.y)}px) scale(${String(Math.round(scale * 100) / 100)})`;
-        const key = `${outline}|${sparks}`;
+        const { box, foot, height } = door.layout;
+        const outline = outlineTransforms(box, DOOR_LIGHT.thick);
+        const scale = Math.round((height / PIECE) * 100) / 100;
+        const sparks = `translate(${r1(foot.x)}px, ${r1(foot.y)}px) scale(${String(scale)})`;
+        const key = `${Object.values(outline).join('|')}|${sparks}`;
         if (key === light.key) continue;
         light.key = key;
-        light.outline.style.transform = outline;
+        for (const name of OUTLINE_PIECES) light.pieces[name].style.transform = outline[name];
         light.sparks.style.transform = sparks;
       }
     },

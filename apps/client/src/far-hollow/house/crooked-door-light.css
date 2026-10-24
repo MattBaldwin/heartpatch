@@ -1,8 +1,8 @@
 /* A woken power door's cue (#306), over the house's dark: a soft bright
    outline of the door in its power's colour (`--glow`, with a lighter `--hot`
    rim), and the power's sparkles drifting up from it. Placed by
-   `crooked-door-light.ts` with composited transforms only; the outline box is
-   mapped onto the door's corners, so it leans with the wall. Screen-blended,
+   `crooked-door-light.ts` with composited transforms only; the outline is an
+   upright doorway round the door, built from pieces. Screen-blended,
    so it adds light and never greys the dark. Reduced motion keeps the outline
    and drops the drift and the pulse. */
 
@@ -19,7 +19,7 @@
   display: none;
 }
 
-.crooked-door-outline,
+.crooked-door-piece,
 .crooked-door-sparks {
   position: absolute;
   top: 0;
@@ -29,24 +29,63 @@
   pointer-events: none;
 }
 
-.crooked-door-outline {
-  width: var(--box-w, 64px);
-  height: var(--box-h, 100px);
+/* The bright rim: a hot core with the glow round it. The sides and top only
+   stretch along their length (100px long), so the glow keeps its width. */
+.crooked-door-piece {
+  box-sizing: border-box;
+  mix-blend-mode: screen;
 }
 
-/* The ring itself: rounded like a doorway, a hot rim with the glow either side. */
-.crooked-door-outline::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2.5px solid color-mix(in srgb, var(--hot) 92%, transparent);
-  border-radius: 34% 34% 8% 8% / 22% 22% 4% 4%;
+.crooked-door-left,
+.crooked-door-right,
+.crooked-door-top {
+  background: color-mix(in srgb, var(--hot) 92%, transparent);
   box-shadow:
-    0 0 6px 2px color-mix(in srgb, var(--glow) 95%, transparent),
-    0 0 18px 6px color-mix(in srgb, var(--glow) 55%, transparent),
-    inset 0 0 8px 2px color-mix(in srgb, var(--glow) 70%, transparent),
-    inset 0 0 22px 4px color-mix(in srgb, var(--glow) 22%, transparent);
-  mix-blend-mode: screen;
+    0 0 5px 2px color-mix(in srgb, var(--glow) 95%, transparent),
+    0 0 14px 5px color-mix(in srgb, var(--glow) 50%, transparent);
+}
+
+.crooked-door-left,
+.crooked-door-right {
+  width: var(--thick, 3px);
+  height: 100px;
+}
+
+.crooked-door-top {
+  width: 100px;
+  height: var(--thick, 3px);
+}
+
+/* The round top corners: a quarter ring each, only ever moved. */
+.crooked-door-corner-left,
+.crooked-door-corner-right {
+  width: calc(var(--round, 12px) + var(--thick, 3px));
+  height: calc(var(--round, 12px) + var(--thick, 3px));
+  border-top: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
+  filter: drop-shadow(0 0 3px var(--glow)) drop-shadow(0 0 7px var(--glow));
+}
+
+.crooked-door-corner-left {
+  border-left: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
+  border-top-left-radius: 100%;
+}
+
+.crooked-door-corner-right {
+  border-right: var(--thick, 3px) solid color-mix(in srgb, var(--hot) 92%, transparent);
+  border-top-right-radius: 100%;
+}
+
+/* A soft wash of the power's colour inside the doorway, brightest at the foot. */
+.crooked-door-fill {
+  width: 100px;
+  height: 100px;
+  border-radius: 12% 12% 0 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--glow) 34%, transparent),
+    color-mix(in srgb, var(--glow) 12%, transparent) 70%,
+    transparent
+  );
 }
 
 /* The sparkles' anchor: the door's foot middle, scaled to the door's height. */
@@ -98,7 +137,7 @@
     animation: crooked-door-drift var(--life, 4s) linear var(--delay, 0s) infinite;
   }
 
-  .crooked-door-light-fresh .crooked-door-outline::before {
+  .crooked-door-light-fresh .crooked-door-outline {
     animation: crooked-door-wake var(--pulse, 2.4s) ease-out;
   }
 }
@@ -128,20 +167,20 @@
   }
 }
 
+/* A woken door flares twice, then settles (opacity only). */
 @keyframes crooked-door-wake {
   0%,
   100% {
-    transform: scale(1);
     opacity: 1;
   }
 
-  30% {
-    transform: scale(var(--swell, 1.12));
-    opacity: 1;
-  }
-
+  20%,
   60% {
-    transform: scale(1);
-    opacity: 0.7;
+    opacity: 0.45;
+  }
+
+  40%,
+  80% {
+    opacity: 1;
   }
 }
