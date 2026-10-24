@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
 import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { squishyParams } from '../procedural/params.js';
 import { ARENA_STAGE } from './arena-config.js';
+import battleCss from './battle.css?raw';
 import { BATTLE_CAMERA, FIGHTER, HOMES } from './battle-config.js';
 import {
   arenaReach,
@@ -283,11 +283,10 @@ const ON_SCREEN = { tall: 0.085, share: 0.75, least: 0.03 };
 
 describe('the sheet the camera frames above', () => {
   it('turns into a centred card from the width the camera expects (battle.css)', () => {
-    const css = readFileSync(new URL('./battle.css', import.meta.url), 'utf8');
     const card = new RegExp(
       `@media \\(min-width: ${BATTLE_CAMERA.narrowSheetFrom}px\\) \\{\\s*\\.battle-sheet \\{[^}]*width: \\d+px`,
     );
-    expect(css).toMatch(card);
+    expect(battleCss).toMatch(card);
   });
 });
 

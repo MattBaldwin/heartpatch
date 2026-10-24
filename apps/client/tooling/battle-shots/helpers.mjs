@@ -1,4 +1,4 @@
-/* global process, window */
+/* global process, fetch, window */
 // What the battle capture scripts share (shoot.mjs, framing.mjs): signing a
 // player up, starting a dev battle, opening it on the manual battle clock and
 // shooting a settled frame. Dev tooling only; see shoot.mjs for how to run.
