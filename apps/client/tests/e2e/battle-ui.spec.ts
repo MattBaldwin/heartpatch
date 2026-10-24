@@ -333,6 +333,7 @@ async function expectSheetFits(
   page: Page,
   label: string,
   inset: Inset = { top: 0, bottom: 0 },
+  tipShows = false,
 ): Promise<void> {
   const { width, height } = page.viewportSize()!;
   await still(
@@ -369,6 +370,8 @@ async function expectSheetFits(
   const ids = boxes.items.map((item) => item.id);
   expect(ids, label).toContain('battle-caption');
   expect(ids, label).toContain('battle-run');
+  // The tip is measured when the bag is empty (and only then), so a missed mock can't pass.
+  expect(ids.includes('battle-capture-hint'), `${label}: the craft tip`).toBe(tipShows);
   expect(boxes.scrolls, `${label}: the sheet scrolls`).toBeLessThanOrEqual(0);
   expect(boxes.plateTop, `${label}: the pills start below the top inset`).toBeGreaterThanOrEqual(
     inset.top,
@@ -422,7 +425,17 @@ for (const { name, bench, noCharms } of SHEET_CASES) {
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     await settled(page);
-    if (noCharms) await expect(page.getByTestId('battle-capture-hint')).toBeAttached();
+    if (noCharms) {
+      await expect(page.getByTestId('battle-capture-hint')).toContainText('No Heart Charms!');
+      // A tap on the tip puts it away; a tap on the dimmed button brings it back,
+      // and neither adds a line to the sheet.
+      await page.getByTestId('battle-capture-hint').tap();
+      await expect(page.getByTestId('battle-capture-hint')).toBeHidden();
+      await page.getByTestId('battle-capture').tap();
+      await expect(page.getByTestId('battle-capture-hint')).toBeVisible();
+      await expect(page.locator('.battle-problem')).toBeEmpty();
+      await settled(page);
+    }
     const chromium = page.context().browser()?.browserType().name() === 'chromium';
     const cdp = chromium ? await page.context().newCDPSession(page) : null;
     for (const screen of SHEET_SCREENS) {
@@ -436,7 +449,7 @@ for (const { name, bench, noCharms } of SHEET_CASES) {
       );
       await page.setViewportSize({ width: screen.width, height: screen.height });
       await freshResize(page);
-      await expectSheetFits(page, screen.name, screen.inset);
+      await expectSheetFits(page, screen.name, screen.inset, noCharms);
     }
   });
 }

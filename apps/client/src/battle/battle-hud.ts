@@ -140,6 +140,8 @@ export interface BattleHud {
   /** A comic callout ("Super cozy!") under a side's pill. */
   callout: (side: 'mine' | 'theirs', text: string) => void;
   setControls: (mode: ControlMode) => void;
+  /** Brings the craft tip back (a tap on the empty Heart Charm button). */
+  remindTip: () => void;
   /** A friendly problem line under the controls (empty to clear). */
   setProblem: (text: string) => void;
   showResult: (info: ResultInfo) => void;
@@ -336,6 +338,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     tipDismissed = true;
     tip.hidden = true;
   });
+  /** A tap on the dimmed Heart Charm explains again: the tip comes back and its fade starts over. */
+  const remindTip = () => {
+    if (tip.textContent === '') return;
+    tipDismissed = false;
+    tip.hidden = false;
+    tip.style.animation = 'none';
+    void tip.offsetWidth; // a style flush, so the animation below runs from its start
+    tip.style.animation = '';
+  };
   // The tip sits `--battle-sheet-h` above the bottom edge: the sheet's own height.
   const placeTip = () => {
     hud.style.setProperty('--battle-sheet-h', `${String(sheet.offsetHeight)}px`);
@@ -713,14 +724,17 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       case 'hidden':
         break;
     }
-    // A tip already shown (or put away) stays so while the same words stand,
-    // so a redraw of the buttons doesn't bring it back.
-    if (tipText === '') tipDismissed = false;
-    else if (tip.textContent !== tipText) {
-      tipDismissed = false;
-      tip.textContent = tipText;
+    // The tip follows the pick of moves only: the waiting and picker views
+    // between taps leave it alone, so a tip put away (or faded) stays away and
+    // one on show isn't restarted. The same words standing means nothing changed.
+    if (mode.type === 'choose' || mode.type === 'hidden') {
+      if (tipText === '' || tip.textContent !== tipText) {
+        tipDismissed = false;
+        tip.textContent = tipText;
+      }
+      const hide = tipText === '' || tipDismissed;
+      if (tip.hidden !== hide) tip.hidden = hide;
     }
-    tip.hidden = tipText === '' || tipDismissed;
     placeTip();
   };
 
@@ -781,6 +795,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       }, CALLOUT_MS);
     },
     setControls,
+    remindTip,
     setProblem: (text) => {
       problem.textContent = text;
     },

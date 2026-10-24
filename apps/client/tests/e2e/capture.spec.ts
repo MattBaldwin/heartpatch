@@ -194,9 +194,11 @@ test('an empty bag keeps the Heart Charm button, dimmed, says how to craft one, 
   await expect(page.getByTestId('battle-capture-hint')).toContainText(
     'No Heart Charms! Craft one from',
   );
-  // A tap explains; nothing is spent and the turn doesn't move.
+  // A tap explains; nothing is spent and the turn doesn't move. The words are
+  // the tip over the fight (still there, shown again), not a new line in the sheet.
   await charm.tap();
-  await expect(hud.locator('.battle-problem')).toContainText('No Heart Charms!');
+  await expect(page.getByTestId('battle-capture-hint')).toBeVisible();
+  await expect(hud.locator('.battle-problem')).toBeEmpty();
   expect(await settled(page)).toMatchObject({ id: start.id, turn: 0 });
   await expect(charm).toHaveText('Use Heart Charm (0)');
 

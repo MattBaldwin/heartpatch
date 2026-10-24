@@ -56,13 +56,7 @@ import {
   plateName,
 } from './battle-view.js';
 import type { SafeRegion } from './camera-director.js';
-import {
-  BEFRIEND_NUDGE,
-  HEART_CHARM,
-  joinedLine,
-  newFriends,
-  noCharmsLine,
-} from './heart-charm.js';
+import { BEFRIEND_NUDGE, HEART_CHARM, joinedLine, newFriends } from './heart-charm.js';
 import {
   chipsAfterDrinking,
   NO_CHIPS,
@@ -532,7 +526,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           void submit({ type: 'capture' });
         } else {
           hud.setControls(controlsFor(current));
-          hud.setProblem(noCharmsLine());
+          // The tip over the fight says it again; the sheet takes no new line.
+          hud.remindTip();
         }
       });
     },
