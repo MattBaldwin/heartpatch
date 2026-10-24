@@ -3,7 +3,9 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import {
@@ -15,6 +17,7 @@ import {
 } from '@heartpatch/shared';
 import { kitMesh } from '../../explore/kit-mesh.js';
 import type { SquishyLod } from '../../procedural/config.js';
+import { overlayMaterial } from '../../map/map-scene.js';
 import { SquishyField, type SquishyHandle } from '../../procedural/squishy-field.js';
 import {
   chestBase,
@@ -24,7 +27,9 @@ import {
   halo,
   leafMote,
   mote,
+  spillPulse,
   WOKEN_COLOUR,
+  WOKEN_SPILL,
   wokenGlow,
 } from './crooked-bonus-kit.js';
 import { chestOpened, chestPoint, chestRooms } from './crooked-bonus.js';
@@ -138,6 +143,11 @@ export class CrookedBonusFx {
   readonly #chests = new Map<string, Chest>();
   /** The glow of each woken power door shown, by door id. */
   readonly #woken = new Map<string, Mesh>();
+  /** The light spilling through each woken power door shown, by door id. */
+  readonly #spills = new Map<string, { mesh: Mesh; colors: Float32Array; since: number | null }>();
+  readonly #spillMat: StandardMaterial;
+  /** When the last door woke, ms: a spill drawn just after pulses. */
+  #wokeAt = -Infinity;
   /** One glowing material a colour. */
   readonly #glowMats = new Map<string, StandardMaterial>();
   #motes: Mote[] = [];
@@ -183,6 +193,7 @@ export class CrookedBonusFx {
     m.roughness = 0.55;
     m.maxSimultaneousLights = 6;
     this.#chestMat = m;
+    this.#spillMat = overlayMaterial(scene, 'crooked-spill');
     this.#fill = new HemisphericLight('crooked-chest-fill', new Vector3(0.2, 1, -0.4), scene);
     this.#fill.diffuse = Color3.FromHexString('#fff1dc');
     this.#fill.groundColor = Color3.FromHexString('#4a3a55');
@@ -364,19 +375,30 @@ export class CrookedBonusFx {
   #showWoken(view: CrookedHouseView, rooms: ReadonlySet<string>): void {
     const want = new Map<
       string,
-      { power: string; at: FloorPoint; side: Parameters<typeof doorFacing>[0] }
+      {
+        power: string;
+        at: FloorPoint;
+        inward: FloorPoint;
+        side: Parameters<typeof doorFacing>[0];
+      }
     >();
     for (const door of CROOKED_HOUSE.doors) {
       if (door.power === undefined || !view.bonusOpen.includes(door.id)) continue;
       const main = roomOf(door.a.room)?.kind === 'main' ? door.a.room : door.b.room;
       if (!rooms.has(main)) continue;
       const end = doorEnd(door, main);
-      if (end) want.set(door.id, { power: door.power, at: end.point, side: end.side });
+      if (end)
+        want.set(door.id, { power: door.power, at: end.point, inward: end.inward, side: end.side });
     }
     for (const [id, mesh] of this.#woken) {
       if (want.has(id)) continue;
       mesh.dispose();
       this.#woken.delete(id);
+    }
+    for (const [id, spill] of this.#spills) {
+      if (want.has(id)) continue;
+      spill.mesh.dispose();
+      this.#spills.delete(id);
     }
     for (const [id, w] of want) {
       if (this.#woken.has(id)) continue;
@@ -389,7 +411,33 @@ export class CrookedBonusFx {
       mesh.position.set(w.at.x, 0, w.at.z);
       mesh.rotation.y = doorFacing(w.side);
       this.#woken.set(id, mesh);
+      this.#spills.set(id, this.#spill(w.power, w.at, w.inward));
     }
+  }
+
+  /**
+   * The light through a woken door: a camera-facing disc in the power's
+   * colour, warm in the middle and clear at the rim, in the doorway. A door
+   * that woke just now pulses once; one met later simply glows.
+   */
+  #spill(power: string, at: FloorPoint, into: FloorPoint) {
+    const hex = WOKEN_COLOUR[power] ?? '#ffffff';
+    const { radius, height, inward, alpha } = WOKEN_SPILL;
+    const mesh = CreateDisc('crooked-spill', { radius, tessellation: 28 }, this.#scene);
+    const c = Color3.FromHexString(hex);
+    const n = mesh.getTotalVertices();
+    const colors: number[] = [];
+    // The disc's first vertex is its middle; the rest are its rim.
+    for (let i = 0; i < n; i++) colors.push(c.r, c.g, c.b, i === 0 ? alpha : 0);
+    const data = new Float32Array(colors);
+    mesh.setVerticesData(VertexBuffer.ColorKind, data, true);
+    mesh.hasVertexAlpha = true;
+    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    mesh.material = this.#spillMat;
+    mesh.isPickable = false;
+    mesh.position.set(at.x + into.x * inward, height, at.z + into.z * inward);
+    const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
+    return { mesh, colors: data, since: fresh ? this.#wokeAt : null };
   }
 
   /**
@@ -609,6 +657,17 @@ export class CrookedBonusFx {
       source.mesh.thinInstanceCount = source.count;
       if (source.count > 0) source.mesh.thinInstanceBufferUpdated('matrix');
     }
+    // The woken doors' light: a pulse on wake, then still.
+    for (const spill of this.#spills.values()) {
+      if (spill.since === null) continue;
+      const ms = now - spill.since;
+      const p = spillPulse(ms, this.#options.reducedMotion);
+      spill.mesh.scaling.setAll(p.scale);
+      spill.colors[3] = p.alpha;
+      spill.mesh.updateVerticesData(VertexBuffer.ColorKind, spill.colors);
+      if (ms >= WOKEN_SPILL.seconds * 1000) spill.since = null;
+      else moving = true;
+    }
     // The chests' lids.
     for (const chest of this.#chests.values()) {
       if (chest.opening === null) continue;
@@ -624,6 +683,7 @@ export class CrookedBonusFx {
       if (h.woke && now >= h.wake) {
         const woke = h.woke;
         h.woke = null;
+        this.#wokeAt = now;
         woke();
         this.#field.play(h.handle, 'bounce', now);
         // The door wakes in its element's colours.

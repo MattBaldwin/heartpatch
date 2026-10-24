@@ -91,6 +91,36 @@ export const WOKEN_COLOUR: Readonly<Record<string, string>> = {
   light: '#ffe08a',
 }; // TUNE
 
+/**
+ * The light that spills through a woken power door (one soft disc a door,
+ * in the power's colour). It swells and settles on wake, then stays still:
+ * an idle house draws nothing.
+ */
+export const WOKEN_SPILL = {
+  /** The disc's radius, m, and how high its middle hangs. */
+  radius: 2.8,
+  height: 0.9,
+  /** Its middle's opacity when settled, and at the pulse's peak (1 = solid). */
+  alpha: 0.75,
+  peakAlpha: 1,
+  /** How far into the room it sits from the wall, m. */
+  inward: 1.1,
+  /** The wake pulse: this many beats over this long, s, growing by this much. */
+  beats: 2,
+  seconds: 2.4,
+  swell: 0.35,
+} as const; // TUNE: all of them
+
+/** The spill's size and brightness `ms` after the door woke: a gentle pulse, then still. */
+export function spillPulse(ms: number, reduced: boolean): { scale: number; alpha: number } {
+  const { seconds, beats, swell, alpha, peakAlpha } = WOKEN_SPILL;
+  const t = ms / 1000 / seconds;
+  if (reduced || t >= 1 || t < 0) return { scale: 1, alpha };
+  // Beats that die away: a sine hump per beat, fading over the whole pulse.
+  const wave = Math.abs(Math.sin(t * beats * Math.PI)) * (1 - t);
+  return { scale: 1 + swell * wave, alpha: alpha + (peakAlpha - alpha) * wave };
+}
+
 /** A sparkle mote for the bursts (a glowing material). */
 export const mote = (): Part => merged([ball(0.24, [0, 0, 0], '#ffffff')]);
 

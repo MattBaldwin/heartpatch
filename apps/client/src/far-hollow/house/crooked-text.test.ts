@@ -44,7 +44,9 @@ describe('the Crooked House’s words (#306 6c)', () => {
       state: { kind: 'sleeping', power: 'fire', sleeper: 'the cold fireplace' },
       at,
     });
-    expect(sleeping.bubble).toBe("The cold fireplace won't budge. A Fire friend could help 🔥");
+    expect(sleeping.bubble).toBe(
+      "The cold fireplace won't budge. A Fire friend on your team could help 🔥",
+    );
     expect(keyName('attic-key')).toBe('Attic Key');
     expect(elementWords('water')).toEqual({ name: 'Water', icon: '💧' });
   });

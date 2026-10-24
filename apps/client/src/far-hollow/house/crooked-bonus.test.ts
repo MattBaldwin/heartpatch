@@ -5,6 +5,7 @@ import {
   type JobsView,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { spillPulse, WOKEN_COLOUR, WOKEN_SPILL } from './crooked-bonus-kit.js';
 import {
   chestPoint,
   chestRooms,
@@ -172,6 +173,24 @@ describe('who can help', () => {
   it('only for a power door', () => {
     const rows = helpersFor(door('north-door'), jobs([squishy(1, { element: 'fire' })]));
     expect(rows.every((r) => !r.helps)).toBe(true);
+  });
+});
+
+describe('woken door light', () => {
+  it('pulses on wake, then settles still', () => {
+    const mid = spillPulse(300, false);
+    expect(mid.scale).toBeGreaterThan(1);
+    expect(mid.alpha).toBeGreaterThan(WOKEN_SPILL.alpha);
+    const done = spillPulse(WOKEN_SPILL.seconds * 1000, false);
+    expect(done).toEqual({ scale: 1, alpha: WOKEN_SPILL.alpha });
+  });
+
+  it('stays still under reduced motion', () => {
+    expect(spillPulse(300, true)).toEqual({ scale: 1, alpha: WOKEN_SPILL.alpha });
+  });
+
+  it('has a colour for every power', () => {
+    for (const p of ['fire', 'leaf', 'water', 'light']) expect(WOKEN_COLOUR[p]).toBeDefined();
   });
 });
 
