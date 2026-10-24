@@ -113,8 +113,8 @@ export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries
  * the wall, opacity settled], all in metres.
  */
 export const WOKEN_SPILL = {
-  opening: [1.6, 1.2, 0.5, 1],
-  pool: [1.3, 3.0, 0.6, 1],
+  opening: [1.5, 1.2, 0.3, 1],
+  pool: [1.3, 1.8, 0.3, 1],
   /** The wake pulse: this many beats over this long, s, growing by this much. */
   beats: 2,
   seconds: 2.4,
