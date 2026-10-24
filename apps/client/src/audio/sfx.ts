@@ -116,7 +116,7 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       dur: 0.035,
       freq: 1800 * pitch,
       to: 1250 * pitch,
-      gain: gain * 0.32,
+      gain: gain * 0.55,
       attack: 0.001,
     });
     tone(kit.ctx, out, {
@@ -125,14 +125,14 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       dur: 0.06,
       freq: 900 * pitch,
       to: 760 * pitch,
-      gain: gain * 0.22,
+      gain: gain * 0.38,
       attack: 0.002,
       lowpass: 2400,
     });
     noise(kit.ctx, out, kit.noise, {
       at,
       dur: 0.015,
-      gain: gain * 0.06,
+      gain: gain * 0.1,
       filter: 'bandpass',
       freq: 3600,
       q: 2,
