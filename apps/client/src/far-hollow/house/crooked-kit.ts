@@ -283,6 +283,8 @@ export function lampStand(joy: number, lit: boolean): Part[] {
 
 /** A knocked-over thing lies on its side, turned this far round, unless that blocks a doorway (`toppledYaw`). */
 export const TOPPLED_YAW = 0.6;
+/** A crooked thing that's straightened leans this far west (radians round its foot; `tiltOf` turns some east). */
+export const TILT = 0.32;
 
 type PropBuilder = (joy: number) => Part[];
 
@@ -521,12 +523,13 @@ export function prop(
   joy: number,
   at: readonly [number, number],
   yaw: number = TOPPLED_YAW,
+  tilt: number = TILT,
 ): Part {
   // A dusty or dark thing is greyer until it's put right, even in colour.
   const dull = !fixed && (kind === 'rub' || kind === 'tap-rhythm' || kind === 'relight');
   const one = merged((PROPS[name] ?? fallbackProp)(dull ? joy * 0.35 : joy));
   one.position.set(at[0], 0, at[1]);
-  if (!fixed && kind === 'straighten') one.rotation.set(0, 0, 0.32);
+  if (!fixed && kind === 'straighten') one.rotation.set(0, 0, tilt);
   if (!fixed && kind === 'lift') {
     // Knocked over onto its side, lying on the floor.
     one.rotation.set(0, yaw, Math.PI / 2);

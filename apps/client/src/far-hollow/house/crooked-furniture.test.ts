@@ -11,12 +11,13 @@ import { chestPoint, CROOKED_CHEST } from './crooked-bonus.js';
 import {
   blocked,
   CROOKED_BODY,
-  FALLBACK_FOOTPRINT,
   houseStep,
   PROP_FOOTPRINTS,
   roomFootprints,
   settle,
   tapWalk,
+  LEANS_EAST,
+  tiltOf,
   TOPPLE_TURNS,
   toppledYaw,
   walkPath,
@@ -79,37 +80,76 @@ describe('the Crooked House’s furniture footprints (#651)', () => {
     for (const name of propNames()) expect(name in PROP_FOOTPRINTS, name).toBe(true);
   });
 
-  it('covers every prop as it is drawn, standing or knocked over', () => {
-    // Each thing's own drawn mesh (`prop`), room-local, against its footprint in the room.
+  /** Each thing's drawn mesh (`prop`), room-local, put right or crooked, as floor points and heights. */
+  function drawn(r: CrookedRoom, t: CrookedRoom['things'][number], fixed: boolean) {
+    const part = prop(t.prop, t.kind, fixed, 1, t.at, toppledYaw(t), tiltOf(t));
+    part.bakeCurrentTransformIntoVertices();
+    const pos = part.data.positions ?? [];
+    const out: { x: number; y: number; z: number }[] = [];
+    for (let i = 0; i < pos.length; i += 3) {
+      out.push({ x: r.box.x + (pos[i] ?? 0), y: pos[i + 1] ?? 0, z: r.box.z + (pos[i + 2] ?? 0) });
+    }
+    return out;
+  }
+
+  it('covers every solid prop as it is drawn: standing, knocked over or tilted', () => {
     for (const r of CROOKED_HOUSE.rooms) {
       for (const t of r.things) {
-        const e = t.prop in PROP_FOOTPRINTS ? PROP_FOOTPRINTS[t.prop] : FALLBACK_FOOTPRINT;
-        if (!e) continue;
-        const states = t.kind === 'lift' ? [false, true] : [true];
-        for (const fixed of states) {
+        for (const fixed of [true, false]) {
           const v = viewOf(() => (fixed ? [t.id] : []), true);
           const f = roomFootprints(r, v).find((x) => x.id === t.id);
-          expect(f, t.id).toBeDefined();
           if (!f) continue;
-          const part = prop(t.prop, t.kind, fixed || t.kind !== 'lift', 1, t.at, toppledYaw(t));
-          part.bakeCurrentTransformIntoVertices();
-          const pos = part.data.positions ?? [];
-          for (let i = 0; i < pos.length; i += 3) {
-            const [lx, lz] = local(f, r.box.x + (pos[i] ?? 0), r.box.z + (pos[i + 2] ?? 0));
+          const label = `${t.id} ${fixed ? 'put right' : 'crooked'}`;
+          for (const p of drawn(r, t, fixed)) {
+            // A tilted thing's lean counts up to the Keeper's height.
+            if (!fixed && t.kind === 'straighten' && p.y > CROOKED_BODY.tall) continue;
+            const [lx, lz] = local(f, p.x, p.z);
             const slack = 0.02;
             const inside =
               lx >= f.x0 - slack && lx <= f.x1 + slack && lz >= f.z0 - slack && lz <= f.z1 + slack;
-            expect(inside, `${t.id} ${fixed ? 'standing' : 'toppled'}`).toBe(true);
+            expect(inside, label).toBe(true);
           }
         }
       }
     }
   });
 
-  it('turns only things that are knocked over, each named once in the house', () => {
+  it('lets the Keeper walk only over things low enough to step over, on the wall, or overhead', () => {
+    // The wall's things, the ceiling's mobile and the stairs, each for its own reason.
+    const ABOVE = new Set(['picture', 'mirror', 'mobile', 'banister']);
+    for (const r of CROOKED_HOUSE.rooms) {
+      for (const t of r.things) {
+        for (const fixed of [true, false]) {
+          const v = viewOf(() => (fixed ? [t.id] : []), true);
+          if (roomFootprints(r, v).some((x) => x.id === t.id)) continue;
+          const label = `${t.id} ${fixed ? 'put right' : 'crooked'}`;
+          if (ABOVE.has(t.prop)) continue;
+          const top = Math.max(...drawn(r, t, fixed).map((p) => p.y));
+          expect(top, label).toBeLessThanOrEqual(CROOKED_BODY.stepOver);
+        }
+      }
+    }
+    // The wall's things hang where the walls keep the Keeper off them; the mobile above its head.
+    for (const r of CROOKED_HOUSE.rooms) {
+      for (const t of r.things.filter((x) => x.prop === 'picture' || x.prop === 'mirror')) {
+        const fromWall = Math.min(r.box.w / 2 - Math.abs(t.at[0]), r.box.d / 2 - Math.abs(t.at[1]));
+        expect(fromWall, t.id).toBeLessThan(CROOKED_WALK.margin);
+      }
+      for (const t of r.things.filter((x) => x.prop === 'mobile')) {
+        const low = Math.min(...drawn(r, t, true).map((p) => p.y));
+        expect(low, t.id).toBeGreaterThan(CROOKED_BODY.tall);
+      }
+    }
+  });
+
+  it('turns and leans only things that fall or tilt, each named once in the house', () => {
     const lifts = CROOKED_HOUSE.rooms.flatMap((r) => r.things.filter((t) => t.kind === 'lift'));
     const ids = CROOKED_HOUSE.rooms.flatMap((r) => r.things.map((t) => t.id));
     expect(new Set(ids).size).toBe(ids.length);
+    for (const id of LEANS_EAST) {
+      const t = CROOKED_HOUSE.rooms.flatMap((r) => r.things).find((x) => x.id === id);
+      expect(t?.kind, id).toBe('straighten');
+    }
     for (const id of Object.keys(TOPPLE_TURNS)) {
       expect(
         lifts.some((t) => t.id === id),
@@ -118,8 +158,8 @@ describe('the Crooked House’s furniture footprints (#651)', () => {
     }
   });
 
-  it('leaves rugs, flat and small things walkable, and blocks the kitchen counter and the table', () => {
-    for (const name of ['runner', 'watering-can', 'soup-bowl', 'pans', 'yarn', 'banister']) {
+  it('leaves rugs and small things walkable, and blocks the kitchen counter and the table', () => {
+    for (const name of ['runner', 'soup-bowl', 'yarn', 'banister']) {
       expect(PROP_FOOTPRINTS[name]).toBeNull();
     }
     const kitchen = room('kitchen');

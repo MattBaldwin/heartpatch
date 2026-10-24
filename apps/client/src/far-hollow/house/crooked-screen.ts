@@ -60,6 +60,7 @@ import {
   type CrookedShot,
   type CrookedTarget,
   type FloorPoint,
+  walkStep,
 } from './crooked-plan.js';
 import {
   CrookedScene,
@@ -1399,6 +1400,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function apply(fresh: FarHollowView): void {
     view = fresh;
     if (fresh.house) clock = serverClock(fresh.house.serverTime, Date.now());
+    // A thing put right stands up where it lay: out of it, if I'm standing there.
+    const room = here();
+    if (room) keeperAt = standIn(room, keeperAt);
   }
 
   /** Shows the room I'm in (and its floor), and fits the camera to it. */
@@ -1954,7 +1958,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       const room = here();
       if (!h || !room || !isOpen) return;
       walk = null;
-      keeperAt = settle(room, h, houseStep(room, h, { x, z }, { x, z }).at);
+      keeperAt = settle(room, h, walkStep(room, h, { x, z }).at);
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();

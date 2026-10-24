@@ -2,7 +2,7 @@ import type { CrookedHouseView, CrookedRoom, CrookedThing } from '@heartpatch/sh
 import { CHEST_SIZE } from './crooked-bonus-kit.js';
 import { chestPoint } from './crooked-bonus.js';
 import { atticChestPoint, CROOKED_ATTIC } from './crooked-attic.js';
-import { TOPPLED_YAW } from './crooked-kit.js';
+import { TILT, TOPPLED_YAW } from './crooked-kit.js';
 import {
   CROOKED_WALK,
   crookedThings,
@@ -29,6 +29,10 @@ export const CROOKED_BODY = {
   radius: 0.24, // TUNE
   /** Kept this much further off furniture than its drawn edge. */
   pad: 0.05, // TUNE
+  /** The Keeper's height in the house (1.6 m at `HOUSE_KEEPER.scale` 0.72): a lean below it is in the way. */
+  tall: 1.15, // TUNE
+  /** Things this low a kid steps over (the watering can, the pans), metres. */
+  stepOver: 0.6, // TUNE
   /** A tap-walk's grid, metres a cell. */
   cell: 0.1, // TUNE
 } as const;
@@ -56,7 +60,7 @@ export const PROP_FOOTPRINTS: Readonly<Record<string, PropExtent | null>> = {
   clock: [-0.43, -0.33, 0.43, 0.31, 2.35],
   'flower-pots': [-0.61, -0.25, 0.57, 0.31, 0.87],
   'bird-cage': [-0.32, -0.32, 0.32, 0.32, 1.85],
-  'watering-can': null, // small: stepped over
+  'watering-can': [-0.29, -0.23, 0.54, 0.23, 0.57], // stepped over standing (`STEPPED_OVER`)
   lamp: [-0.28, -0.28, 0.28, 0.28, 1.65],
   runner: null, // a rug
   banister: null, // the stairs up
@@ -67,7 +71,7 @@ export const PROP_FOOTPRINTS: Readonly<Record<string, PropExtent | null>> = {
   'reading-lamps': [-0.6, -0.31, 0.6, 0.31, 1.3],
   stove: [-0.7, -0.41, 0.7, 0.41, 2.4],
   tap: [-0.7, -0.31, 0.7, 0.31, 1.4],
-  pans: null, // flat: stepped over
+  pans: [-0.34, -0.3, 0.76, 0.3, 0.31], // stepped over standing (`STEPPED_OVER`)
   'cookie-jar': [-0.65, -0.36, 0.65, 0.36, 1.65],
   mop: [-0.21, -0.21, 0.21, 0.21, 1.6],
   bucket: [-0.27, -0.28, 0.27, 0.28, 0.82],
@@ -86,6 +90,13 @@ export const PROP_FOOTPRINTS: Readonly<Record<string, PropExtent | null>> = {
   'pin-cushion': [-0.45, -0.26, 0.45, 0.26, 1.07],
   'sewing-basket': [-0.34, -0.33, 0.34, 0.33, 0.72],
 };
+
+/**
+ * Props a kid steps over while they stand (lower than `stepOver`), but that
+ * are solid knocked over: on its side the can's spout and the pans' handle
+ * stand up past the Keeper's waist.
+ */
+export const STEPPED_OVER: ReadonlySet<string> = new Set(['watering-can', 'pans']);
 
 /** The kit's soft crate for a prop it doesn't know (`fallbackProp`). */
 export const FALLBACK_FOOTPRINT: PropExtent = [-0.36, -0.31, 0.36, 0.31, 0.61];
@@ -145,7 +156,24 @@ export const TOPPLE_TURNS: Readonly<Record<string, number>> = {
 export const toppledYaw = (thing: Pick<CrookedThing, 'id'>): number =>
   TOPPLE_TURNS[thing.id] ?? TOPPLED_YAW;
 
-/** Built once per room and per set of fixed things (a fix stands a toppled thing up). */
+/** Crooked things that lean east, not west (`TILT`), so the Blue Bedroom's bed leaves the closet door clear. */
+export const LEANS_EAST: ReadonlySet<string> = new Set(['bed']); // TUNE
+
+/** How far a crooked thing leans round its foot: west (+), or east (−) for `LEANS_EAST`. */
+export const tiltOf = (thing: Pick<CrookedThing, 'id'>): number =>
+  LEANS_EAST.has(thing.id) ? -TILT : TILT;
+
+/** A tilted thing leans from its foot: its footprint grows that way by the lean up to the Keeper's height. */
+function tilted(e: PropExtent, tilt: number): PropExtent {
+  const lean = Math.sin(Math.abs(tilt)) * Math.min(e[4], CROOKED_BODY.tall);
+  return tilt > 0 ? [e[0] - lean, e[1], e[2], e[3], e[4]] : [e[0], e[1], e[2] + lean, e[3], e[4]];
+}
+
+/**
+ * Built once per room and per set of fixed things (a fix stands a toppled
+ * thing up). Keyed on the `fixed` array itself: the screen swaps in a fresh
+ * view on every reply, so an edit in place would leave stale footprints.
+ */
 const CACHE = new Map<string, { fixed: readonly string[] | undefined; list: Footprint[] }>();
 
 /** The solid things in a room as it stands now: its props, its lamp, and its chest. */
@@ -162,9 +190,13 @@ export function roomFootprints(
     const e = extentOf(thing);
     if (!e) continue;
     const at = thingPoint(room, thing);
-    // A tilted thing (straighten) keeps its standing footprint; its lean is above the Keeper's knees.
-    if (thing.kind === 'lift' && crooked.has(thing.id)) {
+    const down = crooked.has(thing.id);
+    if (thing.kind === 'lift' && down) {
       list.push(box(thing.id, at, toppled(e), toppledYaw(thing)));
+    } else if (STEPPED_OVER.has(thing.prop)) {
+      continue;
+    } else if (thing.kind === 'straighten' && down) {
+      list.push(box(thing.id, at, tilted(e, tiltOf(thing))));
     } else list.push(box(thing.id, at, e));
   }
   // The room's own lamp, unless a crooked thing is its lamp (`roomParts`).
