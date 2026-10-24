@@ -1,7 +1,7 @@
 import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '@heartpatch/shared';
 import { CARE_TEXT, evolvingBar } from '../care/care-view.js';
 import { evolvingMeterEl } from '../care/evolving-meter.js';
-import { buttonClass } from '../ui/button/button.js';
+import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
@@ -298,11 +298,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   });
   const problem = el('p', { class: 'auth-error battle-problem', role: 'alert' });
   const controls = el('div', { class: 'battle-controls', 'data-testid': 'battle-controls' });
-  const leave = el(
-    'button',
-    { type: 'button', class: 'battle-leave', 'aria-label': 'Back to patch' },
-    '×',
-  );
+  const leave = hpClose('Back to patch');
   leave.addEventListener('click', options.onLeave);
 
   const result = el('section', {

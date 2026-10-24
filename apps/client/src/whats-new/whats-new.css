@@ -66,18 +66,6 @@
   inset: -6px -4px;
 }
 
-.whats-new-x {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: #fbeaf2;
-  font-size: 24px;
-  color: #7a2d55;
-  cursor: pointer;
-}
-
 .whats-new-list {
   flex: 1;
   min-height: 0;

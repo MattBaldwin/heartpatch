@@ -22,6 +22,7 @@ import { recipeBookApi } from '../recipes/recipe-book-api.js';
 import { ApiRequestError } from '../net/api.js';
 import type { TileActions } from '../map/map-screen.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   bagCrafts,
@@ -331,11 +332,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   });
   chip.hidden = true;
 
-  const close = el(
-    'button',
-    { type: 'button', class: 'tile-panel-close', 'aria-label': TEXT.close },
-    '×',
-  );
+  const close = hpClose(TEXT.close);
   const note = el('p', { class: 'bag-note', role: 'status', 'data-testid': 'bag-note' });
   const itemsBox = el('ul', { class: 'bag-items', 'data-testid': 'bag-items' });
   // What a tapped item is for (#241): one card under the grid; tap again to close.
@@ -380,16 +377,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     stop: (batchId) => stopBatch(batchId),
     isOpen: (key) => openPages.has(key),
   });
-  const factoryClose = el(
-    'button',
-    {
-      type: 'button',
-      class: 'tile-panel-close',
-      'aria-label': TEXT.close,
-      'data-testid': 'factory-close',
-    },
-    '×',
-  );
+  const factoryClose = hpClose(TEXT.close, 'factory-close');
   const factorySheet = el(
     'section',
     {

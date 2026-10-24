@@ -1,3 +1,4 @@
+import { buttonClass } from '../../ui/button/button.js';
 import { el } from '../../ui/dom.js';
 import { createEngine, renderLoop, type Engine } from '../audio-engine.js';
 import { CUE_NAMES, type CueName } from '../cues.js';
@@ -37,7 +38,7 @@ function start(): Engine {
 const button = (label: string, onTap: () => void, testid: string) => {
   const b = el(
     'button',
-    { type: 'button', class: 'auth-button sound-button', 'data-testid': testid },
+    { type: 'button', class: buttonClass({ variant: 'primary' }), 'data-testid': testid },
     label,
   );
   b.addEventListener('click', onTap);

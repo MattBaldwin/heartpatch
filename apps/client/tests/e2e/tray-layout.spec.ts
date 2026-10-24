@@ -15,7 +15,7 @@ const TRAY_CONTROLS = [
   '.tray-section > button',
   '.tray-section > .battle-entry-box > button',
   '.tray-jobs .jobs-entry > button',
-  '.hp-close',
+  '[data-testid^="tray-"] .hp-close',
   '.tray-top-left > button',
 ].join(', ');
 
@@ -66,7 +66,7 @@ async function checkTileChip(page: Page): Promise<void> {
   await expect(panel).toBeVisible();
   // The × is an icon, not a label: where its glyph box sits depends only on
   // the font's metrics (7 px in the CI container's fonts), not on the layout.
-  await expectRoomyLabels(page, '.tile-panel button:not(.tile-panel-close)');
+  await expectRoomyLabels(page, '.tile-panel button:not(.hp-close)');
   await panel.getByRole('button', { name: 'Close' }).tap();
 }
 
