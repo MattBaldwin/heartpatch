@@ -3,9 +3,9 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import {
@@ -120,12 +120,22 @@ interface Chest {
   opening: number | null;
 }
 
+/** A spill disc's opacity from its middle out: [fraction of the radius, opacity], clear at the rim. */
+const SPILL_PROFILE: readonly (readonly [number, number])[] = [
+  [0.3, 1],
+  [0.55, 0.85],
+  [0.8, 0.45],
+  [1, 0],
+]; // TUNE
+const SPILL_CENTRE = 1;
+const SPILL_SEGMENTS = 24;
+
 /** One soft disc of a woken door's light, its middle's colours kept to pulse in place. */
 interface SpillPart {
   readonly mesh: Mesh;
   readonly colors: Float32Array;
-  /** The middle's opacity when settled. */
-  readonly alpha: number;
+  /** Each vertex's opacity when settled. */
+  readonly base: Float32Array;
   readonly scale: readonly [number, number, number];
 }
 
@@ -209,6 +219,7 @@ export class CrookedBonusFx {
     m.maxSimultaneousLights = 6;
     this.#chestMat = m;
     this.#spillMat = overlayMaterial(scene, 'crooked-spill');
+    this.#spillMat.backFaceCulling = false;
     this.#fill = new HemisphericLight('crooked-chest-fill', new Vector3(0.2, 1, -0.4), scene);
     this.#fill.diffuse = Color3.FromHexString('#fff1dc');
     this.#fill.groundColor = Color3.FromHexString('#4a3a55');
@@ -441,7 +452,7 @@ export class CrookedBonusFx {
     const S = WOKEN_SPILL;
     const doorway = this.#spillDisc(hex, S.doorRadius, S.doorAlpha, [1, 1, 1]);
     doorway.mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    doorway.mesh.position.set(at.x, S.doorHeight, at.z);
+    doorway.mesh.position.set(at.x + into.x * 0.7, S.doorHeight, at.z + into.z * 0.7);
     // The pool lies flat, longer into the room (its local y runs along `into` once turned).
     const floor = this.#spillDisc(hex, S.floorRadius, S.floorAlpha, [
       1,
@@ -449,30 +460,67 @@ export class CrookedBonusFx {
       1,
     ]);
     floor.mesh.rotation.set(Math.PI / 2, Math.atan2(into.x, into.z), 0);
-    floor.mesh.position.set(at.x + into.x * S.floorInward, 0.04, at.z + into.z * S.floorInward);
+    floor.mesh.position.set(at.x + into.x * S.floorInward, 0.2, at.z + into.z * S.floorInward);
     const fresh = performance.now() - this.#wokeAt < 3000 && !this.#options.reducedMotion;
     return { parts: [doorway, floor], since: fresh ? this.#wokeAt : null };
   }
 
-  /** One soft disc: its middle's opacity `alpha`, clear at the rim (vertex alpha, the overlay material). */
+  /**
+   * One soft disc: rings from a bright middle to a clear rim, opacity
+   * following `SPILL_PROFILE` (a curve, so the glow holds up before it fades).
+   * `alpha` scales the middle; every vertex's settled opacity is kept to pulse in place.
+   */
   #spillDisc(
     hex: string,
     radius: number,
     alpha: number,
     scale: readonly [number, number, number],
   ): SpillPart {
-    const mesh = CreateDisc('crooked-spill', { radius, tessellation: 28 }, this.#scene);
     const c = Color3.FromHexString(hex);
-    const n = mesh.getTotalVertices();
-    const colors = new Float32Array(n * 4);
-    // The disc's first vertex is its middle; the rest are its rim.
-    for (let i = 0; i < n; i++) colors.set([c.r, c.g, c.b, i === 0 ? alpha : 0], i * 4);
-    mesh.setVerticesData(VertexBuffer.ColorKind, colors, true);
+    const rings = SPILL_PROFILE.length;
+    const count = 1 + rings * SPILL_SEGMENTS;
+    const positions = new Float32Array(count * 3);
+    const normals = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 4);
+    const base = new Float32Array(count);
+    const indices: number[] = [];
+    for (let i = 0; i < count; i++) {
+      normals[i * 3 + 2] = -1;
+      colors.set([c.r, c.g, c.b, 0], i * 4);
+    }
+    base[0] = alpha * SPILL_CENTRE;
+    colors[3] = base[0];
+    for (let r = 0; r < rings; r++) {
+      const [at, level] = SPILL_PROFILE[r] ?? [1, 0];
+      for (let k = 0; k < SPILL_SEGMENTS; k++) {
+        const v = 1 + r * SPILL_SEGMENTS + k;
+        const turn = (k / SPILL_SEGMENTS) * Math.PI * 2;
+        positions[v * 3] = Math.cos(turn) * radius * at;
+        positions[v * 3 + 1] = Math.sin(turn) * radius * at;
+        base[v] = alpha * level;
+        colors[v * 4 + 3] = base[v] ?? 0;
+        const next = (k + 1) % SPILL_SEGMENTS;
+        const here = 1 + r * SPILL_SEGMENTS;
+        // The first ring fans from the middle; each further ring is a band of quads.
+        if (r === 0) indices.push(0, here + k, here + next);
+        else {
+          const inner = 1 + (r - 1) * SPILL_SEGMENTS;
+          indices.push(inner + k, here + k, here + next, inner + k, here + next, inner + next);
+        }
+      }
+    }
+    const mesh = new Mesh('crooked-spill', this.#scene);
+    const data = new VertexData();
+    data.positions = positions;
+    data.normals = normals;
+    data.colors = colors;
+    data.indices = indices;
+    data.applyToMesh(mesh, true);
     mesh.hasVertexAlpha = true;
     mesh.material = this.#spillMat;
     mesh.isPickable = false;
     mesh.scaling.set(...scale);
-    return { mesh, colors, alpha, scale };
+    return { mesh, colors, base, scale };
   }
 
   /**
@@ -699,7 +747,10 @@ export class CrookedBonusFx {
       const p = spillPulse(ms, this.#options.reducedMotion);
       for (const part of spill.parts) {
         part.mesh.scaling.set(part.scale[0] * p.scale, part.scale[1] * p.scale, part.scale[2]);
-        part.colors[3] = part.alpha + (1 - part.alpha) * p.wave;
+        for (let i = 0; i < part.base.length; i++) {
+          const settled = part.base[i] ?? 0;
+          part.colors[i * 4 + 3] = settled + (1 - settled) * p.wave;
+        }
         part.mesh.updateVerticesData(VertexBuffer.ColorKind, part.colors);
       }
       if (ms >= WOKEN_SPILL.seconds * 1000) spill.since = null;

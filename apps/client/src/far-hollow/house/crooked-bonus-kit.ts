@@ -100,14 +100,14 @@ export const WOKEN_COLOUR: Readonly<Record<string, string>> = Object.fromEntries
  */
 export const WOKEN_SPILL = {
   /** The doorway's glow: radius and height of its middle, m, and its opacity settled. */
-  doorRadius: 1.5,
-  doorHeight: 1.0,
-  doorAlpha: 0.85,
+  doorRadius: 2.8,
+  doorHeight: 1.2,
+  doorAlpha: 1,
   /** The floor's pool: radius across, how far it reaches into the room, its middle's distance from the wall (m), and its opacity settled. */
-  floorRadius: 1.4,
-  floorReach: 1.7,
-  floorInward: 1.6,
-  floorAlpha: 0.6,
+  floorRadius: 2.6,
+  floorReach: 3.6,
+  floorInward: 0.9,
+  floorAlpha: 1,
   /** The wake pulse: this many beats over this long, s, growing by this much. */
   beats: 2,
   seconds: 2.4,
