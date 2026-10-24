@@ -1779,3 +1779,31 @@ _Owner decisions and screen approvals from 2026-10-23, and the `## Decisions` se
 **Coordinator calls**
 - **Controls B2 splits into B2a and B2b.** B2a is every leftover control except `.auth-button*`. B2b is `.auth-button*`, which has about 60 call sites.
 - **The house ✕s are in the player's home.** `house-grow-close` is in `apps/client/src/house/`, not the Crooked House, so B2a takes them. They don't wait for 6e.
+
+## 2026-10-24 — Owner decisions and coordinator calls (supervisor 14)
+
+_Owner decisions and screen approvals from 2026-10-24, with coordinator calls inside them. "Coordinator call" marks a call the supervisor made inside an owner-approved design._
+
+**Merged with owner-approved screens**
+- **Crooked House 6e (#641).** Owner follow-ups: a woken power door gets a visible glow or light spill, and the power-door bubble reads "A <Element> friend on your team could help <icon>". Both are issue #306 lane work.
+- **Controls B2a (#646).** Every ✕ is the shared 44pt round close.
+
+**Coordinator calls**
+- **E2E groups rebalanced (#647), and we kept 6 groups, not 9.** 18 e2e jobs per run would likely hit GitHub's concurrent-job limit with 2–3 PRs in CI.
+
+**Process (owner-approved 2026-10-24)**
+- **Batch pushes.** A lane keeps capture-tool and screenshot-only edits local and pushes once, because each push cancels the running CI (11 of 16 runs on #641 were cancelled this way).
+- **Supervisor sweeps every ~20 min via `send_later`.** The auto-mode classifier blocks them unless the owner approves in the session.
+- **Finish existing lanes first** (owner: "finish existing lanes first") before starting new queued work.
+
+**Wild Isle (#621) is Phase 2**
+- **Where things are.** The plan is #621 comment 6378778868, revision 1 is comment 6384239738, and the owner's answers are comment 6384215574.
+- **Water and wells.** Lakes are real water: a new `wild-lake` terrain, and Cozy's `lake` is unchanged. The Water Well becomes a river-side `river-well`.
+- **Snorkel moves to coast tide pools** (the planner's call, relayed to the owner).
+- **Ferry dock** is in Wave 1, as a lake crossing.
+- **Bridges are shared and roads are owner-only.**
+- **Today's Greenhouse is weatherproof.**
+- **Fish pie** is 2 Flour + 1 Fish + 1 Salt → 3 (`// TUNE:`).
+- **Island radius is 18.**
+- **Market and Inn** are built simply, in Wave 2. There is no weather knob in Wave 1.
+- **Build order.** The build starts 2026-10-25 00:00 UTC (8 PM ET Oct 24): W1-1 contracts alone, then W1-2 / W1-5a / W1-4. Migrations are serial: 0059 → 0060 → 0061.
