@@ -564,14 +564,15 @@ async function runDevice(browser, device, statePath, fx) {
   await until(page, () => window.__heartpatch?.stranded?.()?.card);
   await shot(page, device, 'stranded', 'as-it-opens', strandedView);
   if (!ONLY || ONLY.includes('stranded')) {
+    const before = JSON.stringify(await hook(page, 'camera'));
     await tapText('stranded-show');
-    await page.waitForTimeout(1500);
-    let prev = '';
-    for (let i = 0; i < 60; i++) {
-      const cur = JSON.stringify(await hook(page, 'camera'));
-      if (cur === prev) break;
-      prev = cur;
+    // The glide may start late on slow software rendering: wait for it to move, then to stop.
+    let prev = before;
+    for (let i = 0; i < 90; i++) {
       await page.waitForTimeout(700);
+      const cur = JSON.stringify(await hook(page, 'camera'));
+      if (cur === prev && cur !== before) break;
+      prev = cur;
     }
     await shot(
       page,
