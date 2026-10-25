@@ -83,11 +83,11 @@ function caption(d, door, state, r) {
     state === 'asleep'
       ? `${door.room}, the ${door.thing} door still asleep, the Keeper at it.`
       : state === 'woke'
-        ? `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend.`
+        ? `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend, the opening burst held ${((r.burstHeldMs ?? 0) / 1000).toFixed(1)} s into its 2.4 s run so it can be seen (each side’s glow is swollen and brighter, and a puff of larger sparkles is rising beside it).`
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
-    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} glowing outline traces that same doorway, its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall; ${up === 0 ? 'no' : 'a few'} ${door.sparkle[1]} are drifting up from it (they loop, so how many show at once varies); the rest of the room stays dark.`
+    ? ` ${door.colour === 'orange' ? 'An' : 'A'} ${door.colour} soft glow stands on each side of that same doorway (centred on its foot ${Math.round((light.foot.x / r.viewport.w) * 100)}% across and ${Math.round((light.foot.y / r.viewport.h) * 100)}% down the screen, ${Math.round(light.height)} px tall), and ${up === 0 ? 'no' : state === 'woke' ? 'plenty of' : 'a few'} ${door.sparkle[1]} are drifting up beside it (they loop, so how many show at once varies); the rest of the room stays dark apart from the Keeper’s lantern.`
     : '';
   const shut =
     state === 'asleep'
@@ -95,29 +95,21 @@ function caption(d, door, state, r) {
       : ' The door has swung open.';
   const puddle =
     state !== 'asleep' && door.power === 'water'
-      ? ' At the foot of the door, the doused flames leave a pale blue shining puddle (the game’s own art for a woken Water door).'
+      ? ' At the foot of the door, the doused flames leave a pale blue puddle beside the foot of the door (the game’s own art for a woken Water door).'
       : '';
   const hint =
     state !== 'asleep' && bubble.startsWith('Shh')
       ? ' The bubble is the game’s hint about the dark room through the newly opened door.'
       : '';
-  const blossoms =
-    state !== 'asleep' && door.power === 'leaf'
-      ? ' Inside the open doorway, the vine’s blossoms glow faintly, pale round discs through the dark (the game’s own art for a woken Leaf door).'
-      : '';
   const lantern =
     state !== 'asleep' && door.power === 'light'
       ? ' Near the top of the open doorway, the closet’s little lantern glows faintly, a pale crescent through the dark (the game’s own art for a woken Light door).'
       : '';
-  const ghosts = r.ghosts?.length ?? 0;
-  const ghost = ghosts
-    ? ` ${ghosts === 1 ? 'A wandering echo shows' : 'Wandering echoes show'} as a pale spotted ghost near the Keeper.`
-    : '';
   const keeper = away ? ` The Keeper stands ${away} m from the door.` : '';
   const echoes = r.echoes?.length
     ? ` ${r.echoes.length === 1 ? 'A wandering echo’s eyes show' : 'Wandering echoes’ eyes show'} (they wander; their clock is pinned to the same moment on both phones).`
     : '';
-  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${blossoms}${lantern}${keeper}${ghost}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
+  return `${name}. ${lead} Same fixed camera view of the door as the ${state === 'asleep' ? 'woken' : 'asleep'} frame${state === 'asleep' ? 's' : ''}.${shut}${cue}${puddle}${lantern}${keeper}${hint} On screen: ${parts.join(' and ')}.${echoes}`;
 }
 
 function figure(d, door, state) {

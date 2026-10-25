@@ -27,9 +27,6 @@ interface LoreDebug {
   unread: number;
 }
 
-/** WebKit's page error for an in-flight API fetch a reload aborts (as in hollow.spec.ts). */
-const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
-
 const loreState = (page: Page) => hook<LoreDebug>(page, 'lore');
 const exploreState = (page: Page) =>
   hook<{
@@ -38,32 +35,22 @@ const exploreState = (page: Page) =>
     spots: { index: number; tool: string | null; x: number; z: number }[];
     scene: { keeper: boolean } | null;
   }>(page, 'explore');
-const mapState = (page: Page) => hook<{ live: string | null }>(page, 'map');
 const slow = { timeout: 30_000 };
 
 test('a found page sparkles in the Bag, opens in the Lorebook and is read', async ({ browser }) => {
-  test.setTimeout(150_000); // map builds and two reloads; CI renders in software
+  // Two map opens, no reloads: a reload boots the whole game again, and with
+  // two reloads both CI tries ran past 150 s on a loaded iPad box. This way is
+  // up to 2.3 min in a loaded local Chromium iPad, so the limit is 240 s
+  // (#429). CI renders in software.
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('lore'));
   const errors: string[] = [];
-  let reloading = false;
-  page.on('pageerror', (err) => {
-    if (reloading && ABORTED_FETCH.test(err.message)) return;
-    errors.push(err.message);
-  });
-  const reload = async () => {
-    reloading = true;
-    await page.reload();
-    reloading = false;
-    await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
-    await expect.poll(async () => (await mapState(page))?.live, slow).toBe('live');
-  };
+  page.on('pageerror', (err) => errors.push(err.message));
 
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Story Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await visitPatch(lobby);
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
   // The book's size is the server's (lore pages are server-only data), so
   // adding a page never breaks this spec.
   const book0 = await api<{ total: number }>(page, 'GET', '/lore');
@@ -73,15 +60,14 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   await expect.poll(async () => (await loreState(page))?.total, slow).toBe(total);
   expect((await loreState(page))?.found).toBe(0);
 
-  // A page is found while exploring; the next map open shows its card. Wait
-  // for the map open's own looks to finish first: one landing between the
-  // find and the reload would show the card (and remember it) before the
-  // reload. Live first: the map open starts its looks in the same task.
-  await expect.poll(async () => (await mapState(page))?.live, slow).toBe('live');
+  // A page is found while away (the dev route stands in for exploring); the
+  // next map open shows its card. No look is in flight first, so the card
+  // comes from the map open, not from a look that started before the find.
   await expect.poll(async () => (await loreState(page))?.checking, slow).toBe(0);
   const found = await api(page, 'POST', '/lore/dev/find', { pageId: 'under-a-mossy-rock' });
   expect(found.status).toBe(200);
-  await reload();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
   const card = page.getByTestId('lore-card');
   await expect(card).toBeVisible(slow);
   await expect(card.getByTestId('lore-title')).toHaveText('Under a Mossy Rock');
@@ -147,10 +133,19 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
     expect.any(String),
   );
 
-  // "Open Lorebook" on a found card opens the book at that page.
+  // "Open Lorebook" on a found card opens the book at that page. Found while
+  // the map is open, it shows on the next map open: back to the patch list
+  // and in again (no reload, see the top). The first open's second look (5 s
+  // on) must be done first, or it shows the card here, over the Bag.
+  await expect.poll(async () => (await loreState(page))?.checking, slow).toBe(0);
+  expect((await loreState(page))?.showing).toBeNull();
   await api(page, 'POST', '/lore/dev/find', { pageId: 'two-watchful-dogs' });
-  await reload();
+  await bag.getByRole('button', { name: 'Close' }).tap();
+  await expect(bag).toBeHidden();
   await closeTrays(page);
+  await page.getByTestId('lobby-open').tap();
+  await lobby.getByRole('button', { name: /Story Patch/ }).tap();
+  await visitPatch(lobby);
   await expect(card).toBeVisible(slow);
   await expect(card.getByTestId('lore-title')).toHaveText('Two Watchful Dogs');
   await card.getByTestId('lore-open-book').tap();

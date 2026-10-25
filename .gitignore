@@ -21,5 +21,8 @@ apps/client/public/changelog.json
 
 # House screen captures (apps/client/tooling/house-shots).
 .house-shots/
+
+# Keeper screen captures (apps/client/tooling/keeper-shots).
+.keeper-shots/
 .crooked-shots/
 .walk-shots/

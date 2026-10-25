@@ -165,6 +165,49 @@ describe('FencePoller', () => {
     poller.dispose();
     expect(gpu.freed).toEqual([0, 1]);
   });
+
+  // Any gap works for the poller; the stage's own is FENCE_GAP_MS (perf-report.test.ts).
+  describe('with a minimum gap between fences (#501: each fence is a round trip in Safari)', () => {
+    it('a fast loop fences once per gap, not every frame', () => {
+      const gpu = fakeGpu();
+      const poller = new FencePoller(gpu, { minGapMs: 250 });
+      // One second at 30 fps, each fence passing by the next frame.
+      for (let i = 0; i < 30; i++) {
+        poller.frame(i * 33.3);
+        gpu.passUpTo(gpu.made - 1);
+      }
+      expect(gpu.made).toBe(4); // at 0, 266, 533 and 800 ms
+      expect(poller.latency?.passed).toBe(4);
+    });
+
+    it('a slow run still fences every frame, and reads the same latency as without a gap', () => {
+      const run = (poller: FencePoller<number>, gpu: ReturnType<typeof fakeGpu>) => {
+        for (let i = 0; i < 6; i++) {
+          poller.frame(i * 400);
+          if (i >= 1) gpu.passUpTo(i - 1); // the GPU runs a frame behind
+        }
+        return poller.latency;
+      };
+      const sampled = fakeGpu();
+      const every = fakeGpu();
+      const withGap = run(new FencePoller(sampled, { minGapMs: 250 }), sampled);
+      expect(sampled.made).toBe(6);
+      expect(withGap).toEqual(run(new FencePoller(every), every));
+    });
+
+    it('a frame the context makes no fence for leaves the next frame free to try', () => {
+      const gpu = fakeGpu();
+      let none = true;
+      const poller = new FencePoller(
+        { ...gpu, create: () => (none ? null : gpu.create()) },
+        { minGapMs: 250 },
+      );
+      poller.frame(0);
+      none = false;
+      poller.frame(16);
+      expect(poller.pending).toBe(1);
+    });
+  });
 });
 
 describe('webglFenceOps', () => {
