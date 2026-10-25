@@ -1813,8 +1813,6 @@ _Owner decisions and screen approvals from 2026-10-24, with coordinator calls in
 _Owner decisions and screen approvals from 2026-10-24 evening to 2026-10-25, with coordinator calls inside them._
 
 **Merged**
-- **#688 (#655 D):** the Gift and Trade bar and the Swap bar.
-- **#689 (#621 W1-8b):** pies, `bake-pies`, `CARE_RULES.foods`, and the optional feed `itemId`. Opus + Fable round 1.
 - **Sound pass (#653, PR #658).** Sound is hybrid: the big moments (chest crescendo, door wake, evolution, befriend, win, key / room put right) layer short CC0 Kenney recordings with synth; small ticks stay upgraded synth. The chest has two cues: `chest` (bonus room, short build) and `chest-big` (attic, longer build that lands as its lid swings). The owner approved it by ear (v2 and v3 pages).
 - **Wild Isle contracts (#621 W1-1, PR #663).** Migration 0059 is in. Everything sits behind `HP_WILD_ISLE`, which is off by default.
 - **Basket sell contract (#655 A, PR #661).** The legacy one-line sell request stays accepted until part E.
@@ -1916,6 +1914,8 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Merged**
 - **#684 (#621 W1-8A):** water works and the food chain. Opus + Fable APPROVE; the head was a clean main merge.
 - **#687:** supervisor 18 handoff docs.
+- **#688 (#655 D):** the Gift and Trade bar and the Swap bar.
+- **#689 (#621 W1-8b):** pies, `bake-pies`, `CARE_RULES.foods`, and the optional feed `itemId`. Opus + Fable round 1, then a fresh Opus APPROVE in round 2.
 
 **Owner decisions (#382 Wave 2)**
 - **Shinybeet** gets a data-only beetle-shell body, then one last tweak: a taller dome, a smaller, lower head, and studs in a line. If it still fails, it is auto-swapped for the strongest of the other 19 kinds, with no more rounds.
@@ -1924,17 +1924,17 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Fluffasus** gets stacked-lobe cloud wings (render-check PASS).
 - **Cubbun** gets hug arms.
   - **Owner, 15:24Z:** "Get rid of the tree for Cubbun." The tree (tree-stump and tree-top) is removed, and the hug arms are re-seated to hug Cubbun's own tummy, because the mirrored far arm pointed sideways with no trunk to hold.
-- **Coordinator call:** #382 may add more than the ~6 parts first allowed (14 after the duck rework, minus the tree parts). They're all data-only, built from existing primitives, with a data test, and listed in the PR body.
-- **Standing rule:** serve owner decisions one at a time.
-- **Standing rule (owner, ~16:20Z):** when the owner is needed (a decision, or screens ready to approve after the supervisor's render-check passes), send a push notification (`PushNotification`, one line, leading with the action). Only then; no routine-progress pushes.
+- **Coordinator call:** #382 may add more than the ~6 parts first allowed (16 at sheet v6: the duck, bubble and tail parts added, and the two tree parts removed). They're all data-only, built from existing primitives, with a data test, and listed in the PR body.
 
 **Owner decisions (other)**
+- **Standing rule:** serve owner decisions one at a time.
+- **Standing rule (owner, ~16:20Z):** when the owner is needed (a decision, or screens ready to approve after the supervisor's render-check passes), send a push notification (`PushNotification`, one line, leading with the action). Only then; no routine-progress pushes.
 - **#689 (#621 W1-8b) merged with main's red e2e group (owner, ~16:35Z, option A).** The auto-mode classifier blocked the first merge attempt because the aggregate `check` was red. The owner chose to merge rather than wait for a fully green run. The only real failure was `lobby.spec.ts:9`, which is red on main too and owned by a Fix lane.
 - **#688 (#655 D) screens approved (v9, ~15:52Z).** The supervisor's independent render-check took four rounds (v2, v5, v6, v9) before it passed.
-
 - **Retired supervisors archived (owner, ~16:05Z):** supervisors 18 and 17 were archived at the owner's request. Supervisors 10–16 were already archived.
 
 **Coordinator calls**
-- **Lanes handed off for size:** the #382 Wave 2b lane reached about 670k context ($25.71) and its notes drifted from its renders. A fresh Sonnet lane (2c) took over from #382 comment 6399726332 with the v6 fix list. The W1-8A lane cost $43.85 (245k).
+- **Lanes handed off for size:** the #382 Wave 2b lane reached about 670k context ($25.71) and its notes drifted from its renders. A fresh Sonnet lane (2c) took over from #382 comment 6399726332 with the v6 fix list.
+- **Costs:** the W1-8A lane cost $43.85 (245k context; flagged), and the #655 D lane cost $12.04.
 - **#382 Oinkle curl tail:** it failed three render-checks (handle, raspberry), so it fell back to a short stub tail.
-- **`isBuildableOn` naming:** main's `isBuildableOn` (W1-8A, buildings) checks whether a building is allowed on a patch type. W1-6's shared tile check for bridges and docks is `travelBuildCheck`. These are different questions, not a duplicate.
+- **`isBuildableOn` naming (supersedes supervisor 18's "Shared `isBuildableOn`" call):** main's `isBuildableOn` (W1-8A, buildings) checks whether a building is allowed on a patch type. W1-6's shared tile check for bridges and docks is `travelBuildCheck`. These are different questions, not a duplicate. The "server switches over after W1-8" follow-up now means the server adopts `travelBuildCheck` for bridge and dock placement.
