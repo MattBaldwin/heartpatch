@@ -5,6 +5,7 @@ import { MAP_GEN } from '../map-gen.js';
 import { checkGuardianRules } from '../../schemas/data/guardian-rules.js';
 import { hintForGuardians } from '../../territory/guardians.js';
 import { TRADING_POST_TERRAIN } from '../../territory/reach.js';
+import { isWater } from '../../schemas/data/terrains.js';
 import { GUARDIAN_RULES } from './guardian-rules.js';
 import { SECRET_SPECIES } from './secret-species.js';
 
@@ -31,8 +32,12 @@ describe('guardian rules', () => {
     for (const table of GUARDIAN_RULES.tables) {
       for (const entry of table.entries) expect(species).toContain(entry.species);
     }
-    // Trading posts (#269) have no guardians: they can never be claimed.
-    for (const terrain of GAME_DATA.terrains.filter((t) => t.id !== TRADING_POST_TERRAIN)) {
+    // Trading posts (#269) have no guardians: they can never be claimed. Nor
+    // water (Wild Isle, #621); the coast's tables come with the Wild Isle lanes.
+    const guarded = GAME_DATA.terrains.filter(
+      (t) => t.id !== TRADING_POST_TERRAIN && !isWater(t) && t.id !== 'coast',
+    );
+    for (const terrain of guarded) {
       // Year-round: a terrain is guarded outside every season too.
       expect(GUARDIAN_RULES.tables.some((t) => !t.season && t.terrains.includes(terrain.id))).toBe(
         true,

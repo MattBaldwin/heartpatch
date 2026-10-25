@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Building } from './buildings.js';
+import { buildsOnPatchType, type Building } from './buildings.js';
+import { DEFAULT_PATCH_TYPE, type PatchType } from '../../patch-types/patch-type.js';
 
 // Home-base rules (design doc §11, §13, §14): the building grid on each home
 // tile, take-down refunds and when nightfall is. Data, so tuning them is a
@@ -8,7 +9,8 @@ import type { Building } from './buildings.js';
 /**
  * Building kinds a player can put up today (Training Grounds: owner decision
  * 2026-10-06; the Crafting Factory: #294; resource buildings: #601 PR 7; the
- * Warehouse: #601 PR 9).
+ * Warehouse: #601 PR 9). The Wild Isle kinds (#621) join here, and in
+ * `HOME_BASE_RULES.buildableKinds`, with the lane that builds each one.
  */
 export const BuildableKindSchema = z.enum([
   'hearthfire',
@@ -41,7 +43,18 @@ export const HomeBaseRulesSchema = z.strictObject({
 });
 export type HomeBaseRules = z.infer<typeof HomeBaseRulesSchema>;
 
-/** Can a player build this one now? (Its kind is in `buildableKinds`.) */
-export function isBuildable(rules: HomeBaseRules, building: Building): boolean {
-  return (rules.buildableKinds as readonly string[]).includes(building.kind);
+/**
+ * Can a player build this one now, on a patch of this type? (Its kind is in
+ * `buildableKinds`, and its `patchTypes` allow the patch's type; a Cozy
+ * Patch when left out, #621.)
+ */
+export function isBuildable(
+  rules: HomeBaseRules,
+  building: Building,
+  patchType: PatchType = DEFAULT_PATCH_TYPE,
+): boolean {
+  return (
+    (rules.buildableKinds as readonly string[]).includes(building.kind) &&
+    buildsOnPatchType(building, patchType)
+  );
 }

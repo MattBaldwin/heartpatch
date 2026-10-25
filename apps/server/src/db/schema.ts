@@ -34,6 +34,9 @@ const id = () =>
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
+// A patch's type (#621), chosen when it's made and never changed. Every rule
+// that differs reads it through shared `patchRules`; existing patches are cozy.
+export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle']);
 export const mapMemberRole = pgEnum('map_member_role', ['owner', 'member']);
 /** Removed players are archived by status, never deleted (tech spec §4). */
 export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']);
@@ -326,6 +329,9 @@ export const maps = pgTable(
     // The patch owner's friendly-battle switch (#29): off, nobody can ask
     // "Battle me?" on this patch. Live land defense follows the PvP mode instead.
     friendlyChallenges: boolean('friendly_challenges').notNull().default(true),
+    // Cozy Patch or Wild Isle (#621): fixed at creation; `HP_WILD_ISLE` gates
+    // making a Wild Isle.
+    patchType: patchType('patch_type').notNull().default('cozy'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -418,6 +424,9 @@ export const tiles = pgTable(
     communityId: uuid('community_id').references((): AnyPgColumn => communities.id, {
       onDelete: 'set null',
     }),
+    // Which offshore isle (#621, Wild Isle) this tile is part of, numbered
+    // from 1 by the generator; null on the main island and on every cozy tile.
+    isle: smallint('isle'),
   },
   (t) => [
     unique('tiles_map_id_q_r_key').on(t.mapId, t.q, t.r),

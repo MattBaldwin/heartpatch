@@ -135,8 +135,10 @@ test('a reload lands back on the patch the player was on (#160)', async ({ brows
 test('a new family signs up with a patch invite and lands in the join queue (#195)', async ({
   browser,
 }) => {
-  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders in software.
-  test.setTimeout(90_000);
+  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
+  // in software. About 50 s in a local Chromium; a loaded iPad CI box ran both
+  // tries past 90 s (2026-10-25), so the limit is 150 s.
+  test.setTimeout(150_000);
   const ownerName = uniqueName('host');
   const kidName = uniqueName('newfam');
 

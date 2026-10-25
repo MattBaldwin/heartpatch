@@ -9,6 +9,7 @@ import {
   hexEquals,
   hexFromKey,
   hexKey,
+  hexLine,
   hexNeighbors,
   hexRing,
   hexScale,
@@ -170,6 +171,69 @@ describe('hexBfs', () => {
 
   it('returns nothing for no starts', () => {
     expect(hexBfs([], () => true).size).toBe(0);
+  });
+});
+
+describe('hexLine', () => {
+  const line = (a: Hex, b: Hex) => hexLine(a, b).map((h) => [h.q, h.r]);
+
+  it('draws pinned lines, so rivers and weather fronts never drift (#621)', () => {
+    // Exactly between two hexes on all of q, r and s: the nudge picks.
+    expect(line(origin, hex(1, 1))).toEqual([
+      [0, 0],
+      [1, 0],
+      [1, 1],
+    ]);
+    expect(line(origin, hex(3, -1))).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, -1],
+      [3, -1],
+    ]);
+    // Exactly between two hexes at the middle step: always the same side.
+    expect(line(origin, hex(4, -2))).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, -1],
+      [3, -1],
+      [4, -2],
+    ]);
+    expect(line(hex(1, 1), hex(-3, 2))).toEqual([
+      [1, 1],
+      [0, 1],
+      [-1, 2],
+      [-2, 2],
+      [-3, 2],
+    ]);
+    expect(line(hex(-2, 4), hex(5, -3))).toEqual([
+      [-2, 4],
+      [-1, 3],
+      [0, 2],
+      [1, 1],
+      [2, 0],
+      [3, -1],
+      [4, -2],
+      [5, -3],
+    ]);
+  });
+
+  it('is just the start when both ends are the same hex', () => {
+    expect(hexLine(hex(2, -5), hex(2, -5))).toEqual([hex(2, -5)]);
+  });
+
+  it('goes from a to b one neighbour at a time, distance + 1 hexes', () => {
+    const ends = hexSpiral(origin, 4);
+    for (const a of ends.slice(0, 19)) {
+      for (const b of ends) {
+        const hexes = hexLine(a, b);
+        expect(hexes).toHaveLength(hexDistance(a, b) + 1);
+        expect(hexes[0]).toEqual(a);
+        expect(hexes.at(-1)).toEqual(b);
+        for (let i = 1; i < hexes.length; i++)
+          expect(hexDistance(hexes[i - 1]!, hexes[i]!)).toBe(1);
+        for (const h of hexes) expect(Object.is(h.q, -0) || Object.is(h.r, -0)).toBe(false);
+      }
+    }
   });
 });
 

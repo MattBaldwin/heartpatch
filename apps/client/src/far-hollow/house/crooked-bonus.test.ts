@@ -6,7 +6,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { ELEMENT_FX } from '../../battle/element-fx.js';
-import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
+import { CHEST_SIZE, WOKEN_COLOUR } from './crooked-bonus-kit.js';
 import {
   DOOR_LIGHT,
   MAX_SPARKLES,
@@ -14,7 +14,6 @@ import {
   doorLightLayout,
   doorLightPoints,
   offScreen,
-  outlinePath,
   sparkleShape,
   sparkles,
 } from './crooked-door-light.js';
@@ -25,8 +24,8 @@ import {
   CROOKED_CHEST,
   crookedTeam,
   helpersFor,
-  keepOffChest,
 } from './crooked-bonus.js';
+import { CROOKED_BODY, houseStep } from './crooked-furniture.js';
 import { CROOKED_WALK, roomOf } from './crooked-plan.js';
 import { BONUS_TEXT, lootWords, powerDone } from './crooked-text.js';
 
@@ -123,13 +122,12 @@ describe('bonus chests', () => {
   it('stop the Keeper beside them', () => {
     const r = room('pantry');
     const p = chestPoint(r);
-    const at = keepOffChest(r, { x: p.x, z: p.z - 0.1 });
-    expect(Math.hypot(at.x - p.x, at.z - p.z)).toBeCloseTo(CROOKED_WALK.margin + 0.2);
+    const view = { rooms: [], unlocked: [], bonusOpen: [], keys: [] };
+    const step = (to: { x: number; z: number }) => houseStep(r, view, to, to).at;
+    const at = step({ x: p.x, z: p.z - 0.1 });
+    expect(p.z - at.z).toBeCloseTo(CHEST_SIZE.d / 2 + CROOKED_BODY.radius + CROOKED_BODY.pad);
     const clear = { x: p.x, z: p.z - 1.2 };
-    expect(keepOffChest(r, clear)).toEqual(clear);
-    // Main rooms have no chest to bump.
-    const hall = room('front-hall');
-    expect(keepOffChest(hall, { x: 0, z: 0 })).toEqual({ x: 0, z: 0 });
+    expect(step(clear)).toEqual(clear);
   });
 });
 
@@ -216,23 +214,14 @@ describe('woken door cue', () => {
     expect((layout?.box.left ?? 0) + (layout?.box.width ?? 0) / 2).toBeCloseTo(202.5);
   });
 
-  it('draws the outline as one path: up a side, round the top, down the other, open at the floor', () => {
-    const box = { left: 100, top: 300, width: 80, height: 200 };
-    const r = DOOR_LIGHT.round;
-    const d = outlinePath(box);
-    // One shape, so the glow is even with no brighter joins.
-    expect(d.match(/M/g)).toHaveLength(1);
-    expect(d.startsWith('M100 500V')).toBe(true);
-    expect(d).toContain(`H${String(180 - r)}`);
-    expect(d.endsWith('V500')).toBe(true);
-    expect(d.match(/A/g)).toHaveLength(2);
-    // The fill is the same shape shut along the floor.
-    expect(outlinePath(box, true)).toBe(`${d}Z`);
-  });
-
-  it('keeps a narrow doorway’s round top no wider than the doorway', () => {
-    const d = outlinePath({ left: 0, top: 0, width: 10, height: 40 });
-    expect(d).toContain('A5 5');
+  it('keeps the sparkles beside the two doorposts, never over the door', () => {
+    const bits = sparkles('fire');
+    const left = bits.filter((b) => b.x < 0);
+    const right = bits.filter((b) => b.x > 0);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBe(left.length);
+    // Outside the door's own width (half of it is 0.5 either side).
+    expect(bits.every((b) => Math.abs(b.x) > 0.5)).toBe(true);
   });
 
   it('draws nothing while a corner of the door is off screen', () => {
@@ -263,7 +252,7 @@ describe('woken door cue', () => {
     expect(peeking && offScreen(peeking, view)).toBe(false);
   });
 
-  it('puts the outline round the door slab in the wall, just in front of it', () => {
+  it('puts the doorway’s corners at the door slab in the wall, just in front of it', () => {
     // A door in the west wall, the room towards +x.
     const p = doorLightPoints({ x: -9, z: 0 }, { x: 1, z: 0 });
     expect(p.footLeft[0].x).toBeCloseTo(-9 + DOOR_LIGHT.lift);
