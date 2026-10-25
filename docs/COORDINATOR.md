@@ -31,6 +31,8 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 Lanes do **small changes** and hand off cleanly. A long-running lane gets expensive: every step re-reads its whole conversation, so cost grows with context even when the step is tiny. One house lane ran for a week across several PRs and cost about $770.
 
 - **One small PR per lane.** If an issue needs more than one PR, the supervisor splits it into parts (for example B5a, B5b) when briefing, and each part gets its own fresh lane.
+- **Cost stop (owner, 2026-10-25):** when a lane's cost reaches **$20** (`get_session`, `usage.cost_usd`), whatever its context, the supervisor tells it to stop: push, post the `Lane handoff`, and report. A fresh lane continues from the handoff. A lane can stay under the context cap and still cost a lot. W1-9c stayed at 150–180k but spent about $25 in 2.5 hours re-shooting screens, because every step re-read a context full of images.
+- **Screens out of the lane's context:** capture lanes let a helper subagent view the PNGs and report back in text. They don't read many full-size images themselves.
 - **Context cap:** when a lane's context passes about **200k tokens** (`get_session`, `context_usage.used_tokens`), the supervisor tells it to wrap up: push a coherent state, get that PR to ready (or leave it open with `Part of #N`), and post the handoff comment.
 - **Handoff note (required when a lane stops with work left on the issue).** The lane posts it as a comment on the issue, titled `Lane handoff`. A comment outlives the session, so the next lane can read it after the old one is archived. It holds:
   - the branch and head SHA
@@ -120,7 +122,7 @@ The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
-Report usage to the owner when asked, and flag any lane above about $20 (except #13: about $30, see §9). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
+Report usage to the owner when asked, and flag any lane above about $20 and stop it there (the §2 cost stop; #13's old ~$30 exception is historical). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
 
 ## 7. Brief template
 
