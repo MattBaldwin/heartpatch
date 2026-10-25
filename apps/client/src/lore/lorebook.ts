@@ -132,12 +132,12 @@ export function createLorebook(options: LorebookOptions): Lorebook {
   const text = el('p', { class: 'lore-text', 'data-testid': 'lore-text' });
   const openButton = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'lore-open-book' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'lore-open-book' },
     LORE_TEXT.openBook,
   );
   const button = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'lore-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'lore-close' },
     LORE_TEXT.close,
   );
   const card = el(
@@ -326,7 +326,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
     settings: () => {
       const entry = el(
         'button',
-        { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'lore-open' },
+        { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'lore-open' },
         LORE_TEXT.open,
       );
       entry.addEventListener('click', () => {

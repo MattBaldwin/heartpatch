@@ -146,7 +146,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   newForm.hidden = true;
   const yay = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'care-yay' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'care-yay' },
     CARE_TEXT.yay,
   );
   const celebrate = el(
@@ -160,12 +160,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   celebrate.hidden = true;
   const closeButton = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'care-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'care-close' },
     CARE_TEXT.close,
   );
   const closeUpButton = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'care-close-up' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'care-close-up' },
     `👀 ${CARE_TEXT.upClose}`,
   );
   closeUpButton.hidden = true;
@@ -278,7 +278,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
           'button',
           {
             type: 'button',
-            class: `auth-button care-action${b.special ? ' care-action-special' : ''}`,
+            class: `hp-button hp-button-primary care-action${b.special ? ' care-action-special' : ''}`,
             'data-care': b.action,
           },
           b.label,

@@ -1591,7 +1591,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-soft explore-lorebook',
+          class: 'hp-button hp-button-secondary explore-lorebook',
           'data-testid': 'explore-lorebook',
         },
         EXPLORE_TEXT.openLorebook,
@@ -1605,7 +1605,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
     const yay = el(
       'button',
-      { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
+      {
+        type: 'button',
+        class: 'hp-button hp-button-primary explore-yay',
+        'data-testid': 'explore-yay',
+      },
       EXPLORE_TEXT.yay,
     );
     yay.addEventListener('click', () => {
@@ -1621,7 +1625,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function keyCard(name: string): void {
     const yay = el(
       'button',
-      { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
+      {
+        type: 'button',
+        class: 'hp-button hp-button-primary explore-yay',
+        'data-testid': 'explore-yay',
+      },
       EXPLORE_TEXT.yay,
     );
     yay.addEventListener('click', () => {
@@ -1858,7 +1866,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       'button',
       {
         type: 'button',
-        class: 'auth-button bag-action tile-action-pair',
+        class: 'hp-button hp-button-primary bag-action tile-action-pair',
         'data-testid': 'tile-explore',
       },
       `🔍 ${EXPLORE_TEXT.explore}`,

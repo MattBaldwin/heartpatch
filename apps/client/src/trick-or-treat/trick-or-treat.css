@@ -41,7 +41,7 @@
 }
 
 /* Visited today: soft, and solid so the night chip never shows through it
-   (`.auth-button:disabled` fades a button). */
+   (`.hp-button:disabled` fades a button). */
 .tile-panel .trick-knock.trick-visited:disabled {
   opacity: 1;
   background: #f6dceb;

@@ -541,7 +541,10 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   const button = (label: string, onClick: () => void, soft = false) => {
     const node = el(
       'button',
-      { type: 'button', class: soft ? 'auth-button auth-button-soft' : 'auth-button' },
+      {
+        type: 'button',
+        class: soft ? 'hp-button hp-button-secondary' : 'hp-button hp-button-primary',
+      },
       label,
     );
     node.addEventListener('click', onClick);
@@ -790,7 +793,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-soft',
+          class: 'hp-button hp-button-secondary',
           'data-testid': 'keeper-settings',
         },
         KEEPER_TEXT.settingsButton,

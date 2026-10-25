@@ -53,7 +53,7 @@ export function saveCodePanel(options: SaveCodeOptions): HTMLElement {
   );
   const done = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'auth-code-done' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'auth-code-done' },
     options.doneLabel ?? SAVE_CODE_TEXT.next,
   );
   const sync = () => {
@@ -78,7 +78,7 @@ export function saveCodePanel(options: SaveCodeOptions): HTMLElement {
   const status = el('p', { class: 'auth-error', role: 'alert' });
   const picture = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'auth-code-picture' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'auth-code-picture' },
     SAVE_CODE_TEXT.picture,
   );
   picture.addEventListener('click', () => {
@@ -103,7 +103,7 @@ export function saveCodePanel(options: SaveCodeOptions): HTMLElement {
 
   const copy = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft' },
+    { type: 'button', class: 'hp-button hp-button-secondary' },
     SAVE_CODE_TEXT.copy,
   );
   copy.addEventListener('click', () => {
@@ -136,7 +136,11 @@ export function saveCodePanel(options: SaveCodeOptions): HTMLElement {
   function showPicture(blob: Blob): void {
     dropPicture();
     pictureUrl = URL.createObjectURL(blob);
-    const back = el('button', { type: 'button', class: 'auth-button' }, SAVE_CODE_TEXT.done);
+    const back = el(
+      'button',
+      { type: 'button', class: 'hp-button hp-button-primary' },
+      SAVE_CODE_TEXT.done,
+    );
     back.addEventListener('click', showCode);
     panel.replaceChildren(
       el('h1', { class: 'auth-title', id: options.titleId }, SAVE_CODE_TEXT.picture),

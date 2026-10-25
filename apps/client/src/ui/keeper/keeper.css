@@ -397,15 +397,15 @@
   margin-top: 2px;
 }
 
-.keeper-card .keeper-actions .auth-button {
+.keeper-card .keeper-actions .hp-button {
   flex: 2 1 0;
 }
 
-.keeper-card .keeper-actions .auth-button-soft {
+.keeper-card .keeper-actions .hp-button-secondary {
   flex: 1 1 0;
 }
 
-.keeper-card .keeper-actions .auth-button:disabled {
+.keeper-card .keeper-actions .hp-button:disabled {
   opacity: 0.45;
 }
 

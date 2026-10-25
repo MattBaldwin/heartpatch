@@ -1836,3 +1836,30 @@ _Owner decisions and screen approvals from 2026-10-24 evening to 2026-10-25, wit
 - **#656 (battle sheet):** the iPhone 15 "Run away in the home-indicator inset" report didn't reproduce on main with insets. Only the iPhone SE 4-move clip was real.
 - **#501 explore freeze:** no repro on main (no per-frame allocation, no drift). The one device-only suspect is a per-frame `clientWaitSync` (a synchronous WebKit GPU IPC). The lane was asked to make it non-blocking only if provably safe.
 - **e2e-fix finding:** `ui/trays` drops `hp-settling` after its 450 ms fallback even while a late slide still runs. The test now waits on `still()`. The product fix (cancel the fallback on `transitionrun`) is a logged follow-up.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 17)
+
+_Merges, owner approvals and coordinator calls from 2026-10-25 ~02:25 to ~07:22 UTC._
+
+**Merged**
+- **#666 (#651):** the Keeper collides with furniture.
+- **#669:** the supervisor 16 handoff docs.
+- **#662 (#652):** the battle camera.
+- **#668 (#655 B):** the sell basket server.
+- **#670 (#501):** the GPU fence is sampled at most ~10/s (`FENCE_GAP_MS = 0.9 × 1000 / SLOW_FPS`) instead of a blocking wait every frame.
+- **#665 (#657):** Keeper bodies.
+- **#667 (#654):** door sparkle.
+- **#677:** iPad e2e flake fixes.
+- **#671:** Controls D2.
+- **#675 (#621 W1-2):** the map generator, behind `HP_WILD_ISLE`.
+- **#673 (#621 W1-5a):** roads, migration 0060, behind `HP_WILD_ISLE`.
+
+**Owner decisions**
+- **Controls D2 screens v2 approved** (2026-10-25 06:15Z).
+- **Supervisor 16 was archived** on the owner's request after the handoff.
+
+**Coordinator calls**
+- **#677 merged with the `check` aggregator still queued,** because all 14 real jobs were green and it fixed main's red iPad groups. Not a precedent.
+- **#665 merged on an APPROVE at `be6ffd7`.** The head `295da40` differed only by a `.gitignore` line and main merges (the supervisor diffed it).
+- **#656's landscape sky-only 4-move frame is pre-existing** (reproduced on `eb15770`, before #662), not a #662 regression. Logged.
+- **W1-7 runs as the only migration lane.** W1-5b (no migration) waits for a free lane because it shares `modules/buildings/` with W1-7.

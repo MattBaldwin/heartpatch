@@ -82,7 +82,11 @@ export function createCommunityActions(me: () => string | null = () => null): Co
       const button = (which: 'gift' | 'name', label: string, onTap: () => void) => {
         const b = el(
           'button',
-          { type: 'button', class: 'auth-button bag-action', 'data-testid': `community-${which}` },
+          {
+            type: 'button',
+            class: 'hp-button hp-button-primary bag-action',
+            'data-testid': `community-${which}`,
+          },
           label,
         );
         b.addEventListener('click', onTap);
@@ -177,7 +181,7 @@ export function createCommunityActions(me: () => string | null = () => null): Co
         'button',
         {
           type: 'button',
-          class: 'auth-button bag-action tile-action-pair community-action',
+          class: 'hp-button hp-button-primary bag-action tile-action-pair community-action',
           'data-testid': `community-${which}`,
         },
         label,

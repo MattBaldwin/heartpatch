@@ -397,7 +397,7 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
         expect(fit.head, at).toBeGreaterThanOrEqual(fit.top - 1);
       }
     }
-    await expectRoomyLabels(page, '.keeper-tab, .keeper-style, .keeper-actions .auth-button');
+    await expectRoomyLabels(page, '.keeper-tab, .keeper-style, .keeper-actions .hp-button');
   }
 
   // Tapping an outfit picks it; it never saves the Keeper by mistake.

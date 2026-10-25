@@ -18,7 +18,7 @@ import {
 } from '@heartpatch/shared';
 import { slotIcon } from '../../map/map-legend.js';
 import { updateHold } from '../../pwa/update-hold.js';
-import { hpButton } from '../button/button.js';
+import { buttonClass, hpButton } from '../button/button.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import {
   codeDays,
@@ -200,9 +200,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     onClick: () => void,
     options: { soft?: boolean; small?: boolean; testId?: string } = {},
   ) => {
-    const classes = ['auth-button'];
-    if (options.soft) classes.push('auth-button-soft');
-    if (options.small) classes.push('auth-button-small');
+    const classes = [
+      buttonClass({ variant: options.soft ? 'secondary' : 'primary', small: options.small }),
+    ];
     const node = el(
       'button',
       {
@@ -453,7 +453,11 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     const inputId = `${spec.id}-input`;
     const input = el('input', { id: inputId, class: 'auth-input', ...spec.input });
     const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'lobby-error' });
-    const submit = el('button', { type: 'submit', class: 'auth-button' }, spec.submitLabel);
+    const submit = el(
+      'button',
+      { type: 'submit', class: 'hp-button hp-button-primary' },
+      spec.submitLabel,
+    );
     const form = el(
       'form',
       { class: 'auth-form', id: spec.id, novalidate: '' },

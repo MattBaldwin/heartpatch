@@ -251,17 +251,17 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   const renameStatus = el('p', { class: 'close-up-rename-status', role: 'status' });
   const renameSave = el(
     'button',
-    { type: 'submit', class: 'auth-button', 'data-testid': 'close-up-rename-save' },
+    { type: 'submit', class: 'hp-button hp-button-primary', 'data-testid': 'close-up-rename-save' },
     CLOSE_UP_TEXT.save,
   );
   const renameClear = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft' },
+    { type: 'button', class: 'hp-button hp-button-secondary' },
     CLOSE_UP_TEXT.clear,
   );
   const renameCancel = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft' },
+    { type: 'button', class: 'hp-button hp-button-secondary' },
     CLOSE_UP_TEXT.cancel,
   );
   const renameForm = el(
@@ -277,7 +277,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     'button',
     {
       type: 'button',
-      class: 'auth-button auth-button-soft',
+      class: 'hp-button hp-button-secondary',
       'data-testid': 'close-up-rename-open',
     },
     `✏️ ${CLOSE_UP_TEXT.rename}`,
@@ -286,7 +286,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     'button',
     {
       type: 'button',
-      class: 'auth-button auth-button-soft close-up-dress-open',
+      class: 'hp-button hp-button-secondary close-up-dress-open',
       'data-testid': 'close-up-dress-open',
     },
     `🎀 ${DRESS_UP_TEXT.open}`,
@@ -306,7 +306,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   });
   const dressDone = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'close-up-dress-done' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'close-up-dress-done' },
     DRESS_UP_TEXT.done,
   );
   const dress = el(
@@ -337,7 +337,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   const celebrateLine = el('p', { class: 'care-celebrate-line' });
   const yay = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'close-up-yay' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'close-up-yay' },
     CARE_TEXT.yay,
   );
   const celebrate = el(
@@ -527,7 +527,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     if (existing) return existing;
     const button = el('button', {
       type: 'button',
-      class: 'auth-button care-action',
+      class: 'hp-button hp-button-primary care-action',
       'data-care': action,
     });
     // Never disabled: a resting touch still gets its reaction (it just isn't sent).
