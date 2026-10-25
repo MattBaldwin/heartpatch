@@ -1,6 +1,7 @@
 import {
   findAvoidedWords,
   hexKey,
+  type HexKey,
   edgeNeighbor,
   hexNeighbors,
   TERRITORY_RULES,
@@ -360,5 +361,30 @@ describe('the guard strength line (#529)', () => {
   it('reads cozy, shows no numbers and uses no avoided words', () => {
     expect(TERRITORY_TEXT.guardsAsStrong).not.toMatch(/\d/);
     expect(findAvoidedWords(TERRITORY_TEXT.guardsAsStrong)).toEqual([]);
+  });
+});
+
+describe('territoryAction on a Wild Isle (#621)', () => {
+  it('offers nothing on water: a bridge goes there, not a claim', () => {
+    const { view, tile } = setup((t) => ({ ...t, terrain: 'river' }));
+    expect(territoryAction(tile, view, ME, status(), NOW)).toEqual({ kind: 'none' });
+    expect(
+      territoryAction(tile, view, ME, status(), NOW, {
+        supplied: new Set<HexKey>(),
+        reach: new Map<HexKey, number>(),
+      }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('follows my supply line for what is next to my land, not just who owns the neighbour', () => {
+    const { view, tile } = setup();
+    // The usual rule: next to my home ring, so it can be claimed.
+    expect(territoryAction(tile, view, ME, status(), NOW).kind).toBe('claim');
+    // A supply line that doesn't reach it: too far.
+    const none = { supplied: new Set<HexKey>(), reach: new Map<HexKey, number>() };
+    expect(territoryAction(tile, view, ME, status(), NOW, none).kind).toBe('too-far');
+    // A road or ferry that reaches it: claimable again.
+    const reached = { supplied: new Set<HexKey>(), reach: new Map([[hexKey(tile), 1]]) };
+    expect(territoryAction(tile, view, ME, status(), NOW, reached).kind).toBe('claim');
   });
 });

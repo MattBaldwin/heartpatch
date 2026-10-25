@@ -92,7 +92,10 @@ export function describeTile(
   const emoji = TILE_EMOJI[tile.terrain];
   let owner: string;
   if (water) {
-    owner = terrain?.description ?? 'Just water out here.';
+    // A river with a bridge on it (#621) is no longer too deep to cross.
+    owner = tile.buildings.some((b) => b.buildingId === 'bridge')
+      ? 'A bridge crosses here. Hop across! 🪵'
+      : (terrain?.description ?? 'Just water out here.');
   } else if (post) {
     owner = 'A trading post for every Keeper. Nobody can claim it!';
   } else if (home) {

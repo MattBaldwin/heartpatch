@@ -17,6 +17,8 @@ export interface TilePanel {
   readonly open: boolean;
   /** Where features draw their buttons for the tile on show. */
   readonly actions: HTMLElement;
+  /** Where a water tile's buttons go (a bridge on a river, Wild Isle #621). */
+  readonly waterActions: HTMLElement;
 }
 
 export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePanel {
@@ -62,6 +64,10 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   // A trading post (#269): how I reach it.
   const postReachText = el('p', { class: 'tile-panel-post', 'data-testid': 'tile-panel-post' });
   const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
+  const waterActions = el('div', {
+    class: 'tile-panel-actions',
+    'data-testid': 'tile-panel-water-actions',
+  });
   const close = hpClose('Close');
   close.addEventListener('click', onClose);
   const panel = el(
@@ -84,6 +90,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     postReachText,
     details,
     actions,
+    waterActions,
   );
   panel.hidden = true;
   root.append(panel);
@@ -116,5 +123,6 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       return !panel.hidden;
     },
     actions,
+    waterActions,
   };
 }
