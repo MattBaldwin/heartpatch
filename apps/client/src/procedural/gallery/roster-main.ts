@@ -25,7 +25,8 @@ setPerfReports(false);
  * (only the squishies, on white, for silhouette sheets), `?studio` (fog off and
  * the backdrop cleared to a flat pale colour, so the squishy's own colours and
  * shape read without the arena's haze), `?motion` (idle
- * animation on, to check how the vinyl looks while fighters move).
+ * animation on, to check how the vinyl looks while fighters move), `?alone` (no
+ * reference squishy on the player's side, so a wide opponent isn't cropped by it).
  */
 
 if (!import.meta.env.DEV) throw new Error('The roster sheet is dev-only');
@@ -42,6 +43,7 @@ const timeOfDay = BattleTimeOfDaySchema.safeParse(params.get('time')).data ?? 'd
 const silhouette = params.has('silhouette');
 const studio = params.has('studio');
 const motion = params.has('motion');
+const alone = params.has('alone');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
 const REFERENCE = params.get('reference') ?? 'pebblesnooze';
@@ -83,8 +85,10 @@ await boot(canvas, {
         });
         // A fixed reference on the player's side keeps the camera's framing
         // nearly the same for every species, so evolutions read bigger.
-        built.prewarm('a', [{ speciesId: REFERENCE, instanceId: 'roster-reference' }]);
-        built.sendOut('a', REFERENCE, 'roster-reference');
+        if (!alone) {
+          built.prewarm('a', [{ speciesId: REFERENCE, instanceId: 'roster-reference' }]);
+          built.sendOut('a', REFERENCE, 'roster-reference');
+        }
         built.prewarm('b', [{ speciesId, instanceId: `roster-${speciesId}` }]);
         built.sendOut('b', speciesId, `roster-${speciesId}`);
         battle = built;

@@ -28,8 +28,8 @@ const TERRAIN = process.env.TERRAIN ?? 'meadow';
 const TIME = process.env.TIME ?? 'day';
 /** Viewport, pixel ratio and the crop (CSS px) that frames the opponent and leaves the reference out. */
 const DEVICES = {
-  iphone: { width: 390, height: 844, dpr: 2, clip: { x: 170, y: 170, width: 220, height: 330 } },
-  ipad: { width: 820, height: 1180, dpr: 2, clip: { x: 360, y: 170, width: 460, height: 530 } },
+  iphone: { width: 390, height: 844, dpr: 2, clip: { x: 140, y: 150, width: 250, height: 370 } },
+  ipad: { width: 820, height: 1180, dpr: 2, clip: { x: 300, y: 150, width: 440, height: 570 } },
 };
 const devices = (process.env.DEVICES ?? 'iphone,ipad').split(',');
 
@@ -65,7 +65,7 @@ async function shoot({ id, device }) {
   });
   try {
     const page = await ctx.newPage();
-    const url = `${BASE}/roster.html?species=${id}&quality=${TIER}&terrain=${TERRAIN}&time=${TIME}${process.env.STUDIO ? '&studio' : ''}${process.env.SILHOUETTE ? '&silhouette' : ''}`;
+    const url = `${BASE}/roster.html?species=${id}&quality=${TIER}&terrain=${TERRAIN}&time=${TIME}${process.env.STUDIO ? '&studio' : ''}${process.env.ALONE ? '&alone' : ''}${process.env.SILHOUETTE ? '&silhouette' : ''}`;
     await page.goto(url);
     await page.waitForFunction(() => window.__roster?.ready(), null, { timeout: 120_000 });
     await page.waitForTimeout(300);
