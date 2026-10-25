@@ -35,6 +35,8 @@ const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) 
 const AWAY = Number(process.env.AWAY ?? 1.8);
 /** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
+/** The wake burst is held this far (ms) into its animation for the "just woken" shot: software rendering is too slow to catch it live. */
+const BURST_AT = Number(process.env.BURST_AT ?? 700);
 /** Real ms between the "just woken" shot and the "a moment later" one, so the sparkles' drift shows. */
 const LATER = Number(process.env.LATER ?? 1400);
 /** The echoes' clock, pinned (ms), so both phones show them at the same places. */
@@ -356,12 +358,30 @@ async function shootPower(page, device, mapId, ids, p) {
   await until(page, () => document.querySelector('[data-testid="crooked-card"]') !== null);
   await page.getByTestId('crooked-card-ok').dispatchEvent('click');
   const woke = Date.now();
+  // Hold the wake burst (glows and puff) at BURST_AT ms, once it is on screen: the frame then shows it, and the caption says so.
+  await until(
+    page,
+    (at) => {
+      const held = document
+        .getAnimations()
+        .filter((a) => a.effect?.target?.closest?.('.crooked-door-side-glow, .crooked-door-burst'));
+      if (held.length === 0) return false;
+      for (const a of held) {
+        a.pause();
+        a.currentTime = at;
+      }
+      window.__burstHeld = held;
+      return true;
+    },
+    BURST_AT,
+  );
   // The Keeper walks off to the same spot on every phone: the woken door stays in view, not under the lantern.
   await clearSpot(page, p);
   await look();
   await page.waitForTimeout(AFTER_WAKE + 1500);
-  await shot(page, device, `${p.power}-woke`, { msAfterWake: Date.now() - woke });
-  // A moment later, from the same view: the sparkles have drifted on.
+  await shot(page, device, `${p.power}-woke`, { burstHeldMs: BURST_AT });
+  // A moment later, from the same view: the burst has played out and the sparkles have drifted on.
+  await page.evaluate(() => window.__burstHeld?.forEach((a) => a.play()));
   await page.waitForTimeout(LATER);
   await shot(page, device, `${p.power}-later`, { msAfterWake: Date.now() - woke });
 }

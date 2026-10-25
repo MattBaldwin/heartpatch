@@ -51,7 +51,7 @@ const GOLDEN_CONFIG: KeeperConfig = {
   eyeColor: 'violet',
   outfit: 'pumpkin',
 };
-const GOLDEN_HASH = '4c9ed66e81af00f0cc5379ce835aa96d';
+const GOLDEN_HASH = 'ec7a73d840234fb9963b8cd532ccc762';
 
 /**
  * Babylon's report of a shader variant that failed to compile or link, which

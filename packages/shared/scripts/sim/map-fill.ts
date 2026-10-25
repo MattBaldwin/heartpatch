@@ -4,6 +4,7 @@ import { heartSeedOf, pickReclaimed, rollStrikes, strengthOf } from '../../src/h
 import { isTradingPost } from '../../src/territory/reach.js';
 import { hexDistance, hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
+import { isWater } from '../../src/schemas/data/terrains.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
 import {
   borderEdges,
@@ -114,7 +115,11 @@ export function runMapFill(
   rules: MapFillRules,
   config: { readonly rootSeed: string; readonly mapSeed: string; readonly days: number },
 ): MapFillRun {
-  const map = generateMap(GAME_DATA, { seed: config.mapSeed, playerCount: scenario.mapSeats });
+  const map = generateMap(GAME_DATA, {
+    seed: config.mapSeed,
+    playerCount: scenario.mapSeats,
+    ...(scenario.patchType ? { patchType: scenario.patchType } : {}),
+  });
   const tiles: readonly MapTile[] = map.tiles;
   const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
   const seats = scenario.seats;
@@ -126,8 +131,17 @@ export function runMapFill(
       owned.set(hexKey(t), { owner: t.homeSlot, tendedAt: new Date(DAY_ONE) });
     }
   }
-  // Trading posts (#269) are never claimed.
-  const neutral = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
+  // Trading posts (#269) are never claimed, nor water or a Wild Isle's
+  // offshore isles (#621: no roads, bridges or ferries in the model, so
+  // kids claim only land next to theirs).
+  const terrainById = new Map(GAME_DATA.terrains.map((t) => [t.id, t]));
+  const neutral = tiles.filter(
+    (t) =>
+      t.homeSlot === null &&
+      !isTradingPost(t) &&
+      !isWater(terrainById.get(t.terrain)) &&
+      t.isle === undefined,
+  );
   const neutralLeft = () => neutral.filter((t) => !owned.has(hexKey(t)));
   const wentWildBefore = new Set<HexKey>();
   const rng = Rng.fromSeed(deriveSeed(config.rootSeed, scenario.id, rules.label));

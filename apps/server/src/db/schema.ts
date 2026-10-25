@@ -1328,6 +1328,11 @@ export const tileTending = pgTable(
     // When its owner claimed it (#277): a tile claimed since the last
     // nightfall is safe on its first night. Null: held before this column.
     claimedAt: timestamptz('claimed_at'),
+    // Wild Isle (#621): cut off from its owner's home (no supply line, shared
+    // `supplyMap`) since then; it fades from then and can go wild
+    // `TRAVEL_RULES.stranded.afterHours` later. A lost bridge's grace can put
+    // it ahead of now. Null: supplied (always, on a Cozy Patch).
+    strandedSince: timestamptz('stranded_since'),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),
@@ -1335,6 +1340,38 @@ export const tileTending = pgTable(
       'tile_tending_wild_set',
       sql`(${t.wildNight} is null) = (${t.wildFromUserId} is null) and (${t.wildNight} is null) = (${t.wildAt} is null)`,
     ),
+  ],
+);
+
+/**
+ * Wild Isle roads (#621): a tile attribute, not a building, so a road and a
+ * building share a tile. Level 1 is a Path, 2 a Road, 3 a Paved road
+ * (`TRAVEL_RULES.roads`). Owner-only (owner answer Q3): it counts only while
+ * its owner holds the tile, and comes down with half back when the tile is
+ * captured or goes wild; a leaver's row is ignored until the tile is laid
+ * again. Locked at step 6b (tech spec §7), after `tile_explore`.
+ */
+export const tileRoads = pgTable(
+  'tile_roads',
+  {
+    tileId: uuid('tile_id')
+      .primaryKey()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id').notNull(),
+    ownerUserId: uuid('owner_user_id').notNull(),
+    level: smallint('level').notNull(),
+    builtAt: timestamptz('built_at').notNull().defaultNow(),
+  },
+  (t) => [
+    // Laying one takes the member row first (step 2), so this key's share
+    // lock is never taken after a tile lock.
+    foreignKey({
+      name: 'tile_roads_owner_member_fk',
+      columns: [t.mapId, t.ownerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('tile_roads_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
+    check('tile_roads_level', sql`${t.level} between 1 and 3`),
   ],
 );
 

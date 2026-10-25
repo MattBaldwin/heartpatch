@@ -51,6 +51,8 @@ import { createMilestonesService, milestoneRewardId } from '../modules/milestone
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { createRoadsRepo } from '../modules/roads/repo.js';
+import { createTendingRepo } from '../modules/territory/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
@@ -58,6 +60,7 @@ import { createTutorialService } from '../modules/tutorial/service.js';
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService, grantClothing } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
+import { createPostSellRepo } from '../modules/post-sell/repo.js';
 import { createJobsRepo } from '../jobs/repo.js';
 import { runConsumer } from '../jobs/consumers.js';
 import { appendGameEvent } from './game-events.js';
@@ -77,6 +80,8 @@ import {
   fenceSegments,
   gameEvents,
   tileExplore,
+  tileRoads,
+  tileTending,
   gatherJobs,
   heartCoinLedger,
   houseGifts,
@@ -200,6 +205,45 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await nightfallAgainst(ids, () =>
       unplanned((tx) => createBattlesRepo(tx).lockSquishies([...ids].reverse())),
     );
+  });
+
+  it('a basket locks pieces across items in id order, then bag rows, then the balance (post-sell `lockPieces`, #655 step 10b)', async () => {
+    const { userId } = await patch();
+    // Two items' pieces interleaved in id order, stored highest id first.
+    const ids = [randomUUID(), randomUUID(), randomUUID()].sort();
+    const itemOf = (i: number) => (i === 1 ? 'pom-pom-beanie' : 'flower-crown');
+    await db
+      .insert(clothingOwned)
+      .values(
+        ids.map((id, i) => ({ id, userId, itemId: itemOf(i), source: 'dev-grant' })).reverse(),
+      );
+    const lockPiece = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: clothingOwned.id })
+        .from(clothingOwned)
+        .where(eq(clothingOwned.id, id))
+        .for('update');
+    let locked: string[] = [];
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockPiece(tx, ids[0]!);
+      const pid = await backendPid(tx);
+      running = unplanned(async (sale) => {
+        const rows = await createPostSellRepo(sale).lockPieces(userId, [
+          'pom-pom-beanie',
+          'flower-crown',
+        ]);
+        locked = rows.map((r) => r.id);
+      });
+      await waitUntilBlockedBy(db, pid);
+      for (const id of ids.slice(1)) await lockPiece(tx, id);
+    });
+    await running;
+    // One statement across both items, in id order, not item by item. The
+    // bag rows (11) and the balance (12b) after it are checked in
+    // `post-sell.test.ts`'s lock order block.
+    expect(locked).toEqual(ids);
   });
 
   it("locks a habitat's residents in id order before moving them out (buildings `moveOutAll`)", async () => {
@@ -1981,6 +2025,57 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       ).map((f) => f.id);
     });
     expect(locked).toEqual(fenceIds);
+  });
+
+  it('locks the roads on lost land in tile id order (roads `lockOnTiles`, #621 step 6b)', async () => {
+    const { mapId, userId, tileIds } = await fires();
+    await db
+      .insert(tileRoads)
+      .values(
+        [...tileIds].reverse().map((tileId) => ({ tileId, mapId, ownerUserId: userId, level: 1 })),
+      );
+    const lockRoadRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileRoads.tileId })
+        .from(tileRoads)
+        .where(eq(tileRoads.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockRoadRow, tileIds, async () => {
+      locked = (
+        await unplanned((tx) => createRoadsRepo(tx).lockOnTiles([...tileIds].reverse()))
+      ).map((r) => r.tileId);
+    });
+    expect(locked).toEqual(tileIds);
+  });
+
+  it("locks a supply line's tending rows in tile id order (territory `lockForSupply`, #621 step 6)", async () => {
+    const { mapId, tileIds } = await fires();
+    await db
+      .insert(tileTending)
+      .values([...tileIds].reverse().map((tileId) => ({ tileId, mapId, tendedAt: new Date() })));
+    const lockTendingRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileTending.tileId })
+        .from(tileTending)
+        .where(eq(tileTending.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    // Nightfall's own pass waits for the rows, in tile id order.
+    await rowsAgainst(lockTendingRow, tileIds, async () => {
+      locked = await unplanned((tx) =>
+        createTendingRepo(tx).lockForSupply([...tileIds].reverse(), false),
+      );
+    });
+    expect(locked).toEqual(tileIds);
+    // A capture or road command never waits: it passes over a row held elsewhere.
+    await db.transaction(async (tx) => {
+      await lockTendingRow(tx, tileIds[1]!);
+      const skipped = await unplanned((inner) =>
+        createTendingRepo(inner).lockForSupply([...tileIds].reverse(), true),
+      );
+      expect(skipped).toEqual([tileIds[0], tileIds[2]]);
+    });
   });
 
   it("locks players' explored rows in (user, tile) order (explore `lockExplored`, #199)", async () => {

@@ -10,7 +10,9 @@ import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { guardWatchesOf, writeGuardCheckpoints } from '../jobs/contentment.js';
 import { leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
+import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
+import { refreshSupply } from './supply.js';
 
 /**
  * Land goes wild (#194's path, shared with the Hollow Man's reclaims, #277):
@@ -21,6 +23,9 @@ import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './r
  * 6, id order) and their `tile_tending` rows and checked each is still its
  * owner's; this keeps the rest of tech spec §7's order (defenders, buildings,
  * fences, squishies, inventory). Returns the events to append (`maps` last).
+ * On a Wild Isle (#621) the owners' supply lines are worked out again, roads
+ * there come down for half back, and the tiles in `stranded` (cut off from
+ * home, not untended) are reported with `cause: 'stranded'`.
  */
 export async function rewildTiles(
   tx: Executor,
@@ -29,6 +34,7 @@ export async function rewildTiles(
   night: LocalDate,
   at: Date,
   cause: 'untended' | 'hollow',
+  stranded: ReadonlySet<string> = new Set(),
 ): Promise<NewGameEvent[]> {
   if (going.length === 0) return [];
   const mapId = map.id;
@@ -62,6 +68,14 @@ export async function rewildTiles(
     const guards = await territory.clearDefenders(tile.id);
     returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
   }
+  // Wild Isle (#621): land beyond what went wild may be cut off from home
+  // now. Their tending rows (step 6, with the tiles), never waited for.
+  const supply = await refreshSupply(
+    tx,
+    mapId,
+    owned.map(([userId]) => userId),
+    at,
+  );
   // Homesteads (#199) beyond land that went wild may be cut off from home,
   // and a homestead the Hollow Man won back (#277) is no longer one; it keeps
   // its explore progress. After the tiles and defenders, before buildings
@@ -71,6 +85,13 @@ export async function rewildTiles(
     mapId,
     owned.map(([userId]) => userId),
     at,
+  );
+  // Its roads come down for half back (#621, step 6b after `tile_explore`).
+  const lostRoads = await takeDownRoadsOnLostLand(
+    tx,
+    mapId,
+    new Map(going.map((t) => [t.id, t.ownerUserId])),
+    'wild',
   );
   // Fires and Training Grounds (#277) on that land come down too (#202,
   // step 8). What they give back goes in their owners' bags with the
@@ -122,6 +143,7 @@ export async function rewildTiles(
     ...refunds,
     ...planGrants(lostFires.flatMap((l) => l.batches)),
     ...lostOutputGrants(lostFires),
+    ...lostRoadGrants(lostRoads),
   ];
   const events: NewGameEvent[] =
     workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, toLock) : [];
@@ -129,24 +151,35 @@ export async function rewildTiles(
   for (const { userId, items, refId } of refunds) {
     await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
   }
+  await grantLostRoads(tx, mapId, lostRoads);
   // A lost Factory's batches bank and give back (#295); trainees land what
   // they earned and stop, then their Training Grounds go (#277).
   const training = await finishLostBuildings(tx, mapId, lostFires, at);
   events.push(
+    ...supply,
     ...homesteads,
+    ...lostRoads.map((l) => l.event),
     ...lostFires.map((l) => l.event),
     ...lostFences.map((l) => l.event),
     ...training,
   );
   for (const [userId, list] of owned) {
-    const payload: GameEventPayload<'tile.rewilded'> = {
-      userId,
-      night,
-      tiles: list.map(({ q, r, terrain }) => ({ q, r, terrain })),
-      returnedSquishyIds: returned.get(userId) ?? [],
-      ...(cause === 'hollow' ? { cause } : {}),
-    };
-    events.push({ mapId, type: 'tile.rewilded', actorUserId: null, payload });
+    // Cut off from home (#621) and untended land go wild together under
+    // one cap; each cause is its own event, the squishies sent home on the first.
+    const groups = [
+      { cause, tiles: list.filter((t) => !stranded.has(t.id)) },
+      { cause: 'stranded' as const, tiles: list.filter((t) => stranded.has(t.id)) },
+    ].filter((g) => g.tiles.length > 0);
+    groups.forEach((group, i) => {
+      const payload: GameEventPayload<'tile.rewilded'> = {
+        userId,
+        night,
+        tiles: group.tiles.map(({ q, r, terrain }) => ({ q, r, terrain })),
+        returnedSquishyIds: i === 0 ? (returned.get(userId) ?? []) : [],
+        ...(group.cause === 'untended' ? {} : { cause: group.cause }),
+      };
+      events.push({ mapId, type: 'tile.rewilded', actorUserId: null, payload });
+    });
   }
   return events;
 }

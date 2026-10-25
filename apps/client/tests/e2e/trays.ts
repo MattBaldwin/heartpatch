@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
+import { still } from './layout.js';
 
 // The map's controls live in two side trays (ui/trays). A spec that taps one
 // opens its tray first, the way a player would.
@@ -79,9 +80,13 @@ export async function trayButton(
  * The open tray's slide has ended: ui/trays marks a sliding tray `hp-settling`
  * (tray-state.ts SETTLING) until its transitionend, so a row is never measured
  * mid-slide. No sleep: CI renders in software and a slide can start late.
+ * Late enough, the class's 450 ms fallback (ui/trays/trays.ts SETTLE_FALLBACK_MS) goes
+ * before the slide does (CI's iPhone measured the adventure tray's rows clear
+ * of a chip they sit under once in place). So the tray's box must hold still too.
  */
 export async function traySettled(page: Page, side: TraySide): Promise<void> {
   const tray = page.getByTestId(`tray-${side}`);
   await expect(tray).toHaveClass(/tray-shown/);
   await expect(tray).not.toHaveClass(/hp-settling/);
+  await still(page, `[data-testid="tray-${side}"]`);
 }
