@@ -1,5 +1,6 @@
 import {
   isTradingPost,
+  isWater,
   FEELINGS,
   JOB_RULES,
   RESOURCES,
@@ -47,6 +48,23 @@ export interface TileInfo {
   readonly home: boolean;
 }
 
+/**
+ * Wild Isle's tile names (#621 plan §8): water and the coast wear an emoji
+ * in the panel's title ("Ocean 🌊"). Water is nobody's land and can never be
+ * claimed, so its owner line is what it's like (the terrain's description:
+ * "Just waves out here. Nothing to claim!"), and it offers no actions.
+ */
+export const WATER_WORDS = {
+  emoji: { ocean: '🌊', river: '💧', 'wild-lake': '💧', coast: '🐚' } as Readonly<
+    Record<string, string>
+  >,
+} as const;
+
+/** True for a water tile (shared `isWater`): no Claim, no Explore, nothing to build (#621). */
+export function isWaterTile(tile: Pick<PublicTile, 'terrain'>): boolean {
+  return isWater(TERRAINS.find((t) => t.id === tile.terrain));
+}
+
 export function describeTile(
   tile: PublicTile,
   member: (userId: string) => MapMember | undefined,
@@ -70,8 +88,12 @@ export function describeTile(
   const home = tile.homeSlot !== null;
 
   const post = isTradingPost(tile);
+  const water = isWater(terrain);
+  const emoji = WATER_WORDS.emoji[tile.terrain];
   let owner: string;
-  if (post) {
+  if (water) {
+    owner = terrain?.description ?? 'Just water out here.';
+  } else if (post) {
     owner = 'A trading post for every Keeper. Nobody can claim it!';
   } else if (home) {
     if (mine) owner = 'Your home base. Nobody can ever take it!';
@@ -90,7 +112,7 @@ export function describeTile(
     title:
       (post ? tile.post?.name : undefined) ??
       (homeName !== null ? seedTitle(homeName) : undefined) ??
-      `${terrain?.name ?? 'Mystery land'}${mine && !home ? HOMESTEAD_WORDS.tag(tile) : ''}`,
+      `${terrain?.name ?? 'Mystery land'}${emoji !== undefined ? ` ${emoji}` : ''}${mine && !home ? HOMESTEAD_WORDS.tag(tile) : ''}`,
     about: terrain?.description ?? 'Nobody knows much about this spot yet.',
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,

@@ -4,9 +4,9 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
-import { hexKey, hexNeighbors, hexToWorld, type MapView } from '@heartpatch/shared';
+import { hexKey, hexNeighbors, hexToWorld, worldToHex, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BORDER, HEX_SIZE, MAP_DETAIL, PLAYER_COLORS, type PropKind } from './map-config.js';
+import { BORDER, HEX_SIZE, MAP_DETAIL, OCEAN, PLAYER_COLORS, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
 import {
   buildProp,
@@ -16,7 +16,7 @@ import {
   tileScreenRectOf,
   type MapSceneOptions,
 } from './map-scene.js';
-import { testPatch, testView, userId } from './test-view.js';
+import { testPatch, testView, testWildIsle, userId } from './test-view.js';
 import { wildMarkers } from './wild-markers.js';
 
 describe('MapScene', () => {
@@ -448,6 +448,8 @@ describe('MapScene', () => {
       'crystal',
       'hay-bale',
       'jack-o-lantern',
+      'shell',
+      'driftwood',
     ];
     for (const kind of kinds) {
       const { mesh, shadow } = buildProp(scene, kind);
@@ -691,6 +693,107 @@ describe('MapScene', () => {
     camera.setTarget(new Vector3(0, 40, 80));
     scene.render();
     expect(tileScreenRectOf(scene, middle)).toBeNull();
+  });
+});
+
+describe('Wild Isle on the map (#621 W1-4)', () => {
+  const engine = new NullEngine({
+    renderWidth: 400,
+    renderHeight: 800,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+  const view = testWildIsle();
+  const ocean = view.tiles.filter((t) => t.terrain === 'ocean');
+
+  function build(v: MapView = view) {
+    const scene = new Scene(engine);
+    const map = new MapScene(scene, v);
+    const enabled = (prefix: string) =>
+      scene.meshes.filter((m) => m.name.startsWith(prefix) && m.isEnabled()) as Mesh[];
+    return { scene, map, enabled };
+  }
+
+  it('draws the ocean as one sea, never as tile instances or props', () => {
+    const { scene, map, enabled } = build();
+    expect(ocean.length).toBeGreaterThan(150);
+    // Every tile is still on the map (taps find them) ...
+    expect(map.stats.tiles).toBe(1027);
+    // ... but only land, rivers and lakes are tile instances.
+    const instanced = enabled('tiles-').reduce((n, m) => n + m.thinInstanceCount, 0);
+    expect(instanced).toBe(1027 - ocean.length);
+    // Rivers and lakes borrow the lake's tiles, the coast the meadow's: no new tile mesh.
+    expect(scene.getMeshByName('tiles-river')).toBeNull();
+    expect(scene.getMeshByName('tiles-wild-lake')).toBeNull();
+    expect(scene.getMeshByName('tiles-coast')).toBeNull();
+    expect(map.stats.tileMeshes).toBeLessThanOrEqual(10);
+    const sea = scene.getMeshByName('sea')!;
+    expect(sea.isEnabled()).toBe(true);
+    expect(sea.position.y).toBe(OCEAN.level);
+    // The island is the sea's grass plate and beach; Cozy's round island isn't built.
+    expect(scene.getMeshByName('island-beach')).toBeTruthy();
+    expect(scene.getMeshByName('island-rim')).toBeNull();
+    // No prop stands out at sea.
+    const oceanKeys = new Set(ocean.map(hexKey));
+    const props = scene.meshes.filter(
+      (m): m is Mesh => m instanceof Mesh && m.thinInstanceCount > 0 && m.name.endsWith('-far'),
+    );
+    expect(props.length).toBeGreaterThan(10);
+    for (const m of props.filter((x) => !x.name.startsWith('tiles-'))) {
+      for (const matrix of m.thinInstanceGetWorldMatrices()) {
+        const t = matrix.getTranslation();
+        expect(oceanKeys.has(hexKey(worldToHex({ x: t.x, z: t.z }, HEX_SIZE))), m.name).toBe(false);
+      }
+    }
+  });
+
+  it('adds only a few draw calls over a Cozy patch however big the sea', () => {
+    const wild = build().scene.meshes.filter((m) => m.isEnabled()).length;
+    const cozy = build(testView(6, 'map-render-test', 6)).scene.meshes.filter((m) =>
+      m.isEnabled(),
+    ).length;
+    // The sea and beach (Cozy's island and rim go), shells and driftwood.
+    expect(wild - cozy).toBeLessThanOrEqual(4);
+  });
+
+  it('puts Cozy maps on the same round island as before, with no sea', () => {
+    const { scene } = build(testView(4));
+    expect(scene.getMeshByName('sea')).toBeNull();
+    expect(scene.getMeshByName('island')).toBeTruthy();
+    expect(scene.getMeshByName('island-rim')).toBeTruthy();
+    expect(scene.getMeshByName('island-beach')).toBeNull();
+  });
+
+  it('dresses the coast with shells and driftwood', () => {
+    const { scene } = build();
+    expect(scene.getMeshByName('shell')?.thinInstanceCount ?? 0).toBeGreaterThan(20);
+    expect(scene.getMeshByName('driftwood')?.thinInstanceCount ?? 0).toBeGreaterThan(5);
+  });
+
+  it('picks an ocean tile and rings it on the water', () => {
+    const { scene, map } = build();
+    const tile = ocean[0]!;
+    const p = hexToWorld(tile, HEX_SIZE);
+    const camera = new TargetCamera('cam', new Vector3(p.x, 12, p.z - 6), scene);
+    camera.setTarget(new Vector3(p.x, OCEAN.level, p.z));
+    scene.activeCamera = camera;
+    expect(map.pick(200, 400)).toMatchObject({ q: tile.q, r: tile.r, terrain: 'ocean' });
+    map.select(tile);
+    expect(scene.getMeshByName('selection')!.position.y).toBe(OCEAN.level);
+  });
+
+  it('stands the isles out at sea in the water, and island tiles on the island', () => {
+    const { scene } = build();
+    const meadow = scene.getMeshByName('tiles-meadow') as Mesh;
+    const matrices = meadow.thinInstanceGetWorldMatrices();
+    const ys = matrices.map((m) => m.getTranslation().y);
+    expect(Math.min(...ys)).toBeCloseTo(-OCEAN.sink, 6);
+    // Most meadow tiles stand on the island's top.
+    expect(ys.filter((y) => y === 0).length).toBeGreaterThan(200);
   });
 });
 

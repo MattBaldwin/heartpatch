@@ -3,6 +3,7 @@ import {
   GAME_DATA,
   hexToWorld,
   isTradingPost,
+  isWater,
   type Hex,
   type PublicTile,
 } from '@heartpatch/shared';
@@ -147,10 +148,32 @@ export function tileJitter(tile: Hex, terrain: string): TileJitter {
   };
 }
 
-/** True when a tile is drawn muted: wild land nobody owns. Juniper's Gap always glows in colour. */
+/**
+ * True when a tile is drawn muted: wild land nobody owns. Juniper's Gap
+ * always glows in colour, and so does water (Wild Isle, #621): nobody can
+ * ever claim it, so it never looks wild.
+ */
 export function isMuted(tile: Pick<PublicTile, 'ownerUserId' | 'terrain'>): boolean {
   // A trading post (#269) belongs to everyone, so it's never wild-looking.
-  return tile.ownerUserId === null && tile.terrain !== 'junipers-gap' && !isTradingPost(tile);
+  return (
+    tile.ownerUserId === null &&
+    tile.terrain !== 'junipers-gap' &&
+    !isTradingPost(tile) &&
+    !WATER.has(tile.terrain)
+  );
+}
+
+/** Water terrains (shared `isWater`): Wild Isle's ocean, rivers and lakes (#621). */
+const WATER: ReadonlySet<string> = new Set(GAME_DATA.terrains.filter(isWater).map((t) => t.id));
+
+/** Deep water: the ocean, drawn as the sea under the island, never as tiles (#621 revision 1). */
+const DEEP: ReadonlySet<string> = new Set(
+  GAME_DATA.terrains.filter((t) => t.water === 'deep').map((t) => t.id),
+);
+
+/** True for an ocean tile: no tile mesh, no props, no motes; the sea is drawn under it. */
+export function isOcean(tile: Pick<PublicTile, 'terrain'>): boolean {
+  return DEEP.has(tile.terrain);
 }
 
 export type Rgb = readonly [number, number, number];

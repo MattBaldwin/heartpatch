@@ -3,6 +3,7 @@ import {
   HEX_DIRECTIONS,
   generateMap,
   hexDistance,
+  hexKey,
   hexToWorld,
   type PublicTile,
 } from '@heartpatch/shared';
@@ -17,8 +18,10 @@ import {
   slotsByUser,
   tintSlot,
   maxZoomFor,
+  hexIslandRadius,
+  islandTiles,
 } from './map-layout.js';
-import { member, testView, userId } from './test-view.js';
+import { member, testView, testWildIsle, userId } from './test-view.js';
 
 describe('findHomeBases', () => {
   it("finds every slot's Heart Seed: the middle of its 7-tile ring", () => {
@@ -168,5 +171,44 @@ describe('maxZoomFor (#318)', () => {
     expect(maxZoomFor(r16, 38)).toBeCloseTo((38 * 16) / 12, 5);
     // A small map never zooms in tighter than the camera allows anyway.
     expect(maxZoomFor({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }, 38)).toBe(38);
+  });
+});
+
+describe('the Wild Isle island (#621)', () => {
+  const view = testWildIsle();
+  const ocean = (t: PublicTile) => t.terrain === 'ocean';
+
+  it('is every tile on a Cozy map', () => {
+    const cozy = testView(1);
+    expect(islandTiles(cozy.tiles, ocean).size).toBe(cozy.tiles.length);
+  });
+
+  it('holds the land, rivers and lakes joined to the middle, and not the isles at sea', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const land = view.tiles.filter((t) => !ocean(t));
+    const isles = land.filter((t) => !island.has(hexKey(t)));
+    expect(isles).toHaveLength(8); // two isles of four
+    for (const t of isles) expect(hexDistance(t, { q: 0, r: 0 })).toBe(18);
+    expect(
+      view.tiles.filter((t) => t.terrain === 'river').every((t) => island.has(hexKey(t))),
+    ).toBe(true);
+  });
+
+  it('sizes the island’s hexagon to hold every corner of its tiles', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const tiles = view.tiles.filter((t) => island.has(hexKey(t)));
+    const r = hexIslandRadius(tiles, HEX_SIZE);
+    const apothem = r * (Math.sqrt(3) / 2);
+    for (const t of tiles) {
+      const p = hexToWorld(t, HEX_SIZE);
+      for (let k = 0; k < 6; k++) {
+        const a = ((30 + 60 * k) * Math.PI) / 180;
+        expect(p.x * Math.cos(a) + p.z * Math.sin(a) + HEX_SIZE).toBeLessThanOrEqual(
+          apothem + 1e-9,
+        );
+      }
+    }
+    // Snug: no bigger than the land's corner tiles need.
+    expect(r).toBeLessThan(hexIslandRadius(view.tiles, HEX_SIZE));
   });
 });

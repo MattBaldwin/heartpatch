@@ -1,6 +1,6 @@
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { describe, expect, it } from 'vitest';
-import { loftRoundedHex, roundedHexOutline } from './hex-mesh.js';
+import { loftRoundedHex, roundedHexOutline, seaDisc } from './hex-mesh.js';
 
 describe('roundedHexOutline', () => {
   it('has six rounded corners, inside the hexagon, touching each edge', () => {
@@ -86,5 +86,51 @@ describe('loftRoundedHex', () => {
     const arrays = loftRoundedHex(1, rings.slice(0, 2), { corner: 0.2, segments: 3 });
     expect(arrays.positions).toHaveLength(2 * 24 * 3);
     expect(arrays.indices).toHaveLength(24 * 2 * 3);
+  });
+});
+
+describe('seaDisc (Wild Isle, #621)', () => {
+  const shape = {
+    inner: 10,
+    shore: 12,
+    shallows: 3,
+    outer: 20,
+    rings: 4,
+    segments: 24,
+    lip: 0.3,
+    shallow: [0.4, 0.8, 0.9],
+    deep: [0.1, 0.4, 0.8],
+  } as const;
+
+  it('faces up on the water and out round the lip (the side Babylon draws)', () => {
+    const arrays = seaDisc(shape);
+    const normals: number[] = [];
+    VertexData.ComputeNormals(arrays.positions, arrays.indices, normals);
+    // The first ring (under the island) is flat water.
+    for (let v = 0; v < shape.segments; v++) expect(normals[v * 3 + 1]!).toBeGreaterThan(0.99);
+    // The lip's widest ring (half way round it) points outwards.
+    const count = arrays.positions.length / 3;
+    const widest = count - shape.segments * 4;
+    const out =
+      arrays.positions[widest * 3]! * normals[widest * 3]! +
+      arrays.positions[widest * 3 + 2]! * normals[widest * 3 + 2]!;
+    expect(out).toBeGreaterThan(0);
+  });
+
+  it('is shallow at the shore and deep past the shallows, out to the edge and its lip', () => {
+    const arrays = seaDisc(shape);
+    const colors = arrays.colors!;
+    const at = (v: number) => colors.slice(v * 4, v * 4 + 4);
+    expect(at(0)).toEqual([0.4, 0.8, 0.9, 1]);
+    expect(at(shape.segments)).toEqual([0.4, 0.8, 0.9, 1]); // the shore
+    const last = arrays.positions.length / 3 - 1;
+    at(last).forEach((v, i) => expect(v).toBeCloseTo([0.1, 0.4, 0.8, 1][i]!, 9));
+    let r = 0;
+    for (let v = 0; v <= last; v++) {
+      r = Math.max(r, Math.hypot(arrays.positions[v * 3]!, arrays.positions[v * 3 + 2]!));
+    }
+    expect(r).toBeCloseTo(shape.outer + shape.lip, 6);
+    // Under the edge, the lip curls back down below the water.
+    expect(Math.min(...arrays.positions.filter((_, i) => i % 3 === 1))).toBeCloseTo(-0.6, 6);
   });
 });

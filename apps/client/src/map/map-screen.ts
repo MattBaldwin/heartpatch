@@ -38,7 +38,7 @@ import { MapSync } from './map-sync.js';
 import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
 import { seedName } from '../home/home-name-view.js';
-import { describeTile } from './tile-info.js';
+import { describeTile, isWaterTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
 import { wildMarkers } from './wild-markers.js';
 import './map.css';
@@ -395,7 +395,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         seedName(state.view, tile),
       ),
     );
-    options.tileActions?.show(panel.actions, tile, state.view);
+    // Water (Wild Isle, #621) can't be claimed, explored or built on.
+    if (isWaterTile(tile)) options.tileActions?.hide();
+    else options.tileActions?.show(panel.actions, tile, state.view);
     if (another) panel.toTop();
     options.invalidate();
   };

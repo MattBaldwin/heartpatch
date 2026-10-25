@@ -41,6 +41,24 @@ const MAP_BUDGET = {
   farTriangles: 620_000,
 } as const;
 
+/**
+ * Wild Isle's budget (#621 W1-4, TUNE), on the radius-18 test island (the
+ * dev page `/island.html`, no server): the plan's 82 draw calls. Its tiles
+ * are about a 6-seat Cozy patch's (the ocean is one sea, never tiles), so
+ * triangles get Cozy's budget plus a little for the coast's shells and
+ * driftwood: measured 64 draw calls, 1.17M triangles up close, 587k far.
+ */
+const WILD_BUDGET = {
+  drawCalls: 82,
+  nearTriangles: 1_400_000,
+  farTriangles: 680_000,
+} as const;
+
+/** The dev island page's hook (src/map/gallery/island-gallery-main.ts). */
+type IslandHooks = Window & {
+  __islandMap?: { ready: () => boolean; stats: () => MapDebug | null };
+};
+
 function mapState(page: Page): Promise<MapDebug | null> {
   return hook<MapDebug>(page, 'map');
 }
@@ -361,4 +379,41 @@ test('an open home says it is saved for the next Keeper, and offers nothing to t
     'A cozy home, saved for the next Keeper who joins! ✨',
   );
   await expect(panel.getByRole('button', { name: /Claim|Challenge/ })).toHaveCount(0);
+});
+
+test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoomed out (#621)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000); // shader compiles; CI renders in software
+  const measure = async (query: string) => {
+    await page.goto(`/island.html?tier=high&${query}`);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const hook = (window as IslandHooks).__islandMap;
+            return hook?.ready() === true ? (hook.stats()?.drawCalls ?? 0) : 0;
+          }),
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(40);
+    return (await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null))!;
+  };
+  const near = await measure('patch=wild');
+  expect(near.detail).toBe('near');
+  // The whole radius-18 map, the ocean drawn as one sea (no ocean tile instances).
+  expect(near.tiles).toBe(1027);
+  expect(near.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
+  expect(near.activeTriangles).toBeLessThanOrEqual(WILD_BUDGET.nearTriangles);
+  const far = await measure('patch=wild&far=1');
+  expect(far.detail).toBe('far');
+  test.info().annotations.push({
+    type: 'wild isle budget',
+    description: JSON.stringify({
+      near: { drawCalls: near.drawCalls, triangles: near.activeTriangles },
+      far: { drawCalls: far.drawCalls, triangles: far.activeTriangles },
+    }),
+  });
+  expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
+  expect(far.activeTriangles).toBeLessThanOrEqual(WILD_BUDGET.farTriangles);
 });

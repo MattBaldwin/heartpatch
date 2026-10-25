@@ -1,7 +1,14 @@
 import { JOB_RULES, RESOURCES, workSource, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { MapState } from './map-state.js';
-import { describeTile, guardianLine, watchFeelingsLine, type TileInfo } from './tile-info.js';
+import {
+  describeTile,
+  guardianLine,
+  isWaterTile,
+  watchFeelingsLine,
+  WATER_WORDS,
+  type TileInfo,
+} from './tile-info.js';
 import { testView, userId } from './test-view.js';
 
 const state = new MapState(testView(2));
@@ -251,5 +258,45 @@ describe('watchFeelingsLine (#531)', () => {
   it('never uses an avoided word', () => {
     const all = ['joy', 'cozy', 'brave', 'silly', 'sleepy', 'spooky'] as const;
     expect(watchFeelingsLine([...all])).not.toMatch(AVOIDED);
+  });
+});
+
+describe('Wild Isle tiles (#621 plan §8)', () => {
+  const info = (terrain: string, extra: Partial<PublicTile> = {}) =>
+    describeTile(tile({ terrain, ...extra }), lookup, userId(1));
+
+  it('names water and the coast with their emoji', () => {
+    expect(info('ocean').title).toBe('Ocean 🌊');
+    expect(info('river').title).toBe('River 💧');
+    expect(info('wild-lake').title).toBe('Lake 💧');
+    expect(info('coast').title).toBe('Coast 🐚');
+    // Cozy's lake stays as it was.
+    expect(info('lake').title).toBe('Lake');
+  });
+
+  it('says what water is like instead of whose land it is, with nothing to gather or guard', () => {
+    expect(info('ocean').owner).toBe('Just waves out here. Nothing to claim!');
+    expect(info('river').owner).toBe('Too deep to wade. A bridge would do it!');
+    expect(info('wild-lake').owner).toBe('Deep and sparkly. A ferry could cross it!');
+    for (const terrain of ['ocean', 'river', 'wild-lake']) {
+      const w = info(terrain);
+      expect(w.resource, terrain).toBeNull();
+      expect(w.guardians, terrain).toBeNull();
+      expect(w.gatherer, terrain).toBeNull();
+      expect(isWaterTile({ terrain }), terrain).toBe(true);
+    }
+    // The coast is land: claimable, with an owner line like any land.
+    expect(info('coast').owner).toBe('Wild land.');
+    expect(info('coast', { ownerUserId: userId(1) }).title).toBe('Coast 🐚');
+    expect(isWaterTile({ terrain: 'coast' })).toBe(false);
+    expect(isWaterTile({ terrain: 'lake' })).toBe(false);
+  });
+
+  it('keeps every Wild Isle line short and free of avoided words', () => {
+    for (const terrain of Object.keys(WATER_WORDS.emoji)) {
+      const text = allText(info(terrain));
+      expect(text, terrain).not.toMatch(AVOIDED);
+      expect(info(terrain).owner.split(/\s+/).length, terrain).toBeLessThanOrEqual(12);
+    }
   });
 });
