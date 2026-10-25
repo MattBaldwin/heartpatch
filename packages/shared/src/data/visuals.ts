@@ -1839,21 +1839,6 @@ export const PARTS: Part[] = [
   // #382 wave 2: twenty-three parts so a tusk, a snout, a curly tail, a chest bib, hug arms, a slide
   // trail, a lure, a ram horn and a stacked wing can be the silhouette instead of a small add-on. All existing
   // primitives (no client geometry code); a species' `glow` lights them like any other part.
-  // A pair of tusks curling up from the snout (`fangs` only points down).
-  {
-    id: 'tusks',
-    slot: 'fangs',
-    shape: 'cone',
-    size: [0.1, 0.26, 0.1],
-    color: 'white',
-    layout: pair,
-    around: 18,
-    up: -14,
-    tilt: 25,
-    splay: 0,
-    sink: 0.5,
-    jitter: 0.05,
-  },
   // A zigzag wake of ice on the ground behind a sliding penguin.
   {
     id: 'slide-trail',
@@ -1990,9 +1975,9 @@ export const PARTS: Part[] = [
     size: [0.1, 0.3, 0.1],
     color: 'white',
     layout: pair,
-    around: 22,
-    up: -22,
-    tilt: 30,
+    around: 12,
+    up: -20,
+    tilt: 90,
     splay: 0,
     sink: 0.35,
     jitter: 0.03,

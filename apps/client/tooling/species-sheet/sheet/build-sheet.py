@@ -31,7 +31,7 @@ def cropframe(i,dev,q=84):
     sil=np.array(Image.open(f"{R}/silnew/{i}-{dev}-high.png").convert('L'))<110
     ys,xs=np.where(sil)
     m=60 if dev=='iphone' else 100
-    x0=max(0,xs.min()-m); x1=min(col.width,xs.max()+m)
+    x0=max(0,xs.min()-m); x1=min(col.width,xs.max()+m*2)
     y0=max(0,ys.min()-m); y1=min(col.height,ys.max()+m)
     # keep a floor strip under the squishy so its shadow shows
     y1=min(col.height,y1+m)

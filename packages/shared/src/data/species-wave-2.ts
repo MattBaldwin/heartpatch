@@ -755,7 +755,7 @@ export const WAVE_2_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#2b5c86', '#8fd3ff', '#fffbd0', '#183550'],
-      parts: ['spooky-eyes', 'smile', 'tusks', 'lure-beads', 'side-fins', 'tail-fan'],
+      parts: ['spooky-eyes', 'smile', 'lure-beads', 'side-fins', 'tail-fan'],
       stance: 0,
       pose: 'hover',
       glow: 'accent',
@@ -778,7 +778,7 @@ export const WAVE_2_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#2b5c86', '#8fd3ff', '#fffbd0', '#183550'],
-      parts: ['spooky-eyes', 'smile', 'tusks', 'lure-beads', 'side-fins', 'tail-fan', 'fin-row'],
+      parts: ['spooky-eyes', 'smile', 'lure-beads', 'side-fins', 'tail-fan', 'fin-row'],
       stance: 0,
       pose: 'hover',
       glow: 'accent',
@@ -805,7 +805,6 @@ export const WAVE_2_SPECIES: Species[] = [
       parts: [
         'spooky-eyes',
         'smile',
-        'tusks',
         'lure-beads',
         'side-fins',
         'tail-fan',
