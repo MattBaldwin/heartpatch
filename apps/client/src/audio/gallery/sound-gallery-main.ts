@@ -1,6 +1,6 @@
 import { buttonClass } from '../../ui/button/button.js';
 import { el } from '../../ui/dom.js';
-import { MIX, MUSIC } from '../audio-config.js';
+import { MUSIC } from '../audio-config.js';
 import { createEngine, renderLoop, type Engine } from '../audio-engine.js';
 import { CUE_NAMES, type CueName } from '../cues.js';
 import { loadInstruments, type InstrumentBank } from '../music-samples.js';
@@ -8,7 +8,7 @@ import { loopSeconds, SCORES, type TrackId } from '../music-score.js';
 import { RECORDED } from '../recorded.js';
 import { loadSamples, type SampleId } from '../samples.js';
 import { RECIPES } from '../sfx.js';
-import { noiseBuffer, roomImpulse } from '../synth.js';
+import { noiseBuffer } from '../synth.js';
 import '../../ui/auth/auth.css';
 import './sound-gallery.css';
 
@@ -20,7 +20,7 @@ import './sound-gallery.css';
  * `window.__heartpatchSounds.check()` renders every cue and loop offline and
  * reports its length and peak (silence or clipping shows up there), and how
  * long each loop took to render. `capture(track, seconds)` renders a loop as
- * the game plays it, through the music's reverb send, for
+ * the game plays it (its room's echo is rendered in), for
  * `tooling/music-capture` (#664).
  */
 
@@ -188,14 +188,7 @@ window.__heartpatchSounds = {
     source.buffer = loop;
     source.loop = true;
     source.loopEnd = loop.duration;
-    const reverb = offline.createConvolver();
-    reverb.buffer = roomImpulse(offline, MIX.reverbS);
-    const send = offline.createGain();
-    send.gain.value = MIX.musicReverb;
     source.connect(offline.destination);
-    source.connect(send);
-    send.connect(reverb);
-    reverb.connect(offline.destination);
     source.start(0);
     const out = await offline.startRendering();
     return { rate, loopS: loop.duration, renderMs, samples: Array.from(out.getChannelData(0)) };

@@ -17,7 +17,7 @@ export const MIX = {
   reverbS: 1.4, // TUNE
   sfxReverb: 0.22, // TUNE: cozy, not a cathedral
   uiReverb: 0.08, // TUNE: button ticks stay dry and close
-  /** The music's soft room (#664): a little more than the SFX, so the instruments bloom. */
+  /** The music's soft room (#664), rendered into each loop: a little more than the SFX, so the instruments bloom. */
   musicReverb: 0.3, // TUNE
 } as const;
 

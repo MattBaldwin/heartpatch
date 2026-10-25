@@ -53,7 +53,8 @@ function offlineCtor(): OfflineCtor | null {
 
 /**
  * Renders a score to one seamless mono loop: notes that ring past the end are
- * folded back over the start, then the loop is levelled to a steady loudness.
+ * folded back over the start (the room's echo too), then the loop is levelled
+ * to a steady loudness.
  * Each note plays its sampled instrument from `bank` (#664), or the synth if
  * that instrument isn't loaded.
  */
@@ -68,11 +69,23 @@ export async function renderLoop(
   const loopLength = Math.round(loopSeconds(score) * rate);
   const offline = new Offline(1, loopLength + Math.round(MUSIC.tailS * rate), rate);
   const spb = 60 / score.bpm;
-  const buses = voiceBuses(offline, offline.destination);
+  // The music's soft room (#664) is rendered into the loop, once, rather than
+  // sent to the live reverb: a live convolver fed by music runs for as long
+  // as the music plays, which an older iPad (or CI's WebKit) feels.
+  const mix = offline.createGain();
+  mix.connect(offline.destination);
+  const room = offline.createConvolver();
+  room.buffer = roomImpulse(offline, MIX.reverbS);
+  const send = offline.createGain();
+  send.gain.value = MIX.musicReverb;
+  mix.connect(send);
+  send.connect(room);
+  room.connect(offline.destination);
+  const buses = voiceBuses(offline, mix);
   const hiss = noiseBuffer(offline);
   for (const note of score.notes) {
     if (!playSampled(offline, buses, bank, note, spb)) {
-      playNote(offline, offline.destination, note, spb, hiss);
+      playNote(offline, mix, note, spb, hiss);
     }
   }
   const rendered = await offline.startRendering();
@@ -127,15 +140,14 @@ export function createEngine(
   sfxBus.connect(master);
   const uiBus = ctx.createGain();
   uiBus.connect(master);
-  // A light room reverb (#653): SFX and UI send a little into it, and the
-  // music (#664) a touch more, after its duck so the room dips with it.
+  // A light room reverb (#653): SFX and UI send a little into it. The music's
+  // room is rendered into its loops instead (#664, `renderLoop`).
   const reverb = ctx.createConvolver();
   reverb.buffer = roomImpulse(ctx, MIX.reverbS);
   reverb.connect(master);
   for (const [bus, amount] of [
     [sfxBus, MIX.sfxReverb],
     [uiBus, MIX.uiReverb],
-    [duck, MIX.musicReverb],
   ] as const) {
     const send = ctx.createGain();
     send.gain.value = amount;
