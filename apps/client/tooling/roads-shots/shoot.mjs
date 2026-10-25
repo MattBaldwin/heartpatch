@@ -298,15 +298,16 @@ async function frameFacts(page, device, roadTiles) {
         return { panel: shown, panelCut: cut };
       }
       // One tile's centre and six corners (CSS px): how much of it can be seen, with nothing
-      // (card, panel, HUD, button) over the map there. 'full', 'partly' or 'hidden'.
-      // A tile whose centre is covered is 'hidden'; one with a covered corner is 'partly'.
+      // (card, panel, HUD, button) over the map there. 'centre', 'edge' or 'hidden' (see classify).
+      // One tile: 'centre' when its centre is in the viewport and not under UI; 'edge' when only
+      // some corner is (the rest is off-screen or behind UI); 'hidden' when no point is.
       function classify(points) {
         const seen = points.map((p) => {
           if (p.x < 0 || p.y < 0 || p.x > w || p.y > h) return false;
           return document.elementFromPoint(p.x, p.y)?.tagName === 'CANVAS';
         });
-        if (!seen[0]) return 'hidden';
-        return seen.every(Boolean) ? 'full' : 'partly';
+        if (seen[0]) return 'centre';
+        return seen.some(Boolean) ? 'edge' : 'hidden';
       }
       // Does the cut-off card sit under a side button?
       const card = document.querySelector('[data-testid="stranded-card"]');
@@ -400,14 +401,15 @@ const count = (list, kind) => list.filter((k) => k === kind).length;
 function strandedView(f) {
   const tiles = f.strandedDebug?.tiles ?? [];
   const all = tiles.length;
-  const full = count(tiles, 'full');
-  const partly = count(tiles, 'partly');
+  const seen = tiles.filter((k) => k !== 'hidden').length;
   const kind = `${f.strandedDebug?.fading ? 'fading' : 'grace'} tint`;
-  if (!full && !partly)
-    return `The map around home; the cut-off land (${all} tiles) is off-screen, so none of it shows and "Show me" pans to it.`;
-  if (!full)
-    return `The map around home; a little of the cut-off land (${partly} of ${all} tiles) shows at the edge, partly tucked behind the buttons or card, and "Show me" pans to it.`;
-  return `The map with ${full} of ${all} cut-off tiles fully in view${partly ? ` and ${partly} partly` : ''}, in the ${kind}.`;
+  if (!seen)
+    return `The cut-off land (${all} tiles) does not show here, so none of it shows; "Show me" pans to it.`;
+  if (count(tiles, 'centre') === all)
+    return `All ${all} of ${all} cut-off tiles are in view, in the ${kind}.`;
+  return seen === all
+    ? `All ${all} of ${all} cut-off tiles show in the ${kind}; some are partly tucked behind a pill, card or button.`
+    : `Some of the cut-off land (${seen} of ${all} tiles) shows in the ${kind}; the rest is out of view.`;
 }
 
 /** The ferry map's far shore: how much of it, and the dock, is not under the panel or buttons. */
@@ -415,19 +417,15 @@ function ferryView(f) {
   const v = f.ferryView;
   if (!v) return 'No ferry map is showing.';
   const total = v.far.length;
-  const full = count(v.far, 'full');
-  const partly = count(v.far, 'partly');
-  const hiddenN = count(v.far, 'hidden');
-  const dock =
-    v.dock === 'hidden'
-      ? 'the dock is covered'
-      : `the dock shows${v.dock === 'partly' ? ' (partly)' : ''}`;
-  if (!full && !partly)
-    return `The ferry map is on (${total} far-shore tiles in the aqua tint), but the tile panel and buttons cover the far shore and ${v.dock === 'hidden' ? 'the dock' : 'most of the dock'}; see the next frame.`;
-  const parts = [`${full} fully in view`];
-  if (partly) parts.push(`${partly} partly tucked behind the panel or buttons`);
-  if (hiddenN) parts.push(`${hiddenN} out of sight`);
-  return `The ferry map is showing: of ${total} far-shore tiles in the aqua tint with a pale rim, ${parts.join(', ')}; ${dock}.`;
+  const seen = v.far.filter((k) => k !== 'hidden').length;
+  const dock = v.dock === 'hidden' ? 'the dock is covered' : 'the dock shows';
+  if (!seen)
+    return `The ferry map is on (${total} far-shore tiles in the aqua tint), but none of the far shore shows (it is behind the panel or buttons) and ${dock}; see the next frame.`;
+  if (count(v.far, 'centre') === total)
+    return `The ferry map is showing: all ${total} of ${total} far-shore tiles in the aqua tint are in view, and ${dock}.`;
+  return seen === total
+    ? `The ferry map is showing: all ${total} of ${total} far-shore tiles show in the aqua tint; some are partly cut by the screen edge or tucked behind a button; ${dock}.`
+    : `The ferry map is showing: some of the far shore (${seen} of ${total} tiles) is in view in the aqua tint; the rest is out of view; ${dock}.`;
 }
 
 /** How much of each road level is really in view (not behind the panel or buttons). */
@@ -436,7 +434,7 @@ function roadsView(f) {
   if (!v) return '';
   const say = (level, name) => {
     const list = v[level];
-    return `${name} ${count(list, 'full')} of ${list.length} fully in view`;
+    return `${name} ${count(list, 'centre')} of ${list.length} in view`;
   };
   return ` In view: ${say(1, 'dirt path')}, ${say(2, 'gravel road')}, ${say(3, 'paved stone road')}.`;
 }
@@ -625,12 +623,14 @@ async function runDevice(browser, device, statePath, fx) {
   if (!ONLY || ONLY.includes('stranded')) {
     const before = JSON.stringify(await hook(page, 'camera'));
     await tapText('stranded-show');
-    // The glide may start late on slow software rendering: wait for it to move, then to stop.
+    // The glide may start late on slow software rendering: wait for it to move, then
+    // for the camera to hold still for three reads, all before the frame is classified.
     let prev = before;
-    for (let i = 0; i < 90; i++) {
+    let still = 0;
+    for (let i = 0; i < 120 && still < 3; i++) {
       await page.waitForTimeout(700);
       const cur = JSON.stringify(await hook(page, 'camera'));
-      if (cur === prev && cur !== before) break;
+      still = cur === prev && cur !== before ? still + 1 : 0;
       prev = cur;
     }
     await shot(
@@ -638,7 +638,7 @@ async function runDevice(browser, device, statePath, fx) {
       device,
       'stranded',
       'whole-card',
-      (f) => `Show me pressed: the camera panned to the cut-off land. ${strandedView(f)}`,
+      (f) => `Show me pressed, and the camera has settled. ${strandedView(f)}`,
     );
   }
   await context.close();
