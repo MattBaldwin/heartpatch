@@ -81,7 +81,7 @@ import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/se
 import { clearGoingOn } from '../clearing/repo.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { createLandTending, type LandTendingService } from './tending.js';
-import { mapPatchRules, refreshSupply, supplyFor } from './supply.js';
+import { lostDockOwners, mapPatchRules, refreshSupply, supplyFor } from './supply.js';
 import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
 
 /*
@@ -929,12 +929,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       await repo.endAttack(battle.id, 'captured', at);
       // Wild Isle (#621): the capturer's land may join up, the defender's
       // beyond this tile may be cut off from home. Tending rows (step 6,
-      // with the tiles), never waited for.
+      // with the tiles), never waited for. A ferry dock lost with the tile
+      // gives the defender's line the lost-crossing grace (W1-5b).
       const supply = await refreshSupply(
         tx,
         attack.mapId,
         [attack.attackerUserId, ...(tile.ownerUserId ? [tile.ownerUserId] : [])],
         at,
+        { lostCrossing: await lostDockOwners(tx, attack.mapId, [tile]) },
       );
       // Homesteads (#199): the capturer's may grow or wake up, and the
       // defender's beyond this tile may be cut off from home. With the

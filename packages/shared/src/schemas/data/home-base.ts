@@ -9,7 +9,8 @@ import { DEFAULT_PATCH_TYPE, type PatchType } from '../../patch-types/patch-type
 /**
  * Building kinds a player can put up today (Training Grounds: owner decision
  * 2026-10-06; the Crafting Factory: #294; resource buildings: #601 PR 7; the
- * Warehouse: #601 PR 9). The Wild Isle kinds (#621) join here, and in
+ * Warehouse: #601 PR 9; bridges and ferry docks: #621 W1-5b, Wild Isle only by
+ * their `patchTypes`). The other Wild Isle kinds (#621) join here, and in
  * `HOME_BASE_RULES.buildableKinds`, with the lane that builds each one.
  */
 export const BuildableKindSchema = z.enum([
@@ -20,6 +21,7 @@ export const BuildableKindSchema = z.enum([
   'factory',
   'resource',
   'warehouse',
+  'travel',
 ]);
 export type BuildableKind = z.infer<typeof BuildableKindSchema>;
 

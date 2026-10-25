@@ -7,7 +7,9 @@ export const HOME_BASE_RULES: HomeBaseRules = {
   removeRefundPercent: 50, // TUNE:
   // Training Grounds: owner decision 2026-10-06. Fences (#203) go on edges,
   // from the tile's panel, not the home build sheet. The Crafting Factory: #294.
-  // Resource buildings: #601 PR 7. The Warehouse: #601 PR 9.
+  // Resource buildings: #601 PR 7. The Warehouse: #601 PR 9. Bridges and
+  // ferry docks: #621 W1-5b (Wild Isle only, by their `patchTypes`; a
+  // Waystation is refused until its lane).
   buildableKinds: [
     'hearthfire',
     'habitat',
@@ -16,5 +18,6 @@ export const HOME_BASE_RULES: HomeBaseRules = {
     'factory',
     'resource',
     'warehouse',
+    'travel',
   ],
 };

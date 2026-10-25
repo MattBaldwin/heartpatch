@@ -128,6 +128,7 @@ export function isOnWatch(
 export * from './tending.js';
 export * from './fences.js';
 export * from './reach.js';
+export * from './water.js';
 export * from './journeys.js';
 export * from './watch-level.js';
 export * from './roads.js';

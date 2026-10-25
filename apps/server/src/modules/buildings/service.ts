@@ -12,12 +12,16 @@ import {
   fuelSpace,
   GAME_DATA,
   heartSeedOf,
+  hexKey,
+  hexNeighbors,
   HOME_BASE_RULES,
   houseTile,
   hearthfireState,
   inSeason,
   isBuildable,
   isReservedSpot,
+  lakeBodies,
+  lakesTouching,
   NAMING_RULES,
   namingGate,
   tileUseRefusal,
@@ -44,6 +48,8 @@ import {
   HOUSE_START_LEVEL,
   type PublicUser,
   type RemoveBuildingResponse,
+  type TravelBuilding,
+  type TravelRules,
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
@@ -73,6 +79,8 @@ import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
+import { createTerritoryRepo } from '../territory/repo.js';
+import { crossersOf, mapPatchRules, refreshSupply, supplyFor } from '../territory/supply.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
 import {
@@ -116,6 +124,7 @@ import {
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
+const TERRAIN_WATER = new Map(GAME_DATA.terrains.map((t) => [t.id, t.water ?? null]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
 const SPECIES_NAMES = new Map(
@@ -171,7 +180,27 @@ const MESSAGES = {
   noPatch: "We couldn't find that patch.",
   noUpkeep: "That building doesn't need Heart Coins.",
   notKnocked: 'Nothing to fix here, it works just fine! ✨',
+  // Wild Isle bridges and ferry docks (#621 W1-5b).
+  onRiver: (name: string) => `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} goes over a river 💧`,
+  bridgeFar: 'Build your bridge right next to land that’s joined up to home 🌉',
+  bridgeThere: 'There’s a bridge here already! Every Keeper can cross it 🌉',
+  needsLake: (name: string) =>
+    `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} needs a lake next door 💧`,
+  oneDock: 'You already have a dock on this lake! One is plenty ⛵',
 } as const;
+
+/** A bridge: the one building that stands on water (`onWater`), nobody's land (#621). */
+const isBridge = (
+  b: Building,
+): b is TravelBuilding & { onWater: NonNullable<TravelBuilding['onWater']> } =>
+  b.kind === 'travel' && b.onWater !== undefined;
+
+/** Ferry dock content ids (#621 W1-5b). */
+const DOCK_IDS = new Set(
+  GAME_DATA.buildings.flatMap((b) =>
+    b.kind === 'travel' && b.role === 'ferry-dock' ? [b.id] : [],
+  ),
+);
 
 /**
  * The Heart Seed's level for naming (#306): 1 for everyone until #221 grows
@@ -429,6 +458,18 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     homestead: 'joined' | 'paused' | null = null,
     houseStands = false,
   ): HomeTileRow {
+    // A bridge (#621 W1-5b) stands on its water, which nobody owns, instead
+    // of on my land; `checkCrossing` reads the rest under the tile lock.
+    if (isBridge(building)) {
+      const water = outer && outer.ownerUserId === null ? TERRAIN_WATER.get(outer.terrain) : null;
+      if (!outer || water !== building.onWater) {
+        throw new AppError('FORBIDDEN', MESSAGES.onRiver(building.name));
+      }
+      if (!fitsSlot(building.slot, target.spot)) {
+        throw new AppError('CONFLICT', MESSAGES.wrongSlot(building));
+      }
+      return outer;
+    }
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
     // A won village's ring (#306 PR 3): home land, but it takes no buildings yet.
     if (!homeTile && outer?.ownerUserId === userId && outer.homeSlot !== null) {
@@ -496,6 +537,48 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       throw new AppError('CONFLICT', MESSAGES.middleTaken);
     }
     return mine;
+  }
+
+  /**
+   * A bridge or ferry dock's own rules (#621 W1-5b), read under the tile
+   * lock after `checkSpot`: a bridge goes on a river tile with no building
+   * yet, next to land that's joined up to home (my supplied land, or a
+   * bridge my line crosses); a ferry dock on a homestead touching a lake,
+   * and, while `ferry.oneDockPerLake`, on no lake one of my docks touches
+   * already. The map's travel rules, for the supply refresh after it.
+   */
+  async function checkCrossing(
+    repo: BuildingsRepo,
+    tx: Executor,
+    mapId: string,
+    userId: string,
+    building: TravelBuilding,
+    tile: HomeTileRow,
+    owned: readonly BuildingRow[],
+  ): Promise<TravelRules> {
+    const travel = (await mapPatchRules(tx, mapId))?.travel ?? null;
+    if (!travel) throw new AppError('CONFLICT', MESSAGES.notYet);
+    if (building.role === 'bridge') {
+      // Anyone's: a river tile is nobody's land (step 8, after the tile).
+      if ((await repo.lockOnTiles([tile.id])).length > 0) {
+        throw new AppError('CONFLICT', MESSAGES.bridgeThere);
+      }
+      const { supplied } = await supplyFor(tx, mapId, userId, travel);
+      if (!hexNeighbors(tile).some((n) => supplied.has(hexKey(n)))) {
+        throw new AppError('FORBIDDEN', MESSAGES.bridgeFar);
+      }
+      return travel;
+    }
+    const bodies = lakeBodies(await createTerritoryRepo(tx).listTiles(mapId));
+    const lakes = lakesTouching(bodies, tile);
+    if (lakes.length === 0) throw new AppError('FORBIDDEN', MESSAGES.needsLake(building.name));
+    if (travel.ferry.oneDockPerLake) {
+      const docked = new Set(
+        owned.filter((b) => DOCK_IDS.has(b.buildingId)).flatMap((b) => lakesTouching(bodies, b)),
+      );
+      if (lakes.some((lake) => docked.has(lake))) throw new AppError('CONFLICT', MESSAGES.oneDock);
+    }
+    return travel;
   }
 
   /** Runs a command for one player in one transaction, then publishes. */
@@ -625,7 +708,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       const building = requireBuildingData(request.buildingId);
       // Fences go on a tile's edges, through the fences module (#203).
       if (building.kind === 'fence') throw new AppError('CONFLICT', MESSAGES.fenceOnEdge);
-      if (!isBuildable(HOME_BASE_RULES, building)) throw new AppError('CONFLICT', MESSAGES.notYet);
+      // A Wild Isle building is built only there (#621: `patchTypes`); a
+      // patch's type never changes, so it's read before the transaction.
+      const patchType = (await mapPatchRules(db, mapId))?.patchType;
+      if (!isBuildable(HOME_BASE_RULES, building, patchType)) {
+        throw new AppError('CONFLICT', MESSAGES.notYet);
+      }
+      // Waystations wait for their own lane (#621).
+      if (building.kind === 'travel' && building.role === 'waystation') {
+        throw new AppError('CONFLICT', MESSAGES.notYet);
+      }
       // A clear that's done but not settled yet finishes first, as before a
       // clear starts (#242): the kid saw it done, so the land is cleared
       // land when the build reads it, and stays so even if the build is refused.
@@ -660,6 +752,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             homestead,
             houseOn(user, mapKind),
           );
+          const travel =
+            building.kind === 'travel'
+              ? await checkCrossing(repo, tx, mapId, user.id, building, tile, owned)
+              : null;
           const same = owned.filter((b) => b.buildingId === building.id);
           const homeIds = new Set(home.map((t) => t.id));
           if (homeIds.has(tile.id)) {
@@ -707,6 +803,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             // A resource building starts making things now (#601).
             producedSince: building.kind === 'resource' ? at : null,
           });
+          // A new crossing (#621 W1-5b) may join up land that was cut off:
+          // the lines that now run over it. Their tending rows are step 6,
+          // never waited for.
+          const supply = travel
+            ? await refreshSupply(tx, mapId, await crossersOf(tx, mapId, [tile]), at)
+            : [];
           // Short of anything: CONFLICT, and the row rolls back with it.
           const cost = buildCost(building);
           await consumeItems(tx, { mapId, userId: user.id }, cost, 'build', row.id);
@@ -716,6 +818,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             actorUserId: user.id,
             payload: { userId: user.id, building: placed(row, local), cost },
           });
+          for (const event of supply) await repo.appendEvent(event);
           return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
         },
         { q: request.q, r: request.r },
@@ -790,6 +893,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
                   stopPlan(b, at, 'taken-down'),
                 )
               : [];
+          // A bridge or dock (#621 W1-5b): whose supply line runs over it,
+          // read before it comes down.
+          const crossers = locked.kind === 'travel' ? await crossersOf(tx, mapId, [locked]) : [];
           const movedOut = await repo.moveOutAll(locked.id);
           const trainees = await repo.lockTrainees(locked.id);
           // Inventory rows before `species_seen` (tech spec §7 step 11): the
@@ -821,6 +927,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const training =
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
           await repo.deleteBuilding(row.id);
+          // Land it carried strands after the lost-crossing grace (tending
+          // rows `SKIP LOCKED`, so this never waits behind its later locks).
+          const supply =
+            crossers.length > 0
+              ? await refreshSupply(tx, mapId, crossers, at, { lostCrossing: true })
+              : [];
           for (const event of paused) await repo.appendEvent(event);
           for (const bank of banks) await repo.appendEvent(bank.event);
           await repo.appendEvent({
@@ -839,6 +951,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
           for (const event of stopped.events) await repo.appendEvent(event);
+          for (const event of supply) await repo.appendEvent(event);
           return {
             refund,
             home: await homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind }),
@@ -1428,6 +1541,15 @@ export async function removeMemberBuildings(
   // Read before the delete locks them: every command on these buildings
   // locks their owner's home tiles first, which the caller's release holds.
   const outer = (await repo.listOwned(map.id, userId)).filter((b) => b.homeSlot === null);
+  // Their bridges come down (#621 W1-5b, plan §9): whoever's supply line
+  // ran over one gets the lost-crossing grace. Read before the delete.
+  const crossers = (
+    await crossersOf(
+      tx,
+      map.id,
+      outer.filter((b) => b.kind === 'travel'),
+    )
+  ).filter((id) => id !== userId);
   await repo.deleteOwned(map.id, userId);
   // Their Crafting Factory's batches stop (#294), after the buildings (step 8,
   // id order): what's made stays in their bag on this patch, the rest comes back.
@@ -1469,6 +1591,11 @@ export async function removeMemberBuildings(
     });
   }
   const stopped = await applyBatchPlans(tx, batches, at);
+  // Their tending rows `SKIP LOCKED` (step 6), so never waited for.
+  const supply =
+    crossers.length > 0
+      ? await refreshSupply(tx, map.id, crossers, at, { lostCrossing: true })
+      : [];
   const removed: NewGameEvent<'building.removed'>[] = lost.map(({ row, refund }) => ({
     mapId: map.id,
     type: 'building.removed',
@@ -1484,7 +1611,7 @@ export async function removeMemberBuildings(
       lost: 'left',
     },
   }));
-  return [...produced, ...removed, ...stopped.events];
+  return [...produced, ...removed, ...stopped.events, ...supply];
 }
 
 /**

@@ -2,6 +2,7 @@ import { TERRAINS } from '../data/terrains.js';
 import { hexBfs, hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import type { TravelRules } from '../schemas/data/travel.js';
 import { isWater } from '../schemas/data/terrains.js';
+import { ferryShore } from './water.js';
 
 // Connected land and trading-post reach (#30, #269). Pure: the server decides
 // with these and the client explains with the same code. `connectedLand` is
@@ -82,12 +83,18 @@ export interface BridgeSpot extends Hex {
   readonly ownerUserId: string;
 }
 
+/** A ferry dock standing on a homestead by a Wild Isle lake, and whose it is (W1-5b). */
+export interface DockSpot extends Hex {
+  readonly ownerUserId: string;
+}
+
 /**
  * A player's supply line home on a Wild Isle (#621):
  * - `supplied`: the tiles joined to home, their own land and the bridges
  *   they cross; land of theirs outside it is stranded and starts to fade.
  * - `reach`: land a road of theirs reaches past their own land, with the
- *   steps from the nearest such road; they may claim it.
+ *   steps from the nearest such road, or a dock of theirs ferries to, with
+ *   its water steps; they may claim it.
  */
 export interface Supply {
   readonly supplied: ReadonlySet<HexKey>;
@@ -101,15 +108,19 @@ export interface Supply {
  * supplied land reaches `reach` steps (its level's) over any land, never
  * water; their own land in that reach is supplied too, so a road carries
  * the supply line across a gap and land claimed through it isn't stranded.
- * Roads count only on their owner's tiles. Pure; the server decides with it
- * and the client explains with it.
+ * Roads count only on their owner's tiles. A ferry dock of theirs on
+ * supplied land (W1-5b) carries the line across its lake: the land round it
+ * within `ferry.range` water steps (`ferryShore`) is in reach, and their own
+ * land there is supplied. Docks are their owner's alone, like roads. Pure;
+ * the server decides with it and the client explains with it.
  */
 export function supplyMap(
   tiles: readonly SupplyTile[],
   roads: readonly RoadSpot[],
   bridges: readonly BridgeSpot[],
   userId: string,
-  rules: Pick<TravelRules, 'roads' | 'bridgesShared'>,
+  rules: Pick<TravelRules, 'roads' | 'bridgesShared'> & Partial<Pick<TravelRules, 'ferry'>>,
+  docks: readonly DockSpot[] = [],
 ): Supply {
   const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
   const isLand = (key: HexKey) => {
@@ -130,6 +141,12 @@ export function supplyMap(
     const level = rules.roads.levels[Math.min(road.level, rules.roads.levels.length) - 1];
     if (level) roadReach.set(key, level.reach);
   }
+  const ferries = new Map<HexKey, ReadonlyMap<HexKey, number>>();
+  for (const dock of rules.ferry ? docks : []) {
+    const key = hexKey(dock);
+    if (dock.ownerUserId !== userId || !mine(key) || ferries.has(key)) continue;
+    ferries.set(key, ferryShore(tiles, dock, rules.ferry?.range ?? 0));
+  }
 
   const supplied = new Set<HexKey>();
   const reach = new Map<HexKey, number>();
@@ -148,6 +165,12 @@ export function supplyMap(
     for (const n of hexNeighbors(current)) {
       const key = hexKey(n);
       if (mine(key) || crossings.has(key)) supply(n);
+    }
+    // Across the lake by ferry: the far shore is in reach, my land there supplied.
+    for (const [key, steps] of ferries.get(hexKey(current)) ?? []) {
+      reach.set(key, Math.min(reach.get(key) ?? Infinity, steps));
+      const t = byKey.get(key);
+      if (t && mine(key)) supply(t);
     }
     const steps = roadReach.get(hexKey(current));
     if (steps === undefined) continue;
