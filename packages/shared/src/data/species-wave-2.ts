@@ -750,7 +750,7 @@ export const WAVE_2_SPECIES: Species[] = [
         'bubble-sail',
         'suds-ruff',
       ],
-      head: { body: 'orb', size: 0.8, forward: 0.55, up: 0.66 },
+      head: { body: 'orb', size: 0.8, forward: 0.55, up: 0.72 },
       stance: 0,
       pose: 'stand',
       attackPart: 'horns',
