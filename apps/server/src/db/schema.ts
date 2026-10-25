@@ -1355,8 +1355,8 @@ export const tileTending = pgTable(
 // Wild Isle weather (#621): each map-local day's plan, stored the first time
 // anyone needs it (`ON CONFLICT DO NOTHING`), so a retune of `WEATHER_RULES`
 // never rewrites a day kids already saw. `fronts` is `WeatherFront[]`
-// (validated on read). Inserted, never locked (tech spec §7); the weather
-// sweep deletes days older than `WEATHER_RULES.retentionDays`.
+// (validated on read). Inserted, never locked (tech spec §7); the
+// `weather.retention` job deletes days older than `WEATHER_RULES.retentionDays`.
 export const weatherDays = pgTable(
   'weather_days',
   {

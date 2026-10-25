@@ -139,7 +139,6 @@ export const buildingsRoutes =
         service.upgrade(requireUser(request), request.params.mapId, request.params.buildingId),
     );
 
-    // Naming my home (#306 PR 0).
     // Wild Isle (#621): fixes a building a storm knocked about.
     app.post(
       '/maps/:mapId/buildings/:buildingId/repair',
@@ -151,6 +150,7 @@ export const buildingsRoutes =
         service.repair(requireUser(request), request.params.mapId, request.params.buildingId),
     );
 
+    // Naming my home (#306 PR 0).
     app.post(
       '/maps/:mapId/home/name',
       {

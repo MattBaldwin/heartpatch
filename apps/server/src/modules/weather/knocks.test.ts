@@ -573,4 +573,36 @@ describe.skipIf(!url)('storm knocks (needs DATABASE_URL)', () => {
     await settle(server, kid, mapId);
     expect(await upkeep()).toBe(-(4 * 23 + 20));
   });
+
+  it('wakes a building paused for upkeep only once it is fixed', async () => {
+    const { server, kid, mapId, row } = await setup();
+    // Napping for upkeep since this morning, then knocked about this afternoon.
+    const morning = new Date('2026-10-25T06:00:00Z');
+    const knock = new Date(PLACED.getTime() + HOUR_MS).toISOString();
+    await db.execute(
+      `update buildings set paused_at = '${morning.toISOString()}', upkeep_paid_through = '${TODAY}',
+       damaged_at = '${knock}', damaged_by = 'dev', weather_checked_through = '${knock}' where id = '${row}'`,
+    );
+    await withTransaction(db, (tx) =>
+      creditHeartCoins(tx, {
+        source: 'dev-grant',
+        refId: randomUUID(),
+        mapId,
+        userId: kid.id,
+        amount: 500,
+        at: clock,
+      }),
+    );
+    // Coins enough to wake it, but it makes nothing until fixed: it naps on.
+    await settle(server, kid, mapId);
+    expect((await rowOf(row)).pausedAt).toEqual(morning);
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 5, stone: 4 }, 'dev-grant'),
+    );
+    expect(
+      (await call(server, 'POST', `/maps/${mapId}/buildings/${row}/repair`, kid)).statusCode,
+    ).toBe(200);
+    await settle(server, kid, mapId);
+    expect((await rowOf(row)).pausedAt).toBe(null);
+  });
 });
