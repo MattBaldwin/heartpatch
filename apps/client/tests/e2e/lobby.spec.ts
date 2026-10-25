@@ -247,8 +247,9 @@ test('makes a Wild Isle when the switch lets them, and hides the card when not (
   await page.route(/\/api\/v1\/maps$/, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const response = await route.fetch();
-    const { canMakeWildIsle: _drop, ...rest } = (await response.json()) as Record<string, unknown>;
-    return route.fulfill({ response, json: rest });
+    const json = (await response.json()) as Record<string, unknown>;
+    delete json['canMakeWildIsle'];
+    return route.fulfill({ response, json });
   });
   await page.reload();
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
