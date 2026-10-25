@@ -9,5 +9,7 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "tests", "tooling"]
+  "include": ["vite.config.ts", "playwright.config.ts", "tests", "tooling"],
+  // Imports from src, so the app project checks it (tsconfig.app.json).
+  "exclude": ["tooling/roads-shots/fixture.ts"]
 }
