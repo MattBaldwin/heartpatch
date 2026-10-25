@@ -57,8 +57,9 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
     const levels = [casual!, engaged!].map((kid) =>
       runProgression(data, SMALL, CURRENT_RULES, kid, 4).kids[0]!.days.map((d) => d.partnerLevel),
     );
+    // Wave 2's kinds (#382) reshuffled the seeded wild fights: the casual kid's days 2 and 3 moved.
     expect(levels).toEqual([
-      [8, 13, 16, 17, 18, 19],
+      [8, 11, 15, 17, 18, 19],
       [14, 18, 20, 21, 22, 23],
     ]);
   });

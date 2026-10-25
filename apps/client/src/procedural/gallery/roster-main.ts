@@ -22,8 +22,11 @@ setPerfReports(false);
  *
  * Query flags: `?species=puddlepuff` (default the first species),
  * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`, and `?silhouette`
- * (only the squishies, on white, for silhouette sheets), `?motion` (idle
- * animation on, to check how the vinyl looks while fighters move).
+ * (only the squishies, on white, for silhouette sheets), `?studio` (fog off and
+ * the backdrop cleared to a flat colour over a matt floor, so the squishy's own colours and
+ * shape read without the arena's haze), `?motion` (idle
+ * animation on, to check how the vinyl looks while fighters move), `?alone` (no
+ * reference squishy on the player's side, so a wide opponent isn't cropped by it).
  */
 
 if (!import.meta.env.DEV) throw new Error('The roster sheet is dev-only');
@@ -38,7 +41,9 @@ const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
 const timeOfDay = BattleTimeOfDaySchema.safeParse(params.get('time')).data ?? 'day';
 const silhouette = params.has('silhouette');
+const studio = params.has('studio');
 const motion = params.has('motion');
+const alone = params.has('alone');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
 const REFERENCE = params.get('reference') ?? 'pebblesnooze';
@@ -80,8 +85,10 @@ await boot(canvas, {
         });
         // A fixed reference on the player's side keeps the camera's framing
         // nearly the same for every species, so evolutions read bigger.
-        built.prewarm('a', [{ speciesId: REFERENCE, instanceId: 'roster-reference' }]);
-        built.sendOut('a', REFERENCE, 'roster-reference');
+        if (!alone) {
+          built.prewarm('a', [{ speciesId: REFERENCE, instanceId: 'roster-reference' }]);
+          built.sendOut('a', REFERENCE, 'roster-reference');
+        }
         built.prewarm('b', [{ speciesId, instanceId: `roster-${speciesId}` }]);
         built.sendOut('b', speciesId, `roster-${speciesId}`);
         battle = built;
@@ -112,6 +119,23 @@ function frame(): void {
         material.unlit = true;
         material.albedoColor = Color3.Black();
         material.clearCoat.isEnabled = false;
+      }
+    }
+  }
+  if (stage && battle && studio && !silhouette) {
+    const { scene } = stage;
+    scene.fogEnabled = false;
+    scene.clearColor.set(0.26, 0.24, 0.4, 1);
+    for (const mesh of scene.meshes) {
+      if (!mesh.name.startsWith('squishy-') && mesh.name !== 'arena-ground') mesh.setEnabled(false);
+    }
+    // A matt neutral floor, so the lights don't flare a hot spot of yellow-green across it.
+    for (const material of scene.materials) {
+      if (material instanceof PBRMaterial && material.name === 'arena-ground-mat') {
+        material.clearCoat.isEnabled = false;
+        material.roughness = 1;
+        material.metallic = 0;
+        material.albedoColor = new Color3(0.5, 0.48, 0.62);
       }
     }
   }

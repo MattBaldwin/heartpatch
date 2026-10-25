@@ -31,6 +31,8 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
 Lanes do **small changes** and hand off cleanly. A long-running lane gets expensive: every step re-reads its whole conversation, so cost grows with context even when the step is tiny. One house lane ran for a week across several PRs and cost about $770.
 
 - **One small PR per lane.** If an issue needs more than one PR, the supervisor splits it into parts (for example B5a, B5b) when briefing, and each part gets its own fresh lane.
+- **Cost stop (owner, 2026-10-25):** when a lane's cost reaches **$20** (`get_session`, `usage.cost_usd`), whatever its context, the supervisor tells it to stop: push, post the `Lane handoff`, and report. A fresh lane continues from the handoff. A lane can stay under the context cap and still cost a lot. W1-9c stayed at 150–180k but spent about $25 in 2.5 hours re-shooting screens, because every step re-read a context full of images.
+- **Screens out of the lane's context:** capture lanes let a helper subagent view the PNGs and report back in text. They don't read many full-size images themselves.
 - **Context cap:** when a lane's context passes about **200k tokens** (`get_session`, `context_usage.used_tokens`), the supervisor tells it to wrap up: push a coherent state, get that PR to ready (or leave it open with `Part of #N`), and post the handoff comment.
 - **Handoff note (required when a lane stops with work left on the issue).** The lane posts it as a comment on the issue, titled `Lane handoff`. A comment outlives the session, so the next lane can read it after the old one is archived. It holds:
   - the branch and head SHA
@@ -120,7 +122,7 @@ The 2026-10-11 rows replace the earlier "docs-only reviews on Sonnet" row: every
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
-Report usage to the owner when asked, and flag any lane above about $20 (except #13: about $30, see §9). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
+Report usage to the owner when asked, and flag any lane above about $20 and stop it there (the §2 cost stop; #13's old ~$30 exception is historical). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
 
 ## 7. Brief template
 
@@ -165,6 +167,7 @@ Keep this PR small: one part of the issue. If you find the work is bigger than o
 coherent part and report `#{N} blocked: needs split: <what's left>`. When you stop with work left on
 the issue, post a `Lane handoff` comment on the issue (COORDINATOR.md §2, "Lane size and handoffs"):
 branch + head SHA, done/merged, next part's scope, approved mockups and decisions, gotchas, start files.
+Cost stop: at $20 (owner rule), push, post that handoff, report and stop.
 
 ## Review loop
 Reviewer subagent until APPROVE; fresh reviewer each round; at most 4 rounds, then report blocked.
@@ -189,23 +192,21 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 18 handoff, 2026-10-25 ~14:10 UTC):** main `f48edb9` (#681), migrations through 0061. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 18)". Supervisor 18 is `session_01UZPidAHd9f2apgGePXErkk` (lineage depth 1). It took over from supervisor 17 (`session_012Qmyafu7VYabWthhQmx6z4`) at 08:03Z. Merged under supervisor 18: #674, #672, #682, #683, #679, #676, #678, #681.
-- **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 18)" and confirm each switch (§8).
+- **State (supervisor 20 handoff, 2026-10-25 ~22:35 UTC):** main `096275f` (#695), migrations through 0061. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 19)"; supervisor 20's calls are below, waiting to be recorded (see "To record in DECISIONS"). Supervisor 20 is `session_011gkvFfEfDHAALE3gT8RJqT` (lineage depth 3), and took over at 17:55Z. Merged under supervisor 20: #692 (lobby.spec fix), #693 (handoff docs), #685 (W1-6 roads), #695 (#382 Wave 2). Supervisor 19 is retired, not archived.
+- **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 20)" and confirm each switch (§8).
 
 | Lane | Session | Model | State at handoff |
 |---|---|---|---|
-| #621 W1-8A water works | session_011HrgMgSAiB9sEE3XMVBqWz | Opus | PR #684, CI red on `f0e37e6` (ipad-webkit 2), fixing. APPROVE comment on the head. Big: verify Opus + Fable round 1, sim guards, lock order and TECH_SPEC §7. Then W1-8b (pies/care) in a fresh lane from its handoff. |
-| #621 W1-6 roads client | session_01G9J962SoXT9vA6nTummNTm | Sonnet | PR #685 draft (`d218b69`); screens and review pending. Adds shared `isBuildableOn`. |
-| #621 W1-9 weather client screens | session_014d39xXqoB95bjJnNZcn3QH | Sonnet | PR #686, code done (`0d8e4bd`); shooting owner screens and the review loop. Handoff: #621 comment 6398626223. |
-| #382 Wave 2b rework | session_01EB2ZpxQGSu4mqmiUthTTL8 | Sonnet | Branch `issue-382-wave-2`; silhouette rework and re-shoot. Sheet v2 after its own render-check, then the supervisor's render-check, then the owner. PR after owner approval. |
-| #655 D Gift/Trade/Swap bar | session_01F8dj49o9dZzs9Rh9iwRUb5 | Sonnet | Started 13:49 from the #655 handoff comment 6398012087. Owner screens needed. |
-| Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle. Archive after Wave 1 lands. |
+| #621 W1-11 coast (PR #694) | session_011Qf36DemGfrcuewEzCs4Dh | Sonnet | `edc2981`; screens at R4jk7Mk4SE9sRZoKSjiksR. Render-check round 2 was FIX on 2 items: floating palm fronds in 4 frames, and the tide-pool frames show the Keeper in the kelp pool. Re-shoot those, then a fresh render-check, the owner, then review. The shared explore UI items (HUD over spots, dive card over the pool, the Shovel chip staying on, the landscape walk hint) go to the polish lane. |
+| #621 W1-9d weather (PR #686) | session_012aacg5L8GFVUPwxvaXrYRx | Sonnet | Fresh lane from handoff 6403629681 (the old W1-9c lane cost $58.64). `baa83e4` is red (e2e iphone-webkit 2 and ipad-webkit 6; the old lane's unverified morning-line fix). It must merge main (#685), verify, fix the round-4 FIX list, shoot once from one seeded world, then render-check, the owner, review. |
+| Fix: lock-order Watermill flake (2nd) | session_01L1sKg7ihqafaHqucKtsbR1 | Opus | `lock-order.test.ts:678` "takes a Watermill's Greens…" timed out in `waitUntilBlockedBy` on #696 (docs only; main green). #691 only raised a timeout. Root cause plus a deterministic wait, with loop evidence. When it merges, merge main into #696. |
+| Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle. Archive after Wave 1 is done and merged (owner, 2026-10-25). |
 
 - **Queue (start in this order as lanes free up):**
-  1. W1-8b pies/care after #684 merges. Big, and care is sensitive: Opus + Fable.
-  2. W1-10 and W1-11 per plan §6 and revision 1. `coast` still needs spawn/guardian tables (#382's lane area) before Wild Isle creation opens.
-  3. #655 E (Chore: drop the legacy one-line sell request) one release after C.
-  4. The server switches to the shared `isBuildableOn` after W1-8.
+  1. **W1-10 (works buildings, Opus, not big)** once #694 merges (one queued lane at a time while usage is at warning). It owns `apps/client/src/works/`, `procedural/buildings/building-models.ts` and the buildings gallery. Sources: plan 6378778868, revision 1 6384239738 (the River Well model), W1-8b handoff 6398251339 (the feed card line "Pies! Squishies go wild for these"). It uses `buildable-on.ts` / `travelBuildCheck` from #685. Needs owner screens. Then **coast spawn and guardian tables** (data-only, small, now that #382 merged): drop the `coast` skips in `species.test.ts` and `guardian-rules.test.ts`.
+  2. #655 E (Chore: drop the legacy one-line sell request) one release after C.
+  3. The server adopts W1-6's `travelBuildCheck` for bridge and dock placement (#685 merged).
+  4. **Layout polish lane (seen in #688 and #685 render-checks, pre-existing):** the iPhone SE paw button overlaps "My patches" (serious: taps are ambiguous); on iPad the tile panel covers the Wild Isle pill; phone bottom panels clip their lower rows; a "Log out" chip shows behind the Build sheet; the dark-spots pills show through. Also `house.spec.ts:611` showed as flaky on #689. From #694: the explore HUD (joystick, Dive/Lift) sits over spots, the dive card covers the pool, the Shovel chip stays on shells, and the walk hint is hidden in landscape. From #685: the night pills show through the bridge panel.
   5. Leftover `.auth-button` sites (B2b handoff on #674).
   6. **Logged nits:**
      - the What's new date wraps on SE
@@ -222,7 +223,6 @@ The supervisor keeps this list current. Remove items as they land.
      - #682 and #683 follow-ups are in DECISIONS (supervisor 18)
   7. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
 - **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad.
-- **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first. **Show the screens before asking (2026-10-11, relayed by the coordinator):** always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link. **Features must be felt (2026-10-11, relayed by the coordinator):** a feature needs visible feedback, not just correct text, and the home must be personal and personalizable. **Squishies are the most important visual part (2026-10-11, relayed by the coordinator):** every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones.
@@ -256,6 +256,28 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **To record in DECISIONS (supervisor 20 calls and owner answers):**
+  - #382: the owner chose A for both: the bears' heart hug (both arms wrap a red heart, paws meet at the front) and the Soapduke ruff (a ring of white spheres). Sheet v25 approved ~20:00Z. The ruff is wider than the head on one side only in the 3/4 camera, accepted after four rounds.
+  - #382: close-set eye styles (`close-happy-eyes`, `close-oval-eyes`, `close-spooky-eyes`) are additive `ART_RULES.feelingFaces` options (coordinator call).
+  - #685 screens approved by the owner (v6, ~20:40Z). Its `farShoreOnly` fixes the ferry tint on the player's own land.
+  - The coast spawn and guardian tables come after #382, in a small follow-up (coordinator call). W1-11 does not touch #382's files.
+  - **Owner, ~21:45Z:** a $20 cost stop per lane, whatever its context (§2; PR #696).
+- **Lessons (2026-10-25, supervisor 20):**
+  - **A lane can stay under the context cap and still burn money.** W1-9c sat at 150–180k but spent about $25 in 2.5 h on screen re-shoots. Hence the $20 stop. Capture lanes let a helper view the PNGs.
+  - **Render-checks caught real bugs every round:** the ferry tint on the player's own land, a missing kelp spot, faded interactables, #382 self-reports not matching the images (bear arms, ruff). Give each round a fresh Opus helper and scope it to the changed frames.
+  - **Messages cross with pushes.** W1-6c pushed `c600e93` and got APPROVE before the round-2 FIX arrived. Check that a head includes the latest FIX before treating screens as done.
+  - **Keep `list_events` small** (limit 5–10). One unfiltered read cost about 20k of supervisor context.
+  - **Computational tests may get a longer limit; races may not.** #695's 30-battles-per-pair balance test got 30 s (real compute). The lock-order wait needs a deterministic signal instead.
+  - **Costs:** W1-9c $58.64 and W1-6b $32.50 (both flagged, inherited); #382 2d $5.95, 2e $4.42, 2f $2.36, 2g $1.71; W1-6c $3.81; lobby fix $5.06; supervisor 20 about $24 at 367k.
+- **Lessons (2026-10-25, supervisor 19):**
+  - **Lanes' self-reports drift from their renders past ~300k context.** The #382 2b lane (670k, $25.71) said fixes were in that the sheet didn't show (no ruff, arms at foot level). Fresh lanes must report only what they or a helper SAW in the images.
+  - **Use a fresh render-check helper each round.** A resumed helper past ~250k context passed things a fresh one failed (the duck stage step).
+  - **The auto-mode classifier blocks merging with a red aggregate `check`,** even when the red is main-wide. Ask the owner (plain text, A/B); with their go-ahead the retry went through (#689).
+  - **Owner pushes:** the owner asked for a `PushNotification` whenever they're needed (a decision, or screens ready after a PASS), and only then.
+  - **Cross-session messages cross.** Lanes acted on stale lists twice. Say "publish all of it together as vN" and check once.
+  - **CI logs:** the `gh api .../logs` blob URLs are blocked by the proxy. Use check-run annotations (`gh api repos/.../check-runs/<id>/annotations`) for the Playwright summary, or `mcp__github__get_job_logs` with a small tail.
+  - **Name collisions across lanes:** W1-8A and W1-6 both added an `isBuildableOn`, which failed lint on the merge ref. Check new shared names against the open PRs in the cross-PR pass.
+  - **Costs:** W1-8A $43.85 (flagged), #382 2b $25.71 (flagged), #655 D $12.04, W1-8b $11.35, #382 2c $5.18, lock-order fix $3.36; supervisor 19 about $29 at 371k.
 - **Lessons (2026-10-25, supervisor 18):**
   - **AskUserQuestion was closed by container restarts about 8 times in 5 hours and never answered.** Asking in plain text worked: the owner answered in chat. Keep it to ONE question per message, with the artifact opened and its URL inline.
   - **Lanes that read the #621 plan comments directly blew the 200k cap in minutes** (W1-6 hit 190k in 6 min; W1-9 hit 240k). Briefs now carry a CONTEXT BUDGET block (see Briefs).
@@ -343,6 +365,6 @@ The supervisor keeps this list current. Remove items as they land.
   - Batch 8–9: #95 10.14, #96 9.22, #94 10.96, #93 1.56, #97 16.73, #98 11.44, #99 29.61, audit 1.9.
   - Batches 10–12: #102 5.24, #103 10.37, #104 6.31, #105 36.09, #106 32.17, #107 24.81, Docs #101 2.00, audits 2.83 and 2.92. The CI split (#100) was coordinator-made.
   - Supervisor 3: about 28.
-  - Big lanes run $25–50; flag above about $35.
+  - Big lanes run $25–50; flag above about $35 (superseded by the §2 $20 cost stop).
 - **Owner questions queued:** none open. The tutorial gate, tutorial coins, the Halloween clock, the milestone member count and the #24/#44/#45/#46 confirmations were answered on 2026-10-04 (DECISIONS, "2026-10-04 — Owner decisions").
   - **AWS:** done 2026-10-05 (DECISIONS, "Deploy on the new AWS experience"). A fresh supervisor container needs the network policy to allow `*.signin.aws.amazon.com`, `signin.aws.amazon.com`, `*.amazonaws.com` and `*.api.aws`, then the CLI install and `aws login --remote --region us-east-2 --profile heartpatch` (pipe the pasted code into the waiting process through a FIFO). Agent Toolkit rules live in the uncommitted `CLAUDE.local.md`.
