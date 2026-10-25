@@ -119,7 +119,7 @@ export const WAVE_2_SPECIES: Species[] = [
     evolutions: [{ into: 'snortle', level: 16 }], // TUNE: #443 kid at the common level,
     visual: {
       body: 'bun',
-      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#8a5a3b'],
+      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#7a4a2a'],
       parts: [
         'oval-eyes',
         'round-mouth',
@@ -149,7 +149,7 @@ export const WAVE_2_SPECIES: Species[] = [
     evolutions: [{ into: 'tuskoink', level: 24 }], // TUNE: kid level + 8 (#443),
     visual: {
       body: 'bun',
-      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#8a5a3b'],
+      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#7a4a2a'],
       parts: [
         'oval-eyes',
         'round-mouth',
@@ -182,7 +182,7 @@ export const WAVE_2_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'bun',
-      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#8a5a3b'],
+      palette: ['#ffb3c7', '#f08aa8', '#e0608a', '#7a4a2a'],
       parts: [
         'oval-eyes',
         'round-mouth',
@@ -702,6 +702,7 @@ export const WAVE_2_SPECIES: Species[] = [
         'stubby-legs',
         'round-hands',
         'zing-antennae',
+        'tusks',
       ],
       stance: 0.1,
       pose: 'stand',
@@ -731,7 +732,8 @@ export const WAVE_2_SPECIES: Species[] = [
         'shell-gleam',
         'stubby-legs',
         'round-hands',
-        'uni-horn',
+        'zing-antennae',
+        'tusks',
         'nub-wings',
       ],
       stance: 0.1,
@@ -764,6 +766,7 @@ export const WAVE_2_SPECIES: Species[] = [
         'stubby-legs',
         'round-hands',
         'antlers',
+        'tusks',
         'nub-wings',
       ],
       stance: 0.1,
