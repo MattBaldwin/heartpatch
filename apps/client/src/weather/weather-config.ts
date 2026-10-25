@@ -13,20 +13,22 @@ export const WEATHER_LOOK = {
     /** A puff is flattened to this share of its width: a cushion, not a ball. // TUNE: */
     squash: 0.6,
     /** Size of a puff, before the front grows in: base plus up to `spread`. // TUNE: */
-    size: 0.75,
-    spread: 0.45,
-    /** Soft grey-white for rain; a heavy slate for a storm. // TUNE: */
+    size: 0.62,
+    spread: 0.35,
+    /** Soft white for rain; slate for a storm, still see-through so my Keeper and home show. // TUNE: */
     colour: {
-      rain: [0.9, 0.92, 0.97, 0.78],
-      storm: [0.66, 0.67, 0.73, 0.86],
+      rain: [0.92, 0.94, 0.98, 0.66],
+      storm: [0.6, 0.61, 0.68, 0.58],
     } satisfies Record<'rain' | 'storm', Rgba>,
   },
+  /** The low tier draws no rain, and fewer, lighter clouds. // TUNE: */
+  lowTier: { share: 0.5, alpha: 0.7 },
   rain: {
     /** One streak: a thin cylinder, `height` long. // TUNE: */
-    height: 0.42,
-    diameter: 0.035,
+    height: 0.62,
+    diameter: 0.06,
     /** A cool blue that shows over pale grass and over dark woods. // TUNE: */
-    colour: '#5d7fd6',
+    colour: '#3a5fc8',
     alpha: 0.9,
     /** How far a streak falls in one cycle (world units). // TUNE: */
     fall: 1.9,

@@ -13,8 +13,8 @@ export const WEATHER_CAPS = { clouds: 72, rain: 480, fog: 48 } as const;
 
 /** Instances a radius-3 front asks for; other radii scale from it. // TUNE: */
 const PER_FRONT = {
-  rain: { clouds: 14, rain: 90 },
-  storm: { clouds: 22, rain: 160 },
+  rain: { clouds: 10, rain: 90 },
+  storm: { clouds: 13, rain: 160 },
   fog: { fog: 18 },
 } as const;
 
@@ -122,17 +122,27 @@ function put(m: Float32Array, at: number, x: number, y: number, z: number, scale
   m[o + 15] = 1;
 }
 
+/** How thick the clouds are: a share of the count and a scale on their alpha. */
+export interface CloudThickness {
+  readonly share: number;
+  readonly alpha: number;
+}
+
+export const FULL_CLOUDS: CloudThickness = { share: 1, alpha: 1 };
+
 /**
  * Fills `out` for `nowMs`. `rainShare` (1, 0.5 or 0) thins the rain by tier,
- * as the motes are. Returns `out` for chaining; counts are clamped to the caps.
+ * as the motes are, and `clouds` thins the clouds (the low tier's are
+ * lighter). Returns `out` for chaining; counts are clamped to the caps.
  */
 export function layoutWeather(
   fronts: readonly WeatherFront[],
   nowMs: number,
   rainShare: number,
   out: WeatherLayout,
+  clouds: CloudThickness = FULL_CLOUDS,
 ): WeatherLayout {
-  let clouds = 0;
+  let nCloud = 0;
   let rain = 0;
   let fog = 0;
   for (const front of fronts) {
@@ -145,12 +155,12 @@ export function layoutWeather(
       const want = PER_FRONT[front.kind];
       const colour = CLOUDS.colour[front.kind];
       const nClouds = Math.min(
-        WEATHER_CAPS.clouds - clouds,
-        Math.max(4, Math.round(want.clouds * bulk)),
+        WEATHER_CAPS.clouds - nCloud,
+        Math.max(3, Math.round(want.clouds * bulk * clouds.share)),
       );
       for (let i = 0; i < nClouds; i++) {
         const s = spotIn(seed, i, nClouds, front.radius, 10);
-        const at = clouds++;
+        const at = nCloud++;
         put(
           out.cloudMatrices,
           at,
@@ -160,7 +170,7 @@ export function layoutWeather(
           (CLOUDS.size + s.jitter * CLOUDS.spread) * grow,
         );
         out.cloudColours.set(
-          [linear(colour[0]), linear(colour[1]), linear(colour[2]), colour[3]],
+          [linear(colour[0]), linear(colour[1]), linear(colour[2]), colour[3] * clouds.alpha],
           at * 4,
         );
         out.cloudDrift.set(
@@ -195,7 +205,7 @@ export function layoutWeather(
       }
     }
   }
-  out.clouds = clouds;
+  out.clouds = nCloud;
   out.rain = rain;
   out.fog = fog;
   return out;

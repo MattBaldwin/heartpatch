@@ -14,6 +14,7 @@ import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
 import { WEATHER_LOOK } from './weather-config.js';
+import { FULL_CLOUDS } from './weather-layout.js';
 import { WeatherPlacer, PLACE_EVERY_MS } from './weather-placer.js';
 import type { WeatherStore } from './weather-store.js';
 import { createWeatherTint } from './weather-tint.js';
@@ -131,6 +132,8 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         placer.setFronts(store.view?.today.fronts ?? []);
         // Rain shows unless ambient is off (low tier, slow device, WebGPU).
         placer.setRainShare(mode === 'off' || !rainPlugin ? 0 : moteShare(options.tier()));
+        // The low tier's clouds are fewer and lighter, as well as rainless.
+        placer.setClouds(options.tier() === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());
         tint.set(store.kindNow());
         if (placed || last.mode !== mode) {

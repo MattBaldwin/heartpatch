@@ -102,6 +102,15 @@ describe('layoutWeather', () => {
     expect(none.clouds).toBeGreaterThan(0);
   });
 
+  it('thins and lightens the clouds for the low tier', () => {
+    const at = START + 2 * HOUR;
+    const full = layoutWeather([front()], at, 0, createWeatherLayout());
+    const thin = layoutWeather([front()], at, 0, createWeatherLayout(), { share: 0.5, alpha: 0.5 });
+    expect(thin.clouds).toBeLessThan(full.clouds);
+    expect(thin.clouds).toBeGreaterThan(0);
+    expect(thin.cloudColours[3]).toBeCloseTo((full.cloudColours[3] ?? 0) * 0.5);
+  });
+
   it('fog gives fog and no clouds or rain; drought gives nothing', () => {
     const fog = layoutWeather([front({ kind: 'fog' })], START + 2 * HOUR, 1, createWeatherLayout());
     expect([fog.clouds, fog.rain]).toEqual([0, 0]);
