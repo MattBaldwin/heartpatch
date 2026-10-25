@@ -92,6 +92,7 @@ const E2E_GROUPS = [
     'milestones',
     'potions',
     'quality-budget',
+    'sell-basket',
     'smoke',
     'trick-or-treat',
     'whats-new',
@@ -174,6 +175,9 @@ process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
 // The Keeper's house (#381) ships behind HP_HOUSE (off by default); house.spec.ts
 // needs it on, and stands in a home reply without it to check the off case.
 process.env['HP_HOUSE'] ??= 'on';
+// Wild Isle (#621) ships behind HP_WILD_ISLE (off by default); lobby.spec.ts
+// needs it on to make one, and stands in a patch list without it for the off case.
+process.env['HP_WILD_ISLE'] ??= 'on';
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
 // leaves a slow software-rendered phone time to play a turn back). Dev and

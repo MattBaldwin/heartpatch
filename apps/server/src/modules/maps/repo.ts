@@ -4,6 +4,7 @@ import {
   type DefenseStance,
   type FeelingId,
   type MapRole,
+  type PatchType,
   type PublicKeeper,
   type PublicTile,
   type PvpMode,
@@ -49,6 +50,8 @@ export interface NewTile {
   nodeResource: string | null;
   guardianStrength: number | null;
   homeSlot: number | null;
+  /** Wild Isle (#621): which offshore isle (1 up); left out or null on the main island. */
+  isle?: number | null;
 }
 
 /** A tile for the map view, before the service makes it a `PublicTile`. */
@@ -108,6 +111,7 @@ export interface MapSummaryRow {
   memberCount: number;
   maxPlayers: number;
   pvpMode: PvpMode;
+  patchType: PatchType;
   /** Join requests waiting on the owner (#144); 0 unless this row is the owner's. */
   pendingRequests: number;
 }
@@ -228,9 +232,16 @@ export interface MapsRepo {
     timeZone: string;
     seed: string;
     maxPlayers: number;
+    patchType: PatchType;
   }) => Promise<{ id: string; pvpMode: PvpMode }>;
   insertTiles: (mapId: string, rows: readonly NewTile[]) => Promise<void>;
   findMap: (mapId: string) => Promise<MapRow | null>;
+  /**
+   * Cozy Patch or Wild Isle (#621), chosen at creation and never changed.
+   * Its own read, not a `findMap` column: boot code migrations (crowded
+   * tiles) call `findMap` on a schema from before migration 0059.
+   */
+  patchTypeOf: (mapId: string) => Promise<PatchType>;
   /** True if the mode changed. */
   setPvpMode: (mapId: string, pvpMode: PvpMode) => Promise<boolean>;
   /** Sorted by `q`, then `r`. */
@@ -507,7 +518,7 @@ function queries(db: Executor): MapsRepo {
     },
 
     insertTiles: async (mapId, rows) => {
-      await db.insert(tiles).values(rows.map((t) => ({ mapId, ...t })));
+      await db.insert(tiles).values(rows.map((t) => ({ mapId, ...t, isle: t.isle ?? null })));
     },
 
     findMap: async (mapId) => {
@@ -526,6 +537,15 @@ function queries(db: Executor): MapsRepo {
         .from(maps)
         .where(eq(maps.id, mapId));
       return row ?? null;
+    },
+
+    patchTypeOf: async (mapId) => {
+      const [row] = await db
+        .select({ patchType: maps.patchType })
+        .from(maps)
+        .where(eq(maps.id, mapId));
+      if (!row) throw new Error(`patchTypeOf: no map ${mapId}`);
+      return row.patchType;
     },
 
     setPvpMode: async (mapId, pvpMode) => {
@@ -999,6 +1019,7 @@ function queries(db: Executor): MapsRepo {
           memberCount: activeMemberCount,
           maxPlayers: maps.maxPlayers,
           pvpMode: maps.pvpMode,
+          patchType: maps.patchType,
           pendingRequests: pendingRequestCount,
         })
         .from(mapMembers)

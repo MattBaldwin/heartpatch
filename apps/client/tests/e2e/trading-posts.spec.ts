@@ -1,4 +1,4 @@
-import { findAvoidedWords, HEART_COIN_RULES } from '@heartpatch/shared';
+import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { SCREENS } from './layout.js';
@@ -387,89 +387,6 @@ test('swaps 10 Stone for 1 Glimmer at a post, up to the day’s cap (#523)', asy
   );
   expect(inventory.body.items).toMatchObject({ stone: 4, glimmer: 3 });
   expect(findAvoidedWords((await page.getByTestId('post').textContent()) ?? '')).toEqual([]);
-
-  expect(errors).toEqual([]);
-  await page.context().close();
-});
-
-test('sells extras and a spare piece for Heart Coins at a post (#601 PR 4)', async ({
-  browser,
-}) => {
-  test.setTimeout(240_000); // the map build; CI renders in software
-  const page = await newPlayer(browser, uniqueName('seller'));
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
-  // My land reaches a post before the patch opens (dev route), as in twoTraders.
-  const lobby = page.getByTestId('lobby');
-  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
-  await lobby.getByLabel('Patch name').fill('Market Patch');
-  await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await expect(lobby.getByTestId('lobby-invite-code')).toBeVisible();
-  const mine = await api<{ maps: { id: string; name: string }[] }>(page, 'GET', '/maps');
-  const mapId = mine.body.maps.find((m) => m.name === 'Market Patch')!.id;
-  expect((await api(page, 'POST', `/maps/${mapId}/dev/posts/connect`)).status).toBe(200);
-  await grantItems(page, mapId, { timber: 23, greens: 3 });
-  const dressed = await api(page, 'POST', '/dev/wardrobe/items', {
-    items: ['pom-pom-beanie', 'pom-pom-beanie'],
-  });
-  expect(dressed.status).toBe(201);
-  await visitPatch(lobby);
-  await expect(lobby).toBeHidden();
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
-  await visitPost(page);
-
-  // Five tabs, picture over word, each whole on the phone.
-  await page.getByTestId('post-tab-sell').tap();
-  const tabsFit = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('[data-testid="post"] .post-tab')].every(
-      (t) => t.scrollWidth <= t.clientWidth + 1,
-    ),
-  );
-  expect(tabsFit).toBe(true);
-  const SELL_CAP = HEART_COIN_RULES.dailyCaps.sell;
-  const today = page.getByTestId('post-sell-today');
-  await expect(today).toHaveText(`💛 0 of ${String(SELL_CAP)} today`);
-  // Not a whole lot of Greens (plus what a recipe keeps): the button says
-  // what's needed and can't be tapped.
-  await expect(page.getByTestId('post-sell-greens')).toHaveText(/^Need \d+$/);
-  await expect(page.getByTestId('post-sell-greens')).toBeDisabled();
-  await expect(page.getByTestId('post-sell-stays')).toContainText('stay with you');
-
-  // Pick Timber, step up a lot, say yes: the coins are the patch's.
-  await page.getByTestId('post-sell-timber').tap();
-  const confirm = page.getByTestId('post-sell-confirm');
-  await expect(confirm).toContainText('Sell 5 Timber for 1 💛?');
-  await expect(page.getByTestId('post-sell-less')).toBeDisabled();
-  await page.getByTestId('post-sell-more').tap();
-  await expect(confirm).toContainText('Sell 10 Timber for 2 💛?');
-  await expect(confirm).toContainText("Once it's sold, it's sold!");
-  await page.getByTestId('post-sell-yes').tap();
-  await expect(page.getByTestId('post-sell-done')).toContainText('Yay! +2 💛 for your patch!');
-  await expect(today).toHaveText(`💛 2 of ${String(SELL_CAP)} today`);
-  await expect(confirm).toBeHidden();
-
-  // One spare beanie goes; the last copy stays, so its row is gone.
-  await page.getByTestId('post-sell-pom-pom-beanie').tap();
-  await expect(confirm).toContainText('Sell 1 Pom-Pom Beanie for 2 💛?');
-  await expect(page.getByTestId('post-sell-stepper')).toHaveCount(0);
-  await page.getByTestId('post-sell-yes').tap();
-  await expect(today).toHaveText(`💛 4 of ${String(SELL_CAP)} today`);
-  await expect(page.getByTestId('post-sell-pom-pom-beanie')).toHaveCount(0);
-
-  const inventory = await api<{ items: Record<string, number> }>(
-    page,
-    'GET',
-    `/maps/${mapId}/inventory`,
-  );
-  expect(inventory.body.items).toMatchObject({ timber: 13, greens: 3 });
-  // The 💛 pill reads again after each sale.
-  await expect
-    .poll(async () => (await hook<{ balance: number | null }>(page, 'heartCoins'))?.balance)
-    .toBe(4);
-  expect(findAvoidedWords((await page.getByTestId('post').textContent()) ?? '')).toEqual([]);
-  expect(await wordsSplit(page)).toEqual([]);
 
   expect(errors).toEqual([]);
   await page.context().close();

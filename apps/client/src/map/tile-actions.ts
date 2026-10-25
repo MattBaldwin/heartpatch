@@ -25,3 +25,15 @@ export function combineTileActions(...features: readonly TileActions[]): TileAct
     },
   };
 }
+
+/**
+ * Empties every feature's slot in a tile panel's actions, keeping the slots
+ * themselves (`combineTileActions` draws into the same ones next time). For a
+ * tile that offers nothing (water, #621): features' `hide` only forgets their
+ * state, so the last tile's buttons would stay, acting on that tile.
+ */
+export function emptyTileActions(container: {
+  readonly children: ArrayLike<{ replaceChildren: () => void }>;
+}): void {
+  for (const slot of Array.from(container.children)) slot.replaceChildren();
+}

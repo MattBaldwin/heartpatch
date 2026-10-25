@@ -267,6 +267,56 @@ export function buildProp(scene: Scene, kind: PropKind, detail: PropDetail = 'hi
         ],
         0,
       );
+    case 'shell': {
+      // A scallop fanned open on the sand, and a little spiral shell beside it.
+      const parts: Mesh[] = [painted(at(sphere(0.12), 0, 0.012, 0, 1, 0.3, 0.85), '#ffd9cf')];
+      for (let i = 0; i < 3; i++) {
+        const a = -0.5 + i * 0.5;
+        parts.push(
+          painted(
+            at(
+              cylinder(0.1, 0.012, 0.012, 5),
+              Math.sin(a) * 0.022,
+              0.026,
+              Math.cos(a) * 0.022,
+              1,
+              1,
+              1,
+              {
+                x: Math.PI / 2 - 0.25,
+                y: a,
+              },
+            ),
+            '#f6b9b1',
+          ),
+        );
+      }
+      parts.push(painted(at(sphere(0.03), 0, 0.012, -0.05, 1, 0.6, 1), '#f0c2b6'));
+      parts.push(
+        painted(at(cylinder(0.08, 0, 0.045, 7), 0.09, 0.02, 0.05, 1, 1, 1, { z: 1.2 }), '#fff1dc'),
+      );
+      parts.push(painted(at(sphere(0.036), 0.06, 0.018, 0.05), '#ffe0b8'));
+      return done(parts, 0.13);
+    }
+    case 'driftwood':
+      // A weathered, sun-bleached branch washed up, with one stub of a twig.
+      return done(
+        [
+          painted(
+            at(cylinder(0.34, 0.055, 0.075), 0, 0.035, 0, 1, 1, 1, { z: Math.PI / 2, y: 0.2 }),
+            '#d8c9b4',
+          ),
+          painted(
+            at(cylinder(0.35, 0.04, 0.055), 0, 0.035, 0, 1, 1, 1, { z: Math.PI / 2, y: 0.2 }),
+            '#eee3d2',
+          ),
+          painted(
+            at(cylinder(0.12, 0.018, 0.03, 6), 0.06, 0.07, 0.03, 1, 1, 1, { z: -0.7, x: 0.3 }),
+            '#cbbca6',
+          ),
+        ],
+        0.22,
+      );
     case 'dock':
       // Built along +z from the middle, so its turn points it out over the water.
       return done(

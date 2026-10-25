@@ -282,3 +282,31 @@
   background: #eee3ea;
   color: #6b5a66;
 }
+
+/* Cozy Patch or Wild Isle (#621): two big cards on "Make a patch". */
+.lobby-patch-types {
+  margin-bottom: 12px;
+}
+
+.lobby-patch-type {
+  min-height: 72px;
+  padding: 12px 16px;
+}
+
+.lobby-patch-type-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* The 🌊 chip on a Wild Isle's row and card. */
+.lobby-badge-wild {
+  background: #d8eef8;
+  font-weight: 600;
+  color: #1f5a78;
+}
+
+.lobby-chip-row {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 4px;
+}

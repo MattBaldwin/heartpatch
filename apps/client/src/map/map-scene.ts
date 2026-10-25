@@ -47,7 +47,7 @@ import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { AmbientJudge, ambientMode, moteShare, type AmbientMode } from './ambient-layout.js';
-import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js';
+import { loftRoundedHex, seaDisc, type MeshArrays, type ProfileRing } from './hex-mesh.js';
 import { MapAmbient, type AmbientStats } from './map-ambient.js';
 import {
   CRYSTAL_GLOW,
@@ -65,6 +65,7 @@ import {
   LAND_FADE,
   MAP_DETAIL,
   MUTED,
+  OCEAN,
   PROP_SWAY,
   TERRAIN_LOOKS,
   TILE_FILL,
@@ -77,12 +78,20 @@ import {
   drainRgb,
   hexRgb,
   isMuted,
+  isOcean,
   muteRgb,
   tileColor,
   tileJitter,
 } from './map-dressing.js';
 import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-model.js';
-import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
+import {
+  findHomeBases,
+  hash01,
+  beachRadius,
+  islandTiles,
+  mapBounds,
+  mapRadius,
+} from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
 import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
@@ -218,9 +227,18 @@ function meshLookOf(tile: PublicTile): TerrainLook {
 /** sRGB (0–1) to linear, as Babylon's `toLinearSpace` does. */
 const toLinear = (v: number): number => Math.pow(v, 2.2);
 
+/** An sRGB hex colour in linear RGB (0–1). */
+const linearRgb = (hex: string): [number, number, number] => {
+  const [r, g, b] = hexRgb(hex);
+  return [toLinear(r), toLinear(g), toLinear(b)];
+};
+
 /** Height of a tile's top: its look's, plus its own small wobble (none on home tiles). */
 /** A tile's top surface height, world units (layers that sit on a tile use it). */
 export function topOf(tile: PublicTile): number {
+  // The ocean is never a tile (#621): what marks it (the selection ring)
+  // sits at the island's top, so the beach between coast tiles never hides it.
+  if (isOcean(tile)) return OCEAN.markTop;
   const look = lookOf(tile);
   return tile.homeSlot !== null ? look.height : look.height + tileJitter(tile, tile.terrain).height;
 }
@@ -462,6 +480,10 @@ export class MapScene {
   private wild: readonly WildMarker[] = [];
   /** The seasons on today, for a resource building asleep out of season (#601). */
   private readonly seasons: readonly string[];
+  /** Wild Isle's isles (#621): tiles out at sea, off the island, that stand in the water. */
+  private isles: ReadonlySet<HexKey> = new Set();
+  /** The sea's glint strength (Wild Isle, #621): softer at night. */
+  private readonly seaGlint: { value: number } = { value: OCEAN.glint.day };
 
   constructor(scene: Scene, view: MapView, options: MapSceneOptions = {}) {
     this.scene = scene;
@@ -491,21 +513,30 @@ export class MapScene {
       this.instrumentation.dispose();
     });
 
-    this.buildIsland(view.tiles);
-    this.animated = this.buildTiles(view.tiles);
+    // The ocean (#621) is drawn as the sea under the island, never as tiles,
+    // props or motes; it stays in `tiles`, so a tap on it still finds it.
+    const land = view.tiles.filter((t) => !isOcean(t));
+    const island = islandTiles(view.tiles, isOcean);
+    this.isles = new Set(land.map(hexKey).filter((k) => !island.has(k)));
+    const sea = this.buildIsland(
+      view.tiles,
+      land.filter((t) => island.has(hexKey(t))),
+    );
+    this.animated = this.buildTiles(land);
     for (const t of view.tiles) {
       this.builtTerrain.set(hexKey(t), t.terrain);
       if (t.homeSlot !== null) this.builtHome.add(hexKey(t));
     }
-    this.buildProps(view.tiles);
+    this.buildProps(land);
     this.applyDetail();
     this.nodeField = new HomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
     this.homeNodes = this.nodeField.count;
     this.buildGap();
-    this.ambient = new MapAmbient(scene, view.tiles, this.clock, {
+    this.ambient = new MapAmbient(scene, land, this.clock, {
       halloween: this.halloween,
       thanksgiving: options.seasons?.includes('thanksgiving') === true,
-      islandRadius: mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
+      // The backdrop and clouds sit out past the sea, if there is one.
+      islandRadius: sea ?? mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
     });
     // Start as the tier and motion setting say, so nothing shows for a frame
     // that would then be hidden (drifting motes under reduced motion).
@@ -744,6 +775,7 @@ export class MapScene {
   setNight(night: boolean): void {
     if (night === this.night) return;
     this.night = night;
+    this.seaGlint.value = night ? OCEAN.glint.night : OCEAN.glint.day;
     this.borders.setNight(night ? BORDER.night : 0);
     this.applyAmbient();
   }
@@ -1006,7 +1038,12 @@ export class MapScene {
     return tile ? tileScreenRectOf(this.scene, tile) : null;
   }
 
-  private buildIsland(tiles: readonly PublicTile[]): void {
+  /**
+   * The soft island under the tiles. With ocean tiles (Wild Isle, #621) it's
+   * the sea instead (`buildSea`); returns the sea's radius then, else null.
+   */
+  private buildIsland(tiles: readonly PublicTile[], land: readonly PublicTile[]): number | null {
+    if (tiles.some(isOcean)) return this.buildSea(tiles, land);
     const radius = mapRadius(tiles, HEX_SIZE) + ISLAND.margin;
     const island = CreateCylinder(
       'island',
@@ -1036,6 +1073,120 @@ export class MapScene {
       m.isPickable = false;
       m.freezeWorldMatrix();
     }
+    return null;
+  }
+
+  /**
+   * Wild Isle (#621 revision 1): the island is a soft hexagon hugging the
+   * land, its grass plate inside a sandy beach that slopes into one disc of
+   * sea reaching past the map's edge, shallow by the shore and deep out
+   * beyond, with the lake's glint. Three meshes, however big the sea.
+   * Returns the sea's radius.
+   */
+  private buildSea(tiles: readonly PublicTile[], island: readonly PublicTile[]): number {
+    const beach = beachRadius(island);
+    const outer = mapRadius(tiles, HEX_SIZE) + OCEAN.reach;
+    const slab = (name: string, radius: number, top: number, color: string): Mesh => {
+      const mesh = meshFrom(
+        this.scene,
+        name,
+        loftRoundedHex(
+          radius,
+          [
+            { scale: 1, y: top },
+            { scale: 1 + (OCEAN.shore * 0.5) / radius, y: top - 0.04 },
+            { scale: 1 + OCEAN.shore / radius, y: OCEAN.level - 0.03 },
+            { scale: 1 + (OCEAN.shore + 0.15) / radius, y: -ISLAND.thickness },
+          ],
+          { corner: 0.12, segments: 6, centre: { y: top } },
+        ),
+      );
+      // Turned 30° to the land's hexagon (corners east and west).
+      mesh.rotation.y = Math.PI / 6;
+      mesh.material = this.islandMaterial(`${name}-mat`, color);
+      mesh.freezeWorldMatrix();
+      return mesh;
+    };
+    // The grass stops a little inside the coast, so the gaps round the coast
+    // tiles show sand, as the beach runs on under them.
+    slab('island', beach - OCEAN.margin - HEX_SIZE, 0, ISLAND.color);
+    slab('island-beach', beach, -0.02, OCEAN.beach);
+    const sea = meshFrom(
+      this.scene,
+      'sea',
+      seaDisc({
+        inner: beach * 0.8,
+        shore: beach * Math.cos(Math.PI / 6),
+        shallows: OCEAN.shallows,
+        outer,
+        rings: OCEAN.rings,
+        segments: 96,
+        lip: ISLAND.thickness / 2,
+        shallow: linearRgb(OCEAN.shallow),
+        deep: linearRgb(OCEAN.deep),
+      }),
+    );
+    sea.hasVertexAlpha = false;
+    sea.position.y = OCEAN.level;
+    const mat = vinyl(this.scene, 'sea-mat', {
+      ...FALLBACK_LOOK,
+      color: '#ffffff',
+      roughness: 0.2,
+      clearCoat: true,
+    });
+    attachTerrainPlugin(mat, this.clock, { water: true, glint: this.seaGlint });
+    sea.material = mat;
+    sea.freezeWorldMatrix();
+    this.buildIsleSand(tiles);
+    return outer;
+  }
+
+  /** Island ground (grass, beach, an isle's sand), softened like wild land part way, since nobody owns it. */
+  private islandMaterial(name: string, color: string): PBRMaterial {
+    const mat = vinyl(this.scene, name, { ...FALLBACK_LOOK, color, roughness: 0.85 });
+    const rgb = hexRgb(color);
+    const soft = muteRgb(rgb);
+    mat.albedoColor = new Color3(
+      ...rgb.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
+    );
+    return mat;
+  }
+
+  /**
+   * A low sand skirt under each isle tile out at sea (#621): its top is the
+   * tile's foot (y = 0, as the island's top is for island tiles) and it
+   * slopes into the shallows, so an isle stands on its own sandbar instead
+   * of tiles adrift. One mesh, one instance a tile; none without isles.
+   */
+  private buildIsleSand(tiles: readonly PublicTile[]): void {
+    const isles = tiles.filter((t) => this.isles.has(hexKey(t)));
+    if (isles.length === 0) return;
+    const r = HEX_SIZE * OCEAN.isleSand;
+    const top = 0;
+    const mesh = meshFrom(
+      this.scene,
+      'isle-sand',
+      loftRoundedHex(
+        r,
+        [
+          { scale: 1, y: top },
+          { scale: OCEAN.isleSandWater, y: OCEAN.level - 0.03 },
+          { scale: OCEAN.isleSandWater + 0.08, y: OCEAN.level - 0.2 },
+        ],
+        { corner: 0.5, segments: 4, centre: { y: top } },
+      ),
+    );
+    mesh.material = this.islandMaterial('isle-sand-mat', OCEAN.beach);
+    // Neighbours' skirts overlap: each stands a hair higher or lower than the
+    // next, so the overlap never shares one depth (it would shimmer).
+    setInstances(
+      mesh,
+      isles.map((t) => {
+        const p = hexToWorld(t, HEX_SIZE);
+        return placeAt(p.x, ((((t.q - t.r) % 3) + 3) % 3) * OCEAN.sandStep, p.z);
+      }),
+    );
+    mesh.freezeWorldMatrix();
   }
 
   /**

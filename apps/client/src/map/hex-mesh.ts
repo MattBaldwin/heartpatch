@@ -92,3 +92,75 @@ export function loftRoundedHex(
   });
   return { positions, indices, colors };
 }
+
+export interface SeaShape {
+  /** Where the water starts, under the island (world units from the middle). */
+  readonly inner: number;
+  /** The shore: the water is shallowest here… */
+  readonly shore: number;
+  /** …deepening over this far past it… */
+  readonly shallows: number;
+  /** …out to the water's edge. */
+  readonly outer: number;
+  /** Ring steps across the shallows. */
+  readonly rings: number;
+  /** Sides round the disc. */
+  readonly segments: number;
+  /** The rolled lip round the edge (its radius), like Cozy's island rim. */
+  readonly lip: number;
+  /** Linear RGB (0–1) at the shore and out at sea. */
+  readonly shallow: readonly [number, number, number];
+  readonly deep: readonly [number, number, number];
+}
+
+/**
+ * Wild Isle's sea (#621): a flat ring of water at y = 0, its vertex colour
+ * easing from `shallow` at the shore to `deep` past the shallows (smoothstep),
+ * rolling over a soft lip at the edge, wound so its normals point up and
+ * out. One mesh, a couple of thousand triangles.
+ */
+export function seaDisc(shape: SeaShape): MeshArrays {
+  const rings: { radius: number; y: number }[] = [shape.inner, shape.shore].map((radius) => ({
+    radius,
+    y: 0,
+  }));
+  for (let i = 1; i <= shape.rings; i++)
+    rings.push({ radius: shape.shore + (shape.shallows * i) / shape.rings, y: 0 });
+  if (shape.outer > (rings[rings.length - 1]?.radius ?? 0))
+    rings.push({ radius: shape.outer, y: 0 });
+  // The lip: half a circle rolling over the edge and back under.
+  const LIP_STEPS = 6;
+  for (let i = 1; i <= LIP_STEPS; i++) {
+    const a = (i / LIP_STEPS) * Math.PI;
+    rings.push({
+      radius: shape.outer + Math.sin(a) * shape.lip,
+      y: (Math.cos(a) - 1) * shape.lip,
+    });
+  }
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const n = shape.segments;
+  for (const { radius, y } of rings) {
+    const t = Math.min(
+      1,
+      Math.max(0, (Math.min(radius, shape.outer) - shape.shore) / shape.shallows),
+    );
+    const k = t * t * (3 - 2 * t);
+    const rgb = shape.shallow.map((v, i) => v + ((shape.deep[i] ?? v) - v) * k);
+    for (let s = 0; s < n; s++) {
+      const a = (s / n) * Math.PI * 2;
+      positions.push(Math.cos(a) * radius, y, Math.sin(a) * radius);
+      colors.push(rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0, 1);
+    }
+  }
+  for (let j = 1; j < rings.length; j++) {
+    const inner = (j - 1) * n;
+    const ring = j * n;
+    for (let s = 0; s < n; s++) {
+      const next = (s + 1) % n;
+      indices.push(inner + s, ring + next, inner + next, inner + s, ring + s, ring + next);
+    }
+  }
+  return { positions, indices, colors };
+}
