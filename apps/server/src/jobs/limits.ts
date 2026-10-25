@@ -41,3 +41,16 @@ export const EVENT_RETENTION_SHORT_DAYS = 2; // TUNE: guess
 export const EVENT_RETENTION_BATCH = 1000; // TUNE: guess
 /** Full batches one retention run deletes, across all maps; the next run carries on. */
 export const EVENT_RETENTION_MAX_BATCHES = 50; // TUNE: guess
+
+/** How often every Wild Isle's storms are rolled (cron, UTC; #621). */
+export const WEATHER_SWEEP_CRON = '17 * * * *'; // TUNE: hourly, off the hour
+
+/** Wild Isle maps swept at once in this process. */
+export const WEATHER_CONCURRENCY = 2; // TUNE: guess; fits pg-boss's and the app's pools
+
+/** Retries for a weather sweep that throws (seeded rolls make them safe). */
+export const WEATHER_RETRY_LIMIT = 3; // TUNE: guess
+export const WEATHER_RETRY_DELAY_SECONDS = 60; // TUNE: guess, doubles each time
+
+/** When old weather plans are deleted (cron, UTC). */
+export const WEATHER_RETENTION_CRON = '23 4 * * *'; // TUNE: daily, a quiet hour

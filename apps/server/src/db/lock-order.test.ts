@@ -34,7 +34,9 @@ import { createGatheringService } from '../modules/gathering/service.js';
 import { createHeartCoinsRepo } from '../modules/heart-coins/repo.js';
 import { creditHeartCoins } from '../modules/heart-coins/service.js';
 import { createSettleService } from '../modules/settle/service.js';
+import { createWeatherService } from '../modules/weather/service.js';
 import { makeHomestead } from '../../tests/homestead.js';
+import { frontIdThat, makeWildIsle, putPlan, stormOver } from '../../tests/weather.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHouseRepo } from '../modules/house/repo.js';
@@ -1257,6 +1259,132 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       () => service.remove(kid, mapId, hut!.id),
       (tx) => lockHeart(tx, mapId, kid.id),
     );
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+  });
+
+  /**
+   * `hutSetup` on a Wild Isle (#621 W1-7): a storm sat over the hut until
+   * five minutes ago, and its seeded roll knocks the hut about.
+   */
+  async function stormyHutSetup(prefix: string) {
+    const setup = await hutSetup(prefix);
+    const seed = await makeWildIsle(db, setup.mapId);
+    const [hut] = await db
+      .select({ id: buildings.id, tileId: buildings.tileId })
+      .from(buildings)
+      .where(and(eq(buildings.mapId, setup.mapId), eq(buildings.ownerUserId, setup.kid.id)));
+    const [tile] = await db
+      .select({ q: tiles.q, r: tiles.r })
+      .from(tiles)
+      .where(eq(tiles.id, hut!.tileId));
+    const now = Date.now();
+    await db
+      .update(buildings)
+      .set({ weatherCheckedThrough: new Date(now - 30 * 60_000) })
+      .where(eq(buildings.id, hut!.id));
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    // The day the last look fell on, if it was yesterday, is calm.
+    await putPlan(db, setup.mapId, day(now - 30 * 60_000), []);
+    await putPlan(db, setup.mapId, day(now), [
+      stormOver(
+        frontIdThat(true, seed, hut!.id),
+        tile!,
+        new Date(now - 25 * 60_000),
+        new Date(now - 5 * 60_000),
+      ),
+    ]);
+    const lockHut = (tx: Transaction) =>
+      tx
+        .select({ id: buildings.id })
+        .from(buildings)
+        .where(eq(buildings.id, hut!.id))
+        .for('update');
+    const lockTimber = (tx: Transaction) =>
+      tx
+        .select({ itemId: inventories.itemId })
+        .from(inventories)
+        .where(
+          and(
+            eq(inventories.mapId, setup.mapId),
+            eq(inventories.userId, setup.kid.id),
+            eq(inventories.itemId, 'timber'),
+          ),
+        )
+        .for('update');
+    const knocks = async () =>
+      (
+        await db
+          .select({ id: gameEvents.seq })
+          .from(gameEvents)
+          .where(and(eq(gameEvents.mapId, setup.mapId), eq(gameEvents.type, 'building.knocked')))
+      ).length;
+    return {
+      ...setup,
+      hutId: hut!.id,
+      lockHut,
+      lockTimber,
+      knocks,
+      weather: createWeatherService({ db }),
+    };
+  }
+
+  it('takes the member row before the buildings (weather `sweep`, #621 step 2 then 8)', async () => {
+    const { kid, mapId, lockHut, knocks, weather } = await stormyHutSetup('sweep-member');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      () => weather.sweep(mapId),
+      lockHut,
+    );
+    expect(await knocks()).toBe(1);
+  });
+
+  it('rolls a storm under the building lock and appends its knock last (weather `sweep`, #621 step 8 then 13)', async () => {
+    const { mapId, lockHut, knocks, weather } = await stormyHutSetup('sweep-maps');
+    await holdThen(
+      lockHut,
+      () => weather.sweep(mapId),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await knocks()).toBe(1);
+  });
+
+  it('runs a sweep and a settle one at a time on the member row, knocking once (weather `sweep`, settle, #621)', async () => {
+    const { kid, mapId, settle, knocks, weather } = await stormyHutSetup('sweep-settle');
+    let running: Promise<unknown>[] = [];
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await createMapsRepo(tx).lockMember(mapId, kid.id);
+      const pid = await backendPid(tx);
+      running = [weather.sweep(mapId), settle.settle(kid, mapId)];
+      await waitUntilBlockedBy(db, pid);
+    });
+    await Promise.all(running);
+    expect(await knocks()).toBe(1);
+  });
+
+  it("takes a fix's building before its inventory rows (buildings `repair`, #621 step 8 then 11)", async () => {
+    const { kid, mapId, hutId, lockHut, lockTimber, weather } = await stormyHutSetup('fixer');
+    await weather.sweep(mapId);
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
+    );
+    await holdThen(
+      lockHut,
+      () => createBuildingsService({ db }).repair(kid, mapId, hutId),
+      lockTimber,
+    );
+    const [row] = await db.select().from(buildings).where(eq(buildings.id, hutId));
+    expect(row!.damagedAt).toBe(null);
+  });
+
+  it("spends a fix's cost and charges its mornings before its events (buildings `repair`, #621 step 11 then 12b then 13)", async () => {
+    const { kid, mapId, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
+    await weather.sweep(mapId);
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
+    );
+    const repair = () => createBuildingsService({ db }).repair(kid, mapId, hutId);
+    await holdThen(lockTimber, repair, (tx) => lockHeart(tx, mapId, kid.id));
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
 

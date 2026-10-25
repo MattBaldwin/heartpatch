@@ -92,6 +92,10 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['buildings', 'paused_at', 'timestamptz'],
   ['buildings', 'upkeep_paid_through', 'date'],
   ['buildings', 'upkeep_rank', 'smallint'],
+  // Wild Isle weather (#621, migration 0061): read with every building, as above.
+  ['buildings', 'damaged_at', 'timestamptz'],
+  ['buildings', 'damaged_by', 'text'],
+  ['buildings', 'weather_checked_through', 'timestamptz'],
 ];
 /**
  * Tables later migrations add that the pack-up reads (a gatherer's job joins

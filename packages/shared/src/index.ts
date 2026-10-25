@@ -86,6 +86,7 @@ export * from './data/trading.js';
 export * from './trading/index.js';
 export * from './data/fences.js';
 export * from './territory/index.js';
+export * from './weather/index.js';
 export * from './communities/index.js';
 export * from './data/home-base.js';
 export * from './data/naming.js';

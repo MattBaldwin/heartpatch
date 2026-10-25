@@ -245,6 +245,23 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
       }),
     )
     .optional(),
+  /**
+   * Wild Isle (#621): buildings of mine a storm knocked about since the last
+   * settle (they stop working until fixed). Left out on a Cozy Patch and by
+   * an older server.
+   */
+  weather: z
+    .object({
+      knocked: z.array(
+        z.object({
+          buildingRowId: z.uuid(),
+          buildingId: ContentIdSchema,
+          q: z.number().int(),
+          r: z.number().int(),
+        }),
+      ),
+    })
+    .optional(),
   nextAt: z.iso.datetime().nullable(),
 });
 export type SettleResponse = z.infer<typeof SettleResponseSchema>;

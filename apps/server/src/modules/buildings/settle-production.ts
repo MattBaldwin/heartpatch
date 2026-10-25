@@ -53,7 +53,9 @@ export interface ProductionSettlement {
  * Locks the player's upkeep buildings (step 8, id order) whose tiles the
  * settle holds (one placed since the first read waits for the next settle),
  * and plans their part: the morning charges, the output up to now (or a
- * pause), and any wake-up.
+ * pause), and any wake-up. `weather` (Wild Isle #621) runs on the locked
+ * rows first and gives them back as storms left them, so a knock stops the
+ * output it plans.
  */
 export async function lockProducing(
   tx: Executor,
@@ -61,10 +63,12 @@ export async function lockProducing(
   userId: string,
   lockedTiles: ReadonlySet<string>,
   at: Date,
+  weather?: (rows: BuildingRow[]) => Promise<BuildingRow[]>,
 ): Promise<ProductionSettlement> {
-  const rows = (await createBuildingsRepo(tx).lockUpkeepBuildings(map.id, userId)).filter((r) =>
+  const locked = (await createBuildingsRepo(tx).lockUpkeepBuildings(map.id, userId)).filter((r) =>
     lockedTiles.has(r.tileId),
   );
+  const rows = weather ? await weather(locked) : locked;
   // Before the mornings are charged: a Warehouse that pauses only makes less.
   const warehouse = warehouseIn(rows);
   const grants = rows.flatMap((row) => {

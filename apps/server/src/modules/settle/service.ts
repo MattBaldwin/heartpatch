@@ -27,6 +27,8 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { lockProducing, producingTiles } from '../buildings/settle-production.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
+import { resolveWeather, type Knocked } from '../weather/knocks.js';
+import { storeWeatherFor, weatherMap } from '../weather/service.js';
 import { createSettleRepo } from './repo.js';
 
 /*
@@ -45,7 +47,9 @@ import { createSettleRepo } from './repo.js';
  * clears (#242) turn their tiles into cleared land and bank what they
  * dropped (`tile.cleared`). Resource buildings (#601) bank what they made
  * (`building.produced`), after their mornings' upkeep is charged
- * (`building.paused`, `building.resumed`). Settling twice, or from two phones at
+ * (`building.paused`, `building.resumed`). On a Wild Isle (#621) storms
+ * that crossed my buildings since the last look are rolled for first
+ * (`building.knocked`), so a knock stops their output. Settling twice, or from two phones at
  * once, banks each thing once: the member row lock runs settles one at a
  * time, and each row is re-read under its lock.
  */
@@ -83,6 +87,10 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
       const owner = { mapId, userId: user.id };
       // A building that fell asleep or woke (#601) shows on everyone's map.
       let buildingNews = false;
+      // Wild Isle weather (#621): the days' plans are stored first, outside
+      // the transaction (inserted, never locked). Null on a Cozy Patch.
+      const wild = await weatherMap(db, mapId);
+      if (wild) await storeWeatherFor(db, wild, user.id, at);
       const result = await createSettleRepo(db).transaction(async (repo, tx) => {
         const { map } = await requireMember(tx, user, mapId);
         // Lock order (tech spec §7): the member row (one settle at a time per
@@ -95,6 +103,7 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         const inventory = createInventoryRepo(tx);
         const jobs = createSquishyJobsRepo(tx);
 
+        const events: NewGameEvent[] = [];
         // What might be due, read unlocked; each is read again under its lock.
         const [gathersBefore, mine, clearsBefore, producingBefore] = await Promise.all([
           gathering.listToSettle(map.id, user.id),
@@ -127,7 +136,23 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         // Clears after the gathers (step 7, id order, #242).
         const clears = await planClearSettlement(tx, clearsBefore.ids, tileIds, at);
         // Resource buildings and the Warehouse (#601), then the craft (step 8).
-        const production = await lockProducing(tx, map, user.id, tileIds, at);
+        // On a Wild Isle their storms are rolled under that lock (#621).
+        let knocked: Knocked[] = [];
+        const production = await lockProducing(
+          tx,
+          map,
+          user.id,
+          tileIds,
+          at,
+          wild
+            ? async (rows) => {
+                const weather = await resolveWeather(tx, wild, rows, at);
+                knocked = weather.knocked;
+                events.push(...weather.events);
+                return weather.rows;
+              }
+            : undefined,
+        );
         const crafts = await inventory.lockActiveCrafts(owner);
         // Factory batches after the craft (step 8, id order).
         const batches = await planSettleBatches(tx, owner, at);
@@ -163,7 +188,6 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         ]);
 
         const landed: Landed[] = [];
-        const events: NewGameEvent[] = [];
         const due: number[] = [...batches.due, ...clears.due];
 
         for (const { craft, ready } of craftPlans) {
@@ -253,7 +277,7 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         const producing = await production.apply();
         events.push(...producing.events);
         due.push(...producing.due);
-        buildingNews = producing.events.length > 0;
+        buildingNews = producing.events.length > 0 || knocked.length > 0;
 
         // Gathers' grants are in: mark them collected and roll for clothing.
         for (const gather of banking) {
@@ -284,6 +308,7 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           trained,
           cleared: clearing.cleared,
           produced: producing.produced,
+          ...(wild ? { weather: { knocked } } : {}),
           nextAt: next,
         };
       });

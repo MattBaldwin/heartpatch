@@ -24,9 +24,11 @@ import {
   jobOf,
   planFuelAll,
   removeRefund,
+  repairCost,
   spentOn,
   suitsLand,
   upgradeCost,
+  WEATHER_RULES,
   type Building,
   type FuelAllResponse,
   type HomeNameRequest,
@@ -168,6 +170,7 @@ const MESSAGES = {
   seedFirst: 'Your Heart Seed needs to grow first 🌱',
   noPatch: "We couldn't find that patch.",
   noUpkeep: "That building doesn't need Heart Coins.",
+  notKnocked: 'Nothing to fix here, it works just fine! ✨',
 } as const;
 
 /**
@@ -211,6 +214,11 @@ export interface BuildingsService {
   fuelAll: (user: PublicUser, mapId: string) => Promise<FuelAllResponse>;
   /** Raises one of my buildings a level, paying the next level's cost. */
   upgrade: (user: PublicUser, mapId: string, buildingRowId: string) => Promise<HomeResponse>;
+  /**
+   * Fixes one of my buildings a storm knocked about (Wild Isle #621),
+   * paying its repair cost; it works again from now.
+   */
+  repair: (user: PublicUser, mapId: string, buildingRowId: string) => Promise<HomeResponse>;
   /**
    * Names my home (#306 PR 0), once naming is unlocked, and again after each
    * Heart Seed upgrade. Patches only, never the Tutorial Glade.
@@ -288,6 +296,10 @@ function toMyBuilding(
       ? { production: productionView(row, at, timeZone, warehouse) }
       : {}),
     ...(row.kind === 'warehouse' ? { warehouse: warehouseView(row, at) } : {}),
+    // Knocked about by a storm (Wild Isle #621): what fixing it costs.
+    ...(row.damagedAt !== null && building
+      ? { repairCost: repairCost(building, row.level, WEATHER_RULES.effects) }
+      : {}),
   };
 }
 
@@ -993,6 +1005,65 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
+          return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
+        },
+        await tileOf(mapId, user.id, buildingRowId),
+      ),
+
+    repair: async (user, mapId, buildingRowId) =>
+      command(
+        user,
+        mapId,
+        async ({ repo, tx, at, timeZone, mapKind }) => {
+          // Upgrade's order (tech spec §7): my home tiles (step 6), my upkeep
+          // buildings then this one (8), the rows the cost and the output
+          // touch (11), the mornings owed (12b), then `maps`.
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          if (locked.damagedAt === null) throw new AppError('CONFLICT', MESSAGES.notKnocked);
+          const building = requireBuildingData(locked.buildingId);
+          const cost = repairCost(building, locked.level, WEATHER_RULES.effects);
+          // What it made up to the knock banks first, as at an upgrade. A
+          // Warehouse's fix ends its stop for every building it delivers
+          // for, so they all bank first, as the settle banks before a wake-up.
+          const banking = (rows: readonly BuildingRow[], row: BuildingRow) =>
+            row.kind === 'warehouse' && rows.length > 0 ? rows : [row];
+          const before = warehouseIn(upkeepRows ?? []);
+          const most = banking(upkeepRows ?? [], locked).flatMap((r) => {
+            const made = productionAt(r, at, timeZone, before);
+            return made ? [{ userId: user.id, items: made.ready }] : [];
+          });
+          await lockGrantRows(tx, mapId, [{ userId: user.id, items: cost }, ...most]);
+          const {
+            row,
+            rows: charged,
+            events: paused,
+          } = await chargeFirst(tx, { id: mapId, timeZone }, user.id, upkeepRows, locked, at);
+          const warehouse = warehouseIn(charged);
+          const banked: Banked[] = [];
+          for (const r of banking(charged, row)) {
+            const made = productionAt(r, at, timeZone, warehouse);
+            const bank = made ? await bankOutput(tx, r, made) : null;
+            if (bank) banked.push(bank);
+          }
+          // Short of anything: CONFLICT ("You need 2 more Timber first!"), nothing changes.
+          await consumeItems(tx, { mapId, userId: user.id }, cost, 'repair', row.id);
+          // Its next storm rolls from now: the one that knocked it never rolls again.
+          await repo.setWeather(row.id, {
+            damagedAt: null,
+            damagedBy: null,
+            weatherCheckedThrough: at,
+          });
+          // It starts again from the fix: the time it stood knocked made nothing.
+          if (row.producedSince !== null) await repo.setProduction(row.id, { producedSince: at });
+          for (const event of paused) await repo.appendEvent(event);
+          for (const bank of banked) await repo.appendEvent(bank.event);
+          await repo.appendEvent({
+            mapId,
+            type: 'building.repaired',
+            actorUserId: user.id,
+            payload: { userId: user.id, buildingRowId: row.id, q: row.q, r: row.r, cost },
+          });
           return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
         },
         await tileOf(mapId, user.id, buildingRowId),

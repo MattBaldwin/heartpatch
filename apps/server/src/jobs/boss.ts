@@ -15,6 +15,7 @@ import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
 import { startRetention } from './retention.js';
+import { startWeather, type WeatherRunner } from './weather.js';
 
 /** pg-boss keeps its tables in their own schema, outside Drizzle's migrations. */
 export const PG_BOSS_SCHEMA = 'pgboss';
@@ -39,6 +40,8 @@ export interface JobsOptions {
   schedule?: boolean;
   /** The Hollow Man's nightfall (#21, `jobs/nightfall.ts`); none without it. */
   nightfall?: NightfallRunner;
+  /** Wild Isle storms (#621, `jobs/weather.ts`); none without it. */
+  weather?: WeatherRunner;
 }
 
 export interface Jobs {
@@ -46,6 +49,8 @@ export interface Jobs {
   catchUp: () => Promise<number>;
   /** Enqueues every due nightfall now (also every minute, and at start). 0 without `nightfall`. */
   nightfallSweep: () => Promise<number>;
+  /** Enqueues a weather sweep for every Wild Isle now (also hourly). 0 without `weather`. */
+  weatherScan: () => Promise<number>;
   /** Stops taking jobs, waits for running ones, and stops enqueuing wake-ups. */
   stop: () => Promise<void>;
 }
@@ -57,7 +62,7 @@ export interface Jobs {
  * applies events with `runConsumer`; the wake-up `appendGameEvent` enqueues
  * inside each command's transaction; the periodic catch-up job; the
  * `game_events` retention job (`retention.ts`); and, given a runner, the
- * Hollow Man's nightfall (`nightfall.ts`).
+ * Hollow Man's nightfall (`nightfall.ts`) and Wild Isle storms (`weather.ts`).
  *
  * Why `short` and not `stately`: `stately` also allows only one *active* job
  * per key, enforced by a unique index on the job table. pg-boss's fetch only
@@ -171,9 +176,14 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     ? await startNightfall(boss, options.nightfall, logger, options.schedule ?? true)
     : null;
 
+  const weather = options.weather
+    ? await startWeather(boss, options.weather, logger, options.schedule ?? true)
+    : null;
+
   return {
     catchUp,
     nightfallSweep: () => nightfall?.sweep() ?? Promise.resolve(0),
+    weatherScan: () => weather?.scan() ?? Promise.resolve(0),
     stop: async () => {
       setEventWakeup(null);
       await boss.stop({ graceful: true, timeout: JOBS_STOP_TIMEOUT_MS });

@@ -140,6 +140,17 @@ export const buildingsRoutes =
     );
 
     // Naming my home (#306 PR 0).
+    // Wild Isle (#621): fixes a building a storm knocked about.
+    app.post(
+      '/maps/:mapId/buildings/:buildingId/repair',
+      {
+        schema: { params: BuildingParamsSchema, response: { 200: HomeResponseSchema } },
+        ...commandHooks,
+      },
+      async (request) =>
+        service.repair(requireUser(request), request.params.mapId, request.params.buildingId),
+    );
+
     app.post(
       '/maps/:mapId/home/name',
       {

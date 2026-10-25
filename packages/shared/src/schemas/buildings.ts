@@ -61,6 +61,12 @@ export const PublicBuildingSchema = z.object({
    * stored events.
    */
   paused: z.boolean().nullable().optional(),
+  /**
+   * Wild Isle (#621): a storm knocked it about and it waits to be fixed.
+   * Members see the knock, never the roll. Left out for kinds a storm
+   * never knocks, on a Cozy Patch, and by older servers.
+   */
+  knocked: z.boolean().optional(),
 });
 export type PublicBuilding = z.infer<typeof PublicBuildingSchema>;
 
@@ -136,6 +142,11 @@ export const MyBuildingSchema = z.object({
    * for other kinds and by an older server.
    */
   production: BuildingProductionSchema.nullable().optional(),
+  /**
+   * Wild Isle (#621): what fixing it costs while a storm has it knocked
+   * about (`POST …/buildings/:id/repair`). Left out when it isn't knocked.
+   */
+  repairCost: ItemCountsSchema.optional(),
   /**
    * The Warehouse (#601 PR 8): whether it delivers for my level 3+
    * resource buildings now, and its morning upkeep. Left out for other kinds

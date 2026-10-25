@@ -158,6 +158,23 @@ export const HollowStatusSchema = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * Wild Isle (#621): my buildings storms knocked about over the last few
+   * nights and still waiting to be fixed, newest first, for the morning
+   * card ("The storm knocked your pier about 🌧️"). Left out on a Cozy
+   * Patch and by an older server.
+   */
+  weatherNotes: z
+    .array(
+      z.object({
+        buildingRowId: z.uuid(),
+        buildingId: ContentIdSchema,
+        q: HexSchema.shape.q,
+        r: HexSchema.shape.r,
+        at: z.iso.datetime(),
+      }),
+    )
+    .optional(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });

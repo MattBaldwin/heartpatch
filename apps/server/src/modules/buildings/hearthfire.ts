@@ -53,6 +53,8 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
     ...(row.kind === 'resource' || row.kind === 'warehouse'
       ? { paused: row.pausedAt !== null }
       : {}),
+    // Knocked about by a storm (Wild Isle #621): only ever set there.
+    ...(row.damagedAt !== null ? { knocked: true } : {}),
   };
 }
 

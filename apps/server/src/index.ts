@@ -17,6 +17,7 @@ import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createLandTending } from './modules/territory/tending.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
+import { createWeatherService } from './modules/weather/service.js';
 
 const config = loadServerConfig();
 const db = createDbClient(config.DATABASE_URL);
@@ -67,6 +68,16 @@ const jobs = await startJobs({
       return taken;
     },
   },
+  // Wild Isle storms (#621): rolled hourly for every player, so knocks show
+  // for a kid who's away; old plans are tidied daily.
+  weather: (() => {
+    const weather = createWeatherService({
+      db: db.db,
+      clock,
+      ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
+    });
+    return { maps: weather.wildMaps, sweep: weather.sweep, retain: weather.retain };
+  })(),
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
 });

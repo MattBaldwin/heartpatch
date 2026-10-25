@@ -486,6 +486,15 @@ export const buildings = pgTable(
     // The kid's own upkeep order (#601 owner decision Q5): lower pays first.
     // Null: the default order (highest level, then oldest, Warehouse last).
     upkeepRank: smallint('upkeep_rank'),
+    // Wild Isle (#621): a storm knocked it about at this instant (inside the
+    // front's minutes over its tile); it works again once fixed. Null: fine.
+    damagedAt: timestamptz('damaged_at'),
+    // The weather front that knocked it (`WeatherFront.id`), or null.
+    damagedBy: text('damaged_by'),
+    // Storm fronts whose minutes over its tile ended by here have been
+    // rolled for (seeded, so rolling again changes nothing). Null reads as
+    // `placed_at`.
+    weatherCheckedThrough: timestamptz('weather_checked_through'),
   },
   (t) => [
     foreignKey({
@@ -1351,6 +1360,27 @@ export const tileTending = pgTable(
  * captured or goes wild; a leaver's row is ignored until the tile is laid
  * again. Locked at step 6b (tech spec §7), after `tile_explore`.
  */
+// Wild Isle weather (#621): each map-local day's plan, stored the first time
+// anyone needs it (`ON CONFLICT DO NOTHING`), so a retune of `WEATHER_RULES`
+// never rewrites a day kids already saw. `fronts` is `WeatherFront[]`
+// (validated on read). Inserted, never locked (tech spec §7); the weather
+// sweep deletes days older than `WEATHER_RULES.retentionDays`.
+export const weatherDays = pgTable(
+  'weather_days',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    // The kind of day it rolled (`WeatherKind`): a dry spell or a clear day
+    // can have no fronts, and the forecast still says which.
+    kind: text('kind').notNull(),
+    fronts: jsonb('fronts').notNull(),
+    plannedAt: timestamptz('planned_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.day] })],
+);
+
 export const tileRoads = pgTable(
   'tile_roads',
   {
