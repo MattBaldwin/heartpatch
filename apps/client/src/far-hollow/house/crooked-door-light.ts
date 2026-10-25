@@ -249,8 +249,9 @@ export function createDoorLights(): DoorLights {
               class: `crooked-door-spark crooked-door-burst crooked-door-spark-${shape}`,
             });
             bit.style.setProperty('--y', `${r1(-s.y * PIECE * 0.5)}px`);
-            bit.style.setProperty('--sway', `${r1(s.sway * 2)}px`);
-            bit.style.setProperty('--size', `${r1(s.size * 1.5)}px`);
+            // Outward from the doorway, so the burst stays beside it.
+            bit.style.setProperty('--sway', `${r1(Math.abs(s.sway) * 2 * Math.sign(s.x))}px`);
+            bit.style.setProperty('--size', `${r1(s.size * 1.3)}px`);
             bit.style.setProperty('--burst-delay', `${r1(i * 0.06)}s`);
             bit.style.setProperty('--spark', s.colour);
             const lane = el('span', { class: 'crooked-door-lane' }, bit);

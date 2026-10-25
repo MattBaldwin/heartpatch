@@ -83,7 +83,7 @@ function caption(d, door, state, r) {
     state === 'asleep'
       ? `${door.room}, the ${door.thing} door still asleep, the Keeper at it.`
       : state === 'woke'
-        ? `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend, the opening burst held ${((r.burstHeldMs ?? 0) / 1000).toFixed(1)} s into its 2.4 s run so it can be seen (the glows are swollen and a puff of extra sparkles is rising).`
+        ? `${door.room}, the ${door.thing} door just woken by a ${door.elem} friend, the opening burst held ${((r.burstHeldMs ?? 0) / 1000).toFixed(1)} s into its 2.4 s run so it can be seen (each side’s glow is swollen and brighter, and a puff of larger sparkles is rising beside it).`
         : `${door.room}, the same woken door ${(r.msAfterWake / 1000).toFixed(1)} s after the wake.`;
   const up = r.sparklesUp ?? 0;
   const cue = light
