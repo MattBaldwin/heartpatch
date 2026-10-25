@@ -406,7 +406,7 @@ function strandedView(f) {
   if (!seen)
     return `The cut-off land (${all} tiles) does not show here, so none of it shows; "Show me" pans to it.`;
   if (count(tiles, 'centre') === all)
-    return `All ${all} of ${all} cut-off tiles are in view, in the ${kind}.`;
+    return `All ${all} of ${all} cut-off tiles show in the ${kind}; a tile can sit partly under a pill, card or button.`;
   return seen === all
     ? `All ${all} of ${all} cut-off tiles show in the ${kind}; some are partly tucked behind a pill, card or button.`
     : `Some of the cut-off land (${seen} of ${all} tiles) shows in the ${kind}; the rest is out of view.`;
@@ -422,7 +422,7 @@ function ferryView(f) {
   if (!seen)
     return `The ferry map is on (${total} far-shore tiles in the aqua tint), but none of the far shore shows (it is behind the panel or buttons) and ${dock}; see the next frame.`;
   if (count(v.far, 'centre') === total)
-    return `The ferry map is showing: all ${total} of ${total} far-shore tiles in the aqua tint are in view, and ${dock}.`;
+    return `The ferry map is showing: all ${total} of ${total} far-shore tiles show in the aqua tint; a tile can sit partly under a button or the screen edge; ${dock}.`;
   return seen === total
     ? `The ferry map is showing: all ${total} of ${total} far-shore tiles show in the aqua tint; some are partly cut by the screen edge or tucked behind a button; ${dock}.`
     : `The ferry map is showing: some of the far shore (${seen} of ${total} tiles) is in view in the aqua tint; the rest is out of view; ${dock}.`;
