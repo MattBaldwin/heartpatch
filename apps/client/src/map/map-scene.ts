@@ -87,7 +87,7 @@ import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-m
 import {
   findHomeBases,
   hash01,
-  hexIslandRadius,
+  beachRadius,
   islandTiles,
   mapBounds,
   mapRadius,
@@ -236,8 +236,9 @@ const linearRgb = (hex: string): [number, number, number] => {
 /** Height of a tile's top: its look's, plus its own small wobble (none on home tiles). */
 /** A tile's top surface height, world units (layers that sit on a tile use it). */
 export function topOf(tile: PublicTile): number {
-  // The ocean is never a tile (#621): what marks it sits on the water.
-  if (isOcean(tile)) return OCEAN.level;
+  // The ocean is never a tile (#621): what marks it (the selection ring)
+  // sits at the island's top, so the beach between coast tiles never hides it.
+  if (isOcean(tile)) return OCEAN.markTop;
   const look = lookOf(tile);
   return tile.homeSlot !== null ? look.height : look.height + tileJitter(tile, tile.terrain).height;
 }
@@ -1049,7 +1050,7 @@ export class MapScene {
    * the sea instead (`buildSea`); returns the sea's radius then, else null.
    */
   private buildIsland(tiles: readonly PublicTile[], land: readonly PublicTile[]): number | null {
-    if (land.length < tiles.length && tiles.some(isOcean)) return this.buildSea(tiles, land);
+    if (tiles.some(isOcean)) return this.buildSea(tiles, land);
     const radius = mapRadius(tiles, HEX_SIZE) + ISLAND.margin;
     const island = CreateCylinder(
       'island',
@@ -1090,7 +1091,7 @@ export class MapScene {
    * Returns the sea's radius.
    */
   private buildSea(tiles: readonly PublicTile[], island: readonly PublicTile[]): number {
-    const beach = hexIslandRadius(island, HEX_SIZE) + OCEAN.margin;
+    const beach = beachRadius(island);
     const outer = mapRadius(tiles, HEX_SIZE) + OCEAN.reach;
     const slab = (name: string, radius: number, top: number, color: string): Mesh => {
       const mesh = meshFrom(
@@ -1100,9 +1101,9 @@ export class MapScene {
           radius,
           [
             { scale: 1, y: top },
-            { scale: 1 + 0.25 / radius, y: top - 0.05 },
-            { scale: 1 + 0.55 / radius, y: OCEAN.level - 0.03 },
-            { scale: 1 + 0.7 / radius, y: -ISLAND.thickness },
+            { scale: 1 + (OCEAN.shore * 0.5) / radius, y: top - 0.04 },
+            { scale: 1 + OCEAN.shore / radius, y: OCEAN.level - 0.03 },
+            { scale: 1 + (OCEAN.shore + 0.15) / radius, y: -ISLAND.thickness },
           ],
           { corner: 0.12, segments: 6, centre: { y: top } },
         ),
@@ -1175,8 +1176,8 @@ export class MapScene {
         r,
         [
           { scale: 1, y: top },
-          { scale: 1.12, y: OCEAN.level - 0.03 },
-          { scale: 1.2, y: OCEAN.level - 0.2 },
+          { scale: OCEAN.isleSandWater, y: OCEAN.level - 0.03 },
+          { scale: OCEAN.isleSandWater + 0.08, y: OCEAN.level - 0.2 },
         ],
         { corner: 0.5, segments: 4, centre: { y: top } },
       ),

@@ -778,7 +778,7 @@ describe('Wild Isle on the map (#621 W1-4)', () => {
     ).toBeGreaterThan(5);
   });
 
-  it('picks an ocean tile and rings it on the water', () => {
+  it('picks an ocean tile and rings it clear of the beach', () => {
     const { scene, map } = build();
     const tile = ocean[0]!;
     const p = hexToWorld(tile, HEX_SIZE);
@@ -787,7 +787,9 @@ describe('Wild Isle on the map (#621 W1-4)', () => {
     scene.activeCamera = camera;
     expect(map.pick(200, 400)).toMatchObject({ q: tile.q, r: tile.r, terrain: 'ocean' });
     map.select(tile);
-    expect(scene.getMeshByName('selection')!.position.y).toBe(OCEAN.level);
+    // At the island's top, above the beach that fills the coast's notches.
+    expect(scene.getMeshByName('selection')!.position.y).toBe(OCEAN.markTop);
+    expect(OCEAN.markTop).toBeGreaterThan(-0.02);
   });
 
   it('stands the isles out at sea in the water, and island tiles on the island', () => {

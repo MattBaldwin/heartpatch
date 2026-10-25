@@ -1,12 +1,13 @@
 import { JOB_RULES, RESOURCES, workSource, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { isWaterTile } from './map-dressing.js';
 import { MapState } from './map-state.js';
 import {
   describeTile,
   guardianLine,
-  isWaterTile,
+  TILE_EMOJI,
+  WATER_ABOUT,
   watchFeelingsLine,
-  WATER_WORDS,
   type TileInfo,
 } from './tile-info.js';
 import { testView, userId } from './test-view.js';
@@ -284,6 +285,8 @@ describe('Wild Isle tiles (#621 plan §8)', () => {
       expect(w.guardians, terrain).toBeNull();
       expect(w.gatherer, terrain).toBeNull();
       expect(isWaterTile({ terrain }), terrain).toBe(true);
+      // The details don't repeat the owner line.
+      expect(w.about, terrain).toBe(WATER_ABOUT);
     }
     // The coast is land: claimable, with an owner line like any land.
     expect(info('coast').owner).toBe('Wild land.');
@@ -293,7 +296,7 @@ describe('Wild Isle tiles (#621 plan §8)', () => {
   });
 
   it('keeps every Wild Isle line short and free of avoided words', () => {
-    for (const terrain of Object.keys(WATER_WORDS.emoji)) {
+    for (const terrain of Object.keys(TILE_EMOJI)) {
       const text = allText(info(terrain));
       expect(text, terrain).not.toMatch(AVOIDED);
       expect(info(terrain).owner.split(/\s+/).length, terrain).toBeLessThanOrEqual(12);

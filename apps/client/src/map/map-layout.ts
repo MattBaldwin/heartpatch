@@ -1,4 +1,5 @@
 import {
+  hexDistance,
   hexKey,
   hexNeighbors,
   hexToWorld,
@@ -9,7 +10,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { Bounds } from '../engine/camera/camera-math.js';
-import { HEX_SIZE, type PropKind, type TerrainLook } from './map-config.js';
+import { HEX_SIZE, OCEAN, type PropKind, type TerrainLook } from './map-config.js';
 
 // Pure map layout (no Babylon), so it's unit-tested: where tiles, home bases
 // and props go. Everything is derived from what the server sent; the client
@@ -158,13 +159,10 @@ export function islandTiles(
 ): Set<HexKey> {
   const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
   if (!tiles.some(ocean)) return new Set(byKey.keys());
+  const middle = { q: 0, r: 0 };
   const start = tiles.reduce<PublicTile | null>(
     (best, t) =>
-      ocean(t)
-        ? best
-        : !best || Math.abs(t.q) + Math.abs(t.r) < Math.abs(best.q) + Math.abs(best.r)
-          ? t
-          : best,
+      ocean(t) ? best : !best || hexDistance(t, middle) < hexDistance(best, middle) ? t : best,
     null,
   );
   const island = new Set<HexKey>();
@@ -191,14 +189,29 @@ export function islandTiles(
  * that holds every corner of these tiles: the Wild Isle island's size (#621).
  */
 export function hexIslandRadius(tiles: readonly PublicTile[], size: number): number {
-  const cos30 = Math.sqrt(3) / 2;
   let r = 0;
-  for (const t of tiles) {
-    const p = hexToWorld(t, size);
-    for (let k = 0; k < 6; k++) {
-      const a = ((30 + 60 * k) * Math.PI) / 180;
-      r = Math.max(r, (p.x * Math.cos(a) + p.z * Math.sin(a) + size) / cos30);
-    }
+  // A tile's corner pokes out `size` past its centre along these normals.
+  for (const t of tiles) r = Math.max(r, (hexReach(hexToWorld(t, size)) + size) / COS30);
+  return r;
+}
+
+const COS30 = Math.sqrt(3) / 2;
+
+/**
+ * How far the land reaches along its hexagon's edge normals (world units):
+ * a tile centre's "hex distance" in the land's own shape. The beach's top
+ * edge sits at `beachRadius × cos 30°` by this measure.
+ */
+export function hexReach(p: { x: number; z: number }): number {
+  let r = -Infinity;
+  for (let k = 0; k < 6; k++) {
+    const a = ((30 + 60 * k) * Math.PI) / 180;
+    r = Math.max(r, p.x * Math.cos(a) + p.z * Math.sin(a));
   }
   return r;
+}
+
+/** The Wild Isle beach's circumradius (#621): the island's hexagon plus `OCEAN.margin`. */
+export function beachRadius(island: readonly PublicTile[], size = HEX_SIZE): number {
+  return hexIslandRadius(island, size) + OCEAN.margin;
 }

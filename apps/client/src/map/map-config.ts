@@ -207,12 +207,22 @@ export const OCEAN = {
   /** Ring steps in the disc (more: a smoother shallow-to-deep blend). */
   rings: 8, // TUNE
   beach: '#f3e3bd', // TUNE
-  /** The island's margin past its outermost land tile (Cozy's is `ISLAND.margin`). */
-  margin: 0.3, // TUNE
+  /**
+   * The beach's top edge past the outermost land tiles' corners (Cozy's island
+   * uses `ISLAND.margin`). 0: the sand fills the notches between coast tiles
+   * and stops there, never over the first ring of sea.
+   */
+  margin: 0, // TUNE
+  /** How far past its top edge the beach slopes down to the water line (world units). */
+  shore: 0.25, // TUNE
+  /** What marks an ocean tile (the selection ring) sits at: the island's top, clear of the beach. */
+  markTop: 0,
   /** An isle tile's foot sinks this far under the water, so it stands in the sea. */
   sink: 0.25, // TUNE
   /** Each isle tile's sand skirt, as a multiple of a tile's size: neighbours' skirts join into a sandbar. */
-  isleSand: 1.35, // TUNE
+  isleSand: 1.1, // TUNE
+  /** An isle skirt's reach at the water line, as a multiple of its top's. */
+  isleSandWater: 1.12,
   /** Height steps between neighbouring sand skirts (world units), so overlaps never z-fight. */
   sandStep: 0.006, // TUNE
   /** The sea's glint by day and by night (softer, so it never reads as snow); the lakes' is `AMBIENT.water.glint`. */

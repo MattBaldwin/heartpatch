@@ -1,6 +1,5 @@
 import {
   isTradingPost,
-  isWater,
   FEELINGS,
   JOB_RULES,
   RESOURCES,
@@ -17,6 +16,7 @@ import {
 import { itemIcon } from '../inventory/item-icons.js';
 import { seedTitle } from '../home/home-name-view.js';
 import { postReachLine } from '../trading/post-model.js';
+import { isWaterTile } from './map-dressing.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -52,18 +52,18 @@ export interface TileInfo {
  * Wild Isle's tile names (#621 plan §8): water and the coast wear an emoji
  * in the panel's title ("Ocean 🌊"). Water is nobody's land and can never be
  * claimed, so its owner line is what it's like (the terrain's description:
- * "Just waves out here. Nothing to claim!"), and it offers no actions.
+ * "Just waves out here. Nothing to claim!"), its details say so, and it
+ * offers no actions (`map-screen.ts`).
  */
-export const WATER_WORDS = {
-  emoji: { ocean: '🌊', river: '💧', 'wild-lake': '💧', coast: '🐚' } as Readonly<
-    Record<string, string>
-  >,
-} as const;
+export const TILE_EMOJI: Readonly<Record<string, string>> = {
+  ocean: '🌊',
+  river: '💧',
+  'wild-lake': '💧',
+  coast: '🐚',
+};
 
-/** True for a water tile (shared `isWater`): no Claim, no Explore, nothing to build (#621). */
-export function isWaterTile(tile: Pick<PublicTile, 'terrain'>): boolean {
-  return isWater(TERRAINS.find((t) => t.id === tile.terrain));
-}
+/** The details line on a water tile (the owner line already says what it's like). */
+export const WATER_ABOUT = 'Nobody can claim water. Enjoy the view!';
 
 export function describeTile(
   tile: PublicTile,
@@ -88,8 +88,8 @@ export function describeTile(
   const home = tile.homeSlot !== null;
 
   const post = isTradingPost(tile);
-  const water = isWater(terrain);
-  const emoji = WATER_WORDS.emoji[tile.terrain];
+  const water = isWaterTile(tile);
+  const emoji = TILE_EMOJI[tile.terrain];
   let owner: string;
   if (water) {
     owner = terrain?.description ?? 'Just water out here.';
@@ -113,7 +113,7 @@ export function describeTile(
       (post ? tile.post?.name : undefined) ??
       (homeName !== null ? seedTitle(homeName) : undefined) ??
       `${terrain?.name ?? 'Mystery land'}${emoji !== undefined ? ` ${emoji}` : ''}${mine && !home ? HOMESTEAD_WORDS.tag(tile) : ''}`,
-    about: terrain?.description ?? 'Nobody knows much about this spot yet.',
+    about: water ? WATER_ABOUT : (terrain?.description ?? 'Nobody knows much about this spot yet.'),
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),

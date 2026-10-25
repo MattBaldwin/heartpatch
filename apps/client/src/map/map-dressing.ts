@@ -171,6 +171,11 @@ const DEEP: ReadonlySet<string> = new Set(
   GAME_DATA.terrains.filter((t) => t.water === 'deep').map((t) => t.id),
 );
 
+/** True for a water tile (shared `isWater`: ocean, river, Wild Isle lake), never land (#621). */
+export function isWaterTile(tile: Pick<PublicTile, 'terrain'>): boolean {
+  return WATER.has(tile.terrain);
+}
+
 /** True for an ocean tile: no tile mesh, no props, no motes; the sea is drawn under it. */
 export function isOcean(tile: Pick<PublicTile, 'terrain'>): boolean {
   return DEEP.has(tile.terrain);

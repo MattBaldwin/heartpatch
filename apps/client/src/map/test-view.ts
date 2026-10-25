@@ -6,7 +6,6 @@ import {
   hexLine,
   hexNeighbors,
   hexRing,
-  isWater,
   GAME_DATA,
   KEEPER_BASES,
   generateMap,
@@ -16,6 +15,7 @@ import {
   type MapView,
   type PublicTile,
 } from '@heartpatch/shared';
+import { isWaterTile } from './map-dressing.js';
 
 // A realistic map view for unit tests: a real generated 4-player map, as the
 // server would send it, with members taking home slots in order. Pinned to
@@ -150,9 +150,6 @@ function grown(view: MapView, extra: number, claimable: (t: PublicTile) => boole
 /** The Wild Isle test map's radius (#621 revision 1: rings 17–18 ocean, 16 coast). */
 export const WILD_RADIUS = 18;
 
-/** Wild Isle tiles that are water (shared `isWater`), as terrain ids. */
-const WATER = new Set(GAME_DATA.terrains.filter(isWater).map((t) => t.id));
-
 /**
  * A hand-made radius-18 Wild Isle (#621 W1-4) for the map's looks, budgets
  * and captures, until W1-2's generator can make one: the 6-seat Cozy test map
@@ -256,5 +253,5 @@ export function testWildIsle(players = 6, extra = 30): MapView {
     map: { ...base.map, name: 'Wild Isle', patchType: 'wild-isle' },
     tiles,
   };
-  return grown(view, extra, (t) => t.terrain !== 'junipers-gap' && !WATER.has(t.terrain));
+  return grown(view, extra, (t) => t.terrain !== 'junipers-gap' && !isWaterTile(t));
 }

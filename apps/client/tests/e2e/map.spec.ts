@@ -397,7 +397,9 @@ test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoome
         { timeout: 60_000 },
       )
       .toBeGreaterThan(40);
-    return (await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null))!;
+    const stats = await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null);
+    if (!stats) throw new Error('the island page drew no map');
+    return stats;
   };
   const near = await measure('patch=wild');
   expect(near.detail).toBe('near');
