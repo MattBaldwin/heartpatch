@@ -1,14 +1,18 @@
 import { MIX, MUSIC, SFX } from './audio-config.js';
 import { DUCKING_CUES, UI_CUES, type CueName } from './cues.js';
 import { loopSeconds, SCORES, type Score, type TrackId } from './music-score.js';
+import { recordingFor } from './recorded.js';
+import { fetchBytes, loadSamples, type FetchBytes, type SampleId } from './samples.js';
 import { RECIPES } from './sfx.js';
-import { noiseBuffer, playNote } from './synth.js';
+import { noiseBuffer, playNote, roomImpulse } from './synth.js';
 
 // The sound engine (#25, tech spec §15). Loaded lazily after the first tap
 // (`audio.ts`), so it never weighs on the first load. Buses for music, SFX
 // and UI meet in a master gain with a limiter. Music loops are rendered once
 // each on an OfflineAudioContext (on the audio thread, off the render loop)
 // and then play as plain looping buffers: no timers or per-frame work.
+// The big moments' recorded hits (#653) start loading when the engine is made
+// (after the first tap); each plays its synth stand-in until they're in.
 
 export interface Engine {
   /** Plays a cue now; false if it was dropped (too many voices, or a repeat too soon). */
@@ -74,6 +78,7 @@ export async function renderLoop(ctx: BaseAudioContext, score: Score): Promise<A
 export function createEngine(
   ctx: AudioContext,
   volumes: { music: number; sounds: number },
+  fetcher: FetchBytes = fetchBytes,
 ): Engine {
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = MIX.limiterThresholdDb;
@@ -93,8 +98,23 @@ export function createEngine(
   sfxBus.connect(master);
   const uiBus = ctx.createGain();
   uiBus.connect(master);
+  // A light room reverb (#653): SFX and UI send a little into it, music none.
+  const reverb = ctx.createConvolver();
+  reverb.buffer = roomImpulse(ctx, MIX.reverbS);
+  reverb.connect(master);
+  for (const [bus, amount] of [
+    [sfxBus, MIX.sfxReverb],
+    [uiBus, MIX.uiReverb],
+  ] as const) {
+    const send = ctx.createGain();
+    send.gain.value = amount;
+    bus.connect(send);
+    send.connect(reverb);
+  }
 
-  const kit = { ctx, noise: noiseBuffer(ctx) };
+  const samples = new Map<SampleId, AudioBuffer>();
+  void loadSamples(ctx, samples, fetcher);
+  const kit = { ctx, noise: noiseBuffer(ctx), samples };
   /** When each voice slot frees up (context time); fixed size, so no allocation per play. */
   const voiceEnds = new Float64Array(SFX.maxVoices);
   const lastPlayed = new Map<CueName, number>();
@@ -194,10 +214,14 @@ export function createEngine(
       }
     }
     if (slot < 0) return false;
-    const pitch = 1 + (Math.random() * 2 - 1) * SFX.pitchJitter;
+    const recording = recordingFor(cue, samples);
+    const jitter = recording ? SFX.recordedPitchJitter : SFX.pitchJitter;
+    const pitch = 1 + (Math.random() * 2 - 1) * jitter;
     const gain = 1 - Math.random() * SFX.gainJitter;
     const out = UI_CUES.has(cue) ? uiBus : sfxBus;
-    const length = RECIPES[cue](kit, out, now, pitch, gain);
+    const length = recording
+      ? recording.play(kit, out, now, pitch, gain)
+      : RECIPES[cue](kit, out, now, pitch, gain);
     voiceEnds[slot] = now + length;
     lastPlayed.set(cue, now);
     if (DUCKING_CUES.has(cue)) duckFor(length);
