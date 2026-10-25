@@ -38,9 +38,11 @@ const exploreState = (page: Page) =>
 const slow = { timeout: 30_000 };
 
 test('a found page sparkles in the Bag, opens in the Lorebook and is read', async ({ browser }) => {
-  // Two map opens, no reloads: a reload boots the whole game again, and
-  // three of them ran past this limit on a loaded iPad CI box. CI renders in software.
-  test.setTimeout(150_000);
+  // Two map opens, no reloads: a reload boots the whole game again, and with
+  // two reloads both CI tries ran past 150 s on a loaded iPad box. This way is
+  // up to 2.3 min in a loaded local Chromium iPad, so the limit is 240 s
+  // (#429). CI renders in software.
+  test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('lore'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
