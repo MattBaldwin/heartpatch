@@ -1872,8 +1872,23 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         ),
       );
     } else {
-      // A storm knocked it about (#621): say so and offer the fix.
+      // A storm knocked it about (#621): say so and offer the fix, all
+      // together under the name, so the note, its cost and Fix it fit in
+      // one view of a short panel (238pt on an iPhone SE).
       const fix = repairOffer(current.items, b);
+      const fixButton = (): HTMLButtonElement => {
+        const go = tileButton(
+          FIX_TEXT.fixIt,
+          () =>
+            void tileAct(
+              (id, send) => send((key) => api.repair(id, b.id, key)),
+              FIX_TEXT.fixed(buildingName(b.buildingId), b.buildingId),
+            ),
+          `tile-${prefix}-fix`,
+        );
+        if (fix && !fix.affordable) go.disabled = true;
+        return go;
+      };
       card.push(
         ...(fix
           ? [
@@ -1883,27 +1898,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 FIX_TEXT.knocked(buildingName(b.buildingId)),
               ),
               needRow(fix.needs),
+              tileRow(fixButton()),
             ]
           : []),
         ...lines,
         tileRow(
-          ...(fix
-            ? [
-                (() => {
-                  const go = tileButton(
-                    FIX_TEXT.fixIt,
-                    () =>
-                      void tileAct(
-                        (id, send) => send((key) => api.repair(id, b.id, key)),
-                        FIX_TEXT.fixed(buildingName(b.buildingId), b.buildingId),
-                      ),
-                    `tile-${prefix}-fix`,
-                  );
-                  if (!fix.affordable) go.disabled = true;
-                  return go;
-                })(),
-              ]
-            : []),
           ...actions,
           ...(upgradeAt
             ? [
