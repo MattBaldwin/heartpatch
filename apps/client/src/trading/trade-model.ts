@@ -58,6 +58,28 @@ export const TRADE_TEXT = {
   sendGift: 'Send gift 🎁',
   waitsSafely: (name: string) => `Your things wait safely at the post until ${name} answers.`,
   giftWaits: (name: string) => `${name} picks it up at any trading post.`,
+  // The bars and the gift confirm (#655, part D).
+  toChip: (name: string) => `To: ${name}`,
+  whoFor: 'Who’s it for? 🎁',
+  whoForHint: 'Tap a name to pick them.',
+  giftCount: (things: number, name: string) =>
+    `${String(things)} ${things === 1 ? 'thing' : 'things'} for ${name}\u00a0🎁`,
+  giftPickFirst: 'Tap things to pick a gift',
+  giftConfirmTitle: 'Send this gift? 🎁',
+  giftConfirmTo: (name: string) => `To ${name}`,
+  giftConfirmNote: (name: string) =>
+    `${name} picks it up at the post. You can take it back until\u00a0then.`,
+  changePick: 'Tap to change it',
+  ofShelf: (n: number) => `of ${String(n)}`,
+  notNow: 'Not now',
+  sendYes: 'Send!',
+  remove: 'Remove',
+  morePicked: 'Change how many',
+  swapPickFirst: 'Pick one thing to swap 💎',
+  swapPicked: 'Picked ✓',
+  swapPickIt: 'Pick',
+  swapLine: (give: string, get: number) => `${give} → ${String(get)} 💎`,
+  swapsLeft: (n: number) => `${String(n)} ${n === 1 ? 'swap' : 'swaps'} left today`,
   wantsToTrade: (name: string) => `${name} wants to trade!`,
   sayYes: 'Say yes! 🤝',
   noThanks: 'No thanks',
@@ -216,11 +238,32 @@ export function stepItem(
   delta: 1 | -1,
   max: number,
 ): TradeLine[] {
+  const current = picks.find((p) => p.kind === 'item' && p.itemId === itemId);
+  if (current?.kind !== 'item') return [...picks];
+  return setItemQuantity(picks, itemId, current.quantity + delta, max);
+}
+
+/** Takes a pick off the list, whatever it is. */
+export function removePick(picks: readonly TradeLine[], key: string): TradeLine[] {
+  return picks.filter((p) => lineKey(p) !== key);
+}
+
+/** An item pick set to exactly `quantity`, kept from 1 up to what's on the shelf. */
+export function setItemQuantity(
+  picks: readonly TradeLine[],
+  itemId: string,
+  quantity: number,
+  max: number,
+): TradeLine[] {
+  const next = Math.min(Math.max(1, max), Math.max(1, Math.floor(quantity)));
   return picks.map((p) =>
-    p.kind === 'item' && p.itemId === itemId
-      ? { ...p, quantity: Math.min(max, Math.max(1, p.quantity + delta)) }
-      : p,
+    p.kind === 'item' && p.itemId === itemId ? { ...p, quantity: next } : p,
   );
+}
+
+/** How many things are picked: an item counts by its quantity, a squishy or piece as one. */
+export function thingsIn(lines: readonly TradeLine[]): number {
+  return lines.reduce((n, l) => n + (l.kind === 'item' ? l.quantity : 1), 0);
 }
 
 /** Why the send button waits, or null when it's ready (the server checks again). */

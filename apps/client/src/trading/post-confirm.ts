@@ -44,13 +44,27 @@ export interface ConfirmSheet {
   readonly yesDisabled?: boolean;
 }
 
-/** The dimmed layer and the sheet on it. A tap on the dim, ✕ or "Not now" closes it. */
-export function postConfirm(sheet: ConfirmSheet): HTMLElement {
+const FOCUSABLE =
+  'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The dimmed layer with a card on it (the confirm sheet and the Gift mate
+ * picker). A tap on the dim, ✕ or Escape closes it, and Tab stays on the
+ * card, so a keyboard never wanders into the list underneath.
+ */
+export function postSheet(sheet: {
+  readonly title: string;
+  readonly testId: string;
+  /** What "close" says to a screen reader on the ✕. */
+  readonly closeLabel: string;
+  readonly onClose: () => void;
+  readonly content: readonly Node[];
+}): HTMLElement {
   const titleId = `${sheet.testId}-title`;
-  const close = hpClose(sheet.no, `${sheet.testId}-close`);
-  close.addEventListener('click', sheet.onNo);
+  const close = hpClose(sheet.closeLabel, `${sheet.testId}-close`);
+  close.addEventListener('click', sheet.onClose);
   const dim = el('div', { class: 'post-confirm-dim', 'aria-hidden': 'true' });
-  dim.addEventListener('click', sheet.onNo);
+  dim.addEventListener('click', sheet.onClose);
   const card = el(
     'div',
     {
@@ -61,6 +75,49 @@ export function postConfirm(sheet: ConfirmSheet): HTMLElement {
       'data-testid': sheet.testId,
     },
     el('h3', { class: 'post-confirm-title' }, el('span', { id: titleId }, sheet.title), close),
+    ...sheet.content,
+  );
+  const layer = el('div', { class: 'post-confirm-layer' }, dim, card);
+  layer.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      sheet.onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const stops = [...card.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (!first || !last) return;
+    const active = document.activeElement;
+    if (!card.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  return layer;
+}
+
+/** The confirm sheet on its layer. A tap on the dim, ✕, Escape or "Not now" closes it. */
+export function postConfirm(sheet: ConfirmSheet): HTMLElement {
+  return postSheet({
+    title: sheet.title,
+    testId: sheet.testId,
+    closeLabel: sheet.no,
+    onClose: sheet.onNo,
+    content: confirmBody(sheet),
+  });
+}
+
+function confirmBody(sheet: ConfirmSheet): Node[] {
+  return [
     el(
       'ul',
       { class: 'post-confirm-lines', 'data-testid': `${sheet.testId}-lines` },
@@ -109,6 +166,5 @@ export function postConfirm(sheet: ConfirmSheet): HTMLElement {
       sheet.button(sheet.no, `${sheet.testId}-no`, 'quiet', sheet.onNo),
       sheet.button(sheet.yes, `${sheet.testId}-yes`, 'primary', sheet.onYes, sheet.yesDisabled),
     ),
-  );
-  return el('div', { class: 'post-confirm-layer' }, dim, card);
+  ];
 }
