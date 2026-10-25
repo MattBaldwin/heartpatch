@@ -9,6 +9,7 @@ import {
   tileAttacks,
   tileDefenders,
   tileExplore,
+  tileRoads,
   tiles,
   tileTending,
 } from '../../db/schema.js';
@@ -29,6 +30,8 @@ export interface JobTileRow {
    * fully explored it (#199): its homestead columns. Work tiles only.
    */
   homestead?: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
+  /** The working squishy's owner's road level here (Wild Isle #621); null: none. Work tiles only. */
+  roadLevel?: number | null;
 }
 
 /** One of a player's squishies with everything its job depends on. */
@@ -262,6 +265,7 @@ function queries(db: Executor): SquishyJobsRepo {
         workJoinedAt: tileExplore.joinedAt,
         workPausedAt: tileExplore.pausedAt,
         workResumedAt: tileExplore.resumedAt,
+        workRoad: tileRoads.level,
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
@@ -292,6 +296,14 @@ function queries(db: Executor): SquishyJobsRepo {
           eq(tileExplore.tileId, squishies.workTileId),
           eq(tileExplore.userId, squishies.ownerUserId),
           isNotNull(tileExplore.completedAt),
+        ),
+      )
+      // The owner's road on the work tile: a gatherer's pace on it (#621).
+      .leftJoin(
+        tileRoads,
+        and(
+          eq(tileRoads.tileId, squishies.workTileId),
+          eq(tileRoads.ownerUserId, squishies.ownerUserId),
         ),
       )
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
@@ -336,6 +348,7 @@ function queries(db: Executor): SquishyJobsRepo {
             nodeResource: r.workNode,
             homeSlot: r.workHomeSlot,
             ownerUserId: r.workOwner,
+            roadLevel: r.workRoad,
             homestead:
               r.workExplored === null
                 ? null

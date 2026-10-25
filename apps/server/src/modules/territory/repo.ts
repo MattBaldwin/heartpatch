@@ -639,6 +639,17 @@ export interface TendingTileRow {
   terrain: string;
   ownerUserId: string;
   tendedAt: Date | null;
+  /**
+   * Wild Isle (#621): cut off from home since then; null: supplied (or no
+   * row yet). `outerTiles` always reads it; other callers may leave it out.
+   */
+  strandedSince?: Date | null;
+}
+
+/** A locked `tile_tending` row's two clocks. */
+export interface TendingClocks {
+  tendedAt: Date;
+  strandedSince: Date | null;
 }
 
 /**
@@ -668,8 +679,19 @@ export interface TendingRepo {
   lockMyOuterTiles: (mapId: string, userId: string) => Promise<string[]>;
   /** Dev only: moves these tiles' last tending `days` back. The caller has locked the tiles. */
   ageTending: (tileIds: readonly string[], days: number) => Promise<void>;
-  /** Row-locks these tiles' tending rows in tile id order (after the tiles); returns when each was tended. */
-  lockTending: (tileIds: readonly string[]) => Promise<Map<string, Date>>;
+  /** Row-locks these tiles' tending rows in tile id order (after the tiles); returns their clocks. */
+  lockTending: (tileIds: readonly string[]) => Promise<Map<string, TendingClocks>>;
+  /**
+   * Row-locks these tiles' tending rows in tile id order for the supply line
+   * (#621), without their tiles: `skipLocked` passes over rows another
+   * transaction holds (it waits for none, so it can't deadlock; nightfall's
+   * own pass fixes what it skipped). Returns the tile ids it holds.
+   */
+  lockForSupply: (tileIds: readonly string[], skipLocked: boolean) => Promise<string[]>;
+  /** Stranded from `since`, unless already stranded (the earlier time stands). Rows locked. */
+  strand: (tileIds: readonly string[], since: Date) => Promise<void>;
+  /** Supplied again. Rows locked. */
+  unstrand: (tileIds: readonly string[]) => Promise<void>;
   /**
    * Gives owned outer tiles with no row one, tended at `at` (land held before
    * this table). Takes only key-share locks on the tiles, in id order; run it
@@ -727,6 +749,7 @@ function tendingQueries(db: Executor): TendingRepo {
           terrain: tiles.terrain,
           ownerUserId: tiles.ownerUserId,
           tendedAt: tileTending.tendedAt,
+          strandedSince: tileTending.strandedSince,
         })
         .from(tiles)
         .leftJoin(tileTending, eq(tileTending.tileId, tiles.id))
@@ -779,6 +802,8 @@ function tendingQueries(db: Executor): TendingRepo {
           set: {
             tendedAt: sql`greatest(${tileTending.tendedAt}, excluded.tended_at)`,
             claimedAt: at,
+            // A new owner's supply line is worked out afresh (#621).
+            strandedSince: null,
           },
         });
     },
@@ -827,12 +852,45 @@ function tendingQueries(db: Executor): TendingRepo {
     lockTending: async (tileIds) => {
       if (tileIds.length === 0) return new Map();
       const rows = await db
-        .select({ tileId: tileTending.tileId, tendedAt: tileTending.tendedAt })
+        .select({
+          tileId: tileTending.tileId,
+          tendedAt: tileTending.tendedAt,
+          strandedSince: tileTending.strandedSince,
+        })
         .from(tileTending)
         .where(inArray(tileTending.tileId, [...tileIds]))
         .orderBy(asc(tileTending.tileId))
         .for('update');
-      return new Map(rows.map((r) => [r.tileId, r.tendedAt]));
+      return new Map(
+        rows.map((r) => [r.tileId, { tendedAt: r.tendedAt, strandedSince: r.strandedSince }]),
+      );
+    },
+
+    lockForSupply: async (tileIds, skipLocked) => {
+      if (tileIds.length === 0) return [];
+      const rows = await db
+        .select({ tileId: tileTending.tileId })
+        .from(tileTending)
+        .where(inArray(tileTending.tileId, [...tileIds]))
+        .orderBy(asc(tileTending.tileId))
+        .for('update', skipLocked ? { skipLocked: true } : {});
+      return rows.map((r) => r.tileId);
+    },
+
+    strand: async (tileIds, since) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(tileTending)
+        .set({ strandedSince: since })
+        .where(and(inArray(tileTending.tileId, [...tileIds]), isNull(tileTending.strandedSince)));
+    },
+
+    unstrand: async (tileIds) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(tileTending)
+        .set({ strandedSince: null })
+        .where(inArray(tileTending.tileId, [...tileIds]));
     },
 
     lockTiles: async (tileIds) => {
@@ -853,7 +911,13 @@ function tendingQueries(db: Executor): TendingRepo {
         .where(inArray(tiles.id, [...tileIds]));
       await db
         .update(tileTending)
-        .set({ wildNight: night, wildFromUserId: fromUserId, wildAt: at, lostFireRefund: null })
+        .set({
+          wildNight: night,
+          wildFromUserId: fromUserId,
+          wildAt: at,
+          lostFireRefund: null,
+          strandedSince: null,
+        })
         .where(inArray(tileTending.tileId, [...tileIds]));
     },
 

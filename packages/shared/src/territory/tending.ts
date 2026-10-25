@@ -1,5 +1,6 @@
 import { hexDistance, type Hex } from '../hex/index.js';
 import type { TerritoryRules } from '../schemas/data/territory.js';
+import type { TravelRules } from '../schemas/data/travel.js';
 import type { PvpMode } from '../schemas/maps.js';
 
 // Land that misses you (owner decision 2026-10-06, design review Q2). An
@@ -10,10 +11,17 @@ import type { PvpMode } from '../schemas/maps.js';
 // a player's tiles a night, farthest from home first, and its guardians come
 // back. Home tiles and the ring around them never fade. Pure: the server
 // passes in when each tile was last tended.
+//
+// Wild Isle (#621) adds a second clock: land cut off from home (not in its
+// owner's `supplyMap`) is stranded from `stranded_since`, fades at once and
+// can go wild `afterHours` later. Whichever clock ends first is the one a
+// tile fades by. A Cozy Patch passes no stranded rules and never strands.
 
 type TendingRules = TerritoryRules['tending'];
+type StrandedRules = TravelRules['stranded'];
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /**
  * How an owned tile feels about its owner:
@@ -24,10 +32,65 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type LandMood = 'happy' | 'misses-you' | 'going-wild';
 
 export function landMood(tendedAt: Date, now: Date, rules: TendingRules): LandMood {
-  const age = now.getTime() - tendedAt.getTime();
-  if (age >= rules.wildAfterDays * DAY_MS) return 'going-wild';
-  if (age >= rules.missesYouAfterDays * DAY_MS) return 'misses-you';
+  return clockMood(tendingClock(tendedAt, rules), now);
+}
+
+/**
+ * A fading clock: from `start` the tile misses its owner, from `end` it can
+ * go wild at a nightfall. `stranded`: it's the Wild Isle's cut-off clock.
+ */
+export interface FadeClock {
+  readonly start: Date;
+  readonly end: Date;
+  readonly stranded: boolean;
+}
+
+/** The tending clock: untended land misses you, then goes wild. */
+export function tendingClock(tendedAt: Date, rules: TendingRules): FadeClock {
+  return { start: missesYouAt(tendedAt, rules), end: wildFrom(tendedAt, rules), stranded: false };
+}
+
+/** The stranded clock (Wild Isle, #621): it fades from `since`, wild `afterHours` later. */
+export function strandedClock(since: Date, rules: StrandedRules): FadeClock {
+  return {
+    start: since,
+    end: new Date(since.getTime() + rules.afterHours * HOUR_MS),
+    stranded: true,
+  };
+}
+
+/**
+ * The clock a tile fades by: its tending clock, or its stranded clock when
+ * it's stranded (`strandedSince` set, stranded rules given) and that one
+ * lets it go wild first. Equal ends keep the tending clock.
+ */
+export function fadeClock(
+  tendedAt: Date,
+  strandedSince: Date | null,
+  rules: TendingRules,
+  stranded: StrandedRules | null,
+): FadeClock {
+  const tending = tendingClock(tendedAt, rules);
+  if (strandedSince === null || stranded === null) return tending;
+  const cutOff = strandedClock(strandedSince, stranded);
+  return cutOff.end.getTime() < tending.end.getTime() ? cutOff : tending;
+}
+
+/** How a tile on `clock` feels at `now`. */
+export function clockMood(clock: FadeClock, now: Date): LandMood {
+  if (now.getTime() >= clock.end.getTime()) return 'going-wild';
+  if (now.getTime() >= clock.start.getTime()) return 'misses-you';
   return 'happy';
+}
+
+/** How far into fading a tile on `clock` is at `now`, 0 to 100. */
+export function clockFadePercent(clock: FadeClock, now: Date): number {
+  const start = clock.start.getTime();
+  const end = clock.end.getTime();
+  const at = now.getTime();
+  if (at <= start) return 0;
+  if (at >= end) return 100;
+  return Math.floor(((at - start) * 100) / (end - start));
 }
 
 /** When a tile tended at `tendedAt` starts to miss its owner. */
@@ -42,12 +105,7 @@ export function wildFrom(tendedAt: Date, rules: TendingRules): Date {
 
 /** How far into fading a tile is, 0 (just started) to 100 (going wild), for the map's tint. */
 export function fadePercent(tendedAt: Date, now: Date, rules: TendingRules): number {
-  const start = missesYouAt(tendedAt, rules).getTime();
-  const end = wildFrom(tendedAt, rules).getTime();
-  const at = now.getTime();
-  if (at <= start) return 0;
-  if (at >= end) return 100;
-  return Math.floor(((at - start) * 100) / (end - start));
+  return clockFadePercent(tendingClock(tendedAt, rules), now);
 }
 
 /** Whether a tile can ever fade: not a home tile, and outside the kept ring round its owner's Heart Seed. */
@@ -71,6 +129,8 @@ export interface TendingTile extends Hex {
   readonly homeSlot: number | null;
   /** When its owner last tended it (claiming counts). */
   readonly tendedAt: Date;
+  /** Wild Isle (#621): cut off from home since then; null or unset: supplied. */
+  readonly strandedSince?: Date | null;
 }
 
 /**
@@ -78,6 +138,8 @@ export interface TendingTile extends Hex {
  * `perOwner` of their fading-eligible tiles untended for `wildAfterDays`,
  * farthest from their Heart Seed first (land shrinks from its edges), then
  * the longest untended, then by position so the pick is always the same.
+ * With a Wild Isle's `stranded` rules (#621), stranded land whose cut-off
+ * clock ends first goes by that clock, under the same per-owner cap.
  */
 export function tilesGoingWild<T extends TendingTile>(
   tiles: readonly T[],
@@ -85,12 +147,14 @@ export function tilesGoingWild<T extends TendingTile>(
   now: Date,
   perOwner: number,
   rules: TendingRules,
+  stranded: StrandedRules | null = null,
 ): T[] {
   const byOwner = new Map<string, { tile: T; distance: number }[]>();
   for (const tile of tiles) {
     const seed = heartSeeds.get(tile.ownerUserId) ?? null;
     if (!canFade(tile, seed, rules)) continue;
-    if (landMood(tile.tendedAt, now, rules) !== 'going-wild') continue;
+    const clock = fadeClock(tile.tendedAt, tile.strandedSince ?? null, rules, stranded);
+    if (clockMood(clock, now) !== 'going-wild') continue;
     const distance = seed === null ? 0 : hexDistance(tile, seed);
     byOwner.set(tile.ownerUserId, [...(byOwner.get(tile.ownerUserId) ?? []), { tile, distance }]);
   }

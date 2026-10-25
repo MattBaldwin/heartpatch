@@ -81,6 +81,8 @@ import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/se
 import { clearGoingOn } from '../clearing/repo.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { createLandTending, type LandTendingService } from './tending.js';
+import { mapPatchRules, refreshSupply, supplyFor } from './supply.js';
+import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
 
 /*
  * Territory (#15; design doc §11; decisions B and C). Players claim neutral
@@ -156,6 +158,9 @@ const MESSAGES = {
   inHollow: 'That squishy is in the Hollow. Rescue them first!',
   inTrade: 'That squishy is waiting at a trading post right now. 📬',
   housed: (name: string) => `Move ${name} out of their habitat first!`,
+  // Wild Isle reach (#621, plan §8).
+  water: "Water's in the way. Build a bridge!",
+  pastRoads: "That's past your roads. Lay a path closer first!",
   // Fences (#203): the guard battle after a broken fence needs someone fresh.
   nobodyLeft:
     'Your fence breaker needs a rest! Pick another squishy for your team to beat the guard.',
@@ -163,6 +168,7 @@ const MESSAGES = {
 
 const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; message: string }> = {
   home: { code: 'FORBIDDEN', message: MESSAGES.home },
+  water: { code: 'FORBIDDEN', message: MESSAGES.water },
   'trading-post': { code: 'FORBIDDEN', message: MESSAGES.tradingPost },
   hollowed: { code: 'FORBIDDEN', message: MESSAGES.hollowed },
   mine: { code: 'CONFLICT', message: MESSAGES.mine },
@@ -413,7 +419,18 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       // a grey one is still won only by restoring it.
       const restored =
         tile.communityId !== null && (await createCommunitiesRepo(tx).isRestored(tile.id));
-      const problem = attackTargetProblem({ ...tile, restored }, tiles, user.id, map.pvpMode);
+      // Wild Isle (#621): reach runs along my supply line and roads. A Cozy
+      // Patch has no travel rules and passes none: reach as it always was.
+      const travel = (await mapPatchRules(tx, map.id))?.travel ?? null;
+      const supply = travel ? await supplyFor(tx, map.id, user.id, travel) : undefined;
+      const problem = attackTargetProblem(
+        { ...tile, restored },
+        tiles,
+        user.id,
+        map.pvpMode,
+        supply,
+      );
+      if (problem === 'too-far' && supply) throw new AppError('FORBIDDEN', MESSAGES.pastRoads);
       if (problem) throw new AppError(PROBLEMS[problem].code, PROBLEMS[problem].message);
 
       // Fences (#203): the defender's segments on this tile, and whether it's
@@ -910,6 +927,15 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // and it's safe from the Hollow Man on its first night (#277).
       await createTendingRepo(tx).claim(attack.mapId, tile.id, at);
       await repo.endAttack(battle.id, 'captured', at);
+      // Wild Isle (#621): the capturer's land may join up, the defender's
+      // beyond this tile may be cut off from home. Tending rows (step 6,
+      // with the tiles), never waited for.
+      const supply = await refreshSupply(
+        tx,
+        attack.mapId,
+        [attack.attackerUserId, ...(tile.ownerUserId ? [tile.ownerUserId] : [])],
+        at,
+      );
       // Homesteads (#199): the capturer's may grow or wake up, and the
       // defender's beyond this tile may be cut off from home. With the
       // tiles, before fires and fences (tech spec §7: `tile_explore` rows
@@ -919,6 +945,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         attack.mapId,
         [attack.attackerUserId, ...(tile.ownerUserId ? [tile.ownerUserId] : [])],
         at,
+      );
+      // The defender's road comes down with the land (#621, step 6b), half
+      // back; the capturer never gets it.
+      const lostRoads = await takeDownRoadsOnLostLand(
+        tx,
+        attack.mapId,
+        new Map([[tile.id, tile.ownerUserId]]),
+        'captured',
       );
       // The defender's fire comes down with the land (#202, step 8); the
       // rival never gets it. Battles grants the refund after its squishy locks.
@@ -970,7 +1004,9 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       return {
         events: [
           event,
+          ...supply,
           ...homesteads,
+          ...lostRoads.map((l) => l.event),
           ...lostFires.map((l) => l.event),
           ...fences.broken,
           ...fences.inner.map((l) => l.event),
@@ -999,11 +1035,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         alsoLock: [
           ...planGrants(lostFires.flatMap((l) => l.batches)),
           ...lostOutputGrants(lostFires),
+          // And a lost road's take-down share (#621), granted below.
+          ...lostRoadGrants(lostRoads),
         ],
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
         guards,
-        afterRefunds: (inner, when) => finishLostBuildings(inner, attack.mapId, lostFires, when),
+        afterRefunds: async (inner, when) => {
+          await grantLostRoads(inner, attack.mapId, lostRoads);
+          return finishLostBuildings(inner, attack.mapId, lostFires, when);
+        },
       };
     },
   };

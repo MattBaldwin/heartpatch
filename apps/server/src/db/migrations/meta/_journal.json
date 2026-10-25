@@ -421,6 +421,13 @@
       "when": 1792886624825,
       "tag": "0059_wild_isle_patch_type",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792895454843,
+      "tag": "0060_wild_isle_roads",
+      "breakpoints": true
     }
   ]
 }

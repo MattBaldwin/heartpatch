@@ -28,6 +28,8 @@ import { exploreRoutes } from './modules/explore/routes.js';
 import { createExploreService } from './modules/explore/service.js';
 import { fencesRoutes } from './modules/fences/routes.js';
 import { createFencesService } from './modules/fences/service.js';
+import { roadsRoutes } from './modules/roads/routes.js';
+import { createRoadsService } from './modules/roads/service.js';
 import { careRoutes } from './modules/care/routes.js';
 import { chatRoutes } from './modules/chat/routes.js';
 import { createChatService } from './modules/chat/service.js';
@@ -420,6 +422,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Fences on the edges of my land (#203).
         await api.register(
           fencesRoutes(createFencesService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Roads on my Wild Isle land (#621).
+        await api.register(
+          roadsRoutes(createRoadsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

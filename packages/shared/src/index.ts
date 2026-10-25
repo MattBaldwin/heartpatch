@@ -149,6 +149,7 @@ export * from './schemas/factory.js';
 export * from './schemas/buildings.js';
 export * from './schemas/house.js';
 export * from './schemas/fences.js';
+export * from './schemas/roads.js';
 export * from './schemas/explore.js';
 export * from './schemas/cellar.js';
 export * from './schemas/far-hollow.js';
