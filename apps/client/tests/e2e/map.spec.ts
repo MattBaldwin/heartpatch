@@ -491,7 +491,7 @@ test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; re
   ).toBe(0);
 });
 
-test('a real tap on the weather chip opens the Forecast sheet (#621)', async ({
+test('a real tap on the weather chip opens the Forecast sheet, and the top bar fits a 375pt phone (#621)', async ({
   browser,
 }) => {
   test.setTimeout(120_000); // one signup through the Keeper picker; CI renders in software
@@ -521,5 +521,14 @@ test('a real tap on the weather chip opens the Forecast sheet (#621)', async ({
   await page.getByTestId('weather-close').click();
   await expect(page.getByTestId('weather-sheet')).toBeHidden();
 
+  // iPhone SE width: "My patches" ends before the 🐾 button begins.
+  await page.setViewportSize({ width: 375, height: 667 });
+  const gap = await page.evaluate(() => {
+    const patches = document.querySelector('.lobby-open')?.getBoundingClientRect();
+    const paw = document.querySelector('.squishies-open-map')?.getBoundingClientRect();
+    return patches && paw ? paw.left - patches.right : null;
+  });
+  expect(gap).not.toBeNull();
+  expect(gap!).toBeGreaterThanOrEqual(4);
   await page.context().close();
 });
