@@ -58,6 +58,7 @@ import { createTutorialService } from '../modules/tutorial/service.js';
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService, grantClothing } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
+import { createPostSellRepo } from '../modules/post-sell/repo.js';
 import { createJobsRepo } from '../jobs/repo.js';
 import { runConsumer } from '../jobs/consumers.js';
 import { appendGameEvent } from './game-events.js';
@@ -200,6 +201,45 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await nightfallAgainst(ids, () =>
       unplanned((tx) => createBattlesRepo(tx).lockSquishies([...ids].reverse())),
     );
+  });
+
+  it('a basket locks pieces across items in id order, then bag rows, then the balance (post-sell `lockPieces`, #655 step 10b)', async () => {
+    const { userId } = await patch();
+    // Two items' pieces interleaved in id order, stored highest id first.
+    const ids = [randomUUID(), randomUUID(), randomUUID()].sort();
+    const itemOf = (i: number) => (i === 1 ? 'pom-pom-beanie' : 'flower-crown');
+    await db
+      .insert(clothingOwned)
+      .values(
+        ids.map((id, i) => ({ id, userId, itemId: itemOf(i), source: 'dev-grant' })).reverse(),
+      );
+    const lockPiece = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: clothingOwned.id })
+        .from(clothingOwned)
+        .where(eq(clothingOwned.id, id))
+        .for('update');
+    let locked: string[] = [];
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockPiece(tx, ids[0]!);
+      const pid = await backendPid(tx);
+      running = unplanned(async (sale) => {
+        const rows = await createPostSellRepo(sale).lockPieces(userId, [
+          'pom-pom-beanie',
+          'flower-crown',
+        ]);
+        locked = rows.map((r) => r.id);
+      });
+      await waitUntilBlockedBy(db, pid);
+      for (const id of ids.slice(1)) await lockPiece(tx, id);
+    });
+    await running;
+    // One statement across both items, in id order, not item by item. The
+    // bag rows (11) and the balance (12b) after it are checked in
+    // `post-sell.test.ts`'s lock order block.
+    expect(locked).toEqual(ids);
   });
 
   it("locks a habitat's residents in id order before moving them out (buildings `moveOutAll`)", async () => {

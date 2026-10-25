@@ -7,9 +7,11 @@ import {
   hexDistance,
   MapResponseSchema,
   SELL_RULES,
+  SellBasketResponseSchema,
   SellResponseSchema,
   SellViewResponseSchema,
   type PublicUser,
+  type SellLine,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -36,6 +38,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createHeartCoinsRepo } from '../heart-coins/repo.js';
 import { grantItems } from '../inventory/service.js';
+import { createPostSellService } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -59,6 +62,8 @@ const CAP = HEART_COIN_RULES.dailyCaps.sell;
 const TIMBER = SELL_RULES.items['timber']!;
 /** A tradable piece, and a milestone's account-bound one. */
 const BEANIE = 'pom-pom-beanie';
+/** Another tradable piece, of a different rarity. */
+const CROWN = 'flower-crown';
 const MILESTONE_HAT = 'explorers-hat';
 
 interface Player extends PublicUser {
@@ -237,6 +242,37 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     }
     return pieces(kid, itemId);
   }
+  /** A trade offer on the patch, with no lines yet. */
+  async function offerOn(
+    mapId: string,
+    from: PublicUser,
+    to: PublicUser,
+    status: 'open' | 'declined',
+  ) {
+    const [row] = await db
+      .insert(tradeOffers)
+      .values({
+        mapId,
+        kind: 'trade',
+        fromUserId: from.id,
+        toUserId: to.id,
+        status,
+        createdAt: clock,
+        expiresAt: new Date(clock.getTime() + DAY_MS),
+      })
+      .returning({ id: tradeOffers.id });
+    return row!.id;
+  }
+  const sellBasket = (
+    server: FastifyInstance,
+    kid: Player,
+    at: { mapId: string; post: { q: number; r: number } },
+    lines: SellLine[],
+    headers: Record<string, string> = {},
+  ) => sell(server, kid, at.mapId, { ...at.post, kind: 'basket', lines }, headers);
+  /** Item ids of the kid's pieces, oldest first. */
+  const pieceIds = async (kid: PublicUser, itemId: string) =>
+    (await pieces(kid, itemId)).map((p) => p.id);
   /** The kid's keep for an item, from the Sell tab. */
   const keepOf = async (server: FastifyInstance, kid: Player, mapId: string, itemId: string) =>
     (await viewOf(server, kid, mapId)).items.find((i) => i.itemId === itemId)?.keep ?? 0;
@@ -258,7 +294,8 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     const res = await sellLots(server, kid, at, 'timber', 3);
     expect(res.statusCode, res.body).toBe(200);
     const sold = SellResponseSchema.parse(res.json());
-    expect(sold.sold).toEqual({
+    // A legacy one-line request (#655) answers in the legacy shape, not a basket's.
+    expect((res.json() as { sold: object }).sold).toEqual({
       kind: 'item',
       itemId: 'timber',
       quantity: 3 * TIMBER.lot,
@@ -318,9 +355,11 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     // Two lots would pass the cap by one: refused whole, not sold in part.
     const over = await sellLots(server, kid, at, 'timber', 2);
     expect(over.statusCode).toBe(409);
-    expect(errorOf(over).message).toBe("You've sold enough for today! Come back tomorrow. 🌙");
+    expect(errorOf(over).message).toBe("Some of that won't fit today. Let's look again!");
     expect((await sellLots(server, kid, at, 'timber', 1)).statusCode).toBe(200);
-    expect((await sellLots(server, kid, at, 'timber', 1)).statusCode).toBe(409);
+    const done = await sellLots(server, kid, at, 'timber', 1);
+    expect(done.statusCode).toBe(409);
+    expect(errorOf(done).message).toBe("You've sold enough for today! Come back tomorrow. 🌙");
     const capped = await viewOf(server, kid, at.mapId);
     expect(capped).toMatchObject({ balance: CAP, soldToday: CAP });
     expect(capped.items[0]!.have).toBe(TIMBER.lot * 4 + 10);
@@ -375,21 +414,8 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     const at = await patch(server, kid, {});
     await db.insert(mapMembers).values({ mapId: at.mapId, userId: mate.id, role: 'member' });
     const [a, b, c] = await givePieces(kid, BEANIE, 3);
-    const offer = async (from: PublicUser, to: PublicUser, status: 'open' | 'declined') => {
-      const [row] = await db
-        .insert(tradeOffers)
-        .values({
-          mapId: at.mapId,
-          kind: 'trade',
-          fromUserId: from.id,
-          toUserId: to.id,
-          status,
-          createdAt: clock,
-          expiresAt: new Date(clock.getTime() + DAY_MS),
-        })
-        .returning({ id: tradeOffers.id });
-      return row!.id;
-    };
+    const offer = (from: PublicUser, to: PublicUser, status: 'open' | 'declined') =>
+      offerOn(at.mapId, from, to, status);
     // Mine, held for an offer I sent: not free.
     const held = await offer(kid, mate, 'open');
     await db
@@ -518,6 +544,279 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     );
   });
 
+  describe('baskets (#655)', () => {
+    const priceOf = (itemId: string) => SELL_RULES.clothing[CLOTHING_BY_ID.get(itemId)!.rarity];
+    const STONE = SELL_RULES.items['stone']!;
+
+    it('a basket sells every line and pays once against the sale id', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 40, stone: 30 });
+      const [beanie] = await givePieces(kid, BEANIE, 3);
+      const [crown] = await givePieces(kid, CROWN, 4);
+      const lines: SellLine[] = [
+        { kind: 'item', itemId: 'timber', lots: 2 },
+        { kind: 'item', itemId: 'stone', lots: 1 },
+        { kind: 'clothing', itemId: BEANIE, count: 2 },
+        { kind: 'clothing', itemId: CROWN, count: 3 },
+      ];
+      const res = await sellBasket(server, kid, at, lines);
+      expect(res.statusCode, res.body).toBe(200);
+      const { sold, sell } = SellBasketResponseSchema.parse(res.json());
+      const coins = 2 * TIMBER.coins + STONE.coins + 2 * priceOf(BEANIE) + 3 * priceOf(CROWN);
+      expect(sold).toEqual({
+        lines: [
+          { kind: 'item', itemId: 'timber', quantity: 2 * TIMBER.lot, coins: 2 * TIMBER.coins },
+          { kind: 'item', itemId: 'stone', quantity: STONE.lot, coins: STONE.coins },
+          { kind: 'clothing', itemId: BEANIE, quantity: 2, coins: 2 * priceOf(BEANIE) },
+          { kind: 'clothing', itemId: CROWN, quantity: 3, coins: 3 * priceOf(CROWN) },
+        ],
+        quantity: 2 * TIMBER.lot + STONE.lot + 5,
+        coins,
+      });
+      expect(sell).toMatchObject({ balance: coins, soldToday: coins, clothing: [] });
+      expect(await bag(at.mapId, kid)).toEqual({
+        timber: 40 - 2 * TIMBER.lot,
+        stone: 30 - STONE.lot,
+      });
+      // The first of each stays.
+      expect(await pieceIds(kid, BEANIE)).toEqual([beanie!.id]);
+      expect(await pieceIds(kid, CROWN)).toEqual([crown!.id]);
+      // One sale: a resource ledger row per item and one Heart Coin row, all on the sale id.
+      const items = await saleItemRows(at.mapId);
+      expect(items.map((r) => [r.itemId, r.delta]).sort()).toEqual([
+        ['stone', -STONE.lot],
+        ['timber', -2 * TIMBER.lot],
+      ]);
+      expect(new Set(items.map((r) => r.refId)).size).toBe(1);
+      expect(await heartRows(at.mapId, kid)).toEqual([
+        { source: 'sell', refId: items[0]!.refId, amount: coins },
+      ]);
+    });
+
+    it('a basket that passes the cap moves nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 2000, stone: 300 });
+      await givePieces(kid, BEANIE, 3);
+      // More than a whole day pays: refused before the transaction.
+      const huge = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'timber', lots: 100 },
+        { kind: 'item', itemId: 'stone', lots: CAP / STONE.coins - 100 / STONE.coins + 1 },
+      ]);
+      expect(huge.statusCode).toBe(400);
+      expect(errorOf(huge)).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        message: "Some of that won't fit today. Let's look again!",
+      });
+      // Up to 3 coins of room.
+      const lots = (CAP - 3) / TIMBER.coins;
+      for (let left = lots; left > 0; left -= 100) {
+        const res = await sellLots(server, kid, at, 'timber', Math.min(left, 100));
+        expect(res.statusCode, res.body).toBe(200);
+      }
+      const timber = (await bag(at.mapId, kid))['timber'];
+      // 1 + 2 × 2 = 5 coins in 3 coins of room: nothing goes, not even the part that fits.
+      const over = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'timber', lots: 1 },
+        { kind: 'clothing', itemId: BEANIE, count: 2 },
+      ]);
+      expect(over.statusCode).toBe(409);
+      expect(errorOf(over).message).toBe("Some of that won't fit today. Let's look again!");
+      expect((await bag(at.mapId, kid))['timber']).toBe(timber);
+      expect(await pieces(kid, BEANIE)).toHaveLength(3);
+      expect((await viewOf(server, kid, at.mapId)).soldToday).toBe(CAP - 3);
+      // Exactly the room fits; then the day is done.
+      const fits = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'timber', lots: 3 - priceOf(BEANIE) },
+        { kind: 'clothing', itemId: BEANIE, count: 1 },
+      ]);
+      expect(fits.statusCode, fits.body).toBe(200);
+      const done = await sellBasket(server, kid, at, [{ kind: 'item', itemId: 'stone', lots: 1 }]);
+      expect(done.statusCode).toBe(409);
+      expect(errorOf(done).message).toBe("You've sold enough for today! Come back tomorrow. 🌙");
+      expect((await viewOf(server, kid, at.mapId)).soldToday).toBe(CAP);
+    });
+
+    it('a basket never leaves fewer than one free copy of a piece, across lines', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 30 });
+      await givePieces(kid, BEANIE, 3);
+      await givePieces(kid, CROWN, 2);
+      for (const lines of [
+        [{ kind: 'clothing', itemId: BEANIE, count: 3 }],
+        [
+          { kind: 'item', itemId: 'timber', lots: 1 },
+          { kind: 'clothing', itemId: BEANIE, count: 2 },
+          { kind: 'clothing', itemId: CROWN, count: 2 },
+        ],
+      ] satisfies SellLine[][]) {
+        const res = await sellBasket(server, kid, at, lines);
+        expect(res.statusCode).toBe(409);
+        expect(errorOf(res).message).toBe("That's your only one! The post only takes spares.");
+      }
+      expect(await bag(at.mapId, kid)).toEqual({ timber: 30 });
+      expect(await pieces(kid, BEANIE)).toHaveLength(3);
+      expect(await pieces(kid, CROWN)).toHaveLength(2);
+      expect(await heartRows(at.mapId, kid)).toEqual([]);
+      const ok = await sellBasket(server, kid, at, [
+        { kind: 'clothing', itemId: BEANIE, count: 2 },
+        { kind: 'clothing', itemId: CROWN, count: 1 },
+      ]);
+      expect(ok.statusCode, ok.body).toBe(200);
+      expect(await pieces(kid, BEANIE)).toHaveLength(1);
+      expect(await pieces(kid, CROWN)).toHaveLength(1);
+    });
+
+    it('pieces held by, or named in, an open offer are skipped and a short line refuses the basket', async () => {
+      const server = await start();
+      const kid = await player();
+      const mate = await player();
+      const at = await patch(server, kid, { timber: 30 });
+      await db.insert(mapMembers).values({ mapId: at.mapId, userId: mate.id, role: 'member' });
+      const [a, b, c, d] = await givePieces(kid, BEANIE, 4);
+      // c is held for my offer; a patch-mate's open offer wants b and d.
+      const mine = await offerOn(at.mapId, kid, mate, 'open');
+      await db
+        .insert(tradeLines)
+        .values({ offerId: mine, side: 'give', kind: 'clothing', clothingId: c!.id });
+      await holdPiece(c!.id, mine);
+      const wants = await offerOn(at.mapId, mate, kid, 'open');
+      await db.insert(tradeLines).values([
+        { offerId: wants, side: 'want', kind: 'clothing', clothingId: b!.id },
+        { offerId: wants, side: 'want', kind: 'clothing', clothingId: d!.id },
+      ]);
+      // Three free, so two could go without the last copy, but only a is free to sell.
+      const short = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'timber', lots: 1 },
+        { kind: 'clothing', itemId: BEANIE, count: 2 },
+      ]);
+      expect(short.statusCode).toBe(409);
+      expect(errorOf(short).message).toBe(
+        'A patch-mate asked for that one in a trade! Answer their offer first.',
+      );
+      expect(await bag(at.mapId, kid)).toEqual({ timber: 30 });
+      expect(await pieces(kid, BEANIE)).toHaveLength(4);
+      const one = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'timber', lots: 1 },
+        { kind: 'clothing', itemId: BEANIE, count: 1 },
+      ]);
+      expect(one.statusCode, one.body).toBe(200);
+      expect(await pieceIds(kid, BEANIE)).toEqual([b!.id, c!.id, d!.id]);
+    });
+
+    it('the keep holds per item inside a basket', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 30, stone: 30 });
+      const keep = await keepOf(server, kid, at.mapId, 'timber');
+      const lots = Math.floor((30 - keep) / TIMBER.lot);
+      const res = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'stone', lots: 1 },
+        { kind: 'item', itemId: 'timber', lots: lots + 1 },
+      ]);
+      expect(res.statusCode).toBe(409);
+      expect(errorOf(res).message).toBe(
+        `Hang on to ${String(keep)} Timber for your recipes! Try selling a little less.`,
+      );
+      expect(await bag(at.mapId, kid)).toEqual({ timber: 30, stone: 30 });
+      const ok = await sellBasket(server, kid, at, [
+        { kind: 'item', itemId: 'stone', lots: 1 },
+        { kind: 'item', itemId: 'timber', lots },
+      ]);
+      expect(ok.statusCode, ok.body).toBe(200);
+    });
+
+    it('a duplicate line is VALIDATION_FAILED before the transaction', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 30, shovel: 2 });
+      await givePieces(kid, BEANIE, 3);
+      await givePieces(kid, MILESTONE_HAT, 2);
+      const twice: SellLine[] = [
+        { kind: 'item', itemId: 'timber', lots: 1 },
+        { kind: 'item', itemId: 'timber', lots: 1 },
+      ];
+      // The route's schema refuses it; the service checks too.
+      const res = await sellBasket(server, kid, at, twice);
+      expect(res.statusCode).toBe(400);
+      expect(errorOf(res).code).toBe('VALIDATION_FAILED');
+      const service = createPostSellService({ db, clock: () => clock });
+      await expect(
+        service.sellBasket(kid, at.mapId, { kind: 'basket', ...at.post, lines: twice }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      // One line the post won't buy refuses the lot.
+      for (const bad of [
+        { kind: 'item', itemId: 'shovel', lots: 1 },
+        { kind: 'clothing', itemId: MILESTONE_HAT, count: 1 },
+      ] satisfies SellLine[]) {
+        const refused = await sellBasket(server, kid, at, [
+          { kind: 'clothing', itemId: BEANIE, count: 1 },
+          bad,
+        ]);
+        expect(refused.statusCode).toBe(400);
+        expect(errorOf(refused).message).toBe("The post doesn't buy that one. It's a keeper!");
+      }
+      expect(await bag(at.mapId, kid)).toEqual({ timber: 30, shovel: 2 });
+      expect(await pieces(kid, BEANIE)).toHaveLength(3);
+      expect(await heartRows(at.mapId, kid)).toEqual([]);
+    });
+
+    it('the same Idempotency-Key replays the basket reply without a second ledger row', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { stone: 30 });
+      await givePieces(kid, BEANIE, 3);
+      const headers = { 'idempotency-key': 'basket-once' };
+      const lines: SellLine[] = [
+        { kind: 'item', itemId: 'stone', lots: 2 },
+        { kind: 'clothing', itemId: BEANIE, count: 1 },
+      ];
+      const first = await sellBasket(server, kid, at, lines, headers);
+      const again = await sellBasket(server, kid, at, lines, headers);
+      expect(first.statusCode, first.body).toBe(200);
+      expect(again.statusCode).toBe(200);
+      expect(again.headers['idempotent-replayed']).toBe('true');
+      expect(again.json()).toEqual(first.json());
+      expect(await bag(at.mapId, kid)).toEqual({ stone: 30 - 2 * STONE.lot });
+      expect(await pieces(kid, BEANIE)).toHaveLength(2);
+      expect(await heartRows(at.mapId, kid)).toHaveLength(1);
+    });
+
+    it('racing baskets from two devices never oversell, over-pay or sell the last copy', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 2000 });
+      await givePieces(kid, BEANIE, 4);
+      // Four copies: only one basket can take two and still leave one.
+      const withPieces: SellLine[] = [
+        { kind: 'item', itemId: 'timber', lots: 10 },
+        { kind: 'clothing', itemId: BEANIE, count: 2 },
+      ];
+      const first = await Promise.all(
+        Array.from({ length: 5 }, () => sellBasket(server, kid, at, withPieces)),
+      );
+      expect(first.filter((r) => r.statusCode === 200)).toHaveLength(1);
+      expect(first.filter((r) => r.statusCode === 409)).toHaveLength(4);
+      expect(await pieces(kid, BEANIE)).toHaveLength(2);
+      // Then the cap: 30-lot baskets in what's left of the day's room.
+      const sold = 10 * TIMBER.coins + 2 * priceOf(BEANIE);
+      const room = CAP - sold;
+      const fit = Math.floor(room / (30 * TIMBER.coins));
+      const taps = await Promise.all(
+        Array.from({ length: fit + 2 }, () =>
+          sellBasket(server, kid, at, [{ kind: 'item', itemId: 'timber', lots: 30 }]),
+        ),
+      );
+      expect(taps.filter((r) => r.statusCode === 200)).toHaveLength(fit);
+      const balance = sold + fit * 30 * TIMBER.coins;
+      expect((await viewOf(server, kid, at.mapId)).balance).toBe(balance);
+      expect(await heartRows(at.mapId, kid)).toHaveLength(1 + fit);
+      expect((await bag(at.mapId, kid))['timber']).toBe(2000 - (10 + 30 * fit) * TIMBER.lot);
+    });
+  });
+
   describe('lock order (tech spec §7)', () => {
     /** Holds `first`, starts the sale, and once it waits on us takes `then` too. */
     async function holdThen(
@@ -572,6 +871,30 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
         (tx) => lockHeart(tx, at.mapId, kid),
       );
       expect(res.statusCode, res.body).toBe(200);
+      expect(await pieces(kid, BEANIE)).toHaveLength(1);
+    });
+    it('a basket takes the pieces before the bag rows, then the Heart Coin balance (post-sell `sellBasket`, #655 step 10b, 11, 12b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, { timber: 30 });
+      await givePieces(kid, BEANIE, 3);
+      const lines: SellLine[] = [
+        { kind: 'item', itemId: 'timber', lots: 1 },
+        { kind: 'clothing', itemId: BEANIE, count: 1 },
+      ];
+      const piecesThenBag = await holdThen(
+        (tx) => lockPieces(tx, kid, BEANIE),
+        () => sellBasket(server, kid, at, lines),
+        (tx) => lockBag(tx, at.mapId, kid, 'timber'),
+      );
+      expect(piecesThenBag.statusCode, piecesThenBag.body).toBe(200);
+      const bagThenHeart = await holdThen(
+        (tx) => lockBag(tx, at.mapId, kid, 'timber'),
+        () => sellBasket(server, kid, at, lines),
+        (tx) => lockHeart(tx, at.mapId, kid),
+      );
+      expect(bagThenHeart.statusCode, bagThenHeart.body).toBe(200);
+      expect(await heartRows(at.mapId, kid)).toHaveLength(2);
       expect(await pieces(kid, BEANIE)).toHaveLength(1);
     });
   });

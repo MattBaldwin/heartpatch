@@ -8,6 +8,7 @@ export const SELL_REASON = 'post-sell';
 /** One of the player's pieces of a clothing item, as a sale sees it. */
 export interface SellPieceRow {
   id: string;
+  itemId: string;
   /** The offer holding it in escrow (#271), or null if it's free. */
   heldByOfferId: string | null;
 }
@@ -21,28 +22,33 @@ export interface SellPieceRow {
 export interface PostSellRepo {
   transaction: <T>(fn: (repo: PostSellRepo, tx: Executor) => Promise<T>) => Promise<T>;
   /**
-   * Row-locks every piece of `itemId` the player has, in id order (tech spec
-   * §7 step 10b, as trades lock pieces): one sale or offer of that item's
-   * pieces at a time, so the last copy is never sold.
+   * Row-locks every piece of these items the player has in one statement, in
+   * id order across the items (tech spec §7 step 10b, as trades lock pieces):
+   * one sale or offer of those pieces at a time, so the last copy is never
+   * sold.
    */
-  lockPieces: (userId: string, itemId: string) => Promise<SellPieceRow[]>;
+  lockPieces: (userId: string, itemIds: readonly string[]) => Promise<SellPieceRow[]>;
   /** Of these pieces, the ones an open offer names on either side (a patch-mate may want one). */
   inOpenOffers: (pieceIds: readonly string[]) => Promise<Set<string>>;
   /** Free (not held) copies of each clothing item the player has. */
   freeCopies: (userId: string) => Promise<Map<string, number>>;
-  /** Deletes a sold piece. Closed offers that named it keep their other lines. */
-  deletePiece: (id: string) => Promise<void>;
+  /** Deletes sold pieces. Closed offers that named them keep their other lines. */
+  deletePieces: (ids: readonly string[]) => Promise<void>;
 }
 
 export function createPostSellRepo(db: Executor): PostSellRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createPostSellRepo(tx), tx)),
 
-    lockPieces: (userId, itemId) =>
+    lockPieces: (userId, itemIds) =>
       db
-        .select({ id: clothingOwned.id, heldByOfferId: clothingOwned.heldByOfferId })
+        .select({
+          id: clothingOwned.id,
+          itemId: clothingOwned.itemId,
+          heldByOfferId: clothingOwned.heldByOfferId,
+        })
         .from(clothingOwned)
-        .where(and(eq(clothingOwned.userId, userId), eq(clothingOwned.itemId, itemId)))
+        .where(and(eq(clothingOwned.userId, userId), inArray(clothingOwned.itemId, [...itemIds])))
         .orderBy(asc(clothingOwned.id))
         .for('update'),
 
@@ -65,8 +71,9 @@ export function createPostSellRepo(db: Executor): PostSellRepo {
       return new Map(rows.map((r) => [r.itemId, r.n]));
     },
 
-    deletePiece: async (id) => {
-      await db.delete(clothingOwned).where(eq(clothingOwned.id, id));
+    deletePieces: async (ids) => {
+      if (ids.length === 0) return;
+      await db.delete(clothingOwned).where(inArray(clothingOwned.id, [...ids]));
     },
   };
 }

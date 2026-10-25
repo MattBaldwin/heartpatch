@@ -1,7 +1,7 @@
 import {
+  AnySellRequestSchema,
+  AnySellResponseSchema,
   MapIdParamsSchema,
-  SellRequestSchema,
-  SellResponseSchema,
   SellViewResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
@@ -10,7 +10,7 @@ import { playerRateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
 import { requireUser, type AuthHooks } from '../auth/hooks.js';
 import { POST_SELL_RATE_LIMITS } from './limits.js';
-import type { PostSellService } from './service.js';
+import { legacyBasket, type PostSellService } from './service.js';
 
 export interface PostSellRoutesOptions {
   hooks: AuthHooks;
@@ -43,13 +43,26 @@ export const postSellRoutes =
       {
         schema: {
           params: MapIdParamsSchema,
-          body: SellRequestSchema,
-          response: { 200: SellResponseSchema },
+          body: AnySellRequestSchema,
+          response: { 200: AnySellResponseSchema },
         },
         preHandler: [requireAuth, rateLimit('sell'), idempotency.preHandler],
         onSend: idempotency.onSend,
       },
-      async (request) => service.sell(requireUser(request), request.params.mapId, request.body),
+      async (request) => {
+        const user = requireUser(request);
+        const { body } = request;
+        if (body.kind === 'basket') return service.sellBasket(user, request.params.mapId, body);
+        // A legacy one-line sale (#655, one release; part E removes it): sold
+        // as a one-line basket, answered in the old shape.
+        const { sold, sell } = await service.sellBasket(
+          user,
+          request.params.mapId,
+          legacyBasket(body),
+        );
+        const [line] = sold.lines;
+        return { sold: line!, sell };
+      },
     );
 
     done();
