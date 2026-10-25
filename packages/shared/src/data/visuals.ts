@@ -1836,7 +1836,7 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.06,
   },
-  // #382 wave 2: fifteen parts so a tusk, a curly tail, a chest bib, hug arms, a slide
+  // #382 wave 2: sixteen parts so a tusk, a curly tail, a chest bib, hug arms, a slide
   // trail, a lure and a stacked wing can be the silhouette instead of a small add-on. All existing
   // primitives (no client geometry code); a species' `glow` lights them like any other part.
   // A pair of tusks curling up from the snout (`fangs` only points down).
@@ -1897,17 +1897,17 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.05,
   },
-  // A pig's curly tail: a thin tube that turns right round on itself.
+  // A pig's short stub of a tail, flicked up from the rump.
   {
-    id: 'curl-tail',
+    id: 'pig-tail',
     slot: 'tail',
-    shape: 'ellipsoid',
-    size: [0.2, 0.2, 0.2],
+    shape: 'capsule',
+    size: [0.12, 0.28, 0.12],
     color: 'accent',
-    layout: { kind: 'chain', count: 6, step: 0.62, curl: 55, wave: 0, shrink: 0.93 },
+    layout: single,
     around: 180,
-    up: 34,
-    tilt: 65,
+    up: 22,
+    tilt: 60,
     sink: 0.3,
     jitter: 0.03,
   },
@@ -2023,19 +2023,19 @@ export const PARTS: Part[] = [
     sink: 0.25,
     jitter: 0.03,
   },
-  // A big ruff of suds that sticks out past the body.
+  // A ring of mixed-size suds bubbles round the back of the neck, clear of the bill.
   {
     id: 'suds-collar',
     slot: 'mane',
     shape: 'ellipsoid',
-    size: [0.8, 0.6, 0.55],
+    size: [0.42, 0.36, 0.36],
     color: 'secondary',
-    layout: { kind: 'ring', count: 8, spread: 180 },
-    around: 0,
-    up: -35,
-    tilt: 35,
+    layout: { kind: 'ring', count: 9, spread: 110 },
+    around: 180,
+    up: -30,
+    tilt: 30,
     sink: 0.25,
-    jitter: 0.06,
+    jitter: 0.3,
   },
   // A tall column of bubbles rising from the bill.
   {
@@ -2049,6 +2049,20 @@ export const PARTS: Part[] = [
     up: -4,
     tilt: 10,
     sink: 0.2,
+    jitter: 0.03,
+  },
+  // The back of a duck's hull sweeping up into its tail point.
+  {
+    id: 'duck-tail',
+    slot: 'tail',
+    shape: 'ellipsoid',
+    size: [0.55, 0.45, 0.45],
+    color: 'primary',
+    layout: { kind: 'chain', count: 3, step: 0.6, curl: 32, wave: 0, shrink: 0.7 },
+    around: 180,
+    up: 12,
+    tilt: 20,
+    sink: 0.35,
     jitter: 0.03,
   },
 ];
