@@ -5,10 +5,13 @@ import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import type { GameEvent } from '../../db/game-events.js';
 import { buildings, maps, tileRoads, tiles } from '../../db/schema.js';
 
+/** Content ids of the `travel` buildings with this role. */
+export const travelIds = (role: 'bridge' | 'ferry-dock') =>
+  GAME_DATA.buildings.flatMap((b) => (b.kind === 'travel' && b.role === role ? [b.id] : []));
 /** Bridge content ids (`travel` buildings whose role is `bridge`). */
-const BRIDGE_IDS = GAME_DATA.buildings.flatMap((b) =>
-  b.kind === 'travel' && b.role === 'bridge' ? [b.id] : [],
-);
+const BRIDGE_IDS = travelIds('bridge');
+/** Ferry dock content ids (W1-5b). */
+const DOCK_IDS = travelIds('ferry-dock');
 
 /** A `tile_roads` row with its tile's place and owner now. */
 export interface RoadRow {
@@ -42,6 +45,8 @@ export interface RoadsRepo {
   listLive: (mapId: string) => Promise<RoadRow[]>;
   /** Every bridge standing on the map, and whose (`buildings`, kind `travel`). */
   bridges: (mapId: string) => Promise<{ q: number; r: number; ownerUserId: string }[]>;
+  /** Every ferry dock standing on the map, and whose (W1-5b). */
+  docks: (mapId: string) => Promise<{ q: number; r: number; ownerUserId: string }[]>;
   /** Row-locks a tile by place (`FOR NO KEY UPDATE`, step 6). */
   lockTileAt: (mapId: string, q: number, r: number) => Promise<RoadTileRow | null>;
   /** Row-locks a tile's road (step 6b), stale or live; null with none. */
@@ -73,6 +78,17 @@ const roadColumns = {
   tileOwnerUserId: tiles.ownerUserId,
 };
 
+/** The `travel` buildings of these content ids on a map: where, and whose. */
+async function travelOn(db: Executor, mapId: string, ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  return db
+    .select({ q: tiles.q, r: tiles.r, ownerUserId: buildings.ownerUserId })
+    .from(buildings)
+    .innerJoin(tiles, eq(tiles.id, buildings.tileId))
+    .where(and(eq(buildings.mapId, mapId), inArray(buildings.buildingId, [...ids])))
+    .orderBy(asc(tiles.q), asc(tiles.r));
+}
+
 export function createRoadsRepo(db: Executor): RoadsRepo {
   return queries(db);
 }
@@ -100,14 +116,8 @@ function queries(db: Executor): RoadsRepo {
         .where(and(eq(tileRoads.mapId, mapId), eq(tiles.ownerUserId, tileRoads.ownerUserId)))
         .orderBy(asc(tiles.q), asc(tiles.r)),
 
-    bridges: async (mapId) => {
-      if (BRIDGE_IDS.length === 0) return [];
-      return db
-        .select({ q: tiles.q, r: tiles.r, ownerUserId: buildings.ownerUserId })
-        .from(buildings)
-        .innerJoin(tiles, eq(tiles.id, buildings.tileId))
-        .where(and(eq(buildings.mapId, mapId), inArray(buildings.buildingId, BRIDGE_IDS)));
-    },
+    bridges: (mapId) => travelOn(db, mapId, BRIDGE_IDS),
+    docks: (mapId) => travelOn(db, mapId, DOCK_IDS),
 
     lockTileAt: async (mapId, q, r) => {
       const [row] = await db

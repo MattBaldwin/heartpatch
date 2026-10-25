@@ -43,6 +43,8 @@ export interface TargetTileRow extends HomeTileRow {
   homeSlot: number | null;
   /** A grey village's tile, or a won village's ring (#306). */
   communityId: string | null;
+  /** Its terrain: a bridge stands on a river (#621 W1-5b). */
+  terrain: string;
 }
 
 export interface BuildingRow {
@@ -292,7 +294,10 @@ export interface BuildingsRepo {
   lockFires: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** The player's buildings on this map, by tile then spot. */
   listOwned: (mapId: string, userId: string) => Promise<BuildingRow[]>;
-  /** Every building on the map, on tiles its owner still holds, by tile then spot. */
+  /**
+   * Every building on the map, on tiles its owner still holds (and bridges,
+   * on river tiles nobody owns: #621 W1-5b), by tile then spot.
+   */
   listOnMap: (mapId: string) => Promise<BuildingRow[]>;
   lockBuilding: (buildingRowId: string) => Promise<BuildingRow | null>;
   /**
@@ -472,6 +477,7 @@ function queries(db: Executor): BuildingsRepo {
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
           communityId: tiles.communityId,
+          terrain: tiles.terrain,
         })
         .from(tiles)
         .where(
@@ -791,7 +797,15 @@ function queries(db: Executor): BuildingsRepo {
     listOnMap: async (mapId) =>
       (
         await selectBuildings()
-          .where(and(eq(buildings.mapId, mapId), eq(tiles.ownerUserId, buildings.ownerUserId)))
+          .where(
+            and(
+              eq(buildings.mapId, mapId),
+              or(
+                eq(tiles.ownerUserId, buildings.ownerUserId),
+                and(isNull(tiles.ownerUserId), eq(buildings.kind, 'travel')),
+              ),
+            ),
+          )
           .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot))
       ).map(toBuilding),
 

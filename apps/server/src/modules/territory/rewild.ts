@@ -12,7 +12,7 @@ import { leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
-import { refreshSupply } from './supply.js';
+import { lostDockOwners, refreshSupply } from './supply.js';
 
 /**
  * Land goes wild (#194's path, shared with the Hollow Man's reclaims, #277):
@@ -69,12 +69,14 @@ export async function rewildTiles(
     returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
   }
   // Wild Isle (#621): land beyond what went wild may be cut off from home
-  // now. Their tending rows (step 6, with the tiles), never waited for.
+  // now. Their tending rows (step 6, with the tiles), never waited for. A
+  // ferry dock that goes with its land gives the lost-crossing grace (W1-5b).
   const supply = await refreshSupply(
     tx,
     mapId,
     owned.map(([userId]) => userId),
     at,
+    { lostCrossing: await lostDockOwners(tx, mapId, going) },
   );
   // Homesteads (#199) beyond land that went wild may be cut off from home,
   // and a homestead the Hollow Man won back (#277) is no longer one; it keeps

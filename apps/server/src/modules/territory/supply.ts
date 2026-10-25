@@ -20,9 +20,10 @@ import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './r
  * home (shared `supplyMap`: their own land, bridges, roads' reach) is
  * stranded, fades, and goes wild at a nightfall once
  * `TRAVEL_RULES.stranded.afterHours` have passed. `refreshSupply` runs where
- * land or roads change (a capture, land going wild, a road laid, raised or
- * taken up) and at each nightfall; a Cozy Patch has no travel rules, so it
- * writes nothing there and reach stays as it always was.
+ * land, roads or crossings change (a capture, land going wild, a road laid,
+ * raised or taken up, a bridge or ferry dock put up or taken down, W1-5b)
+ * and at each nightfall; a Cozy Patch has no travel rules, so it writes
+ * nothing there and reach stays as it always was.
  */
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -46,19 +47,26 @@ export async function mapPatchRules(tx: Executor, mapId: string): Promise<PatchR
 }
 
 /**
- * What every supply line on the map is worked out from: the tiles, live roads
- * and bridges. The one loader, so `supplyFor` and `refreshSupply` can't drift
- * (W1-5b adds its crossings here).
+ * What every supply line on the map is worked out from: the tiles, live
+ * roads, bridges and ferry docks. The one loader, so `supplyFor`,
+ * `refreshSupply` and `crossersOf` can't drift.
  */
 async function supplyInputs(tx: Executor, mapId: string) {
   const roads = createRoadsRepo(tx);
-  const [tiles, live, bridges] = await Promise.all([
+  const [tiles, live, bridges, docks] = await Promise.all([
     createTerritoryRepo(tx).listTiles(mapId),
     roads.listLive(mapId),
     roads.bridges(mapId),
+    roads.docks(mapId),
   ]);
-  return { tiles, live, bridges };
+  return { tiles, live, bridges, docks };
 }
+
+type SupplyInputs = Awaited<ReturnType<typeof supplyInputs>>;
+
+/** One player's supply line from the loaded inputs. */
+const lineOf = (inputs: SupplyInputs, userId: string, travel: TravelRules): Supply =>
+  supplyMap(inputs.tiles, inputs.live, inputs.bridges, userId, travel, inputs.docks);
 
 /** A player's supply line home on a Wild Isle, read in `tx`. */
 export async function supplyFor(
@@ -67,8 +75,59 @@ export async function supplyFor(
   userId: string,
   travel: TravelRules,
 ): Promise<Supply> {
-  const { tiles, live, bridges } = await supplyInputs(tx, mapId);
-  return supplyMap(tiles, live, bridges, userId, travel);
+  return lineOf(await supplyInputs(tx, mapId), userId, travel);
+}
+
+/**
+ * The players whose supply line runs over these bridges or docks (W1-5b):
+ * some land of theirs is supplied now and wouldn't be without them. Read
+ * before they come down, for `refreshSupply`'s `lostCrossing`. Sorted;
+ * empty on a Cozy Patch.
+ */
+export async function crossersOf(
+  tx: Executor,
+  mapId: string,
+  crossings: readonly Hex[],
+): Promise<string[]> {
+  if (crossings.length === 0) return [];
+  const travel = (await mapPatchRules(tx, mapId))?.travel ?? null;
+  if (!travel) return [];
+  const inputs = await supplyInputs(tx, mapId);
+  const gone = new Set(crossings.map(hexKey));
+  const without: SupplyInputs = {
+    ...inputs,
+    bridges: inputs.bridges.filter((b) => !gone.has(hexKey(b))),
+    docks: inputs.docks.filter((d) => !gone.has(hexKey(d))),
+  };
+  const owners = [...new Set(inputs.tiles.flatMap((t) => t.ownerUserId ?? []))].sort();
+  return owners.filter((userId) => {
+    const before = lineOf(inputs, userId, travel).supplied;
+    const after = lineOf(without, userId, travel).supplied;
+    return inputs.tiles.some(
+      (t) => t.ownerUserId === userId && before.has(hexKey(t)) && !after.has(hexKey(t)),
+    );
+  });
+}
+
+/**
+ * The players whose ferry dock stands on land they held and are losing
+ * (captured, or gone wild): their lines get the lost-crossing grace
+ * (W1-5b). Read before the dock comes down; empty on a Cozy Patch, which
+ * has no docks.
+ */
+export async function lostDockOwners(
+  tx: Executor,
+  mapId: string,
+  held: readonly (Hex & { ownerUserId: string | null })[],
+): Promise<string[]> {
+  if (held.length === 0) return [];
+  const heldBy = new Map(held.map((t) => [hexKey(t), t.ownerUserId]));
+  const docks = await createRoadsRepo(tx).docks(mapId);
+  return [
+    ...new Set(
+      docks.filter((d) => heldBy.get(hexKey(d)) === d.ownerUserId).map((d) => d.ownerUserId),
+    ),
+  ].sort();
 }
 
 export interface RefreshSupplyOptions {
@@ -80,9 +139,11 @@ export interface RefreshSupplyOptions {
   wait?: boolean;
   /**
    * The supply line was a bridge or dock that came down (W1-5b): newly cut-off
-   * land starts to strand `graceHoursAfterBridgeLoss` from now.
+   * land starts to strand `graceHoursAfterBridgeLoss` from now. `true` for
+   * every player listed, or just these players (the ones whose line crossed
+   * it, `crossersOf`), so one call still takes every row in tile id order.
    */
-  lostCrossing?: boolean;
+  lostCrossing?: boolean | readonly string[];
 }
 
 /**
@@ -109,19 +170,18 @@ export async function refreshSupply(
   // Read before any lock: a road laid between this read and the locks below
   // can leave a tile marked a night early or late; its clock is fresh, so it
   // never goes wild for it, and the next nightfall's pass puts it right.
-  const [{ tiles, live, bridges }, homes] = await Promise.all([
+  const [inputs, homes] = await Promise.all([
     supplyInputs(tx, mapId),
     createSquishyJobsRepo(tx).homeTiles(mapId),
   ]);
   const seeds = heartSeeds(homes);
-  const since = options.lostCrossing
-    ? new Date(at.getTime() + travel.stranded.graceHoursAfterBridgeLoss * HOUR_MS)
-    : at;
+  const graceFor = new Set(options.lostCrossing === true ? players : options.lostCrossing || []);
+  const grace = new Date(at.getTime() + travel.stranded.graceHoursAfterBridgeLoss * HOUR_MS);
   // Every player's changes first, then one lock over all their rows in tile
   // id order (a waiting pass must never lock player by player).
   const changes: { userId: string; cut: TendingTileRow[]; joined: (Hex & { id: string })[] }[] = [];
   for (const userId of players) {
-    const { supplied } = supplyMap(tiles, live, bridges, userId, travel);
+    const { supplied } = lineOf(inputs, userId, travel);
     const seed = seeds.get(userId) ?? null;
     const outer = (await tending.outerTiles(mapId, userId)).filter(
       (t) =>
@@ -151,7 +211,7 @@ export async function refreshSupply(
     const resupplied = joined.filter((t) => held.has(t.id));
     await tending.strand(
       stranded.map((t) => t.id),
-      since,
+      graceFor.has(userId) ? grace : at,
     );
     await tending.unstrand(resupplied.map((t) => t.id));
     if (stranded.length > 0) {

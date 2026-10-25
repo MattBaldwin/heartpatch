@@ -1388,6 +1388,118 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
 
+  /**
+   * A Wild Isle (#621 W1-5b) with a river across the kid's line out of home
+   * at (3), their land at (2), cut-off land of theirs at (4) with its
+   * tending row, and Timber and Stone for a bridge.
+   */
+  async function bridgeSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    await makeWildIsle(db, map.id);
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, map.id));
+    const at = new Map(all.map((t) => [hexKey(t), t]));
+    const home = all.filter((t) => t.ownerUserId === kid.id && t.homeSlot !== null);
+    const homeKeys = new Set(home.map(hexKey));
+    const seed = home.find((t) => hexNeighbors(t).every((n) => homeKeys.has(hexKey(n))))!;
+    const line = hexNeighbors(seed)
+      .map((n) =>
+        [0, 1, 2, 3, 4].map((k) =>
+          at.get(hexKey({ q: seed.q + (n.q - seed.q) * k, r: seed.r + (n.r - seed.r) * k })),
+        ),
+      )
+      .find((l) =>
+        l.every(
+          (t, k) =>
+            t !== undefined &&
+            (k <= 1 ||
+              (t.ownerUserId === null &&
+                t.homeSlot === null &&
+                t.communityId === null &&
+                t.terrain !== 'trading-post')),
+        ),
+      )!
+      .map((t) => t!);
+    const [river, far] = [line[3]!, line[4]!];
+    await db
+      .update(tiles)
+      .set({ terrain: 'river', nodeResource: null })
+      .where(eq(tiles.id, river.id));
+    await db
+      .update(tiles)
+      .set({ ownerUserId: kid.id })
+      .where(inArray(tiles.id, [line[2]!.id, far.id]));
+    await db
+      .insert(tileTending)
+      .values([line[2]!, far].map((t) => ({ tileId: t.id, mapId: map.id, tendedAt: new Date() })));
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 100, stone: 100 }, 'dev-grant'),
+    );
+    const lockTimber = (tx: Transaction) =>
+      tx
+        .select({ itemId: inventories.itemId })
+        .from(inventories)
+        .where(
+          and(
+            eq(inventories.mapId, map.id),
+            eq(inventories.userId, kid.id),
+            eq(inventories.itemId, 'timber'),
+          ),
+        )
+        .for('update');
+    const service = createBuildingsService({ db });
+    const place = () =>
+      service.place(kid, map.id, { buildingId: 'bridge', q: river.q, r: river.r, spot: 1 });
+    const bridge = async () =>
+      (
+        await db.select({ id: buildings.id }).from(buildings).where(eq(buildings.tileId, river.id))
+      )[0] ?? null;
+    return { kid, mapId: map.id, river, far, lockTimber, service, place, bridge };
+  }
+
+  it('takes the river tile before the bag (buildings `place` a bridge, #621 W1-5b step 6 then 11)', async () => {
+    const { river, lockTimber, place, bridge } = await bridgeSetup('bridger');
+    await holdThen(
+      (tx) => tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, river.id)).for('update'),
+      place,
+      lockTimber,
+    );
+    expect(await bridge()).not.toBeNull();
+  });
+
+  it("takes a bridge's row before the bag on the way down (buildings `remove`, #621 W1-5b step 8 then 11)", async () => {
+    const { kid, mapId, lockTimber, service, place, bridge } = await bridgeSetup('unbridger');
+    await place();
+    const row = (await bridge())!;
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ id: buildings.id })
+          .from(buildings)
+          .where(eq(buildings.id, row.id))
+          .for('update'),
+      () => service.remove(kid, mapId, row.id),
+      lockTimber,
+    );
+    expect(await bridge()).toBeNull();
+  });
+
+  it("never waits on a supply line's tending row (buildings `place` and `remove` a bridge, #621 W1-5b)", async () => {
+    const { kid, mapId, far, service, place, bridge } = await bridgeSetup('bridge-skipper');
+    await db.transaction(async (tx) => {
+      // Held as nightfall's pass would: the bridge goes up and down past it.
+      await tx.select().from(tileTending).where(eq(tileTending.tileId, far.id)).for('update');
+      await place();
+      const row = (await bridge())!;
+      await service.remove(kid, mapId, row.id);
+    });
+    expect(await bridge()).toBeNull();
+  });
+
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
     const owner = await player('owner');
     const kid = await player('picker');

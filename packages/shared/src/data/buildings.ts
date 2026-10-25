@@ -477,7 +477,9 @@ export const BUILDINGS: Building[] = [
   },
   // Wild Isle (#621). Only on a Wild Isle (`patchTypes`), and not buildable
   // anywhere until each one's lane puts its kind in
-  // `HOME_BASE_RULES.buildableKinds`.
+  // `HOME_BASE_RULES.buildableKinds`. Bridges and ferry docks are the
+  // exception (W1-5b): the server builds them by the map's patch type, not
+  // `buildableKinds`; Waystations are still refused.
   {
     id: 'bridge',
     kind: 'travel',
