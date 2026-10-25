@@ -2132,6 +2132,8 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     fences: () => fences.debug,
     tileBuild: () => tileBuild.debug,
+    roads: () => roads.debug,
+    stranded: () => ({ ...strandedLayer.debug, card: strandedCard.shown }),
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,
