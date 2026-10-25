@@ -1,6 +1,8 @@
 import {
+  frontCover,
   frontSummary,
   type FrontSummary,
+  type Hex,
   type PartOfDay,
   type WeatherDay,
   type WeatherFront,
@@ -59,16 +61,50 @@ export function nowLine(kind: WeatherKind): string {
   return `${WEATHER_EMOJI[kind]} ${NOW_LINE[kind]}`;
 }
 
-export function frontLine(summary: FrontSummary): string {
-  return `${WEATHER_EMOJI[summary.kind]} ${FRONT_NAME[summary.kind]} from the ${summary.from} ${WHEN[summary.when]}`;
+/** How a front sits against my home: over it this minute, later or earlier, or never. */
+export type FrontState = 'now' | 'later' | 'missing';
+
+export function frontLine(summary: FrontSummary, state: FrontState = 'later'): string {
+  const lead = `${WEATHER_EMOJI[summary.kind]} ${FRONT_NAME[summary.kind]} from the ${summary.from}`;
+  if (state === 'now') return `${lead}, right now`;
+  return state === 'missing'
+    ? `${lead} ${WHEN[summary.when]}, missing your home`
+    : `${lead} ${WHEN[summary.when]}`;
 }
 
-/** One line per front in a day, in time order; empty when the sky stays clear. */
-export function dayLines(day: WeatherDay, timeZone: string): string[] {
+/** Where I am and what time it is, so a line can agree with the "right now" line above it. */
+export interface HomeClock {
+  readonly home: Hex;
+  readonly nowMs: number;
+}
+
+/**
+ * One line per front in a day, in time order; empty when the sky stays clear.
+ * With a home, a line speaks about the stretch the front is over my home (the
+ * same cover `weatherAt` reads for "right now"), not the middle of its trip
+ * across the island, so the two never disagree.
+ */
+export function dayLines(day: WeatherDay, timeZone: string, at?: HomeClock): string[] {
   const start = dayStartMs(day.day, timeZone);
+  const end = start + 24 * 3_600_000;
   return [...day.fronts]
     .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt))
-    .map((f: WeatherFront) => frontLine(frontSummary(f, start)));
+    .map((f: WeatherFront) => {
+      if (!at) return frontLine(frontSummary(f, start));
+      const cover = frontCover(f, at.home);
+      if (cover.some(([from, to]) => from <= at.nowMs && at.nowMs < to)) {
+        return frontLine(frontSummary(f, start), 'now');
+      }
+      const today = cover.find(([from, to]) => to > start && from < end);
+      if (!today) return frontLine(frontSummary(f, start), 'missing');
+      // Reuse the shared part-of-day rule on the stretch over my home.
+      const over = {
+        ...f,
+        startAt: new Date(Math.max(today[0], start)).toISOString(),
+        endAt: new Date(Math.min(today[1], end)).toISOString(),
+      };
+      return frontLine(frontSummary(over, start));
+    });
 }
 
 export interface ForecastPage {
@@ -84,14 +120,15 @@ export function forecastPage(
   view: WeatherView,
   kindNow: WeatherKind,
   timeZone: string,
+  at?: HomeClock,
 ): ForecastPage {
   const tomorrow = view.tomorrow;
   const hasVane = 'fronts' in tomorrow;
   return {
     now: nowLine(kindNow),
-    today: hasVane ? dayLines(view.today, timeZone) : null,
+    today: hasVane ? dayLines(view.today, timeZone, at) : null,
     tomorrow: hasVane
-      ? { summary: null, lines: dayLines(tomorrow, timeZone) }
+      ? { summary: null, lines: dayLines(tomorrow, timeZone, at) }
       : { summary: tomorrow.summary, lines: [] },
     hasVane,
   };

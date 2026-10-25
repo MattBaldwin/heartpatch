@@ -83,9 +83,12 @@
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
-  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 12px)
-    calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
-  background: rgb(220 226 248 / 70%);
+  padding: var(--weather-sheet-top, calc(env(safe-area-inset-top) + 64px))
+    calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px)
+    calc(env(safe-area-inset-left) + 12px);
+  /* A clear backdrop: it only catches the tap that closes the sheet. The Me chip
+     stays above every sheet on purpose (#47), so a dim here would leave it bright. */
+  background: transparent;
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   color: #3b3560;
 }
@@ -152,12 +155,13 @@
   align-self: center;
   width: min(100%, 220px);
   height: auto;
+  border-radius: 16px;
 }
 
-.weather-map-island {
-  fill: #cfe8c4;
-  stroke: #9cc98f;
-  stroke-width: 0.12;
+.weather-map-tile {
+  stroke: rgb(255 255 255 / 45%);
+  stroke-width: 0.08;
+  stroke-linejoin: round;
 }
 
 .weather-map-path {

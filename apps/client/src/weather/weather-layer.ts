@@ -1,5 +1,6 @@
 import { Constants } from '@babylonjs/core/Engines/constants';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -9,7 +10,7 @@ import type { MapView } from '@heartpatch/shared';
 import { moteShare, type AmbientMode } from '../map/ambient-layout.js';
 import { glowMaterial, softDisc } from '../map/map-ambient.js';
 import type { MapLayer, MapLayerHost } from '../map/map-screen.js';
-import { merged, painted } from '../map/map-props.js';
+import { merged } from '../map/map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
@@ -80,17 +81,31 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       // soft shape, never rings of see-through balls.
       cloudMat.disableDepthWrite = false;
       attachTerrainPlugin(cloudMat, host.clock);
-      // Soft cushions, flattened like the sky's clouds (map-ambient.ts).
+      // Soft cushions, flattened like the sky's clouds (map-ambient.ts). Light is
+      // baked into the vertex colours (bright tops, dim bellies) because the
+      // material is unlit: otherwise a storm is one flat grey blob.
+      const { belly, top } = WEATHER_LOOK.clouds.shade;
       const puff = (name: string, d: number, x: number, y: number, z: number): Mesh => {
         const p = CreateSphere(name, { diameter: d, segments: 8 }, scene);
         p.position.set(x, y, z);
         p.scaling.y = WEATHER_LOOK.clouds.squash;
-        return painted(p, '#ffffff');
+        const at = p.getVerticesData(VertexBuffer.PositionKind) ?? [];
+        const colours = new Float32Array((at.length / 3) * 4);
+        for (let i = 0; i < at.length / 3; i++) {
+          // Height on the sphere, 0 at the bottom to 1 at the top, lifted by where the puff sits.
+          const up = ((at[i * 3 + 1] ?? 0) / d + 0.5 + y * 1.4) / 1.6;
+          const light = belly + (top - belly) * Math.min(1, Math.max(0, up));
+          colours.set([light, light, light, 1], i * 4);
+        }
+        p.setVerticesData(VertexBuffer.ColorKind, colours);
+        return p;
       };
       const cloud = merged('weather-clouds', [
         puff('wc0', 1, 0, 0, 0),
         puff('wc1', 0.72, 0.5, -0.04, 0.12),
         puff('wc2', 0.66, -0.46, -0.05, -0.08),
+        puff('wc3', 0.6, 0.12, 0.2, -0.16),
+        puff('wc4', 0.5, -0.2, 0.17, 0.2),
       ]);
       cloud.hasVertexAlpha = true;
       cloud.material = cloudMat;

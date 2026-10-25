@@ -1,9 +1,10 @@
 import { hexToWorld, type Hex, type MapView, type WeatherFront } from '@heartpatch/shared';
-import { HEX_SIZE } from '../map/map-config.js';
+import { FALLBACK_LOOK, HEX_SIZE, TERRAIN_LOOKS } from '../map/map-config.js';
 import { frontPosition } from './weather-layout.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SQRT3 = Math.sqrt(3);
+const SEA = '#bfe3f7'; // TUNE
 const KIND_FILL: Readonly<Record<string, string>> = {
   rain: '#7f8fc9',
   storm: '#5a5190',
@@ -20,10 +21,22 @@ function svg<K extends keyof SVGElementTagNameMap>(
   return node;
 }
 
+/** A pointy-top hex's six corners around a centre (x right, y down, like the sheet). */
+function hexPoints(cx: number, cy: number, size: number): string {
+  return [0, 1, 2, 3, 4, 5]
+    .map((k) => {
+      const a = (Math.PI / 180) * (60 * k + 30);
+      return `${(cx + size * Math.cos(a)).toFixed(3)},${(cy + size * Math.sin(a)).toFixed(3)}`;
+    })
+    .join(' ');
+}
+
 /**
- * A tiny map of today's fronts over the island: where each is now (a soft
- * disc), the way it is heading (a dashed line), and my home (a dot). Drawn
- * from the same fronts the layer uses, so the two always agree.
+ * A tiny map of today's fronts over the island: the real tiles in their own
+ * colours on the sea, each front a soft-edged cloud (where it is now, strong;
+ * not yet over the island, faint), the way it is heading (a dashed line), and
+ * my home (a heart-pink dot). Drawn from the same fronts the layer uses, so
+ * the two always agree.
  */
 export function islandMap(
   view: MapView,
@@ -36,27 +49,54 @@ export function islandMap(
     const p = hexToWorld(t, HEX_SIZE);
     reach = Math.max(reach, Math.hypot(p.x, p.z) + HEX_SIZE);
   }
-  const box = reach * 1.3;
+  const box = reach * 1.15;
   const root = svg('svg', {
     viewBox: `${-box} ${-box} ${box * 2} ${box * 2}`,
     class: 'weather-map',
     role: 'img',
+    'aria-label': 'A map of the island with the weather over it',
     'data-testid': 'weather-map',
   });
-  root.append(svg('circle', { cx: 0, cy: 0, r: reach, class: 'weather-map-island' }));
+  // A soft edge for each kind of front: opaque in the middle, gone at the rim.
+  const defs = svg('defs', {});
+  for (const [kind, fill] of Object.entries(KIND_FILL)) {
+    const grad = svg('radialGradient', { id: `weather-map-${kind}` });
+    grad.append(
+      svg('stop', { offset: '0%', 'stop-color': fill, 'stop-opacity': 0.9 }),
+      svg('stop', { offset: '65%', 'stop-color': fill, 'stop-opacity': 0.6 }),
+      svg('stop', { offset: '100%', 'stop-color': fill, 'stop-opacity': 0 }),
+    );
+    defs.append(grad);
+  }
+  root.append(
+    defs,
+    svg('rect', { x: -box, y: -box, width: box * 2, height: box * 2, rx: box * 0.18, fill: SEA }),
+  );
+  for (const t of view.tiles) {
+    const p = hexToWorld(t, HEX_SIZE);
+    const look = TERRAIN_LOOKS[t.terrain] ?? FALLBACK_LOOK;
+    root.append(
+      svg('polygon', {
+        points: hexPoints(p.x, -p.z, HEX_SIZE),
+        fill: look.color,
+        class: 'weather-map-tile',
+      }),
+    );
+  }
   for (const f of fronts) {
     const a = hexToWorld(f.from, HEX_SIZE);
     const b = hexToWorld(f.to, HEX_SIZE);
     const at = frontPosition(f, nowMs);
-    const fill = KIND_FILL[f.kind] ?? '#999999';
+    const centre = at ?? a;
+    const r = (f.radius + 0.5) * SQRT3 * HEX_SIZE;
     root.append(
       svg('line', { x1: a.x, y1: -a.z, x2: b.x, y2: -b.z, class: 'weather-map-path' }),
       svg('circle', {
-        cx: (at ?? a).x,
-        cy: -(at ?? a).z,
-        r: (f.radius + 0.5) * SQRT3 * HEX_SIZE,
-        fill,
-        'fill-opacity': at ? 0.55 : 0.2,
+        cx: centre.x,
+        cy: -centre.z,
+        r,
+        fill: `url(#weather-map-${f.kind in KIND_FILL ? f.kind : 'rain'})`,
+        'fill-opacity': at ? 1 : 0.3,
         class: 'weather-map-front',
         'data-kind': f.kind,
         'data-active': at ? 'true' : 'false',
@@ -65,9 +105,7 @@ export function islandMap(
   }
   if (home) {
     const p = hexToWorld(home, HEX_SIZE);
-    root.append(
-      svg('circle', { cx: p.x, cy: -p.z, r: HEX_SIZE * 0.45, class: 'weather-map-home' }),
-    );
+    root.append(svg('circle', { cx: p.x, cy: -p.z, r: HEX_SIZE * 0.5, class: 'weather-map-home' }));
   }
   return root;
 }

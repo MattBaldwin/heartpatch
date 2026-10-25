@@ -1,6 +1,6 @@
 import type { WeatherDay, WeatherFront, WeatherView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { forecastPage, nowLine, WEATHER_TEXT } from './weather-model.js';
+import { dayLines, forecastPage, nowLine, WEATHER_TEXT } from './weather-model.js';
 
 const front: WeatherFront = {
   id: 'f',
@@ -13,6 +13,43 @@ const front: WeatherFront = {
 };
 const day = (fronts: WeatherFront[]): WeatherDay => ({ day: '2026-10-25', fronts });
 const TZ = 'America/Chicago';
+
+describe('dayLines with a home', () => {
+  // Crosses the island east over eight hours (14:00 to 22:00 in Chicago): the
+  // middle of its trip is evening, but it only sits over x = -6 early on.
+  const trip: WeatherFront = {
+    ...front,
+    kind: 'rain',
+    from: { q: -9, r: 0 },
+    to: { q: 9, r: 0 },
+    startAt: '2026-10-25T19:00:00.000Z',
+    endAt: '2026-10-26T03:00:00.000Z',
+    radius: 2,
+  };
+  const today = day([trip]);
+  const west = { q: -6, r: 0 };
+  const at = (home: typeof west, iso: string) => ({ home, nowMs: Date.parse(iso) });
+
+  it('names the stretch over my home, not the middle of the trip', () => {
+    expect(dayLines(today, TZ)[0]).toMatch(/in the evening$/);
+    expect(dayLines(today, TZ, at(west, '2026-10-25T18:00:00.000Z'))[0]).toBe(
+      '🌧️ Rain from the west in the afternoon',
+    );
+  });
+
+  it('says "right now" while it is over my home, so the two lines agree', () => {
+    const lines = dayLines(today, TZ, at(west, '2026-10-25T20:30:00.000Z'));
+    expect(lines[0]).toBe('🌧️ Rain from the west, right now');
+    expect(nowLine('rain')).toMatch(/Rain is pattering/);
+  });
+
+  it('says so when a front misses my home', () => {
+    const north = { q: 0, r: 6 };
+    expect(dayLines(today, TZ, at(north, '2026-10-25T18:00:00.000Z'))[0]).toMatch(
+      /, missing your home$/,
+    );
+  });
+});
 
 describe('forecastPage', () => {
   it('without a vane: tomorrow is one line and today shows no fronts', () => {

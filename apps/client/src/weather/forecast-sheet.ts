@@ -59,7 +59,12 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
       return;
     }
     const kind = store.kindNow();
-    const page = forecastPage(view, kind, map.map.timeZone);
+    const page = forecastPage(
+      view,
+      kind,
+      map.map.timeZone,
+      store.home ? { home: store.home, nowMs: store.now() } : undefined,
+    );
     const parts: Node[] = [
       el(
         'p',
@@ -96,6 +101,16 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
     body.replaceChildren(...parts);
   };
 
+  // Start the card under the map's name pill and its chips, whatever their height
+  // (a notch and the legend row make it taller on an iPhone), so none is cut.
+  const clearTheHud = (): void => {
+    const hud = document.querySelector('[data-testid="map-hud"]');
+    const bottom = hud && !hud.hasAttribute('hidden') ? hud.getBoundingClientRect().bottom : 0;
+    if (bottom > 0)
+      node.style.setProperty('--weather-sheet-top', `${String(Math.ceil(bottom) + 8)}px`);
+    else node.style.removeProperty('--weather-sheet-top');
+  };
+
   const sheet: ForecastSheet = {
     node,
     get isOpen() {
@@ -103,6 +118,7 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
     },
     open() {
       node.hidden = false;
+      clearTheHud();
       draw();
       // A fresh read each time it opens, so a new vane shows at once.
       void store.refresh();
@@ -116,6 +132,9 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
   });
   node.addEventListener('click', (e) => {
     if (e.target === node) sheet.close();
+  });
+  window.addEventListener('resize', () => {
+    if (!node.hidden) clearTheHud();
   });
   store.onChange(() => {
     if (!node.hidden) draw();

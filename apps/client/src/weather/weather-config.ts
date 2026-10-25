@@ -17,9 +17,11 @@ export const WEATHER_LOOK = {
     spread: 0.35,
     /** Soft white for rain; slate for a storm, still see-through so my Keeper and home show. // TUNE: */
     colour: {
-      rain: [0.92, 0.94, 0.98, 0.66],
-      storm: [0.6, 0.61, 0.68, 0.58],
+      rain: [0.92, 0.94, 0.98, 0.7],
+      storm: [0.5, 0.47, 0.68, 0.8],
     } satisfies Record<'rain' | 'storm', Rgba>,
+    /** Light baked into the puffs: how dim the underside is and how bright the top. // TUNE: */
+    shade: { belly: 0.42, top: 1.12 },
   },
   /** The low tier draws no rain, and fewer, lighter clouds. // TUNE: */
   lowTier: { share: 0.5, alpha: 0.7 },
