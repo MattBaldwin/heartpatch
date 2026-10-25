@@ -542,8 +542,7 @@ for (const screen of TURN_SCREENS) {
     const heights = await page.evaluate(
       () => (window as unknown as { sheetHeights: number[] }).sheetHeights,
     );
-    for (const height of heights)
-      expect(Math.abs(height - pick), `${String(heights)}`).toBeLessThan(1);
+    for (const height of heights) expect(Math.abs(height - pick), String(heights)).toBeLessThan(1);
     // The turn played, with the sheet held at the pick's height all the way through.
     expect((await page.getByTestId('battle-sheet').boundingBox())!.height).toBeCloseTo(pick, 0);
   });

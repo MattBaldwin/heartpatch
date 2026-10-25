@@ -1,4 +1,4 @@
-/* global process, console, fetch, window */
+/* global process, console, fetch, window, document */
 // Captures the battle sheet (#656) at the phone sizes it has to fit, with the
 // notch / home-bar insets emulated (Chromium's Emulation.setSafeAreaInsetsOverride,
 // the same call battle-ui.spec.ts makes), for a squishy with 4 moves and one
