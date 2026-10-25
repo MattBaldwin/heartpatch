@@ -124,6 +124,8 @@ export interface WhereToFind {
   bonusFrom: string[];
   /** Recipes that make it. */
   madeBy: string[];
+  /** Wild Isle works that make it by themselves (#621 W1-8: a Fishing Pier's Fish), in data order. */
+  madeAt: string[];
   /** Its season, or null if it's around all year. */
   season: string | null;
 }
@@ -131,7 +133,7 @@ export interface WhereToFind {
 /** Where to look for an item, from public gather, terrain, map and recipe data only. */
 export function whereToFind(
   resourceId: string,
-  data: Pick<GameData, 'resources' | 'terrains' | 'mapGen' | 'recipes'> = GAME_DATA,
+  data: Pick<GameData, 'resources' | 'terrains' | 'mapGen' | 'recipes' | 'buildings'> = GAME_DATA,
   jobs: Pick<typeof JOB_RULES, 'terrainYields'> = JOB_RULES,
 ): WhereToFind {
   return {
@@ -146,6 +148,9 @@ export function whereToFind(
     madeBy: data.recipes
       .filter((r) => isAvailableRecipe(r) && r.output.resource === resourceId)
       .map((r) => r.id),
+    madeAt: data.buildings
+      .filter((b) => b.kind === 'works' && b.makes.resource === resourceId)
+      .map((b) => b.id),
     season: data.resources.find((r) => r.id === resourceId)?.season ?? null,
   };
 }

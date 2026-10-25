@@ -182,7 +182,8 @@ describe('whereToFind', () => {
         where.terrains.length > 0 ||
         where.homeRing ||
         where.bonusFrom.length > 0 ||
-        where.madeBy.length > 0;
+        where.madeBy.length > 0 ||
+        where.madeAt.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
       // Things only a hidden recipe makes aren't anywhere yet either. The
       // Rekindled finds turn up only in Hollowed villages (#306 PR 5).
@@ -206,6 +207,7 @@ describe('whereToFind', () => {
       homeRing: true,
       bonusFrom: [],
       madeBy: [],
+      madeAt: [],
       season: null,
     });
     expect(whereToFind('witch-dust')).toEqual({
@@ -214,6 +216,7 @@ describe('whereToFind', () => {
       homeRing: false,
       bonusFrom: ['emberwood', 'pumpkins'],
       madeBy: [],
+      madeAt: [],
       season: 'halloween',
     });
     expect(whereToFind('treats')).toMatchObject({
@@ -231,6 +234,17 @@ describe('whereToFind', () => {
       terrains: ['forest'],
       gatheredOn: ['meadow'],
     });
+    // Wild Isle (#621 W1-8): Fish on the coast and at a pier; Flour and Salt
+    // only from their works.
+    expect(whereToFind('fish')).toMatchObject({
+      terrains: [],
+      gatheredOn: ['coast'],
+      madeBy: [],
+      madeAt: ['fishing-pier'],
+    });
+    expect(whereToFind('flour')).toMatchObject({ gatheredOn: [], madeAt: ['watermill'] });
+    expect(whereToFind('salt')).toMatchObject({ gatheredOn: [], madeAt: ['salt-pans'] });
+    expect(whereToFind('water').madeAt).toEqual(['river-well', 'rain-barrel']);
     expect(whereToFind('jack-o-lantern-hearthfire')).toMatchObject({
       madeBy: ['jack-o-lantern-hearthfire'],
     });
@@ -247,6 +261,7 @@ describe('whereToFind', () => {
       homeRing: false,
       bonusFrom: [],
       madeBy: [],
+      madeAt: [],
       season: null,
     });
   });

@@ -52,7 +52,9 @@ export type ItemEffect =
   /** Care actions that use it. */
   | { readonly kind: 'care'; readonly actions: readonly string[] }
   /** A seasonal thing with no use yet: a keepsake. */
-  | { readonly kind: 'keepsake'; readonly season: string };
+  | { readonly kind: 'keepsake'; readonly season: string }
+  /** Wild Isle works that make it by themselves (#621 W1-8: a Fishing Pier's Fish). */
+  | { readonly kind: 'made-at'; readonly buildings: readonly string[] };
 
 type ItemData = Pick<GameData, 'resources' | 'recipes' | 'buildings' | 'careActions'>;
 
@@ -123,6 +125,14 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
 
   const care = data.careActions.filter((c) => (c.cost?.[item.id] ?? 0) > 0);
   if (care.length > 0) effects.push({ kind: 'care', actions: care.map((c) => c.id) });
+
+  // Wild Isle works (#621 W1-8) that make it, for an item with nothing else
+  // to say (Fish, Flour, Salt): Water and Greens keep today's chips, so a
+  // Cozy Patch's Bag reads as before.
+  const works = data.buildings.filter((b) => b.kind === 'works' && b.makes.resource === item.id);
+  if (effects.length === 0 && works.length > 0) {
+    effects.push({ kind: 'made-at', buildings: works.map((b) => b.id) });
+  }
 
   if (effects.length === 0 && item.season) effects.push({ kind: 'keepsake', season: item.season });
   return effects;

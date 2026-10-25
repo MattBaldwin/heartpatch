@@ -19,7 +19,13 @@ import {
   hearthfireState,
   inSeason,
   isBuildable,
+  isBuildableOn,
   buildsOnPatchType,
+  canalFits,
+  hasWaterNextDoor,
+  waterRefusalOf,
+  WILD_ISLE_BUILDING_KINDS,
+  type WaterRefusal,
   isReservedSpot,
   lakeBodies,
   lakesTouching,
@@ -88,14 +94,17 @@ import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
 import {
   bankOutput,
   deliveryOf,
+  eatersLast,
   productionAt,
   productionBeforeUnpaid,
   productionView,
   upkeepOf,
   warehouseIn,
   warehouseView,
+  worksFronts,
   type Banked,
   type ProductionAt,
+  type ProductionContext,
 } from './production.js';
 import { chargeUpkeep } from './upkeep.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
@@ -189,7 +198,24 @@ const MESSAGES = {
   needsLake: (name: string) =>
     `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} needs a lake next door 💧`,
   oneDock: 'You already have a dock on this lake! One is plenty ⛵',
+  // Wild Isle water works held back (#621 W1-8, plan §8, revision 1 §8).
+  water: {
+    water: 'Needs water next door 💧',
+    river: 'Needs the river 🌊',
+    'river-or-lake': 'Needs a river or lake next door 💧',
+    coast: 'Only on the coast 🐚',
+    canal: 'Canal needs water or a canal next to it 💧',
+  } satisfies Record<WaterRefusal, string>,
 } as const;
+
+/** Wild Isle kinds (#621): built by the map's patch type, never through `buildableKinds`. */
+const WILD_KINDS: readonly string[] = WILD_ISLE_BUILDING_KINDS;
+
+/** How far canals carry water (#621 W1-8): the Canal's `maxRun`, for fields beside one. */
+const CANAL_RUN = Math.max(
+  0,
+  ...[...BUILDING_DATA.values()].flatMap((b) => (b.kind === 'canal' ? [b.maxRun] : [])),
+);
 
 /** A bridge: the one building that stands on water (`onWater`), nobody's land (#621). */
 const isBridge = (
@@ -304,6 +330,7 @@ function toMyBuilding(
   at: Date,
   timeZone: string,
   warehouse: BuildingRow | null,
+  ctx: ProductionContext = {},
 ): MyBuilding {
   const building = BUILDING_DATA.get(row.buildingId);
   const fire = building?.kind === 'hearthfire' ? building : null;
@@ -318,9 +345,10 @@ function toMyBuilding(
     fuelSpace: fire ? fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) : null,
     capacity: roomy ? (step && 'capacity' in step ? step.capacity : 0) : null,
     residents: roomy ? residents : null,
-    // Resource buildings (#601): what's waiting for the next settle.
-    ...(row.kind === 'resource'
-      ? { production: productionView(row, at, timeZone, warehouse) }
+    // Resource buildings (#601) and Wild Isle works (#621 W1-8): what's
+    // waiting for the next settle (an eater's, what the bag pays for).
+    ...(row.kind === 'resource' || row.kind === 'works'
+      ? { production: productionView(row, at, timeZone, warehouse, ctx) }
       : {}),
     ...(row.kind === 'warehouse' ? { warehouse: warehouseView(row, at) } : {}),
     // Knocked about by a storm (Wild Isle #621): what fixing it costs.
@@ -372,6 +400,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       map.kind === 'multiplayer' ? createMapsRepo(tx).memberNaming(mapId, userId) : null,
     ]);
     const seed = heartSeedOf(tiles);
+    // Wild Isle works (#621 W1-8): their weather, read only if one follows it.
+    const ctx: ProductionContext = {
+      fronts: await worksFronts(tx, mapId, buildings, at),
+      bag: items,
+    };
     const active = squishies.filter((s) => s.state === 'active');
     const worn = await wornAccessories(
       tx,
@@ -399,6 +432,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           at,
           timeZone,
           warehouseIn(buildings),
+          ctx,
         ),
       ),
       squishies: active.map((s) => ({
@@ -600,6 +634,47 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     return travel;
   }
 
+  /**
+   * A Wild Isle works, canal, shelter or vane's patch (#621 W1-8): only on a
+   * Wild Isle (`isBuildableOn`), read after membership like `travelRulesFor`,
+   * so a Cozy Patch refuses them as it always has.
+   */
+  async function requireWildPatch(tx: Executor, mapId: string, building: Building): Promise<void> {
+    const rules = await mapPatchRules(tx, mapId);
+    if (!rules || !isBuildableOn(HOME_BASE_RULES, building, rules.patchType)) {
+      throw new AppError('CONFLICT', MESSAGES.notYet);
+    }
+  }
+
+  /**
+   * A Wild Isle building's water (#621 W1-8): a works or shelter that
+   * `needsWater` stands next to one of those (a canal counting while it
+   * carries water, shared `hasWaterNextDoor`); a canal next to water or a
+   * canal that carries it, within its `maxRun`. Plain reads under the
+   * target's tile lock: terrain never changes, and anyone's canal counts.
+   */
+  async function checkWater(
+    repo: BuildingsRepo,
+    tx: Executor,
+    mapId: string,
+    building: Building,
+    tile: { q: number; r: number },
+  ): Promise<void> {
+    const needs =
+      building.kind === 'works' || building.kind === 'shelter' ? building.needsWater : undefined;
+    if (building.kind !== 'canal' && !needs) return;
+    const [tiles, onMap] = await Promise.all([
+      createTerritoryRepo(tx).listTiles(mapId),
+      repo.listOnMap(mapId),
+    ]);
+    const canals = onMap.filter((b) => b.kind === 'canal').map((b) => ({ q: b.q, r: b.r }));
+    const ok =
+      building.kind === 'canal'
+        ? canalFits(tile, tiles, canals, building.maxRun)
+        : hasWaterNextDoor(tile, tiles, canals, needs, CANAL_RUN);
+    if (!ok) throw new AppError('FORBIDDEN', MESSAGES.water[waterRefusalOf(building)]);
+  }
+
   /** Runs a command for one player in one transaction, then publishes. */
   async function command<T>(
     user: PublicUser,
@@ -727,10 +802,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       const building = requireBuildingData(request.buildingId);
       // Fences go on a tile's edges, through the fences module (#203).
       if (building.kind === 'fence') throw new AppError('CONFLICT', MESSAGES.fenceOnEdge);
-      // Bridges and ferry docks (#621 W1-5b) go up only on a Wild Isle,
-      // checked in the transaction once membership is (`checkCrossing`);
+      // Wild Isle kinds (#621) go up only on a Wild Isle, checked in the
+      // transaction once membership is (`travelRulesFor`, `requireWildPatch`);
       // they aren't in `buildableKinds`, so no Cozy Build sheet lists them.
-      if (building.kind !== 'travel' && !isBuildable(HOME_BASE_RULES, building)) {
+      if (!WILD_KINDS.includes(building.kind) && !isBuildable(HOME_BASE_RULES, building)) {
         throw new AppError('CONFLICT', MESSAGES.notYet);
       }
       // A clear that's done but not settled yet finishes first, as before a
@@ -743,6 +818,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         async ({ repo, tx, at, local, timeZone, mapKind, home, outer }) => {
           const travel =
             building.kind === 'travel' ? await travelRulesFor(tx, mapId, building) : null;
+          if (building.kind !== 'travel' && WILD_KINDS.includes(building.kind)) {
+            await requireWildPatch(tx, mapId, building);
+          }
           if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
             const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
@@ -807,6 +885,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
                 throw new AppError('CONFLICT', MESSAGES.wrongLand(building.name, terrain));
               }
             }
+            // A Wild Isle works, shelter or canal needs its water next door (#621 W1-8).
+            await checkWater(repo, tx, mapId, building, tile);
           }
           const row = await repo.insertBuilding({
             mapId,
@@ -816,8 +896,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             kind: building.kind,
             spot: request.spot,
             placedAt: at,
-            // A resource building starts making things now (#601).
-            producedSince: building.kind === 'resource' ? at : null,
+            // A resource building or works starts making things now (#601, #621 W1-8).
+            producedSince: building.kind === 'resource' || building.kind === 'works' ? at : null,
           });
           // A new crossing (#621 W1-5b) may join up land that was cut off:
           // the lines that now run over it. Their tending rows are step 6,
@@ -898,8 +978,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
                   (r) => r.kind === 'resource' && deliveryOf(r, warehouse).length > 0,
                 )
               : [];
+          // A works' weather (#621 W1-8): plain reads, none on a Cozy Patch.
+          const fronts = await worksFronts(tx, mapId, [locked], at);
           const most = [locked, ...delivered].flatMap(
-            (r) => productionAt(r, at, timeZone, warehouse) ?? [],
+            (r) => productionAt(r, at, timeZone, warehouse, { fronts }) ?? [],
           );
           // A Crafting Factory's batches stop (#294): what's made is kept, the
           // rest comes back. Its batches after the building (step 8, id order).
@@ -919,7 +1001,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // writes `species_seen`) and stop, then the building goes.
           await lockGrantRows(tx, mapId, [
             { userId: user.id, items: refund },
-            ...most.map((m) => ({ userId: user.id, items: m.ready })),
+            ...most.map((m) => ({ userId: user.id, items: m.touches })),
             ...planGrants(batches),
           ]);
           // The mornings it owes first (12b): an unpaid one stops its output.
@@ -932,7 +1014,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const toBank = [row, ...charged.filter((r) => delivered.some((d) => d.id === r.id))];
           const banks: Banked[] = [];
           for (const r of toBank) {
-            const made = productionAt(r, at, timeZone, after);
+            const made = productionAt(r, at, timeZone, after, { fronts });
             const bank = made ? await bankOutput(tx, r, made) : null;
             if (bank) banks.push(bank);
           }
@@ -1095,13 +1177,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // (#601); its rows lock with the cost's (step 11, one item-id order),
           // then the mornings it owes are charged (12b): an unpaid one stops
           // its output. Banked before the cost, so what it made can pay.
-          const most = productionAt(locked, at, timeZone, warehouseIn(upkeepRows ?? []));
+          const fronts = await worksFronts(tx, mapId, [locked], at);
+          const most = productionAt(locked, at, timeZone, warehouseIn(upkeepRows ?? []), {
+            fronts,
+          });
           // Locked whenever a charge follows, so the cost's rows (step 11)
           // never come after the balance (12b), even for one that makes nothing.
           if (most || upkeepRows) {
             await lockGrantRows(tx, mapId, [
               { userId: user.id, items: cost },
-              ...(most ? [{ userId: user.id, items: most.ready }] : []),
+              ...(most ? [{ userId: user.id, items: most.touches }] : []),
             ]);
           }
           const {
@@ -1109,7 +1194,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             rows: charged,
             events: paused,
           } = await chargeFirst(tx, { id: mapId, timeZone }, user.id, upkeepRows, locked, at);
-          const made = productionAt(row, at, timeZone, warehouseIn(charged));
+          const made = productionAt(row, at, timeZone, warehouseIn(charged), { fronts });
           const banked = made ? await bankOutput(tx, row, made) : null;
           // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
           await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
@@ -1158,9 +1243,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const banking = (rows: readonly BuildingRow[], row: BuildingRow) =>
             row.kind === 'warehouse' && rows.length > 0 ? rows : [row];
           const before = warehouseIn(upkeepRows ?? []);
+          const fronts = await worksFronts(tx, mapId, banking(upkeepRows ?? [], locked), at);
           const most = banking(upkeepRows ?? [], locked).flatMap((r) => {
-            const made = productionAt(r, at, timeZone, before);
-            return made ? [{ userId: user.id, items: made.ready }] : [];
+            const made = productionAt(r, at, timeZone, before, { fronts });
+            return made ? [{ userId: user.id, items: made.touches }] : [];
           });
           await lockGrantRows(tx, mapId, [{ userId: user.id, items: cost }, ...most]);
           const {
@@ -1170,8 +1256,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           } = await chargeFirst(tx, { id: mapId, timeZone }, user.id, upkeepRows, locked, at);
           const warehouse = warehouseIn(charged);
           const banked: Banked[] = [];
-          for (const r of banking(charged, row)) {
-            const made = productionAt(r, at, timeZone, warehouse);
+          for (const r of eatersLast(banking(charged, row))) {
+            const made = productionAt(r, at, timeZone, warehouse, { fronts });
             const bank = made ? await bankOutput(tx, r, made) : null;
             if (bank) banked.push(bank);
           }
@@ -1241,7 +1327,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
         const rows = await repo.lockUpkeepBuildings(mapId, user.id);
         for (const row of rows) {
-          // One the Warehouse delivers for never fills.
+          // One the Warehouse delivers for never fills. A works fills at 100 % pace.
           const made = productionAt(row, at, timeZone, warehouseIn(rows));
           if (!made || made.maxCycles === null) continue;
           const back = made.maxCycles * made.cycleSeconds * 1000;

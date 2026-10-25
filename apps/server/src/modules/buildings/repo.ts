@@ -29,6 +29,13 @@ import {
   tiles,
 } from '../../db/schema.js';
 
+/**
+ * The kinds that pay a morning upkeep and produce (#601; Wild Isle works,
+ * #621 W1-8), as stored in `buildings.kind`: the rows `lockUpkeepBuildings`
+ * takes. Matches shared `paysUpkeep`.
+ */
+export const UPKEEP_KINDS = ['resource', 'warehouse', 'works'] as const;
+
 /** One of the player's home tiles (read only: tiles belong to the maps module). */
 export interface HomeTileRow {
   id: string;
@@ -305,7 +312,7 @@ export interface BuildingsRepo {
    * latest finished clear started from (owner decision Q2), else null.
    */
   landOf: (tileId: string) => Promise<{ terrain: string; clearedFrom: string | null } | null>;
-  /** Locks the player's buildings that pay upkeep (#601: resource, Warehouse), in id order (step 8). */
+  /** Locks the player's buildings that pay upkeep (#601: resource, Warehouse; #621: works), in id order (step 8). */
   lockUpkeepBuildings: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** Writes a resource building's output count and upkeep state (#601). */
   setProduction: (buildingRowId: string, update: ProductionUpdate) => Promise<void>;
@@ -514,7 +521,11 @@ function queries(db: Executor): BuildingsRepo {
         tileIds.map((id) => sql`${id}`),
         sql`, `,
       );
-      const upkeepKinds = inArray(buildings.kind, ['resource', 'warehouse']);
+      const upkeepKinds = inArray(buildings.kind, [...UPKEEP_KINDS]);
+      const kinds = sql.join(
+        UPKEEP_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      );
       return (
         await selectBuildings()
           .where(
@@ -524,7 +535,7 @@ function queries(db: Executor): BuildingsRepo {
                 upkeepKinds,
                 sql`(${buildings.mapId}, ${buildings.ownerUserId}) in (
                   select lost.map_id, lost.owner_user_id from buildings lost
-                  where lost.tile_id in (${ids}) and lost.kind in ('resource', 'warehouse'))`,
+                  where lost.tile_id in (${ids}) and lost.kind in (${kinds}))`,
               ),
             ),
           )
@@ -840,7 +851,7 @@ function queries(db: Executor): BuildingsRepo {
             and(
               eq(buildings.mapId, mapId),
               eq(buildings.ownerUserId, userId),
-              inArray(buildings.kind, ['resource', 'warehouse']),
+              inArray(buildings.kind, [...UPKEEP_KINDS]),
             ),
           )
           .orderBy(asc(buildings.id))
@@ -862,7 +873,7 @@ function queries(db: Executor): BuildingsRepo {
       const owned = and(
         eq(buildings.mapId, mapId),
         eq(buildings.ownerUserId, userId),
-        inArray(buildings.kind, ['resource', 'warehouse']),
+        inArray(buildings.kind, [...UPKEEP_KINDS]),
       );
       await db.update(buildings).set({ upkeepRank: null }).where(owned);
       for (const [rank, id] of ranked.entries()) {

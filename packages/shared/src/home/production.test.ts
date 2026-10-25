@@ -5,7 +5,9 @@ import { HOLLOW_RULES } from '../data/hollow.js';
 import { JOB_RULES } from '../data/jobs.js';
 import { RESOURCE_BUILDING_RULES } from '../data/resource-buildings.js';
 import { RESOURCES } from '../data/resources.js';
-import type { ResourceBuilding } from '../schemas/data/buildings.js';
+import { WEATHER_RULES } from '../data/weather.js';
+import type { ResourceBuilding, WorksBuilding } from '../schemas/data/buildings.js';
+import type { CoverWindow } from '../weather/plan.js';
 import {
   latestMorning,
   planResume,
@@ -25,6 +27,13 @@ import {
   warehouseWindows,
   deliveredProgress,
   deliveringAt,
+  eatenBy,
+  eatsCap,
+  followsWeather,
+  pacedProgress,
+  worksPace,
+  worksSource,
+  type ProductionFacts,
   type UpkeepPlanEntry,
 } from './production.js';
 
@@ -447,5 +456,148 @@ describe('planUpkeep (#601, owner decisions Q4–Q6)', () => {
     expect(planResume(10, paused).map((e) => e.id)).toEqual(['a', 'c']);
     expect(planResume(5, paused).map((e) => e.id)).toEqual(['c']);
     expect(planResume(0, paused)).toEqual([]);
+  });
+});
+
+describe('Wild Isle works (#621 W1-8)', () => {
+  const works = (id: string): WorksBuilding => {
+    const b = BUILDINGS.find((x) => x.id === id);
+    if (b?.kind !== 'works') throw new Error(`no works ${id}`);
+    return b;
+  };
+  const cover = (
+    kind: CoverWindow['kind'],
+    fromMs: number,
+    toMs: number,
+    frontId = `${kind}-1`,
+  ): CoverWindow => ({ frontId, kind, fromMs, toMs });
+  // A 10-minute cycle at 100 % (the pace windows multiply it).
+  const facts = (over: Partial<ProductionFacts> = {}): ProductionFacts => ({
+    sinceMs: T0,
+    nowMs: T0 + 2 * HOUR,
+    pausedAtMs: null,
+    cycleSeconds: 600,
+    maxCycles: null,
+    homesteadPause: null,
+    ...over,
+  });
+
+  it("makes its own `makes` a cycle, with no homestead +1 (the River Well keeps level with Cozy's well)", () => {
+    expect(worksSource(works('watermill'))).toEqual({
+      resource: 'flour',
+      perCycle: 1,
+      seconds: 15 * 60,
+    });
+    const cozy = productionSource(hut('water-well'), JOB_RULES, EXPLORE_RULES);
+    expect(worksSource(works('river-well'))).toEqual(cozy);
+  });
+
+  it('is productionProgress itself with no weather to follow', () => {
+    const f = facts({ nowMs: T0 + 95 * MIN, maxCycles: 4 });
+    expect(pacedProgress(f, { basePercent: 100, windows: [] })).toEqual(
+      productionProgress(f, JOB_RULES),
+    );
+    const paused = facts({ pausedAtMs: T0 + 25 * MIN });
+    expect(pacedProgress(paused, { basePercent: 100, windows: [] })).toEqual(
+      productionProgress(paused, JOB_RULES),
+    );
+    const cut = facts({ homesteadPause: { fromMs: T0 + 15 * MIN, toMs: T0 + 45 * MIN } });
+    expect(pacedProgress(cut, { basePercent: 100, windows: [] })).toEqual(
+      productionProgress(cut, JOB_RULES),
+    );
+  });
+
+  it('fishes half again as fast while fog covers the pier (the weather’s pierPercent)', () => {
+    const pier = works('fishing-pier');
+    expect(pier.weather).toEqual(WEATHER_RULES.effects.pierPercent);
+    // Fog for the first hour: 150 % there, 100 % after.
+    const pace = worksPace(pier, [cover('fog', T0, T0 + HOUR)]);
+    expect(pace).toEqual({
+      basePercent: 100,
+      windows: [{ fromMs: T0, toMs: T0 + HOUR, percent: 150 }],
+    });
+    const p = pacedProgress(facts(), pace);
+    // 9 cycles in the foggy hour (6 × 1.5), then 6 more in the clear one.
+    expect(p.cycles).toBe(15);
+    expect(p.finishedMs[0]).toBe(T0 + 400_000);
+    expect(p.finishedMs[8]).toBe(T0 + HOUR);
+    expect(p.finishedMs[9]).toBe(T0 + HOUR + 10 * MIN);
+    // Rain doesn't help the pier: only the kinds it lists change its pace.
+    expect(worksPace(pier, [cover('rain', T0, T0 + HOUR)]).windows).toEqual([]);
+  });
+
+  it('grows a field slower in a dry spell and faster in the rain; a storm over the rain counts as the storm', () => {
+    const field = works('irrigated-field');
+    const dry = worksPace(field, [cover('drought', T0, T0 + 2 * HOUR)]);
+    expect(pacedProgress(facts(), dry).cycles).toBe(6); // 12 at 100 %
+    const wet = worksPace(field, [cover('rain', T0, T0 + 2 * HOUR)]);
+    expect(pacedProgress(facts(), wet).cycles).toBe(18);
+    // Storm over rain for the first hour: the storm sets the pace (100 %), like `weatherAt`.
+    const mixed = worksPace(field, [
+      cover('rain', T0, T0 + 2 * HOUR),
+      cover('storm', T0, T0 + HOUR, 'storm-1'),
+    ]);
+    expect(mixed.windows).toEqual([{ fromMs: T0 + HOUR, toMs: T0 + 2 * HOUR, percent: 150 }]);
+    // A part-done cycle carries across a change of pace: 35 minutes of rain
+    // are 5¼ cycles of work, and the rest of the 6th takes 7½ minutes at 100 %.
+    const short = worksPace(field, [cover('rain', T0, T0 + 35 * MIN)]);
+    const p = pacedProgress(facts({ nowMs: T0 + 40 * MIN }), short);
+    expect(p.cycles).toBe(5);
+    expect(p.nextSinceMs).toBe(T0 + 2_000_000);
+    expect(p.nextReadyMs).toBe(T0 + 35 * MIN + 7.5 * MIN);
+  });
+
+  it('fills a rain barrel only while rain covers it, never between', () => {
+    const barrel = works('rain-barrel');
+    expect(worksPace(barrel, [])).toEqual({ basePercent: 0, windows: [] });
+    const none = pacedProgress(facts(), worksPace(barrel, []));
+    expect(none).toMatchObject({ cycles: 0, nextReadyMs: null, nextSinceMs: T0 });
+    // Fog and drought make no water; 20 minutes of rain make two cycles.
+    const pace = worksPace(barrel, [
+      cover('fog', T0, T0 + 30 * MIN),
+      cover('rain', T0 + HOUR, T0 + HOUR + 20 * MIN),
+      cover('drought', T0 + HOUR + 30 * MIN, T0 + 2 * HOUR),
+    ]);
+    expect(pace.windows).toEqual([{ fromMs: T0 + HOUR, toMs: T0 + HOUR + 20 * MIN, percent: 100 }]);
+    const p = pacedProgress(facts(), pace);
+    expect(p.finishedMs).toEqual([T0 + HOUR + 10 * MIN, T0 + HOUR + 20 * MIN]);
+    expect(p.nextReadyMs).toBeNull(); // no more rain in the plan
+  });
+
+  it('ignores the weather when weatherproof', () => {
+    const field = { ...works('irrigated-field'), weatherproof: true as const };
+    expect(followsWeather(field)).toBe(false);
+    expect(worksPace(field, [cover('drought', T0, T0 + 2 * HOUR)])).toEqual({
+      basePercent: 100,
+      windows: [],
+    });
+    expect(followsWeather(works('salt-pans'))).toBe(false);
+    expect(followsWeather(works('fishing-pier'))).toBe(true);
+  });
+
+  it('stops at full storage, at an upkeep pause or a knock, and while cut off, as productionProgress does', () => {
+    const pace = worksPace(works('fishing-pier'), [cover('fog', T0, T0 + 2 * HOUR)]);
+    const full = pacedProgress(facts({ maxCycles: 4 }), pace);
+    expect(full).toMatchObject({
+      cycles: 4,
+      full: true,
+      nextReadyMs: null,
+      nextSinceMs: T0 + 2 * HOUR,
+    });
+    const knocked = pacedProgress(facts({ pausedAtMs: T0 + 30 * MIN }), pace);
+    expect(knocked).toMatchObject({ cycles: 4, nextReadyMs: null, nextSinceMs: T0 + 1_600_000 });
+    // Cut off for the second hour: only the first hour's 9 count.
+    const cut = pacedProgress(facts({ homesteadPause: { fromMs: T0 + HOUR, toMs: null } }), pace);
+    expect(cut).toMatchObject({ cycles: 9, nextReadyMs: null });
+  });
+
+  it('caps a Watermill at what the bag pays for, and says what that eats', () => {
+    const mill = works('watermill');
+    expect(eatsCap(mill.eats, { greens: 7 })).toBe(3);
+    expect(eatsCap(mill.eats, {})).toBe(0);
+    expect(eatsCap(undefined, {})).toBe(Infinity);
+    expect(eatsCap({ greens: 2, water: 1 }, { greens: 20, water: 4 })).toBe(4);
+    expect(eatenBy(mill.eats, 3)).toEqual({ greens: 6 });
+    expect(eatenBy(mill.eats, 0)).toEqual({});
   });
 });

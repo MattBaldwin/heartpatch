@@ -3,6 +3,7 @@ import type { Executor } from '../../db/client.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { canWorkAt, morningAt, nextMorningAt, upkeepOf } from './production.js';
 import { createBuildingsRepo } from './repo.js';
+import { upkeepKindOf } from './upkeep.js';
 
 /**
  * My building upkeep on a patch for the Heart Coins sheet (#601): the next
@@ -20,9 +21,8 @@ export async function upkeepView(
 ): Promise<HeartCoins['upkeep']> {
   const rows = (await createBuildingsRepo(tx).listOwned(map.id, userId)).flatMap((row) => {
     const upkeep = upkeepOf(row);
-    return upkeep !== null && (row.kind === 'resource' || row.kind === 'warehouse')
-      ? [{ row, upkeep, kind: row.kind }]
-      : [];
+    const kind = upkeepKindOf(row);
+    return upkeep !== null && kind !== null ? [{ row, upkeep, kind }] : [];
   });
   if (rows.length === 0) return undefined;
   const morning = nextMorningAt(at, HOLLOW_RULES.morningMinute, map.timeZone);
