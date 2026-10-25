@@ -11,7 +11,7 @@ import { bisectFlags, bisectLabel } from './bisect-flags.js';
 import { FencePoller, webglFenceOps, type FenceGl } from './gpu-fence.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 import type { RendererKind } from './renderer.js';
-import { PAUSE_MS, REPORT_EVERY_MS, SlowTrigger, type SlowRun } from './slow-trigger.js';
+import { PAUSE_MS, REPORT_EVERY_MS, SLOW_FPS, SlowTrigger, type SlowRun } from './slow-trigger.js';
 import type { Stage } from './stage.js';
 
 /**
@@ -214,6 +214,15 @@ export interface ReportStatus {
 export const FENCE_POLL_MS = 20; // TUNE
 
 /**
+ * The minimum time between two GPU fences (#501). In Safari each fence and
+ * each check of one is a blocking round trip to the GPU process, so a loop at
+ * 30 fps fences about 10 times a second instead of every frame. Just under a
+ * frame at `SLOW_FPS`, so every frame of 100 ms or more is still fenced and a
+ * slow run's latency reads as before.
+ */
+export const FENCE_GAP_MS = (0.9 * 1000) / SLOW_FPS; // TUNE
+
+/**
  * How far into a slow run the badge counts start (a scene instrumentation and
  * the GL wrappers, for the rest of the page's life). Late enough that a
  * one-off hitch, like shaders compiling as a scene opens, doesn't start them.
@@ -314,7 +323,7 @@ export class PerfProbe {
     this.#quality = quality;
     this.#stage = stage;
     const gl = fenceGl(engine, kind);
-    this.#fences = gl ? new FencePoller(webglFenceOps(gl)) : null;
+    this.#fences = gl ? new FencePoller(webglFenceOps(gl), { minGapMs: FENCE_GAP_MS }) : null;
     page.trigger.reset();
     page.hitches.reset();
     page.decisions.remount();

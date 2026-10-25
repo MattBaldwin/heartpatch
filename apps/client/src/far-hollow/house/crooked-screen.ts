@@ -455,7 +455,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     }),
   );
   const doorLights = createDoorLights();
-  // Reduced motion keeps the outline and drops the sparkles' drift.
+  // Reduced motion keeps the settled glow and drops the sparkles' drift and the burst.
   doorLights.root.classList.toggle('crooked-door-calm', reducedMotion());
   const overlay = el(
     'div',
@@ -1632,7 +1632,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     bubbleText(text);
   };
 
-  /** The woken doors' cues (an outline and sparkles), over the dark, where each door stands in the wall now. */
+  /** The woken doors' cues (a glow and sparkles on both sides), over the dark, where each door stands in the wall now. */
   function renderDoorLights(): void {
     const s = scene3d;
     const doors = isOpen && !mapShown && s ? (bonusFx?.wokenDoors() ?? []) : [];

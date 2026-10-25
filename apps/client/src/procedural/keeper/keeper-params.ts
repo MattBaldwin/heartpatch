@@ -264,7 +264,7 @@ export function keeperParams(
   );
 
   const s = KEEPER.height * b.height;
-  const t = b.limbs * s;
+  const t = Math.max(b.limbs, KEEPER.minLimb) * s;
   const tw = b.torsoWidth * s;
   const th = b.torsoHeight * s;
   const round = b.roundness;
@@ -299,14 +299,24 @@ export function keeperParams(
   };
 
   // ── Body and starter outfit ───────────────────────────────────────────
+  // Chunky vinyl-toy limbs (#657): legs and arms are thicker than a bare limb
+  // so they read next to the round head and torso.
+  const legT = t * KEEPER.leg;
+  const shortsT = t * KEEPER.shortsLeg;
   const legBottom = shoe[1] * 0.6;
   const legTop = hipY + th * 0.15;
   for (const side of [-1, 1]) {
     const x = side * legX;
     piece('outfit', 'ellipsoid', [x, shoe[1] / 2, -t * 0.3], shoe, shoes);
-    piece('body', 'capsule', [x, (legBottom + legTop) / 2, 0], [t, legTop - legBottom, t], skin);
+    piece(
+      'body',
+      'capsule',
+      [x, (legBottom + legTop) / 2, 0],
+      [legT, legTop - legBottom, legT],
+      skin,
+    );
     // Shorts legs, so the bottom reads as clothing.
-    piece('outfit', 'capsule', [x, hipY - t * 0.35, 0], [t * 1.3, t * 1.4, t * 1.3], bottom);
+    piece('outfit', 'capsule', [x, hipY - t * 0.35, 0], [shortsT, t * 1.4, shortsT], bottom);
   }
   piece('outfit', round >= 0.6 ? 'ellipsoid' : 'capsule', [0, torsoY, 0], torso, top);
   const shorts: Vec3 = [torso[0] * 1.04, th * 0.5, torso[2] * 1.04];
@@ -329,28 +339,47 @@ export function keeperParams(
     );
   }
 
-  // Arms hang down and a little out (sin and cos of KEEPER.armSplayDeg).
+  // Arms come out of short sleeves on the shirt and hang down and out, with a
+  // hand joined on each end. How far out depends on the body: the hands must
+  // clear the shorts (a wide body splays its arms more), or they sink into the hips.
   const armLength = b.arms * s;
-  const out = 0.2419; // sin 14°
-  const down = 0.9703; // cos 14°
+  const arm = KEEPER.arm;
+  const armT = t * arm.thick;
+  const handT = armT * arm.hand;
+  // The shoulder sits on the torso's side at its height (a squarish capsule torso is
+  // wider there than an ellipsoid), so the sleeve grows out of the shirt.
+  const shoulderY = hipY + th * 0.8;
+  const up = (shoulderY - torsoY) / (torso[1] / 2);
+  const half = (torso[0] / 2) * (round >= 0.6 ? Math.sqrt(1 - up * up) : arm.squareHalf);
+  const reach = armLength * (1 - (handT * arm.handSink) / armLength);
+  const clear = shorts[0] / 2 + handT * arm.handClear - half;
+  const wanted = clear / reach;
+  const out = wanted < arm.splay[0] ? arm.splay[0] : wanted > arm.splay[1] ? arm.splay[1] : wanted;
+  const down = Math.sqrt(1 - out * out);
+  // asin(out) in degrees, by its series (no trigonometry, so every engine agrees).
+  const splayDeg = (out + (out * out * out) / 6 + (3 * out * out * out * out * out) / 40) * 57.2958;
   const hands: Vec3[] = [];
   const armMids: PieceSocket['anchors'][number][] = [];
   for (const side of [-1, 1]) {
-    const shoulder: Vec3 = [side * (torso[0] / 2 - t * 0.15), hipY + th * 0.82, 0];
+    const shoulder: Vec3 = [side * half, shoulderY, 0];
     const along = (k: number): Vec3 =>
       add(shoulder, [side * out * armLength * k, -down * armLength * k, 0]);
-    const roll = -side * KEEPER.armSplayDeg;
+    const roll = side * splayDeg; // Babylon turns the other way: a positive roll swings the arm's foot towards +x
     armMids.push({ at: along(0.5), roll, sin: -side * out, cos: down });
-    piece('body', 'capsule', along(0.5), [t * 0.95, armLength, t * 0.95], skin, [0, 0, roll]);
+    piece('body', 'capsule', along(0.5), [armT, armLength, armT], skin, [0, 0, roll]);
     const sleeve = KEEPER.sleeve;
-    piece('outfit', 'capsule', along(sleeve / 2), [t * 1.3, armLength * sleeve, t * 1.3], top, [
+    const sleeveT = armT * arm.sleeveThick;
+    // A round shoulder, then the sleeve the arm comes out of.
+    piece('outfit', 'ellipsoid', shoulder, [sleeveT, sleeveT, sleeveT], top);
+    piece('outfit', 'capsule', along(sleeve / 2), [sleeveT, armLength * sleeve, sleeveT], top, [
       0,
       0,
       roll,
     ]);
-    const hand = along(1 + t / armLength / 4);
+    // The hand sinks into the arm's end, so it is part of the arm.
+    const hand = along(1 - (handT * arm.handSink) / armLength);
     hands.push(hand);
-    piece('body', 'ellipsoid', hand, [t * KEEPER.hand, t * KEEPER.hand, t * KEEPER.hand], skin);
+    piece('body', 'ellipsoid', hand, [handT, handT, handT], skin);
   }
 
   // ── Head and face ─────────────────────────────────────────────────────
@@ -480,7 +509,7 @@ export function keeperParams(
 
   // Costume pieces may sit on any body part (#261), so a head-to-toe costume
   // follows each base's own head, limbs and hands.
-  const handSize = t * KEEPER.hand;
+  const handSize = handT;
   const socketOf = (slot: WardrobeSlot): PieceSocket => ({
     anchors: upright(sockets[slot].anchors),
     size: sockets[slot].size,
@@ -493,9 +522,9 @@ export function keeperParams(
     shoes: socketOf('shoes'),
     legs: {
       anchors: upright([-1, 1].map((side): Vec3 => [side * legX, (legBottom + legTop) / 2, 0])),
-      size: [t, legTop - legBottom, t],
+      size: [legT, legTop - legBottom, legT],
     },
-    arms: { anchors: armMids, size: [t, armLength, t] },
+    arms: { anchors: armMids, size: [armT, armLength, armT] },
     hands: { anchors: upright(hands), size: [handSize, handSize, handSize] },
     back: socketOf('back'),
     held: socketOf('held'),

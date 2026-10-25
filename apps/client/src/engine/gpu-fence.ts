@@ -1,8 +1,8 @@
 /**
- * GPU frame latency without blocking (#501 PR A). After each `scene.render`
- * the stage drops a WebGL2 fence into the command stream; on later frames,
- * and on a short timer between them (`poll`), it asks with a zero timeout
- * which fences the GPU has passed. A fence's latency is the time from the
+ * GPU frame latency without blocking (#501 PR A). After a `scene.render`, at
+ * most every `minGapMs`, the stage drops a WebGL2 fence into the command
+ * stream; on later frames, and on a short timer between them (`poll`), it
+ * asks with a zero timeout which fences the GPU has passed. A fence's latency is the time from the
  * frame that queued it to the first check that saw it passed, so it is
  * rounded up to the check interval. Next to the frame gap and our
  * `scene.render` time it tells a stalled GPU (latency near the gap, fences
@@ -37,28 +37,47 @@ export const MAX_PENDING_FENCES = 4; // TUNE
 /** Passed fences averaged over. */
 export const GPU_WINDOW = 30; // TUNE
 
+/** How a `FencePoller` samples. */
+export interface FenceOptions {
+  /**
+   * The minimum time between two fences, in ms. A frame sooner than this after
+   * the last fence queues none, so a fast loop fences a few times a second
+   * while every frame of a slow run (each this long or longer) still gets one.
+   * 0 fences every frame.
+   */
+  readonly minGapMs?: number;
+}
+
 export class FencePoller<F> {
   readonly #ops: FenceOps<F>;
+  readonly #minGapMs: number;
   readonly #pending: { fence: F; at: number }[] = [];
   readonly #recent: number[] = [];
   #last: number | null = null;
   #passed = 0;
+  /** When the last fence was queued, or null before the first. */
+  #lastFenceAt: number | null = null;
 
-  constructor(ops: FenceOps<F>) {
+  constructor(ops: FenceOps<F>, { minGapMs = 0 }: FenceOptions = {}) {
     this.#ops = ops;
+    this.#minGapMs = minGapMs;
   }
 
   /**
    * One drawn frame at `now`, right after `scene.render`: resolves the fences
    * the GPU has passed since the last frame (oldest first; the GPU runs them
    * in order, so the first one still pending ends the check), then queues
-   * one for this frame unless `MAX_PENDING_FENCES` are already in flight.
+   * one for this frame unless `MAX_PENDING_FENCES` are already in flight or
+   * the last one was queued under `minGapMs` ago.
    */
   frame(now: number): void {
     this.poll(now);
     if (this.#pending.length >= MAX_PENDING_FENCES) return;
+    if (this.#lastFenceAt !== null && now - this.#lastFenceAt < this.#minGapMs) return;
     const fence = this.#ops.create();
-    if (fence !== null) this.#pending.push({ fence, at: now });
+    if (fence === null) return;
+    this.#pending.push({ fence, at: now });
+    this.#lastFenceAt = now;
   }
 
   /** Resolves the fences passed by `now`, between frames too. */
