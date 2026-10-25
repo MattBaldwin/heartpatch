@@ -16,8 +16,16 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   const ownerName = uniqueName('own');
   const friendName = uniqueName('pal');
 
+  // Both sign up at once: the friend needs nothing from the owner until the
+  // code, and each signup boots the game and builds the Keeper preview
+  // (about 45 s of a 6x-throttled Chromium's 85 s run). One after the other,
+  // a loaded iPad CI box ran the test past 120 s, at a different step each try.
+  const [owner, friend] = await Promise.all([
+    newPlayer(browser, ownerName),
+    newPlayer(browser, friendName),
+  ]);
+
   // The owner makes a patch and gets a code.
-  const owner = await newPlayer(browser, ownerName);
   const ownerLobby = owner.getByTestId('lobby');
   await expect(ownerLobby).toContainText('No patches yet');
   await ownerLobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -28,7 +36,6 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
   // A friend asks to join with it.
-  const friend = await newPlayer(browser, friendName);
   const friendLobby = friend.getByTestId('lobby');
   await friendLobby.getByRole('button', { name: 'Join with a code' }).tap();
   await friendLobby.getByLabel('Invite code').fill(code.toLowerCase());
