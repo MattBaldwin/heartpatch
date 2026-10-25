@@ -750,7 +750,7 @@ export const WAVE_2_SPECIES: Species[] = [
         'bubble-sail',
         'suds-ruff',
       ],
-      head: { body: 'orb', size: 0.8, forward: 0.55, up: 0.58 },
+      head: { body: 'orb', size: 0.8, forward: 0.55, up: 0.66 },
       stance: 0,
       pose: 'stand',
       attackPart: 'horns',
@@ -773,7 +773,14 @@ export const WAVE_2_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#2b5c86', '#8fd3ff', '#fffbd0', '#183550'],
-      parts: ['spooky-eyes', 'boo-mouth', 'brave-brows', 'lure-beads', 'side-fins', 'tail-fan'],
+      parts: [
+        'close-spooky-eyes',
+        'boo-mouth',
+        'brave-brows',
+        'lure-beads',
+        'side-fins',
+        'tail-fan',
+      ],
       stance: 0,
       pose: 'hover',
       glow: 'accent',
@@ -797,7 +804,7 @@ export const WAVE_2_SPECIES: Species[] = [
       body: 'blob',
       palette: ['#2b5c86', '#8fd3ff', '#fffbd0', '#183550'],
       parts: [
-        'spooky-eyes',
+        'close-spooky-eyes',
         'boo-mouth',
         'brave-brows',
         'lure-beads',
@@ -829,7 +836,7 @@ export const WAVE_2_SPECIES: Species[] = [
       body: 'blob',
       palette: ['#2b5c86', '#8fd3ff', '#fffbd0', '#183550'],
       parts: [
-        'spooky-eyes',
+        'close-spooky-eyes',
         'boo-mouth',
         'brave-brows',
         'lure-beads',
