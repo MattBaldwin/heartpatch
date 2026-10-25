@@ -218,7 +218,11 @@ export function productionAt(
   const eats = building.kind === 'works' && building.eats ? { ...building.eats } : null;
   const paid = Math.min(progress.cycles, ctx.bag ? eatsCap(eats ?? undefined, ctx.bag) : Infinity);
   const ready = yieldOf(paid);
-  const touches = { ...yieldOf(progress.cycles), ...eatenBy(eats ?? undefined, progress.cycles) };
+  // Every row its output or its eating could land on (a works might eat what it makes).
+  const touches: ItemCounts = { ...yieldOf(progress.cycles) };
+  for (const [id, n] of Object.entries(eatenBy(eats ?? undefined, progress.cycles))) {
+    touches[id] = (touches[id] ?? 0) + n;
+  }
   const maxCycles = deliveringAt(windows, at.getTime()) ? null : storage;
   return {
     building,

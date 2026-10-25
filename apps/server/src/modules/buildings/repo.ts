@@ -522,6 +522,10 @@ function queries(db: Executor): BuildingsRepo {
         sql`, `,
       );
       const upkeepKinds = inArray(buildings.kind, [...UPKEEP_KINDS]);
+      const kinds = sql.join(
+        UPKEEP_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      );
       return (
         await selectBuildings()
           .where(
@@ -531,7 +535,7 @@ function queries(db: Executor): BuildingsRepo {
                 upkeepKinds,
                 sql`(${buildings.mapId}, ${buildings.ownerUserId}) in (
                   select lost.map_id, lost.owner_user_id from buildings lost
-                  where lost.tile_id in (${ids}) and lost.kind in ('resource', 'warehouse', 'works'))`,
+                  where lost.tile_id in (${ids}) and lost.kind in (${kinds}))`,
               ),
             ),
           )
