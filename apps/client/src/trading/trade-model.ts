@@ -63,7 +63,7 @@ export const TRADE_TEXT = {
   whoFor: 'Who’s it for? 🎁',
   whoForHint: 'Tap a name to pick them.',
   giftCount: (things: number, name: string) =>
-    `${String(things)} ${things === 1 ? 'thing' : 'things'} for ${name} 🎁`,
+    `${String(things)} ${things === 1 ? 'thing' : 'things'} for ${name}\u00a0🎁`,
   giftPickFirst: 'Tap things to pick a gift',
   giftConfirmTitle: 'Send this gift? 🎁',
   giftConfirmTo: (name: string) => `To ${name}`,

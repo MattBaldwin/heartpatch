@@ -1679,8 +1679,7 @@ button.post-col-head {
 
 /* Gift: "To: Mia ▾" and the picks on one row, the count and Send gift under. */
 .post-gift-top {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 8px;
 }
@@ -1689,7 +1688,8 @@ button.post-col-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: 150px;
+  flex: 0 1 auto;
+  max-width: 60%;
   min-height: 44px;
   padding: 0 10px 0 6px;
   border: 2px solid #c9c2f0;
@@ -1709,6 +1709,8 @@ button.post-col-head {
 
 .post-to-name {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1719,6 +1721,7 @@ button.post-col-head {
   min-width: 0;
   /* Room for each ×N badge, which hangs off its tile inside the scroller. */
   padding: 4px 10px 8px 2px;
+  flex: 1 1 0;
   overflow-x: auto;
 }
 

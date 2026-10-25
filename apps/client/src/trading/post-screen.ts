@@ -715,7 +715,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const problem = sendProblem('gift', give, []);
     const chipWords = [
       el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
-      el('span', { class: 'post-to-name post-fit' }, TRADE_TEXT.toChip(name)),
+      el('span', { class: 'post-to-name' }, TRADE_TEXT.toChip(name)),
     ];
     const toChip = el(
       'button',
@@ -1333,7 +1333,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   }
 
   function giftTab(view: TradesView, my: string): Node[] {
-    if (mates().length === 0) return [el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
+    if (mates().length === 0) {
+      // Nobody to give to: a sheet can't stay up (the ticker would stay paused).
+      giftConfirm = false;
+      matePicker = false;
+      return [el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
+    }
     const sheet = giftConfirm ? giftConfirmSheet() : matePicker ? matePickerSheet() : null;
     return [
       notes(),
