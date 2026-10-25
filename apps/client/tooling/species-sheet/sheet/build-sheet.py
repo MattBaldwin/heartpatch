@@ -8,7 +8,7 @@ meta={m['id']:m for m in json.load(open(R+'/meta.json'))}
 iou=json.load(open(R+'/iou.json'))
 LINES=[
  ('Slipwaddle','Penguin that slides on its tummy',['slipwaddle','sledwaddle','blizzwaddle']),
- ('Oinkle','Piglet with a curly tail (the teen grows tusks)',['oinkle','snortle','tuskoink']),
+ ('Oinkle','Piglet with a stub tail (the teen grows tusks)',['oinkle','snortle','tuskoink']),
  ('Cubbun','Bear cub that hugs its heart',['cubbun','brambun','grizzbun']),
  ('Spudsy','Potato with one tiny sprout',['spudsy','tatertot','hashbrawn']),
  ('Cloudlamb','Sheep made of actual cloud',['cloudlamb','cumulamb','fluffasus']),
