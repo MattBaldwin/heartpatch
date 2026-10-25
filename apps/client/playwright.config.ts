@@ -36,7 +36,7 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~20.5 iPhone, ~24.2 iPad (medians of 9 CI runs, 2026-10-24). tutorial-flow's two runs go side by side.
+  // ~20.5 iPhone, ~24.2 iPad (medians of 9 CI runs, 2026-10-24) before lorebook moved to group 4. tutorial-flow's two runs go side by side.
   [
     'accessory-everywhere',
     'admin',
@@ -46,7 +46,6 @@ const E2E_GROUPS = [
     'hollow',
     'hollowed-restore',
     'landscape-phone',
-    'lorebook',
     'map-hole',
     'recipe-book',
     'squishy-gallery',
@@ -79,7 +78,7 @@ const E2E_GROUPS = [
     'tray-layout',
     'wild-picker',
   ],
-  // ~12.8 iPhone, ~16.0 iPad, with far-hollow-bonus (a first attempt of trick-or-treat that times out adds a few more).
+  // ~12.8 iPhone, ~16.0 iPad before lorebook joined from group 1 (it timed out there on a slow iPad run), with far-hollow-bonus (a first attempt of trick-or-treat that times out adds a few more).
   [
     'clear-land',
     'explore',
@@ -89,6 +88,7 @@ const E2E_GROUPS = [
     'hollowed-explore',
     'homestead-colour',
     'keeper-gallery',
+    'lorebook',
     'milestones',
     'potions',
     'quality-budget',
