@@ -392,6 +392,23 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     );
   });
 
+  it('clears a stale stranded mark on land that can’t strand', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await makeWild(mapId);
+    await give(mapId, kid, PLENTY);
+    const line = await lineFrom(mapId, kid);
+    // (2) is in the kept ring round the Heart Seed: it never fades, but a mark
+    // from before (a homestead un-joined later, say) mustn't linger.
+    await own(mapId, line[2]!, kid.id);
+    await db.execute(
+      `update tile_tending set stranded_since = now() - interval '3 days' where tile_id = '${line[2]!.id}'`,
+    );
+    expect((await road(server, kid, mapId, line[2]!)).statusCode).toBe(201);
+    expect(await strandedOf(line[2]!.id)).toBeNull();
+  });
+
   it('claims along a road’s reach, and never water', async () => {
     const server = await start();
     const kid = await player();
@@ -440,7 +457,8 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * HOUR_MS);
     const line = await lineFrom(mapId, kid);
     await own(mapId, line[2]!, rival.id);
-    // The rival's land past it, joined to theirs only through (2) once it's won.
+    // More of the rival's land past it, cut off from their home (it sits by
+    // the kid's): the capture's supply refresh, the only one here, marks it.
     await own(mapId, line[3]!, rival.id);
     // The rival's road there (laid as their own command would, on their land).
     await db.insert(tileRoads).values({

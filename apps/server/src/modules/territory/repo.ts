@@ -693,6 +693,12 @@ export interface TendingRepo {
   /** Supplied again. Rows locked. */
   unstrand: (tileIds: readonly string[]) => Promise<void>;
   /**
+   * The player's tiles still marked stranded (#621), joined homesteads and
+   * home tiles included: `refreshSupply` clears a mark on land that can't
+   * strand, so it never comes back stale.
+   */
+  strandedTiles: (mapId: string, userId: string) => Promise<{ id: string; q: number; r: number }[]>;
+  /**
    * Gives owned outer tiles with no row one, tended at `at` (land held before
    * this table). Takes only key-share locks on the tiles, in id order; run it
    * on its own, outside a transaction holding tile locks.
@@ -884,6 +890,19 @@ function tendingQueries(db: Executor): TendingRepo {
         .set({ strandedSince: since })
         .where(and(inArray(tileTending.tileId, [...tileIds]), isNull(tileTending.strandedSince)));
     },
+
+    strandedTiles: (mapId, userId) =>
+      db
+        .select({ id: tiles.id, q: tiles.q, r: tiles.r })
+        .from(tileTending)
+        .innerJoin(tiles, eq(tiles.id, tileTending.tileId))
+        .where(
+          and(
+            eq(tileTending.mapId, mapId),
+            eq(tiles.ownerUserId, userId),
+            isNotNull(tileTending.strandedSince),
+          ),
+        ),
 
     unstrand: async (tileIds) => {
       if (tileIds.length === 0) return;

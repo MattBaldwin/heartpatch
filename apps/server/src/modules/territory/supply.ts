@@ -119,7 +119,7 @@ export async function refreshSupply(
     : at;
   // Every player's changes first, then one lock over all their rows in tile
   // id order (a waiting pass must never lock player by player).
-  const changes: { userId: string; cut: TendingTileRow[]; joined: TendingTileRow[] }[] = [];
+  const changes: { userId: string; cut: TendingTileRow[]; joined: (Hex & { id: string })[] }[] = [];
   for (const userId of players) {
     const { supplied } = supplyMap(tiles, live, bridges, userId, travel);
     const seed = seeds.get(userId) ?? null;
@@ -128,9 +128,13 @@ export async function refreshSupply(
         t.tendedAt !== null && canFade({ ...t, homeSlot: null }, seed, rules.territory.tending),
     );
     const cut = outer.filter((t) => (t.strandedSince ?? null) === null && !supplied.has(hexKey(t)));
-    const joined = outer.filter(
+    const joined: { id: string; q: number; r: number }[] = outer.filter(
       (t) => (t.strandedSince ?? null) !== null && supplied.has(hexKey(t)),
     );
+    // A mark left on land that can't strand now (it became a joined
+    // homestead, say) goes too, or an un-join would bring back a stale time.
+    const fading = new Set(outer.map((t) => t.id));
+    joined.push(...(await tending.strandedTiles(mapId, userId)).filter((t) => !fading.has(t.id)));
     if (cut.length + joined.length > 0) changes.push({ userId, cut, joined });
   }
   if (changes.length === 0) return [];
