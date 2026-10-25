@@ -47,7 +47,7 @@ const SHOTS = [
   // South of the Kitchen's tap counter (`tap` at the room's middle + [0.4, 2.1]).
   { name: 'kitchen-counter', room: 'kitchen', x: -5.2, z: 12.2, walk: true },
   // South of the Dining Room's table's east end, clear of the chairs knocked over in front of it.
-  { name: 'dining-table', room: 'dining-room', x: -4.4, z: 4.3, walk: true },
+  { name: 'dining-table', room: 'dining-room', x: -4.25, z: 4.3, walk: true },
   // In the Dining Room's doorway to the Kitchen (its north wall, 0.5 m west of the middle).
   { name: 'doorway', room: 'dining-room', x: -6.2, z: 8.5, walk: false },
   // South of the table's middle, then a tap on the floor behind it (page CSS px, per phone).

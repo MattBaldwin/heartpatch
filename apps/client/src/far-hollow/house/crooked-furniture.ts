@@ -26,7 +26,7 @@ import {
 
 export const CROOKED_BODY = {
   /** The Keeper's body on the floor, a circle this wide (metres, at the house's size). */
-  radius: 0.24, // TUNE
+  radius: 0.28, // TUNE
   /** Kept this much further off furniture than its drawn edge. */
   pad: 0.05, // TUNE
   /** The Keeper's height in the house (1.6 m at `HOUSE_KEEPER.scale` 0.72): a lean below it is in the way. */
