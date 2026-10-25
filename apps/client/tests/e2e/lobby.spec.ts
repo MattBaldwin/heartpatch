@@ -9,17 +9,19 @@ const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
 }) => {
-  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
-  // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
-  // CI), and a group's first tests also pay for the first shader compiles.
-  test.setTimeout(120_000);
+  // Two signups, each through the Keeper picker's 3D preview (#42), then a
+  // reload that boots the game a third time; CI renders in software. About
+  // 1.2 min on iPad WebKit next to light specs, but next to house.spec's
+  // build test both tries ran out 120 s at a different step each time
+  // (2026-10-25), so the limit is 150 s, like #195's below.
+  test.setTimeout(150_000);
   const ownerName = uniqueName('own');
   const friendName = uniqueName('pal');
 
   // Both sign up at once: the friend needs nothing from the owner until the
-  // code, and each signup boots the game and builds the Keeper preview
-  // (about 45 s of a 6x-throttled Chromium's 85 s run). One after the other,
-  // a loaded iPad CI box ran the test past 120 s, at a different step each try.
+  // code, and the signups are most of the test. In a local Chromium with its
+  // CPU throttled 6x, that took the run from past 120 s down to 85 s; on CI's
+  // shared cores it saves less.
   const [owner, friend] = await Promise.all([
     newPlayer(browser, ownerName),
     newPlayer(browser, friendName),
