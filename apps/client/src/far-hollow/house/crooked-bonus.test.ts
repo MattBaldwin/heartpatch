@@ -6,7 +6,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { ELEMENT_FX } from '../../battle/element-fx.js';
-import { WOKEN_COLOUR } from './crooked-bonus-kit.js';
+import { CHEST_SIZE, WOKEN_COLOUR } from './crooked-bonus-kit.js';
 import {
   DOOR_LIGHT,
   MAX_SPARKLES,
@@ -25,8 +25,8 @@ import {
   CROOKED_CHEST,
   crookedTeam,
   helpersFor,
-  keepOffChest,
 } from './crooked-bonus.js';
+import { CROOKED_BODY, houseStep } from './crooked-furniture.js';
 import { CROOKED_WALK, roomOf } from './crooked-plan.js';
 import { BONUS_TEXT, lootWords, powerDone } from './crooked-text.js';
 
@@ -123,13 +123,12 @@ describe('bonus chests', () => {
   it('stop the Keeper beside them', () => {
     const r = room('pantry');
     const p = chestPoint(r);
-    const at = keepOffChest(r, { x: p.x, z: p.z - 0.1 });
-    expect(Math.hypot(at.x - p.x, at.z - p.z)).toBeCloseTo(CROOKED_WALK.margin + 0.2);
+    const view = { rooms: [], unlocked: [], bonusOpen: [], keys: [] };
+    const step = (to: { x: number; z: number }) => houseStep(r, view, to, to).at;
+    const at = step({ x: p.x, z: p.z - 0.1 });
+    expect(p.z - at.z).toBeCloseTo(CHEST_SIZE.d / 2 + CROOKED_BODY.radius + CROOKED_BODY.pad);
     const clear = { x: p.x, z: p.z - 1.2 };
-    expect(keepOffChest(r, clear)).toEqual(clear);
-    // Main rooms have no chest to bump.
-    const hall = room('front-hall');
-    expect(keepOffChest(hall, { x: 0, z: 0 })).toEqual({ x: 0, z: 0 });
+    expect(step(clear)).toEqual(clear);
   });
 });
 
