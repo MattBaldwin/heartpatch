@@ -229,6 +229,26 @@ export function watchLayout(
   };
 }
 
+/**
+ * The height (px) the sheet is held to as the controls change from `previous`
+ * to `next`, or null for none. A turn playing is "waiting" (the server's
+ * answer) then "hidden" (the log): the sheet takes the height its pick had
+ * when the turn starts, keeps it from one to the other, and lets go at the
+ * next pick, "Who comes out?" or the result (#656). `height` is the sheet's
+ * height now, `held` what it is held to already.
+ */
+export function sheetHold(
+  previous: ControlMode['type'] | undefined,
+  next: ControlMode['type'],
+  height: number,
+  held: number | null,
+): number | null {
+  const turn = (type: ControlMode['type'] | undefined) => type === 'waiting' || type === 'hidden';
+  if (!turn(next)) return null;
+  if (turn(previous)) return held;
+  return height > 0 ? height : null;
+}
+
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
     const name = el('span', { class: 'battle-plate-name' });
@@ -506,7 +526,28 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   /** The "ⓘ More" view of the move buttons (#565): each one adds its own words and chances. */
   let moreMoves = false;
 
+  // While a turn plays ("waiting" for the server, then "hidden" for the log) the
+  // sheet keeps the height the pick gave it: the controls leave, the sheet stays,
+  // and the camera, which frames the fight above the sheet, has nothing to chase
+  // (#656). The pick's height is measured as the pick goes, so it is the real
+  // one for this screen, moves and Swap and all. A resize drops the hold; the
+  // next pick measures again.
+  const holdHeight = (mode: ControlMode): void => {
+    const held = sheetHold(
+      sheet.dataset['mode'] as ControlMode['type'] | undefined,
+      mode.type,
+      sheet.getBoundingClientRect().height,
+      sheet.style.minHeight === '' ? null : Number.parseFloat(sheet.style.minHeight),
+    );
+    sheet.style.minHeight = held === null ? '' : `${String(held)}px`;
+  };
+  const dropHeld = () => {
+    sheet.style.minHeight = '';
+  };
+  window.addEventListener('resize', dropHeld);
+
   const setControls = (mode: ControlMode): void => {
+    holdHeight(mode);
     controls.replaceChildren();
     let tipText = '';
     // Back from the potion picker: the caption returns.
@@ -899,6 +940,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       return !hud.hidden;
     },
     dispose: () => {
+      window.removeEventListener('resize', dropHeld);
       stopWatching();
       stopWatchingSheet();
       for (const p of Object.values(plates)) window.clearTimeout(p.timer);

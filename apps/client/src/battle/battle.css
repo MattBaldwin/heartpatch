@@ -969,6 +969,27 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   .battle-sheet[data-mode='choose'] .battle-row {
     gap: 4px;
   }
+
+  /* A squishy with four moves has two rows of two-line buttons plus the
+     two-row Heart Charm and Run away block, and on an iPhone SE (667 pt,
+     no home bar) that ran 12 pt past the sheet (#656). Less air between and
+     around the rows, not smaller buttons: each move is still about 70 pt
+     tall and every other control keeps its 44 pt. */
+  .battle-sheet {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  }
+
+  .battle-sheet[data-mode='choose'] > .battle-caption {
+    padding-block: 2px;
+  }
+
+  .battle-moves {
+    gap: 6px;
+  }
+
+  .hp-button.battle-move {
+    padding-block: calc(var(--hp-pad-y) - 2px) calc(var(--hp-pad-y) - 1px);
+  }
 }
 
 /* A live battle's three-column pick is narrow: name, kind chip with its
