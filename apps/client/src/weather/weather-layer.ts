@@ -130,8 +130,11 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       const refresh = (): void => {
         const mode = host.mode();
         placer.setFronts(store.view?.today.fronts ?? []);
-        // Rain shows unless ambient is off (low tier, slow device, WebGPU).
-        placer.setRainShare(mode === 'off' || !rainPlugin ? 0 : moteShare(options.tier()));
+        // Rain by tier (none on low) where the plugin runs (not WebGPU). A slow
+        // device's ambient goes `off` a few seconds in, which stops the clock:
+        // the streaks then hold still, as under reduced motion, rather than
+        // vanish (#621). A still mesh costs nothing between frames.
+        placer.setRainShare(rainPlugin ? moteShare(options.tier()) : 0);
         // The low tier's clouds are fewer and lighter, as well as rainless.
         placer.setClouds(options.tier() === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());

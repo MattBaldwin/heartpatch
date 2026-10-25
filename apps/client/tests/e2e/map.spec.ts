@@ -494,7 +494,7 @@ test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; re
 test('a real tap on the weather chip opens the Forecast sheet, and the top bar fits a 375pt phone (#621)', async ({
   browser,
 }) => {
-  test.setTimeout(120_000); // one signup through the Keeper picker; CI renders in software
+  test.setTimeout(180_000); // one signup through the Keeper picker, 40 s of rain; CI renders in software
   const page = await newPlayer(browser, uniqueName('sky'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -514,12 +514,38 @@ test('a real tap on the weather chip opens the Forecast sheet, and the top bar f
     return top !== null && node.contains(top);
   });
   expect(hit).toBe(true);
+  // Rain over my home, an hour in (the server's clock), read when the sheet opens.
+  const mapId = (await mapState(page))!.id;
+  const sky = await page.request.get(`/api/v1/maps/${mapId}/weather`);
+  const serverTime = Date.parse(((await sky.json()) as { serverTime: string }).serverTime);
+  const rained = await page.request.post(`/api/v1/maps/${mapId}/dev/weather`, {
+    data: { kind: 'rain', hours: 6, at: new Date(serverTime - 3_600_000).toISOString() },
+    headers: { 'x-requested-with': 'heartpatch' },
+  });
+  expect(rained.ok()).toBe(true);
+  const opened = Date.now();
   // A real click (no force, no dispatched event): the sheet opens, the legend stays shut.
   await chip.click();
   await expect(page.getByTestId('weather-sheet')).toBeVisible();
   await expect(page.getByTestId('map-legend-button')).not.toHaveAttribute('aria-expanded', 'true');
   await page.getByTestId('weather-close').click();
   await expect(page.getByTestId('weather-sheet')).toBeHidden();
+
+  // The rain keeps falling for the whole front: a slow (software-rendered)
+  // device's ambient goes off a few seconds in, and the streaks hold still
+  // then rather than vanish (#621 round 3).
+  const rain = () =>
+    page.evaluate(
+      () =>
+        (
+          window as Window & { __heartpatch?: { weather?: () => { rain: number } } }
+        ).__heartpatch?.weather?.().rain ?? 0,
+    );
+  await expect.poll(rain, { timeout: 30_000 }).toBeGreaterThan(0);
+  for (const at of [15_000, 40_000]) {
+    await expect.poll(() => Date.now() - opened, { timeout: 60_000 }).toBeGreaterThan(at);
+    expect(await rain(), `rain ${String(at / 1000)}s in`).toBeGreaterThan(0);
+  }
 
   // iPhone SE width: "My patches" ends before the 🐾 button begins.
   await page.setViewportSize({ width: 375, height: 667 });

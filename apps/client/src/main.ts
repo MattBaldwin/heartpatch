@@ -2092,6 +2092,7 @@ if (import.meta.env.DEV) {
     testScenes: () => testScenesBuilt,
     hitchesExpected: () => stage?.quality.hitchesExpected ?? 0,
     map: () => maps.debug,
+    weather: () => weatherLayer.stats(),
     trays: () => trays.debug,
     recipeBook: () => recipeBook.debug,
     tutorial: () => tutorial.debug,

@@ -18,6 +18,7 @@ import type { FarHollowSheetDebug } from '../hollowed/far-hollow-sheet.js';
 import type { CrookedDebug } from '../far-hollow/house/crooked-screen.js';
 import type { CommunityFlags } from '../hollowed/community-flags.js';
 import type { MapDebug } from '../map/map-screen.js';
+import type { WeatherStats } from '../weather/weather-layer.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TileBuildDebug } from '../building/tile-build.js';
@@ -81,6 +82,8 @@ declare global {
        * Only the game page has it (not dev pages like the squishy gallery).
        */
       map?(): MapDebug | null;
+      /** What the Wild Isle weather layer draws now (#621): counts, ambient mode, refills. */
+      weather?(): WeatherStats;
       /**
        * Map controls for e2e (#295): `select` opens a tile's panel as a tap
        * would, without hunting for it on a slow software-rendered canvas.
