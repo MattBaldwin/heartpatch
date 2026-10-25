@@ -1,16 +1,13 @@
 import {
   addDays,
   canFade,
-  fadePercent,
+  clockFadePercent,
+  clockMood,
+  fadeClock,
   HOLLOW_RULES,
-  heartSeedOf,
-  landMood,
-  missesYouAt,
   TERRITORY_RULES,
   tilesGoingWild,
-  wildFrom,
   wildPerNight,
-  type Hex,
   type LandTending,
   type LocalDate,
   type PublicUser,
@@ -23,6 +20,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
 import { rewildTiles } from './rewild.js';
+import { heartSeeds, mapPatchRules, refreshSupply } from './supply.js';
 
 /*
  * Land that misses you (owner decision 2026-10-06, design review Q2;
@@ -33,6 +31,10 @@ import { rewildTiles } from './rewild.js';
  * tiles and the ring round them never fade; tutorial maps never do. Nothing
  * ticks: fading is worked out on read, and going wild runs in the nightfall
  * job after the Hollow Man (`src/index.ts`).
+ *
+ * On a Wild Isle (#621) land cut off from home is stranded too
+ * (`tile_tending.stranded_since`, `supply.ts`): it fades by whichever clock
+ * ends first and goes wild under the same per-night cap, cause `stranded`.
  */
 
 export interface LandTendingService {
@@ -69,18 +71,6 @@ const quiet = (at: Date): LandTending => ({
   now: at.toISOString(),
 });
 
-/** Each owner's Heart Seed, from the map's home tiles (their first home's: #306 PR 3). */
-function heartSeeds(
-  homeTiles: readonly { ownerUserId: string; q: number; r: number; communityId: string | null }[],
-) {
-  const homes = new Map<string, Hex[]>();
-  for (const { ownerUserId, q, r, communityId } of homeTiles) {
-    if (communityId !== null) continue;
-    homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
-  }
-  return new Map([...homes].map(([owner, tiles]) => [owner, heartSeedOf(tiles)]));
-}
-
 export function createLandTending(options: LandTendingOptions): LandTendingService {
   const { db } = options;
   const store = createTendingRepo(db);
@@ -97,28 +87,42 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
   ): Promise<LandTending> => {
     const repo = createTendingRepo(executor);
     const today = localDate(at, timeZone);
-    const [tiles, homes, wentWild] = await Promise.all([
+    const [tiles, homes, wentWild, patch] = await Promise.all([
       repo.outerTiles(mapId, userId),
       createSquishyJobsRepo(executor).homeTiles(mapId),
       repo.wentWildSince(mapId, userId, addDays(today, -WENT_WILD_NIGHTS)),
+      mapPatchRules(executor, mapId),
     ]);
+    // Wild Isle (#621): cut-off land fades too. Null on a Cozy Patch.
+    const strandedRules = patch?.travel?.stranded ?? null;
     const seed = heartSeeds(homes).get(userId) ?? null;
     const missing: LandTending['missing'] = [];
+    const stranded: NonNullable<LandTending['stranded']> = [];
     let next: number | null = null;
     for (const tile of tiles) {
       if (!canFade({ ...tile, homeSlot: null }, seed, rules)) continue;
       // No row yet: land held before tending existed; nightfall gives it one.
       const tendedAt = tile.tendedAt ?? at;
-      if (landMood(tendedAt, at, rules) === 'happy') {
-        const starts = missesYouAt(tendedAt, rules).getTime();
+      const strandedSince = tile.strandedSince ?? null;
+      const clock = fadeClock(tendedAt, strandedSince, rules, strandedRules);
+      if (strandedRules && strandedSince !== null) {
+        stranded.push({
+          q: tile.q,
+          r: tile.r,
+          since: strandedSince.toISOString(),
+          wildAt: clock.end.toISOString(),
+        });
+      }
+      if (clockMood(clock, at) === 'happy') {
+        const starts = clock.start.getTime();
         next = next === null ? starts : Math.min(next, starts);
         continue;
       }
       missing.push({
         q: tile.q,
         r: tile.r,
-        fade: fadePercent(tendedAt, at, rules),
-        wildFrom: wildFrom(tendedAt, rules).toISOString(),
+        fade: clockFadePercent(clock, at),
+        wildFrom: clock.end.toISOString(),
       });
     }
     return {
@@ -126,6 +130,7 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
       wentWild,
       nextMissesYouAt: next === null ? null : new Date(next).toISOString(),
       now: at.toISOString(),
+      ...(strandedRules ? { stranded } : {}),
     };
   };
 
@@ -156,6 +161,19 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
       // Land held before tending existed gets a row (tended now), on its own:
       // inserts only, before the transaction below takes any tile lock.
       await store.fillMissing(mapId, now());
+      // Wild Isle (#621): every Keeper's supply line, afresh, in its own
+      // transaction holding no tile lock (so it may wait for tending rows):
+      // it puts right any a busy capture or road command skipped.
+      const strandedRules = (await mapPatchRules(db, mapId))?.travel?.stranded ?? null;
+      if (strandedRules) {
+        const supplied = await store.transaction(async (repo, tx) => {
+          const owners = [...new Set((await repo.outerTiles(mapId)).map((t) => t.ownerUserId))];
+          const events = await refreshSupply(tx, mapId, owners, now(), { wait: true });
+          for (const event of events) await repo.appendEvent(event);
+          return events.length;
+        });
+        if (supplied > 0) void options.publish?.(mapId);
+      }
       const result = await store.transaction(async (repo, tx) => {
         // The cutoff is the job's own time, a few minutes past nightfall at
         // most (retries); the per-night cap bounds what that can change.
@@ -175,11 +193,14 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
         const candidates = tiles.map((t) => ({ ...t, homeSlot: null, tendedAt: t.tendedAt ?? at }));
         // The cap is per player per night: a second run tops up to it, never past.
         const left = new Map<string, number>();
-        const picked = tilesGoingWild(candidates, heartSeeds(homes), at, cap, rules).filter((t) => {
-          const n = left.get(t.ownerUserId) ?? cap - (done.get(t.ownerUserId) ?? 0);
-          left.set(t.ownerUserId, n - 1);
-          return n > 0;
-        });
+        const seeds = heartSeeds(homes);
+        const picked = tilesGoingWild(candidates, seeds, at, cap, rules, strandedRules).filter(
+          (t) => {
+            const n = left.get(t.ownerUserId) ?? cap - (done.get(t.ownerUserId) ?? 0);
+            left.set(t.ownerUserId, n - 1);
+            return n > 0;
+          },
+        );
         if (picked.length === 0) return { wild: 0 };
 
         // Lock order (tech spec §7): the tiles (id order), their tending rows
@@ -189,20 +210,25 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
         const owners = new Map((await repo.lockTiles(ids)).map((t) => [t.id, t.ownerUserId]));
         const tended = await repo.lockTending(ids);
         const going: TendingTileRow[] = [];
+        const stranded = new Set<string>();
         for (const tile of picked) {
-          // Still theirs, still untended (a Visit may have landed since the
-          // read), and no battle for it in the last few hours.
+          // Still theirs, still untended or cut off (a Visit or a road may
+          // have landed since the read), and no battle for it in the last
+          // few hours.
           if (owners.get(tile.id) !== tile.ownerUserId) continue;
           const fresh = tended.get(tile.id);
-          if (!fresh || landMood(fresh, at, rules) !== 'going-wild') continue;
+          if (!fresh) continue;
+          const clock = fadeClock(fresh.tendedAt, fresh.strandedSince, rules, strandedRules);
+          if (clockMood(clock, at) !== 'going-wild') continue;
           // A skipped tile isn't swapped for the next one: a gentler night.
           const cooldown = await territory.cooldownUntil(tile.id);
           if (cooldown !== null && cooldown > at) continue;
           going.push(tile);
+          if (clock.stranded) stranded.add(tile.id);
         }
         if (going.length === 0) return { wild: 0 };
 
-        const events = await rewildTiles(tx, map, going, night, at, 'untended');
+        const events = await rewildTiles(tx, map, going, night, at, 'untended', stranded);
         for (const event of events) await repo.appendEvent(event);
         return { wild: going.length };
       });
