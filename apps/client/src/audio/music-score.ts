@@ -171,7 +171,7 @@ const MAJ7 = [0, 4, 7, 11] as const;
 const MIN7 = [0, 3, 7, 10] as const;
 const chord = (root: number, tones: readonly number[]): Chord => [root, ...tones];
 
-/** Twice through the same chords: the tune, then its dressed-up repeat. */
+/** Twice through the same chords: the tune, then its repeat in new clothes. */
 const twice = (progression: readonly Chord[]): Chord[] => [...progression, ...progression];
 
 const DAY_TUNE: Line = [
