@@ -61,7 +61,8 @@ export const postSellRoutes =
           legacyBasket(body),
         );
         const [line] = sold.lines;
-        return { sold: line!, sell };
+        if (!line) throw new Error('post-sell: a one-line basket sold no line');
+        return { sold: line, sell };
       },
     );
 

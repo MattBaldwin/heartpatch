@@ -295,7 +295,7 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     expect(res.statusCode, res.body).toBe(200);
     const sold = SellResponseSchema.parse(res.json());
     // A legacy one-line request (#655) answers in the legacy shape, not a basket's.
-    expect((res.json() as { sold: object }).sold).toEqual({
+    expect(res.json<{ sold: object }>().sold).toEqual({
       kind: 'item',
       itemId: 'timber',
       quantity: 3 * TIMBER.lot,
@@ -703,7 +703,9 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
         { kind: 'clothing', itemId: BEANIE, count: 1 },
       ]);
       expect(one.statusCode, one.body).toBe(200);
+      // a went: the only free piece no offer names.
       expect(await pieceIds(kid, BEANIE)).toEqual([b!.id, c!.id, d!.id]);
+      expect(await pieceIds(kid, BEANIE)).not.toContain(a!.id);
     });
 
     it('the keep holds per item inside a basket', async () => {

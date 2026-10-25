@@ -31,8 +31,9 @@ import { createPostSellRepo, SELL_REASON } from './repo.js';
 
 /*
  * Selling extras to the trading post for Heart Coins (#601 PR 3; #320 part
- * 1, owner decisions 2026-10-22): whole lots of a resource or crafted item
- * from the bag, or one spare piece of clothing, at a post the player can use
+ * 1, owner decisions 2026-10-22; baskets #655): a basket of lines, each
+ * whole lots of a resource or crafted item from the bag or spare pieces of a
+ * clothing item, at a post the player can use
  * (connected, or a journey's visit pass, #270). Prices are shared data
  * (`SELL_RULES`); the day's cap is Heart Coins' own (`dailyCaps.sell`, the
  * patch's day). Never sold: tools and anything else that stays with its
@@ -40,9 +41,10 @@ import { createPostSellRepo, SELL_REASON } from './repo.js';
  * `tradable`), the last free copy of a piece, a piece a patch-mate's open
  * offer names, and the most one open recipe uses of an item, so a craft
  * always stays possible. Server-authoritative and atomic (CLAUDE.md rules 1
- * and 7): one transaction takes the items (or deletes the piece) and pays
- * the Heart Coins, both against the sale id, and a sale past the cap is
- * refused before anything moves. Works with trading off: nobody else is
+ * and 7): one transaction takes every line's items and pieces and pays the
+ * Heart Coins once, all against one sale id, or moves nothing: a basket
+ * past the cap, or with any line refused, is refused whole before anything
+ * moves. Works with trading off: nobody else is
  * involved. No undo (the client confirms first) and no game event: nobody
  * else sees a sale. Not on the Tutorial Glade, which pays no Heart Coins.
  */
