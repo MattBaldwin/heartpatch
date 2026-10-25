@@ -93,7 +93,7 @@ for (const name of devices) {
       device: name,
       tier: TIER,
       label: LABEL,
-      caption: 'The Keeper in the house',
+      caption: 'The Keeper in the house, at kid height',
       view: 'world',
     });
     console.log('shot', file);

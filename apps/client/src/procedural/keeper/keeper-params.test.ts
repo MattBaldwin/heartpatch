@@ -398,7 +398,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"b29726f984956d6fcf8384bf301f8548"`,
+      `"ec7a73d840234fb9963b8cd532ccc762"`,
     );
   });
 });
@@ -650,7 +650,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       }
     }
     expect(lines.length).toBe(120);
-    expect(hashString(lines.join('\n'))).toBe('c7871b1f0a0888da55db6cc07dd598ee');
+    expect(hashString(lines.join('\n'))).toBe('86853c478b31bcf68ad84bb3053adb81');
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {

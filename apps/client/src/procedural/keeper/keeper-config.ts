@@ -33,12 +33,12 @@ export const KEEPER = {
     /** The torso's half width at the shoulder when it is a squarish capsule, of its full half width. */
     squareHalf: 0.97, // TUNE
     /** A hand stays this far (of its own size) outside the shorts' side. */
-    handClear: 0.45, // TUNE
-    /** How far out the arm hangs, as the sine of its angle: least, most (about 10° to 30°). */
-    splay: [0.17, 0.5], // TUNE
+    handClear: 0.75, // TUNE
+    /** How far out the arm hangs, as the sine of its angle: least, most (about 12° to 37°). */
+    splay: [0.2, 0.6], // TUNE
   },
   /** Sleeves cover this much of the arm from the shoulder. */
-  sleeve: 0.4, // TUNE
+  sleeve: 0.34, // TUNE
   /** Face features, as fractions of the head's own size. */
   face: {
     eyeSpread: 0.19, // TUNE: eye centre from the middle, of head width
