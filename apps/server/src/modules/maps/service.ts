@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
+  DEFAULT_PATCH_TYPE,
   formatInviteCode,
   GAME_DATA,
   generateMap,
@@ -61,6 +62,7 @@ import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/c
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
+import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
 
 export interface MapsService {
   myMaps: (user: PublicUser) => Promise<MyMapsResponse>;
@@ -97,6 +99,8 @@ export interface MapsServiceOptions {
   tutorialRequired: boolean;
   /** `HP_KEEPER_REQUIRED`: creating or joining needs a Keeper (#42). */
   keeperRequired: boolean;
+  /** `HP_WILD_ISLE` (#621): who can make a Wild Isle; off when left out. */
+  wildIsle?: WildIsleSwitch;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -137,6 +141,8 @@ const MESSAGES = {
     "This Keeper also plays in a patch you don't own. Ask the grown-up who runs Heartpatch to reset it.",
   noRoom: "This patch can't take new Keepers.",
   notReady: (username: string) => `${username} is still getting ready. Try again soon!`,
+  wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
+  wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
 } as const;
 
 /** How many times to retry on the (very unlikely) chance a new code is taken. */
@@ -242,6 +248,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const guardians = options.guardians ?? defaultGuardianData();
   const store = createMapsRepo(db);
   const keepersRepo = createKeepersRepo(db);
+  const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
@@ -281,9 +288,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
     const { map, role } = await requireMember(db, user, mapId, PATCHES);
-    const [members, starter] = await Promise.all([
+    const [members, starter, patchType] = await Promise.all([
       store.listMembers(mapId),
       starterPick(db, mapId, user.id),
+      store.patchTypeOf(mapId),
     ]);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
@@ -305,6 +313,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       pvpMode: map.pvpMode,
       tradingEnabled: map.tradingEnabled,
       friendlyChallenges: map.friendlyChallenges,
+      patchType,
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
@@ -422,7 +431,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         store.listMyMaps(user.id),
         store.listMyPendingRequests(user.id),
       ]);
-      return { maps, requests: requests.map(toRequest) };
+      return {
+        maps,
+        requests: requests.map(toRequest),
+        canMakeWildIsle: wildIsleOpenFor(wildIsle, user),
+      };
     },
 
     create: async (user, input) => {
@@ -431,16 +444,30 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       if (timeZone === null) throw new AppError('VALIDATION_FAILED', MESSAGES.timeZone);
       await assertKeeperChosen(user);
       await assertTutorialDone(user);
+      const patchType = input.patchType ?? DEFAULT_PATCH_TYPE;
+      const maxPlayers = MAP_MAX_PLAYERS;
+      // The switch and the seat count before the seed: a refused Wild Isle
+      // never draws one (#621). Only the Wild layouts in data can be made.
+      if (patchType === 'wild-isle') {
+        if (!wildIsleOpenFor(wildIsle, user)) {
+          throw new AppError('FORBIDDEN', MESSAGES.wildIsleClosed);
+        }
+        if (!(GAME_DATA.mapGen.wildIsle?.layouts.some((l) => l.players === maxPlayers) ?? false)) {
+          throw new AppError('FORBIDDEN', MESSAGES.wildIsleSeats);
+        }
+      }
 
       // Generate once and store it all (design doc §3): every seat's home base
       // exists from the start, so joining never resizes the map. The seed is
       // secret and never leaves the server (tech spec §8).
+      // A Wild Isle's ocean is stored too, every tile (revision 1).
       const seed = newSeed();
-      const maxPlayers = MAP_MAX_PLAYERS;
       const generated = generateMap(GAME_DATA, {
         seed,
         playerCount: maxPlayers,
         cellarKeys: CELLAR_RULES.keyFromVillage,
+        // Left out for a Cozy Patch, so it stays byte for byte as before.
+        ...(patchType === 'wild-isle' ? { patchType } : {}),
       });
       const homeSlot = 0;
 
@@ -448,7 +475,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         store.transaction(async (repo, tx) => {
           // Ordered against an owner resetting this player (decision D scope check).
           await repo.lockUser(user.id);
-          const map = await repo.insertMap({ name: input.name, timeZone, seed, maxPlayers });
+          const map = await repo.insertMap({
+            name: input.name,
+            timeZone,
+            seed,
+            maxPlayers,
+            patchType,
+          });
           await repo.upsertMember({
             mapId: map.id,
             userId: user.id,
@@ -481,6 +514,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               maxPlayers,
               homeSlot,
               heartSeed: heartSeedOf(home),
+              patchType,
             },
           });
           return map.id;
@@ -507,19 +541,21 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
-        const [members, tiles, buildings, fences, seed, explored, seen] = await Promise.all([
-          repo.listMembers(mapId),
-          repo.listTiles(mapId),
-          // Fires and habitats (#18), with `lit` as of now.
-          listPublicBuildings(tx, mapId, at, map.timeZone),
-          // Fence segments on edges (#203), with their energy.
-          listPublicFences(tx, mapId),
-          createTerritoryRepo(tx).mapSeed(mapId),
-          // Land its owner has fully explored, and their homesteads (#199).
-          createExploreRepo(tx).listOwnersExplored(mapId),
-          // Species this viewer has met, to mask gatherers' looks (#602).
-          createSpawnsRepo(tx).listSeen(mapId, user.id),
-        ]);
+        const [members, tiles, buildings, fences, seed, explored, seen, patchType] =
+          await Promise.all([
+            repo.listMembers(mapId),
+            repo.listTiles(mapId),
+            // Fires and habitats (#18), with `lit` as of now.
+            listPublicBuildings(tx, mapId, at, map.timeZone),
+            // Fence segments on edges (#203), with their energy.
+            listPublicFences(tx, mapId),
+            createTerritoryRepo(tx).mapSeed(mapId),
+            // Land its owner has fully explored, and their homesteads (#199).
+            createExploreRepo(tx).listOwnersExplored(mapId),
+            // Species this viewer has met, to mask gatherers' looks (#602).
+            createSpawnsRepo(tx).listSeen(mapId, user.id),
+            repo.patchTypeOf(mapId),
+          ]);
         const met = new Set(seen.map((row) => row.speciesId));
         // Trading posts (#269), named by their place in (q, r) order.
         const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
@@ -549,6 +585,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             timeZone: map.timeZone,
             pvpMode: map.pvpMode,
             maxPlayers: map.maxPlayers,
+            patchType,
           },
           members: members.map(toMember),
           tiles: tiles.map((tile) =>

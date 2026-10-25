@@ -95,6 +95,7 @@ import { mapsRoutes } from './modules/maps/routes.js';
 import { signupCodesRoutes } from './modules/signup-codes/routes.js';
 import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
+import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
 import { boutiqueRoutes } from './modules/boutique/routes.js';
@@ -267,6 +268,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           },
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
+          // Who can make a Wild Isle (#621), off by default.
+          wildIsle: wildIsleSwitchOf(config),
           clock,
           log: app.log,
           ...(wsHub ? { publish: wsHub.publish } : {}),

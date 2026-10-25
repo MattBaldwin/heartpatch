@@ -213,6 +213,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         pvpMode: 'gentle',
         role: 'owner',
         maxPlayers: MAP_MAX_PLAYERS,
+        patchType: 'cozy',
         members: [{ user: { id: owner.id, username: owner.username }, role: 'owner', homeSlot: 0 }],
       });
       expect(map.admin!.invite!.code).toMatch(/^[2-9A-HJKMNP-TV-Z]{4}-[2-9A-HJKMNP-TV-Z]{4}$/);
@@ -250,6 +251,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         maxPlayers: MAP_MAX_PLAYERS,
         homeSlot: 0,
         heartSeed: generated.homes[0],
+        patchType: 'cozy',
       });
 
       // The seed appears in no response.
@@ -283,10 +285,12 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
             memberCount: 1,
             maxPlayers: MAP_MAX_PLAYERS,
             pvpMode: 'gentle',
+            patchType: 'cozy',
             pendingRequests: 0,
           },
         ],
         requests: [],
+        canMakeWildIsle: false,
       });
     });
 
@@ -376,6 +380,147 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('Wild Isle (#621)', () => {
+    const wildIsle = (who: Player, extra: object = {}) =>
+      call(server!, 'POST', '/maps', who, {
+        name: 'Splash Cove',
+        timeZone: 'UTC',
+        patchType: 'wild-isle',
+        ...extra,
+      });
+    let server: FastifyInstance | undefined;
+    const canMake = async (who: Player) =>
+      MyMapsResponseSchema.parse((await call(server!, 'GET', '/maps', who)).json()).canMakeWildIsle;
+    const mapsOwnedBy = async (who: Player) =>
+      (
+        await db.query.mapMembers.findMany({
+          where: (t, { and, eq }) => and(eq(t.userId, who.id), eq(t.role, 'owner')),
+        })
+      ).length;
+
+    it('makes a Cozy Patch when no type is sent, and when cozy is', async () => {
+      server = await start({ HP_WILD_ISLE: 'on' });
+      const owner = await player();
+      const plain = await createMap(server, owner);
+      const cozy = MapResponseSchema.parse(
+        (await wildIsle(owner, { patchType: 'cozy' })).json(),
+      ).map;
+      for (const map of [plain, cozy]) {
+        expect(map.patchType).toBe('cozy');
+        const row = await mapRow(map.id);
+        expect(row?.patchType).toBe('cozy');
+        // Byte for byte the generator's Cozy output, with no isles.
+        const generated = generateMap(GAME_DATA, {
+          seed: row!.seed!,
+          playerCount: MAP_MAX_PLAYERS,
+        });
+        const stored = await tilesOf(map.id);
+        expect(stored).toHaveLength(generated.tiles.length);
+        expect(stored.every((t) => t.isle === null)).toBe(true);
+        expect(
+          stored.some((t) => ['ocean', 'river', 'coast', 'wild-lake'].includes(t.terrain)),
+        ).toBe(false);
+      }
+    });
+
+    it('refuses a Wild Isle while the switch is off, before making anything', async () => {
+      server = await start();
+      const owner = await player();
+      expect(await canMake(owner)).toBe(false);
+      const res = await wildIsle(owner);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res)).toMatchObject({ code: 'FORBIDDEN', message: /Cozy Patch/ });
+      expect(await mapsOwnedBy(owner)).toBe(0);
+      // A Cozy Patch still works.
+      expect((await createMap(server, owner)).patchType).toBe('cozy');
+    });
+
+    it('lets only the testers make one while the switch is on testers', async () => {
+      const tester = await player();
+      const other = await player();
+      // Case doesn't matter, and spaces around a name are trimmed.
+      server = await start({
+        HP_WILD_ISLE: 'testers',
+        HP_WILD_ISLE_TESTERS: ` someone_else , ${tester.username.toUpperCase()} `,
+      });
+      expect(await canMake(tester)).toBe(true);
+      expect(await canMake(other)).toBe(false);
+      expect((await wildIsle(other)).statusCode).toBe(403);
+      expect(await mapsOwnedBy(other)).toBe(0);
+      const res = await wildIsle(tester);
+      expect(res.statusCode).toBe(201);
+      expect(MapResponseSchema.parse(res.json()).map.patchType).toBe('wild-isle');
+    });
+
+    it('stores a Wild Isle with its type, every tile and its water', async () => {
+      server = await start({ HP_WILD_ISLE: 'on' });
+      const owner = await player();
+      expect(await canMake(owner)).toBe(true);
+      const res = await wildIsle(owner);
+      expect(res.statusCode).toBe(201);
+      const map = MapResponseSchema.parse(res.json()).map;
+      expect(map).toMatchObject({ patchType: 'wild-isle', maxPlayers: 6, role: 'owner' });
+
+      const row = await mapRow(map.id);
+      expect(row?.patchType).toBe('wild-isle');
+      const generated = generateMap(GAME_DATA, {
+        seed: row!.seed!,
+        playerCount: MAP_MAX_PLAYERS,
+        patchType: 'wild-isle',
+      });
+      // Every tile, ocean included (revision 1): 1027 at radius 18.
+      const stored = await tilesOf(map.id);
+      expect(stored).toHaveLength(1027);
+      expect(generated.tiles).toHaveLength(1027);
+      const byKey = new Map(stored.map((t) => [`${t.q},${t.r}`, t]));
+      for (const t of generated.tiles) {
+        expect(byKey.get(`${t.q},${t.r}`)).toMatchObject({
+          terrain: t.terrain,
+          nodeResource: t.nodeResource,
+          guardianStrength: t.guardianStrength,
+          homeSlot: t.homeSlot,
+          isle: t.isle ?? null,
+          ownerUserId: t.homeSlot === 0 ? owner.id : null,
+        });
+      }
+      const terrains = new Set(stored.map((t) => t.terrain));
+      for (const water of ['ocean', 'river', 'wild-lake', 'coast'])
+        expect(terrains).toContain(water);
+      expect(stored.some((t) => t.isle !== null)).toBe(true);
+      // Its communities arrive as on Cozy.
+      expect(
+        await db.query.communities.findMany({ where: (t, { eq }) => eq(t.mapId, map.id) }),
+      ).toHaveLength(generated.communities.length);
+
+      const [created] = await eventsOf(map.id);
+      expect(created?.type).toBe('map.created');
+      expect(payloadOf('map.created', created!.payload)).toEqual({
+        name: 'Splash Cove',
+        timeZone: 'UTC',
+        pvpMode: 'gentle',
+        maxPlayers: MAP_MAX_PLAYERS,
+        homeSlot: 0,
+        heartSeed: generated.homes[0],
+        patchType: 'wild-isle',
+      });
+
+      // The lobby, the detail and the view say so; the view keeps the ocean.
+      const list = MyMapsResponseSchema.parse((await call(server, 'GET', '/maps', owner)).json());
+      expect(list.maps.map((m) => m.patchType)).toEqual(['wild-isle']);
+      expect((await getMap(server, map.id, owner)).patchType).toBe('wild-isle');
+      const view = MapViewSchema.parse(
+        (await call(server, 'GET', `/maps/${map.id}/view`, owner)).json(),
+      );
+      expect(view.map.patchType).toBe('wild-isle');
+      expect(view.tiles).toHaveLength(1027);
+      // Reading it plants no node on the water (the extra-nodes top-up).
+      const after = await tilesOf(map.id);
+      for (const t of after.filter((x) => ['ocean', 'river', 'wild-lake'].includes(x.terrain))) {
+        expect(t.nodeResource).toBeNull();
+      }
+    });
+  });
+
   describe('invites and join requests', () => {
     it('code → request → approve: both players see the map (acceptance)', async () => {
       const server = await start();
@@ -396,7 +541,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       const waiting = MyMapsResponseSchema.parse(
         (await call(server, 'GET', '/maps', friend)).json(),
       );
-      expect(waiting).toEqual({ maps: [], requests: [request] });
+      expect(waiting).toEqual({ maps: [], requests: [request], canMakeWildIsle: false });
       // The owner's patch list says someone is waiting (#144).
       const ownerLobby = MyMapsResponseSchema.parse(
         (await call(server, 'GET', '/maps', owner)).json(),
@@ -464,6 +609,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         timeZone: 'America/Chicago',
         pvpMode: 'gentle',
         maxPlayers: MAP_MAX_PLAYERS,
+        patchType: 'cozy',
       });
       expect(view.members).toHaveLength(2);
       expect(view.tiles).toHaveLength(generated.tiles.length);
@@ -629,6 +775,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       ).toEqual({
         maps: [],
         requests: [],
+        canMakeWildIsle: false,
       });
       // They can ask again.
       await requestJoin(server, friend, inviteOf(map));
