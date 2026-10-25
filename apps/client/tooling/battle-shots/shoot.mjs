@@ -1,4 +1,4 @@
-/* global process, console, fetch, window */
+/* global process, console, window */
 // Captures the battle screen from the real game at iPhone and iPad sizes with
 // headless Chromium (SwiftShader WebGL), for the owner to judge the look. Dev
 // tooling only: `node tooling/battle-shots/shoot.mjs` with the dev servers
@@ -9,17 +9,12 @@
 // JPEGs and a stats JSON (draw calls per moment) into OUT. The default
 // Chromium path is the preinstalled one in the build container; set
 // PW_CHROMIUM_EXECUTABLE elsewhere.
-import { chromium } from '@playwright/test';
 import { GAME_DATA } from '@heartpatch/shared';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { api, battleDev, hook, launch, openBattle, shoot, signUpAndMakePatch } from './helpers.mjs';
 
 const OUT = process.env.OUT ?? path.resolve('.battle-shots');
-const BASE = process.env.BASE ?? 'http://localhost:5173';
-// Through the client dev server's proxy, like the game itself (same origin).
-const API = process.env.API ?? '/api/v1';
-const SIGNUP_CODE = process.env.HP_SIGNUP_CODE ?? 'heartpatch-dev-family';
-const QUALITY = Number(process.env.JPEG ?? 80);
 const ALL_DEVICES = {
   iphone: { width: 390, height: 844, dpr: 2 },
   ipad: { width: 1180, height: 820, dpr: 2 },
@@ -114,135 +109,8 @@ function attack(element, arena, mine, theirs, move) {
 
 const moveName = (id) => GAME_DATA.moves.find((m) => m.id === id)?.name ?? id;
 
-/** Calls the API from the page (its own session cookie), like the e2e specs do. */
-async function api(page, method, route, body) {
-  return page.evaluate(
-    async ({ method, route, body, base }) => {
-      const res = await fetch(`${base}${route}`, {
-        method,
-        headers: {
-          'x-requested-with': 'heartpatch',
-          ...(body ? { 'content-type': 'application/json' } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      const text = await res.text();
-      return { status: res.status, body: text ? JSON.parse(text) : null };
-    },
-    { method, route, body, base: API },
-  );
-}
-
-const hook = (page, name) => page.evaluate((n) => window.__heartpatch?.[n]?.() ?? null, name);
-
-async function signUpAndMakePatch(page, name) {
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
-  const overlay = page.getByTestId('auth-overlay');
-  await overlay.getByRole('button', { name: 'Sign up' }).click();
-  await overlay.getByLabel('Family or invite code').fill(SIGNUP_CODE);
-  await overlay.getByLabel('Pick a name').fill(name);
-  await overlay.getByLabel('Pick a password').fill('squishy-secret');
-  await overlay.getByLabel('Year you were born').selectOption('2014');
-  await overlay.getByRole('button', { name: 'Sign up' }).click();
-  await overlay.getByRole('button', { name: 'I saved it!' }).click();
-  // No story today (it's marked seen), straight to the Keeper pick.
-  await api(page, 'POST', '/cinematic/seen');
-  const picker = page.getByTestId('keeper-picker');
-  await picker.getByRole('button', { name: 'Clover', exact: true }).click();
-  await picker.getByRole('button', { name: 'That’s me!' }).click();
-  const lobby = page.getByTestId('lobby');
-  await lobby.getByRole('heading', { name: 'Your patches' }).waitFor({ timeout: 30_000 });
-  await lobby.getByRole('button', { name: 'Make a patch' }).click();
-  await lobby.getByLabel('Patch name').fill('Lantern Hour');
-  await lobby.getByRole('button', { name: 'Make it!' }).click();
-  await lobby.getByRole('button', { name: 'Visit patch' }).click();
-  const starter = page.getByTestId('starter-picker');
-  await starter.getByRole('button', { name: /^Puddlepuff,/ }).click({ timeout: 60_000 });
-  await starter.getByRole('button', { name: 'Choose Puddlepuff' }).click();
-  await starter.getByRole('button', { name: 'Let’s go!' }).click({ timeout: 60_000 });
-  await page.waitForFunction(() => window.__heartpatch?.map?.()?.id, null, { timeout: 120_000 });
-  return hook(page, 'map').then((m) => m.id);
-}
-
-/** Ends the battle on the map, if any, so the next moment gets a fresh one. */
-async function endCurrentBattle(page, mapId) {
-  const current = await api(page, 'GET', `/maps/${mapId}/battles/current`);
-  const battle = current.body?.battle;
-  if (!battle || battle.status !== 'active') return;
-  await api(page, 'POST', `/battles/${battle.id}/actions`, {
-    action: { type: 'forfeit' },
-    turn: battle.view.turn,
-  });
-}
-
-async function openBattle(page, mapId, starterId, moment) {
-  await endCurrentBattle(page, mapId);
-  // The strongest resting squishy goes first: a fresh one at the wanted level.
-  const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, moment.mine);
-  if (granted.status !== 201) throw new Error(`grant: ${JSON.stringify(granted.body)}`);
-  // It leads the team (the earlier moments' squishies would tie on strength), the starter behind it.
-  const team = await api(page, 'POST', `/maps/${mapId}/team`, {
-    squishyIds: [granted.body.squishy.id, ...(starterId ? [starterId] : [])],
-  });
-  if (team.status !== 200) throw new Error(`team: ${JSON.stringify(team.body)}`);
-  const started = await api(page, 'POST', `/maps/${mapId}/dev/battles`, {
-    opponent: moment.theirs,
-  });
-  if (started.status !== 201 && started.status !== 200) {
-    throw new Error(`battle: ${JSON.stringify(started.body)}`);
-  }
-  // Reload with the manual clock and the arena override: the game lands back on
-  // the last patch (#160) and the battle resumes. An older build (or a cleared
-  // store) shows the lobby instead, so visit the patch from there if it does.
-  await page.goto(`${BASE}/?battle-clock=manual&battle-arena=${moment.arena}&quality=high`, {
-    waitUntil: 'load',
-  });
-  const lobby = page.getByTestId('lobby');
-  const patchRow = lobby.getByRole('button', { name: /Lantern Hour/ });
-  const hud = page.getByTestId('battle-hud');
-  await hud.or(patchRow).first().waitFor({ timeout: 120_000 });
-  if (await patchRow.isVisible()) {
-    await patchRow.click({ timeout: 60_000 });
-    await lobby.getByRole('button', { name: 'Visit patch' }).click({ timeout: 60_000 });
-  }
-  await hud.waitFor({ timeout: 120_000 });
-  await page.waitForSelector('canvas[data-ready="true"]', { timeout: 180_000 });
-  await page.waitForFunction(
-    () => {
-      const b = window.__heartpatch?.battle?.();
-      return b && b.pending === 0 && !b.waiting && b.scene;
-    },
-    null,
-    { timeout: 120_000 },
-  );
-}
-
-/** Draws a couple of frames at the clock's time and waits for them. */
-async function settleFrames(page) {
-  const before = await page.evaluate(() => window.__heartpatch?.draws?.() ?? 0);
-  await page.evaluate(() => window.__heartpatch?.invalidate?.());
-  await page.waitForFunction((n) => (window.__heartpatch?.draws?.() ?? 0) >= n + 2, before, {
-    timeout: 120_000,
-  });
-}
-
-async function shoot(page, file) {
-  await settleFrames(page);
-  await page.screenshot({ path: file, type: 'jpeg', quality: QUALITY });
-  const battle = await hook(page, 'battle');
-  return battle?.scene ?? null;
-}
-
 await mkdir(OUT, { recursive: true });
-const browser = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM_EXECUTABLE ?? '/opt/pw-browsers/chromium',
-  args: [
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
-    '--ignore-gpu-blocklist',
-    '--enable-webgl',
-  ],
-});
+const browser = await launch();
 const stats = [];
 for (const device of DEVICES) {
   const size = ALL_DEVICES[device];
@@ -268,8 +136,7 @@ for (const device of DEVICES) {
       const started = Date.now();
       await openBattle(page, mapId, starterId, moment);
       // Idle: a little way in, so the ready stance and motes are mid-bob.
-      const dev = (fn, ms) =>
-        page.evaluate(({ fn, ms }) => window.__heartpatch?.battleDev?.()?.[fn](ms), { fn, ms });
+      const dev = (fn, ms) => battleDev(page, fn, ms);
       await dev('set', 400);
       let t0 = 400;
       if (moment.tap) {

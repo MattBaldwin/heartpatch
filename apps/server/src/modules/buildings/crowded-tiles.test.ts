@@ -83,6 +83,9 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['map_members', 'caught_count', 'integer default 0 not null'],
   ['map_members', 'kinds_built', "text[] default '{}'::text[] not null"],
   ['tiles', 'community_id', 'uuid'],
+  // Wild Isle (#621, migration 0059): a patch's type and a tile's isle.
+  ['maps', 'patch_type', "text default 'cozy' not null"],
+  ['tiles', 'isle', 'smallint'],
   // Resource buildings (#601, migration 0054): every `buildings` read names
   // them, the pack-up's too, so they go only after it (`PACK_READS`).
   ['buildings', 'produced_since', 'timestamptz'],

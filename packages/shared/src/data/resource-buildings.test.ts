@@ -28,6 +28,21 @@ describe('resource buildings and the Warehouse (#601)', () => {
     expect(problems).toMatch(/gap-hut.terrain: "juniper-gap" has no land yield/);
     expect(problems).toMatch(/gap-hut: a homestead building/);
     expect(problems).toMatch(/shrinking.levels.1: holds less/);
+
+    // Wild Isle works (#621) level up the same way, with no terrain to work.
+    const well = BUILDINGS.find((b) => b.id === 'river-well');
+    if (well?.kind !== 'works') throw new Error('no River Well');
+    const backwards: Building[] = [
+      ...BUILDINGS,
+      { ...well, id: 'sinking-well', levels: [...well.levels].reverse() },
+    ];
+    const worksProblems = checkResourceBuildings(
+      backwards,
+      RESOURCE_BUILDING_RULES,
+      JOB_RULES,
+    ).join('\n');
+    expect(worksProblems).toMatch(/sinking-well.levels.2: slower than below/);
+    expect(worksProblems).not.toMatch(/sinking-well.terrain/);
   });
 
   it('has one building for every land with a yield, and one Warehouse', () => {

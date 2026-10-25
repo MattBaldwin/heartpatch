@@ -69,9 +69,12 @@ describe('cues', () => {
     expect(careCue('evolve')).toBe('evolve');
   });
 
-  it('dips the music for his visit, his sting, the peekaboo, a new friend, an evolution, a win, a rare find and the title card', () => {
+  it('dips the music for his visit, his sting, the peekaboo, a new friend, an evolution, a win, a rare find, the title card and the Crooked House moments', () => {
     expect([...DUCKING_CUES].sort()).toEqual([
       'charm',
+      'chest',
+      'chest-big',
+      'door-wake',
       'evolve',
       'find-1',
       'find-2',
@@ -79,8 +82,10 @@ describe('cues', () => {
       'find-4',
       'friend-fanfare',
       'hollow-sting',
+      'key-found',
       'nightfall',
       'peekaboo',
+      'room-bloom',
       'title',
       'yay',
     ]);

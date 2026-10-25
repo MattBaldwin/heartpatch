@@ -12,6 +12,7 @@ import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { MOVES, SPECIES } from './species.js';
 import { WAVE_1_SPECIES } from './species-wave-1.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
+import { isWater } from '../schemas/data/terrains.js';
 
 /*
  * The launch roster (issue #10, design doc §4). Schema and reference checks
@@ -254,8 +255,12 @@ describe('where the roster lives (server-only tables)', () => {
   });
 
   it('has someone to find on every terrain on any day of the year', () => {
-    // Trading posts (#269) are never wild: nobody spawns there.
-    for (const terrain of GAME_DATA.terrains.filter((t) => t.id !== TRADING_POST_TERRAIN)) {
+    // Trading posts (#269) are never wild: nobody spawns there. Nor on water
+    // (Wild Isle, #621); the coast's tables come with the Wild Isle lanes.
+    const wild = GAME_DATA.terrains.filter(
+      (t) => t.id !== TRADING_POST_TERRAIN && !isWater(t) && t.id !== 'coast',
+    );
+    for (const terrain of wild) {
       const everyDay = SPAWN_TABLES.filter(
         (t) => t.terrains.includes(terrain.id) && !t.season && !t.timeOfDay,
       ).flatMap((t) => t.entries.filter((e) => byId.get(e.species)?.season === undefined));

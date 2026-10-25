@@ -144,6 +144,20 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     haze: '#d6effa',
     hills: '#7fa9b8',
   },
+  // Wild Isle's coast (#621): a sandy beach with the sea behind the fighters.
+  coast: {
+    ground: '#f2e2b8', // TUNE
+    props: [
+      { kind: 'rock', count: 6, ring: ring(6, 11), scale: [3, 4.5] }, // TUNE
+      { kind: 'stones', count: 8, ring: ring(4.8, 10), scale: [3.4, 4.6], front: true }, // TUNE
+      { kind: 'log', count: 3, ring: ring(7, 12), scale: [3, 4] }, // TUNE: driftwood
+      { kind: 'grass', count: 10, ring: ring(4.2, 12), scale: [2.4, 3.2], front: true }, // TUNE
+      { kind: 'tree', count: 7, ring: ring(15, 19), scale: [8.5, 11.9] }, // TUNE: inland
+    ],
+    water: '#8ccbef', // TUNE: the sea
+    haze: '#d6effa',
+    hills: '#7fa9b8',
+  },
   'pumpkin-fields': {
     props: [
       { kind: 'pumpkin', count: 20, ring: ring(5.5, 14), scale: [3.5, 6] }, // TUNE
@@ -175,7 +189,7 @@ export const FALLBACK_ARENA = 'meadow';
 /** Sizes of the diorama, world units. */
 export const ARENA_STAGE = {
   /** Radius of the ground disc. */
-  groundRadius: 20, // TUNE
+  groundRadius: 32, // TUNE: room for the camera (#652): an iPhone SE mid-turn, a wide iPad's corners
   /** Thickness of the ground slab (its edge shows: it's a little diorama). */
   groundDepth: 1.1, // TUNE
   /** Props stay this far from the arena's middle (the fight between the fighters). */
@@ -188,6 +202,8 @@ export const ARENA_STAGE = {
   cameraLane: { z: -2, halfWidth: 7 }, // TUNE
   /** Where the lake's water starts behind the fighters (+z, away from the camera). */
   waterFrom: 5.5, // TUNE
+  /** The lake's size: its pool is 1.6 × this across (its own, so a bigger ground doesn't widen it). */
+  lakeRadius: 20, // TUNE
   /** Sky dome radius (well inside the camera's far plane). */
   skyRadius: 95, // TUNE
   /** Far hills: how many, how far, their size. */
@@ -198,6 +214,8 @@ export const ARENA_STAGE = {
   stars: 80, // TUNE
   /** The ground's mottling (value noise) and how dark it gets towards the rim. */
   ground: { rimDarken: 0.26, mottle: 0.22 }, // TUNE
+  /** The ground darkens to its rim colour this far out, however big the disc (#652 grew it past here). */
+  shadeRadius: 20, // TUNE
   /** How much of the terrain's haze colour tints the horizon. */
   hazeMix: 0.35, // TUNE
   /** On the low quality tier, scatter this share of the props (and draw no shadow map). */
