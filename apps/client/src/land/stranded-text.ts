@@ -5,12 +5,12 @@ import { hexDistance, type Hex, type StrandedTile } from '@heartpatch/shared';
 // share. Cozy and short (style guide): never "damage" or "destroy".
 
 export const STRANDED_TEXT = {
-  title: 'Some land is cut off! 🛤️',
+  title: 'Some land is cut off! 🧭',
   /** Cut off, but the fading hasn't started yet (a lost bridge's grace). */
-  soon: 'This land may drift away soon. Build a road to bring it home!',
-  fading: 'This land is drifting away! Build a road to bring it home.',
+  soon: 'These tiles may drift away soon. Build a road to bring it home!',
+  fading: 'These tiles are drifting away! Build a road to bring it home.',
   show: 'Show me',
-  tileSoon: 'Cut off, fading soon 🛤️',
+  tileSoon: 'Cut off, fading soon 🧭',
   tileFading: 'Cut off and fading 🍂',
 } as const;
 

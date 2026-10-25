@@ -82,13 +82,16 @@ describe('bridge card (#621 W1-6)', () => {
     if (!bank) throw new Error('no river bank');
     const [card] = bridgeCards({ tile: bank, view: base, me: ME, supplied: new Set() });
     expect(card?.blocked).toBe(TRAVEL_TEXT.problems['too-far']);
+    // The sheet's top line says it can't go here, not that it goes across.
+    expect(card?.hint).toBe(TRAVEL_TEXT.bridgeBlockedHint);
   });
 
-  it('is blocked once a bridge stands there', () => {
+  it('is not offered once a bridge stands there (nothing left to build)', () => {
     if (!bank) throw new Error('no river bank');
     const view = with_(base, bank, { buildings: [building('bridge')] });
-    const [card] = bridgeCards({ tile: tileAt(view, bank) ?? bank, view, me: ME, supplied: land });
-    expect(card?.blocked).toBe(TRAVEL_TEXT.problems.taken);
+    expect(bridgeCards({ tile: tileAt(view, bank) ?? bank, view, me: ME, supplied: land })).toEqual(
+      [],
+    );
   });
 
   it('is not shown on land, a lake, or a Cozy Patch', () => {

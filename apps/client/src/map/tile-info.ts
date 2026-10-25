@@ -94,7 +94,7 @@ export function describeTile(
   if (water) {
     // A river with a bridge on it (#621) is no longer too deep to cross.
     owner = tile.buildings.some((b) => b.buildingId === 'bridge')
-      ? 'A bridge crosses here. Hop on across! 🌉'
+      ? 'A bridge crosses here. Hop across! 🪵'
       : (terrain?.description ?? 'Just water out here.');
   } else if (post) {
     owner = 'A trading post for every Keeper. Nobody can claim it!';

@@ -147,7 +147,7 @@ async function mock(context, fx) {
   );
   await context.route('**/api/v1/maps/*/territory/tending', (r) =>
     r.request().method() === 'GET'
-      ? r.fulfill({ json: { tending: { ...fx.tending.tending, now: new Date().toISOString() } } })
+      ? r.fulfill({ json: { tending: fx.tending.tending } })
       : r.fallback(),
   );
   await context.route('**/api/v1/maps/*/inventory', async (r) => {
@@ -412,6 +412,10 @@ function strandedView(f) {
     : `Some of the cut-off land (${seen} of ${all} tiles) shows in the ${kind}; the rest is out of view.`;
 }
 
+/** Two aqua tiles sit on the road side of the dock: they are my own land, already joined by road. */
+const OWN_AQUA =
+  'The two aqua tiles on the road side of the dock are my own land, already joined to home by road; the far shore is the aqua land across the water.';
+
 /** The ferry map's far shore: how much of it, and the dock, is not under the panel or buttons. */
 function ferryView(f) {
   const v = f.ferryView;
@@ -452,6 +456,11 @@ async function runDevice(browser, device, statePath, fx) {
     timezoneId: 'Etc/UTC',
   });
   await mock(context, fx);
+  // One clock for every frame: `Date.now` is pinned to the fixture's time (timers and
+  // rAF still run, so Babylon is untouched), so "Night in N min" says the same everywhere.
+  await context.addInitScript((t) => {
+    Date.now = () => t;
+  }, Date.parse(fx.tending.tending.now));
   await context.addInitScript(() => {
     // No dev-only UI in a picture: the badge, and any "(dev)" button.
     const style = document.createElement('style');
@@ -499,21 +508,9 @@ async function runDevice(browser, device, statePath, fx) {
       page,
       device,
       'build-sheet',
-      'as-it-opens',
+      'open',
       (f) =>
-        `The Build sheet just opened over the tile panel, with the Path card picked. Sheet: ${nodeTexts(f.sheet)}.`,
-    );
-    // Whole-card frame: show every card, then pick the Path card.
-    const all = page.locator('.build-all');
-    if (await all.isVisible().catch(() => false)) await all.click();
-    await settle(page);
-    await shot(
-      page,
-      device,
-      'build-sheet',
-      'whole-card',
-      (f) =>
-        `The Build sheet with the Path card chosen and its details and Build button showing. Sheet: ${nodeTexts(f.sheet)}.`,
+        `The Build sheet open on that tile, with the Path card picked. Sheet: ${nodeTexts(f.sheet)}.`,
     );
   }
 
@@ -598,12 +595,36 @@ async function runDevice(browser, device, statePath, fx) {
       prev = cur;
       await page.waitForTimeout(700);
     }
+    if (device === 'ipad') {
+      // The iPad's tile panel sits mid-screen over the dock and the far shore: drag the map
+      // (a touch pan, in two short strokes that stay in the clear strip left of the panel)
+      // so they sit right of the panel instead.
+      for (const [x0, x1] of [
+        [10, 295],
+        [10, 92],
+      ]) {
+        await page.mouse.move(x0, 300);
+        await page.mouse.down();
+        await page.mouse.move((x0 + x1) / 2, 300, { steps: 6 });
+        await page.mouse.move(x1, 300, { steps: 6 });
+        await page.mouse.up();
+        await page.waitForTimeout(800);
+      }
+      let held = '';
+      for (let i = 0; i < 60; i++) {
+        const cur = JSON.stringify(await hook(page, 'camera'));
+        if (cur === held) break;
+        held = cur;
+        await page.waitForTimeout(700);
+      }
+      await settle(page);
+    }
     await shot(
       page,
       device,
       'dock',
       'far-shore',
-      (f) => `${ferryView(f)} Panel rows in view: ${nodeTexts(f.panel)}.`,
+      (f) => `${ferryView(f)} ${OWN_AQUA} Panel rows in view: ${nodeTexts(f.panel)}.`,
     );
     // The same moment with the panel out of the way (hidden, not closed: closing puts the map back).
     await page.addStyleTag({ content: '.tile-panel{visibility:hidden!important}' });
@@ -612,14 +633,13 @@ async function runDevice(browser, device, statePath, fx) {
       device,
       'dock',
       'far-shore-map',
-      (f) => `Same moment with the tile panel hidden. ${ferryView(f)}`,
+      (f) => `Same moment with the tile panel hidden. ${ferryView(f)} ${OWN_AQUA}`,
     );
   }
 
   // 5. Stranded land: tint and the "Some land is cut off!" card.
   await openMap(page);
   await until(page, () => window.__heartpatch?.stranded?.()?.card);
-  await shot(page, device, 'stranded', 'as-it-opens', strandedView);
   if (!ONLY || ONLY.includes('stranded')) {
     const before = JSON.stringify(await hook(page, 'camera'));
     await tapText('stranded-show');
@@ -637,8 +657,9 @@ async function runDevice(browser, device, statePath, fx) {
       page,
       device,
       'stranded',
-      'whole-card',
-      (f) => `Show me pressed, and the camera has settled. ${strandedView(f)}`,
+      'show-me',
+      (f) =>
+        `The cut-off card on screen, "Show me" pressed and the camera settled. ${strandedView(f)}`,
     );
   }
   await context.close();

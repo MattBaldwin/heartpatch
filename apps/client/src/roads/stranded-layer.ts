@@ -36,11 +36,11 @@ import type { MapLayer } from '../map/map-screen.js';
 // tending fetch (land-screen).
 
 const LOOK = {
-  grace: { fill: [0.68, 0.56, 0.92, 0.56], ring: '#f1b94a' }, // TUNE
-  fading: { fill: [0.4, 0.3, 0.7, 0.74], ring: '#efe6ff' }, // TUNE
+  grace: { fill: [0.72, 0.7, 0.86, 1], ring: '#f1b94a' }, // TUNE
+  fading: { fill: [0.5, 0.44, 0.7, 1], ring: '#efe6ff' }, // TUNE
 } as const;
 const FILL_INSET = 0.98; // TUNE: of the tile's radius
-const LIFT = 0.015; // TUNE: above the tile top
+const LIFT = 0.07; // TUNE: above the tile top
 const RING = { dashes: 5, fill: 0.55, width: 0.075 } as const; // TUNE: a chunky dashed edge
 
 /** A flat hex disc at y = 0, one flat colour. */

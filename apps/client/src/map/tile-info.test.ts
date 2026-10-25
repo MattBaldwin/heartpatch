@@ -298,7 +298,7 @@ describe('Wild Isle tiles (#621 plan §8)', () => {
       lookup,
       userId(1),
     );
-    expect(bridged.owner).toBe('A bridge crosses here. Hop on across! 🌉');
+    expect(bridged.owner).toBe('A bridge crosses here. Hop across! 🪵');
     for (const terrain of ['ocean', 'river', 'wild-lake']) {
       const w = info(terrain);
       expect(w.resource, terrain).toBeNull();

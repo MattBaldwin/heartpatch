@@ -25,9 +25,9 @@ export const ROAD_NAMES = ['Path', 'Road', 'Paved road'] as const;
 
 /** Player-facing text (style guide: cozy, short, kid-readable). */
 export const ROAD_TEXT = {
-  icon: '🛤️',
+  icon: '🧱',
   /** The server's FORBIDDEN, said before the tap. */
-  cutOff: 'This land is cut off from home! Join it up with a road or a bridge first. 🌉',
+  cutOff: 'This land is cut off from home! Join it up with a road or a bridge first. 🪵',
   built: (level: number) =>
     level <= 1 ? 'Ta-da! A cozy path!' : `Ta-da! Now it's a ${roadName(level).toLowerCase()}!`,
   line: (level: number) =>
@@ -41,7 +41,7 @@ export const ROAD_TEXT = {
   working: 'One moment…',
   /** The Build sheet's top line for each level's card. */
   hints: [
-    'A path goes right in the middle. 🛤️',
+    'A path goes right in the middle. 🧱',
     'Make the path a wider road!',
     'Pave the road with stone!',
   ],

@@ -33,11 +33,11 @@ export const DOCK_ID = 'ferry-dock';
 export const TRAVEL_SPOT = 1;
 
 export const TRAVEL_TEXT = {
-  bridgeIcon: '🌉',
+  bridgeIcon: '🪵',
   dockIcon: '🛶',
   bridgeEffect: 'Everyone on the patch can hop across!',
   dockEffect: 'Ferry to the far shore of the lake!',
-  bridgeBuilt: 'Ta-da! A bridge! Everyone can hop across now. 🌉',
+  bridgeBuilt: 'Ta-da! A bridge! Everyone can hop across now. 🪵',
   dockBuilt: 'Ta-da! Your ferry dock is ready. 🛶',
   ferryAcross: 'Ferry across',
   ferryHide: 'Hide ferry',
@@ -47,7 +47,10 @@ export const TRAVEL_TEXT = {
   dockHere: 'Your ferry waits here 🛶',
   /** On the dock's own tile while the ferry map shows. */
   dockShowing: 'Your ferry waits here! The aqua land is where it goes. 🛶',
-  bridgeHint: 'The bridge goes right across the river! 🌉',
+  bridgeHint: 'The bridge goes right across the river! 🪵',
+  /** The Build sheet's top line when the bridge can't go here yet. */
+  bridgeBlockedHint: "A bridge can't go here yet. 🪵",
+  dockBlockedHint: "A dock can't go here yet. 🛶",
   dockHint: 'The dock goes right by the water! 🛶',
   ferryNowhere: 'No far shore to reach from this dock yet.',
   problems: {
@@ -107,6 +110,7 @@ function travelCard(
   effect: string,
   blocked: string | null,
   hint: string,
+  blockedHint: string,
 ): BuildCard | null {
   const building = travelBuilding(id);
   if (!building) return null;
@@ -119,7 +123,7 @@ function travelCard(
     area: 'spot',
     blocked,
     craft: null,
-    hint,
+    hint: blocked ? blockedHint : hint,
   };
 }
 
@@ -158,6 +162,8 @@ export function travelProblem(id: string, input: TravelCardInput): BuildableProb
 
 /** The bridge card for a river tile, or none (blocked, with why, when it can't go here yet). */
 export function bridgeCards(input: TravelCardInput): BuildCard[] {
+  // A river tile that already has its bridge has nothing left to build.
+  if (input.tile.buildings.some((b) => b.buildingId === BRIDGE_ID)) return [];
   const problem = travelProblem(BRIDGE_ID, input);
   if (problem && NOT_FOR_THIS_TILE.has(problem)) return [];
   const card = travelCard(
@@ -166,6 +172,7 @@ export function bridgeCards(input: TravelCardInput): BuildCard[] {
     TRAVEL_TEXT.bridgeEffect,
     problem ? TRAVEL_TEXT.problems[problem] : null,
     TRAVEL_TEXT.bridgeHint,
+    TRAVEL_TEXT.bridgeBlockedHint,
   );
   return card ? [card] : [];
 }
@@ -181,6 +188,7 @@ export function dockCards(input: TravelCardInput): BuildCard[] {
     TRAVEL_TEXT.dockEffect,
     problem ? TRAVEL_TEXT.problems[problem] : null,
     TRAVEL_TEXT.dockHint,
+    TRAVEL_TEXT.dockBlockedHint,
   );
   return card ? [card] : [];
 }

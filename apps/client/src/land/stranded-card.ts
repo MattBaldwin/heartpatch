@@ -2,7 +2,7 @@ import type { Hex, StrandedTile } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { nearestGap, strandedLine, STRANDED_TEXT } from './stranded-text.js';
 
-// The "Some land is cut off! 🛤️" card (Wild Isle, #621), beside the "Some
+// The "Some land is cut off! 🧭" card (Wild Isle, #621), beside the "Some
 // land misses you!" chip. Show me pans the camera to the gap.
 
 export interface StrandedCard {
