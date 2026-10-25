@@ -452,13 +452,14 @@ Small and cheap on purpose: one server for a few families.
 
 ## 15. Audio
 
-All sound is synthesised in the browser with Web Audio. There are no audio files (DECISIONS "Audio (#25)"). Real recordings can replace a cue later; they would go in `ASSETS.md`.
+Sound is made in the browser with Web Audio (DECISIONS "Audio (#25)"). Music and the small sounds are synthesised; the big moments (#653) layer a few short CC0 recorded hits with the synth. Every recording is listed in `ASSETS.md`.
 
 - **Sounds:** oscillators, filters and noise, with pitch bends and vowel-like filters for squishy voices. Species voice parameters live in species data (size sets pitch, feeling sets contour).
+- **Big moments (#653):** both chests (`chest` in the bonus room, `chest-big` in the attic, each a crescendo whose chord lands as its lid comes up), a power door waking (`door-wake`), a key found (`key-found`), a room put right (`room-bloom`), an evolution, a new friend (`charm`) and a win (`yay`). `audio/recorded.ts` tunes four CC0 hits (`audio/samples/*.m4a`, AAC) to notes and mixes them with synth bells and swells at play time. The hits load with the engine after the first tap (Vite fingerprints them; they are never inlined, so `connect-src 'self'` allows the fetch) and the service worker doesn't precache them. Until they decode, or if they can't (offline on a first visit), each moment plays its synth stand-in.
 - **Music:** day, night and Halloween loops are note data (`music-score.ts`), rendered once on an `OfflineAudioContext` and played as a looping buffer. Loops cross-fade.
-- **Mix:** music, SFX and UI buses into a master gain and a limiter. Music dips under key moments (his visit, a new friend, an evolution, a win). Up to 10 voices at once; repeats within 50 ms are dropped; each play varies pitch and volume a little.
+- **Mix:** music, SFX and UI buses into a master gain and a limiter. SFX and UI send a little into a light room reverb (a generated impulse, no file); music has none. Music dips under key moments (his visit, a new friend, an evolution, a win, a rare find, the title card and the Crooked House's big moments). Up to 10 voices at once; repeats within 50 ms are dropped; each play varies pitch and volume a little (the big moments' pitch less, so they stay in tune).
 - **Settings:** per device, in `localStorage` (read in try/catch). A slider and an On/Off switch each for Music and Sounds. Music drives the music bus; Sounds drives SFX and UI.
 - **iOS:** nothing is made or played before the first tap. Create, prime and resume the `AudioContext` inside that gesture, then load the engine chunk. Resume on `visibilitychange` and when `statechange` reports `interrupted`. Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so the silent switch mutes the game and other apps keep playing.
 - **Stings:** the Crooked House's peekaboo has the house's one sting, the `peekaboo` cue, beside the opening cinematic's `hollow-sting`. It dips the music like `hollow-sting` does.
 - **Sound gallery:** the dev-only `/sounds.html` page plays every cue and loop, so a human can judge quality by ear.
-- **Budget:** the engine is lazy-loaded after the first tap and counts toward the 15 MB first load (about 11 KB).
+- **Budget:** the engine is lazy-loaded after the first tap and counts toward the 15 MB first load (about 17 KB), and so do the recorded hits (about 17 KB).
