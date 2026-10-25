@@ -128,6 +128,12 @@ async function expectClearOfButtons(page: Page): Promise<void> {
 
 /** The map's own limit for a tap (map/tap-detector.ts `TAP_MAX_MS`). */
 const TAP_MAX_MS = 400;
+/**
+ * Presses in all: one the map sees as too long is pressed again, up to this
+ * many. A loaded iPad CI box has stretched three in a row (1175, 738 and
+ * 816 ms on main 13ec2c3; 606, 474 and 557 ms on PR #662).
+ */
+const MAX_PRESSES = 6;
 
 /**
  * Taps the middle of the spotlight hole (the spotlit tile) until `opened`
@@ -169,9 +175,11 @@ async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
     });
     presses.push(press === null ? 'no press seen' : `${String(Math.round(press))} ms`);
     // Too long to be a tap: the map rightly ignored it, so press again (and
-    // say so in the output, as evidence the slow-press case happens).
-    if (press !== null && press > TAP_MAX_MS && attempt < 3) {
+    // say so in the output, as evidence the slow-press case happens), once
+    // the scene is idle again, as before the first press.
+    if (press !== null && press > TAP_MAX_MS && attempt < MAX_PRESSES) {
       console.log(`a ${String(Math.round(press))} ms press is no tap; pressing again`);
+      await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
       continue;
     }
     const shown = await opened.waitFor({ timeout: 5_000 }).then(
