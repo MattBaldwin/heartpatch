@@ -29,16 +29,19 @@ import type { MapLayer } from '../map/map-screen.js';
 // Stranded land (Wild Isle, #621): a flat tint and a dotted hex outline on
 // land of mine that is cut off from home. Two looks, each one thin-instanced
 // fill and one thin-instanced ring (four draw calls, none when nothing is cut
-// off): "grace" (fading hasn't started, a soft amber) and "fading" (a dusty
-// rose). Fed by `set` from the tending fetch (land-screen).
+// off): "grace" (fading hasn't started: a pale grey-violet wash and an amber
+// dashed edge) and "fading" (a deeper, duskier wash and a pale lilac edge).
+// Both wash the land's own colour out to a faded, cool grey-violet, and
+// neither uses the reds of the player's home borders. Fed by `set` from the
+// tending fetch (land-screen).
 
 const LOOK = {
-  grace: { fill: [0.96, 0.78, 0.35, 0.22], ring: '#f1b94a' }, // TUNE
-  fading: { fill: [0.8, 0.4, 0.5, 0.3], ring: '#c9506a' }, // TUNE
+  grace: { fill: [0.68, 0.56, 0.92, 0.56], ring: '#f1b94a' }, // TUNE
+  fading: { fill: [0.4, 0.3, 0.7, 0.74], ring: '#efe6ff' }, // TUNE
 } as const;
-const FILL_INSET = 0.92; // TUNE: of the tile's radius
+const FILL_INSET = 0.98; // TUNE: of the tile's radius
 const LIFT = 0.015; // TUNE: above the tile top
-const RING = { dashes: 4, fill: 0.4, width: 0.05 } as const; // TUNE: dotted
+const RING = { dashes: 5, fill: 0.55, width: 0.075 } as const; // TUNE: a chunky dashed edge
 
 /** A flat hex disc at y = 0, one flat colour. */
 function hexFill(radius: number, rgba: readonly number[]): MeshArrays {
@@ -145,7 +148,7 @@ export function createStrandedLayer(now: () => number = () => Date.now()): Stran
         const ring = meshFrom(
           next,
           `stranded-${kind}-ring`,
-          dashedHexRing(TILE_RADIUS * 0.9, RING.dashes, RING.fill, RING.width),
+          dashedHexRing(TILE_RADIUS * 0.92, RING.dashes, RING.fill, RING.width),
         );
         fill.material = fillMat;
         ring.material = ringMat;

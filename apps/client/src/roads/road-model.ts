@@ -39,6 +39,12 @@ export const ROAD_TEXT = {
   keep: 'Keep it',
   tookUp: (back: string) => (back ? `Road taken up. You got back ${back}.` : 'Road taken up.'),
   working: 'One moment…',
+  /** The Build sheet's top line for each level's card. */
+  hints: [
+    'A path goes right in the middle. 🛤️',
+    'Make the path a wider road!',
+    'Pave the road with stone!',
+  ],
 } as const;
 
 export function roadName(level: number): string {
@@ -104,6 +110,7 @@ export function roadCards(input: RoadCardInput): BuildCard[] {
       area: 'spot',
       blocked: level === null && supplied === false ? ROAD_TEXT.cutOff : null,
       craft: null,
+      hint: ROAD_TEXT.hints[Math.min(next, ROAD_TEXT.hints.length) - 1] ?? ROAD_TEXT.hints[0],
     },
   ];
 }

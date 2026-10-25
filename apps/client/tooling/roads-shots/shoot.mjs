@@ -9,7 +9,7 @@
 // and bag from `fixture.ts` (`testWildIsle()` plus a 3-level road network, a
 // bridge, a ferry dock and two cut-off tiles) to iPhone 15, iPhone SE and
 // iPad, each pinned to `?tier=high` at the device's own DPR. Shots, per device:
-// `build-sheet`, `network`, `bridge`, `dock`, `stranded`, each as an "as it
+// `build-sheet`, `network`, `bridge`, `cant-build`, `dock`, `stranded`, each as an "as it
 // opens" frame and a whole-card frame. No dev badge, no "(dev)" buttons, no fake
 // clock; the safe areas are emulated and the script checks nothing sits in the
 // bottom one. Env: DEVICES, ONLY (shot names), REUSE=1 (the last player),
@@ -181,6 +181,11 @@ async function openMap(page) {
   // The first-visit tray hint is dismissed, as a returning player has.
   const gotIt = page.getByRole('button', { name: 'Got it!' });
   if (await gotIt.isVisible().catch(() => false)) await gotIt.click();
+  // The night nudge ("Some of your land is dark tonight!") is another feature's card and,
+  // near dusk, sits over the map: kept out of these frames.
+  await page.addStyleTag({
+    content: '[aria-labelledby="night-nudge-title"]{display:none!important}',
+  });
   await page.waitForTimeout(1200);
 }
 
@@ -217,136 +222,151 @@ const cardHidden = (page, hidden) =>
   }, hidden);
 
 /** Facts about the frame about to be shot, so a bad one is loud and the caption is true. */
-async function frameFacts(page, device) {
-  return page.evaluate((insets) => {
-    const h = window.innerHeight;
-    const w = window.innerWidth;
-    const visible = (e) => {
-      const b = e.getBoundingClientRect();
-      const s = window.getComputedStyle(e);
-      return (
-        b.width > 0 &&
-        b.height > 0 &&
-        s.visibility !== 'hidden' &&
-        s.display !== 'none' &&
-        !e.closest('[hidden]')
-      );
-    };
-    const text = (sel) =>
-      [...document.querySelectorAll(sel)]
-        .filter(visible)
-        .map((e) => e.textContent.trim().replace(/\s+/g, ' '));
-    // Anything solid that reaches into the home-indicator zone (canvas excluded).
-    const inZone = [...document.querySelectorAll('body *')]
-      .filter(
-        (e) =>
-          e.id !== 'game' &&
-          !/^trays( trays-hinting)?$/.test(e.className) &&
-          visible(e) &&
-          !/dark-moon/.test(e.className) && // a spot's marker on the map, not UI
-          window.getComputedStyle(e).position === 'fixed',
-      )
-      .filter(
-        (e) => e.getBoundingClientRect().bottom > h - insets.bottom + 0.5 && insets.bottom > 0,
-      )
-      .map((e) => e.className || e.tagName);
-    const devs = [...document.querySelectorAll('button,.dev-status')]
-      .filter(
-        (e) => visible(e) && (/\(dev\)/i.test(e.textContent) || e.classList.contains('dev-status')),
-      )
-      .map((e) => e.textContent.trim());
-    const reconnecting = /Reconnecting/.test(document.body.innerText);
-    // What the tile panel really shows: only rows fully inside its scroll box
-    // and above the bottom of the screen; the rest is "scrolled out of sight".
-    function panelFacts() {
-      const panelEl = document.querySelector('.tile-panel');
-      if (!panelEl || !visible(panelEl)) return { panel: [], panelCut: [] };
-      const box = panelEl.getBoundingClientRect();
-      const shown = [];
-      const cut = [];
-      const rows = [...panelEl.querySelectorAll('.tile-panel-title,.tile-panel-owner,p,button')];
-      // Reading order as on screen (CSS can reorder or lay rows side by side).
-      rows.sort((a, b) => {
-        const ra = a.getBoundingClientRect();
-        const rb = b.getBoundingClientRect();
-        return Math.round(ra.top / 4) - Math.round(rb.top / 4) || ra.left - rb.left;
-      });
-      for (const e of rows) {
-        if (!visible(e) || e.closest('.tile-panel-details[hidden]')) continue;
-        if (e.tagName !== 'BUTTON' && e.querySelector('button')) continue;
+async function frameFacts(page, device, roadTiles) {
+  return page.evaluate(
+    ({ insets, roadTiles }) => {
+      const h = window.innerHeight;
+      const w = window.innerWidth;
+      const visible = (e) => {
         const b = e.getBoundingClientRect();
-        const label =
-          e.tagName === 'BUTTON'
-            ? e.getAttribute('aria-label') === 'Close'
-              ? '✕ close button'
-              : `${e.textContent.trim().replace(/\s+/g, ' ') || e.getAttribute('aria-label')} button`
-            : e.textContent.trim().replace(/\s+/g, ' ');
-        if (!label) continue;
-        const edge = Math.min(box.bottom, h) + 1;
-        if (b.top >= box.top - 1 && b.bottom <= edge) shown.push(label);
-        else if (b.top < edge - 1 && b.bottom > box.top + 1)
-          shown.push(`${label} (partly cut off at the bottom of the panel)`);
-        else cut.push(label);
+        const s = window.getComputedStyle(e);
+        return (
+          b.width > 0 &&
+          b.height > 0 &&
+          s.visibility !== 'hidden' &&
+          s.display !== 'none' &&
+          !e.closest('[hidden]')
+        );
+      };
+      const text = (sel) =>
+        [...document.querySelectorAll(sel)]
+          .filter(visible)
+          .map((e) => e.textContent.trim().replace(/\s+/g, ' '));
+      // Anything solid that reaches into the home-indicator zone (canvas excluded).
+      const inZone = [...document.querySelectorAll('body *')]
+        .filter(
+          (e) =>
+            e.id !== 'game' &&
+            !/^trays( trays-hinting)?$/.test(e.className) &&
+            visible(e) &&
+            !/dark-moon/.test(e.className) && // a spot's marker on the map, not UI
+            window.getComputedStyle(e).position === 'fixed',
+        )
+        .filter(
+          (e) => e.getBoundingClientRect().bottom > h - insets.bottom + 0.5 && insets.bottom > 0,
+        )
+        .map((e) => e.className || e.tagName);
+      const devs = [...document.querySelectorAll('button,.dev-status')]
+        .filter(
+          (e) =>
+            visible(e) && (/\(dev\)/i.test(e.textContent) || e.classList.contains('dev-status')),
+        )
+        .map((e) => e.textContent.trim());
+      const reconnecting = /Reconnecting/.test(document.body.innerText);
+      // What the tile panel really shows: only rows fully inside its scroll box
+      // and above the bottom of the screen; the rest is "scrolled out of sight".
+      function panelFacts() {
+        const panelEl = document.querySelector('.tile-panel');
+        if (!panelEl || !visible(panelEl)) return { panel: [], panelCut: [] };
+        const box = panelEl.getBoundingClientRect();
+        const shown = [];
+        const cut = [];
+        const rows = [...panelEl.querySelectorAll('.tile-panel-title,.tile-panel-owner,p,button')];
+        // Reading order as on screen (CSS can reorder or lay rows side by side).
+        rows.sort((a, b) => {
+          const ra = a.getBoundingClientRect();
+          const rb = b.getBoundingClientRect();
+          return Math.round(ra.top / 4) - Math.round(rb.top / 4) || ra.left - rb.left;
+        });
+        for (const e of rows) {
+          if (!visible(e) || e.closest('.tile-panel-details[hidden]')) continue;
+          if (e.tagName !== 'BUTTON' && e.querySelector('button')) continue;
+          const b = e.getBoundingClientRect();
+          const label =
+            e.tagName === 'BUTTON'
+              ? e.getAttribute('aria-label') === 'Close'
+                ? '✕ close button'
+                : `${e.textContent.trim().replace(/\s+/g, ' ') || e.getAttribute('aria-label')} button`
+              : e.textContent.trim().replace(/\s+/g, ' ');
+          if (!label) continue;
+          const edge = Math.min(box.bottom, h) + 1;
+          if (b.top >= box.top - 1 && b.bottom <= edge) shown.push(label);
+          else if (b.top < edge - 1 && b.bottom > box.top + 1)
+            shown.push(`${label} (partly cut off at the bottom of the panel)`);
+          else cut.push(label);
+        }
+        return { panel: shown, panelCut: cut };
       }
-      return { panel: shown, panelCut: cut };
-    }
-    // One tile's centre and six corners (CSS px): how much of it can be seen, with nothing
-    // (card, panel, HUD, button) over the map there. 'full', 'partly' or 'hidden'.
-    function classify(points) {
-      const seen = points.filter((p) => {
-        if (p.x < 0 || p.y < 0 || p.x > w || p.y > h) return false;
-        return document.elementFromPoint(p.x, p.y)?.tagName === 'CANVAS';
-      }).length;
-      return seen === points.length ? 'full' : seen > 0 ? 'partly' : 'hidden';
-    }
-    // Does the cut-off card sit under a side button?
-    const card = document.querySelector('[data-testid="stranded-card"]');
-    const overlaps = [];
-    if (card && visible(card)) {
-      const c = card.getBoundingClientRect();
-      for (const e of document.querySelectorAll(
-        '.trays *, .tray-handle, .top-bar *, .map-hud *, .post-flag',
-      )) {
-        if (!visible(e)) continue;
-        const b = e.getBoundingClientRect();
-        if (b.width < 20) continue;
-        if (b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top)
-          overlaps.push((e.textContent || e.className).trim().slice(0, 20));
+      // One tile's centre and six corners (CSS px): how much of it can be seen, with nothing
+      // (card, panel, HUD, button) over the map there. 'full', 'partly' or 'hidden'.
+      // A tile whose centre is covered is 'hidden'; one with a covered corner is 'partly'.
+      function classify(points) {
+        const seen = points.map((p) => {
+          if (p.x < 0 || p.y < 0 || p.x > w || p.y > h) return false;
+          return document.elementFromPoint(p.x, p.y)?.tagName === 'CANVAS';
+        });
+        if (!seen[0]) return 'hidden';
+        return seen.every(Boolean) ? 'full' : 'partly';
       }
-    }
-    return {
-      overlaps,
-      viewport: [w, h],
-      inZone,
-      devs,
-      reconnecting,
-      ...panelFacts(),
-      sheet: text('[data-testid="build-sheet"]'),
-      stranded: [...document.querySelectorAll('[data-testid="stranded-card"]')]
-        .filter(visible)
-        .map((e) => e.innerText.trim().replace(/\s+/g, ' ')),
-      roads: window.__heartpatch.roads?.() ?? null,
-      strandedDebug: (() => {
-        const d = window.__heartpatch.stranded?.();
-        if (!d) return null;
-        return { grace: d.grace, fading: d.fading, tiles: d.outlines.map(classify) };
-      })(),
-      ferryView: (() => {
-        const r = window.__heartpatch.roads?.();
-        if (!r?.ferryDock) return null;
-        const [dock, ...far] = window.__heartpatch.outlines([r.ferryDock, ...r.ferryTiles]);
-        return { dock: classify(dock), far: far.map(classify) };
-      })(),
-    };
-  }, DEVICES[device].insets);
+      // Does the cut-off card sit under a side button?
+      const card = document.querySelector('[data-testid="stranded-card"]');
+      const overlaps = [];
+      if (card && visible(card)) {
+        const c = card.getBoundingClientRect();
+        for (const e of document.querySelectorAll(
+          '.trays *, .tray-handle, .top-bar *, .map-hud *, .post-flag',
+        )) {
+          if (!visible(e)) continue;
+          const b = e.getBoundingClientRect();
+          if (b.width < 20) continue;
+          if (b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top)
+            overlaps.push((e.textContent || e.className).trim().slice(0, 20));
+        }
+      }
+      return {
+        overlaps,
+        viewport: [w, h],
+        inZone,
+        devs,
+        reconnecting,
+        ...panelFacts(),
+        sheet: text('[data-testid="build-sheet"]'),
+        stranded: [...document.querySelectorAll('[data-testid="stranded-card"]')]
+          .filter(visible)
+          .map((e) => e.innerText.trim().replace(/\s+/g, ' ')),
+        roads: window.__heartpatch.roads?.() ?? null,
+        strandedDebug: (() => {
+          const d = window.__heartpatch.stranded?.();
+          if (!d) return null;
+          return { grace: d.grace, fading: d.fading, tiles: d.outlines.map(classify) };
+        })(),
+        roadView: (() => {
+          if (!roadTiles.length) return null;
+          const outlines = window.__heartpatch.outlines(roadTiles);
+          const out = { 1: [], 2: [], 3: [] };
+          roadTiles.forEach((t, i) => out[t.level].push(classify(outlines[i] ?? [])));
+          return out;
+        })(),
+        ferryView: (() => {
+          const r = window.__heartpatch.roads?.();
+          if (!r?.ferryDock) return null;
+          const [dock, ...far] = window.__heartpatch.outlines([r.ferryDock, ...r.ferryTiles]);
+          return { dock: classify(dock), far: far.map(classify) };
+        })(),
+      };
+    },
+    { insets: DEVICES[device].insets, roadTiles },
+  );
 }
 
 const captions = [];
+/** Set once the fixture is built: the road tiles (q, r, level) the network frames check. */
+let ROAD_TILES = [];
 async function shot(page, device, name, frame, describe) {
   if (ONLY && !ONLY.includes(name)) return;
   const d = DEVICES[device];
   await settle(page);
-  const facts = await frameFacts(page, device);
+  const facts = await frameFacts(page, device, ROAD_TILES);
   const file = `${device}-${name}-${frame}.png`;
   await page.screenshot({ path: path.join(OUT, file), type: 'png', timeout: 180_000 });
   const problems = [
@@ -395,14 +415,30 @@ function ferryView(f) {
   const v = f.ferryView;
   if (!v) return 'No ferry map is showing.';
   const total = v.far.length;
-  const shown = v.far.filter((k) => k !== 'hidden').length;
+  const full = count(v.far, 'full');
+  const partly = count(v.far, 'partly');
+  const hiddenN = count(v.far, 'hidden');
   const dock =
     v.dock === 'hidden'
       ? 'the dock is covered'
       : `the dock shows${v.dock === 'partly' ? ' (partly)' : ''}`;
-  if (!shown)
-    return `The ferry map is on (${total} far-shore tiles in the aqua tint), but the tile panel covers the far shore and ${v.dock === 'hidden' ? 'the dock' : 'most of the dock'}; see the next frame.`;
-  return `The ferry map is showing: ${shown} of ${total} far-shore tiles in the aqua tint with a pale rim in view (${count(v.far, 'full')} fully), ${dock}.`;
+  if (!full && !partly)
+    return `The ferry map is on (${total} far-shore tiles in the aqua tint), but the tile panel and buttons cover the far shore and ${v.dock === 'hidden' ? 'the dock' : 'most of the dock'}; see the next frame.`;
+  const parts = [`${full} fully in view`];
+  if (partly) parts.push(`${partly} partly tucked behind the panel or buttons`);
+  if (hiddenN) parts.push(`${hiddenN} out of sight`);
+  return `The ferry map is showing: of ${total} far-shore tiles in the aqua tint with a pale rim, ${parts.join(', ')}; ${dock}.`;
+}
+
+/** How much of each road level is really in view (not behind the panel or buttons). */
+function roadsView(f) {
+  const v = f.roadView;
+  if (!v) return '';
+  const say = (level, name) => {
+    const list = v[level];
+    return `${name} ${count(list, 'full')} of ${list.length} fully in view`;
+  };
+  return ` In view: ${say(1, 'dirt path')}, ${say(2, 'gravel road')}, ${say(3, 'paved stone road')}.`;
 }
 
 const nodeTexts = (list) => (list.length ? list.join(' / ') : 'nothing');
@@ -455,20 +491,23 @@ async function runDevice(browser, device, statePath, fx) {
   if (!ONLY || ONLY.includes('build-sheet')) {
     await page.getByTestId('tile-build').click();
     await page.getByTestId('build-sheet').waitFor();
+    // The Path card is picked first, so the frame (and its top line) is the road's.
+    // Wait for the bag (the sheet redraws when it lands), then tap the card in the page.
+    await until(page, () => window.__heartpatch?.tileBuild?.()?.bag);
+    await page.evaluate(() => document.querySelector('[data-build="road-1"]')?.click());
+    await until(page, () => window.__heartpatch?.tileBuild?.()?.selected === 'road-1');
     await settle(page);
     await shot(
       page,
       device,
       'build-sheet',
       'as-it-opens',
-      (f) => `The Build sheet just opened over the tile panel. Sheet: ${nodeTexts(f.sheet)}.`,
+      (f) =>
+        `The Build sheet just opened over the tile panel, with the Path card picked. Sheet: ${nodeTexts(f.sheet)}.`,
     );
     // Whole-card frame: show every card, then pick the Path card.
     const all = page.locator('.build-all');
     if (await all.isVisible().catch(() => false)) await all.click();
-    await page.locator('[data-build="road-1"]').scrollIntoViewIfNeeded();
-    await page.locator('[data-build="road-1"]').click();
-    await page.getByTestId('build-detail').waitFor();
     await settle(page);
     await shot(
       page,
@@ -483,14 +522,14 @@ async function runDevice(browser, device, statePath, fx) {
   // 2. A 3-level road network (levels 1–3), the tile panel closed.
   await openMap(page);
   await cardHidden(page, true);
-  await showTile(page, s.network, 1);
+  await showTile(page, s.networkMid, 0);
   await shot(
     page,
     device,
     'network',
     'as-it-opens',
     (f) =>
-      `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}. Panel rows in view: ${nodeTexts(f.panel)}.`,
+      `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}.${roadsView(f)} Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
   await page.evaluate(() =>
     [...document.querySelectorAll('.tile-panel button')]
@@ -503,7 +542,8 @@ async function runDevice(browser, device, statePath, fx) {
     device,
     'network',
     'whole-network',
-    (f) => `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}.`,
+    (f) =>
+      `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}.${roadsView(f)}`,
   );
 
   // 3. The bridge on its river tile.
@@ -518,6 +558,25 @@ async function runDevice(browser, device, statePath, fx) {
     (f) =>
       `A bridge on a river tile, the tile selected. Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
+
+  // 3b. A spot that can't be built on, with the reason on the card (a bridge with no joined land near).
+  if (!ONLY || ONLY.includes('cant-build')) {
+    await openMap(page);
+    await cardHidden(page, true);
+    await showTile(page, s.cantBuild, 1);
+    await page.evaluate(() => document.querySelector('[data-testid="tile-build"]')?.click());
+    await page.getByTestId('build-sheet').waitFor();
+    await page.getByTestId('build-detail').waitFor();
+    await settle(page);
+    await shot(
+      page,
+      device,
+      'cant-build',
+      'as-it-opens',
+      (f) =>
+        `A river tile where a bridge can't go yet (no land joined to home is next to it), with the Build sheet open and the card saying why. Sheet: ${nodeTexts(f.sheet)}.`,
+    );
+  }
 
   // 4. The dock card, "Ferry across" pressed, and the far shore tint.
   await openMap(page);
@@ -613,6 +672,7 @@ if (process.env.REUSE === '1' && (await stat(statePath).catch(() => null))) {
   await context.close();
 }
 const fx = buildFixture(facts);
+ROAD_TILES = fx.roads.roads.map((r) => ({ q: r.q, r: r.r, level: r.level }));
 console.log('fixture', JSON.stringify(fx.counts));
 for (const device of WANT) await runDevice(browser, device, statePath, fx);
 await browser.close();

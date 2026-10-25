@@ -7,8 +7,8 @@ import { hexDistance, type Hex, type StrandedTile } from '@heartpatch/shared';
 export const STRANDED_TEXT = {
   title: 'Some land is cut off! 🛤️',
   /** Cut off, but the fading hasn't started yet (a lost bridge's grace). */
-  soon: 'Join it up to home soon!',
-  fading: 'Fading! Join it to home!',
+  soon: 'This land may drift away soon. Build a road to bring it home!',
+  fading: 'This land is drifting away! Build a road to bring it home.',
   show: 'Show me',
   tileSoon: 'Cut off, fading soon 🛤️',
   tileFading: 'Cut off and fading 🍂',

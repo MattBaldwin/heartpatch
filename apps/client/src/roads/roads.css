@@ -4,3 +4,20 @@
 .tile-panel .tile-actions-slot > .road-row {
   order: -1;
 }
+
+/* One main button per panel. A tile with a road, dock or ferry map keeps one
+   filled (plum) button (Ferry across on a dock, else Build); the others sit
+   back as soft (pink) ones, as the shared secondary button looks. Only
+   panels that carry one of our rows are touched. */
+.tile-panel:has(.road-row)
+  .tile-actions-slot
+  > .hp-button-primary:not([data-testid='tile-build']):not([data-testid='ferry-across']) {
+  background: var(--hp-gloss), var(--hp-secondary);
+  box-shadow: 0 var(--hp-lip) 0 var(--hp-secondary-lip);
+  color: var(--hp-secondary-ink);
+}
+.tile-panel:has([data-testid='ferry-across']) .tile-actions-slot > [data-testid='tile-build'] {
+  background: var(--hp-gloss), var(--hp-secondary);
+  box-shadow: 0 var(--hp-lip) 0 var(--hp-secondary-lip);
+  color: var(--hp-secondary-ink);
+}

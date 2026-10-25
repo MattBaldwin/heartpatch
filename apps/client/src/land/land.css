@@ -176,3 +176,17 @@
 .land-stranded:has(~ .land-chip:not([hidden])) {
   top: calc(env(safe-area-inset-top) + 236px);
 }
+
+/* The cut-off card's line is longer than the others: on a phone it steps down a
+   size and gives its button a snug fit, so it stays two lines under the title
+   and clear of the side buttons (iPhone SE). */
+@media (max-width: 440px) {
+  .land-stranded {
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .land-stranded .land-chip-visit {
+    padding-inline: 12px;
+  }
+}

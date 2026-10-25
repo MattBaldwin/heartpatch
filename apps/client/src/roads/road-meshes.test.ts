@@ -15,6 +15,8 @@ const normalsOf = (arrays: { positions: number[]; indices: number[] }): number[]
   return normals;
 };
 
+const HUB_SIDES_N = 14;
+
 describe('road meshes (#621 W1-6)', () => {
   it('has a look for each of the three levels, wider and thicker as it goes up', () => {
     expect(ROAD_LOOK).toHaveLength(3);
@@ -22,6 +24,21 @@ describe('road meshes (#621 W1-6)', () => {
       expect(ROAD_LOOK[i]?.width).toBeGreaterThan(ROAD_LOOK[i - 1]?.width ?? 0);
       expect(ROAD_LOOK[i]?.height).toBeGreaterThan(ROAD_LOOK[i - 1]?.height ?? 0);
     }
+  });
+
+  it('tells the three levels apart: dirt trail, gravel with a dark edge, stone with a light kerb', () => {
+    const [path, road, paved] = ROAD_LOOK;
+    expect(path.edge).toBeNull();
+    expect(road.edge).not.toBeNull();
+    expect(paved.edge).not.toBeNull();
+    // Each is at least 1.5x as wide as the one below, and the colours differ.
+    expect(road.width).toBeGreaterThanOrEqual(path.width * 1.5);
+    expect(paved.width).toBeGreaterThanOrEqual(road.width * 1.5);
+    expect(new Set([path.top, road.top, paved.top]).size).toBe(3);
+    // Gravel's edge is darker than its surface; the stone's kerb is lighter than its surface.
+    const lum = (hex: string) => linearRgb(hex).reduce((a, b) => a + b, 0);
+    expect(lum(road.edge ?? '#fff')).toBeLessThan(lum(road.top));
+    expect(lum(paved.edge ?? '#000')).toBeGreaterThan(lum(paved.top));
   });
 
   it('clamps a level into 1–3', () => {
@@ -57,9 +74,8 @@ describe('road meshes (#621 W1-6)', () => {
     const hub = hubArrays(3);
     const n = normalsOf(hub);
     const p = hub.positions;
-    const verts = p.length / 3;
     // Each of its segments: 3 vertices of the top fan, then 4 of the rim.
-    for (let seg = 0; seg < verts / 7; seg++) {
+    for (let seg = 0; seg < HUB_SIDES_N; seg++) {
       for (let k = 0; k < 3; k++) expect(n[(seg * 7 + k) * 3 + 1]).toBeCloseTo(1);
       for (let k = 3; k < 7; k++) {
         const v = seg * 7 + k;

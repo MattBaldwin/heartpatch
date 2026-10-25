@@ -46,6 +46,13 @@ describe('stranded land', () => {
     expect(nearestGap([])).toBeNull();
   });
 
+  it('says plainly what to do, gentler before the fading starts', () => {
+    expect(STRANDED_TEXT.fading).toBe('This land is drifting away! Build a road to bring it home.');
+    expect(STRANDED_TEXT.soon).toMatch(/may drift away soon/);
+    expect(STRANDED_TEXT.soon).toMatch(/road/);
+    expect(STRANDED_TEXT.fading).not.toMatch(/Fading!/);
+  });
+
   it('stays cozy and kid-safe', () => {
     const lines = Object.values(STRANDED_TEXT).join(' ');
     expect(findAvoidedWords(lines)).toEqual([]);

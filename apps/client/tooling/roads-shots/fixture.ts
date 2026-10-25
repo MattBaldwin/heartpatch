@@ -1,6 +1,8 @@
 /// <reference types="node" />
 import {
   ferryShore,
+  GAME_DATA,
+  travelBuildCheck,
   hexDistance,
   hexKey,
   hexLine,
@@ -178,6 +180,32 @@ const final = supplied();
 for (const t of strandedPair) {
   if (final.supplied.has(hexKey(t))) throw new Error('stranded tile is supplied');
 }
+// --- A river tile no bridge can start from: no neighbour is joined to home ("too far"). ---
+const bridgeBuilding = GAME_DATA.buildings.find((b) => b.id === 'bridge');
+if (!bridgeBuilding || bridgeBuilding.kind !== 'travel') throw new Error('no bridge building');
+const cantBuild = nearest(
+  rivers.filter((t) => {
+    if (t === bridgeAt || t.buildings.length > 0) return false;
+    const check = travelBuildCheck({
+      building: bridgeBuilding,
+      patchType: view.map.patchType ?? 'cozy',
+      userId: me,
+      tile: {
+        q: t.q,
+        r: t.r,
+        terrain: t.terrain,
+        ownerUserId: t.ownerUserId,
+        communityId: t.communityId ?? null,
+        hasBuilding: false,
+      },
+      tiles: view.tiles,
+      supplied: final.supplied,
+      ownDocks: [],
+    });
+    return !check.ok && check.reason === 'too-far';
+  }),
+  homeCentre,
+);
 const now = Date.now();
 const hours = (h: number) => new Date(now + h * 3_600_000).toISOString();
 const tending = {
@@ -206,6 +234,9 @@ process.stdout.write(
         homeCentre,
       ),
       bridge: bridgeSpot,
+      cantBuild,
+      /** The middle of the road from home to the bridge's near bank, whole network in frame. */
+      networkMid: trunk[Math.floor((trunk.length - 1) * 0.3)] ?? homeCentre,
       bridgeNearBank: nearBank,
       dock: dockSpot,
       farShore: nearest(farShore, dockSpot),

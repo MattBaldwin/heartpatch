@@ -41,7 +41,14 @@ export const TRAVEL_TEXT = {
   dockBuilt: 'Ta-da! Your ferry dock is ready. 🛶',
   ferryAcross: 'Ferry across',
   ferryHide: 'Hide ferry',
+  /** On a far-shore tile of the ferry map. */
   ferryReach: 'Your ferry can take you here 🛶',
+  /** On the dock's own tile. */
+  dockHere: 'Your ferry waits here 🛶',
+  /** On the dock's own tile while the ferry map shows. */
+  dockShowing: 'Your ferry waits here! The aqua land is where it goes. 🛶',
+  bridgeHint: 'The bridge goes right across the river! 🌉',
+  dockHint: 'The dock goes right by the water! 🛶',
   ferryNowhere: 'No far shore to reach from this dock yet.',
   problems: {
     'wrong-patch': 'Only Wild Isles have these.',
@@ -99,6 +106,7 @@ function travelCard(
   icon: string,
   effect: string,
   blocked: string | null,
+  hint: string,
 ): BuildCard | null {
   const building = travelBuilding(id);
   if (!building) return null;
@@ -111,6 +119,7 @@ function travelCard(
     area: 'spot',
     blocked,
     craft: null,
+    hint,
   };
 }
 
@@ -156,6 +165,7 @@ export function bridgeCards(input: TravelCardInput): BuildCard[] {
     TRAVEL_TEXT.bridgeIcon,
     TRAVEL_TEXT.bridgeEffect,
     problem ? TRAVEL_TEXT.problems[problem] : null,
+    TRAVEL_TEXT.bridgeHint,
   );
   return card ? [card] : [];
 }
@@ -170,6 +180,7 @@ export function dockCards(input: TravelCardInput): BuildCard[] {
     TRAVEL_TEXT.dockIcon,
     TRAVEL_TEXT.dockEffect,
     problem ? TRAVEL_TEXT.problems[problem] : null,
+    TRAVEL_TEXT.dockHint,
   );
   return card ? [card] : [];
 }

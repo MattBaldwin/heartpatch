@@ -315,10 +315,17 @@ export function createRoads(options: RoadsOptions): Roads {
     const road = isWildIsleView(v) ? myRoad(tile, me) : null;
     const showingFerry =
       ferry !== null && ferry.dock.q === tile.q && ferry.dock.r === tile.r && hasDock(tile, me);
+    const isDock = isWildIsleView(v) && hasDock(tile, me);
+    const onFarShore =
+      !isDock && ferry !== null && ferry.tiles.some((t) => t.q === tile.q && t.r === tile.r);
+    // Far-shore tiles of the ferry map say the ferry can come here; the dock's own
+    // tile says where the ferry waits (never the far-shore line).
+    if (onFarShore) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
+    if (isDock && (showingFerry || !road)) {
+      parts.push(say(showingFerry ? TRAVEL_TEXT.dockShowing : TRAVEL_TEXT.dockHere, 'dock-line'));
+    }
     if (road) {
-      // While the ferry map shows, its line takes the road line's place (one row).
-      if (showingFerry) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
-      else parts.push(say(ROAD_TEXT.line(road.level), 'road-line'));
+      if (!(isDock && showingFerry)) parts.push(say(ROAD_TEXT.line(road.level), 'road-line'));
       if (mode === 'confirm') {
         parts.push(
           say(ROAD_TEXT.takeUpAsk(refundText(takeUpRefund(road.level))), 'road-confirm'),
@@ -348,9 +355,8 @@ export function createRoads(options: RoadsOptions): Roads {
         );
       }
     }
-    if (isWildIsleView(v) && hasDock(tile, me)) {
+    if (isDock) {
       const showing = showingFerry;
-      if (showing && !road) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
       parts.push(
         button(
           showing ? TRAVEL_TEXT.ferryHide : TRAVEL_TEXT.ferryAcross,
@@ -379,7 +385,12 @@ export function createRoads(options: RoadsOptions): Roads {
       if (!same) {
         mode = 'card';
         note = '';
-        if (ferry && (ferry.dock.q !== tile.q || ferry.dock.r !== tile.r)) clearFerry();
+        if (
+          ferry &&
+          (ferry.dock.q !== tile.q || ferry.dock.r !== tile.r) &&
+          !ferry.tiles.some((t) => t.q === tile.q && t.r === tile.r)
+        )
+          clearFerry();
       }
       panel = { container, tile, view: next };
       render();
