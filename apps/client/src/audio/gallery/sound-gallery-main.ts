@@ -3,6 +3,8 @@ import { el } from '../../ui/dom.js';
 import { createEngine, renderLoop, type Engine } from '../audio-engine.js';
 import { CUE_NAMES, type CueName } from '../cues.js';
 import { loopSeconds, SCORES, type TrackId } from '../music-score.js';
+import { RECORDED } from '../recorded.js';
+import { loadSamples, type SampleId } from '../samples.js';
 import { RECIPES } from '../sfx.js';
 import { noiseBuffer } from '../synth.js';
 import '../../ui/auth/auth.css';
@@ -48,7 +50,11 @@ const button = (label: string, onTap: () => void, testid: string) => {
 const tracks: TrackId[] = ['day', 'night', 'halloween', 'wonder'];
 root.append(
   el('h1', { class: 'auth-title' }, 'Sound gallery'),
-  el('p', { class: 'auth-subtitle' }, 'Tap to hear. All made in the browser, no files.'),
+  el(
+    'p',
+    { class: 'auth-subtitle' },
+    'Tap to hear. Made in the browser; the big moments layer a few CC0 recorded hits (#653).',
+  ),
   el('h2', {}, 'Music'),
   el(
     'div',
@@ -97,18 +103,21 @@ function measure(name: string, buffer: AudioBuffer): Report {
   return { name, seconds: buffer.duration, peak, finite };
 }
 
-async function renderCue(cue: CueName): Promise<Report> {
+/** Renders a cue's synth recipe, or with `recorded`, its recording (#653) from those hits. */
+async function renderCue(
+  cue: CueName,
+  recorded?: ReadonlyMap<SampleId, AudioBuffer>,
+): Promise<Report> {
   const rate = 44_100;
   const offline = new OfflineAudioContext(1, rate * 5, rate);
-  const length = RECIPES[cue](
-    { ctx: offline, noise: noiseBuffer(offline) },
-    offline.destination,
-    0,
-    1,
-    1,
-  );
+  const kit = { ctx: offline, noise: noiseBuffer(offline), samples: recorded ?? new Map() };
+  const recording = recorded ? RECORDED[cue] : undefined;
+  const length = recording
+    ? recording.play(kit, offline.destination, 0, 1, 1)
+    : RECIPES[cue](kit, offline.destination, 0, 1, 1);
   const buffer = await offline.startRendering();
-  return { ...measure(cue, buffer), seconds: length };
+  const name = recording ? `recorded:${cue}` : cue;
+  return { ...measure(name, buffer), seconds: length };
 }
 
 declare global {
@@ -121,6 +130,12 @@ window.__heartpatchSounds = {
   check: async () => {
     const reports: Report[] = [];
     for (const cue of CUE_NAMES) reports.push(await renderCue(cue));
+    // The big moments' recordings too (#653), from the decoded hits.
+    const samples = new Map<SampleId, AudioBuffer>();
+    await loadSamples(new OfflineAudioContext(1, 1, 44_100), samples);
+    for (const cue of CUE_NAMES) {
+      if (RECORDED[cue]) reports.push(await renderCue(cue, samples));
+    }
     const live = new OfflineAudioContext(1, 1, 22_050);
     for (const id of tracks) {
       const loop = await renderLoop(live, SCORES[id]);
