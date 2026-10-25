@@ -43,7 +43,10 @@ export type PropKind =
   | 'greens-patch'
   | 'ice-crystals'
   // Trading posts (#269): the post's hut on its centre spot.
-  | 'trading-post';
+  | 'trading-post'
+  // Wild Isle's coast (#621): shells and driftwood on the sand.
+  | 'shell'
+  | 'driftwood';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -92,13 +95,13 @@ export const TERRAIN_LOOKS: Readonly<Record<string, TerrainLook>> = {
   'junipers-gap': look('#e6cdfc', 0.3, { glow: 0.25 }), // TUNE
   // Cleared land (#242): sandy ground drawn with the meadow's tiles.
   clearing: look('#efcf95', 0.22, { meshOf: 'meadow' }), // TUNE
-  // Wild Isle (#621), stand-ins until W1-4 draws the island: its lakes and
-  // rivers with Cozy's lake tiles, the coast as sand on the meadow's tiles,
-  // so none adds a draw call. The ocean has no look: it's never a tile
-  // instance (the island base's water disc, revision 1).
+  // Wild Isle (#621): its lakes look just like Cozy's (the lake's tiles,
+  // bob and glint), rivers are a lighter, lower ribbon on the same tiles, and
+  // the coast is pale sand on the meadow's tiles, so none adds a draw call.
+  // The ocean has no look: it's never a tile instance (`OCEAN`, revision 1).
   'wild-lake': look('#9fd6f5', 0.12, { meshOf: 'lake' }), // TUNE
-  river: look('#9fd6f5', 0.12, { meshOf: 'lake' }), // TUNE
-  coast: look('#f2e2b8', 0.2, { meshOf: 'meadow' }), // TUNE
+  river: look('#c2eefb', 0.09, { meshOf: 'lake' }), // TUNE
+  coast: look('#f7dfa8', 0.18, { meshOf: 'meadow' }), // TUNE
 };
 
 /** Used for a terrain id this client doesn't know yet. */
@@ -184,6 +187,45 @@ export const MAP_DETAIL = {
 
 /** The soft island everything sits on. */
 export const ISLAND = { color: '#a9d897', margin: 1.2, thickness: 0.6 } as const; // TUNE
+
+/**
+ * Wild Isle's sea (#621 revision 1): the ocean is never tile instances, but
+ * one water disc under the island reaching past the map's edge, shallow
+ * turquoise by the shore deepening to blue, with the lake's glint. The
+ * island it rings is smaller than Cozy's (`margin`), with a sandy rim for a
+ * beach. Isles out at sea stand in the water on their own. sRGB.
+ */
+export const OCEAN = {
+  shallow: '#b2e9f2', // TUNE
+  deep: '#6cb4e4', // TUNE
+  /** Water level (world units): just under the island's top, so its rim pokes out as a beach. */
+  level: -0.06, // TUNE
+  /** How far the water reaches past the outermost ocean tile, world units. */
+  reach: 10, // TUNE: far enough that the farthest zoom sees sea, not sky, past the island
+  /** World units from the island's edge over which the shallows deepen. */
+  shallows: 3.5, // TUNE
+  /** Ring steps in the disc (more: a smoother shallow-to-deep blend). */
+  rings: 8, // TUNE
+  beach: '#f3e3bd', // TUNE
+  /**
+   * The beach's top edge past the outermost land tiles' corners (Cozy's island
+   * uses `ISLAND.margin`). 0: the sand fills the notches between coast tiles
+   * and stops there, never over the first ring of sea.
+   */
+  margin: 0, // TUNE
+  /** How far past its top edge the beach slopes down to the water line (world units). */
+  shore: 0.25, // TUNE
+  /** What marks an ocean tile (the selection ring) sits at: the island's top, clear of the beach. */
+  markTop: 0,
+  /** Each isle tile's sand skirt, as a multiple of a tile's size: neighbours' skirts join into a sandbar. */
+  isleSand: 1.1, // TUNE
+  /** An isle skirt's reach at the water line, as a multiple of its top's. */
+  isleSandWater: 1.12,
+  /** Height steps between neighbouring sand skirts (world units), so overlaps never z-fight. */
+  sandStep: 0.006, // TUNE
+  /** The sea's glint by day and by night (softer, so it never reads as snow); the lakes' is `AMBIENT.water.glint`. */
+  glint: { day: 0.14, night: 0.035 }, // TUNE
+} as const;
 
 // ---------------------------------------------------------------------------
 // Terrain dressing and ambient life (the terrain visual pass). Every number is
@@ -322,17 +364,36 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     tints: ['#ffffff', '#fff6e0'],
     jitter: { color: 0.03, height: 0.004 },
   },
-  // Wild Isle's coast (#621): a few stones and tufts on the sand. Water
-  // tiles have no dressing.
+  // Wild Isle (#621). The coast: shells and driftwood on the sand, a few
+  // stones and dune tufts. Its lakes grow the lake's lily pads and reeds (no
+  // dock: a Ferry dock is a building, W1-5b); a river now and then a pad.
+  // The ocean is never a tile, so it has no dressing.
   coast: {
     count: [1, 3],
     items: [
-      item('stones', 3, [1.1, 1.4]),
-      item('grass', 2, [0.9, 1.2]),
-      item('reeds', 1, [0.9, 1.1]),
+      item('shell', 3, [1.3, 1.7]),
+      item('driftwood', 2, [0.9, 1.15], { single: true }),
+      item('stones', 2, [1, 1.3]),
+      item('grass', 1, [0.9, 1.1]),
     ],
     tints: ['#ffffff', '#fff6e0', '#f8f0dc'],
     jitter: { color: 0.03, height: 0.006 },
+  },
+  'wild-lake': {
+    count: [1, 3],
+    items: [
+      item('lily-pad', 5, [1.1, 1.5]),
+      item('reeds', 3, [1, 1.3], { edge: true }),
+      item('stones', 1, [1, 1.2]),
+    ],
+    tints: PLAIN,
+    jitter: { color: 0.03, height: 0 },
+  },
+  river: {
+    count: [0, 1],
+    items: [item('lily-pad', 1, [0.6, 0.85])],
+    tints: ['#ffffff'],
+    jitter: { color: 0.02, height: 0 },
   },
   // A Hollowed village's square (#306): the kind's broken building stands in
   // the middle (`HOLLOWED_SQUARE`) with ruins round it. Stand-ins from props

@@ -8,6 +8,7 @@ import {
   hexRgb,
   isHalloween,
   isMuted,
+  isOcean,
   localDateIn,
   seasonsOn,
   muteRgb,
@@ -43,9 +44,38 @@ describe('terrain dressing data', () => {
   it('draws Wild Isle water with the lake’s tiles, and has no ocean tiles (#621)', () => {
     expect(TERRAIN_LOOKS['wild-lake']?.meshOf).toBe('lake');
     expect(TERRAIN_LOOKS['river']?.meshOf).toBe('lake');
+    expect(TERRAIN_LOOKS['coast']?.meshOf).toBe('meadow');
+    // A Wild Isle lake looks just like a Cozy one; a river is lighter and lower.
+    expect(TERRAIN_LOOKS['wild-lake']?.color).toBe(TERRAIN_LOOKS['lake']?.color);
+    expect(TERRAIN_LOOKS['river']?.height).toBeLessThan(TERRAIN_LOOKS['lake']?.height ?? 0);
     expect(TERRAIN_LOOKS['ocean']).toBeUndefined();
-    for (const terrain of GAME_DATA.terrains.filter(isWater)) {
-      expect(TERRAIN_DRESSING[terrain.id], terrain.id).toBeUndefined();
+    expect(TERRAIN_DRESSING['ocean']).toBeUndefined();
+    expect(isOcean({ terrain: 'ocean' })).toBe(true);
+    for (const terrain of ['river', 'wild-lake', 'coast', 'lake', 'meadow']) {
+      expect(isOcean({ terrain }), terrain).toBe(false);
+    }
+    // Every water tile is drawn level, and grows nothing a Cozy lake doesn't.
+    const lakeKinds = new Set(dressingOf('lake').items.map((i) => i.kind));
+    for (const terrain of GAME_DATA.terrains.filter((t) => isWater(t) && t.id !== 'ocean')) {
+      const dressing = TERRAIN_DRESSING[terrain.id];
+      expect(dressing, terrain.id).toBeDefined();
+      expect(dressing?.jitter.height, terrain.id).toBe(0);
+      for (const it of dressing?.items ?? []) expect(lakeKinds.has(it.kind), terrain.id).toBe(true);
+      // No dock: a Ferry dock is a building (W1-5b), not dressing.
+      expect(
+        dressing?.items.some((i) => i.kind === 'dock'),
+        terrain.id,
+      ).toBe(false);
+    }
+  });
+
+  it('dresses the coast with shells and driftwood, at most one log of it a tile (#621)', () => {
+    const kinds = new Set(dressingOf('coast').items.map((i) => i.kind));
+    expect(kinds.has('shell')).toBe(true);
+    expect(kinds.has('driftwood')).toBe(true);
+    for (let q = -8; q <= 8; q++) {
+      const props = dressTile({ q, r: 16 - Math.abs(q) }, 'coast', HEX_SIZE, { halloween: false });
+      expect(props.filter((p) => p.kind === 'driftwood').length).toBeLessThanOrEqual(1);
     }
   });
 
@@ -204,6 +234,15 @@ describe('wild land is muted, owned land in full colour', () => {
     expect(isMuted(tile({}))).toBe(true);
     expect(isMuted(tile({ ownerUserId: userId(1) }))).toBe(false);
     expect(isMuted(tile({ terrain: 'junipers-gap' }))).toBe(false);
+  });
+
+  it('never mutes water: nobody can claim it, so it never looks wild (#621)', () => {
+    for (const terrain of ['ocean', 'river', 'wild-lake']) {
+      expect(isMuted(tile({ terrain })), terrain).toBe(false);
+    }
+    // Cozy's lake is land: muted while it's wild, as before. So is the coast.
+    expect(isMuted(tile({ terrain: 'lake' }))).toBe(true);
+    expect(isMuted(tile({ terrain: 'coast' }))).toBe(true);
   });
 
   it('draws a muted tile with less colour but keeps terrains apart', () => {

@@ -3,7 +3,9 @@ import {
   defaultKeeperConfig,
   hexDistance,
   hexKey,
+  hexLine,
   hexNeighbors,
+  hexRing,
   GAME_DATA,
   KEEPER_BASES,
   generateMap,
@@ -13,6 +15,7 @@ import {
   type MapView,
   type PublicTile,
 } from '@heartpatch/shared';
+import { isWaterTile } from './map-dressing.js';
 
 // A realistic map view for unit tests: a real generated 4-player map, as the
 // server would send it, with members taking home slots in order. Pinned to
@@ -106,7 +109,14 @@ export function testView(players = 1, seed = 'map-render-test', seats = SEATS): 
  * same land every run.
  */
 export function testPatch(extra = 48): MapView {
-  const view = testView(4);
+  return grown(testView(4), extra, (t) => t.terrain !== 'junipers-gap');
+}
+
+/**
+ * Each Keeper's land grown out from their home, nearest tiles first, `extra`
+ * tiles each, onto tiles `claimable` allows (and never a home ring).
+ */
+function grown(view: MapView, extra: number, claimable: (t: PublicTile) => boolean): MapView {
   const tiles = view.tiles.map((t) => ({ ...t }));
   const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
   const seeds = view.members.map(
@@ -124,7 +134,7 @@ export function testPatch(extra = 48): MapView {
       if (!seed || (left[i] ?? 0) <= 0) return;
       let best: PublicTile | null = null;
       for (const t of tiles) {
-        if (t.ownerUserId !== null || t.homeSlot !== null || t.terrain === 'junipers-gap') continue;
+        if (t.ownerUserId !== null || t.homeSlot !== null || !claimable(t)) continue;
         if (!hexNeighbors(t).some((n) => byKey.get(hexKey(n))?.ownerUserId === m.user.id)) continue;
         const score = (x: PublicTile) => hexDistance(x, seed) * 100 + x.q * 3 + x.r;
         if (!best || score(t) < score(best)) best = t;
@@ -135,4 +145,113 @@ export function testPatch(extra = 48): MapView {
     });
   }
   return { ...view, tiles };
+}
+
+/** The Wild Isle test map's radius (#621 revision 1: rings 17–18 ocean, 16 coast). */
+export const WILD_RADIUS = 18;
+
+/**
+ * A hand-made radius-18 Wild Isle (#621 W1-4) for the map's looks, budgets
+ * and captures, until W1-2's generator can make one: the 6-seat Cozy test map
+ * (radius 16) as its land, with ring 16 turned to coast, rings 17–18 added as
+ * ocean, Cozy lakes made `wild-lake`, three rivers running from the middle out
+ * between the homes to the sea (one through a pond), and two little isles out
+ * in the ocean. Each Keeper's land is grown `extra` tiles, never onto water.
+ * The same map every run.
+ */
+export function testWildIsle(players = 6, extra = 30): MapView {
+  const base = testView(players, 'map-render-test', 6);
+  const origin = { q: 0, r: 0 };
+  const byKey = new Map(base.tiles.map((t) => [hexKey(t), { ...t }]));
+  const water = (t: PublicTile, terrain: string) => {
+    t.terrain = terrain;
+    t.nodeResource = null;
+  };
+  // The coast rings the land; Cozy's lakes are Wild Isle's water lakes.
+  for (const t of byKey.values()) {
+    if (hexDistance(t, origin) === WILD_RADIUS - 2 && t.post === null) water(t, 'coast');
+    else if (t.terrain === 'lake') water(t, t.homeSlot === null ? 'wild-lake' : 'meadow');
+  }
+  // Rivers: from near the middle out to the coast, between neighbouring homes,
+  // with one bend. Never through a home, the Gap, a post or a village.
+  const blocked = (t: PublicTile | undefined) =>
+    !t ||
+    t.homeSlot !== null ||
+    t.terrain === 'junipers-gap' ||
+    t.post !== null ||
+    t.communityId !== null;
+  const homes = Array.from({ length: 6 }, (_, slot) => {
+    const ring = base.tiles.filter((t) => t.homeSlot === slot);
+    const q = ring.reduce((n, t) => n + t.q, 0) / ring.length;
+    const r = ring.reduce((n, t) => n + t.r, 0) / ring.length;
+    return { q, r };
+  });
+  const toward = (a: { q: number; r: number }, scale: number) => {
+    const len = hexDistance({ q: Math.round(a.q), r: Math.round(a.r) }, origin) || 1;
+    return { q: Math.round((a.q * scale) / len), r: Math.round((a.r * scale) / len) };
+  };
+  const rivers: PublicTile[][] = [];
+  for (let i = 0; i < homes.length && rivers.length < 3; i++) {
+    const a = homes[i];
+    const b = homes[(i + 1) % homes.length];
+    if (!a || !b) continue;
+    const between = { q: (a.q + b.q) / 2, r: (a.r + b.r) / 2 };
+    const source = toward(between, 4);
+    const bend = toward(
+      { q: between.q + (a.q - b.q) * 0.15, r: between.r + (a.r - b.r) * 0.15 },
+      10,
+    );
+    const mouth = toward(between, WILD_RADIUS - 2);
+    const path = [...hexLine(source, bend), ...hexLine(bend, mouth).slice(1)].map((h) =>
+      byKey.get(hexKey(h)),
+    );
+    if (path.some(blocked)) continue;
+    rivers.push(path.filter((t): t is PublicTile => t !== undefined));
+  }
+  for (const path of rivers) for (const t of path) water(t, 'river');
+  // A pond part way down the first river.
+  const first = rivers.at(0);
+  const pond = first ? first[Math.floor(first.length * 0.4)] : undefined;
+  if (pond) {
+    for (const h of hexNeighbors(pond)) {
+      const t = byKey.get(hexKey(h));
+      if (t && !blocked(t) && t.terrain !== 'river') water(t, 'wild-lake');
+    }
+    water(pond, 'wild-lake');
+  }
+  // The ocean, and two isles of four tiles each out on the last ring.
+  const outer = hexRing(origin, WILD_RADIUS);
+  const isles = new Map<string, string>();
+  for (const start of [WILD_RADIUS + 5, WILD_RADIUS * 4 + 9]) {
+    ['coast', 'meadow', 'forest', 'coast'].forEach((terrain, i) => {
+      const h = outer[(start + i) % outer.length];
+      if (h) isles.set(hexKey(h), terrain);
+    });
+  }
+  for (let ring = WILD_RADIUS - 1; ring <= WILD_RADIUS; ring++) {
+    for (const h of hexRing(origin, ring)) {
+      byKey.set(hexKey(h), {
+        q: h.q,
+        r: h.r,
+        terrain: isles.get(hexKey(h)) ?? 'ocean',
+        ownerUserId: null,
+        nodeResource: null,
+        homeSlot: null,
+        gathering: null,
+        cooldownUntil: null,
+        defenders: 0,
+        guardianHint: null,
+        buildings: [],
+        post: null,
+        communityId: null,
+      });
+    }
+  }
+  const tiles = [...byKey.values()].sort((a, b) => a.q - b.q || a.r - b.r);
+  const view: MapView = {
+    ...base,
+    map: { ...base.map, name: 'Wild Isle', patchType: 'wild-isle' },
+    tiles,
+  };
+  return grown(view, extra, (t) => t.terrain !== 'junipers-gap' && !isWaterTile(t));
 }
