@@ -244,3 +244,71 @@ export const SellResponseSchema = z.object({
   sell: SellViewSchema,
 });
 export type SellResponse = z.infer<typeof SellResponseSchema>;
+
+/**
+ * One line of a sell basket (#655): `lots` lots of an item from my bag, or
+ * `count` spare pieces of a clothing item (never the last free copy).
+ */
+export const SellLineSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('item'),
+    itemId: ContentIdSchema,
+    lots: z.number().int().min(1).max(100),
+  }),
+  z.strictObject({
+    kind: z.literal('clothing'),
+    itemId: ContentIdSchema,
+    count: z.number().int().min(1).max(50), // TUNE: most spares of one piece per sale
+  }),
+]);
+export type SellLine = z.infer<typeof SellLineSchema>;
+
+/**
+ * `POST /maps/:mapId/posts/sell` with a basket (#655): every line sells in
+ * one transaction against one sale id and one `Idempotency-Key`, or nothing
+ * does. One line per (kind, itemId), in the Sell tab's row order.
+ */
+export const SellBasketRequestSchema = z
+  .strictObject({
+    kind: z.literal('basket'),
+    q: HexSchema.shape.q,
+    r: HexSchema.shape.r,
+    lines: z.array(SellLineSchema).min(1).max(40), // TUNE: most lines in one basket
+  })
+  .refine(
+    (basket) =>
+      new Set(basket.lines.map((l) => `${l.kind}:${l.itemId}`)).size === basket.lines.length,
+    { message: 'one line per item', path: ['lines'] },
+  );
+export type SellBasketRequest = z.infer<typeof SellBasketRequestSchema>;
+
+/** One line of a basket sale: how many went and what they paid. */
+export const SoldLineSchema = z.object({
+  kind: z.enum(['item', 'clothing']),
+  itemId: ContentIdSchema,
+  quantity: z.number().int().min(1),
+  coins: z.number().int().min(1),
+});
+export type SoldLine = z.infer<typeof SoldLineSchema>;
+
+/** What a basket took and paid, line by line and in all, and the Sell tab after it. */
+export const SellBasketResponseSchema = z.object({
+  sold: z.object({
+    lines: z.array(SoldLineSchema).min(1),
+    quantity: z.number().int().min(1),
+    coins: z.number().int().min(1),
+  }),
+  sell: SellViewSchema,
+});
+export type SellBasketResponse = z.infer<typeof SellBasketResponseSchema>;
+
+/**
+ * The sell route's body while the one-line request is still accepted (#655,
+ * one release): a basket or a legacy one-line sale. A legacy request gets the
+ * legacy `SellResponse`, a basket gets `SellBasketResponse`.
+ */
+export const AnySellRequestSchema = z.union([SellRequestSchema, SellBasketRequestSchema]);
+export type AnySellRequest = z.infer<typeof AnySellRequestSchema>;
+
+export const AnySellResponseSchema = z.union([SellResponseSchema, SellBasketResponseSchema]);
+export type AnySellResponse = z.infer<typeof AnySellResponseSchema>;

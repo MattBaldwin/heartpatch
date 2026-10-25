@@ -36,7 +36,7 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~17.3 iPhone, ~18.4 iPad. tutorial-flow's two runs go side by side.
+  // ~20.5 iPhone, ~24.2 iPad (medians of 9 CI runs, 2026-10-24) before lorebook moved to group 4. tutorial-flow's two runs go side by side.
   [
     'accessory-everywhere',
     'admin',
@@ -46,14 +46,13 @@ const E2E_GROUPS = [
     'hollow',
     'hollowed-restore',
     'landscape-phone',
-    'lorebook',
     'map-hole',
     'recipe-book',
     'squishy-gallery',
     'taps',
     'tutorial-flow',
   ],
-  // ~16.8 iPhone, ~18.2 iPad.
+  // ~14.6 iPhone, ~19.4 iPad.
   [
     'battle-ui',
     'boutique',
@@ -67,7 +66,7 @@ const E2E_GROUPS = [
     'pwa',
     'roster',
   ],
-  // friendly's group: ~15.7 iPhone, ~16.0 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
+  // friendly's group: ~13.1 iPhone, ~17.0 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
   [
     'battle',
     'friendly',
@@ -79,7 +78,7 @@ const E2E_GROUPS = [
     'tray-layout',
     'wild-picker',
   ],
-  // ~16.5 iPhone, ~17.4 iPad (a first attempt of trick-or-treat that times out adds a few more).
+  // ~12.8 iPhone, ~16.0 iPad before lorebook joined from group 1 (it timed out there on a slow iPad run), with far-hollow-bonus (a first attempt of trick-or-treat that times out adds a few more).
   [
     'clear-land',
     'explore',
@@ -89,6 +88,7 @@ const E2E_GROUPS = [
     'hollowed-explore',
     'homestead-colour',
     'keeper-gallery',
+    'lorebook',
     'milestones',
     'potions',
     'quality-budget',
@@ -96,7 +96,7 @@ const E2E_GROUPS = [
     'trick-or-treat',
     'whats-new',
   ],
-  // ~15.7 iPhone, ~18.3 iPad.
+  // ~18.9 iPhone, ~22.1 iPad.
   [
     'account-help',
     'chat',
@@ -109,7 +109,7 @@ const E2E_GROUPS = [
     'territory',
     'wardrobe',
   ],
-  // ~17.5 iPhone, ~18.4 iPad.
+  // ~20.7 iPhone, ~26.4 iPad (slowest: 27.9 max). Put new specs elsewhere.
   [
     'audio',
     'far-hollow-relight',
