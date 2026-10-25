@@ -29,7 +29,6 @@ export function createStrandedCard(options: {
   const card = el(
     'div',
     { class: 'land-chip land-stranded', role: 'status', 'data-testid': 'stranded-card' },
-    el('span', { 'aria-hidden': 'true' }, '🛤️'),
     el('span', { class: 'land-chip-text' }, el('strong', {}, STRANDED_TEXT.title), el('br'), line),
     button,
   );
