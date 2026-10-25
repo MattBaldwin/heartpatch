@@ -63,7 +63,18 @@ export type CueName =
   /** A Heart Seed lands at the Keeper's feet. */
   | 'seed-land'
   /** The title card. */
-  | 'title';
+  | 'title'
+  /**
+   * Big moments in the Crooked House (#653): a chest opens (a crescendo:
+   * build, swell, sparkle; the bonus room's quick, the attic's big one slower,
+   * each landing on its lid), a power door wakes, a key turns up, a room is
+   * put right. Recorded CC0 hits layered with the synth (`recorded.ts`).
+   */
+  | 'chest'
+  | 'chest-big'
+  | 'door-wake'
+  | 'key-found'
+  | 'room-bloom';
 
 export const CUE_NAMES: readonly CueName[] = [
   'tick',
@@ -96,6 +107,11 @@ export const CUE_NAMES: readonly CueName[] = [
   'cold-wind',
   'seed-land',
   'title',
+  'chest',
+  'chest-big',
+  'door-wake',
+  'key-found',
+  'room-bloom',
 ];
 
 /** True for a cue the engine has a sound for (data names cues as plain strings). */
@@ -117,6 +133,11 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'find-4',
   'friend-fanfare',
   'title',
+  'chest',
+  'chest-big',
+  'door-wake',
+  'key-found',
+  'room-bloom',
 ]);
 
 /** UI cues go on the UI bus; the rest on the SFX bus (both follow the Sounds slider). */
