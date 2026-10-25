@@ -1921,4 +1921,6 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Oinkle** drops the mud puddle.
 - **Fluffasus** gets stacked-lobe cloud wings (render-check PASS).
 - **Cubbun** gets hug arms.
+  - **Owner, 15:24Z:** "Get rid of the tree for Cubbun." The tree (tree-stump and tree-top) is removed, and the hug arms are re-seated to hug Cubbun's own tummy, because the mirrored far arm pointed sideways with no trunk to hold.
+- **Coordinator call:** #382 may add more than the ~6 parts first allowed (14 after the duck rework, minus the tree parts). They're all data-only, built from existing primitives, with a data test, and listed in the PR body.
 - **Standing rule:** serve owner decisions one at a time.
