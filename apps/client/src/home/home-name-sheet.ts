@@ -1,4 +1,5 @@
 import { HomeNameSchema, NAMING_RULES, type HomeNaming } from '@heartpatch/shared';
+import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { HOME_NAME_TEXT as T, homeFlagLabel, KIND_NAMES, nameCard } from './home-name-view.js';
 
@@ -47,7 +48,7 @@ export function createHomeNameSheet(): HomeNameSheet {
       'button',
       {
         type: onTap ? 'button' : 'submit',
-        class: `auth-button home-name-${soft ? 'soft auth-button-soft' : 'primary'}`,
+        class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} home-name-${soft ? 'soft' : 'primary'}`,
         'data-testid': testId,
       },
       label,

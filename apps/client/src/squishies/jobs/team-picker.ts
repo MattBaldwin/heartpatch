@@ -61,7 +61,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
   const list = el('ul', { class: 'team-list', 'data-testid': 'team-list' });
   const save = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'team-save' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'team-save' },
     JOBS_TEXT.save,
   );
   const sheet = el(

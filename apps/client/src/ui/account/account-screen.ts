@@ -8,6 +8,7 @@ import { NewRecoveryCodeRequestSchema } from '@heartpatch/shared';
 import { updateHold } from '../../pwa/update-hold.js';
 import { reasonLine } from '../auth/auth-help-text.js';
 import { saveCodePanel } from '../auth/save-code.js';
+import { buttonClass } from '../button/button.js';
 import { el, messageOf } from '../dom.js';
 import { accountApi } from './account-api.js';
 import { ACCOUNT_TEXT } from './account-text.js';
@@ -55,9 +56,9 @@ export function mountAccount(root: HTMLElement): AccountScreen {
     onClick: (b: HTMLButtonElement) => void,
     options: { soft?: boolean; small?: boolean; testId?: string } = {},
   ) => {
-    const classes = ['auth-button'];
-    if (options.soft) classes.push('auth-button-soft');
-    if (options.small) classes.push('auth-button-small');
+    const classes = [
+      buttonClass({ variant: options.soft ? 'secondary' : 'primary', small: options.small }),
+    ];
     const node = el(
       'button',
       {
@@ -427,7 +428,11 @@ export function mountAccount(root: HTMLElement): AccountScreen {
       autocomplete: 'current-password',
     });
     const status = errorLine();
-    const submit = el('button', { type: 'submit', class: 'auth-button' }, ACCOUNT_TEXT.makeCode);
+    const submit = el(
+      'button',
+      { type: 'submit', class: 'hp-button hp-button-primary' },
+      ACCOUNT_TEXT.makeCode,
+    );
     const form = el(
       'form',
       { class: 'auth-form', novalidate: '' },

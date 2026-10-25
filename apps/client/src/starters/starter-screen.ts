@@ -87,7 +87,11 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
   const choices = el('div', { class: 'starter-choices', role: 'group', 'aria-label': 'Starters' });
   const about = el('p', { class: 'starter-about', 'aria-live': 'polite' }, STARTER_TEXT.hint);
   const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'starter-error' });
-  const choose = el('button', { type: 'button', class: 'auth-button' }, STARTER_TEXT.choose);
+  const choose = el(
+    'button',
+    { type: 'button', class: 'hp-button hp-button-primary' },
+    STARTER_TEXT.choose,
+  );
   const card = el(
     'div',
     { class: 'auth-card starter-card' },
@@ -115,7 +119,11 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
     class: 'auth-subtitle starter-subtitle',
     'data-testid': 'starter-gift',
   });
-  const giftDone = el('button', { type: 'button', class: 'auth-button' }, STARTER_TEXT.giftDone);
+  const giftDone = el(
+    'button',
+    { type: 'button', class: 'hp-button hp-button-primary' },
+    STARTER_TEXT.giftDone,
+  );
   const giftCard = el(
     'div',
     { class: 'auth-card starter-card', role: 'status' },

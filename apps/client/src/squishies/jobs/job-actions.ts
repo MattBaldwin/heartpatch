@@ -36,7 +36,11 @@ export function jobButton(
   working: boolean,
   attrs: Record<string, string> = {},
 ): HTMLButtonElement {
-  const b = el('button', { type: 'button', class: 'auth-button jobs-action', ...attrs }, label);
+  const b = el(
+    'button',
+    { type: 'button', class: 'hp-button hp-button-primary jobs-action', ...attrs },
+    label,
+  );
   b.disabled = working;
   b.addEventListener('click', onTap);
   return b;

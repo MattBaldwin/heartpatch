@@ -779,7 +779,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       if (!user) return [];
       const button = el(
         'button',
-        { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'wardrobe-open' },
+        { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'wardrobe-open' },
         WARDROBE_TEXT.open,
       );
       button.addEventListener('click', open);

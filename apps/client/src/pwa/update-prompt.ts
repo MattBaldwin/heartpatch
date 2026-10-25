@@ -9,7 +9,11 @@ export interface UpdatePrompt {
 }
 
 export function mountUpdatePrompt(root: HTMLElement): UpdatePrompt {
-  const button = el('button', { type: 'button', class: 'auth-button auth-button-small' }, 'Update');
+  const button = el(
+    'button',
+    { type: 'button', class: 'hp-button hp-button-primary hp-button-small' },
+    'Update',
+  );
   const pill = el(
     'div',
     { class: 'pwa-update', role: 'status', 'data-testid': 'pwa-update' },

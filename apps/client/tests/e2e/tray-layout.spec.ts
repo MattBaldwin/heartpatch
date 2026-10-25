@@ -55,7 +55,7 @@ async function checkTrays(page: Page): Promise<void> {
 
 async function checkKeeperMenu(page: Page): Promise<void> {
   await page.getByTestId('keeper-menu').tap();
-  await expectRoomyLabels(page, '.auth-chip-menu > button, .auth-chip-body > .auth-button');
+  await expectRoomyLabels(page, '.auth-chip-menu > button, .auth-chip-body > .hp-button');
   await page.getByTestId('keeper-menu').tap();
 }
 

@@ -657,7 +657,7 @@ export function createPuzzleSheet<R = SolvePuzzleResponse>(
       nodes.push(
         button(
           EXPLORE_TEXT.openLorebook,
-          'auth-button auth-button-soft explore-lorebook',
+          'hp-button hp-button-secondary explore-lorebook',
           'hollowed-puzzle-lorebook',
           () => {
             close(reply);
@@ -667,9 +667,14 @@ export function createPuzzleSheet<R = SolvePuzzleResponse>(
       );
     }
     nodes.push(
-      button(EXPLORE_TEXT.yay, 'auth-button explore-yay', 'hollowed-puzzle-yay', () => {
-        close(reply);
-      }),
+      button(
+        EXPLORE_TEXT.yay,
+        'hp-button hp-button-primary explore-yay',
+        'hollowed-puzzle-yay',
+        () => {
+          close(reply);
+        },
+      ),
     );
     sheet.replaceChildren(...nodes);
   }

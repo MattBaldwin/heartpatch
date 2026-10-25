@@ -226,7 +226,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                   'button',
                   {
                     type: 'button',
-                    class: 'auth-button auth-button-soft auth-button-small',
+                    class: 'hp-button hp-button-secondary hp-button-small',
                     'data-testid': 'raid-watch',
                   },
                   RAID_TEXT.watch,
@@ -284,7 +284,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
     );
     const gotIt = el(
       'button',
-      { type: 'button', class: 'auth-button', 'data-testid': 'raid-done' },
+      { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'raid-done' },
       RAID_TEXT.gotIt,
     );
     gotIt.addEventListener('click', () => void dismiss());

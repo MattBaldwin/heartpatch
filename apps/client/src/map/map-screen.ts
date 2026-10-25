@@ -336,7 +336,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
   const login = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-small map-hud-login' },
+    { type: 'button', class: 'hp-button hp-button-primary hp-button-small map-hud-login' },
     'Log in again',
   );
   login.addEventListener('click', () => {

@@ -14,6 +14,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { territoryApi, type TerritoryApi } from './territory-api.js';
 import { crackedBy, fenceCard } from '../fences/fence-model.js';
@@ -242,7 +243,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       'button',
       {
         type: 'button',
-        class: `auth-button bag-action${soft ? ' auth-button-soft' : ''}`,
+        class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} bag-action`,
         ...extra,
       },
       label,

@@ -36,7 +36,11 @@ export function createWildPicker(options: WildPickerOptions): WildPicker {
     }
     const meet = el(
       'button',
-      { type: 'button', class: 'auth-button bag-action', 'data-testid': 'tile-meet-wild' },
+      {
+        type: 'button',
+        class: 'hp-button hp-button-primary bag-action',
+        'data-testid': 'tile-meet-wild',
+      },
       WILD_TEXT.meet,
     );
     meet.disabled = working;

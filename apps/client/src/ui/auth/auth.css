@@ -121,6 +121,9 @@
   margin-top: 16px;
 }
 
+/* Left for later (Controls B2b): only the audio settings toggle and the trading
+   journey buttons still use .auth-button*, because their lanes (#653, #655) are
+   reworking those files. Delete this block when they move onto the kit. */
 .auth-button {
   min-height: 52px;
   padding: 12px 20px;
@@ -193,7 +196,9 @@
   align-items: center;
   gap: 10px;
   max-width: calc(100vw - 32px);
-  padding: 4px 4px 4px 14px;
+  /* Same 52px height as before; the 5px below holds the Log out button's 3px
+     lip, and the 8px on its right sits the pill button inside the pill chip. */
+  padding: 3px 8px 5px 14px;
   border-radius: 999px;
   background: rgb(255 255 255 / 85%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -362,7 +367,11 @@
   cursor: default;
 }
 
-.hp-trays-on .auth-chip-body > .auth-button {
+.auth-chip-body > .hp-button {
+  border-radius: 999px;
+}
+
+.hp-trays-on .auth-chip-body > .hp-button {
   min-height: 48px;
 }
 

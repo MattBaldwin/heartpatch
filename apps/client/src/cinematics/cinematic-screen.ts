@@ -388,7 +388,7 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-soft',
+          class: 'hp-button hp-button-secondary',
           'data-testid': 'cinematic-settings',
         },
         CINEMATIC_TEXT.settingsButton,

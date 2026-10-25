@@ -143,8 +143,8 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
         {
           type: 'button',
           class: soft
-            ? 'auth-button auth-button-soft hollowed-soft'
-            : 'auth-button hollowed-primary',
+            ? 'hp-button hp-button-secondary hollowed-soft'
+            : 'hp-button hp-button-primary hollowed-primary',
           'data-testid': testId,
         },
         label,
@@ -343,7 +343,7 @@ export function createKeyHunt(options: KeyHuntOptions): KeyHunt {
     const button = (label: string, testId: string, onTap: () => void) => {
       const b = el(
         'button',
-        { type: 'button', class: 'auth-button bag-action', 'data-testid': testId },
+        { type: 'button', class: 'hp-button hp-button-primary bag-action', 'data-testid': testId },
         label,
       );
       b.disabled = working;

@@ -170,7 +170,11 @@ export function createAwaySummary(
   const trainingList = el('ul', { class: 'away-training' });
   const madeTitle = el('h3', { class: 'away-card-section' }, `🔨 ${AWAY_TEXT.buildings}`);
   const madeList = el('ul', { class: 'away-made-lines', 'data-testid': 'away-made-lines' });
-  const nice = el('button', { type: 'button', class: 'auth-button away-nice' }, AWAY_TEXT.nice);
+  const nice = el(
+    'button',
+    { type: 'button', class: 'hp-button hp-button-primary away-nice' },
+    AWAY_TEXT.nice,
+  );
   const card = el(
     'section',
     {

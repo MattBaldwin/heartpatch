@@ -446,7 +446,7 @@
     margin: 2px 0;
   }
 
-  .jobs-sheet:has(> .team-list) > .auth-button {
+  .jobs-sheet:has(> .team-list) > .hp-button {
     grid-row: 5;
     align-self: start;
   }

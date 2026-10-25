@@ -117,7 +117,10 @@ export function mountTutorialOverlay(
   const choiceButton = (label: string, choice: GraduationChoice, soft = false) => {
     const node = el(
       'button',
-      { type: 'button', class: soft ? 'auth-button auth-button-soft' : 'auth-button' },
+      {
+        type: 'button',
+        class: soft ? 'hp-button hp-button-secondary' : 'hp-button hp-button-primary',
+      },
       label,
     );
     node.addEventListener('click', () => {
@@ -136,7 +139,7 @@ export function mountTutorialOverlay(
   const line = el('p', { class: 'tutorial-line', 'data-testid': 'tutorial-line' });
   const mainButton = el('button', {
     type: 'button',
-    class: 'auth-button',
+    class: 'hp-button hp-button-primary',
     'data-testid': 'tutorial-main',
   });
   const nameInput = el('input', {
@@ -152,7 +155,7 @@ export function mountTutorialOverlay(
   });
   const nameSave = el(
     'button',
-    { type: 'submit', class: 'auth-button', 'data-testid': 'tutorial-name-save' },
+    { type: 'submit', class: 'hp-button hp-button-primary', 'data-testid': 'tutorial-name-save' },
     'Save',
   );
   const nameForm = el(

@@ -168,7 +168,7 @@
   margin-top: 16px;
 }
 
-.treat-buttons .auth-button {
+.treat-buttons .hp-button {
   flex: 1 1 130px;
   min-height: 56px;
   padding-inline: 12px;
@@ -176,7 +176,7 @@
   font-weight: 900;
 }
 
-.treat-buttons .auth-button[hidden] {
+.treat-buttons .hp-button[hidden] {
   display: none;
 }
 

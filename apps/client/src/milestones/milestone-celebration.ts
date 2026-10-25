@@ -77,7 +77,7 @@ export function createMilestoneCelebration(
   const prize = el('p', { class: 'milestone-prize', 'data-testid': 'milestone-prize' });
   const button = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'milestone-yay' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'milestone-yay' },
     MILESTONES_TEXT.yay,
   );
   const card = el(

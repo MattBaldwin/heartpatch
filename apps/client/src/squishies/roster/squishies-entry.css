@@ -88,7 +88,7 @@ body:has(.squishies-open-home:not([hidden])) .auth-chip {
     font-size: 18px;
   }
 
-  body:has(.squishies-open-home:not([hidden])) .auth-chip .auth-button-small {
+  body:has(.squishies-open-home:not([hidden])) .auth-chip .hp-button-small {
     white-space: nowrap;
   }
 }

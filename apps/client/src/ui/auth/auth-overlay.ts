@@ -121,7 +121,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   const chipStatus = el('span', { class: 'auth-chip-status', role: 'status' });
   const logoutButton = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-small' },
+    { type: 'button', class: 'hp-button hp-button-secondary hp-button-small' },
     'Log out',
   );
   const menuHead = el('div', { class: 'auth-chip-head' });
@@ -215,7 +215,11 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
 
   function buildForm(spec: FormSpec): HTMLFormElement {
     const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'auth-error' });
-    const submit = el('button', { type: 'submit', class: 'auth-button' }, spec.submitLabel);
+    const submit = el(
+      'button',
+      { type: 'submit', class: 'hp-button hp-button-primary' },
+      spec.submitLabel,
+    );
     const form = el(
       'form',
       { class: 'auth-form', id: spec.id, novalidate: '' },
@@ -340,10 +344,10 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   }
 
   function showWelcome(notice?: string): void {
-    const login = el('button', { type: 'button', class: 'auth-button' }, 'Log in');
+    const login = el('button', { type: 'button', class: 'hp-button hp-button-primary' }, 'Log in');
     const signup = el(
       'button',
-      { type: 'button', class: 'auth-button auth-button-soft' },
+      { type: 'button', class: 'hp-button hp-button-secondary' },
       'Sign up',
     );
     login.addEventListener('click', () => {
@@ -468,10 +472,14 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
 
   /** "Not you?" asks first (style guide §3.6), then forgets every name. */
   function showForgetNames(names: string[]): void {
-    const forget = el('button', { type: 'button', class: 'auth-button' }, AUTH_HELP_TEXT.forget);
+    const forget = el(
+      'button',
+      { type: 'button', class: 'hp-button hp-button-primary' },
+      AUTH_HELP_TEXT.forget,
+    );
     const keep = el(
       'button',
-      { type: 'button', class: 'auth-button auth-button-soft' },
+      { type: 'button', class: 'hp-button hp-button-secondary' },
       AUTH_HELP_TEXT.keep,
     );
     forget.addEventListener('click', () => {
@@ -495,7 +503,11 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
    * type a guess into.
    */
   function showForgotName(): void {
-    const close = el('button', { type: 'button', class: 'auth-button' }, AUTH_HELP_TEXT.gotIt);
+    const close = el(
+      'button',
+      { type: 'button', class: 'hp-button hp-button-primary' },
+      AUTH_HELP_TEXT.gotIt,
+    );
     const sheet = el(
       'div',
       {
@@ -689,10 +701,14 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
    */
   function showHelperStep(user: PublicUser, grownup: PublicUser): void {
     const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'auth-error' });
-    const ask = el('button', { type: 'button', class: 'auth-button' }, `Ask ${grownup.username}`);
+    const ask = el(
+      'button',
+      { type: 'button', class: 'hp-button hp-button-primary' },
+      `Ask ${grownup.username}`,
+    );
     const later = el(
       'button',
-      { type: 'button', class: 'auth-button auth-button-soft' },
+      { type: 'button', class: 'hp-button hp-button-secondary' },
       AUTH_HELP_TEXT.maybeLater,
     );
     ask.addEventListener('click', () => {

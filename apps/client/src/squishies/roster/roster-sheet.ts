@@ -23,7 +23,7 @@ import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
-import { hpClose } from '../../ui/button/button.js';
+import { buttonClass, hpClose } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { rarityChip } from '../../ui/rarity/rarity.js';
 import {
@@ -362,7 +362,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       'button',
       {
         type: 'button',
-        class: `auth-button roster-action${soft ? ' auth-button-soft' : ''}`,
+        class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} roster-action`,
         ...attrs,
       },
       label,
