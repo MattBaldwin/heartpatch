@@ -5,6 +5,7 @@ import { CommunityKindIdSchema } from './data/communities.js';
 import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
+import { PatchTypeSchema } from '../patch-types/patch-type.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
 import { HexEdgeSchema, PlacedFenceSchema } from './fences.js';
@@ -142,6 +143,13 @@ const walkSchema = (object: typeof z.object | typeof z.strictObject) =>
 export const ExploreNotableSchema = z.enum(['lore', 'cosmetic', 'heartdust']);
 export type ExploreNotable = z.infer<typeof ExploreNotableSchema>;
 
+/** Why land went wild again (`tile.rewilded.cause`; #194, #277, Wild Isle #621). */
+export const RewildCauseSchema = z.enum(['untended', 'hollow', 'stranded']);
+export type RewildCause = z.infer<typeof RewildCauseSchema>;
+
+/** A road's level (Wild Isle #621): 1 Path, 2 Road, 3 Paved road (`TRAVEL_RULES.roads`). */
+export const RoadLevelSchema = z.number().int().min(1).max(3);
+
 export const GAME_EVENTS = {
   /** A player made a map and is its owner. Always seq 1. */
   'map.created': {
@@ -153,6 +161,8 @@ export const GAME_EVENTS = {
       /** The owner's home slot and Heart Seed tile. */
       homeSlot: z.number().int().min(0),
       heartSeed: HexSchema,
+      /** Cozy Patch or Wild Isle (#621); left out on maps made before it, which are cozy. */
+      patchType: PatchTypeSchema.optional(),
     }),
     public: z.object({ name: z.string(), pvpMode: PvpModeSchema }),
   },
@@ -459,15 +469,80 @@ export const GAME_EVENTS = {
       night: LocalDateSchema,
       tiles: z.array(z.strictObject({ ...coords, terrain: z.string() })).min(1),
       returnedSquishyIds: z.array(z.uuid()),
-      /** Why (#277): nobody tended it (#194, the default), or the Hollow Man won it back in the dark. */
-      cause: z.enum(['untended', 'hollow']).optional(),
+      /**
+       * Why (#277): nobody tended it (#194, the default), the Hollow Man won
+       * it back in the dark, or it was cut off from home too long (`stranded`,
+       * Wild Isle #621).
+       */
+      cause: RewildCauseSchema.optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       night: LocalDateSchema,
       tiles: z.array(z.object(coords)),
-      cause: z.enum(['untended', 'hollow']).optional(),
+      cause: RewildCauseSchema.optional(),
     }),
+  },
+  /**
+   * Wild Isle (#621): some of a player's land lost its supply line home (a
+   * road, bridge or ferry dock gone, or a tile between captured). It starts
+   * to fade (`tile_tending.stranded_since`). Land is public, so members see
+   * which tiles.
+   */
+  'tile.stranded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      tiles: z.array(z.strictObject(coords)).min(1),
+    }),
+    public: z.object({ userId: z.uuid(), tiles: z.array(z.object(coords)) }),
+  },
+  /** Wild Isle (#621): stranded land is joined up to home again and stops fading. */
+  'tile.supplied': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      tiles: z.array(z.strictObject(coords)).min(1),
+    }),
+    public: z.object({ userId: z.uuid(), tiles: z.array(z.object(coords)) }),
+  },
+  /**
+   * Wild Isle (#621): a player laid a road on one of their tiles (level 1, a
+   * Path). Roads are a tile attribute (`tile_roads`), not a building. Members
+   * see it; the bill stays internal.
+   */
+  'road.built': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      level: RoadLevelSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, level: RoadLevelSchema }),
+  },
+  /** Wild Isle (#621): a road went up a level (Path → Road → Paved road). The bill stays internal. */
+  'road.upgraded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      fromLevel: RoadLevelSchema,
+      level: RoadLevelSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, level: RoadLevelSchema }),
+  },
+  /**
+   * Wild Isle (#621): a road came up. Its owner took it up, or (`lost`) its
+   * tile was won by a rival, went wild or its owner left. The refund stays
+   * internal.
+   */
+  'road.removed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      level: RoadLevelSchema,
+      refund: z.record(z.string(), z.number().int().min(1)),
+      lost: z.enum(['captured', 'wild', 'left']).optional(),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords }),
   },
   /**
    * Trading posts (#269) came to an older map: the boot pass turned these
@@ -1104,6 +1179,47 @@ export const GAME_EVENTS = {
       buildingRowId: z.uuid(),
       q: z.number().int(),
       r: z.number().int(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /**
+   * Wild Isle (#621): a storm front knocked a building about
+   * (`buildings.damaged_at`); it stops working until it's fixed. Nothing is
+   * destroyed. Members see whose building and where; the front and the roll
+   * stay internal (the weather seed is server-only).
+   */
+  'building.knocked': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      buildingId: ContentIdSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      /** The weather front that knocked it (`WeatherFront.id`). */
+      frontId: z.string().min(1).max(64),
+      /** When the front knocked it: inside the front's minutes over the tile. */
+      at: z.iso.datetime(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /** Wild Isle (#621): a knocked building was fixed and works again. The bill stays internal. */
+  'building.repaired': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      cost: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({
       userId: z.uuid(),
