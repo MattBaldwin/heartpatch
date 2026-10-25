@@ -121,7 +121,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   const chipStatus = el('span', { class: 'auth-chip-status', role: 'status' });
   const logoutButton = el(
     'button',
-    { type: 'button', class: 'hp-button hp-button-primary hp-button-small' },
+    { type: 'button', class: 'hp-button hp-button-secondary hp-button-small' },
     'Log out',
   );
   const menuHead = el('div', { class: 'auth-chip-head' });

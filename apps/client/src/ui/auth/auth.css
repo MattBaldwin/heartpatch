@@ -196,7 +196,9 @@
   align-items: center;
   gap: 10px;
   max-width: calc(100vw - 32px);
-  padding: 4px 4px 4px 14px;
+  /* Room for the Log out button's lip, and a gap on its right so the pill
+     button sits inside the pill chip. */
+  padding: 5px 8px 8px 14px;
   border-radius: 999px;
   background: rgb(255 255 255 / 85%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -363,6 +365,10 @@
 .auth-chip-menu > button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.auth-chip-body > .hp-button {
+  border-radius: 999px;
 }
 
 .hp-trays-on .auth-chip-body > .hp-button {
