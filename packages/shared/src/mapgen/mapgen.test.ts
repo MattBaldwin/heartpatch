@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../data/index.js';
+import { patchRules } from '../patch-types/index.js';
 import { CELLAR_RULES } from '../data/server/cellar.js';
 import { hashString } from '../rng/index.js';
 import { hex, hexDistance, hexKey, hexRing, hexSpiral } from '../hex/index.js';
@@ -353,8 +354,11 @@ describe('generateMap: terrain, nodes and guardians', () => {
         seen.add(tile.terrain);
       }
     }
-    // Cleared land (#242) is only ever written by a player clearing a tile.
-    const generated = GAME_DATA.terrains.map((t) => t.id).filter((id) => id !== 'clearing');
+    // Cleared land (#242) is only ever written by a player clearing a tile;
+    // Wild Isle's terrains (#621) never come up on a Cozy Patch.
+    const generated = patchRules('cozy')
+      .terrains.map((t) => t.id)
+      .filter((id) => id !== 'clearing');
     expect(seen.has('clearing')).toBe(false);
     expect([...seen].sort()).toEqual(generated.sort());
   });

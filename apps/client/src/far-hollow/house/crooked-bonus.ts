@@ -6,7 +6,7 @@ import {
   type JobSquishy,
   type JobsView,
 } from '@heartpatch/shared';
-import { CROOKED_WALK, type FloorPoint } from './crooked-plan.js';
+import type { FloorPoint } from './crooked-plan.js';
 
 // The Crooked House's bonus rooms (#306 6e), pure so every case is
 // unit-tested: where a bonus room's chest stands, when it's in reach, and who
@@ -53,19 +53,6 @@ export function chestTarget(
   return Math.hypot(p.x - at.x, p.z - at.z) <= CROOKED_CHEST.reach
     ? { kind: 'chest', room, at: p }
     : null;
-}
-
-/** Walking into a chest (opened or not) stops beside it, as a wall does. */
-export function keepOffChest(room: CrookedRoom, at: FloorPoint): FloorPoint {
-  if (room.kind !== 'bonus') return at;
-  const p = chestPoint(room);
-  const dx = at.x - p.x;
-  const dz = at.z - p.z;
-  const d = Math.hypot(dx, dz);
-  const r = CROOKED_WALK.margin + 0.2;
-  if (d >= r) return at;
-  if (d === 0) return { x: p.x, z: p.z - r };
-  return { x: p.x + (dx / d) * r, z: p.z + (dz / d) * r };
 }
 
 /**

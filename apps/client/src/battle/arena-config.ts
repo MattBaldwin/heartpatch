@@ -144,6 +144,20 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     haze: '#d6effa',
     hills: '#7fa9b8',
   },
+  // Wild Isle's coast (#621): a sandy beach with the sea behind the fighters.
+  coast: {
+    ground: '#f2e2b8', // TUNE
+    props: [
+      { kind: 'rock', count: 6, ring: ring(6, 11), scale: [3, 4.5] }, // TUNE
+      { kind: 'stones', count: 8, ring: ring(4.8, 10), scale: [3.4, 4.6], front: true }, // TUNE
+      { kind: 'log', count: 3, ring: ring(7, 12), scale: [3, 4] }, // TUNE: driftwood
+      { kind: 'grass', count: 10, ring: ring(4.2, 12), scale: [2.4, 3.2], front: true }, // TUNE
+      { kind: 'tree', count: 7, ring: ring(15, 19), scale: [8.5, 11.9] }, // TUNE: inland
+    ],
+    water: '#8ccbef', // TUNE: the sea
+    haze: '#d6effa',
+    hills: '#7fa9b8',
+  },
   'pumpkin-fields': {
     props: [
       { kind: 'pumpkin', count: 20, ring: ring(5.5, 14), scale: [3.5, 6] }, // TUNE

@@ -6,10 +6,9 @@ import {
   atticRoom,
   atticTarget,
   CROOKED_ATTIC,
-  houseStep,
-  keepOffAtticChest,
   scrapsLeft,
 } from './crooked-attic.js';
+import { houseStep } from './crooked-furniture.js';
 import { CROOKED_ATTIC_TEXT } from './crooked-text.js';
 
 const attic = atticRoom()!;
@@ -42,15 +41,15 @@ describe('the Crooked House’s attic (#306 6f)', () => {
   });
 
   it('stops the Keeper beside the chest, never inside it', () => {
-    const inside = keepOffAtticChest(attic, { x: chest.x + 0.2, z: chest.z - 0.1 });
+    const view = { rooms: [], unlocked: [], bonusOpen: [], keys: [] };
+    const step = (to: { x: number; z: number }) => houseStep(attic, view, to, to).at;
+    const inside = step({ x: chest.x + 0.2, z: chest.z - 0.1 });
     const out =
       Math.abs(inside.x - chest.x) >= CROOKED_ATTIC.half.x ||
       Math.abs(inside.z - chest.z) >= CROOKED_ATTIC.half.z;
     expect(out).toBe(true);
     const free = { x: chest.x, z: chest.z - 2 };
-    expect(keepOffAtticChest(attic, free)).toEqual(free);
-    const landing = CROOKED_HOUSE.rooms.find((r) => r.id === 'landing')!;
-    expect(keepOffAtticChest(landing, chest)).toEqual(chest);
+    expect(step(free)).toEqual(free);
   });
 
   it('says what the big chest gave, a line each (owner decision 4)', () => {
@@ -85,14 +84,14 @@ describe('the Crooked House’s attic (#306 6f)', () => {
   });
 
   it('ends a tap-walk into the chest beside it, so the walk stops (no frame after frame)', () => {
-    const view = { unlocked: [], bonusOpen: [], keys: [] };
+    const view = { rooms: [], unlocked: [], bonusOpen: [], keys: [] };
     // Walk from the ladder straight at the chest's middle, as a tap on it does.
     let at = { x: chest.x, z: attic.box.z - 1.6 };
     let steps = 0;
     for (; steps < 600; steps++) {
       const d = Math.hypot(chest.x - at.x, chest.z - at.z);
       const k = Math.min(1, 0.05 / d);
-      const next = houseStep(attic, view, {
+      const next = houseStep(attic, view, at, {
         x: at.x + (chest.x - at.x) * k,
         z: at.z + (chest.z - at.z) * k,
       }).at;

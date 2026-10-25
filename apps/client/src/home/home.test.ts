@@ -566,6 +566,12 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       building: { id: 'jack-o-lantern-hearthfire' },
       needs: [{ ok: true }],
     });
+    // Plenty for a Wild Isle Bridge (#621, `land` too) and no lantern kit: still no second card.
+    const rich = landTileOffer(
+      { ...tile, q: 4, buildings: [] },
+      homeWith({ buildings: [outer], items: { timber: 500, stone: 500, glimmer: 50 } }),
+    );
+    expect(rich.kind === 'build' && rich.lantern).toBeNull();
   });
 });
 
