@@ -232,9 +232,9 @@ export function createPostSellService(options: PostSellServiceOptions): PostSell
         // the bag), then today's selling under it: two sales at once take
         // turns here, so the cap holds, and a basket past it moves nothing.
         await createHeartCoinsRepo(tx).lockBalance(mapId, user.id);
-        const today = await heartCoinsView(tx, map, user.id, at);
-        if (today.today.sell + coins > today.caps.sell) {
-          const room = today.caps.sell - today.today.sell;
+        const day = await heartCoinsView(tx, map, user.id, at);
+        if (day.today.sell + coins > day.caps.sell) {
+          const room = day.caps.sell - day.today.sell;
           throw new AppError('CONFLICT', room > 0 ? MESSAGES.wontFit : MESSAGES.capped);
         }
 
