@@ -490,3 +490,36 @@ test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; re
     await page.evaluate(() => (window as IslandHooks).__islandMap?.weather()?.placed ?? 0),
   ).toBe(0);
 });
+
+test('a real tap on the weather chip opens the Forecast sheet (#621)', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // one signup through the Keeper picker; CI renders in software
+  const page = await newPlayer(browser, uniqueName('sky'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
+  await lobby.getByLabel('Patch name').fill('Drizzle Cove');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+
+  const chip = page.getByTestId('weather-chip');
+  await expect(chip).toBeVisible({ timeout: 30_000 });
+  // Nothing lies over the chip (the HUD is pointer-events: none, the legend's
+  // whole-row tap sits under it): the finger lands on the chip itself.
+  const hit = await chip.evaluate((node) => {
+    const r = node.getBoundingClientRect();
+    const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return top !== null && node.contains(top);
+  });
+  expect(hit).toBe(true);
+  // A real click (no force, no dispatched event): the sheet opens, the legend stays shut.
+  await chip.click();
+  await expect(page.getByTestId('weather-sheet')).toBeVisible();
+  await expect(page.getByTestId('map-legend-button')).not.toHaveAttribute('aria-expanded', 'true');
+  await page.getByTestId('weather-close').click();
+  await expect(page.getByTestId('weather-sheet')).toBeHidden();
+
+  await page.context().close();
+});

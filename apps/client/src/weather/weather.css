@@ -35,7 +35,11 @@
   }
 }
 
+/* At the end of the patch-name card's row, like the 💛 pill: over the
+   legend's whole-row tap (::before), and tappable though the HUD is not. */
 .weather-chip {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -50,6 +54,15 @@
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+/* 44pt to the finger, 32 to the eye. */
+.weather-chip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
 }
 
 .weather-chip[hidden],
