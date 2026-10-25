@@ -1572,3 +1572,246 @@ button.post-col-head {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
 }
+
+/* Gift, Trade and Swap from the bar (#655 part D; the owner-approved mockup v4,
+   sections 4-8). Bars reuse .post-send-bar; popovers sit above the bar. */
+.post-body:has(> .post-gift-bar, > .post-swap-bar) {
+  flex: 1 0 auto;
+}
+
+.post-gift-bar,
+.post-swap-bar {
+  margin-top: auto;
+  border-top: 2px solid #f6dceb;
+}
+
+/* A picked stack takes its column's full width: − N + with real 44 pt buttons. */
+.post-slot-wide {
+  padding: 4px;
+  border-radius: 14px;
+  outline: 2px solid var(--own);
+  outline-offset: -2px;
+  background: var(--own-soft);
+}
+
+.post-col .post-slot-wide .post-slot.picked {
+  outline: none;
+  background: transparent;
+}
+
+.post-slot-wide .post-stepper,
+.post-strip-pop .post-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 6px;
+}
+
+.post-step-n {
+  display: grid;
+  justify-items: center;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-step-n b {
+  font-size: 18px;
+}
+
+.post-step-n small {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a6f8c;
+}
+
+/* A pick in a bar's strip is a 44 pt button. */
+.post-mini.tap {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-mini.tap.open {
+  outline: 3px solid #b8487a;
+  background: #fff;
+}
+
+.post-mini.tap:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 1px;
+}
+
+.post-half-things.mini {
+  gap: 0;
+}
+
+.post-strip-pop {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px solid #f6dceb;
+  box-shadow: 0 -4px 18px rgb(74 49 80 / 22%);
+}
+
+.post-pop-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.post-pop-who b {
+  min-width: 0;
+}
+
+/* Gift: "To: Mia ▾" and the picks on one row, the count and Send gift under. */
+.post-gift-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.post-to-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  max-width: 60%;
+  min-height: 44px;
+  padding: 0 10px 0 6px;
+  border: 2px solid #c9c2f0;
+  border-radius: 999px;
+  background: #ebe8fa;
+  color: #6a5fd0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-to-chip:disabled {
+  cursor: default;
+}
+
+.post-to-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post-picks {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  /* Room for each ×N badge, which hangs off its tile inside the scroller. */
+  padding: 4px 10px 8px 2px;
+  flex: 1 1 0;
+  overflow-x: auto;
+}
+
+.post-gift-act {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.post-gift-act > .hp-button,
+.post-swap-bar > .hp-button {
+  min-width: 112px;
+  min-height: 48px;
+}
+
+.post-gift-sum {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* Swap: what this swap is, swaps left, and Swap. */
+.post-swap-bar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.post-bar-sum {
+  display: grid;
+  min-width: 0;
+}
+
+.post-bar-sum b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-bar-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff8ec;
+  border: 2px solid #f6e6c9;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* The mate picker's rows (the sheet itself is the confirm layer's card). */
+.post-mate-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.post-mate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 12px;
+  border: 2px solid #f6dceb;
+  border-radius: 14px;
+  background: #fff;
+  color: #4a3150;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-mate-row.on {
+  background: #ebe8fa;
+  border-color: #6a5fd0;
+}
+
+.post-mate-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post-mate-row:focus-visible,
+.post-to-chip:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 2px;
+}

@@ -316,7 +316,10 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
     .tap();
   await leePost.getByTestId('step-up-timber').tap();
   await expect.poll(async () => (await postState(lee))?.give).toBe(1);
+  // A gift asks first (#655): the sheet says what goes, then Send! sends it.
   await leePost.getByTestId('post-send-gift').tap();
+  await expect(leePost.getByTestId('post-gift-confirm')).toContainText('Send this gift? 🎁');
+  await leePost.getByTestId('post-gift-confirm-yes').tap();
   await expect(leePost.getByTestId('post-note')).toHaveText(
     `Gift sent! ${samName} can pick it up at any post. 🎁`,
   );
@@ -370,9 +373,11 @@ test('swaps 10 Stone for 1 Glimmer at a post, up to the day’s cap (#523)', asy
   // Pick, say yes, and the Glimmer is in the bag.
   for (let i = 1; i <= 3; i += 1) {
     await page.getByTestId('post-swap-stone').tap();
-    await expect(page.getByTestId('post-swap-confirm')).toContainText('Swap 10 Stone for 1 💎?');
+    await expect(page.getByTestId('post-swap-sum')).toHaveText('10 Stone → 1 💎');
     await page.getByTestId('post-swap-yes').tap();
-    await expect(page.getByTestId('post-note')).toHaveText('Yay! 1 💎 Glimmer is in your bag!');
+    await expect(page.getByTestId('post-swap-note')).toHaveText(
+      'Yay! 1 💎 Glimmer is in your bag!',
+    );
     await expect(today).toHaveText(`Today: ${String(i)} of 3 💎`);
   }
   // At the cap: the day's done, and nothing more swaps.

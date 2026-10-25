@@ -93,6 +93,7 @@ const E2E_GROUPS = [
     'potions',
     'quality-budget',
     'sell-basket',
+    'gift-trade-swap-bar',
     'smoke',
     'trick-or-treat',
     'whats-new',
