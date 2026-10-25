@@ -28,8 +28,8 @@ const TERRAIN = process.env.TERRAIN ?? 'meadow';
 const TIME = process.env.TIME ?? 'day';
 /** Viewport, pixel ratio and the crop (CSS px) that frames the opponent and leaves the reference out. */
 const DEVICES = {
-  iphone: { width: 390, height: 844, dpr: 2, clip: { x: 140, y: 150, width: 250, height: 370 } },
-  ipad: { width: 820, height: 1180, dpr: 2, clip: { x: 300, y: 150, width: 440, height: 570 } },
+  iphone: { width: 390, height: 844, dpr: 2, clip: { x: 60, y: 40, width: 330, height: 520 } },
+  ipad: { width: 820, height: 1180, dpr: 2, clip: { x: 200, y: 40, width: 620, height: 780 } },
 };
 const devices = (process.env.DEVICES ?? 'iphone,ipad').split(',');
 

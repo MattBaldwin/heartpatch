@@ -23,7 +23,7 @@ setPerfReports(false);
  * Query flags: `?species=puddlepuff` (default the first species),
  * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`, and `?silhouette`
  * (only the squishies, on white, for silhouette sheets), `?studio` (fog off and
- * the backdrop cleared to a flat pale colour, so the squishy's own colours and
+ * the backdrop cleared to a flat colour over a matt floor, so the squishy's own colours and
  * shape read without the arena's haze), `?motion` (idle
  * animation on, to check how the vinyl looks while fighters move), `?alone` (no
  * reference squishy on the player's side, so a wide opponent isn't cropped by it).
@@ -128,6 +128,15 @@ function frame(): void {
     scene.clearColor.set(0.26, 0.24, 0.4, 1);
     for (const mesh of scene.meshes) {
       if (!mesh.name.startsWith('squishy-') && mesh.name !== 'arena-ground') mesh.setEnabled(false);
+    }
+    // A matt neutral floor, so the lights don't flare a hot spot of yellow-green across it.
+    for (const material of scene.materials) {
+      if (material instanceof PBRMaterial && material.name === 'arena-ground-mat') {
+        material.clearCoat.isEnabled = false;
+        material.roughness = 1;
+        material.metallic = 0;
+        material.albedoColor = new Color3(0.5, 0.48, 0.62);
+      }
     }
   }
   if (stage && battle) {
