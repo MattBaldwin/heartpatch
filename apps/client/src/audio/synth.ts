@@ -178,8 +178,18 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   return buffer;
 }
 
-/** The music's instruments: one note of a score, `spb` seconds per beat. */
-export function playNote(ctx: BaseAudioContext, out: AudioNode, note: Note, spb: number): void {
+/**
+ * The music's synth instruments: one note of a score, `spb` seconds per beat.
+ * They stand in for the sampled instruments (#664) until those load; `noise`
+ * is for the shaker.
+ */
+export function playNote(
+  ctx: BaseAudioContext,
+  out: AudioNode,
+  note: Note,
+  spb: number,
+  noiseSource?: AudioBuffer,
+): void {
   const at = note.beat * spb;
   const len = note.beats * spb;
   const freq = midiToHz(note.midi);
@@ -223,6 +233,34 @@ export function playNote(ctx: BaseAudioContext, out: AudioNode, note: Note, spb:
       tone(ctx, out, { type: 'sine', at, dur: 1.6, freq, gain: v * 0.4, attack: 0.004 });
       tone(ctx, out, { type: 'sine', at, dur: 0.5, freq: freq * 2.76, gain: v * 0.12 });
       tone(ctx, out, { type: 'sine', at, dur: 0.18, freq: freq * 5.4, gain: v * 0.06 });
+      return;
+    }
+    case 'piano': {
+      tone(ctx, out, { type: 'triangle', at, dur: len + 0.6, freq, gain: v * 0.3, lowpass: 1800 });
+      tone(ctx, out, { type: 'sine', at, dur: 0.4, freq: freq * 2, gain: v * 0.08 });
+      return;
+    }
+    case 'harp': {
+      tone(ctx, out, { type: 'triangle', at, dur: 1.4, freq, gain: v * 0.35, lowpass: 2200 });
+      tone(ctx, out, { type: 'sine', at, dur: 0.3, freq: freq * 2, gain: v * 0.08 });
+      return;
+    }
+    case 'pizz': {
+      tone(ctx, out, { type: 'triangle', at, dur: 0.35, freq, gain: v * 0.45, attack: 0.004 });
+      return;
+    }
+    case 'shaker': {
+      if (noiseSource) {
+        noise(ctx, out, noiseSource, {
+          at,
+          dur: 0.09,
+          gain: v * 0.12,
+          filter: 'bandpass',
+          freq: 6000,
+          q: 0.8,
+          attack: 0.015,
+        });
+      }
       return;
     }
     case 'whistle': {

@@ -32,11 +32,27 @@ describe('music score', () => {
       expect(note.midi).toBeGreaterThanOrEqual(36);
       expect(note.midi).toBeLessThanOrEqual(96);
     }
-    // Long enough not to nag, short enough to keep each rendered loop small.
+    // Long enough not to nag (each tune plays twice, dressed differently, #664),
+    // short enough to keep each rendered loop small.
     const seconds = loopSeconds(score);
-    expect(seconds).toBeGreaterThan(15);
-    expect(seconds).toBeLessThan(40);
-    expect(seconds * MUSIC.sampleRate * 4).toBeLessThan(4 * 1024 * 1024);
+    expect(seconds).toBeGreaterThan(20);
+    expect(seconds).toBeLessThanOrEqual(60);
+    expect(seconds * MUSIC.sampleRate * 4).toBeLessThan(5.5 * 1024 * 1024);
+  });
+
+  it('dresses up the second time round: new voices join halfway through', () => {
+    for (const id of ['day', 'night', 'halloween'] as const) {
+      const score = SCORES[id];
+      const half = (score.bars * score.beatsPerBar) / 2;
+      const voices = (from: number, to: number) =>
+        new Set(score.notes.filter((n) => n.beat >= from && n.beat < to).map((n) => n.voice));
+      const first = voices(0, half);
+      const second = voices(half, half * 2);
+      expect(
+        [...second].some((v) => !first.has(v)),
+        id,
+      ).toBe(true);
+    }
   });
 
   it('keeps notes in time order', () => {

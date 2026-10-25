@@ -41,7 +41,7 @@ export const fetchBytes: FetchBytes = async (url) => {
 };
 
 /** Old Safari only has the callback form of `decodeAudioData`. */
-function decode(ctx: BaseAudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
+export function decode(ctx: BaseAudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
   return new Promise((resolve, reject) => {
     const pending = ctx.decodeAudioData(bytes, resolve, reject) as Promise<AudioBuffer> | undefined;
     pending?.catch(reject);

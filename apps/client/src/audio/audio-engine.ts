@@ -1,5 +1,6 @@
 import { MIX, MUSIC, SFX } from './audio-config.js';
 import { DUCKING_CUES, UI_CUES, type CueName } from './cues.js';
+import { loadInstruments, playSampled, voiceBuses, type InstrumentBank } from './music-samples.js';
 import { loopSeconds, SCORES, type Score, type TrackId } from './music-score.js';
 import { recordingFor } from './recorded.js';
 import { fetchBytes, loadSamples, type FetchBytes, type SampleId } from './samples.js';
@@ -13,6 +14,9 @@ import { noiseBuffer, playNote, roomImpulse } from './synth.js';
 // and then play as plain looping buffers: no timers or per-frame work.
 // The big moments' recorded hits (#653) start loading when the engine is made
 // (after the first tap); each plays its synth stand-in until they're in.
+// So do the music's instrument notes (#664): a loop waits a few seconds for
+// them, renders with the synth if they're late, and is re-rendered and
+// cross-faded in place (same spot in the tune) once they arrive.
 
 export interface Engine {
   /** Plays a cue now; false if it was dropped (too many voices, or a repeat too soon). */
@@ -29,6 +33,8 @@ interface Playing {
   readonly id: TrackId;
   readonly gain: GainNode;
   source: AudioBufferSourceNode | null;
+  /** Context time the loop's first beat played (or would have). */
+  startedAt: number;
 }
 
 type OfflineCtor = new (
@@ -47,16 +53,41 @@ function offlineCtor(): OfflineCtor | null {
 
 /**
  * Renders a score to one seamless mono loop: notes that ring past the end are
- * folded back over the start, then the loop is levelled to a steady peak.
+ * folded back over the start (the room's echo too), then the loop is levelled
+ * to a steady loudness.
+ * Each note plays its sampled instrument from `bank` (#664), or the synth if
+ * that instrument isn't loaded.
  */
-export async function renderLoop(ctx: BaseAudioContext, score: Score): Promise<AudioBuffer | null> {
+export async function renderLoop(
+  ctx: BaseAudioContext,
+  score: Score,
+  bank: InstrumentBank = new Map(),
+): Promise<AudioBuffer | null> {
   const Offline = offlineCtor();
   if (!Offline) return null;
   const rate = MUSIC.sampleRate;
   const loopLength = Math.round(loopSeconds(score) * rate);
   const offline = new Offline(1, loopLength + Math.round(MUSIC.tailS * rate), rate);
   const spb = 60 / score.bpm;
-  for (const note of score.notes) playNote(offline, offline.destination, note, spb);
+  // The music's soft room (#664) is rendered into the loop, once, rather than
+  // sent to the live reverb: a live convolver fed by music runs for as long
+  // as the music plays, which an older iPad (or CI's WebKit) feels.
+  const mix = offline.createGain();
+  mix.connect(offline.destination);
+  const room = offline.createConvolver();
+  room.buffer = roomImpulse(offline, MIX.reverbS);
+  const send = offline.createGain();
+  send.gain.value = MIX.musicReverb;
+  mix.connect(send);
+  send.connect(room);
+  room.connect(offline.destination);
+  const buses = voiceBuses(offline, mix);
+  const hiss = noiseBuffer(offline);
+  for (const note of score.notes) {
+    if (!playSampled(offline, buses, bank, note, spb)) {
+      playNote(offline, mix, note, spb, hiss);
+    }
+  }
   const rendered = await offline.startRendering();
   const from = rendered.getChannelData(0);
   const loop = ctx.createBuffer(1, loopLength, rate);
@@ -66,13 +97,24 @@ export async function renderLoop(ctx: BaseAudioContext, score: Score): Promise<A
     to[i - loopLength] = (to[i - loopLength] ?? 0) + (from[i] ?? 0);
   }
   let peak = 0;
-  for (const sample of to) peak = Math.max(peak, Math.abs(sample));
-  // TUNE: a steady peak per loop (tech spec §15 asks for loudness matching).
+  let power = 0;
+  for (const sample of to) {
+    peak = Math.max(peak, Math.abs(sample));
+    power += sample * sample;
+  }
+  // One loudness for every loop (tech spec §15), never past the peak cap.
   if (peak > 0) {
-    const scale = 0.8 / peak;
+    const rms = Math.sqrt(power / to.length);
+    const scale = Math.min(MUSIC.rms / rms, MUSIC.peak / peak);
     for (let i = 0; i < to.length; i += 1) to[i] = (to[i] ?? 0) * scale;
   }
   return loop;
+}
+
+/** The context the music's notes decode on: the loops' own rate, so they stay small. */
+function decodeContext(ctx: BaseAudioContext): BaseAudioContext {
+  const Offline = offlineCtor();
+  return Offline ? new Offline(1, 1, MUSIC.sampleRate) : ctx;
 }
 
 export function createEngine(
@@ -98,7 +140,8 @@ export function createEngine(
   sfxBus.connect(master);
   const uiBus = ctx.createGain();
   uiBus.connect(master);
-  // A light room reverb (#653): SFX and UI send a little into it, music none.
+  // A light room reverb (#653): SFX and UI send a little into it. The music's
+  // room is rendered into its loops instead (#664, `renderLoop`).
   const reverb = ctx.createConvolver();
   reverb.buffer = roomImpulse(ctx, MIX.reverbS);
   reverb.connect(master);
@@ -118,7 +161,21 @@ export function createEngine(
   /** When each voice slot frees up (context time); fixed size, so no allocation per play. */
   const voiceEnds = new Float64Array(SFX.maxVoices);
   const lastPlayed = new Map<CueName, number>();
+  /** Empty (every loop plays the synth) until all the notes have settled. */
+  let instruments: InstrumentBank = new Map();
+  let instrumentsIn = false;
+  const instrumentsLoaded = loadInstruments(decodeContext(ctx), fetcher).then((bank) => {
+    instruments = bank;
+    instrumentsIn = true;
+  });
+  /** Settles once the notes are in, or after the wait (a slow first visit plays the synth). */
+  const instrumentsOrWait = Promise.race([
+    instrumentsLoaded,
+    new Promise<void>((resolve) => setTimeout(resolve, MUSIC.instrumentWaitS * 1000)),
+  ]);
   const loops = new Map<TrackId, Promise<AudioBuffer | null>>();
+  /** Loops rendered before the instruments were in, to redo once they are. */
+  const synthLoops = new Set<TrackId>();
   let playing: Playing | null = null;
   let duckUntil = 0;
 
@@ -139,7 +196,12 @@ export function createEngine(
   const loopFor = (id: TrackId): Promise<AudioBuffer | null> => {
     let loop = loops.get(id);
     if (!loop) {
-      loop = renderLoop(ctx, SCORES[id]).catch(() => null);
+      loop = instrumentsOrWait
+        .then(() => {
+          if (!instrumentsIn) synthLoops.add(id);
+          return renderLoop(ctx, SCORES[id], instruments);
+        })
+        .catch(() => null);
       loops.set(id, loop);
     }
     return loop;
@@ -157,14 +219,39 @@ export function createEngine(
     }
   };
 
+  /** Starts `buffer` looping into `entry`, `offset` seconds into the tune, fading in. */
+  const startLoop = (entry: Playing, buffer: AudioBuffer, offset: number) => {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = 0;
+    source.loopEnd = buffer.duration;
+    source.connect(entry.gain);
+    source.onended = () => {
+      source.disconnect();
+      entry.gain.disconnect();
+    };
+    const now = ctx.currentTime;
+    entry.gain.gain.setValueAtTime(0, now);
+    entry.gain.gain.linearRampToValueAtTime(1, now + MUSIC.crossFadeS);
+    source.start(now, offset);
+    entry.source = source;
+    entry.startedAt = now - offset;
+  };
+
+  const newEntry = (id: TrackId): Playing => {
+    const entry: Playing = { id, gain: ctx.createGain(), source: null, startedAt: 0 };
+    entry.gain.gain.value = 0;
+    entry.gain.connect(musicBus);
+    return entry;
+  };
+
   const setTrack = (id: TrackId | null) => {
     if ((playing?.id ?? null) === id) return;
     if (playing) fadeOut(playing);
     playing = null;
     if (!id) return;
-    const entry: Playing = { id, gain: ctx.createGain(), source: null };
-    entry.gain.gain.value = 0;
-    entry.gain.connect(musicBus);
+    const entry = newEntry(id);
     playing = entry;
     void loopFor(id).then((buffer) => {
       // Changed again while it rendered: this one never starts.
@@ -172,24 +259,31 @@ export function createEngine(
         entry.gain.disconnect();
         return;
       }
-      if (!buffer) return;
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-      source.loopStart = 0;
-      source.loopEnd = buffer.duration;
-      source.connect(entry.gain);
-      source.onended = () => {
-        source.disconnect();
-        entry.gain.disconnect();
-      };
-      const now = ctx.currentTime;
-      entry.gain.gain.setValueAtTime(0, now);
-      entry.gain.gain.linearRampToValueAtTime(1, now + MUSIC.crossFadeS);
-      source.start(now);
-      entry.source = source;
+      if (buffer) startLoop(entry, buffer, 0);
     });
   };
+
+  // The instruments came in after a loop had to render with the synth: redo
+  // those loops, and swap the one playing for its new self at the same spot.
+  void instrumentsLoaded.then(() => {
+    if (synthLoops.size === 0 || instruments.size === 0) return;
+    const current = playing;
+    // Let the synth render in progress finish (and start) first.
+    const before = current ? loops.get(current.id) : undefined;
+    for (const id of synthLoops) loops.delete(id);
+    synthLoops.clear();
+    if (!current) return;
+    void Promise.resolve(before)
+      .then(() => loopFor(current.id))
+      .then((buffer) => {
+        if (!buffer || playing !== current || !current.source) return;
+        const offset = (ctx.currentTime - current.startedAt) % buffer.duration;
+        fadeOut(current);
+        const entry = newEntry(current.id);
+        playing = entry;
+        startLoop(entry, buffer, offset);
+      });
+  });
 
   const duckFor = (seconds: number) => {
     const now = ctx.currentTime;
