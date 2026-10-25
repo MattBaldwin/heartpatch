@@ -168,6 +168,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let sellMeter: MeterParts | null = null;
   /** The last sale, for the tab's "Yay!" card. */
   let sold: SellBasketResponse['sold'] | null = null;
+  /** The next draw brings the "Yay!" card into view (once, right after a sale). */
+  let showSold = false;
   const shelves = new Map<string, TradeShelf>();
   let mate: string | null = null;
   let give: TradeLine[] = [];
@@ -330,6 +332,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       if (res && stillHere()) {
         sell = res.sell;
         sold = res.sold;
+        showSold = true;
         // The stepper basket is what sold; after ✨ Sell all spares, what I'd
         // picked stays, kept to what's left.
         sellBasket = from === 'basket' ? new Map() : clampBasket(res.sell, sellBasket);
@@ -1380,8 +1383,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       sellMeter = drawn.meter;
       body.replaceChildren(...drawn.nodes);
       fitNames(body);
-      // A sale's "Yay!" card is at the top of the list: bring it into view.
-      if (sold && !working) {
+      // A sale's "Yay!" card is at the top of the list: bring it into view, once.
+      if (showSold && !working) {
+        showSold = false;
         body.querySelector('[data-testid="post-sell-done"]')?.scrollIntoView({ block: 'nearest' });
       }
       return;
@@ -1437,7 +1441,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   /** Counts the visit pass down, only while a pass's post is open. */
   function syncTicker(on: boolean): void {
     if (on && ticker === undefined) {
-      ticker = window.setInterval(render, 15_000);
+      // Not while a confirm sheet is up: a redraw would take its focus.
+      ticker = window.setInterval(() => {
+        if (sellConfirm === null) render();
+      }, 15_000);
     } else if (!on && ticker !== undefined) {
       window.clearInterval(ticker);
       ticker = undefined;

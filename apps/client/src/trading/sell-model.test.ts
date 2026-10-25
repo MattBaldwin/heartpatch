@@ -1,4 +1,4 @@
-import { planSpareClothing, SELL_RULES, type SellView } from '@heartpatch/shared';
+import { CLOTHING_BY_ID, planSpareClothing, SELL_RULES, type SellView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { hoursToReset } from './glimmer-swap-model.js';
 import {
@@ -10,6 +10,8 @@ import {
   confirmContent,
   countOf,
   hasSpares,
+  lotsIn,
+  MAX_LINES,
   MAX_LOTS,
   rarityOf,
   rowNote,
@@ -155,6 +157,24 @@ describe('the Sell basket (#655)', () => {
     basket = tap(v, basket, 'timber', 5);
     expect(basketTotals(basketLines(basket, sellRows(v))).coins).toBe(sellRoom(v));
     expect(canAdd(v, basket, row(v, 'timber'), sellRows(v))).toBe(false);
+  });
+
+  it('keeps a basket within its line limit', () => {
+    // A spare of every tradable piece and plenty of room: the 41st line won't go in.
+    const ids = [...CLOTHING_BY_ID.values()].filter((c) => c.tradable).map((c) => c.id);
+    const v = view({
+      cap: 10_000,
+      items: [],
+      clothing: ids.map((itemId) => ({ itemId, copies: 3 })),
+    });
+    const rows = sellRows(v);
+    let basket = empty;
+    for (const r of rows) basket = stepLine(v, basket, r, rows, 1);
+    expect(rows.length).toBeGreaterThan(MAX_LINES);
+    expect(basketLines(basket, rows)).toHaveLength(MAX_LINES);
+    // A line already in still steps up.
+    const first = rows[0]!;
+    expect(lotsIn(stepLine(v, basket, first, rows, 1), first)).toBe(2);
   });
 
   it('basket totals count items, not rows, and the cap meter after-line', () => {

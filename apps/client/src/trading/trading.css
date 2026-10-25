@@ -103,13 +103,19 @@
    and f): a tall sheet over the map on a phone; on an iPad in landscape a
    side panel, so the map stays live beside it. */
 .post-sheet {
+  /* Where the sheet sits; the Sell confirm's dim (#655) covers the same box. */
+  --post-left: calc(env(safe-area-inset-left) + 8px);
+  --post-right: calc(env(safe-area-inset-right) + 8px);
+  /* Under the corner buttons (56px from the top), like the Bag. */
+  --post-top: calc(env(safe-area-inset-top) + 68px);
+  --post-bottom: calc(env(safe-area-inset-bottom) + 8px);
+
   position: fixed;
   z-index: 5;
-  left: calc(env(safe-area-inset-left) + 8px);
-  right: calc(env(safe-area-inset-right) + 8px);
-  /* Under the corner buttons (56px from the top), like the Bag. */
-  top: calc(env(safe-area-inset-top) + 68px);
-  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  left: var(--post-left);
+  right: var(--post-right);
+  top: var(--post-top);
+  bottom: var(--post-bottom);
   box-sizing: border-box;
   /* Two shelves side by side need the room on an iPad (#305). */
   max-width: 820px;
@@ -137,10 +143,14 @@
 
 @media (min-width: 900px) and (orientation: landscape) {
   .post-sheet {
+    --post-right: calc(env(safe-area-inset-right) + 16px);
+    --post-top: calc(env(safe-area-inset-top) + 72px);
+    --post-bottom: calc(env(safe-area-inset-bottom) + 16px);
+
     left: auto;
-    right: calc(env(safe-area-inset-right) + 16px);
-    top: calc(env(safe-area-inset-top) + 72px);
-    bottom: calc(env(safe-area-inset-bottom) + 16px);
+    right: var(--post-right);
+    top: var(--post-top);
+    bottom: var(--post-bottom);
     /* Wide enough for two columns, with the map still live beside it (owner, #305). */
     width: 640px;
     margin: 0;
@@ -1412,12 +1422,20 @@ button.post-col-head {
 }
 
 /* The one confirm sheet (#655, post-confirm.ts): over the list, from the
-   bottom, clear of the home indicator. Fixed, inside the post sheet's
-   stacking context. */
+   sheet's bottom (which already clears the home indicator). The dim covers
+   the post sheet's own box, as in the mockup, so nothing outside the sheet
+   looks half covered. Fixed, inside the post sheet's stacking context. */
 .post-confirm-layer {
   position: fixed;
-  inset: 0;
   z-index: 3;
+  left: var(--post-left);
+  right: var(--post-right);
+  top: var(--post-top);
+  bottom: var(--post-bottom);
+  max-width: 820px;
+  margin: 0 auto;
+  border-radius: 24px;
+  overflow: hidden;
 }
 
 .post-confirm-dim {
@@ -1428,12 +1446,10 @@ button.post-col-head {
 
 .post-confirm {
   position: absolute;
-  left: calc(env(safe-area-inset-left) + 14px);
-  right: calc(env(safe-area-inset-right) + 14px);
-  bottom: calc(env(safe-area-inset-bottom) + 14px);
-  max-width: 560px;
-  max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 96px);
-  margin: 0 auto;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: calc(100% - 16px);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1441,19 +1457,17 @@ button.post-col-head {
   flex-direction: column;
   gap: 10px;
   padding: 16px 16px 14px;
-  border-radius: 24px;
+  border-radius: 20px;
   background: #fffafc;
   color: #4a3150;
   box-shadow: 0 -8px 30px rgb(40 20 40 / 30%);
 }
 
-/* iPad landscape: inside the post's side panel, so the map stays live beside it. */
+/* iPad landscape: the post is a side panel; the layer follows it. */
 @media (min-width: 900px) and (orientation: landscape) {
-  .post-confirm {
+  .post-confirm-layer {
     left: auto;
-    right: calc(env(safe-area-inset-right) + 28px);
-    bottom: calc(env(safe-area-inset-bottom) + 28px);
-    width: 616px;
+    width: 640px;
     margin: 0;
   }
 }

@@ -40,6 +40,8 @@ export const rarityOf: RarityOf = (itemId) => {
 /** The most lots of an item, and spares of a piece, one line takes (`SellLineSchema`). */
 export const MAX_LOTS = 100;
 export const MAX_PIECES = 50;
+/** The most lines one basket takes (`SellBasketRequestSchema`). */
+export const MAX_LINES = 40;
 
 /** "1 Ghost Cape", "3 Pumpkin Hoods", "2 Cozy Scarves", "10 Timber". */
 export function countOf(kind: SellLine['kind'], itemId: string, n: number): string {
@@ -107,6 +109,7 @@ export const SELL_TEXT = {
   doneLines: (sold: SellBasketResponse['sold']) =>
     `${inWords(sold.lines.map((l) => countOf(l.kind, l.itemId, l.quantity)))} sold.`,
   // The server's messages too (modules/post-sell MESSAGES): change both together.
+  // The bar shows the server's own text; these pin the contract in the tests.
   capped: "You've sold enough for today! Come back tomorrow. 🌙",
   wontFitNow: "Some of that won't fit today. Let's look again!",
   resetsIn: (hours: number) =>
@@ -251,10 +254,17 @@ export function basketTotals(
 export const lotsIn = (basket: SellBasket, row: Pick<SellRow, 'kind' | 'itemId'>) =>
   basket.get(rowKey(row)) ?? 0;
 
-/** One more lot of a row still fits: the row has it, and today's room takes the basket with it. */
+/**
+ * One more lot of a row still fits: the row has it, today's room takes the
+ * basket with it, and a new line keeps the basket within its line limit.
+ */
 export function canAdd(view: SellView, basket: SellBasket, row: SellRow, rows: readonly SellRow[]) {
-  const { coins } = basketTotals(basketLines(basket, rows));
-  return lotsIn(basket, row) < row.maxLots && coins + row.coins <= sellRoom(view);
+  const lines = basketLines(basket, rows);
+  const { coins } = basketTotals(lines);
+  const n = lotsIn(basket, row);
+  return (
+    n < row.maxLots && coins + row.coins <= sellRoom(view) && (n > 0 || lines.length < MAX_LINES)
+  );
 }
 
 /**
