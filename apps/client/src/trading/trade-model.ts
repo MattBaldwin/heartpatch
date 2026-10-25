@@ -68,7 +68,7 @@ export const TRADE_TEXT = {
   giftConfirmTitle: 'Send this gift? 🎁',
   giftConfirmTo: (name: string) => `To ${name}`,
   giftConfirmNote: (name: string) =>
-    `${name} picks it up at the post. You can take it back until then.`,
+    `${name} picks it up at the post. You can take it back until\u00a0then.`,
   changePick: 'Tap to change it',
   ofShelf: (n: number) => `of ${String(n)}`,
   notNow: 'Not now',
