@@ -190,7 +190,13 @@ export function createWeatherService(options: WeatherServiceOptions): WeatherSer
               from: seed,
               to: seed,
               startAt: start.toISOString(),
-              endAt: new Date(start.getTime() + request.hours * 60 * 60 * 1000).toISOString(),
+              // Never past the day's end, like every planned front.
+              endAt: new Date(
+                Math.min(
+                  start.getTime() + request.hours * 60 * 60 * 1000,
+                  dayWindow(day, map.timeZone).endMs,
+                ),
+              ).toISOString(),
               // Over my whole home and the land around it.
               radius: 3,
             },

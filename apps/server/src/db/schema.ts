@@ -1352,14 +1352,6 @@ export const tileTending = pgTable(
   ],
 );
 
-/**
- * Wild Isle roads (#621): a tile attribute, not a building, so a road and a
- * building share a tile. Level 1 is a Path, 2 a Road, 3 a Paved road
- * (`TRAVEL_RULES.roads`). Owner-only (owner answer Q3): it counts only while
- * its owner holds the tile, and comes down with half back when the tile is
- * captured or goes wild; a leaver's row is ignored until the tile is laid
- * again. Locked at step 6b (tech spec §7), after `tile_explore`.
- */
 // Wild Isle weather (#621): each map-local day's plan, stored the first time
 // anyone needs it (`ON CONFLICT DO NOTHING`), so a retune of `WEATHER_RULES`
 // never rewrites a day kids already saw. `fronts` is `WeatherFront[]`
@@ -1381,6 +1373,14 @@ export const weatherDays = pgTable(
   (t) => [primaryKey({ columns: [t.mapId, t.day] })],
 );
 
+/**
+ * Wild Isle roads (#621): a tile attribute, not a building, so a road and a
+ * building share a tile. Level 1 is a Path, 2 a Road, 3 a Paved road
+ * (`TRAVEL_RULES.roads`). Owner-only (owner answer Q3): it counts only while
+ * its owner holds the tile, and comes down with half back when the tile is
+ * captured or goes wild; a leaver's row is ignored until the tile is laid
+ * again. Locked at step 6b (tech spec §7), after `tile_explore`.
+ */
 export const tileRoads = pgTable(
   'tile_roads',
   {

@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import {
+  addDays,
   ApiErrorSchema,
   deriveSeed,
   HomeResponseSchema,
@@ -21,6 +23,7 @@ import { newSessionToken } from '../auth/secrets.js';
 import { BUILDING_DATA } from '../buildings/hearthfire.js';
 import { productionAt } from '../buildings/production.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
+import { creditHeartCoins } from '../heart-coins/service.js';
 import { grantItems } from '../inventory/service.js';
 import { makeHomestead, type HomesteadTile } from '../../../tests/homestead.js';
 import { frontIdThat, makeWildIsle, putPlan, stormOver } from '../../../tests/weather.js';
@@ -424,5 +427,150 @@ describe.skipIf(!url)('storm knocks (needs DATABASE_URL)', () => {
     expect(await sweep(mapId)).toBe(0);
     expect((await rowOf(row)).damagedAt).toBe(null);
     expect((await repair()).statusCode).toBe(409);
+  });
+
+  it('knocks a building placed while a storm sits over it, and again after a fix by a later front', async () => {
+    const { server, kid, mapId, seed, plot } = await setup();
+    // A second hut placed mid-storm, on the second homestead (the first one's hut goes).
+    await db.execute(`delete from buildings where map_id = '${mapId}'`);
+    const midStorm = new Date(PLACED.getTime() + 90 * 60_000);
+    const [row] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: plot.id,
+        buildingId: HUT.id,
+        kind: 'resource',
+        spot: 1,
+        placedAt: midStorm,
+        producedSince: midStorm,
+      })
+      .returning({ id: buildings.id });
+    const first = frontIdThat(true, seed, row!.id, 'early');
+    const later = frontIdThat(true, seed, row!.id, 'late');
+    const at = (h: number) => new Date(PLACED.getTime() + h * HOUR_MS);
+    await putPlan(db, mapId, TODAY, [
+      stormOver(first, plot, at(1), at(2)),
+      stormOver(later, plot, at(3), at(4)),
+    ]);
+    // Built at 13:30 under the 13:00–14:00 storm: the rest of it still counts.
+    clock.setTime(at(2.5).getTime());
+    expect(await sweep(mapId)).toBe(1);
+    expect(await rowOf(row!.id)).toMatchObject({ damagedAt: at(2), damagedBy: first });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 5, stone: 4 }, 'dev-grant'),
+    );
+    const fixed = await call(server, 'POST', `/maps/${mapId}/buildings/${row!.id}/repair`, kid);
+    expect(fixed.statusCode, fixed.body).toBe(200);
+    // The 15:00–16:00 front is a new roll, and it hits.
+    clock.setTime(at(5).getTime());
+    expect(await sweep(mapId)).toBe(1);
+    expect(await rowOf(row!.id)).toMatchObject({ damagedAt: at(4), damagedBy: later });
+  });
+
+  it('stops a knocked Warehouse delivering, skips its knocked mornings, and delivers again from the fix', async () => {
+    const server = await start();
+    const kid = await player();
+    const made = await server.inject({
+      method: 'POST',
+      url: '/api/v1/maps',
+      headers: HEADERS,
+      cookies: { [SESSION_COOKIE]: kid.token },
+      payload: { name: 'Store Patch', timeZone: ZONE },
+    });
+    const mapId = MapResponseSchema.parse(made.json()).map.id;
+    await makeWildIsle(db, mapId);
+    // Placed Wednesday afternoon; the Warehouse is knocked Thursday 10:00,
+    // after that morning's upkeep. Mornings (06:00 UTC) Thu–Sun fall between.
+    const placed = new Date('2026-10-21T14:00:00Z');
+    const knockedAt = new Date('2026-10-22T10:00:00Z');
+    for (let day = '2026-10-21'; day <= TODAY; day = addDays(day, 1)) {
+      await putPlan(db, mapId, day, []);
+    }
+    const hutPlot = await makeHomestead(db, mapId, kid.id, placed, 0);
+    const storePlot = await makeHomestead(db, mapId, kid.id, placed, 1);
+    await db.execute(
+      `update tiles set terrain = 'forest', node_resource = null where id = '${hutPlot.id}'`,
+    );
+    await db.execute(`update tiles set node_resource = null where id = '${storePlot.id}'`);
+    const [hut] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: hutPlot.id,
+        buildingId: HUT.id,
+        kind: 'resource',
+        level: 3,
+        spot: 1,
+        placedAt: placed,
+        producedSince: placed,
+      })
+      .returning({ id: buildings.id });
+    const [store] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: storePlot.id,
+        buildingId: 'warehouse',
+        kind: 'warehouse',
+        spot: 1,
+        placedAt: placed,
+        damagedAt: knockedAt,
+        damagedBy: 'dev',
+        weatherCheckedThrough: knockedAt,
+      })
+      .returning({ id: buildings.id });
+    await withTransaction(db, (tx) =>
+      creditHeartCoins(tx, {
+        source: 'dev-grant',
+        refId: randomUUID(),
+        mapId,
+        userId: kid.id,
+        amount: 1000,
+        at: placed,
+      }),
+    );
+    const rows = await createBuildingsRepo(db).listOwned(mapId, kid.id);
+    const hutRow = rows.find((r) => r.id === hut!.id)!;
+    const storeRow = rows.find((r) => r.id === store!.id)!;
+    // The knock cuts the delivery: what the hut banks is capped from there.
+    const capped = productionAt(hutRow, clock, ZONE, storeRow)!.ready;
+    const uncapped = productionAt(hutRow, clock, ZONE, { ...storeRow, damagedAt: null })!.ready;
+    expect(capped['timber']).toBeLessThan(uncapped['timber']!);
+
+    const settled = await settle(server, kid, mapId);
+    expect(settled.produced?.find((p) => p.buildingRowId === hut!.id)?.items).toEqual(capped);
+    const upkeep = async () =>
+      (
+        await db.query.heartCoinLedger.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.source, 'upkeep')),
+        })
+      ).reduce((n, r) => n + r.amount, 0);
+    // The hut pays four mornings at level 3; the Warehouse only the one before its knock.
+    expect(await upkeep()).toBe(-(4 * 23 + 20));
+    expect(await rowOf(store!.id)).toMatchObject({ pausedAt: null, upkeepPaidThrough: TODAY });
+    const before = await home(server, kid, mapId);
+    expect(before.buildings.find((b) => b.id === store!.id)?.warehouse?.delivering).toBe(false);
+
+    await withTransaction(db, (tx) =>
+      grantItems(
+        tx,
+        { mapId, userId: kid.id },
+        { timber: 150, stone: 113, glimmer: 5 },
+        'dev-grant',
+      ),
+    );
+    const fixed = await call(server, 'POST', `/maps/${mapId}/buildings/${store!.id}/repair`, kid);
+    expect(fixed.statusCode, fixed.body).toBe(200);
+    const after = HomeResponseSchema.parse(fixed.json());
+    expect(after.buildings.find((b) => b.id === store!.id)?.warehouse?.delivering).toBe(true);
+    expect(after.buildings.find((b) => b.id === hut!.id)?.production?.maxCycles).toBe(null);
+    // The knocked mornings are never charged back.
+    clock.setTime(clock.getTime() + HOUR_MS);
+    await settle(server, kid, mapId);
+    expect(await upkeep()).toBe(-(4 * 23 + 20));
   });
 });
