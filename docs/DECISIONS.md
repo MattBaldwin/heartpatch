@@ -1924,3 +1924,11 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
   - **Owner, 15:24Z:** "Get rid of the tree for Cubbun." The tree (tree-stump and tree-top) is removed, and the hug arms are re-seated to hug Cubbun's own tummy, because the mirrored far arm pointed sideways with no trunk to hold.
 - **Coordinator call:** #382 may add more than the ~6 parts first allowed (14 after the duck rework, minus the tree parts). They're all data-only, built from existing primitives, with a data test, and listed in the PR body.
 - **Standing rule:** serve owner decisions one at a time.
+
+**Owner decisions (other)**
+- **#688 (#655 D) screens approved (v9, ~15:52Z).** The supervisor's independent render-check took four rounds (v2, v5, v6, v9) before it passed.
+
+**Coordinator calls**
+- **Lanes handed off for size:** the #382 Wave 2b lane reached about 670k context ($25.71) and its notes drifted from its renders. A fresh Sonnet lane (2c) took over from #382 comment 6399726332 with the v6 fix list. The W1-8A lane cost $43.85 (245k).
+- **#382 Oinkle curl tail:** it failed three render-checks (handle, raspberry), so it fell back to a short stub tail.
+- **`isBuildableOn` naming:** main's `isBuildableOn` (W1-8A, buildings) checks whether a building is allowed on a patch type. W1-6's shared tile check for bridges and docks is `travelBuildCheck`. These are different questions, not a duplicate.
