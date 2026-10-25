@@ -304,7 +304,15 @@
   display: contents;
 }
 
-.tile-panel-actions:not(:has(.tile-actions-slot > *)) {
+.tile-panel-actions:not(:has(.tile-actions-slot > *)):not(
+    [data-testid='tile-panel-water-actions']
+  ) {
+  display: none;
+}
+
+/* A river tile's own buttons (a bridge, #621) sit straight in this box, with no
+   feature slot; only an empty one hides. */
+.tile-panel-actions[data-testid='tile-panel-water-actions']:empty {
   display: none;
 }
 

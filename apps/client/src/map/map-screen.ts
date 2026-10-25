@@ -77,6 +77,8 @@ export interface MapScreenOptions {
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
+  /** Buttons for a tapped water tile (a bridge on a river, Wild Isle #621); land never reaches it. */
+  waterTileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
   layers?: readonly MapLayer[];
   /** Small things at the end of the patch-name card's row (the 💛 Heart Coin pill, #601). */
@@ -381,6 +383,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d?.select(null);
     panel.hide();
     options.tileActions?.hide();
+    options.waterTileActions?.hide();
     options.invalidate();
   };
   const panel = mountTilePanel(options.root, deselect);
@@ -409,12 +412,17 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         seedName(state.view, tile),
       ),
     );
-    // Water (Wild Isle, #621) can't be claimed or explored. (W1-5b/W1-6: a
-    // bridge or dock action on a river or lake tile goes through here.)
+    // Water (Wild Isle, #621) can't be claimed or explored: land's buttons
+    // step aside, and the water slot offers a bridge on a river.
     if (isWaterTile(tile)) {
       options.tileActions?.hide();
       emptyTileActions(panel.actions);
-    } else options.tileActions?.show(panel.actions, tile, state.view);
+      options.waterTileActions?.show(panel.waterActions, tile, state.view);
+    } else {
+      options.waterTileActions?.hide();
+      panel.waterActions.replaceChildren();
+      options.tileActions?.show(panel.actions, tile, state.view);
+    }
     if (another) panel.toTop();
     options.invalidate();
   };
@@ -541,6 +549,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     buildArea = null;
     panel.hide();
     options.tileActions?.hide();
+    options.waterTileActions?.hide();
     setLegend(false);
     stats.close();
     hud.hidden = true;
@@ -564,6 +573,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     panel.hide();
     options.tileActions?.hide();
+    options.waterTileActions?.hide();
     options.showScene(build);
   };
 

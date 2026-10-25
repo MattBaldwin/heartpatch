@@ -916,6 +916,76 @@ export function buildBuildingModel(
       part(windowList, sphere(0.09, 8), lampColor, [-0.3, 0.46, -0.42]);
       break;
     }
+    case 'bridge': {
+      // Wild Isle (#621): a plank bridge over a river tile, lying along +x
+      // (the map turns it to run bank to bank). A cozy arched deck with
+      // slats, rope rails on little posts, two stone piers in the water and
+      // a lamp at each end that glows.
+      part(body, box(1.5, 0.05, 0.38), C.post, [0, 0.15, 0]);
+      for (const x of [-0.82, 0.82]) {
+        part(
+          body,
+          box(0.3, 0.045, 0.38),
+          C.post,
+          [x, 0.12, 0],
+          [1, 1, 1],
+          [0, 0, x < 0 ? 0.22 : -0.22],
+        );
+      }
+      for (let i = 0; i < 9; i++) {
+        part(body, box(0.025, 0.014, 0.4), C.log, [-0.64 + i * 0.16, 0.18, 0]);
+      }
+      for (const z of [-0.2, 0.2]) {
+        part(body, box(1.4, 0.03, 0.03), C.log, [0, 0.33, z]);
+        for (let i = 0; i < 5; i++) {
+          part(body, box(0.045, 0.17, 0.045), C.log, [-0.7 + i * 0.35, 0.25, z]);
+        }
+      }
+      for (const x of [-0.45, 0.45]) {
+        part(body, cylinder(0.14, 0.2, 0.24, 10), C.stoneDark, [x, 0.04, 0]);
+      }
+      for (const x of [-0.7, 0.7]) {
+        part(windowList, sphere(0.08, 8), lampColor, [x, 0.4, 0.2]);
+      }
+      break;
+    }
+    case 'ferry-dock': {
+      // Wild Isle (#621): a little wooden pier with a rosy rowboat moored
+      // beside it in a puddle of lake: posts, slats, a rope, a crate and a
+      // lamp. The boat bobs nowhere; it is a toy.
+      part(body, cylinder(0.02, 0.7, 0.7, 20), C.water, [0.2, 0.01, 0.12], [1, 1, 0.75]);
+      part(body, box(0.74, 0.05, 0.3), C.post, [-0.16, 0.12, -0.12]);
+      for (let i = 0; i < 6; i++) {
+        part(body, box(0.02, 0.014, 0.32), C.log, [-0.46 + i * 0.12, 0.15, -0.12]);
+      }
+      for (const [x, z] of [
+        [-0.5, -0.24],
+        [-0.5, 0],
+        [0.18, -0.24],
+        [0.18, 0],
+      ] as const) {
+        part(body, cylinder(0.24, 0.06, 0.06, 8), C.log, [x, 0.12, z]);
+      }
+      part(body, box(0.1, 0.1, 0.1), C.crateMint, [-0.38, 0.2, -0.16]);
+      // The boat: a rosy hull, a honey seat, a mast with a sail and a pennant.
+      part(body, sphere(0.3, 12), C.crate, [0.3, 0.07, 0.16], [1.5, 0.45, 0.8]);
+      part(body, sphere(0.26, 10), C.hay, [0.3, 0.12, 0.16], [1.35, 0.25, 0.62]);
+      part(body, cylinder(0.34, 0.02, 0.02, 6), C.post, [0.3, 0.3, 0.16]);
+      part(body, box(0.012, 0.18, 0.16), C.storeTrim, [0.3, 0.32, 0.24]);
+      part(body, box(0.1, 0.04, 0.012), C.flag, [0.35, 0.46, 0.16]);
+      // The rope from the boat to the post.
+      part(
+        body,
+        cylinder(0.16, 0.012, 0.012, 5),
+        C.ribbon,
+        [0.2, 0.15, 0.04],
+        [1, 1, 1],
+        [0, 0, 1.3],
+      );
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.54, 0.21, 0.06]);
+      part(windowList, sphere(0.09, 8), lampColor, [-0.54, 0.46, 0.06]);
+      break;
+    }
     default:
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
   }

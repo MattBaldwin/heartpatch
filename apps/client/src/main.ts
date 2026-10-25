@@ -14,6 +14,9 @@ import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
+import { createStrandedCard } from './land/stranded-card.js';
+import { createStrandedLayer } from './roads/stranded-layer.js';
+import { createRoads } from './roads/roads-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
@@ -104,6 +107,7 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
+import { hexOutlineOnScreen } from './map/map-scene.js';
 import { createPortraits } from './procedural/portraits.js';
 import { createRosterSheet } from './squishies/roster/roster-sheet.js';
 import { heroLodFor } from './procedural/motion.js';
@@ -581,6 +585,8 @@ const territory = withFences(
         if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen)
           battles.open(battle);
       },
+      // A Wild Isle's "next to my land" follows my supply line (#621).
+      supply: (view) => roads.supply(view),
     }),
     raidReport,
   ),
@@ -589,8 +595,21 @@ const territory = withFences(
 // Land that misses you (owner decision 2026-10-06): my fading land drawn on
 // the map, the "Some land misses you!" chip with Visit, and the welcome-back
 // card for land that went wild while I was away.
+const strandedLayer = createStrandedLayer();
+const strandedCard = createStrandedCard({
+  root: document.body,
+  pan: (tile) => {
+    panToTile(tile);
+  },
+});
 const land = createLandScreen({
   root: document.body,
+  // Wild Isle (#621): cut-off land is tinted on the map and told on a card.
+  onStranded: (stranded) => {
+    strandedLayer.set(stranded);
+    strandedCard.set(stranded);
+    stage?.invalidate();
+  },
   setFade: (fade) => {
     maps.setLandFade(fade);
   },
@@ -619,6 +638,13 @@ const RING_ZOOM = 16;
 const panToTile = (h: Hex): void => {
   stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
 };
+// Roads, bridges and ferry docks on a Wild Isle (#621): the roads' map layer,
+// their Build cards and the tile panel's Take up and Ferry across.
+const roads = createRoads({
+  me: () => signedIn?.id ?? null,
+  pan: panToTile,
+  invalidate: () => stage?.invalidate(),
+});
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
 // Hollowed villages (#306): a flag over each (after the posts', so it keeps
@@ -1284,13 +1310,21 @@ onPanelFocus((focused) => {
 });
 const tileBuild = createTileBuild({
   // Clear land (#242) sits with the buildings it makes room for.
-  sources: [home.buildSource, inventory.clearSource, fences.buildSource],
+  sources: [home.buildSource, inventory.clearSource, fences.buildSource, roads.buildSource],
   area: () => maps,
   onRecipeBook: () => {
     recipeBook.open();
   },
   reveal: (tile) => {
     // Above the sheet along the bottom, so the lit edges stay in view.
+    stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
+  },
+});
+// A river tile's Build sheet: just the bridge (#621).
+const waterBuild = createTileBuild({
+  sources: [roads.bridgeSource],
+  area: () => maps,
+  reveal: (tile) => {
     stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
   },
 });
@@ -1325,6 +1359,7 @@ const maps = createMapScreen({
     crookedHouse.setMap(null);
     lobby.showMessage(message);
   },
+  waterTileActions: waterBuild.tileActions,
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
@@ -1341,6 +1376,7 @@ const maps = createMapScreen({
     explore.tileActions,
     land.tileActions,
     fences.tileActions,
+    roads.tileActions,
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
@@ -1379,6 +1415,8 @@ const maps = createMapScreen({
     knockedMarks,
     jobs.gatherers,
     land.layer,
+    roads.layer,
+    strandedLayer,
     postFlags,
     communityFlags,
     villageWins,
@@ -2085,6 +2123,7 @@ if (import.meta.env.DEV) {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
     camera: () => stage?.camera.state ?? null,
+    outlines: (hexes) => hexes.map((h) => (stage ? hexOutlineOnScreen(stage.scene, h) : [])),
     draws: () => stage?.draws ?? 0,
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
@@ -2117,6 +2156,8 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     fences: () => fences.debug,
     tileBuild: () => tileBuild.debug,
+    roads: () => roads.debug,
+    stranded: () => ({ ...strandedLayer.debug, card: strandedCard.shown }),
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,

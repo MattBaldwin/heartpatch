@@ -2,6 +2,7 @@ import {
   GAME_DATA,
   TERRITORY_RULES,
   type MapView,
+  type Supply,
   type OwnedSquishy,
   type PlayerBattle,
   type PublicTile,
@@ -39,6 +40,8 @@ export interface TerritoryScreenOptions {
   openBattle: (battle: PlayerBattle) => void;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
+  /** My supply line on a Wild Isle (#621), for what counts as next to my land; none on a Cozy Patch. */
+  supply?: (view: MapView) => Supply | undefined;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -335,7 +338,14 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       return;
     }
     const { container, tile, view } = panel;
-    const action = territoryAction(tile, view, user?.id ?? null, status, clock.now());
+    const action = territoryAction(
+      tile,
+      view,
+      user?.id ?? null,
+      status,
+      clock.now(),
+      options.supply?.(view),
+    );
     shown = action;
     const children: HTMLElement[] = [];
     const owner = view.members.find((m) => m.user.id === tile.ownerUserId)?.user.username;

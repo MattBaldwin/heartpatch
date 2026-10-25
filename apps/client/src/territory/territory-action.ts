@@ -8,6 +8,7 @@ import {
   TERRITORY_RULES,
   type MapView,
   type PublicTile,
+  type Supply,
   type TerritoryStatus,
 } from '@heartpatch/shared';
 import { mapSafeTiles } from '../home/home-layout.js';
@@ -58,11 +59,21 @@ export function territoryAction(
   me: string | null,
   status: TerritoryStatus | null,
   now: number,
+  /** A Wild Isle's supply line (#621): what "next to yours" means there. Left out on a Cozy Patch. */
+  supply?: Supply,
 ): TerritoryAction {
   if (me === null || !status) return { kind: 'none' };
   // A restored village tile is ordinary land (#306 PR 4): Claim or Challenge.
   const restored = isRestoredVillageTile(tile, view);
-  const problem = attackTargetProblem({ ...tile, restored }, view.tiles, me, view.map.pvpMode);
+  const problem = attackTargetProblem(
+    { ...tile, restored },
+    view.tiles,
+    me,
+    view.map.pvpMode,
+    supply,
+  );
+  // Water (Wild Isle, #621) is never claimed: a bridge or dock goes there instead.
+  if (problem === 'water') return { kind: 'none' };
   if (problem === 'mine') {
     if (tile.homeSlot !== null) return { kind: 'none' };
     const post = status.defenders.find((d) => d.q === tile.q && d.r === tile.r);
