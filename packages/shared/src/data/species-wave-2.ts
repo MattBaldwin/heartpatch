@@ -198,8 +198,7 @@ export const WAVE_2_SPECIES: Species[] = [
   {
     id: 'cubbun',
     name: 'Cubbun',
-    description:
-      'A bear cub who hugs a big red heart whenever it is happy. Both arms, every time.',
+    description: 'A bear cub who hugs a big red heart whenever it is happy. Both arms, every time.',
     element: 'leaf',
     feeling: 'cozy',
     rarity: 'common',
@@ -209,10 +208,17 @@ export const WAVE_2_SPECIES: Species[] = [
     visual: {
       body: 'pear',
       palette: ['#c89a6c', '#7fcf5a', '#b5532a', '#d63a4e'],
-      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'round-ears', 'heart-arms',
+      parts: [
+        'oval-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'round-ears',
+        'heart-arms',
         'heart-lobes',
         'heart-point',
-        'heart-paws', 'stubby-legs'],
+        'heart-paws',
+        'stubby-legs',
+      ],
       head: { body: 'orb', size: 0.9, forward: 0.15, up: 0.5 },
       stance: 0.05,
       pose: 'sit',
