@@ -1,6 +1,6 @@
 import { VOICE_STYLES, type VoiceStyle } from './audio-config.js';
 import type { Note } from './music-score.js';
-import { fetchBytes, type FetchBytes } from './samples.js';
+import { decode, fetchBytes, type FetchBytes } from './samples.js';
 
 // The music's real instruments (#664, owner 2026-10-25: "enrich the music
 // just like we did the other sounds"): a few short CC0 notes from
@@ -118,39 +118,32 @@ export function leadIn(buffer: AudioBuffer): number {
   return 0;
 }
 
-/** Old Safari only has the callback form of `decodeAudioData`. */
-function decode(ctx: BaseAudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
-  return new Promise((resolve, reject) => {
-    const pending = ctx.decodeAudioData(bytes, resolve, reject) as Promise<AudioBuffer> | undefined;
-    pending?.catch(reject);
-  });
-}
-
 /**
- * Loads and decodes every note into `bank`. A note that fails is left out
- * (its neighbours stretch to cover it; an instrument with none plays its
+ * Loads and decodes every note, resolving with the whole bank only once all
+ * have settled, so a loop never renders from half the notes (a lone note
+ * stretched octaves to cover the rest). A note that fails is left out (its
+ * neighbours stretch a little to cover it; an instrument with none plays its
  * synth stand-in). Never rejects.
  */
 export async function loadInstruments(
   ctx: BaseAudioContext,
-  bank: Map<InstrumentId, readonly InstrumentNote[]>,
   fetcher: FetchBytes = fetchBytes,
-): Promise<void> {
+): Promise<InstrumentBank> {
+  const bank = new Map<InstrumentId, InstrumentNote[]>();
   await Promise.all(
     INSTRUMENT_FILES.map(async (file) => {
       try {
         const buffer = await decode(ctx, await fetcher(file.url));
-        const note: InstrumentNote = { midi: file.midi, buffer, offset: leadIn(buffer) };
-        const notes = [...(bank.get(file.instrument) ?? []), note];
-        bank.set(
-          file.instrument,
-          notes.sort((a, b) => a.midi - b.midi),
-        );
+        const notes = bank.get(file.instrument) ?? [];
+        notes.push({ midi: file.midi, buffer, offset: leadIn(buffer) });
+        bank.set(file.instrument, notes);
       } catch {
         // Offline or undecodable: the synth stands in.
       }
     }),
   );
+  for (const notes of bank.values()) notes.sort((a, b) => a.midi - b.midi);
+  return bank;
 }
 
 /** Each voice's own level and tone (`VOICE_STYLES`): gain, then its lowpass, into `out`. */

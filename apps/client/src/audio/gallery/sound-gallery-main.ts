@@ -3,7 +3,7 @@ import { el } from '../../ui/dom.js';
 import { MIX, MUSIC } from '../audio-config.js';
 import { createEngine, renderLoop, type Engine } from '../audio-engine.js';
 import { CUE_NAMES, type CueName } from '../cues.js';
-import { loadInstruments, type InstrumentId, type InstrumentNote } from '../music-samples.js';
+import { loadInstruments, type InstrumentBank } from '../music-samples.js';
 import { loopSeconds, SCORES, type TrackId } from '../music-score.js';
 import { RECORDED } from '../recorded.js';
 import { loadSamples, type SampleId } from '../samples.js';
@@ -106,13 +106,9 @@ interface Capture {
 }
 
 /** The music's instrument notes, decoded once at the loops' rate. */
-let instruments: Promise<Map<InstrumentId, readonly InstrumentNote[]>> | null = null;
+let instruments: Promise<InstrumentBank> | null = null;
 const loadedInstruments = () => {
-  instruments ??= (async () => {
-    const bank = new Map<InstrumentId, readonly InstrumentNote[]>();
-    await loadInstruments(new OfflineAudioContext(1, 1, MUSIC.sampleRate), bank);
-    return bank;
-  })();
+  instruments ??= loadInstruments(new OfflineAudioContext(1, 1, MUSIC.sampleRate));
   return instruments;
 };
 

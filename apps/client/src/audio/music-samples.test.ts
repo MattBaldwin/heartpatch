@@ -107,8 +107,7 @@ describe('music instruments (#664)', () => {
   });
 
   it('loads every note, low to high per instrument', async () => {
-    const bank = new Map<InstrumentId, readonly InstrumentNote[]>();
-    await loadInstruments(fakeCtx(), bank, fetchTagged());
+    const bank = await loadInstruments(fakeCtx(), fetchTagged());
     expect([...bank.keys()].sort()).toEqual([...INSTRUMENT_IDS].sort());
     for (const notes of bank.values()) {
       const pitches = notes.map((n) => n.midi);
@@ -120,13 +119,32 @@ describe('music instruments (#664)', () => {
   it('leaves out notes that fail, without rejecting', async () => {
     const piano = INSTRUMENT_FILES.filter((f) => f.instrument === 'piano');
     const harp = INSTRUMENT_FILES.filter((f) => f.instrument === 'harp');
-    const bank = new Map<InstrumentId, readonly InstrumentNote[]>();
-    await loadInstruments(
+    const bank = await loadInstruments(
       fakeCtx(new Set(harp.map((f) => f.url))),
-      bank,
       fetchTagged(new Set([piano[0]?.url ?? ''])),
     );
     expect(bank.has('harp')).toBe(false);
     expect(bank.get('piano')).toHaveLength(piano.length - 1);
+  });
+
+  it('hands over no notes until every one has settled (a loop never hears half a bank)', async () => {
+    const last = INSTRUMENT_FILES[INSTRUMENT_FILES.length - 1]?.url;
+    let release = () => {};
+    const slow = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetcher = async (url: string) => {
+      if (url === last) await slow;
+      return fetchTagged()(url);
+    };
+    let bank: unknown = null;
+    const loading = loadInstruments(fakeCtx(), fetcher).then((b) => {
+      bank = b;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(bank).toBeNull();
+    release();
+    await loading;
+    expect(bank).toBeInstanceOf(Map);
   });
 });

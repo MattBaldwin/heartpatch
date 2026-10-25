@@ -1,13 +1,6 @@
 import { MIX, MUSIC, SFX } from './audio-config.js';
 import { DUCKING_CUES, UI_CUES, type CueName } from './cues.js';
-import {
-  loadInstruments,
-  playSampled,
-  voiceBuses,
-  type InstrumentBank,
-  type InstrumentId,
-  type InstrumentNote,
-} from './music-samples.js';
+import { loadInstruments, playSampled, voiceBuses, type InstrumentBank } from './music-samples.js';
 import { loopSeconds, SCORES, type Score, type TrackId } from './music-score.js';
 import { recordingFor } from './recorded.js';
 import { fetchBytes, loadSamples, type FetchBytes, type SampleId } from './samples.js';
@@ -156,9 +149,11 @@ export function createEngine(
   /** When each voice slot frees up (context time); fixed size, so no allocation per play. */
   const voiceEnds = new Float64Array(SFX.maxVoices);
   const lastPlayed = new Map<CueName, number>();
-  const instruments = new Map<InstrumentId, readonly InstrumentNote[]>();
+  /** Empty (every loop plays the synth) until all the notes have settled. */
+  let instruments: InstrumentBank = new Map();
   let instrumentsIn = false;
-  const instrumentsLoaded = loadInstruments(decodeContext(ctx), instruments, fetcher).then(() => {
+  const instrumentsLoaded = loadInstruments(decodeContext(ctx), fetcher).then((bank) => {
+    instruments = bank;
     instrumentsIn = true;
   });
   /** Settles once the notes are in, or after the wait (a slow first visit plays the synth). */
