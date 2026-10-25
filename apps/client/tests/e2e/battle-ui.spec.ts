@@ -520,30 +520,43 @@ for (const screen of TURN_SCREENS) {
     await freshResize(page);
     await still(page, '[data-testid="battle-sheet"]');
 
-    // Every height the sheet takes from here on, as the browser lays it out.
+    // The sheet's height on every frame, with the controls' mode at the time.
     await page.evaluate(() => {
-      const sheet = document.querySelector('[data-testid="battle-sheet"]')!;
-      const seen: number[] = [];
-      new ResizeObserver((entries) => {
-        for (const entry of entries) seen.push(entry.borderBoxSize[0]?.blockSize ?? 0);
-      }).observe(sheet);
-      (window as unknown as { sheetHeights: number[] }).sheetHeights = seen;
+      const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
+      const samples: { mode: string; height: number }[] = [];
+      const tick = () => {
+        samples.push({
+          mode: sheet.dataset['mode'] ?? '',
+          height: sheet.getBoundingClientRect().height,
+        });
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      (window as unknown as { sheetSamples: typeof samples }).sheetSamples = samples;
     });
     const pick = (await page.getByTestId('battle-sheet').boundingBox())!.height;
-    // Bubble Bath heals: the wild squishy survives, so the next pick is the same sheet.
+    // Bubble Bath heals: the wild squishy survives, so the fight goes on to the next pick.
     await realTap(page.getByTestId('battle-move').filter({ hasText: 'Bubble Bath' }));
     await expect
       .poll(async () => (await battleState(page))?.turn, { timeout: 30_000 })
       .toBeGreaterThan(first.turn);
     await settled(page);
     await expect(page.getByTestId('battle-move')).toHaveCount(4);
-    await still(page, '[data-testid="battle-sheet"]');
 
-    const heights = await page.evaluate(
-      () => (window as unknown as { sheetHeights: number[] }).sheetHeights,
+    // While the turn plays ("waiting" for the server, "hidden" for the log) the
+    // sheet is as tall as the pick was. The next pick's own words may wrap
+    // differently, so the frames after the turn are not compared.
+    const samples = await page.evaluate(
+      () =>
+        (window as unknown as { sheetSamples: { mode: string; height: number }[] }).sheetSamples,
     );
-    for (const height of heights) expect(Math.abs(height - pick), String(heights)).toBeLessThan(1);
-    // The turn played, with the sheet held at the pick's height all the way through.
-    expect((await page.getByTestId('battle-sheet').boundingBox())!.height).toBeCloseTo(pick, 0);
+    const turn = samples.filter((sample) => sample.mode === 'waiting' || sample.mode === 'hidden');
+    expect(turn.length, 'frames drawn while the turn played').toBeGreaterThan(0);
+    for (const sample of turn) {
+      expect(
+        Math.abs(sample.height - pick),
+        `${sample.mode} at ${String(sample.height)}`,
+      ).toBeLessThan(1);
+    }
   });
 }
