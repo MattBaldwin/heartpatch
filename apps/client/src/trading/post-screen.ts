@@ -2,7 +2,8 @@ import {
   GLIMMER_SWAP,
   type GlimmerSwapView,
   type MapView,
-  type SellResponse,
+  type SellBasketResponse,
+  type SellLine,
   type SellView,
   type TradeTip,
   type PublicUser,
@@ -22,8 +23,15 @@ import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
-import { clampLots, sellRequest, sellRows, type SellPick } from './sell-model.js';
-import { sellTab } from './sell-tab.js';
+import {
+  basketLines,
+  clampBasket,
+  sellRequest,
+  sellRows,
+  stepLine,
+  type SellBasket,
+} from './sell-model.js';
+import { sellTab, type MeterParts, type SellConfirm } from './sell-tab.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
   fitName,
@@ -109,13 +117,16 @@ export interface PostDebug {
   readonly sorts: Readonly<Record<Side, ShelfSort>>;
   /** The Glimmer swap (#523): today's swaps and the resource waiting on its confirm. */
   readonly swap: { readonly today: number; readonly picked: string | null } | null;
-  /** The Sell tab (#601 PR 4): today's 💛 from selling, the pick on its confirm, the last sale. */
+  /** The Sell tab (#601 PR 4, #655): today's 💛 from selling, the basket, its confirm, the last sale. */
   readonly sell: {
     readonly soldToday: number;
+    readonly cap: number;
     readonly rows: number;
-    readonly picked: string | null;
-    readonly lots: number;
-    readonly sold: SellResponse['sold'] | null;
+    /** The basket's lines in row order, as the request would send them. */
+    readonly lines: SellLine[];
+    readonly confirm: SellConfirm | null;
+    readonly barNote: string;
+    readonly sold: SellBasketResponse['sold'] | null;
   } | null;
 }
 
@@ -147,10 +158,16 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let swapPick: string | null = null;
   /** What I could sell here (#601 PR 4), loaded when the Sell tab opens. */
   let sell: SellView | null = null;
-  /** The stack or piece waiting on "Sell 10 Timber for 2 💛?", and how many lots. */
-  let sellPick: SellPick | null = null;
+  /** What's picked to sell, row by row (#655). */
+  let sellBasket: SellBasket = new Map();
+  /** The confirm sheet that's up, if any. */
+  let sellConfirm: SellConfirm | null = null;
+  /** A refusal or failed read for the Sell tab's bar (never the top note, #655). */
+  let sellNote = '';
+  /** The cap meter as last drawn, so it slides to the next. */
+  let sellMeter: MeterParts | null = null;
   /** The last sale, for the tab's "Yay!" card. */
-  let sold: SellResponse['sold'] | null = null;
+  let sold: SellBasketResponse['sold'] | null = null;
   const shelves = new Map<string, TradeShelf>();
   let mate: string | null = null;
   let give: TradeLine[] = [];
@@ -275,36 +292,48 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     }
   }
 
+  /** Reads the Sell tab again; the basket is kept to what the fresh view can sell. */
   async function loadSell(): Promise<void> {
     const at = generation;
     if (!mapView) return;
     try {
       const view = await sells.view(mapView.map.id);
-      if (at === generation) sell = view;
+      if (at === generation) {
+        sell = view;
+        sellBasket = clampBasket(view, sellBasket);
+      }
     } catch (err) {
-      if (at === generation) note = messageOf(err);
+      if (at === generation) sellNote = messageOf(err);
     }
     if (at === generation) render();
   }
 
-  /** One sale at this post: one transaction on the server, keyed so a retry never sells twice. No undo. */
-  async function sellCommand(pick: SellPick): Promise<void> {
-    if (working || !post) return;
+  /**
+   * One basket at this post (#655): every line in one transaction on the
+   * server, or none, keyed (one key per tap, reused on the one offline retry)
+   * so a retry never sells twice. No undo: the confirm sheet came first.
+   */
+  async function sellCommand(lines: SellLine[], from: SellConfirm): Promise<void> {
+    if (working || !post || lines.length === 0) return;
     const gen = generation;
     const stillHere = () => gen === generation;
+    const request = sellRequest(lines, at());
     working = true;
-    note = '';
+    sellNote = '';
     render();
     try {
       const res = await sendCommand(
         sendDeps,
-        (key) => sells.sell(mapId(), sellRequest(pick, at()), key),
+        (key) => sells.sell(mapId(), request, key),
         stillHere,
       );
       if (res && stillHere()) {
         sell = res.sell;
         sold = res.sold;
-        sellPick = null;
+        // The stepper basket is what sold; after ✨ Sell all spares, what I'd
+        // picked stays, kept to what's left.
+        sellBasket = from === 'basket' ? new Map() : clampBasket(res.sell, sellBasket);
+        sellConfirm = null;
         // My shelf on the Trade and Gift tabs reads again: the sale took from it.
         const my = me();
         if (my !== null) void load({ shelves: [my] });
@@ -312,10 +341,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       }
     } catch (err) {
       if (stillHere()) {
-        // Refused (today's cap from another device, a recipe opened, an offer
-        // named the spare): drop the pick and show what the server sees now.
-        note = messageOf(err);
-        sellPick = null;
+        // Refused, nothing moved (today's room from another device, a recipe
+        // opened, an offer named a spare): say so in the bar, read what the
+        // server sees now, and keep the basket to it, so one more tap sells.
+        sellNote = messageOf(err);
+        sellConfirm = null;
         void loadSell();
       }
     } finally {
@@ -366,12 +396,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const button = (
     label: string,
     testId: string,
-    kind: 'primary' | 'secondary' | 'gold',
+    kind: 'primary' | 'secondary' | 'gold' | 'quiet',
     onClick: () => void,
     disabled = false,
   ) => {
     // Gold is the secondary look with the post's own gold tokens (trading.css).
-    const b = hpButton(label, { variant: kind === 'primary' ? 'primary' : 'secondary', testId });
+    const variant = kind === 'gold' ? 'secondary' : kind;
+    const b = hpButton(label, { variant, testId });
     if (kind === 'gold') b.classList.add('post-gold');
     b.disabled = disabled || working;
     b.addEventListener('click', onClick);
@@ -1278,7 +1309,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           if (tab === t) return;
           tab = t;
           swapPick = null;
-          sellPick = null;
+          sellBasket = new Map();
+          sellConfirm = null;
+          sellNote = '';
           sold = null;
           if (t === 'swap') void loadSwap();
           if (t === 'sell') void loadSell();
@@ -1307,6 +1340,52 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       body.replaceChildren(el('p', { class: 'post-tiny' }, '…'));
       return;
     }
+    if (tab === 'sell') {
+      const drawn = sellTab(
+        {
+          view: sell,
+          basket: sellBasket,
+          confirm: sellConfirm,
+          sold,
+          barNote: sellNote,
+          passOver: passOver(),
+          nowMs: now(),
+          meterFrom: sellMeter,
+        },
+        {
+          button,
+          onStep: (row, delta) => {
+            if (!sell) return;
+            sellBasket = stepLine(sell, sellBasket, row, sellRows(sell), delta);
+            sold = null;
+            sellNote = '';
+            render();
+          },
+          onConfirm: (which) => {
+            sellConfirm = which;
+            sold = null;
+            sellNote = '';
+            render();
+            body.querySelector<HTMLElement>('[data-testid="post-sell-confirm-yes"]')?.focus();
+          },
+          onCancel: () => {
+            sellConfirm = null;
+            render();
+          },
+          onSell: (lines) => {
+            if (sellConfirm) void sellCommand(lines, sellConfirm);
+          },
+        },
+      );
+      sellMeter = drawn.meter;
+      body.replaceChildren(...drawn.nodes);
+      fitNames(body);
+      // A sale's "Yay!" card is at the top of the list: bring it into view.
+      if (sold && !working) {
+        body.querySelector('[data-testid="post-sell-done"]')?.scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
     const parts =
       tab === 'trade'
         ? tradeTab(trades, my)
@@ -1314,32 +1393,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           ? giftTab(trades, my)
           : tab === 'mailbox'
             ? mailboxTab(trades)
-            : tab === 'swap'
-              ? swapTab()
-              : sellTab(
-                  { view: sell, pick: sellPick, sold, passOver: passOver(), nowMs: now() },
-                  {
-                    button,
-                    onPick: (row) => {
-                      sellPick = { kind: row.kind, itemId: row.itemId, lots: 1 };
-                      sold = null;
-                      note = '';
-                      render();
-                    },
-                    onLots: (lots) => {
-                      const row = sell && sellRows(sell).find((r) => r.itemId === sellPick?.itemId);
-                      if (sellPick && row) sellPick = { ...sellPick, lots: clampLots(lots, row) };
-                      render();
-                    },
-                    onCancel: () => {
-                      sellPick = null;
-                      render();
-                    },
-                    onSell: (pick) => {
-                      void sellCommand(pick);
-                    },
-                  },
-                );
+            : swapTab();
     body.replaceChildren(...parts);
     fitNames(body);
   }
@@ -1406,7 +1460,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     swap = null;
     swapPick = null;
     sell = null;
-    sellPick = null;
+    sellBasket = new Map();
+    sellConfirm = null;
+    sellNote = '';
+    sellMeter = null;
     sold = null;
   }
 
@@ -1476,9 +1533,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         sell: sell
           ? {
               soldToday: sell.soldToday,
+              cap: sell.cap,
               rows: sellRows(sell).length,
-              picked: sellPick?.itemId ?? null,
-              lots: sellPick?.lots ?? 0,
+              lines: basketLines(sellBasket, sellRows(sell)),
+              confirm: sellConfirm,
+              barNote: sellNote,
               sold,
             }
           : null,

@@ -1201,7 +1201,9 @@ button.post-col-head {
   font-size: 18px;
 }
 
-/* The Sell tab (#601 PR 4): the Swap tab's rows, a 💛 cap line, a lot stepper. */
+/* The Sell tab (#601 PR 4; #655 part C, the owner-approved mockup v4): rows
+   with their own − N +, a sticky bar with the total and today's cap meter,
+   and one confirm sheet. */
 .post-sell-today {
   padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 999px;
@@ -1210,6 +1212,39 @@ button.post-col-head {
   font-size: 14px;
   font-weight: 800;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-swap-head > .post-gold {
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.post-sell-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.post-sell-section h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.post-sell-row {
+  padding: 8px 10px 8px 12px;
+}
+
+.post-sell-row .post-icon {
+  font-size: 28px;
+}
+
+.post-sell-row.in {
+  outline: 3px solid #b8487a;
 }
 
 .post-sell-keep {
@@ -1217,16 +1252,51 @@ button.post-col-head {
   font-weight: 700;
 }
 
-.post-sell-stepper {
-  gap: 12px;
+.post-sell-line span,
+.post-sell-keep {
+  white-space: nowrap;
 }
 
-.post-sell-lots {
-  min-width: 72px;
-  font-size: 20px;
+.post-sell-price {
   font-weight: 800;
+}
+
+.post-sell-step {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.post-sell-step .post-stepper .hp-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 22px;
+}
+
+.post-sell-count {
+  min-width: 34px;
+  font-size: 20px;
+  font-weight: 900;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-sell-earn {
+  min-height: 15px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #6b4a00;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-sell-earn.why {
+  color: #8a6f8c;
+  font-weight: 800;
 }
 
 .post-sell-done {
@@ -1244,11 +1314,236 @@ button.post-col-head {
   text-align: center;
 }
 
-.post-sell-line span,
-.post-sell-keep {
+/* The bar: what's picked and what it pays, today's cap meter, and Sell. */
+/* A short list still puts the bar at the sheet's bottom, so Sell never floats mid-sheet. */
+.post-body:has(> .post-sell-bar) {
+  flex: 1 0 auto;
+}
+
+.post-sell-bar {
+  margin-top: auto;
+}
+
+.post-send-bar.post-sell-bar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  border-top: 2px solid #f6dceb;
+}
+
+.post-sell-bar > .hp-button {
+  min-width: 104px;
+}
+
+.post-sell-bar-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff8ec;
+  border: 2px solid #f6e6c9;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.post-sell-sum {
+  min-width: 0;
+}
+
+.post-sell-sum b {
+  display: block;
+  font-size: 17px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-sell-sum em {
+  font-style: normal;
+  color: #6b4a00;
+}
+
+.post-sell-sum .post-small {
+  display: block;
+  margin-top: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-sell-meter {
+  position: relative;
+  display: block;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #f6dceb;
+  overflow: hidden;
+}
+
+.post-sell-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  transition: width 0.45s ease;
+}
+
+.post-sell-meter i.after {
+  background: #f0d98a;
+}
+
+.post-sell-meter i.now {
+  background: #e0b43a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-sell-meter i {
+    transition: none;
+  }
+}
+
+/* The one confirm sheet (#655, post-confirm.ts): over the list, from the
+   bottom, clear of the home indicator. Fixed, inside the post sheet's
+   stacking context. */
+.post-confirm-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+}
+
+.post-confirm-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(74 49 80 / 45%);
+}
+
+.post-confirm {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 14px);
+  right: calc(env(safe-area-inset-right) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  max-width: 560px;
+  max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 96px);
+  margin: 0 auto;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  border-radius: 24px;
+  background: #fffafc;
+  color: #4a3150;
+  box-shadow: 0 -8px 30px rgb(40 20 40 / 30%);
+}
+
+/* iPad landscape: inside the post's side panel, so the map stays live beside it. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .post-confirm {
+    left: auto;
+    right: calc(env(safe-area-inset-right) + 28px);
+    bottom: calc(env(safe-area-inset-bottom) + 28px);
+    width: 616px;
+    margin: 0;
+  }
+}
+
+.post-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 20px;
+}
+
+.post-confirm-title span {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-confirm-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-confirm-line {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 2px solid #f6dceb;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.post-confirm-icon {
+  font-size: 20px;
+}
+
+.post-confirm-coins {
+  color: #6b4a00;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-confirm-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.post-confirm-total em {
+  font-style: normal;
+  font-size: 20px;
+  color: #6b4a00;
   white-space: nowrap;
 }
 
-.post-sell-price {
+.post-confirm-after {
+  margin: -6px 0 0;
+  padding: 0 4px;
+  text-align: right;
+  font-size: 13px;
   font-weight: 800;
+  color: #8a6f8c;
+}
+
+.post-confirm-stays {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #fff6e8;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #8a6f8c;
+}
+
+.post-confirm-stays p,
+.post-confirm-note {
+  margin: 0;
+}
+
+.post-confirm-note {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #8a6f8c;
+}
+
+.post-confirm-acts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
 }

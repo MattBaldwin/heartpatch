@@ -1,32 +1,57 @@
-import type { SellResponse, SellView } from '@heartpatch/shared';
+import type { SellBasketResponse, SellLine, SellView } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { hoursToReset } from './glimmer-swap-model.js';
+import { postConfirm } from './post-confirm.js';
 import {
-  clampLots,
-  pickTotals,
+  basketLines,
+  basketTotals,
+  canAdd,
+  capMeter,
+  confirmContent,
+  hasSpares,
+  lotsIn,
+  rowKey,
+  rowNote,
   SELL_TEXT,
   sellCapped,
-  sellLabel,
   sellRows,
-  type SellPick,
+  sparesPlan,
+  type SellBasket,
+  type SellConfirm,
   type SellRow,
 } from './sell-model.js';
 
-// The post's Sell tab (#601 PR 4), drawn from its state. The post screen owns
-// the state and the sale; this only lays out the cap line, the success card,
-// the confirm with its lot stepper, the rows and the "stays with you" line.
+// The post's Sell tab (#601 PR 4; #655 part C, the owner-approved mockup v4),
+// drawn from its state. The list is for picking and counting: a − N + on each
+// row. The sticky bar at the bottom shows what's picked, what it pays and
+// today's cap meter, carries any refusal, and does the selling, through the
+// one confirm sheet. ✨ Sell all spares opens the same sheet with the shared
+// planner's lines. The post screen owns the state and the sale.
 
-type ButtonKind = 'primary' | 'secondary' | 'gold';
+type ButtonKind = 'primary' | 'secondary' | 'gold' | 'quiet';
+
+export type { SellConfirm };
+
+/** The cap meter's two fills, as parts of the cap (`capMeter`). */
+export interface MeterParts {
+  readonly now: number;
+  readonly after: number;
+}
 
 export interface SellTabState {
   /** Null until the first read arrives. */
   readonly view: SellView | null;
-  readonly pick: SellPick | null;
-  /** The last sale, for the success card (cleared by the next pick). */
-  readonly sold: SellResponse['sold'] | null;
+  readonly basket: SellBasket;
+  readonly confirm: SellConfirm | null;
+  /** The last sale, for the success card (cleared by the next step). */
+  readonly sold: SellBasketResponse['sold'] | null;
+  /** A refusal or a failed read, shown in the bar (never at the top, #655). */
+  readonly barNote: string;
   /** The visit pass ran out: nothing sells. */
   readonly passOver: boolean;
   readonly nowMs: number;
+  /** The meter as last drawn, so a change slides instead of jumping. */
+  readonly meterFrom: MeterParts | null;
 }
 
 export interface SellTabDeps {
@@ -38,31 +63,62 @@ export interface SellTabDeps {
     onClick: () => void,
     disabled?: boolean,
   ) => HTMLButtonElement;
-  onPick: (row: SellRow) => void;
-  onLots: (lots: number) => void;
+  onStep: (row: SellRow, delta: 1 | -1) => void;
+  onConfirm: (which: SellConfirm) => void;
   onCancel: () => void;
-  onSell: (pick: SellPick) => void;
+  onSell: (lines: SellLine[]) => void;
 }
 
-export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
+/** What the tab drew: its nodes, and the meter it shows (for the next draw's slide). */
+export interface SellTabParts {
+  readonly nodes: Node[];
+  readonly meter: MeterParts | null;
+}
+
+export function sellTab(state: SellTabState, deps: SellTabDeps): SellTabParts {
   const { view } = state;
-  if (!view) return [el('p', { class: 'post-tiny' }, '…')];
+  if (!view) {
+    return {
+      nodes: [
+        el('p', { class: 'post-tiny' }, '…'),
+        ...(state.barNote ? [el('div', { class: 'post-send-bar post-sell-bar' }, barNote())] : []),
+      ],
+      meter: null,
+    };
+  }
   const { button } = deps;
+  /** The view, narrowed for the functions below. */
+  const v: SellView = view;
   const rows = sellRows(view);
   const capped = sellCapped(view);
+  const lines = basketLines(state.basket, rows);
+  const totals = basketTotals(lines);
+  const meter = capMeter(view, totals.coins);
+  const plan = sparesPlan(view);
 
-  const parts: Node[] = [
+  const head = el(
+    'div',
+    { class: 'post-swap-head' },
     el(
-      'div',
-      { class: 'post-swap-head' },
-      el('b', { class: 'post-small' }, SELL_TEXT.intro),
-      el(
-        'span',
-        { class: 'post-sell-today', 'data-testid': 'post-sell-today' },
-        SELL_TEXT.today(view),
-      ),
+      'span',
+      { class: 'post-sell-today', 'data-testid': 'post-sell-today' },
+      SELL_TEXT.today(view),
     ),
-  ];
+    ...(hasSpares(view)
+      ? [
+          button(
+            SELL_TEXT.spares,
+            'post-sell-spares',
+            'gold',
+            () => {
+              deps.onConfirm('spares');
+            },
+            plan.length === 0 || state.passOver,
+          ),
+        ]
+      : []),
+  );
+  const parts: Node[] = [head];
 
   if (state.sold) {
     parts.push(
@@ -70,7 +126,7 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
         'div',
         { class: 'post-card post-sell-done', role: 'status', 'data-testid': 'post-sell-done' },
         el('b', {}, SELL_TEXT.done(state.sold)),
-        el('span', { class: 'post-small' }, SELL_TEXT.doneLine(state.sold)),
+        el('span', { class: 'post-small' }, SELL_TEXT.doneLines(state.sold)),
       ),
     );
   }
@@ -86,23 +142,37 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
     );
   }
 
-  const picked = state.pick && rows.find((r) => r.itemId === state.pick?.itemId);
-  if (state.pick && picked && picked.maxLots > 0) {
-    parts.push(confirmCard({ ...state.pick, lots: clampLots(state.pick.lots, picked) }, picked));
-  }
-
   if (rows.length === 0) {
     parts.push(
       el('p', { class: 'post-tiny', 'data-testid': 'post-sell-empty' }, SELL_TEXT.nothing),
     );
   } else {
-    parts.push(
-      el(
-        'div',
-        { class: 'post-swap-list', 'data-testid': 'post-sell-rows' },
-        ...rows.map((row) => rowCard(row)),
-      ),
-    );
+    const items = rows.filter((r) => r.kind === 'item');
+    const pieces = rows.filter((r) => r.kind === 'clothing');
+    if (items.length > 0) {
+      parts.push(
+        el(
+          'div',
+          { class: 'post-swap-list', 'data-testid': 'post-sell-rows' },
+          ...items.map(rowCard),
+        ),
+      );
+    }
+    if (pieces.length > 0) {
+      parts.push(
+        el(
+          'div',
+          { class: 'post-sell-section' },
+          el('h3', {}, SELL_TEXT.clothingHead),
+          el('span', { class: 'post-small' }, SELL_TEXT.keepsOne),
+        ),
+        el(
+          'div',
+          { class: 'post-swap-list', 'data-testid': 'post-sell-clothing' },
+          ...pieces.map(rowCard),
+        ),
+      );
+    }
   }
   parts.push(
     el(
@@ -111,15 +181,42 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
       SELL_TEXT.stays,
     ),
   );
-  return parts;
+  if (rows.length > 0 || state.barNote) parts.push(sellBar());
+
+  const sheet = state.confirm ? confirmSheet(state.confirm) : null;
+  if (sheet) parts.push(sheet);
+  return { nodes: parts, meter };
+
+  function barNote(): HTMLElement {
+    return el(
+      'p',
+      { class: 'post-sell-bar-note', role: 'alert', 'data-testid': 'post-sell-bar-note' },
+      state.barNote,
+    );
+  }
 
   function rowCard(row: SellRow): HTMLElement {
-    const label = sellLabel(row, capped);
+    const lots = lotsIn(state.basket, row);
+    const step = (delta: 1 | -1, off: boolean) => {
+      const b = button(
+        delta === 1 ? '+' : '−',
+        `post-sell-${delta === 1 ? 'more' : 'less'}-${row.itemId}`,
+        delta === 1 ? 'primary' : 'secondary',
+        () => {
+          deps.onStep(row, delta);
+        },
+        off || state.passOver,
+      );
+      b.setAttribute('aria-label', (delta === 1 ? SELL_TEXT.more : SELL_TEXT.less)(row.name));
+      return b;
+    };
+    const note = rowNote(row, lots, capped);
     return el(
       'div',
       {
-        class: `post-card post-row post-swap-card${row.itemId === state.pick?.itemId ? ' picked' : ''}`,
+        class: `post-card post-row post-sell-row${lots > 0 ? ' in' : ''}`,
         'data-item': row.itemId,
+        'data-key': rowKey(row),
         'data-block': row.block,
       },
       el('span', { class: 'post-icon', 'aria-hidden': 'true' }, row.icon),
@@ -131,8 +228,12 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
           'div',
           { class: 'post-small post-sell-line' },
           // Two unbreakable halves: a narrow phone wraps between them, never inside.
-          el('span', {}, SELL_TEXT.have(row.have)),
-          ' ',
+          el(
+            'span',
+            {},
+            row.kind === 'item' ? SELL_TEXT.have(row.have) : SELL_TEXT.spare(row.maxLots),
+          ),
+          ' · ',
           el('span', { class: 'post-sell-price' }, SELL_TEXT.price(row.lot, row.coins)),
         ),
         ...(row.keepLine
@@ -148,71 +249,113 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): Node[] {
             ]
           : []),
       ),
-      button(
-        label,
-        `post-sell-${row.itemId}`,
-        'gold',
-        () => {
-          deps.onPick(row);
-        },
-        row.maxLots === 0 || state.passOver,
+      el(
+        'div',
+        { class: 'post-sell-step' },
+        el(
+          'div',
+          { class: 'post-stepper' },
+          step(-1, lots === 0),
+          el(
+            'span',
+            { class: 'post-sell-count', 'data-testid': `post-sell-count-${row.itemId}` },
+            String(lots * row.lot),
+          ),
+          step(1, !canAdd(v, state.basket, row, rows)),
+        ),
+        el(
+          'span',
+          {
+            class: `post-sell-earn${lots > 0 ? '' : ' why'}`,
+            'data-testid': `post-sell-note-${row.itemId}`,
+          },
+          note,
+        ),
       ),
     );
   }
 
-  function confirmCard(pick: SellPick, row: SellRow): HTMLElement {
-    const { quantity, coins } = pickTotals(pick, row);
-    /** A − or + that says what it does to a screen reader. */
-    const step = (glyph: string, testId: string, label: string, lots: number, off: boolean) => {
-      const b = button(
-        glyph,
-        testId,
-        'secondary',
-        () => {
-          deps.onLots(lots);
-        },
-        off,
-      );
-      b.setAttribute('aria-label', label);
-      return b;
+  function sellBar(): HTMLElement {
+    const some = lines.length > 0;
+    const fill = (cls: string, part: number, from: number | undefined) => {
+      const i = el('i', { class: cls });
+      i.style.width = `${String((from ?? part) * 100)}%`;
+      if (from !== undefined && from !== part) {
+        // Two frames, so the browser draws the old width before the slide.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            i.style.width = `${String(part * 100)}%`;
+          });
+        });
+      }
+      return i;
     };
-    const stepper =
-      row.maxLots > 1
-        ? [
-            el(
-              'div',
-              { class: 'post-stepper post-sell-stepper', 'data-testid': 'post-sell-stepper' },
-              step('−', 'post-sell-less', SELL_TEXT.less, pick.lots - 1, pick.lots <= 1),
-              el(
-                'span',
-                { class: 'post-sell-lots', 'data-testid': 'post-sell-lots' },
-                `${String(quantity)} ${row.icon}`,
-              ),
-              step('+', 'post-sell-more', SELL_TEXT.more, pick.lots + 1, pick.lots >= row.maxLots),
-            ),
-          ]
-        : [];
-    const card = el(
+    return el(
       'div',
-      { class: 'post-card post-swap-confirm', 'data-testid': 'post-sell-confirm' },
-      el('b', {}, SELL_TEXT.confirm(quantity, pick.itemId, coins)),
-      ...stepper,
-      el('span', { class: 'post-small' }, SELL_TEXT.noUndo),
+      { class: 'post-send-bar post-sell-bar', 'data-testid': 'post-sell-bar' },
+      ...(state.barNote ? [barNote()] : []),
       el(
         'div',
-        { class: 'post-row' },
-        button(SELL_TEXT.no, 'post-sell-no', 'secondary', deps.onCancel),
-        button(
-          SELL_TEXT.yes,
-          'post-sell-yes',
-          'primary',
-          () => {
-            deps.onSell(pick);
+        { class: 'post-sell-sum' },
+        el(
+          'b',
+          { 'data-testid': 'post-sell-summary' },
+          ...(some
+            ? [
+                `${SELL_TEXT.things(totals.quantity)} · `,
+                el('em', {}, SELL_TEXT.coins(totals.coins)),
+              ]
+            : [SELL_TEXT.nothingPicked]),
+        ),
+        el(
+          'span',
+          {
+            class: 'post-sell-meter',
+            'aria-hidden': 'true',
+            'data-testid': 'post-sell-meter',
+            'data-now': String(meter.now),
+            'data-after': String(meter.after),
           },
-          state.passOver,
+          fill('after', meter.after, state.meterFrom?.after),
+          fill('now', meter.now, state.meterFrom?.now),
+        ),
+        el(
+          'span',
+          { class: 'post-small', 'data-testid': 'post-sell-meter-text' },
+          some ? SELL_TEXT.meterAfter(v, totals.coins) : SELL_TEXT.meterNow(v),
         ),
       ),
+      button(
+        SELL_TEXT.sell,
+        'post-sell-go',
+        'primary',
+        () => {
+          deps.onConfirm('basket');
+        },
+        !some || state.passOver,
+      ),
     );
-    return card;
+  }
+
+  function confirmSheet(which: SellConfirm): HTMLElement | null {
+    const content = confirmContent(v, which, state.basket);
+    if (!content) return null;
+    return postConfirm({
+      title: content.title,
+      testId: 'post-sell-confirm',
+      lines: content.rows,
+      total: content.total,
+      after: content.after,
+      stays: content.stays,
+      note: content.note,
+      yes: SELL_TEXT.yes,
+      no: SELL_TEXT.no,
+      button,
+      onYes: () => {
+        deps.onSell(content.lines);
+      },
+      onNo: deps.onCancel,
+      yesDisabled: state.passOver,
+    });
   }
 }
