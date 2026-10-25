@@ -1926,6 +1926,21 @@ export const PARTS: Part[] = [
     sink: 0.4,
     jitter: 0.05,
   },
+  // Wider moth wings for a firefly's last form, so its outline steps out again from `glim-wings`.
+  {
+    id: 'glim-wings-wide',
+    slot: 'wings',
+    shape: 'teardrop',
+    size: [0.62, 1.0, 0.07],
+    color: 'secondary',
+    layout: pair,
+    around: 92,
+    up: 16,
+    tilt: 8,
+    splay: 75,
+    sink: 0.2,
+    jitter: 0.06,
+  },
   // A pair of icy blue spikes flaring out from the sides of a fish's head, clear of its back fins.
   {
     id: 'icicle-fins',
