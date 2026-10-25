@@ -181,10 +181,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
   {
     id: 'wave-2-forest',
     terrains: ['forest', 'old-forest'],
-    entries: [
-      { species: 'cubbun', weight: 4 },
-      { species: 'shinybeet', weight: 4 },
-    ],
+    entries: [{ species: 'cubbun', weight: 4 }],
   },
   {
     id: 'wave-2-hills',
@@ -209,10 +206,13 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
   {
-    // Piglets wade in at the water's edge.
+    // Piglets wade in at the water's edge, and ducks bob on the lake.
     id: 'wave-2-lake',
     terrains: ['lake'],
-    entries: [{ species: 'oinkle', weight: 2 }],
+    entries: [
+      { species: 'quackle', weight: 4 },
+      { species: 'oinkle', weight: 2 },
+    ],
   },
   {
     // Cloudlamb only drifts down on sunny days.

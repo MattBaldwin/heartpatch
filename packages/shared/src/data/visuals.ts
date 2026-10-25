@@ -215,20 +215,6 @@ export const BODIES: Body[] = [
     bottomFlat: 0.25,
     jitter: 0.03,
   },
-  // #382 wave 2: a beetle's carapace. `cleft` runs a seam front to back along the top, so two
-  // domed wing-cases sit either side of it; the head is a separate small body in front.
-  {
-    id: 'beetle-shell',
-    width: 1.25,
-    height: 1.05,
-    depth: 1.5,
-    squareness: 0.15,
-    taper: 0.15,
-    peak: 0,
-    bottomFlat: 0.35,
-    cleft: { depth: 0.3, tip: 0 },
-    jitter: 0.04,
-  },
 ];
 
 const single = { kind: 'single' } as const;
@@ -1850,9 +1836,9 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.06,
   },
-  // #382 wave 2: nine parts so a tusk, a puddle, a curly tail, a chest bib, a tree top, hug arms, stacked wing lobes, a little tree, a slide trail, a lure and a
-  // gleam can be the silhouette instead of a small add-on. All existing primitives (no
-  // client geometry code); a species' `glow` lights them like any other part.
+  // #382 wave 2: twelve parts so a tusk, a curly tail, a chest bib, a little tree, hug arms, a slide
+  // trail, a lure and a stacked wing can be the silhouette instead of a small add-on. All existing
+  // primitives (no client geometry code); a species' `glow` lights them like any other part.
   // A pair of tusks curling up from the snout (`fangs` only points down).
   {
     id: 'tusks',
@@ -1908,19 +1894,6 @@ export const PARTS: Part[] = [
     up: 80,
     tilt: -20,
     sink: 0.3,
-    jitter: 0.03,
-  },
-  // A bright streak painted on a polished shell.
-  {
-    id: 'shell-gleam',
-    slot: 'pattern',
-    shape: 'ellipsoid',
-    size: [0.1, 0.45, 0.03],
-    color: 'white',
-    layout: single,
-    around: 75,
-    up: 62,
-    sink: 0.5,
     jitter: 0.03,
   },
   // A pair of big pointed wings swept back along the flanks (thick enough to read from the front).
@@ -2022,6 +1995,20 @@ export const PARTS: Part[] = [
     splay: 60,
     sink: 0.3,
     jitter: 0.05,
+  },
+  // A duck's wide flat bill (the `beak` cone reads as a chick's).
+  {
+    id: 'duck-bill',
+    slot: 'fangs',
+    shape: 'ellipsoid',
+    size: [0.42, 0.34, 0.2],
+    color: 'accent',
+    layout: single,
+    around: 0,
+    up: -6,
+    tilt: -5,
+    sink: 0.25,
+    jitter: 0.03,
   },
 ];
 
