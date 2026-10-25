@@ -78,4 +78,25 @@ export const MAP_GEN: MapGenSettings = {
     ],
     nameSuffix: 'Hollow',
   },
+  // Wild Isle (#621, plan §2 and revision 1): an island ringed by coast and
+  // sea, cut by rivers and real-water lakes (`wild-lake`), with offshore
+  // isles the Wave 2 ferry reaches. Cozy Patches never read this block.
+  wildIsle: {
+    // Owner answer Q6 (2026-10-24): radius 18. Rings 17–18 sea, 16 coast,
+    // land inside: 1027 tiles stored. 6 × 11 divides by 6.
+    layouts: [{ players: 6, radius: 18, homeDistance: 11, oceanRings: 2 }], // TUNE:
+    coastRing: 1,
+    oceanTerrain: 'ocean',
+    coastTerrain: 'coast',
+    riverTerrain: 'river',
+    lakeTerrain: 'wild-lake',
+    waterMinFromSeed: 3, // TUNE: past TERRITORY_RULES keepRadius (2), so the never-fade zone is land
+    homeWaterSteps: 3, // TUNE: every home has a river or lake this close
+    rivers: { count: [2, 3], sourceRing: [4, 7], sourceTerrain: 'mountains', lakePercent: 50 }, // TUNE:
+    lakes: { count: [3, 5], size: [3, 7] }, // TUNE:
+    isles: { count: [2, 3], size: [3, 5], offshore: 1 }, // TUNE:
+    minRegionLand: 50, // TUNE:
+    landBandPercent: 15, // TUNE: claimable land per home within ±15 % of the average
+    attempts: 60, // TUNE: water layouts tried before a RangeError
+  },
 };
