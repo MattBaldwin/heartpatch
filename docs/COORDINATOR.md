@@ -189,19 +189,42 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 14, 2026-10-24):** main `f5cbf09` (#641), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-24 — Owner decisions and coordinator calls (supervisor 14)". Merged under supervisor 14: #647, #646, #641.
-- **Lanes in flight** (report to supervisor 14 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
-  - **#306 door glow + bubble** `session_01CxhiQ3oYabvTKwn7wD2PQM` (Sonnet, branch `issue-306-door-glow`): owner screens required.
-  - **Battle safe areas** `session_01Y6HVnjXqD9YFS1rPkzhzPH` (Sonnet, branch `fix-battle-safe-areas`): the Heart Charm tip and "Run away" clip on iPhone 15/SE. Owner screens required.
-  - **Wild Isle planner** `session_01PdqoGSArLRgVrdshJnaZvq` (Fable, idle): keep it for plan questions during Wave 1.
-  - In-flight lanes' folders are off-limits to the others. Tell a lane when a folder frees up after a merge.
+- **State (supervisor 16 handoff, 2026-10-25 ~02:25 UTC):** main `6ade165` (#663), migrations through 0059. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 16)". Merged under supervisor 16: #658, #661, #660, #663. **Lineage is at the limit:** supervisor 16 was depth 7, so the owner starts supervisor 17 from a fresh session (depth 1 again).
+- **Lanes in flight.** Each reports to supervisor 16. **Supervisor 17's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 16)" and confirm each switch (§8). The lanes' @parent is supervisor 16, who is retiring.
+
+| Lane | Session | Model | State at handoff |
+|---|---|---|---|
+| #652 battle camera | session_01VcgKMM7bJDCTCKSWitQfn7 | Opus | PR #662 at f963dad (main merged), CI running. Owner screens approved, reviewer APPROVE stands. Merge on green. Then tell #656 to merge main and re-shoot landscape. ~$28, past cap. |
+| #651 furniture collision | session_012CGASVrWZPEG23BtogBkGM | Opus | PR #666, owner-approved, CI running. ~$25. |
+| #654 door sparkle | session_01KeFwYLALnBtn6Aet32iZYV | Sonnet | PR #667, owner-approved, CI running. |
+| #657 Keeper bodies | session_01M3Prx7iS5iLSC4sx6usbpU | Sonnet | PR #665, owner-approved (v4, hands on hips OK). One CI failure to check. |
+| #655 B sell server | session_0123znVDm43dnicWq8dtuDob | Opus | PR #668, needs Opus + Fable APPROVE. When it merges, start #655 C (client Sell tab, plan §11 row C, from the part B Lane handoff on #655). |
+| Controls B2b | session_01Q3gaJyyf3ZTWfdnMxThnpS | Sonnet | Owner-approved (v4). PR coming. |
+| #664 music | session_0111CwPFcW65bLs6K7UZ8Dy9 | Opus | Owner-approved by ear. PR coming. |
+| #656 battle sheet | session_01A4ki5ZK3QfXiyAttzyssbP | Sonnet | Holding until #662 merges, then merges main, re-shoots landscape, render-check, then owner. |
+| Controls D2 | session_01VsBejqQ2kX9uauASFnXpa4 | Sonnet | Building. Screens (render-check, then owner) next. Map legend left for later (W1-4 owns map/). |
+| #501 explore fps | session_014Gew1kNrjygNXk9ZzAK5q5 | Opus | No-repro. May open a small "no blocking GPU wait per frame" PR, or stop. Archive when done. |
+| e2e fix | session_013Bbxqq72VnQJMuiuaF3sUx | Opus | Fixing iPad e2e failures on main: lorebook:44, map-hole:63, lobby:135, tutorial-flow:563, tutorial:515. Urgent: main is red on ipad groups 1 and 2. |
+| #382 squishy Wave 2 | session_01StqxPaD94zxAurY2S1VYPz | Sonnet | Rendering a 72-frame species sheet (slow). Sheet goes to render-check, then the owner. Past cap: if it needs a re-shoot, it should post a Lane handoff instead. |
+| #621 W1-2 mapgen | session_01DNAMb3gFEfciDcg5K5yJXt | Opus | Just started. |
+| #621 W1-5a roads (migration 0060) | session_01So3UgZNFQubx1rLMcXFbMF | Opus | Just started. The only migration lane. |
+| #621 W1-4 island map | session_015MjtcmZYTvxc3Wmp8xYHZw | Opus | Just started. Owner screens (iPhone 15 + iPad). |
+| Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle, ~$41. Archive after Wave 1 lands. |
+
 - **Queue (start in this order as lanes free up):**
-  1. **Wild Isle Wave 1** at 8 PM ET Oct 24 (the supervisor's one-shot reminder; a new supervisor recreates it).
-  2. **Controls B2b:** `.auth-button*`, about 60 call sites.
-  3. **Controls D "Left for later"** (from PR #637's body): home, heart-coins, the roster and team two-column pass, and the chat strip.
-  4. **Coordinator CI change:** e2e job timeout 40 → 35 (the slowest group measured 24.9 min on #647), plus refreshed `E2E_GROUPS` minute comments including far-hollow-bonus.
-  5. **#501 frame-rate check** (still open after #562).
-  6. **Logged nits:** the What's new date wraps on iPhone SE (no-wrap the date); the `isPlural` heuristic in `crooked-text.ts`; the 6e/6f nits (a long `changes/` line, a `nearest()` comment over 100 chars, a tap-walk into a bonus chest that keeps pressing); the Water echo near the iPhone 15 home indicator.
+  1. #655 C (client Sell tab) after PR #668 merges. Then ask the owner whether #655 D (Gift/Trade/Swap bar) is Halloween.
+  2. Wild Isle: W1-3 after W1-2; W1-5b and W1-7 (migration 0061) after W1-5a; then W1-6, W1-8, W1-9, W1-10, W1-11 per plan §6 and revision 1.
+  3. **Logged nits:**
+     - the What's new date wraps on SE
+     - `isPlural` in crooked-text.ts
+     - the 6e/6f nits
+     - the Water echo near the home indicator
+     - room-name pills truncate ("Dining Roo…", "Conservato…")
+     - disabled Feed looks enabled in close-up
+     - the trays `hp-settling` fallback (the e2e-fix finding)
+     - re-measure the E2E_GROUPS medians after a few runs; group 6 iPad is the tightest
+  4. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
+- **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad.
 - **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
@@ -235,6 +258,16 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-25, supervisor 16):**
+  - **When a visual fails 3+ render-checks on the same core problem, take it to the owner with a different approach** instead of iterating. #306 needed six "light the room" rounds. The #657 hands question was settled in one owner answer.
+  - **A long foreground check can hide a coordinator message for an hour,** so lanes run long checks in the background.
+  - **Lanes past ~300k context cost the most.** #652 reached $28 and #651 $25, mostly from re-shoots and review rounds at 400–565k. Move screen re-shoots to a fresh lane once a lane passes about 300k.
+  - **The supervisor's context grows fast with 12+ lanes.** Supervisor 16 hit 429k in 4 hours. Use a helper subagent for status tables, keep render-checks in helpers, and check your own context every few sweeps.
+  - **Owner approvals from AskUserQuestion get closed by container restarts** (twice tonight). Re-ask at once, with the artifact opened in the same response.
+  - **CI is the bottleneck with 7+ PRs open.** Jobs queue for 20+ minutes. Batch merges when they clear.
+  - **A remote branch name can already exist from months ago.** `chore-ci-e2e-timeout` did, and PR #659 opened against the stale branch. Check `git ls-remote` before reusing a branch name.
+  - **Render-check helpers can't always save the artifact file.** Tell them to write the returned content verbatim, never to hand-type a copy.
+  - **Costs tonight:** #653 $12.25, #655 A $7.34, W1-1 $18.52, #655 planner $15.99, supervisor 16 ~$36 at 429k.
 - **Lessons (2026-10-24, supervisor 14):**
   - **Playwright's fake clock starves Babylon rendering.** `page.clock.install()` fakes rAF, so each fake 16 ms costs a whole SwiftShader frame: portraits took 156 s, and the Water picker faces never drew. Shoot "asleep" and picker frames without the fake clock (6e3's finding).
   - **Render-checks caught real bugs every round:** a room pill truncated with no ellipsis, "The flames needs", the battle tip in the home-indicator area, a different random state between phones, captions describing things not on screen, and swapped titles on the artifact page. Keep checking every round, including page-only changes.
