@@ -1270,6 +1270,13 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   it("takes a Watermill's Greens with the settle's grant rows, before the balance (settle, #621 W1-8 step 11 then 12b)", async () => {
     const { kid, mapId, settle } = await hutSetup('mill-eater');
     await makeWildIsle(db, mapId);
+    // Calm days from the hut's placing (two days back) to tomorrow: left to
+    // the patch's random seed, a storm could knock the mill, which then eats
+    // nothing, never queues on the Greens row, and the wait times out.
+    for (let back = -1; back <= 2; back++) {
+      const day = new Date(Date.now() - back * 24 * 3600_000).toISOString().slice(0, 10);
+      await putPlan(db, mapId, day, []);
+    }
     // The hut's row becomes a Watermill with an hour's grinding waiting.
     await db
       .update(buildings)
