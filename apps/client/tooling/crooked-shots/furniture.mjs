@@ -36,7 +36,7 @@ const DEVICES = (process.env.DEVICES ?? 'iphone,se').split(',');
 /** How long the joystick is held north before each walking shot, ms. */
 const WALK_MS = Number(process.env.WALK_MS ?? 3000);
 /** A tap-walk is shot this long after the tap, then again once it has arrived, ms. */
-const TAP_MID_MS = Number(process.env.TAP_MID_MS ?? 1400);
+const TAP_MID_MS = Number(process.env.TAP_MID_MS ?? 2000);
 const TAP_END_MS = Number(process.env.TAP_END_MS ?? 6000);
 
 /**
@@ -49,7 +49,7 @@ const SHOTS = [
   // South of the Dining Room's table's east end, clear of the chairs knocked over in front of it.
   { name: 'dining-table', room: 'dining-room', x: -4.25, z: 4.3, walk: true },
   // In the Kitchen's doorway from the Dining Room (its south wall, 0.5 m west of the middle).
-  { name: 'doorway', room: 'kitchen', x: -6.1, z: 9.15, walk: false },
+  { name: 'doorway', room: 'kitchen', x: -6.1, z: 9.15, walk: false, holdMs: 4000 },
   // South of the table's middle, then a tap on the floor behind it (page CSS px, per phone).
   {
     name: 'tap-round-table',
@@ -210,6 +210,8 @@ for (const device of DEVICES) {
       await page.mouse.move(sx, sy - 40, { steps: 3 });
       await page.waitForTimeout(WALK_MS);
     }
+    // Held until the first-visit hint has gone, so both builds show the same HUD.
+    if (s.holdMs) await page.waitForTimeout(s.holdMs);
     const frames = [s.name];
     if (s.tap) {
       const at = s.tap[device];
