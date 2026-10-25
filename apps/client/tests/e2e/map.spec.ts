@@ -56,7 +56,12 @@ const WILD_BUDGET = {
 
 /** The dev island page's hook (src/map/gallery/island-gallery-main.ts). */
 type IslandHooks = Window & {
-  __islandMap?: { ready: () => boolean; stats: () => MapDebug | null };
+  __islandMap?: {
+    ready: () => boolean;
+    stats: () => MapDebug | null;
+    weather: () => { clouds: number; rain: number; fog: number; mode: string; placed: number } | null;
+    clock: () => number | null;
+  };
 };
 
 function mapState(page: Page): Promise<MapDebug | null> {
@@ -418,4 +423,64 @@ test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoome
   });
   expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
   expect(far.activeTriangles).toBeLessThanOrEqual(WILD_BUDGET.farTriangles);
+});
+
+test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; reduced motion holds still (#621)', async ({
+  page,
+}) => {
+  test.setTimeout(150_000); // shader compiles; CI renders in software
+  const look = async (query: string) => {
+    await page.goto(`/island.html?${query}`);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const hook = (window as IslandHooks).__islandMap;
+            return hook?.ready() === true ? (hook.weather()?.placed ?? 0) : 0;
+          }),
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(0);
+    return page.evaluate(() => {
+      const hook = (window as IslandHooks).__islandMap;
+      return { stats: hook?.stats() ?? null, weather: hook?.weather() ?? null };
+    });
+  };
+
+  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (3 weather draw calls).
+  const storm = await look('tier=high&patch=wild&weather=storm');
+  expect(storm.weather?.clouds).toBeGreaterThan(0);
+  expect(storm.weather?.rain).toBeGreaterThan(0);
+  expect(storm.stats?.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
+
+  // Fog draws fog only.
+  const fog = await look('tier=high&patch=wild&weather=fog');
+  expect(fog.weather?.fog).toBeGreaterThan(0);
+  expect(fog.weather?.rain).toBe(0);
+  expect(fog.stats?.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
+
+  // The low tier draws clouds and fog only, no rain.
+  const low = await look('tier=low&patch=wild&weather=storm');
+  expect(low.weather?.mode).toBe('off');
+  expect(low.weather?.clouds).toBeGreaterThan(0);
+  expect(low.weather?.rain).toBe(0);
+
+  // Reduced motion (the gallery's setting) holds the weather still: the clock never moves.
+  await look('tier=high&patch=wild&weather=storm');
+  const before = await page.evaluate(() => (window as IslandHooks).__islandMap?.clock() ?? null);
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => (window as IslandHooks).__islandMap?.clock() ?? null);
+  expect(storm.weather?.mode).toBe('still');
+  expect(after).toBe(before);
+
+  // A cozy patch has no weather layer at all.
+  await page.goto('/island.html?tier=high&patch=cozy&weather=storm');
+  await expect
+    .poll(() => page.evaluate(() => (window as IslandHooks).__islandMap?.ready() === true), {
+      timeout: 60_000,
+    })
+    .toBe(true);
+  expect(
+    await page.evaluate(() => (window as IslandHooks).__islandMap?.weather()?.placed ?? 0),
+  ).toBe(0);
 });

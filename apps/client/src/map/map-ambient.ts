@@ -53,7 +53,7 @@ export interface AmbientStats {
 }
 
 /** Unlit, coloured by `color` times vertex and instance colours. */
-function glowMaterial(
+export function glowMaterial(
   scene: Scene,
   name: string,
   color: string,
@@ -73,7 +73,7 @@ function glowMaterial(
 }
 
 /** A soft disc, opaque in the middle and fading to nothing at the rim (fog wisps). */
-function softDisc(scene: Scene, name: string, rings: readonly [number, number][]): Mesh {
+export function softDisc(scene: Scene, name: string, rings: readonly [number, number][]): Mesh {
   const segments = 20;
   const positions: number[] = [0, 0, 0];
   const colors: number[] = [1, 1, 1, rings[0]?.[1] ?? 1];

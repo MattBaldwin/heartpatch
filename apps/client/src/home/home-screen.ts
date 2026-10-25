@@ -69,6 +69,7 @@ import {
   type NeedChip,
   type ReachTile,
 } from './home-view.js';
+import { FIX_TEXT, repairOffer } from '../weather/repair-offer.js';
 import { homeTileLines } from './home-tile-info.js';
 import { createHomeNameSheet } from './home-name-sheet.js';
 import {
@@ -1871,9 +1872,38 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         ),
       );
     } else {
+      // A storm knocked it about (#621): say so and offer the fix.
+      const fix = repairOffer(current.items, b);
       card.push(
+        ...(fix
+          ? [
+              el(
+                'p',
+                { class: 'home-card-note', 'data-testid': `tile-${prefix}-knocked` },
+                FIX_TEXT.knocked(buildingName(b.buildingId)),
+              ),
+              needRow(fix.needs),
+            ]
+          : []),
         ...lines,
         tileRow(
+          ...(fix
+            ? [
+                (() => {
+                  const go = tileButton(
+                    FIX_TEXT.fixIt,
+                    () =>
+                      void tileAct(
+                        (id, send) => send((key) => api.repair(id, b.id, key)),
+                        FIX_TEXT.fixed(buildingName(b.buildingId), b.buildingId),
+                      ),
+                    `tile-${prefix}-fix`,
+                  );
+                  if (!fix.affordable) go.disabled = true;
+                  return go;
+                })(),
+              ]
+            : []),
           ...actions,
           ...(upgradeAt
             ? [

@@ -1,0 +1,161 @@
+/* Wild Isle weather (#621): the sky wash and the top-bar chip. */
+.weather-tint {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background: transparent;
+  transition: opacity 1.5s ease;
+}
+
+.weather-tint[data-kind='rain'] {
+  opacity: 1;
+  background: rgb(98 112 160 / 16%);
+}
+
+.weather-tint[data-kind='storm'] {
+  opacity: 1;
+  background: rgb(58 52 98 / 34%);
+}
+
+.weather-tint[data-kind='fog'] {
+  opacity: 1;
+  background: rgb(240 238 248 / 26%);
+}
+
+.weather-tint[data-kind='drought'] {
+  opacity: 1;
+  background: rgb(255 176 96 / 16%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-tint {
+    transition: none;
+  }
+}
+
+.weather-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.weather-chip[hidden],
+.weather-sheet[hidden] {
+  display: none;
+}
+
+.weather-chip:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 3px;
+}
+
+.weather-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 12px)
+    calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
+  background: rgb(220 226 248 / 70%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #3b3560;
+}
+
+.weather-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  max-height: 100%;
+  width: min(100%, 460px);
+}
+
+.weather-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weather-sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.weather-sheet-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.weather-sheet-scroll h3 {
+  margin: 6px 0 0;
+  font-size: 15px;
+}
+
+.weather-sheet-scroll p {
+  margin: 0;
+}
+
+.weather-sheet-now {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.weather-sheet-note {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.weather-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-map {
+  align-self: center;
+  width: min(100%, 220px);
+  height: auto;
+}
+
+.weather-map-island {
+  fill: #cfe8c4;
+  stroke: #9cc98f;
+  stroke-width: 0.12;
+}
+
+.weather-map-path {
+  stroke: #3b3560;
+  stroke-width: 0.06;
+  stroke-dasharray: 0.2 0.18;
+  opacity: 0.5;
+}
+
+.weather-map-home {
+  fill: #e0508a;
+  stroke: #fff;
+  stroke-width: 0.1;
+}

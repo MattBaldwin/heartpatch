@@ -50,6 +50,11 @@ import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
+import { createKnockedMarks } from './weather/knocked-marks.js';
+import { createForecastSheet } from './weather/forecast-sheet.js';
+import { createWeatherChip } from './weather/weather-chip.js';
+import { createWeatherLayer } from './weather/weather-layer.js';
+import { WeatherStore } from './weather/weather-store.js';
 import { newIdempotencyKey } from './net/idempotency-key.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -440,6 +445,18 @@ const care = createCareSheet({
 // One quiet mark on my own tiles that need me (#602): my gatherers' now,
 // #601's resource buildings' later. One map layer, handed to each feature.
 const tileMarks = createTileMarks(document.body);
+// Wild Isle weather (#621): one store feeds the clouds and rain, the sky wash, the chip and the sheet.
+const weatherStore = new WeatherStore({
+  now: () => inventory.gameNow(),
+  me: () => signedIn?.id ?? null,
+});
+const weatherLayer = createWeatherLayer({
+  store: weatherStore,
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+});
+const knockedMarks = createKnockedMarks(tileMarks, () => signedIn?.id ?? null);
+const forecastSheet = createForecastSheet(document.body, weatherStore);
+const weatherChip = createWeatherChip(weatherStore, () => forecastSheet.open());
 const jobs = createJobs({
   root: document.body,
   marks: tileMarks,
@@ -1337,7 +1354,7 @@ const maps = createMapScreen({
       },
     },
   ),
-  hudExtras: [heartCoins.mapPill],
+  hudExtras: [heartCoins.mapPill, weatherChip.node],
   onHudChange: (mapId) => {
     hudMapId = mapId;
     // Back on the map (after a battle, home, the lobby): read its Heart Coins again.
@@ -1356,6 +1373,8 @@ const maps = createMapScreen({
   layers: [
     hollowLayer,
     darkLand,
+    weatherLayer,
+    knockedMarks,
     jobs.gatherers,
     land.layer,
     postFlags,

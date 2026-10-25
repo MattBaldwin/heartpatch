@@ -195,3 +195,20 @@ export function upkeepPausedLine(
     text: `${who} 💛: this morning's coins ran short. ${one ? 'It wakes' : 'They wake'} up as soon as you have ${enough}!`,
   };
 }
+
+/**
+ * The morning card's line after a Wild Isle storm (#621 W1-9): the buildings
+ * it knocked about that still wait to be fixed (`HollowStatus.weatherNotes`).
+ * "The storm knocked your Pier about 🌧️ Fix it when you can!" Up to three by
+ * name, more by count. Never "damage" or "destroy": it is knocked, not broken.
+ */
+export function weatherNotesLine(notes: readonly { buildingId: string }[]): ReportLine | null {
+  if (notes.length === 0) return null;
+  const names = notes.map((n) => BUILDING_NAMES.get(n.buildingId) ?? 'building');
+  const named = new Set(names).size === names.length && names.length <= 3;
+  const what = named ? `your ${joinNames(names)}` : `${String(names.length)} of your buildings`;
+  return {
+    icon: '🌧️',
+    text: `The storm knocked ${what} about 🌧️ Fix ${notes.length === 1 ? 'it' : 'them'} when you can!`,
+  };
+}
