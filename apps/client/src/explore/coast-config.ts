@@ -33,6 +33,8 @@ export const SEA = {
   radius: 70, // TUNE: past the haze
   /** The surf line's foam: its colour and how wide the lapping band is. */
   foam: '#ffffff', // TUNE
+  /** The pale wash under the foam, where the water thins out over the sand. */
+  wash: '#c4f3f1', // TUNE
   foamBand: { from: -0.35, to: 0.9 }, // TUNE: world units out from the shoreline
 } as const;
 

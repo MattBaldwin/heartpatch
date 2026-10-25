@@ -1,7 +1,9 @@
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { SEA, shoreRadius } from './coast-config.js';
-import { kitMesh, merged, type Part } from './kit-mesh.js';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import { kitMesh, merged, Part } from './kit-mesh.js';
 import { cylinder, flat, shaded, sphere } from './land-kit.js';
 import type { ExtrasContext, Growth } from './land-layout.js';
 import type { SpotShape } from './trail-kit.js';
@@ -18,42 +20,103 @@ type Layers = NonNullable<LandOptions['extras']>;
 /** A small deterministic spread (golden-angle ring), so the foam is the same on every device. */
 const spread = (i: number): number => (i * 0.61803398875) % 1;
 
-/** The open sea and its pale shallows, flat discs under the sand's edge. */
+/** Radii (past the shoreline) where the sea's colour is set; between them it blends smoothly. */
+const SEA_RINGS = [-1, 0, 1, 2, 3.5, 5, 7, 10, 14, 22] as const;
+
+/**
+ * The open sea: one disc whose vertex colour fades from the pale shallows at
+ * the shore to the deep blue far out, so no ring of colour shows a hard edge
+ * (the camera stands near the old shallows' rim and saw it as a straight seam).
+ */
 export function buildSea(scene: Scene): Mesh {
   return kitMesh(scene, 'coast-sea', () => {
     const rs = shoreRadius();
-    return merged([
-      flat(cylinder(0.02, SEA.radius * 2, SEA.radius * 2, 40, [0, SEA.level - 0.02, 0]), SEA.deep),
-      flat(
-        cylinder(0.02, (rs + SEA.shallowReach) * 2, (rs + SEA.shallowReach) * 2, 40, [
-          0,
-          SEA.level - 0.005,
-          0,
-        ]),
-        SEA.shallows,
-      ),
-    ]);
+    const shallow = Color3.FromHexString(SEA.shallows).toLinearSpace();
+    const deep = Color3.FromHexString(SEA.deep).toLinearSpace();
+    const radii = [0, ...SEA_RINGS.map((r) => rs + r), SEA.radius];
+    const around = 48;
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    radii.forEach((r, ring) => {
+      // Pale until the shoreline, then a smooth fade to deep over `shallowReach` × 3.
+      const t = Math.min(1, Math.max(0, (r - rs) / (SEA.shallowReach * 3)));
+      const k = t * t * (3 - 2 * t);
+      for (let n = 0; n < around; n++) {
+        const a = (n / around) * Math.PI * 2;
+        positions.push(Math.cos(a) * r, SEA.level, Math.sin(a) * r);
+        colors.push(
+          shallow.r + (deep.r - shallow.r) * k,
+          shallow.g + (deep.g - shallow.g) * k,
+          shallow.b + (deep.b - shallow.b) * k,
+          1,
+        );
+      }
+      if (ring === 0) return;
+      for (let n = 0; n < around; n++) {
+        const a0 = (ring - 1) * around + n;
+        const a1 = (ring - 1) * around + ((n + 1) % around);
+        const b0 = ring * around + n;
+        const b1 = ring * around + ((n + 1) % around);
+        indices.push(a0, b0, a1, a1, b0, b1, a0, a1, b0, a1, b1, b0);
+      }
+    });
+    const data = new VertexData();
+    data.positions = positions;
+    data.colors = colors;
+    data.normals = positions.map((_, n) => (n % 3 === 1 ? 1 : 0));
+    data.uvs = new Array<number>((positions.length / 3) * 2).fill(0);
+    data.indices = indices;
+    return merged([new Part(data)]);
   });
 }
 
-/** The surf line: a lapping band of soft foam blobs round the shoreline (hidden where the sand is higher). */
+/**
+ * A flat, wavy band round the shoreline, `from`…`to` out from `radius` (the
+ * edges wobble so it reads as a lapping wave, not a ring). Both windings, so
+ * it shows whichever way the material culls.
+ */
+function wavyBand(radius: number, from: number, to: number, y: number, phase: number): Part {
+  const n = 120;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let k = 0; k <= n; k++) {
+    const a = (k / n) * Math.PI * 2;
+    const wobble = (w: number) =>
+      0.16 * Math.sin(7 * a + phase + w) + 0.1 * Math.sin(13 * a + 2 * phase - w);
+    const rIn = radius + from + wobble(0);
+    const rOut = radius + to + wobble(1.7);
+    positions.push(
+      Math.cos(a) * rIn,
+      y,
+      Math.sin(a) * rIn,
+      Math.cos(a) * rOut,
+      y,
+      Math.sin(a) * rOut,
+    );
+    if (k < n) {
+      const i = k * 2;
+      indices.push(i, i + 1, i + 2, i + 2, i + 1, i + 3, i, i + 2, i + 1, i + 2, i + 3, i + 1);
+    }
+  }
+  const data = new VertexData();
+  data.positions = positions;
+  data.indices = indices;
+  data.normals = positions.map((_, k) => (k % 3 === 1 ? 1 : 0));
+  return new Part(data);
+}
+
+/** The surf line: a pale wash and a white wavy foam band round the shoreline (hidden where the sand is higher). */
 export function buildFoam(scene: Scene): Mesh {
   return kitMesh(scene, 'coast-foam', () => {
     const rs = shoreRadius();
-    const parts: Part[] = [];
-    const n = 90;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + spread(i) * 0.05;
-      const r = rs + SEA.foamBand.from + spread(i * 7 + 3) * (SEA.foamBand.to - SEA.foamBand.from);
-      const d = 0.22 + spread(i * 5 + 1) * 0.36;
-      parts.push(
-        flat(
-          sphere(d, 6, [Math.cos(a) * r, SEA.level + 0.02, Math.sin(a) * r], [1.5, 0.16, 1]),
-          SEA.foam,
-        ),
-      );
-    }
-    return merged(parts);
+    return merged([
+      flat(
+        wavyBand(rs, SEA.foamBand.from - 0.3, SEA.foamBand.to + 0.7, SEA.level + 0.008, 0.6),
+        SEA.wash,
+      ),
+      flat(wavyBand(rs, SEA.foamBand.from, SEA.foamBand.to, SEA.level + 0.02, 0), SEA.foam),
+    ]);
   });
 }
 
@@ -172,11 +235,12 @@ const clear = (ctx: ExtrasContext, g: Growth, gap: number): boolean =>
   !ctx.colliders.some((k) => (g.x - k.x) ** 2 + (g.z - k.z) ** 2 < (k.r + gap) ** 2);
 
 function coastPlace(ctx: ExtrasContext): Readonly<Record<string, readonly Growth[]>> {
-  // Palms on the sand's rim to the sides, not across the back where the sea shows.
+  // Palms on the sand's back diagonals, so the camera never stands beside one
+  // (its trunk would sit off the screen's edge, with the fronds hanging in).
   const palms = [
-    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [-10, 30]),
-    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [150, 190]),
-    ...ring(ctx, 1, 0.98, 1.04, [0.8, 1.0], [60, 120]),
+    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [25, 65]),
+    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [115, 155]),
+    ...ring(ctx, 1, 0.98, 1.04, [0.8, 1.0], [80, 100]),
   ];
   for (const p of palms) ctx.shade(p.x, p.z, 0.9 * p.scale, 3 * p.scale);
   // Sea rocks standing in the surf, a few on the sand's rim.
@@ -263,7 +327,7 @@ function buildShells(scene: Scene): SpotShape {
     );
     return merged(parts);
   });
-  return { mesh, glint: 0.7 };
+  return { mesh, glint: 0.4 };
 }
 
 /** Driftwood: two bleached logs crossed, with a knotted branch and a bit of rope. */
@@ -296,7 +360,7 @@ function buildDriftwood(scene: Scene): SpotShape {
       flat(cylinder(0.05, 0.4, 0.4, 8, [0.1, 0.47, 0.05], [0, -0.6, Math.PI / 2]), '#c8a46a'),
     ]),
   );
-  return { mesh, glint: 0.85 };
+  return { mesh, glint: 0.6 };
 }
 
 /** A crab hole: a dug-out mound with a dark hole, and a little crab peeking out. */
@@ -339,7 +403,7 @@ function buildCrabHole(scene: Scene): SpotShape {
     }
     return merged(parts);
   });
-  return { mesh, glint: 0.65 };
+  return { mesh, glint: 0.5 };
 }
 
 /** A tide pool: a ring of dark, wet rocks round clear turquoise water, with a starfish. */
@@ -381,55 +445,90 @@ function buildTidePool(scene: Scene): SpotShape {
     parts.push(flat(sphere(0.07, 4, [-0.22, 0.34, 0.24]), '#e6fbff'));
     return merged(parts);
   });
-  return { mesh, glint: 0.75 };
+  return { mesh, glint: 0.4 };
 }
 
-/** A kelp bed: tall, ribboned fronds with little float bulbs, rooted on a wet rock. */
+/**
+ * One kelp ribbon: a flat strip rising from the pool's middle, leaning out
+ * towards bearing `a`, swaying side to side along a sine, narrowing to a
+ * soft tip. Both windings, so it shows from either side.
+ */
+function kelpRibbon(a: number, height: number, swing: number, phase: number): Part {
+  const levels = 12;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  const out = [Math.cos(a), Math.sin(a)] as const;
+  const across = [-Math.sin(a), Math.cos(a)] as const;
+  for (let k = 0; k <= levels; k++) {
+    const t = k / levels;
+    const sway = Math.sin(t * Math.PI * 2.6 + phase) * swing * (0.5 + t);
+    const reach = 0.14 + t * 0.34;
+    const half = 0.085 * (1 - t * 0.7);
+    // The strip twists a little as it rises, so it catches the light.
+    const twist = Math.sin(t * Math.PI * 2 + phase) * 0.6;
+    const cx = out[0] * reach + across[0] * sway;
+    const cz = out[1] * reach + across[1] * sway;
+    const dx = (across[0] * Math.cos(twist) + out[0] * Math.sin(twist)) * half;
+    const dz = (across[1] * Math.cos(twist) + out[1] * Math.sin(twist)) * half;
+    const y = 0.1 + t * height;
+    positions.push(cx - dx, y, cz - dz, cx + dx, y, cz + dz);
+    normals.push(out[0], 0, out[1], out[0], 0, out[1]);
+    if (k < levels) {
+      const i = k * 2;
+      indices.push(i, i + 1, i + 2, i + 2, i + 1, i + 3, i, i + 2, i + 1, i + 2, i + 3, i + 1);
+    }
+  }
+  const data = new VertexData();
+  data.positions = positions;
+  data.normals = normals;
+  // The kit's other parts carry UVs; a merge needs every part to have the same attributes.
+  data.uvs = new Array<number>((positions.length / 3) * 2).fill(0);
+  data.indices = indices;
+  return new Part(data);
+}
+
+/** A kelp bed: wavy golden-brown ribbons rooted in a little pool of clear water. */
 function buildKelpBed(scene: Scene): SpotShape {
   const mesh = kitMesh(scene, 'coast-spot-kelp-bed', () => {
     const parts: Part[] = [
-      shaded(sphere(0.9, 6, [0, 0.0, 0], [1.1, 0.3, 1]), '#b9a679', '#e0cf9e', -0.05, 0.12),
-      shaded(sphere(0.5, 5, [0.1, 0.12, 0], [1.1, 0.7, 1]), '#565154', '#9a9294', 0, 0.3),
+      shaded(sphere(1.7, 8, [0, -0.03, 0], [1, 0.1, 1]), '#d8bd86', '#ecd9a6', -0.05, 0.05),
+      flat(cylinder(0.04, 1.2, 1.2, 14, [0, 0.07, 0]), '#4fb9c4'),
+      flat(cylinder(0.03, 0.9, 0.9, 12, [0.02, 0.095, 0]), '#79d6d6'),
     ];
-    const fronds = 9;
+    // A few wet rocks at the pool's edge.
+    for (const [x, z, d] of [
+      [0.55, 0.15, 0.3],
+      [-0.5, -0.2, 0.26],
+      [0.1, 0.55, 0.22],
+    ] as const) {
+      parts.push(
+        shaded(sphere(d, 5, [x, d * 0.22, z], [1.2, 0.7, 1]), '#575257', '#a8a0a2', 0, d * 0.5),
+      );
+    }
+    // A loose fan of smooth, waving ribbons that lean out over the water.
+    const fronds = 7;
     for (let i = 0; i < fronds; i++) {
       const a = (i / fronds) * Math.PI * 2 + 0.3;
-      const h = 1.1 + (i % 3) * 0.28;
-      const lean = 0.12 + (i % 2) * 0.12;
-      const x = Math.cos(a) * (0.12 + lean * h * 0.5);
-      const z = Math.sin(a) * (0.12 + lean * h * 0.5);
+      const h = 0.95 + (i % 3) * 0.22;
       parts.push(
         shaded(
-          cylinder(
-            h,
-            0.03,
-            0.1,
-            5,
-            [x, h / 2 + 0.05, z],
-            [Math.sin(a) * lean, 0, -Math.cos(a) * lean],
-          ),
-          '#4e7a3c',
-          i % 2 ? '#a7c46a' : '#8fb85c',
-          0,
-          h,
+          kelpRibbon(a, h, 0.1 + (i % 2) * 0.05, i * 1.3),
+          '#7a6a2a',
+          i % 2 ? '#d6c25a' : '#c2b24c',
+          0.1,
+          0.1 + h,
         ),
       );
       if (i % 3 === 0) {
         parts.push(
-          flat(
-            sphere(0.12, 4, [
-              Math.cos(a) * (0.12 + lean * h),
-              h * 0.8,
-              Math.sin(a) * (0.12 + lean * h),
-            ]),
-            '#c7a43e',
-          ),
+          flat(sphere(0.1, 4, [Math.cos(a) * 0.5, 0.1 + h * 0.85, Math.sin(a) * 0.5]), '#e0ad3c'),
         );
       }
     }
     return merged(parts);
   });
-  return { mesh, glint: 1.5 };
+  return { mesh, glint: 0.5 };
 }
 
 /** The coast's search spots, drawn in the kit's style (`biome-dressing.ts` adds them to the biome spots). */
