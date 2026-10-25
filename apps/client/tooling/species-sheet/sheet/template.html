@@ -1,43 +1,300 @@
 <title>Wave 2 Species Sheet</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;700&display=swap">
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;700&display=swap"
+/>
 <style>
-/* Layout: one column. Capture facts, then the silhouette duplication check, then one section per kind with each form shot on iPhone and iPad. */
-:root{--bg:#f5f3fa;--fg:#241f33;--mute:#655e7c;--card:#ffffff;--line:#d9d3e8;--accent:#5b3fb5;--good:#2a7a4f;--warn:#a5651a;
---display:"Baloo 2","Nunito",system-ui,sans-serif;--body:"Nunito",system-ui,-apple-system,sans-serif}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17141f;--fg:#ece8f6;--mute:#a59fbd;--card:#221e2e;--line:#38324b;--accent:#b79cff;--good:#68d391;--warn:#f6ad55;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#17141f;--fg:#ece8f6;--mute:#a59fbd;--card:#221e2e;--line:#38324b;--accent:#b79cff;--good:#68d391;--warn:#f6ad55;color-scheme:dark}
-body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);padding-block:24px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-main{max-width:1000px;margin:0 auto;display:grid;gap:32px;grid-template-columns:minmax(0,1fr)}
-h1,h2,h3,h4{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance}
-h1{font-size:2rem}h2{font-size:1.5rem}h3{font-size:1.1rem}h4{font-size:1.05rem}
-p{margin:0}.lede{color:var(--mute);max-width:68ch}
-.facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;margin:12px 0 0;font-size:.92rem}.facts dt{color:var(--mute)}.facts dd{margin:0}
-.num{font-variant-numeric:tabular-nums}
-.silkind{display:grid;gap:8px;padding-block:12px;border-top:1px solid var(--line)}
-.silrow{display:flex;flex-wrap:wrap;gap:18px}
-.silgroup{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
-.sil{margin:0;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;color:#241f33;font-size:.72rem;text-align:center;line-height:1.25}
-.sil img{display:block;max-width:100%;height:auto}
-.sil.new{border-color:var(--accent);border-width:2px}
-.closest{display:grid;gap:3px}.closest .lbl{font-size:.7rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}.closest .row{display:flex;gap:6px}
-.sil.old{opacity:.9}.sil.old img{width:72px;height:90px;object-fit:contain}
-.wall{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.sil.tiny{font-size:.6rem;padding:2px}.sil.tiny figcaption{max-width:56px;overflow-wrap:anywhere}
-details summary{cursor:pointer;font-weight:700;color:var(--accent)}
-.kind{display:grid;gap:14px;padding-top:20px;border-top:2px solid var(--line)}
-.kh{display:grid;gap:2px}.hook{font-weight:700}.meta{color:var(--mute);text-transform:capitalize}
-.form{display:grid;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
-.pill{font:700 .66rem/1 var(--body);padding:3px 7px;border-radius:99px;border:1px solid var(--line);letter-spacing:.04em;text-transform:uppercase;vertical-align:middle;color:var(--mute)}
-.cap{max-width:70ch}
-.shots{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
-.shots figure{margin:0;min-width:0;max-width:100%}.shots img{display:block;max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
-.shots figcaption{font-size:.78rem;color:var(--mute);margin-top:4px}
-@media (max-width:600px){.shots{flex-direction:column}.facts{grid-template-columns:minmax(0,1fr)}}
+  /* Layout: one column. Capture facts, then the silhouette duplication check, then one section per kind with each form shot on iPhone and iPad. */
+  :root {
+    --bg: #f5f3fa;
+    --fg: #241f33;
+    --mute: #655e7c;
+    --card: #ffffff;
+    --line: #d9d3e8;
+    --accent: #5b3fb5;
+    --good: #2a7a4f;
+    --warn: #a5651a;
+    --display: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+    --body: 'Nunito', system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #17141f;
+      --fg: #ece8f6;
+      --mute: #a59fbd;
+      --card: #221e2e;
+      --line: #38324b;
+      --accent: #b79cff;
+      --good: #68d391;
+      --warn: #f6ad55;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #17141f;
+    --fg: #ece8f6;
+    --mute: #a59fbd;
+    --card: #221e2e;
+    --line: #38324b;
+    --accent: #b79cff;
+    --good: #68d391;
+    --warn: #f6ad55;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 var(--body);
+    padding-block: 24px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    gap: 32px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--display);
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: 2rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  h3 {
+    font-size: 1.1rem;
+  }
+  h4 {
+    font-size: 1.05rem;
+  }
+  p {
+    margin: 0;
+  }
+  .lede {
+    color: var(--mute);
+    max-width: 68ch;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 14px;
+    margin: 12px 0 0;
+    font-size: 0.92rem;
+  }
+  .facts dt {
+    color: var(--mute);
+  }
+  .facts dd {
+    margin: 0;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .silkind {
+    display: grid;
+    gap: 8px;
+    padding-block: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .silrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+  .silgroup {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .sil {
+    margin: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px;
+    color: #241f33;
+    font-size: 0.72rem;
+    text-align: center;
+    line-height: 1.25;
+  }
+  .sil img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .sil.new {
+    border-color: var(--accent);
+    border-width: 2px;
+  }
+  .closest {
+    display: grid;
+    gap: 3px;
+  }
+  .closest .lbl {
+    font-size: 0.7rem;
+    color: var(--mute);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .closest .row {
+    display: flex;
+    gap: 6px;
+  }
+  .sil.old {
+    opacity: 0.9;
+  }
+  .sil.old img {
+    width: 72px;
+    height: 90px;
+    object-fit: contain;
+  }
+  .wall {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .sil.tiny {
+    font-size: 0.6rem;
+    padding: 2px;
+  }
+  .sil.tiny figcaption {
+    max-width: 56px;
+    overflow-wrap: anywhere;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .kind {
+    display: grid;
+    gap: 14px;
+    padding-top: 20px;
+    border-top: 2px solid var(--line);
+  }
+  .kh {
+    display: grid;
+    gap: 2px;
+  }
+  .hook {
+    font-weight: 700;
+  }
+  .meta {
+    color: var(--mute);
+    text-transform: capitalize;
+  }
+  .form {
+    display: grid;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    min-width: 0;
+  }
+  .pill {
+    font: 700 0.66rem/1 var(--body);
+    padding: 3px 7px;
+    border-radius: 99px;
+    border: 1px solid var(--line);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    color: var(--mute);
+  }
+  .cap {
+    max-width: 70ch;
+  }
+  .shots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .shots figure {
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .shots img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .shots figcaption {
+    font-size: 0.78rem;
+    color: var(--mute);
+    margin-top: 4px;
+  }
+  @media (max-width: 600px) {
+    .shots {
+      flex-direction: column;
+    }
+    .facts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 </style>
 <main>
-<header><h1>Wave 2 species sheet v6 (#382)</h1><p class="lede">Redesign of the kinds that failed the v1 render-check. Shinybeet never read as a beetle, so Quackle (a rubber duck that blows bubbles) takes its place. Dragofruit passed and is unchanged. Every kind now has its hook as its outline, and each baby, kid and teen is checked against the existing roster as a solid-black silhouette.</p>
-<dl class="facts"><dt>Tier</dt><dd>high, set with ?quality=high on every frame</dd><dt>Devices</dt><dd>iPhone 390×844 and iPad 820×1180, both at 2× pixels, cropped to the opponent</dd><dt>Same state</dt><dd>Every frame is the same view of one squishy alone: fog off, flat backdrop, the battle scene's lights, still pose, no dev HUD</dd><dt>Haze</dt><dd>The yellow haze came from the meadow-day fog and sky. This sheet turns fog off and clears the backdrop (dev-only ?studio and ?alone flags on the roster page)</dd><dt>Parts</dt><dd>Sixteen new parts, data only, built from the existing shapes: tusks, hug-arms, slide-trail, lure-beads, puff-wings, wing-lobe-mid, wing-lobe-low, pig-tail, chest-bib, duck-bill, bubble-stream, bubble-stream-long, bubble-stream-tall, bubble-sail, suds-collar, duck-tail</dd></dl></header>
-<section><h2>Silhouette check</h2><p class="lede">Each new form (blue border) next to the three existing forms whose solid-black outline overlaps it most. The number is the outline overlap after scaling both to the same box: 1.00 is identical, and 0.90 or more would count as a duplicate. The highest score anywhere is %%WORST%%. Nothing reaches 0.90.</p>%%STRIP%%
-<details><summary>All %%NWALL%% existing silhouettes</summary><div class="wall">%%WALL%%</div></details></section>
-%%KINDS%%
+  <header>
+    <h1>Wave 2 species sheet v6 (#382)</h1>
+    <p class="lede">
+      Redesign of the kinds that failed the v1 render-check. Shinybeet never read as a beetle, so
+      Quackle (a rubber duck that blows bubbles) takes its place. Dragofruit passed and is
+      unchanged. Every kind now has its hook as its outline, and each baby, kid and teen is checked
+      against the existing roster as a solid-black silhouette.
+    </p>
+    <dl class="facts">
+      <dt>Tier</dt>
+      <dd>high, set with ?quality=high on every frame</dd>
+      <dt>Devices</dt>
+      <dd>iPhone 390×844 and iPad 820×1180, both at 2× pixels, cropped to the opponent</dd>
+      <dt>Same state</dt>
+      <dd>
+        Every frame is the same view of one squishy alone: fog off, flat backdrop, the battle
+        scene's lights, still pose, no dev HUD
+      </dd>
+      <dt>Haze</dt>
+      <dd>
+        The yellow haze came from the meadow-day fog and sky. This sheet turns fog off and clears
+        the backdrop (dev-only ?studio and ?alone flags on the roster page)
+      </dd>
+      <dt>Parts</dt>
+      <dd>
+        Sixteen new parts, data only, built from the existing shapes: tusks, hug-arms, slide-trail,
+        lure-beads, puff-wings, wing-lobe-mid, wing-lobe-low, pig-tail, chest-bib, duck-bill,
+        bubble-stream, bubble-stream-long, bubble-stream-tall, bubble-sail, suds-collar, duck-tail
+      </dd>
+    </dl>
+  </header>
+  <section>
+    <h2>Silhouette check</h2>
+    <p class="lede">
+      Each new form (blue border) next to the three existing forms whose solid-black outline
+      overlaps it most. The number is the outline overlap after scaling both to the same box: 1.00
+      is identical, and 0.90 or more would count as a duplicate. The highest score anywhere is
+      %%WORST%%. Nothing reaches 0.90.
+    </p>
+    %%STRIP%%
+    <details>
+      <summary>All %%NWALL%% existing silhouettes</summary>
+      <div class="wall">%%WALL%%</div>
+    </details>
+  </section>
+  %%KINDS%%
 </main>
