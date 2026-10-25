@@ -48,6 +48,8 @@ export const MUSIC = {
    * the synth instead (#664); it's re-rendered with them once they're in.
    */
   instrumentWaitS: 5, // TUNE
+  /** Instrument notes downloading at once, so the game's own requests never queue behind them. */
+  loadParallel: 2, // TUNE
 } as const;
 
 /**

@@ -1,4 +1,4 @@
-import { VOICE_STYLES, type VoiceStyle } from './audio-config.js';
+import { MUSIC, VOICE_STYLES, type VoiceStyle } from './audio-config.js';
 import type { Note } from './music-score.js';
 import { decode, fetchBytes, type FetchBytes } from './samples.js';
 
@@ -124,14 +124,20 @@ export function leadIn(buffer: AudioBuffer): number {
  * stretched octaves to cover the rest). A note that fails is left out (its
  * neighbours stretch a little to cover it; an instrument with none plays its
  * synth stand-in). Never rejects.
+ *
+ * Only `parallel` notes load at a time: 44 at once would take every
+ * connection the browser allows the host (six over HTTP/1.1), and the
+ * game's own requests (signing in, the lobby) would wait behind the music.
  */
 export async function loadInstruments(
   ctx: BaseAudioContext,
   fetcher: FetchBytes = fetchBytes,
+  parallel: number = MUSIC.loadParallel,
 ): Promise<InstrumentBank> {
   const bank = new Map<InstrumentId, InstrumentNote[]>();
-  await Promise.all(
-    INSTRUMENT_FILES.map(async (file) => {
+  let next = 0;
+  const worker = async () => {
+    for (let file = INSTRUMENT_FILES[next++]; file; file = INSTRUMENT_FILES[next++]) {
       try {
         const buffer = await decode(ctx, await fetcher(file.url));
         const notes = bank.get(file.instrument) ?? [];
@@ -140,8 +146,9 @@ export async function loadInstruments(
       } catch {
         // Offline or undecodable: the synth stands in.
       }
-    }),
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, parallel) }, worker));
   for (const notes of bank.values()) notes.sort((a, b) => a.midi - b.midi);
   return bank;
 }

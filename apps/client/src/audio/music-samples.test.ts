@@ -127,6 +127,21 @@ describe('music instruments (#664)', () => {
     expect(bank.get('piano')).toHaveLength(piano.length - 1);
   });
 
+  it('downloads only a couple of notes at a time, leaving connections for the game', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const fetcher = async (url: string) => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return fetchTagged()(url);
+    };
+    const bank = await loadInstruments(fakeCtx(), fetcher, 2);
+    expect(most).toBe(2);
+    expect([...bank.values()].reduce((n, notes) => n + notes.length, 0)).toBe(44);
+  });
+
   it('hands over no notes until every one has settled (a loop never hears half a bank)', async () => {
     const last = INSTRUMENT_FILES[INSTRUMENT_FILES.length - 1]?.url;
     let release = () => {};
