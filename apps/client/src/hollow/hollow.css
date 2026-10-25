@@ -193,6 +193,15 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   pointer-events: none;
 }
 
+/* Upright on a screen with a home indicator (812pt and taller), at least
+   34pt clear of the bottom edge even where env() reads 0, as the tile panel
+   is (#621). A home-button phone (667pt) has none and keeps env() alone. // TUNE: */
+@media (orientation: portrait) and (min-height: 740px) {
+  .night-chips {
+    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 12px);
+  }
+}
+
 .night-chip {
   display: inline-flex;
   align-items: center;
