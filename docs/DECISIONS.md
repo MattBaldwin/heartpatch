@@ -1917,6 +1917,7 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 
 **Owner decisions (#382 Wave 2)**
 - **Shinybeet** gets a data-only beetle-shell body, then one last tweak: a taller dome, a smaller, lower head, and studs in a line. If it still fails, it is auto-swapped for the strongest of the other 19 kinds, with no more rounds.
+  - **Outcome:** the last tweak still read as a tortoise close to Shellnap, so the lane auto-swapped Shinybeet for **Quackle → Bubbleduck → Soapduke** (a rubber duck that blows bubbles; water; common/common/uncommon; lake spawn table). The beetle-shell body and shell-gleam part were removed and a `duck-bill` part was added.
 - **Oinkle** drops the mud puddle.
 - **Fluffasus** gets stacked-lobe cloud wings (render-check PASS).
 - **Cubbun** gets hug arms.
