@@ -48,8 +48,8 @@ const SHOTS = [
   { name: 'kitchen-counter', room: 'kitchen', x: -5.2, z: 12.2, walk: true },
   // South of the Dining Room's table's east end, clear of the chairs knocked over in front of it.
   { name: 'dining-table', room: 'dining-room', x: -4.25, z: 4.3, walk: true },
-  // In the Dining Room's doorway to the Kitchen (its north wall, 0.5 m west of the middle).
-  { name: 'doorway', room: 'dining-room', x: -6.2, z: 8.5, walk: false },
+  // In the Kitchen's doorway from the Dining Room (its south wall, 0.5 m west of the middle).
+  { name: 'doorway', room: 'kitchen', x: -6.1, z: 9.15, walk: false },
   // South of the table's middle, then a tap on the floor behind it (page CSS px, per phone).
   {
     name: 'tap-round-table',
@@ -68,6 +68,21 @@ async function until(page, fn, arg, timeout = 180_000) {
     if (Date.now() > end) throw new Error(`timed out: ${fn.toString().slice(0, 80)}`);
     await new Promise((r) => setTimeout(r, 250));
   }
+}
+
+/**
+ * The server time at which the stair echo is `rooms` along its loop (0 the
+ * Stair Hall, 1 the Dining Room), a few laps on from now, as `shoot.mjs`.
+ */
+async function echoTime(page, mapId, rooms) {
+  const view = await api(page, 'GET', `/maps/${mapId}/far-hollow`);
+  const echo = view.body.house.echoes.find((e) => e.loop === 'stair-echo');
+  // CROOKED_HOUSE.echoLoops: the stair echo's period (seconds) and rooms on its loop.
+  const [period, n] = [24, 2];
+  const laps = (rooms / n - echo.offset) * echo.direction;
+  const now = Date.parse(view.body.house.serverTime);
+  const base = Math.ceil(now / 1000 / period) * period;
+  return (base + laps * period) * 1000;
 }
 
 const house = (page) => page.evaluate(() => window.__heartpatch?.farHollowHouse?.() ?? null);
@@ -180,6 +195,9 @@ for (const device of DEVICES) {
     await page.goto(`${BASE}/?tier=${TIER}`, { waitUntil: 'load' });
     await goInside(page);
     await dismissLore(page);
+    // The stair echo pinned in the Stair Hall, so it's in the same place on every phone.
+    const pin = await echoTime(page, mapId, 0);
+    await page.evaluate((ms) => window.__heartpatch?.farHollowDev?.().echoesAt(ms), pin);
     await page.evaluate(({ x, z }) => window.__heartpatch?.farHollowDev?.().place(x, z), s);
     await page.waitForTimeout(600);
     await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
