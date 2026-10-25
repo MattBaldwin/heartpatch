@@ -137,7 +137,8 @@ export function hexBfs(starts: readonly Hex[], canEnter: (h: Hex) => boolean): M
  * cube lerp rounded to the nearest hex at each step. Integer-only, so every
  * JS engine draws the same line (rivers and weather fronts, #621): the
  * cube coordinates are scaled by `10 × distance` and nudged by `(+1, +1, −2)`
- * (the usual tiny epsilon, small enough not to change any other rounding) so
+ * (0.1 / distance of a hex: below the 0.5 / distance gap to the nearest tie,
+ * so it only ever decides a tie) so
  * no point ever lands exactly between two hexes.
  */
 export function hexLine(a: Hex, b: Hex): Hex[] {

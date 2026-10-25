@@ -21,9 +21,14 @@ export const WeatherFrontSchema = z.strictObject({
 });
 export type WeatherFront = z.infer<typeof WeatherFrontSchema>;
 
-/** One map-local day's plan: its fronts (none on a clear day). */
+/**
+ * One map-local day's plan: the kind of day it rolled (`WEATHER_RULES.days`,
+ * for the forecast chip, e.g. "Dry spell") and its fronts (none on a clear
+ * day). `kind` is optional so a plan stored without it still parses.
+ */
 export const WeatherDaySchema = z.strictObject({
   day: LocalDateSchema,
+  kind: WeatherKindSchema.optional(),
   fronts: z.array(WeatherFrontSchema),
 });
 export type WeatherDay = z.infer<typeof WeatherDaySchema>;

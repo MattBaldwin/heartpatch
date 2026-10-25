@@ -263,6 +263,12 @@ export const TravelBuildingSchema = z
     message: 'a bridge, and only a bridge, stands on water (onWater)',
     path: ['onWater'],
   })
+  // Its tile is water, never owned land: `land` keeps today's placement
+  // switches whole, and its lane's `checkSpot` must check `onWater` first.
+  .refine((b) => b.onWater === undefined || b.placement === 'land', {
+    message: "a building on water is placement 'land'",
+    path: ['placement'],
+  })
   .refine((b) => (b.role === 'waystation') === (b.reach !== undefined), {
     message: 'a waystation, and only a waystation, has a reach',
     path: ['reach'],
@@ -357,7 +363,9 @@ export function checkResourceBuildings(
   const terrains = new Set<string>();
   let warehouses = 0;
   for (const b of buildings) {
-    if (!paysUpkeep(b)) continue;
+    // Wild Isle works (#621) level up like resource buildings; W1-8 makes
+    // them pay upkeep (`paysUpkeep`) when it builds their settle.
+    if (!paysUpkeep(b) && b.kind !== 'works') continue;
     if (b.placement !== 'homestead' || b.maxPerTile !== 1 || b.slot !== 'ring') {
       report([b.id], 'a homestead building that fills its tile (placement, maxPerTile 1, ring)');
     }
@@ -366,11 +374,15 @@ export function checkResourceBuildings(
       if (b.maxPerHome !== 1) report([b.id, 'maxPerHome'], 'one Warehouse a patch');
       continue;
     }
-    if (!jobRules.terrainYields.some((y) => y.terrain === b.terrain)) {
-      report([b.id, 'terrain'], `"${b.terrain}" has no land yield to work`);
+    if (b.kind === 'resource') {
+      if (!jobRules.terrainYields.some((y) => y.terrain === b.terrain)) {
+        report([b.id, 'terrain'], `"${b.terrain}" has no land yield to work`);
+      }
+      if (terrains.has(b.terrain)) {
+        report([b.id, 'terrain'], `a second building for "${b.terrain}"`);
+      }
+      terrains.add(b.terrain);
     }
-    if (terrains.has(b.terrain)) report([b.id, 'terrain'], `a second building for "${b.terrain}"`);
-    terrains.add(b.terrain);
     b.levels.forEach((level, i) => {
       const below = b.levels[i - 1];
       if (!below) return;

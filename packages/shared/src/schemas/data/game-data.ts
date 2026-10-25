@@ -225,7 +225,7 @@ export const GameDataSchema = z
       // Wild Isle kinds (#621) are never on a Cozy Patch's Build sheet.
       if (
         (WILD_ISLE_BUILDING_KINDS as readonly string[]).includes(b.kind) &&
-        (b.patchTypes === undefined || b.patchTypes.join() !== 'wild-isle')
+        (b.patchTypes?.length !== 1 || b.patchTypes[0] !== 'wild-isle')
       ) {
         report(['buildings', i, 'patchTypes'], `"${b.id}" is a Wild Isle building: ['wild-isle']`);
       }

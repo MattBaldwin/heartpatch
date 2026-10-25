@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
+import { PATCH_TYPE_RULES } from '../data/patch-types.js';
 import { HOME_BASE_RULES } from '../data/home-base.js';
 import { TERRAINS } from '../data/terrains.js';
 import { TERRITORY_RULES } from '../data/territory.js';
@@ -35,6 +36,14 @@ describe('patch types (#621)', () => {
       'wild-isle',
     );
     expect(() => CreateMapRequestSchema.parse({ ...request, patchType: 'volcano' })).toThrow();
+  });
+
+  it('only leaves out terrains that exist', () => {
+    const ids = new Set(TERRAINS.map((t) => t.id));
+    for (const type of PatchTypeSchema.options) {
+      for (const id of PATCH_TYPE_RULES[type].excludedTerrains)
+        expect(ids, `${type}: ${id}`).toContain(id);
+    }
   });
 
   it('keeps a Cozy Patch on exactly today’s rules', () => {

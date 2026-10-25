@@ -52,7 +52,7 @@ describe('weather rules (Wild Isle, #621)', () => {
       endAt: '2026-10-25T19:00:00.000Z',
       radius: 2,
     };
-    const today = { day: '2026-10-25', fronts: [front] };
+    const today = { day: '2026-10-25', kind: 'storm', fronts: [front] };
     const serverTime = '2026-10-25T12:00:00.000Z';
     expect(WeatherViewSchema.parse({ today, tomorrow: today, serverTime }).today).toEqual(today);
     const summary = { summary: 'A storm crosses the east coast tomorrow afternoon ⛈️' };

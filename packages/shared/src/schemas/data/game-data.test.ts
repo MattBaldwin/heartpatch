@@ -71,6 +71,13 @@ describe('checkGameData', () => {
         dock.reach = 2;
       }).join('\n'),
     ).toMatch(/only a waystation, has a reach/);
+    expect(
+      problemsAfter((d) => {
+        const bridge = building('bridge')(d);
+        if (bridge.kind !== 'travel') throw new Error('no Bridge');
+        bridge.placement = 'homestead';
+      }).join('\n'),
+    ).toMatch(/a building on water is placement 'land'/);
   });
 
   it('keeps battle potions to crafted things with a real effect (#214)', () => {
