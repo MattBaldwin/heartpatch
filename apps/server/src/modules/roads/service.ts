@@ -72,8 +72,8 @@ async function travelOf(tx: Executor, mapId: string): Promise<TravelRules> {
 }
 
 /** A road counts only while its owner holds its tile. */
-const isLive = (road: RoadRow | null): road is RoadRow =>
-  road !== null && road.tileOwnerUserId === road.ownerUserId;
+const liveRoad = (road: RoadRow | null): RoadRow | null =>
+  road !== null && road.tileOwnerUserId === road.ownerUserId ? road : null;
 
 export function createRoadsService(options: RoadsServiceOptions): RoadsService {
   const { db } = options;
@@ -148,7 +148,7 @@ export function createRoadsService(options: RoadsServiceOptions): RoadsService {
         user,
         mapId,
         async (repo, tx, { at, travel, tile, road }) => {
-          if (isLive(road)) throw new AppError('CONFLICT', MESSAGES.taken);
+          if (liveRoad(road)) throw new AppError('CONFLICT', MESSAGES.taken);
           const supply = await supplyFor(tx, mapId, user.id, travel);
           if (!supply.supplied.has(hexKey(tile))) throw new AppError('FORBIDDEN', MESSAGES.cutOff);
           // A leaver's road left behind (its owner no longer holds the tile) goes quietly.
@@ -180,8 +180,9 @@ export function createRoadsService(options: RoadsServiceOptions): RoadsService {
       command(
         user,
         mapId,
-        async (repo, tx, { at, travel, tile, road }) => {
-          if (!isLive(road)) throw new AppError('NOT_FOUND', MESSAGES.noRoad);
+        async (repo, tx, { at, travel, tile, road: row }) => {
+          const road = liveRoad(row);
+          if (!road) throw new AppError('NOT_FOUND', MESSAGES.noRoad);
           const level = road.level + 1;
           const cost = level > topRoadLevel(travel) ? null : roadCost(level, travel);
           if (!cost) throw new AppError('CONFLICT', MESSAGES.top);
@@ -204,8 +205,9 @@ export function createRoadsService(options: RoadsServiceOptions): RoadsService {
       command(
         user,
         mapId,
-        async (repo, tx, { at, travel, tile, road }) => {
-          if (!isLive(road)) throw new AppError('NOT_FOUND', MESSAGES.noRoad);
+        async (repo, tx, { at, travel, tile, road: row }) => {
+          const road = liveRoad(row);
+          if (!road) throw new AppError('NOT_FOUND', MESSAGES.noRoad);
           const refund = roadRefund(road.level, travel, HOME_BASE_RULES);
           await repo.deleteRoads([tile.id]);
           const events = await resupply(tx, mapId, user.id, at);

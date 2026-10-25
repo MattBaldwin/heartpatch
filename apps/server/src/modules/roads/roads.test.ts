@@ -24,7 +24,6 @@ import {
   type PlayerBattleAction,
   type PublicUser,
 } from '@heartpatch/shared';
-import { sql } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -174,14 +173,16 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
   }
 
   const makeWild = (mapId: string) =>
-    db.execute(sql`update maps set patch_type = 'wild-isle' where id = ${mapId}`);
+    db.execute(`update maps set patch_type = 'wild-isle' where id = '${mapId}'`);
   const give = (mapId: string, who: Player, items: Record<string, number>) =>
     withTransaction(db, (tx) => grantItems(tx, { mapId, userId: who.id }, items, 'dev-grant'));
   const tilesOf = async (mapId: string): Promise<Tile[]> =>
     db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
   /** Hands a tile to `userId` (null: neutral) as a claim would: owned and tended now. */
   async function own(mapId: string, tile: Tile, userId: string | null) {
-    await db.execute(sql`update tiles set owner_user_id = ${userId} where id = ${tile.id}`);
+    await db.execute(
+      `update tiles set owner_user_id = ${userId === null ? 'null' : `'${userId}'`} where id = '${tile.id}'`,
+    );
     if (userId === null) return;
     await db
       .insert(tileTending)
@@ -300,7 +301,7 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     const line = await lineFrom(mapId, kid);
     await own(mapId, line[2]!, kid.id);
     await db.execute(
-      sql`update tiles set terrain = 'river', node_resource = null where id = ${line[3]!.id}`,
+      `update tiles set terrain = 'river', node_resource = null where id = '${line[3]!.id}'`,
     );
 
     const water = await road(server, kid, mapId, line[3]!);
@@ -391,12 +392,12 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     expect(far.statusCode).toBe(403);
     expect(errorOf(far).message).toBe("That's past your roads. Lay a path closer first!");
     await db.execute(
-      sql`update tiles set terrain = 'river', node_resource = null where id = ${line[3]!.id}`,
+      `update tiles set terrain = 'river', node_resource = null where id = '${line[3]!.id}'`,
     );
     const water = await attack(line[3]!);
     expect(water.statusCode).toBe(403);
     expect(errorOf(water).message).toBe("Water's in the way. Build a bridge!");
-    await db.execute(sql`update tiles set terrain = 'meadow' where id = ${line[3]!.id}`);
+    await db.execute(`update tiles set terrain = 'meadow' where id = '${line[3]!.id}'`);
 
     expect((await road(server, kid, mapId, line[2]!)).statusCode).toBe(201);
     expect((await road(server, kid, mapId, line[2]!, '/upgrade')).statusCode).toBe(200);
@@ -467,7 +468,7 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     await makeWild(mapId);
     await give(mapId, kid, PLENTY);
     const node = (await tilesOf(mapId)).find(
-      (t) => t.ownerUserId === kid.id && t.homeSlot !== null && t.nodeResource !== null,
+      (t) => t.ownerUserId === kid.id && t.homeSlot !== null && t.nodeResource === 'timber',
     )!;
     const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
       level: 3,
