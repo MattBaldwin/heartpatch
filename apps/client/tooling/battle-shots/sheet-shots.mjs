@@ -198,7 +198,7 @@ const browser = await chromium.launch({
   ],
 });
 const report = [];
-for (const device of DEVICES) {
+for (const device of DEVICES.filter((d) => !process.env.ONLY || d.id === process.env.ONLY)) {
   const context = await browser.newContext({
     viewport: { width: device.width, height: device.height },
     deviceScaleFactor: 2,
