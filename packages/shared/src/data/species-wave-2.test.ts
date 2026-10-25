@@ -133,14 +133,13 @@ describe('wave 2 (#382)', () => {
     for (const s of WAVE_2_SPECIES) expect(instances(s.visual.parts), s.id).toBeLessThanOrEqual(32);
   });
 
-  it('adds twenty-three parts, each valid and worn by at least one wave-2 form', () => {
+  it('adds twenty-eight parts, each valid and worn by at least one wave-2 form', () => {
     const NEW_PARTS = [
       'tusks',
       'slide-trail',
       'lure-beads',
       'puff-wings',
       'pig-tail',
-      'chest-bib',
       'hug-arms',
       'wing-lobe-mid',
       'wing-lobe-low',
@@ -158,6 +157,12 @@ describe('wave 2 (#382)', () => {
       'glim-wings',
       'icicle-fins',
       'glim-smile',
+      'belly-oval',
+      'pig-tusks',
+      'glim-hands',
+      'glim-lobe',
+      'back-scales',
+      'leaf-crown',
     ];
     for (const id of NEW_PARTS) {
       const part = PARTS.find((p) => p.id === id);
