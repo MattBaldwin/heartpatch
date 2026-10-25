@@ -12,6 +12,7 @@ import {
   type MemberPasswordResetResponse,
   type MyMapsResponse,
   type MySignupCodesResponse,
+  type PatchType,
   type PublicUser,
   type PvpMode,
 } from '@heartpatch/shared';
@@ -31,6 +32,7 @@ import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
 import { closeListTo, LOBBY_PEEK_TEXT, lobbyChrome, type LobbyMode } from './lobby-chrome.js';
 import { lobbyApi } from './lobby-api.js';
 import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
+import { isWildIsle, PATCH_TYPE_CHOICES, WILD_ISLE_CHIP, wildIsleOffered } from './patch-types.js';
 import '../auth/auth.css';
 import './lobby.css';
 
@@ -236,6 +238,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       });
   };
 
+  /** `MyMapsResponse.canMakeWildIsle` from the last list (#621); unknown until one loads. */
+  let canMakeWildIsle: boolean | undefined;
+
   async function showList(message?: string): Promise<void> {
     refresh = () => void showList();
     // A list already on screen stays put while the new one loads, so a tap
@@ -251,6 +256,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     let mine: MyMapsResponse;
     try {
       mine = await lobbyApi.myMaps();
+      canMakeWildIsle = mine.canMakeWildIsle ?? false;
     } catch (err) {
       if (at !== shown) return;
       show(
@@ -340,6 +346,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
           'span',
           { class: 'lobby-map-name' },
           map.name,
+          ...(isWildIsle(map) ? [wildIsleChip()] : []),
           // Someone is asking to join (#144): say so right on the row.
           ...(map.pendingRequests > 0
             ? [
@@ -437,6 +444,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     label: string;
     hint: string;
     input: Record<string, string>;
+    /** Shown under the field (the patch type cards, #621). */
+    extra?: Node[];
     submitLabel: string;
     submit: (value: string) => Promise<string | null>;
   }): void {
@@ -457,6 +466,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         input,
         el('p', { class: 'auth-hint' }, spec.hint),
       ),
+      ...(spec.extra ?? []),
       error,
       submit,
       backLink(),
@@ -483,7 +493,89 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     input.focus();
   }
 
+  /** The 🌊 chip on a Wild Isle's row and card (#621). */
+  function wildIsleChip(): HTMLElement {
+    return el(
+      'span',
+      { class: 'lobby-badge lobby-badge-wild', 'data-testid': 'lobby-wild-chip' },
+      WILD_ISLE_CHIP,
+    );
+  }
+
+  /**
+   * Cozy Patch or Wild Isle (#621): two big cards, Cozy picked. The Wild
+   * card is there only while `wildIsleOffered`; `addWild` puts it in later
+   * when the answer arrives after the form is up.
+   */
+  function patchTypeCards(offerWild: boolean) {
+    let picked: PatchType = 'cozy';
+    const group = el('div', {
+      class: 'lobby-choices lobby-patch-types',
+      role: 'radiogroup',
+      'aria-label': 'Kind of patch',
+      'data-testid': 'lobby-patch-types',
+    });
+    const cards: { type: PatchType; card: HTMLButtonElement; label: HTMLElement }[] = [];
+    const mark = () => {
+      for (const { type, card, label } of cards) {
+        const on = type === picked;
+        card.setAttribute('aria-checked', String(on));
+        label.querySelector('.lobby-choice-picked')?.remove();
+        // The picked one says so in words too, not only by its border (#146).
+        if (on) {
+          label.append(
+            el('span', { class: 'lobby-choice-picked', 'aria-hidden': 'true' }, '✓ Picked'),
+          );
+        }
+      }
+    };
+    const add = (choice: (typeof PATCH_TYPE_CHOICES)[number]) => {
+      const label = el(
+        'span',
+        { class: 'lobby-choice-label' },
+        el('span', { class: 'lobby-patch-type-icon', 'aria-hidden': 'true' }, choice.icon),
+        choice.label,
+      );
+      const card = el(
+        'button',
+        {
+          type: 'button',
+          class: 'lobby-choice lobby-patch-type',
+          role: 'radio',
+          'data-testid': `lobby-patch-type-${choice.type}`,
+        },
+        label,
+        el('span', { class: 'lobby-choice-hint' }, choice.hint),
+      );
+      card.addEventListener('click', () => {
+        picked = choice.type;
+        mark();
+      });
+      cards.push({ type: choice.type, card, label });
+      group.append(card);
+      mark();
+    };
+    const [cozy, wild] = PATCH_TYPE_CHOICES;
+    if (cozy) add(cozy);
+    const addWild = () => {
+      if (wild && !cards.some((c) => c.type === wild.type)) add(wild);
+    };
+    if (offerWild) addWild();
+    return { node: group, picked: () => picked, addWild };
+  }
+
   function showCreate(): void {
+    const kinds = patchTypeCards(wildIsleOffered(canMakeWildIsle));
+    if (canMakeWildIsle === undefined) {
+      // Opened before any list loaded (the tutorial's graduation): ask now.
+      void lobbyApi
+        .myMaps()
+        .then((mine) => {
+          canMakeWildIsle = mine.canMakeWildIsle ?? false;
+          if (wildIsleOffered(canMakeWildIsle)) kinds.addWild();
+        })
+        .catch(() => undefined);
+    }
     oneFieldForm({
       id: 'lobby-create',
       title: 'Make a patch',
@@ -491,9 +583,16 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       label: 'Patch name',
       hint: 'Something cozy, like "Pumpkin Meadow".',
       input: { type: 'text', maxlength: '24', autocomplete: 'off' },
+      extra: [kinds.node],
       submitLabel: 'Make it!',
       submit: async (name) => {
-        const parsed = CreateMapRequestSchema.safeParse({ name, timeZone: deviceTimeZone() });
+        const patchType = kinds.picked();
+        const parsed = CreateMapRequestSchema.safeParse({
+          name,
+          timeZone: deviceTimeZone(),
+          // Left out for a Cozy Patch, as older servers expect.
+          ...(patchType === 'cozy' ? {} : { patchType }),
+        });
         if (!parsed.success) return parsed.error.issues[0]?.message ?? 'Try another name!';
         const map = await lobbyApi.create(parsed.data);
         renderMap(map, 'Ta-da! Your patch is ready. Share the code with a friend!');
@@ -805,6 +904,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
 
     show(
       title(map.name),
+      ...(isWildIsle(map) ? [el('p', { class: 'lobby-chip-row' }, wildIsleChip())] : []),
       subtitle(isOwner ? 'You own this patch.' : 'A patch you belong to.'),
       ...(message ? [notice(message, 'ok')] : []),
       status,

@@ -4,6 +4,7 @@ import {
   type DefenseStance,
   type FeelingId,
   type MapRole,
+  type PatchType,
   type PublicKeeper,
   type PublicTile,
   type PvpMode,
@@ -49,6 +50,8 @@ export interface NewTile {
   nodeResource: string | null;
   guardianStrength: number | null;
   homeSlot: number | null;
+  /** Wild Isle (#621): which offshore isle (1 up); left out or null on the main island. */
+  isle?: number | null;
 }
 
 /** A tile for the map view, before the service makes it a `PublicTile`. */
@@ -73,6 +76,8 @@ export interface MapRow {
   /** The owner's friendly-battle switch (#29). */
   friendlyChallenges: boolean;
   maxPlayers: number;
+  /** Cozy Patch or Wild Isle (#621), chosen at creation and never changed. */
+  patchType: PatchType;
   /** The last event seq committed for this map (`maps.event_seq`). */
   eventSeq: number;
 }
@@ -108,6 +113,7 @@ export interface MapSummaryRow {
   memberCount: number;
   maxPlayers: number;
   pvpMode: PvpMode;
+  patchType: PatchType;
   /** Join requests waiting on the owner (#144); 0 unless this row is the owner's. */
   pendingRequests: number;
 }
@@ -228,6 +234,7 @@ export interface MapsRepo {
     timeZone: string;
     seed: string;
     maxPlayers: number;
+    patchType: PatchType;
   }) => Promise<{ id: string; pvpMode: PvpMode }>;
   insertTiles: (mapId: string, rows: readonly NewTile[]) => Promise<void>;
   findMap: (mapId: string) => Promise<MapRow | null>;
@@ -507,7 +514,7 @@ function queries(db: Executor): MapsRepo {
     },
 
     insertTiles: async (mapId, rows) => {
-      await db.insert(tiles).values(rows.map((t) => ({ mapId, ...t })));
+      await db.insert(tiles).values(rows.map((t) => ({ mapId, ...t, isle: t.isle ?? null })));
     },
 
     findMap: async (mapId) => {
@@ -521,6 +528,7 @@ function queries(db: Executor): MapsRepo {
           tradingEnabled: maps.tradingEnabled,
           friendlyChallenges: maps.friendlyChallenges,
           maxPlayers: maps.maxPlayers,
+          patchType: maps.patchType,
           eventSeq: maps.eventSeq,
         })
         .from(maps)
@@ -999,6 +1007,7 @@ function queries(db: Executor): MapsRepo {
           memberCount: activeMemberCount,
           maxPlayers: maps.maxPlayers,
           pvpMode: maps.pvpMode,
+          patchType: maps.patchType,
           pendingRequests: pendingRequestCount,
         })
         .from(mapMembers)
