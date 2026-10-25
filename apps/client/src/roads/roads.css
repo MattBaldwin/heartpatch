@@ -1,0 +1,6 @@
+/* A road or ferry dock on the tile: its short card leads the tile panel (the
+   slots are `display: contents`, so `order` reaches the panel's own rows). On a
+   small phone the panel only fits a few rows, and these are what the tile is for. */
+.tile-panel .tile-actions-slot > .road-row {
+  order: -1;
+}

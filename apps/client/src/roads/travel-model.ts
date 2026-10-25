@@ -5,7 +5,7 @@ import {
   hexFromKey,
   hexKey,
   hexNeighbors,
-  isBuildableOn,
+  travelBuildCheck,
   supplyMap,
   TRAVEL_RULES,
   ferryShore,
@@ -23,7 +23,7 @@ import {
 import type { BuildCard } from '../building/build-model.js';
 
 // Bridges, ferry docks and the supply line on a Wild Isle (#621 W1-6). The
-// Build sheet greys a spot out and says why with the shared `isBuildableOn`;
+// Build sheet greys a spot out and says why with the shared `travelBuildCheck`;
 // the server stays the judge. Pure, so every case is unit-tested.
 
 export const BRIDGE_ID = 'bridge';
@@ -39,8 +39,8 @@ export const TRAVEL_TEXT = {
   dockEffect: 'Ferry to the far shore of the lake!',
   bridgeBuilt: 'Ta-da! A bridge! Everyone can hop across now. 🌉',
   dockBuilt: 'Ta-da! Your ferry dock is ready. 🛶',
-  ferryAcross: 'Ferry across 🛶',
-  ferryHide: 'Put the map back',
+  ferryAcross: 'Ferry across',
+  ferryHide: 'Hide ferry',
   ferryReach: 'Your ferry can take you here 🛶',
   ferryNowhere: 'No far shore to reach from this dock yet.',
   problems: {
@@ -122,12 +122,12 @@ export interface TravelCardInput {
   readonly supplied: ReadonlySet<HexKey> | null;
 }
 
-/** Can `id` go on this tile, by the shared rule (`isBuildableOn`)? */
+/** Can `id` go on this tile, by the shared rule (`travelBuildCheck`)? */
 export function travelProblem(id: string, input: TravelCardInput): BuildableProblem | null {
   const { tile, view, me } = input;
   const building = travelBuilding(id);
   if (!building || !me) return 'wrong-patch';
-  const result = isBuildableOn({
+  const result = travelBuildCheck({
     building,
     patchType: view.map.patchType ?? 'cozy',
     userId: me,

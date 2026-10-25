@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
 import { hexKey, type HexKey } from '../hex/index.js';
 import type { TravelBuilding } from '../schemas/data/buildings.js';
-import { isBuildableOn, type BuildableOnInput, type BuildableTile } from './index.js';
+import { travelBuildCheck, type BuildableOnInput, type BuildableTile } from './index.js';
 
 const travel = (id: string) =>
   BUILDINGS.find((b) => b.id === id && b.kind === 'travel') as TravelBuilding;
@@ -31,9 +31,9 @@ const at = (q: number, r: number) => TILES.find((x) => x.q === q && x.r === r)!;
 const supplied = new Set<HexKey>([hexKey({ q: 0, r: 0 }), hexKey({ q: 0, r: 1 })]);
 
 const ask = (over: Partial<BuildableOnInput> & Pick<BuildableOnInput, 'building' | 'tile'>) =>
-  isBuildableOn({ patchType: 'wild-isle', userId: ME, tiles: TILES, supplied, ...over });
+  travelBuildCheck({ patchType: 'wild-isle', userId: ME, tiles: TILES, supplied, ...over });
 
-describe('isBuildableOn: bridge', () => {
+describe('travelBuildCheck: bridge', () => {
   it('goes on a river tile next to supplied land', () => {
     expect(ask({ building: BRIDGE, tile: at(1, 0) })).toEqual({ ok: true });
   });
@@ -66,7 +66,7 @@ describe('isBuildableOn: bridge', () => {
   });
 });
 
-describe('isBuildableOn: ferry dock', () => {
+describe('travelBuildCheck: ferry dock', () => {
   it('goes on my land next to a lake', () => {
     expect(ask({ building: DOCK, tile: at(0, 1) })).toEqual({ ok: true });
   });
@@ -99,7 +99,7 @@ describe('isBuildableOn: ferry dock', () => {
   });
 });
 
-describe('isBuildableOn: waystation and patch type', () => {
+describe('travelBuildCheck: waystation and patch type', () => {
   it('waystations are not yet', () => {
     expect(ask({ building: WAYSTATION, tile: at(0, 0) })).toEqual({ ok: false, reason: 'not-yet' });
   });

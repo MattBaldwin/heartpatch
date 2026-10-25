@@ -61,7 +61,7 @@ export interface BuildableOnInput {
 
 const WATER_OF = new Map(TERRAINS.map((t) => [t.id, t.water ?? null]));
 
-export function isBuildableOn(input: BuildableOnInput): BuildableResult {
+export function travelBuildCheck(input: BuildableOnInput): BuildableResult {
   const { building, patchType, userId, tile } = input;
   const travel = patchRules(patchType).travel;
   if (!travel || !buildsOnPatchType(building, patchType)) return no('wrong-patch');

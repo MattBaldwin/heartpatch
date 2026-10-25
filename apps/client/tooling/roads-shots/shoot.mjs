@@ -243,6 +243,7 @@ async function frameFacts(page, device) {
           e.id !== 'game' &&
           !/^trays( trays-hinting)?$/.test(e.className) &&
           visible(e) &&
+          !/dark-moon/.test(e.className) && // a spot's marker on the map, not UI
           window.getComputedStyle(e).position === 'fixed',
       )
       .filter(
@@ -255,17 +256,55 @@ async function frameFacts(page, device) {
       )
       .map((e) => e.textContent.trim());
     const reconnecting = /Reconnecting/.test(document.body.innerText);
+    // What the tile panel really shows: only rows fully inside its scroll box
+    // and above the bottom of the screen; the rest is "scrolled out of sight".
+    function panelFacts() {
+      const panelEl = document.querySelector('.tile-panel');
+      if (!panelEl || !visible(panelEl)) return { panel: [], panelCut: [] };
+      const box = panelEl.getBoundingClientRect();
+      const shown = [];
+      const cut = [];
+      for (const e of panelEl.querySelectorAll('.tile-panel-title,.tile-panel-owner,p,button')) {
+        if (!visible(e) || e.closest('.tile-panel-details[hidden]')) continue;
+        if (e.tagName !== 'BUTTON' && e.querySelector('button')) continue;
+        const b = e.getBoundingClientRect();
+        const label =
+          e.tagName === 'BUTTON'
+            ? e.getAttribute('aria-label') === 'Close'
+              ? '✕ close button'
+              : `${e.textContent.trim().replace(/\s+/g, ' ') || e.getAttribute('aria-label')} button`
+            : e.textContent.trim().replace(/\s+/g, ' ');
+        if (!label) continue;
+        (b.top >= box.top - 1 && b.bottom <= box.bottom + 1 && b.bottom <= h ? shown : cut).push(
+          label,
+        );
+      }
+      return { panel: shown, panelCut: cut };
+    }
+    // Does the cut-off card sit under a side button?
+    const card = document.querySelector('[data-testid="stranded-card"]');
+    const overlaps = [];
+    if (card && visible(card)) {
+      const c = card.getBoundingClientRect();
+      for (const e of document.querySelectorAll('.trays *, .tray-handle, .top-bar *, .map-hud *')) {
+        if (!visible(e)) continue;
+        const b = e.getBoundingClientRect();
+        if (b.width < 20) continue;
+        if (b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top)
+          overlaps.push((e.textContent || e.className).trim().slice(0, 20));
+      }
+    }
     return {
+      overlaps,
       viewport: [w, h],
       inZone,
       devs,
       reconnecting,
-      panel: [
-        text('.tile-panel-title')[0] ?? '',
-        'buttons: ' + text('.tile-panel button').filter(Boolean).join(', '),
-      ].filter(Boolean),
+      ...panelFacts(),
       sheet: text('[data-testid="build-sheet"]'),
-      stranded: text('[data-testid="stranded-card"]'),
+      stranded: [...document.querySelectorAll('[data-testid="stranded-card"]')]
+        .filter(visible)
+        .map((e) => e.innerText.trim().replace(/\s+/g, ' ')),
       roads: window.__heartpatch.roads?.() ?? null,
       strandedDebug: window.__heartpatch.stranded?.() ?? null,
     };
@@ -284,10 +323,14 @@ async function shot(page, device, name, frame, describe) {
     ...(facts.inZone.length ? [`in home-indicator zone: ${facts.inZone.join(', ')}`] : []),
     ...(facts.devs.length ? [`dev UI: ${facts.devs.join(', ')}`] : []),
     ...(facts.reconnecting ? ['Reconnecting… showing'] : []),
+    ...(facts.overlaps.length ? [`cut-off card overlaps: ${facts.overlaps.join(', ')}`] : []),
   ];
   const caption = `${d.label} (${d.width}×${d.height} @${d.dpr}x), quality tier ${TIER}. ${describe(facts)}`;
   const onScreenCard = facts.stranded.length
-    ? ` Also on screen: the cut-off card (${facts.stranded.join(' / ')}).`
+    ? ` The cut-off card shows: "${facts.stranded.join(' / ')}".`
+    : '';
+  const cutRows = facts.panelCut.length
+    ? ` Scrolled out of sight inside the panel (not visible): ${facts.panelCut.join(', ')}.`
     : '';
   captions.push({
     file,
@@ -295,13 +338,13 @@ async function shot(page, device, name, frame, describe) {
     tier: TIER,
     shot: name,
     frame,
-    caption: caption + onScreenCard,
+    caption: caption + onScreenCard + cutRows,
     problems,
   });
   console.log(file, problems.length ? `PROBLEMS ${problems.join('; ')}` : 'ok');
 }
 
-const nodeTexts = (list) => list.join(' / ');
+const nodeTexts = (list) => (list.length ? list.join(' / ') : 'nothing');
 
 async function runDevice(browser, device, statePath, fx) {
   const d = DEVICES[device];
@@ -346,7 +389,7 @@ async function runDevice(browser, device, statePath, fx) {
     'build-sheet',
     'as-opened-panel',
     (f) =>
-      `The tile panel for a land tile of mine, with a Build button. Panel: ${nodeTexts(f.panel)}.`,
+      `The tile panel for a land tile of mine, with a Build button. Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
   if (!ONLY || ONLY.includes('build-sheet')) {
     await page.getByTestId('tile-build').click();
@@ -386,7 +429,7 @@ async function runDevice(browser, device, statePath, fx) {
     'network',
     'as-it-opens',
     (f) =>
-      `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}. Panel: ${nodeTexts(f.panel)}.`,
+      `Roads drawn on the map by level (level 1, 2, 3 counts): ${f.roads?.drawn?.join(', ')}. Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
   await page.evaluate(() =>
     [...document.querySelectorAll('.tile-panel button')]
@@ -411,7 +454,8 @@ async function runDevice(browser, device, statePath, fx) {
     device,
     'bridge',
     'as-it-opens',
-    (f) => `A bridge on a river tile, the tile selected. Panel: ${nodeTexts(f.panel)}.`,
+    (f) =>
+      `A bridge on a river tile, the tile selected. Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
 
   // 4. The dock card, "Ferry across" pressed, and the far shore tint.
@@ -423,7 +467,8 @@ async function runDevice(browser, device, statePath, fx) {
     device,
     'dock',
     'as-it-opens',
-    (f) => `The ferry dock's tile panel before the ferry is shown. Panel: ${nodeTexts(f.panel)}.`,
+    (f) =>
+      `The ferry dock's tile panel before the ferry is shown. Panel rows in view: ${nodeTexts(f.panel)}.`,
   );
   if (!ONLY || ONLY.includes('dock')) {
     await tapText('ferry-across');
@@ -441,7 +486,7 @@ async function runDevice(browser, device, statePath, fx) {
       'dock',
       'far-shore',
       (f) =>
-        `"Ferry across 🛶" pressed on the dock's tile; ${f.roads?.ferry} far-shore tiles are in the ferry tint (the tile panel covers part of the map). Panel: ${nodeTexts(f.panel)}.`,
+        `The ferry map is showing: ${f.roads?.ferry} far-shore tiles in a bright aqua tint with a pale rim, the dock between. Panel rows in view: ${nodeTexts(f.panel)}.`,
     );
     // The same moment with the panel out of the way (hidden, not closed: closing puts the map back).
     await page.addStyleTag({ content: '.tile-panel{visibility:hidden!important}' });
@@ -451,7 +496,7 @@ async function runDevice(browser, device, statePath, fx) {
       'dock',
       'far-shore-map',
       (f) =>
-        `Same moment with the tile panel hidden: ${f.roads?.ferry} far-shore tiles in the ferry tint, the dock on its lake.`,
+        `Same moment with the tile panel hidden: ${f.roads?.ferry} far-shore tiles in the aqua ferry tint, the dock on its lake.`,
     );
   }
 
@@ -464,7 +509,7 @@ async function runDevice(browser, device, statePath, fx) {
     'stranded',
     'as-it-opens',
     (f) =>
-      `The cut-off card on the map. Card: ${nodeTexts(f.stranded)}. Tinted tiles (grace, fading): ${f.strandedDebug?.grace}, ${f.strandedDebug?.fading}.`,
+      `The map with cut-off land tinted (grace ${f.strandedDebug?.grace}, fading ${f.strandedDebug?.fading} tiles).`,
   );
   if (!ONLY || ONLY.includes('stranded')) {
     await tapText('stranded-show');
@@ -482,7 +527,7 @@ async function runDevice(browser, device, statePath, fx) {
       'stranded',
       'whole-card',
       (f) =>
-        `Show me pressed: the camera is on the cut-off land, tinted. Card: ${nodeTexts(f.stranded)}. Tinted tiles (grace, fading): ${f.strandedDebug?.grace}, ${f.strandedDebug?.fading}.`,
+        `Show me pressed: the camera is on the cut-off land, tinted (grace ${f.strandedDebug?.grace}, fading ${f.strandedDebug?.fading} tiles).`,
     );
   }
   await context.close();

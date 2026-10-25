@@ -32,7 +32,7 @@ export const ROAD_TEXT = {
     level <= 1 ? 'Ta-da! A cozy path!' : `Ta-da! Now it's a ${roadName(level).toLowerCase()}!`,
   line: (level: number) =>
     `${ROAD_TEXT.icon} A ${roadName(level).toLowerCase()} runs through here.`,
-  takeUp: 'Take up the road',
+  takeUp: 'Take up road',
   takeUpAsk: (back: string) =>
     back ? `Take up this road? You get back ${back}.` : 'Take up this road?',
   yes: 'Yes, take it up',

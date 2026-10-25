@@ -1,5 +1,6 @@
 import {
   hexKey,
+  hexLine,
   type Hex,
   type HexKey,
   type MapView,
@@ -40,6 +41,7 @@ import {
   TRAVEL_SPOT,
   TRAVEL_TEXT,
 } from './travel-model.js';
+import './roads.css';
 
 // Roads, bridges and ferry docks on a Wild Isle (#621 W1-6), as one feature
 // main.ts mounts: the roads' map layer (drawn from `GET /maps/:id/roads`), the
@@ -243,7 +245,11 @@ export function createRoads(options: RoadsOptions): Roads {
     field?.drawFerry(tiles);
     options.invalidate();
     const target = nearestFarShore(reach, tile, supplyFor(v)?.supplied ?? null);
-    if (target) options.pan(target);
+    // Look at the water between the dock and the far shore, so both are in frame.
+    if (target) {
+      const line = hexLine(tile, target);
+      options.pan(line[Math.floor(line.length / 2)] ?? target);
+    }
   }
 
   async function takeUp(): Promise<void> {
@@ -282,13 +288,19 @@ export function createRoads(options: RoadsOptions): Roads {
     const me = options.me();
     const parts: HTMLElement[] = [];
     const say = (text: string, testId?: string) =>
-      el('p', { class: 'tile-action-note', ...(testId ? { 'data-testid': testId } : {}) }, text);
+      el(
+        'p',
+        { class: 'tile-action-note road-row', ...(testId ? { 'data-testid': testId } : {}) },
+        text,
+      );
+    // Buttons share a row (two to a row, like Go home and Explore), so the
+    // card stays short on a small phone.
     const button = (label: string, testId: string, onClick: () => void, soft = false) => {
       const b = el(
         'button',
         {
           type: 'button',
-          class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} bag-action`,
+          class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} bag-action tile-action-pair road-row`,
           'data-testid': testId,
         },
         label,
@@ -298,8 +310,12 @@ export function createRoads(options: RoadsOptions): Roads {
       return b;
     };
     const road = isWildIsleView(v) ? myRoad(tile, me) : null;
+    const showingFerry =
+      ferry !== null && ferry.dock.q === tile.q && ferry.dock.r === tile.r && hasDock(tile, me);
     if (road) {
-      parts.push(say(ROAD_TEXT.line(road.level), 'road-line'));
+      // While the ferry map shows, its line takes the road line's place (one row).
+      if (showingFerry) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
+      else parts.push(say(ROAD_TEXT.line(road.level), 'road-line'));
       if (mode === 'confirm') {
         parts.push(
           say(ROAD_TEXT.takeUpAsk(refundText(takeUpRefund(road.level))), 'road-confirm'),
@@ -330,8 +346,8 @@ export function createRoads(options: RoadsOptions): Roads {
       }
     }
     if (isWildIsleView(v) && hasDock(tile, me)) {
-      const showing = ferry !== null && ferry.dock.q === tile.q && ferry.dock.r === tile.r;
-      if (showing) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
+      const showing = showingFerry;
+      if (showing && !road) parts.push(say(TRAVEL_TEXT.ferryReach, 'ferry-reach'));
       parts.push(
         button(
           showing ? TRAVEL_TEXT.ferryHide : TRAVEL_TEXT.ferryAcross,
@@ -346,7 +362,11 @@ export function createRoads(options: RoadsOptions): Roads {
         ),
       );
     }
-    if (note) parts.push(say(note, 'road-note'));
+    if (note) {
+      const n = say(note, 'road-note');
+      n.classList.remove('road-row');
+      parts.push(n);
+    }
     container.replaceChildren(...parts);
   }
 

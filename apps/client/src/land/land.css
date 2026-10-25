@@ -163,8 +163,13 @@
   font-weight: 600;
 }
 
-/* Wild Isle's cut-off card sits just under the "misses you" chip. */
+/* Wild Isle's cut-off card takes the chip row (short, two lines at most, so it
+   stays clear of the side buttons on a small phone) and drops under the
+   "misses you" chip only when that one shows too. */
 .land-stranded {
-  top: calc(env(safe-area-inset-top) + 236px);
   border-color: #e9a9b4;
+}
+
+.land-stranded:has(~ .land-chip:not([hidden])) {
+  top: calc(env(safe-area-inset-top) + 236px);
 }

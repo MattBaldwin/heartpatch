@@ -32,11 +32,16 @@ import { armYaw, maskSides, roadPieces } from './road-layout.js';
 
 const LIFT = DOME + 0.008; // TUNE: a hair above the tile's domed top
 const FERRY_LIFT = 0.02; // TUNE
-const FERRY_RGBA = [0.4, 0.82, 0.92, 0.34] as const; // TUNE: a watery teal
+const FERRY_FILL = [0.1, 0.78, 0.95, 0.5] as const; // TUNE: a strong watery aqua, unlike any forest
+const FERRY_RIM = [0.92, 1, 1, 0.95] as const; // TUNE: a pale rim, so each far-shore tile has an edge
 const FERRY_INSET = 0.94; // TUNE: of the tile's radius
+const FERRY_RIM_WIDTH = 0.16; // TUNE: of the tile's radius
+
+/** Mesh arrays that always carry vertex colours. */
+export type ColouredMesh = MeshArrays & { colors: number[] };
 
 /** A flat hex disc on y = 0, one flat colour (pointy-top, like the tiles). */
-export function hexDisc(radius: number, rgba: readonly number[]): MeshArrays {
+export function hexDisc(radius: number, rgba: readonly number[]): ColouredMesh {
   const positions = [0, 0, 0];
   const colors = [...rgba];
   const indices: number[] = [];
@@ -45,6 +50,33 @@ export function hexDisc(radius: number, rgba: readonly number[]): MeshArrays {
     positions.push(radius * Math.cos(a), 0, radius * Math.sin(a));
     colors.push(...rgba);
     indices.push(0, 1 + ((i + 1) % 6), 1 + i);
+  }
+  return { positions, indices, colors };
+}
+
+/** A hex disc with a rim ring round it (still one mesh, one draw call for every tile). */
+export function hexRimDisc(
+  radius: number,
+  rimWidth: number,
+  fill: readonly number[],
+  rim: readonly number[],
+): ColouredMesh {
+  const disc = hexDisc(radius - rimWidth, fill);
+  const positions = [...disc.positions];
+  const colors = [...disc.colors];
+  const indices = [...disc.indices];
+  const base = positions.length / 3;
+  const inner = radius - rimWidth;
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 180) * (60 * i - 30);
+    positions.push(inner * Math.cos(a), 0, inner * Math.sin(a));
+    positions.push(radius * Math.cos(a), 0, radius * Math.sin(a));
+    colors.push(...rim, ...rim);
+  }
+  for (let i = 0; i < 6; i++) {
+    const j = (i + 1) % 6;
+    const [a0, b0, a1, b1] = [base + 2 * i, base + 2 * i + 1, base + 2 * j, base + 2 * j + 1];
+    indices.push(a0, a1, b1, a0, b1, b0);
   }
   return { positions, indices, colors };
 }
@@ -75,7 +107,11 @@ export class RoadField {
     };
     this.hubs = [1, 2, 3].map((level) => make(`road-hub-${String(level)}`, hubArrays(level)));
     this.arms = [1, 2, 3].map((level) => make(`road-arm-${String(level)}`, armArrays(level)));
-    this.ferry = meshFrom(scene, 'ferry-reach', hexDisc(TILE_RADIUS * FERRY_INSET, FERRY_RGBA));
+    this.ferry = meshFrom(
+      scene,
+      'ferry-reach',
+      hexRimDisc(TILE_RADIUS * FERRY_INSET, TILE_RADIUS * FERRY_RIM_WIDTH, FERRY_FILL, FERRY_RIM),
+    );
     const tint = overlayMaterial(scene, 'ferry-reach-mat');
     tint.backFaceCulling = false;
     this.ferry.material = tint;
